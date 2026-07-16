@@ -14,6 +14,11 @@ import {
   prepareHumanReviewForOwnerApproval,
 } from "~~/lib/tokenless/humanReviewApprovalPreparation";
 import { transitionHumanReviewOpportunityLifecycle } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
+import { prepareHumanReviewRequest } from "~~/lib/tokenless/humanReviewRequestPreparation";
+import {
+  type PrivatePaidHumanReviewDelivery,
+  requestPrivatePaidHumanReview,
+} from "~~/lib/tokenless/privatePaidHumanReviewAdapter";
 import { preparePrivateReviewFoundation } from "~~/lib/tokenless/privateReviewFoundation";
 import { requestPrivateUnpaidHumanReview } from "~~/lib/tokenless/privateUnpaidReviewAdapter";
 import {
@@ -56,6 +61,9 @@ export type FrozenHumanReviewRoutingContext = {
   integrationId: string;
   opportunityId: string;
   workflowKey: string;
+  agent: { id: string; versionId: string };
+  selectionPolicy: { id: string; version: number; audiencePolicyHash: `sha256:${string}` };
+  contentCommitments: { source: `sha256:${string}`; suggestion: `sha256:${string}` };
   decision: "required" | "recommended" | "skip";
   lifecycle: { state: string; revision: number };
   binding: {
@@ -77,6 +85,10 @@ export type FrozenHumanReviewRoutingContext = {
     panelSize: number;
     compensationMode: "unpaid" | "usdc";
     bountyPerSeatAtomic: string | null;
+    criterion: string;
+    positiveLabel: string;
+    negativeLabel: string;
+    rationaleMode: "off" | "optional" | "required";
   };
   grant: {
     active: boolean;
@@ -138,6 +150,15 @@ export type HumanReviewRoutingResult =
     }
   | {
       schemaVersion: "rateloop.human-review-route.v1";
+      action: "private_paid_review_assigned";
+      opportunityId: string;
+      authority: "ask_automatically";
+      lane: "private_invited_paid";
+      foundation: HumanAssurancePrivateReviewCreateResponse;
+      delivery: PrivatePaidHumanReviewDelivery;
+    }
+  | {
+      schemaVersion: "rateloop.human-review-route.v1";
       action: "blocked";
       opportunityId: string;
       authority: HumanReviewAuthorityLevel;
@@ -167,6 +188,7 @@ type RouterDependencies = {
   ) => Promise<void>;
   preparePrivateFoundation: typeof preparePrivateReviewFoundation;
   assignPrivateUnpaid: typeof requestPrivateUnpaidHumanReview;
+  assignPrivatePaid: typeof requestPrivatePaidHumanReview;
 };
 
 const NO_SIDE_EFFECTS = Object.freeze({
@@ -268,6 +290,7 @@ async function loadFrozenContext(
   opportunityId: string,
   _now: Date,
 ): Promise<FrozenHumanReviewRoutingContext> {
+  void _now;
   const effective = await getEffectiveAgentReviewContext(principal);
   if (
     effective.humanReview.status !== "configured" ||
@@ -303,6 +326,7 @@ async function loadFrozenContext(
     sql: `SELECT o.opportunity_id,o.agent_id,o.agent_version_id,o.policy_id,o.policy_version,
                  o.human_review_binding_id,o.human_review_binding_version,
                  o.request_profile_id,o.request_profile_version,o.request_profile_hash,o.decision,
+                 o.source_evidence_hash,o.suggestion_commitment,
                  l.state AS lifecycle_state,l.state_revision AS lifecycle_revision,l.terminal_at,
                  s.workflow_key,
                  pp.allowed_project_ids_json,pp.allowed_reviewer_sources_json,
@@ -392,6 +416,16 @@ async function loadFrozenContext(
     integrationId: principal.integration.integrationId,
     opportunityId: text(row, "opportunity_id")!,
     workflowKey,
+    agent: { id: principal.integration.agentId, versionId: principal.integration.agentVersionId },
+    selectionPolicy: {
+      id: effective.reviewPolicy.policyId,
+      version: effective.reviewPolicy.version,
+      audiencePolicyHash: effective.reviewPolicy.audiencePolicyHash as `sha256:${string}`,
+    },
+    contentCommitments: {
+      source: text(row, "source_evidence_hash") as `sha256:${string}`,
+      suggestion: text(row, "suggestion_commitment") as `sha256:${string}`,
+    },
     decision: exactDecision(text(row, "decision")),
     lifecycle: { state, revision: positiveInteger(row, "lifecycle_revision") },
     binding: {
@@ -420,6 +454,10 @@ async function loadFrozenContext(
       panelSize: profile.panelSize!,
       compensationMode: profile.compensation.mode,
       bountyPerSeatAtomic: profile.compensation.bountyPerSeatAtomic,
+      criterion: profile.criterion,
+      positiveLabel: profile.labels.positive,
+      negativeLabel: profile.labels.negative,
+      rationaleMode: profile.rationaleMode,
     },
     grant: {
       active:
@@ -450,13 +488,16 @@ async function resolveExactPrivateBinding(
   const group = profile.privateGroup;
   const caps = context.grant.policyCaps;
   if (
-    profile.lane !== "private_invited_unpaid" ||
+    (profile.lane !== "private_invited_unpaid" && profile.lane !== "private_invited_paid") ||
     profile.audience !== "private_invited" ||
     profile.contentBoundary !== "private_workspace" ||
     profile.privateSensitivity === null ||
     !group ||
-    profile.compensationMode !== "unpaid" ||
-    profile.bountyPerSeatAtomic !== null ||
+    (profile.lane === "private_invited_unpaid"
+      ? profile.compensationMode !== "unpaid" || profile.bountyPerSeatAtomic !== null
+      : profile.compensationMode !== "usdc" ||
+        profile.bountyPerSeatAtomic === null ||
+        !/^[1-9][0-9]*$/u.test(profile.bountyPerSeatAtomic)) ||
     !caps ||
     !caps.allowedReviewerSources.includes("customer_invited") ||
     (caps.allowedDataClassifications.length > 0 &&
@@ -597,7 +638,7 @@ async function activateExactAutonomousLane(
 }
 
 function requiredMaterial(context: FrozenHumanReviewRoutingContext, material: HumanReviewRoutingMaterial | undefined) {
-  const expectedKind = context.requestProfile.lane === "private_invited_unpaid" ? "private" : "public";
+  const expectedKind = context.requestProfile.lane.startsWith("private_invited_") ? "private" : "public";
   if (!material || material.kind !== expectedKind) {
     throw new TokenlessServiceError(
       `The frozen ${context.requestProfile.lane} lane requires ${expectedKind} review material.`,
@@ -623,7 +664,7 @@ function hasExactAutonomousGrant(context: FrozenHumanReviewRoutingContext) {
     return false;
   }
   if (
-    context.requestProfile.lane === "public_paid_network" &&
+    (context.requestProfile.lane === "public_paid_network" || context.requestProfile.lane === "private_invited_paid") &&
     (!context.grant.grantedScopes.includes("payment:submit") ||
       !context.grant.credentialScopes.includes("payment:submit"))
   ) {
@@ -640,6 +681,7 @@ const DEFAULT_DEPENDENCIES: RouterDependencies = {
   activateAutonomousLane: activateExactAutonomousLane,
   preparePrivateFoundation: preparePrivateReviewFoundation,
   assignPrivateUnpaid: requestPrivateUnpaidHumanReview,
+  assignPrivatePaid: requestPrivatePaidHumanReview,
 };
 
 export function createHumanReviewRequestRouter(dependencies: RouterDependencies = DEFAULT_DEPENDENCIES) {
@@ -663,7 +705,8 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
     }
     if (
       context.requestProfile.lane !== "public_paid_network" &&
-      context.requestProfile.lane !== "private_invited_unpaid"
+      context.requestProfile.lane !== "private_invited_unpaid" &&
+      context.requestProfile.lane !== "private_invited_paid"
     ) {
       return {
         ...common,
@@ -770,6 +813,63 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
         409,
         "private_routing_configuration_required",
       );
+    }
+    if (context.requestProfile.lane === "private_invited_paid") {
+      const prepared = prepareHumanReviewRequest({
+        opportunityId: context.opportunityId,
+        workflowKey: context.workflowKey,
+        requestProfile: {
+          id: context.requestProfile.id,
+          version: context.requestProfile.version,
+          hash: context.requestProfile.hash,
+          agentId: context.agent.id,
+          agentVersionId: context.agent.versionId,
+          criterion: context.requestProfile.criterion,
+          positiveLabel: context.requestProfile.positiveLabel,
+          negativeLabel: context.requestProfile.negativeLabel,
+          rationaleMode: context.requestProfile.rationaleMode,
+          audience: "private_invited",
+          contentBoundary: "private_workspace",
+          privateSensitivity: context.requestProfile.privateSensitivity,
+          privateGroupId: context.requestProfile.privateGroup!.id,
+          responseWindowSeconds: context.requestProfile.responseWindowSeconds,
+          panelSize: context.requestProfile.panelSize,
+          compensationMode: "usdc",
+          bountyPerSeatAtomic: context.requestProfile.bountyPerSeatAtomic,
+        },
+        selectionPolicy: { id: context.selectionPolicy.id, version: context.selectionPolicy.version },
+        contentCommitments: context.contentCommitments,
+        preparedAt: now,
+        expiresAt: new Date(now.getTime() + context.requestProfile.responseWindowSeconds * 1_000),
+        sourcePayload: input.sourcePayload,
+        suggestionPayload: input.suggestionPayload,
+      });
+      const delivery = await dependencies.assignPrivatePaid({
+        principal: input.principal.principal,
+        integrationId: context.integrationId,
+        opportunityId: context.opportunityId,
+        privateReviewId: foundation.privateReviewId,
+        projectId: privateBinding.projectId,
+        cohortId: privateBinding.cohortId,
+        privateGroup: context.requestProfile.privateGroup!,
+        reviewerAccountAddresses: privateBinding.reviewerAccountAddresses,
+        audiencePolicyHash: context.selectionPolicy.audiencePolicyHash,
+        publishingPolicy: context.grant.configuredPolicy!,
+        preparedRequest: prepared.preparedRequest,
+        preparedRequestHash: prepared.preparedRequestHash,
+        economics: prepared.derivedEconomics,
+        economicsHash: prepared.derivedEconomicsHash,
+        now,
+      });
+      return {
+        schemaVersion: "rateloop.human-review-route.v1",
+        action: "private_paid_review_assigned",
+        opportunityId: context.opportunityId,
+        authority: "ask_automatically",
+        lane: "private_invited_paid",
+        foundation,
+        delivery,
+      };
     }
     const delivery = await dependencies.assignPrivateUnpaid({
       principal: input.principal.principal,

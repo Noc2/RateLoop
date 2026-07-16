@@ -1,5 +1,6 @@
 import type { HumanAssurancePrivateReviewCreateResponse, TokenlessAskResponse } from "@rateloop/sdk";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
 import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import type { PreparedOwnerApproval } from "~~/lib/tokenless/humanReviewApprovalPreparation";
@@ -15,6 +16,8 @@ type IntegrationPrincipal = Extract<AgentMcpPrincipal, { kind: "integration" }>;
 const NOW = new Date("2026-07-16T12:00:00.000Z");
 const HASH = `sha256:${"1a".repeat(32)}` as const;
 const POLICY = { id: "agpol_router", version: 3 };
+const payloadHash = (value: string) =>
+  `sha256:${createHash("sha256").update(value).digest("hex")}` as `sha256:${string}`;
 
 const principal: IntegrationPrincipal = {
   kind: "integration",
@@ -57,6 +60,9 @@ function context(input?: {
     integrationId: "integration_router",
     opportunityId: "opportunity_router",
     workflowKey: "support-reply",
+    agent: { id: "agent_router", versionId: "agent_version_router" },
+    selectionPolicy: { id: "review_policy_router", version: 4, audiencePolicyHash: HASH },
+    contentCommitments: { source: payloadHash("private source"), suggestion: payloadHash("private suggestion") },
     decision: input?.decision ?? "required",
     lifecycle: { state: input?.lifecycleState ?? "approval_required", revision: 2 },
     binding: {
@@ -78,6 +84,10 @@ function context(input?: {
       panelSize: privateLane ? 2 : 3,
       compensationMode: lane === "private_invited_unpaid" ? "unpaid" : "usdc",
       bountyPerSeatAtomic: lane === "private_invited_unpaid" ? null : "1000000",
+      criterion: "Is the reply accurate?",
+      positiveLabel: "Accurate",
+      negativeLabel: "Needs changes",
+      rationaleMode: "required",
     },
     grant: {
       active: grantActive,
@@ -147,9 +157,11 @@ function dependencies(
     resolvePrivate: 0,
     foundation: 0,
     assign: 0,
+    assignPaid: 0,
     order: [] as string[],
     foundationInput: null as null | Record<string, unknown>,
     assignmentInput: null as null | Record<string, unknown>,
+    paidAssignmentInput: null as null | Record<string, unknown>,
   };
   const deps = {
     loadContext: async () => frozen,
@@ -187,6 +199,17 @@ function dependencies(
       calls.order.push("assign");
       calls.assignmentInput = input as Record<string, unknown>;
       return { deliveryId: "delivery_router" } as never;
+    },
+    assignPrivatePaid: async (input: unknown) => {
+      calls.assignPaid += 1;
+      calls.order.push("assign_paid");
+      calls.paidAssignmentInput = input as Record<string, unknown>;
+      return {
+        schemaVersion: "rateloop.private-paid-human-review.v1",
+        opportunityId: frozen.opportunityId,
+        privateReviewId: "private_review_router",
+        lane: "private_invited_paid",
+      } as never;
     },
   } as unknown as Parameters<typeof createHumanReviewRequestRouter>[0];
   return { calls, router: createHumanReviewRequestRouter(deps) };
@@ -340,6 +363,39 @@ test("private unpaid automatic routing activates a blocked opportunity then free
   assert.equal(assignmentInput.opportunityId, "opportunity_router");
   assert.equal(assignmentInput.privateReviewId, "private_review_router");
   assert.deepEqual(assignmentInput.reviewerAccountAddresses, privateBinding.reviewerAccountAddresses);
+});
+
+test("private paid automatic routing uses the distinct paid adapter with frozen private economics", async () => {
+  const { calls, router } = dependencies(context({ lane: "private_invited_paid", lifecycleState: "blocked" }));
+  const result = await router({
+    principal,
+    opportunityId: "opportunity_router",
+    sourcePayload: "private source",
+    suggestionPayload: "private suggestion",
+    material: { kind: "private", sourceContentType: "text/plain", suggestionContentType: "text/plain" },
+    now: NOW,
+  });
+  assert.equal(result.action, "private_paid_review_assigned");
+  assert.deepEqual(calls.order, ["resolve_private", "activate", "foundation", "assign_paid"]);
+  assert.equal(calls.assign, 0);
+  const paid = calls.paidAssignmentInput as {
+    projectId: string;
+    cohortId: string;
+    reviewerAccountAddresses: string[];
+    economics: { compensationMode: string; bountyPerSeatAtomic: string; panelSize: number };
+    preparedRequest: { audience: { kind: string; contentBoundary: string } };
+  };
+  assert.equal(paid.projectId, privateBinding.projectId);
+  assert.equal(paid.cohortId, privateBinding.cohortId);
+  assert.deepEqual(paid.reviewerAccountAddresses, privateBinding.reviewerAccountAddresses);
+  assert.deepEqual(paid.economics, {
+    ...paid.economics,
+    compensationMode: "usdc",
+    bountyPerSeatAtomic: "1000000",
+    panelSize: 2,
+  });
+  assert.equal(paid.preparedRequest.audience.kind, "private_invited");
+  assert.equal(paid.preparedRequest.audience.contentBoundary, "private_workspace");
 });
 
 test("unsupported hybrid routing remains blocked without falling back to either implemented lane", async () => {

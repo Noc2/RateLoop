@@ -27,7 +27,7 @@ const REQUIRED_SPENDING_SCOPE = "payment:submit";
 
 export const HUMAN_REVIEW_LANE_IMPLEMENTATION = {
   privateInvitedUnpaid: true,
-  privateInvitedPaid: false,
+  privateInvitedPaid: true,
   publicPaidNetwork: true,
   hybridPublicSafe: false,
 } as const;

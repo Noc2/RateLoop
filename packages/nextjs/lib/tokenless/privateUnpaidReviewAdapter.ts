@@ -9,6 +9,7 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
 type PrivateUnpaidReviewPrincipal = Extract<ProductPrincipal, { kind: "api_key" }>;
+type PrivateReviewCompensationMode = "unpaid" | "usdc";
 
 const RESERVATION_TTL_MS = 15 * 60_000;
 const ARTIFACT_LEASE_TTL_MS = 10 * 60_000;
@@ -115,6 +116,7 @@ function assertExactFoundation(input: {
   privateReviewId: string;
   opportunityId: string;
   now: Date;
+  compensationMode: PrivateReviewCompensationMode;
 }) {
   const row = input.row;
   const responseDeadline = date(row, "response_deadline");
@@ -154,7 +156,7 @@ function assertExactFoundation(input: {
     text(row, "task_kind") !== "binary_review" ||
     text(row, "profile_audience") !== "private_invited" ||
     text(row, "content_boundary") !== "private_workspace" ||
-    text(row, "compensation_mode") !== "unpaid" ||
+    text(row, "compensation_mode") !== input.compensationMode ||
     text(row, "cohort_source") !== "customer_invited" ||
     text(row, "cohort_selection") !== "customer_named" ||
     text(row, "cohort_status") !== "active" ||
@@ -181,7 +183,9 @@ function assertExactFoundation(input: {
     throw new TokenlessServiceError(
       "The private review foundation no longer matches its exact opportunity, profile, group, or cohort.",
       409,
-      "private_unpaid_review_binding_conflict",
+      input.compensationMode === "usdc"
+        ? "private_paid_review_binding_conflict"
+        : "private_unpaid_review_binding_conflict",
     );
   }
   assertHash(text(row, "binding_hash"), "private-review binding hash");
@@ -198,6 +202,7 @@ async function loadFrozenFoundation(
     privateReviewId: string;
     opportunityId: string;
     now: Date;
+    compensationMode: PrivateReviewCompensationMode;
   },
 ) {
   const result = await client.query(
@@ -261,7 +266,12 @@ async function loadFrozenFoundation(
   return { row, responseDeadline };
 }
 
-async function responseForDelivery(client: PoolClient, deliveryId: string, replayed: boolean) {
+async function responseForDelivery(
+  client: PoolClient,
+  deliveryId: string,
+  replayed: boolean,
+  compensationMode: PrivateReviewCompensationMode,
+) {
   const result = await client.query(
     `SELECT d.delivery_id, d.opportunity_id, d.private_review_id, d.operation_hash,
             d.membership_snapshot_hash, d.response_deadline, d.status,
@@ -275,7 +285,10 @@ async function responseForDelivery(client: PoolClient, deliveryId: string, repla
   if (!result.rows.length) throw new Error("Private unpaid delivery has no assignments.");
   const first = result.rows[0] as Row;
   return {
-    schemaVersion: "rateloop.private-unpaid-review-delivery.v1" as const,
+    schemaVersion:
+      compensationMode === "usdc"
+        ? ("rateloop.private-paid-review-delivery.v1" as const)
+        : ("rateloop.private-unpaid-review-delivery.v1" as const),
     deliveryId,
     opportunityId: text(first, "opportunity_id")!,
     privateReviewId: text(first, "private_review_id")!,
@@ -296,11 +309,12 @@ async function responseForDelivery(client: PoolClient, deliveryId: string, repla
   };
 }
 
-export async function requestPrivateUnpaidHumanReview(input: {
+async function requestPrivateHumanReviewAssignments(input: {
   principal: PrivateUnpaidReviewPrincipal;
   opportunityId: string;
   privateReviewId: string;
   reviewerAccountAddresses: readonly string[];
+  compensationMode: PrivateReviewCompensationMode;
   now?: Date;
 }) {
   const now = input.now ?? new Date();
@@ -309,16 +323,21 @@ export async function requestPrivateUnpaidHumanReview(input: {
   try {
     await client.query("BEGIN");
     const { row, responseDeadline } = await loadFrozenFoundation(client, { ...input, now });
+    const paid = input.compensationMode === "usdc";
+    const laneSlug = paid ? "private-paid" : "private-unpaid";
+    const laneCode = paid ? "private_paid" : "private_unpaid";
+    const laneActor = paid ? "private-paid-v1" : "private-unpaid-v1";
     const operationHash = sha256({
-      schemaVersion: "rateloop.private-unpaid-review-operation.v1",
+      schemaVersion: paid ? "rateloop.private-paid-review-operation.v1" : "rateloop.private-unpaid-review-operation.v1",
       workspaceId: input.principal.workspaceId,
       opportunityId: input.opportunityId,
       privateReviewId: input.privateReviewId,
       foundationBindingHash: text(row, "binding_hash"),
       responseDeadline: responseDeadline.toISOString(),
       reviewers,
+      compensationMode: input.compensationMode,
     });
-    const deliveryId = identifier("hpud", operationHash);
+    const deliveryId = identifier(paid ? "hppd" : "hpud", operationHash);
     const existing = await client.query(
       `SELECT * FROM tokenless_private_unpaid_review_deliveries
        WHERE workspace_id = $1 AND (opportunity_id = $2 OR private_review_id = $3)
@@ -334,7 +353,12 @@ export async function requestPrivateUnpaidHumanReview(input: {
           "private_unpaid_review_idempotency_conflict",
         );
       }
-      const response = await responseForDelivery(client, text(existingRow, "delivery_id")!, true);
+      const response = await responseForDelivery(
+        client,
+        text(existingRow, "delivery_id")!,
+        true,
+        input.compensationMode,
+      );
       if (
         response.membershipSnapshotHash !== text(existingRow, "membership_snapshot_hash") ||
         response.assignments.length !== reviewers.length ||
@@ -351,12 +375,12 @@ export async function requestPrivateUnpaidHumanReview(input: {
         await transitionHumanReviewOpportunityLifecycleInTransaction(client, {
           workspaceId: input.principal.workspaceId,
           opportunityId: input.opportunityId,
-          transitionKey: `private-unpaid:${operationHash.slice("sha256:".length)}`,
+          transitionKey: `${laneSlug}:${operationHash.slice("sha256:".length)}`,
           expectedState: "request_ready",
           expectedRevision: integer(row, "lifecycle_revision", 1),
           toState: "pending",
-          reasonCodes: ["private_unpaid_assignments_reserved"],
-          actor: { kind: "lane_adapter", reference: "private-unpaid-v1" },
+          reasonCodes: [`${laneCode}_assignments_reserved`],
+          actor: { kind: "lane_adapter", reference: laneActor },
           details: {
             deliveryId: text(existingRow, "delivery_id"),
             privateReviewId: input.privateReviewId,
@@ -568,12 +592,12 @@ export async function requestPrivateUnpaidHumanReview(input: {
     await transitionHumanReviewOpportunityLifecycleInTransaction(client, {
       workspaceId: input.principal.workspaceId,
       opportunityId: input.opportunityId,
-      transitionKey: `private-unpaid:${operationHash.slice("sha256:".length)}`,
+      transitionKey: `${laneSlug}:${operationHash.slice("sha256:".length)}`,
       expectedState: "request_ready",
       expectedRevision: integer(row, "lifecycle_revision", 1),
       toState: "pending",
-      reasonCodes: ["private_unpaid_assignments_reserved"],
-      actor: { kind: "lane_adapter", reference: "private-unpaid-v1" },
+      reasonCodes: [`${laneCode}_assignments_reserved`],
+      actor: { kind: "lane_adapter", reference: laneActor },
       details: {
         deliveryId,
         privateReviewId: input.privateReviewId,
@@ -602,7 +626,7 @@ export async function requestPrivateUnpaidHumanReview(input: {
        WHERE integration_id = $2 AND workspace_id = $3`,
       [now, text(row, "integration_id"), input.principal.workspaceId],
     );
-    const response = await responseForDelivery(client, deliveryId, false);
+    const response = await responseForDelivery(client, deliveryId, false, input.compensationMode);
     await client.query("COMMIT");
     return response;
   } catch (error) {
@@ -611,6 +635,18 @@ export async function requestPrivateUnpaidHumanReview(input: {
   } finally {
     client.release();
   }
+}
+
+export async function requestPrivateUnpaidHumanReview(
+  input: Omit<Parameters<typeof requestPrivateHumanReviewAssignments>[0], "compensationMode">,
+) {
+  return requestPrivateHumanReviewAssignments({ ...input, compensationMode: "unpaid" });
+}
+
+export async function requestPrivatePaidReviewAssignments(
+  input: Omit<Parameters<typeof requestPrivateHumanReviewAssignments>[0], "compensationMode">,
+) {
+  return requestPrivateHumanReviewAssignments({ ...input, compensationMode: "usdc" });
 }
 
 export async function expirePrivateUnpaidReviewReservations(now = new Date()) {
@@ -659,6 +695,7 @@ export async function expirePrivateUnpaidReviewReservations(now = new Date()) {
 async function upsertPrivateArtifactLease(
   client: PoolClient,
   input: {
+    adapterReference: "private-paid-v1" | "private-unpaid-v1";
     artifactId: string;
     assignmentId: string;
     expiresAt: Date;
@@ -669,7 +706,10 @@ async function upsertPrivateArtifactLease(
   },
 ) {
   const leaseId = identifier("lease", {
-    schemaVersion: "rateloop.private-unpaid-artifact-lease.v1",
+    schemaVersion:
+      input.adapterReference === "private-paid-v1"
+        ? "rateloop.private-paid-artifact-lease.v1"
+        : "rateloop.private-unpaid-artifact-lease.v1",
     assignmentId: input.assignmentId,
     artifactId: input.artifactId,
   });
@@ -705,7 +745,7 @@ async function upsertPrivateArtifactLease(
       `INSERT INTO tokenless_assurance_artifact_leases
        (lease_id,artifact_id,workspace_id,project_id,account_address,assignment_id,purpose,
         expires_at,created_by,created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,'private_assigned_review',$7,'private-unpaid-v1',$8)`,
+       VALUES ($1,$2,$3,$4,$5,$6,'private_assigned_review',$7,$8,$9)`,
       [
         leaseId,
         input.artifactId,
@@ -714,6 +754,7 @@ async function upsertPrivateArtifactLease(
         input.reviewer,
         input.assignmentId,
         input.expiresAt,
+        input.adapterReference,
         input.now,
       ],
     );
@@ -723,9 +764,18 @@ async function upsertPrivateArtifactLease(
     `INSERT INTO tokenless_assurance_access_logs
      (log_id,workspace_id,project_id,artifact_id,lease_id,actor_kind,actor_reference,
       action,purpose,request_reference,occurred_at)
-     VALUES ($1,$2,$3,$4,$5,'service','private-unpaid-v1','lease','private_assigned_review',$6,$7)
+     VALUES ($1,$2,$3,$4,$5,'service',$6,'lease','private_assigned_review',$7,$8)
      ON CONFLICT (log_id) DO NOTHING`,
-    [logId, input.workspaceId, input.projectId, input.artifactId, leaseId, input.assignmentId, input.now],
+    [
+      logId,
+      input.workspaceId,
+      input.projectId,
+      input.artifactId,
+      leaseId,
+      input.adapterReference,
+      input.assignmentId,
+      input.now,
+    ],
   );
   return { artifactId: input.artifactId, leaseId, expiresAt: input.expiresAt.toISOString() };
 }
@@ -743,13 +793,16 @@ export async function acceptPrivateUnpaidReviewAssignment(input: {
     await client.query("BEGIN");
     const result = await client.query(
       `SELECT a.*, d.response_deadline AS delivery_response_deadline,
-              f.source_artifact_id, f.suggestion_artifact_id,
+              f.source_artifact_id, f.suggestion_artifact_id,p.compensation_mode,
               m.status AS membership_status, m.joined_at AS current_membership_joined_at,
               m.membership_expires_at AS current_membership_expires_at,
               m.allowed_project_ids_json AS current_allowed_project_ids_json
        FROM tokenless_private_unpaid_review_assignments a
        JOIN tokenless_private_unpaid_review_deliveries d ON d.delivery_id = a.delivery_id
        JOIN tokenless_private_review_requests f ON f.private_review_id = a.private_review_id
+       JOIN tokenless_agent_review_request_profiles p
+         ON p.workspace_id=f.workspace_id AND p.profile_id=f.request_profile_id
+        AND p.version=f.request_profile_version AND p.profile_hash=f.request_profile_hash
        JOIN tokenless_private_group_memberships m
          ON m.group_id = a.private_group_id AND m.principal_address = a.reviewer_account_address
        WHERE a.assignment_id = $1 AND a.reviewer_account_address = $2
@@ -784,6 +837,15 @@ export async function acceptPrivateUnpaidReviewAssignment(input: {
       );
     }
     const replayed = text(row, "status") === "accepted";
+    const compensationMode = text(row, "compensation_mode");
+    if (compensationMode !== "unpaid" && compensationMode !== "usdc") {
+      throw new TokenlessServiceError(
+        "The private assignment compensation mode is invalid.",
+        409,
+        "private_review_binding_conflict",
+      );
+    }
+    const adapterReference = compensationMode === "usdc" ? "private-paid-v1" : "private-unpaid-v1";
     if (!replayed) {
       if (date(row, "reservation_expires_at") <= now) {
         throw new TokenlessServiceError("Assignment reservation expired.", 410, "assignment_expired");
@@ -805,6 +867,7 @@ export async function acceptPrivateUnpaidReviewAssignment(input: {
     for (const artifactId of artifacts) {
       leases.push(
         await upsertPrivateArtifactLease(client, {
+          adapterReference,
           artifactId,
           assignmentId: input.assignmentId,
           expiresAt: leaseExpiresAt,
