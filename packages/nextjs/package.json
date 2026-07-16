@@ -21,6 +21,7 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "evidence:verify": "node scripts/verify-assurance-evidence.mjs",
+    "attestation:verify": "node scripts/verify-assurance-attestation.mjs",
     "oscal:check": "node scripts/generate-oscal-component-definition.mjs --check",
     "oscal:generate": "node scripts/generate-oscal-component-definition.mjs",
     "audit:verify": "node scripts/verify-audit-export.mjs",

@@ -12,12 +12,17 @@ import {
   verifyAssuranceDsseEnvelope,
 } from "~~/lib/tokenless/assuranceAttestations";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import {
+  EXTERNAL_WITNESS_SCHEMA_VERSION,
+  rfc3161BoundaryDigestHex,
+} from "~~/scripts/assurance-attestation-witness-core.mjs";
 
 const KEY_ID = /^[A-Za-z0-9:._/-]{1,200}$/u;
 const REKOR_UUID = /^[A-Za-z0-9._:-]{1,200}$/u;
 const DECIMAL = /^(?:0|[1-9][0-9]*)$/u;
 const MAX_ATTEMPTS = 8;
 const LEASE_MS = 60_000;
+const JOB_ID = /^aat_[0-9a-f]{40}$/u;
 
 type Row = Record<string, unknown>;
 
@@ -207,8 +212,88 @@ export async function listAssuranceAttestations(input: {
       createdAt: new Date(String(row.created_at)).toISOString(),
       updatedAt: new Date(String(row.updated_at)).toISOString(),
       completedAt: row.completed_at ? new Date(String(row.completed_at)).toISOString() : null,
+      publicPath:
+        text(row, "state") === "completed" ? `/api/public/assurance/attestations/${text(row, "job_id")!}` : null,
     };
   });
+}
+
+export async function countDueAssuranceAttestationJobs(now = new Date()) {
+  const due = await dbClient.execute({
+    sql: `SELECT COUNT(*) AS count FROM tokenless_assurance_attestation_jobs
+          WHERE ((state IN ('pending','retry') AND next_attempt_at<=?)
+                 OR (state='processing' AND lease_expires_at<=?))`,
+    args: [validDate(now, "Attestation queue time"), now],
+  });
+  const count = Number((due.rows[0] as Row | undefined)?.count ?? 0);
+  if (!Number.isSafeInteger(count) || count < 0) throw new Error("Database returned an invalid attestation job count.");
+  return count;
+}
+
+export async function getPublicAssuranceAttestationBundle(jobId: string) {
+  if (!JOB_ID.test(jobId)) {
+    throw new TokenlessServiceError("Attestation not found.", 404, "assurance_attestation_not_found");
+  }
+  const result = await dbClient.execute({
+    sql: `SELECT job_id,artifact_kind,artifact_schema_version,artifact_digest,boundary_at,statement_json,
+                 signer_key_id,dsse_envelope_json,rekor_entry_uuid,rekor_log_index,rekor_bundle_json,
+                 tsa_token_base64,completed_at
+          FROM tokenless_assurance_attestation_jobs WHERE job_id=? AND state='completed' LIMIT 1`,
+    args: [jobId],
+  });
+  const row = result.rows[0] as Row | undefined;
+  if (!row) throw new TokenlessServiceError("Attestation not found.", 404, "assurance_attestation_not_found");
+  const statement = parseStatement(row.statement_json);
+  let envelope: DsseEnvelope;
+  let rekorBundle: Record<string, unknown>;
+  try {
+    envelope = JSON.parse(text(row, "dsse_envelope_json") ?? "") as DsseEnvelope;
+    rekorBundle = JSON.parse(text(row, "rekor_bundle_json") ?? "") as Record<string, unknown>;
+    if (
+      canonicalAttestationJson(envelope) !== text(row, "dsse_envelope_json") ||
+      canonicalAttestationJson(rekorBundle) !== text(row, "rekor_bundle_json")
+    ) {
+      throw new Error();
+    }
+  } catch {
+    throw new TokenlessServiceError(
+      "Stored external witness bundle is invalid.",
+      500,
+      "stored_assurance_attestation_invalid",
+    );
+  }
+  const boundaryAt = new Date(String(row.boundary_at)).toISOString();
+  const artifactKind = text(row, "artifact_kind") as AssuranceAttestationKind;
+  const artifactDigest = text(row, "artifact_digest")!;
+  const timestamp = text(row, "tsa_token_base64");
+  return {
+    schemaVersion: EXTERNAL_WITNESS_SCHEMA_VERSION,
+    jobId,
+    artifact: {
+      kind: artifactKind,
+      schemaVersion: text(row, "artifact_schema_version")!,
+      digest: artifactDigest,
+      boundaryAt,
+    },
+    statement,
+    dsse: { signerKeyId: text(row, "signer_key_id")!, envelope },
+    rekor: {
+      entryUuid: text(row, "rekor_entry_uuid")!,
+      logIndex: text(row, "rekor_log_index")!,
+      bundle: rekorBundle,
+    },
+    rfc3161:
+      timestamp === null
+        ? null
+        : {
+            messageImprint: {
+              algorithm: "sha256" as const,
+              digest: rfc3161BoundaryDigestHex({ artifactDigest, boundaryAt }),
+            },
+            tokenBase64: timestamp,
+          },
+    completedAt: new Date(String(row.completed_at)).toISOString(),
+  };
 }
 
 function validateManagedSigner(signer: ManagedAttestationSigner) {

@@ -5,6 +5,7 @@ import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import {
   enqueueAssuranceAttestation,
+  getPublicAssuranceAttestationBundle,
   listAssuranceAttestations,
   processAssuranceAttestationJobs,
 } from "~~/lib/tokenless/assuranceAttestationPipeline";
@@ -84,6 +85,15 @@ test("digest-only export jobs are idempotent and require Rekor plus RFC 3161 rec
   assert.equal(listed[0]?.state, "completed");
   assert.deepEqual(listed[0]?.rekor, { entryUuid: "rekor-entry-1", logIndex: "42" });
   assert.equal(listed[0]?.rfc3161TimestampPresent, true);
+  assert.equal(listed[0]?.publicPath, `/api/public/assurance/attestations/${first.jobId}`);
+  const publicBundle = await getPublicAssuranceAttestationBundle(first.jobId);
+  assert.equal(publicBundle.schemaVersion, "rateloop.assurance-external-witness.v1");
+  assert.equal(publicBundle.artifact.digest, DIGEST);
+  assert.equal(publicBundle.dsse.signerKeyId, dependencies.signer.keyId);
+  assert.deepEqual(publicBundle.rekor.bundle, { verified: true });
+  assert.equal(publicBundle.rfc3161?.messageImprint.algorithm, "sha256");
+  assert.equal(publicBundle.rfc3161?.tokenBase64, Buffer.alloc(64, 7).toString("base64"));
+  assert.doesNotMatch(JSON.stringify(publicBundle), new RegExp(workspaceId, "u"));
   await assert.rejects(
     () => listAssuranceAttestations({ accountAddress: OUTSIDER, workspaceId }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "workspace_not_found",
