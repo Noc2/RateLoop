@@ -554,6 +554,13 @@
       "when": 1784224800000,
       "tag": "0079_evidence_retention_enforcement",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1784228400000,
+      "tag": "0080_retention_audit_idempotency",
+      "breakpoints": true
     }
   ]
 }
