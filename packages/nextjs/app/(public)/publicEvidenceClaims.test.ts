@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -14,6 +14,7 @@ import {
 const PUBLIC_APP_DIRECTORY = fileURLToPath(new URL(".", import.meta.url));
 const NEXTJS_DIRECTORY = path.resolve(PUBLIC_APP_DIRECTORY, "../..");
 const MACHINE_DOCS_DIRECTORY = path.resolve(PUBLIC_APP_DIRECTORY, "../../public/docs");
+const COMPONENTS_DIRECTORY = path.resolve(PUBLIC_APP_DIRECTORY, "../../components");
 
 function filesBelow(directory: string, extension: ".md" | ".tsx"): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
@@ -28,6 +29,36 @@ function capabilitiesEnabled(...enabled: (typeof PUBLIC_EVIDENCE_CAPABILITIES)[n
   return Object.fromEntries(
     PUBLIC_EVIDENCE_CAPABILITIES.map(capability => [capability, enabled.includes(capability)]),
   ) as unknown as PublicEvidenceCapabilityState;
+}
+
+function resolvePublicComponent(importer: string, specifier: string) {
+  const candidate = specifier.startsWith("~~/components/")
+    ? path.join(COMPONENTS_DIRECTORY, specifier.slice("~~/components/".length))
+    : specifier.startsWith(".")
+      ? path.resolve(path.dirname(importer), specifier)
+      : null;
+  if (!candidate || !candidate.startsWith(`${COMPONENTS_DIRECTORY}${path.sep}`)) return null;
+  for (const file of [candidate, `${candidate}.tsx`, path.join(candidate, "index.tsx")]) {
+    if (file.endsWith(".tsx") && existsSync(file)) return file;
+  }
+  return null;
+}
+
+function publicComponentDependencies(publicAppFiles: string[]) {
+  const discovered = new Set<string>();
+  const queue = [...publicAppFiles];
+  const staticImport = /\bfrom\s+["']([^"']+)["']/gu;
+  while (queue.length > 0) {
+    const importer = queue.shift()!;
+    const source = readFileSync(importer, "utf8");
+    for (const match of source.matchAll(staticImport)) {
+      const dependency = resolvePublicComponent(importer, match[1]!);
+      if (!dependency || discovered.has(dependency)) continue;
+      discovered.add(dependency);
+      queue.push(dependency);
+    }
+  }
+  return [...discovered];
 }
 
 test("the public evidence claims matrix is fail-closed and has explicit prerequisites", () => {
@@ -111,6 +142,10 @@ test("gated evidence phrases require every capability named by the matrix", () =
     ).length,
     0,
   );
+  assert.deepEqual(
+    findPublicEvidenceClaimViolations("rekor: { entryUuid: string } | null; rfc3161Timestamp: string | null"),
+    [],
+  );
 });
 
 test("forbidden compliance and provenance claims cannot be enabled by capability flags", () => {
@@ -132,8 +167,14 @@ test("forbidden compliance and provenance claims cannot be enabled by capability
 });
 
 test("all public TSX and machine-doc markdown obey the current evidence claim gates", () => {
-  const publicFiles = [...filesBelow(PUBLIC_APP_DIRECTORY, ".tsx"), ...filesBelow(MACHINE_DOCS_DIRECTORY, ".md")];
+  const publicAppFiles = filesBelow(PUBLIC_APP_DIRECTORY, ".tsx");
+  const publicFiles = [
+    ...publicAppFiles,
+    ...publicComponentDependencies(publicAppFiles),
+    ...filesBelow(MACHINE_DOCS_DIRECTORY, ".md"),
+  ];
   assert.ok(publicFiles.some(file => file.endsWith("/docs/sdk/page.tsx")));
+  assert.ok(publicFiles.some(file => file.endsWith("/components/shared/AppPageShell.tsx")));
   assert.ok(publicFiles.some(file => file.endsWith("/public/docs/sdk.md")));
 
   const failures = publicFiles.flatMap(file =>

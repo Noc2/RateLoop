@@ -92,8 +92,8 @@ export const PUBLIC_EVIDENCE_CLAIMS_MATRIX = [
     phrase: "Independently witnessed through a transparency log or RFC 3161 timestamp",
     patterns: [
       /independently witnessed/iu,
-      /(?:Rekor|transparency log).{0,100}RFC\s*3161.{0,100}(?:anchor|timestamp|witness|verif)/isu,
-      /RFC\s*3161.{0,100}(?:Rekor|transparency log).{0,100}(?:anchor|timestamp|witness|verif)/isu,
+      /(?:Rekor|transparency log).{0,100}RFC\s+3161.{0,100}(?:anchor|timestamp|witness|verif)/isu,
+      /RFC\s+3161.{0,100}(?:Rekor|transparency log).{0,100}(?:anchor|timestamp|witness|verif)/isu,
     ],
     requiredCapabilities: ["managed_evidence_signing", "rekor_attestation", "rfc3161_timestamping"],
     policy: "gated",
