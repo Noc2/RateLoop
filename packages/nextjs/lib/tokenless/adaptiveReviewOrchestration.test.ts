@@ -170,6 +170,20 @@ async function fixture(
       },
       declaredConfidenceBps: 8_500,
       metadataComplete: true,
+      execution: {
+        externalExecutionId: "execution-refund-case-0001",
+        status: "completed",
+        primarySpanId: "generation-primary",
+        generationSpans: [
+          {
+            spanId: "generation-primary",
+            role: "primary",
+            provider: "OpenAI",
+            requestedModel: "gpt-5.6-sol",
+            reasoningEffort: "medium",
+          },
+        ],
+      },
     },
   });
   assert.equal(decision.required, true);

@@ -11,6 +11,7 @@ export type AdaptiveReviewObservation = {
   workspaceId: string;
   scopeId: string;
   opportunityId: string;
+  executionId: string | null;
   operationKey: string;
   evidenceReference: string;
   sourcePayloadHash: string;
@@ -81,6 +82,7 @@ function observationFromResult(input: {
   const scopeId = rowString(input.row, "scope_id")!;
   const sourcePayloadHash = rowString(input.row, "source_evidence_hash")!;
   const agentOutcomeCommitment = rowString(input.row, "suggestion_commitment")!;
+  const executionId = rowString(input.row, "execution_id");
   const createdAt = new Date(String(input.row.created_at));
   const finalizedAt = new Date(input.result.updatedAt);
   if (!Number.isFinite(createdAt.getTime()) || !Number.isFinite(finalizedAt.getTime())) {
@@ -106,6 +108,7 @@ function observationFromResult(input: {
     workspaceId,
     scopeId,
     opportunityId,
+    executionId,
     operationKey: input.operationKey,
     evidenceReference: `tokenless-result/${input.operationKey}/${input.result.roundId}`,
     sourcePayloadHash,
@@ -138,7 +141,7 @@ export async function finalizeAdaptiveReviewEvidence(input: {
     await client.query("BEGIN");
     const result = await client.query(
       `SELECT o.workspace_id, o.scope_id, o.opportunity_id, o.decision, o.status, o.operation_key,
-              o.source_evidence_hash, o.suggestion_commitment, o.created_at,
+              o.execution_id, o.source_evidence_hash, o.suggestion_commitment, o.created_at,
               a.result_json
        FROM tokenless_agent_review_opportunities o
        JOIN tokenless_agent_asks a ON a.operation_key = o.operation_key
@@ -173,12 +176,13 @@ export async function finalizeAdaptiveReviewEvidence(input: {
     const now = new Date();
     await client.query(
       `INSERT INTO tokenless_agent_evaluation_observations
-       (observation_id, workspace_id, scope_id, opportunity_id, operation_key, run_id, evidence_reference,
+       (observation_id, workspace_id, scope_id, opportunity_id, execution_id, operation_key, run_id, evidence_reference,
         source_payload_hash, agent_outcome_commitment, human_outcome_commitment, agreement, comparable,
         responding_human_count, human_human_agreement_bps, latency_ms, cost_atomic, finalized_at, created_at)
-       VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+       VALUES ($1, $2, $3, $4, $5, $6, NULL, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
        ON CONFLICT (opportunity_id) DO UPDATE SET
          operation_key = EXCLUDED.operation_key,
+         execution_id = EXCLUDED.execution_id,
          evidence_reference = EXCLUDED.evidence_reference,
          source_payload_hash = EXCLUDED.source_payload_hash,
          agent_outcome_commitment = EXCLUDED.agent_outcome_commitment,
@@ -195,6 +199,7 @@ export async function finalizeAdaptiveReviewEvidence(input: {
         observation.workspaceId,
         observation.scopeId,
         observation.opportunityId,
+        observation.executionId,
         observation.operationKey,
         observation.evidenceReference,
         observation.sourcePayloadHash,

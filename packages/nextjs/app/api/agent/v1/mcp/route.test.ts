@@ -583,6 +583,25 @@ test("injects bound identity into review decisions and rejects caller spoofing",
     },
     declaredConfidenceBps: 9200,
     metadataComplete: true,
+    execution: {
+      externalExecutionId: "execution-mcp-opportunity-0001",
+      status: "completed",
+      primarySpanId: "generation-primary",
+      generationSpans: [
+        {
+          spanId: "generation-primary",
+          role: "primary",
+          provider: "OpenAI",
+          requestedModel: "gpt-5.6-terra",
+          resolvedModel: "gpt-5.6-terra-2026-07-01",
+          reasoningEffort: "low",
+          serviceTier: "fast",
+          inputTokens: 1200,
+          outputTokens: 300,
+          reasoningOutputTokens: 80,
+        },
+      ],
+    },
   };
   const decided = await POST(
     request(
@@ -599,6 +618,8 @@ test("injects bound identity into review decisions and rejects caller spoofing",
   assert.equal(decision.decision, "required");
   assert.equal(decision.policyFrozen, true);
   assert.equal(decision.stage, "calibrating");
+  assert.equal(decision.executionProfile.primary.resolvedModel, "gpt-5.6-terra-2026-07-01");
+  assert.equal(decision.executionProfile.primary.reasoningEffort, "low");
   assert.equal("sourceEvidenceReference" in decision, false);
 
   const spoofed = await POST(

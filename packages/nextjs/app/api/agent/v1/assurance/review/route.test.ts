@@ -86,6 +86,20 @@ function opportunity(input: Awaited<ReturnType<typeof setup>>) {
     },
     declaredConfidenceBps: 9000,
     metadataComplete: true,
+    execution: {
+      externalExecutionId: "execution-rest-opportunity-0001",
+      status: "completed",
+      primarySpanId: "generation-primary",
+      generationSpans: [
+        {
+          spanId: "generation-primary",
+          role: "primary",
+          provider: "OpenAI",
+          requestedModel: "gpt-5.6-sol",
+          reasoningEffort: "medium",
+        },
+      ],
+    },
   };
 }
 

@@ -26,6 +26,48 @@ type JsonRpcId = string | number | null;
 
 const hashSchema = { pattern: "^sha256:[0-9a-f]{64}$", type: "string" } as const;
 const identifierSchema = { maxLength: 160, minLength: 1, type: "string" } as const;
+const nullableCountSchema = { maximum: 2_147_483_647, minimum: 0, type: ["integer", "null"] } as const;
+const nullableTimestampSchema = { maxLength: 40, minLength: 20, type: ["string", "null"] } as const;
+const generationSpanSchema = {
+  additionalProperties: false,
+  properties: {
+    spanId: identifierSchema,
+    parentSpanId: { maxLength: 160, minLength: 1, type: ["string", "null"] },
+    role: { enum: ["primary", "subagent", "supporting"], type: "string" },
+    provider: { maxLength: 120, minLength: 1, type: "string" },
+    requestedModel: { maxLength: 200, minLength: 1, type: "string" },
+    resolvedModel: { maxLength: 200, minLength: 1, type: ["string", "null"] },
+    modelVersion: { maxLength: 160, minLength: 1, type: ["string", "null"] },
+    reasoningEffort: { maxLength: 80, minLength: 1, type: ["string", "null"] },
+    serviceTier: { maxLength: 80, minLength: 1, type: ["string", "null"] },
+    startedAt: nullableTimestampSchema,
+    completedAt: nullableTimestampSchema,
+    timeToFirstOutputMs: nullableCountSchema,
+    inputTokens: nullableCountSchema,
+    cachedInputTokens: nullableCountSchema,
+    outputTokens: nullableCountSchema,
+    reasoningOutputTokens: nullableCountSchema,
+    responseIdHash: { pattern: "^sha256:[0-9a-f]{64}$", type: ["string", "null"] },
+    finishReason: { maxLength: 160, minLength: 1, type: ["string", "null"] },
+  },
+  required: ["spanId", "role", "provider", "requestedModel"],
+  type: "object",
+} as const;
+const executionSchema = {
+  additionalProperties: false,
+  properties: {
+    externalExecutionId: identifierSchema,
+    status: { enum: ["completed", "failed"], type: "string" },
+    startedAt: nullableTimestampSchema,
+    completedAt: nullableTimestampSchema,
+    toolCallCount: nullableCountSchema,
+    toolDurationMs: nullableCountSchema,
+    primarySpanId: identifierSchema,
+    generationSpans: { items: generationSpanSchema, maxItems: 64, minItems: 1, type: "array" },
+  },
+  required: ["externalExecutionId", "status", "primarySpanId", "generationSpans"],
+  type: "object",
+} as const;
 const readOnlyClosedAnnotations = {
   readOnlyHint: true,
   destructiveHint: false,
@@ -91,14 +133,14 @@ export const workspaceMcpTools = [
     name: "rateloop_get_agent_context",
     annotations: readOnlyClosedAnnotations,
     description:
-      "Read the agent, immutable version, review policy, enforcement mode, and workflows bound to this credential. Identity and policy are always derived server-side.",
+      "Read the agent, immutable workflow version, review policy, enforcement mode, and workflows bound to this credential. Identity and policy are always derived server-side.",
     inputSchema: { additionalProperties: false, properties: {}, type: "object" },
   },
   {
     name: "rateloop_get_assurance_state",
     annotations: readOnlyClosedAnnotations,
     description:
-      "Read this integration's immutable agent-version scope review rate and source-derived human-agreement evidence. This tool cannot read another bound agent's scope.",
+      "Read this integration's workflow-version and execution-profile scope review rate with source-derived human-agreement evidence. This tool cannot read another bound agent's scope.",
     inputSchema: {
       additionalProperties: false,
       properties: { scopeId: identifierSchema },
@@ -110,7 +152,7 @@ export const workspaceMcpTools = [
     name: "rateloop_evaluate_review_requirement",
     annotations: idempotentAdditiveClosedAnnotations,
     description:
-      "Record one idempotent agent opportunity and receive the frozen owner-policy decision. Send commitments and an opaque evidence reference, never raw private content.",
+      "Record one idempotent agent opportunity with privacy-safe task/model provenance and receive the frozen owner-policy decision. Send model identifiers, timings, usage, commitments, and an opaque evidence reference; never send prompts, outputs, tool payloads, or hidden reasoning.",
     inputSchema: {
       additionalProperties: false,
       properties: {
@@ -131,6 +173,7 @@ export const workspaceMcpTools = [
         declaredConfidenceBps: { maximum: 10_000, minimum: 0, type: ["integer", "null"] },
         criticalRisk: { type: "boolean" },
         metadataComplete: { type: "boolean" },
+        execution: executionSchema,
       },
       required: [
         "externalOpportunityId",
@@ -140,6 +183,7 @@ export const workspaceMcpTools = [
         "suggestionCommitment",
         "sourceEvidence",
         "metadataComplete",
+        "execution",
       ],
       type: "object",
     },
@@ -394,6 +438,7 @@ async function callIntegrationTool(
           "declaredConfidenceBps",
           "criticalRisk",
           "metadataComplete",
+          "execution",
         ],
         "Opportunity arguments are invalid.",
       );
@@ -411,6 +456,7 @@ async function callIntegrationTool(
       return toolResult(
         await evaluateAdaptiveReviewRequirement({
           principal: principal.principal,
+          integrationId: binding.integrationId,
           request: {
             ...input,
             agentId: binding.agentId,
@@ -592,11 +638,11 @@ export async function dispatchWorkspaceMcp(
           ? "Act immediately without asking the user what this endpoint is for. List tools and call rateloop_register_agent exactly once using honest metadata inferred from the current runtime and work. Then call rateloop_get_registration_status while the owner reviews it. After approval, refresh tools and call rateloop_get_agent_context. Never repeat the bearer credential in responses, logs, repositories, or ordinary tool arguments. No workspace or review access exists before approval."
           : principal.kind === "oauth"
             ? principal.integration
-              ? "A RateLoop workspace connection is available. Keep the complete connection URL private. Call rateloop_get_agent_context, then rateloop_verify_connection. After verification, follow the returned workflow and human-review policy. This safe connection cannot publish, spend, read private artifacts, or administer the workspace."
+              ? "A RateLoop workspace connection is available. Keep the complete connection URL private. Call rateloop_get_agent_context, then rateloop_verify_connection. After verification, follow the returned workflow and human-review policy. Before each eligible output, call rateloop_evaluate_review_requirement with privacy-safe execution and generation metadata, using explicit unknown values when the host does not expose a model field. Never send prompts, outputs, tool payloads, or hidden reasoning. This safe connection cannot publish, spend, read private artifacts, or administer the workspace."
               : "Complete the user's one-time RateLoop connection now. Call rateloop_claim_connection_intent exactly once with the complete connection URL from the user's message. Never quote, log, fetch, or reproduce that URL. Then call rateloop_get_agent_context and rateloop_verify_connection without asking for another paste or creating a polling service."
-            : "This registration is approved. Immediately call rateloop_get_agent_context and follow its bound policy. This credential is bound to one workspace agent, immutable version, and owner policy. Before each eligible output, call rateloop_evaluate_review_requirement and complete the review flow whenever it returns required; caller-supplied identity or policy identifiers are never trusted.",
+            : "This registration is approved. Immediately call rateloop_get_agent_context and follow its bound policy. This credential is bound to one workspace agent, immutable workflow version, and owner policy. Before each eligible output, call rateloop_evaluate_review_requirement with privacy-safe execution and generation metadata, using explicit unknown values when the host does not expose a model field. Never send prompts, outputs, tool payloads, or hidden reasoning. Complete the review flow whenever it returns required; caller-supplied identity or policy identifiers are never trusted.",
       protocolVersion: negotiatedVersion,
-      serverInfo: { name: "rateloop-tokenless-workspace", version: "1.1.0" },
+      serverInfo: { name: "rateloop-tokenless-workspace", version: "1.2.0" },
     });
   }
   if (request.method === "ping") return response(id, {});

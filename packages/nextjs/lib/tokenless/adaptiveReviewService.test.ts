@@ -93,6 +93,22 @@ function opportunity(input: Awaited<ReturnType<typeof fixture>>, externalOpportu
     declaredConfidenceBps: 8700,
     criticalRisk: false,
     metadataComplete: true,
+    execution: {
+      externalExecutionId: `execution-${externalOpportunityId}`,
+      status: "completed" as const,
+      primarySpanId: "generation-primary",
+      generationSpans: [
+        {
+          spanId: "generation-primary",
+          role: "primary" as const,
+          provider: "OpenAI",
+          requestedModel: "gpt-5.6-sol",
+          resolvedModel: "gpt-5.6-sol-2026-07-01",
+          reasoningEffort: "medium",
+          serviceTier: "standard",
+        },
+      ],
+    },
   };
 }
 
@@ -110,6 +126,10 @@ test("persists deterministic calibration decisions and returns frozen idempotent
   assert.deepEqual(first.reasonCodes, ["calibrating"]);
   assert.equal(first.policyFrozen, true);
   assert.equal(first.sourceEvidenceHash, request.sourceEvidence.hash);
+  assert.match(first.executionId, /^aex_/);
+  assert.equal(first.executionManifestCommitment, replay.executionManifestCommitment);
+  assert.equal(first.executionProfile?.primary.resolvedModel, "gpt-5.6-sol-2026-07-01");
+  assert.equal(first.executionProfile?.primary.reasoningEffort, "medium");
   assert.equal("sourceEvidenceReference" in first, false);
 
   const rows = await dbClient.execute(
@@ -120,10 +140,48 @@ test("persists deterministic calibration decisions and returns frozen idempotent
   assert.equal(rows.rows[0]?.source_evidence_reference, request.sourceEvidence.reference);
   assert.equal(rows.rows[0]?.source_evidence_hash, request.sourceEvidence.hash);
 
+  const executions = await dbClient.execute({
+    sql: `SELECT e.execution_id, e.metadata_source, e.execution_profile_hash, e.model_call_count,
+                 s.provider, s.requested_model, s.resolved_model, s.reasoning_effort, s.service_tier
+          FROM tokenless_agent_executions e
+          JOIN tokenless_agent_generation_spans s ON s.execution_id = e.execution_id`,
+  });
+  assert.equal(executions.rowCount, 1);
+  assert.equal(executions.rows[0]?.execution_id, first.executionId);
+  assert.equal(executions.rows[0]?.metadata_source, "host_reported");
+  assert.equal(executions.rows[0]?.execution_profile_hash, first.executionProfileHash);
+  assert.equal(executions.rows[0]?.model_call_count, 1);
+  assert.equal(executions.rows[0]?.requested_model, "gpt-5.6-sol");
+  assert.equal(executions.rows[0]?.resolved_model, "gpt-5.6-sol-2026-07-01");
+  assert.equal(executions.rows[0]?.reasoning_effort, "medium");
+  assert.equal(executions.rows[0]?.service_tier, "standard");
+
   const state = await getAdaptiveAssuranceState({ principal: setup.principal, scopeId: first.scopeId });
   assert.equal(state.completedComparableCases, 0);
   assert.equal(state.humanAgreementBps, null);
   assert.equal(state.nextReassessmentAfter, 30);
+});
+
+test("separates assurance scopes when the actual task model or effort changes", async () => {
+  const setup = await fixture();
+  const sol = await evaluateAdaptiveReviewRequirement({
+    principal: setup.principal,
+    request: opportunity(setup, "profile-sol-0001"),
+  });
+  const terraRequest = opportunity(setup, "profile-terra-0001");
+  terraRequest.execution.generationSpans[0] = {
+    ...terraRequest.execution.generationSpans[0]!,
+    requestedModel: "gpt-5.6-terra",
+    resolvedModel: "gpt-5.6-terra-2026-07-01",
+    reasoningEffort: "low",
+  };
+  const terra = await evaluateAdaptiveReviewRequirement({ principal: setup.principal, request: terraRequest });
+
+  assert.notEqual(terra.executionProfileHash, sol.executionProfileHash);
+  assert.notEqual(terra.scopeId, sol.scopeId);
+  assert.equal(terra.executionProfile?.primary.requestedModel, "gpt-5.6-terra");
+  assert.equal(terra.stage, "calibrating");
+  assert.equal(terra.reviewRateBps, 10_000);
 });
 
 test("rejects idempotency conflicts and cross-workspace state reads without leaking existence", async () => {

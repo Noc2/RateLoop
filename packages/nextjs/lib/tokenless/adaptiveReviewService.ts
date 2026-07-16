@@ -11,6 +11,13 @@ import {
   nextAdaptiveStage,
 } from "~~/lib/tokenless/adaptiveReview";
 import {
+  AGENT_EXECUTION_PROFILE_SCHEMA_VERSION,
+  type AgentExecutionProfile,
+  type AgentExecutionProvenanceInput,
+  type NormalizedAgentExecutionProvenance,
+  normalizeAgentExecutionProvenance,
+} from "~~/lib/tokenless/agentExecutionProvenance";
+import {
   type ProductPrincipal,
   authenticateProductPrincipal,
   requireProductPrincipalScope,
@@ -49,6 +56,8 @@ type ReviewRules = {
 type ScopeRow = AdaptiveScopeState & {
   scopeId: string;
   stageEnteredAt: Date;
+  executionProfileHash: string;
+  executionProfile: AgentExecutionProfile | null;
 };
 
 export type AdaptiveReviewDecisionRequest = {
@@ -65,6 +74,7 @@ export type AdaptiveReviewDecisionRequest = {
   declaredConfidenceBps?: number | null;
   criticalRisk?: boolean;
   metadataComplete: boolean;
+  execution: AgentExecutionProvenanceInput;
 };
 
 export type AdaptiveAssuranceState = {
@@ -84,6 +94,8 @@ export type AdaptiveAssuranceState = {
   humanAgreementBps: number | null;
   humanAgreementLower95Bps: number | null;
   nextReassessmentAfter: number;
+  executionProfileHash: string;
+  executionProfile: AgentExecutionProfile | null;
 };
 
 export type AdaptiveReviewDecision = Omit<AdaptiveAssuranceState, "schemaVersion"> & {
@@ -99,6 +111,8 @@ export type AdaptiveReviewDecision = Omit<AdaptiveAssuranceState, "schemaVersion
   suggestionCommitment: string;
   metadataCommitment: string;
   sourceEvidenceHash: string;
+  executionId: string;
+  executionManifestCommitment: string;
   createdAt: string;
 };
 
@@ -212,6 +226,7 @@ function normalizeRequest(input: AdaptiveReviewDecisionRequest) {
     "declaredConfidenceBps",
     "criticalRisk",
     "metadataComplete",
+    "execution",
   ]);
   if (Object.keys(input).some(key => !allowedKeys.has(key))) {
     throw new TokenlessServiceError(
@@ -270,6 +285,7 @@ function normalizeRequest(input: AdaptiveReviewDecisionRequest) {
     declaredConfidenceBps,
     criticalRisk: input.criticalRisk ?? false,
     metadataComplete: input.metadataComplete,
+    execution: normalizeAgentExecutionProvenance(input.execution),
   };
 }
 
@@ -317,12 +333,37 @@ function policyFromRow(row: QueryRow | undefined): ReviewPolicyRow {
   };
 }
 
+function executionProfileFromRow(row: QueryRow): AgentExecutionProfile | null {
+  const value = parseJson(row.execution_profile_json, "execution profile");
+  if (value.schemaVersion !== AGENT_EXECUTION_PROFILE_SCHEMA_VERSION) return null;
+  const primary = value.primary;
+  const contributors = value.contributors;
+  const orchestrationMode = value.orchestrationMode;
+  if (
+    !primary ||
+    typeof primary !== "object" ||
+    Array.isArray(primary) ||
+    !Array.isArray(contributors) ||
+    (orchestrationMode !== "single_model" && orchestrationMode !== "multi_model")
+  ) {
+    throw new Error("Database returned invalid execution profile.");
+  }
+  return value as AgentExecutionProfile;
+}
+
 function scopeFromRow(row: QueryRow): ScopeRow {
   const scopeId = rowString(row, "scope_id");
+  const executionProfileHash = rowString(row, "execution_profile_hash");
   const stage = rowString(row, "stage") as AdaptiveReviewStage | null;
   const stageEnteredAt =
     row.stage_entered_at instanceof Date ? row.stage_entered_at : new Date(String(row.stage_entered_at));
-  if (!scopeId || !stage || !Number.isFinite(stageEnteredAt.getTime()))
+  if (
+    !scopeId ||
+    !executionProfileHash ||
+    !HASH_PATTERN.test(executionProfileHash) ||
+    !stage ||
+    !Number.isFinite(stageEnteredAt.getTime())
+  )
     throw new Error("Database returned an invalid adaptive scope.");
   return {
     scopeId,
@@ -331,6 +372,8 @@ function scopeFromRow(row: QueryRow): ScopeRow {
     stableCasesSinceStage: rowInteger(row, "stable_cases_since_stage"),
     unreviewedSinceLastSample: rowInteger(row, "unreviewed_since_last_sample"),
     stageEnteredAt,
+    executionProfileHash,
+    executionProfile: executionProfileFromRow(row),
   };
 }
 
@@ -671,13 +714,138 @@ async function assuranceState(
     humanAgreementBps: metrics.humanAgreementBps,
     humanAgreementLower95Bps: metrics.humanAgreementLower95Bps,
     nextReassessmentAfter: nextReassessmentAfter(input.scope),
+    executionProfileHash: input.scope.executionProfileHash,
+    executionProfile: input.scope.executionProfile,
   };
+}
+
+function parentFirstGenerationSpans(execution: NormalizedAgentExecutionProvenance) {
+  const byId = new Map(execution.generationSpans.map(span => [span.spanId, span]));
+  const depths = new Map<string, number>();
+  const depth = (spanId: string): number => {
+    const known = depths.get(spanId);
+    if (known !== undefined) return known;
+    const parentSpanId = byId.get(spanId)?.parentSpanId ?? null;
+    const value = parentSpanId ? depth(parentSpanId) + 1 : 0;
+    depths.set(spanId, value);
+    return value;
+  };
+  return [...execution.generationSpans].sort(
+    (left, right) => depth(left.spanId) - depth(right.spanId) || left.spanId.localeCompare(right.spanId),
+  );
+}
+
+async function persistExecution(
+  client: PoolClient,
+  input: {
+    workspaceId: string;
+    agentId: string;
+    agentVersionId: string;
+    integrationId: string | null;
+    execution: NormalizedAgentExecutionProvenance;
+    createdAt: Date;
+  },
+) {
+  const executionId = deterministicId("aex", [input.workspaceId, input.agentId, input.execution.externalExecutionId]);
+  const existing = await client.query(
+    `SELECT execution_id, agent_version_id, integration_id, manifest_commitment, execution_profile_hash
+     FROM tokenless_agent_executions
+     WHERE workspace_id = $1 AND agent_id = $2 AND external_execution_id = $3
+     FOR UPDATE`,
+    [input.workspaceId, input.agentId, input.execution.externalExecutionId],
+  );
+  const row = existing.rows[0] as QueryRow | undefined;
+  if (row) {
+    if (
+      rowString(row, "execution_id") !== executionId ||
+      rowString(row, "agent_version_id") !== input.agentVersionId ||
+      rowString(row, "integration_id") !== input.integrationId ||
+      rowString(row, "manifest_commitment") !== input.execution.manifestCommitment ||
+      rowString(row, "execution_profile_hash") !== input.execution.executionProfileHash
+    ) {
+      throw new TokenlessServiceError(
+        "externalExecutionId is already bound to different immutable provenance.",
+        409,
+        "execution_provenance_conflict",
+      );
+    }
+    return executionId;
+  }
+  await client.query(
+    `INSERT INTO tokenless_agent_executions
+     (execution_id, workspace_id, agent_id, agent_version_id, integration_id, external_execution_id,
+      status, metadata_source, started_at, completed_at, total_duration_ms, tool_call_count, tool_duration_ms,
+      model_call_count, input_token_total, cached_input_token_total, output_token_total,
+      reasoning_output_token_total, primary_span_id, manifest_commitment, execution_profile_hash,
+      execution_profile_json, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'host_reported', $8, $9, $10, $11, $12, $13, $14,
+             $15, $16, $17, $18, $19, $20, $21, $22)`,
+    [
+      executionId,
+      input.workspaceId,
+      input.agentId,
+      input.agentVersionId,
+      input.integrationId,
+      input.execution.externalExecutionId,
+      input.execution.status,
+      input.execution.startedAt ? new Date(input.execution.startedAt) : null,
+      input.execution.completedAt ? new Date(input.execution.completedAt) : null,
+      input.execution.durationMs,
+      input.execution.toolCallCount,
+      input.execution.toolDurationMs,
+      input.execution.totals.generationSpanCount,
+      input.execution.totals.inputTokens,
+      input.execution.totals.cachedInputTokens,
+      input.execution.totals.outputTokens,
+      input.execution.totals.reasoningOutputTokens,
+      input.execution.primarySpanId,
+      input.execution.manifestCommitment,
+      input.execution.executionProfileHash,
+      JSON.stringify(input.execution.executionProfile),
+      input.createdAt,
+    ],
+  );
+  for (const span of parentFirstGenerationSpans(input.execution)) {
+    await client.query(
+      `INSERT INTO tokenless_agent_generation_spans
+       (execution_id, span_id, parent_span_id, role, provider, requested_model, resolved_model, model_version,
+        reasoning_effort, service_tier, started_at, completed_at, duration_ms, time_to_first_output_ms,
+        input_tokens, cached_input_tokens, output_tokens, reasoning_output_tokens, response_id_hash,
+        finish_reason, metadata_source)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
+               $18, $19, $20, 'host_reported')`,
+      [
+        executionId,
+        span.spanId,
+        span.parentSpanId,
+        span.role,
+        span.provider,
+        span.requestedModel,
+        span.resolvedModel,
+        span.modelVersion,
+        span.reasoningEffort,
+        span.serviceTier,
+        span.startedAt ? new Date(span.startedAt) : null,
+        span.completedAt ? new Date(span.completedAt) : null,
+        span.durationMs,
+        span.timeToFirstOutputMs,
+        span.inputTokens,
+        span.cachedInputTokens,
+        span.outputTokens,
+        span.reasoningOutputTokens,
+        span.responseIdHash,
+        span.finishReason,
+      ],
+    );
+  }
+  return executionId;
 }
 
 function replayMatches(
   row: QueryRow,
   request: ReturnType<typeof normalizeRequest>,
   scopeId: string,
+  executionId: string,
   metadataCommitment: string,
   effectiveCriticalRisk: boolean,
 ) {
@@ -689,6 +857,7 @@ function replayMatches(
     rowInteger(row, "policy_version") === request.policyVersion &&
     rowString(row, "suggestion_commitment") === request.suggestionCommitment &&
     rowString(row, "metadata_commitment") === metadataCommitment &&
+    rowString(row, "execution_id") === executionId &&
     rowString(row, "source_evidence_reference") === request.sourceEvidenceReference &&
     rowString(row, "source_evidence_hash") === request.sourceEvidenceHash &&
     (row.declared_confidence_bps === null ? null : Number(row.declared_confidence_bps)) ===
@@ -716,6 +885,7 @@ export async function authenticateAdaptiveReviewPrincipal(
 export async function evaluateAdaptiveReviewRequirement(input: {
   principal: AdaptivePrincipal;
   request: AdaptiveReviewDecisionRequest;
+  integrationId?: string | null;
 }): Promise<AdaptiveReviewDecision> {
   requireProductPrincipalScope(input.principal, "review:decide");
   const request = normalizeRequest(input.request);
@@ -724,6 +894,10 @@ export async function evaluateAdaptiveReviewRequirement(input: {
   }
   const sampler = samplerConfig();
   const workspaceId = input.principal.workspaceId;
+  const integrationId =
+    input.integrationId === undefined || input.integrationId === null
+      ? null
+      : boundedIdentifier(input.integrationId, "integrationId");
   const scopeId = deterministicId("evs", [
     workspaceId,
     request.agentId,
@@ -733,6 +907,7 @@ export async function evaluateAdaptiveReviewRequirement(input: {
     request.workflowKey,
     request.riskTier,
     request.audiencePolicyHash,
+    request.execution.executionProfileHash,
   ]);
   const opportunityId = deterministicId("aop", [workspaceId, request.agentId, request.externalOpportunityId]);
   const partitionCommitment = sha256({
@@ -744,6 +919,7 @@ export async function evaluateAdaptiveReviewRequirement(input: {
     workflowKey: request.workflowKey,
     riskTier: request.riskTier,
     audiencePolicyHash: request.audiencePolicyHash,
+    executionProfileHash: request.execution.executionProfileHash,
   });
   const metadataCommitment = sha256({
     workflowKey: request.workflowKey,
@@ -753,18 +929,28 @@ export async function evaluateAdaptiveReviewRequirement(input: {
     criticalRisk: request.criticalRisk,
     metadataComplete: request.metadataComplete,
     sourceEvidenceHash: request.sourceEvidenceHash,
+    executionManifestCommitment: request.execution.manifestCommitment,
   });
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
     const policy = await loadPolicy(client, workspaceId, request);
     const now = new Date();
+    const executionId = await persistExecution(client, {
+      workspaceId,
+      agentId: request.agentId,
+      agentVersionId: request.agentVersionId,
+      integrationId,
+      execution: request.execution,
+      createdAt: now,
+    });
     const insertedScope = await client.query(
       `INSERT INTO tokenless_agent_evaluation_scopes
        (scope_id, workspace_id, agent_id, agent_version_id, policy_id, policy_version, workflow_key, risk_tier,
-        audience_policy_hash, partition_commitment, stage, completed_comparable_cases, stable_cases_since_stage,
-        unreviewed_since_last_sample, stage_entered_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'calibrating', 0, 0, 0, $11, $11)
+        audience_policy_hash, execution_profile_hash, execution_profile_json, partition_commitment, stage,
+        completed_comparable_cases, stable_cases_since_stage, unreviewed_since_last_sample, stage_entered_at,
+        updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'calibrating', 0, 0, 0, $13, $13)
        ON CONFLICT (scope_id) DO NOTHING RETURNING scope_id`,
       [
         scopeId,
@@ -776,6 +962,8 @@ export async function evaluateAdaptiveReviewRequirement(input: {
         request.workflowKey,
         request.riskTier,
         request.audiencePolicyHash,
+        request.execution.executionProfileHash,
+        JSON.stringify(request.execution.executionProfile),
         partitionCommitment,
         now,
       ],
@@ -794,7 +982,7 @@ export async function evaluateAdaptiveReviewRequirement(input: {
     }
     const scopeResult = await client.query(
       `SELECT scope_id, stage, completed_comparable_cases, stable_cases_since_stage,
-              unreviewed_since_last_sample, stage_entered_at
+              unreviewed_since_last_sample, stage_entered_at, execution_profile_hash, execution_profile_json
        FROM tokenless_agent_evaluation_scopes
        WHERE workspace_id = $1 AND scope_id = $2 FOR UPDATE`,
       [workspaceId, scopeId],
@@ -812,7 +1000,10 @@ export async function evaluateAdaptiveReviewRequirement(input: {
     );
     let opportunity = existing.rows[0] as QueryRow | undefined;
     const effectiveCriticalRisk = request.criticalRisk || policy.rules.criticalRiskTiers.includes(request.riskTier);
-    if (opportunity && !replayMatches(opportunity, request, scopeId, metadataCommitment, effectiveCriticalRisk)) {
+    if (
+      opportunity &&
+      !replayMatches(opportunity, request, scopeId, executionId, metadataCommitment, effectiveCriticalRisk)
+    ) {
       throw new TokenlessServiceError(
         "externalOpportunityId is already bound to different immutable inputs.",
         409,
@@ -825,12 +1016,12 @@ export async function evaluateAdaptiveReviewRequirement(input: {
       const inserted = await client.query(
         `INSERT INTO tokenless_agent_review_opportunities
          (opportunity_id, workspace_id, agent_id, agent_version_id, scope_id, policy_id, policy_version,
-          external_opportunity_id, suggestion_commitment, suggestion_ciphertext, suggestion_key_ref,
+          external_opportunity_id, execution_id, suggestion_commitment, suggestion_ciphertext, suggestion_key_ref,
           declared_confidence_bps, metadata_commitment, metadata_complete, critical_risk, decision,
           review_rate_bps, selection_probability_bps, sample_bucket, sampler_key_version, sampler_commitment,
           reason_codes_json, status, source_evidence_reference, source_evidence_hash, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NULL, NULL, $10, $11, $12, $13, $14,
-                 $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $24)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULL, NULL, $11, $12, $13, $14, $15,
+                 $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $25)
          RETURNING *`,
         [
           opportunityId,
@@ -841,6 +1032,7 @@ export async function evaluateAdaptiveReviewRequirement(input: {
           request.policyId,
           request.policyVersion,
           request.externalOpportunityId,
+          executionId,
           request.suggestionCommitment,
           request.declaredConfidenceBps,
           metadataCommitment,
@@ -898,6 +1090,8 @@ export async function evaluateAdaptiveReviewRequirement(input: {
       suggestionCommitment: rowString(opportunity, "suggestion_commitment")!,
       metadataCommitment: rowString(opportunity, "metadata_commitment")!,
       sourceEvidenceHash: rowString(opportunity, "source_evidence_hash")!,
+      executionId,
+      executionManifestCommitment: request.execution.manifestCommitment,
       createdAt: new Date(String(opportunity.created_at)).toISOString(),
     };
   } catch (error) {
@@ -917,6 +1111,7 @@ export async function getAdaptiveAssuranceState(input: {
   const result = await dbClient.execute({
     sql: `SELECT s.scope_id, s.stage, s.completed_comparable_cases, s.stable_cases_since_stage,
                  s.unreviewed_since_last_sample, s.stage_entered_at,
+                 s.execution_profile_hash, s.execution_profile_json,
                  p.policy_id, p.version, p.agent_id, p.agent_version_id, p.mode,
                  p.agreement_threshold_bps, p.production_floor_bps, p.maximum_unreviewed_gap,
                  p.rules_json, p.audience_policy_json
