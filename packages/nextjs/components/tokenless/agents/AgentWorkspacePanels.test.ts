@@ -71,6 +71,11 @@ test("completed read-only workspaces never render connection or policy mutations
   assert.match(panelsSource, /hasConnectedAgent && resolvedTab === "agents" && canManage/);
 });
 
+test("workspace managers see the human-review approval inbox on the agent task path", () => {
+  assert.match(panelsSource, /import \{ HumanReviewApprovalInbox \}/);
+  assert.match(panelsSource, /<HumanReviewApprovalInbox workspaceId=\{workspaceId\} \/>/);
+});
+
 test("one canonical human-review editor renders only for the selected agent", () => {
   assert.match(panelsSource, /const \[reviewAgentId, setReviewAgentId\] = useState/);
   assert.match(panelsSource, /activeReviewAgentId=\{reviewAgentId\}/);

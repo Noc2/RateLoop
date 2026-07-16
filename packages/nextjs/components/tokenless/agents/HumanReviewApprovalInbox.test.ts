@@ -1,0 +1,32 @@
+import { formatApprovalUsdc } from "./HumanReviewApprovalInbox";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+test("approval inbox formats exact atomic USDC values", () => {
+  assert.equal(formatApprovalUsdc("2650000"), "2.65 USDC");
+});
+
+test("approval inbox shows frozen terms and submits optimistic approve or reject decisions", () => {
+  const source = readFileSync(new URL("./HumanReviewApprovalInbox.tsx", import.meta.url), "utf8");
+  for (const label of [
+    "Reviewers",
+    "Answer window",
+    "Panel",
+    "Maximum charge",
+    "Compensation",
+    "Fee",
+    "Material",
+    "Expires",
+    "Frozen terms and provenance",
+    "Source commitment",
+    "Suggestion commitment",
+  ]) {
+    assert.match(source, new RegExp(label));
+  }
+  assert.match(source, /preparedRequestHash: approval\.preparedRequestHash/);
+  assert.match(source, /derivedEconomicsHash: approval\.derivedEconomicsHash/);
+  assert.match(source, /decision: "approve" \| "reject"/);
+  assert.match(source, /method: "PUT"/);
+  assert.match(source, /cache: "no-store"/);
+});

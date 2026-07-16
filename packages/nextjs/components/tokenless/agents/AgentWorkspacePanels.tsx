@@ -9,6 +9,7 @@ import { AgentHumanReviewEditor } from "./AgentHumanReviewEditor";
 import { AgentRegistryPanel } from "./AgentRegistryPanel";
 import { type AgentTab, AgentTabs } from "./AgentTabs";
 import { EvaluationDashboardPanel } from "./EvaluationDashboardPanel";
+import { HumanReviewApprovalInbox } from "./HumanReviewApprovalInbox";
 import { PrivateGroupsPanel } from "./PrivateGroupsPanel";
 import { connectedAgentTabs, resolveAvailableAgentTab } from "./agentWorkspaceState";
 import { AgentSetupFlow } from "./setup/AgentSetupFlow";
@@ -119,6 +120,9 @@ export function AgentWorkspacePanels({
             onAgentApproved={refreshAgents}
             onConnectionStateChange={handleConnectionState}
           />
+        ) : null}
+        {hasConnectedAgent && resolvedTab === "agents" && canManage ? (
+          <HumanReviewApprovalInbox workspaceId={workspaceId} />
         ) : null}
         {hasConnectedAgent && resolvedTab === "agents" ? (
           <AgentRegistryPanel
