@@ -15,6 +15,7 @@ import {
 } from "~~/lib/tokenless/humanReviewApprovalPreparation";
 import { transitionHumanReviewOpportunityLifecycle } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
 import { prepareHumanReviewRequest } from "~~/lib/tokenless/humanReviewRequestPreparation";
+import type { FrozenHybridReviewSplit, HybridHumanReviewResult } from "~~/lib/tokenless/hybridHumanReviewAdapter";
 import {
   type PrivatePaidHumanReviewDelivery,
   requestPrivatePaidHumanReview,
@@ -40,6 +41,7 @@ export type HumanReviewRoutingMaterial =
       kind: "public";
       appOrigin: string;
       publication: PublicPaidHumanReviewPublication;
+      hybridSplit?: FrozenHybridReviewSplit;
     }
   | {
       kind: "private";
@@ -159,6 +161,14 @@ export type HumanReviewRoutingResult =
     }
   | {
       schemaVersion: "rateloop.human-review-route.v1";
+      action: "hybrid_review_requested";
+      opportunityId: string;
+      authority: "ask_automatically";
+      lane: "hybrid_public_safe";
+      delivery: HybridHumanReviewResult;
+    }
+  | {
+      schemaVersion: "rateloop.human-review-route.v1";
       action: "blocked";
       opportunityId: string;
       authority: HumanReviewAuthorityLevel;
@@ -189,6 +199,7 @@ type RouterDependencies = {
   preparePrivateFoundation: typeof preparePrivateReviewFoundation;
   assignPrivateUnpaid: typeof requestPrivateUnpaidHumanReview;
   assignPrivatePaid: typeof requestPrivatePaidHumanReview;
+  assignHybrid?: (split: FrozenHybridReviewSplit) => Promise<HybridHumanReviewResult>;
 };
 
 const NO_SIDE_EFFECTS = Object.freeze({
@@ -664,7 +675,9 @@ function hasExactAutonomousGrant(context: FrozenHumanReviewRoutingContext) {
     return false;
   }
   if (
-    (context.requestProfile.lane === "public_paid_network" || context.requestProfile.lane === "private_invited_paid") &&
+    (context.requestProfile.lane === "public_paid_network" ||
+      context.requestProfile.lane === "private_invited_paid" ||
+      context.requestProfile.lane === "hybrid_public_safe") &&
     (!context.grant.grantedScopes.includes("payment:submit") ||
       !context.grant.credentialScopes.includes("payment:submit"))
   ) {
@@ -706,7 +719,8 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
     if (
       context.requestProfile.lane !== "public_paid_network" &&
       context.requestProfile.lane !== "private_invited_unpaid" &&
-      context.requestProfile.lane !== "private_invited_paid"
+      context.requestProfile.lane !== "private_invited_paid" &&
+      context.requestProfile.lane !== "hybrid_public_safe"
     ) {
       return {
         ...common,
@@ -746,6 +760,28 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
         code: "automatic_grant_inactive",
         retryable: true,
         sideEffects: NO_SIDE_EFFECTS,
+      };
+    }
+    if (context.requestProfile.lane === "hybrid_public_safe") {
+      const material = input.material!;
+      const split = material.kind === "public" ? material.hybridSplit : undefined;
+      if (!dependencies.assignHybrid || !split || split.opportunityId !== context.opportunityId) {
+        return {
+          ...common,
+          action: "blocked",
+          code: "lane_not_implemented",
+          retryable: true,
+          sideEffects: NO_SIDE_EFFECTS,
+        };
+      }
+      await dependencies.activateAutonomousLane(context, null, now);
+      return {
+        schemaVersion: "rateloop.human-review-route.v1",
+        action: "hybrid_review_requested",
+        opportunityId: context.opportunityId,
+        authority: "ask_automatically",
+        lane: "hybrid_public_safe",
+        delivery: await dependencies.assignHybrid(split),
       };
     }
     if (context.requestProfile.lane === "public_paid_network") {

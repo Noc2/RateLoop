@@ -158,6 +158,7 @@ function dependencies(
     foundation: 0,
     assign: 0,
     assignPaid: 0,
+    hybrid: 0,
     order: [] as string[],
     foundationInput: null as null | Record<string, unknown>,
     assignmentInput: null as null | Record<string, unknown>,
@@ -210,6 +211,32 @@ function dependencies(
         privateReviewId: "private_review_router",
         lane: "private_invited_paid",
       } as never;
+    },
+    assignHybrid: async () => {
+      calls.hybrid += 1;
+      calls.order.push("hybrid");
+      return {
+        schemaVersion: "rateloop.hybrid-human-review.v1",
+        opportunityId: frozen.opportunityId,
+        lane: "hybrid_public_safe",
+        deduplicationRule: "invited_wins",
+        invited: {
+          subpanelReference: "hybrid:invited",
+          bindingHash: HASH,
+          status: "ready",
+          replayed: false,
+          reviewerCount: 1,
+        },
+        network: {
+          subpanelReference: "hybrid:network",
+          bindingHash: HASH,
+          status: "ready",
+          replayed: false,
+          reviewerCount: 2,
+          removedDuplicateCount: 0,
+        },
+        splitBindingHash: HASH,
+      } as const;
     },
   } as unknown as Parameters<typeof createHumanReviewRequestRouter>[0];
   return { calls, router: createHumanReviewRequestRouter(deps) };
@@ -411,4 +438,55 @@ test("unsupported hybrid routing remains blocked without falling back to either 
   assert.equal(result.action, "blocked");
   assert.equal(result.action === "blocked" ? result.code : null, "lane_not_implemented");
   assert.deepEqual(calls.order, []);
+});
+
+test("hybrid routing activates only with an exact frozen split and the dedicated adapter", async () => {
+  const { calls, router } = dependencies(context({ lane: "hybrid_public_safe" }));
+  const result = await router({
+    principal,
+    opportunityId: "opportunity_router",
+    sourcePayload: "public source",
+    suggestionPayload: "public suggestion",
+    material: {
+      ...publicMaterial,
+      hybridSplit: {
+        schemaVersion: "rateloop.hybrid-review-split.v1",
+        opportunityId: "opportunity_router",
+        audiencePolicyHash: HASH,
+        requestProfileHash: HASH,
+        contentCommitments: { source: HASH, suggestion: HASH },
+        publication: publicMaterial.publication,
+        economics: {
+          asset: "USDC",
+          invitedMaximumChargeAtomic: "1000000",
+          networkMaximumChargeAtomic: "2000000",
+        },
+        invited: {
+          requestedCount: 1,
+          candidates: [
+            {
+              accountAddress: "0x1111111111111111111111111111111111111111",
+              assignmentReference: "assignment:invited",
+              assignmentHash: HASH,
+            },
+          ],
+        },
+        network: {
+          requestedCount: 1,
+          candidates: [
+            {
+              accountAddress: "0x2222222222222222222222222222222222222222",
+              assignmentReference: "assignment:network",
+              assignmentHash: HASH,
+            },
+          ],
+        },
+      },
+    },
+    now: NOW,
+  });
+  assert.equal(result.action, "hybrid_review_requested");
+  assert.deepEqual(calls.order, ["activate", "hybrid"]);
+  assert.equal(calls.public, 0);
+  assert.equal(calls.assignPaid, 0);
 });
