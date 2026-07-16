@@ -1,9 +1,7 @@
 import { createHash } from "node:crypto";
 import { dbClient } from "~~/lib/db";
-
-function sha256(value: string) {
-  return `sha256:${createHash("sha256").update(value).digest("hex")}`;
-}
+import { hashHumanReviewConfiguration } from "~~/lib/tokenless/humanReviewConfiguration";
+import { hashReviewRequestProfile } from "~~/lib/tokenless/reviewRequestProfiles";
 
 export async function seedReadyHumanReviewBinding(input: {
   workspaceId: string;
@@ -20,7 +18,33 @@ export async function seedReadyHumanReviewBinding(input: {
     .slice(0, 32);
   const profileId = `rrp_test_${suffix}`;
   const bindingId = `hrb_test_${suffix}`;
-  const profileHash = sha256(`ready-profile\0${suffix}`);
+  const profileHash = hashReviewRequestProfile({
+    agentId: input.agentId,
+    agentVersionId: input.agentVersionId,
+    criterion: "Is this output correct and safe to use",
+    positiveLabel: "Approve",
+    negativeLabel: "Reject",
+    rationaleMode: "optional",
+    audience: "public_network",
+    contentBoundary: "public_or_test",
+    privateSensitivity: null,
+    privateGroupId: null,
+    privateGroupPolicyVersion: null,
+    privateGroupPolicyHash: null,
+    responseWindowSeconds: 1_200,
+    panelSize: 3,
+    compensationMode: "usdc",
+    bountyPerSeatAtomic: "1000000",
+  });
+  const canonicalHash = hashHumanReviewConfiguration({
+    workspaceId: input.workspaceId,
+    agentId: input.agentId,
+    agentVersionId: input.agentVersionId,
+    selectionPolicy: { id: input.policyId, version: policyVersion },
+    requestProfile: { id: profileId, version: 1, hash: profileHash },
+    publishingPolicy: null,
+    authority: "check_only",
+  });
   const now = new Date();
   await dbClient.execute({
     sql: `INSERT INTO tokenless_agent_review_request_profiles
@@ -59,7 +83,7 @@ export async function seedReadyHumanReviewBinding(input: {
       policyVersion,
       profileId,
       profileHash,
-      sha256(`ready-binding\0${suffix}`),
+      canonicalHash,
       input.actor,
       now,
       input.actor,

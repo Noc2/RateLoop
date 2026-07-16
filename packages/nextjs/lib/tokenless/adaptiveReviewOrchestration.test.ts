@@ -11,6 +11,9 @@ import {
 } from "~~/lib/tokenless/adaptiveReviewOrchestration";
 import { evaluateAdaptiveReviewRequirement } from "~~/lib/tokenless/adaptiveReviewService";
 import { createWorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
+import { hashHumanReviewConfiguration } from "~~/lib/tokenless/humanReviewConfiguration";
+import { transitionHumanReviewOpportunityLifecycle } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
+import { prepareHumanReviewRequest } from "~~/lib/tokenless/humanReviewRequestPreparation";
 import {
   authenticateProductPrincipal,
   createAgentPublishingPolicy,
@@ -18,6 +21,7 @@ import {
   createWorkspaceApiKey,
   recordPrepaidLedgerEntry,
 } from "~~/lib/tokenless/productCore";
+import { __setPublicPaidHumanReviewActivationHookForTests } from "~~/lib/tokenless/publicPaidHumanReviewAdapter";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
 
@@ -38,6 +42,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  __setPublicPaidHumanReviewActivationHookForTests(null);
   __setDatabaseResourcesForTests(null);
   if (originalSamplerKey === undefined) delete process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY;
   else process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = originalSamplerKey;
@@ -105,7 +110,7 @@ async function fixture(
     },
   });
   const audiencePolicy = { reviewerSource: input.audience ?? "public_network" };
-  const reviewPolicyId = `arp_refund_${audiencePolicy.reviewerSource}`;
+  const reviewPolicyId = `arp_refund_${workspaceId.slice(-8)}_${audiencePolicy.reviewerSource}`;
   await dbClient.execute({
     sql: `INSERT INTO tokenless_agent_review_policies
           (policy_id, version, workspace_id, agent_id, agent_version_id, mode, enabled,
@@ -131,6 +136,26 @@ async function fixture(
     agentVersionId: agent.currentVersion.versionId,
     policyId: reviewPolicyId,
     actor: OWNER,
+  });
+  const automaticBindingHash = hashHumanReviewConfiguration({
+    workspaceId,
+    agentId: agent.agentId,
+    agentVersionId: agent.currentVersion.versionId,
+    selectionPolicy: { id: reviewPolicyId, version: 1 },
+    requestProfile: {
+      id: humanReview.profileId,
+      version: humanReview.profileVersion,
+      hash: humanReview.profileHash,
+    },
+    publishingPolicy: { id: publishingPolicy.policyId, version: 1 },
+    authority: "ask_automatically",
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_human_review_bindings
+          SET publishing_policy_id = ?, publishing_policy_version = 1, authority = 'ask_automatically',
+              canonical_hash = ?
+          WHERE workspace_id = ? AND binding_id = ? AND version = 1`,
+    args: [publishingPolicy.policyId, automaticBindingHash, workspaceId, humanReview.bindingId],
   });
   const key = await createWorkspaceApiKey({
     workspaceId,
@@ -196,6 +221,18 @@ async function fixture(
     },
   });
   assert.equal(decision.required, true);
+  if ((input.audience ?? "public_network") === "public_network" && decision.lifecycle.state !== "request_ready") {
+    await transitionHumanReviewOpportunityLifecycle({
+      workspaceId,
+      opportunityId: decision.opportunityId,
+      transitionKey: `test-public-ready:${decision.opportunityId}`,
+      expectedState: decision.lifecycle.state as "approval_required" | "blocked",
+      expectedRevision: decision.lifecycle.revision,
+      toState: "request_ready",
+      reasonCodes: ["test_owner_grant"],
+      actor: { kind: "owner", reference: OWNER },
+    });
+  }
   if (input.fund !== false) {
     await recordPrepaidLedgerEntry({ workspaceId, amountAtomic: "100000000", source: "test-funding" });
   }
@@ -234,6 +271,18 @@ test("creates one prepaid canonical ask and idempotently binds the required oppo
     args: [setup.decision.opportunityId],
   });
   assert.deepEqual(opportunity.rows[0], { operation_key: first.ask.operationKey, status: "review_requested" });
+  const lifecycle = await dbClient.execute({
+    sql: `SELECT l.state, l.state_revision, COUNT(e.event_id) AS transition_count
+          FROM tokenless_agent_review_opportunity_lifecycles l
+          LEFT JOIN tokenless_agent_review_opportunity_transition_events e
+            ON e.workspace_id = l.workspace_id AND e.opportunity_id = l.opportunity_id
+           AND e.to_state = 'pending'
+          WHERE l.workspace_id = ? AND l.opportunity_id = ?
+          GROUP BY l.state, l.state_revision`,
+    args: [setup.workspaceId, setup.decision.opportunityId],
+  });
+  assert.deepEqual(lifecycle.rows[0], { state: "pending", state_revision: 4, transition_count: 1 });
+  assert.match(first.ask.idempotencyKey, /^adaptive-public-paid:[0-9a-f]{64}$/u);
   const stored = await dbClient.execute({
     sql: `SELECT q.request_json, o.payment_mode, o.api_key_id
           FROM tokenless_agent_asks a
@@ -296,6 +345,239 @@ test("creates one prepaid canonical ask and idempotently binds the required oppo
   );
 });
 
+test("keeps a created ask inert until lifecycle binding succeeds and reconciles an activation crash", async () => {
+  const setup = await fixture();
+  let failedOperationKey = "";
+  __setPublicPaidHumanReviewActivationHookForTests(async input => {
+    failedOperationKey = input.operationKey;
+    throw new Error("simulated activation crash");
+  });
+  await assert.rejects(
+    () =>
+      requestAdaptiveHumanReview({
+        principal: setup.principal,
+        opportunityId: setup.decision.opportunityId,
+        sourcePayload: SOURCE_PAYLOAD,
+        suggestionPayload: SUGGESTION_PAYLOAD,
+        publication,
+        appOrigin: APP_ORIGIN,
+      }),
+    /simulated activation crash/,
+  );
+  const inert = await dbClient.execute({
+    sql: `SELECT a.operation_key, o.operation_key AS bound_operation_key, l.state,
+                 own.operation_key AS owned_operation_key,
+                 r.operation_key AS reservation_operation_key, r.status AS reservation_status
+          FROM tokenless_agent_asks a
+          JOIN tokenless_agent_review_opportunities o ON o.opportunity_id = ?
+          JOIN tokenless_agent_review_opportunity_lifecycles l
+            ON l.workspace_id = o.workspace_id AND l.opportunity_id = o.opportunity_id
+          JOIN tokenless_prepaid_reservations r ON r.idempotency_key = a.idempotency_key
+          LEFT JOIN tokenless_ask_ownership own ON own.operation_key = a.operation_key
+          WHERE a.operation_key = ?`,
+    args: [setup.decision.opportunityId, failedOperationKey],
+  });
+  assert.deepEqual(inert.rows[0], {
+    operation_key: failedOperationKey,
+    bound_operation_key: failedOperationKey,
+    state: "pending",
+    owned_operation_key: null,
+    reservation_operation_key: null,
+    reservation_status: "reserved",
+  });
+
+  __setPublicPaidHumanReviewActivationHookForTests(null);
+  const replay = await requestAdaptiveHumanReview({
+    principal: setup.principal,
+    opportunityId: setup.decision.opportunityId,
+    sourcePayload: SOURCE_PAYLOAD,
+    suggestionPayload: SUGGESTION_PAYLOAD,
+    publication,
+    appOrigin: APP_ORIGIN,
+  });
+  assert.equal(replay.ask.operationKey, failedOperationKey);
+  const activated = await dbClient.execute({
+    sql: `SELECT COUNT(*) AS owners FROM tokenless_ask_ownership WHERE operation_key = ?`,
+    args: [failedOperationKey],
+  });
+  const reservation = await dbClient.execute({
+    sql: `SELECT operation_key FROM tokenless_prepaid_reservations WHERE idempotency_key = ?`,
+    args: [replay.ask.idempotencyKey],
+  });
+  const transitions = await dbClient.execute({
+    sql: `SELECT COUNT(*) AS count FROM tokenless_agent_review_opportunity_transition_events
+          WHERE workspace_id = ? AND opportunity_id = ? AND to_state = 'pending'`,
+    args: [setup.workspaceId, setup.decision.opportunityId],
+  });
+  assert.equal(Number(activated.rows[0]?.owners), 1);
+  assert.equal(reservation.rows[0]?.operation_key, failedOperationKey);
+  assert.equal(Number(transitions.rows[0]?.count), 1);
+});
+
+test("consumes an exact owner approval in the same transaction as the pending transition", async () => {
+  const setup = await fixture();
+  const createdAt = new Date();
+  const expiresAt = new Date(createdAt.getTime() + 1_200_000);
+  const preparation = prepareHumanReviewRequest({
+    opportunityId: setup.decision.opportunityId,
+    workflowKey: "refund-review",
+    requestProfile: {
+      id: setup.humanReview.profileId,
+      version: setup.humanReview.profileVersion,
+      hash: setup.humanReview.profileHash as `sha256:${string}`,
+      agentId: setup.principal.integration.agentId,
+      agentVersionId: setup.principal.integration.agentVersionId,
+      criterion: "Is this output correct and safe to use",
+      positiveLabel: "Approve",
+      negativeLabel: "Reject",
+      rationaleMode: "optional",
+      audience: "public_network",
+      contentBoundary: "public_or_test",
+      privateSensitivity: null,
+      privateGroupId: null,
+      responseWindowSeconds: 1_200,
+      panelSize: 3,
+      compensationMode: "usdc",
+      bountyPerSeatAtomic: "1000000",
+    },
+    selectionPolicy: { id: setup.principal.integration.reviewPolicyId, version: 1 },
+    contentCommitments: {
+      source: __adaptiveReviewOrchestrationTestUtils.sha256(SOURCE_PAYLOAD),
+      suggestion: __adaptiveReviewOrchestrationTestUtils.sha256(SUGGESTION_PAYLOAD),
+    },
+    preparedAt: createdAt,
+    expiresAt,
+    sourcePayload: SOURCE_PAYLOAD,
+    suggestionPayload: SUGGESTION_PAYLOAD,
+  });
+  const approvalId = `hrap_${"ab".repeat(16)}`;
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_review_approval_requests
+          (approval_id, workspace_id, opportunity_id, revision,
+           request_profile_id, request_profile_version, request_profile_hash,
+           source_evidence_hash, suggestion_commitment,
+           prepared_request_json, prepared_request_hash,
+           derived_economics_json, derived_economics_hash, maximum_charge_atomic,
+           status, owner_decision, prepared_by, decided_by, decided_at, created_at, expires_at)
+          VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                  'approved', 'approved', ?, ?, ?, ?, ?)`,
+    args: [
+      approvalId,
+      setup.workspaceId,
+      setup.decision.opportunityId,
+      setup.humanReview.profileId,
+      setup.humanReview.profileVersion,
+      setup.humanReview.profileHash,
+      __adaptiveReviewOrchestrationTestUtils.sha256(SOURCE_PAYLOAD),
+      __adaptiveReviewOrchestrationTestUtils.sha256(SUGGESTION_PAYLOAD),
+      JSON.stringify(preparation.preparedRequest),
+      preparation.preparedRequestHash,
+      JSON.stringify(preparation.derivedEconomics),
+      preparation.derivedEconomicsHash,
+      preparation.maximumChargeAtomic,
+      OWNER,
+      OWNER,
+      createdAt,
+      createdAt,
+      expiresAt,
+    ],
+  });
+  const requested = await requestAdaptiveHumanReview({
+    principal: setup.principal,
+    opportunityId: setup.decision.opportunityId,
+    sourcePayload: SOURCE_PAYLOAD,
+    suggestionPayload: SUGGESTION_PAYLOAD,
+    publication,
+    appOrigin: APP_ORIGIN,
+  });
+  const state = await dbClient.execute({
+    sql: `SELECT a.status, a.consumption_reference, l.state
+          FROM tokenless_agent_review_approval_requests a
+          JOIN tokenless_agent_review_opportunity_lifecycles l
+            ON l.workspace_id = a.workspace_id AND l.opportunity_id = a.opportunity_id
+          WHERE a.approval_id = ?`,
+    args: [approvalId],
+  });
+  assert.deepEqual(state.rows[0], {
+    status: "consumed",
+    consumption_reference: requested.ask.operationKey,
+    state: "pending",
+  });
+});
+
+test("rejects cross-workspace opportunities and semantic binding tampering before reserving funds", async () => {
+  const first = await fixture();
+  const second = await fixture();
+  await assert.rejects(
+    () =>
+      requestAdaptiveHumanReview({
+        principal: second.principal,
+        opportunityId: first.decision.opportunityId,
+        sourcePayload: SOURCE_PAYLOAD,
+        suggestionPayload: SUGGESTION_PAYLOAD,
+        publication,
+        appOrigin: APP_ORIGIN,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "review_opportunity_not_found",
+  );
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_human_review_bindings SET canonical_hash = ?
+          WHERE workspace_id = ? AND binding_id = ? AND version = 1`,
+    args: [`sha256:${"ff".repeat(32)}`, first.workspaceId, first.humanReview.bindingId],
+  });
+  await assert.rejects(
+    () =>
+      requestAdaptiveHumanReview({
+        principal: first.principal,
+        opportunityId: first.decision.opportunityId,
+        sourcePayload: SOURCE_PAYLOAD,
+        suggestionPayload: SUGGESTION_PAYLOAD,
+        publication,
+        appOrigin: APP_ORIGIN,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "review_configuration_mismatch",
+  );
+  const asks = await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_agent_asks");
+  assert.equal(Number(asks.rows[0]?.count), 0);
+});
+
+test("requires the public paid lifecycle to be request_ready before any reservation", async () => {
+  const setup = await fixture();
+  const lifecycle = await dbClient.execute({
+    sql: `SELECT state_revision FROM tokenless_agent_review_opportunity_lifecycles
+          WHERE workspace_id = ? AND opportunity_id = ?`,
+    args: [setup.workspaceId, setup.decision.opportunityId],
+  });
+  await transitionHumanReviewOpportunityLifecycle({
+    workspaceId: setup.workspaceId,
+    opportunityId: setup.decision.opportunityId,
+    transitionKey: `test-public-blocked:${setup.decision.opportunityId}`,
+    expectedState: "request_ready",
+    expectedRevision: Number(lifecycle.rows[0]?.state_revision),
+    toState: "blocked",
+    reasonCodes: ["test_lane_blocked"],
+    actor: { kind: "service", reference: "test" },
+  });
+  await assert.rejects(
+    () =>
+      requestAdaptiveHumanReview({
+        principal: setup.principal,
+        opportunityId: setup.decision.opportunityId,
+        sourcePayload: SOURCE_PAYLOAD,
+        suggestionPayload: SUGGESTION_PAYLOAD,
+        publication,
+        appOrigin: APP_ORIGIN,
+      }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "human_review_lifecycle_not_request_ready",
+  );
+  const mutations = await dbClient.execute(
+    "SELECT (SELECT COUNT(*) FROM tokenless_agent_asks) AS asks, (SELECT COUNT(*) FROM tokenless_prepaid_reservations) AS reservations",
+  );
+  assert.equal(Number(mutations.rows[0]?.asks), 0);
+  assert.equal(Number(mutations.rows[0]?.reservations), 0);
+});
+
 test("requires an explicit safe public publication declaration before creating an ask", async () => {
   const setup = await fixture();
   const invalidDeclarations: unknown[] = [
@@ -343,9 +625,7 @@ test("fails private and hybrid policies before creating unreachable asks", async
           appOrigin: APP_ORIGIN,
         }),
       (error: unknown) =>
-        error instanceof TokenlessServiceError &&
-        error.code === "private_assignment_lane_unavailable" &&
-        error.message.includes("RateLoop network"),
+        error instanceof TokenlessServiceError && error.code === "human_review_lifecycle_not_request_ready",
     );
   }
   const mutations = await dbClient.execute(

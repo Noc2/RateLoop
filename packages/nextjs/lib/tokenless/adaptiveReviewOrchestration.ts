@@ -6,32 +6,21 @@ import type {
 } from "@rateloop/sdk";
 import { createHash } from "node:crypto";
 import "server-only";
-import { dbClient, dbPool } from "~~/lib/db";
+import { dbClient } from "~~/lib/db";
 import {
   type AdaptiveReviewObservation,
   finalizeAdaptiveReviewEvidence,
 } from "~~/lib/tokenless/adaptiveReviewEvidence";
 import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
+import type { BoundHumanReviewRequestProfile } from "~~/lib/tokenless/humanReviewRequestPreparation";
+import { authorizeAskAccess, requireProductPrincipalScope } from "~~/lib/tokenless/productCore";
 import {
-  type BoundHumanReviewRequestProfile,
-  prepareHumanReviewRequest,
-} from "~~/lib/tokenless/humanReviewRequestPreparation";
-import {
-  type PreparedProductAsk,
-  attachProductAsk,
-  authorizeAskAccess,
-  prepareProductAsk,
-  releasePreparedProductAsk,
-  requireProductPrincipalScope,
-} from "~~/lib/tokenless/productCore";
-import {
-  TokenlessServiceError,
-  createTokenlessAsk,
-  createTokenlessQuote,
-  getTokenlessResult,
-  waitForTokenlessAsk,
-} from "~~/lib/tokenless/server";
-import { isWorldIdAssuranceEnabled } from "~~/lib/tokenless/worldIdAssurance";
+  type PublicPaidHumanReviewPublication,
+  type PublicPaidHumanReviewRequest,
+  normalizePublicPaidReviewPublication,
+  requestPublicPaidHumanReview,
+} from "~~/lib/tokenless/publicPaidHumanReviewAdapter";
+import { TokenlessServiceError, getTokenlessResult, waitForTokenlessAsk } from "~~/lib/tokenless/server";
 
 type QueryRow = Record<string, unknown>;
 
@@ -39,21 +28,8 @@ const BYTES32_PATTERN = /^0x[0-9a-f]{64}$/;
 
 export type AdaptiveReviewIntegrationPrincipal = Extract<AgentMcpPrincipal, { kind: "integration" }>;
 
-export type AdaptiveReviewPublicationDeclaration = {
-  visibility: "public";
-  dataClassification: "public" | "synthetic" | "redacted";
-  confirmedNoSensitiveData: true;
-  redactionSummary?: string;
-};
-
-export type AdaptiveHumanReviewRequest = {
-  principal: AdaptiveReviewIntegrationPrincipal;
-  opportunityId: string;
-  sourcePayload: string;
-  suggestionPayload: string;
-  publication: AdaptiveReviewPublicationDeclaration;
-  appOrigin: string;
-};
+export type AdaptiveReviewPublicationDeclaration = PublicPaidHumanReviewPublication;
+export type AdaptiveHumanReviewRequest = PublicPaidHumanReviewRequest;
 
 type BoundOpportunity = {
   opportunityId: string;
@@ -267,230 +243,10 @@ async function loadBoundOpportunity(
   };
 }
 
-function exactPayload(value: string, field: "sourcePayload" | "suggestionPayload") {
-  if (typeof value !== "string" || value.trim().length === 0) {
-    throw new TokenlessServiceError(`${field} must be a non-empty string.`, 400, "invalid_review_payload");
-  }
-  return value;
-}
-
-function normalizePublicationDeclaration(value: unknown): AdaptiveReviewPublicationDeclaration {
-  const declaration =
-    value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
-  const classification = declaration?.dataClassification;
-  const redactionSummary = declaration?.redactionSummary;
-  if (
-    declaration?.visibility !== "public" ||
-    !["public", "synthetic", "redacted"].includes(String(classification)) ||
-    declaration.confirmedNoSensitiveData !== true ||
-    (redactionSummary !== undefined && typeof redactionSummary !== "string") ||
-    (classification === "redacted" && (typeof redactionSummary !== "string" || redactionSummary.trim().length < 10))
-  ) {
-    throw new TokenlessServiceError(
-      "RateLoop-network review publication requires visibility 'public', dataClassification 'public', 'synthetic', or 'redacted', and confirmedNoSensitiveData true. Redacted work also requires a redactionSummary of at least 10 characters.",
-      400,
-      "invalid_review_publication",
-    );
-  }
-  return {
-    visibility: "public",
-    dataClassification: classification as AdaptiveReviewPublicationDeclaration["dataClassification"],
-    confirmedNoSensitiveData: true,
-    ...(typeof redactionSummary === "string" ? { redactionSummary: redactionSummary.trim() } : {}),
-  };
-}
-
-function assertAvailableReviewerLane(opportunity: BoundOpportunity) {
-  if (opportunity.audienceSource !== "rateloop_network") {
-    throw new TokenlessServiceError(
-      "Private and hybrid reviewer policies cannot publish yet because no private assignment lane is connected. Change the review audience to RateLoop network for public, non-sensitive work, or wait for private assignment support.",
-      409,
-      "private_assignment_lane_unavailable",
-    );
-  }
-  if (!isWorldIdAssuranceEnabled()) {
-    throw new TokenlessServiceError(
-      "RateLoop-network assurance is disabled. Enable TOKENLESS_NETWORK_PANELS_ENABLED on the hosted service before retrying.",
-      404,
-      "network_panels_disabled",
-    );
-  }
-}
-
-function assertRequestable(binding: BoundOpportunity, principal: AdaptiveReviewIntegrationPrincipal) {
-  const now = Date.now();
-  if (binding.decision !== "required") {
-    throw new TokenlessServiceError("This opportunity does not require human review.", 409, "review_not_required");
-  }
-  if (!binding.reviewPolicyEnabled || binding.reviewPolicySuperseded) {
-    throw new TokenlessServiceError("The bound review policy is not active.", 409, "review_policy_inactive");
-  }
-  if (binding.reviewPublishingPolicyId !== principal.integration.publishingPolicyId) {
-    throw new TokenlessServiceError(
-      "The review and publishing policy bindings do not match.",
-      409,
-      "review_configuration_mismatch",
-    );
-  }
-  if (
-    !binding.publishingPolicyEnabled ||
-    binding.publishingPolicyRevoked ||
-    binding.publishingPolicyEffectiveAt.getTime() > now ||
-    (binding.publishingPolicyExpiresAt && binding.publishingPolicyExpiresAt.getTime() <= now)
-  ) {
-    throw new TokenlessServiceError("The bound publishing policy is not active.", 409, "publishing_policy_inactive");
-  }
-  if (!["decided", "review_requested", "completed"].includes(binding.status)) {
-    throw new TokenlessServiceError("This review opportunity cannot be requested.", 409, "review_status_conflict");
-  }
-}
-
-async function bindOperation(input: {
-  principal: AdaptiveReviewIntegrationPrincipal;
-  opportunityId: string;
-  operationKey: string;
-}) {
-  const binding = input.principal.integration;
-  const client = await dbPool.connect();
-  try {
-    await client.query("BEGIN");
-    const result = await client.query(
-      `SELECT decision, status, operation_key FROM tokenless_agent_review_opportunities
-       WHERE workspace_id = $1 AND agent_id = $2 AND agent_version_id = $3
-         AND policy_id = $4 AND policy_version = $5 AND opportunity_id = $6
-       FOR UPDATE`,
-      [
-        binding.workspaceId,
-        binding.agentId,
-        binding.agentVersionId,
-        binding.reviewPolicyId,
-        binding.reviewPolicyVersion,
-        input.opportunityId,
-      ],
-    );
-    const row = result.rows[0] as QueryRow | undefined;
-    const currentOperationKey = rowString(row, "operation_key");
-    const status = rowString(row, "status");
-    if (
-      rowString(row, "decision") !== "required" ||
-      !["decided", "review_requested", "completed"].includes(status ?? "") ||
-      (status === "completed" && currentOperationKey !== input.operationKey) ||
-      (currentOperationKey !== null && currentOperationKey !== input.operationKey)
-    ) {
-      throw new TokenlessServiceError(
-        "Review opportunity binding conflicts with this ask.",
-        409,
-        "review_binding_conflict",
-      );
-    }
-    const now = new Date();
-    if (status !== "completed") {
-      await client.query(
-        `UPDATE tokenless_agent_review_opportunities
-         SET operation_key = $1, status = 'review_requested', updated_at = $2
-         WHERE opportunity_id = $3 AND (operation_key IS NULL OR operation_key = $1)`,
-        [input.operationKey, now, input.opportunityId],
-      );
-    }
-    if (status === "decided") {
-      await client.query(
-        `UPDATE tokenless_agent_integrations
-         SET last_request_at = CASE
-           WHEN last_request_at IS NULL OR last_request_at < $1 THEN $1
-           ELSE last_request_at
-         END,
-         updated_at = CASE WHEN updated_at < $1 THEN $1 ELSE updated_at END
-         WHERE integration_id = $2 AND workspace_id = $3 AND agent_id = $4 AND agent_version_id = $5`,
-        [now, binding.integrationId, binding.workspaceId, binding.agentId, binding.agentVersionId],
-      );
-    }
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
 export async function requestAdaptiveHumanReview(
   input: AdaptiveHumanReviewRequest,
 ): Promise<{ schemaVersion: "rateloop.adaptive-review-request.v1"; opportunityId: string; ask: TokenlessAskResponse }> {
-  requireProductPrincipalScope(input.principal.principal, "panel:publish");
-  requireProductPrincipalScope(input.principal.principal, "payment:submit");
-  const publication = normalizePublicationDeclaration(input.publication);
-  const sourcePayload = exactPayload(input.sourcePayload, "sourcePayload");
-  const suggestionPayload = exactPayload(input.suggestionPayload, "suggestionPayload");
-  const opportunity = await loadBoundOpportunity(input.principal, input.opportunityId);
-  assertRequestable(opportunity, input.principal);
-  assertAvailableReviewerLane(opportunity);
-  if (opportunity.requestProfile.audience !== "public_network") {
-    throw new TokenlessServiceError(
-      "The bound review policy and request-profile audiences do not match.",
-      409,
-      "review_configuration_mismatch",
-    );
-  }
-  if (sha256(sourcePayload) !== opportunity.sourceEvidenceHash) {
-    throw new TokenlessServiceError(
-      "sourcePayload does not match the committed source evidence.",
-      409,
-      "source_payload_commitment_mismatch",
-    );
-  }
-  if (sha256(suggestionPayload) !== opportunity.suggestionCommitment) {
-    throw new TokenlessServiceError(
-      "suggestionPayload does not match the committed suggestion.",
-      409,
-      "suggestion_payload_commitment_mismatch",
-    );
-  }
-  const preparedAt = new Date();
-  const preparation = prepareHumanReviewRequest({
-    opportunityId: opportunity.opportunityId,
-    workflowKey: opportunity.workflowKey,
-    requestProfile: opportunity.requestProfile,
-    selectionPolicy: opportunity.selectionPolicy,
-    contentCommitments: {
-      source: opportunity.sourceEvidenceHash,
-      suggestion: opportunity.suggestionCommitment,
-    },
-    preparedAt,
-    expiresAt: new Date(preparedAt.getTime() + opportunity.requestProfile.responseWindowSeconds * 1_000),
-    sourcePayload,
-    suggestionPayload,
-  });
-  const quoteRequest: TokenlessQuoteRequest = {
-    audience: { admissionPolicyHash: opportunity.admissionPolicyHash, source: opportunity.audienceSource },
-    ...preparation.quoteTerms,
-    confirmedNoSensitiveData: publication.confirmedNoSensitiveData,
-    dataClassification: publication.dataClassification,
-    ...(publication.redactionSummary ? { redactionSummary: publication.redactionSummary } : {}),
-    visibility: publication.visibility,
-  };
-  const quote = await createTokenlessQuote(quoteRequest);
-  const askRequest = {
-    idempotencyKey: `adaptive-review:${opportunity.opportunityId}`,
-    payment: { mode: "prepaid" as const, workspaceId: input.principal.integration.workspaceId },
-    quoteId: quote.quoteId,
-  };
-  let prepared: PreparedProductAsk | null = null;
-  let attached = false;
-  try {
-    prepared = await prepareProductAsk({ principal: input.principal.principal, request: askRequest });
-    const ask = await createTokenlessAsk(askRequest, askRequest.idempotencyKey, input.appOrigin);
-    await attachProductAsk(prepared, ask);
-    attached = true;
-    await bindOperation({
-      principal: input.principal,
-      opportunityId: opportunity.opportunityId,
-      operationKey: ask.operationKey,
-    });
-    return { schemaVersion: "rateloop.adaptive-review-request.v1", opportunityId: opportunity.opportunityId, ask };
-  } catch (error) {
-    if (prepared && !attached) await releasePreparedProductAsk(prepared);
-    throw error;
-  }
+  return requestPublicPaidHumanReview(input);
 }
 
 async function requireBoundOperation(input: { principal: AdaptiveReviewIntegrationPrincipal; opportunityId: string }) {
@@ -538,4 +294,7 @@ export async function getAdaptiveHumanReviewResult(input: {
   };
 }
 
-export const __adaptiveReviewOrchestrationTestUtils = { normalizePublicationDeclaration, sha256 };
+export const __adaptiveReviewOrchestrationTestUtils = {
+  normalizePublicationDeclaration: normalizePublicPaidReviewPublication,
+  sha256,
+};

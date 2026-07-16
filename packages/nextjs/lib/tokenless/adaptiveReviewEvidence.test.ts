@@ -12,6 +12,8 @@ import {
 } from "~~/lib/tokenless/adaptiveReviewOrchestration";
 import { evaluateAdaptiveReviewRequirement } from "~~/lib/tokenless/adaptiveReviewService";
 import { createWorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
+import { hashHumanReviewConfiguration } from "~~/lib/tokenless/humanReviewConfiguration";
+import { transitionHumanReviewOpportunityLifecycle } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
 import {
   authenticateProductPrincipal,
   createAgentPublishingPolicy,
@@ -107,12 +109,32 @@ async function fixture() {
       now,
     ],
   });
-  await seedReadyHumanReviewBinding({
+  const humanReview = await seedReadyHumanReviewBinding({
     workspaceId,
     agentId: agent.agentId,
     agentVersionId: agent.currentVersion.versionId,
     policyId: reviewPolicyId,
     actor: OWNER,
+  });
+  const automaticBindingHash = hashHumanReviewConfiguration({
+    workspaceId,
+    agentId: agent.agentId,
+    agentVersionId: agent.currentVersion.versionId,
+    selectionPolicy: { id: reviewPolicyId, version: 1 },
+    requestProfile: {
+      id: humanReview.profileId,
+      version: humanReview.profileVersion,
+      hash: humanReview.profileHash,
+    },
+    publishingPolicy: { id: publishingPolicy.policyId, version: 1 },
+    authority: "ask_automatically",
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_human_review_bindings
+          SET publishing_policy_id = ?, publishing_policy_version = 1, authority = 'ask_automatically',
+              canonical_hash = ?
+          WHERE workspace_id = ? AND binding_id = ? AND version = 1`,
+    args: [publishingPolicy.policyId, automaticBindingHash, workspaceId, humanReview.bindingId],
   });
   const key = await createWorkspaceApiKey({
     workspaceId,
@@ -177,6 +199,18 @@ async function fixture() {
       },
     },
   });
+  if (decision.lifecycle.state !== "request_ready") {
+    await transitionHumanReviewOpportunityLifecycle({
+      workspaceId,
+      opportunityId: decision.opportunityId,
+      transitionKey: `test-public-ready:${decision.opportunityId}`,
+      expectedState: decision.lifecycle.state as "approval_required" | "blocked",
+      expectedRevision: decision.lifecycle.revision,
+      toState: "request_ready",
+      reasonCodes: ["test_owner_grant"],
+      actor: { kind: "owner", reference: OWNER },
+    });
+  }
   await recordPrepaidLedgerEntry({ workspaceId, amountAtomic: "100000000", source: "test-funding" });
   const requested = await requestAdaptiveHumanReview({
     principal,
