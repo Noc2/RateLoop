@@ -4,6 +4,8 @@ import { dbClient } from "~~/lib/db";
 import { runTokenlessNotificationCycle } from "~~/lib/notifications/delivery";
 import { expireDeletedAuthSubjectGuards, reconcileWorkspaceDeletionJobs } from "~~/lib/privacy/deletionReconciliation";
 import { processArtifactDeletionByObjectId } from "~~/lib/tokenless/artifactPrivacy";
+import { processDueGrcReconciliations } from "~~/lib/tokenless/assuranceGrcConnectors";
+import { processDueAssuranceWormExports } from "~~/lib/tokenless/assuranceWormExports";
 import { processPublicQuestionMediaDeletionByAssetId } from "~~/lib/tokenless/publicQuestionMedia";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { processSurpriseBountyPayments } from "~~/lib/tokenless/surpriseBountyService";
@@ -110,6 +112,8 @@ type MaintenanceProcessors = {
   deliverWebhooks: typeof deliverPendingWebhooks;
   processNotifications: typeof runTokenlessNotificationCycle;
   processSurpriseBounties: typeof processSurpriseBountyPayments;
+  processGrcReconciliations: typeof processDueGrcReconciliations;
+  processWormExports: typeof processDueAssuranceWormExports;
   reconcileDeletionJobs: typeof reconcileWorkspaceDeletionJobs;
   expireDeletedAuthGuards: typeof expireDeletedAuthSubjectGuards;
 };
@@ -124,6 +128,8 @@ const defaultProcessors: MaintenanceProcessors = {
   deliverWebhooks: deliverPendingWebhooks,
   processNotifications: runTokenlessNotificationCycle,
   processSurpriseBounties: processSurpriseBountyPayments,
+  processGrcReconciliations: processDueGrcReconciliations,
+  processWormExports: processDueAssuranceWormExports,
   reconcileDeletionJobs: reconcileWorkspaceDeletionJobs,
   expireDeletedAuthGuards: expireDeletedAuthSubjectGuards,
 };
@@ -264,6 +270,14 @@ export async function runTokenlessScheduledMaintenance(input: {
       now,
       limit: workLimit,
     });
+    const grcReconciliations = await processors.processGrcReconciliations({
+      now,
+      limit: 1,
+    });
+    const wormExports = await processors.processWormExports({
+      now,
+      limit: workLimit,
+    });
     const webhookOutcomes = await processors.deliverWebhooks({
       now,
       limit: webhookLimit,
@@ -286,7 +300,11 @@ export async function runTokenlessScheduledMaintenance(input: {
       notifications.dead > 0 ||
       notifications.retry > 0 ||
       surpriseBounties.retry > 0 ||
-      surpriseBounties.reconciliationRequired > 0
+      surpriseBounties.reconciliationRequired > 0 ||
+      grcReconciliations.retry > 0 ||
+      grcReconciliations.failed > 0 ||
+      wormExports.retry > 0 ||
+      wormExports.dead > 0
         ? "degraded"
         : "healthy";
     const summary = {
@@ -297,6 +315,8 @@ export async function runTokenlessScheduledMaintenance(input: {
       deletionJobs,
       deletedAuthGuards,
       surpriseBounties,
+      grcReconciliations,
+      wormExports,
       adaptiveRollups: "not_scheduled_until_a_persisted_rollup_processor_exists",
     };
     await dbClient.execute({
