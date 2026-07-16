@@ -3,6 +3,10 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { dbPool } from "~~/lib/db";
 import {
+  type AdaptiveReviewDecisionRequest,
+  evaluateAdaptiveReviewRequirement,
+} from "~~/lib/tokenless/adaptiveReviewService";
+import {
   type AgentExecutionProvenanceInput,
   type NormalizedAgentExecutionProvenance,
   normalizeAgentExecutionProvenance,
@@ -31,6 +35,7 @@ export const OTLP_PROVENANCE_SOURCE = {
   independentlyVerified: false,
   attestation: null,
 } as const;
+export const OTLP_REVIEW_MAPPING_PIN = "rateloop.otlp-review-attributes.v1" as const;
 
 export const OTLP_INGEST_LIMITS = {
   compressedBytes: 1_048_576,
@@ -49,6 +54,9 @@ export const OTLP_INGEST_LIMITS = {
 const TRACE_ID_PATTERN = /^[0-9a-f]{32}$/u;
 const SPAN_ID_PATTERN = /^[0-9a-f]{16}$/u;
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9._:-]{3,160}$/u;
+const REVIEW_IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u;
+const REVIEW_RISK_TIER_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/u;
+const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const GENERATION_OPERATIONS = new Set([
   "chat",
   "generate_content",
@@ -76,6 +84,7 @@ type TraceMapping = {
   agentId: string;
   agentVersionId: string;
   execution: NormalizedAgentExecutionProvenance;
+  reviewRequest: AdaptiveReviewDecisionRequest | null;
 };
 
 export type OtlpTraceIngestResult = {
@@ -373,6 +382,120 @@ function boundedOptionalAttribute(attributes: Map<string, OtlpPrimitive>, key: s
   return value;
 }
 
+const OTLP_REVIEW_ATTRIBUTES = [
+  "rateloop.review.policy.id",
+  "rateloop.review.policy.version",
+  "rateloop.review.workflow.key",
+  "rateloop.review.risk.tier",
+  "rateloop.review.audience_policy_hash",
+  "rateloop.review.suggestion_commitment",
+  "rateloop.review.declared_confidence_bps",
+  "rateloop.review.critical_risk",
+  "rateloop.review.metadata_complete",
+] as const;
+
+function reviewBoolean(attributes: Map<string, OtlpPrimitive>, key: string, required: boolean) {
+  const value = attributes.get(key);
+  if (value === undefined && !required) return null;
+  if (typeof value !== "boolean") invalid(`${key} must be a boolean.`, "invalid_otlp_review_mapping");
+  return value;
+}
+
+function reviewInteger(
+  attributes: Map<string, OtlpPrimitive>,
+  key: string,
+  minimum: number,
+  maximum: number,
+  required: boolean,
+) {
+  const value = attributes.get(key);
+  if (value === undefined && !required) return null;
+  const parsed =
+    typeof value === "number" ? value : typeof value === "string" && /^\d+$/u.test(value) ? Number(value) : NaN;
+  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) {
+    invalid(`${key} must be an integer from ${minimum} to ${maximum}.`, "invalid_otlp_review_mapping");
+  }
+  return parsed;
+}
+
+function reviewString(attributes: Map<string, OtlpPrimitive>, key: string, pattern: RegExp, description: string) {
+  const value = attributeString(attributes, key);
+  if (value === null || !pattern.test(value)) {
+    invalid(`${key} must be ${description}.`, "invalid_otlp_review_mapping");
+  }
+  return value;
+}
+
+function mapReviewRequest(input: {
+  group: TraceGroup;
+  primary: MaterializedSpan;
+  agentId: string;
+  agentVersionId: string;
+  execution: NormalizedAgentExecutionProvenance;
+}): AdaptiveReviewDecisionRequest | null {
+  const attributes = input.primary.attributesByKey;
+  const eligible = reviewBoolean(attributes, "rateloop.review.eligible", false);
+  const hasReviewMetadata = OTLP_REVIEW_ATTRIBUTES.some(key => attributes.has(key));
+  if (eligible !== true) {
+    if (hasReviewMetadata) {
+      invalid("OTLP review attributes require rateloop.review.eligible=true.", "invalid_otlp_review_mapping");
+    }
+    return null;
+  }
+  if (input.execution.status !== "completed") {
+    invalid("A failed OTLP execution cannot declare an eligible output.", "invalid_otlp_review_mapping");
+  }
+  const policyId = reviewString(
+    attributes,
+    "rateloop.review.policy.id",
+    REVIEW_IDENTIFIER_PATTERN,
+    "a bounded policy identifier",
+  );
+  const workflowKey = reviewString(
+    attributes,
+    "rateloop.review.workflow.key",
+    REVIEW_IDENTIFIER_PATTERN,
+    "a bounded workflow identifier",
+  );
+  const riskTier = reviewString(
+    attributes,
+    "rateloop.review.risk.tier",
+    REVIEW_RISK_TIER_PATTERN,
+    "a lowercase risk tier",
+  );
+  const audiencePolicyHash = reviewString(
+    attributes,
+    "rateloop.review.audience_policy_hash",
+    SHA256_PATTERN,
+    "a sha256 commitment",
+  );
+  const suggestionCommitment = reviewString(
+    attributes,
+    "rateloop.review.suggestion_commitment",
+    SHA256_PATTERN,
+    "a sha256 commitment",
+  );
+  return {
+    externalOpportunityId: `otlp:${input.group.traceId}`,
+    agentId: input.agentId,
+    agentVersionId: input.agentVersionId,
+    policyId,
+    policyVersion: reviewInteger(attributes, "rateloop.review.policy.version", 1, MAX_INTEGER, true)!,
+    workflowKey,
+    riskTier,
+    audiencePolicyHash,
+    suggestionCommitment,
+    sourceEvidence: {
+      reference: `otlp-trace/${input.group.traceId}`,
+      hash: input.execution.manifestCommitment,
+    },
+    declaredConfidenceBps: reviewInteger(attributes, "rateloop.review.declared_confidence_bps", 0, 10_000, false),
+    criticalRisk: reviewBoolean(attributes, "rateloop.review.critical_risk", false) ?? false,
+    metadataComplete: reviewBoolean(attributes, "rateloop.review.metadata_complete", true)!,
+    execution: input.execution,
+  };
+}
+
 function isToolSpan(span: MaterializedSpan) {
   return (
     attributeString(span.attributesByKey, "gen_ai.operation.name") === "execute_tool" ||
@@ -522,7 +645,13 @@ function mapTrace(group: TraceGroup): TraceMapping {
       };
     }),
   };
-  return { agentId, agentVersionId, execution: normalizeAgentExecutionProvenance(executionInput) };
+  const execution = normalizeAgentExecutionProvenance(executionInput);
+  return {
+    agentId,
+    agentVersionId,
+    execution,
+    reviewRequest: mapReviewRequest({ group, primary, agentId, agentVersionId, execution }),
+  };
 }
 
 function deterministicExecutionId(workspaceId: string, agentId: string, externalExecutionId: string) {
@@ -692,6 +821,7 @@ function partialMessage(codes: Set<string>) {
 export async function ingestOtlpTraces(input: {
   principal: OtlpPrincipal;
   request: OtlpTraceExportRequest;
+  evaluateReview?: typeof evaluateAdaptiveReviewRequirement;
 }): Promise<OtlpTraceIngestResult> {
   requireProductPrincipalScope(input.principal, "telemetry:write");
   const materialized = materializeSpans(input.request);
@@ -716,6 +846,13 @@ export async function ingestOtlpTraces(input: {
       await client.query("BEGIN");
       const stored = await persistMappedTrace(client, input.principal.workspaceId, mapping);
       await client.query("COMMIT");
+      if (mapping.reviewRequest) {
+        requireProductPrincipalScope(input.principal, "review:decide");
+        await (input.evaluateReview ?? evaluateAdaptiveReviewRequirement)({
+          principal: input.principal,
+          request: mapping.reviewRequest,
+        });
+      }
       acceptedSpans += group.spans.length;
       acceptedExecutions += 1;
       if (stored.deduplicated) deduplicatedExecutions += 1;

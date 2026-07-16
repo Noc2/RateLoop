@@ -13,6 +13,10 @@ import {
   OTLP_GENAI_SEMCONV_PIN,
   OTLP_HTTP_PROTOCOL_PIN,
   OTLP_PROVENANCE_SOURCE,
+  OTLP_REVIEW_MAPPING_PIN,
+  authenticateOtlpTracePrincipal,
+  ingestOtlpTraces,
+  parseOtlpTraceJson,
 } from "~~/lib/tokenless/otlpTraceIngest";
 import { createWorkspace, createWorkspaceApiKey } from "~~/lib/tokenless/productCore";
 
@@ -66,6 +70,28 @@ function setTraceId(value: JsonRecord, traceId: string) {
   }
 }
 
+function addPrimaryAttribute(value: JsonRecord, key: string, anyValue: JsonRecord) {
+  const primary = spans(scopeSpans(resourceSpans(value)[0]!)[0]!)[0]!;
+  attributes(primary).push({ key, value: anyValue });
+}
+
+function addEligibleReviewAttributes(value: JsonRecord) {
+  addPrimaryAttribute(value, "rateloop.review.eligible", { boolValue: true });
+  addPrimaryAttribute(value, "rateloop.review.policy.id", { stringValue: "arp_otlp" });
+  addPrimaryAttribute(value, "rateloop.review.policy.version", { intValue: "2" });
+  addPrimaryAttribute(value, "rateloop.review.workflow.key", { stringValue: "support_reply" });
+  addPrimaryAttribute(value, "rateloop.review.risk.tier", { stringValue: "medium" });
+  addPrimaryAttribute(value, "rateloop.review.audience_policy_hash", {
+    stringValue: `sha256:${"22".repeat(32)}`,
+  });
+  addPrimaryAttribute(value, "rateloop.review.suggestion_commitment", {
+    stringValue: `sha256:${"33".repeat(32)}`,
+  });
+  addPrimaryAttribute(value, "rateloop.review.declared_confidence_bps", { intValue: "7300" });
+  addPrimaryAttribute(value, "rateloop.review.critical_risk", { boolValue: false });
+  addPrimaryAttribute(value, "rateloop.review.metadata_complete", { boolValue: true });
+}
+
 async function setup() {
   const { workspaceId } = await createWorkspace({ name: "OTLP workspace", ownerAddress: OWNER });
   const agent = await createWorkspaceAgent({
@@ -80,10 +106,15 @@ async function setup() {
     },
   });
   const key = await createWorkspaceApiKey({ workspaceId, name: "Telemetry", scopes: ["telemetry:write"] });
+  const reviewKey = await createWorkspaceApiKey({
+    workspaceId,
+    name: "Telemetry review decisions",
+    scopes: ["telemetry:write", "review:decide"],
+  });
   const narrow = await createWorkspaceApiKey({ workspaceId, name: "Read only", scopes: ["evaluation:read"] });
   const body = fixture();
   bindFixture(body, agent.agentId, agent.currentVersion.versionId);
-  return { workspaceId, agent, token: key.token, narrowToken: narrow.token, body };
+  return { workspaceId, agent, token: key.token, reviewToken: reviewKey.token, narrowToken: narrow.token, body };
 }
 
 function request(body: BodyInit, token?: string, headers?: Record<string, string>) {
@@ -193,6 +224,60 @@ test("pins the OTLP and development GenAI mapping inputs", () => {
     independentlyVerified: false,
     attestation: null,
   });
+  assert.equal(OTLP_REVIEW_MAPPING_PIN, "rateloop.otlp-review-attributes.v1");
+});
+
+test("eligible OTLP outputs use exact commitment-only attributes to evaluate the human-review policy", async () => {
+  const setupData = await setup();
+  addEligibleReviewAttributes(setupData.body);
+  const principal = await authenticateOtlpTracePrincipal(`Bearer ${setupData.reviewToken}`);
+  let captured: JsonRecord | null = null;
+  const evaluateReview = (async (input: { request: JsonRecord }) => {
+    captured = input.request;
+    return {} as never;
+  }) as NonNullable<Parameters<typeof ingestOtlpTraces>[0]["evaluateReview"]>;
+  const result = await ingestOtlpTraces({
+    principal,
+    request: parseOtlpTraceJson(setupData.body),
+    evaluateReview,
+  });
+  assert.equal(result.acceptedExecutions, 1);
+  const reviewRequest = (captured ?? {}) as JsonRecord;
+  assert.equal(reviewRequest.policyId, "arp_otlp");
+  assert.equal(reviewRequest.policyVersion, 2);
+  assert.equal(reviewRequest.workflowKey, "support_reply");
+  assert.equal(reviewRequest.suggestionCommitment, `sha256:${"33".repeat(32)}`);
+  assert.match(String((reviewRequest.sourceEvidence as JsonRecord | undefined)?.hash), /^sha256:[0-9a-f]{64}$/u);
+  assert.equal(
+    (reviewRequest.execution as JsonRecord | undefined)?.externalExecutionId,
+    "otlp:5b8efff798038103d269b633813fc60c",
+  );
+  assert.doesNotMatch(JSON.stringify(reviewRequest), /never-persist-this-prompt|never-persist-this-tool-input/u);
+});
+
+test("eligible OTLP outputs fail closed without review authority or a complete mapping", async () => {
+  const setupData = await setup();
+  addEligibleReviewAttributes(setupData.body);
+  const telemetryOnly = await authenticateOtlpTracePrincipal(`Bearer ${setupData.token}`);
+  const unauthorized = await ingestOtlpTraces({
+    principal: telemetryOnly,
+    request: parseOtlpTraceJson(setupData.body),
+    evaluateReview: (async () => ({}) as never) as NonNullable<
+      Parameters<typeof ingestOtlpTraces>[0]["evaluateReview"]
+    >,
+  });
+  assert.equal(unauthorized.acceptedExecutions, 0);
+  assert.equal(unauthorized.rejectedSpans, 2);
+  assert.match(unauthorized.errorMessage, /insufficient_scope/u);
+
+  const incomplete = fixture();
+  bindFixture(incomplete, setupData.agent.agentId, setupData.agent.currentVersion.versionId);
+  addPrimaryAttribute(incomplete, "rateloop.review.policy.id", { stringValue: "arp_otlp" });
+  const principal = await authenticateOtlpTracePrincipal(`Bearer ${setupData.reviewToken}`);
+  const rejected = await ingestOtlpTraces({ principal, request: parseOtlpTraceJson(incomplete) });
+  assert.equal(rejected.acceptedExecutions, 0);
+  assert.equal(rejected.rejectedSpans, 2);
+  assert.match(rejected.errorMessage, /invalid_otlp_review_mapping/u);
 });
 
 test("ingests collector JSON as host-reported execution provenance and deduplicates exact replay", async () => {
