@@ -208,6 +208,34 @@ test("the tokenless test deployment still rejects browser-exposed secrets", () =
   assert.doesNotMatch(output, /must-not-ship/);
 });
 
+test("test and production deployments refuse server-held Feedback Bonus award authority", () => {
+  const testEnv = {
+    VERCEL: "1",
+    VERCEL_ENV: "production",
+    VERCEL_PROJECT_ID: "prj_H6C2pfWKEAupFroHbLfzhquaNCLm",
+    VERCEL_PROJECT_NAME: "rateloop-tokenless",
+    VERCEL_GIT_COMMIT_REF: "tokenless",
+    APP_URL: "https://rateloop-tokenless.vercel.app",
+    NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
+    TOKENLESS_NETWORK_PANELS_ENABLED: "false",
+    TOKENLESS_FEEDBACK_BONUS_AWARDER_PRIVATE_KEY: "server-must-not-custody-human-awarder",
+    NEXT_PUBLIC_TOKENLESS_FEEDBACK_BONUS_AWARD_WORKER_PRIVATE_KEY: "browser-must-not-see-worker-secret",
+  };
+  const testOutput = validateTokenlessProductionReadiness({ env: testEnv, activeRegistry: {} }).join("\n");
+  assert.match(testOutput, /TOKENLESS_FEEDBACK_BONUS_AWARDER_PRIVATE_KEY is forbidden/);
+  assert.match(testOutput, /NEXT_PUBLIC_TOKENLESS_FEEDBACK_BONUS_AWARD_WORKER_PRIVATE_KEY is forbidden/);
+  assert.doesNotMatch(testOutput, /server-must-not-custody-human-awarder/);
+  assert.doesNotMatch(testOutput, /browser-must-not-see-worker-secret/);
+
+  const production = validFixture();
+  production.env.TOKENLESS_FEEDBACK_BONUS_AWARD_WORKER_PRIVATE_KEY = "still-forbidden";
+  production.env.NEXT_PUBLIC_TOKENLESS_FEEDBACK_BONUS_AWARDER_PRIVATE_KEY = "still-private";
+  const productionOutput = validateTokenlessProductionReadiness(production).join("\n");
+  assert.match(productionOutput, /TOKENLESS_FEEDBACK_BONUS_AWARD_WORKER_PRIVATE_KEY is forbidden/);
+  assert.match(productionOutput, /NEXT_PUBLIC_TOKENLESS_FEEDBACK_BONUS_AWARDER_PRIVATE_KEY is forbidden/);
+  assert.doesNotMatch(productionOutput, /still-forbidden|still-private/);
+});
+
 test("the production preflight runs before hosted migrations", () => {
   const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   const build = packageJson.scripts.build;
@@ -226,6 +254,26 @@ test("hosted release remains blocked while required product capabilities are inc
   const errors = validateTokenlessProductionReadiness(fixture);
   assert.match(errors.join("\n"), /managed signing/i);
   assert.match(errors.join("\n"), /paid assignment reservation/i);
+  assert.match(errors.join("\n"), /Feedback Bonus USDC and credential-issuer immutable wiring/i);
+  assert.match(errors.join("\n"), /human-signed Feedback Bonus award execution/i);
+  assert.match(errors.join("\n"), /Feedback Bonus transaction reconciliation and append-only receipt projection/i);
+});
+
+test("hosted release requires a dedicated Feedback Bonus escrow address", () => {
+  for (const role of [
+    "TOKENLESS_PANEL_ADDRESS",
+    "TOKENLESS_CREDENTIAL_ISSUER_ADDRESS",
+    "TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS",
+    "TOKENLESS_USDC_ADDRESS",
+    "TOKENLESS_FEE_RECIPIENT",
+  ]) {
+    const fixture = validFixture();
+    fixture.env.TOKENLESS_FEEDBACK_BONUS_ADDRESS = fixture.env[role];
+    assert.match(
+      validateTokenlessProductionReadiness(fixture).join("\n"),
+      new RegExp(`dedicated escrow address distinct from ${role}`, "i"),
+    );
+  }
 });
 
 test("hosted release rejects an empty active v4 registry", () => {

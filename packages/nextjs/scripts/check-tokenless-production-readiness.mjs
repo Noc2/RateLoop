@@ -17,11 +17,18 @@ const TOKENLESS_REVIEW_ORIGIN = "https://rateloop-tokenless.vercel.app";
 export const DEFAULT_HOSTED_RELEASE_CAPABILITIES = Object.freeze({
   managedSigning: false,
   paidAssignmentSettlement: false,
+  feedbackBonusLiveWiringVerification: false,
+  feedbackBonusHumanAwardExecution: false,
+  feedbackBonusReceiptReconciliation: false,
 });
 
 const HOSTED_RELEASE_CAPABILITY_LABELS = Object.freeze({
   managedSigning: "managed signing for credential issuance and chain transactions",
   paidAssignmentSettlement: "paid assignment reservation, voucher, commit, and settlement orchestration",
+  feedbackBonusLiveWiringVerification: "live Feedback Bonus USDC and credential-issuer immutable wiring verification",
+  feedbackBonusHumanAwardExecution: "human-signed Feedback Bonus award execution without a server-held awarder key",
+  feedbackBonusReceiptReconciliation:
+    "idempotent Feedback Bonus transaction reconciliation and append-only receipt projection",
 });
 
 export const REQUIRED_TOKENLESS_PRODUCTION_VARIABLES = [
@@ -127,6 +134,8 @@ const FORBIDDEN_PUBLIC_SECRETS = [
   "NEXT_PUBLIC_TOKENLESS_X402_RELAYER_PRIVATE_KEY",
   "NEXT_PUBLIC_TOKENLESS_PREPAID_FUNDER_PRIVATE_KEY",
   "NEXT_PUBLIC_TOKENLESS_SURPRISE_BONUS_FUNDER_PRIVATE_KEY",
+  "NEXT_PUBLIC_TOKENLESS_FEEDBACK_BONUS_AWARDER_PRIVATE_KEY",
+  "NEXT_PUBLIC_TOKENLESS_FEEDBACK_BONUS_AWARD_WORKER_PRIVATE_KEY",
   "NEXT_PUBLIC_TOKENLESS_ELIGIBILITY_HANDOFF_SECRET",
   "NEXT_PUBLIC_TOKENLESS_PROVIDER_EVIDENCE_VAULT_KEYS",
   "NEXT_PUBLIC_TOKENLESS_TAX_VAULT_KEYS",
@@ -141,6 +150,11 @@ const FORBIDDEN_PUBLIC_SECRETS = [
   "NEXT_PUBLIC_WORLD_ID_RP_SIGNING_KEY",
   "NEXT_PUBLIC_TOKENLESS_PROVIDER_SUBJECT_HMAC_KEYS",
   "NEXT_PUBLIC_TOKENLESS_WORLD_ID_EVIDENCE_KEYS",
+];
+
+const FORBIDDEN_FEEDBACK_BONUS_CUSTODY_SECRETS = [
+  "TOKENLESS_FEEDBACK_BONUS_AWARDER_PRIVATE_KEY",
+  "TOKENLESS_FEEDBACK_BONUS_AWARD_WORKER_PRIVATE_KEY",
 ];
 
 function value(env, name) {
@@ -247,6 +261,11 @@ function validateTokenlessTestDeployment(env) {
   for (const name of FORBIDDEN_PUBLIC_SECRETS) {
     if (value(env, name)) errors.push(`${name} is forbidden because secrets must remain server-only.`);
   }
+  for (const name of FORBIDDEN_FEEDBACK_BONUS_CUSTODY_SECRETS) {
+    if (value(env, name)) {
+      errors.push(`${name} is forbidden because Feedback Bonus award authority must remain with the configured human.`);
+    }
+  }
   return errors;
 }
 
@@ -281,6 +300,11 @@ export function validateTokenlessProductionReadiness({
   }
   for (const name of FORBIDDEN_PUBLIC_SECRETS) {
     if (value(env, name)) errors.push(`${name} is forbidden because production secrets must remain server-only.`);
+  }
+  for (const name of FORBIDDEN_FEEDBACK_BONUS_CUSTODY_SECRETS) {
+    if (value(env, name)) {
+      errors.push(`${name} is forbidden because Feedback Bonus award authority must remain with the configured human.`);
+    }
   }
   if (value(env, "DATABASE_URL") && !hostedPostgresUrl(value(env, "DATABASE_URL"))) {
     errors.push("DATABASE_URL must identify a non-local hosted Postgres database.");
@@ -362,6 +386,18 @@ export function validateTokenlessProductionReadiness({
     const address = value(env, name);
     if (!ADDRESS_PATTERN.test(address) || /^0x0{40}$/iu.test(address)) {
       errors.push(`${name} must be a non-zero EVM address.`);
+    }
+  }
+  const feedbackBonusAddress = value(env, "TOKENLESS_FEEDBACK_BONUS_ADDRESS").toLowerCase();
+  for (const name of [
+    "TOKENLESS_PANEL_ADDRESS",
+    "TOKENLESS_CREDENTIAL_ISSUER_ADDRESS",
+    "TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS",
+    "TOKENLESS_USDC_ADDRESS",
+    "TOKENLESS_FEE_RECIPIENT",
+  ]) {
+    if (feedbackBonusAddress && feedbackBonusAddress === value(env, name).toLowerCase()) {
+      errors.push(`TOKENLESS_FEEDBACK_BONUS_ADDRESS must be a dedicated escrow address distinct from ${name}.`);
     }
   }
   for (const name of [
