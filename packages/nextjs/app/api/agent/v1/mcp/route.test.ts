@@ -25,6 +25,7 @@ import {
   registerAgentOAuthClient,
   validateAgentOAuthAuthorizationRequest,
 } from "~~/lib/tokenless/agentOAuth";
+import { putHumanReviewConfigurationForOwner } from "~~/lib/tokenless/humanReviewConfiguration";
 import { createAgentPublishingPolicy, createWorkspace } from "~~/lib/tokenless/productCore";
 import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
 
@@ -138,7 +139,7 @@ async function setup() {
   });
   assert.equal(verified.principal.apiKeyId, storedCredential.rows[0]?.api_key_id);
   assert.equal(storedCredential.rows[0]?.token_family_id, null);
-  return { workspaceId, approved, audiencePolicyHash, token: issued.secret };
+  return { workspaceId, approved, audiencePolicyHash, reviewBinding, token: issued.secret };
 }
 
 test("pairing initialization tells the agent to register immediately and returns the next automatic action", async () => {
@@ -367,9 +368,13 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
     ),
   );
   const agentContext = (await context.json()).result.structuredContent;
+  assert.equal(agentContext.schemaVersion, "rateloop.agent-context.v2");
   assert.equal(agentContext.workspaceId, workspaceId);
   assert.match(agentContext.reviewPolicy.audiencePolicyHash, /^sha256:[a-f0-9]{64}$/);
   assert.equal(agentContext.publishingPolicy, null);
+  assert.equal(agentContext.humanReview.status, "configuration_required");
+  assert.equal(agentContext.publishingGrant.active, false);
+  assert.equal(agentContext.publishingGrant.reason, "not_configured");
   assert.equal(agentContext.safeAccess.canSpend, false);
   const verified = await POST(
     request(
@@ -402,9 +407,9 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
   );
   const resumedInitializationBody = await resumedInitialization.json();
   assert.match(resumedInitializationBody.result.instructions, /workspace connection is available/i);
-  assert.match(resumedInitializationBody.result.instructions, /can record review-policy decisions/i);
-  assert.match(resumedInitializationBody.result.instructions, /cannot publish requests or spend funds/i);
-  assert.doesNotMatch(resumedInitializationBody.result.instructions, /owner-approved publishing policy is active/i);
+  assert.match(resumedInitializationBody.result.instructions, /exact human-review configuration/i);
+  assert.match(resumedInitializationBody.result.instructions, /publishing-policy reference alone never grants/i);
+  assert.match(resumedInitializationBody.result.instructions, /safeAccess and the exact publishingGrant/i);
 
   const resumedTools = await POST(
     request({ id: 142, jsonrpc: "2.0", method: "tools/list", params: {} }, tokens.access_token),
@@ -501,9 +506,9 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
       maxBountyAtomic: "20000000",
       maxFeeBps: 750,
       maxAttemptReserveAtomic: "5000000",
-      allowedReviewerSources: ["customer_invited"],
+      allowedReviewerSources: ["rateloop_network"],
       allowedAdmissionPolicyHashes: [`0x${"22".repeat(32)}`],
-      allowedDataClassifications: ["internal"],
+      allowedDataClassifications: ["public"],
       onPolicyMiss: "deny",
     },
   });
@@ -531,9 +536,97 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
     version: stepUp.integration.reviewPolicyVersion,
     audiencePolicyHash: agentContext.reviewPolicy.audiencePolicyHash,
   });
-  assert.deepEqual(upgradedContext.publishingPolicy, { policyId: publishing.policyId, version: publishing.version });
-  assert.equal(upgradedContext.safeAccess.canSpend, true);
-  assert.equal(upgradedContext.safeAccess.canPublish, true);
+  assert.equal(upgradedContext.publishingPolicy, null);
+  assert.deepEqual(upgradedContext.publishingGrant.integrationPolicy, {
+    policyId: publishing.policyId,
+    version: publishing.version,
+  });
+  assert.equal(upgradedContext.publishingGrant.active, false);
+  assert.equal(upgradedContext.publishingGrant.reason, "not_configured");
+  assert.equal(upgradedContext.safeAccess.canSpend, false);
+  assert.equal(upgradedContext.safeAccess.canPublish, false);
+
+  const configured = await putHumanReviewConfigurationForOwner({
+    accountAddress: principalId,
+    workspaceId,
+    agentId: claim.connection.agentId,
+    body: {
+      expectedBindingVersion: null,
+      selection: {
+        mode: "fixed",
+        enforcementMode: "advisory",
+        agreementThresholdBps: 7_500,
+        productionFloorBps: 0,
+        fixedRateBps: 2_500,
+        maximumUnreviewedGap: 8,
+        requiredRiskTiers: ["high"],
+        criticalRiskTiers: ["critical"],
+        minimumConfidenceBps: 7_000,
+        maximumLatencyMs: 120_000,
+      },
+      requestProfile: {
+        criterion: "Is this output correct and safe to use?",
+        positiveLabel: "Approve",
+        negativeLabel: "Reject",
+        rationaleMode: "optional",
+        audience: "public_network",
+        contentBoundary: "public_or_test",
+        privateSensitivity: null,
+        privateGroupId: null,
+        responseWindowSeconds: 3_600,
+        panelSize: 5,
+        compensationMode: "usdc",
+        bountyPerSeatAtomic: "1000000",
+      },
+      authority: "ask_automatically",
+      publishingGrant: {
+        integrationId: claim.connection.integrationId,
+        publishingPolicyId: publishing.policyId,
+        publishingPolicyVersion: publishing.version,
+        allowedWorkflowKeys: ["general-assistance"],
+      },
+    },
+  });
+  assert.equal(configured.configuration.authority, "ask_automatically");
+  const configuredContextResponse = await POST(
+    request(
+      {
+        id: 1511,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: "rateloop_get_agent_context", arguments: {} },
+      },
+      tokens.access_token,
+    ),
+  );
+  const configuredContext = (await configuredContextResponse.json()).result.structuredContent;
+  assert.equal(configuredContext.humanReview.binding.bindingId, configured.configuration.bindingId);
+  assert.deepEqual(configuredContext.humanReview.selection.frequency, {
+    mode: "fixed",
+    fixedRateBps: 2_500,
+    agreementThresholdBps: 7_500,
+    productionFloorBps: 0,
+    maximumUnreviewedGap: 8,
+  });
+  assert.equal(configuredContext.humanReview.requestProfile.audience.type, "public_network");
+  assert.equal(configuredContext.humanReview.requestProfile.audience.contentBoundary, "public_or_test");
+  assert.equal(configuredContext.humanReview.requestProfile.responseWindowSeconds, 3_600);
+  assert.equal(configuredContext.humanReview.requestProfile.panelSize, 5);
+  assert.deepEqual(configuredContext.humanReview.requestProfile.compensation, {
+    mode: "usdc",
+    bountyPerSeatAtomic: "1000000",
+  });
+  assert.equal(configuredContext.humanReview.authority, "ask_automatically");
+  assert.equal(configuredContext.capabilities.implementedLanes.privateInvitedUnpaid.available, true);
+  assert.equal(configuredContext.capabilities.implementedLanes.privateInvitedPaid.available, false);
+  assert.equal(configuredContext.capabilities.implementedLanes.publicPaidNetwork.available, true);
+  assert.equal(configuredContext.capabilities.implementedLanes.hybridPublicSafe.available, false);
+  assert.equal(configuredContext.capabilities.effectiveLane.lane, "public_paid_network");
+  assert.equal(configuredContext.publishingGrant.active, true);
+  assert.ok(configuredContext.publishingGrant.grantedScopes.includes("panel:publish"));
+  assert.ok(configuredContext.publishingGrant.grantedScopes.includes("payment:submit"));
+  assert.equal(configuredContext.safeAccess.canSpend, true);
+  assert.equal(configuredContext.safeAccess.canPublish, true);
   const upgradedInitialization = await POST(
     request(
       {
@@ -550,9 +643,8 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
     ),
   );
   const upgradedInitializationBody = await upgradedInitialization.json();
-  assert.match(upgradedInitializationBody.result.instructions, /owner-approved publishing policy is active/i);
-  assert.match(upgradedInitializationBody.result.instructions, /only within that bound policy/i);
-  assert.doesNotMatch(upgradedInitializationBody.result.instructions, /cannot publish requests or spend funds/i);
+  assert.match(upgradedInitializationBody.result.instructions, /publishing-policy reference alone never grants/i);
+  assert.match(upgradedInitializationBody.result.instructions, /safeAccess and the exact publishingGrant/i);
   await assert.rejects(
     () =>
       rotateAgentIntegration({
@@ -582,6 +674,48 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
     args: [claim.connection.integrationId],
   });
   assert.deepEqual(revokedFamily.rows[0], { status: "revoked", revocation_reason: "workspace_deleted" });
+});
+
+test("agent context reports the exact configured profile while a legacy publishing reference grants nothing", async () => {
+  const setupData = await setup();
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_policies SET audience_policy_json = ?
+          WHERE workspace_id = ? AND policy_id = ? AND version = 1`,
+    args: [
+      JSON.stringify({ reviewerSource: "public_network" }),
+      setupData.workspaceId,
+      setupData.approved.integration.reviewPolicyId,
+    ],
+  });
+  const contextResponse = await POST(
+    request(
+      {
+        id: 0,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: "rateloop_get_agent_context", arguments: {} },
+      },
+      setupData.token,
+    ),
+  );
+  const context = (await contextResponse.json()).result.structuredContent;
+  assert.equal(context.humanReview.status, "configured");
+  assert.equal(context.humanReview.binding.bindingId, setupData.reviewBinding.bindingId);
+  assert.equal(context.humanReview.authority, "check_only");
+  assert.equal(context.humanReview.selection.frequency.mode, "adaptive");
+  assert.equal(context.humanReview.requestProfile.audience.type, "public_network");
+  assert.equal(context.humanReview.requestProfile.responseWindowSeconds, 1_200);
+  assert.equal(context.humanReview.requestProfile.panelSize, 3);
+  assert.deepEqual(context.humanReview.requestProfile.compensation, {
+    mode: "usdc",
+    bountyPerSeatAtomic: "1000000",
+  });
+  assert.equal(context.publishingPolicy, null);
+  assert.ok(context.publishingGrant.integrationPolicy);
+  assert.equal(context.publishingGrant.active, false);
+  assert.equal(context.publishingGrant.reason, "not_configured");
+  assert.equal(context.safeAccess.canPublish, false);
+  assert.equal(context.safeAccess.canSpend, false);
 });
 
 test("uses a bound authenticated workspace surface without changing the public four tools", async () => {

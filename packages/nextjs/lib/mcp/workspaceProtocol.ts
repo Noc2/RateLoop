@@ -19,6 +19,7 @@ import {
   recordPairingClientMetadata,
   submitAgentRegistration,
 } from "~~/lib/tokenless/agentIntegrations";
+import { getEffectiveAgentReviewContext } from "~~/lib/tokenless/effectiveAgentReviewContext";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type JsonRecord = Record<string, unknown>;
@@ -91,12 +92,8 @@ const consequentialOpenAnnotations = {
   openWorldHint: true,
 } as const;
 
-function boundWorkspaceInstructions(binding: { publishingPolicyId: string | null }) {
-  const policyInstructions =
-    binding.publishingPolicyId === null
-      ? "This safe connection can record review-policy decisions and read aggregate results, but it cannot publish requests or spend funds."
-      : "An owner-approved publishing policy is active. You may publish requests and spend funds only when the frozen review decision requires it and only within that bound policy.";
-  return `Before each eligible output, call rateloop_evaluate_review_requirement with privacy-safe execution and generation metadata, using explicit unknown values when the host does not expose a model field. Never send prompts, outputs, tool payloads, or hidden reasoning. ${policyInstructions} This connection cannot read private artifacts or administer the workspace.`;
+function boundWorkspaceInstructions() {
+  return "Before each eligible output, call rateloop_get_agent_context and follow the returned exact human-review configuration, then call rateloop_evaluate_review_requirement with privacy-safe execution and generation metadata. Never send prompts, outputs, tool payloads, or hidden reasoning during evaluation. A publishing-policy reference alone never grants publication or spending authority; those actions are allowed only when safeAccess and the exact publishingGrant say so. This connection cannot read private artifacts or administer the workspace.";
 }
 
 export const pairingMcpTools = [
@@ -141,7 +138,7 @@ export const workspaceMcpTools = [
     name: "rateloop_get_agent_context",
     annotations: readOnlyClosedAnnotations,
     description:
-      "Read the agent, immutable workflow version, review policy, enforcement mode, and workflows bound to this credential. Identity and policy are always derived server-side.",
+      "Read the exact active agent version and effective human-review configuration bound server-side to this credential: selection frequency, request profile, audience and privacy boundary, response window, panel, compensation, authority, publishing grant and scopes, and implemented lane readiness.",
     inputSchema: { additionalProperties: false, properties: {}, type: "object" },
   },
   {
@@ -376,35 +373,7 @@ async function callIntegrationTool(
     }
     if (name === "rateloop_get_agent_context") {
       requireObjectWithKeys(args, [], "Agent context arguments are invalid.");
-      if (!binding.audiencePolicyHash) {
-        throw new TokenlessServiceError("The bound review audience is unavailable.", 500, "agent_context_invalid");
-      }
-      return toolResult({
-        schemaVersion: "rateloop.agent-context.v1",
-        integrationId: binding.integrationId,
-        workspaceId: binding.workspaceId,
-        agentId: binding.agentId,
-        agentVersionId: binding.agentVersionId,
-        status: binding.status,
-        enforcementMode: binding.enforcementMode,
-        allowedWorkflowKeys: binding.allowedWorkflowKeys,
-        reviewPolicy: {
-          policyId: binding.reviewPolicyId,
-          version: binding.reviewPolicyVersion,
-          audiencePolicyHash: binding.audiencePolicyHash,
-        },
-        publishingPolicy:
-          binding.publishingPolicyId && binding.publishingPolicyVersion
-            ? { policyId: binding.publishingPolicyId, version: binding.publishingPolicyVersion }
-            : null,
-        safeAccess: {
-          canCheckReviewRequirement: true,
-          canSpend: binding.publishingPolicyId !== null,
-          canPublish: binding.publishingPolicyId !== null,
-          canReadPrivateArtifacts: false,
-          canAdministerWorkspace: false,
-        },
-      });
+      return toolResult(await getEffectiveAgentReviewContext(principal));
     }
     if (name === "rateloop_get_assurance_state") {
       const input = requireObjectWithKeys(args, ["scopeId"], "scopeId is required.");
@@ -634,9 +603,9 @@ export async function dispatchWorkspaceMcp(
           ? "Act immediately without asking the user what this endpoint is for. List tools and call rateloop_register_agent exactly once using honest metadata inferred from the current runtime and work. Then call rateloop_get_registration_status while the owner reviews it. After approval, refresh tools and call rateloop_get_agent_context. Never repeat the bearer credential in responses, logs, repositories, or ordinary tool arguments. No workspace or review access exists before approval."
           : principal.kind === "oauth"
             ? principal.integration
-              ? `A RateLoop workspace connection is available. Keep the complete connection URL private. Call rateloop_get_agent_context, then rateloop_verify_connection. After verification, follow the returned workflow and human-review policy. ${boundWorkspaceInstructions(principal.integration)}`
+              ? `A RateLoop workspace connection is available. Keep the complete connection URL private. Call rateloop_get_agent_context, then rateloop_verify_connection. After verification, follow the returned workflow and human-review policy. ${boundWorkspaceInstructions()}`
               : "Complete the user's one-time RateLoop connection now. Call rateloop_claim_connection_intent exactly once with the complete connection URL from the user's message. Never quote, log, fetch, or reproduce that URL. Then call rateloop_get_agent_context and rateloop_verify_connection without asking for another paste or creating a polling service."
-            : `This registration is approved. Immediately call rateloop_get_agent_context and follow its bound policy. This credential is bound to one workspace agent, immutable workflow version, and owner policy. ${boundWorkspaceInstructions(principal.integration)} Caller-supplied identity or policy identifiers are never trusted.`,
+            : `This registration is approved. Immediately call rateloop_get_agent_context and follow its bound policy. This credential is bound to one workspace agent, immutable workflow version, and owner policy. ${boundWorkspaceInstructions()} Caller-supplied identity or policy identifiers are never trusted.`,
       protocolVersion: negotiatedVersion,
       serverInfo: { name: "rateloop-tokenless-workspace", version: "1.2.0" },
     });
