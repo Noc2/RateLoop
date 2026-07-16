@@ -97,34 +97,23 @@ export function HumanAssuranceLoop({ className = "", concise = false }: { classN
               ))}
             </svg>
             <figcaption className="pointer-events-none absolute inset-[29%] flex flex-col items-center justify-center rounded-full border border-white/10 bg-black/70 text-center shadow-[0_0_80px_rgb(3_206_164/0.08)] backdrop-blur-sm">
-              <span className="font-mono text-[0.62rem] uppercase tracking-[0.22em] text-base-content/45 sm:text-xs">
-                Review coverage
-              </span>
-              <strong className="mt-2 text-[clamp(1.05rem,4vw,1.55rem)] leading-tight">100 → 50 → 25 → 10%</strong>
-              {!concise ? (
-                <span className="mt-2 max-w-[12rem] text-[0.6rem] leading-4 text-base-content/45 sm:text-xs">
-                  Evidence earns autonomy
-                </span>
-              ) : null}
+              <h3 id="human-assurance-loop-title" className="font-bold leading-[1.08]">
+                <span className="block whitespace-nowrap text-[clamp(0.72rem,3.2vw,1.25rem)]">Human Assurance</span>
+                <span className="rateloop-text-gradient block text-[clamp(1.2rem,4.4vw,1.8rem)]">Loop</span>
+              </h3>
             </figcaption>
           </div>
         </figure>
 
-        <div>
-          {!concise ? (
-            <p className="font-mono text-xs uppercase tracking-[0.22em] text-base-content/45">The mechanism</p>
-          ) : null}
-          <h3 id="human-assurance-loop-title" className="mt-3 text-3xl font-bold sm:text-4xl">
-            The Human Assurance <span className="rateloop-text-gradient">Loop</span>
-          </h3>
-          <ol className="mt-7 grid gap-5 sm:grid-cols-2">
+        <div className="w-full">
+          <ol className="grid gap-x-8 gap-y-7 sm:grid-cols-2">
             {stages.map(stage => (
               <li key={stage.number} className="border-l-2 pl-4" style={{ borderColor: stage.color }}>
-                <span className="font-mono text-xs" style={{ color: stage.color }}>
+                <span className="font-mono text-sm" style={{ color: stage.color }}>
                   {stage.number}
                 </span>
-                <h4 className="mt-1 text-lg font-semibold">{stage.title}</h4>
-                <p className="mt-2 text-sm leading-6 text-base-content/55">
+                <h4 className="mt-1 text-xl font-semibold">{stage.title}</h4>
+                <p className="mt-2 text-[0.95rem] leading-7 text-base-content/55 sm:text-base">
                   {concise ? stage.conciseBody : stage.body}
                 </p>
               </li>

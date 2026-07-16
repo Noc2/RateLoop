@@ -38,7 +38,6 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /<span class="font-semibold text-base-content">21<\/span> Ratings/);
   assert.match(html, /<span class="font-semibold text-base-content">\$12<\/span> USDC Paid/);
   assert.match(html, /How It/);
-  assert.match(html, /The Human Assurance/);
   assert.match(html, /Owner sets policy/);
   assert.match(html, /Agent submits work/);
   assert.match(html, /Humans judge/);
@@ -47,7 +46,10 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /within the owner-approved policy/i);
   assert.match(html, /evidence-backed feedback and actionable insights for this workflow/i);
   assert.doesNotMatch(html, /Agent prepares|RateLoop decides|Evidence adapts/);
-  assert.match(html, /100 → 50 → 25 → 10%/);
+  assert.match(html, /<h3 id="human-assurance-loop-title"[^>]*>.*Human Assurance.*Loop.*<\/h3>/i);
+  assert.equal(html.match(/id="human-assurance-loop-title"/g)?.length, 1);
+  assert.doesNotMatch(html, /Review coverage|100 → 50 → 25 → 10%|Evidence earns autonomy/);
+  assert.doesNotMatch(html, /The Human Assurance <span class="rateloop-text-gradient">Loop/);
   assert.equal(html.match(/stroke-dasharray="25 75"/g)?.length, 4);
   assert.doesNotMatch(html, /rateloop-promo/);
   assert.match(html, /Why It/);
