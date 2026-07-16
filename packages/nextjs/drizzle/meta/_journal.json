@@ -547,6 +547,13 @@
       "when": 1784221200000,
       "tag": "0078_assurance_event_references",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1784224800000,
+      "tag": "0079_evidence_retention_enforcement",
+      "breakpoints": true
     }
   ]
 }

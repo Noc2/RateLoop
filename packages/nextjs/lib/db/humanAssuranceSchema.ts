@@ -34,6 +34,57 @@ export const tokenlessWorkspaceEvidenceRetentionPolicies = pgTable(
   }),
 );
 
+export const tokenlessEvidenceRetentionEnforcementRuns = pgTable(
+  "tokenless_evidence_retention_enforcement_runs",
+  {
+    runId: text("run_id").primaryKey(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    workspaceId: text("workspace_id").notNull(),
+    policyVersion: integer("policy_version").notNull(),
+    evidenceRetentionMonths: integer("evidence_retention_months").notNull(),
+    auditRetentionMonths: integer("audit_retention_months").notNull(),
+    evidenceCutoffAt: time("evidence_cutoff_at").notNull(),
+    auditCutoffAt: time("audit_cutoff_at").notNull(),
+    state: text("state").notNull().default("pending"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    nextAttemptAt: time("next_attempt_at").notNull(),
+    leaseExpiresAt: time("lease_expires_at"),
+    objectsQueued: integer("objects_queued").notNull().default(0),
+    accessLogsPruned: integer("access_logs_pruned").notNull().default(0),
+    objectsHeld: integer("objects_held").notNull().default(0),
+    accessLogsHeld: integer("access_logs_held").notNull().default(0),
+    backlogCount: integer("backlog_count").notNull().default(0),
+    auditEventsPreserved: integer("audit_events_preserved").notNull().default(0),
+    evidencePacketsPreserved: integer("evidence_packets_preserved").notNull().default(0),
+    attestationsPreserved: integer("attestations_preserved").notNull().default(0),
+    wormReceiptsPreserved: integer("worm_receipts_preserved").notNull().default(0),
+    lastError: text("last_error"),
+    prunedAt: time("pruned_at"),
+    completedAt: time("completed_at"),
+    deadAt: time("dead_at"),
+    createdAt: time("created_at").notNull(),
+    updatedAt: time("updated_at").notNull(),
+  },
+  table => ({
+    idempotencyUnique: uniqueIndex("tokenless_evidence_retention_enforcement_runs_idempotency_key_unique").on(
+      table.idempotencyKey,
+    ),
+    activeUnique: uniqueIndex("tokenless_evidence_retention_enforcement_runs_active_idx")
+      .on(table.workspaceId)
+      .where(sql`${table.state} IN ('pending', 'processing', 'retry')`),
+    dueIdx: index("tokenless_evidence_retention_enforcement_runs_due_idx").on(
+      table.state,
+      table.nextAttemptAt,
+      table.leaseExpiresAt,
+    ),
+    workspaceIdx: index("tokenless_evidence_retention_enforcement_runs_workspace_idx").on(
+      table.workspaceId,
+      table.createdAt,
+      table.runId,
+    ),
+  }),
+);
+
 export const tokenlessAssuranceProjects = pgTable(
   "tokenless_assurance_projects",
   {
