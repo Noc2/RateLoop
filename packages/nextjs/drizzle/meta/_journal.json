@@ -414,6 +414,13 @@
       "when": 1784149200000,
       "tag": "0058_human_review_binding_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1784152800000,
+      "tag": "0059_agent_integration_scope_downgrade",
+      "breakpoints": true
     }
   ]
 }

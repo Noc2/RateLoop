@@ -8,7 +8,10 @@ import {
   verifyAgentConnection,
 } from "~~/lib/tokenless/agentConnectionIntents";
 import { OWNER_APPROVED_AGENT_SCOPES } from "~~/lib/tokenless/agentIntegrations";
-import { putHumanReviewConfigurationForOwner } from "~~/lib/tokenless/humanReviewConfiguration";
+import {
+  getHumanReviewConfigurationForOwner,
+  putHumanReviewConfigurationForOwner,
+} from "~~/lib/tokenless/humanReviewConfiguration";
 import { loadWorkspaceOnboardingFunnel } from "~~/lib/tokenless/onboardingObservability";
 import { createPrivateGroup } from "~~/lib/tokenless/privateGroups";
 import { createAgentPublishingPolicy, createWorkspace } from "~~/lib/tokenless/productCore";
@@ -360,47 +363,54 @@ test("automatic setup atomically binds the exact owner-approved workflows and sp
       onPolicyMiss: "deny",
     },
   });
+  const automaticBody = {
+    expectedBindingVersion: null as number | null,
+    selection: {
+      mode: "always",
+      enforcementMode: "advisory",
+      agreementThresholdBps: 8_000,
+      productionFloorBps: 0,
+      fixedRateBps: null,
+      maximumUnreviewedGap: 20,
+      requiredRiskTiers: ["high"],
+      criticalRiskTiers: ["critical"],
+      minimumConfidenceBps: 7_000,
+      maximumLatencyMs: 120_000,
+    },
+    requestProfile: {
+      criterion: "Is this response safe and correct?",
+      positiveLabel: "Approve",
+      negativeLabel: "Reject",
+      rationaleMode: "required",
+      audience: "public_network",
+      contentBoundary: "public_or_test",
+      privateSensitivity: null,
+      privateGroupId: null,
+      responseWindowSeconds: 3_600,
+      panelSize: 3,
+      compensationMode: "usdc",
+      bountyPerSeatAtomic: "1000000",
+    },
+    authority: "ask_automatically",
+    publishingGrant: {
+      integrationId,
+      publishingPolicyId: publishing.policyId,
+      publishingPolicyVersion: publishing.version ?? 1,
+      allowedWorkflowKeys: ["general-assistance"],
+    },
+  };
   const saved = await putHumanReviewConfigurationForOwner({
     accountAddress: OWNER,
     workspaceId,
     agentId: connected.agent!.agentId,
-    body: {
-      expectedBindingVersion: null,
-      selection: {
-        mode: "always",
-        enforcementMode: "advisory",
-        agreementThresholdBps: 8_000,
-        productionFloorBps: 0,
-        fixedRateBps: null,
-        maximumUnreviewedGap: 20,
-        requiredRiskTiers: ["high"],
-        criticalRiskTiers: ["critical"],
-        minimumConfidenceBps: 7_000,
-        maximumLatencyMs: 120_000,
-      },
-      requestProfile: {
-        criterion: "Is this response safe and correct?",
-        positiveLabel: "Approve",
-        negativeLabel: "Reject",
-        rationaleMode: "required",
-        audience: "public_network",
-        contentBoundary: "public_or_test",
-        privateSensitivity: null,
-        privateGroupId: null,
-        responseWindowSeconds: 3_600,
-        panelSize: 3,
-        compensationMode: "usdc",
-        bountyPerSeatAtomic: "1000000",
-      },
-      authority: "ask_automatically",
-      publishingGrant: {
-        integrationId,
-        publishingPolicyId: publishing.policyId,
-        publishingPolicyVersion: publishing.version ?? 1,
-        allowedWorkflowKeys: ["general-assistance"],
-      },
-    },
+    body: automaticBody,
   });
+  const ownerView = await getHumanReviewConfigurationForOwner({
+    accountAddress: OWNER,
+    workspaceId,
+    agentId: connected.agent!.agentId,
+  });
+  assert.deepEqual(ownerView.configuration?.delegation?.allowedWorkflowKeys, ["general-assistance"]);
   const reviews = await configureWorkspaceSetupReviews({
     accountAddress: OWNER,
     workspaceId,
@@ -434,6 +444,33 @@ test("automatic setup atomically binds the exact owner-approved workflows and sp
   assert.equal(events.rowCount, 1);
   assert.match(String(events.rows[0]?.details_json), /"explicitBrowserConsent":true/u);
   assert.doesNotMatch(String(events.rows[0]?.details_json), /criterion|positiveLabel|negativeLabel/u);
+
+  const downgraded = await putHumanReviewConfigurationForOwner({
+    accountAddress: OWNER,
+    workspaceId,
+    agentId: connected.agent!.agentId,
+    body: {
+      ...automaticBody,
+      expectedBindingVersion: saved.configuration.version,
+      authority: "prepare_for_approval",
+      publishingGrant: null,
+    },
+  });
+  assert.equal(downgraded.configuration.authority, "prepare_for_approval");
+  const safe = await dbClient.execute({
+    sql: `SELECT activation_mode,publishing_policy_id,granted_scopes_json
+          FROM tokenless_agent_integrations WHERE integration_id=?`,
+    args: [integrationId],
+  });
+  assert.equal(safe.rows[0]?.activation_mode, "preauthorized_safe");
+  assert.equal(safe.rows[0]?.publishing_policy_id, null);
+  assert.deepEqual(JSON.parse(String(safe.rows[0]?.granted_scopes_json)), SAFE_AGENT_CONNECTION_SCOPES);
+  const downgradeEvent = await dbClient.execute({
+    sql: `SELECT details_json FROM tokenless_agent_integration_events
+          WHERE integration_id=? AND event_type='scope_downgraded'`,
+    args: [integrationId],
+  });
+  assert.equal(downgradeEvent.rowCount, 1);
 });
 
 test("setup rejects future steps, stale revisions, and unsaved review configuration", async () => {

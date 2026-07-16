@@ -7,10 +7,12 @@ test("agent registry keeps the default row compact and reveals management on dem
   const form = readFileSync(new URL("./AgentVersionForm.tsx", import.meta.url), "utf8");
   assert.match(source, />Manage</);
   assert.match(source, /Change workflow version/);
-  assert.match(source, /Review behavior/);
-  assert.match(source, /Autonomous requests/);
-  assert.match(source, /aria-controls="agent-review-behavior"/);
-  assert.match(source, /aria-controls="agent-autonomous-requests"/);
+  assert.match(source, />Human review</);
+  assert.match(source, /aria-controls="agent-human-review-editor"/);
+  assert.match(source, /activeReviewAgentId === agent\.agentId/);
+  assert.match(source, /onReviewAgentChange/);
+  assert.doesNotMatch(source, />Review behavior</);
+  assert.doesNotMatch(source, />Autonomous requests</);
   assert.match(source, /Technical details/);
   assert.match(source, /Audit history/);
   assert.match(source, /Only workspace owners and admins can make changes/);

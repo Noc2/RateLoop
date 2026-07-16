@@ -1,0 +1,615 @@
+"use client";
+
+import { type FormEvent, useCallback, useEffect, useState } from "react";
+
+type Authority = "check_only" | "prepare_for_approval" | "ask_automatically";
+type Audience = "private_invited" | "public_network" | "hybrid";
+type Mode = "adaptive" | "always" | "manual" | "rules" | "fixed";
+
+type OwnerView = {
+  bindingRevision: number;
+  configuration: {
+    authority: Authority;
+    delegation: {
+      integrationId: string | null;
+      publishingPolicy: { id: string; version: number };
+      allowedWorkflowKeys: string[];
+    } | null;
+    requestProfile: { value: Record<string, unknown> };
+    selection: { value: Record<string, unknown> };
+  } | null;
+  connection: { allowedWorkflowKeys: string[]; integrationId: string } | null;
+};
+
+type PrivateGroup = { groupId: string; name: string; status: string };
+
+type Draft = {
+  mode: Mode;
+  ratePercent: string;
+  maximumUnreviewedGap: string;
+  requiredRiskTiers: string;
+  minimumConfidencePercent: string;
+  criterion: string;
+  positiveLabel: string;
+  negativeLabel: string;
+  rationaleMode: "off" | "optional" | "required";
+  audience: Audience;
+  privateGroupId: string;
+  privateSensitivity: "internal" | "confidential" | "restricted" | "regulated";
+  responseWindowSeconds: string;
+  panelSize: string;
+  compensationMode: "unpaid" | "usdc";
+  bountyUsdc: string;
+  authority: Authority;
+};
+
+type PendingChange = { fingerprint: string; body: Record<string, unknown>; summary: Record<string, string> };
+
+async function readJson(response: Response) {
+  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!response.ok) {
+    throw new Error(
+      typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : "Request failed.",
+    );
+  }
+  return body;
+}
+
+function number(value: unknown, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function strings(value: unknown, fallback: string[]) {
+  return Array.isArray(value) && value.every(entry => typeof entry === "string") ? value : fallback;
+}
+
+function atomicToUsdc(value: unknown) {
+  if (typeof value !== "string" || !/^[1-9]\d*$/u.test(value)) return "1";
+  const atomic = BigInt(value);
+  const whole = atomic / 1_000_000n;
+  const fraction = (atomic % 1_000_000n).toString().padStart(6, "0").replace(/0+$/u, "");
+  return fraction ? `${whole}.${fraction}` : whole.toString();
+}
+
+function usdcToAtomic(value: string) {
+  const match = /^(0|[1-9]\d*)(?:\.(\d{1,6}))?$/u.exec(value.trim());
+  if (!match) throw new Error("USDC per reviewer must have at most six decimal places.");
+  const atomic = BigInt(match[1]!) * 1_000_000n + BigInt((match[2] ?? "").padEnd(6, "0") || "0");
+  if (atomic <= 0n) throw new Error("USDC per reviewer must be greater than zero.");
+  return atomic.toString();
+}
+
+function draftFromView(view: OwnerView): Draft {
+  if (!view.configuration) throw new Error("Finish human-review setup before editing it.");
+  const selection = view.configuration.selection.value;
+  const request = view.configuration.requestProfile.value;
+  const mode = String(selection.mode) as Mode;
+  const rateBps =
+    mode === "fixed" ? number(selection.fixedRateBps, 1_000) : number(selection.productionFloorBps, 1_000);
+  return {
+    mode,
+    ratePercent: String(rateBps / 100),
+    maximumUnreviewedGap: String(number(selection.maximumUnreviewedGap, 20)),
+    requiredRiskTiers: strings(selection.requiredRiskTiers, ["high"]).join(", "),
+    minimumConfidencePercent:
+      selection.minimumConfidenceBps === null ? "" : String(number(selection.minimumConfidenceBps, 7_000) / 100),
+    criterion: String(request.criterion ?? ""),
+    positiveLabel: String(request.positiveLabel ?? "Approve"),
+    negativeLabel: String(request.negativeLabel ?? "Reject"),
+    rationaleMode: String(request.rationaleMode ?? "required") as Draft["rationaleMode"],
+    audience: String(request.audience ?? "private_invited") as Audience,
+    privateGroupId: String(request.privateGroupId ?? ""),
+    privateSensitivity: String(request.privateSensitivity ?? "confidential") as Draft["privateSensitivity"],
+    responseWindowSeconds: String(number(request.responseWindowSeconds, 3_600)),
+    panelSize: String(number(request.panelSize, 1)),
+    compensationMode: String(request.compensationMode ?? "unpaid") as Draft["compensationMode"],
+    bountyUsdc: atomicToUsdc(request.bountyPerSeatAtomic),
+    authority: view.configuration.authority,
+  };
+}
+
+function positiveInteger(value: string, field: string, minimum: number, maximum: number) {
+  if (!/^\d+$/u.test(value.trim())) throw new Error(`${field} must be a whole number.`);
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) {
+    throw new Error(`${field} must be between ${minimum} and ${maximum}.`);
+  }
+  return parsed;
+}
+
+function bps(value: string, field: string, minimum: number) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed * 100 < minimum || parsed > 100) {
+    throw new Error(`${field} must be between ${minimum / 100}% and 100%.`);
+  }
+  return Math.round(parsed * 100);
+}
+
+function buildMutation(view: OwnerView, draft: Draft) {
+  const configuration = view.configuration;
+  if (!configuration) throw new Error("Human-review configuration is unavailable.");
+  const currentSelection = configuration.selection.value;
+  const requiredRiskTiers = [
+    ...new Set(
+      draft.requiredRiskTiers
+        .split(",")
+        .map(value => value.trim())
+        .filter(Boolean),
+    ),
+  ];
+  const minimumPanelSize = draft.audience === "private_invited" ? 1 : 3;
+  const panelSize = positiveInteger(draft.panelSize, "Reviewer count", minimumPanelSize, 100);
+  const responseWindowSeconds = positiveInteger(draft.responseWindowSeconds, "Response window", 1_200, 86_400);
+  const compensationMode = draft.audience === "private_invited" ? draft.compensationMode : "usdc";
+  const privateGroupId = draft.audience === "public_network" ? null : draft.privateGroupId.trim();
+  if (draft.audience !== "public_network" && !privateGroupId) throw new Error("Choose an invited reviewer group.");
+  const selection = {
+    mode: draft.mode,
+    enforcementMode: currentSelection.enforcementMode,
+    agreementThresholdBps: currentSelection.agreementThresholdBps,
+    productionFloorBps: draft.mode === "adaptive" ? bps(draft.ratePercent, "Minimum review rate", 1_000) : 0,
+    fixedRateBps: draft.mode === "fixed" ? bps(draft.ratePercent, "Fixed review rate", 1) : null,
+    maximumUnreviewedGap: positiveInteger(draft.maximumUnreviewedGap, "Maximum unreviewed gap", 1, 10_000),
+    requiredRiskTiers,
+    criticalRiskTiers: currentSelection.criticalRiskTiers,
+    minimumConfidenceBps: draft.minimumConfidencePercent.trim()
+      ? bps(draft.minimumConfidencePercent, "Confidence threshold", 0)
+      : null,
+    maximumLatencyMs: currentSelection.maximumLatencyMs,
+  };
+  const requestProfile = {
+    criterion: draft.criterion.trim(),
+    positiveLabel: draft.positiveLabel.trim(),
+    negativeLabel: draft.negativeLabel.trim(),
+    rationaleMode: draft.rationaleMode,
+    audience: draft.audience,
+    contentBoundary: draft.audience === "private_invited" ? "private_workspace" : "public_or_test",
+    privateSensitivity: draft.audience === "private_invited" ? draft.privateSensitivity : null,
+    privateGroupId,
+    responseWindowSeconds,
+    panelSize,
+    compensationMode,
+    bountyPerSeatAtomic: compensationMode === "usdc" ? usdcToAtomic(draft.bountyUsdc) : null,
+  };
+  if (!requestProfile.criterion || !requestProfile.positiveLabel || !requestProfile.negativeLabel) {
+    throw new Error("Question and answer labels are required.");
+  }
+  let publishingGrant: Record<string, unknown> | null = null;
+  if (draft.authority === "ask_automatically") {
+    const delegation = configuration.delegation;
+    const workflowKeys = delegation?.allowedWorkflowKeys ?? [];
+    if (!delegation?.integrationId || workflowKeys.length === 0) {
+      throw new Error("Automatic requests need an existing exact publishing grant.");
+    }
+    publishingGrant = {
+      integrationId: delegation.integrationId,
+      publishingPolicyId: delegation.publishingPolicy.id,
+      publishingPolicyVersion: delegation.publishingPolicy.version,
+      allowedWorkflowKeys: workflowKeys,
+    };
+  }
+  const body =
+    draft.authority === "ask_automatically"
+      ? {
+          expectedBindingVersion: view.bindingRevision,
+          selection,
+          requestProfile,
+          authority: draft.authority,
+          publishingGrant,
+        }
+      : {
+          expectedBindingVersion: view.bindingRevision,
+          selection,
+          requestProfile,
+          authority: draft.authority,
+          publishingGrant: null,
+        };
+  return {
+    body,
+    summary: {
+      Frequency:
+        draft.mode === "always"
+          ? "Every eligible output"
+          : draft.mode === "manual"
+            ? "Only after owner approval"
+            : `${draft.mode} · ${draft.ratePercent}%`,
+      Audience:
+        draft.audience === "private_invited"
+          ? "Invited reviewers; private workspace material"
+          : draft.audience === "hybrid"
+            ? "Invited and RateLoop network; public-safe material"
+            : "RateLoop network; public-safe material",
+      Round: `${panelSize} reviewer${panelSize === 1 ? "" : "s"} · ${responseWindowSeconds} seconds`,
+      Payment: compensationMode === "usdc" ? `${draft.bountyUsdc} USDC per accepted reviewer` : "Unpaid",
+      Authority:
+        draft.authority === "check_only"
+          ? "Check only"
+          : draft.authority === "prepare_for_approval"
+            ? "Prepare and wait for owner approval"
+            : "Ask automatically within the existing exact grant",
+      Question: requestProfile.criterion,
+    },
+  };
+}
+
+export function AgentHumanReviewEditor({
+  workspaceId,
+  agentId,
+  onSaved,
+  onClose,
+}: {
+  workspaceId: string;
+  agentId: string;
+  onSaved?: () => void;
+  onClose?: () => void;
+}) {
+  const [view, setView] = useState<OwnerView | null>(null);
+  const [groups, setGroups] = useState<PrivateGroup[]>([]);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [pending, setPending] = useState<PendingChange | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
+
+  const load = useCallback(
+    async (signal?: AbortSignal) => {
+      const [reviewBody, groupsBody] = await Promise.all([
+        readJson(
+          await fetch(
+            `/api/account/workspaces/${encodeURIComponent(workspaceId)}/agents/${encodeURIComponent(agentId)}/human-review`,
+            { cache: "no-store", credentials: "same-origin", signal },
+          ),
+        ),
+        readJson(
+          await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/private-groups`, {
+            cache: "no-store",
+            credentials: "same-origin",
+            signal,
+          }),
+        ),
+      ]);
+      const nextView = reviewBody as unknown as OwnerView;
+      setView(nextView);
+      setGroups(((groupsBody.groups ?? []) as PrivateGroup[]).filter(group => group.status === "active"));
+      setDraft(draftFromView(nextView));
+    },
+    [agentId, workspaceId],
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void load(controller.signal).catch(cause => {
+      if (cause instanceof DOMException && cause.name === "AbortError") return;
+      setError(cause instanceof Error ? cause.message : "Unable to load human review.");
+    });
+    return () => controller.abort();
+  }, [load]);
+
+  function update<Key extends keyof Draft>(key: Key, value: Draft[Key]) {
+    setDraft(current => (current ? { ...current, [key]: value } : current));
+    setPending(null);
+    setConfirmed(false);
+    setStatus(null);
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!view || !draft) return;
+    setError(null);
+    try {
+      const next = buildMutation(view, draft);
+      const fingerprint = JSON.stringify(next.body);
+      if (pending?.fingerprint !== fingerprint) {
+        setPending({ fingerprint, ...next });
+        setConfirmed(false);
+        return;
+      }
+      if (!confirmed) throw new Error("Confirm the exact changes before saving them.");
+      setBusy(true);
+      await readJson(
+        await fetch(
+          `/api/account/workspaces/${encodeURIComponent(workspaceId)}/agents/${encodeURIComponent(agentId)}/human-review`,
+          {
+            method: "PUT",
+            body: JSON.stringify(next.body),
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+      await load();
+      setPending(null);
+      setConfirmed(false);
+      setStatus("Human-review configuration saved.");
+      onSaved?.();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to save human review.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!draft || !view) {
+    return (
+      <section id="agent-human-review-editor" className="surface-card rounded-2xl p-6">
+        <p className="text-sm text-base-content/60">{error ?? "Loading human-review configuration…"}</p>
+      </section>
+    );
+  }
+  const automaticAvailable = Boolean(
+    view.configuration?.delegation?.integrationId && view.configuration.delegation.allowedWorkflowKeys.length > 0,
+  );
+
+  return (
+    <section id="agent-human-review-editor" className="surface-card rounded-2xl p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold">Human review</h2>
+          <p className="mt-1 text-sm text-base-content/60">Edit the complete configuration for this agent.</p>
+        </div>
+        <button type="button" className="btn btn-sm rateloop-secondary-action" onClick={onClose} disabled={busy}>
+          Close
+        </button>
+      </div>
+      <form className="mt-6 space-y-5" onSubmit={submit}>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="text-sm sm:col-span-2">
+            Review question
+            <textarea
+              className="textarea mt-2 w-full"
+              rows={3}
+              value={draft.criterion}
+              onChange={event => update("criterion", event.target.value)}
+              required
+            />
+          </label>
+          <label className="text-sm">
+            Positive label
+            <input
+              className="input mt-2 w-full"
+              value={draft.positiveLabel}
+              onChange={event => update("positiveLabel", event.target.value)}
+              required
+            />
+          </label>
+          <label className="text-sm">
+            Negative label
+            <input
+              className="input mt-2 w-full"
+              value={draft.negativeLabel}
+              onChange={event => update("negativeLabel", event.target.value)}
+              required
+            />
+          </label>
+          <label className="text-sm">
+            Rationale
+            <select
+              className="select mt-2 w-full"
+              value={draft.rationaleMode}
+              onChange={event => update("rationaleMode", event.target.value as Draft["rationaleMode"])}
+            >
+              <option value="off">Off</option>
+              <option value="optional">Optional</option>
+              <option value="required">Required</option>
+            </select>
+          </label>
+          <label className="text-sm">
+            Frequency
+            <select
+              className="select mt-2 w-full"
+              value={draft.mode}
+              onChange={event => update("mode", event.target.value as Mode)}
+            >
+              <option value="adaptive">Adaptive</option>
+              <option value="always">Every output</option>
+              <option value="fixed">Fixed percentage</option>
+              <option value="rules">Rules and conditions</option>
+              <option value="manual">Only after owner approval</option>
+            </select>
+          </label>
+          {draft.mode === "adaptive" || draft.mode === "fixed" ? (
+            <label className="text-sm">
+              {draft.mode === "adaptive" ? "Minimum review rate (%)" : "Outputs reviewed (%)"}
+              <input
+                className="input mt-2 w-full"
+                type="number"
+                min={draft.mode === "adaptive" ? 10 : 0.01}
+                max={100}
+                step="0.01"
+                value={draft.ratePercent}
+                onChange={event => update("ratePercent", event.target.value)}
+                required
+              />
+            </label>
+          ) : null}
+          <label className="text-sm">
+            Maximum outputs between reviews
+            <input
+              className="input mt-2 w-full"
+              type="number"
+              min={1}
+              max={10000}
+              value={draft.maximumUnreviewedGap}
+              onChange={event => update("maximumUnreviewedGap", event.target.value)}
+              required
+            />
+          </label>
+          {draft.mode === "rules" ? (
+            <>
+              <label className="text-sm">
+                Risk levels
+                <input
+                  className="input mt-2 w-full"
+                  value={draft.requiredRiskTiers}
+                  onChange={event => update("requiredRiskTiers", event.target.value)}
+                />
+              </label>
+              <label className="text-sm">
+                Review below confidence (%)
+                <input
+                  className="input mt-2 w-full"
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={draft.minimumConfidencePercent}
+                  onChange={event => update("minimumConfidencePercent", event.target.value)}
+                />
+              </label>
+            </>
+          ) : null}
+          <label className="text-sm">
+            Reviewers
+            <select
+              className="select mt-2 w-full"
+              value={draft.audience}
+              onChange={event => update("audience", event.target.value as Audience)}
+            >
+              <option value="private_invited">Invited reviewers</option>
+              <option value="public_network">RateLoop network</option>
+              <option value="hybrid">Invited and RateLoop network</option>
+            </select>
+          </label>
+          {draft.audience !== "public_network" ? (
+            <label className="text-sm">
+              Invited reviewer group
+              <select
+                className="select mt-2 w-full"
+                value={draft.privateGroupId}
+                onChange={event => update("privateGroupId", event.target.value)}
+                required
+              >
+                <option value="">Choose a group</option>
+                {groups.map(group => (
+                  <option key={group.groupId} value={group.groupId}>
+                    {group.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {draft.audience === "private_invited" ? (
+            <label className="text-sm">
+              Private material sensitivity
+              <select
+                className="select mt-2 w-full"
+                value={draft.privateSensitivity}
+                onChange={event => update("privateSensitivity", event.target.value as Draft["privateSensitivity"])}
+              >
+                <option value="internal">Internal</option>
+                <option value="confidential">Confidential</option>
+                <option value="restricted">Restricted</option>
+                <option value="regulated">Regulated</option>
+              </select>
+            </label>
+          ) : null}
+          <label className="text-sm">
+            Response window (seconds)
+            <input
+              className="input mt-2 w-full"
+              type="number"
+              min={1200}
+              max={86400}
+              value={draft.responseWindowSeconds}
+              onChange={event => update("responseWindowSeconds", event.target.value)}
+              required
+            />
+          </label>
+          <label className="text-sm">
+            Reviewers per request
+            <input
+              className="input mt-2 w-full"
+              type="number"
+              min={draft.audience === "private_invited" ? 1 : 3}
+              max={100}
+              value={draft.panelSize}
+              onChange={event => update("panelSize", event.target.value)}
+              required
+            />
+          </label>
+          {draft.audience === "private_invited" ? (
+            <label className="text-sm">
+              Base payment
+              <select
+                className="select mt-2 w-full"
+                value={draft.compensationMode}
+                onChange={event => update("compensationMode", event.target.value as Draft["compensationMode"])}
+              >
+                <option value="unpaid">Unpaid</option>
+                <option value="usdc">USDC bounty</option>
+              </select>
+            </label>
+          ) : null}
+          {draft.audience !== "private_invited" || draft.compensationMode === "usdc" ? (
+            <label className="text-sm">
+              USDC per accepted reviewer
+              <input
+                className="input mt-2 w-full"
+                inputMode="decimal"
+                value={draft.bountyUsdc}
+                onChange={event => update("bountyUsdc", event.target.value)}
+                required
+              />
+            </label>
+          ) : null}
+          <label className="text-sm sm:col-span-2">
+            Agent authority
+            <select
+              className="select mt-2 w-full"
+              value={draft.authority}
+              onChange={event => update("authority", event.target.value as Authority)}
+            >
+              <option value="check_only">Check only</option>
+              <option value="prepare_for_approval">Prepare for owner approval</option>
+              <option value="ask_automatically" disabled={!automaticAvailable}>
+                Ask automatically within the existing exact grant
+              </option>
+            </select>
+            {!automaticAvailable ? (
+              <span className="mt-1 block text-xs text-base-content/50">
+                Automatic requests require a separate exact publishing and funding grant.
+              </span>
+            ) : null}
+          </label>
+        </div>
+        {pending ? (
+          <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
+            <h3 className="font-medium">Confirm exact changes</h3>
+            <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+              {Object.entries(pending.summary).map(([label, value]) => (
+                <div key={label}>
+                  <dt className="text-base-content/50">{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+            <label className="mt-4 flex gap-3 border-t border-white/10 pt-4 text-sm">
+              <input
+                className="checkbox checkbox-sm"
+                type="checkbox"
+                checked={confirmed}
+                onChange={event => setConfirmed(event.target.checked)}
+                required
+              />
+              <span>I confirm this exact human-review configuration.</span>
+            </label>
+          </div>
+        ) : null}
+        {error ? (
+          <p className="alert alert-error text-sm" role="alert">
+            {error}
+          </p>
+        ) : null}
+        {status ? (
+          <p className="alert alert-success text-sm" role="status">
+            {status}
+          </p>
+        ) : null}
+        <button className="rateloop-gradient-action px-5" disabled={busy}>
+          {busy ? "Saving…" : pending ? "Save changes" : "Review changes"}
+        </button>
+      </form>
+    </section>
+  );
+}

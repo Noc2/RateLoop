@@ -4,6 +4,7 @@ import "server-only";
 import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
+import { SAFE_AGENT_CONNECTION_SCOPES } from "~~/lib/tokenless/agentConnectionIntents";
 import { OWNER_APPROVED_AGENT_SCOPES } from "~~/lib/tokenless/agentIntegrations";
 import {
   HUMAN_REVIEW_AUTHORITY_LEVELS,
@@ -1048,6 +1049,60 @@ async function activatePreparedPublishingGrant(
   return true;
 }
 
+async function downgradePublishingGrants(
+  client: PoolClient,
+  input: {
+    workspaceId: string;
+    agentId: string;
+    agentVersionId: string;
+    selectionPolicy: HumanReviewVersionReference;
+    actor: string;
+    now: Date;
+  },
+) {
+  const result = await client.query(
+    `UPDATE tokenless_agent_integrations
+     SET review_policy_id = $1, review_policy_version = $2,
+         publishing_policy_id = NULL, publishing_policy_version = NULL,
+         activation_mode = 'preauthorized_safe', granted_scopes_json = $3, updated_at = $4
+     WHERE workspace_id = $5 AND agent_id = $6 AND agent_version_id = $7
+       AND status = 'active' AND revoked_at IS NULL
+       AND (activation_mode = 'owner_approved' OR publishing_policy_id IS NOT NULL)
+     RETURNING integration_id`,
+    [
+      input.selectionPolicy.id,
+      input.selectionPolicy.version,
+      stableJson(SAFE_AGENT_CONNECTION_SCOPES),
+      input.now,
+      input.workspaceId,
+      input.agentId,
+      input.agentVersionId,
+    ],
+  );
+  const integrationIds = result.rows.map(row => rowString(row as Row, "integration_id")!).filter(Boolean);
+  for (const integrationId of integrationIds) {
+    await client.query(
+      `INSERT INTO tokenless_agent_integration_events
+       (event_id,integration_id,workspace_id,event_type,actor_type,actor_reference,details_json,created_at)
+       VALUES ($1,$2,$3,'scope_downgraded','account',$4,$5,$6)`,
+      [
+        `agie_${randomUUID().replaceAll("-", "")}`,
+        integrationId,
+        input.workspaceId,
+        input.actor,
+        stableJson({
+          source: "browser_owner_human_review_configuration",
+          explicitBrowserConsent: true,
+          activeSelectionPolicy: input.selectionPolicy,
+          grantedScopes: SAFE_AGENT_CONNECTION_SCOPES,
+        }),
+        input.now,
+      ],
+    );
+  }
+  return integrationIds;
+}
+
 async function resolvePrivateGroupTuple(
   client: PoolClient,
   input: { workspaceId: string; audience: unknown; privateGroupId: unknown },
@@ -1259,6 +1314,7 @@ export async function putHumanReviewConfigurationForOwner(input: PutHumanReviewC
   const client = await dbPool.connect();
   let saved: HumanReviewConfiguration | undefined;
   let activatedGrant: PreparedPublishingGrant | undefined;
+  let downgradedIntegrationIds: string[] = [];
   try {
     await client.query("BEGIN");
     const agent = await currentAgentVersion(client, input.workspaceId, input.agentId, true);
@@ -1332,6 +1388,16 @@ export async function putHumanReviewConfigurationForOwner(input: PutHumanReviewC
       policy: selection,
       now,
     });
+    if (body.publishingGrant === null) {
+      downgradedIntegrationIds = await downgradePublishingGrants(client, {
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        agentVersionId: agent.agentVersionId,
+        selectionPolicy,
+        actor,
+        now,
+      });
+    }
     if (preparedGrant) {
       const changed = await activatePreparedPublishingGrant(client, {
         workspaceId: input.workspaceId,
@@ -1434,6 +1500,30 @@ export async function putHumanReviewConfigurationForOwner(input: PutHumanReviewC
       workspaceId: input.workspaceId,
     });
   }
+  await Promise.all(
+    downgradedIntegrationIds.map(integrationId =>
+      appendAuditEvent({
+        action: "agent.integration_scope_downgraded",
+        actorKind: isRateLoopPrincipalId(actor) ? "principal" : "account",
+        actorReference: actor,
+        assuranceMethod: "rateloop_session",
+        metadata: {
+          agentId: input.agentId,
+          agentVersionId: saved!.agentVersionId,
+          humanReviewBindingId: saved!.bindingId,
+          humanReviewBindingVersion: saved!.version,
+          grantedScopes: SAFE_AGENT_CONNECTION_SCOPES,
+          explicitBrowserConsent: true,
+        },
+        purpose: "human_review_publishing_grant_removal",
+        reason: "workspace_administrator_human_review_consent",
+        result: "success",
+        targetId: integrationId,
+        targetKind: "agent_integration",
+        workspaceId: input.workspaceId,
+      }),
+    ),
+  );
   return { configuration: saved };
 }
 
@@ -1602,7 +1692,11 @@ export async function getHumanReviewConfigurationForOwner(input: {
         },
         authority,
         delegation: publishingPolicy
-          ? { publishingPolicy, integrationId: delegationConnection?.integrationId ?? null }
+          ? {
+              publishingPolicy,
+              integrationId: delegationConnection?.integrationId ?? null,
+              allowedWorkflowKeys: delegationConnection?.allowedWorkflowKeys ?? [],
+            }
           : null,
       },
       capability,

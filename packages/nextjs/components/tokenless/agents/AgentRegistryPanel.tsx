@@ -379,15 +379,15 @@ function AgentAssuranceSummary({ agent }: { agent: WorkspaceAgent }) {
 export function AgentRegistryPanel({
   workspaceId,
   agentRevision = 0,
-  activeManagementPanel = null,
+  activeReviewAgentId = null,
   onAgentsChanged,
-  onManagementPanelChange,
+  onReviewAgentChange,
 }: {
   workspaceId: string;
   agentRevision?: number;
-  activeManagementPanel?: "review" | "publishing" | null;
+  activeReviewAgentId?: string | null;
   onAgentsChanged?: () => void;
-  onManagementPanelChange?: (panel: "review" | "publishing" | null) => void;
+  onReviewAgentChange?: (agentId: string | null) => void;
 }) {
   const [registry, setRegistry] = useState<AgentRegistry | null>(null);
   const [editingAgent, setEditingAgent] = useState<WorkspaceAgent | null>(null);
@@ -532,24 +532,14 @@ export function AgentRegistryPanel({
                     <button
                       type="button"
                       className="btn btn-sm rateloop-secondary-action"
-                      aria-expanded={activeManagementPanel === "review"}
-                      aria-controls="agent-review-behavior"
-                      disabled={busy}
-                      onClick={() => onManagementPanelChange?.(activeManagementPanel === "review" ? null : "review")}
-                    >
-                      Review behavior
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-sm rateloop-secondary-action"
-                      aria-expanded={activeManagementPanel === "publishing"}
-                      aria-controls="agent-autonomous-requests"
+                      aria-expanded={activeReviewAgentId === agent.agentId}
+                      aria-controls="agent-human-review-editor"
                       disabled={busy}
                       onClick={() =>
-                        onManagementPanelChange?.(activeManagementPanel === "publishing" ? null : "publishing")
+                        onReviewAgentChange?.(activeReviewAgentId === agent.agentId ? null : agent.agentId)
                       }
                     >
-                      Autonomous requests
+                      Human review
                     </button>
                     <button
                       type="button"
