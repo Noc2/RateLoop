@@ -44,12 +44,24 @@ export type AssuranceEvidenceChainReference = {
 
 type Row = Record<string, unknown>;
 
+export type AssuranceEvidenceReference =
+  | {
+      schemaVersion: "rateloop.assurance-event-reference.v1";
+      kind: "decision_packet";
+      digest: string;
+    }
+  | {
+      schemaVersion: "rateloop.assurance-event-reference.v1";
+      kind: "gate_transition";
+      digest: string;
+    };
+
 type AssuranceLifecycleEventSource = {
   workspaceId: string;
   sourceEventId: string;
   eventType: AssuranceEventType;
   subject: string;
-  packetHash: string;
+  evidenceReference: AssuranceEvidenceReference;
   occurredAt: Date;
 };
 
@@ -61,12 +73,15 @@ type CloudEvent = {
   subject: string;
   time: string;
   datacontenttype: "application/json";
-  dataschema: "urn:rateloop:schema:assurance-event:v1";
-  ratelooppackethash: string;
+  dataschema: "urn:rateloop:schema:assurance-event:v2";
+  rateloopevidencekind: AssuranceEvidenceReference["kind"];
+  rateloopevidencedigest: string;
+  ratelooppackethash?: string;
   rateloopchainhash: string;
   data: {
-    schemaVersion: "rateloop.assurance-event.v1";
-    packetHash: string;
+    schemaVersion: "rateloop.assurance-event.v2";
+    evidenceReference: AssuranceEvidenceReference;
+    packetHash?: string;
     evidenceChain: AssuranceEvidenceChainReference;
     ocsf: OcsfComplianceFinding;
   };
@@ -98,7 +113,8 @@ type OcsfComplianceFinding = {
   type_uid: 200301 | 200302 | 200303;
   unmapped: {
     rateloop_evidence_chain: AssuranceEvidenceChainReference;
-    rateloop_packet_hash: string;
+    rateloop_evidence_reference: AssuranceEvidenceReference;
+    rateloop_packet_hash?: string;
   };
 };
 
@@ -125,6 +141,19 @@ function eventType(value: unknown): AssuranceEventType {
 function packetHash(value: unknown) {
   if (typeof value !== "string" || !HASH.test(value)) {
     throw new TokenlessServiceError("A canonical packet hash is required.", 400, "invalid_assurance_event");
+  }
+  return value;
+}
+
+function assuranceEvidenceReference(value: AssuranceEvidenceReference): AssuranceEvidenceReference {
+  if (
+    !value ||
+    value.schemaVersion !== "rateloop.assurance-event-reference.v1" ||
+    !["decision_packet", "gate_transition"].includes(value.kind) ||
+    typeof value.digest !== "string" ||
+    !HASH.test(value.digest)
+  ) {
+    throw new TokenlessServiceError("Assurance evidence reference is invalid.", 400, "invalid_assurance_event");
   }
   return value;
 }
@@ -177,7 +206,11 @@ function lifecycleSourceFromRow(row: Row): AssuranceLifecycleEventSource {
     sourceEventId: sourceEventId(text(row, "source_event_id")),
     eventType: eventType(text(row, "event_type")),
     subject: sourceEventId(text(row, "subject")),
-    packetHash: packetHash(text(row, "packet_hash")),
+    evidenceReference: assuranceEvidenceReference({
+      schemaVersion: "rateloop.assurance-event-reference.v1",
+      kind: text(row, "evidence_reference_kind") as AssuranceEvidenceReference["kind"],
+      digest: text(row, "evidence_reference_digest")!,
+    }),
     occurredAt: validDate(row.occurred_at, "assurance event time"),
   };
 }
@@ -234,13 +267,28 @@ export function buildAssuranceCloudEvent(input: {
   sourceEventId: string;
   eventType: AssuranceEventType;
   subject?: string;
-  packetHash: string;
+  evidenceReference: AssuranceEvidenceReference;
   evidenceChain: AssuranceEvidenceChainReference;
   occurredAt: Date;
 }) {
   const type = eventType(input.eventType);
   const sourceId = sourceEventId(input.sourceEventId);
-  const packet = packetHash(input.packetHash);
+  const reference = assuranceEvidenceReference(input.evidenceReference);
+  if (type !== "ai.rateloop.gate.blocked" && reference.kind !== "decision_packet") {
+    throw new TokenlessServiceError(
+      "Completed and anchored events require a decision-packet reference.",
+      400,
+      "invalid_assurance_event",
+    );
+  }
+  if (type === "ai.rateloop.gate.blocked" && reference.kind !== "gate_transition") {
+    throw new TokenlessServiceError(
+      "Blocked events require a gate-transition reference.",
+      400,
+      "invalid_assurance_event",
+    );
+  }
+  const packet = reference.kind === "decision_packet" ? packetHash(reference.digest) : undefined;
   const chain = evidenceChain(input.evidenceChain);
   if (!input.workspaceId.trim()) {
     throw new TokenlessServiceError("Workspace is required.", 400, "invalid_assurance_event");
@@ -278,7 +326,8 @@ export function buildAssuranceCloudEvent(input: {
     type_uid: definition.typeUid,
     unmapped: {
       rateloop_evidence_chain: chain,
-      rateloop_packet_hash: packet,
+      rateloop_evidence_reference: reference,
+      ...(packet ? { rateloop_packet_hash: packet } : {}),
     },
   };
   const event: CloudEvent = {
@@ -289,12 +338,15 @@ export function buildAssuranceCloudEvent(input: {
     subject,
     time: input.occurredAt.toISOString(),
     datacontenttype: "application/json",
-    dataschema: "urn:rateloop:schema:assurance-event:v1",
-    ratelooppackethash: packet,
+    dataschema: "urn:rateloop:schema:assurance-event:v2",
+    rateloopevidencekind: reference.kind,
+    rateloopevidencedigest: reference.digest,
+    ...(packet ? { ratelooppackethash: packet } : {}),
     rateloopchainhash: chain.eventHash,
     data: {
-      schemaVersion: "rateloop.assurance-event.v1",
-      packetHash: packet,
+      schemaVersion: "rateloop.assurance-event.v2",
+      evidenceReference: reference,
+      ...(packet ? { packetHash: packet } : {}),
       evidenceChain: chain,
       ocsf,
     },
@@ -347,7 +399,7 @@ export async function enqueueAssuranceEvent(input: {
   sourceEventId: string;
   eventType: AssuranceEventType;
   subject?: string;
-  packetHash: string;
+  evidenceReference: AssuranceEvidenceReference;
   evidenceChain: AssuranceEvidenceChainReference;
   occurredAt: Date;
   now?: Date;
@@ -389,9 +441,9 @@ export async function enqueueAssuranceEvent(input: {
     }
     const inserted = await client.query(
       `INSERT INTO tokenless_assurance_event_outbox
-       (event_id,workspace_id,source_event_id,event_type,subject,packet_hash,evidence_chain_json,
-       cloud_event_json,ocsf_event_json,payload_hash,occurred_at,created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       (event_id,workspace_id,source_event_id,event_type,subject,packet_hash,evidence_reference_kind,
+       evidence_reference_digest,evidence_chain_json,cloud_event_json,ocsf_event_json,payload_hash,occurred_at,created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
        ON CONFLICT (workspace_id,event_type,source_event_id) DO NOTHING
        RETURNING event_id`,
       [
@@ -400,7 +452,9 @@ export async function enqueueAssuranceEvent(input: {
         input.sourceEventId,
         event.type,
         event.subject,
-        event.data.packetHash,
+        event.data.packetHash ?? null,
+        event.data.evidenceReference.kind,
+        event.data.evidenceReference.digest,
         chainJson,
         cloudEventJson,
         ocsfJson,
@@ -501,7 +555,8 @@ async function projectAssuranceLifecycleEvent(source: AssuranceLifecycleEventSou
         result: "success",
         metadata: {
           eventType: source.eventType,
-          packetHash: source.packetHash,
+          evidenceReferenceDigest: source.evidenceReference.digest,
+          evidenceReferenceKind: source.evidenceReference.kind,
           sourceOccurredAt: source.occurredAt.toISOString(),
           subject: source.subject,
         },
@@ -540,12 +595,12 @@ export async function projectAssuranceLifecycleEvents(
   const limit = Math.min(Math.max(input.limit ?? 50, 1), 100);
   const workspaceFilter = input.workspaceId ? "AND t.workspace_id=?" : "";
   const anchorWorkspaceFilter = input.workspaceId ? "AND j.workspace_id=?" : "";
-  const [transitions, anchors, deferred] = await Promise.all([
+  const [completedTransitions, blockedTransitions, anchors, deferred] = await Promise.all([
     dbClient.execute({
       sql: `SELECT t.event_id AS source_event_id,t.workspace_id,t.opportunity_id AS subject,
-                   p.packet_digest AS packet_hash,t.occurred_at,
-                   CASE WHEN t.to_state='completed' THEN 'ai.rateloop.review.completed'
-                        ELSE 'ai.rateloop.gate.blocked' END AS event_type
+                   'decision_packet' AS evidence_reference_kind,
+                   p.packet_digest AS evidence_reference_digest,t.occurred_at,
+                   'ai.rateloop.review.completed' AS event_type
             FROM tokenless_agent_review_opportunity_transition_events t
             JOIN tokenless_agent_review_opportunities o
               ON o.workspace_id=t.workspace_id AND o.opportunity_id=t.opportunity_id
@@ -556,15 +611,30 @@ export async function projectAssuranceLifecycleEvents(
               ON p.run_id=r.run_id AND p.packet_digest IS NOT NULL
             LEFT JOIN tokenless_assurance_event_outbox e
               ON e.workspace_id=t.workspace_id AND e.source_event_id=t.event_id
-             AND e.event_type=CASE WHEN t.to_state='completed' THEN 'ai.rateloop.review.completed'
-                                   ELSE 'ai.rateloop.gate.blocked' END
-            WHERE t.to_state IN ('completed','blocked') AND e.event_id IS NULL ${workspaceFilter}
+             AND e.event_type='ai.rateloop.review.completed'
+            WHERE t.to_state='completed' AND e.event_id IS NULL ${workspaceFilter}
+            ORDER BY t.occurred_at ASC,t.event_id ASC LIMIT ?`,
+      args: [...(input.workspaceId ? [input.workspaceId] : []), limit],
+    }),
+    dbClient.execute({
+      sql: `SELECT t.event_id AS source_event_id,t.workspace_id,t.opportunity_id AS subject,
+                   'gate_transition' AS evidence_reference_kind,
+                   t.transition_commitment AS evidence_reference_digest,t.occurred_at,
+                   'ai.rateloop.gate.blocked' AS event_type
+            FROM tokenless_agent_review_opportunity_transition_events t
+            JOIN tokenless_agent_review_opportunities o
+              ON o.workspace_id=t.workspace_id AND o.opportunity_id=t.opportunity_id
+            LEFT JOIN tokenless_assurance_event_outbox e
+              ON e.workspace_id=t.workspace_id AND e.source_event_id=t.event_id
+             AND e.event_type='ai.rateloop.gate.blocked'
+            WHERE t.to_state='blocked' AND e.event_id IS NULL ${workspaceFilter}
             ORDER BY t.occurred_at ASC,t.event_id ASC LIMIT ?`,
       args: [...(input.workspaceId ? [input.workspaceId] : []), limit],
     }),
     dbClient.execute({
       sql: `SELECT j.job_id AS source_event_id,j.workspace_id,p.packet_id AS subject,
-                   j.artifact_digest AS packet_hash,j.completed_at AS occurred_at,
+                   'decision_packet' AS evidence_reference_kind,
+                   j.artifact_digest AS evidence_reference_digest,j.completed_at AS occurred_at,
                    'ai.rateloop.packet.anchored' AS event_type
             FROM tokenless_assurance_attestation_jobs j
             JOIN tokenless_assurance_evidence_packets p ON p.packet_digest=j.artifact_digest
@@ -593,13 +663,13 @@ export async function projectAssuranceLifecycleEvents(
               ON e.workspace_id=t.workspace_id AND e.source_event_id=t.event_id
              AND e.event_type=CASE WHEN t.to_state='completed' THEN 'ai.rateloop.review.completed'
                                    ELSE 'ai.rateloop.gate.blocked' END
-            WHERE t.to_state IN ('completed','blocked') AND p.packet_digest IS NULL
+            WHERE t.to_state='completed' AND p.packet_digest IS NULL
               AND e.event_id IS NULL ${workspaceFilter}
             GROUP BY t.to_state`,
       args: input.workspaceId ? [input.workspaceId] : [],
     }),
   ]);
-  const sources = [...transitions.rows, ...anchors.rows]
+  const sources = [...completedTransitions.rows, ...blockedTransitions.rows, ...anchors.rows]
     .map(value => lifecycleSourceFromRow(value as Row))
     .sort((left, right) => left.occurredAt.getTime() - right.occurredAt.getTime())
     .slice(0, limit);
@@ -614,7 +684,6 @@ export async function projectAssuranceLifecycleEvents(
   for (const value of deferred.rows) {
     const row = value as Row;
     const count = nonNegativeInteger(row.count, "deferred event count");
-    if (text(row, "to_state") === "blocked") summary.deferredWithoutPacket.gateBlocked = count;
     if (text(row, "to_state") === "completed") summary.deferredWithoutPacket.reviewCompleted = count;
   }
   for (const source of sources) {
@@ -633,7 +702,8 @@ export async function listAssuranceEvents(input: { accountAddress: string; works
   await listWorkspaceWebhooks({ accountAddress: input.accountAddress, workspaceId: input.workspaceId });
   const limit = Math.min(Math.max(input.limit ?? 50, 1), 100);
   const result = await dbClient.execute({
-    sql: `SELECT event_id,event_type,subject,packet_hash,evidence_chain_json,payload_hash,occurred_at,created_at
+    sql: `SELECT event_id,event_type,subject,packet_hash,evidence_reference_kind,evidence_reference_digest,
+                 evidence_chain_json,payload_hash,occurred_at,created_at
           FROM tokenless_assurance_event_outbox WHERE workspace_id=?
           ORDER BY occurred_at DESC,event_id DESC LIMIT ?`,
     args: [input.workspaceId, limit],
@@ -644,7 +714,12 @@ export async function listAssuranceEvents(input: { accountAddress: string; works
       eventId: text(row, "event_id")!,
       eventType: text(row, "event_type") as AssuranceEventType,
       subject: text(row, "subject")!,
-      packetHash: text(row, "packet_hash")!,
+      evidenceReference: assuranceEvidenceReference({
+        schemaVersion: "rateloop.assurance-event-reference.v1",
+        kind: text(row, "evidence_reference_kind") as AssuranceEvidenceReference["kind"],
+        digest: text(row, "evidence_reference_digest")!,
+      }),
+      packetHash: text(row, "packet_hash"),
       evidenceChain: JSON.parse(text(row, "evidence_chain_json")!),
       payloadHash: text(row, "payload_hash")!,
       occurredAt: new Date(String(row.occurred_at)).toISOString(),

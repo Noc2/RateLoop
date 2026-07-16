@@ -39,6 +39,11 @@ const CHAIN_REFERENCE = {
 };
 const resolvePublic = async () => ["203.0.113.10"];
 const HASH = (character: string) => `sha256:${character.repeat(64)}`;
+const PACKET_REFERENCE = {
+  schemaVersion: "rateloop.assurance-event-reference.v1" as const,
+  kind: "decision_packet" as const,
+  digest: PACKET_HASH,
+};
 
 beforeEach(() => __setDatabaseResourcesForTests(createMemoryDatabaseResources()));
 afterEach(() => __setDatabaseResourcesForTests(null));
@@ -200,7 +205,7 @@ async function seedLifecycleEventSources() {
     sql: `INSERT INTO tokenless_agent_review_opportunity_lifecycles
           (workspace_id,opportunity_id,state,state_revision,reason_codes_json,state_entered_at,terminal_at,
            created_at,updated_at)
-          VALUES (?,?,'completed',3,'[]',?,?,?,?),
+          VALUES (?,?,'completed',5,'[]',?,?,?,?),
                  (?,?,'blocked',2,'[]',?,NULL,?,?)`,
     args: [workspaceId, completedOpportunity, NOW, NOW, NOW, NOW, workspaceId, deferredOpportunity, NOW, NOW, NOW],
   });
@@ -211,9 +216,9 @@ async function seedLifecycleEventSources() {
     sql: `INSERT INTO tokenless_agent_review_opportunity_transition_events
           (event_id,workspace_id,opportunity_id,transition_key,from_state,to_state,from_revision,to_revision,
            reason_codes_json,actor_kind,actor_reference,details_json,transition_commitment,occurred_at)
-          VALUES (?,?,?,'pending:blocked','pending','blocked',1,2,'[]','service','stream-test','{}',?,?),
-                 (?,?,?,'blocked:completed','blocked','completed',2,3,'[]','service','stream-test','{}',?,?),
-                 (?,?,?,'pending:deferred','pending','blocked',1,2,'[]','service','stream-test','{}',?,?)`,
+          VALUES (?,?,?,'request-ready:blocked','request_ready','blocked',1,2,'[]','service','stream-test','{}',?,?),
+                 (?,?,?,'pending:completed','pending','completed',4,5,'[]','service','stream-test','{}',?,?),
+                 (?,?,?,'approval:blocked','approval_required','blocked',1,2,'[]','service','stream-test','{}',?,?)`,
     args: [
       blockedEventId,
       workspaceId,
@@ -242,7 +247,7 @@ async function seedLifecycleEventSources() {
                   'managed-key','{}','rekor-entry','1','{}',1,?,?,?,?)`,
     args: [anchorJobId, workspaceId, PACKET_HASH, NOW, NOW, NOW, NOW, NOW],
   });
-  return { workspaceId, blockedEventId, completedEventId, deferredEventId, anchorJobId };
+  return { workspaceId, blockedEventId, completedEventId, deferredEventId, anchorJobId, deferredOpportunity };
 }
 
 test("CloudEvents 1.0 wraps an OCSF 1.8 Compliance Finding and cross-verifiable evidence references", () => {
@@ -250,13 +255,17 @@ test("CloudEvents 1.0 wraps an OCSF 1.8 Compliance Finding and cross-verifiable 
     workspaceId: "ws_test",
     sourceEventId: "review:completed:run_123",
     eventType: "ai.rateloop.review.completed",
-    packetHash: PACKET_HASH,
+    evidenceReference: PACKET_REFERENCE,
     evidenceChain: CHAIN_REFERENCE,
     occurredAt: NOW,
   });
   assert.equal(built.event.specversion, "1.0");
+  assert.equal(built.event.dataschema, "urn:rateloop:schema:assurance-event:v2");
   assert.equal(built.event.ratelooppackethash, PACKET_HASH);
+  assert.equal(built.event.rateloopevidencekind, "decision_packet");
+  assert.equal(built.event.rateloopevidencedigest, PACKET_HASH);
   assert.equal(built.event.rateloopchainhash, CHAIN_HASH);
+  assert.deepEqual(built.event.data.evidenceReference, PACKET_REFERENCE);
   assert.deepEqual(built.event.data.evidenceChain, CHAIN_REFERENCE);
   assert.equal(built.event.data.ocsf.class_uid, 2003);
   assert.equal(built.event.data.ocsf.category_uid, 2);
@@ -271,12 +280,32 @@ test("CloudEvents 1.0 wraps an OCSF 1.8 Compliance Finding and cross-verifiable 
         sourceEventId: "review:completed:run_123",
         eventType: "ai.rateloop.review.completed",
         subject: "raw review content must not enter a SIEM event",
-        packetHash: PACKET_HASH,
+        evidenceReference: PACKET_REFERENCE,
         evidenceChain: CHAIN_REFERENCE,
         occurredAt: NOW,
       }),
     /Event reference is invalid/u,
   );
+
+  const gateDigest = HASH("9");
+  const blocked = buildAssuranceCloudEvent({
+    workspaceId: "ws_test",
+    sourceEventId: "gate:blocked:transition_123",
+    eventType: "ai.rateloop.gate.blocked",
+    evidenceReference: {
+      schemaVersion: "rateloop.assurance-event-reference.v1",
+      kind: "gate_transition",
+      digest: gateDigest,
+    },
+    evidenceChain: CHAIN_REFERENCE,
+    occurredAt: NOW,
+  });
+  assert.equal(blocked.event.rateloopevidencekind, "gate_transition");
+  assert.equal(blocked.event.rateloopevidencedigest, gateDigest);
+  assert.equal("ratelooppackethash" in blocked.event, false);
+  assert.equal("packetHash" in blocked.event.data, false);
+  assert.equal("rateloop_packet_hash" in blocked.ocsf.unmapped, false);
+  assert.equal(blocked.ocsf.unmapped.rateloop_evidence_reference.digest, gateDigest);
 });
 
 test("workspace administrators configure streams and event enqueue is atomic, scoped, and idempotent", async () => {
@@ -308,7 +337,7 @@ test("workspace administrators configure streams and event enqueue is atomic, sc
     workspaceId,
     sourceEventId: "review:completed:run_123",
     eventType: "ai.rateloop.review.completed",
-    packetHash: PACKET_HASH,
+    evidenceReference: PACKET_REFERENCE,
     evidenceChain: CHAIN_REFERENCE,
     occurredAt: NOW,
     now: NOW,
@@ -319,7 +348,7 @@ test("workspace administrators configure streams and event enqueue is atomic, sc
     workspaceId,
     sourceEventId: "review:completed:run_123",
     eventType: "ai.rateloop.review.completed",
-    packetHash: PACKET_HASH,
+    evidenceReference: PACKET_REFERENCE,
     evidenceChain: CHAIN_REFERENCE,
     occurredAt: NOW,
     now: new Date(NOW.getTime() + 1_000),
@@ -346,7 +375,7 @@ test("workspace administrators configure streams and event enqueue is atomic, sc
         workspaceId,
         sourceEventId: "review:completed:run_123",
         eventType: "ai.rateloop.review.completed",
-        packetHash: `sha256:${"99".repeat(32)}`,
+        evidenceReference: { ...PACKET_REFERENCE, digest: `sha256:${"99".repeat(32)}` },
         evidenceChain: CHAIN_REFERENCE,
         occurredAt: NOW,
       }),
@@ -366,15 +395,16 @@ test("lifecycle projection emits completed, blocked, and anchored events with ex
   });
   const first = await projectAssuranceLifecycleEvents({ now: NOW, limit: 20 });
   assert.deepEqual(first, {
-    scanned: 3,
-    projected: 3,
+    scanned: 4,
+    projected: 4,
     replayed: 0,
     retry: 0,
-    deferredWithoutPacket: { gateBlocked: 1, reviewCompleted: 0 },
+    deferredWithoutPacket: { gateBlocked: 0, reviewCompleted: 0 },
     retrySources: [],
   });
   const stored = await dbClient.execute({
-    sql: `SELECT o.source_event_id,o.event_type,o.packet_hash,o.evidence_chain_json,o.cloud_event_json,
+    sql: `SELECT o.source_event_id,o.event_type,o.packet_hash,o.evidence_reference_kind,
+                 o.evidence_reference_digest,o.evidence_chain_json,o.cloud_event_json,
                  a.event_digest,a.previous_digest,a.sequence,COUNT(d.delivery_id) AS deliveries
           FROM tokenless_assurance_event_outbox o
           JOIN tokenless_audit_events a
@@ -382,32 +412,66 @@ test("lifecycle projection emits completed, blocked, and anchored events with ex
            AND a.target_kind='assurance_lifecycle_source' AND a.target_id=o.source_event_id
           LEFT JOIN tokenless_assurance_event_deliveries d ON d.event_id=o.event_id
           WHERE o.workspace_id=?
-          GROUP BY o.source_event_id,o.event_type,o.packet_hash,o.evidence_chain_json,o.cloud_event_json,
+          GROUP BY o.source_event_id,o.event_type,o.packet_hash,o.evidence_reference_kind,
+                   o.evidence_reference_digest,o.evidence_chain_json,o.cloud_event_json,
                    a.event_digest,a.previous_digest,a.sequence
           ORDER BY o.event_type ASC`,
     args: [fixture.workspaceId],
   });
-  assert.equal(stored.rows.length, 3);
+  assert.equal(stored.rows.length, 4);
   assert.deepEqual(
     new Set(stored.rows.map(row => String(row.source_event_id))),
-    new Set([fixture.blockedEventId, fixture.completedEventId, fixture.anchorJobId]),
+    new Set([fixture.blockedEventId, fixture.completedEventId, fixture.deferredEventId, fixture.anchorJobId]),
   );
   for (const row of stored.rows) {
     const chain = JSON.parse(String(row.evidence_chain_json));
     const envelope = JSON.parse(String(row.cloud_event_json));
-    assert.equal(row.packet_hash, PACKET_HASH);
     assert.equal(chain.eventHash, row.event_digest);
     assert.equal(chain.previousHash, row.previous_digest);
     assert.equal(chain.sequence, Number(row.sequence));
     assert.equal(envelope.rateloopchainhash, row.event_digest);
-    assert.equal(envelope.ratelooppackethash, PACKET_HASH);
+    if (row.event_type === "ai.rateloop.gate.blocked") {
+      const expectedDigest = row.source_event_id === fixture.deferredEventId ? HASH("6") : HASH("4");
+      assert.equal(row.packet_hash, null);
+      assert.equal(row.evidence_reference_kind, "gate_transition");
+      assert.equal(row.evidence_reference_digest, expectedDigest);
+      assert.equal(envelope.rateloopevidencedigest, expectedDigest);
+      assert.equal("ratelooppackethash" in envelope, false);
+    } else {
+      assert.equal(row.packet_hash, PACKET_HASH);
+      assert.equal(row.evidence_reference_kind, "decision_packet");
+      assert.equal(row.evidence_reference_digest, PACKET_HASH);
+      assert.equal(envelope.ratelooppackethash, PACKET_HASH);
+    }
     assert.equal(Number(row.deliveries), 1);
   }
   assert.deepEqual(await verifyWorkspaceAuditChain(fixture.workspaceId), {
-    eventCount: 3,
-    headDigest: String(stored.rows.find(row => Number(row.sequence) === 3)?.event_digest),
+    eventCount: 4,
+    headDigest: String(stored.rows.find(row => Number(row.sequence) === 4)?.event_digest),
     valid: true,
   });
+
+  const deliveredPayloads: Array<Record<string, unknown>> = [];
+  const delivered = await deliverPendingAssuranceEvents({
+    now: NOW,
+    encryptionKey: ENCRYPTION_KEY,
+    resolveHostname: resolvePublic,
+    fetchImpl: async (_url, init) => {
+      deliveredPayloads.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return new Response(null, { status: 202 });
+    },
+  });
+  assert.equal(delivered.length, 4);
+  assert.equal(
+    delivered.every(outcome => outcome.state === "delivered"),
+    true,
+  );
+  const preRunBlocked = deliveredPayloads.find(
+    payload => payload.type === "ai.rateloop.gate.blocked" && payload.subject === fixture.deferredOpportunity,
+  );
+  assert.equal(preRunBlocked?.rateloopevidencekind, "gate_transition");
+  assert.equal(preRunBlocked?.rateloopevidencedigest, HASH("6"));
+  assert.equal(preRunBlocked ? "ratelooppackethash" in preRunBlocked : true, false);
 
   const replay = await projectAssuranceLifecycleEvents({ now: new Date(NOW.getTime() + 60_000), limit: 20 });
   assert.deepEqual(replay, {
@@ -415,14 +479,14 @@ test("lifecycle projection emits completed, blocked, and anchored events with ex
     projected: 0,
     replayed: 0,
     retry: 0,
-    deferredWithoutPacket: { gateBlocked: 1, reviewCompleted: 0 },
+    deferredWithoutPacket: { gateBlocked: 0, reviewCompleted: 0 },
     retrySources: [],
   });
   const auditCount = await dbClient.execute({
     sql: "SELECT COUNT(*) AS count FROM tokenless_audit_events WHERE workspace_id=?",
     args: [fixture.workspaceId],
   });
-  assert.equal(Number(auditCount.rows[0]?.count), 3);
+  assert.equal(Number(auditCount.rows[0]?.count), 4);
 });
 
 test("deliveries retry with a stable payload and signature, recover expired leases, and re-check SSRF on every attempt", async () => {
@@ -439,7 +503,7 @@ test("deliveries retry with a stable payload and signature, recover expired leas
     workspaceId,
     sourceEventId: "review:completed:run_retry",
     eventType: "ai.rateloop.review.completed",
-    packetHash: PACKET_HASH,
+    evidenceReference: PACKET_REFERENCE,
     evidenceChain: CHAIN_REFERENCE,
     occurredAt: NOW,
     now: NOW,
@@ -480,7 +544,7 @@ test("deliveries retry with a stable payload and signature, recover expired leas
     workspaceId,
     sourceEventId: "packet:anchored:run_lease",
     eventType: "ai.rateloop.packet.anchored",
-    packetHash: PACKET_HASH,
+    evidenceReference: PACKET_REFERENCE,
     evidenceChain: CHAIN_REFERENCE,
     occurredAt: retryAt,
     now: retryAt,
@@ -502,7 +566,7 @@ test("deliveries retry with a stable payload and signature, recover expired leas
     workspaceId,
     sourceEventId: "packet:anchored:run_ssrf",
     eventType: "ai.rateloop.packet.anchored",
-    packetHash: PACKET_HASH,
+    evidenceReference: PACKET_REFERENCE,
     evidenceChain: CHAIN_REFERENCE,
     occurredAt: new Date(retryAt.getTime() + 1_000),
     now: new Date(retryAt.getTime() + 1_000),
