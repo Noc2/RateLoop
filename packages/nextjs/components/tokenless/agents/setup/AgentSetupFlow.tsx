@@ -211,6 +211,11 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
 
   async function confirmAgent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const connectedAgent = setup.agent;
+    if (!connectedAgent) {
+      setError("The connected agent details are unavailable. Reconnect the agent and try again.");
+      return;
+    }
     const form = new FormData(event.currentTarget);
     setBusy(true);
     setError(null);
@@ -227,7 +232,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               model: "unknown",
               modelVersion: null,
               deploymentName: form.get("deploymentName") || null,
-              environment: form.get("environment"),
+              environment: connectedAgent.environment,
             },
           }),
           credentials: "same-origin",
@@ -431,7 +436,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             <p className="mt-2 text-sm text-base-content/65">
               The connected client stays separate from the model, effort, and timing reported for each eligible run.
             </p>
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div className="mt-5 grid gap-4">
               <label className="text-sm">
                 Workflow name
                 <input
@@ -443,17 +448,6 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 />
               </label>
               <label className="text-sm">
-                Environment
-                <select
-                  className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  name="environment"
-                  defaultValue={setup.agent.environment}
-                >
-                  <option value="production">Production</option>
-                  <option value="staging">Staging</option>
-                </select>
-              </label>
-              <label className="text-sm sm:col-span-2">
                 Description <span className="text-base-content/50">(optional)</span>
                 <textarea
                   className="textarea mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
@@ -462,7 +456,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   maxLength={1000}
                 />
               </label>
-              <label className="text-sm sm:col-span-2">
+              <label className="text-sm">
                 Deployment name <span className="text-base-content/50">(optional)</span>
                 <input
                   className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"

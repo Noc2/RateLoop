@@ -54,6 +54,13 @@ test("setup separates the connected client from per-run model provenance", () =>
   assert.doesNotMatch(flowSource, />Model version</);
 });
 
+test("workflow setup preserves the connected environment without asking the user to classify it", () => {
+  assert.match(flowSource, /environment: connectedAgent\.environment/);
+  assert.doesNotMatch(flowSource, /form\.get\("environment"\)/);
+  assert.doesNotMatch(flowSource, />Environment</);
+  assert.doesNotMatch(flowSource, /<option value="(?:production|staging)">/);
+});
+
 test("workspace step remains editable when revisited", () => {
   assert.match(flowSource, /htmlFor="agent-setup-workspace-name"/);
   assert.match(flowSource, /value=\{workspaceName\}/);
