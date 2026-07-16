@@ -206,10 +206,6 @@ export function BetterAuthSignIn() {
           {error}
         </p>
       ) : null}
-      <p className="text-xs leading-5 text-base-content/45">
-        Creating a RateLoop account does not create a wallet. Wallet setup appears only when you choose an onchain
-        funding, payout, or recovery action.
-      </p>
     </div>
   );
 }
