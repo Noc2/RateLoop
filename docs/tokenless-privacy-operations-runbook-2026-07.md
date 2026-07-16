@@ -1,5 +1,7 @@
 # Tokenless privacy operations runbook (July 2026)
 
+**Status:** Current operational runbook for the isolated tokenless deployment.
+
 This runbook covers the repository-controlled privacy workflow for the isolated `tokenless` deployment. It does not
 replace a controller/processor determination, statutory retention schedule, transfer assessment, or legal advice.
 

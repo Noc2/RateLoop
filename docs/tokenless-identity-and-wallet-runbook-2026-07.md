@@ -1,5 +1,7 @@
 # Tokenless identity and optional wallet runbook (July 2026)
 
+**Status:** Current provisioning and verification runbook.
+
 ## Boundary
 
 Better Auth is the primary browser authenticator. RateLoop authorization uses an opaque `rlp_*` principal and its own

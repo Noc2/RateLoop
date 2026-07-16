@@ -1,5 +1,7 @@
 # Tokenless supply-chain controls
 
+**Status:** Current CI and release-evidence controls.
+
 The tokenless CI line now produces repeatable engineering evidence; it does not constitute a certification.
 
 - CodeQL runs JavaScript/TypeScript `security-extended` queries for pushes and pull requests to `main` and `tokenless`,

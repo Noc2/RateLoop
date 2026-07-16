@@ -1,6 +1,7 @@
 # Tokenless RBTS v1 Scoring Specification
 
-**Status:** frozen for the next disposable tokenless test deployment  
+**Status:** Current mechanism specification, implemented in the disposable tokenless v3 test deployment. Real-money
+use remains gated by the production-readiness register.
 **Scoring version:** `2`  
 **Mechanism identifier:** `tokenless-rbts-v1`  
 **Fund core:** immutable and adminless; no LREP, stake, governance, payout oracle, or operator scoring input

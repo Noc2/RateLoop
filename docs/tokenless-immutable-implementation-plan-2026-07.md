@@ -1,222 +1,182 @@
-# RateLoop Tokenless: Architecture & Implementation Plan (July 2026)
+# RateLoop tokenless design of record
 
-**Status:** Current design of record and implementation baseline. The product direction is **human assurance for AI-enabled workflows**; its dependency-ordered implementation is specified in the [human-assurance redesign plan](tokenless-human-assurance-redesign-plan-2026-07.md). The [production-readiness register](tokenless-production-readiness-2026-07.md) supersedes the earlier Base-Account-only and thirdweb-primary browser identity decisions: Better Auth supplies primary authentication, a RateLoop-owned opaque principal is the application identity, and thirdweb is an optional wallet adapter. Smart-contract deployments on this branch are disposable until Phase 5; none of the current Base contracts should be treated as final or as a compatibility constraint. Legal/revenue reference in [legal-revenue-assessment-tokenless-design-2026-07.md](legal-revenue-assessment-tokenless-design-2026-07.md).
+**Status:** Current architecture and product baseline for the `tokenless` branch. This document contains current
+decisions only. Superseded research, review notes, and implementation sequences remain available in Git history.
+Concrete release evidence and blockers live in the [production-readiness register](tokenless-production-readiness-2026-07.md).
+Legal and revenue obligations live in the [legal and revenue reference](tokenless-legal-revenue-reference-2026-07.md).
 
-**Mechanism-integrity amendment — 13 July 2026:** the
-[incentive and integrity reintegration plan](tokenless-incentive-integrity-reintegration-plan-2026-07.md) reopens the
-implemented v0 prediction-only score for the next paid deployment. The current disposable `TokenlessScoring` baseline is
-not approved for real-money RateLoop-network or hybrid panels because its payout is invariant to the rater's own vote.
-The target keeps LREP, stake, governance, and the legacy payout oracle deleted while adding World ID 4 for initial
-network uniqueness, a fixed non-negative binary RBTS bonus, and off-chain prospective correlation epochs that cannot
-change earned pay. Paid network and hybrid work remain fail-closed until that plan is implemented and verified.
+If another document conflicts with this one, this document controls unless the decision is explicitly reopened here.
 
-**Autonomous-agent publishing amendment — 14 July 2026:** delegated machine publishing is an authenticated,
-workspace-scoped capability, not a public MCP permission. Approving an agent connection automatically creates its
-hash-only, policy-bound credential; owners do not issue separate agent API keys. The connection may run the existing
-`quote -> ask -> payment -> wait -> result` primitive without a per-run browser click only when a versioned policy binds
-its payment mode, wallet, budget, audience-policy hashes, project, data classification, retention, expiry, and revocation
-state. Result-webhook registration is not part of the current product or SDK; connected agents use bounded wait and
-result reads. The preferred self-funded lane is a local encrypted signer producing short-lived x402/EIP-3009
-authorizations; the gas-only relayer never receives the key. The public MCP remains draft-first and browser-approved.
-The [autonomous publishing reintegration plan](tokenless-autonomous-agent-publishing-reintegration-plan-2026-07.md)
-defines the implementation and release gates. Accountless x402 publishing remains deferred until B2B, screening,
-terms, rate-limit, and abuse controls can be enforced without a workspace principal.
+## Product boundary
 
-**One-message workspace-agent connection amendment — 15 July 2026:** the accepted
-[one-message agent connection plan](tokenless-one-message-agent-connection-plan-2026-07.md) supersedes the connection and
-credential-issuance portions of the July 14 amendment where they conflict. A basic workspace connection does not create a
-publishing credential or require a publishing policy. The default safe grant may discover its bound context and check
-connection health, but it cannot create human-review work, spend, publish, read private artifacts, or administer the
-workspace. Those capabilities require a separate, versioned browser step-up with exact scopes and policy/budget limits.
-The copied chat message contains one short-lived, single-use connection intent and no bearer/API credential; OAuth 2.1
-with PKCE, or device authorization for headless clients, delivers operational credentials to host-controlled secure
-storage. Exactly one generated message, clipboard copy, and chat paste is the invariant for first-time and returning
-supported clients. Install, trust, OAuth, reload, retry, and a host-required new task preserve and resume that intent
-without asking the owner to paste again. Verified/pre-registered clients may auto-activate only the pre-authorized safe
-profile; generic or unknown clients require explicit OAuth consent showing client identity and scope. Same-client claim
-retries are idempotent; other claimants are rejected. The agent completes the flow with the dashboard closed and uses the
-non-mutating `rateloop_verify_connection`; connection verification never creates or evaluates a review opportunity. The
-public four-tool handoff MCP remains separate and unchanged.
+RateLoop is **human assurance for AI-enabled workflows**. A workspace owner defines when an agent needs human review,
+which humans may participate, what information they may see, and how much the agent may spend. RateLoop returns a
+versioned decision packet containing the panel result, reasons, disagreement, reviewer provenance, and settlement
+evidence. The customer remains responsible for the final decision.
 
-**Concise progressive-disclosure UX amendment — 15 July 2026:** the accepted
-[concise product plan](tokenless-concise-product-ux-plan-2026-07-15.md) supersedes earlier screen-composition,
-always-visible-tab, and large-form recommendations where they conflict. A new workspace shows one next action:
-**Connect an agent**. Connection progress and success replace that surface; agent registry, review behavior, groups,
-evaluations, billing, and autonomous publishing appear only after their prerequisite exists and the user requests the
-capability. Backend privacy, authorization, budget, eligibility, and settlement controls remain enforced, but internal
-hashes, schema taxonomies, and protocol terminology are not exposed merely because the backend supports them. The
-six-checkbox data-classification UI is removed; visibility, public-material declaration, and private-sensitivity
-enforcement are normalized as separate dimensions. Every signed-in and public surface follows the same rule: one primary
-task, safe defaults, secondary explanation on demand, and technical detail in Docs.
+The product is not a general social network, token-governance system, prediction market, model leaderboard, or public
+wallet dashboard. Blockchain and x402 are implementation details for independently checkable funding and settlement;
+they do not define the product category or the primary navigation.
 
-**Guided workspace-agent setup amendment — 15 July 2026:** the accepted
-[guided setup plan](tokenless-guided-workspace-agent-setup-plan-2026-07.md) makes first-workspace setup a resumable,
-workspace-scoped five-stage flow: workspace, connection, agent confirmation, review behavior, and people. The normal
-Agents workspace navigation remains hidden until explicit completion or grandfathering, while the global product shell
-stays available. Safe OAuth connection remains separate from publishing, spending, and private-artifact authority.
-Unavailable reviewer lanes are absent and rejected server-side. Invited groups and one-use codes may be prepared, but
-the product must not claim autonomous private delivery before the assignment-gated runtime is connected. Autonomous
-OAuth spending also remains fail-closed until ask ownership and budget reservations use a credential-neutral actor
-binding and the full quote-to-result path passes end to end.
+## Current baseline
 
-## Implementation status — 15 July 2026
+The active package graph is tokenless-only:
 
-Phases 1-4 are implemented in the `tokenless` package graph: greenfield contracts and invariants; tokenless-only ABIs;
-Ponder and keeper; Better Auth browser sessions and opaque RateLoop principals; B2B workspaces; payment execution;
-pre-round moderation; paid eligibility and epoch-bound vouchers; per-round vote and payout keys with user-controlled
-recovery; sponsored commits; transparency analytics; and agent OAuth. The ordered application migration journal currently
-runs through `0051_workspace_agent_setup.sql`.
+- `packages/foundry` contains the immutable fund core, credential issuer, stateless x402 adapter, and deterministic
+  RBTS libraries.
+- `packages/contracts` exports only the root package and `./tokenless` generated artifacts.
+- `packages/ponder` indexes the active tokenless deployment and publishes source-derived evidence.
+- `packages/keeper` advances permissionless reveal, settlement, compensation, claims, and stale-return paths.
+- `packages/sdk` and `packages/agents` expose the versioned `quote -> ask -> wait -> result` workflow.
+- `packages/nextjs` implements Better Auth, workspaces, agent OAuth, reviewer access, payments, privacy controls,
+  evidence packets, and the Human Assurance Loop.
 
-The current disposable Base Sepolia v3 bundle was deployed at block `44132668`, producing deployment key
-`tokenless-v3:84532:0xf97d28e02f7301b4f6cb19160e1176eaf3e4f19a:0x67a89f76ae9a89866a0e62785d7999efe1c5e592:0x8a9b7af03f3cf362ba98180700bc92fbb72fcbc9`.
-Generated contract exports, Ponder, and keeper identify that complete bundle. It is a disposable Base Sepolia test-profile
-deployment, not a production release target. No further hosted release may use deterministic or in-memory simulation:
-staging and production must use dedicated persistence and the real assignment, payment, settlement, and result path.
-Release remains fail-closed until managed signing, paid-assignment settlement, every migration through `0051`, the signed
-EU resource/provider bundle, and a deployment-pinned paid end-to-end exercise are complete. Any later fund-core change
-invalidates this bundle and requires the same atomic redeployment procedure. Phase 5 audit, bounty, and mainnet hardening
-remain open.
+The ordered application migration journal runs from `0000` through `0051_workspace_agent_setup.sql`. The current
+checked-in Base Sepolia bundle is the disposable `tokenless-v3` deployment at block `44132668`, with complete key:
 
-## Execution philosophy: build-first
+```text
+tokenless-v3:84532:0xf97d28e02f7301b4f6cb19160e1176eaf3e4f19a:0x67a89f76ae9a89866a0e62785d7999efe1c5e592:0x8a9b7af03f3cf362ba98180700bc92fbb72fcbc9
+```
 
-The entire system is implemented immediately (AI-driven development) and tested live end-to-end. Legal grey areas are tracked in a parallel backlog and addressed over time — they do not gate building or testing; if something breaks legally or technically, the design changes or the project is abandoned. Consequences:
+This is a test-profile deployment, not a compatibility anchor or real-money release. Any fund-core change invalidates
+the artifact and every hosted address until contracts and all consumers are redeployed together.
 
-- **v0 deployments are disposable.** With ~zero users and test-scale money, iterate-by-redeploy is free. The immutable/adminless-funds posture hardens into a real commitment only once third-party money flows at scale.
-- **The existing contract topology is not preserved.** No storage-layout compatibility, proxy migration, governance rotation, or old-address continuity work is required on `tokenless`. Build a greenfield core, redeploy it, regenerate every consumer, and delete legacy code instead of adapting obsolete abstractions.
-- **Only a short pre-real-money list blocks scaled launch** (each item cheap, and existential or contract-shaped): paid-panel framing (never "reviews"), Impressum + AGB skeleton, sanctions geoblocking + basic wallet screening, the DAC7 paid-task-unlock sheet, B2B-only funders, and the contract-schema defaults below.
+## Trust and authority
 
-## Pre-implementation review — resolved design gaps
+The fund-holding core is immutable and has no owner, proxy, pause, sweep, setter, governance, oracle, or operator path
+to funds. Its only stateful responsibilities are round funding, voucher-bound commits, deterministic settlement,
+compensation, refunds, claims, fee release, and stale-share return.
 
-The final review before coding found eight issues that were important enough to change the baseline:
+The separate credential issuer may rotate admission signers by epoch and can admit or censor future work. It cannot
+hold funds, redirect a claim, alter an accepted commit, change settlement, or move customer assets. Issuance authority
+is therefore disclosed separately from the no-funds-admin custody claim.
 
-1. **Paid eligibility must precede paid work.** A permissionless claim cannot be withheld after settlement for DAC7 or sanctions onboarding. Browsing and advisory calibration stay frictionless, but the combined identity/residence/tax/sanctions step now happens when a rater unlocks paid tasks, before the first paid voucher is issued. There is no "earn now, discover a blocked balance later" state.
-2. **Accepted work is not free when quorum fails.** A disclosed `attemptReserve` is funded with the round. If at least one valid commit is accepted but the round misses quorum, the bounty and platform fee refund while the reserve pays a capped base amount to valid revealers; unused reserve refunds. Zero-commit rounds still refund in full. The UI must not promise "fully refunded" once raters have worked.
-3. **No cancellation after the first paid commit.** Even pro-rata cancellation would let a funder decrypt answers after the beacon and obtain work without paying the bounty. After the first accepted paid commit, only the normal settle/refund/expiry state machine applies. Illegal-content takedowns stop distribution and new vouchers but compensate already-accepted work from the reserve and, if necessary, a platform make-good budget.
-4. **Settlement is a restart-safe state machine, not an underspecified paginated call.** Scoring that depends on the whole panel needs an immutable reveal set and at least two phases: freeze/aggregate, then process weights, then finalize. Claims stay disabled until finalization; any caller can continue from the recorded cursor; order, retries, and partial transactions cannot change the result.
-5. **A payout commitment does not by itself provide lasting unlinkability.** `claim(commitKey, payoutAddress, salt)` publicly links that vote to the destination. Test deployments may use a normal payout address with explicit disclosure; the final privacy claim requires a tested per-round destination and recovery design that never gives the operator a spend key. Until then, say "unlinkable until claim," not "unlinkable to the payout wallet."
-6. **Credential rotation and nullifier derivation need failure-safe versions.** A shared never-rotated derivation secret is an unrecoverable privacy and availability failure. Each identity gets a stable random nullifier seed stored encrypted; wrapping/KMS keys rotate. Vouchers carry an issuer epoch. Scheduled signer rotation may preserve a bounded previous-epoch grace; emergency compromise rotation invalidates uncommitted old-epoch vouchers immediately. Neither mode affects accepted commits.
-7. **The tokenless contracts should be greenfield.** The old registry/escrow/oracle graph would preserve mutual references and thousands of lines of recovery machinery. The target is one fund-holding panel core, one credential issuer, an optional x402 adapter, and pure libraries. Existing contract names are deletion inputs, not design constraints.
-8. **v0 needs a narrow, legible mechanism.** Paid v0 supports binary and head-to-head A/B questions. Every valid reveal earns an equal base share; only a bounded bonus pool depends on RBTS-style accuracy. A question may require a bounded written rationale from every rater; that requirement is priced into the base pool and committed with the vote. There is no discretionary post-hoc bonus escrow or funder acceptance switch.
-9. **Surprisingly Popular is a separate central top-up, not fund-core settlement.** The July 14 production decision adds a deterministic, versioned, platform-funded bounty after finalization. Its maximum liability is reserved before a paid round, its per-rater cap is frozen, and it pays only after the base claim to the same user-selected address. It cannot change the majority verdict, base, RBTS, refund, compensation, or any contract state; the dedicated bonus funder has no path into customer-funded assets.
+The operator controls off-chain identity, eligibility, moderation, assignment, correlation analytics, and publication
+policy. Those controls can stop future admission or distribution but cannot erase accepted work or change earned pay.
+Every customer-facing custody, privacy, identity, and settlement claim must match the deployed system exactly.
 
-## Core architecture decisions
+## Human Assurance Loop
 
-1. **Chain: Base.** Identity is off-chain and commits are relayed, so nothing needs a specific chain; the demand side (x402 facilitator + agent ecosystem, CDP Paymaster, Coinbase Onramp, USDC liquidity, Base Account) is Base-native. World Chain was evaluated and declined — its advantages (World-App distribution, verified-human free gas, Mini Apps) do not require moving the fund core. Contracts remain portable. Rater surface: **mobile-web PWA**; World App is the Proof-of-Human handoff required for RateLoop-network supply and remains optional for customer-invited work.
-2. **Adminless, immutable fund-holding core.** No proxies, no pause, no sweeps, no setters; constructor-configured; single-shot deploy with an assert-no-funds-admin verification script. The credential issuer is explicitly outside that claim: it retains narrowly scoped, epoch-based signer rotation and can admit or censor future voters, but it never holds or redirects funds and cannot affect accepted commits. Bug response = disclose → let users exit → redeploy; every state must have a funder/rater exit path (Foundry invariant). Honest positioning: _"non-custodial escrow with no operator path to funds"_ — not "fully keyless" or "decentralized."
-3. **Stake-free voting.** Raters never deposit, approve, or risk anything (zero Entgelt ⇒ German gambling law cannot apply; the engine holds no rater funds, shrinking the MiCA/PSD2 surface to funder-side escrows). Quality/sybil control comes from gates, not money: World ID 4 Proof of Human for RateLoop-network supply, versioned audience policies, task-relevant cohorts, per-identity caps enforced at voucher issuance, prospective correlation-epoch diversification, gold questions, probation, and minimum round sizes scaled to bounty. World ID proves a provider-scoped unique human, not expertise, honest judgment, or behavioral independence.
-4. **Voting stays on-chain** (commit-reveal with drand/tlock sealing). This prevents the operator from changing accepted commits or settlement inputs after the fact; it does **not** prevent a compromised or malicious issuer from minting eligible voters, so issuance controls and published issuance-versus-identity counts remain explicit trust assumptions. An operator-posted settlement root over escrowed funds would add a separate fund-control key and is rejected. Costs are solved on Base: sub-cent sponsored commits, no popups (see 6).
-5. **Pseudonymous vote keys.** Votes are cast from per-round one-time keys that are unlinkable before claim (a vote is an opinion = personal data; the EDPB blockchain guidelines discourage identifiable on-chain data). The commit voucher carries a per-(identity, round) nullifier, deduped on-chain — one-vote-per-identity is contract-enforced without cross-round linkage. The rater binds a payout commitment into their own commit, so settlement and claims are self-contained from user inputs. A reused claim destination links rounds, and a normal claim links the vote to its destination permanently; the final deployment therefore needs a user-controlled per-round destination with tested backup/recovery. The vote-key↔rater mapping is held off-chain, encrypted under per-rater keys; erasure = deletion after statutory retention periods. Sponsored relay prevents funding-graph linkage but does not solve claim-time linkage.
-6. **Commit authorization is decoupled from submission.** The contract verifies the voucher-bound vote key's signature over the commit payload and ignores `msg.sender`; commits are relayed (RateLoop's sponsored relayer, any relayer, or self-funded). No per-key account deployment; no wallet interaction to vote. The rater's self-custodial wallet matters only for the payout commitment and claim. Sub Accounts / Spend Permissions are used in funder flows only. Never let the operator generate, retain, or recover a rater spend key; encrypted server backups are acceptable only when decryption remains user-controlled.
-7. **Admission is provider-neutral and policy-bound.** Keep browser identity, project access, job qualification, identity assurance, and paid eligibility separate. A versioned audience policy defines reviewer source (`customer-invited`, `RateLoop network`, or `hybrid`), cohort/qualification rules, acceptable assurance capabilities, quotas, selection, fallbacks, and privacy-safe reporting. Its canonical hash is bound exactly in paid round terms and vouchers; a scalar ordered identity tier is not the product model. Customer invitations can authorize private or unpaid work without World ID or Self, but never imply uniqueness, independence, or paid eligibility. World ID 4 Proof of Human is required for RateLoop-network supply as a one-time, durable RateLoop-account enrollment: it records provider-scoped uniqueness at enrollment, not current liveness or continuing credential validity. World session proofs are not accepted for renewal because the protocol exposes no cryptographic subject link to the enrollment nullifier; a policy requiring fresh uniqueness evidence is therefore incompatible with this adapter. Self remains an optional later adapter for document predicates. Both stay behind the off-chain issuer and neither adds contracts to the Base fund core. Paid reviewers still complete age, residence/tax, sanctions, and payout eligibility before their first voucher. Nationality, document-issuing country, declared residence, tax residence, and sanctions results remain distinct and minimized.
-8. **No on-chain challenge oracle.** Settlement runs directly from revealed votes. In its place: a commitment-based transparency log (aggregates + keyed per-rater commitments, recompute script, voucher issuance versus policy-eligible subject counts — never per-address plaintext), point-in-time integrity epochs for prospective cluster-diversified assignment, and post-round correlation/answer-fingerprint analytics feeding _future-round eligibility and verdict publication only_ (never retroactive payout changes). Verdicts pend behind policy/cohort-specific analytics with published SLOs; decision packets carry reviewer-source, World ID capability, assurance, diversity, epoch, and limitation metadata. A bounded remediation policy may trigger a rerun or fee refund but never reduce accepted-work pay.
-9. **Fee: neutral caller-set `feeBps + feeRecipient`** on funding entry points (immutable cap 20%; default 0; no company address on-chain). RateLoop's interfaces charge 5–10% (start ~7.5%), quoted all-in on the x402 lane with a small fixed floor; funder-side only — raters are always free, with no paid rater conveniences (they would reopen the gambling analysis). The fee is held in escrow until settlement; under-quorum rounds refund the bounty and fee while the separately disclosed attempt reserve compensates accepted work.
-10. **Single-operator keeper is a liveness convenience, not a trust point.** Everything it calls (reveal, settle, cleanup) is permissionless; a run-your-own-keeper script and optional Gelato/Chainlink backup are published. Payout claims are permissionless (`claim()` callable by anyone) — the auto-claimer is a convenience executor with self-claim as fallback.
+1. **Owner sets policy.** The owner chooses review rules, risk thresholds, reviewer audience, data boundaries,
+   publishing permissions, and spending limits.
+2. **Agent submits work.** The connected agent provides the work, declared risk, confidence, completeness, suggestion
+   commitment, and source evidence within that policy.
+3. **Humans judge.** Eligible reviewers answer independently. RateLoop returns the verdict, reasons, disagreement, and
+   source-linked agreement evidence.
+4. **Evaluation.** The result updates evidence for the exact agent version, policy, workflow, risk tier, and reviewer
+   audience. Evidence never becomes a global agent score.
 
-## Mechanism (implemented disposable v0; superseded for the next paid deployment)
+Review begins at 100%. Within the same scope, two independent 15-case windows with at least 14 comparable agreements
+may reduce baseline review to 50%; 50 more stable cases may reduce it to 25%; 100 more may reduce it to the 10%
+monitoring floor. A complete evidence window below threshold restores 100% calibration. High-risk rules and explicit
+owner requirements always override the adaptive baseline.
 
-The bullets below describe the deployed v0 baseline and remain useful for compatibility and benchmark fixtures. They are
-not the production target. The normative replacement is the fixed-base, fixed-maximum binary RBTS mechanism in the
-[incentive and integrity reintegration plan](tokenless-incentive-integrity-reintegration-plan-2026-07.md).
+## Workspace and agent setup
 
-- **Scope:** paid v0 supports one binary rating or one head-to-head A/B choice. Multi-option ranking is a bundle of binary members. A rationale is either required from every participant under a bounded schema and included in the quoted base compensation, or optional and uncompensated; no funder/operator selectively accepts feedback after seeing it. There is no `FeedbackBonusEscrow` in v0.
-- **Commit tuple:** `{vote, predictedUpBps, responseHash?, payoutCommitment, nullifier, voucher}`; the tlock plaintext also carries the bound payout address and salt needed for permissionless auto-claim after reveal. The prediction control is one tap among five buckets (10/30/50/70/90%), not a precision slider. If live testing shows the second input materially harms completion, redeploy with equal-share payouts and remove prediction/RBTS rather than hiding the cost.
-- **Payout transform:** record a default split of **80% equal base pool / 20% accuracy pool**. Every timely valid reveal receives the same base share. Non-negative RBTS scores divide only the bonus pool; if the aggregate bonus score is zero, the bonus also splits equally. Cross-round statistics never enter this round's price. Phase 1 must freeze the peer-selection rule, rounding/dust behavior, and worked examples before Solidity implementation.
-- **Round lifecycle:** paid-eligibility voucher → relayed tlock commit → immutable reveal set at deadline → keeper or any caller freezes/aggregates → restart-safe weight processing → finalize → permissionless claims. A late beacon opens self-reveal fallback after the blind window; a dead beacon returns the bounty and fee while valid committers receive the disclosed attempt compensation. Claims are disabled until finalization. Target payout availability remains ~1–2 minutes after a healthy window.
-- **Funding/refunds:** funding terms include `{bountyAmount, feeAmount, attemptReserve}`. Zero accepted commits ⇒ full refund. Under quorum after accepted work ⇒ bounty + fee refund, capped base compensation from the reserve, unused reserve refund. No funder cancellation or edits after the first accepted paid commit. Takedown and infrastructure-failure make-goods follow the same "accepted work is paid" rule.
-- **Probation:** unverified users calibrate advisory-only off-chain until graduating on gold-question and minority-calibration evidence (rate-limited per identity cluster); do not preserve `AdvisoryVoteRecorder`. A verified user becomes payout-eligible only after completing the paid-task unlock step. Gold results gate future eligibility, never alter already-earned payouts.
-- **Known adversarial edges, managed not solved:** verified-identity majority capture becomes profitable around $250–800 bounties for small rounds at $30/account — bind maximum bounty to panel size, the exact audience policy, caps, and _detection capability_; real-human collusion rings cost nothing in forgery and are detectable only in answer-content statistics; the gold pool is a depleting security asset (rotation budget, delayed feedback for advisory accounts, per-item pass-rate drift monitoring); self-dealing funders can manufacture verdicts — hence verdict-pending analytics, diversity metadata, and funder CoI declarations in ToS.
+A first workspace uses one resumable setup flow:
 
-## Contract schemas (recorded defaults)
+1. name the workspace;
+2. connect an agent;
+3. confirm the agent identity and declaration;
+4. choose review behavior, public/private material boundaries, and safe spending defaults; and
+5. invite people or prepare one-use invitation codes when an invited reviewer lane is needed.
 
-- **Voucher:** `{voteKey, contentId, roundId, nullifier, admissionPolicyHash, issuerEpoch, expiresAt}`, EIP-712-signed by an issuer signer. The core checks exact policy-hash equality, issuer acceptance, expiry, nullifier-unused, and the vote key's signature over the exact commit payload. Each identity has a stable random nullifier seed stored envelope-encrypted; wrapping/KMS keys rotate without changing the seed. The issuer derives `H(seed, contentId, roundId)` and enforces issuance caps in its ledger. This prevents duplicate admission within the disclosed issuer/provider namespace, not malicious issuer vote minting or cross-provider duplicates; issuance-versus-eligible-subject counts remain part of the transparency audit.
-- **Issuer trust anchor:** the core immutably references the issuer contract. The issuer retains the only admin role: signer rotation by epoch. Scheduled rotation accepts current-epoch vouchers plus a bounded previous-epoch grace; emergency rotation accepts only the new epoch and forces uncommitted users to obtain a fresh voucher. An accepted commit never depends on later issuer state. Rotation mode/events, epoch bounds, issuance alarms, and circuit-breaker activation are public. The assert script verifies that this role cannot call or influence fund-moving functions.
-- **Round state machine:** `Open → Revealable → Aggregating → Weighting → Finalized`, with terminal `ZeroCommitRefund`, `UnderQuorumCompensation`, and `BeaconFailureCompensation` paths. `beginSettlement` freezes the reveal count and sufficient statistics; `processWeights(cursor,count)` is deterministic and retry-safe; `finalizeSettlement` enables claims only after every weight is stored and conservation/dust invariants pass.
-- **Funding:** immutable per-round terms include bounty, fee, attempt reserve, minimum reveals, deadlines, admission-policy hash, scoring version, and salted content/terms commitments. Fee fields remain inside the EIP-3009/x402 signed terms. The attempt reserve cannot be redirected to the fee recipient.
-- **Claims:** `claim(commitKey, payoutAddress, salt)` is callable by anyone against the committed destination. The tlock reveal exposes the already-bound claim material, so an auto-claimer needs no wallet key and cannot redirect payment; the client retains plaintext for the late-beacon self-reveal fallback. Each round now generates independent vote and payout keys locally and exports them in a PBKDF2-SHA256/AES-256-GCM recovery package; the operator never receives either private key or the recovery secret. Unclaimed shares revert to the funder after the stale grace. Claim remains publicly linkable from the vote key to that per-round destination, and moving claimed USDC remains a user-controlled action from the recovered destination.
-- **Content/takedown:** only hashes/commitments on-chain — never payloads or plaintext URLs in structs/events. Public question context may contain up to four RateLoop-hosted JPG/PNG/WEBP uploads (10 MB each before normalization) or one canonical YouTube reference. Image bytes remain in private operator storage and the frozen question commits only ordered asset IDs, normalized-byte digests, and accessible labels; YouTube input is reduced to a canonical video ID before hashing. Authenticated ask preparation verifies workspace ownership, digest, moderation state, and single-question binding without rewriting the quoted descriptor. Same-origin delivery joins the asset to an approved public question on every read, so rejection or takedown denies delivery without changing accepted-work settlement. Stopping new vouchers after a takedown does not cancel accepted work: the round reaches its deterministic terminal path, and reserve/platform make-good covers valid committers. Minimize event payloads throughout.
+The flow shows the current stage, permits backward navigation, persists progress per workspace, and hides the normal
+Agents management menu until setup is completed or the workspace is grandfathered. The global product shell remains
+available. Downstream registries, evaluation history, billing, group management, and technical identifiers appear only
+when their prerequisite exists and the user requests that capability.
 
-## UX invariants
+A basic agent connection is deliberately safe: it may read its bound context and assurance state, verify connection
+health, and record an idempotent review-requirement decision under the owner policy. It cannot publish a review, spend,
+read private artifacts, or administer the workspace. Publishing and paid review require a separate, versioned owner
+approval with exact scopes, policy hashes, audience rules, project binding, budget limits, expiry, and revocation state.
 
-The canonical product information architecture is the accepted
-[Humans and Agents production redesign](tokenless-humans-agents-production-redesign-plan-2026-07.md): `/human` owns
-human discovery, profile, assurance, invitations, paid eligibility, and notification preferences; `/agents` owns
-workspace integrations, agent/model declarations, audience and spend policy, private groups, and evaluations. The
-blank human-authored `/ask` journey is removed. `/handoff` remains the exact agent-created, human-approved draft lane.
-These route and composition decisions do not weaken any fund-custody, settlement, eligibility, privacy, or deployment
-invariant below.
+## Agent connection and integration
 
-**Rater:** browsing and advisory calibration require no tax form and no payout wallet. "Unlock paid tasks" is one combined step before the first paid voucher: required assurance evidence, adulthood, declared residence, DAC7 fields when applicable, sanctions consent/screening, and a self-custodial payout destination. Project invitation/assignment and paid eligibility are separate checks. Do not create a held balance that becomes inaccessible later. Per-task interaction is choice + bounded rubric tags/rationale + an optional five-bucket prediction tap; no visible claim step in the happy path (auto-executed, batched, sponsored). Earnings show the guaranteed base, possible bonus, and attempt-compensation amount before acceptance; receipts show base + bonus after settlement. No leaderboards, streaks, or decay — habit comes from rater-set availability windows and the sealed→reveal notification loop. Failure copy: relayer down → client-queued commit with deadline awareness (never "self-fund a key"); voucher denied → reason classes (re-verify / appeal / neutral legal); quorum miss → "panel did not complete; your accepted work earned $X" + similar round; claim recovery → explain linkability and destination recovery before funds are at risk. Gold failures never touch already-earned payouts and have a one-tap appeal with a human-review SLA and published overturn rate.
+The supported connection flow uses one short-lived, single-use intent. The copied message contains no durable bearer or
+workspace API credential. OAuth 2.1 with PKCE, or device authorization for approved headless clients, delivers
+operational credentials to host-controlled secure storage. Install, consent, reload, retry, and a host-required new task
+preserve the original intent so the owner is not asked to paste again.
 
-**Buyer/funder:** the product journey is project → versioned suite → blinded cases → reviewer policy → budget → frozen manifest → run → decision packet. Templates keep the common path short, but the buyer must preview the exact rater view and approve the rubric, reviewer source, acceptance rule, privacy/on-chain boundary, and provenance before funding. The pay button and quote itemize bounty, platform fee, and the maximum accepted-work reserve: "No responses: fully refunded. Partial panel: bounty and fee refunded; accepted work up to $X is paid." The waiting room shows assignment, commit, quorum, reveal, settlement, and exceptions without exposing early answers. The result reports preference share, sample, disagreement, reviewer provenance, limitations, settlement references, and a separate client `go/revise/stop` sign-off; it does not use an unvalidated confidence claim. Primary B2B rail = prepaid workspace balance via a regulated partner (invoice/SEPA/card; VAT-ID at workspace level; B2B gate = self-declaration + VAT-ID, never document-KYB before a small first run). Fees are all-in before purchase and itemized on every receipt.
+The authenticated workspace MCP keeps a stable tool contract. A new connection calls
+`rateloop_get_agent_context -> rateloop_verify_connection`; verification is non-mutating and never creates a synthetic
+review. The assurance workflow uses
+`evaluate_review_requirement -> skip or request_review -> wait_for_review -> get_review_result -> get_assurance_state`.
+Generic MCP is advisory; a host-enforced integration is required when the host must prove that output remained blocked.
 
-**Agent API/MCP:** project/run APIs orchestrate quote → ask → wait → result as the per-case settlement primitive; authenticated artifact upload; webhooks + polling; idempotency on every mutation; versioned JSON-Schema results with case/run state, reviewer provenance, decision/evidence references, and structured bounty/fee/attempt-reserve/refund/compensation fields; machine-readable audience-policy SLOs; a policy-bound API-key + prepaid-balance mode so agents can integrate without any wallet; and a policy-bound x402 lane for agents that fund from their own wallet. Staging uses testnet USDC and the same persisted reviewer, payment, settlement, and result machinery as production; deterministic outcomes exist only in injected tests, never as a hosted product or runtime mode. The installable Codex surface bundles a narrow invocation skill with a stateless Streamable HTTP MCP adapter. Its initial public surface is exactly capabilities, create-browser-handoff, handoff-status, and result. The user must approve the exact public, synthetic, or safely redacted draft before an agent sends it to the hosted MCP. The MCP processes the draft to create a bearer link but does not persist it; the browser then keeps it in the URL fragment while the user reviews the question, audience, and privacy classification. Clicking “request exact quote” stores the reviewed question and panel terms as a short-lived quote; ask submission remains a separate explicit action. Autonomous quote, ask, payment, upload, and bounded wait are available only through authenticated policy-enforced API/CLI paths, not the public MCP. Do not restore the legacy category, governance, rating-transaction, local-signer, LREP, or raw wallet-plan MCP tools. Sales asset: a published benchmark of RateLoop panels versus model-as-judge and simpler equal-pay human voting (reliability, failure cases, completion, cost, latency) — positioned as the human-assurance layer of an eval stack.
+The authenticated API and SDK use `quote -> ask -> wait -> result`. Scoped workspace credentials support prepaid
+automation. A self-funded agent may use short-lived x402/EIP-3009 USDC authorizations from a local encrypted signer;
+the gas-only relayer never receives the spend key. The public MCP remains a separate, approval-bound browser handoff and
+cannot silently turn draft content into a funded ask.
 
-**Agent workspace connection:** the default `/agents` action is **Copy connection message**; it creates and copies the
-fixed safe intent in one click with no required host chooser, profile form, publishing policy, or technical settings. Host
-and client identity come from OAuth and MCP `initialize.clientInfo`, not owner guesses. The intent starts with a 30-minute
-claim window; a matching verified client that begins authorization in time may finish within a bounded continuation window
-with a hard 45-minute total cap. Claim retries from the same OAuth token family/client return the original integration;
-another claimant cannot consume or resume it. Install and OAuth callbacks persist a server-owned handoff so a reload or
-new task resumes automatically. After the initial paste, the owner is interrupted only for a host-native install/trust
-action, client-trust OAuth consent, or later elevated-scope consent. The agent performs all other work in the background
-and reports one final **Connected with safe access** confirmation. The authenticated MCP keeps one stable tool list and
-uses non-mutating `rateloop_verify_connection` for readiness; it must not use
-`rateloop_evaluate_review_requirement` as a synthetic connection test. Dashboard SSE/polling is presentation only, stops
-in hidden tabs, preserves focus, and is never required for completion. Connection progress and recovery must be keyboard
-and screen-reader operable, textually distinguish every state, announce transitions once, provide a selectable full
-message when clipboard access fails, and preserve the original intent through install/reload recovery without another
-copy or paste.
+## Identity, audience, and privacy
 
-## Target contract set
+Better Auth is the primary browser authentication layer. Email OTP and passkeys are first; Google and Apple appear only
+when complete credential pairs exist. Authentication resolves to a RateLoop-owned opaque principal and a hashed,
+HttpOnly session. A client-reported profile, provider token, email domain, or wallet is never authorization.
 
-Treat this as a greenfield protocol, not a refactor of the old graph. Working names may change during Phase 1, but the responsibility boundaries do not:
+Wallets are optional, purpose-bound adapters for funding, payout, or recovery. Existing self-custodial wallets and an
+optional thirdweb-created wallet use the same explicit proof boundary. Browser identity, workspace role, project
+assignment, reviewer qualification, assurance evidence, paid eligibility, and wallet authority remain separate.
 
-| New target                  | Responsibility                                                                                                                                                                                                                                                                                                                       |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `TokenlessPanel`            | The only fund-holding stateful core: create/fund round, accept voucher-bound commits, reveal, deterministic multi-phase settlement, reserve compensation, refunds, claims, fee release, stale-share return. Immutable USDC/issuer/drand configuration; no admin path. Use internal/pure libraries for scoring and state transitions. |
-| `CredentialIssuer`          | Epoch-based signer acceptance, public rotation metadata, and voucher verification only. No funds, content, profiles, or reputation. This is the explicitly disclosed admission/censorship trust point.                                                                                                                               |
-| `X402PanelSubmitter`        | Optional stateless funding adapter. EIP-3009-hashed terms include every economic field and the target panel-core address. No owner, fee override, escrow pointer setter, or custody.                                                                                                                                                 |
-| Pure libraries / interfaces | Math, EIP-712 hashing, and read-only interfaces. A pure library is not a governance or upgrade surface.                                                                                                                                                                                                                              |
+Audience policies are versioned and distinguish customer-invited, RateLoop-network, and hybrid reviewers. The exact
+policy hash is bound into paid round terms and vouchers. World ID Proof of Human may supply provider-scoped uniqueness
+for RateLoop-network admission; it does not prove expertise, residence, independence, or paid eligibility. Paid-task
+eligibility—including adulthood, residence/tax information where applicable, sanctions screening, and payout setup—must
+finish before the first paid voucher. Browsing and advisory calibration require none of those paid-task fields.
 
-Start with one stateful fund-holding core to eliminate mutual-reference cycles. If code-size or gas benchmarks require a split, use a one-way immutable interface and preserve a single conservation boundary; do not reintroduce setter-based wiring or an operator-posted payout root.
+Private artifacts are encrypted before storage and released only through workspace membership, project assignment, and
+short reviewer leases. Public, private, and sensitive-material decisions are separate policy dimensions. On-chain data
+contains commitments and settlement evidence, never private payloads or plaintext URLs. A normal claim publicly links
+the one-time vote key to its payout destination; reusing a destination can link rounds. The operator never possesses a
+rater spend key or universal decryption key.
 
-**Delete rather than adapt:** all current LREP/governance/timelock contracts; `RoundVotingEngine` and its module/storage/recovery libraries; `ClusterPayoutOracle`; `QuestionRewardPoolEscrow`; `FeedbackBonusEscrow`; `ConfidentialityEscrow`; `RoundRewardDistributor`; `LaunchDistributionPool`; `AdvisoryVoteRecorder`; `ContentRegistry`; `CategoryRegistry`; `ProfileRegistry`; `FeedbackRegistry`; `FrontendRegistry`; `RaterRegistry`; `ProtocolConfig`; submission-media validator contracts/factories; the current `WorldIdV4BackendIssuer`; and the current owned `X402QuestionSubmitter`. Advisory calibration, profiles, categories, content moderation, feedback text, and confidentiality access policy belong in signed off-chain records and the app database; only their hashes enter round terms.
+## Funding, incentives, and terminal paths
 
-## Phases
+Round terms freeze the bounty, platform fee, accepted-work reserve, minimum reveals, deadlines, audience-policy hash,
+scoring version, and content commitments. The funder cannot cancel or edit a paid round after the first accepted commit.
 
-**Phase 0 — parallel backlog (runs alongside the build; nothing here blocks testing):**
+Every valid reveal earns fixed base compensation. The current binary
+[RBTS v1 specification](tokenless-rbts-v1-spec.md) adds a bounded, non-negative reporting bonus without changing the
+majority verdict. The separately funded [Surprisingly Popular bounty](tokenless-surprise-bounty-v1-spec.md) may reward
+useful minority signal after finalization; it cannot alter customer-funded settlement or contract state.
 
-1. Legal opinions: EMT/PSD2 on the funder-side escrow flow (+ EU interface-fee characterization); VAT deemed-supplier structuring memo + binding-ruling decision; confirmatory gambling-law check; the consolidated counsel list in the legal doc.
-2. DAC7 build-out: BZSt DIP portal onboarding, the combined paid-task unlock sheet (collected before the first paid voucher, never signup; advisory participation needs nothing), § 23 ineligibility mechanics, non-EU residency plausibility procedure.
-3. Economics model: per reviewer-source/audience-policy table (max bounty vs N_min vs caps vs detection lag; rater wage targets incl. advisory-calibration cost; cohort recruitment and fill cost; quorum-failure rates; attempt-reserve sizing and abuse budget; sponsorship/griefing budget incl. a fully-self-paid fallback line; gold-pool authoring/rotation budget) + a one-page revenue model — this table is also the run quote/refund/SLO engine.
-4. Demand work: validate human assurance for repeated AI-enabled workflows through paid consultancy/agency and direct design-partner pilots. Test blinded baseline/candidate suites, customer-invited versus external panels, recurring regression runs, and willingness to pay for the decision packet. Do not define the market by whether the customer is "AI-native."
-5. Identity-and-role matrix: pin each duty to a separate layer — (i) a Better-Auth-authenticated, RateLoop-owned opaque browser principal, (ii) an optional separately proven thirdweb in-app wallet, Base Account, or other self-custodial funding/payout wallet, (iii) project invitation/assignment, (iv) job qualification/cohort provenance, (v) provider-scoped assurance evidence, (vi) on-chain one-time vote/payout keys, and (vii) separately vaulted paid-eligibility/tax records. Never infer residence from nationality or document issuer, and never grant wallet authority merely because a social identity controls the browser session.
-6. Operational resilience: mapping-DB breach as the DPIA headline scenario (per-rater-key encryption; operator holds ciphertext); envelope-encrypted DAC7 vault; backup/DR; issuer key in KMS with issuance alarms + circuit breaker; founder continuity plan (second authorized person for the DAC7 filing, sanctions desk, takedown mailbox); drand/sequencer runbooks; pre-round content moderation + 18+ eligibility; regulated-partner selection for B2B balances; rater-surface funnel instrumentation ("open in browser" interstitials for in-app webviews).
+Settlement freezes the reveal set, processes deterministic evidence in restart-safe pages, and enables claims only
+after conservation checks pass. Any caller may continue the state machine. Zero-commit rounds refund in full. Under-
+quorum, beacon-failure, takedown, and infrastructure-failure paths preserve compensation for accepted valid work and
+return unused customer funds. Unclaimed shares return to the funder after the stale grace.
 
-**Phase 1 — implemented baseline specs:** the original phase froze the disposable v0 80/20 prediction-only transform, five prediction buckets, rounding/dust, immutable reveal set, multi-phase settlement, reserve compensation, no-post-commit-cancel rule, voucher/issuer/nullifier epochs, claim recovery, agent API, and paid-task unlock. For the next paid deployment, the mechanism specification and contract work restart at Phases 0 and 3 of the [incentive and integrity reintegration plan](tokenless-incentive-integrity-reintegration-plan-2026-07.md); the v0 score is a benchmark fixture, not the production acceptance criterion.
+Workspace subscriptions are conventional B2B billing and remain separate from panel economics. They are disabled
+unless the complete Stripe configuration and readiness checks are present. Panel quotes and receipts continue to
+itemize bounty, platform fee, reserve, refunds, and compensation.
 
-**Phase 2 — greenfield contracts:** delete the complete legacy set listed above and its tests first; do not preserve storage layouts, selectors, deployment addresses, or upgrade paths. Build `CredentialIssuer`, then the minimal `TokenlessPanel`, then the stateless x402 adapter. Add invariants: no admin/operator path to funds; issuer cannot influence accepted commits or transfers; core conservation across bounty/fee/reserve/dust; no claim before finalization; every non-final state has a permissionless continuation or time-bounded terminal path; zero-commit full refund; under-quorum accepted-work compensation; beacon-failure compensation; no post-commit cancellation; unclaimed-share return; settlement is order/retry invariant.
+## Deployment and operations
 
-**Phase 3 — services and generated consumers:** keeper reduced to reveal/freeze/process/finalize/cleanup (+ self-reveal fallback support); transparency-log publisher; correlation + answer-fingerprint analytics and verdict pipeline; paid-task eligibility issuance + sanctions screening; replace Ponder schema/handlers rather than carrying old tables; testnet enablement (keeper Base Sepolia support, testnet USDC/paymaster/facilitator); regenerate `@rateloop/contracts`; delete all legacy ABIs, address keys, env vars, readiness checks, cron jobs, MCP tools, and runbook steps.
+`tokenless` and `main` are separate products and deployment lines. Tokenless code may target only the dedicated Vercel
+project `rateloop-tokenless`, its Vercel-provided domain, and the isolated Railway/Postgres/Ponder/keeper resources. It
+must never move `main`, the legacy `rate-loop-nextjs` project, `rateloop.ai`, or `www.rateloop.ai`.
 
-**Phase 4 — app + SDK:** use Better Auth for email, Google, Apple, and passkey browser onboarding; offer thirdweb in-app wallets only after an authenticated user explicitly needs a funding or payout wallet, while retaining Base Account and other self-custodial wallets as external-wallet options; remove governance/tokenomics/manual-claim/launch/stake/oracle/frontend-bond UX; build paid-task unlock, assurance/admission policies, policy-bound agent credentials and spend controls, counterfactual advisory earnings, entry-level task bundling, itemized checkout/reserve copy, automatic claim + destination recovery, failure-state matrix, earnings receipts, sealed→reveal notification loop, funder waiting room/result artifact, and the quote/ask/payment/wait/result SDK plus tokenless CLI signer. Rebuild E2E from user journeys rather than mechanically porting legacy selectors.
+Hosted environments have no simulation mode. Staging uses testnet assets with the same persisted assignment, payment,
+settlement, and result machinery as production. Deterministic fixtures and local signing keys are test-only. Deployment
+identity, database head, EU resource evidence, signing roles, and chain addresses fail closed on a complete deployment
+key; mixed address bundles are invalid.
 
-**Phase 4B — human-assurance redesign:** execute the [dependency-ordered redesign plan](tokenless-human-assurance-redesign-plan-2026-07.md). Private artifacts, assignment-gated access, provider-neutral audience policies, multi-case runs, client-approved manifests, source-derived evidence packets, invited/network/hybrid reviewer modes, and recurring quality loops must replace the one-question demo before Phase 5 claims or a broad real-user launch.
+Operational instructions are intentionally separate from product design:
 
-**Phase 5 — hardening at traction:** audit competition on the (small) immutable core, Immunefi bounty, soak, then the final adminless-funds mainnet deployment; publish the verified contract addresses, transparency log, recompute script, and keeper runbook in their relevant technical documentation.
+- [environment parity](tokenless-environment-parity.md);
+- [EU deployment](tokenless-eu-deployment-runbook.md);
+- [identity and optional wallet provisioning](tokenless-identity-and-wallet-runbook-2026-07.md);
+- [privacy operations](tokenless-privacy-operations-runbook-2026-07.md); and
+- [supply-chain controls](tokenless-supply-chain-controls.md).
 
-## Cutover and cleanup rules
+## Remaining release phases
 
-- The old Base deployment remains a legacy deployment until users can exit; it is not the target architecture and does not block fresh `tokenless` deployments.
-- Do not merge old governance/oracle/registry abstractions into the new core merely to keep generated types or UI code compiling. Delete the consumer and rebuild the journey.
-- Every removed contract must be removed in the same implementation sequence from Foundry scripts/tests, deployment JSON, `@rateloop/contracts`, Ponder schema/handlers, keeper jobs, Next.js hooks/pages, SDK/agents/MCP payloads, E2E fixtures, env templates, readiness workflows, and public docs.
-- During migration, the new deployment uses a distinct deployment schema/version; never make a mixed old/new address bundle look healthy. Readiness fails closed if any legacy-required address is accidentally treated as part of the tokenless core.
-- Commit deletion, new contract core, service/indexer migration, and app/SDK migration as separate concerns. A phase is complete only when `rg` finds no unintended legacy symbol and the relevant tests no longer encode old behavior.
+1. **Hosted staging:** managed signing, complete paid assignment-to-settlement wiring, signed EU resource evidence,
+   migration verification through `0051`, and deployment-pinned end-to-end exercises.
+2. **Real users and money:** external contract/privacy review, paid eligibility and DAC7 operations, sanctions and B2B
+   controls, reviewer appeals/recovery, operational drills, security testing, and evidence-packet verification.
+3. **Hardening at traction:** audit the small immutable core, run a public bounty and soak period, deploy the final
+   adminless-funds mainnet bundle, and publish verified addresses plus recomputation and keeper instructions.
 
-## Public settlement and custody documentation
-
-Immutable fund-holding core (addresses + verification links); no operator/admin path to funds; separately disclosed credential-issuer signer rotation and its admission/censorship power. State honest limits: funds are USDC and inherit Circle's freeze/blacklist power and depeg risk; sealing trusts drand; vote admission and caps are operator-attested; a normal claim links the vote key to its destination; the operator stores the off-chain vote-key↔identity mapping during required retention. Raters never deposit funds; votes are sealed and cast from single-use keys; one-vote-per-identity is enforced by on-chain nullifiers under the issuer trust assumption; settlement is recomputable; bounded remediation and attempt-compensation policies are explicit; bug policy = disclose → exit → redeploy; run-your-own-keeper instructions.
-
-## Open items
-
-Exact prediction-score peer-selection/rounding examples and benchmark versus equal-pay voting; attempt-reserve size and abuse controls; issuer epoch/grace bounds and continuity operator; `TokenlessPanel` code-size/gas split threshold; gold-pool authoring/rotation budget; integrator program terms; quality-benchmark publication; World ID 4 Selfie/Identity Check production availability; World/Self commercial and data-processing terms; cross-provider deduplication limits; Base Account conversion for invited reviewers; DAC7 treatment of unclaimed-but-claimable payouts; wallet address as DAC7 "financial account identifier"; sponsored-relay cost at scale; public-vote acceptability for private B2B panels; World ID's German litigation (VG Ansbach) and the Platform Work Directive transposition (Dec 2026) on the monitor list.
+The [production-readiness register](tokenless-production-readiness-2026-07.md) is the only current release checklist.
+A successful build or push is never release approval.

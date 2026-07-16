@@ -5,13 +5,13 @@ and must not be exposed through a public limitations or trust-status page. The
 [implementation plan](tokenless-immutable-implementation-plan-2026-07.md) remains the design of record; this document
 records the concrete work that must pass before staging or production publication.
 
-## Current baseline — 15 July 2026
+## Current baseline — 16 July 2026
 
 | Area                | Verified baseline                                                                                                                                                                                                                       | Release boundary                                                                                                                                            |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Contract bundle     | Disposable Base Sepolia tokenless-v3 deployment at block `44132668`; complete key `tokenless-v3:84532:0xf97d28e02f7301b4f6cb19160e1176eaf3e4f19a:0x67a89f76ae9a89866a0e62785d7999efe1c5e592:0x8a9b7af03f3cf362ba98180700bc92fbb72fcbc9` | Test-profile deployment with unrestricted test currency; not a mainnet or real-money release                                                                |
 | Generated consumers | `@rateloop/contracts`, Ponder, and keeper identify the complete v3 bundle                                                                                                                                                               | Any fund-core change invalidates the artifact and every hosted address until an atomic redeployment                                                         |
-| Application data    | Ordered Drizzle journal `0000` through migration `0049`                                                                                                                                                                                 | Every migration must be applied and verified before hosted smoke testing                                                                                    |
+| Application data    | Ordered Drizzle journal `0000` through migration `0051`                                                                                                                                                                                 | Every migration must be applied and verified before hosted smoke testing                                                                                    |
 | Hosted isolation    | Dedicated Vercel project `rateloop-tokenless`; dedicated Railway project with Postgres, Ponder, and keeper; no `rateloop.ai` alias                                                                                                      | The currently served preview is not a release candidate and must not be promoted as production-ready                                                        |
 | Identity            | Better Auth supplies browser authentication and opaque RateLoop principals; wallets are purpose-bound adapters                                                                                                                          | Hosted OTP/passkey verification, optional provider allowlists, managed wallet configuration when enabled, and account-recovery testing remain release gates |
 | Release preflight   | Deployment identity, region, secret-role separation, and schema checks fail closed                                                                                                                                                      | `managedSigning` and `paidAssignmentSettlement` remain explicitly unavailable in the production readiness check                                             |
@@ -60,7 +60,7 @@ testing.
 3. **Provision the signed EU bundle.** Supply matching EU Postgres, private Blob, managed KMS, log, backup, auth,
    support-access, Ponder, keeper, and external-processor evidence. Validate actual provider IDs and runtime regions;
    setting expected strings is not evidence.
-4. **Apply and verify migrations.** Run every journal entry through `0049` against the isolated database, verify the
+4. **Apply and verify migrations.** Run every journal entry through `0051` against the isolated database, verify the
    resulting constraints, and test rollback/recovery procedures without pointing at legacy data.
 5. **Exercise the complete paid path.** Run a deployment-pinned Base Sepolia journey:
    `quote -> ask -> fund -> assign -> voucher -> commit -> reveal -> settle -> result -> claim`. Verify the normal,
@@ -73,9 +73,9 @@ testing.
 
 ## Additional gates before real users or real money
 
-- Implement and review the fixed-base binary RBTS and prospective integrity epochs selected by the
-  [incentive reintegration plan](tokenless-incentive-integrity-reintegration-plan-2026-07.md). The disposable v0 score is
-  not a real-money acceptance criterion.
+- Complete the real-money security and economics acceptance review for the implemented fixed-base
+  [binary RBTS mechanism](tokenless-rbts-v1-spec.md), its attack benchmark, and prospective integrity epochs. Source
+  implementation and a disposable test deployment are evidence, not approval for real-money panels.
 - Complete World ID 4 Proof of Human enrollment for RateLoop-network supply and keep provider assurance separate from
   paid eligibility, tax, sanctions, wallet, and job qualification.
 - Complete multi-case buyer workflows, reviewer notifications and receipts, appeals, failure recovery, and evidence

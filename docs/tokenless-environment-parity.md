@@ -1,4 +1,6 @@
-# Tokenless Environment Parity
+# Tokenless environment parity
+
+**Status:** Current deployment-identity and hosted-environment contract.
 
 Every live tokenless component is isolated from the legacy RateLoop deployment.
 

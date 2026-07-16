@@ -1,5 +1,7 @@
 # Tokenless EU deployment contract
 
+**Status:** Current hosted EU resource and evidence runbook.
+
 This runbook applies only to the isolated `tokenless` deployment line. The checked controls make EU the only accepted
 hosted data-plane configuration; region configuration alone does not prove that a live deployment is EU-hosted.
 

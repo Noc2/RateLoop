@@ -1,6 +1,7 @@
-# Tokenless RBTS v1 Candidate — Worked Examples
+# Tokenless RBTS v1 worked examples
 
-**Status:** executable review candidate, not yet a deployed scoring promise  
+**Status:** Executable reference vectors for the current RBTS v1 source. The scoring specification and contract tests
+control if an example diverges.
 **Simulator:** `packages/foundry/scripts-js/tokenlessRbts.js`
 
 The candidate uses integer basis points. A user prediction must be between 100 and 9,900. For each rater a seeded

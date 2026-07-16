@@ -1,6 +1,9 @@
-# RateLoop Tokenless: Legal & Revenue Reference (July 2026)
+# RateLoop tokenless legal and revenue reference
 
-**Status:** Current reference. Architecture in [tokenless-immutable-implementation-plan-2026-07.md](tokenless-immutable-implementation-plan-2026-07.md). Under the build-first philosophy, everything here is a *parallel backlog* informing iterations — only the plan's short pre-real-money list blocks scaled launch with third-party funds.
+**Status:** Current internal issue-spotting reference, not legal advice. The
+[design of record](tokenless-immutable-implementation-plan-2026-07.md) controls architecture and the
+[production-readiness register](tokenless-production-readiness-2026-07.md) controls release approval. Counsel questions
+and regulatory operations remain real-money gates where the readiness register says they are required.
 
 ## Revenue model
 

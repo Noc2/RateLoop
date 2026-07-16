@@ -1,6 +1,6 @@
 # Tokenless Surprisingly Popular bounty v1
 
-Status: production mechanism specification, July 14, 2026.
+**Status:** Current mechanism specification. Production funding remains gated by the production-readiness register.
 
 ## Purpose and boundary
 
