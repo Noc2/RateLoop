@@ -31,7 +31,7 @@ test("guided setup renders one stage at a time and keeps implementation details 
     "Connect your agent",
     "Name this workflow",
     "Set review behavior",
-    "Add people and finish",
+    "People and funding",
   ]) {
     assert.match(flowSource, new RegExp(heading));
   }
@@ -199,6 +199,17 @@ test("connection creation keeps the complete message visible and confirms clipbo
   assert.match(flowSource, /Copy message/);
   assert.match(flowSource, /notifications\.success\("Connection message copied to clipboard\."\)/);
   assert.match(flowSource, /notifications\.error\("Clipboard access was blocked\./);
+});
+
+test("people and funding are conditional on the exact review audience and compensation", () => {
+  assert.match(flowSource, /People and funding/);
+  assert.match(flowSource, /requestProfile\.audience === "public_network"/);
+  assert.match(flowSource, /name="decision" value="not_required"/);
+  assert.match(flowSource, /No invitation is needed/);
+  assert.match(flowSource, /requestProfile\.compensationMode === "usdc"/);
+  assert.match(flowSource, /USDC per accepted reviewer/);
+  assert.match(flowSource, /checked and reserved only when a request is prepared/);
+  assert.doesNotMatch(flowSource, /RateLoop will still prepare the private group/);
 });
 
 test("invitation copy states that email binds the code but is not delivered", () => {

@@ -982,42 +982,67 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         {currentStep === "people" ? (
           <>
             <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-semibold outline-none">
-              Add people and finish
+              People and funding
             </h1>
             {!setup.peopleDecision ? (
               <form className="mt-5" onSubmit={configurePeople}>
-                <fieldset className="space-y-3">
-                  <legend className="font-medium">Invite a reviewer now?</legend>
-                  <label className="flex gap-3 rounded-xl border border-white/10 p-4">
-                    <input className="radio mt-0.5" type="radio" name="decision" value="invited" defaultChecked />
-                    <span>
-                      <span className="font-medium">Create a one-use code</span>
-                      <span className="mt-1 block text-sm text-base-content/60">The code expires in seven days.</span>
-                    </span>
-                  </label>
-                  <label className="flex gap-3 rounded-xl border border-white/10 p-4">
-                    <input className="radio mt-0.5" type="radio" name="decision" value="later" />
-                    <span>
-                      <span className="font-medium">Invite later</span>
-                      <span className="mt-1 block text-sm text-base-content/60">
-                        RateLoop will still prepare the private group.
+                {setup.reviewDraft?.requestProfile.audience === "public_network" ? (
+                  <>
+                    <input type="hidden" name="decision" value="not_required" />
+                    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm">
+                      <p className="font-medium">RateLoop network</p>
+                      <p className="mt-1 text-base-content/60">
+                        No invitation is needed. Eligible network reviewers can receive public, synthetic, or safely
+                        redacted requests.
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <fieldset className="space-y-3">
+                      <legend className="font-medium">Invite a reviewer now?</legend>
+                      <label className="flex gap-3 rounded-xl border border-white/10 p-4">
+                        <input className="radio mt-0.5" type="radio" name="decision" value="invited" defaultChecked />
+                        <span>
+                          <span className="font-medium">Create a one-use code</span>
+                          <span className="mt-1 block text-sm text-base-content/60">
+                            The code expires in seven days.
+                          </span>
+                        </span>
+                      </label>
+                      <label className="flex gap-3 rounded-xl border border-white/10 p-4">
+                        <input className="radio mt-0.5" type="radio" name="decision" value="later" />
+                        <span>
+                          <span className="font-medium">Invite later</span>
+                          <span className="mt-1 block text-sm text-base-content/60">
+                            The saved reviewer group stays ready.
+                          </span>
+                        </span>
+                      </label>
+                    </fieldset>
+                    <label className="mt-4 block text-sm">
+                      Bind code to recipient email <span className="text-base-content/50">(optional)</span>
+                      <input
+                        className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                        type="email"
+                        name="intendedEmail"
+                        maxLength={320}
+                      />
+                      <span className="mt-1 block text-xs text-base-content/55">
+                        RateLoop does not send this email. The recipient must use the code while signed in with that
+                        address.
                       </span>
-                    </span>
-                  </label>
-                </fieldset>
-                <label className="mt-4 block text-sm">
-                  Bind code to recipient email <span className="text-base-content/50">(optional)</span>
-                  <input
-                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                    type="email"
-                    name="intendedEmail"
-                    maxLength={320}
-                  />
-                  <span className="mt-1 block text-xs text-base-content/55">
-                    RateLoop does not send this email. The recipient must use the code while signed in with that
-                    address.
-                  </span>
-                </label>
+                    </label>
+                  </>
+                )}
+                {setup.reviewDraft?.requestProfile.compensationMode === "usdc" ? (
+                  <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm">
+                    <p className="font-medium">{reviewCompensation.usdcPerReviewer} USDC per accepted reviewer</p>
+                    <p className="mt-1 text-base-content/60">
+                      Available workspace funding is checked and reserved only when a request is prepared.
+                    </p>
+                  </div>
+                ) : null}
                 <div className="mt-6 flex items-center gap-3">
                   {backButton}
                   <button className="rateloop-gradient-action px-5" disabled={busy}>
@@ -1050,8 +1075,18 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   </p>
                   <p className="mt-2">
                     <span className="text-base-content/55">People:</span>{" "}
-                    {setup.peopleDecision === "invited" ? "Invitation code created" : "Invite later"}
+                    {setup.peopleDecision === "invited"
+                      ? "Invitation code created"
+                      : setup.peopleDecision === "not_required"
+                        ? "RateLoop network; no invitation needed"
+                        : "Invite later"}
                   </p>
+                  {setup.reviewDraft?.requestProfile.compensationMode === "usdc" ? (
+                    <p className="mt-2">
+                      <span className="text-base-content/55">Base bounty:</span> {reviewCompensation.usdcPerReviewer}{" "}
+                      USDC per accepted reviewer
+                    </p>
+                  ) : null}
                   <p className="mt-2">
                     <span className="text-base-content/55">Authority:</span> Safe connection; no autonomous publishing
                     or spending

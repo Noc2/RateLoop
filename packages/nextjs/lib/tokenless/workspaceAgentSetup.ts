@@ -6,7 +6,7 @@ import { createAgentConnectionIntent } from "~~/lib/tokenless/agentConnectionInt
 import { AGENT_SETUP_SCREEN_STEPS, type AgentSetupScreenStep } from "~~/lib/tokenless/agentSetupNavigation";
 import { getHumanReviewConfigurationForOwner } from "~~/lib/tokenless/humanReviewConfiguration";
 import { recordWorkspaceSetupFunnelEvent } from "~~/lib/tokenless/onboardingObservability";
-import { createPrivateGroup, createPrivateGroupInvitation } from "~~/lib/tokenless/privateGroups";
+import { createPrivateGroupInvitation } from "~~/lib/tokenless/privateGroups";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export { agentSetupUrl } from "~~/lib/tokenless/agentSetupNavigation";
@@ -760,7 +760,7 @@ export async function configureWorkspaceSetupReviews(input: {
       now,
       access.actor,
       preservePeople ? rowString(setup, "people_decision") : null,
-      preservePeople ? rowString(setup, "private_group_id") : null,
+      review.requestProfile.privateGroupId,
       preservePeople ? setup?.people_decided_at : null,
       preservePeople ? rowString(setup, "people_decided_by") : null,
       expectedRevision + 1,
@@ -785,23 +785,6 @@ export async function configureWorkspaceSetupReviews(input: {
   return { review, revision: expectedRevision + 1 };
 }
 
-async function setupDefaultGroup(accountAddress: string, workspaceId: string) {
-  const groups = await dbClient.execute({
-    sql: `SELECT group_id FROM tokenless_private_groups
-          WHERE workspace_id=? AND name='Reviewers' AND status='active' LIMIT 1`,
-    args: [workspaceId],
-  });
-  const existingGroupId = rowString(groups.rows[0] as Row | undefined, "group_id");
-  if (existingGroupId) return { groupId: existingGroupId };
-  return createPrivateGroup({
-    accountAddress,
-    workspaceId,
-    name: "Reviewers",
-    purpose: "People invited to review this workspace's private material.",
-    policy: { defaultCompensation: "unpaid", dataClassifications: ["internal", "confidential"] },
-  });
-}
-
 export async function configureWorkspaceSetupPeople(input: {
   accountAddress: string;
   workspaceId: string;
@@ -813,35 +796,74 @@ export async function configureWorkspaceSetupPeople(input: {
 }) {
   const access = await requireManager(input.accountAddress, input.workspaceId);
   const expectedRevision = requiredRevision(input.revision);
-  if (input.decision !== "invited" && input.decision !== "later") {
-    throw new TokenlessServiceError("People decision is invalid.", 400, "invalid_agent_setup_people");
-  }
   const current = await dbClient.execute({
-    sql: `SELECT revision,reviews_confirmed_at FROM tokenless_workspace_agent_setups
-          WHERE workspace_id=? AND status='in_progress' LIMIT 1`,
+    sql: `SELECT s.revision,s.reviews_confirmed_at,s.private_group_id,i.agent_id
+          FROM tokenless_workspace_agent_setups s
+          JOIN tokenless_agent_integrations i
+            ON i.integration_id=s.primary_integration_id AND i.workspace_id=s.workspace_id AND i.status='active'
+          WHERE s.workspace_id=? AND s.status='in_progress' LIMIT 1`,
     args: [input.workspaceId],
   });
   const setup = current.rows[0] as Row | undefined;
-  if (rowNumber(setup, "revision") !== expectedRevision || !rowString(setup, "reviews_confirmed_at")) {
+  const agentId = rowString(setup, "agent_id");
+  if (rowNumber(setup, "revision") !== expectedRevision || !rowString(setup, "reviews_confirmed_at") || !agentId) {
     throw new TokenlessServiceError("Workspace setup changed. Reload and try again.", 409, "agent_setup_conflict");
   }
-  const group =
-    typeof input.groupId === "string" && input.groupId
-      ? await (async () => {
-          const selected = await dbClient.execute({
-            sql: `SELECT group_id FROM tokenless_private_groups
-                  WHERE workspace_id=? AND group_id=? AND status='active' LIMIT 1`,
-            args: [input.workspaceId, input.groupId],
-          });
-          const groupId = rowString(selected.rows[0] as Row | undefined, "group_id");
-          if (!groupId) {
-            throw new TokenlessServiceError("Reviewer group is unavailable.", 409, "agent_setup_group_unavailable");
-          }
-          return { groupId };
-        })()
-      : await setupDefaultGroup(access.actor, input.workspaceId);
+  const review = reviewDraftFromOwnerView(
+    await getHumanReviewConfigurationForOwner({
+      accountAddress: access.actor,
+      workspaceId: input.workspaceId,
+      agentId,
+    }),
+  );
+  if (!isReviewDraftReady(review)) {
+    throw new TokenlessServiceError(
+      "Save the exact human-review configuration before continuing.",
+      409,
+      "agent_setup_review_configuration_required",
+    );
+  }
+  const requiresInvitedGroup = review.requestProfile.audience !== "public_network";
+  if (
+    (requiresInvitedGroup && input.decision !== "invited" && input.decision !== "later") ||
+    (!requiresInvitedGroup && input.decision !== "not_required")
+  ) {
+    throw new TokenlessServiceError(
+      "People decision does not match the review audience.",
+      400,
+      "invalid_agent_setup_people",
+    );
+  }
+  const boundGroupId = review.requestProfile.privateGroupId;
+  if (requiresInvitedGroup && (!boundGroupId || rowString(setup, "private_group_id") !== boundGroupId)) {
+    throw new TokenlessServiceError("The exact reviewer group is unavailable.", 409, "agent_setup_group_unavailable");
+  }
+  if (typeof input.groupId === "string" && input.groupId && input.groupId !== boundGroupId) {
+    throw new TokenlessServiceError(
+      "The selected reviewer group does not match the saved review profile.",
+      409,
+      "agent_setup_group_unavailable",
+    );
+  }
+  if (boundGroupId) {
+    const selected = await dbClient.execute({
+      sql: `SELECT group_id FROM tokenless_private_groups
+            WHERE workspace_id=? AND group_id=? AND status='active' LIMIT 1`,
+      args: [input.workspaceId, boundGroupId],
+    });
+    if (!rowString(selected.rows[0] as Row | undefined, "group_id")) {
+      throw new TokenlessServiceError("Reviewer group is unavailable.", 409, "agent_setup_group_unavailable");
+    }
+  }
   let invitation: Awaited<ReturnType<typeof createPrivateGroupInvitation>> | null = null;
   if (input.createInvitation === true) {
+    if (!boundGroupId || input.decision !== "invited") {
+      throw new TokenlessServiceError(
+        "An invitation is not allowed for this review audience.",
+        400,
+        "invalid_agent_setup_people",
+      );
+    }
     const intendedEmail =
       input.intendedEmail === undefined || input.intendedEmail === null || input.intendedEmail === ""
         ? null
@@ -849,7 +871,7 @@ export async function configureWorkspaceSetupPeople(input: {
     invitation = await createPrivateGroupInvitation({
       accountAddress: access.actor,
       workspaceId: input.workspaceId,
-      groupId: group.groupId,
+      groupId: boundGroupId,
       intendedEmail,
       maximumRedemptions: 1,
     });
@@ -862,7 +884,7 @@ export async function configureWorkspaceSetupPeople(input: {
           WHERE workspace_id=? AND status='in_progress' AND revision=?`,
     args: [
       input.decision,
-      group.groupId,
+      boundGroupId,
       now,
       access.actor,
       expectedRevision + 1,
@@ -881,7 +903,7 @@ export async function configureWorkspaceSetupPeople(input: {
     revision: expectedRevision + 1,
     occurredAt: now,
   });
-  return { groupId: group.groupId, invitation, revision: expectedRevision + 1 };
+  return { groupId: boundGroupId, invitation, revision: expectedRevision + 1 };
 }
 
 export async function completeWorkspaceAgentSetup(input: {
@@ -938,12 +960,12 @@ export async function completeWorkspaceAgentSetup(input: {
       );
     }
     const groupId = rowString(setup, "private_group_id");
-    if (!groupId) throw new TokenlessServiceError("Choose a reviewer group first.", 409, "agent_setup_group_required");
     const bindingId = rowString(setup, "human_review_binding_id");
     const bindingVersion = rowNumber(setup, "human_review_binding_version");
     const bindingResult = await client.query(
       `SELECT b.selection_policy_id,b.selection_policy_version,b.publishing_policy_id,b.authority,
-              r.private_group_id,r.configuration_status,r.response_window_seconds,r.panel_size,g.status AS group_status
+              r.audience,r.private_group_id,r.configuration_status,r.response_window_seconds,r.panel_size,
+              g.status AS group_status
        FROM tokenless_agent_human_review_bindings b
        JOIN tokenless_agent_review_policies p
          ON p.workspace_id=b.workspace_id AND p.policy_id=b.selection_policy_id
@@ -966,6 +988,14 @@ export async function completeWorkspaceAgentSetup(input: {
       ],
     );
     const binding = bindingResult.rows[0] as Row | undefined;
+    const requiresInvitedGroup = rowString(binding, "audience") !== "public_network";
+    const groupMatches = requiresInvitedGroup
+      ? Boolean(
+          groupId &&
+            rowString(binding, "private_group_id") === groupId &&
+            rowString(binding, "group_status") === "active",
+        )
+      : groupId === null && rowString(binding, "private_group_id") === null;
     if (
       !binding ||
       rowString(binding, "authority") !== "check_only" ||
@@ -973,8 +1003,7 @@ export async function completeWorkspaceAgentSetup(input: {
       rowString(binding, "configuration_status") !== "ready" ||
       rowOptionalNumber(binding, "response_window_seconds") === null ||
       rowOptionalNumber(binding, "panel_size") === null ||
-      rowString(binding, "private_group_id") !== groupId ||
-      rowString(binding, "group_status") !== "active" ||
+      !groupMatches ||
       rowString(integration, "human_review_binding_id") !== bindingId ||
       rowNumber(integration, "human_review_binding_version") !== bindingVersion
     ) {

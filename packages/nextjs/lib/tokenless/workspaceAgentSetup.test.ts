@@ -95,9 +95,11 @@ async function connectedSetup() {
 async function saveSetupReviewConfiguration(input: {
   workspaceId: string;
   agentId: string;
-  groupId: string;
+  groupId?: string | null;
   mode?: "adaptive" | "always";
+  audience?: "private_invited" | "public_network";
 }) {
+  const audience = input.audience ?? "private_invited";
   return putHumanReviewConfigurationForOwner({
     accountAddress: OWNER,
     workspaceId: input.workspaceId,
@@ -121,14 +123,14 @@ async function saveSetupReviewConfiguration(input: {
         positiveLabel: "Approve",
         negativeLabel: "Reject",
         rationaleMode: "required",
-        audience: "private_invited",
-        contentBoundary: "private_workspace",
-        privateSensitivity: "confidential",
-        privateGroupId: input.groupId,
+        audience,
+        contentBoundary: audience === "public_network" ? "public_or_test" : "private_workspace",
+        privateSensitivity: audience === "public_network" ? null : "confidential",
+        privateGroupId: audience === "public_network" ? null : input.groupId,
         responseWindowSeconds: 3_600,
-        panelSize: 2,
-        compensationMode: "unpaid",
-        bountyPerSeatAtomic: null,
+        panelSize: audience === "public_network" ? 3 : 2,
+        compensationMode: audience === "public_network" ? "usdc" : "unpaid",
+        bountyPerSeatAtomic: audience === "public_network" ? "1000000" : null,
       },
       authority: "check_only",
     },
@@ -189,6 +191,7 @@ test("setup binds one verified connection and completes without publishing or sp
     decision: "later",
   });
   assert.equal(people.revision, 5);
+  assert.ok(people.groupId);
   assert.match(people.groupId, /^pgrp_/);
   const policyVersionsBeforeCompletion = await dbClient.execute({
     sql: `SELECT COUNT(*) AS count FROM tokenless_agent_review_policies
@@ -245,6 +248,68 @@ test("setup binds one verified connection and completes without publishing or sp
     ["agent_details_confirmed", "review_behavior_confirmed", "reviewers_deferred", "workspace_setup_completed"],
   );
   assert.doesNotMatch(JSON.stringify(funnel), /Setup workspace|Setup client|pgrp_|confidential/u);
+});
+
+test("public network setup skips private people and preserves a null group", async () => {
+  const { workspaceId } = await connectedSetup();
+  const connected = await getWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId });
+  const confirmed = await confirmWorkspaceSetupAgent({
+    accountAddress: OWNER,
+    workspaceId,
+    revision: connected.revision,
+    agent: {
+      displayName: connected.agent!.displayName,
+      description: connected.agent!.description,
+      provider: connected.agent!.provider,
+      model: connected.agent!.model,
+      modelVersion: connected.agent!.modelVersion,
+      deploymentName: connected.agent!.deploymentName,
+      environment: "production",
+    },
+  });
+  const savedReview = await saveSetupReviewConfiguration({
+    workspaceId,
+    agentId: connected.agent!.agentId,
+    audience: "public_network",
+  });
+  const reviews = await configureWorkspaceSetupReviews({
+    accountAddress: OWNER,
+    workspaceId,
+    revision: confirmed.revision,
+    bindingRevision: savedReview.configuration.version,
+  });
+  assert.equal(reviews.review.requestProfile.privateGroupId, null);
+  await assert.rejects(
+    configureWorkspaceSetupPeople({
+      accountAddress: OWNER,
+      workspaceId,
+      revision: reviews.revision,
+      decision: "later",
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_agent_setup_people",
+  );
+  const people = await configureWorkspaceSetupPeople({
+    accountAddress: OWNER,
+    workspaceId,
+    revision: reviews.revision,
+    decision: "not_required",
+  });
+  assert.equal(people.groupId, null);
+  const completed = await completeWorkspaceAgentSetup({
+    accountAddress: OWNER,
+    workspaceId,
+    revision: people.revision,
+  });
+  assert.equal(completed.revision, people.revision + 1);
+  const stored = await dbClient.execute({
+    sql: "SELECT people_decision,private_group_id,status FROM tokenless_workspace_agent_setups WHERE workspace_id=?",
+    args: [workspaceId],
+  });
+  assert.deepEqual(stored.rows[0], {
+    people_decision: "not_required",
+    private_group_id: null,
+    status: "completed",
+  });
 });
 
 test("setup rejects future steps, stale revisions, and unsaved review configuration", async () => {
