@@ -16,14 +16,14 @@ test("pricing page keeps two plans and discloses costs progressively", async () 
 
   assert.match(html, /Start free/);
   assert.match(html, /Free/);
-  assert.match(html, /\$99/);
+  assert.match(html, /\$29/);
   assert.match(html, /25 completed review decisions/);
   assert.match(html, /250 completed review decisions/);
   assert.match(html, /href="\/agents\?tab=overview"/);
   assert.match(html, /href="\/agents\?tab=overview&amp;billing=upgrade"/);
   assert.match(html, /Paid panels/);
   assert.match(html, /Explain paid panel costs/);
-  assert.match(html, /not included in the \$99 subscription/);
+  assert.match(html, /not included in the \$29 subscription/);
   assert.match(html, /no automatic overage charge/i);
   assert.match(html, /price applies for 12 months/i);
   assert.match(html, /at least 60 days/);

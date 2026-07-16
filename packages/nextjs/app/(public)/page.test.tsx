@@ -13,6 +13,7 @@ test("landing page presents the tokenless human-assurance story", async () => {
   const { TokenlessLandingPage } = await import("./page");
   const html = renderToStaticMarkup(
     <TokenlessLandingPage
+      subscriptionsEnabled
       socialProofItems={[
         { value: "10", label: "Verified Humans" },
         { value: "21", label: "Ratings" },
@@ -87,9 +88,13 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.doesNotMatch(html, /See evidence/);
   assert.doesNotMatch(html, /Privacy and Security with Clear Limits/i);
   assert.match(html, /Pricing, Kept/);
-  assert.match(html, /Start free with 25 decisions each month/);
-  assert.match(html, /Early Access is \$99 for 250 decisions/);
-  assert.match(html, /href="\/pricing"/);
+  assert.match(html, /Workspace plans cover RateLoop decisions/);
+  assert.match(html, /\$29/);
+  assert.match(html, /25 completed review decisions/);
+  assert.match(html, /250 completed review decisions/);
+  assert.match(html, /href="\/agents\?tab=overview"/);
+  assert.match(html, /href="\/agents\?tab=overview&amp;billing=upgrade"/);
+  assert.doesNotMatch(html, /See pricing|href="\/pricing"/);
   assert.match(html, /Works with the agents your team already uses/);
   assert.match(html, /Claude Code/);
   assert.match(html, /OpenAI Codex/);
@@ -128,5 +133,5 @@ test("landing page presents the tokenless human-assurance story", async () => {
     .replace(/&[a-zA-Z0-9#]+;/g, " ")
     .trim()
     .split(/\s+/).length;
-  assert.ok(visibleWords <= 390, `landing page should stay under 390 visible words; found ${visibleWords}`);
+  assert.ok(visibleWords <= 430, `landing page should stay under 430 visible words; found ${visibleWords}`);
 });

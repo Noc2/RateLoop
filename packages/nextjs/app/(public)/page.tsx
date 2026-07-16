@@ -2,6 +2,7 @@ import Link from "next/link";
 import { HumanAssuranceLoop } from "~~/components/assurance/HumanAssuranceLoop";
 import { SupportedAgentsSection } from "~~/components/home/SupportedAgentsSection";
 import { TokenlessOrb } from "~~/components/home/TokenlessOrb";
+import { WorkspacePlanCards } from "~~/components/pricing/WorkspacePlanCards";
 import type { LandingSocialProofItem } from "~~/lib/home/socialProof";
 import { getLandingPageSocialProofItems } from "~~/lib/home/socialProofServer";
 
@@ -89,7 +90,13 @@ function SectionTitle({
   );
 }
 
-export function TokenlessLandingPage({ socialProofItems }: { socialProofItems: LandingSocialProofItem[] }) {
+export function TokenlessLandingPage({
+  socialProofItems,
+  subscriptionsEnabled,
+}: {
+  socialProofItems: LandingSocialProofItem[];
+  subscriptionsEnabled: boolean;
+}) {
   return (
     <div className="flex grow flex-col items-center px-4 pb-16 pt-4 sm:pt-12 lg:pt-16">
       <div className="relative flex w-full max-w-6xl flex-col items-center">
@@ -192,18 +199,13 @@ export function TokenlessLandingPage({ socialProofItems }: { socialProofItems: L
         <div aria-hidden="true" className="my-16 h-px w-full max-w-5xl bg-base-content/10 sm:my-20 lg:my-24" />
 
         <section className="relative z-10 w-full">
-          <SectionTitle number="03" gradient="Simple">
+          <SectionTitle number="03" gradient="Simple" className="mb-6">
             Pricing, Kept
           </SectionTitle>
-          <div className="surface-card flex flex-col gap-6 rounded-2xl p-7 sm:flex-row sm:items-center sm:justify-between">
-            <p className="max-w-3xl text-lg leading-8 text-base-content/65">
-              Start free with 25 decisions each month. Early Access is $99 for 250 decisions; paid reviewer costs are
-              separate.
-            </p>
-            <Link href="/pricing" className="rateloop-gradient-action shrink-0 px-5">
-              See pricing
-            </Link>
-          </div>
+          <p className="mb-8 max-w-3xl text-lg leading-8 text-base-content/65 sm:mb-10 sm:text-xl">
+            Workspace plans cover RateLoop decisions. Paid reviewer costs are separate.
+          </p>
+          <WorkspacePlanCards subscriptionsEnabled={subscriptionsEnabled} />
         </section>
 
         <div aria-hidden="true" className="my-16 h-px w-full max-w-5xl bg-base-content/10 sm:my-20 lg:my-24" />
@@ -246,5 +248,10 @@ export function TokenlessLandingPage({ socialProofItems }: { socialProofItems: L
 }
 
 export default async function LandingPage() {
-  return <TokenlessLandingPage socialProofItems={await getLandingPageSocialProofItems()} />;
+  return (
+    <TokenlessLandingPage
+      socialProofItems={await getLandingPageSocialProofItems()}
+      subscriptionsEnabled={process.env.TOKENLESS_SUBSCRIPTIONS_ENABLED === "true"}
+    />
+  );
 }

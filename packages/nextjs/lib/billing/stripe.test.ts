@@ -3,6 +3,7 @@ import {
   __resetStripeForTests,
   checkoutIdempotencyKey,
   isBlockingSubscriptionStatus,
+  isExpectedEarlyAccessStripePrice,
   subscriptionsEnabled,
 } from "./stripe";
 import { constructStripeEvent } from "./webhooks";
@@ -49,6 +50,23 @@ test("only terminal Stripe subscriptions allow a fresh Checkout", () => {
   assert.equal(isBlockingSubscriptionStatus("incomplete"), true);
   assert.equal(isBlockingSubscriptionStatus("canceled"), false);
   assert.equal(isBlockingSubscriptionStatus("incomplete_expired"), false);
+});
+
+test("Checkout accepts only the configured Early Access amount and cadence", () => {
+  const expected = {
+    active: true,
+    currency: "usd",
+    recurring: { interval: "month", interval_count: 1 },
+    type: "recurring",
+    unit_amount: 2_900,
+  };
+  assert.equal(isExpectedEarlyAccessStripePrice(expected), true);
+  assert.equal(isExpectedEarlyAccessStripePrice({ ...expected, unit_amount: 9_900 }), false);
+  assert.equal(
+    isExpectedEarlyAccessStripePrice({ ...expected, recurring: { interval: "year", interval_count: 1 } }),
+    false,
+  );
+  assert.equal(isExpectedEarlyAccessStripePrice({ ...expected, active: false }), false);
 });
 
 test("Stripe webhook construction accepts only a signature for the exact raw body", async () => {

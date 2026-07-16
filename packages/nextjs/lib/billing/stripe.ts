@@ -1,4 +1,4 @@
-import { EARLY_ACCESS_PRICE_VERSION } from "./plans";
+import { EARLY_ACCESS_PRICE_VERSION, TOKENLESS_BILLING_PLANS, formatUsdPrice } from "./plans";
 import "server-only";
 import Stripe from "stripe";
 import { getOptionalAppUrl } from "~~/lib/env/server";
@@ -47,6 +47,37 @@ export function getEarlyAccessPriceId() {
   return requiredEnv("STRIPE_EARLY_ACCESS_MONTHLY_PRICE_ID");
 }
 
+export function isExpectedEarlyAccessStripePrice(price: {
+  active: boolean;
+  currency: string;
+  recurring: { interval: string; interval_count: number } | null;
+  type: string;
+  unit_amount: number | null;
+}) {
+  return (
+    price.active &&
+    price.currency === "usd" &&
+    price.type === "recurring" &&
+    price.recurring?.interval === "month" &&
+    price.recurring.interval_count === 1 &&
+    price.unit_amount === TOKENLESS_BILLING_PLANS.early_access.monthlyPriceCents
+  );
+}
+
+async function getValidatedEarlyAccessPriceId() {
+  const priceId = getEarlyAccessPriceId();
+  const price = await getStripe().prices.retrieve(priceId);
+  if (!isExpectedEarlyAccessStripePrice(price)) {
+    const priceLabel = formatUsdPrice(TOKENLESS_BILLING_PLANS.early_access.monthlyPriceCents);
+    throw new TokenlessServiceError(
+      `STRIPE_EARLY_ACCESS_MONTHLY_PRICE_ID must reference an active USD ${priceLabel} monthly recurring price.`,
+      503,
+      "invalid_billing_configuration",
+    );
+  }
+  return priceId;
+}
+
 function getBillingAppUrl() {
   const appUrl = getOptionalAppUrl();
   if (!appUrl) {
@@ -81,6 +112,7 @@ export async function createStripeCustomer(input: { workspaceId: string; legalNa
 
 export async function createEarlyAccessCheckout(input: { customerId: string; legalName: string; workspaceId: string }) {
   const appUrl = getBillingAppUrl();
+  const priceId = await getValidatedEarlyAccessPriceId();
   const session = await getStripe().checkout.sessions.create(
     {
       allow_promotion_codes: false,
@@ -89,7 +121,7 @@ export async function createEarlyAccessCheckout(input: { customerId: string; leg
       cancel_url: `${appUrl}/agents?tab=overview&billing=cancelled`,
       customer: input.customerId,
       customer_update: { address: "auto", name: "auto" },
-      line_items: [{ price: getEarlyAccessPriceId(), quantity: 1 }],
+      line_items: [{ price: priceId, quantity: 1 }],
       metadata: {
         rateloop_price_version: EARLY_ACCESS_PRICE_VERSION,
         rateloop_workspace_id: input.workspaceId,

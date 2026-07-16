@@ -98,7 +98,7 @@ test("verified subscription events project Early Access once and duplicate deliv
     },
     {
       planKey: "early_access",
-      priceVersion: "early_access_usd_99_2026_07",
+      priceVersion: "early_access_usd_29_2026_07",
       providerStatus: "active",
       subscriptionId: "sub_fixture",
       priceId: PRICE_ID,
