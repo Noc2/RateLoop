@@ -1,6 +1,6 @@
 {
   "name": "rateloop",
-  "version": "0.2.0+codex.20260715174222",
+  "version": "0.2.0+codex.20260716062548",
   "description": "Use RateLoop for privacy-bounded human assurance and OAuth-protected workspace review policies.",
   "author": {
     "name": "RateLoop",
@@ -32,7 +32,7 @@
     "privacyPolicyURL": "https://rateloop-tokenless.vercel.app/legal/privacy",
     "termsOfServiceURL": "https://rateloop-tokenless.vercel.app/legal/terms",
     "defaultPrompt": [
-      "Connect this agent to my RateLoop workspace",
+      "Use $rateloop-workspace-connection to connect this agent to my RateLoop workspace",
       "Prepare human assurance for this public AI workflow",
       "Review this redacted output with a human panel"
     ],

@@ -59,6 +59,9 @@ describe("RateLoop agent host assets", () => {
     expect(manifest.interface.defaultPrompt).toHaveLength(3);
     for (const prompt of manifest.interface.defaultPrompt)
       expect(prompt.length).toBeLessThanOrEqual(128);
+    expect(manifest.interface.defaultPrompt[0]).toContain(
+      "$rateloop-workspace-connection",
+    );
   });
 
   it("keeps the packaged and repository skills identical and privacy bounded", async () => {
@@ -172,6 +175,8 @@ describe("RateLoop agent host assets", () => {
     expect(skill).toContain("rateloop_verify_connection");
     expect(skill).toContain("Check the current tool inventory");
     expect(skill).toContain("structured RateLoop plugin mention");
+    expect(skill).toContain("explicit `$rateloop-workspace-connection` invocation");
+    expect(skill).toContain("when the plugin is already installed");
     expect(skill).toContain("host actually presents");
     expect(skill).toContain("check the workspace tool inventory once on the next active turn");
     expect(skill).toContain("Do not run a second login");

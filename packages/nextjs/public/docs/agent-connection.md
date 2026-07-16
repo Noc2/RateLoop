@@ -13,6 +13,11 @@ After the server is installed, paste the complete single-use RateLoop `/connect/
 The agent claims the intent, loads its bound policy, and verifies the connection. Installation, trust, organization policy,
 and OAuth consent remain controls of the agent host; they cannot be bypassed by a prompt.
 
+The generated Codex message includes both the structured RateLoop plugin mention and an explicit
+`$rateloop-workspace-connection` skill invocation. The plugin mention starts installation when RateLoop is missing. The
+explicit skill invocation activates the workspace MCP dependency when RateLoop is already installed, so the host can
+present any required trust or OAuth action instead of leaving the agent with only the separate public handoff tools.
+
 OAuth approval is a one-time action for the connection attempt. Follow only the continuation, restart, or new-task action
 the host actually presents; Codex's structured plugin setup offers **Continue** when same-task resumption is available.
 On the next active turn, check for the workspace tools and complete claim, context, and verification. Do not invent a
