@@ -1,4 +1,3 @@
-import { createPublicKey } from "node:crypto";
 import "server-only";
 import { dbClient } from "~~/lib/db";
 import { requireAssuranceAttestationManagement } from "~~/lib/tokenless/assuranceAttestationPipeline";
@@ -19,17 +18,6 @@ function iso(value: unknown) {
     throw new TokenlessServiceError("Stored evidence key history is invalid.", 500, "stored_evidence_key_invalid");
   }
   return parsed.toISOString();
-}
-
-function packetPublicKeyJwk(value: string) {
-  try {
-    const key = createPublicKey({ key: Buffer.from(value, "base64url"), format: "der", type: "spki" });
-    const jwk = key.export({ format: "jwk" });
-    if (jwk.kty !== "OKP" || jwk.crv !== "Ed25519" || typeof jwk.x !== "string") throw new Error();
-    return { kty: "OKP" as const, crv: "Ed25519" as const, x: jwk.x };
-  } catch {
-    throw new TokenlessServiceError("Stored evidence key history is invalid.", 500, "stored_evidence_key_invalid");
-  }
 }
 
 export async function listWorkspaceEvidenceSigningKeys(input: { accountAddress: string; workspaceId: string }) {
@@ -67,21 +55,10 @@ export async function listWorkspaceEvidenceSigningKeys(input: { accountAddress: 
       packetCount: packet ? Number(packet.packet_count) : 0,
     };
   });
-  for (const packet of packetById.values()) {
-    keys.push({
-      keyId: text(packet, "signing_key_id")!,
-      algorithm: "Ed25519",
-      publicKeyJwk: packetPublicKeyJwk(text(packet, "signing_public_key")!),
-      status: "retired",
-      uses: ["decision_packet"],
-      firstPacketAt: iso(packet.first_seen_at),
-      lastPacketAt: iso(packet.last_seen_at),
-      packetCount: Number(packet.packet_count),
-    });
-  }
   return {
     schemaVersion: "rateloop.evidence-trusted-key-history.v1" as const,
     workspaceId: input.workspaceId,
     keys,
+    untrustedPacketKeyCount: packetById.size,
   };
 }

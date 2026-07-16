@@ -44,6 +44,7 @@ type TrustedKey = {
   lastPacketAt: string | null;
   packetCount: number;
 };
+type TrustedKeyHistory = { keys: TrustedKey[]; untrustedPacketKeyCount: number };
 
 async function readJson<T>(response: Response): Promise<T> {
   const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
@@ -213,6 +214,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
   const [attestations, setAttestations] = useState<Attestation[]>([]);
   const [retention, setRetention] = useState<RetentionPolicy | null>(null);
   const [keys, setKeys] = useState<TrustedKey[]>([]);
+  const [untrustedPacketKeyCount, setUntrustedPacketKeyCount] = useState(0);
   const [selectedPacket, setSelectedPacket] = useState<EvidencePacket | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -253,13 +255,14 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
           readJson<RetentionPolicy>(
             await fetch(`${base}/assurance/retention`, { cache: "no-store", credentials: "same-origin" }),
           ),
-          readJson<{ keys: TrustedKey[] }>(
+          readJson<TrustedKeyHistory>(
             await fetch(`${base}/assurance/trusted-keys`, { cache: "no-store", credentials: "same-origin" }),
           ),
         ]);
         setAttestations(attestationBody.attestations);
         setRetention(retentionBody);
         setKeys(keyBody.keys);
+        setUntrustedPacketKeyCount(keyBody.untrustedPacketKeyCount);
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to load evidence.");
@@ -431,6 +434,15 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
             Trusted verification keys
           </h2>
           <p className="mt-2 text-sm text-base-content/55">Current and retired keys remain visible for old packets.</p>
+          {untrustedPacketKeyCount > 0 ? (
+            <p
+              className="mt-4 rounded-xl border border-red-300/20 bg-red-300/[0.06] p-3 text-sm text-red-100"
+              role="alert"
+            >
+              {untrustedPacketKeyCount} packet signing {untrustedPacketKeyCount === 1 ? "key is" : "keys are"} not in
+              the configured trust anchor.
+            </p>
+          ) : null}
           {keys.length === 0 ? (
             <p className="mt-4 text-sm text-base-content/50">No key history is available.</p>
           ) : (
