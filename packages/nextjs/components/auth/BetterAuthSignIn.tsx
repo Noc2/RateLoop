@@ -3,6 +3,37 @@
 import { FormEvent, useEffect, useState } from "react";
 import { betterAuthClient, exchangeBetterAuthSession, readBrowserAuthConfiguration } from "~~/lib/auth/client";
 
+function GoogleIcon() {
+  return (
+    <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="#4285F4"
+        d="M21.6 12.23c0-.71-.06-1.4-.18-2.06H12v3.89h5.38a4.6 4.6 0 0 1-2 3.02v2.53h3.24c1.9-1.75 2.98-4.33 2.98-7.38Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 22c2.7 0 4.97-.9 6.62-2.39l-3.24-2.53c-.9.6-2.05.96-3.38.96-2.61 0-4.82-1.76-5.61-4.13H3.05v2.6A10 10 0 0 0 12 22Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M6.39 13.91A6.02 6.02 0 0 1 6.08 12c0-.66.11-1.3.31-1.91v-2.6H3.05A10 10 0 0 0 2 12c0 1.61.39 3.14 1.05 4.51l3.34-2.6Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.96c1.47 0 2.79.51 3.83 1.5l2.87-2.88A9.64 9.64 0 0 0 12 2a10 10 0 0 0-8.95 5.49l3.34 2.6C7.18 7.72 9.39 5.96 12 5.96Z"
+      />
+    </svg>
+  );
+}
+
+function AppleIcon() {
+  return (
+    <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M17.05 12.54c-.02-2.37 1.94-3.52 2.03-3.58a4.36 4.36 0 0 0-3.43-1.86c-1.44-.15-2.84.86-3.57.86-.75 0-1.88-.84-3.1-.82a4.56 4.56 0 0 0-3.84 2.34c-1.66 2.87-.42 7.1 1.17 9.42.8 1.14 1.73 2.42 2.95 2.37 1.2-.05 1.64-.76 3.08-.76 1.42 0 1.84.76 3.09.73 1.28-.02 2.09-1.14 2.86-2.3a9.35 9.35 0 0 0 1.31-2.68 4.1 4.1 0 0 1-2.55-3.72ZM14.7 5.57A4.18 4.18 0 0 0 15.66 2a4.26 4.26 0 0 0-2.75 1.7 3.98 3.98 0 0 0-.99 3.46 3.53 3.53 0 0 0 2.78-1.59Z" />
+    </svg>
+  );
+}
+
 function safeReturnPath() {
   const value = new URL(window.location.href).searchParams.get("returnTo");
   return value?.startsWith("/") && !value.startsWith("//") ? value : "/agents";
@@ -184,18 +215,20 @@ export function BetterAuthSignIn() {
           </button>
           <div className="grid gap-3 sm:grid-cols-2">
             <button
-              className="btn rateloop-secondary-action"
+              className="btn rateloop-secondary-action gap-3"
               disabled={busy || !configuration.methods.google}
               onClick={() => void social("google")}
             >
-              Continue with Google
+              <GoogleIcon />
+              Google
             </button>
             <button
-              className="btn rateloop-secondary-action"
+              className="btn rateloop-secondary-action gap-3"
               disabled={busy || !configuration.methods.apple}
               onClick={() => void social("apple")}
             >
-              Continue with Apple
+              <AppleIcon />
+              Apple
             </button>
           </div>
         </>

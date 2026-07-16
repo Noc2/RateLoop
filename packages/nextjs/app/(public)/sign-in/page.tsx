@@ -9,8 +9,8 @@ export const metadata: Metadata = {
 
 export default function SignInPage() {
   return (
-    <SignInSurface title="Sign-In" titleId="sign-in-title">
-      <div className="text-left">
+    <SignInSurface branded title="Sign in" titleId="sign-in-title">
+      <div className="mt-6 text-left">
         <BetterAuthSignIn />
       </div>
     </SignInSurface>
