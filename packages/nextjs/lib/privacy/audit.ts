@@ -310,26 +310,17 @@ export async function appendSecurityAuditEvent(input: SecurityAuditEventInput) {
   }
 }
 
-export async function verifyWorkspaceAuditChain(workspaceId: string) {
-  const [result, headResult] = await Promise.all([
-    dbClient.execute({
-      sql: `SELECT event_id, sequence, previous_digest, event_digest, home_region, actor_kind, actor_reference,
-                   assurance_method, action, target_kind, target_id, purpose, reason, request_correlation,
-                   result, metadata_json, occurred_at
-            FROM tokenless_audit_events WHERE workspace_id = ? ORDER BY sequence ASC`,
-      args: [workspaceId],
-    }),
-    dbClient.execute({
-      sql: "SELECT last_sequence, last_digest FROM tokenless_audit_heads WHERE workspace_id = ? LIMIT 1",
-      args: [workspaceId],
-    }),
-  ]);
+function verifyWorkspaceAuditRows(
+  workspaceId: string,
+  rows: readonly Record<string, unknown>[],
+  head: QueryRow | undefined,
+) {
   let previousDigest = GENESIS_DIGEST;
   let expectedSequence = 1;
-  for (const value of result.rows) {
+  for (const value of rows) {
     const row = value as QueryRow;
     if (Number(row.sequence) !== expectedSequence || rowString(row, "previous_digest") !== previousDigest) {
-      return { eventCount: expectedSequence - 1, valid: false };
+      return { eventCount: expectedSequence - 1, valid: false } as const;
     }
     const payloadJson = canonicalJson({
       action: rowString(row, "action"),
@@ -351,20 +342,36 @@ export async function verifyWorkspaceAuditChain(workspaceId: string) {
     });
     const expectedDigest = digest(previousDigest, payloadJson);
     if (rowString(row, "event_digest") !== expectedDigest) {
-      return { eventCount: expectedSequence - 1, valid: false };
+      return { eventCount: expectedSequence - 1, valid: false } as const;
     }
     previousDigest = expectedDigest;
     expectedSequence += 1;
   }
   const eventCount = expectedSequence - 1;
-  const head = headResult.rows[0] as QueryRow | undefined;
   if (
     (head && (Number(head.last_sequence) !== eventCount || rowString(head, "last_digest") !== previousDigest)) ||
     (!head && eventCount > 0)
   ) {
-    return { eventCount, valid: false };
+    return { eventCount, valid: false } as const;
   }
-  return { eventCount, headDigest: previousDigest, valid: true };
+  return { eventCount, headDigest: previousDigest, valid: true } as const;
+}
+
+export async function verifyWorkspaceAuditChain(workspaceId: string) {
+  const [result, headResult] = await Promise.all([
+    dbClient.execute({
+      sql: `SELECT event_id, sequence, previous_digest, event_digest, home_region, actor_kind, actor_reference,
+                   assurance_method, action, target_kind, target_id, purpose, reason, request_correlation,
+                   result, metadata_json, occurred_at
+            FROM tokenless_audit_events WHERE workspace_id = ? ORDER BY sequence ASC`,
+      args: [workspaceId],
+    }),
+    dbClient.execute({
+      sql: "SELECT last_sequence, last_digest FROM tokenless_audit_heads WHERE workspace_id = ? LIMIT 1",
+      args: [workspaceId],
+    }),
+  ]);
+  return verifyWorkspaceAuditRows(workspaceId, result.rows as Record<string, unknown>[], headResult.rows[0]);
 }
 
 export async function verifySecurityAuditChain(input: Pick<SecurityAuditEventInput, "scopeId" | "scopeKind">) {
@@ -444,18 +451,36 @@ export async function exportWorkspaceAudit(input: { accountAddress: string; work
   if (!new Set(["owner", "admin"]).has(rowString(member.rows[0] as QueryRow | undefined, "role") ?? "")) {
     throw new TokenlessServiceError("Workspace not found.", 404, "workspace_not_found");
   }
-  const result = await dbClient.execute({
-    sql: `SELECT event_id, sequence, previous_digest, event_digest, home_region, actor_kind, actor_reference,
-                 assurance_method, action, target_kind, target_id, purpose, reason, request_correlation,
-                 result, metadata_json, occurred_at
-          FROM tokenless_audit_events WHERE workspace_id = ? ORDER BY sequence ASC`,
-    args: [input.workspaceId],
+  const snapshot = await dbClient.execute({
+    sql: `WITH audit_head AS (
+            SELECT last_sequence, last_digest FROM tokenless_audit_heads WHERE workspace_id = ? LIMIT 1
+          )
+          SELECT e.event_id, e.workspace_id, e.sequence, e.previous_digest, e.event_digest, e.home_region,
+                 e.actor_kind, e.actor_reference, e.assurance_method, e.action, e.target_kind, e.target_id,
+                 e.purpose, e.reason, e.request_correlation, e.result, e.metadata_json, e.occurred_at,
+                 h.last_sequence AS head_last_sequence, h.last_digest AS head_last_digest
+          FROM audit_head h
+          LEFT JOIN tokenless_audit_events e ON e.workspace_id = ?
+          ORDER BY e.sequence ASC`,
+    args: [input.workspaceId, input.workspaceId],
   });
+  const events = snapshot.rows.filter(row => row.event_id !== null && row.event_id !== undefined);
+  const snapshotHead = snapshot.rows[0]
+    ? {
+        last_sequence: snapshot.rows[0].head_last_sequence,
+        last_digest: snapshot.rows[0].head_last_digest,
+      }
+    : undefined;
+  const integrity = verifyWorkspaceAuditRows(input.workspaceId, events as Record<string, unknown>[], snapshotHead);
+  if (!integrity.valid) {
+    throw new TokenlessServiceError("The workspace audit chain failed integrity verification.", 409, "audit_invalid");
+  }
+  const exportedEvents = events.map(({ head_last_sequence: _sequence, head_last_digest: _digest, ...event }) => event);
   const exported = {
     exportedAt: new Date().toISOString(),
     format: "rateloop-audit-v1",
-    integrity: await verifyWorkspaceAuditChain(input.workspaceId),
-    events: result.rows,
+    integrity,
+    events: exportedEvents,
     workspaceId: input.workspaceId,
   };
   await appendAuditEvent({
@@ -463,7 +488,7 @@ export async function exportWorkspaceAudit(input: { accountAddress: string; work
     actorKind: isRateLoopPrincipalId(accountReference) ? "principal" : "account",
     actorReference: accountReference,
     assuranceMethod: "rateloop_session",
-    metadata: { eventCount: result.rowCount },
+    metadata: { eventCount: exportedEvents.length, exportedHeadDigest: integrity.headDigest },
     purpose: "workspace_audit_export",
     reason: "authorized_administrator_export",
     result: "success",
