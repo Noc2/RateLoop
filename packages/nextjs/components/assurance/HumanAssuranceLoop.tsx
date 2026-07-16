@@ -103,7 +103,7 @@ export function HumanAssuranceLoop({ className = "", concise = false }: { classN
               >
                 <span>Human</span>
                 <span>Assurance</span>
-                <span className="rateloop-text-gradient inline-block">Loop</span>
+                <span className="inline-block text-white">Loop</span>
               </h3>
             </figcaption>
           </div>

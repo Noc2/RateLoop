@@ -47,7 +47,10 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /within the owner-approved policy/i);
   assert.match(html, /evidence-backed feedback and actionable insights for this workflow/i);
   assert.doesNotMatch(html, /Agent prepares|RateLoop decides|Evidence adapts/);
-  assert.match(html, /<h3 id="human-assurance-loop-title"[^>]*>.*Human Assurance.*Loop.*<\/h3>/i);
+  assert.match(
+    html,
+    /<h3 id="human-assurance-loop-title"[^>]*><span>Human<\/span><span>Assurance<\/span><span class="inline-block text-white">Loop<\/span><\/h3>/i,
+  );
   assert.equal(html.match(/id="human-assurance-loop-title"/g)?.length, 1);
   assert.doesNotMatch(html, /Review coverage|100 → 50 → 25 → 10%|Evidence earns autonomy/);
   assert.doesNotMatch(html, /The Human Assurance <span class="rateloop-text-gradient">Loop/);
