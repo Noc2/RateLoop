@@ -50,11 +50,21 @@ test("review setup distinguishes a saved policy decision from delivery authority
   assert.match(flowSource, /mark an eligible output for human review/i);
   assert.match(flowSource, /This saves a review policy/i);
   assert.match(flowSource, /safe\s+connection does not send requests or pay reviewers/i);
-  assert.match(flowSource, /RateLoop’s adaptive policy requires it/i);
-  assert.match(flowSource, /Manual handoffs only/i);
-  assert.match(flowSource, /saved fixed review frequency/i);
-  assert.match(flowSource, /saved rule-based frequency/i);
-  assert.doesNotMatch(flowSource, /Only after I approve a request/i);
+  for (const label of [
+    "Adaptive",
+    "Every output",
+    "Fixed percentage",
+    "Rules and conditions",
+    "Only after I approve",
+  ]) {
+    assert.match(flowSource, new RegExp(label));
+  }
+  assert.match(flowSource, /Minimum review rate \(%\)/);
+  assert.match(flowSource, /Outputs reviewed \(%\)/);
+  assert.match(flowSource, /Maximum outputs between reviews/);
+  assert.match(flowSource, /Review these risk levels/);
+  assert.match(flowSource, /Review below confidence \(%\)/);
+  assert.match(flowSource, /buildReviewFrequencySelection\(draft\.selection, reviewFrequency\)/);
   assert.match(flowSource, /safe connection\s+does not assign or deliver work to reviewers/i);
   assert.doesNotMatch(flowSource, /Choose when this agent should involve people/i);
   assert.doesNotMatch(flowSource, /reviewerAudience|contentBoundary: "private_workspace"|autonomousAccess/);
