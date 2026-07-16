@@ -2,6 +2,7 @@
 
 import { useCallback, useReducer, useState } from "react";
 import { useRouter } from "next/navigation";
+import { WorkspaceDeletionPanel } from "../WorkspaceDeletionPanel";
 import { WorkspaceSettingsClient } from "../WorkspaceSettingsClient";
 import { AgentConnectionPanel } from "./AgentConnectionPanel";
 import { AgentPublishingPolicyPanel } from "./AgentPublishingPolicyPanel";
@@ -74,6 +75,9 @@ export function AgentWorkspacePanels({
           </div>
         ) : null}
         <AgentSetupFlow initialSetup={initialSetup} />
+        {workspace.role === "owner" ? (
+          <WorkspaceDeletionPanel workspaceId={workspace.workspaceId} workspaceName={workspace.name} />
+        ) : null}
       </div>
     );
   }
@@ -109,6 +113,9 @@ export function AgentWorkspacePanels({
 
       <div key={workspaceId} className="space-y-5">
         {hasConnectedAgent && resolvedTab === "overview" ? <WorkspaceSettingsClient /> : null}
+        {hasConnectedAgent && resolvedTab === "overview" && workspace.role === "owner" ? (
+          <WorkspaceDeletionPanel workspaceId={workspace.workspaceId} workspaceName={workspace.name} />
+        ) : null}
         {hasConnectedAgent && resolvedTab === "agents" && canManage ? (
           <AgentConnectionPanel
             workspaceId={workspaceId}
