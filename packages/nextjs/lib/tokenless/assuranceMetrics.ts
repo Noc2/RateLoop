@@ -33,7 +33,9 @@ export type AssuranceMetricsSnapshot = {
   approvalRequired: number;
   scopesTruncated: boolean;
   scopes: AssuranceMetricScope[];
-  evidenceAnchor: { state: "absent" };
+  evidenceAnchor:
+    | { state: "absent"; lagSeconds: null }
+    | { state: "pending" | "completed" | "failed"; lagSeconds: number };
 };
 
 function text(row: Row, key: string) {
@@ -266,7 +268,7 @@ export async function authenticateAssuranceMetricsCredential(authorization: stri
 export async function collectWorkspaceAssuranceMetrics(input: { workspaceId: string; now?: Date }) {
   const now = input.now ?? new Date();
   const windowStart = new Date(now.getTime() - WINDOW_MS);
-  const [totals, scopeResult] = await Promise.all([
+  const [totals, scopeResult, anchorResult] = await Promise.all([
     dbClient.execute({
       sql: `SELECT
               (SELECT COUNT(*) FROM tokenless_agent_review_opportunity_transition_events
@@ -342,6 +344,13 @@ export async function collectWorkspaceAssuranceMetrics(input: { workspaceId: str
         MAX_ASSURANCE_METRIC_SCOPES + 1,
       ],
     }),
+    dbClient.execute({
+      sql: `SELECT state,boundary_at,created_at,completed_at
+            FROM tokenless_assurance_attestation_jobs
+            WHERE workspace_id=?
+            ORDER BY created_at DESC,job_id DESC LIMIT 1`,
+      args: [input.workspaceId],
+    }),
   ]);
   const total = totals.rows[0] as Row;
   const rows = scopeResult.rows.slice(0, MAX_ASSURANCE_METRIC_SCOPES) as Row[];
@@ -358,6 +367,24 @@ export async function collectWorkspaceAssuranceMetrics(input: { workspaceId: str
     latencyMilliseconds: nonnegative(row, "latency_milliseconds"),
     latencyCount: nonnegative(row, "latency_count"),
   }));
+  const anchor = anchorResult.rows[0] as Row | undefined;
+  const anchorState = anchor ? text(anchor, "state") : null;
+  const anchorTimestamp =
+    anchorState === "completed" ? anchor?.completed_at : (anchor?.boundary_at ?? anchor?.created_at);
+  const anchorDate = anchorTimestamp ? new Date(String(anchorTimestamp)) : null;
+  if (anchorState !== null && anchorDate === null) {
+    throw new Error("Database returned incomplete evidence-anchor timing.");
+  }
+  if (anchorDate && !Number.isFinite(anchorDate.getTime())) {
+    throw new Error("Database returned an invalid evidence-anchor timestamp.");
+  }
+  const evidenceAnchor: AssuranceMetricsSnapshot["evidenceAnchor"] =
+    anchorState === null
+      ? { state: "absent", lagSeconds: null }
+      : {
+          state: anchorState === "completed" ? "completed" : anchorState === "dead" ? "failed" : "pending",
+          lagSeconds: Math.max(0, Math.floor((now.getTime() - anchorDate!.getTime()) / 1_000)),
+        };
   return {
     windowSeconds: WINDOW_MS / 1_000,
     reviewsRequested: nonnegative(total, "requested"),
@@ -366,7 +393,7 @@ export async function collectWorkspaceAssuranceMetrics(input: { workspaceId: str
     approvalRequired: nonnegative(total, "approval_required"),
     scopesTruncated: scopeResult.rows.length > MAX_ASSURANCE_METRIC_SCOPES,
     scopes,
-    evidenceAnchor: { state: "absent" as const },
+    evidenceAnchor,
   } satisfies AssuranceMetricsSnapshot;
 }
 
@@ -449,9 +476,11 @@ export function renderAssuranceOpenMetrics(snapshot: AssuranceMetricsSnapshot) {
   lines.push(
     "# HELP rateloop_assurance_evidence_anchor_lag_seconds Age of the latest assurance evidence anchor; absent when no anchor exists.",
     "# TYPE rateloop_assurance_evidence_anchor_lag_seconds gauge",
-    'rateloop_assurance_evidence_anchor_lag_seconds{state="absent"} NaN',
-    "# EOF",
   );
+  sample(lines, "rateloop_assurance_evidence_anchor_lag_seconds", snapshot.evidenceAnchor.lagSeconds ?? Number.NaN, {
+    state: snapshot.evidenceAnchor.state,
+  });
+  lines.push("# EOF");
   return `${lines.join("\n")}\n`;
 }
 

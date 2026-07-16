@@ -284,6 +284,24 @@ test("metrics credentials are hashed, workspace-bound, rotatable, and revocable"
 test("workspace SQL aggregation preserves tenant isolation and metric semantics", async () => {
   const first = await metricsFixture("tenant_a");
   const second = await metricsFixture("tenant_b", OUTSIDER);
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_attestation_jobs
+          (job_id,workspace_id,artifact_kind,artifact_schema_version,artifact_digest,boundary_at,
+           statement_json,state,signer_key_id,dsse_envelope_json,rekor_entry_uuid,rekor_log_index,
+           rekor_bundle_json,attempt_count,next_attempt_at,created_at,updated_at,completed_at)
+          VALUES (?,?, 'decision_packet','rateloop.assurance-evidence.v3',?,?, '{}','completed',
+                  'managed-key','{}','rekor-entry','1','{}',1,?,?,?,?)`,
+    args: [
+      `aat_${"1".repeat(40)}`,
+      first.workspaceId,
+      HASH("9"),
+      new Date(NOW.getTime() - 60_000),
+      NOW,
+      new Date(NOW.getTime() - 60_000),
+      NOW,
+      new Date(NOW.getTime() - 30_000),
+    ],
+  });
   const snapshot = await collectWorkspaceAssuranceMetrics({ workspaceId: first.workspaceId, now: NOW });
   assert.equal(snapshot.reviewsRequested, 2);
   assert.equal(snapshot.reviewsCompleted, 1);
@@ -295,6 +313,7 @@ test("workspace SQL aggregation preserves tenant isolation and metric semantics"
   assert.equal(snapshot.scopes[0].requested / snapshot.scopes[0].eligible, 0.5);
   assert.equal(snapshot.scopes[0].disagreements / snapshot.scopes[0].comparable, 0.5);
   assert.equal(snapshot.scopes[0].latencyMilliseconds / snapshot.scopes[0].latencyCount / 1_000, 2);
+  assert.deepEqual(snapshot.evidenceAnchor, { state: "completed", lagSeconds: 30 });
 
   const issued = await issueAssuranceMetricsCredential({
     accountAddress: OWNER,
@@ -395,7 +414,7 @@ test("OpenMetrics uses bounded labels and represents a missing evidence anchor a
     blocked: 1,
     approvalRequired: 1,
     scopesTruncated: false,
-    evidenceAnchor: { state: "absent" },
+    evidenceAnchor: { state: "absent", lagSeconds: null },
     scopes: [
       {
         scope: 'aesc_scope_"one',
@@ -423,4 +442,18 @@ test("OpenMetrics uses bounded labels and represents a missing evidence anchor a
   assert.doesNotMatch(output, /workspace=|agent=|workflow=|reason=/u);
   assert.equal(output.match(/# HELP rateloop_assurance_sampling_rate_ratio /gu)?.length, 1);
   assert.match(output, /# EOF\n$/u);
+});
+
+test("OpenMetrics reports a real evidence-anchor state and lag", () => {
+  const output = renderAssuranceOpenMetrics({
+    windowSeconds: 2_592_000,
+    reviewsRequested: 0,
+    reviewsCompleted: 0,
+    blocked: 0,
+    approvalRequired: 0,
+    scopesTruncated: false,
+    evidenceAnchor: { state: "pending", lagSeconds: 75 },
+    scopes: [],
+  });
+  assert.match(output, /rateloop_assurance_evidence_anchor_lag_seconds\{state="pending"\} 75/u);
 });
