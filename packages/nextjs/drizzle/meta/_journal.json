@@ -561,6 +561,13 @@
       "when": 1784228400000,
       "tag": "0080_retention_audit_idempotency",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1784232000000,
+      "tag": "0081_artifact_deletion_outbox",
+      "breakpoints": true
     }
   ]
 }
