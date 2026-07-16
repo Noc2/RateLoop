@@ -60,6 +60,20 @@ type ScopeRow = AdaptiveScopeState & {
   stageEnteredAt: Date;
   executionProfileHash: string;
   executionProfile: AgentExecutionProfile | null;
+  humanReviewBindingId: string;
+  humanReviewBindingVersion: number;
+  requestProfileId: string;
+  requestProfileVersion: number;
+  requestProfileHash: string;
+};
+
+type HumanReviewBindingRow = {
+  bindingId: string;
+  bindingVersion: number;
+  requestProfileId: string;
+  requestProfileVersion: number;
+  requestProfileHash: string;
+  configurationStatus: "ready" | "action_required";
 };
 
 export type AdaptiveReviewDecisionRequest = {
@@ -371,6 +385,9 @@ function executionProfileFromRow(row: QueryRow): AgentExecutionProfile | null {
 function scopeFromRow(row: QueryRow): ScopeRow {
   const scopeId = rowString(row, "scope_id");
   const executionProfileHash = rowString(row, "execution_profile_hash");
+  const humanReviewBindingId = rowString(row, "human_review_binding_id");
+  const requestProfileId = rowString(row, "request_profile_id");
+  const requestProfileHash = rowString(row, "request_profile_hash");
   const stage = rowString(row, "stage") as AdaptiveReviewStage | null;
   const stageEnteredAt =
     row.stage_entered_at instanceof Date ? row.stage_entered_at : new Date(String(row.stage_entered_at));
@@ -378,6 +395,10 @@ function scopeFromRow(row: QueryRow): ScopeRow {
     !scopeId ||
     !executionProfileHash ||
     !HASH_PATTERN.test(executionProfileHash) ||
+    !humanReviewBindingId ||
+    !requestProfileId ||
+    !requestProfileHash ||
+    !HASH_PATTERN.test(requestProfileHash) ||
     !stage ||
     !Number.isFinite(stageEnteredAt.getTime())
   )
@@ -391,6 +412,11 @@ function scopeFromRow(row: QueryRow): ScopeRow {
     stageEnteredAt,
     executionProfileHash,
     executionProfile: executionProfileFromRow(row),
+    humanReviewBindingId,
+    humanReviewBindingVersion: rowInteger(row, "human_review_binding_version"),
+    requestProfileId,
+    requestProfileVersion: rowInteger(row, "request_profile_version"),
+    requestProfileHash,
   };
 }
 
@@ -570,6 +596,104 @@ async function loadPolicy(client: PoolClient, workspaceId: string, request: Retu
     );
   }
   return policy;
+}
+
+async function loadHumanReviewBinding(
+  client: PoolClient,
+  workspaceId: string,
+  request: ReturnType<typeof normalizeRequest>,
+): Promise<HumanReviewBindingRow> {
+  const result = await client.query(
+    `SELECT b.binding_id, b.version AS binding_version,
+            b.request_profile_id, b.request_profile_version, b.request_profile_hash,
+            r.configuration_status
+     FROM tokenless_agent_human_review_bindings b
+     JOIN tokenless_agent_review_request_profiles r
+       ON r.workspace_id = b.workspace_id
+      AND r.profile_id = b.request_profile_id
+      AND r.version = b.request_profile_version
+      AND r.profile_hash = b.request_profile_hash
+      AND r.agent_id = b.agent_id
+      AND r.agent_version_id = b.agent_version_id
+     WHERE b.workspace_id = $1
+       AND b.agent_id = $2 AND b.agent_version_id = $3
+       AND b.selection_policy_id = $4 AND b.selection_policy_version = $5
+       AND b.enabled = true AND b.superseded_at IS NULL
+     FOR SHARE`,
+    [workspaceId, request.agentId, request.agentVersionId, request.policyId, request.policyVersion],
+  );
+  const row = result.rows[0] as QueryRow | undefined;
+  const bindingId = rowString(row, "binding_id");
+  const requestProfileId = rowString(row, "request_profile_id");
+  const requestProfileHash = rowString(row, "request_profile_hash");
+  const configurationStatus = rowString(row, "configuration_status");
+  if (
+    result.rowCount !== 1 ||
+    !bindingId ||
+    !requestProfileId ||
+    !requestProfileHash ||
+    !HASH_PATTERN.test(requestProfileHash) ||
+    (configurationStatus !== "ready" && configurationStatus !== "action_required")
+  ) {
+    throw new TokenlessServiceError(
+      "The exact human-review configuration is unavailable.",
+      409,
+      "human_review_configuration_required",
+    );
+  }
+  if (configurationStatus === "action_required") {
+    throw new TokenlessServiceError(
+      "The human-review request profile still requires owner configuration.",
+      409,
+      "human_review_configuration_action_required",
+    );
+  }
+  return {
+    bindingId,
+    bindingVersion: rowInteger(row, "binding_version"),
+    requestProfileId,
+    requestProfileVersion: rowInteger(row, "request_profile_version"),
+    requestProfileHash,
+    configurationStatus,
+  };
+}
+
+async function verifyIntegrationBinding(
+  client: PoolClient,
+  input: {
+    workspaceId: string;
+    integrationId: string | null;
+    request: ReturnType<typeof normalizeRequest>;
+    binding: HumanReviewBindingRow;
+  },
+) {
+  if (input.integrationId === null) return;
+  const result = await client.query(
+    `SELECT 1
+     FROM tokenless_agent_integrations
+     WHERE workspace_id = $1 AND integration_id = $2 AND status = 'active'
+       AND agent_id = $3 AND agent_version_id = $4
+       AND review_policy_id = $5 AND review_policy_version = $6
+       AND human_review_binding_id = $7 AND human_review_binding_version = $8
+     FOR SHARE`,
+    [
+      input.workspaceId,
+      input.integrationId,
+      input.request.agentId,
+      input.request.agentVersionId,
+      input.request.policyId,
+      input.request.policyVersion,
+      input.binding.bindingId,
+      input.binding.bindingVersion,
+    ],
+  );
+  if (result.rowCount !== 1) {
+    throw new TokenlessServiceError(
+      "The agent connection is not bound to this exact human-review configuration.",
+      409,
+      "human_review_integration_binding_mismatch",
+    );
+  }
 }
 
 function decisionForMode(input: {
@@ -895,6 +1019,7 @@ function replayMatches(
   executionId: string,
   metadataCommitment: string,
   effectiveCriticalRisk: boolean,
+  binding: HumanReviewBindingRow,
 ) {
   return (
     rowString(row, "agent_id") === request.agentId &&
@@ -902,6 +1027,11 @@ function replayMatches(
     rowString(row, "scope_id") === scopeId &&
     rowString(row, "policy_id") === request.policyId &&
     rowInteger(row, "policy_version") === request.policyVersion &&
+    rowString(row, "human_review_binding_id") === binding.bindingId &&
+    rowInteger(row, "human_review_binding_version") === binding.bindingVersion &&
+    rowString(row, "request_profile_id") === binding.requestProfileId &&
+    rowInteger(row, "request_profile_version") === binding.requestProfileVersion &&
+    rowString(row, "request_profile_hash") === binding.requestProfileHash &&
     rowString(row, "suggestion_commitment") === request.suggestionCommitment &&
     rowString(row, "metadata_commitment") === metadataCommitment &&
     rowString(row, "execution_id") === executionId &&
@@ -945,43 +1075,57 @@ export async function evaluateAdaptiveReviewRequirement(input: {
     input.integrationId === undefined || input.integrationId === null
       ? null
       : boundedIdentifier(input.integrationId, "integrationId");
-  const scopeId = deterministicId("evs", [
-    workspaceId,
-    request.agentId,
-    request.agentVersionId,
-    request.policyId,
-    String(request.policyVersion),
-    request.workflowKey,
-    request.riskTier,
-    request.audiencePolicyHash,
-    request.execution.executionProfileHash,
-  ]);
   const opportunityId = deterministicId("aop", [workspaceId, request.agentId, request.externalOpportunityId]);
-  const partitionCommitment = sha256({
-    workspaceId,
-    agentId: request.agentId,
-    agentVersionId: request.agentVersionId,
-    policyId: request.policyId,
-    policyVersion: request.policyVersion,
-    workflowKey: request.workflowKey,
-    riskTier: request.riskTier,
-    audiencePolicyHash: request.audiencePolicyHash,
-    executionProfileHash: request.execution.executionProfileHash,
-  });
-  const metadataCommitment = sha256({
-    workflowKey: request.workflowKey,
-    riskTier: request.riskTier,
-    audiencePolicyHash: request.audiencePolicyHash,
-    declaredConfidenceBps: request.declaredConfidenceBps,
-    criticalRisk: request.criticalRisk,
-    metadataComplete: request.metadataComplete,
-    sourceEvidenceHash: request.sourceEvidenceHash,
-    executionManifestCommitment: request.execution.manifestCommitment,
-  });
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
     const policy = await loadPolicy(client, workspaceId, request);
+    const binding = await loadHumanReviewBinding(client, workspaceId, request);
+    await verifyIntegrationBinding(client, { workspaceId, integrationId, request, binding });
+    const scopeId = deterministicId("evs", [
+      workspaceId,
+      request.agentId,
+      request.agentVersionId,
+      request.policyId,
+      String(request.policyVersion),
+      binding.bindingId,
+      String(binding.bindingVersion),
+      binding.requestProfileId,
+      String(binding.requestProfileVersion),
+      binding.requestProfileHash,
+      request.workflowKey,
+      request.riskTier,
+      request.audiencePolicyHash,
+      request.execution.executionProfileHash,
+    ]);
+    const partitionCommitment = sha256({
+      workspaceId,
+      agentId: request.agentId,
+      agentVersionId: request.agentVersionId,
+      policyId: request.policyId,
+      policyVersion: request.policyVersion,
+      humanReviewBinding: { id: binding.bindingId, version: binding.bindingVersion },
+      requestProfile: {
+        id: binding.requestProfileId,
+        version: binding.requestProfileVersion,
+        hash: binding.requestProfileHash,
+      },
+      workflowKey: request.workflowKey,
+      riskTier: request.riskTier,
+      audiencePolicyHash: request.audiencePolicyHash,
+      executionProfileHash: request.execution.executionProfileHash,
+    });
+    const metadataCommitment = sha256({
+      workflowKey: request.workflowKey,
+      riskTier: request.riskTier,
+      audiencePolicyHash: request.audiencePolicyHash,
+      requestProfileHash: binding.requestProfileHash,
+      declaredConfidenceBps: request.declaredConfidenceBps,
+      criticalRisk: request.criticalRisk,
+      metadataComplete: request.metadataComplete,
+      sourceEvidenceHash: request.sourceEvidenceHash,
+      executionManifestCommitment: request.execution.manifestCommitment,
+    });
     const now = new Date();
     const executionId = await persistExecution(client, {
       workspaceId,
@@ -994,10 +1138,13 @@ export async function evaluateAdaptiveReviewRequirement(input: {
     const insertedScope = await client.query(
       `INSERT INTO tokenless_agent_evaluation_scopes
        (scope_id, workspace_id, agent_id, agent_version_id, policy_id, policy_version, workflow_key, risk_tier,
-        audience_policy_hash, execution_profile_hash, execution_profile_json, partition_commitment, stage,
+        audience_policy_hash, execution_profile_hash, execution_profile_json,
+        human_review_binding_id, human_review_binding_version,
+        request_profile_id, request_profile_version, request_profile_hash, partition_commitment, stage,
         completed_comparable_cases, stable_cases_since_stage, unreviewed_since_last_sample, stage_entered_at,
         updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'calibrating', 0, 0, 0, $13, $13)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
+               'calibrating', 0, 0, 0, $18, $18)
        ON CONFLICT (scope_id) DO NOTHING RETURNING scope_id`,
       [
         scopeId,
@@ -1011,6 +1158,11 @@ export async function evaluateAdaptiveReviewRequirement(input: {
         request.audiencePolicyHash,
         request.execution.executionProfileHash,
         JSON.stringify(request.execution.executionProfile),
+        binding.bindingId,
+        binding.bindingVersion,
+        binding.requestProfileId,
+        binding.requestProfileVersion,
+        binding.requestProfileHash,
         partitionCommitment,
         now,
       ],
@@ -1030,6 +1182,8 @@ export async function evaluateAdaptiveReviewRequirement(input: {
     const scopeResult = await client.query(
       `SELECT scope_id, stage, completed_comparable_cases, stable_cases_since_stage,
               unreviewed_since_last_sample, stage_entered_at, execution_profile_hash, execution_profile_json
+              , human_review_binding_id, human_review_binding_version,
+              request_profile_id, request_profile_version, request_profile_hash
        FROM tokenless_agent_evaluation_scopes
        WHERE workspace_id = $1 AND scope_id = $2 FOR UPDATE`,
       [workspaceId, scopeId],
@@ -1051,7 +1205,7 @@ export async function evaluateAdaptiveReviewRequirement(input: {
     const effectiveCriticalRisk = request.criticalRisk || policy.rules.criticalRiskTiers.includes(request.riskTier);
     if (
       opportunity &&
-      !replayMatches(opportunity, request, scopeId, executionId, metadataCommitment, effectiveCriticalRisk)
+      !replayMatches(opportunity, request, scopeId, executionId, metadataCommitment, effectiveCriticalRisk, binding)
     ) {
       throw new TokenlessServiceError(
         "externalOpportunityId is already bound to different immutable inputs.",
@@ -1065,12 +1219,14 @@ export async function evaluateAdaptiveReviewRequirement(input: {
       const inserted = await client.query(
         `INSERT INTO tokenless_agent_review_opportunities
          (opportunity_id, workspace_id, agent_id, agent_version_id, scope_id, policy_id, policy_version,
+          human_review_binding_id, human_review_binding_version,
+          request_profile_id, request_profile_version, request_profile_hash,
           external_opportunity_id, execution_id, suggestion_commitment, suggestion_ciphertext, suggestion_key_ref,
           declared_confidence_bps, metadata_commitment, metadata_complete, critical_risk, decision,
           review_rate_bps, selection_probability_bps, sample_bucket, sampler_key_version, sampler_commitment,
           reason_codes_json, status, source_evidence_reference, source_evidence_hash, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NULL, NULL, $11, $12, $13, $14, $15,
-                 $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $25)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NULL, NULL,
+                 $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $30)
          RETURNING *`,
         [
           opportunityId,
@@ -1080,6 +1236,11 @@ export async function evaluateAdaptiveReviewRequirement(input: {
           scopeId,
           request.policyId,
           request.policyVersion,
+          binding.bindingId,
+          binding.bindingVersion,
+          binding.requestProfileId,
+          binding.requestProfileVersion,
+          binding.requestProfileHash,
           request.externalOpportunityId,
           executionId,
           request.suggestionCommitment,
@@ -1161,6 +1322,8 @@ export async function getAdaptiveAssuranceState(input: {
     sql: `SELECT s.scope_id, s.stage, s.completed_comparable_cases, s.stable_cases_since_stage,
                  s.unreviewed_since_last_sample, s.stage_entered_at,
                  s.execution_profile_hash, s.execution_profile_json,
+                 s.human_review_binding_id, s.human_review_binding_version,
+                 s.request_profile_id, s.request_profile_version, s.request_profile_hash,
                  p.policy_id, p.version, p.agent_id, p.agent_version_id, p.mode,
                  p.agreement_threshold_bps, p.production_floor_bps, p.fixed_rate_bps, p.maximum_unreviewed_gap,
                  p.rules_json, p.audience_policy_json

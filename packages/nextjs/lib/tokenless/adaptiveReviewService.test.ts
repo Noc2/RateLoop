@@ -11,6 +11,7 @@ import {
 import { createWorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
 import { createWorkspace, createWorkspaceApiKey } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
 
 const OWNER_A = "0x1111111111111111111111111111111111111111";
 const OWNER_B = "0x2222222222222222222222222222222222222222";
@@ -45,7 +46,7 @@ async function fixture(owner = OWNER_A) {
       environment: "production",
     },
   });
-  const audiencePolicy = { source: "customer_invited", group: "support-emea", classification: "internal" };
+  const audiencePolicy = { reviewerSource: "public_network" };
   const audiencePolicyHash = __adaptiveReviewServiceTestUtils.sha256(audiencePolicy);
   const policyId = `arp_support_${owner.slice(-4)}`;
   await dbClient.execute({
@@ -66,13 +67,20 @@ async function fixture(owner = OWNER_A) {
       new Date(),
     ],
   });
+  const humanReview = await seedReadyHumanReviewBinding({
+    workspaceId,
+    agentId: agent.agentId,
+    agentVersionId: agent.currentVersion.versionId,
+    policyId,
+    actor: owner.toLowerCase(),
+  });
   const key = await createWorkspaceApiKey({
     workspaceId,
     name: "Adaptive evaluator",
     scopes: ["evaluation:read", "review:decide"],
   });
   const principal = await authenticateAdaptiveReviewPrincipal(`Bearer ${key.token}`, "review:decide");
-  return { workspaceId, agent, audiencePolicyHash, policyId, key, principal };
+  return { workspaceId, agent, audiencePolicyHash, policyId, humanReview, key, principal };
 }
 
 function opportunity(input: Awaited<ReturnType<typeof fixture>>, externalOpportunityId = "ticket-00000001") {
@@ -133,12 +141,33 @@ test("persists deterministic calibration decisions and returns frozen idempotent
   assert.equal("sourceEvidenceReference" in first, false);
 
   const rows = await dbClient.execute(
-    "SELECT suggestion_commitment, source_evidence_reference, source_evidence_hash FROM tokenless_agent_review_opportunities",
+    `SELECT suggestion_commitment, source_evidence_reference, source_evidence_hash,
+            human_review_binding_id, human_review_binding_version,
+            request_profile_id, request_profile_version, request_profile_hash
+     FROM tokenless_agent_review_opportunities`,
   );
   assert.equal(rows.rowCount, 1);
   assert.equal(rows.rows[0]?.suggestion_commitment, request.suggestionCommitment);
   assert.equal(rows.rows[0]?.source_evidence_reference, request.sourceEvidence.reference);
   assert.equal(rows.rows[0]?.source_evidence_hash, request.sourceEvidence.hash);
+  assert.equal(rows.rows[0]?.human_review_binding_id, setup.humanReview.bindingId);
+  assert.equal(rows.rows[0]?.human_review_binding_version, setup.humanReview.bindingVersion);
+  assert.equal(rows.rows[0]?.request_profile_id, setup.humanReview.profileId);
+  assert.equal(rows.rows[0]?.request_profile_version, setup.humanReview.profileVersion);
+  assert.equal(rows.rows[0]?.request_profile_hash, setup.humanReview.profileHash);
+
+  const scopes = await dbClient.execute({
+    sql: `SELECT human_review_binding_id, human_review_binding_version,
+                 request_profile_id, request_profile_version, request_profile_hash
+          FROM tokenless_agent_evaluation_scopes
+          WHERE workspace_id = ? AND scope_id = ?`,
+    args: [setup.workspaceId, first.scopeId],
+  });
+  assert.equal(scopes.rows[0]?.human_review_binding_id, setup.humanReview.bindingId);
+  assert.equal(scopes.rows[0]?.human_review_binding_version, setup.humanReview.bindingVersion);
+  assert.equal(scopes.rows[0]?.request_profile_id, setup.humanReview.profileId);
+  assert.equal(scopes.rows[0]?.request_profile_version, setup.humanReview.profileVersion);
+  assert.equal(scopes.rows[0]?.request_profile_hash, setup.humanReview.profileHash);
 
   const executions = await dbClient.execute({
     sql: `SELECT e.execution_id, e.metadata_source, e.execution_profile_hash, e.model_call_count,
@@ -225,6 +254,38 @@ test("enforces dedicated scopes and fails closed when the sampler secret is abse
   await assert.rejects(
     () => evaluateAdaptiveReviewRequirement({ principal: setup.principal, request: opportunity(setup) }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "adaptive_review_unavailable",
+  );
+});
+
+test("fails closed for an incomplete request profile or a mismatched integration binding", async () => {
+  const incomplete = await fixture(OWNER_A);
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_request_profiles
+          SET configuration_status = 'action_required', response_window_seconds = NULL, panel_size = NULL,
+              bounty_per_seat_atomic = NULL, approved_by = NULL, approved_at = NULL
+          WHERE workspace_id = ? AND profile_id = ? AND version = 1`,
+    args: [incomplete.workspaceId, incomplete.humanReview.profileId],
+  });
+  await assert.rejects(
+    () =>
+      evaluateAdaptiveReviewRequirement({
+        principal: incomplete.principal,
+        request: opportunity(incomplete, "incomplete-profile-0001"),
+      }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "human_review_configuration_action_required",
+  );
+
+  const mismatched = await fixture(OWNER_B);
+  await assert.rejects(
+    () =>
+      evaluateAdaptiveReviewRequirement({
+        principal: mismatched.principal,
+        integrationId: "int_not_bound_to_this_configuration",
+        request: opportunity(mismatched, "integration-mismatch-0001"),
+      }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "human_review_integration_binding_mismatch",
   );
 });
 

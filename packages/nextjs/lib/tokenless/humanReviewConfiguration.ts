@@ -130,6 +130,14 @@ function rowInteger(row: Row | undefined, key: string) {
   return value;
 }
 
+function rowBasisPoints(row: Row | undefined, key: string) {
+  const value = Number(row?.[key]);
+  if (!Number.isSafeInteger(value) || value < 0 || value > 10_000) {
+    throw new Error(`Database returned an invalid ${key}.`);
+  }
+  return value;
+}
+
 function iso(value: unknown, field: string) {
   const date = value instanceof Date ? value : new Date(String(value));
   if (!Number.isFinite(date.getTime())) throw new Error(`Database returned an invalid ${field}.`);
@@ -759,8 +767,8 @@ function ownerSelectionFromRow(row: Row) {
     agentVersionId: rowString(row, "agent_version_id"),
     mode: rowString(row, "mode"),
     enforcementMode: rules.enforcementMode,
-    agreementThresholdBps: rowInteger(row, "agreement_threshold_bps"),
-    productionFloorBps: rowInteger(row, "production_floor_bps"),
+    agreementThresholdBps: rowBasisPoints(row, "agreement_threshold_bps"),
+    productionFloorBps: rowBasisPoints(row, "production_floor_bps"),
     fixedRateBps: nullableInteger(row, "fixed_rate_bps"),
     maximumUnreviewedGap: rowInteger(row, "maximum_unreviewed_gap"),
     requiredRiskTiers: rules.requiredRiskTiers,
@@ -773,6 +781,10 @@ function ownerSelectionFromRow(row: Row) {
 }
 
 function ownerProfileFromRow(row: Row) {
+  const configurationStatus = rowString(row, "configuration_status");
+  if (configurationStatus !== "ready" && configurationStatus !== "action_required") {
+    throw new Error("Database returned an invalid review request profile status.");
+  }
   return {
     agentId: rowString(row, "agent_id")!,
     agentVersionId: rowString(row, "agent_version_id")!,
@@ -786,10 +798,11 @@ function ownerProfileFromRow(row: Row) {
     privateGroupId: rowString(row, "private_group_id"),
     privateGroupPolicyVersion: nullableInteger(row, "private_group_policy_version"),
     privateGroupPolicyHash: rowString(row, "private_group_policy_hash"),
-    responseWindowSeconds: rowInteger(row, "response_window_seconds"),
-    panelSize: rowInteger(row, "panel_size"),
+    responseWindowSeconds: nullableInteger(row, "response_window_seconds"),
+    panelSize: nullableInteger(row, "panel_size"),
     compensationMode: rowString(row, "compensation_mode")!,
     bountyPerSeatAtomic: rowString(row, "bounty_per_seat_atomic"),
+    configurationStatus,
   };
 }
 

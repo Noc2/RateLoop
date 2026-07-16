@@ -65,7 +65,9 @@ type NormalizedReviewRequestProfile = {
   bountyPerSeatAtomic: string | null;
 };
 
-export type ReviewRequestProfile = NormalizedReviewRequestProfile & {
+export type ReviewRequestProfile = Omit<NormalizedReviewRequestProfile, "responseWindowSeconds" | "panelSize"> & {
+  responseWindowSeconds: number | null;
+  panelSize: number | null;
   profileId: string;
   version: number;
   workspaceId: string;
@@ -334,6 +336,11 @@ function profileFromRow(row: QueryRow): ReviewRequestProfile {
   const configurationStatus = rowString(row, "configuration_status") as ReviewRequestProfile["configurationStatus"];
   const profileHash = rowString(row, "profile_hash");
   const createdBy = rowString(row, "created_by");
+  const responseWindowSeconds =
+    row.response_window_seconds === null || row.response_window_seconds === undefined
+      ? null
+      : rowInteger(row, "response_window_seconds");
+  const panelSize = row.panel_size === null || row.panel_size === undefined ? null : rowInteger(row, "panel_size");
   if (
     !profileId ||
     !workspaceId ||
@@ -354,7 +361,8 @@ function profileFromRow(row: QueryRow): ReviewRequestProfile {
     !HUMAN_REVIEW_CONTENT_BOUNDARIES.includes(contentBoundary) ||
     !HUMAN_REVIEW_COMPENSATION_MODES.includes(compensationMode) ||
     !["ready", "action_required"].includes(configurationStatus) ||
-    !HASH_PATTERN.test(profileHash)
+    !HASH_PATTERN.test(profileHash) ||
+    (configurationStatus === "ready" && (responseWindowSeconds === null || panelSize === null))
   ) {
     throw new Error("Database returned an invalid review request profile.");
   }
@@ -377,8 +385,8 @@ function profileFromRow(row: QueryRow): ReviewRequestProfile {
         ? null
         : rowInteger(row, "private_group_policy_version"),
     privateGroupPolicyHash: rowString(row, "private_group_policy_hash"),
-    responseWindowSeconds: rowInteger(row, "response_window_seconds"),
-    panelSize: rowInteger(row, "panel_size"),
+    responseWindowSeconds,
+    panelSize,
     compensationMode,
     bountyPerSeatAtomic: rowString(row, "bounty_per_seat_atomic"),
     configurationStatus,

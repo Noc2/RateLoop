@@ -20,6 +20,7 @@ import {
   recordPrepaidLedgerEntry,
 } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const ADMISSION_HASH = `0x${"ab".repeat(32)}` as const;
@@ -105,6 +106,13 @@ async function fixture() {
       OWNER,
       now,
     ],
+  });
+  await seedReadyHumanReviewBinding({
+    workspaceId,
+    agentId: agent.agentId,
+    agentVersionId: agent.currentVersion.versionId,
+    policyId: reviewPolicyId,
+    actor: OWNER,
   });
   const key = await createWorkspaceApiKey({
     workspaceId,
