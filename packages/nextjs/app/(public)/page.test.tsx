@@ -110,14 +110,39 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /whitespace-nowrap text-sm font-semibold sm:text-base/);
   assert.doesNotMatch(html, /See supported agents|href="\/docs\/ai"/);
   assert.doesNotMatch(html, /Agent setup|Copy setup|role="dialog"/);
+  assert.match(html, /id="use-cases"/);
+  assert.match(html, /Where Humans/);
+  assert.match(html, /Automated checks catch many failures.*contextual decision.*actual output/i);
+  for (const [title, body, href] of [
+    [
+      "Customer replies",
+      "A grounded reply can still frustrate. Would you send it?",
+      "/docs/use-cases#customer-replies",
+    ],
+    [
+      "Research and client work",
+      "Citations can still support weak conclusions. Are the claims supported?",
+      "/docs/use-cases#research-deliverables",
+    ],
+    [
+      "Product experiences",
+      "Tests can pass while users stay confused. Is the next action clear?",
+      "/docs/use-cases#product-experiences",
+    ],
+  ]) {
+    assert.match(html, new RegExp(title, "i"));
+    assert.match(html, new RegExp(body.replace(/[?.]/g, "\\$&"), "i"));
+    assert.match(html, new RegExp(`href="${href}"`));
+  }
   assert.match(html, /id="faq"/);
   assert.match(html, /Common/);
-  assert.match(html, /What Does RateLoop Do\?/);
+  assert.doesNotMatch(html, /What Does RateLoop Do\?|What Can I Evaluate\?/);
   assert.match(html, /Can an Agent Run Reviews Automatically\?/);
   assert.match(html, /approve its connection and limits/i);
   assert.match(html, /What Does the Blockchain Record\?/);
-  assert.equal(html.match(/<details/g)?.length, 6);
+  assert.equal(html.match(/<details/g)?.length, 4);
   assert.match(html, /href="\/docs"/);
+  assert.ok(html.indexOf('id="use-cases"') < html.indexOf('id="how-it-works"'));
   assert.ok(html.indexOf('id="how-it-works"') < html.indexOf('id="why-it-works"'));
   assert.ok(html.indexOf('id="why-it-works"') < html.indexOf("Pricing, Kept"));
   assert.ok(html.indexOf("Pricing, Kept") < html.indexOf('id="faq"'));

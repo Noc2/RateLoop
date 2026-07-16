@@ -11,7 +11,7 @@ export const revalidate = 300;
 const whyItWorksFeatures = [
   {
     title: "Agent-native",
-    body: "MCP Adapter handoffs and x402 funding turn one agent request into a scoped human panel.",
+    body: "MCP handoffs and x402 funding turn an agent request into a scoped human panel.",
     color: "#359EEE",
     links: [
       ["MCP Adapter", "/docs/tech-stack#mcp-adapter"],
@@ -20,7 +20,7 @@ const whyItWorksFeatures = [
   },
   {
     title: "Verified and blind",
-    body: "Proof of Human, audience policies, and commit-reveal keep admission explicit and early answers sealed.",
+    body: "Audience policies and sealed answers keep admission explicit and early judgments private.",
     color: "#03CEA4",
     links: [
       ["Proof of Human", "/docs/tech-stack#proof-of-human"],
@@ -31,7 +31,7 @@ const whyItWorksFeatures = [
   },
   {
     title: "Useful signal, auditable pay",
-    body: "RBTS and Surprisingly Popular reward informative reports; Base + USDC makes settlement recomputable.",
+    body: "Published scoring and Base USDC settlement make panel pay recomputable.",
     color: "#EF476F",
     links: [
       ["RBTS", "/docs/tech-stack#robust-bayesian-truth-serum"],
@@ -42,22 +42,35 @@ const whyItWorksFeatures = [
   },
 ] as const;
 
+const useCases = [
+  {
+    title: "Customer replies",
+    body: "A grounded reply can still frustrate. Would you send it?",
+    href: "/docs/use-cases#customer-replies",
+    color: "var(--rateloop-blue)",
+  },
+  {
+    title: "Research and client work",
+    body: "Citations can still support weak conclusions. Are the claims supported?",
+    href: "/docs/use-cases#research-deliverables",
+    color: "var(--rateloop-green)",
+  },
+  {
+    title: "Product experiences",
+    body: "Tests can pass while users stay confused. Is the next action clear?",
+    href: "/docs/use-cases#product-experiences",
+    color: "var(--rateloop-pink)",
+  },
+] as const;
+
 const questions = [
-  [
-    "What Does RateLoop Do?",
-    "It gathers blind human reviews of AI work and returns a clear result with reasons. Your team makes the final decision.",
-  ],
-  [
-    "What Can I Evaluate?",
-    "Support replies, marketing, consulting work, product behavior, internal copilots, and other AI work with a clear quality bar.",
-  ],
   [
     "Who Reviews the Work?",
     "Your invited reviewers, RateLoop's World ID-backed network, or clearly separated hybrid panels.",
   ],
   [
     "Can an Agent Run Reviews Automatically?",
-    "Yes. Once you approve its connection and limits, an agent can request reviews and receive results without a click on every run. You control the project, audience, data rules, and budget.",
+    "Yes. After you approve its connection and limits, an agent can request reviews and receive results automatically. You control the project, audience, data rules, and budget.",
   ],
   [
     "Can I Use Private Data?",
@@ -154,8 +167,36 @@ export function TokenlessLandingPage({
           <SupportedAgentsSection />
         </section>
 
-        <section id="how-it-works" className="relative z-10 mt-12 w-full sm:mt-16 lg:mt-20">
-          <SectionTitle number="01" gradient="Works" className="mb-6">
+        <section id="use-cases" className="relative z-10 mt-12 w-full sm:mt-16 lg:mt-20">
+          <SectionTitle number="01" gradient="Matter" className="mb-6">
+            Where Humans
+          </SectionTitle>
+          <p className="mb-8 max-w-3xl text-lg leading-8 text-base-content/65 sm:mb-10 sm:text-xl">
+            Automated checks catch many failures. When they cannot settle a contextual decision, people can judge the
+            actual output.
+          </p>
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+            {useCases.map(useCase => (
+              <article
+                key={useCase.title}
+                className="rateloop-surface-card rounded-2xl border-l-2 p-5 sm:p-6"
+                style={{ borderColor: useCase.color }}
+              >
+                <h3 className="text-xl font-bold leading-tight">
+                  <Link href={useCase.href} className="transition-colors hover:text-base-content/70">
+                    {useCase.title}
+                  </Link>
+                </h3>
+                <p className="mt-3 text-base leading-7 text-base-content/65">{useCase.body}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <div aria-hidden="true" className="my-16 h-px w-full max-w-5xl bg-base-content/10 sm:my-20 lg:my-24" />
+
+        <section id="how-it-works" className="relative z-10 w-full">
+          <SectionTitle number="02" gradient="Works" className="mb-6">
             How It
           </SectionTitle>
           <HumanAssuranceLoop className="mb-14" concise />
@@ -164,7 +205,7 @@ export function TokenlessLandingPage({
         <div aria-hidden="true" className="my-16 h-px w-full max-w-5xl bg-base-content/10 sm:my-20 lg:my-24" />
 
         <section id="why-it-works" className="relative z-10 w-full">
-          <SectionTitle number="02" gradient="Works">
+          <SectionTitle number="03" gradient="Works">
             Why It
           </SectionTitle>
           <div className="grid grid-cols-1 gap-x-12 gap-y-12 md:grid-cols-3">
@@ -199,7 +240,7 @@ export function TokenlessLandingPage({
         <div aria-hidden="true" className="my-16 h-px w-full max-w-5xl bg-base-content/10 sm:my-20 lg:my-24" />
 
         <section className="relative z-10 w-full">
-          <SectionTitle number="03" gradient="Simple" className="mb-6">
+          <SectionTitle number="04" gradient="Simple" className="mb-6">
             Pricing, Kept
           </SectionTitle>
           <p className="mb-8 max-w-3xl text-lg leading-8 text-base-content/65 sm:mb-10 sm:text-xl">
@@ -211,7 +252,7 @@ export function TokenlessLandingPage({
         <div aria-hidden="true" className="my-16 h-px w-full max-w-5xl bg-base-content/10 sm:my-20 lg:my-24" />
 
         <section id="faq" className="relative z-10 w-full">
-          <SectionTitle number="04" gradient="Questions">
+          <SectionTitle number="05" gradient="Questions">
             Common
           </SectionTitle>
           <div className="grid grid-cols-1 gap-x-12 gap-y-4 xl:grid-cols-2">
