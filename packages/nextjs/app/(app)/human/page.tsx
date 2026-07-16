@@ -6,7 +6,6 @@ import { AnswerPageClient } from "~~/components/tokenless/answer/AnswerPageClien
 import { HumanAccountSignInPrompt } from "~~/components/tokenless/human/HumanAccountSignInPrompt";
 import { HumanProfileContent } from "~~/components/tokenless/human/HumanProfileContent";
 import { type HumanTab, HumanTabs } from "~~/components/tokenless/human/HumanTabs";
-import { AnswerSearch } from "~~/components/tokenless/navigation/AnswerSearch";
 import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
 import { isWorldIdAssuranceEnabled } from "~~/lib/tokenless/worldIdAssurance";
 
@@ -47,9 +46,6 @@ export default async function HumanPage({
       <>
         <AppPageShell contentClassName="mb-4">
           <HumanTabs active={tab} />
-          <div className="mt-4 max-w-2xl [&>form]:!m-0">
-            <AnswerSearch />
-          </div>
         </AppPageShell>
         <AnswerPageClient initialQuery={query} initialScope={scope} />
       </>

@@ -93,6 +93,13 @@ export function createMemoryDatabaseResources(): DatabaseResources {
     implementation: (left, right) =>
       Array.isArray(left) && Array.isArray(right) && right.every(value => left.includes(value)),
   });
+  memoryDb.public.registerOperator({
+    operator: "~",
+    left: DataType.text,
+    right: DataType.text,
+    returns: DataType.bool,
+    implementation: (value, pattern) => new RegExp(pattern).test(value),
+  });
 
   if (fs.existsSync(migrationDirectory)) {
     const files = fs

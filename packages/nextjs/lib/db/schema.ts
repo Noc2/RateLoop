@@ -1,4 +1,14 @@
-import { boolean, index, integer, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  foreignKey,
+  index,
+  integer,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 export * from "./humanAssuranceSchema";
 
@@ -757,3 +767,97 @@ export type TokenlessAgentOauthTokenFamily = typeof tokenlessAgentOauthTokenFami
 export type TokenlessAgentOauthDeviceAuthorization = typeof tokenlessAgentOauthDeviceAuthorizations.$inferSelect;
 export type TokenlessAgentConnectionIntent = typeof tokenlessAgentConnectionIntents.$inferSelect;
 export type TokenlessAgentConnectionIntentEvent = typeof tokenlessAgentConnectionIntentEvents.$inferSelect;
+
+export const tokenlessAgentExecutions = pgTable(
+  "tokenless_agent_executions",
+  {
+    executionId: text("execution_id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    agentId: text("agent_id").notNull(),
+    agentVersionId: text("agent_version_id").notNull(),
+    integrationId: text("integration_id"),
+    externalExecutionId: text("external_execution_id").notNull(),
+    status: text("status").notNull(),
+    metadataSource: text("metadata_source").notNull().default("host_reported"),
+    startedAt: timestamp("started_at", { mode: "date", withTimezone: true }),
+    completedAt: timestamp("completed_at", { mode: "date", withTimezone: true }),
+    totalDurationMs: integer("total_duration_ms"),
+    toolCallCount: integer("tool_call_count"),
+    toolDurationMs: integer("tool_duration_ms"),
+    modelCallCount: integer("model_call_count").notNull(),
+    inputTokenTotal: integer("input_token_total"),
+    cachedInputTokenTotal: integer("cached_input_token_total"),
+    outputTokenTotal: integer("output_token_total"),
+    reasoningOutputTokenTotal: integer("reasoning_output_token_total"),
+    primarySpanId: text("primary_span_id").notNull(),
+    manifestCommitment: text("manifest_commitment").notNull(),
+    executionProfileHash: text("execution_profile_hash").notNull(),
+    executionProfileJson: text("execution_profile_json").notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    externalUnique: uniqueIndex("tokenless_agent_executions_external_unique").on(
+      table.workspaceId,
+      table.agentId,
+      table.externalExecutionId,
+    ),
+    profileIdx: index("tokenless_agent_executions_profile_idx").on(
+      table.workspaceId,
+      table.executionProfileHash,
+      table.createdAt,
+    ),
+    workspaceAgentCreatedIdx: index("tokenless_agent_executions_workspace_agent_created_idx").on(
+      table.workspaceId,
+      table.agentId,
+      table.agentVersionId,
+      table.createdAt,
+    ),
+  }),
+);
+
+export const tokenlessAgentGenerationSpans = pgTable(
+  "tokenless_agent_generation_spans",
+  {
+    executionId: text("execution_id")
+      .notNull()
+      .references(() => tokenlessAgentExecutions.executionId, { onDelete: "cascade" }),
+    spanId: text("span_id").notNull(),
+    parentSpanId: text("parent_span_id"),
+    role: text("role").notNull(),
+    provider: text("provider").notNull(),
+    requestedModel: text("requested_model").notNull(),
+    resolvedModel: text("resolved_model"),
+    modelVersion: text("model_version"),
+    reasoningEffort: text("reasoning_effort"),
+    serviceTier: text("service_tier"),
+    startedAt: timestamp("started_at", { mode: "date", withTimezone: true }),
+    completedAt: timestamp("completed_at", { mode: "date", withTimezone: true }),
+    durationMs: integer("duration_ms"),
+    timeToFirstOutputMs: integer("time_to_first_output_ms"),
+    inputTokens: integer("input_tokens"),
+    cachedInputTokens: integer("cached_input_tokens"),
+    outputTokens: integer("output_tokens"),
+    reasoningOutputTokens: integer("reasoning_output_tokens"),
+    responseIdHash: text("response_id_hash"),
+    finishReason: text("finish_reason"),
+    metadataSource: text("metadata_source").notNull().default("host_reported"),
+  },
+  table => ({
+    executionRoleIdx: index("tokenless_agent_generation_spans_execution_role_idx").on(
+      table.executionId,
+      table.role,
+      table.spanId,
+    ),
+    parentFk: foreignKey({
+      columns: [table.executionId, table.parentSpanId],
+      foreignColumns: [table.executionId, table.spanId],
+      name: "tokenless_agent_generation_spans_parent_fk",
+    }).onDelete("restrict"),
+    pk: primaryKey({ columns: [table.executionId, table.spanId] }),
+  }),
+);
+
+export type TokenlessAgentExecution = typeof tokenlessAgentExecutions.$inferSelect;
+export type NewTokenlessAgentExecution = typeof tokenlessAgentExecutions.$inferInsert;
+export type TokenlessAgentGenerationSpan = typeof tokenlessAgentGenerationSpans.$inferSelect;
+export type NewTokenlessAgentGenerationSpan = typeof tokenlessAgentGenerationSpans.$inferInsert;
