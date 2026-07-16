@@ -27,6 +27,7 @@ export type EvaluationRun = {
   choices: { baseline: number; candidate: number; tie: number } | null;
   clientDecision: "go" | "revise" | "stop" | null;
   evidencePacketAvailable: boolean;
+  evidencePacketDigest: string | null;
   createdAt: string;
   completedAt: string | null;
   attribution: { status: "unattributed"; agentId: null; versionId: null };
@@ -131,7 +132,7 @@ export async function getWorkspaceEvaluationDashboard(input: {
       sql: `SELECT r.run_id, r.project_id, r.status, r.created_at, r.completed_at,
                    p.name AS project_name, s.name AS suite_name,
                    ap.reviewer_source, ap.compensation, ap.buyer_privacy_json,
-                   d.decision AS client_decision, ep.packet_id
+                   d.decision AS client_decision, ep.packet_id, ep.packet_digest
             FROM tokenless_assurance_runs r
             JOIN tokenless_assurance_projects p ON p.project_id = r.project_id
             JOIN tokenless_assurance_suites s ON s.suite_id = r.suite_id AND s.version = r.suite_version
@@ -218,6 +219,7 @@ export async function getWorkspaceEvaluationDashboard(input: {
         : null,
       clientDecision: rowString(row, "client_decision") as EvaluationRun["clientDecision"],
       evidencePacketAvailable: Boolean(rowString(row, "packet_id")),
+      evidencePacketDigest: rowString(row, "packet_digest"),
       createdAt: iso(row.created_at),
       completedAt: row.completed_at ? iso(row.completed_at) : null,
       attribution: { status: "unattributed" as const, agentId: null, versionId: null },

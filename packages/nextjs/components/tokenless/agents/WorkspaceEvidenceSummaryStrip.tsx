@@ -9,6 +9,17 @@ type Summary = {
   stage: AgentAssuranceScopeSummary["stage"] | null;
   anchor: "completed" | "pending" | "failed" | "absent" | "restricted";
 };
+type PacketAttestation = { artifactKind: string; artifactDigest: string; state: string };
+
+export function anchorForPacketDigest(packetDigest: string | null, attestations: PacketAttestation[]) {
+  if (!packetDigest) return "absent" as const;
+  const attestation = attestations.find(
+    item => item.artifactKind === "decision_packet" && item.artifactDigest === packetDigest,
+  );
+  if (attestation?.state === "completed") return "completed" as const;
+  if (attestation?.state === "dead") return "failed" as const;
+  return attestation ? ("pending" as const) : ("absent" as const);
+}
 
 async function json<T>(response: Response): Promise<T> {
   const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
@@ -56,8 +67,8 @@ export function WorkspaceEvidenceSummaryStrip({ workspaceId, canManage }: { work
             }),
           ),
           canManage
-            ? json<{ attestations: Array<{ artifactKind: string; state: string }> }>(
-                await fetch(`${base}/assurance/attestations?limit=20`, {
+            ? json<{ attestations: PacketAttestation[] }>(
+                await fetch(`${base}/assurance/attestations?limit=100`, {
                   cache: "no-store",
                   credentials: "same-origin",
                   signal: controller.signal,
@@ -73,19 +84,12 @@ export function WorkspaceEvidenceSummaryStrip({ workspaceId, canManage }: { work
           "monitoring",
         ];
         const packet = dashboard.runs.find(run => run.evidencePacketAvailable) ?? null;
-        const anchor = attestationBody?.attestations.find(item => item.artifactKind === "decision_packet");
         if (!controller.signal.aborted) {
           setSummary({
             packet: packet ? { createdAt: packet.createdAt, suiteName: packet.suiteName } : null,
             stage: stageOrder.find(candidate => stages.includes(candidate)) ?? null,
             anchor: canManage
-              ? anchor?.state === "completed"
-                ? "completed"
-                : anchor?.state === "dead"
-                  ? "failed"
-                  : anchor
-                    ? "pending"
-                    : "absent"
+              ? anchorForPacketDigest(packet?.evidencePacketDigest ?? null, attestationBody?.attestations ?? [])
               : "restricted",
           });
         }
