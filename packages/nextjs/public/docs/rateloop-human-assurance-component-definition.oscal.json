@@ -22,7 +22,7 @@
         {
           "name": "mapping-hash",
           "ns": "https://rateloop.ai/ns/oscal",
-          "value": "sha256:57fddb6ba71ce04e3dfa809820f9352b5d592f645f50d1fc7d299c64e6d8c393"
+          "value": "sha256:629b2cfdecc3a176c5b09ef95f2c65f15cc2428cf6569a797e5d622f43186dbc"
         },
         {
           "name": "claim-boundary",
@@ -56,7 +56,7 @@
           {
             "name": "mapping-hash",
             "ns": "https://rateloop.ai/ns/oscal",
-            "value": "sha256:57fddb6ba71ce04e3dfa809820f9352b5d592f645f50d1fc7d299c64e6d8c393"
+            "value": "sha256:629b2cfdecc3a176c5b09ef95f2c65f15cc2428cf6569a797e5d622f43186dbc"
           },
           {
             "name": "claim-boundary",
@@ -854,7 +854,7 @@
             {
               "name": "schema-version",
               "ns": "https://rateloop.ai/ns/oscal",
-              "value": "rateloop.human-assurance.evidence.v2"
+              "value": "rateloop.human-assurance.evidence.v3"
             }
           ]
         },
