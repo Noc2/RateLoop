@@ -200,24 +200,13 @@ export const workspaceMcpTools = [
     name: "rateloop_request_review",
     annotations: consequentialOpenAnnotations,
     description:
-      "Publish the canonical human yes/no review for a required frozen opportunity to the public RateLoop network. Exact payload strings must match the earlier commitments. Declare public, synthetic, or safely redacted data with confirmedNoSensitiveData true; private and hybrid assignment lanes are not available yet.",
+      "Publish the canonical human yes/no review for a required frozen opportunity to the public RateLoop network. Exact payload strings must match the earlier commitments. RateLoop derives the question, panel, response window, bounty, fee, and accepted-work reserve from the exact owner-bound request profile. Declare public, synthetic, or safely redacted data with confirmedNoSensitiveData true; private and hybrid assignment lanes are not available yet.",
     inputSchema: {
       additionalProperties: false,
       properties: {
         opportunityId: identifierSchema,
         sourcePayload: { maxLength: 3_000, minLength: 1, type: "string" },
         suggestionPayload: { maxLength: 3_000, minLength: 1, type: "string" },
-        economics: {
-          additionalProperties: false,
-          properties: {
-            requestedPanelSize: { maximum: 500, minimum: 3, type: "integer" },
-            bountyAtomic: { pattern: "^[1-9][0-9]*$", type: "string" },
-            attemptReserveAtomic: { pattern: "^(0|[1-9][0-9]*)$", type: "string" },
-            feeBps: { maximum: 2_000, minimum: 0, type: "integer" },
-          },
-          required: ["requestedPanelSize", "bountyAtomic", "attemptReserveAtomic", "feeBps"],
-          type: "object",
-        },
         publication: {
           additionalProperties: false,
           allOf: [
@@ -239,7 +228,7 @@ export const workspaceMcpTools = [
           type: "object",
         },
       },
-      required: ["opportunityId", "sourcePayload", "suggestionPayload", "economics", "publication"],
+      required: ["opportunityId", "sourcePayload", "suggestionPayload", "publication"],
       type: "object",
     },
   },
@@ -478,7 +467,7 @@ async function callIntegrationTool(
     if (name === "rateloop_request_review") {
       const input = requireObjectWithKeys(
         args,
-        ["opportunityId", "sourcePayload", "suggestionPayload", "economics", "publication"],
+        ["opportunityId", "sourcePayload", "suggestionPayload", "publication"],
         "Review request arguments are invalid.",
       );
       return toolResult(
@@ -487,7 +476,6 @@ async function callIntegrationTool(
           opportunityId: input.opportunityId as string,
           sourcePayload: input.sourcePayload as string,
           suggestionPayload: input.suggestionPayload as string,
-          economics: input.economics as never,
           publication: input.publication as never,
           appOrigin: context.origin,
         }),

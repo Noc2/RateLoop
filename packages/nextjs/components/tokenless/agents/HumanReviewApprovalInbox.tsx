@@ -87,7 +87,7 @@ function ApprovalCard({
         <div>
           <dt className="text-xs text-base-content/45">Fee</dt>
           <dd className="mt-1">
-            {formatApprovalUsdc(economics.feeAtomic)} (cap {(economics.maxFeeBps / 100).toFixed(2)}%)
+            {formatApprovalUsdc(economics.feeAtomic)} ({(economics.feeBps / 100).toFixed(2)}%)
           </dd>
         </div>
         <div>

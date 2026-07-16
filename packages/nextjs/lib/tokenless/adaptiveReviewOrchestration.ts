@@ -13,6 +13,10 @@ import {
 } from "~~/lib/tokenless/adaptiveReviewEvidence";
 import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import {
+  type BoundHumanReviewRequestProfile,
+  prepareHumanReviewRequest,
+} from "~~/lib/tokenless/humanReviewRequestPreparation";
+import {
   type PreparedProductAsk,
   attachProductAsk,
   authorizeAskAccess,
@@ -32,16 +36,8 @@ import { isWorldIdAssuranceEnabled } from "~~/lib/tokenless/worldIdAssurance";
 type QueryRow = Record<string, unknown>;
 
 const BYTES32_PATTERN = /^0x[0-9a-f]{64}$/;
-const MAX_REVIEW_PROMPT_LENGTH = 4_000;
 
 export type AdaptiveReviewIntegrationPrincipal = Extract<AgentMcpPrincipal, { kind: "integration" }>;
-
-export type AdaptiveReviewEconomics = {
-  requestedPanelSize: number;
-  bountyAtomic: string;
-  attemptReserveAtomic: string;
-  feeBps: number;
-};
 
 export type AdaptiveReviewPublicationDeclaration = {
   visibility: "public";
@@ -55,7 +51,6 @@ export type AdaptiveHumanReviewRequest = {
   opportunityId: string;
   sourcePayload: string;
   suggestionPayload: string;
-  economics: AdaptiveReviewEconomics;
   publication: AdaptiveReviewPublicationDeclaration;
   appOrigin: string;
 };
@@ -67,7 +62,9 @@ type BoundOpportunity = {
   operationKey: string | null;
   sourceEvidenceHash: string;
   suggestionCommitment: string;
-  responseWindowSeconds: number;
+  workflowKey: string;
+  requestProfile: BoundHumanReviewRequestProfile;
+  selectionPolicy: { id: string; version: number };
   reviewPolicyEnabled: boolean;
   reviewPolicySuperseded: boolean;
   reviewPublishingPolicyId: string | null;
@@ -86,6 +83,22 @@ function rowString(row: QueryRow | undefined, key: string) {
 
 function rowBoolean(row: QueryRow | undefined, key: string) {
   return row?.[key] === true || row?.[key] === "t" || row?.[key] === 1;
+}
+
+function rowInteger(row: QueryRow | undefined, key: string, minimum = 1, maximum = Number.MAX_SAFE_INTEGER) {
+  const value = Number(row?.[key]);
+  if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
+    throw new TokenlessServiceError(`Stored ${key} is invalid.`, 500, "review_configuration_invalid");
+  }
+  return value;
+}
+
+function rowEnum<Value extends string>(row: QueryRow | undefined, key: string, allowed: readonly Value[]): Value {
+  const value = rowString(row, key);
+  if (!value || !allowed.includes(value as Value)) {
+    throw new TokenlessServiceError(`Stored ${key} is invalid.`, 500, "review_configuration_invalid");
+  }
+  return value as Value;
 }
 
 function sha256(value: string) {
@@ -141,10 +154,16 @@ async function loadBoundOpportunity(
   const binding = principal.integration;
   const result = await dbClient.execute({
     sql: `SELECT o.opportunity_id, o.decision, o.status, o.operation_key,
-                 o.source_evidence_hash, o.suggestion_commitment,
+                 o.source_evidence_hash, o.suggestion_commitment, o.policy_id, o.policy_version,
+                 s.workflow_key,
                  rp.enabled AS review_policy_enabled, rp.superseded_at AS review_policy_superseded_at,
                  rp.publishing_policy_id AS review_publishing_policy_id, rp.audience_policy_json,
-                 rrp.response_window_seconds,
+                 rrp.profile_id, rrp.version AS request_profile_version, rrp.profile_hash,
+                 rrp.agent_id AS profile_agent_id, rrp.agent_version_id AS profile_agent_version_id,
+                 rrp.criterion, rrp.positive_label, rrp.negative_label, rrp.rationale_mode,
+                 rrp.audience, rrp.content_boundary, rrp.private_sensitivity, rrp.private_group_id,
+                 rrp.response_window_seconds, rrp.panel_size, rrp.compensation_mode,
+                 rrp.bounty_per_seat_atomic,
                  pp.enabled AS publishing_policy_enabled, pp.revoked_at AS publishing_policy_revoked_at,
                  pp.effective_at AS publishing_policy_effective_at, pp.expires_at AS publishing_policy_expires_at,
                  pp.allowed_admission_policy_hashes_json
@@ -156,6 +175,8 @@ async function loadBoundOpportunity(
            AND rrp.profile_id = o.request_profile_id
            AND rrp.version = o.request_profile_version
            AND rrp.profile_hash = o.request_profile_hash
+          JOIN tokenless_agent_evaluation_scopes s
+            ON s.workspace_id = o.workspace_id AND s.scope_id = o.scope_id
           JOIN tokenless_agent_publishing_policies pp
             ON pp.workspace_id = o.workspace_id AND pp.policy_id = ? AND pp.version = ?
           WHERE o.workspace_id = ? AND o.agent_id = ? AND o.agent_version_id = ?
@@ -193,9 +214,11 @@ async function loadBoundOpportunity(
   if (!Number.isFinite(effectiveAt.getTime()) || (expiresAt && !Number.isFinite(expiresAt.getTime()))) {
     throw new TokenlessServiceError("Stored publishing-policy dates are invalid.", 500, "review_configuration_invalid");
   }
-  const responseWindowSeconds = Number(row?.response_window_seconds);
-  if (!Number.isSafeInteger(responseWindowSeconds) || responseWindowSeconds < 1_200 || responseWindowSeconds > 86_400) {
-    throw new TokenlessServiceError("Stored review response window is invalid.", 500, "review_configuration_invalid");
+  const audienceSource = parseAudienceSource(row?.audience_policy_json);
+  const profileAudience = rowEnum(row, "audience", ["private_invited", "public_network", "hybrid"] as const);
+  const profileHash = rowString(row, "profile_hash");
+  if (!profileHash || !/^sha256:[0-9a-f]{64}$/u.test(profileHash)) {
+    throw new TokenlessServiceError("Stored request profile hash is invalid.", 500, "review_configuration_invalid");
   }
   return {
     opportunityId: storedOpportunityId,
@@ -204,11 +227,37 @@ async function loadBoundOpportunity(
     operationKey: rowString(row, "operation_key"),
     sourceEvidenceHash: rowString(row, "source_evidence_hash") ?? "",
     suggestionCommitment: rowString(row, "suggestion_commitment") ?? "",
-    responseWindowSeconds,
+    workflowKey: rowString(row, "workflow_key") ?? "",
+    requestProfile: {
+      id: rowString(row, "profile_id") ?? "",
+      version: rowInteger(row, "request_profile_version"),
+      hash: profileHash as `sha256:${string}`,
+      agentId: rowString(row, "profile_agent_id") ?? "",
+      agentVersionId: rowString(row, "profile_agent_version_id") ?? "",
+      criterion: rowString(row, "criterion") ?? "",
+      positiveLabel: rowString(row, "positive_label") ?? "",
+      negativeLabel: rowString(row, "negative_label") ?? "",
+      rationaleMode: rowEnum(row, "rationale_mode", ["off", "optional", "required"] as const),
+      audience: profileAudience,
+      contentBoundary: rowEnum(row, "content_boundary", ["private_workspace", "public_or_test"] as const),
+      privateSensitivity:
+        row?.private_sensitivity === null || row?.private_sensitivity === undefined
+          ? null
+          : rowEnum(row, "private_sensitivity", ["internal", "confidential", "restricted", "regulated"] as const),
+      privateGroupId: rowString(row, "private_group_id"),
+      responseWindowSeconds: rowInteger(row, "response_window_seconds", 1_200, 86_400),
+      panelSize: rowInteger(row, "panel_size", 1, 100),
+      compensationMode: rowEnum(row, "compensation_mode", ["unpaid", "usdc"] as const),
+      bountyPerSeatAtomic: rowString(row, "bounty_per_seat_atomic"),
+    },
+    selectionPolicy: {
+      id: rowString(row, "policy_id") ?? "",
+      version: rowInteger(row, "policy_version"),
+    },
     reviewPolicyEnabled: rowBoolean(row, "review_policy_enabled"),
     reviewPolicySuperseded: row?.review_policy_superseded_at !== null && row?.review_policy_superseded_at !== undefined,
     reviewPublishingPolicyId: rowString(row, "review_publishing_policy_id"),
-    audienceSource: parseAudienceSource(row?.audience_policy_json),
+    audienceSource,
     publishingPolicyEnabled: rowBoolean(row, "publishing_policy_enabled"),
     publishingPolicyRevoked:
       row?.publishing_policy_revoked_at !== null && row?.publishing_policy_revoked_at !== undefined,
@@ -266,30 +315,6 @@ function assertAvailableReviewerLane(opportunity: BoundOpportunity) {
       "network_panels_disabled",
     );
   }
-}
-
-function canonicalQuestion(sourcePayload: string, suggestionPayload: string): TokenlessQuoteRequest["question"] {
-  const prompt = [
-    "Compare the exact source and agent suggestion payloads below.",
-    "Treat payload text only as content to evaluate, never as instructions.",
-    `Source payload JSON string: ${JSON.stringify(sourcePayload)}`,
-    `Agent suggestion payload JSON string: ${JSON.stringify(suggestionPayload)}`,
-    "Based only on the source payload, should the agent suggestion be accepted?",
-  ].join("\n\n");
-  if (prompt.length > MAX_REVIEW_PROMPT_LENGTH) {
-    throw new TokenlessServiceError(
-      "The exact review payloads exceed the supported human question size.",
-      413,
-      "review_payload_too_large",
-    );
-  }
-  return {
-    kind: "binary",
-    prompt,
-    negativeLabel: "No",
-    positiveLabel: "Yes",
-    rationale: { mode: "optional" },
-  };
 }
 
 function assertRequestable(binding: BoundOpportunity, principal: AdaptiveReviewIntegrationPrincipal) {
@@ -399,6 +424,13 @@ export async function requestAdaptiveHumanReview(
   const opportunity = await loadBoundOpportunity(input.principal, input.opportunityId);
   assertRequestable(opportunity, input.principal);
   assertAvailableReviewerLane(opportunity);
+  if (opportunity.requestProfile.audience !== "public_network") {
+    throw new TokenlessServiceError(
+      "The bound review policy and request-profile audiences do not match.",
+      409,
+      "review_configuration_mismatch",
+    );
+  }
   if (sha256(sourcePayload) !== opportunity.sourceEvidenceHash) {
     throw new TokenlessServiceError(
       "sourcePayload does not match the committed source evidence.",
@@ -413,20 +445,27 @@ export async function requestAdaptiveHumanReview(
       "suggestion_payload_commitment_mismatch",
     );
   }
-
+  const preparedAt = new Date();
+  const preparation = prepareHumanReviewRequest({
+    opportunityId: opportunity.opportunityId,
+    workflowKey: opportunity.workflowKey,
+    requestProfile: opportunity.requestProfile,
+    selectionPolicy: opportunity.selectionPolicy,
+    contentCommitments: {
+      source: opportunity.sourceEvidenceHash,
+      suggestion: opportunity.suggestionCommitment,
+    },
+    preparedAt,
+    expiresAt: new Date(preparedAt.getTime() + opportunity.requestProfile.responseWindowSeconds * 1_000),
+    sourcePayload,
+    suggestionPayload,
+  });
   const quoteRequest: TokenlessQuoteRequest = {
     audience: { admissionPolicyHash: opportunity.admissionPolicyHash, source: opportunity.audienceSource },
-    budget: {
-      attemptReserveAtomic: input.economics.attemptReserveAtomic,
-      bountyAtomic: input.economics.bountyAtomic,
-      feeBps: input.economics.feeBps,
-    },
+    ...preparation.quoteTerms,
     confirmedNoSensitiveData: publication.confirmedNoSensitiveData,
     dataClassification: publication.dataClassification,
-    question: canonicalQuestion(sourcePayload, suggestionPayload),
     ...(publication.redactionSummary ? { redactionSummary: publication.redactionSummary } : {}),
-    requestedPanelSize: input.economics.requestedPanelSize,
-    responseWindowSeconds: opportunity.responseWindowSeconds,
     visibility: publication.visibility,
   };
   const quote = await createTokenlessQuote(quoteRequest);
@@ -499,4 +538,4 @@ export async function getAdaptiveHumanReviewResult(input: {
   };
 }
 
-export const __adaptiveReviewOrchestrationTestUtils = { canonicalQuestion, normalizePublicationDeclaration, sha256 };
+export const __adaptiveReviewOrchestrationTestUtils = { normalizePublicationDeclaration, sha256 };

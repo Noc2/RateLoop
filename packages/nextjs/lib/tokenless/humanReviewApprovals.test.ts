@@ -39,7 +39,7 @@ function fixture() {
     bountyPerSeatAtomic: "1000000",
     panelSize: 2,
     baseBountyAtomic: "2000000",
-    maxFeeBps: 750,
+    feeBps: 750,
     feeAtomic: "150000",
     attemptReserveAtomic: "500000",
     maximumChargeAtomic: "2650000",

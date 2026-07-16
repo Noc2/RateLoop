@@ -26,6 +26,7 @@ import {
   validateAgentOAuthAuthorizationRequest,
 } from "~~/lib/tokenless/agentOAuth";
 import { createAgentPublishingPolicy, createWorkspace } from "~~/lib/tokenless/productCore";
+import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const originalSamplerKey = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY;
@@ -114,6 +115,29 @@ async function setup() {
     pairingId: issued.pairing.pairingId,
     body: { publishingPolicyId: publishing.policyId, allowedWorkflowKeys: ["support-reply"] },
   });
+  const reviewBinding = await seedReadyHumanReviewBinding({
+    workspaceId,
+    agentId: approved.agent.agentId,
+    agentVersionId: approved.agent.versionId,
+    policyId: approved.integration.reviewPolicyId,
+    policyVersion: 1,
+    actor: OWNER,
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_integrations
+          SET human_review_binding_id = ?, human_review_binding_version = ?
+          WHERE integration_id = ?`,
+    args: [reviewBinding.bindingId, reviewBinding.bindingVersion, approved.integration.integrationId],
+  });
+  const verified = await authenticateAgentMcpPrincipal(`Bearer ${issued.secret}`);
+  assert.equal(verified.kind, "integration");
+  if (verified.kind !== "integration") throw new Error("Integration principal expected.");
+  const storedCredential = await dbClient.execute({
+    sql: "SELECT api_key_id, token_family_id FROM tokenless_agent_integrations WHERE integration_id = ?",
+    args: [approved.integration.integrationId],
+  });
+  assert.equal(verified.principal.apiKeyId, storedCredential.rows[0]?.api_key_id);
+  assert.equal(storedCredential.rows[0]?.token_family_id, null);
   return { workspaceId, approved, audiencePolicyHash, token: issued.secret };
 }
 
@@ -277,12 +301,13 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
   });
   const requestReviewTool = tool("rateloop_request_review");
   assert.match(requestReviewTool?.description ?? "", /public RateLoop network/);
+  assert.match(requestReviewTool?.description ?? "", /derives the question, panel, response window, bounty, fee/);
   assert.match(requestReviewTool?.description ?? "", /private and hybrid assignment lanes are not available/);
+  assert.equal("economics" in (requestReviewTool?.inputSchema?.properties ?? {}), false);
   assert.deepEqual(requestReviewTool?.inputSchema?.required, [
     "opportunityId",
     "sourcePayload",
     "suggestionPayload",
-    "economics",
     "publication",
   ]);
   assert.deepEqual(requestReviewTool?.inputSchema?.properties?.publication, {
@@ -646,8 +671,10 @@ test("injects bound identity into review decisions and rejects caller spoofing",
       setupData.token,
     ),
   );
-  const decision = (await decided.json()).result.structuredContent;
-  assert.equal(decision.decision, "required");
+  const decidedBody = await decided.json();
+  assert.ok(decidedBody.result?.structuredContent, JSON.stringify(decidedBody));
+  const decision = decidedBody.result.structuredContent;
+  assert.equal(decision.decision, "required", JSON.stringify(decision));
   assert.equal(decision.policyFrozen, true);
   assert.equal(decision.stage, "calibrating");
   assert.equal(decision.executionProfile.primary.resolvedModel, "gpt-5.6-terra-2026-07-01");

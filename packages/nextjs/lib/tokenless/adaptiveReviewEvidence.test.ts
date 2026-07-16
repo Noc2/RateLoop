@@ -183,12 +183,6 @@ async function fixture() {
     opportunityId: decision.opportunityId,
     sourcePayload: SOURCE_PAYLOAD,
     suggestionPayload: SUGGESTION_PAYLOAD,
-    economics: {
-      requestedPanelSize: 5,
-      bountyAtomic: "25000000",
-      attemptReserveAtomic: "5000000",
-      feeBps: 750,
-    },
     publication: {
       visibility: "public",
       dataClassification: "synthetic",

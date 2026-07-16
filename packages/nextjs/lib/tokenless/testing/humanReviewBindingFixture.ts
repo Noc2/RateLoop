@@ -30,7 +30,7 @@ export async function seedReadyHumanReviewBinding(input: {
            compensation_mode,bounty_per_seat_atomic,configuration_status,profile_hash,created_by,created_at,
            approved_by,approved_at)
           VALUES (?,1,?,?,?,'Is this output correct and safe to use','Approve','Reject','optional',
-                  'public_network','public_or_test',NULL,NULL,NULL,NULL,1200,3,'usdc','1','ready',?,?,?,?,?)`,
+                  'public_network','public_or_test',NULL,NULL,NULL,NULL,1200,3,'usdc','1000000','ready',?,?,?,?,?)`,
     args: [
       profileId,
       input.workspaceId,

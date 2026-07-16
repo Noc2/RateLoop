@@ -44,7 +44,7 @@ export type HumanReviewDerivedEconomics = {
   bountyPerSeatAtomic: string;
   panelSize: number;
   baseBountyAtomic: string;
-  maxFeeBps: number;
+  feeBps: number;
   feeAtomic: string;
   attemptReserveAtomic: string;
   maximumChargeAtomic: string;
@@ -256,7 +256,7 @@ function economics(value: unknown): HumanReviewDerivedEconomics {
     "bountyPerSeatAtomic",
     "panelSize",
     "baseBountyAtomic",
-    "maxFeeBps",
+    "feeBps",
     "feeAtomic",
     "attemptReserveAtomic",
     "maximumChargeAtomic",
@@ -268,12 +268,12 @@ function economics(value: unknown): HumanReviewDerivedEconomics {
   const bountyPerSeatAtomic = atomic(root.bountyPerSeatAtomic, "bounty per seat");
   const panelSize = integer(root.panelSize, "economics panel size", 1, 100);
   const baseBountyAtomic = atomic(root.baseBountyAtomic, "base bounty");
-  const maxFeeBps = integer(root.maxFeeBps, "maximum fee", 0, 2_000);
+  const feeBps = integer(root.feeBps, "fee", 0, 2_000);
   const feeAtomic = atomic(root.feeAtomic, "fee");
   const attemptReserveAtomic = atomic(root.attemptReserveAtomic, "attempt reserve");
   const maximumChargeAtomic = atomic(root.maximumChargeAtomic, "maximum charge");
   const expectedBase = BigInt(bountyPerSeatAtomic) * BigInt(panelSize);
-  const expectedFee = (expectedBase * BigInt(maxFeeBps)) / 10_000n;
+  const expectedFee = (expectedBase * BigInt(feeBps)) / 10_000n;
   const expectedMaximum = expectedBase + expectedFee + BigInt(attemptReserveAtomic);
   if (
     BigInt(baseBountyAtomic) !== expectedBase ||
@@ -290,7 +290,7 @@ function economics(value: unknown): HumanReviewDerivedEconomics {
     bountyPerSeatAtomic,
     panelSize,
     baseBountyAtomic,
-    maxFeeBps,
+    feeBps,
     feeAtomic,
     attemptReserveAtomic,
     maximumChargeAtomic,

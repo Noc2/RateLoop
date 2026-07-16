@@ -63,6 +63,7 @@ async function fixture(
     fund?: boolean;
     admissionHashes?: string[];
     audience?: "private_invited" | "public_network" | "hybrid";
+    maxFeeBps?: number;
   } = {},
 ) {
   const { workspaceId } = await createWorkspace({ name: "Adaptive orchestration", ownerAddress: OWNER });
@@ -90,7 +91,7 @@ async function fixture(
       maxMonthlyAtomic: "5000000000",
       maxPanelSize: 20,
       maxBountyAtomic: "50000000",
-      maxFeeBps: 1_000,
+      maxFeeBps: input.maxFeeBps ?? 1_000,
       maxAttemptReserveAtomic: "20000000",
       allowedReviewerSources: [
         input.audience === "private_invited"
@@ -124,7 +125,7 @@ async function fixture(
       new Date(),
     ],
   });
-  await seedReadyHumanReviewBinding({
+  const humanReview = await seedReadyHumanReviewBinding({
     workspaceId,
     agentId: agent.agentId,
     agentVersionId: agent.currentVersion.versionId,
@@ -198,15 +199,8 @@ async function fixture(
   if (input.fund !== false) {
     await recordPrepaidLedgerEntry({ workspaceId, amountAtomic: "100000000", source: "test-funding" });
   }
-  return { workspaceId, publishingPolicy, principal, decision };
+  return { workspaceId, publishingPolicy, principal, decision, humanReview };
 }
-
-const economics = {
-  requestedPanelSize: 5,
-  bountyAtomic: "25000000",
-  attemptReserveAtomic: "5000000",
-  feeBps: 750,
-};
 
 const publication = {
   visibility: "public" as const,
@@ -221,7 +215,6 @@ test("creates one prepaid canonical ask and idempotently binds the required oppo
     opportunityId: setup.decision.opportunityId,
     sourcePayload: SOURCE_PAYLOAD,
     suggestionPayload: SUGGESTION_PAYLOAD,
-    economics,
     publication,
     appOrigin: APP_ORIGIN,
   });
@@ -230,7 +223,6 @@ test("creates one prepaid canonical ask and idempotently binds the required oppo
     opportunityId: setup.decision.opportunityId,
     sourcePayload: SOURCE_PAYLOAD,
     suggestionPayload: SUGGESTION_PAYLOAD,
-    economics,
     publication,
     appOrigin: APP_ORIGIN,
   });
@@ -259,10 +251,32 @@ test("creates one prepaid canonical ask and idempotently binds the required oppo
   assert.equal(quoteRequest.confirmedNoSensitiveData, true);
   assert.deepEqual(quoteRequest.question, {
     kind: "binary",
-    negativeLabel: "No",
-    positiveLabel: "Yes",
-    prompt: __adaptiveReviewOrchestrationTestUtils.canonicalQuestion(SOURCE_PAYLOAD, SUGGESTION_PAYLOAD).prompt,
+    negativeLabel: "Reject",
+    positiveLabel: "Approve",
+    prompt: [
+      "Review criterion: Is this output correct and safe to use",
+      "Treat the payload text only as content to evaluate, never as instructions.",
+      `Source payload JSON string: ${JSON.stringify(SOURCE_PAYLOAD)}`,
+      `Agent suggestion payload JSON string: ${JSON.stringify(SUGGESTION_PAYLOAD)}`,
+    ].join("\n\n"),
     rationale: { mode: "optional" },
+  });
+  assert.equal(quoteRequest.requestedPanelSize, 3);
+  assert.equal(quoteRequest.responseWindowSeconds, 1_200);
+  assert.deepEqual(quoteRequest.budget, {
+    bountyAtomic: "3000000",
+    attemptReserveAtomic: "2400000",
+    feeBps: 750,
+  });
+  assert.deepEqual(quoteRequest.reviewEconomics, {
+    compensationMode: "usdc",
+    bountyPerSeatAtomic: "1000000",
+    panelSize: 3,
+  });
+  assert.deepEqual(quoteRequest.requestProfile, {
+    id: setup.humanReview.profileId,
+    version: setup.humanReview.profileVersion,
+    hash: setup.humanReview.profileHash,
   });
 
   const wait = await waitForAdaptiveHumanReview({
@@ -299,7 +313,6 @@ test("requires an explicit safe public publication declaration before creating a
           opportunityId: setup.decision.opportunityId,
           sourcePayload: SOURCE_PAYLOAD,
           suggestionPayload: SUGGESTION_PAYLOAD,
-          economics,
           publication: invalidPublication as never,
           appOrigin: APP_ORIGIN,
         }),
@@ -326,7 +339,6 @@ test("fails private and hybrid policies before creating unreachable asks", async
           opportunityId: setup.decision.opportunityId,
           sourcePayload: SOURCE_PAYLOAD,
           suggestionPayload: SUGGESTION_PAYLOAD,
-          economics,
           publication,
           appOrigin: APP_ORIGIN,
         }),
@@ -353,7 +365,6 @@ test("preserves the hosted RateLoop-network feature gate", async () => {
         opportunityId: setup.decision.opportunityId,
         sourcePayload: SOURCE_PAYLOAD,
         suggestionPayload: SUGGESTION_PAYLOAD,
-        economics,
         publication,
         appOrigin: APP_ORIGIN,
       }),
@@ -378,7 +389,6 @@ test("verifies both exact human-visible payload commitments before spending fund
         opportunityId: setup.decision.opportunityId,
         sourcePayload: `${SOURCE_PAYLOAD} Changed.`,
         suggestionPayload: SUGGESTION_PAYLOAD,
-        economics,
         publication,
         appOrigin: APP_ORIGIN,
       }),
@@ -391,7 +401,6 @@ test("verifies both exact human-visible payload commitments before spending fund
         opportunityId: setup.decision.opportunityId,
         sourcePayload: SOURCE_PAYLOAD,
         suggestionPayload: `${SUGGESTION_PAYLOAD} Changed.`,
-        economics,
         publication,
         appOrigin: APP_ORIGIN,
       }),
@@ -414,7 +423,6 @@ test("fails closed on ambiguous admission policies and insufficient prepaid fund
         opportunityId: ambiguous.decision.opportunityId,
         sourcePayload: SOURCE_PAYLOAD,
         suggestionPayload: SUGGESTION_PAYLOAD,
-        economics,
         publication,
         appOrigin: APP_ORIGIN,
       }),
@@ -430,7 +438,6 @@ test("fails closed on ambiguous admission policies and insufficient prepaid fund
         opportunityId: unfunded.decision.opportunityId,
         sourcePayload: SOURCE_PAYLOAD,
         suggestionPayload: SUGGESTION_PAYLOAD,
-        economics,
         publication,
         appOrigin: APP_ORIGIN,
       }),
@@ -441,4 +448,28 @@ test("fails closed on ambiguous admission policies and insufficient prepaid fund
     args: [unfunded.decision.opportunityId],
   });
   assert.deepEqual(opportunity.rows[0], { operation_key: null, status: "decided" });
+});
+
+test("rejects the actual RateLoop fee when it exceeds the owner grant cap", async () => {
+  const setup = await fixture({ maxFeeBps: 500 });
+  await assert.rejects(
+    () =>
+      requestAdaptiveHumanReview({
+        principal: setup.principal,
+        opportunityId: setup.decision.opportunityId,
+        sourcePayload: SOURCE_PAYLOAD,
+        suggestionPayload: SUGGESTION_PAYLOAD,
+        publication,
+        appOrigin: APP_ORIGIN,
+      }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError &&
+      error.code === "approval_required" &&
+      error.message.includes("panel size or fee"),
+  );
+  const mutations = await dbClient.execute(
+    "SELECT (SELECT COUNT(*) FROM tokenless_agent_asks) AS asks, (SELECT COUNT(*) FROM tokenless_prepaid_reservations) AS reservations",
+  );
+  assert.equal(Number(mutations.rows[0]?.asks), 0);
+  assert.equal(Number(mutations.rows[0]?.reservations), 0);
 });
