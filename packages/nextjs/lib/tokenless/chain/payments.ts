@@ -169,6 +169,7 @@ function buildRoundTerms(row: QueryRow, config: TokenlessChainConfig, now: Date)
   const minimumAttemptReserve = attemptCompensation * BigInt(maximumCommits);
   const frozenProductTerms = JSON.parse(rowString(row, "terms_json") ?? "null") as {
     audiencePolicy?: unknown;
+    responseWindowSeconds?: unknown;
   } | null;
   if (!frozenProductTerms?.audiencePolicy) {
     throw new TokenlessServiceError(
@@ -178,6 +179,26 @@ function buildRoundTerms(row: QueryRow, config: TokenlessChainConfig, now: Date)
     );
   }
   const admissionPolicy = freezeAdmissionPolicy(frozenProductTerms.audiencePolicy);
+  const responseWindowSeconds = frozenProductTerms.responseWindowSeconds;
+  if (
+    typeof responseWindowSeconds !== "number" ||
+    !Number.isSafeInteger(responseWindowSeconds) ||
+    responseWindowSeconds < 1_200 ||
+    responseWindowSeconds > 86_400
+  ) {
+    throw new TokenlessServiceError(
+      "The frozen response window must be an integer from 1200 to 86400 seconds.",
+      409,
+      "invalid_response_window",
+    );
+  }
+  if (quote.responseWindowSeconds !== responseWindowSeconds) {
+    throw new TokenlessServiceError(
+      "The quoted and frozen response windows do not match.",
+      409,
+      "response_window_mismatch",
+    );
+  }
   if (quote.audience.admissionPolicyHash.toLowerCase() !== admissionPolicy.admissionPolicyHash.toLowerCase()) {
     throw new TokenlessServiceError(
       "The quoted audience does not match the frozen admission policy.",
@@ -207,7 +228,7 @@ function buildRoundTerms(row: QueryRow, config: TokenlessChainConfig, now: Date)
     throw new TokenlessServiceError("Payment and quote economics do not match exactly.", 409, "payment_terms_mismatch");
   }
   const nowSeconds = Math.floor(now.getTime() / 1_000);
-  const commitDeadline = nowSeconds + Math.max(quote.slo.estimatedSeconds, 300);
+  const commitDeadline = nowSeconds + responseWindowSeconds;
   const revealDeadline = commitDeadline + config.revealWindowSeconds;
   const beaconFailureDeadline = revealDeadline + config.beaconFailureGraceSeconds;
   const beaconRound = Math.floor((commitDeadline - QUICKNET_T_GENESIS_SECONDS) / QUICKNET_T_PERIOD_SECONDS) + 1;

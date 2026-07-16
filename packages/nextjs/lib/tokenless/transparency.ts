@@ -69,6 +69,7 @@ export type IndexedFinalizedEvidence = {
   };
   roundTerms: {
     admissionPolicyHash: string;
+    commitDeadline: string;
     contentId: string;
     termsHash: string;
   };
@@ -658,6 +659,7 @@ function validateFinalizedEvidence(value: IndexedFinalizedEvidence) {
   }
   if (
     !BYTES32.test(value.roundTerms.admissionPolicyHash) ||
+    !UNSIGNED_INTEGER.test(value.roundTerms.commitDeadline) ||
     !BYTES32.test(value.roundTerms.contentId) ||
     !BYTES32.test(value.roundTerms.termsHash)
   ) {
@@ -1252,6 +1254,7 @@ async function deriveFinalizedRoundEvidenceBundle(input: {
     },
     roundTerms: {
       admissionPolicyHash: exactBytes32(round.admissionPolicyHash, "Indexed admission policy hash"),
+      commitDeadline: unsignedValue(round.commitDeadline, "Indexed commit deadline"),
       contentId: exactBytes32(round.contentId, "Indexed content id"),
       termsHash: exactBytes32(round.termsHash, "Indexed terms hash"),
     },
@@ -1505,6 +1508,11 @@ export async function reviewAndPublishResult(input: { operationKey: string; appO
   const quote = JSON.parse(rowString(ask, "response_json")!) as Row;
   const request = JSON.parse(rowString(ask, "request_json")!) as Row;
   const audience = quote.audience as Row;
+  const commitDeadlineMilliseconds = Number(BigInt(evidence.roundTerms.commitDeadline) * 1_000n);
+  const commitDeadline = new Date(commitDeadlineMilliseconds);
+  if (!Number.isSafeInteger(commitDeadlineMilliseconds) || !Number.isFinite(commitDeadline.getTime())) {
+    throw new TokenlessServiceError("Frozen commit deadline is invalid.", 409, "invalid_round_evidence");
+  }
   const preferenceShareBps = Math.floor((evidence.upVotes * BPS_MAX) / evidence.revealCount);
   const intervalBps = wilsonIntervalBps(evidence.upVotes, evidence.revealCount);
   const terminal = evaluation.status !== "pending";
@@ -1515,6 +1523,10 @@ export async function reviewAndPublishResult(input: { operationKey: string; appO
     roundId: evidence.roundId,
     verdictStatus: evaluation.status,
     terminal,
+    responseWindowSeconds: quote.responseWindowSeconds,
+    commitDeadline: commitDeadline.toISOString(),
+    requestProfile: quote.requestProfile ?? null,
+    reviewEconomics: quote.reviewEconomics ?? null,
     economics: evidence.economics,
     audience: {
       admissionPolicyHash: audience.admissionPolicyHash,

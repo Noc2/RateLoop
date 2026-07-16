@@ -1077,6 +1077,7 @@ async function createQuestionRecords(input: {
     economics: input.quote.economics,
     panel: input.quote.panel,
     questionHash: contentHash,
+    responseWindowSeconds: input.quoteRequest.responseWindowSeconds,
     schemaVersion: input.quote.schemaVersion,
   };
   const termsJson = stableJson(terms);

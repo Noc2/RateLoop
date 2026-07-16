@@ -14,7 +14,7 @@ import {
 } from "@rateloop/sdk";
 import { eq } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
-import { db } from "~~/lib/db";
+import { db, dbClient } from "~~/lib/db";
 import { tokenlessAgentAsks, tokenlessAgentQuotes } from "~~/lib/db/schema";
 import { assertDataIngressPolicy } from "~~/lib/privacy/dataPolicy";
 
@@ -118,6 +118,17 @@ function assertQuoteRequest(value: unknown): TokenlessQuoteRequest {
     (request.requestedPanelSize ?? 0) > 500
   ) {
     throw new TokenlessServiceError("requestedPanelSize must be an integer from 3 to 500.", 400, "invalid_quote");
+  }
+  if (
+    !Number.isSafeInteger(request.responseWindowSeconds) ||
+    (request.responseWindowSeconds ?? 0) < 1_200 ||
+    (request.responseWindowSeconds ?? 0) > 86_400
+  ) {
+    throw new TokenlessServiceError(
+      "responseWindowSeconds must be an integer from 1200 to 86400.",
+      400,
+      "invalid_quote",
+    );
   }
   if (!request.budget) {
     throw new TokenlessServiceError("budget is required.", 400, "invalid_quote");
@@ -301,6 +312,9 @@ export async function createTokenlessQuote(value: unknown): Promise<TokenlessQuo
       minimumReveals: Math.max(3, Math.ceil(request.requestedPanelSize * 0.8)),
       requestedSize: request.requestedPanelSize,
     },
+    responseWindowSeconds: request.responseWindowSeconds,
+    requestProfile: request.requestProfile ?? null,
+    reviewEconomics: request.reviewEconomics ?? null,
     slo: {
       estimatedSeconds:
         request.audience.source === "rateloop_network" || request.audience.source === "hybrid" ? 3600 : 1800,
@@ -326,6 +340,47 @@ function continuation(operationKey: string, appOrigin: string, updatedAt: Date) 
   };
 }
 
+async function askCommitDeadline(ask: StoredAsk) {
+  if (ask.roundId === null) return null;
+  const result = await dbClient.execute({
+    sql: "SELECT round_terms_json FROM tokenless_chain_executions WHERE operation_key = ? LIMIT 1",
+    args: [ask.operationKey],
+  });
+  const rawTerms = result.rows[0]?.round_terms_json;
+  if (typeof rawTerms !== "string") {
+    throw new TokenlessServiceError("The ask has no frozen round deadline.", 409, "invalid_round_terms");
+  }
+  const terms = JSON.parse(rawTerms) as { commitDeadline?: unknown };
+  if (typeof terms.commitDeadline !== "string" || !ATOMIC_AMOUNT_PATTERN.test(terms.commitDeadline)) {
+    throw new TokenlessServiceError("The ask has an invalid frozen round deadline.", 409, "invalid_round_terms");
+  }
+  const milliseconds = Number(BigInt(terms.commitDeadline) * 1_000n);
+  const deadline = new Date(milliseconds);
+  if (!Number.isSafeInteger(milliseconds) || !Number.isFinite(deadline.getTime())) {
+    throw new TokenlessServiceError("The ask has an invalid frozen round deadline.", 409, "invalid_round_terms");
+  }
+  return deadline.toISOString();
+}
+
+async function askResponse(
+  ask: StoredAsk,
+  quote: TokenlessQuoteResponse,
+  appOrigin: string,
+): Promise<TokenlessAskResponse> {
+  return {
+    schemaVersion: TOKENLESS_SCHEMA_VERSION,
+    idempotencyKey: ask.idempotencyKey,
+    operationKey: ask.operationKey,
+    roundId: ask.roundId,
+    status: ask.status as TokenlessAskResponse["status"],
+    responseWindowSeconds: quote.responseWindowSeconds,
+    commitDeadline: await askCommitDeadline(ask),
+    requestProfile: quote.requestProfile,
+    reviewEconomics: quote.reviewEconomics,
+    continuation: continuation(ask.operationKey, appOrigin, ask.updatedAt),
+  };
+}
+
 export async function createTokenlessAsk(
   value: unknown,
   idempotencyHeader: string | null,
@@ -343,14 +398,9 @@ export async function createTokenlessAsk(
         "idempotency_conflict",
       );
     }
-    return {
-      schemaVersion: TOKENLESS_SCHEMA_VERSION,
-      idempotencyKey: existing.idempotencyKey,
-      operationKey: existing.operationKey,
-      roundId: existing.roundId,
-      status: existing.status as TokenlessAskResponse["status"],
-      continuation: continuation(existing.operationKey, appOrigin, existing.updatedAt),
-    };
+    const existingQuote = await readQuote(existing.quoteId);
+    if (!existingQuote) throw new TokenlessServiceError("Ask quote not found.", 409, "invalid_quote");
+    return askResponse(existing, parseTokenlessQuoteResponse(JSON.parse(existingQuote.responseJson)), appOrigin);
   }
 
   const storedQuote = await readQuote(request.quoteId);
@@ -387,14 +437,7 @@ export async function createTokenlessAsk(
     );
   }
 
-  return {
-    schemaVersion: TOKENLESS_SCHEMA_VERSION,
-    idempotencyKey: persisted.idempotencyKey,
-    operationKey: persisted.operationKey,
-    roundId: persisted.roundId,
-    status: persisted.status as TokenlessAskResponse["status"],
-    continuation: continuation(persisted.operationKey, appOrigin, persisted.updatedAt),
-  };
+  return askResponse(persisted, quote, appOrigin);
 }
 
 export async function waitForTokenlessAsk(

@@ -24,6 +24,7 @@ function quoteRequest() {
     budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
     question: { kind: "binary", prompt: "Ship this?", rationale: { mode: "optional" } },
     requestedPanelSize: 15,
+    responseWindowSeconds: 3_600,
   };
 }
 
@@ -40,6 +41,29 @@ test("tokenless quote itemizes bounty, fee, reserve, refund, and compensation", 
   assert.equal(quote.economics.refund.totalAtomic, "0");
   assert.equal(quote.economics.compensation.perAcceptedRevealCapAtomic, "333333");
   assert.equal(quote.economics.totalFundedAtomic, "31875000");
+  assert.equal(quote.responseWindowSeconds, 3_600);
+  assert.equal(quote.requestProfile, null);
+  assert.equal(quote.reviewEconomics, null);
+});
+
+test("quotes freeze explicit review timing, profile provenance, and economics", async () => {
+  const requestProfile = { id: "rrp_server", version: 3, hash: `sha256:${"ab".repeat(32)}` as const };
+  const reviewEconomics = { compensationMode: "usdc" as const, bountyPerSeatAtomic: "2500000", panelSize: 15 };
+  const quote = await createTokenlessQuote({
+    ...quoteRequest(),
+    responseWindowSeconds: 7_200,
+    requestProfile,
+    reviewEconomics,
+  });
+  assert.equal(quote.responseWindowSeconds, 7_200);
+  assert.deepEqual(quote.requestProfile, requestProfile);
+  assert.deepEqual(quote.reviewEconomics, reviewEconomics);
+  for (const responseWindowSeconds of [undefined, 1_199, 86_401, 3_600.5, "3600"]) {
+    await assert.rejects(
+      () => createTokenlessQuote({ ...quoteRequest(), responseWindowSeconds }),
+      (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_quote",
+    );
+  }
 });
 
 test("quotes canonicalize supported public question media", async () => {
@@ -114,6 +138,11 @@ test("asks are durable and idempotent, remain pending payment, and never synthes
   assert.equal(replay.operationKey, ask.operationKey);
   assert.equal(ask.status, "awaiting_payment");
   assert.equal(ask.roundId, null);
+  assert.equal(ask.responseWindowSeconds, 3_600);
+  assert.equal(ask.commitDeadline, null);
+  assert.equal(ask.requestProfile, null);
+  assert.equal(ask.reviewEconomics, null);
+  assert.deepEqual(replay, ask);
   const staleCursorStartedAt = Date.now();
   const staleCursorWait = await waitForTokenlessAsk(ask.operationKey, "https://tokenless.example", {
     cursor: "0",

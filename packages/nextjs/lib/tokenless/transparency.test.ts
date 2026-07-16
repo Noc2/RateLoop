@@ -372,6 +372,9 @@ beforeEach(async () => {
           label: "Customer-invited reviewers",
           source: "customer_invited",
         },
+        responseWindowSeconds: 3_600,
+        requestProfile: null,
+        reviewEconomics: null,
       }),
       new Date("2027-01-01T00:00:00Z"),
       NOW,
@@ -694,6 +697,7 @@ test("finalized evidence publishes once and webhook retries preserve idempotency
     validResponseCount: 5,
     verifiedIdentityCount: 5,
   });
+  assert.equal((storedEvidence.roundTerms as Record<string, unknown>).commitDeadline, roundTerms.commitDeadline);
   assert.equal((storedEvidence.chain as Record<string, unknown>).transactionHash, `0x${"cd".repeat(32)}`);
   assert.equal(inspection.analyticsReviews[0]?.decision, "publishable");
   assert.equal(inspection.analyticsReviews[0]?.evaluation_schema_version, "rateloop.post-round-integrity.v1");

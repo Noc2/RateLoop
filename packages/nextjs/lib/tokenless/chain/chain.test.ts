@@ -263,7 +263,29 @@ async function freezeAskAdmissionPolicy(operationKey: string) {
   });
 }
 
-async function walletAsk(options: { attemptReserveAtomic?: string; includeAdmissionPolicy?: boolean } = {}) {
+async function setAskFrozenResponseWindow(operationKey: string, responseWindowSeconds: unknown, present = true) {
+  const source = await dbClient.execute({
+    sql: `SELECT q.question_id, q.terms_json FROM tokenless_ask_ownership o
+          JOIN tokenless_question_records q ON q.question_id = o.question_id
+          WHERE o.operation_key = ? LIMIT 1`,
+    args: [operationKey],
+  });
+  const row = source.rows[0];
+  assert.ok(row);
+  const terms = JSON.parse(String(row.terms_json)) as Record<string, unknown>;
+  if (present) terms.responseWindowSeconds = responseWindowSeconds;
+  else delete terms.responseWindowSeconds;
+  const termsJson = stableJson(terms);
+  const termsHash = createHash("sha256").update(termsJson).digest("hex");
+  await dbClient.execute({
+    sql: "UPDATE tokenless_question_records SET terms_json = ?, terms_hash = ?, updated_at = ? WHERE question_id = ?",
+    args: [termsJson, termsHash, new Date(), row.question_id],
+  });
+}
+
+async function walletAsk(
+  options: { attemptReserveAtomic?: string; includeAdmissionPolicy?: boolean; responseWindowSeconds?: unknown } = {},
+) {
   const { workspaceId } = await createWorkspace({ name: "Wallet team", ownerAddress: FUNDER });
   const now = new Date();
   await dbClient.execute({
@@ -285,6 +307,7 @@ async function walletAsk(options: { attemptReserveAtomic?: string; includeAdmiss
     },
     question: { kind: "binary" as const, prompt: "Ship this?", rationale: { mode: "optional" as const } },
     requestedPanelSize: 15,
+    responseWindowSeconds: options.responseWindowSeconds ?? 7_200,
   });
   const request = {
     idempotencyKey: "chain:wallet:12345678",
@@ -309,6 +332,55 @@ test("legacy tier-only asks fail closed instead of being converted into capabili
     () => prepareChainPayment(operationKey, { config: config(), runtime: mockRuntime() }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "capability_policy_required",
   );
+  const executions = await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_chain_executions");
+  assert.equal(Number(executions.rows[0]?.count), 0);
+});
+
+test("the explicit frozen response window creates one immutable deadline across retries", async () => {
+  const operationKey = await walletAsk({ responseWindowSeconds: 7_200 });
+  const source = await dbClient.execute({
+    sql: `SELECT q.terms_json FROM tokenless_ask_ownership o
+          JOIN tokenless_question_records q ON q.question_id = o.question_id
+          WHERE o.operation_key = ? LIMIT 1`,
+    args: [operationKey],
+  });
+  assert.equal(JSON.parse(String(source.rows[0]?.terms_json)).responseWindowSeconds, 7_200);
+
+  const createdAt = new Date("2026-07-12T20:00:00.900Z");
+  const expectedDeadline = String(Math.floor(createdAt.getTime() / 1_000) + 7_200);
+  const first = await prepareChainPayment(operationKey, { config: config(), runtime: mockRuntime(), now: createdAt });
+  assert.equal(first.roundTerms.commitDeadline, expectedDeadline);
+  assert.notEqual(first.roundTerms.commitDeadline, String(Math.floor(createdAt.getTime() / 1_000) + 3_600));
+
+  const replay = await prepareChainPayment(operationKey, {
+    config: config(),
+    runtime: mockRuntime(),
+    now: new Date(createdAt.getTime() + 3_600_000),
+  });
+  assert.equal(replay.roundTerms.commitDeadline, expectedDeadline);
+  assert.equal((await getChainPaymentInstructions(operationKey)).roundTerms.commitDeadline, expectedDeadline);
+  const stored = await dbClient.execute({
+    sql: "SELECT round_terms_json FROM tokenless_chain_executions WHERE operation_key = ?",
+    args: [operationKey],
+  });
+  assert.equal(JSON.parse(String(stored.rows[0]?.round_terms_json)).commitDeadline, expectedDeadline);
+});
+
+test("chain preparation fails closed for missing or invalid frozen response windows", async () => {
+  const operationKey = await walletAsk();
+  for (const candidate of [
+    { present: false, value: undefined },
+    { present: true, value: 1_199 },
+    { present: true, value: 86_401 },
+    { present: true, value: 3_600.5 },
+    { present: true, value: "3600" },
+  ]) {
+    await setAskFrozenResponseWindow(operationKey, candidate.value, candidate.present);
+    await assert.rejects(
+      () => prepareChainPayment(operationKey, { config: config(), runtime: mockRuntime() }),
+      (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_response_window",
+    );
+  }
   const executions = await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_chain_executions");
   assert.equal(Number(executions.rows[0]?.count), 0);
 });
@@ -395,9 +467,26 @@ test("wallet confirmation accepts only the exact quoted RoundCreated evidence an
     { status: ask.rows[0]?.status, roundId: String(ask.rows[0]?.round_id) },
     { status: "open", roundId: "7" },
   );
-  const voucherRound = await dbClient.execute("SELECT round_id, content_id FROM tokenless_voucher_rounds");
+  const voucherRound = await dbClient.execute(
+    "SELECT round_id, content_id, voucher_deadline FROM tokenless_voucher_rounds",
+  );
   assert.equal(String(voucherRound.rows[0]?.round_id), "7");
   assert.equal(voucherRound.rows[0]?.content_id, expected.roundTerms.contentId);
+  assert.equal(
+    new Date(String(voucherRound.rows[0]?.voucher_deadline)).toISOString(),
+    new Date(Number(expected.roundTerms.commitDeadline) * 1_000).toISOString(),
+  );
+  const storedAsk = await dbClient.execute({
+    sql: "SELECT idempotency_key, request_json FROM tokenless_agent_asks WHERE operation_key = ?",
+    args: [operationKey],
+  });
+  const resumedAsk = await createTokenlessAsk(
+    JSON.parse(String(storedAsk.rows[0]?.request_json)),
+    String(storedAsk.rows[0]?.idempotency_key),
+    "https://tokenless.example",
+  );
+  assert.equal(resumedAsk.responseWindowSeconds, 7_200);
+  assert.equal(resumedAsk.commitDeadline, new Date(Number(expected.roundTerms.commitDeadline) * 1_000).toISOString());
 });
 
 test("receipt reconciliation rejects altered economics even when the panel and funder match", async () => {
@@ -465,6 +554,7 @@ test("x402 authorization attaches after exact terms without breaking ask idempot
     budget: { attemptReserveAtomic: "20000000", bountyAtomic: "25000000", feeBps: 750 },
     question: { kind: "binary" as const, prompt: "Fund this?", rationale: { mode: "optional" as const } },
     requestedPanelSize: 15,
+    responseWindowSeconds: 5_400,
   });
   const request = {
     idempotencyKey: "chain:x402:12345678",
