@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
-import { createAgentConnectionIntent } from "~~/lib/tokenless/agentConnectionIntents";
+import { SAFE_AGENT_CONNECTION_SCOPES, createAgentConnectionIntent } from "~~/lib/tokenless/agentConnectionIntents";
 import { AGENT_SETUP_SCREEN_STEPS, type AgentSetupScreenStep } from "~~/lib/tokenless/agentSetupNavigation";
 import { getHumanReviewConfigurationForOwner } from "~~/lib/tokenless/humanReviewConfiguration";
 import { recordWorkspaceSetupFunnelEvent } from "~~/lib/tokenless/onboardingObservability";
@@ -963,7 +963,8 @@ export async function completeWorkspaceAgentSetup(input: {
     const bindingId = rowString(setup, "human_review_binding_id");
     const bindingVersion = rowNumber(setup, "human_review_binding_version");
     const bindingResult = await client.query(
-      `SELECT b.selection_policy_id,b.selection_policy_version,b.publishing_policy_id,b.authority,
+      `SELECT b.selection_policy_id,b.selection_policy_version,b.publishing_policy_id,b.publishing_policy_version,
+              b.authority,
               r.audience,r.private_group_id,r.configuration_status,r.response_window_seconds,r.panel_size,
               g.status AS group_status
        FROM tokenless_agent_human_review_bindings b
@@ -989,6 +990,22 @@ export async function completeWorkspaceAgentSetup(input: {
     );
     const binding = bindingResult.rows[0] as Row | undefined;
     const requiresInvitedGroup = rowString(binding, "audience") !== "public_network";
+    const authority = rowString(binding, "authority");
+    const publishingPolicyId = rowString(binding, "publishing_policy_id");
+    const publishingPolicyVersion = rowOptionalNumber(binding, "publishing_policy_version");
+    const automaticAuthority = authority === "ask_automatically";
+    const integrationScopes = parseJson<string[]>(integration?.granted_scopes_json, []);
+    const allowedWorkflowKeys = parseJson<string[]>(integration?.allowed_workflow_keys_json, []);
+    const exactAutomaticGrant =
+      automaticAuthority &&
+      Boolean(publishingPolicyId && publishingPolicyVersion) &&
+      rowString(integration, "activation_mode") === "owner_approved" &&
+      rowString(integration, "publishing_policy_id") === publishingPolicyId &&
+      rowOptionalNumber(integration, "publishing_policy_version") === publishingPolicyVersion &&
+      integrationScopes.includes("panel:publish") &&
+      integrationScopes.includes("payment:submit") &&
+      allowedWorkflowKeys.length > 0;
+    const safeAuthority = authority === "check_only" || authority === "prepare_for_approval";
     const groupMatches = requiresInvitedGroup
       ? Boolean(
           groupId &&
@@ -998,8 +1015,8 @@ export async function completeWorkspaceAgentSetup(input: {
       : groupId === null && rowString(binding, "private_group_id") === null;
     if (
       !binding ||
-      rowString(binding, "authority") !== "check_only" ||
-      rowString(binding, "publishing_policy_id") !== null ||
+      (!safeAuthority && !exactAutomaticGrant) ||
+      (safeAuthority && publishingPolicyId !== null) ||
       rowString(binding, "configuration_status") !== "ready" ||
       rowOptionalNumber(binding, "response_window_seconds") === null ||
       rowOptionalNumber(binding, "panel_size") === null ||
@@ -1015,23 +1032,41 @@ export async function completeWorkspaceAgentSetup(input: {
     }
     policyId = rowString(binding, "selection_policy_id")!;
     policyVersion = rowNumber(binding, "selection_policy_version")!;
-    await client.query(
-      `UPDATE tokenless_agent_integrations
-       SET review_policy_id=$1,review_policy_version=$2,publishing_policy_id=NULL,
-           publishing_policy_version=NULL,activation_mode='preauthorized_safe',updated_at=$3
-       WHERE integration_id=$4`,
-      [policyId, policyVersion, now, rowString(integration, "integration_id")],
-    );
+    if (safeAuthority) {
+      await client.query(
+        `UPDATE tokenless_agent_integrations
+         SET review_policy_id=$1,review_policy_version=$2,publishing_policy_id=NULL,
+             publishing_policy_version=NULL,activation_mode='preauthorized_safe',
+             granted_scopes_json=$3,updated_at=$4
+         WHERE integration_id=$5`,
+        [
+          policyId,
+          policyVersion,
+          JSON.stringify(SAFE_AGENT_CONNECTION_SCOPES),
+          now,
+          rowString(integration, "integration_id"),
+        ],
+      );
+    } else {
+      await client.query(
+        `UPDATE tokenless_agent_integrations
+         SET review_policy_id=$1,review_policy_version=$2,updated_at=$3
+         WHERE integration_id=$4`,
+        [policyId, policyVersion, now, rowString(integration, "integration_id")],
+      );
+    }
     await client.query(
       `UPDATE tokenless_workspace_agent_setups
        SET status='completed',current_step='complete',primary_integration_id=$1,
-           review_policy_id=$2,review_policy_version=$3,publishing_policy_id=NULL,publishing_policy_version=NULL,
-           revision=$4,completed_at=$5,completed_by=$6,updated_at=$5
-       WHERE workspace_id=$7`,
+           review_policy_id=$2,review_policy_version=$3,publishing_policy_id=$4,publishing_policy_version=$5,
+           revision=$6,completed_at=$7,completed_by=$8,updated_at=$7
+       WHERE workspace_id=$9`,
       [
         rowString(integration, "integration_id"),
         policyId,
         policyVersion,
+        publishingPolicyId,
+        publishingPolicyVersion,
         expectedRevision + 1,
         now,
         access.actor,

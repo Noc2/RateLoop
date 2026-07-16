@@ -1,8 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
-import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
+import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
+import { appendAuditEvent } from "~~/lib/privacy/audit";
+import { OWNER_APPROVED_AGENT_SCOPES } from "~~/lib/tokenless/agentIntegrations";
 import {
   HUMAN_REVIEW_AUTHORITY_LEVELS,
   type HumanReviewAuthorityLevel,
@@ -60,6 +62,7 @@ export type PutHumanReviewConfigurationInput = {
 };
 
 const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/u;
+const WORKFLOW_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u;
 const REQUIRED_AUTOMATIC_SCOPES = ["panel:publish", "payment:submit"] as const;
 const SAFE_EVALUATION_SCOPES = ["evaluation:read", "review:decide"] as const;
 const OWNER_BODY_KEYS = new Set([
@@ -95,7 +98,12 @@ const OWNER_PROFILE_KEYS = new Set([
   "compensationMode",
   "bountyPerSeatAtomic",
 ]);
-const OWNER_GRANT_KEYS = new Set(["integrationId", "publishingPolicyId", "publishingPolicyVersion"]);
+const OWNER_GRANT_KEYS = new Set([
+  "integrationId",
+  "publishingPolicyId",
+  "publishingPolicyVersion",
+  "allowedWorkflowKeys",
+]);
 
 function configurationError(message: string, code = "invalid_human_review_configuration"): never {
   throw new TokenlessServiceError(message, 400, code);
@@ -279,22 +287,39 @@ async function exactAutomaticDelegation(
     agentId: string;
     agentVersionId: string;
     publishingPolicy: HumanReviewVersionReference;
+    now: Date;
   },
 ) {
   const result = await client.query(
-    `SELECT i.granted_scopes_json
+    `SELECT i.granted_scopes_json, i.allowed_workflow_keys_json
      FROM tokenless_agent_integrations i
-     LEFT JOIN tokenless_agent_oauth_token_families f ON f.token_family_id = i.token_family_id
+     JOIN tokenless_agent_connection_intents c ON c.intent_id = i.connection_intent_id
+     JOIN tokenless_agent_oauth_token_families f ON f.token_family_id = i.token_family_id
      WHERE i.workspace_id = $1 AND i.agent_id = $2 AND i.agent_version_id = $3
        AND i.publishing_policy_id = $4 AND i.publishing_policy_version = $5
        AND i.status = 'active' AND i.revoked_at IS NULL AND i.activation_mode = 'owner_approved'
-       AND (i.token_family_id IS NULL OR (f.status = 'active' AND f.revoked_at IS NULL))
+       AND c.status = 'connected'
+       AND f.status = 'active' AND f.revoked_at IS NULL AND f.absolute_expires_at > $6
      FOR SHARE`,
-    [input.workspaceId, input.agentId, input.agentVersionId, input.publishingPolicy.id, input.publishingPolicy.version],
+    [
+      input.workspaceId,
+      input.agentId,
+      input.agentVersionId,
+      input.publishingPolicy.id,
+      input.publishingPolicy.version,
+      input.now,
+    ],
   );
   return result.rows.some(row => {
     const scopes = parseStringArray((row as Row).granted_scopes_json, "delegation scopes");
-    return REQUIRED_AUTOMATIC_SCOPES.every(scope => scopes.includes(scope));
+    const workflows = parseStringArray((row as Row).allowed_workflow_keys_json, "delegation workflows");
+    return (
+      sameStringSet(scopes, OWNER_APPROVED_AGENT_SCOPES) &&
+      REQUIRED_AUTOMATIC_SCOPES.every(scope => scopes.includes(scope)) &&
+      workflows.length >= 1 &&
+      workflows.length <= 32 &&
+      workflows.every(workflow => WORKFLOW_PATTERN.test(workflow))
+    );
   });
 }
 
@@ -394,6 +419,7 @@ async function validateExactObjects(
         agentId: input.agentId,
         agentVersionId: input.agentVersionId,
         publishingPolicy: input.publishingPolicy,
+        now: input.now,
       }))
     ) {
       throw new TokenlessServiceError(
@@ -707,7 +733,12 @@ function normalizeOwnerMutation(value: unknown) {
   let publishingGrant:
     | undefined
     | null
-    | { integrationId: string; publishingPolicyId: string; publishingPolicyVersion: number };
+    | {
+        integrationId: string;
+        publishingPolicyId: string;
+        publishingPolicyVersion: number;
+        allowedWorkflowKeys: string[];
+      };
   if ("publishingGrant" in body) {
     if (body.publishingGrant === null) publishingGrant = null;
     else {
@@ -718,19 +749,35 @@ function normalizeOwnerMutation(value: unknown) {
         typeof grant.publishingPolicyId !== "string" ||
         !grant.publishingPolicyId.trim() ||
         !Number.isSafeInteger(grant.publishingPolicyVersion) ||
-        Number(grant.publishingPolicyVersion) < 1
+        Number(grant.publishingPolicyVersion) < 1 ||
+        !Array.isArray(grant.allowedWorkflowKeys) ||
+        grant.allowedWorkflowKeys.length < 1 ||
+        grant.allowedWorkflowKeys.length > 32
       ) {
         configurationError(
-          "publishingGrant must identify one exact owner-configured integration and policy version.",
+          "publishingGrant must identify one exact integration, policy version, and workflow set.",
           "invalid_human_review_owner_request",
         );
+      }
+      const allowedWorkflowKeys = [
+        ...new Set(grant.allowedWorkflowKeys.map(entry => (typeof entry === "string" ? entry.trim() : ""))),
+      ].sort();
+      if (allowedWorkflowKeys.some(entry => !WORKFLOW_PATTERN.test(entry))) {
+        configurationError("publishingGrant workflows are invalid.", "invalid_human_review_owner_request");
       }
       publishingGrant = {
         integrationId: grant.integrationId.trim(),
         publishingPolicyId: grant.publishingPolicyId.trim(),
         publishingPolicyVersion: Number(grant.publishingPolicyVersion),
+        allowedWorkflowKeys,
       };
     }
+  }
+  if (publishingGrant && authority !== "ask_automatically") {
+    configurationError(
+      "A publishing grant may be activated only for automatic review asks.",
+      "human_review_publishing_grant_requires_automatic",
+    );
   }
   return {
     authority,
@@ -821,7 +868,34 @@ async function currentAgentVersion(client: PoolClient, workspaceId: string, agen
   return { agentVersionId, displayName: rowString(row, "display_name")! };
 }
 
-async function exactPublishingGrant(
+type PreparedPublishingGrant = {
+  integrationId: string;
+  publishingPolicy: HumanReviewVersionReference;
+  allowedWorkflowKeys: string[];
+  grantedScopes: string[];
+  policyCaps: {
+    maxPanelAtomic: string;
+    maxDailyAtomic: string;
+    maxMonthlyAtomic: string;
+    maxPanelSize: number;
+    maxBountyAtomic: string;
+    maxFeeBps: number;
+    maxAttemptReserveAtomic: string;
+  };
+  previousGrant: {
+    activationMode: string;
+    reviewPolicy: HumanReviewVersionReference;
+    publishingPolicy: HumanReviewVersionReference | null;
+    allowedWorkflowKeys: string[];
+    grantedScopes: string[];
+  };
+};
+
+function sameStringSet(left: string[], right: readonly string[]) {
+  return stableJson([...new Set(left)].sort()) === stableJson([...new Set(right)].sort());
+}
+
+async function prepareExactPublishingGrant(
   client: PoolClient,
   input: {
     workspaceId: string;
@@ -830,52 +904,148 @@ async function exactPublishingGrant(
     integrationId: string;
     publishingPolicyId: string;
     publishingPolicyVersion: number;
+    allowedWorkflowKeys: string[];
     now: Date;
   },
-) {
-  const result = await client.query(
-    `SELECT i.integration_id, i.activation_mode, i.granted_scopes_json
+): Promise<PreparedPublishingGrant> {
+  const integrationResult = await client.query(
+    `SELECT i.*, c.status AS connection_status, f.status AS token_family_status,
+            f.revoked_at AS token_family_revoked_at, f.absolute_expires_at AS token_family_expires_at
      FROM tokenless_agent_integrations i
-     JOIN tokenless_agent_publishing_policies p
-       ON p.workspace_id = i.workspace_id AND p.policy_id = i.publishing_policy_id
-      AND p.version = i.publishing_policy_version
-     LEFT JOIN tokenless_agent_oauth_token_families f ON f.token_family_id = i.token_family_id
      LEFT JOIN tokenless_agent_connection_intents c ON c.intent_id = i.connection_intent_id
+     LEFT JOIN tokenless_agent_oauth_token_families f ON f.token_family_id = i.token_family_id
      WHERE i.workspace_id = $1 AND i.agent_id = $2 AND i.agent_version_id = $3
-       AND i.integration_id = $4 AND i.publishing_policy_id = $5 AND i.publishing_policy_version = $6
-       AND i.status = 'active' AND i.revoked_at IS NULL AND i.activation_mode = 'owner_approved'
-       AND p.enabled = true AND p.revoked_at IS NULL AND p.effective_at <= $7
-       AND (p.expires_at IS NULL OR p.expires_at > $7)
-       AND (i.connection_intent_id IS NULL OR c.status = 'connected')
-       AND (i.token_family_id IS NULL OR (f.status = 'active' AND f.revoked_at IS NULL AND f.absolute_expires_at > $7))
-     FOR SHARE`,
-    [
-      input.workspaceId,
-      input.agentId,
-      input.agentVersionId,
-      input.integrationId,
-      input.publishingPolicyId,
-      input.publishingPolicyVersion,
-      input.now,
-    ],
+       AND i.integration_id = $4 AND i.status = 'active' AND i.revoked_at IS NULL
+     FOR UPDATE`,
+    [input.workspaceId, input.agentId, input.agentVersionId, input.integrationId],
   );
-  const row = result.rows[0] as Row | undefined;
-  if (!row) {
+  const integration = integrationResult.rows[0] as Row | undefined;
+  if (!integration) {
     throw new TokenlessServiceError(
-      "The exact owner-configured publishing grant is not active for this agent version.",
+      "The publishing grant does not belong to this workspace and agent version.",
       409,
       "human_review_publishing_grant_mismatch",
     );
   }
-  const scopes = parseStringArray(row.granted_scopes_json, "publishing grant scopes");
-  if (!REQUIRED_AUTOMATIC_SCOPES.every(scope => scopes.includes(scope))) {
+  const familyExpiresAt = new Date(String(integration.token_family_expires_at));
+  if (
+    !rowString(integration, "connection_intent_id") ||
+    !rowString(integration, "token_family_id") ||
+    !rowString(integration, "oauth_client_id") ||
+    !rowString(integration, "oauth_subject_principal_id") ||
+    rowString(integration, "connection_status") !== "connected" ||
+    !["preauthorized_safe", "owner_approved"].includes(rowString(integration, "activation_mode") ?? "") ||
+    rowString(integration, "token_family_status") !== "active" ||
+    rowString(integration, "token_family_revoked_at") !== null ||
+    !Number.isFinite(familyExpiresAt.getTime()) ||
+    familyExpiresAt <= input.now
+  ) {
     throw new TokenlessServiceError(
-      "The exact owner-configured publishing grant cannot publish and pay for review requests.",
+      "Automatic review asks require an active, connected OAuth agent integration.",
       409,
-      "human_review_publishing_grant_incomplete",
+      "human_review_publishing_grant_not_supported",
     );
   }
-  return { id: input.publishingPolicyId, version: input.publishingPolicyVersion };
+  const policyResult = await client.query(
+    `SELECT policy_id, version, max_panel_atomic, max_daily_atomic, max_monthly_atomic,
+            max_panel_size, max_bounty_atomic, max_fee_bps, max_attempt_reserve_atomic
+     FROM tokenless_agent_publishing_policies
+     WHERE workspace_id = $1 AND policy_id = $2 AND version = $3
+       AND enabled = true AND revoked_at IS NULL AND effective_at <= $4
+       AND (expires_at IS NULL OR expires_at > $4)
+     FOR SHARE`,
+    [input.workspaceId, input.publishingPolicyId, input.publishingPolicyVersion, input.now],
+  );
+  const policy = policyResult.rows[0] as Row | undefined;
+  if (!policy) {
+    throw new TokenlessServiceError(
+      "The exact publishing-policy version is not active in this workspace.",
+      409,
+      "human_review_publishing_policy_mismatch",
+    );
+  }
+  const previousPolicyId = rowString(integration, "publishing_policy_id");
+  return {
+    integrationId: input.integrationId,
+    publishingPolicy: { id: input.publishingPolicyId, version: input.publishingPolicyVersion },
+    allowedWorkflowKeys: input.allowedWorkflowKeys,
+    grantedScopes: [...OWNER_APPROVED_AGENT_SCOPES],
+    policyCaps: {
+      maxPanelAtomic: rowString(policy, "max_panel_atomic")!,
+      maxDailyAtomic: rowString(policy, "max_daily_atomic")!,
+      maxMonthlyAtomic: rowString(policy, "max_monthly_atomic")!,
+      maxPanelSize: rowInteger(policy, "max_panel_size"),
+      maxBountyAtomic: rowString(policy, "max_bounty_atomic")!,
+      maxFeeBps: rowBasisPoints(policy, "max_fee_bps"),
+      maxAttemptReserveAtomic: rowString(policy, "max_attempt_reserve_atomic")!,
+    },
+    previousGrant: {
+      activationMode: rowString(integration, "activation_mode")!,
+      reviewPolicy: {
+        id: rowString(integration, "review_policy_id")!,
+        version: rowInteger(integration, "review_policy_version"),
+      },
+      publishingPolicy:
+        previousPolicyId === null
+          ? null
+          : { id: previousPolicyId, version: rowInteger(integration, "publishing_policy_version") },
+      allowedWorkflowKeys: parseStringArray(integration.allowed_workflow_keys_json, "allowed workflows"),
+      grantedScopes: parseStringArray(integration.granted_scopes_json, "publishing grant scopes"),
+    },
+  };
+}
+
+async function activatePreparedPublishingGrant(
+  client: PoolClient,
+  input: {
+    workspaceId: string;
+    agentId: string;
+    agentVersionId: string;
+    selectionPolicy: HumanReviewVersionReference;
+    grant: PreparedPublishingGrant;
+    now: Date;
+  },
+) {
+  const previous = input.grant.previousGrant;
+  const unchanged =
+    previous.activationMode === "owner_approved" &&
+    previous.reviewPolicy.id === input.selectionPolicy.id &&
+    previous.reviewPolicy.version === input.selectionPolicy.version &&
+    previous.publishingPolicy?.id === input.grant.publishingPolicy.id &&
+    previous.publishingPolicy?.version === input.grant.publishingPolicy.version &&
+    sameStringSet(previous.allowedWorkflowKeys, input.grant.allowedWorkflowKeys) &&
+    sameStringSet(previous.grantedScopes, input.grant.grantedScopes);
+  if (unchanged) return false;
+  const updated = await client.query(
+    `UPDATE tokenless_agent_integrations
+     SET review_policy_id = $1, review_policy_version = $2,
+         publishing_policy_id = $3, publishing_policy_version = $4,
+         allowed_workflow_keys_json = $5, activation_mode = 'owner_approved',
+         granted_scopes_json = $6, updated_at = $7
+     WHERE workspace_id = $8 AND agent_id = $9 AND agent_version_id = $10
+       AND integration_id = $11 AND status = 'active' AND revoked_at IS NULL`,
+    [
+      input.selectionPolicy.id,
+      input.selectionPolicy.version,
+      input.grant.publishingPolicy.id,
+      input.grant.publishingPolicy.version,
+      stableJson(input.grant.allowedWorkflowKeys),
+      stableJson(input.grant.grantedScopes),
+      input.now,
+      input.workspaceId,
+      input.agentId,
+      input.agentVersionId,
+      input.grant.integrationId,
+    ],
+  );
+  if (updated.rowCount !== 1) {
+    throw new TokenlessServiceError(
+      "The publishing integration changed while the grant was being activated.",
+      409,
+      "human_review_publishing_grant_mismatch",
+    );
+  }
+  return true;
 }
 
 async function resolvePrivateGroupTuple(
@@ -1087,6 +1257,8 @@ export async function putHumanReviewConfigurationForOwner(input: PutHumanReviewC
   const body = normalizeOwnerMutation(input.body);
   const now = new Date();
   const client = await dbPool.connect();
+  let saved: HumanReviewConfiguration | undefined;
+  let activatedGrant: PreparedPublishingGrant | undefined;
   try {
     await client.query("BEGIN");
     const agent = await currentAgentVersion(client, input.workspaceId, input.agentId, true);
@@ -1115,15 +1287,17 @@ export async function putHumanReviewConfigurationForOwner(input: PutHumanReviewC
           }
         : null
       : null;
+    let preparedGrant: PreparedPublishingGrant | undefined;
     if (body.publishingGrant === null) publishingPolicy = null;
     else if (body.publishingGrant) {
-      publishingPolicy = await exactPublishingGrant(client, {
+      preparedGrant = await prepareExactPublishingGrant(client, {
         workspaceId: input.workspaceId,
         agentId: input.agentId,
         agentVersionId: agent.agentVersionId,
         ...body.publishingGrant,
         now,
       });
+      publishingPolicy = preparedGrant.publishingPolicy;
     }
     const group = await resolvePrivateGroupTuple(client, {
       workspaceId: input.workspaceId,
@@ -1158,6 +1332,17 @@ export async function putHumanReviewConfigurationForOwner(input: PutHumanReviewC
       policy: selection,
       now,
     });
+    if (preparedGrant) {
+      const changed = await activatePreparedPublishingGrant(client, {
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        agentVersionId: agent.agentVersionId,
+        selectionPolicy,
+        grant: preparedGrant,
+        now,
+      });
+      if (changed) activatedGrant = preparedGrant;
+    }
     if (currentBinding) {
       const current = configurationFromRow(currentBinding);
       const unchanged =
@@ -1169,30 +1354,87 @@ export async function putHumanReviewConfigurationForOwner(input: PutHumanReviewC
         current.publishingPolicy?.version === publishingPolicy?.version &&
         current.authority === body.authority;
       if (unchanged) {
-        await client.query("COMMIT");
-        return { configuration: current };
+        saved = current;
       }
     }
-    const configuration = await saveHumanReviewConfigurationInTransaction(client, {
-      actor,
-      workspaceId: input.workspaceId,
-      agentId: input.agentId,
-      agentVersionId: agent.agentVersionId,
-      expectedBindingVersion: body.expectedBindingVersion,
-      selectionPolicy,
-      requestProfile,
-      publishingPolicy,
-      authority: body.authority,
-      now,
-    });
+    if (!saved) {
+      saved = await saveHumanReviewConfigurationInTransaction(client, {
+        actor,
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        agentVersionId: agent.agentVersionId,
+        expectedBindingVersion: body.expectedBindingVersion,
+        selectionPolicy,
+        requestProfile,
+        publishingPolicy,
+        authority: body.authority,
+        now,
+      });
+    }
+    if (activatedGrant) {
+      const details = {
+        source: "browser_owner_human_review_configuration",
+        explicitBrowserConsent: true,
+        previousGrant: activatedGrant.previousGrant,
+        activeGrant: {
+          agentId: input.agentId,
+          agentVersionId: agent.agentVersionId,
+          selectionPolicy,
+          humanReviewBinding: { id: saved.bindingId, version: saved.version },
+          publishingPolicy: activatedGrant.publishingPolicy,
+          publishingPolicyCaps: activatedGrant.policyCaps,
+          allowedWorkflowKeys: activatedGrant.allowedWorkflowKeys,
+          grantedScopes: activatedGrant.grantedScopes,
+        },
+      };
+      await client.query(
+        `INSERT INTO tokenless_agent_integration_events
+         (event_id,integration_id,workspace_id,event_type,actor_type,actor_reference,details_json,created_at)
+         VALUES ($1,$2,$3,'scope_upgraded','account',$4,$5,$6)`,
+        [
+          `agie_${randomUUID().replaceAll("-", "")}`,
+          activatedGrant.integrationId,
+          input.workspaceId,
+          actor,
+          stableJson(details),
+          now,
+        ],
+      );
+    }
     await client.query("COMMIT");
-    return { configuration };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
   } finally {
     client.release();
   }
+  if (!saved) throw new Error("Human-review configuration save did not complete.");
+  if (activatedGrant) {
+    await appendAuditEvent({
+      action: "agent.integration_scope_upgraded",
+      actorKind: isRateLoopPrincipalId(actor) ? "principal" : "account",
+      actorReference: actor,
+      assuranceMethod: "rateloop_session",
+      metadata: {
+        agentId: input.agentId,
+        agentVersionId: saved.agentVersionId,
+        humanReviewBindingId: saved.bindingId,
+        humanReviewBindingVersion: saved.version,
+        publishingPolicyId: activatedGrant.publishingPolicy.id,
+        publishingPolicyVersion: activatedGrant.publishingPolicy.version,
+        allowedWorkflowKeys: activatedGrant.allowedWorkflowKeys,
+        grantedScopes: activatedGrant.grantedScopes,
+        explicitBrowserConsent: true,
+      },
+      purpose: "automatic_human_review_publishing_grant",
+      reason: "workspace_administrator_human_review_consent",
+      result: "success",
+      targetId: activatedGrant.integrationId,
+      targetKind: "agent_integration",
+      workspaceId: input.workspaceId,
+    });
+  }
+  return { configuration: saved };
 }
 
 function connectionFromRow(row: Row) {

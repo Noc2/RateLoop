@@ -15,6 +15,7 @@ import {
   type ReviewCompensationFormValues,
   buildReviewCompensationConfiguration,
   reviewCompensationFormValues,
+  usdcAtomicToDecimal,
 } from "./reviewCompensation";
 import {
   REVIEW_ANSWER_LABEL_MAX_LENGTH,
@@ -40,7 +41,7 @@ import {
 import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
 import { DurationInput } from "~~/components/ui/DurationInput";
 import { type AgentSetupScreenStep, agentSetupUrl } from "~~/lib/tokenless/agentSetupNavigation";
-import type { WorkspaceAgentSetupView } from "~~/lib/tokenless/workspaceAgentSetup";
+import type { AgentSetupReviewDraft, WorkspaceAgentSetupView } from "~~/lib/tokenless/workspaceAgentSetup";
 
 type SetupResponse = WorkspaceAgentSetupView;
 
@@ -76,6 +77,32 @@ const REVIEW_AUTHORITY_OPTIONS = [
     "Send requests within the saved limits. Requires a separate owner-approved publishing and funding grant.",
   ],
 ] as const;
+
+type PendingReviewConfirmation = {
+  fingerprint: string;
+  selection: AgentSetupReviewDraft["selection"];
+  requestProfile: Omit<AgentSetupReviewDraft["requestProfile"], "configurationStatus">;
+  authority: AgentSetupReviewDraft["authority"];
+};
+
+function reviewAudienceSummary(audience: AgentSetupReviewDraft["requestProfile"]["audience"]) {
+  if (audience === "public_network") return "RateLoop public network; public, synthetic, or redacted material only";
+  if (audience === "hybrid") return "Invited reviewers and the public RateLoop network; public-safe material only";
+  return "Invited reviewers only; private workspace material";
+}
+
+function reviewAuthoritySummary(authority: AgentSetupReviewDraft["authority"]) {
+  if (authority === "prepare_for_approval") return "Prepare each required request and wait for owner approval";
+  if (authority === "ask_automatically") return "Send within the exact owner-approved publishing and funding grant";
+  return "Check whether review is required; do not prepare, send, or spend";
+}
+
+function formatResponseWindow(seconds: number | null) {
+  if (seconds === null) return "Not configured";
+  if (seconds % 3_600 === 0) return `${seconds / 3_600} ${seconds === 3_600 ? "hour" : "hours"}`;
+  if (seconds % 60 === 0) return `${seconds / 60} minutes`;
+  return `${seconds} seconds`;
+}
 
 async function readJson(response: Response) {
   const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
@@ -116,10 +143,19 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   const [reviewCompensation, setReviewCompensation] = useState<ReviewCompensationFormValues>(() =>
     reviewCompensationFormValues(initialSetup.reviewDraft?.requestProfile, initialSetup.reviewDraft?.authority),
   );
+  const [pendingReviewConfirmation, setPendingReviewConfirmation] = useState<PendingReviewConfirmation | null>(null);
+  const [confirmedReviewFingerprint, setConfirmedReviewFingerprint] = useState<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const connectionMessageRef = useRef<HTMLTextAreaElement>(null);
   const focusOnNavigation = useRef(false);
   const currentStep = setup.currentStep === "complete" ? "people" : setup.currentStep;
+  const currentReviewFingerprint = JSON.stringify({
+    reviewAudience,
+    reviewCompensation,
+    reviewCriterion,
+    reviewFrequency,
+    reviewTiming,
+  });
 
   const loadStep = useCallback(
     async (step: AgentSetupScreenStep, options?: { replace?: boolean; focus?: boolean }) => {
@@ -355,7 +391,6 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       setError("The connected agent details are unavailable. Reconnect the agent and try again.");
       return;
     }
-    setBusy(true);
     setError(null);
     try {
       const draft = setup.reviewDraft;
@@ -365,6 +400,21 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       const criterionProfile = buildReviewCriterionRequestProfile(audienceProfile, reviewCriterion);
       const timingProfile = buildReviewTimingRequestProfile(criterionProfile, reviewTiming);
       const { requestProfile, authority } = buildReviewCompensationConfiguration(timingProfile, reviewCompensation);
+      if (pendingReviewConfirmation?.fingerprint !== currentReviewFingerprint) {
+        setPendingReviewConfirmation({
+          fingerprint: currentReviewFingerprint,
+          selection,
+          requestProfile,
+          authority,
+        });
+        setConfirmedReviewFingerprint(null);
+        setAnnouncement("Review the exact human-review terms, then confirm and save them.");
+        return;
+      }
+      if (confirmedReviewFingerprint !== currentReviewFingerprint) {
+        throw new Error("Confirm the exact human-review terms before saving them.");
+      }
+      setBusy(true);
       const audience = requestProfile.audience;
       let privateGroupId =
         audience === "public_network" ? null : (requestProfile.privateGroupId ?? setup.privateGroupId);
@@ -967,13 +1017,82 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 </label>
               ))}
             </fieldset>
-            <p className="mt-4 text-xs text-base-content/55">
-              The safe connection does not assign or deliver work to reviewers.
-            </p>
+            {pendingReviewConfirmation?.fingerprint === currentReviewFingerprint ? (
+              <section
+                aria-labelledby="agent-setup-review-consent-heading"
+                className="mt-6 rounded-xl border border-primary/30 bg-primary/5 p-4"
+              >
+                <h2 id="agent-setup-review-consent-heading" className="font-medium">
+                  Confirm these exact terms
+                </h2>
+                <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                  <div>
+                    <dt className="text-base-content/55">When</dt>
+                    <dd>{reviewFrequencySummary(pendingReviewConfirmation.selection)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-base-content/55">Who and what</dt>
+                    <dd>{reviewAudienceSummary(pendingReviewConfirmation.requestProfile.audience)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-base-content/55">Question</dt>
+                    <dd>{pendingReviewConfirmation.requestProfile.criterion}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-base-content/55">Answers</dt>
+                    <dd>
+                      {pendingReviewConfirmation.requestProfile.positiveLabel} /{` `}
+                      {pendingReviewConfirmation.requestProfile.negativeLabel}; rationale{` `}
+                      {pendingReviewConfirmation.requestProfile.rationaleMode}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-base-content/55">Round</dt>
+                    <dd>
+                      {pendingReviewConfirmation.requestProfile.panelSize} reviewers;{` `}
+                      {formatResponseWindow(pendingReviewConfirmation.requestProfile.responseWindowSeconds)} to answer
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-base-content/55">Base payment</dt>
+                    <dd>
+                      {pendingReviewConfirmation.requestProfile.compensationMode === "usdc" &&
+                      pendingReviewConfirmation.requestProfile.bountyPerSeatAtomic
+                        ? `${usdcAtomicToDecimal(pendingReviewConfirmation.requestProfile.bountyPerSeatAtomic)} USDC per accepted reviewer`
+                        : "Unpaid; no base reviewer bounty"}
+                    </dd>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <dt className="text-base-content/55">Agent authority</dt>
+                    <dd>{reviewAuthoritySummary(pendingReviewConfirmation.authority)}</dd>
+                  </div>
+                </dl>
+                <label className="mt-4 flex gap-3 border-t border-white/10 pt-4 text-sm">
+                  <input
+                    className="checkbox checkbox-sm mt-0.5"
+                    type="checkbox"
+                    checked={confirmedReviewFingerprint === currentReviewFingerprint}
+                    onChange={event =>
+                      setConfirmedReviewFingerprint(event.target.checked ? currentReviewFingerprint : null)
+                    }
+                    required
+                  />
+                  <span>I confirm this exact human-review configuration.</span>
+                </label>
+              </section>
+            ) : (
+              <p className="mt-4 text-xs text-base-content/55">
+                Review the exact terms before saving. No request is published and no funds are spent during setup.
+              </p>
+            )}
             <div className="mt-6 flex items-center gap-3">
               {backButton}
               <button className="rateloop-gradient-action px-5" disabled={busy}>
-                {busy ? "Saving…" : "Continue"}
+                {busy
+                  ? "Saving…"
+                  : pendingReviewConfirmation?.fingerprint === currentReviewFingerprint
+                    ? "Save and continue"
+                    : "Review settings"}
               </button>
             </div>
           </form>
@@ -1088,8 +1207,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     </p>
                   ) : null}
                   <p className="mt-2">
-                    <span className="text-base-content/55">Authority:</span> Safe connection; no autonomous publishing
-                    or spending
+                    <span className="text-base-content/55">Authority:</span>{" "}
+                    {reviewAuthoritySummary(setup.reviewDraft?.authority ?? "check_only")}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">

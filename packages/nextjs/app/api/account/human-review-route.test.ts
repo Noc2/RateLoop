@@ -197,11 +197,14 @@ test("strict owner input and stale revisions fail without leaving partial object
 
   const unconfiguredGrant = ownerBody(setup.group.groupId, null) as ReturnType<typeof ownerBody> & {
     publishingGrant?: unknown;
+    authority: string;
   };
+  unconfiguredGrant.authority = "ask_automatically";
   unconfiguredGrant.publishingGrant = {
     integrationId: "agi_not_configured",
     publishingPolicyId: "agpol_not_configured",
     publishingPolicyVersion: 1,
+    allowedWorkflowKeys: ["general-assistance"],
   };
   const grantRejected = await put(unconfiguredGrant);
   assert.equal(grantRejected.status, 409);

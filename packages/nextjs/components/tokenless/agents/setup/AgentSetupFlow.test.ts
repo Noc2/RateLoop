@@ -42,7 +42,7 @@ test("guided setup renders one stage at a time and keeps implementation details 
   assert.match(flowSource, /\/agents\/\$\{encodeURIComponent\(connectedAgent\.agentId\)\}\/human-review/);
   assert.match(flowSource, /expectedBindingVersion: draft\.bindingRevision/);
   assert.match(flowSource, /bindingRevision: ownerView\.bindingRevision/);
-  assert.match(flowSource, /no autonomous publishing\s+or spending/i);
+  assert.match(flowSource, /do not prepare, send, or spend/i);
   assert.doesNotMatch(flowSource, /Audience policy binding|admission policy hash/i);
 });
 
@@ -65,7 +65,7 @@ test("review setup distinguishes a saved policy decision from delivery authority
   assert.match(flowSource, /Review these risk levels/);
   assert.match(flowSource, /Review below confidence \(%\)/);
   assert.match(flowSource, /buildReviewFrequencySelection\(draft\.selection, reviewFrequency\)/);
-  assert.match(flowSource, /safe connection\s+does not assign or deliver work to reviewers/i);
+  assert.match(flowSource, /No request is published and no funds are spent during setup/i);
   assert.doesNotMatch(flowSource, /Choose when this agent should involve people/i);
   assert.doesNotMatch(flowSource, /reviewerAudience|contentBoundary: "private_workspace"|autonomousAccess/);
 });
@@ -145,6 +145,31 @@ test("review setup controls base compensation and agent authority without a feed
   assert.match(flowSource, /\s+authority,\s+/);
   assert.doesNotMatch(flowSource, /Feedback Bonus|feedback bonus/);
   assert.doesNotMatch(flowSource, /authority: draft\.authority/);
+});
+
+test("review setup requires exact informed consent before it persists the configuration", () => {
+  for (const label of [
+    "Confirm these exact terms",
+    "When",
+    "Who and what",
+    "Question",
+    "Answers",
+    "Round",
+    "Base payment",
+    "Agent authority",
+    "I confirm this exact human-review configuration",
+  ]) {
+    assert.match(flowSource, new RegExp(label));
+  }
+  assert.match(flowSource, /pendingReviewConfirmation\?\.fingerprint !== currentReviewFingerprint/);
+  assert.match(flowSource, /confirmedReviewFingerprint !== currentReviewFingerprint/);
+  assert.match(flowSource, /Review settings/);
+  assert.match(flowSource, /Save and continue/);
+  assert.match(flowSource, /reviewFrequencySummary\(pendingReviewConfirmation\.selection\)/);
+  assert.match(flowSource, /reviewAudienceSummary\(pendingReviewConfirmation\.requestProfile\.audience\)/);
+  assert.match(flowSource, /formatResponseWindow\(pendingReviewConfirmation\.requestProfile\.responseWindowSeconds\)/);
+  assert.match(flowSource, /usdcAtomicToDecimal\(pendingReviewConfirmation\.requestProfile\.bountyPerSeatAtomic\)/);
+  assert.match(flowSource, /reviewAuthoritySummary\(pendingReviewConfirmation\.authority\)/);
 });
 
 test("setup separates the connected client from per-run model provenance", () => {

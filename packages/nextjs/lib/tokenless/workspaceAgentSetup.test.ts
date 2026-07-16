@@ -7,10 +7,11 @@ import {
   claimAgentConnectionIntent,
   verifyAgentConnection,
 } from "~~/lib/tokenless/agentConnectionIntents";
+import { OWNER_APPROVED_AGENT_SCOPES } from "~~/lib/tokenless/agentIntegrations";
 import { putHumanReviewConfigurationForOwner } from "~~/lib/tokenless/humanReviewConfiguration";
 import { loadWorkspaceOnboardingFunnel } from "~~/lib/tokenless/onboardingObservability";
 import { createPrivateGroup } from "~~/lib/tokenless/privateGroups";
-import { createWorkspace } from "~~/lib/tokenless/productCore";
+import { createAgentPublishingPolicy, createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
   agentSetupUrl,
@@ -98,6 +99,7 @@ async function saveSetupReviewConfiguration(input: {
   groupId?: string | null;
   mode?: "adaptive" | "always";
   audience?: "private_invited" | "public_network";
+  authority?: "check_only" | "prepare_for_approval";
 }) {
   const audience = input.audience ?? "private_invited";
   return putHumanReviewConfigurationForOwner({
@@ -132,7 +134,7 @@ async function saveSetupReviewConfiguration(input: {
         compensationMode: audience === "public_network" ? "usdc" : "unpaid",
         bountyPerSeatAtomic: audience === "public_network" ? "1000000" : null,
       },
-      authority: "check_only",
+      authority: input.authority ?? "check_only",
     },
   });
 }
@@ -250,7 +252,7 @@ test("setup binds one verified connection and completes without publishing or sp
   assert.doesNotMatch(JSON.stringify(funnel), /Setup workspace|Setup client|pgrp_|confidential/u);
 });
 
-test("public network setup skips private people and preserves a null group", async () => {
+test("prepare-for-approval setup skips private people and preserves a safe null publishing grant", async () => {
   const { workspaceId } = await connectedSetup();
   const connected = await getWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId });
   const confirmed = await confirmWorkspaceSetupAgent({
@@ -271,6 +273,7 @@ test("public network setup skips private people and preserves a null group", asy
     workspaceId,
     agentId: connected.agent!.agentId,
     audience: "public_network",
+    authority: "prepare_for_approval",
   });
   const reviews = await configureWorkspaceSetupReviews({
     accountAddress: OWNER,
@@ -310,6 +313,127 @@ test("public network setup skips private people and preserves a null group", asy
     private_group_id: null,
     status: "completed",
   });
+  const integration = await dbClient.execute({
+    sql: `SELECT activation_mode,granted_scopes_json,publishing_policy_id,allowed_workflow_keys_json
+          FROM tokenless_agent_integrations WHERE workspace_id=?`,
+    args: [workspaceId],
+  });
+  assert.equal(integration.rows[0]?.activation_mode, "preauthorized_safe");
+  assert.equal(integration.rows[0]?.publishing_policy_id, null);
+  assert.deepEqual(JSON.parse(String(integration.rows[0]?.granted_scopes_json)), SAFE_AGENT_CONNECTION_SCOPES);
+  assert.deepEqual(JSON.parse(String(integration.rows[0]?.allowed_workflow_keys_json)), ["general-assistance"]);
+});
+
+test("automatic setup atomically binds the exact owner-approved workflows and spending policy", async () => {
+  const { workspaceId, integrationId } = await connectedSetup();
+  const connected = await getWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId });
+  const confirmed = await confirmWorkspaceSetupAgent({
+    accountAddress: OWNER,
+    workspaceId,
+    revision: connected.revision,
+    agent: {
+      displayName: connected.agent!.displayName,
+      description: connected.agent!.description,
+      provider: connected.agent!.provider,
+      model: connected.agent!.model,
+      modelVersion: connected.agent!.modelVersion,
+      deploymentName: connected.agent!.deploymentName,
+      environment: "production",
+    },
+  });
+  const publishing = await createAgentPublishingPolicy({
+    accountAddress: OWNER,
+    workspaceId,
+    policy: {
+      name: "Automatic human review",
+      allowedPaymentModes: ["prepaid"],
+      maxPanelAtomic: "6000000",
+      maxDailyAtomic: "60000000",
+      maxMonthlyAtomic: "600000000",
+      maxPanelSize: 3,
+      maxBountyAtomic: "3000000",
+      maxFeeBps: 2_000,
+      maxAttemptReserveAtomic: "3000000",
+      allowedReviewerSources: ["rateloop_network"],
+      allowedAdmissionPolicyHashes: [`0x${"a".repeat(64)}`],
+      allowedDataClassifications: ["public", "synthetic", "redacted"],
+      onPolicyMiss: "deny",
+    },
+  });
+  const saved = await putHumanReviewConfigurationForOwner({
+    accountAddress: OWNER,
+    workspaceId,
+    agentId: connected.agent!.agentId,
+    body: {
+      expectedBindingVersion: null,
+      selection: {
+        mode: "always",
+        enforcementMode: "advisory",
+        agreementThresholdBps: 8_000,
+        productionFloorBps: 0,
+        fixedRateBps: null,
+        maximumUnreviewedGap: 20,
+        requiredRiskTiers: ["high"],
+        criticalRiskTiers: ["critical"],
+        minimumConfidenceBps: 7_000,
+        maximumLatencyMs: 120_000,
+      },
+      requestProfile: {
+        criterion: "Is this response safe and correct?",
+        positiveLabel: "Approve",
+        negativeLabel: "Reject",
+        rationaleMode: "required",
+        audience: "public_network",
+        contentBoundary: "public_or_test",
+        privateSensitivity: null,
+        privateGroupId: null,
+        responseWindowSeconds: 3_600,
+        panelSize: 3,
+        compensationMode: "usdc",
+        bountyPerSeatAtomic: "1000000",
+      },
+      authority: "ask_automatically",
+      publishingGrant: {
+        integrationId,
+        publishingPolicyId: publishing.policyId,
+        publishingPolicyVersion: publishing.version ?? 1,
+        allowedWorkflowKeys: ["general-assistance"],
+      },
+    },
+  });
+  const reviews = await configureWorkspaceSetupReviews({
+    accountAddress: OWNER,
+    workspaceId,
+    revision: confirmed.revision,
+    bindingRevision: saved.configuration.version,
+  });
+  const people = await configureWorkspaceSetupPeople({
+    accountAddress: OWNER,
+    workspaceId,
+    revision: reviews.revision,
+    decision: "not_required",
+  });
+  await completeWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId, revision: people.revision });
+
+  const integration = await dbClient.execute({
+    sql: `SELECT activation_mode,publishing_policy_id,publishing_policy_version,allowed_workflow_keys_json,
+                 granted_scopes_json
+          FROM tokenless_agent_integrations WHERE integration_id=?`,
+    args: [integrationId],
+  });
+  assert.equal(integration.rows[0]?.activation_mode, "owner_approved");
+  assert.equal(integration.rows[0]?.publishing_policy_id, publishing.policyId);
+  assert.equal(Number(integration.rows[0]?.publishing_policy_version), publishing.version ?? 1);
+  assert.deepEqual(JSON.parse(String(integration.rows[0]?.allowed_workflow_keys_json)), ["general-assistance"]);
+  assert.deepEqual(JSON.parse(String(integration.rows[0]?.granted_scopes_json)), OWNER_APPROVED_AGENT_SCOPES);
+  const events = await dbClient.execute({
+    sql: `SELECT event_type,details_json FROM tokenless_agent_integration_events
+          WHERE integration_id=? AND event_type='scope_upgraded'`,
+    args: [integrationId],
+  });
+  assert.equal(events.rowCount, 1);
+  assert.match(String(events.rows[0]?.details_json), /"explicitBrowserConsent":true/u);
+  assert.doesNotMatch(String(events.rows[0]?.details_json), /criterion|positiveLabel|negativeLabel/u);
 });
 
 test("setup rejects future steps, stale revisions, and unsaved review configuration", async () => {
