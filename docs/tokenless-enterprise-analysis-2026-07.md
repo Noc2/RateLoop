@@ -80,8 +80,8 @@ score — a defensible answer to "your score means nothing about my deployment."
 
 ### 4. The trust architecture is a real audit-evidence asset
 
-ISO/IEC 42001 control A.8.4 audits demand logs, escalation records, and evidence of human review — "a policy
-alone is not sufficient" ([Lasso Security](https://www.lasso.security/blog/iso-iec-42001)); FINRA Notice
+ISO/IEC 42001 human-oversight audits (Annex A A.6 lifecycle and A.9.2 responsible-use controls) demand logs,
+escalation records, and evidence of human review — "a policy alone is not sufficient" ([Lasso Security](https://www.lasso.security/blog/iso-iec-42001)); FINRA Notice
 24-09 explicitly expects "validation and human-in-the-loop review of model outputs"
 ([FINRA](https://www.finra.org/rules-guidance/notices/24-09)); the revised EU Product Liability Directive
 puts software under strict liability, and AI-performance insurers gate coverage on demonstrated diligence
@@ -135,7 +135,7 @@ path.
 EU AI Act oversight must be assigned to natural persons with "the necessary competence, training and
 authority" ([Article 26](https://artificialintelligenceact.eu/article/26/)); no framework anywhere blesses
 anonymous crowd raters as oversight personnel, and post-hoc sampled review is monitoring evidence
-(Art. 26/72, ISO 42001 A.8.4), not in-flight oversight with intervention authority. The current docs do not
+(Art. 26/72, ISO 42001 A.6/A.9.2), not in-flight oversight with intervention authority. The current docs do not
 draw this line. If marketing ever implies "RateLoop makes your agent EU-AI-Act compliant," it will fail
 diligence; the sellable claim is narrower and still valuable: *independent, tamper-evident evidence of
 sampled human review*.
@@ -238,7 +238,7 @@ system exactly" bar the design sets for itself:
 Ordered by leverage; none requires changing the immutable-core architecture.
 
 **R1 — Position as the assurance-evidence layer, and write the compliance map down.** Claim: "independent,
-tamper-evident evidence of sampled human review of your agents," mapped explicitly to ISO 42001 A.8.4
+tamper-evident evidence of sampled human review of your agents," mapped explicitly to ISO 42001 A.6/A.9.2
 evidence, FINRA 24-09 supervision, EU AI Act Art. 26/72 monitoring and logging, PLD/insurer diligence. Never
 claim to be Article 14 oversight; state plainly that oversight personnel remain the customer's. A short
 public "compliance mapping" doc will do more for enterprise diligence than any feature, and it protects
