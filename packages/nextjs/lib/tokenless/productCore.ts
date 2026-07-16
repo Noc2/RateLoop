@@ -296,6 +296,21 @@ export async function createWorkspace(input: { name: string; ownerAddress: strin
        VALUES ($1, 1, 'in_progress', 'connect', '{}', 1, $2, $2)`,
       [workspaceId, now],
     );
+    await client.query(
+      `INSERT INTO tokenless_workspace_evidence_retention_policies
+       (workspace_id, version, evidence_retention_months, audit_retention_months, basis_json,
+        effective_at, created_by, created_at)
+       VALUES ($1, 1, 12, 12, $2, $3, $4, $3)`,
+      [
+        workspaceId,
+        JSON.stringify({
+          floor: "six_calendar_months",
+          reasons: ["eu_ai_act_article_26_6_deployer_log_minimum", "workspace_assurance_evidence_policy"],
+        }),
+        now,
+        ownerAddress,
+      ],
+    );
     await client.query("COMMIT");
     return { workspaceId };
   } catch (error) {

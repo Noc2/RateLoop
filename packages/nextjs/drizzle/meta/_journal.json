@@ -491,6 +491,13 @@
       "when": 1784192400000,
       "tag": "0070_feedback_bonus_awarder_wallet",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1784196000000,
+      "tag": "0071_workspace_evidence_retention",
+      "breakpoints": true
     }
   ]
 }

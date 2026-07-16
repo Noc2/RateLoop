@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   foreignKey,
@@ -11,6 +12,27 @@ import {
 } from "drizzle-orm/pg-core";
 
 const time = (name: string) => timestamp(name, { mode: "date", withTimezone: true });
+
+export const tokenlessWorkspaceEvidenceRetentionPolicies = pgTable(
+  "tokenless_workspace_evidence_retention_policies",
+  {
+    workspaceId: text("workspace_id").notNull(),
+    version: integer("version").notNull(),
+    evidenceRetentionMonths: integer("evidence_retention_months").notNull().default(12),
+    auditRetentionMonths: integer("audit_retention_months").notNull().default(12),
+    basisJson: text("basis_json").notNull(),
+    effectiveAt: time("effective_at").notNull(),
+    supersededAt: time("superseded_at"),
+    createdBy: text("created_by").notNull(),
+    createdAt: time("created_at").notNull(),
+  },
+  table => ({
+    pk: primaryKey({ columns: [table.workspaceId, table.version] }),
+    activeUnique: uniqueIndex("tokenless_workspace_evidence_retention_policies_active_idx")
+      .on(table.workspaceId)
+      .where(sql`${table.supersededAt} IS NULL`),
+  }),
+);
 
 export const tokenlessAssuranceProjects = pgTable(
   "tokenless_assurance_projects",
