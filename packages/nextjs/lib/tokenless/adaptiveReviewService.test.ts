@@ -8,6 +8,7 @@ import {
   evaluateAdaptiveReviewRequirement,
   getAdaptiveAssuranceState,
 } from "~~/lib/tokenless/adaptiveReviewService";
+import { parseAgentExecutionEvidence } from "~~/lib/tokenless/agentExecutionEvidence";
 import { createWorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
 import { createWorkspace, createWorkspaceApiKey } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -136,6 +137,19 @@ test("persists deterministic calibration decisions and returns frozen idempotent
   assert.equal(first.sourceEvidenceHash, request.sourceEvidence.hash);
   assert.match(first.executionId, /^aex_/);
   assert.equal(first.executionManifestCommitment, replay.executionManifestCommitment);
+  assert.equal(first.executionEvidence.executionId, first.executionId);
+  assert.deepEqual(first.executionEvidence.opportunityBinding, {
+    opportunityId: first.opportunityId,
+    metadataCommitment: first.metadataCommitment,
+  });
+  assert.equal(first.executionEvidence.manifestCommitment, first.executionManifestCommitment);
+  assert.equal(first.executionEvidence.executionProfileHash, first.executionProfileHash);
+  assert.deepEqual(first.executionEvidence.source, {
+    kind: "host_reported",
+    independentlyVerified: false,
+    attestation: null,
+  });
+  assert.deepEqual(parseAgentExecutionEvidence(first.executionEvidence), first.executionEvidence);
   assert.equal(first.executionProfile?.primary.resolvedModel, "gpt-5.6-sol-2026-07-01");
   assert.equal(first.executionProfile?.primary.reasoningEffort, "medium");
   assert.equal("sourceEvidenceReference" in first, false);

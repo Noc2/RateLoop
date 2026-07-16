@@ -10,6 +10,7 @@ import {
   decideAdaptiveReview,
   nextAdaptiveStage,
 } from "~~/lib/tokenless/adaptiveReview";
+import { type AgentExecutionEvidence, projectAgentExecutionEvidence } from "~~/lib/tokenless/agentExecutionEvidence";
 import {
   AGENT_EXECUTION_PROFILE_SCHEMA_VERSION,
   type AgentExecutionProfile,
@@ -143,6 +144,7 @@ export type AdaptiveReviewDecision = Omit<AdaptiveAssuranceState, "schemaVersion
   sourceEvidenceHash: string;
   executionId: string;
   executionManifestCommitment: string;
+  executionEvidence: AgentExecutionEvidence;
   createdAt: string;
   lifecycle: {
     state: HumanReviewOpportunityState;
@@ -1555,6 +1557,12 @@ export async function evaluateAdaptiveReviewRequirement(input: {
       sourceEvidenceHash: rowString(opportunity, "source_evidence_hash")!,
       executionId,
       executionManifestCommitment: request.execution.manifestCommitment,
+      executionEvidence: projectAgentExecutionEvidence({
+        executionId,
+        opportunityId: rowString(opportunity, "opportunity_id")!,
+        metadataCommitment: rowString(opportunity, "metadata_commitment")!,
+        execution: request.execution,
+      }),
       createdAt: new Date(String(opportunity.created_at)).toISOString(),
       lifecycle,
     };
