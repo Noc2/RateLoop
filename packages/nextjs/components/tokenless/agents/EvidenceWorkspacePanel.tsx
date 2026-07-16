@@ -43,6 +43,7 @@ type TrustedKey = {
   keyId: string;
   status: "current" | "retired";
   publicKeyJwk: { kty: "OKP"; crv: "Ed25519"; x: string };
+  publicKeySpki: string;
   uses: string[];
   firstPacketAt: string | null;
   lastPacketAt: string | null;
@@ -66,7 +67,8 @@ function outcomeStyle(outcome: string) {
   return "bg-amber-300/10 text-amber-100";
 }
 
-function anchorLabel(attestation: Attestation | undefined) {
+function anchorLabel(attestation: Attestation | undefined, canViewAttestations: boolean) {
+  if (!canViewAttestations) return "Anchor details restricted";
   if (!attestation) return "Anchor not queued";
   if (attestation.state === "completed") return "Transparency receipt recorded";
   if (attestation.state === "dead") return "Anchor failed";
@@ -97,20 +99,70 @@ function ExportLink({ href, children }: { href: string; children: React.ReactNod
   );
 }
 
-function VerificationInstructions({ packet }: { packet: EvidencePacket | null }) {
-  const packetCommand = packet
-    ? `yarn workspace @rateloop/nextjs evidence:verify packet.json --public-key '${packet.signing.publicKey}' --key-id '${packet.signing.keyId}'`
-    : "Export a packet to show its pinned-key verification command.";
-  const instructions = `${packetCommand}\nyarn workspace @rateloop/nextjs audit:verify audit-export.json`;
+function trustedKeyFilename(keyId: string) {
+  return `rateloop-evidence-${keyId.replace(/[^A-Za-z0-9._-]/gu, "-")}.spki.txt`;
+}
+
+function VerificationInstructions({
+  packet,
+  attestation,
+  trustedKey,
+  trustedKeyDownloadUrl,
+}: {
+  packet: EvidencePacket | null;
+  attestation: Attestation | null;
+  trustedKey: TrustedKey | null;
+  trustedKeyDownloadUrl: string | null;
+}) {
+  const packetCommand =
+    packet && trustedKey
+      ? `yarn workspace @rateloop/nextjs evidence:verify packet.json --public-key './${trustedKeyFilename(trustedKey.keyId)}' --key-id '${trustedKey.keyId}'`
+      : packet
+        ? "This packet's key is not in the workspace trust history. Do not verify it using its embedded key."
+        : "Export a packet to show its pinned-key verification command.";
+  const attestationCommand =
+    attestation?.state === "completed" && attestation.signerKeyId
+      ? `yarn workspace @rateloop/nextjs attestation:verify attestation-witness.json \\
+  --signer-public-key ./trusted-attestation-signer.pem \\
+  --signer-key-id '${attestation.signerKeyId}' \\
+  --rekor-public-key ./trusted-rekor-public-key.pem \\
+  --tsa-ca ./trusted-tsa-ca.pem \\
+  --tsa-chain ./trusted-tsa-chain.pem`
+      : "A completed external attestation is required before attestation verification.";
+  const instructions = `${packetCommand}\nyarn workspace @rateloop/nextjs audit:verify audit-export.json\n${attestationCommand}`;
   const [copied, setCopied] = useState(false);
   return (
     <details className="surface-card rounded-2xl p-6">
       <summary className="cursor-pointer text-sm font-semibold">Verify an export</summary>
       <div className="mt-4 space-y-4">
         <p className="max-w-3xl text-sm leading-6 text-base-content/55">
-          Pin a trusted Ed25519 key, then recompute the packet signature, Merkle roots, aggregation, and digest. The
+          Download the matching Ed25519 SPKI pin from workspace key history, then recompute the packet signature, Merkle
+          roots, aggregation, and digest. Never use the public key embedded in the packet as its own trust anchor. The
           audit command recomputes every chain link and the exported head.
         </p>
+        {trustedKey && trustedKeyDownloadUrl ? (
+          <a
+            className="btn btn-sm border-white/10 bg-white/[0.06] hover:bg-white/[0.1]"
+            href={trustedKeyDownloadUrl}
+            download={trustedKeyFilename(trustedKey.keyId)}
+          >
+            Download trusted SPKI pin
+          </a>
+        ) : packet ? (
+          <p className="text-sm text-red-100" role="alert">
+            A trusted pin for {packet.signing.keyId} is unavailable to this account or is missing from workspace key
+            history.
+          </p>
+        ) : null}
+        {attestation?.state === "completed" ? (
+          <a
+            className="btn btn-sm ml-2 border-white/10 bg-white/[0.06] hover:bg-white/[0.1]"
+            href={`/api/public/assurance/attestations/${encodeURIComponent(attestation.jobId)}`}
+            download={`rateloop-attestation-${attestation.jobId}.json`}
+          >
+            Download attestation witness
+          </a>
+        ) : null}
         <pre className="overflow-x-auto rounded-xl border border-white/10 bg-black/35 p-4 text-xs leading-6 text-base-content/75">
           <code>{instructions}</code>
         </pre>
@@ -127,8 +179,10 @@ function VerificationInstructions({ packet }: { packet: EvidencePacket | null })
           {copied ? "Copied" : "Copy commands"}
         </button>
         <p className="text-xs leading-5 text-base-content/45">
-          A completed external-attestation job also records a Rekor UUID. Export-boundary jobs additionally require an
-          RFC 3161 token; absence is shown as a pending or failed anchor, never as verified evidence.
+          Select the attestation signer, Rekor log key, and TSA certificate chain through an independent trust process;
+          none is trusted merely because it appears in a witness. A completed external-attestation job records a Rekor
+          UUID. Export-boundary jobs additionally require an RFC 3161 token; absence is shown as a pending or failed
+          anchor, never as verified evidence.
         </p>
       </div>
     </details>
@@ -284,6 +338,13 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
     [attestations],
   );
   const base = `/api/account/workspaces/${encodeURIComponent(workspaceId)}`;
+  const selectedTrustedKey = selectedPacket
+    ? (keys.find(key => key.keyId === selectedPacket.signing.keyId) ?? null)
+    : null;
+  const selectedAttestation = selectedPacket ? (attestationByDigest.get(selectedPacket.packetDigest) ?? null) : null;
+  const selectedTrustedKeyDownloadUrl = selectedTrustedKey
+    ? `${base}/assurance/trusted-keys?format=spki&keyId=${encodeURIComponent(selectedTrustedKey.keyId)}`
+    : null;
 
   return (
     <div className="space-y-5">
@@ -341,7 +402,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                     <div className="mt-3 flex flex-wrap gap-2">
                       <span className={`badge border-0 capitalize ${outcomeStyle(outcome)}`}>{outcome}</span>
                       <span className="badge border-white/10 bg-white/[0.04] text-base-content/65">
-                        {anchorLabel(attestation)}
+                        {anchorLabel(attestation, canManage)}
                       </span>
                     </div>
                   </div>
@@ -395,7 +456,8 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                     <div>
                       <dt className="text-xs text-base-content/45">Rekor entry</dt>
                       <dd className="mt-1 break-all font-mono text-xs">
-                        {attestation?.rekor?.entryUuid ?? "No receipt recorded"}
+                        {attestation?.rekor?.entryUuid ??
+                          (canManage ? "No receipt recorded" : "Receipt details restricted")}
                       </dd>
                     </div>
                   </dl>
@@ -411,7 +473,12 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
         </section>
       ) : null}
 
-      <VerificationInstructions packet={selectedPacket} />
+      <VerificationInstructions
+        packet={selectedPacket}
+        attestation={selectedAttestation}
+        trustedKey={selectedTrustedKey}
+        trustedKeyDownloadUrl={selectedTrustedKeyDownloadUrl}
+      />
 
       {canManage ? (
         <section className="surface-card rounded-2xl p-6" aria-labelledby="compliance-export-heading">
@@ -458,12 +525,19 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                     <span className="badge border-white/10 bg-white/[0.04] text-xs capitalize">{key.status}</span>
                   </div>
                   <p className="mt-2 break-all font-mono text-[11px] text-base-content/45">
-                    Ed25519 JWK x: {key.publicKeyJwk.x}
+                    Ed25519 SPKI DER (base64url): {key.publicKeySpki}
                   </p>
                   <p className="mt-2 text-xs text-base-content/45">
                     {key.packetCount} {key.packetCount === 1 ? "packet" : "packets"}
                     {key.lastPacketAt ? ` · last used ${new Date(key.lastPacketAt).toLocaleString()}` : ""}
                   </p>
+                  <a
+                    className="btn btn-xs mt-3 border-white/10 bg-white/[0.06] hover:bg-white/[0.1]"
+                    href={`${base}/assurance/trusted-keys?format=spki&keyId=${encodeURIComponent(key.keyId)}`}
+                    download={trustedKeyFilename(key.keyId)}
+                  >
+                    Download SPKI pin
+                  </a>
                 </article>
               ))}
             </div>
