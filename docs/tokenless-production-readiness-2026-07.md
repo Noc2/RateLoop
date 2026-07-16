@@ -11,7 +11,7 @@ records the concrete work that must pass once `tokenless` is integrated into `ma
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Contract bundle     | Disposable Base Sepolia tokenless-v3 deployment at block `44132668`; complete key `tokenless-v3:84532:0xf97d28e02f7301b4f6cb19160e1176eaf3e4f19a:0x67a89f76ae9a89866a0e62785d7999efe1c5e592:0x8a9b7af03f3cf362ba98180700bc92fbb72fcbc9` | Test-profile deployment with unrestricted test currency; not a mainnet or real-money release                                                                |
 | Generated consumers | `@rateloop/contracts`, Ponder, and keeper identify the complete v3 bundle                                                                                                                                                               | Any fund-core change invalidates the artifact and every hosted address until an atomic redeployment                                                         |
-| Application data    | Ordered Drizzle journal `0000` through migration `0051`                                                                                                                                                                                 | Every migration must be applied and verified before hosted smoke testing                                                                                    |
+| Application data    | Ordered Drizzle journal `0000` through migration `0080`                                                                                                                                                                                 | Every migration must be applied and verified before hosted smoke testing                                                                                    |
 | Hosted isolation    | Dedicated Vercel project `rateloop-tokenless`; dedicated Railway project with Postgres, Ponder, and keeper; no `rateloop.ai` alias                                                                                                      | The currently served preview is not a release candidate and must not be promoted as production-ready                                                        |
 | Identity            | Better Auth supplies browser authentication and opaque RateLoop principals; wallets are purpose-bound adapters                                                                                                                          | Hosted OTP/passkey verification, optional provider allowlists, managed wallet configuration when enabled, and account-recovery testing remain release gates |
 | Release preflight   | Deployment identity, region, secret-role separation, and schema checks fail closed                                                                                                                                                      | `managedSigning` and `paidAssignmentSettlement` remain explicitly unavailable in the production readiness check                                             |
@@ -61,8 +61,8 @@ or end-to-end paid-path testing is complete.
 3. **Provision the signed EU bundle.** Supply matching EU Postgres, private Blob, managed KMS, log, backup, auth,
    support-access, Ponder, keeper, and external-processor evidence. Validate actual provider IDs and runtime regions;
    setting expected strings is not evidence.
-4. **Apply and verify migrations.** Run every journal entry through `0051` against the isolated database, verify the
-   resulting constraints, and test rollback/recovery procedures without pointing at legacy data.
+4. **Apply and verify migrations.** Run every journal entry through the current head (now `0080`) against the isolated
+   database, verify the resulting constraints, and test rollback/recovery procedures without pointing at legacy data.
 5. **Exercise the complete paid path.** Run a deployment-pinned Base Sepolia journey:
    `quote -> ask -> fund -> assign -> voucher -> commit -> reveal -> settle -> result -> claim`. Verify the normal,
    under-quorum, beacon-failure, retry, and idempotent-replay paths. No fabricated result may satisfy this gate.
@@ -70,7 +70,12 @@ or end-to-end paid-path testing is complete.
    browser handoff approval, bounded wait/result, reviewer assignment, settlement receipt, and recovery on desktop and
    mobile.
 7. **Add operational evidence.** Record alerting, key rotation, backup restore, deletion, legal hold, incident response,
-   founder continuity, worker liveness, and deployment rollback exercises for the isolated services.
+   founder continuity, worker liveness, and deployment rollback exercises for the isolated services. Exercise the
+   configured KMS/Rekor/TSA witness, S3 Object Lock destination, SIEM webhook, OTLP ingest, and each enabled GRC
+   connector before enabling its public capability flag. Drata additionally requires the customer's Custom Connection
+   entitlement/schema/monitor/control association. The current Vanta path requires a customer-owned Manage Vanta
+   credential and pre-existing document/control workflow; a public Vanta marketplace app remains blocked on vendor
+   approval and customer-authored Custom Test/control mapping.
 
 ## Additional gates before real users or real money
 
