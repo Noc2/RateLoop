@@ -256,7 +256,7 @@ test("host release evidence cannot be replayed across a candidate, signature, or
     /release_hostBindingCommitment_mismatch/u,
   );
   const tamperedEvidence = structuredClone(evidence);
-  tamperedEvidence.signature = `${tamperedEvidence.signature.slice(0, -1)}${tamperedEvidence.signature.endsWith("A") ? "B" : "A"}`;
+  tamperedEvidence.signature = `${tamperedEvidence.signature.startsWith("A") ? "B" : "A"}${tamperedEvidence.signature.slice(1)}`;
   assert.throws(
     () => verifyHostOutputRelease({ request, evidence: tamperedEvidence, trustedKeys, candidateBytes: CANDIDATE, now }),
     /release_signature_invalid/u,
