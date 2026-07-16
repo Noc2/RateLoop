@@ -512,6 +512,13 @@
       "when": 1784203200000,
       "tag": "0073_assurance_event_streaming",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1784206800000,
+      "tag": "0074_assurance_attestation_jobs",
+      "breakpoints": true
     }
   ]
 }
