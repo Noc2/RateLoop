@@ -277,6 +277,16 @@ test("owner export is bounded, canonical, complete, and records its digest in th
 
   const { exportDigest, ...payload } = exported;
   assert.equal(exportDigest, __adaptiveCoverageExportTestUtils.sha256(payload));
+  const attestationJob = await dbClient.execute({
+    sql: `SELECT artifact_kind,artifact_digest,state FROM tokenless_assurance_attestation_jobs
+          WHERE workspace_id=? AND artifact_digest=?`,
+    args: [setup.workspaceId, exportDigest],
+  });
+  assert.deepEqual(attestationJob.rows[0], {
+    artifact_kind: "coverage_export_head",
+    artifact_digest: exportDigest,
+    state: "pending",
+  });
   const replay = await exportAdaptiveCoverage(input);
   assert.equal(replay.exportDigest, exportDigest);
 

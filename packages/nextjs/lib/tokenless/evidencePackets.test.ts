@@ -514,6 +514,16 @@ test("evidence derives private aggregates, verifies only against trusted pins, a
   assert.equal(packet.payload.settlement.mode, "no_onchain_settlement_unpaid_invited");
   assert.equal(packet.payload.settlement.links.length, 0);
   assert.match(packet.payload.tenantCommitment, /^hmac-sha256:[0-9a-f]{64}$/);
+  const attestationJob = await dbClient.execute({
+    sql: `SELECT artifact_kind,artifact_digest,state FROM tokenless_assurance_attestation_jobs
+          WHERE workspace_id=? AND artifact_digest=?`,
+    args: [fixture.workspaceId, packet.packetDigest],
+  });
+  assert.deepEqual(attestationJob.rows[0], {
+    artifact_kind: "decision_packet",
+    artifact_digest: packet.packetDigest,
+    state: "pending",
+  });
   const serialized = JSON.stringify(packet);
   assert.doesNotMatch(serialized, new RegExp(fixture.workspaceId));
   assert.doesNotMatch(serialized, /ciphertext:private-rationale|key:0:0/);

@@ -3,6 +3,7 @@ import "server-only";
 import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbPool } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
+import { enqueueAssuranceAttestation } from "~~/lib/tokenless/assuranceAttestationPipeline";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
@@ -439,6 +440,14 @@ export async function exportAdaptiveCoverage(input: {
         observationCount: exported.counts.observations,
       },
       occurredAt: window.snapshotAt,
+    });
+    await enqueueAssuranceAttestation({
+      workspaceId: input.workspaceId,
+      kind: "coverage_export_head",
+      artifactDigest: exported.exportDigest,
+      artifactSchemaVersion: EXPORT_SCHEMA_VERSION,
+      boundaryAt: window.snapshotAt,
+      now: window.snapshotAt,
     });
     return exported;
   } catch (error) {

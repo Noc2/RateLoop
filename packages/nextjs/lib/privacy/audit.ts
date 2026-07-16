@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import "server-only";
 import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
+import { enqueueAssuranceAttestation } from "~~/lib/tokenless/assuranceAttestationPipeline";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export type AuditEventInput = Readonly<{
@@ -523,6 +524,13 @@ export async function exportWorkspaceAudit(input: { accountAddress: string; work
     targetId: input.workspaceId,
     targetKind: "workspace_audit",
     workspaceId: input.workspaceId,
+  });
+  await enqueueAssuranceAttestation({
+    workspaceId: input.workspaceId,
+    kind: "audit_export_head",
+    artifactDigest: integrity.headDigest!,
+    artifactSchemaVersion: "rateloop-audit-v1",
+    boundaryAt: new Date(exported.exportedAt),
   });
   return exported;
 }

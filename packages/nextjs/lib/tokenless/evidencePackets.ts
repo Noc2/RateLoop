@@ -12,6 +12,7 @@ import { type KeyObject, createHmac, createPrivateKey, createPublicKey, randomUU
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbPool } from "~~/lib/db";
+import { enqueueAssuranceAttestation } from "~~/lib/tokenless/assuranceAttestationPipeline";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Queryable = { query: (text: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> };
@@ -864,6 +865,13 @@ export async function generateAssuranceEvidencePacket(input: {
     if (existing.rows[0]) {
       const packet = parseStoredPacket(existing.rows[0]);
       await client.query("COMMIT");
+      await enqueueAssuranceAttestation({
+        workspaceId: input.workspaceId,
+        kind: "decision_packet",
+        artifactDigest: packet.packetDigest,
+        artifactSchemaVersion: String(packet.payload.schemaVersion),
+        boundaryAt: new Date(String(packet.payload.generatedAt)),
+      });
       return packet;
     }
     const frozen = requireFrozenSource(row);
@@ -1013,6 +1021,13 @@ export async function generateAssuranceEvidencePacket(input: {
       ],
     );
     await client.query("COMMIT");
+    await enqueueAssuranceAttestation({
+      workspaceId: input.workspaceId,
+      kind: "decision_packet",
+      artifactDigest: packet.packetDigest,
+      artifactSchemaVersion: EVIDENCE_SCHEMA_VERSION,
+      boundaryAt: generatedAt,
+    });
     return packet;
   } catch (error) {
     await client.query("ROLLBACK");
