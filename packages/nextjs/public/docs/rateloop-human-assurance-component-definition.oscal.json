@@ -1,0 +1,932 @@
+{
+  "component-definition": {
+    "uuid": "08442705-7260-55f8-8d02-524f882f3b0a",
+    "metadata": {
+      "title": "RateLoop Human Assurance Evidence Compliance Map",
+      "published": "2026-07-16T00:00:00Z",
+      "last-modified": "2026-07-16T00:00:00Z",
+      "version": "rateloop.assurance-compliance-map.v1",
+      "oscal-version": "1.2.2",
+      "document-ids": [
+        {
+          "scheme": "https://rateloop.ai/docs/compliance-map",
+          "identifier": "rateloop.assurance-compliance-map.v1"
+        }
+      ],
+      "props": [
+        {
+          "name": "mapping-version",
+          "ns": "https://rateloop.ai/ns/oscal",
+          "value": "rateloop.assurance-compliance-map.v1"
+        },
+        {
+          "name": "mapping-hash",
+          "ns": "https://rateloop.ai/ns/oscal",
+          "value": "sha256:57fddb6ba71ce04e3dfa809820f9352b5d592f645f50d1fc7d299c64e6d8c393"
+        },
+        {
+          "name": "claim-boundary",
+          "ns": "https://rateloop.ai/ns/oscal",
+          "value": "These mappings identify evidence RateLoop artifacts can support. They do not establish certification, legal compliance, control effectiveness, or discharge a customer's duties."
+        }
+      ],
+      "links": [
+        {
+          "href": "https://pages.nist.gov/OSCAL-Reference/models/v1.2.2/component-definition/",
+          "rel": "described-by",
+          "media-type": "text/html",
+          "text": "OSCAL 1.2.2 Component Definition Model"
+        }
+      ],
+      "remarks": "This component definition is a machine-readable evidence cross-reference. It does not represent an assessment result, certification, legal opinion, or assertion that a customer's controls are implemented or effective."
+    },
+    "components": [
+      {
+        "uuid": "41d44c7c-86a0-55f2-80a6-7663429df5fd",
+        "type": "service",
+        "title": "RateLoop Human Assurance Evidence",
+        "description": "A service component that produces integrity-bearing records of configured and sampled human review of AI-enabled workflows. Host-reported execution metadata remains explicitly unverified.",
+        "purpose": "Provide review-policy, human-judgment, coverage, escalation, gate, and audit evidence that customers can evaluate within their own governance systems.",
+        "props": [
+          {
+            "name": "mapping-version",
+            "ns": "https://rateloop.ai/ns/oscal",
+            "value": "rateloop.assurance-compliance-map.v1"
+          },
+          {
+            "name": "mapping-hash",
+            "ns": "https://rateloop.ai/ns/oscal",
+            "value": "sha256:57fddb6ba71ce04e3dfa809820f9352b5d592f645f50d1fc7d299c64e6d8c393"
+          },
+          {
+            "name": "claim-boundary",
+            "ns": "https://rateloop.ai/ns/oscal",
+            "value": "supports-evidence-for"
+          },
+          {
+            "name": "execution-provenance",
+            "ns": "https://rateloop.ai/ns/oscal",
+            "value": "host-reported-unverified"
+          }
+        ],
+        "control-implementations": [
+          {
+            "uuid": "82173e73-93e1-5216-aa99-064466f35190",
+            "source": "#f0c392b6-f948-5185-a657-11130917c6b3",
+            "description": "The listed RateLoop artifacts support evidence for selected ISO/IEC 42001:2023 expectations. This is a cross-reference, not an assertion that a control is implemented or effective.",
+            "props": [
+              {
+                "name": "framework-id",
+                "ns": "https://www.iso.org/standard/81230.html#",
+                "value": "iso-iec-42001"
+              },
+              {
+                "name": "claim",
+                "ns": "https://rateloop.ai/ns/oscal",
+                "value": "supports-evidence-for"
+              }
+            ],
+            "implemented-requirements": [
+              {
+                "uuid": "c54c9751-f36e-5cb8-90be-ea7f5e37afb0",
+                "control-id": "iso-iec-42001-a-6",
+                "description": "The listed RateLoop artifacts support evidence for documenting review-policy operation, frozen lifecycle context, sampled human review, and resulting evidence across an AI-system lifecycle. This mapping does not demonstrate that a customer has implemented the A.6 controls or that RateLoop is ISO/IEC 42001 certified.",
+                "props": [
+                  {
+                    "name": "reference",
+                    "ns": "https://www.iso.org/standard/81230.html#",
+                    "value": "A.6"
+                  },
+                  {
+                    "name": "claim",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "supports-evidence-for"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "signed-assurance-evidence-packet"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "adaptive-coverage-export"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "host-reported-execution-evidence"
+                  }
+                ],
+                "links": [
+                  {
+                    "href": "#9ea956b1-7f3e-5c89-89e7-d809f18684c3",
+                    "rel": "evidence",
+                    "text": "Signed assurance evidence packet"
+                  },
+                  {
+                    "href": "#d5d0b0ec-1ff3-5cf7-8725-1b6229e20e3c",
+                    "rel": "evidence",
+                    "text": "Adaptive assurance coverage export"
+                  },
+                  {
+                    "href": "#de8163fc-29a5-5adc-a1d7-ab627d5d605d",
+                    "rel": "evidence",
+                    "text": "Host-reported execution evidence"
+                  }
+                ]
+              },
+              {
+                "uuid": "01900b51-d6b8-59a6-b61c-300ee4c2619f",
+                "control-id": "iso-iec-42001-a-6-2-8",
+                "description": "The listed RateLoop artifacts support evidence for event-log evidence about review decisions, policy context, gate state, and integrity-checkable audit history. This mapping does not establish completeness of a customer's wider AI-system event logging or retention programme.",
+                "props": [
+                  {
+                    "name": "reference",
+                    "ns": "https://www.iso.org/standard/81230.html#",
+                    "value": "A.6.2.8"
+                  },
+                  {
+                    "name": "claim",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "supports-evidence-for"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "workspace-audit-export"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "signed-assurance-evidence-packet"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "human-review-gate-evidence"
+                  }
+                ],
+                "links": [
+                  {
+                    "href": "#bde8250a-b58f-5596-b715-23da54e2681d",
+                    "rel": "evidence",
+                    "text": "Workspace audit-chain export"
+                  },
+                  {
+                    "href": "#9ea956b1-7f3e-5c89-89e7-d809f18684c3",
+                    "rel": "evidence",
+                    "text": "Signed assurance evidence packet"
+                  },
+                  {
+                    "href": "#10c884d0-a2b8-5562-9323-8e0db11729c3",
+                    "rel": "evidence",
+                    "text": "Human-review gate evidence"
+                  }
+                ]
+              },
+              {
+                "uuid": "2d129b70-2d4e-5548-be4e-990f3f3bbcfc",
+                "control-id": "iso-iec-42001-a-9-2",
+                "description": "The listed RateLoop artifacts support evidence for responsible-use records showing configured review rules, human judgments, coverage, escalation, and release-gate evidence. This mapping does not assign customer responsibility, competence, training, authority, or approval obligations to RateLoop.",
+                "props": [
+                  {
+                    "name": "reference",
+                    "ns": "https://www.iso.org/standard/81230.html#",
+                    "value": "A.9.2"
+                  },
+                  {
+                    "name": "claim",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "supports-evidence-for"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "signed-assurance-evidence-packet"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "adaptive-coverage-export"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "human-review-gate-evidence"
+                  }
+                ],
+                "links": [
+                  {
+                    "href": "#9ea956b1-7f3e-5c89-89e7-d809f18684c3",
+                    "rel": "evidence",
+                    "text": "Signed assurance evidence packet"
+                  },
+                  {
+                    "href": "#d5d0b0ec-1ff3-5cf7-8725-1b6229e20e3c",
+                    "rel": "evidence",
+                    "text": "Adaptive assurance coverage export"
+                  },
+                  {
+                    "href": "#10c884d0-a2b8-5562-9323-8e0db11729c3",
+                    "rel": "evidence",
+                    "text": "Human-review gate evidence"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "uuid": "256c2ad9-8ea3-52e0-a554-cd1c37b64cd5",
+            "source": "#3a594389-d27d-5e34-ba41-7588cd18e4f2",
+            "description": "The listed RateLoop artifacts support evidence for selected NIST AI Risk Management Framework expectations. This is a cross-reference, not an assertion that a control is implemented or effective.",
+            "props": [
+              {
+                "name": "framework-id",
+                "ns": "https://airc.nist.gov/airmf-resources/airmf/",
+                "value": "nist-ai-rmf"
+              },
+              {
+                "name": "claim",
+                "ns": "https://rateloop.ai/ns/oscal",
+                "value": "supports-evidence-for"
+              }
+            ],
+            "implemented-requirements": [
+              {
+                "uuid": "9a0683aa-d48c-5d0b-9f25-d07649b0eeb2",
+                "control-id": "nist-ai-rmf-measure",
+                "description": "The listed RateLoop artifacts support evidence for measurement of review sampling, human agreement and disagreement, latency, escalation triggers, and policy adherence over time. This mapping is an evidence cross-reference and does not represent a NIST assessment, endorsement, or determination of risk acceptability.",
+                "props": [
+                  {
+                    "name": "reference",
+                    "ns": "https://airc.nist.gov/airmf-resources/airmf/",
+                    "value": "MEASURE"
+                  },
+                  {
+                    "name": "claim",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "supports-evidence-for"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "adaptive-coverage-export"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "signed-assurance-evidence-packet"
+                  }
+                ],
+                "links": [
+                  {
+                    "href": "#d5d0b0ec-1ff3-5cf7-8725-1b6229e20e3c",
+                    "rel": "evidence",
+                    "text": "Adaptive assurance coverage export"
+                  },
+                  {
+                    "href": "#9ea956b1-7f3e-5c89-89e7-d809f18684c3",
+                    "rel": "evidence",
+                    "text": "Signed assurance evidence packet"
+                  }
+                ]
+              },
+              {
+                "uuid": "e8c569f9-49b1-5800-942b-a11268456272",
+                "control-id": "nist-ai-rmf-manage",
+                "description": "The listed RateLoop artifacts support evidence for documenting configured escalation, human-review gate outcomes, exceptions, and integrity-checkable follow-up records. This mapping does not make or replace the customer's risk treatment, acceptance, response, or governance decisions.",
+                "props": [
+                  {
+                    "name": "reference",
+                    "ns": "https://airc.nist.gov/airmf-resources/airmf/",
+                    "value": "MANAGE"
+                  },
+                  {
+                    "name": "claim",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "supports-evidence-for"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "human-review-gate-evidence"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "workspace-audit-export"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "signed-assurance-evidence-packet"
+                  }
+                ],
+                "links": [
+                  {
+                    "href": "#10c884d0-a2b8-5562-9323-8e0db11729c3",
+                    "rel": "evidence",
+                    "text": "Human-review gate evidence"
+                  },
+                  {
+                    "href": "#bde8250a-b58f-5596-b715-23da54e2681d",
+                    "rel": "evidence",
+                    "text": "Workspace audit-chain export"
+                  },
+                  {
+                    "href": "#9ea956b1-7f3e-5c89-89e7-d809f18684c3",
+                    "rel": "evidence",
+                    "text": "Signed assurance evidence packet"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "uuid": "ce07bce3-2b97-5c95-a587-46e21d6a6f77",
+            "source": "#7567e401-9089-55d4-95ee-e61aefaf5da2",
+            "description": "The listed RateLoop artifacts support evidence for selected Regulation (EU) 2024/1689 (EU AI Act) expectations. This is a cross-reference, not an assertion that a control is implemented or effective.",
+            "props": [
+              {
+                "name": "framework-id",
+                "ns": "http://data.europa.eu/eli/reg/2024/1689/oj#",
+                "value": "eu-ai-act"
+              },
+              {
+                "name": "claim",
+                "ns": "https://rateloop.ai/ns/oscal",
+                "value": "supports-evidence-for"
+              }
+            ],
+            "implemented-requirements": [
+              {
+                "uuid": "c59b44eb-a71a-5c48-9a96-0c20103c1be7",
+                "control-id": "eu-ai-act-article-12",
+                "description": "The listed RateLoop artifacts support evidence for integrity-checkable records of RateLoop review activity and host-reported execution context that may form one input to a customer's logging evidence. RateLoop does not verify model provenance or establish that the customer's high-risk AI system fulfils Article 12 logging requirements.",
+                "props": [
+                  {
+                    "name": "reference",
+                    "ns": "http://data.europa.eu/eli/reg/2024/1689/oj#",
+                    "value": "Article 12"
+                  },
+                  {
+                    "name": "claim",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "supports-evidence-for"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "workspace-audit-export"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "signed-assurance-evidence-packet"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "host-reported-execution-evidence"
+                  }
+                ],
+                "links": [
+                  {
+                    "href": "#bde8250a-b58f-5596-b715-23da54e2681d",
+                    "rel": "evidence",
+                    "text": "Workspace audit-chain export"
+                  },
+                  {
+                    "href": "#9ea956b1-7f3e-5c89-89e7-d809f18684c3",
+                    "rel": "evidence",
+                    "text": "Signed assurance evidence packet"
+                  },
+                  {
+                    "href": "#de8163fc-29a5-5adc-a1d7-ab627d5d605d",
+                    "rel": "evidence",
+                    "text": "Host-reported execution evidence"
+                  }
+                ]
+              },
+              {
+                "uuid": "c6272c60-9996-56e3-87ce-0da60b047aaa",
+                "control-id": "eu-ai-act-article-26-5-6",
+                "description": "The listed RateLoop artifacts support evidence for monitoring records, review-policy operation, and export history that a deployer may retain under its own applicable retention schedule. RateLoop is not the deployer's assigned human oversight and does not by itself satisfy monitoring, authority, competence, reporting, or statutory retention duties.",
+                "props": [
+                  {
+                    "name": "reference",
+                    "ns": "http://data.europa.eu/eli/reg/2024/1689/oj#",
+                    "value": "Article 26(5)-(6)"
+                  },
+                  {
+                    "name": "claim",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "supports-evidence-for"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "adaptive-coverage-export"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "signed-assurance-evidence-packet"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "workspace-audit-export"
+                  }
+                ],
+                "links": [
+                  {
+                    "href": "#d5d0b0ec-1ff3-5cf7-8725-1b6229e20e3c",
+                    "rel": "evidence",
+                    "text": "Adaptive assurance coverage export"
+                  },
+                  {
+                    "href": "#9ea956b1-7f3e-5c89-89e7-d809f18684c3",
+                    "rel": "evidence",
+                    "text": "Signed assurance evidence packet"
+                  },
+                  {
+                    "href": "#bde8250a-b58f-5596-b715-23da54e2681d",
+                    "rel": "evidence",
+                    "text": "Workspace audit-chain export"
+                  }
+                ]
+              },
+              {
+                "uuid": "9da9d727-e838-593f-8405-88f2d3ef8594",
+                "control-id": "eu-ai-act-article-72",
+                "description": "The listed RateLoop artifacts support evidence for periodic review-coverage and outcome evidence that may inform a provider's post-market monitoring inputs. RateLoop does not operate or replace the provider's post-market monitoring system or determine the Article 72 plan and methods.",
+                "props": [
+                  {
+                    "name": "reference",
+                    "ns": "http://data.europa.eu/eli/reg/2024/1689/oj#",
+                    "value": "Article 72"
+                  },
+                  {
+                    "name": "claim",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "supports-evidence-for"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "adaptive-coverage-export"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "signed-assurance-evidence-packet"
+                  }
+                ],
+                "links": [
+                  {
+                    "href": "#d5d0b0ec-1ff3-5cf7-8725-1b6229e20e3c",
+                    "rel": "evidence",
+                    "text": "Adaptive assurance coverage export"
+                  },
+                  {
+                    "href": "#9ea956b1-7f3e-5c89-89e7-d809f18684c3",
+                    "rel": "evidence",
+                    "text": "Signed assurance evidence packet"
+                  }
+                ]
+              },
+              {
+                "uuid": "3c2d38d5-457c-56d8-9816-23096c40e277",
+                "control-id": "eu-ai-act-article-73",
+                "description": "The listed RateLoop artifacts support evidence for preserving review decisions, gate outcomes, and audit history that may support a customer's serious-incident investigation and report preparation. RateLoop does not determine whether an event is a serious incident and does not perform the customer's regulatory notification.",
+                "props": [
+                  {
+                    "name": "reference",
+                    "ns": "http://data.europa.eu/eli/reg/2024/1689/oj#",
+                    "value": "Article 73"
+                  },
+                  {
+                    "name": "claim",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "supports-evidence-for"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "signed-assurance-evidence-packet"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "human-review-gate-evidence"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "workspace-audit-export"
+                  }
+                ],
+                "links": [
+                  {
+                    "href": "#9ea956b1-7f3e-5c89-89e7-d809f18684c3",
+                    "rel": "evidence",
+                    "text": "Signed assurance evidence packet"
+                  },
+                  {
+                    "href": "#10c884d0-a2b8-5562-9323-8e0db11729c3",
+                    "rel": "evidence",
+                    "text": "Human-review gate evidence"
+                  },
+                  {
+                    "href": "#bde8250a-b58f-5596-b715-23da54e2681d",
+                    "rel": "evidence",
+                    "text": "Workspace audit-chain export"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "uuid": "15766a3c-9642-5530-97ca-a07f65bc960c",
+            "source": "#81a5892e-b90c-5dd7-824d-9f7f23e545e1",
+            "description": "The listed RateLoop artifacts support evidence for selected FINRA supervision guidance and Rule 3110 expectations. This is a cross-reference, not an assertion that a control is implemented or effective.",
+            "props": [
+              {
+                "name": "framework-id",
+                "ns": "https://www.finra.org/rules-guidance/",
+                "value": "finra"
+              },
+              {
+                "name": "claim",
+                "ns": "https://rateloop.ai/ns/oscal",
+                "value": "supports-evidence-for"
+              }
+            ],
+            "implemented-requirements": [
+              {
+                "uuid": "1aecbb30-9b2e-54b2-b8fc-7eae9c9399c8",
+                "control-id": "finra-regulatory-notice-24-09",
+                "description": "The listed RateLoop artifacts support evidence for records of human review, configured escalation, model metadata reported by the host, and review outcomes for a member firm's supervision analysis. This mapping does not determine which FINRA rules apply, approve a member firm's supervisory system, or constitute legal advice.",
+                "props": [
+                  {
+                    "name": "reference",
+                    "ns": "https://www.finra.org/rules-guidance/",
+                    "value": "Regulatory Notice 24-09"
+                  },
+                  {
+                    "name": "claim",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "supports-evidence-for"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "signed-assurance-evidence-packet"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "adaptive-coverage-export"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "host-reported-execution-evidence"
+                  }
+                ],
+                "links": [
+                  {
+                    "href": "#9ea956b1-7f3e-5c89-89e7-d809f18684c3",
+                    "rel": "evidence",
+                    "text": "Signed assurance evidence packet"
+                  },
+                  {
+                    "href": "#d5d0b0ec-1ff3-5cf7-8725-1b6229e20e3c",
+                    "rel": "evidence",
+                    "text": "Adaptive assurance coverage export"
+                  },
+                  {
+                    "href": "#de8163fc-29a5-5adc-a1d7-ab627d5d605d",
+                    "rel": "evidence",
+                    "text": "Host-reported execution evidence"
+                  }
+                ]
+              },
+              {
+                "uuid": "70648452-d6b1-5a86-9386-2a01c54fa977",
+                "control-id": "finra-rule-3110",
+                "description": "The listed RateLoop artifacts support evidence for documented review policies, exceptions, escalations, release decisions, and audit history that may be incorporated into a member firm's supervisory records. RateLoop does not establish, maintain, or certify the member firm's supervisory system or written supervisory procedures.",
+                "props": [
+                  {
+                    "name": "reference",
+                    "ns": "https://www.finra.org/rules-guidance/",
+                    "value": "Rule 3110"
+                  },
+                  {
+                    "name": "claim",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "supports-evidence-for"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "adaptive-coverage-export"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "human-review-gate-evidence"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "workspace-audit-export"
+                  }
+                ],
+                "links": [
+                  {
+                    "href": "#d5d0b0ec-1ff3-5cf7-8725-1b6229e20e3c",
+                    "rel": "evidence",
+                    "text": "Adaptive assurance coverage export"
+                  },
+                  {
+                    "href": "#10c884d0-a2b8-5562-9323-8e0db11729c3",
+                    "rel": "evidence",
+                    "text": "Human-review gate evidence"
+                  },
+                  {
+                    "href": "#bde8250a-b58f-5596-b715-23da54e2681d",
+                    "rel": "evidence",
+                    "text": "Workspace audit-chain export"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "uuid": "500df66b-6f48-532c-9103-211376ddc6c5",
+            "source": "#af17ec24-f32c-5def-add8-10ae6a39c1c2",
+            "description": "The listed RateLoop artifacts support evidence for selected SEC Exchange Act Rule 17a-4 expectations. This is a cross-reference, not an assertion that a control is implemented or effective.",
+            "props": [
+              {
+                "name": "framework-id",
+                "ns": "https://www.ecfr.gov/current/title-17/chapter-II/part-240/section-240.17a-4#",
+                "value": "sec-exchange-act-records"
+              },
+              {
+                "name": "claim",
+                "ns": "https://rateloop.ai/ns/oscal",
+                "value": "supports-evidence-for"
+              }
+            ],
+            "implemented-requirements": [
+              {
+                "uuid": "e4e7b5e2-8c2e-590e-8e9a-2de97fdae8ff",
+                "control-id": "sec-rule-17a-4-f",
+                "description": "The listed RateLoop artifacts support evidence for integrity-checkable review and audit exports that may be delivered into a broker-dealer's separately compliant electronic recordkeeping system. RateLoop does not currently provide the broker-dealer's Rule 17a-4 recordkeeping system, audit-trail alternative, WORM storage, undertakings, or required production process.",
+                "props": [
+                  {
+                    "name": "reference",
+                    "ns": "https://www.ecfr.gov/current/title-17/chapter-II/part-240/section-240.17a-4#",
+                    "value": "17 CFR 240.17a-4(f)"
+                  },
+                  {
+                    "name": "claim",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "supports-evidence-for"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "workspace-audit-export"
+                  },
+                  {
+                    "name": "evidence-artifact",
+                    "ns": "https://rateloop.ai/ns/oscal",
+                    "value": "signed-assurance-evidence-packet"
+                  }
+                ],
+                "links": [
+                  {
+                    "href": "#bde8250a-b58f-5596-b715-23da54e2681d",
+                    "rel": "evidence",
+                    "text": "Workspace audit-chain export"
+                  },
+                  {
+                    "href": "#9ea956b1-7f3e-5c89-89e7-d809f18684c3",
+                    "rel": "evidence",
+                    "text": "Signed assurance evidence packet"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "back-matter": {
+      "resources": [
+        {
+          "uuid": "f0c392b6-f948-5185-a657-11130917c6b3",
+          "title": "ISO/IEC 42001:2023",
+          "description": "Authoritative framework or regulatory source used only as a cross-reference for this mapping.",
+          "props": [
+            {
+              "name": "framework-id",
+              "ns": "https://www.iso.org/standard/81230.html#",
+              "value": "iso-iec-42001"
+            }
+          ],
+          "citation": {
+            "text": "ISO/IEC 42001:2023 official standard record. Access to the complete standard may require a licence from ISO or a national standards body."
+          },
+          "rlinks": [
+            {
+              "href": "https://www.iso.org/standard/81230.html",
+              "media-type": "text/html"
+            }
+          ]
+        },
+        {
+          "uuid": "3a594389-d27d-5e34-ba41-7588cd18e4f2",
+          "title": "NIST AI Risk Management Framework",
+          "description": "Authoritative framework or regulatory source used only as a cross-reference for this mapping.",
+          "props": [
+            {
+              "name": "framework-id",
+              "ns": "https://airc.nist.gov/airmf-resources/airmf/",
+              "value": "nist-ai-rmf"
+            }
+          ],
+          "citation": {
+            "text": "NIST AI RMF Core and Playbook resources maintained by the U.S. National Institute of Standards and Technology."
+          },
+          "rlinks": [
+            {
+              "href": "https://airc.nist.gov/airmf-resources/airmf/5-sec-core/",
+              "media-type": "text/html"
+            },
+            {
+              "href": "https://airc.nist.gov/airmf-resources/playbook/",
+              "media-type": "text/html"
+            }
+          ]
+        },
+        {
+          "uuid": "7567e401-9089-55d4-95ee-e61aefaf5da2",
+          "title": "Regulation (EU) 2024/1689 (EU AI Act)",
+          "description": "Authoritative framework or regulatory source used only as a cross-reference for this mapping.",
+          "props": [
+            {
+              "name": "framework-id",
+              "ns": "http://data.europa.eu/eli/reg/2024/1689/oj#",
+              "value": "eu-ai-act"
+            }
+          ],
+          "citation": {
+            "text": "Official Journal text of Regulation (EU) 2024/1689 on harmonised rules on artificial intelligence."
+          },
+          "rlinks": [
+            {
+              "href": "https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng",
+              "media-type": "text/html"
+            }
+          ]
+        },
+        {
+          "uuid": "81a5892e-b90c-5dd7-824d-9f7f23e545e1",
+          "title": "FINRA supervision guidance and Rule 3110",
+          "description": "Authoritative framework or regulatory source used only as a cross-reference for this mapping.",
+          "props": [
+            {
+              "name": "framework-id",
+              "ns": "https://www.finra.org/rules-guidance/",
+              "value": "finra"
+            }
+          ],
+          "citation": {
+            "text": "FINRA Regulatory Notice 24-09 and FINRA Rule 3110 official sources. The mapping does not constitute FINRA approval or legal advice."
+          },
+          "rlinks": [
+            {
+              "href": "https://www.finra.org/rules-guidance/notices/24-09",
+              "media-type": "text/html"
+            },
+            {
+              "href": "https://www.finra.org/rules-guidance/rulebooks/finra-rules/3110",
+              "media-type": "text/html"
+            }
+          ]
+        },
+        {
+          "uuid": "af17ec24-f32c-5def-add8-10ae6a39c1c2",
+          "title": "SEC Exchange Act Rule 17a-4",
+          "description": "Authoritative framework or regulatory source used only as a cross-reference for this mapping.",
+          "props": [
+            {
+              "name": "framework-id",
+              "ns": "https://www.ecfr.gov/current/title-17/chapter-II/part-240/section-240.17a-4#",
+              "value": "sec-exchange-act-records"
+            }
+          ],
+          "citation": {
+            "text": "Official electronic Code of Federal Regulations text for 17 CFR 240.17a-4. RateLoop does not provide a broker-dealer's required recordkeeping system or WORM storage target."
+          },
+          "rlinks": [
+            {
+              "href": "https://www.ecfr.gov/current/title-17/chapter-II/part-240/section-240.17a-4",
+              "media-type": "text/html"
+            }
+          ]
+        },
+        {
+          "uuid": "9ea956b1-7f3e-5c89-89e7-d809f18684c3",
+          "title": "Signed assurance evidence packet",
+          "description": "A signed, hash-bound packet containing frozen assurance-input commitments, privacy-safe aggregation, limitations, and available settlement or chain references.",
+          "props": [
+            {
+              "name": "artifact-id",
+              "ns": "https://rateloop.ai/ns/oscal",
+              "value": "signed-assurance-evidence-packet"
+            },
+            {
+              "name": "schema-version",
+              "ns": "https://rateloop.ai/ns/oscal",
+              "value": "rateloop.human-assurance.evidence.v2"
+            }
+          ]
+        },
+        {
+          "uuid": "d5d0b0ec-1ff3-5cf7-8725-1b6229e20e3c",
+          "title": "Adaptive assurance coverage export",
+          "description": "A hash-bound workspace export of policy snapshots, sampling decisions, forced-review rules, human-result observations, coverage rollups, and stage transitions for a bounded period.",
+          "props": [
+            {
+              "name": "artifact-id",
+              "ns": "https://rateloop.ai/ns/oscal",
+              "value": "adaptive-coverage-export"
+            },
+            {
+              "name": "schema-version",
+              "ns": "https://rateloop.ai/ns/oscal",
+              "value": "rateloop.assurance-coverage-export.v1"
+            }
+          ]
+        },
+        {
+          "uuid": "bde8250a-b58f-5596-b715-23da54e2681d",
+          "title": "Workspace audit-chain export",
+          "description": "A workspace-scoped, hash-chained audit export whose sequence and head digest can be checked with the offline verifier.",
+          "props": [
+            {
+              "name": "artifact-id",
+              "ns": "https://rateloop.ai/ns/oscal",
+              "value": "workspace-audit-export"
+            },
+            {
+              "name": "schema-version",
+              "ns": "https://rateloop.ai/ns/oscal",
+              "value": "rateloop-audit-v1"
+            }
+          ]
+        },
+        {
+          "uuid": "10c884d0-a2b8-5562-9323-8e0db11729c3",
+          "title": "Human-review gate evidence",
+          "description": "Signed evidence binding a review requirement to the stop-gate state and the exact release decision without exposing private review material.",
+          "props": [
+            {
+              "name": "artifact-id",
+              "ns": "https://rateloop.ai/ns/oscal",
+              "value": "human-review-gate-evidence"
+            },
+            {
+              "name": "schema-version",
+              "ns": "https://rateloop.ai/ns/oscal",
+              "value": "rateloop.human-review-gate-evidence.v1"
+            }
+          ]
+        },
+        {
+          "uuid": "de8163fc-29a5-5adc-a1d7-ab627d5d605d",
+          "title": "Host-reported execution evidence",
+          "description": "A canonical commitment to host-reported execution metadata. It is explicitly marked independentlyVerified:false and does not verify which model produced an output.",
+          "props": [
+            {
+              "name": "artifact-id",
+              "ns": "https://rateloop.ai/ns/oscal",
+              "value": "host-reported-execution-evidence"
+            },
+            {
+              "name": "schema-version",
+              "ns": "https://rateloop.ai/ns/oscal",
+              "value": "rateloop.execution-evidence.v1"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

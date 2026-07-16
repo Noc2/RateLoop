@@ -21,6 +21,8 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "evidence:verify": "node scripts/verify-assurance-evidence.mjs",
+    "oscal:check": "node scripts/generate-oscal-component-definition.mjs --check",
+    "oscal:generate": "node scripts/generate-oscal-component-definition.mjs",
     "audit:verify": "node scripts/verify-audit-export.mjs",
     "auth:check": "node scripts/check-identity-deployment.mjs --production",
     "test": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && node ../../scripts/run-node-tests.mjs app config lib utils scripts\""
