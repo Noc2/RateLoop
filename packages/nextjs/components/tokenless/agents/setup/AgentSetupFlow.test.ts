@@ -109,6 +109,18 @@ test("review setup resumes a controlled question and compact answer format", () 
   assert.doesNotMatch(flowSource, /form\.get\("(?:criterion|positiveLabel|negativeLabel|rationaleMode)"\)/);
 });
 
+test("review setup uses the legacy duration control for an explicit frozen response window", () => {
+  assert.match(flowSource, /Review round/);
+  assert.match(flowSource, /Response window/);
+  assert.match(flowSource, /Reviewers per request/);
+  assert.match(flowSource, /<DurationInput/);
+  assert.match(flowSource, /valueSeconds=\{reviewTiming\.responseWindowSeconds\}/);
+  assert.match(flowSource, /summarySuffix="Frozen when a request opens"/);
+  assert.match(flowSource, /reviewAudience\.audience === "private_invited" \? 1 : 3/);
+  assert.match(flowSource, /buildReviewTimingRequestProfile\(criterionProfile, reviewTiming\)/);
+  assert.doesNotMatch(flowSource, /slo\.estimatedSeconds/);
+});
+
 test("setup separates the connected client from per-run model provenance", () => {
   assert.match(flowSource, /connected client stays separate/i);
   assert.match(flowSource, /model, effort, and timing reported for each eligible run/i);

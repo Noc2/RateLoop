@@ -23,7 +23,16 @@ import {
   reviewFrequencyFormValues,
   reviewFrequencySummary,
 } from "./reviewFrequency";
+import {
+  MAX_REVIEW_PANEL_SIZE,
+  MAX_REVIEW_RESPONSE_WINDOW_SECONDS,
+  MIN_REVIEW_RESPONSE_WINDOW_SECONDS,
+  type ReviewTimingFormValues,
+  buildReviewTimingRequestProfile,
+  reviewTimingFormValues,
+} from "./reviewTiming";
 import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
+import { DurationInput } from "~~/components/ui/DurationInput";
 import { type AgentSetupScreenStep, agentSetupUrl } from "~~/lib/tokenless/agentSetupNavigation";
 import type { WorkspaceAgentSetupView } from "~~/lib/tokenless/workspaceAgentSetup";
 
@@ -85,6 +94,9 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   const [reviewCriterion, setReviewCriterion] = useState<ReviewCriterionFormValues>(() =>
     reviewCriterionFormValues(initialSetup.reviewDraft?.requestProfile),
   );
+  const [reviewTiming, setReviewTiming] = useState<ReviewTimingFormValues>(() =>
+    reviewTimingFormValues(initialSetup.reviewDraft?.requestProfile),
+  );
   const headingRef = useRef<HTMLHeadingElement>(null);
   const connectionMessageRef = useRef<HTMLTextAreaElement>(null);
   const focusOnNavigation = useRef(false);
@@ -126,6 +138,11 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
 
   useEffect(
     () => setReviewCriterion(reviewCriterionFormValues(setup.reviewDraft?.requestProfile)),
+    [setup.reviewDraft?.requestProfile],
+  );
+
+  useEffect(
+    () => setReviewTiming(reviewTimingFormValues(setup.reviewDraft?.requestProfile)),
     [setup.reviewDraft?.requestProfile],
   );
 
@@ -316,18 +333,10 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     try {
       const draft = setup.reviewDraft;
       if (!draft) throw new Error("Review behavior is unavailable. Reload setup and try again.");
-      if (
-        draft.requestProfile.configurationStatus !== "ready" ||
-        !Number.isSafeInteger(draft.requestProfile.responseWindowSeconds) ||
-        Number(draft.requestProfile.responseWindowSeconds) < 1_200 ||
-        !Number.isSafeInteger(draft.requestProfile.panelSize) ||
-        Number(draft.requestProfile.panelSize) < 1
-      ) {
-        throw new Error("Choose a response window and panel size before saving review behavior.");
-      }
       const selection = buildReviewFrequencySelection(draft.selection, reviewFrequency);
       const audienceProfile = buildReviewAudienceRequestProfile(draft.requestProfile, reviewAudience);
-      const requestProfile = buildReviewCriterionRequestProfile(audienceProfile, reviewCriterion);
+      const criterionProfile = buildReviewCriterionRequestProfile(audienceProfile, reviewCriterion);
+      const requestProfile = buildReviewTimingRequestProfile(criterionProfile, reviewTiming);
       const audience = requestProfile.audience;
       let privateGroupId =
         audience === "public_network" ? null : (requestProfile.privateGroupId ?? setup.privateGroupId);
@@ -823,6 +832,40 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 Public, synthetic, or safely redacted material only. Network reviewers are paid in USDC.
               </p>
             )}
+            <fieldset className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-4">
+              <legend className="px-1 text-sm font-medium">Review round</legend>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="text-sm">
+                  Response window
+                  <DurationInput
+                    id="agent-setup-review-response-window"
+                    className="mt-2"
+                    ariaLabel="Response window"
+                    valueSeconds={reviewTiming.responseWindowSeconds}
+                    minSeconds={MIN_REVIEW_RESPONSE_WINDOW_SECONDS}
+                    maxSeconds={MAX_REVIEW_RESPONSE_WINDOW_SECONDS}
+                    summarySuffix="Frozen when a request opens"
+                    onChangeSeconds={responseWindowSeconds =>
+                      setReviewTiming(current => ({ ...current, responseWindowSeconds }))
+                    }
+                  />
+                </label>
+                <label className="text-sm">
+                  Reviewers per request
+                  <input
+                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                    type="number"
+                    inputMode="numeric"
+                    min={reviewAudience.audience === "private_invited" ? 1 : 3}
+                    max={MAX_REVIEW_PANEL_SIZE}
+                    step={1}
+                    value={reviewTiming.panelSize}
+                    onChange={event => setReviewTiming(current => ({ ...current, panelSize: event.target.value }))}
+                    required
+                  />
+                </label>
+              </div>
+            </fieldset>
             <p className="mt-4 text-xs text-base-content/55">
               The safe connection does not assign or deliver work to reviewers.
             </p>
