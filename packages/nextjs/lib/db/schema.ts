@@ -946,6 +946,109 @@ export type NewTokenlessAgentHumanReviewBinding = typeof tokenlessAgentHumanRevi
 export type TokenlessAgentHumanReviewBindingEvent = typeof tokenlessAgentHumanReviewBindingEvents.$inferSelect;
 export type NewTokenlessAgentHumanReviewBindingEvent = typeof tokenlessAgentHumanReviewBindingEvents.$inferInsert;
 
+export const tokenlessAgentReviewOpportunityLifecycles = pgTable(
+  "tokenless_agent_review_opportunity_lifecycles",
+  {
+    workspaceId: text("workspace_id").notNull(),
+    opportunityId: text("opportunity_id").notNull(),
+    state: text("state").notNull(),
+    stateRevision: integer("state_revision").notNull().default(1),
+    reasonCodesJson: text("reason_codes_json").notNull().default("[]"),
+    stateEnteredAt: timestamp("state_entered_at", { mode: "date", withTimezone: true }).notNull(),
+    terminalAt: timestamp("terminal_at", { mode: "date", withTimezone: true }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    pk: primaryKey({ columns: [table.workspaceId, table.opportunityId] }),
+    stateUpdatedIdx: index("tokenless_agent_review_opportunity_lifecycles_state_updated_idx")
+      .on(table.workspaceId, table.state, table.updatedAt)
+      .where(sql`${table.terminalAt} IS NULL`),
+  }),
+);
+
+export const tokenlessAgentReviewApprovalRequests = pgTable(
+  "tokenless_agent_review_approval_requests",
+  {
+    approvalId: text("approval_id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    opportunityId: text("opportunity_id").notNull(),
+    revision: integer("revision").notNull(),
+    requestProfileId: text("request_profile_id").notNull(),
+    requestProfileVersion: integer("request_profile_version").notNull(),
+    requestProfileHash: text("request_profile_hash").notNull(),
+    sourceEvidenceHash: text("source_evidence_hash").notNull(),
+    suggestionCommitment: text("suggestion_commitment").notNull(),
+    preparedRequestJson: text("prepared_request_json").notNull(),
+    preparedRequestHash: text("prepared_request_hash").notNull(),
+    derivedEconomicsJson: text("derived_economics_json").notNull(),
+    derivedEconomicsHash: text("derived_economics_hash").notNull(),
+    maximumChargeAtomic: numeric("maximum_charge_atomic", { precision: 78, scale: 0 }).notNull(),
+    status: text("status").notNull().default("pending"),
+    ownerDecision: text("owner_decision"),
+    preparedBy: text("prepared_by").notNull(),
+    decidedBy: text("decided_by"),
+    decisionNote: text("decision_note"),
+    decidedAt: timestamp("decided_at", { mode: "date", withTimezone: true }),
+    invalidatedBy: text("invalidated_by"),
+    invalidatedAt: timestamp("invalidated_at", { mode: "date", withTimezone: true }),
+    expiredAt: timestamp("expired_at", { mode: "date", withTimezone: true }),
+    consumedAt: timestamp("consumed_at", { mode: "date", withTimezone: true }),
+    consumptionReference: text("consumption_reference"),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    actionableOpportunityIdx: uniqueIndex("tokenless_agent_review_approval_requests_actionable_opportunity_idx")
+      .on(table.workspaceId, table.opportunityId)
+      .where(sql`${table.status} IN ('pending', 'approved')`),
+    consumptionUnique: uniqueIndex("tokenless_agent_review_approval_requests_consumption_unique").on(
+      table.consumptionReference,
+    ),
+    opportunityRevisionUnique: uniqueIndex("tokenless_agent_review_approval_requests_opportunity_revision_unique").on(
+      table.workspaceId,
+      table.opportunityId,
+      table.revision,
+    ),
+    preparedHashUnique: uniqueIndex("tokenless_agent_review_approval_requests_prepared_hash_unique").on(
+      table.workspaceId,
+      table.preparedRequestHash,
+    ),
+    profileFk: foreignKey({
+      columns: [table.workspaceId, table.requestProfileId, table.requestProfileVersion, table.requestProfileHash],
+      foreignColumns: [
+        tokenlessAgentReviewRequestProfiles.workspaceId,
+        tokenlessAgentReviewRequestProfiles.profileId,
+        tokenlessAgentReviewRequestProfiles.version,
+        tokenlessAgentReviewRequestProfiles.profileHash,
+      ],
+      name: "tokenless_agent_review_approval_requests_profile_fk",
+    }).onDelete("restrict"),
+    lifecycleFk: foreignKey({
+      columns: [table.workspaceId, table.opportunityId],
+      foreignColumns: [
+        tokenlessAgentReviewOpportunityLifecycles.workspaceId,
+        tokenlessAgentReviewOpportunityLifecycles.opportunityId,
+      ],
+      name: "tokenless_agent_review_approval_requests_lifecycle_fk",
+    }).onDelete("restrict"),
+    profileIdx: index("tokenless_agent_review_approval_requests_profile_idx").on(
+      table.workspaceId,
+      table.requestProfileId,
+      table.requestProfileVersion,
+      table.createdAt,
+    ),
+    statusExpiryIdx: index("tokenless_agent_review_approval_requests_status_expiry_idx")
+      .on(table.workspaceId, table.status, table.expiresAt)
+      .where(sql`${table.status} IN ('pending', 'approved')`),
+  }),
+);
+
+export type TokenlessAgentReviewOpportunityLifecycle = typeof tokenlessAgentReviewOpportunityLifecycles.$inferSelect;
+export type NewTokenlessAgentReviewOpportunityLifecycle = typeof tokenlessAgentReviewOpportunityLifecycles.$inferInsert;
+export type TokenlessAgentReviewApprovalRequest = typeof tokenlessAgentReviewApprovalRequests.$inferSelect;
+export type NewTokenlessAgentReviewApprovalRequest = typeof tokenlessAgentReviewApprovalRequests.$inferInsert;
+
 export const tokenlessAgentExecutions = pgTable(
   "tokenless_agent_executions",
   {
