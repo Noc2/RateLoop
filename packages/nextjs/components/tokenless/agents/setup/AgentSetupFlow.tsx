@@ -11,6 +11,13 @@ import {
   reviewAudienceFormValues,
 } from "./reviewAudience";
 import {
+  REVIEW_ANSWER_LABEL_MAX_LENGTH,
+  REVIEW_CRITERION_MAX_LENGTH,
+  type ReviewCriterionFormValues,
+  buildReviewCriterionRequestProfile,
+  reviewCriterionFormValues,
+} from "./reviewCriterion";
+import {
   type ReviewFrequencyFormValues,
   buildReviewFrequencySelection,
   reviewFrequencyFormValues,
@@ -75,6 +82,9 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   const [reviewAudience, setReviewAudience] = useState<ReviewAudienceFormValues>(() =>
     reviewAudienceFormValues(initialSetup.reviewDraft?.requestProfile),
   );
+  const [reviewCriterion, setReviewCriterion] = useState<ReviewCriterionFormValues>(() =>
+    reviewCriterionFormValues(initialSetup.reviewDraft?.requestProfile),
+  );
   const headingRef = useRef<HTMLHeadingElement>(null);
   const connectionMessageRef = useRef<HTMLTextAreaElement>(null);
   const focusOnNavigation = useRef(false);
@@ -111,6 +121,11 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
 
   useEffect(
     () => setReviewAudience(reviewAudienceFormValues(setup.reviewDraft?.requestProfile)),
+    [setup.reviewDraft?.requestProfile],
+  );
+
+  useEffect(
+    () => setReviewCriterion(reviewCriterionFormValues(setup.reviewDraft?.requestProfile)),
     [setup.reviewDraft?.requestProfile],
   );
 
@@ -311,7 +326,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         throw new Error("Choose a response window and panel size before saving review behavior.");
       }
       const selection = buildReviewFrequencySelection(draft.selection, reviewFrequency);
-      const requestProfile = buildReviewAudienceRequestProfile(draft.requestProfile, reviewAudience);
+      const audienceProfile = buildReviewAudienceRequestProfile(draft.requestProfile, reviewAudience);
+      const requestProfile = buildReviewCriterionRequestProfile(audienceProfile, reviewCriterion);
       const audience = requestProfile.audience;
       let privateGroupId =
         audience === "public_network" ? null : (requestProfile.privateGroupId ?? setup.privateGroupId);
@@ -602,6 +618,63 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               Choose when RateLoop should mark an eligible output for human review. This saves a review policy; the safe
               connection does not send requests or pay reviewers.
             </p>
+            <label className="mt-5 block text-sm">
+              Review question
+              <textarea
+                className="textarea mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                rows={3}
+                value={reviewCriterion.criterion}
+                onChange={event => setReviewCriterion(current => ({ ...current, criterion: event.target.value }))}
+                maxLength={REVIEW_CRITERION_MAX_LENGTH}
+                required
+              />
+            </label>
+            <fieldset className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-4">
+              <legend className="px-1 text-sm font-medium">Answer format</legend>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="text-sm">
+                  Positive label
+                  <input
+                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                    value={reviewCriterion.positiveLabel}
+                    onChange={event =>
+                      setReviewCriterion(current => ({ ...current, positiveLabel: event.target.value }))
+                    }
+                    maxLength={REVIEW_ANSWER_LABEL_MAX_LENGTH}
+                    required
+                  />
+                </label>
+                <label className="text-sm">
+                  Negative label
+                  <input
+                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                    value={reviewCriterion.negativeLabel}
+                    onChange={event =>
+                      setReviewCriterion(current => ({ ...current, negativeLabel: event.target.value }))
+                    }
+                    maxLength={REVIEW_ANSWER_LABEL_MAX_LENGTH}
+                    required
+                  />
+                </label>
+                <label className="text-sm sm:col-span-2">
+                  Rationale
+                  <select
+                    className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                    value={reviewCriterion.rationaleMode}
+                    onChange={event =>
+                      setReviewCriterion(current => ({
+                        ...current,
+                        rationaleMode: event.target.value as ReviewCriterionFormValues["rationaleMode"],
+                      }))
+                    }
+                  >
+                    <option value="off">Off</option>
+                    <option value="optional">Optional</option>
+                    <option value="required">Required</option>
+                  </select>
+                </label>
+              </div>
+            </fieldset>
             <fieldset className="mt-5 space-y-3">
               <legend className="font-medium">How often should RateLoop require human review?</legend>
               {REVIEW_FREQUENCY_OPTIONS.map(([value, label, description, badge]) => (

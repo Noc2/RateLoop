@@ -92,6 +92,23 @@ test("review setup controls audience and shows only the relevant material bounda
   assert.match(flowSource, /audience === "public_network" \? null/);
 });
 
+test("review setup resumes a controlled question and compact answer format", () => {
+  for (const label of ["Review question", "Answer format", "Positive label", "Negative label", "Rationale"]) {
+    assert.match(flowSource, new RegExp(label));
+  }
+  for (const option of ["off", "optional", "required"]) {
+    assert.match(flowSource, new RegExp(`<option value="${option}">`, "u"));
+  }
+  assert.match(flowSource, /value=\{reviewCriterion\.criterion\}/);
+  assert.match(flowSource, /value=\{reviewCriterion\.positiveLabel\}/);
+  assert.match(flowSource, /value=\{reviewCriterion\.negativeLabel\}/);
+  assert.match(flowSource, /value=\{reviewCriterion\.rationaleMode\}/);
+  assert.match(flowSource, /maxLength=\{REVIEW_CRITERION_MAX_LENGTH\}/);
+  assert.match(flowSource, /maxLength=\{REVIEW_ANSWER_LABEL_MAX_LENGTH\}/);
+  assert.match(flowSource, /buildReviewCriterionRequestProfile\(audienceProfile, reviewCriterion\)/);
+  assert.doesNotMatch(flowSource, /form\.get\("(?:criterion|positiveLabel|negativeLabel|rationaleMode)"\)/);
+});
+
 test("setup separates the connected client from per-run model provenance", () => {
   assert.match(flowSource, /connected client stays separate/i);
   assert.match(flowSource, /model, effort, and timing reported for each eligible run/i);
