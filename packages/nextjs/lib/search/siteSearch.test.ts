@@ -14,6 +14,11 @@ test("site search indexes every docs navigation page", () => {
 test("site search finds documentation by title and topic", () => {
   assert.equal(searchSite("drand")[0]?.href, "/docs/tech-stack#drand-tlock");
   assert.equal(searchSite("API errors")[0]?.href, "/docs/ai/errors");
+  assert.equal(searchSite("customer support")[0]?.href, "/docs/use-cases#customer-replies");
+  assert.equal(searchSite("research deliverable")[0]?.href, "/docs/use-cases#research-deliverables");
+  assert.equal(searchSite("UI clarity")[0]?.href, "/docs/use-cases#product-experiences");
+  assert.equal(searchSite("low confidence extraction")[0]?.href, "/docs/use-cases#extraction-triage");
+  assert.ok(searchSite("adaptive review").some(result => result.href === "/docs/use-cases#version-calibration"));
   assert.ok(searchSite("refund compensation").some(result => result.href === "/docs/how-it-works#settlement-paths"));
 });
 

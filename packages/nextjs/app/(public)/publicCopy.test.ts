@@ -7,6 +7,7 @@ const PUBLIC_COPY_FILES = [
   "./docs/page.tsx",
   "./docs/ai/page.tsx",
   "./docs/how-it-works/page.tsx",
+  "./docs/use-cases/page.tsx",
   "./docs/smart-contracts/page.tsx",
   "./docs/tech-stack/page.tsx",
   "./legal/page.tsx",

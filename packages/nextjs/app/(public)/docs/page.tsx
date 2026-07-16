@@ -34,8 +34,9 @@ export default function DocsPage() {
     <article className="prose max-w-none">
       <DocsTitle gradientText="Assurance">Human</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
-        RateLoop gives AI workflows a Human Assurance Loop: review frequently at first, then let scoped evidence—not
-        blind trust—decide when baseline review can decrease.
+        Automated checks can pass while an AI output still needs a contextual decision. RateLoop adds a Human Assurance
+        Loop: review frequently at first, then let scoped evidence—not blind trust—decide when baseline review can
+        decrease.
       </p>
 
       <h2>Human judgment that follows the evidence</h2>
@@ -73,6 +74,10 @@ export default function DocsPage() {
 
       <h2>Where to go next</h2>
       <ul>
+        <li>
+          <Link href="/docs/use-cases">Use Cases</Link> maps concrete AI workflow problems to bounded human checks and
+          accountable owner decisions.
+        </li>
         <li>
           <Link href="/docs/how-it-works">How It Works</Link> follows the agent, reviewer, and settlement journeys.
         </li>
