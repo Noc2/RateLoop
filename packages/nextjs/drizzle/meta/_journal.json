@@ -463,6 +463,13 @@
       "when": 1784174400000,
       "tag": "0065_human_review_continuations",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1784181600000,
+      "tag": "0067_paid_review_voucher_receipts",
+      "breakpoints": true
     }
   ]
 }
