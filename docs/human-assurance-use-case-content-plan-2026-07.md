@@ -50,8 +50,8 @@ mechanism.
 
 Suggested RateLoop problem:
 
-> Automated checks catch broken rules. They do not tell you whether an AI output is clear, useful, and right for the
-> situation. That decision still needs people.
+> Automated checks catch many failures. When they cannot settle a context-dependent decision, people can judge the
+> actual output.
 
 ### 2. Concrete stories use problem -> workflow -> result
 
@@ -99,7 +99,8 @@ A strong RateLoop use case meets most of these conditions:
 - A reviewer can decide from a bounded, authorized evidence packet.
 - The owner can state one concrete criterion and a go, revise, escalate, or stop action.
 - The task can tolerate a human response window; it is not an emergency control.
-- The right reviewer audience is identifiable: public-safe target users or invited domain experts.
+- The right reviewer qualifications are identifiable independently from the data boundary: target users or domain
+  experts when those qualifications matter, or a general-human panel when they do not.
 - Repeated comparable outputs make scoped agreement and adaptive review useful, or the one-off decision is important
   enough to justify a panel.
 
@@ -111,13 +112,13 @@ be presented as the sole medical, legal, financial, security, or safety approval
 
 The first three rows belong on the landing page. The full set belongs in the docs.
 
-| Use case                            | Concrete operator problem                                                                                                                                                 | Example human check                                                                         | Right audience                                                                                                                                           | Decision and pilot measure                                                                                                                                  |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Customer replies                    | A support response can be grounded and formatted correctly yet still be confusing, dismissive, or unsafe to send.                                                         | `Would you send this response to the customer as written?`                                  | Invited support experts for private cases or policy correctness; a RateLoop-network panel only for public, synthetic, or safely redacted clarity checks. | Send, revise, or escalate. Measure human disagreement, revision rate, review time, and escaped issues.                                                      |
-| Research and client deliverables    | An agent can cite sources and still overstate a conclusion, omit a decision-critical point, or deliver work the client cannot act on.                                     | `Is this conclusion supported by the supplied sources?`                                     | Invited domain experts for correctness; public-safe target readers only for clarity or source credibility.                                               | Deliver, revise, or escalate. Measure unsupported-claim flags, revision rate, and client acceptance.                                                        |
-| UI and public-content checks        | A screen or campaign can pass automated checks and still leave the intended audience unsure what to do or interpret.                                                      | `Is the intended next action clear from this screen?`                                       | Invited target users or a public-safe RateLoop-network panel; images or video can supply the bounded artifact.                                           | Publish, revise, or compare a second version. Measure clarity failures, preference, and rework before release.                                              |
-| Agent-version calibration           | A model, prompt, tool, or workflow change invalidates the team's intuitive belief that the agent still behaves the same way.                                              | `Based on the supplied source, should this agent suggestion be accepted?`                   | The same qualified audience and criterion used for that exact workflow scope.                                                                            | Begin at full review, then retain or reduce baseline coverage only from comparable evidence. Measure agreement, severe disagreement, and coverage by scope. |
-| High-risk or low-confidence routing | Most outputs are routine, but declared risk, missing context, low confidence, or a maximum unreviewed gap makes a particular case inappropriate to release automatically. | Reuse the workflow's frozen binary criterion rather than inventing a new question per case. | The policy-bound audience for that workflow.                                                                                                             | Hold, approve, revise, or escalate. Measure trigger rate, turnaround, and the reasons that forced review.                                                   |
+| Use case                         | Concrete operator problem                                                                                                                             | Example human check                                                                | Right audience                                                                                                                                                                  | Decision and pilot measure                                                                                                                                  |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Customer replies                 | A support response can be grounded and formatted correctly yet still be confusing, dismissive, or off-tone.                                           | `Would you send this response to the customer as written?`                         | Invite support experts when policy correctness matters. Use a general-human panel only for clarity or tone, and only with public, synthetic, or safely redacted material.       | Send, revise, or escalate. Measure human disagreement, revision rate, review time, and escaped issues.                                                      |
+| Research and client deliverables | An agent can cite sources and still overstate a conclusion, omit a decision-critical point, or deliver work the client cannot act on.                 | `Is this conclusion supported by the supplied sources?`                            | Invite domain experts for correctness. General readers can judge clarity or source credibility only when those are the frozen criteria. Apply the material boundary separately. | Deliver, revise, or escalate. Measure unsupported-claim flags, revision rate, and client acceptance.                                                        |
+| UI and public-content checks     | A screen or campaign can pass automated checks and still leave the intended audience unsure what to do or interpret.                                  | `Is the intended next action clear from this screen?`                              | Invite representative target users when that qualification matters. A general-human panel can judge broadly legible public-safe media.                                          | Publish, revise, or compare a second version. Measure clarity failures, preference, and rework before release.                                              |
+| Agent-version calibration        | A model, prompt, tool, or workflow change invalidates the team's intuitive belief that the agent still behaves the same way.                          | `Based on the supplied source, should this agent suggestion be accepted?`          | The same qualified audience and criterion used for that exact workflow scope.                                                                                                   | Begin at full review, then retain or reduce baseline coverage only from comparable evidence. Measure agreement, severe disagreement, and coverage by scope. |
+| Extraction and triage exceptions | An agent classifies a request or extracts a record, but ambiguous source material or low confidence makes the suggested structured result unreliable. | `Does the suggested classification or extracted record match the supplied source?` | Invite operations or domain reviewers qualified for the schema and source material. Apply the public/private material boundary independently.                                   | Accept, correct, or escalate. Measure exception rate, corrections, turnaround, and repeated failure categories.                                             |
 
 ### Important capability distinctions
 
@@ -165,7 +166,8 @@ Suggested compact copy:
 
 > **When Humans Matter**
 >
-> Automated checks catch broken rules. People catch work that is technically valid but wrong for the situation.
+> Automated checks catch many failures. When they cannot settle a context-dependent decision, people can judge the
+> actual output.
 >
 > **Customer replies**
 >
@@ -196,7 +198,8 @@ Add `/docs/use-cases` under `Start Here`, between `Introduction` and `How It Wor
    - what RateLoop returns;
    - what the customer decides;
    - what a pilot should measure.
-3. **Choose the audience:** public-safe target judgment versus private invited expertise.
+3. **Choose reviewers and material separately:** qualifications determine who can answer the criterion; sensitivity
+   determines what material each configured audience may receive.
 4. **Combine with automated evals:** run objective checks first; route subjective or exceptional decisions to people.
 5. **When not to use RateLoop:** deterministic, urgent, unauthorized, unknowable, or sole professional-sign-off cases.
 6. **Next action:** connect an agent if the effective lane is available; otherwise link to How It Works and the agent
@@ -263,14 +266,16 @@ negative or inconclusive pilot is still a credible worked example if its method 
 3. Add page and anchor entries to `packages/nextjs/lib/search/siteSearch.ts`; verify searches for `customer support`,
    `research`, `UI`, `human judgment`, and `adaptive review`.
 4. Add `packages/nextjs/public/docs/use-cases.md`.
-5. Add the compact landing-page section and its three deep links.
-6. Remove the redundant evaluation FAQ and trim adjacent copy so the 430-word landing-page guard still passes.
-7. Keep the landing and docs commits separate so the new documentation can land independently of homepage layout.
+5. Update the docs introduction with a problem-first sentence and a direct `Use Cases` path.
+6. Add the compact landing-page section and its three deep links.
+7. Remove the redundant evaluation FAQ and trim adjacent copy so the 430-word landing-page guard still passes.
+8. Keep the landing and docs commits separate so the new documentation can land independently of homepage layout.
 
 Acceptance criteria:
 
 - A first-time visitor can name three problems RateLoop addresses without opening a FAQ.
 - Every example states a trigger, reviewer, question, and customer decision.
+- Reviewer qualifications and permitted material are explained as separate choices.
 - No example claims a customer, uplift, compliance outcome, expert network, real-time decision, or currently unavailable
   workflow.
 - Public-network and private-data boundaries match the design of record.
