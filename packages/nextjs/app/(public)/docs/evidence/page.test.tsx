@@ -34,6 +34,11 @@ test("evidence docs explain exact artifacts, checks, mappings, and non-claims", 
   assert.match(html, /absent token means there is no TSA receipt/i);
   assert.match(html, /assurance\/coverage\/export/i);
   assert.match(html, /assurance\/trusted-keys/i);
+  assert.match(
+    html,
+    /Scheduled enforcement removes due private artifact content and access logs unless a legal hold applies/i,
+  );
+  assert.match(html, /canonical audit chain remain as integrity records/i);
   assert.match(html, /ISO\/IEC 42001:2023.*A\.6, including A\.6\.2\.8, and A\.9\.2/i);
   assert.match(html, /Articles 12, 26\(5\)-\(6\), 72, and 73/i);
   assert.match(html, /NIST AI RMF.*MEASURE and MANAGE/i);
@@ -59,6 +64,11 @@ test("machine docs mirror evidence boundaries and are linked from agent setup", 
   assert.match(evidence, /attestation:verify.*--signer-public-key.*--rekor-public-key.*--tsa-ca/is);
   assert.match(evidence, /ISO\/IEC 42001:2023.*A\.6 including A\.6\.2\.8, and A\.9\.2/is);
   assert.match(evidence, /Articles 12, 26\(5\)-\(6\), 72, and 73/);
+  assert.match(
+    evidence,
+    /Scheduled enforcement removes due private artifact[\s\S]*content and access logs unless a legal hold applies/i,
+  );
+  assert.match(evidence, /canonical audit chain remain as integrity records/i);
   assert.match(evidence, /rateloop-human-assurance-component-definition\.oscal\.json/);
   assert.match(connection, /\[`evidence\.md`\]\(\.\/evidence\.md\)/);
   assert.match(connection, /\[`\/docs\/evidence`\]\(\/docs\/evidence\)/);

@@ -206,7 +206,10 @@ GET /api/public/assurance/attestations/{jobId}`}</code>
       <p>
         The workspace routes require an authorized workspace session. The public witness is digest-only and is
         retrievable only by its opaque job ID. A workspace retention policy cannot be configured below six months, but
-        that product floor does not determine the customer&apos;s legal or contractual retention schedule.
+        that product floor does not determine the customer&apos;s legal or contractual retention schedule. Scheduled
+        enforcement removes due private artifact content and access logs unless a legal hold applies. Artifact digests,
+        signed packets, witness and WORM receipts, and the canonical audit chain remain as integrity records; deleting
+        private content does not rewrite that history.
       </p>
 
       <h2 id="compliance-map">Compliance mapping</h2>
