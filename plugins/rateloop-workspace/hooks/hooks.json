@@ -1,14 +1,28 @@
 {
   "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "^mcp__rateloop[-_]workspace__rateloop_(evaluate_review_requirement|request_review|wait_for_review|get_review_result)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$PLUGIN_ROOT/hooks/rateloop-advisory-state-update.mjs\"",
+            "commandWindows": "node \"%PLUGIN_ROOT%\\hooks\\rateloop-advisory-state-update.mjs\"",
+            "timeout": 5,
+            "statusMessage": "Updating advisory RateLoop review state"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$PLUGIN_ROOT/hooks/rateloop-stop-gate.mjs\"",
-            "commandWindows": "node \"%PLUGIN_ROOT%\\hooks\\rateloop-stop-gate.mjs\"",
+            "command": "node \"$PLUGIN_ROOT/hooks/rateloop-advisory-stop-gate.mjs\"",
+            "commandWindows": "node \"%PLUGIN_ROOT%\\hooks\\rateloop-advisory-stop-gate.mjs\"",
             "timeout": 5,
-            "statusMessage": "Checking RateLoop review state"
+            "statusMessage": "Checking advisory RateLoop review state"
           }
         ]
       }

@@ -1,0 +1,59 @@
+{
+  "session_id": "session_advisory_01",
+  "turn_id": "turn_advisory_01",
+  "transcript_path": "/must/not/be/read/transcript.jsonl",
+  "cwd": "/fixture/workspace",
+  "hook_event_name": "PostToolUse",
+  "permission_mode": "default",
+  "model": "gpt-5.4",
+  "tool_name": "mcp__rateloop-workspace__rateloop_evaluate_review_requirement",
+  "tool_use_id": "tool_advisory_01",
+  "tool_input": {
+    "externalOpportunityId": "external_fixture_01"
+  },
+  "tool_response": {
+    "content": [
+      {
+        "type": "text",
+        "text": "This field is deliberately ignored by the advisory hook."
+      }
+    ],
+    "structuredContent": {
+      "schemaVersion": "rateloop.human-review-tool-envelope.v1",
+      "workspaceId": "workspace_fixture_01",
+      "integrationId": "integration_fixture_01",
+      "opportunityId": "opportunity_fixture_01",
+      "decision": "skip",
+      "lifecycle": {
+        "state": "skipped",
+        "revision": 1,
+        "terminal": true,
+        "reasonCodes": ["selection_skipped"],
+        "stateEnteredAt": "2026-07-16T12:00:00.000Z"
+      },
+      "frozen": {
+        "selectionPolicy": {
+          "id": "selection_fixture_01",
+          "version": 1
+        },
+        "binding": {
+          "id": "binding_fixture_01",
+          "version": 1,
+          "hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        "requestProfile": {
+          "id": "profile_fixture_01",
+          "version": 1,
+          "hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+        },
+        "evaluationCommitment": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      "route": {
+        "lane": "private_unpaid",
+        "authority": "check_only"
+      },
+      "continuation": null,
+      "terminalEvidence": null
+    }
+  }
+}

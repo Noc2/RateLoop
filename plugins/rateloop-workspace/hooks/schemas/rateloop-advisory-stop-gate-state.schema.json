@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rateloop-tokenless.vercel.app/schemas/rateloop-advisory-stop-gate-state.v2.json",
+  "title": "RateLoop advisory Codex Stop gate state v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "armed",
+    "sessionId",
+    "turnId",
+    "gateId",
+    "workspaceId",
+    "integrationId",
+    "opportunityId",
+    "lifecycle",
+    "lifecycleRevision",
+    "lifecycleTerminal",
+    "outputCommitment",
+    "policyBindingHash",
+    "armedAt",
+    "expiresAt",
+    "lastToolUseId",
+    "envelopeCommitment",
+    "terminalEvidence"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "rateloop.advisory-stop-gate.v2"
+    },
+    "armed": {
+      "type": "boolean"
+    },
+    "sessionId": {
+      "$ref": "#/$defs/localIdentifier"
+    },
+    "turnId": {
+      "$ref": "#/$defs/localIdentifier"
+    },
+    "gateId": {
+      "$ref": "#/$defs/opaqueIdentifier"
+    },
+    "workspaceId": {
+      "$ref": "#/$defs/opaqueIdentifier"
+    },
+    "integrationId": {
+      "$ref": "#/$defs/opaqueIdentifier"
+    },
+    "opportunityId": {
+      "$ref": "#/$defs/opaqueIdentifier"
+    },
+    "lifecycle": {
+      "enum": [
+        "skipped",
+        "approval_required",
+        "request_ready",
+        "pending",
+        "blocked",
+        "completed",
+        "inconclusive",
+        "failed_terminal",
+        "cancelled_before_commit"
+      ]
+    },
+    "lifecycleRevision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2147483647
+    },
+    "lifecycleTerminal": {
+      "type": "boolean"
+    },
+    "outputCommitment": {
+      "$ref": "#/$defs/sha256"
+    },
+    "policyBindingHash": {
+      "$ref": "#/$defs/sha256"
+    },
+    "armedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expiresAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "lastToolUseId": {
+      "$ref": "#/$defs/localIdentifier"
+    },
+    "envelopeCommitment": {
+      "$ref": "#/$defs/sha256"
+    },
+    "terminalEvidence": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/terminalEvidence"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "localIdentifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,128}$"
+    },
+    "opaqueIdentifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{8,200}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "terminalEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "keyId", "payload", "signature"],
+      "properties": {
+        "schemaVersion": {
+          "const": "rateloop.human-review-terminal-evidence.v1"
+        },
+        "keyId": {
+          "$ref": "#/$defs/localIdentifier"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schemaVersion",
+            "workspaceId",
+            "integrationId",
+            "opportunityId",
+            "terminalStatus",
+            "outputCommitment",
+            "policyBindingHash",
+            "issuedAt"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "rateloop.human-review-terminal-payload.v1"
+            },
+            "workspaceId": {
+              "$ref": "#/$defs/opaqueIdentifier"
+            },
+            "integrationId": {
+              "$ref": "#/$defs/opaqueIdentifier"
+            },
+            "opportunityId": {
+              "$ref": "#/$defs/opaqueIdentifier"
+            },
+            "terminalStatus": {
+              "enum": ["completed", "inconclusive", "failed_terminal", "cancelled_before_commit"]
+            },
+            "outputCommitment": {
+              "$ref": "#/$defs/sha256"
+            },
+            "policyBindingHash": {
+              "$ref": "#/$defs/sha256"
+            },
+            "issuedAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        },
+        "signature": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{86}$"
+        }
+      }
+    }
+  }
+}

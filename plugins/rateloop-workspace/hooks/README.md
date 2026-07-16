@@ -1,6 +1,8 @@
-# RateLoop Codex Stop-gate spike
+# RateLoop advisory Codex review-state hooks
 
-This command hook is a local contract spike for an advisory Codex `Stop` gate. Codex runs plugin hooks only after the user separately reviews and trusts the exact hook definition. Installing, enabling, or trusting the RateLoop plugin does not make the integration host-enforced.
+The active hook contract connects supported RateLoop workspace `PostToolUse` results to an advisory Codex `Stop` gate without reading the transcript. See [`ADVISORY_STATE_CONTRACT.md`](./ADVISORY_STATE_CONTRACT.md) for the exact v2 state, transition, and trust boundaries.
+
+Codex runs plugin hooks only after the user separately reviews and trusts the exact hook definition. Installing, enabling, or trusting the RateLoop plugin does not make the integration host-enforced. The older `rateloop-stop-gate.mjs` remains only as the separately committed v1 contract spike; [`hooks.json`](./hooks.json) uses the v2 updater and Stop gate.
 
 The hook reads one deterministic state file from the plugin's writable data directory:
 
@@ -8,38 +10,26 @@ The hook reads one deterministic state file from the plugin's writable data dire
 $PLUGIN_DATA/review-stop-gate-v1/sessions/<session_id>.json
 ```
 
-The state must conform to [`schemas/rateloop-stop-gate-state.schema.json`](./schemas/rateloop-stop-gate-state.schema.json). Trusted terminal-evidence keys live in a separately provisioned keyring at:
+The active state must conform to [`schemas/rateloop-advisory-stop-gate-state.schema.json`](./schemas/rateloop-advisory-stop-gate-state.schema.json). Trusted terminal-evidence keys live in a separately provisioned keyring at:
 
 ```text
 $PLUGIN_DATA/review-stop-gate-v1/trusted-keys.json
 ```
 
-The keyring must conform to [`schemas/rateloop-stop-gate-trusted-keys.schema.json`](./schemas/rateloop-stop-gate-trusted-keys.schema.json). The hook never creates, updates, disarms, or deletes either file. A trusted host component must write them atomically, restrict their permissions, and keep their update path outside agent-controlled workspace files.
+The keyring must conform to [`schemas/rateloop-stop-gate-trusted-keys.schema.json`](./schemas/rateloop-stop-gate-trusted-keys.schema.json). The `PostToolUse` updater creates and atomically advances only the session state from validated workspace-tool envelopes; it never writes or changes the trusted-key ring. A trusted host component must provision the key ring, restrict plugin-data permissions, and keep its update path outside agent-controlled workspace files.
 
-## Decision contract
+## Active decision contract
 
-- No state file or an explicit `armed: false` state lets the turn stop, but cannot be described as enforced review.
-- An `armed: true` state is valid only for `approval_required`, `request_ready`, `pending`, or `blocked` and for the exact Codex session and turn.
+- No state file or an authenticated selection skip lets the turn stop, but cannot be described as enforced review.
+- The updater accepts only the supported RateLoop workspace MCP result envelopes and binds state to the exact workspace, integration, opportunity, session, turn, frozen policy, and monotonic lifecycle revision.
+- An armed non-terminal state is valid only for `approval_required`, `request_ready`, `pending`, or `blocked` and for the exact Codex session and turn.
 - A valid signed terminal receipt for `completed`, `inconclusive`, `failed_terminal`, or `cancelled_before_commit` lets the turn stop.
 - An armed state without valid terminal evidence returns `continue: false`.
 - Expiry fails closed with `recovery_required`. Time alone never authorizes release. A trusted host must write a fresh evaluation, valid signed terminal evidence, or an explicit separately authorized owner override/disarm.
 - A malformed, mismatched, or unverifiable armed state fails closed and exposes only a bounded recovery reason.
 
-Terminal evidence is signed with Ed25519 over the UTF-8 bytes of the following JSON object with this exact property order:
+The v2 terminal evidence payload is signed with Ed25519 over the exact server-known projection documented in [`ADVISORY_STATE_CONTRACT.md`](./ADVISORY_STATE_CONTRACT.md). It never claims that the RateLoop server knew the local Codex session or turn.
 
-```json
-{
-  "schemaVersion": "rateloop.stop-gate-terminal.v1",
-  "gateId": "...",
-  "sessionId": "...",
-  "opportunityId": "...",
-  "terminalStatus": "completed",
-  "outputCommitment": "sha256:...",
-  "policyBindingHash": "sha256:...",
-  "issuedAt": "..."
-}
-```
-
-The hook consumes only the Stop event's stable session and turn identifiers plus this local state contract. It deliberately ignores `transcript_path`, never parses conversation history, never reads source or suggestion artifacts, makes no network calls, and cannot publish, assign reviewers, reserve funds, or spend.
+The hooks consume only stable `PostToolUse` and `Stop` fields plus this local state contract. They deliberately ignore `transcript_path`, never parse conversation history, never read source or suggestion artifacts, make no network calls, and cannot approve, publish, assign reviewers, reserve funds, or spend.
 
 This state contract is designed so a future verified host adapter can consume the same signed evidence while owning the actual output boundary. This plugin hook remains advisory because project and plugin trust do not establish that boundary.
