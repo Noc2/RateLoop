@@ -79,15 +79,30 @@ describe("RateLoop Codex Stop hook", () => {
     expect(manifest).not.toHaveProperty("hooks");
     expect(config).toEqual({
       hooks: {
+        PostToolUse: [
+          {
+            matcher:
+              "^mcp__rateloop[-_]workspace__rateloop_(evaluate_review_requirement|request_review|wait_for_review|get_review_result)$",
+            hooks: [
+              {
+                type: "command",
+                command: 'node "$PLUGIN_ROOT/hooks/rateloop-advisory-state-update.mjs"',
+                commandWindows: 'node "%PLUGIN_ROOT%\\hooks\\rateloop-advisory-state-update.mjs"',
+                timeout: 5,
+                statusMessage: "Updating advisory RateLoop review state",
+              },
+            ],
+          },
+        ],
         Stop: [
           {
             hooks: [
               {
                 type: "command",
-                command: 'node "$PLUGIN_ROOT/hooks/rateloop-stop-gate.mjs"',
-                commandWindows: 'node "%PLUGIN_ROOT%\\hooks\\rateloop-stop-gate.mjs"',
+                command: 'node "$PLUGIN_ROOT/hooks/rateloop-advisory-stop-gate.mjs"',
+                commandWindows: 'node "%PLUGIN_ROOT%\\hooks\\rateloop-advisory-stop-gate.mjs"',
                 timeout: 5,
-                statusMessage: "Checking RateLoop review state",
+                statusMessage: "Checking advisory RateLoop review state",
               },
             ],
           },
@@ -105,7 +120,7 @@ describe("RateLoop Codex Stop hook", () => {
     expect(keyringSchema.properties.keys.items.properties.algorithm.const).toBe("Ed25519");
     expect(readme).toContain("separately reviews and trusts the exact hook definition");
     expect(readme).toContain("does not make the integration host-enforced");
-    expect(readme).toContain("deliberately ignores `transcript_path`");
+    expect(readme).toContain("deliberately ignore `transcript_path`");
     expect(script).not.toContain("transcript_path");
     expect(script).not.toMatch(/\bfetch\s*\(/);
     expect(script).not.toContain("sourcePayload");
