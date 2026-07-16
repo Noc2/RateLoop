@@ -498,6 +498,13 @@
       "when": 1784196000000,
       "tag": "0071_workspace_evidence_retention",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1784199600000,
+      "tag": "0072_assurance_openmetrics_credentials",
+      "breakpoints": true
     }
   ]
 }
