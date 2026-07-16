@@ -32,6 +32,7 @@ export const TOKENLESS_AGENT_SCOPES = [
   "result:read",
   "evaluation:read",
   "review:decide",
+  "telemetry:write",
 ] as const;
 export type TokenlessAgentScope = (typeof TOKENLESS_AGENT_SCOPES)[number];
 const TOKENLESS_AGENT_SCOPE_SET = new Set<string>(TOKENLESS_AGENT_SCOPES);
