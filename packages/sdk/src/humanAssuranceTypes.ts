@@ -20,7 +20,8 @@ export type HumanAssuranceDataClassification =
   | "public"
   | "internal"
   | "confidential"
-  | "restricted";
+  | "restricted"
+  | "regulated";
 export type HumanAssuranceReviewerSource =
   | "customer_invited"
   | "rateloop_network"
@@ -68,11 +69,13 @@ export interface HumanAssuranceRubric {
   prompt: string;
   choices: ["baseline", "candidate", "tie"];
   failureTags: HumanAssuranceRubricTag[];
-  rationale: {
-    mode: "optional" | "required";
-    minLength?: number;
-    maxLength: number;
-  };
+  rationale:
+    | { mode: "off" }
+    | {
+        mode: "optional" | "required";
+        minLength?: number;
+        maxLength: number;
+      };
   passRule: {
     metric: "candidate_preference_share_bps";
     operator: "gte";

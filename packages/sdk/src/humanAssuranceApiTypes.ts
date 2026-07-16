@@ -4,6 +4,7 @@ import type {
   HumanAssuranceDataClassification,
   HumanAssuranceRubric,
 } from "./humanAssuranceTypes";
+import type { TokenlessRequestProfileReference } from "./tokenlessTypes";
 
 export interface HumanAssuranceProjectCreateRequest {
   name: string;
@@ -16,6 +17,49 @@ export interface HumanAssuranceProjectCreateResponse {
   schemaVersion: typeof HUMAN_ASSURANCE_SCHEMA_VERSION;
   projectId: string;
   workspaceId: string;
+}
+
+export type HumanAssurancePrivateArtifactInput = {
+  contentType: string;
+  bytesBase64: string;
+};
+
+export interface HumanAssurancePrivateReviewCreateRequest {
+  idempotencyKey: string;
+  integrationId: string;
+  projectId: string;
+  requestProfile: TokenlessRequestProfileReference;
+  cohortId: string;
+  dataClassification: Extract<
+    HumanAssuranceDataClassification,
+    "internal" | "confidential" | "restricted" | "regulated"
+  >;
+  source: HumanAssurancePrivateArtifactInput;
+  suggestion: HumanAssurancePrivateArtifactInput;
+}
+
+export interface HumanAssurancePrivateReviewCreateResponse {
+  schemaVersion: typeof HUMAN_ASSURANCE_SCHEMA_VERSION;
+  privateReviewId: string;
+  status: "ready_for_assignment" | "awaiting_owner_rebind";
+  lane: "private";
+  task: { kind: "binary_review"; commitment: `sha256:${string}` };
+  bindings: {
+    bindingHash: `sha256:${string}`;
+    project: { projectId: string; hash: `sha256:${string}` };
+    requestProfile: TokenlessRequestProfileReference;
+    privateGroup: {
+      groupId: string;
+      policyVersion: number;
+      policyHash: `sha256:${string}`;
+      allowlistHash: `sha256:${string}`;
+      allowlistStatus: "allowed" | "excluded";
+    };
+    cohort: { cohortId: string; hash: `sha256:${string}` };
+  };
+  artifacts: { sourceArtifactId: string; suggestionArtifactId: string };
+  responseWindowSeconds: number;
+  responseDeadline: string;
 }
 
 export interface HumanAssuranceProjectSummary {
@@ -52,10 +96,7 @@ export interface HumanAssuranceProjectResourcesResponse {
   policies: Array<{
     policyId: string;
     version: number;
-    reviewerSource:
-      | "customer_invited"
-      | "rateloop_network"
-      | "hybrid";
+    reviewerSource: "customer_invited" | "rateloop_network" | "hybrid";
     compensation: HumanAssuranceAudiencePolicy["compensation"];
     selection: HumanAssuranceAudiencePolicy["selection"];
     policyHash: `sha256:${string}`;
@@ -135,6 +176,9 @@ export interface HumanAssuranceApiClient {
   createProject(
     request: HumanAssuranceProjectCreateRequest,
   ): Promise<HumanAssuranceProjectCreateResponse>;
+  createPrivateReview(
+    request: HumanAssurancePrivateReviewCreateRequest,
+  ): Promise<HumanAssurancePrivateReviewCreateResponse>;
   getProject(request: {
     projectId: string;
   }): Promise<HumanAssuranceProjectResourcesResponse>;

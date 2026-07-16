@@ -216,9 +216,6 @@ function exactProfile(profile: BoundHumanReviewRequestProfile) {
   if (!["off", "optional", "required"].includes(profile.rationaleMode)) {
     configurationError("Stored rationale mode is invalid.");
   }
-  if (profile.rationaleMode === "off") {
-    configurationError("Stored rationale mode 'off' is not supported by the tokenless review question schema.");
-  }
   if (!["private_invited", "public_network", "hybrid"].includes(profile.audience)) {
     configurationError("Stored review audience is invalid.");
   }
@@ -358,7 +355,9 @@ export function prepareHumanReviewRequest(input: {
   const rationale =
     profile.rationaleMode === "required"
       ? ({ mode: "required", minLength: 10, maxLength: 2_000 } as const)
-      : ({ mode: "optional" } as const);
+      : profile.rationaleMode === "optional"
+        ? ({ mode: "optional" } as const)
+        : ({ mode: "off" } as const);
   return immutable({
     preparedRequest,
     preparedRequestHash: hashPreparedHumanReviewValue(preparedRequest),

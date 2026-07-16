@@ -3,6 +3,7 @@ import test from "node:test";
 import { createTokenlessRateLoopClient } from "./tokenless";
 import {
   parseHumanAssuranceProjectCreateRequest,
+  parseHumanAssurancePrivateReviewCreateRequest,
   parseHumanAssuranceProjectResourcesResponse,
   parseHumanAssuranceRunStatusResponse,
 } from "./humanAssuranceApiSchema";
@@ -42,6 +43,57 @@ test("project creation requires explicit privacy and retention choices", () => {
         workspaceId: "must-be-derived-from-api-key",
       }),
     /only name, description, dataClassification, retentionDays/,
+  );
+});
+
+test("private reviews require exact integration/profile bindings and reject plaintext fields", () => {
+  const request = {
+    idempotencyKey: "private-review-0001",
+    integrationId: "agi_exact",
+    projectId: "hap_private",
+    requestProfile: {
+      id: "rrp_private",
+      version: 3,
+      hash: `sha256:${"a".repeat(64)}`,
+    },
+    cohortId: "hacoh_private",
+    dataClassification: "regulated",
+    source: {
+      contentType: "text/plain",
+      bytesBase64: Buffer.from("source").toString("base64"),
+    },
+    suggestion: {
+      contentType: "text/plain",
+      bytesBase64: Buffer.from("suggestion").toString("base64"),
+    },
+  };
+  assert.deepEqual(
+    parseHumanAssurancePrivateReviewCreateRequest(request),
+    request,
+  );
+  assert.throws(
+    () =>
+      parseHumanAssurancePrivateReviewCreateRequest({
+        ...request,
+        sourceText: "plaintext",
+      }),
+    /only idempotencyKey, integrationId, projectId/u,
+  );
+  assert.throws(
+    () =>
+      parseHumanAssurancePrivateReviewCreateRequest({
+        ...request,
+        dataClassification: "public",
+      }),
+    /dataClassification/u,
+  );
+  assert.throws(
+    () =>
+      parseHumanAssurancePrivateReviewCreateRequest({
+        ...request,
+        source: { ...request.source, bytesBase64: "" },
+      }),
+    /bytesBase64/u,
   );
 });
 
@@ -109,6 +161,7 @@ test("client exposes API-key scoped project and run paths", async () => {
     method: string;
     url: string;
     authorization: string | null;
+    idempotencyKey: string | null;
   }> = [];
   const client = createTokenlessRateLoopClient({
     apiBaseUrl: "https://tokenless.example",
@@ -119,7 +172,51 @@ test("client exposes API-key scoped project and run paths", async () => {
         method: init.method ?? "GET",
         url,
         authorization: new Headers(init.headers).get("authorization"),
+        idempotencyKey: new Headers(init.headers).get("idempotency-key"),
       });
+      if (url.endsWith("/assurance/private-reviews")) {
+        return new Response(
+          JSON.stringify({
+            schemaVersion: HUMAN_ASSURANCE_SCHEMA_VERSION,
+            privateReviewId: "hpr_client",
+            status: "ready_for_assignment",
+            lane: "private",
+            task: {
+              kind: "binary_review",
+              commitment: `sha256:${"1".repeat(64)}`,
+            },
+            bindings: {
+              bindingHash: `sha256:${"2".repeat(64)}`,
+              project: {
+                projectId: "hap_client",
+                hash: `sha256:${"3".repeat(64)}`,
+              },
+              requestProfile: {
+                id: "rrp_client",
+                version: 1,
+                hash: `sha256:${"4".repeat(64)}`,
+              },
+              privateGroup: {
+                groupId: "pgrp_client",
+                policyVersion: 1,
+                policyHash: `sha256:${"5".repeat(64)}`,
+                allowlistHash: `sha256:${"6".repeat(64)}`,
+                allowlistStatus: "allowed",
+              },
+              cohort: {
+                cohortId: "hacoh_client",
+                hash: `sha256:${"7".repeat(64)}`,
+              },
+            },
+            artifacts: {
+              sourceArtifactId: "art_source",
+              suggestionArtifactId: "art_suggestion",
+            },
+            responseWindowSeconds: 3_600,
+            responseDeadline: "2026-07-16T12:00:00.000Z",
+          }),
+        );
+      }
       if (url.endsWith("/assurance/projects") && init.method === "POST") {
         return new Response(
           JSON.stringify({
@@ -188,6 +285,26 @@ test("client exposes API-key scoped project and run paths", async () => {
     dataClassification: "confidential",
     retentionDays: 90,
   });
+  await client.assurance.createPrivateReview({
+    idempotencyKey: "private-client-0001",
+    integrationId: "agi_client",
+    projectId: "hap_client",
+    requestProfile: {
+      id: "rrp_client",
+      version: 1,
+      hash: `sha256:${"4".repeat(64)}`,
+    },
+    cohortId: "hacoh_client",
+    dataClassification: "confidential",
+    source: {
+      contentType: "text/plain",
+      bytesBase64: Buffer.from("source").toString("base64"),
+    },
+    suggestion: {
+      contentType: "text/plain",
+      bytesBase64: Buffer.from("suggestion").toString("base64"),
+    },
+  });
   await client.assurance.getProject({ projectId: "hap_client" });
   await client.assurance.getRunStatus({ runId: "hau_client" });
 
@@ -196,6 +313,10 @@ test("client exposes API-key scoped project and run paths", async () => {
     [
       ["GET", "https://tokenless.example/api/agent/v1/assurance/projects"],
       ["POST", "https://tokenless.example/api/agent/v1/assurance/projects"],
+      [
+        "POST",
+        "https://tokenless.example/api/agent/v1/assurance/private-reviews",
+      ],
       [
         "GET",
         "https://tokenless.example/api/agent/v1/assurance/projects/hap_client",
@@ -208,5 +329,11 @@ test("client exposes API-key scoped project and run paths", async () => {
   );
   assert.ok(
     requests.every((request) => request.authorization === `Bearer ${API_KEY}`),
+  );
+  assert.equal(
+    requests.find((request) =>
+      request.url.endsWith("/assurance/private-reviews"),
+    )?.idempotencyKey,
+    "private-client-0001",
   );
 });

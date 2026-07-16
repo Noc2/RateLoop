@@ -13,7 +13,7 @@ import { isRateLoopPrincipalId } from "~~/lib/auth/accountSubject";
 import { consumeWorkspaceUsageAllocations, releaseWorkspaceUsageAllocations } from "~~/lib/billing/entitlements";
 import { dbClient, dbPool } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
-import { assertDataIngressPolicy } from "~~/lib/privacy/dataPolicy";
+import { assertCredentialDataPolicy, assertDataIngressPolicy } from "~~/lib/privacy/dataPolicy";
 import type { ProductPrincipal } from "~~/lib/tokenless/productCore";
 import {
   type ProjectAccessSubjectKind,
@@ -239,7 +239,7 @@ export async function createAssuranceProject(input: {
     );
   }
   if (
-    !["public", "internal", "confidential", "restricted"].includes(input.dataClassification) ||
+    !["public", "internal", "confidential", "restricted", "regulated"].includes(input.dataClassification) ||
     !Number.isSafeInteger(input.retentionDays) ||
     input.retentionDays < 1 ||
     input.retentionDays > 3650
@@ -250,7 +250,20 @@ export async function createAssuranceProject(input: {
       "invalid_human_assurance_input",
     );
   }
-  assertDataIngressPolicy({ classification: input.dataClassification, visibility: "private" });
+  if (input.principal.kind === "api_key") {
+    assertCredentialDataPolicy({
+      classification: input.dataClassification,
+      credentialHomeRegion: input.principal.credentialHomeRegion ?? "eu",
+      homeRegion: input.principal.workspaceHomeRegion ?? "eu",
+      maxClassification: input.principal.maxDataClassification ?? "confidential",
+      permittedDataUses: input.principal.permittedDataUses ?? ["service_delivery"],
+    });
+  }
+  assertDataIngressPolicy({
+    classification: input.dataClassification,
+    visibility: "private",
+    regulatedModeEnabled: input.principal.kind === "api_key" && input.principal.maxDataClassification === "regulated",
+  });
   const projectId = `hap_${randomUUID().replaceAll("-", "")}`;
   const now = new Date();
   await dbClient.execute({

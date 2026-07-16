@@ -1,16 +1,20 @@
 import {
   HUMAN_ASSURANCE_SCHEMA_VERSION,
+  type HumanAssurancePrivateReviewCreateRequest,
   type HumanAssuranceProjectCreateRequest,
   RateLoopSdkError,
+  parseHumanAssurancePrivateReviewCreateRequest,
   parseHumanAssuranceProjectCreateRequest,
 } from "@rateloop/sdk";
 import "server-only";
+import { authenticateAgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import { getAssuranceRunAggregateState } from "~~/lib/tokenless/assuranceRunOrchestration";
 import {
   createAssuranceProject,
   getAssuranceProjectResources,
   listAssuranceProjects,
 } from "~~/lib/tokenless/humanAssurance";
+import { preparePrivateReviewFoundation } from "~~/lib/tokenless/privateReviewFoundation";
 import { type ProductPrincipal, authenticateProductPrincipal } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -36,6 +40,26 @@ export async function authenticateAssuranceApiPrincipal(authorization: string | 
   return principal;
 }
 
+export async function authenticateAssurancePrivateReviewPrincipal(authorization: string | null) {
+  if (/^Bearer\s+rlo_at_/i.test(authorization ?? "")) {
+    const authenticated = await authenticateAgentMcpPrincipal(authorization);
+    if (
+      authenticated.kind !== "oauth" ||
+      !authenticated.principal ||
+      !authenticated.integration ||
+      authenticated.connectionStatus !== "connected"
+    ) {
+      throw new TokenlessServiceError(
+        "A connected owner-approved agent credential is required for private review.",
+        401,
+        "private_review_agent_connection_required",
+      );
+    }
+    return { boundIntegrationId: authenticated.integration.integrationId, principal: authenticated.principal };
+  }
+  return { boundIntegrationId: null, principal: await authenticateAssuranceApiPrincipal(authorization) };
+}
+
 export function parseAssuranceApiProjectRequest(value: unknown): HumanAssuranceProjectCreateRequest {
   try {
     return parseHumanAssuranceProjectCreateRequest(value);
@@ -45,6 +69,32 @@ export function parseAssuranceApiProjectRequest(value: unknown): HumanAssuranceP
     }
     throw error;
   }
+}
+
+export function parseAssuranceApiPrivateReviewRequest(value: unknown): HumanAssurancePrivateReviewCreateRequest {
+  try {
+    return parseHumanAssurancePrivateReviewCreateRequest(value);
+  } catch (error) {
+    if (error instanceof RateLoopSdkError) {
+      throw new TokenlessServiceError(error.message, 400, "invalid_human_assurance_input");
+    }
+    throw error;
+  }
+}
+
+export async function createAssuranceApiPrivateReview(input: {
+  boundIntegrationId: string | null;
+  principal: AssuranceApiPrincipal;
+  request: HumanAssurancePrivateReviewCreateRequest;
+}) {
+  if (input.boundIntegrationId && input.boundIntegrationId !== input.request.integrationId) {
+    throw new TokenlessServiceError(
+      "The private-review integration does not match the authenticated agent.",
+      409,
+      "private_review_integration_binding_mismatch",
+    );
+  }
+  return preparePrivateReviewFoundation({ principal: input.principal, request: input.request });
 }
 
 export async function listAssuranceApiProjects(principal: AssuranceApiPrincipal) {

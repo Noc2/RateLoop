@@ -4,6 +4,8 @@ import type {
   HumanAssuranceProjectCreateResponse,
   HumanAssuranceProjectListResponse,
   HumanAssuranceProjectResourcesResponse,
+  HumanAssurancePrivateReviewCreateRequest,
+  HumanAssurancePrivateReviewCreateResponse,
   HumanAssuranceRunStatusResponse,
 } from "./humanAssuranceApiTypes";
 import { HUMAN_ASSURANCE_SCHEMA_VERSION } from "./humanAssuranceTypes";
@@ -117,7 +119,19 @@ const DATA_CLASSIFICATIONS = [
   "internal",
   "confidential",
   "restricted",
+  "regulated",
 ] as const;
+const PRIVATE_DATA_CLASSIFICATIONS = [
+  "internal",
+  "confidential",
+  "restricted",
+  "regulated",
+] as const;
+const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,160}$/;
+const BASE64_PATTERN =
+  /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+const MAX_PRIVATE_ARTIFACT_BASE64_LENGTH =
+  Math.ceil((10 * 1024 * 1024) / 3) * 4;
 const RUN_STATUSES = [
   "draft",
   "frozen",
@@ -180,6 +194,196 @@ export function parseHumanAssuranceProjectCreateResponse(
     schemaVersion: schemaVersion(input.schemaVersion),
     projectId: string(input.projectId, "project.projectId"),
     workspaceId: string(input.workspaceId, "project.workspaceId"),
+  };
+}
+
+function privateArtifact(value: unknown, path: string) {
+  const input = record(value, path);
+  exactKeys(input, ["contentType", "bytesBase64"], path);
+  const contentType = string(input.contentType, `${path}.contentType`)
+    .trim()
+    .toLowerCase();
+  if (!/^[a-z0-9][a-z0-9.+-]*\/[a-z0-9][a-z0-9.+-]*$/.test(contentType)) {
+    invalid(`${path}.contentType`, "a MIME content type");
+  }
+  const bytesBase64 = string(input.bytesBase64, `${path}.bytesBase64`).trim();
+  if (
+    bytesBase64.length === 0 ||
+    bytesBase64.length > MAX_PRIVATE_ARTIFACT_BASE64_LENGTH ||
+    !BASE64_PATTERN.test(bytesBase64)
+  ) {
+    invalid(`${path}.bytesBase64`, "1 byte to 10 MB of canonical base64");
+  }
+  return { contentType, bytesBase64 };
+}
+
+export function parseHumanAssurancePrivateReviewCreateRequest(
+  value: unknown,
+): HumanAssurancePrivateReviewCreateRequest {
+  const input = record(value, "privateReview");
+  exactKeys(
+    input,
+    [
+      "idempotencyKey",
+      "integrationId",
+      "projectId",
+      "requestProfile",
+      "cohortId",
+      "dataClassification",
+      "source",
+      "suggestion",
+    ],
+    "privateReview",
+  );
+  const idempotencyKey = string(
+    input.idempotencyKey,
+    "privateReview.idempotencyKey",
+  ).trim();
+  if (!IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey)) {
+    invalid(
+      "privateReview.idempotencyKey",
+      "8-160 safe idempotency characters",
+    );
+  }
+  const profile = record(input.requestProfile, "privateReview.requestProfile");
+  exactKeys(profile, ["id", "version", "hash"], "privateReview.requestProfile");
+  return {
+    idempotencyKey,
+    integrationId: string(
+      input.integrationId,
+      "privateReview.integrationId",
+    ).trim(),
+    projectId: string(input.projectId, "privateReview.projectId").trim(),
+    requestProfile: {
+      id: string(profile.id, "privateReview.requestProfile.id").trim(),
+      version: integer(
+        profile.version,
+        "privateReview.requestProfile.version",
+        1,
+      ),
+      hash: digest(profile.hash, "privateReview.requestProfile.hash"),
+    },
+    cohortId: string(input.cohortId, "privateReview.cohortId").trim(),
+    dataClassification: enumeration(
+      input.dataClassification,
+      "privateReview.dataClassification",
+      PRIVATE_DATA_CLASSIFICATIONS,
+    ),
+    source: privateArtifact(input.source, "privateReview.source"),
+    suggestion: privateArtifact(input.suggestion, "privateReview.suggestion"),
+  };
+}
+
+export function parseHumanAssurancePrivateReviewCreateResponse(
+  value: unknown,
+): HumanAssurancePrivateReviewCreateResponse {
+  const input = record(value, "privateReview");
+  const task = record(input.task, "privateReview.task");
+  const bindings = record(input.bindings, "privateReview.bindings");
+  const project = record(bindings.project, "privateReview.bindings.project");
+  const profile = record(
+    bindings.requestProfile,
+    "privateReview.bindings.requestProfile",
+  );
+  const group = record(
+    bindings.privateGroup,
+    "privateReview.bindings.privateGroup",
+  );
+  const cohort = record(bindings.cohort, "privateReview.bindings.cohort");
+  const artifacts = record(input.artifacts, "privateReview.artifacts");
+  return {
+    schemaVersion: schemaVersion(input.schemaVersion),
+    privateReviewId: string(
+      input.privateReviewId,
+      "privateReview.privateReviewId",
+    ),
+    status: enumeration(input.status, "privateReview.status", [
+      "ready_for_assignment",
+      "awaiting_owner_rebind",
+    ] as const),
+    lane: enumeration(input.lane, "privateReview.lane", ["private"] as const),
+    task: {
+      kind: enumeration(task.kind, "privateReview.task.kind", [
+        "binary_review",
+      ] as const),
+      commitment: digest(task.commitment, "privateReview.task.commitment"),
+    },
+    bindings: {
+      bindingHash: digest(
+        bindings.bindingHash,
+        "privateReview.bindings.bindingHash",
+      ),
+      project: {
+        projectId: string(
+          project.projectId,
+          "privateReview.bindings.project.projectId",
+        ),
+        hash: digest(project.hash, "privateReview.bindings.project.hash"),
+      },
+      requestProfile: {
+        id: string(profile.id, "privateReview.bindings.requestProfile.id"),
+        version: integer(
+          profile.version,
+          "privateReview.bindings.requestProfile.version",
+          1,
+        ),
+        hash: digest(
+          profile.hash,
+          "privateReview.bindings.requestProfile.hash",
+        ),
+      },
+      privateGroup: {
+        groupId: string(
+          group.groupId,
+          "privateReview.bindings.privateGroup.groupId",
+        ),
+        policyVersion: integer(
+          group.policyVersion,
+          "privateReview.bindings.privateGroup.policyVersion",
+          1,
+        ),
+        policyHash: digest(
+          group.policyHash,
+          "privateReview.bindings.privateGroup.policyHash",
+        ),
+        allowlistHash: digest(
+          group.allowlistHash,
+          "privateReview.bindings.privateGroup.allowlistHash",
+        ),
+        allowlistStatus: enumeration(
+          group.allowlistStatus,
+          "privateReview.bindings.privateGroup.allowlistStatus",
+          ["allowed", "excluded"] as const,
+        ),
+      },
+      cohort: {
+        cohortId: string(
+          cohort.cohortId,
+          "privateReview.bindings.cohort.cohortId",
+        ),
+        hash: digest(cohort.hash, "privateReview.bindings.cohort.hash"),
+      },
+    },
+    artifacts: {
+      sourceArtifactId: string(
+        artifacts.sourceArtifactId,
+        "privateReview.artifacts.sourceArtifactId",
+      ),
+      suggestionArtifactId: string(
+        artifacts.suggestionArtifactId,
+        "privateReview.artifacts.suggestionArtifactId",
+      ),
+    },
+    responseWindowSeconds: integer(
+      input.responseWindowSeconds,
+      "privateReview.responseWindowSeconds",
+      1_200,
+      86_400,
+    ),
+    responseDeadline: isoDate(
+      input.responseDeadline,
+      "privateReview.responseDeadline",
+    ),
   };
 }
 
@@ -259,11 +463,7 @@ export function parseHumanAssuranceProjectResourcesResponse(
           reviewerSource: enumeration(
             policy.reviewerSource,
             `${path}.reviewerSource`,
-            [
-              "customer_invited",
-              "rateloop_network",
-              "hybrid",
-            ] as const,
+            ["customer_invited", "rateloop_network", "hybrid"] as const,
           ),
           compensation: enumeration(
             policy.compensation,

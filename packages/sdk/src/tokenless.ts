@@ -4,9 +4,14 @@ import {
   parseHumanAssuranceProjectCreateResponse,
   parseHumanAssuranceProjectListResponse,
   parseHumanAssuranceProjectResourcesResponse,
+  parseHumanAssurancePrivateReviewCreateRequest,
+  parseHumanAssurancePrivateReviewCreateResponse,
   parseHumanAssuranceRunStatusResponse,
 } from "./humanAssuranceApiSchema";
-import type { HumanAssuranceProjectCreateRequest } from "./humanAssuranceApiTypes";
+import type {
+  HumanAssurancePrivateReviewCreateRequest,
+  HumanAssuranceProjectCreateRequest,
+} from "./humanAssuranceApiTypes";
 import {
   parseTokenlessAskResponse,
   parseTokenlessPaymentInstructions,
@@ -487,6 +492,18 @@ export function createTokenlessRateLoopClient(
           "/assurance/projects",
           parseHumanAssuranceProjectCreateRequest(requestBody),
           parseHumanAssuranceProjectCreateResponse,
+        );
+      },
+
+      createPrivateReview(
+        requestBody: HumanAssurancePrivateReviewCreateRequest,
+      ) {
+        return post(
+          config,
+          "/assurance/private-reviews",
+          parseHumanAssurancePrivateReviewCreateRequest(requestBody),
+          parseHumanAssurancePrivateReviewCreateResponse,
+          { "idempotency-key": requestBody.idempotencyKey },
         );
       },
 

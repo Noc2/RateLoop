@@ -330,7 +330,7 @@ export async function relayPaidRaterCommit(input: { accountAddress: string; requ
       );
     }
     const question = JSON.parse(rowString(voucherRow, "content_json")!) as {
-      rationale?: { mode: "optional" | "required"; minLength?: number; maxLength?: number };
+      rationale?: { mode: "off" | "optional" | "required"; minLength?: number; maxLength?: number };
     };
     await preparePublicRaterResponse(preparationClient, {
       voucherId: input.request.voucherId,

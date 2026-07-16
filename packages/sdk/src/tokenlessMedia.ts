@@ -53,13 +53,17 @@ function optionalLabel(value: unknown, path: string) {
 
 function normalizeRationale(value: unknown): TokenlessRationaleRequirement {
   const rationale = record(value, "question.rationale");
+  if (rationale.mode === "off") {
+    exact(rationale, ["mode"], "question.rationale");
+    return { mode: "off" };
+  }
   if (rationale.mode === "optional") {
     exact(rationale, ["mode"], "question.rationale");
     return { mode: "optional" };
   }
   if (rationale.mode !== "required") {
     throw new RateLoopSdkError(
-      "question.rationale.mode must be optional or required.",
+      "question.rationale.mode must be off, optional, or required.",
     );
   }
   exact(rationale, ["mode", "maxLength", "minLength"], "question.rationale");

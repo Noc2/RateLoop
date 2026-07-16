@@ -11,6 +11,8 @@ test("public rating progressively collects feedback without LREP and hides the a
   assert.match(source, /Feedback required/);
   assert.match(source, /Feedback category/);
   assert.match(source, /Source URL/);
+  assert.match(source, /feedbackEnabled = task\.question\.rationale\?\.mode !== "off"/);
+  assert.match(source, /\{feedbackEnabled &&/);
   assert.doesNotMatch(source, /\bLREP\b/);
 });
 

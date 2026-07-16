@@ -6,6 +6,7 @@ import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { assertProjectDeletionAllowed } from "~~/lib/privacy/lifecycle";
 import {
   type KeyWrappingProvider,
+  type WrappedDataKey,
   createLocalKeyWrappingProvider,
   validateVaultEnvironment,
 } from "~~/lib/privacy/vault";
@@ -15,6 +16,8 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 const ARTIFACT_KEY_DOMAIN = "customer_artifact";
 const MAX_ARTIFACT_BYTES = 10 * 1024 * 1024;
 const MAX_LEASE_MS = 30 * 60_000;
+export const PRIVATE_REVIEW_ARTIFACT_KINDS = ["source", "suggestion"] as const;
+export type PrivateReviewArtifactKind = (typeof PRIVATE_REVIEW_ARTIFACT_KINDS)[number];
 
 type QueryRow = Record<string, unknown>;
 
@@ -160,6 +163,19 @@ function tenantCommitment(masterKey: Uint8Array, workspaceId: string, content: U
     .update(`artifact-commitment:${workspaceId}:`)
     .update(content)
     .digest("hex")}`;
+}
+
+function privateReviewArtifactCommitment(input: {
+  content: Uint8Array;
+  kind: PrivateReviewArtifactKind;
+  requestReference: string;
+  runtime: ArtifactPrivacyRuntime;
+  workspaceId: string;
+}) {
+  return `sha256:${createHmac("sha256", input.runtime.commitmentKey!)
+    .update(`private-review-artifact:${input.workspaceId}:${input.requestReference}:${input.kind}:`)
+    .update(input.content)
+    .digest("hex")}` as const;
 }
 
 function keyDomain(provider: KeyWrappingProvider) {
@@ -348,6 +364,278 @@ export async function storeEncryptedArtifact(input: {
     contentType,
     digest: tenantCommitment(runtime.commitmentKey!, input.workspaceId, input.bytes),
     sizeBytes: input.bytes.byteLength,
+  };
+}
+
+export function commitPrivateReviewArtifact(input: {
+  bytes: Uint8Array;
+  kind: PrivateReviewArtifactKind;
+  requestReference: string;
+  workspaceId: string;
+}) {
+  if (input.bytes.byteLength === 0 || input.bytes.byteLength > MAX_ARTIFACT_BYTES) {
+    throw new TokenlessServiceError(
+      "Private review artifacts must be between 1 byte and 10 MB.",
+      400,
+      "invalid_artifact_size",
+    );
+  }
+  if (!PRIVATE_REVIEW_ARTIFACT_KINDS.includes(input.kind)) {
+    throw new TokenlessServiceError("Private review artifact kind is invalid.", 400, "invalid_artifact_metadata");
+  }
+  const requestReference = input.requestReference.trim();
+  if (!requestReference || requestReference.length > 400) {
+    throw new TokenlessServiceError("Private review artifact reference is invalid.", 400, "invalid_artifact_metadata");
+  }
+  return privateReviewArtifactCommitment({
+    content: input.bytes,
+    kind: input.kind,
+    requestReference,
+    runtime: getRuntime(),
+    workspaceId: input.workspaceId,
+  });
+}
+
+export async function storeEncryptedPrivateReviewArtifacts(input: {
+  callerCredentialId: string;
+  callerCredentialKind: "api_key" | "oauth_token_family";
+  integrationId: string;
+  privateReviewId: string;
+  planned: {
+    sourceArtifactId: string;
+    sourceObjectId: string;
+    suggestionArtifactId: string;
+    suggestionObjectId: string;
+  };
+  projectId: string;
+  requestReference: string;
+  retentionDays: number;
+  source: { bytes: Uint8Array; contentType: string };
+  suggestion: { bytes: Uint8Array; contentType: string };
+  uploadId: string;
+  workspaceId: string;
+  now?: Date;
+}) {
+  const runtime = getRuntime();
+  const now = input.now ?? new Date();
+  const deleteAfter = new Date(now.getTime() + input.retentionDays * 86_400_000);
+  const requestReference = input.requestReference.trim();
+  const definitions = PRIVATE_REVIEW_ARTIFACT_KINDS.map(kind => {
+    const value = kind === "source" ? input.source : input.suggestion;
+    if (value.bytes.byteLength === 0 || value.bytes.byteLength > MAX_ARTIFACT_BYTES) {
+      throw new TokenlessServiceError(
+        "Private review artifacts must be between 1 byte and 10 MB.",
+        400,
+        "invalid_artifact_size",
+      );
+    }
+    const contentType = value.contentType.trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9.+-]*\/[a-z0-9][a-z0-9.+-]*$/.test(contentType)) {
+      throw new TokenlessServiceError("Private review artifact metadata is invalid.", 400, "invalid_artifact_metadata");
+    }
+    return {
+      artifactId: kind === "source" ? input.planned.sourceArtifactId : input.planned.suggestionArtifactId,
+      bytes: value.bytes,
+      contentType,
+      digest: privateReviewArtifactCommitment({
+        content: value.bytes,
+        kind,
+        requestReference,
+        runtime,
+        workspaceId: input.workspaceId,
+      }),
+      kind,
+      label: kind === "source" ? "Private review source" : "Private review suggestion",
+      objectId: kind === "source" ? input.planned.sourceObjectId : input.planned.suggestionObjectId,
+      role: kind === "source" ? "private_source" : "private_suggestion",
+    };
+  });
+
+  const existing = await dbClient.execute({
+    sql: `SELECT a.artifact_id, a.digest, a.content_type, a.size_bytes, a.role,
+                 o.object_id, o.workspace_id, o.project_id
+          FROM tokenless_assurance_artifacts a
+          JOIN tokenless_assurance_artifact_objects o ON o.artifact_id = a.artifact_id
+          WHERE a.project_id = ? AND a.artifact_id IN (?, ?)`,
+    args: [input.projectId, input.planned.sourceArtifactId, input.planned.suggestionArtifactId],
+  });
+  if (existing.rowCount !== 0 && existing.rowCount !== 2) {
+    throw new TokenlessServiceError(
+      "Private review artifact recovery found an incomplete encrypted pair.",
+      409,
+      "private_review_artifact_recovery_required",
+    );
+  }
+  if (existing.rowCount === 2) {
+    const rows = new Map(existing.rows.map(row => [rowString(row as QueryRow, "artifact_id"), row as QueryRow]));
+    for (const definition of definitions) {
+      const row = rows.get(definition.artifactId);
+      if (
+        !row ||
+        rowString(row, "object_id") !== definition.objectId ||
+        rowString(row, "workspace_id") !== input.workspaceId ||
+        rowString(row, "project_id") !== input.projectId ||
+        rowString(row, "digest") !== definition.digest ||
+        rowString(row, "content_type") !== definition.contentType ||
+        Number(row.size_bytes) !== definition.bytes.byteLength ||
+        rowString(row, "role") !== definition.role
+      ) {
+        throw new TokenlessServiceError(
+          "Private review artifact recovery found a binding mismatch.",
+          409,
+          "private_review_artifact_recovery_mismatch",
+        );
+      }
+    }
+    return {
+      source: { artifactId: definitions[0].artifactId, digest: definitions[0].digest },
+      suggestion: { artifactId: definitions[1].artifactId, digest: definitions[1].digest },
+    };
+  }
+  const uploaded: Array<{
+    artifactId: string;
+    authTag: string;
+    contentType: string;
+    digest: `sha256:${string}`;
+    kind: PrivateReviewArtifactKind;
+    key: WrappedDataKey;
+    label: string;
+    nonce: string;
+    objectId: string;
+    role: string;
+    sizeBytes: number;
+    storageRef: string;
+  }> = [];
+  try {
+    for (const definition of definitions) {
+      const aad = `${ARTIFACT_KEY_DOMAIN}:${input.workspaceId}:${input.projectId}:${definition.artifactId}`;
+      const dataKey = randomBytes(32);
+      const encrypted = encrypt(definition.bytes, dataKey, aad);
+      const wrapped = await runtime.keyProvider!.wrap(dataKey, Buffer.from(`${aad}:${runtime.keyVersion}`));
+      dataKey.fill(0);
+      const pathname = `rateloop-private/${input.workspaceId}/${input.projectId}/preparations/${input.uploadId}/${definition.objectId}.bin`;
+      const storageRef = await runtime.store.put(pathname, encrypted.ciphertext);
+      uploaded.push({
+        artifactId: definition.artifactId,
+        authTag: encrypted.tag.toString("base64url"),
+        contentType: definition.contentType,
+        digest: definition.digest,
+        kind: definition.kind,
+        key: wrapped,
+        label: definition.label,
+        nonce: encrypted.nonce.toString("base64url"),
+        objectId: definition.objectId,
+        role: definition.role,
+        sizeBytes: definition.bytes.byteLength,
+        storageRef,
+      });
+    }
+    const client = await dbPool.connect();
+    try {
+      await client.query("BEGIN");
+      for (const artifact of uploaded) {
+        await client.query(
+          `INSERT INTO tokenless_assurance_artifacts
+           (artifact_id, project_id, role, label, digest, content_type, size_bytes, storage_ref,
+            redaction_status, renderer_policy, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'not_required', 'download', $9, $9)`,
+          [
+            artifact.artifactId,
+            input.projectId,
+            artifact.role,
+            artifact.label,
+            artifact.digest,
+            artifact.contentType,
+            artifact.sizeBytes,
+            artifact.storageRef,
+            now,
+          ],
+        );
+        await client.query(
+          `INSERT INTO tokenless_assurance_artifact_objects
+           (object_id, artifact_id, workspace_id, project_id, storage_provider, storage_ref, key_domain,
+            key_version, content_nonce, content_auth_tag, wrapped_data_key, wrap_nonce, wrap_auth_tag,
+            status, delete_after, created_at)
+           VALUES ($1, $2, $3, $4, 'vercel_blob_private', $5, $6, $7, $8, $9, $10, $11, $12,
+                   'active', $13, $14)`,
+          [
+            artifact.objectId,
+            artifact.artifactId,
+            input.workspaceId,
+            input.projectId,
+            artifact.storageRef,
+            keyDomain(runtime.keyProvider!),
+            runtime.keyVersion,
+            artifact.nonce,
+            artifact.authTag,
+            artifact.key.ciphertext,
+            artifact.key.nonce ?? "",
+            artifact.key.authTag ?? "",
+            deleteAfter,
+            now,
+          ],
+        );
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    await Promise.all(uploaded.map(value => runtime.store.delete(value.storageRef).catch(() => undefined)));
+    throw error;
+  }
+
+  const actor = actorReference(runtime.commitmentKey!, `${input.callerCredentialKind}:${input.callerCredentialId}`);
+  for (const artifact of uploaded) {
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_assurance_access_logs
+            (log_id, workspace_id, project_id, artifact_id, lease_id, actor_kind, actor_reference,
+             action, purpose, request_reference, occurred_at)
+            VALUES (?, ?, ?, ?, NULL, ?, ?, 'create', 'private_review_prepare', ?, ?)`,
+      args: [
+        `log_${randomUUID().replaceAll("-", "")}`,
+        input.workspaceId,
+        input.projectId,
+        artifact.artifactId,
+        input.callerCredentialKind,
+        actor,
+        input.privateReviewId,
+        now,
+      ],
+    });
+    await appendAuditEvent({
+      action: "artifact.create",
+      actorKind: input.callerCredentialKind,
+      actorReference: actor,
+      assuranceMethod: input.callerCredentialKind === "api_key" ? "workspace_api_key" : "agent_oauth_integration",
+      metadata: {
+        artifactId: artifact.artifactId,
+        integrationId: input.integrationId,
+        kind: artifact.kind,
+        privateReviewId: input.privateReviewId,
+      },
+      purpose: "private_review_prepare",
+      reason: "project_authorized_service_request",
+      requestCorrelation: input.privateReviewId,
+      result: "success",
+      targetId: artifact.artifactId,
+      targetKind: "artifact",
+      workspaceId: input.workspaceId,
+    });
+  }
+  const byKind = new Map(uploaded.map(value => [value.kind, value]));
+  return {
+    source: {
+      artifactId: byKind.get("source")!.artifactId,
+      digest: byKind.get("source")!.digest,
+    },
+    suggestion: {
+      artifactId: byKind.get("suggestion")!.artifactId,
+      digest: byKind.get("suggestion")!.digest,
+    },
   };
 }
 

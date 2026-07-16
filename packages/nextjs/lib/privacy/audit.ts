@@ -6,7 +6,7 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export type AuditEventInput = Readonly<{
   workspaceId: string;
-  actorKind: "principal" | "account" | "api_key" | "system" | "operator";
+  actorKind: "principal" | "account" | "api_key" | "oauth_token_family" | "system" | "operator";
   actorReference: string;
   assuranceMethod: string;
   action: string;

@@ -35,6 +35,36 @@ const now = "2026-07-13T12:00:00.000Z";
 const hash = `sha256:${"a".repeat(64)}` as const;
 const base = { schemaVersion: HUMAN_ASSURANCE_SCHEMA_VERSION };
 
+test("rubric rationale off is exact and rejects hidden length settings", () => {
+  const rubric = {
+    ...base,
+    rubricId: "rubric_off",
+    projectId: "project_1",
+    version: 1,
+    prompt: "Is this suggestion correct?",
+    choices: ["baseline", "candidate", "tie"],
+    failureTags: [],
+    rationale: { mode: "off" },
+    passRule: {
+      metric: "candidate_preference_share_bps",
+      operator: "gte",
+      thresholdBps: 6_000,
+      minimumValidResponses: 1,
+    },
+  };
+  assert.deepEqual(parseHumanAssuranceRubric(rubric).rationale, {
+    mode: "off",
+  });
+  assert.throws(
+    () =>
+      parseHumanAssuranceRubric({
+        ...rubric,
+        rationale: { mode: "off", maxLength: 100 },
+      }),
+    /only mode/u,
+  );
+});
+
 test("v2 parsers cover the complete human-assurance domain", () => {
   assert.deepEqual(
     parseHumanAssuranceProject({

@@ -36,7 +36,7 @@ export type PublicAnswerTask = {
     optionA?: { key: string; label: string };
     optionB?: { key: string; label: string };
     media?: PublicQuestionMedia;
-    rationale?: { mode: "optional" | "required"; minLength?: number; maxLength?: number };
+    rationale?: { mode: "off" } | { mode: "optional" | "required"; minLength?: number; maxLength?: number };
   };
   voucherDeadline: string;
   alreadyVouchered: boolean;
@@ -110,6 +110,7 @@ export function PublicQuestionCard({
   const [feedbackBody, setFeedbackBody] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [savedCommit, setSavedCommit] = useState<TokenlessQueuedCommit | null>(null);
+  const feedbackEnabled = task.question.rationale?.mode !== "off";
 
   useEffect(() => {
     if (!recoveryPackage) {
@@ -313,7 +314,9 @@ export function PublicQuestionCard({
       ? [task.question.optionA?.label ?? "Option A", task.question.optionB?.label ?? "Option B"]
       : [task.question.positiveLabel ?? "Yes", task.question.negativeLabel ?? "No"];
   const feedbackMaximum = Math.min(
-    task.question.rationale?.maxLength ?? PUBLIC_RATER_RESPONSE_BODY_MAX_LENGTH,
+    (task.question.rationale?.mode === "optional" || task.question.rationale?.mode === "required"
+      ? task.question.rationale.maxLength
+      : undefined) ?? PUBLIC_RATER_RESPONSE_BODY_MAX_LENGTH,
     PUBLIC_RATER_RESPONSE_BODY_MAX_LENGTH,
   );
 
@@ -362,7 +365,7 @@ export function PublicQuestionCard({
                 </button>
               ))}
             </div>
-            {answer && !feedbackOpen ? (
+            {feedbackEnabled && answer && !feedbackOpen ? (
               <button
                 type="button"
                 className="mt-4 text-xs font-medium underline underline-offset-4"
@@ -371,7 +374,7 @@ export function PublicQuestionCard({
                 Add feedback
               </button>
             ) : null}
-            {feedbackOpen ? (
+            {feedbackEnabled && feedbackOpen ? (
               <fieldset className="mt-5 border-t border-white/10 pt-4">
                 <legend className="text-xs font-semibold">
                   {task.question.rationale?.mode === "required" ? "Feedback required" : "Optional feedback"}

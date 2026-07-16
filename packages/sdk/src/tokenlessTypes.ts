@@ -58,6 +58,7 @@ export const TOKENLESS_DATA_CLASSIFICATIONS = [
   "internal",
   "confidential",
   "restricted",
+  "regulated",
 ] as const;
 export type TokenlessDataClassification =
   (typeof TOKENLESS_DATA_CLASSIFICATIONS)[number];
@@ -148,6 +149,7 @@ export type TokenlessQuestion =
     };
 
 export type TokenlessRationaleRequirement =
+  | { mode: "off" }
   | { mode: "optional" }
   | { mode: "required"; maxLength: number; minLength?: number };
 

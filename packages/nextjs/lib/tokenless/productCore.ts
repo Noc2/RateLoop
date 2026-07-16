@@ -46,6 +46,7 @@ const TOKENLESS_DATA_CLASSIFICATION_SET = new Set<string>([
   "internal",
   "confidential",
   "restricted",
+  "regulated",
 ]);
 
 export type AgentPublishingPolicyInput = {

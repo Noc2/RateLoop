@@ -159,8 +159,8 @@ function validateResponseBatch(responses: AssuranceCaseResponseInput[]) {
     }
     const selectedArtifactId = requiredIdentifier(response.selectedArtifactId, "selectedArtifactId");
     const rationale = response.rationale.trim();
-    if (rationale.length < 10 || rationale.length > 2_000) {
-      serviceError("rationale must contain 10-2000 characters.", "invalid_assurance_rationale");
+    if (rationale.length > 2_000) {
+      serviceError("rationale must not exceed 2000 characters.", "invalid_assurance_rationale");
     }
     if (
       !Array.isArray(response.failureTagKeys) ||
@@ -268,6 +268,7 @@ function buildResponseRecord(input: {
   failureTagKeys: string[];
   qualificationKeys: string[];
   rationale: string;
+  rationaleMode: "off" | "optional" | "required";
   rationaleKeyring: AssuranceResponseKeyring;
   reviewerKey: string;
   selectedArtifactId: string;
@@ -309,16 +310,19 @@ function buildResponseRecord(input: {
     qualificationKeys: input.qualificationKeys,
     assuranceCapabilities: input.capabilities,
   });
-  const encrypted = encryptRationale(
-    {
-      caseId: rowString(input.caseRow, "case_id")!,
-      digest,
-      rationale: input.rationale,
-      reviewerKey: input.reviewerKey,
-      runId: rowString(input.assignment, "run_id")!,
-    },
-    input.rationaleKeyring,
-  );
+  const encrypted =
+    input.rationaleMode === "off"
+      ? { ciphertext: null, keyRef: null }
+      : encryptRationale(
+          {
+            caseId: rowString(input.caseRow, "case_id")!,
+            digest,
+            rationale: input.rationale,
+            reviewerKey: input.reviewerKey,
+            runId: rowString(input.assignment, "run_id")!,
+          },
+          input.rationaleKeyring,
+        );
   return { canonicalChoice, responseDigest, ...encrypted };
 }
 
@@ -417,8 +421,13 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
     const suiteManifest = parseJson<Record<string, unknown>>(assignment.suite_manifest_json, "suite manifest");
     const rubric = validateFrozenManifests({ assignment, runCases, suiteManifest });
     const allowedTags = new Set(rubric.failureTags.map(tag => tag.key));
-    const minimumRationaleLength = Math.max(10, rubric.rationale.minLength ?? 0);
-    const maximumRationaleLength = Math.min(2_000, rubric.rationale.maxLength);
+    const minimumRationaleLength =
+      rubric.rationale.mode === "off"
+        ? 0
+        : rubric.rationale.mode === "required"
+          ? Math.max(10, rubric.rationale.minLength ?? 0)
+          : 0;
+    const maximumRationaleLength = rubric.rationale.mode === "off" ? 0 : Math.min(2_000, rubric.rationale.maxLength);
     const inputByCase = new Map(responses.map(response => [response.caseId, response]));
     if (runCases.some(row => !inputByCase.has(rowString(row, "case_id")!))) {
       serviceError("Every assigned case must be submitted exactly once.", "incomplete_assurance_response", 400);
@@ -456,6 +465,7 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
           failureTagKeys: response.failureTagKeys,
           qualificationKeys,
           rationale: response.rationale,
+          rationaleMode: rubric.rationale.mode,
           rationaleKeyring: keyrings.rationale,
           reviewerKey: pseudonym,
           selectedArtifactId: response.selectedArtifactId,

@@ -143,7 +143,7 @@ test("fails closed on non-canonical atomics, uint256 overflow, caps, or an unfun
   }
 });
 
-test("fails closed when payload commitments drift or rationale off reaches the unsupported public schema", () => {
+test("fails closed when payload commitments drift and carries rationale off into the public schema", () => {
   const base = {
     opportunityId: "aop_exact",
     workflowKey: "refund-review",
@@ -159,9 +159,10 @@ test("fails closed when payload commitments drift or rationale off reaches the u
     () => prepareHumanReviewRequest({ ...base, sourcePayload: "changed" }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "source_payload_commitment_mismatch",
   );
-  assert.throws(
-    () => prepareHumanReviewRequest({ ...base, requestProfile: { ...profile(), rationaleMode: "off" } }),
-    /rationale mode 'off' is not supported/,
+  assert.deepEqual(
+    prepareHumanReviewRequest({ ...base, requestProfile: { ...profile(), rationaleMode: "off" } }).quoteTerms.question
+      .rationale,
+    { mode: "off" },
   );
 });
 

@@ -75,3 +75,24 @@ test("optional questions permit an empty response but reject unbound metadata", 
     /Add feedback/,
   );
 });
+
+test("rationale off forbids feedback while preserving the binary response envelope", () => {
+  const offBinding = { ...binding, rationale: { mode: "off" as const } };
+  const response = createPublicRaterResponse(offBinding, {
+    category: null,
+    body: "",
+    sourceUrl: null,
+    nonce: `0x${"66".repeat(32)}`,
+  });
+  assert.equal(normalizePublicRaterResponse(offBinding, response).canonical.feedback, null);
+  assert.throws(
+    () =>
+      createPublicRaterResponse(offBinding, {
+        category: "opinion",
+        body: "This field must stay disabled.",
+        sourceUrl: null,
+        nonce: `0x${"77".repeat(32)}`,
+      }),
+    /disabled/u,
+  );
+});

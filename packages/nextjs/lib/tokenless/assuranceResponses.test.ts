@@ -55,7 +55,7 @@ async function seedArtifact(projectId: string, artifactId: string, role: "baseli
   });
 }
 
-async function fixture(input: { paid?: boolean; rubricMinimum?: number } = {}) {
+async function fixture(input: { paid?: boolean; rationaleMode?: "off" | "required"; rubricMinimum?: number } = {}) {
   const { workspaceId } = await createWorkspace({ name: "Response test", ownerAddress: OWNER });
   if (input.paid) {
     const now = new Date();
@@ -85,7 +85,10 @@ async function fixture(input: { paid?: boolean; rubricMinimum?: number } = {}) {
         { key: "incorrect", label: "Incorrect" },
         { key: "unsafe", label: "Unsafe" },
       ],
-      rationale: { mode: "required", minLength: input.rubricMinimum ?? 10, maxLength: 2_000 },
+      rationale:
+        input.rationaleMode === "off"
+          ? { mode: "off" }
+          : { mode: "required", minLength: input.rubricMinimum ?? 10, maxLength: 2_000 },
       passRule: {
         metric: "candidate_preference_share_bps",
         operator: "gte",
@@ -394,6 +397,22 @@ test("response rationale must satisfy the frozen rubric minimum as well as the g
     args: [seeded.assignmentId],
   });
   assert.equal(assignment.rows[0]?.status, "accepted");
+});
+
+test("rationale off accepts empty feedback and stores no ciphertext or key reference", async () => {
+  const seeded = await fixture({ rationaleMode: "off" });
+  const responses = requestFor(seeded.runCases).map(response => ({ ...response, rationale: "" }));
+  await submitAssuranceResponses({
+    assignmentId: seeded.assignmentId,
+    baseAccountAddress: REVIEWER,
+    idempotencyKey: "response:test:rationale-off",
+    responses,
+  });
+  const stored = await dbClient.execute(
+    "SELECT rationale_ciphertext,rationale_key_ref FROM tokenless_assurance_responses",
+  );
+  assert.equal(stored.rowCount, 2);
+  assert.ok(stored.rows.every(row => row.rationale_ciphertext === null && row.rationale_key_ref === null));
 });
 
 test("paid assurance responses fail closed before assignments can claim a terminal state", async () => {

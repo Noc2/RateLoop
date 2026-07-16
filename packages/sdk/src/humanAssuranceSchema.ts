@@ -205,6 +205,33 @@ export function parseHumanAssuranceRubric(
   ) {
     invalid("choices", "baseline, candidate, and tie in that order");
   }
+  const rationaleMode = enumeration(rationale.mode, "rationale.mode", [
+    "off",
+    "optional",
+    "required",
+  ]);
+  if (
+    rationaleMode === "off" &&
+    (rationale.minLength !== undefined || rationale.maxLength !== undefined)
+  ) {
+    invalid("rationale", "only mode when rationale mode is off");
+  }
+  const parsedRationale =
+    rationaleMode === "off"
+      ? ({ mode: "off" } as const)
+      : {
+          mode: rationaleMode,
+          minLength:
+            rationale.minLength === undefined
+              ? undefined
+              : integer(rationale.minLength, "rationale.minLength", 0, 10_000),
+          maxLength: integer(
+            rationale.maxLength,
+            "rationale.maxLength",
+            1,
+            10_000,
+          ),
+        };
   return {
     schemaVersion: schemaVersion(input.schemaVersion),
     rubricId: string(input.rubricId, "rubricId"),
@@ -223,17 +250,7 @@ export function parseHumanAssuranceRubric(
         ),
       };
     }),
-    rationale: {
-      mode: enumeration(rationale.mode, "rationale.mode", [
-        "optional",
-        "required",
-      ]),
-      minLength:
-        rationale.minLength === undefined
-          ? undefined
-          : integer(rationale.minLength, "rationale.minLength", 0, 10_000),
-      maxLength: integer(rationale.maxLength, "rationale.maxLength", 1, 10_000),
-    },
+    rationale: parsedRationale,
     passRule: {
       metric: enumeration(passRule.metric, "passRule.metric", [
         "candidate_preference_share_bps",
@@ -943,7 +960,26 @@ export const HUMAN_ASSURANCE_RUBRIC_JSON_SCHEMA = {
     prompt: idSchema,
     choices: { const: ["baseline", "candidate", "tie"] },
     failureTags: { type: "array" },
-    rationale: { type: "object" },
+    rationale: {
+      oneOf: [
+        {
+          additionalProperties: false,
+          properties: { mode: { const: "off" } },
+          required: ["mode"],
+          type: "object",
+        },
+        {
+          additionalProperties: false,
+          properties: {
+            mode: { enum: ["optional", "required"], type: "string" },
+            minLength: { maximum: 10_000, minimum: 0, type: "integer" },
+            maxLength: { maximum: 10_000, minimum: 1, type: "integer" },
+          },
+          required: ["mode", "maxLength"],
+          type: "object",
+        },
+      ],
+    },
     passRule: { type: "object" },
   },
   required: [

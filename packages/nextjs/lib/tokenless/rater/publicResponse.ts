@@ -14,7 +14,7 @@ export const PUBLIC_RATER_RESPONSE_CATEGORIES = [
 
 export type PublicRaterResponseCategory = (typeof PUBLIC_RATER_RESPONSE_CATEGORIES)[number];
 export type PublicRaterRationaleRequirement = {
-  mode: "optional" | "required";
+  mode: "off" | "optional" | "required";
   minLength?: number;
   maxLength?: number;
 };
@@ -75,10 +75,13 @@ export function normalizePublicRaterResponse(
 
   const body = typeof input.body === "string" ? input.body.trim() : invalid("Feedback body is invalid.");
   const rationale = binding.rationale ?? { mode: "optional" as const };
-  const maximum = Math.min(
-    rationale.maxLength ?? PUBLIC_RATER_RESPONSE_BODY_MAX_LENGTH,
-    PUBLIC_RATER_RESPONSE_BODY_MAX_LENGTH,
-  );
+  if (rationale.mode === "off" && (body || input.category !== null || input.sourceUrl?.trim())) {
+    invalid("Feedback is disabled for this question.");
+  }
+  const maximum =
+    rationale.mode === "off"
+      ? 0
+      : Math.min(rationale.maxLength ?? PUBLIC_RATER_RESPONSE_BODY_MAX_LENGTH, PUBLIC_RATER_RESPONSE_BODY_MAX_LENGTH);
   const minimum = rationale.mode === "required" ? Math.max(1, rationale.minLength ?? 1) : 0;
   if (body.length < minimum || body.length > maximum) {
     invalid(
