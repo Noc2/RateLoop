@@ -540,6 +540,13 @@
       "when": 1784217600000,
       "tag": "0077_assurance_automated_eval_receipts",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1784221200000,
+      "tag": "0078_assurance_event_references",
+      "breakpoints": true
     }
   ]
 }
