@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   foreignKey,
@@ -863,6 +864,87 @@ export const tokenlessAgentReviewRequestProfiles = pgTable(
 
 export type TokenlessAgentReviewRequestProfile = typeof tokenlessAgentReviewRequestProfiles.$inferSelect;
 export type NewTokenlessAgentReviewRequestProfile = typeof tokenlessAgentReviewRequestProfiles.$inferInsert;
+
+export const tokenlessAgentHumanReviewBindings = pgTable(
+  "tokenless_agent_human_review_bindings",
+  {
+    bindingId: text("binding_id").notNull(),
+    version: integer("version").notNull(),
+    workspaceId: text("workspace_id").notNull(),
+    agentId: text("agent_id").notNull(),
+    agentVersionId: text("agent_version_id").notNull(),
+    selectionPolicyId: text("selection_policy_id").notNull(),
+    selectionPolicyVersion: integer("selection_policy_version").notNull(),
+    requestProfileId: text("request_profile_id").notNull(),
+    requestProfileVersion: integer("request_profile_version").notNull(),
+    requestProfileHash: text("request_profile_hash").notNull(),
+    publishingPolicyId: text("publishing_policy_id"),
+    publishingPolicyVersion: integer("publishing_policy_version"),
+    authority: text("authority").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    canonicalHash: text("canonical_hash").notNull(),
+    createdBy: text("created_by").notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    approvedBy: text("approved_by"),
+    approvedAt: timestamp("approved_at", { mode: "date", withTimezone: true }),
+    supersededAt: timestamp("superseded_at", { mode: "date", withTimezone: true }),
+  },
+  table => ({
+    pk: primaryKey({ columns: [table.bindingId, table.version] }),
+    activeAgentIdx: uniqueIndex("tokenless_agent_human_review_bindings_active_agent_idx")
+      .on(table.workspaceId, table.agentId, table.agentVersionId)
+      .where(sql`${table.enabled} = true AND ${table.supersededAt} IS NULL`),
+    workspaceCreatedIdx: index("tokenless_agent_human_review_bindings_workspace_created_idx").on(
+      table.workspaceId,
+      table.createdAt,
+    ),
+    workspaceHashUnique: uniqueIndex("tokenless_agent_human_review_bindings_hash_unique").on(
+      table.workspaceId,
+      table.canonicalHash,
+    ),
+    workspaceUnique: uniqueIndex("tokenless_agent_human_review_bindings_workspace_unique").on(
+      table.workspaceId,
+      table.bindingId,
+      table.version,
+    ),
+  }),
+);
+
+export const tokenlessAgentHumanReviewBindingEvents = pgTable(
+  "tokenless_agent_human_review_binding_events",
+  {
+    eventId: text("event_id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    bindingId: text("binding_id").notNull(),
+    bindingVersion: integer("binding_version").notNull(),
+    eventType: text("event_type").notNull(),
+    actorType: text("actor_type").notNull(),
+    actorReference: text("actor_reference").notNull(),
+    detailsJson: text("details_json").notNull().default("{}"),
+    eventHash: text("event_hash").notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    bindingCreatedIdx: index("tokenless_agent_human_review_binding_events_binding_created_idx").on(
+      table.bindingId,
+      table.createdAt,
+    ),
+    bindingFk: foreignKey({
+      columns: [table.workspaceId, table.bindingId, table.bindingVersion],
+      foreignColumns: [
+        tokenlessAgentHumanReviewBindings.workspaceId,
+        tokenlessAgentHumanReviewBindings.bindingId,
+        tokenlessAgentHumanReviewBindings.version,
+      ],
+      name: "tokenless_agent_human_review_binding_events_binding_fk",
+    }).onDelete("restrict"),
+  }),
+);
+
+export type TokenlessAgentHumanReviewBinding = typeof tokenlessAgentHumanReviewBindings.$inferSelect;
+export type NewTokenlessAgentHumanReviewBinding = typeof tokenlessAgentHumanReviewBindings.$inferInsert;
+export type TokenlessAgentHumanReviewBindingEvent = typeof tokenlessAgentHumanReviewBindingEvents.$inferSelect;
+export type NewTokenlessAgentHumanReviewBindingEvent = typeof tokenlessAgentHumanReviewBindingEvents.$inferInsert;
 
 export const tokenlessAgentExecutions = pgTable(
   "tokenless_agent_executions",

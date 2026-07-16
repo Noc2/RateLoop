@@ -600,6 +600,19 @@ export async function updateReviewRequestProfile(input: {
         "review_request_profile_agent_mismatch",
       );
     }
+    const activeBinding = await client.query(
+      `SELECT 1 FROM tokenless_agent_human_review_bindings
+       WHERE workspace_id = $1 AND request_profile_id = $2 AND request_profile_version = $3
+         AND enabled = true AND superseded_at IS NULL FOR SHARE`,
+      [input.workspaceId, input.profileId, rowInteger(currentRow, "version")],
+    );
+    if (activeBinding.rowCount) {
+      throw new TokenlessServiceError(
+        "Update this profile through the human-review configuration so its exact bindings stay atomic.",
+        409,
+        "human_review_configuration_required",
+      );
+    }
     if (rowString(currentRow, "profile_hash") === profileHash) {
       throw new TokenlessServiceError(
         "The review request profile has no semantic changes.",

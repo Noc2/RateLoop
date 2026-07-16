@@ -552,6 +552,19 @@ export async function updateManagedReviewPolicy(input: {
         "review_policy_agent_mismatch",
       );
     }
+    const activeBinding = await client.query(
+      `SELECT 1 FROM tokenless_agent_human_review_bindings
+       WHERE workspace_id = $1 AND selection_policy_id = $2 AND selection_policy_version = $3
+         AND enabled = true AND superseded_at IS NULL FOR SHARE`,
+      [input.workspaceId, input.policyId, rowInteger(current.rows[0] as QueryRow, "version")],
+    );
+    if (activeBinding.rowCount) {
+      throw new TokenlessServiceError(
+        "Update this policy through the human-review configuration so its exact bindings stay atomic.",
+        409,
+        "human_review_configuration_required",
+      );
+    }
     nextVersion = rowInteger(current.rows[0] as QueryRow, "version") + 1;
     await validateBindings(client, input.workspaceId, policy);
     const duplicate = await client.query(
@@ -615,6 +628,23 @@ export async function disableManagedReviewPolicy(input: {
   policyId: string;
 }) {
   await requireManagement(input.accountAddress, input.workspaceId);
+  const bound = await dbClient.execute({
+    sql: `SELECT 1 FROM tokenless_agent_human_review_bindings b
+          JOIN tokenless_agent_review_policies p
+            ON p.workspace_id = b.workspace_id AND p.policy_id = b.selection_policy_id
+           AND p.version = b.selection_policy_version
+          WHERE b.workspace_id = ? AND b.selection_policy_id = ?
+            AND b.enabled = true AND b.superseded_at IS NULL
+            AND p.enabled = true AND p.superseded_at IS NULL LIMIT 1`,
+    args: [input.workspaceId, input.policyId],
+  });
+  if (bound.rowCount) {
+    throw new TokenlessServiceError(
+      "Disable this policy through the human-review configuration so its exact bindings stay atomic.",
+      409,
+      "human_review_configuration_required",
+    );
+  }
   const now = new Date();
   const result = await dbClient.execute({
     sql: `UPDATE tokenless_agent_review_policies SET enabled = false, superseded_at = ?

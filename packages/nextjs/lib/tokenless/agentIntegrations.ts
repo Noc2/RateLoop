@@ -971,6 +971,19 @@ export async function activateAgentIntegrationPublishing(input: {
     const reviewPolicyId = text(review, "policy_id")!;
     let reviewPolicyVersion = integer(review, "version");
     if (text(review, "publishing_policy_id") !== activation.publishingPolicyId) {
+      const activeBinding = await client.query(
+        `SELECT 1 FROM tokenless_agent_human_review_bindings
+         WHERE workspace_id = $1 AND selection_policy_id = $2 AND selection_policy_version = $3
+           AND enabled = true AND superseded_at IS NULL FOR SHARE`,
+        [input.workspaceId, reviewPolicyId, reviewPolicyVersion],
+      );
+      if (activeBinding.rowCount) {
+        throw new TokenlessServiceError(
+          "Change autonomous review through the human-review configuration so its exact bindings stay atomic.",
+          409,
+          "human_review_configuration_required",
+        );
+      }
       reviewPolicyVersion += 1;
       await client.query(
         `UPDATE tokenless_agent_review_policies SET enabled = false, superseded_at = $1
