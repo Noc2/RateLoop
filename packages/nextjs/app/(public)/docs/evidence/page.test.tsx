@@ -27,7 +27,9 @@ test("evidence docs explain exact artifacts, checks, mappings, and non-claims", 
   assert.match(html, /reviewer identities and raw or decryptable rationales are excluded/i);
   assert.match(html, /evidence:verify.*--public-key.*--key-id/i);
   assert.match(html, /audit:verify.*--expected-head/i);
+  assert.match(html, /attestation:verify.*--signer-public-key.*--signer-key-id.*--rekor-public-key.*--tsa-ca/is);
   assert.match(html, /independently selected Base RPC or indexer/i);
+  assert.match(html, /does not embed a complete transaction receipt/i);
   assert.match(html, /absent bundle means there is no Rekor receipt/i);
   assert.match(html, /absent token means there is no TSA receipt/i);
   assert.match(html, /assurance\/coverage\/export/i);
@@ -54,6 +56,7 @@ test("machine docs mirror evidence boundaries and are linked from agent setup", 
   assert.match(evidence, /execution provenance is host-reported and labelled so/i);
   assert.match(evidence, /evidence:verify.*--public-key.*--key-id/is);
   assert.match(evidence, /audit:verify.*--expected-head/is);
+  assert.match(evidence, /attestation:verify.*--signer-public-key.*--rekor-public-key.*--tsa-ca/is);
   assert.match(evidence, /ISO\/IEC 42001:2023.*A\.6 including A\.6\.2\.8, and A\.9\.2/is);
   assert.match(evidence, /Articles 12, 26\(5\)-\(6\), 72, and 73/);
   assert.match(evidence, /rateloop-human-assurance-component-definition\.oscal\.json/);

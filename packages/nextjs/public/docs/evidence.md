@@ -60,8 +60,9 @@ Redacted shape:
 
 ## How to check the evidence
 
-1. Export the packet and obtain the expected key ID and public-key pin from a trusted workspace source. Do not use the
-   public key embedded in the same packet as its sole trust anchor.
+1. Export the packet and obtain the expected key ID and public-key pin from the authenticated workspace key history.
+   In the Evidence Center, select the packet and download its matching SPKI pin. Do not use the public key embedded in
+   the same packet as its sole trust anchor.
 2. Check the Ed25519 signature, canonical packet digest, case and response roots, privacy-safe aggregation, and frozen
    pass rule:
 
@@ -73,13 +74,31 @@ Redacted shape:
 
    Any reported error means the check failed.
 
-3. When paid settlement evidence is present, compare the deployment key, chain ID, contract, transaction receipt,
-   indexed terminal event, and recomputed accounting with an independently selected Base RPC or indexer. Missing chain
-   evidence remains an explicit packet limitation.
+3. When paid settlement evidence is present, compare the deployment key and block, chain ID, panel address,
+   round-creation transaction hash, receipt block number and hash, execution state, and stored indexed-event fields with
+   an independently selected Base RPC or indexer. The packet also records settlement mode, statement, and links; it does
+   not embed a complete transaction receipt or independently recompute chain accounting. Missing chain evidence remains
+   an explicit packet limitation.
 4. Validate optional external receipts only when they are present. For a non-null Rekor bundle, select the intended log
    independently and check its UUID, index, inclusion data, and signed entry time. An absent bundle means there is no
    Rekor receipt. For a non-null TSA field, validate its RFC 3161 message imprint, certificate path, policy, and time
    against trust roots selected by your organization. An absent token means there is no TSA receipt.
+
+Download a completed witness from its public attestation URL. Select the signer, Rekor log key, and TSA certificate
+chain independently, pin the witness signer key ID, then run:
+
+```sh
+yarn workspace @rateloop/nextjs attestation:verify ./attestation-witness.json \
+  --signer-public-key ./trusted-attestation-signer.pem \
+  --signer-key-id ed25519:... \
+  --rekor-public-key ./trusted-rekor-public-key.pem \
+  --tsa-ca ./trusted-tsa-ca.pem \
+  --tsa-chain ./trusted-tsa-chain.pem
+```
+
+The TSA arguments are required when `rfc3161` is non-null; omit them for a witness without a timestamp. The verifier
+checks the DSSE signature and statement binding, Rekor body, signed entry timestamp and inclusion proof, and the RFC 3161
+token when present.
 
 The workspace audit chain is separate. Pin the expected head from another trusted record when possible:
 
@@ -94,10 +113,13 @@ GET /api/account/workspaces/{workspaceId}/assurance/runs/{runId}/evidence
 GET /api/account/workspaces/{workspaceId}/assurance/coverage/export
 GET /api/account/workspaces/{workspaceId}/audit/export
 GET /api/account/workspaces/{workspaceId}/assurance/trusted-keys
+GET /api/account/workspaces/{workspaceId}/assurance/trusted-keys?format=spki&keyId=ed25519:...
+GET /api/public/assurance/attestations/{jobId}
 ```
 
-These routes require an authorized workspace session. A workspace retention policy cannot be configured below six
-months. That product floor does not determine the customer's legal or contractual retention schedule.
+The workspace routes require an authorized workspace session. The public witness is digest-only and is retrievable only
+by its opaque job ID. A workspace retention policy cannot be configured below six months. That product floor does not
+determine the customer's legal or contractual retention schedule.
 
 ## Compliance map
 

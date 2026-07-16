@@ -55,12 +55,20 @@ const result = state.status === "ready"
         <code>{`GET /api/account/workspaces/{workspaceId}/assurance/runs/{runId}/evidence
 GET /api/account/workspaces/{workspaceId}/assurance/coverage/export
 GET /api/account/workspaces/{workspaceId}/audit/export
-GET /api/account/workspaces/{workspaceId}/assurance/trusted-keys`}</code>
+GET /api/account/workspaces/{workspaceId}/assurance/trusted-keys
+GET /api/account/workspaces/{workspaceId}/assurance/trusted-keys?format=spki&keyId=ed25519:…`}</code>
       </pre>
-      <p>Run the local checkers with explicit trust pins instead of trusting keys or heads from the same export:</p>
+      <p>
+        Download the matching SPKI pin from the authenticated workspace key history, then run the local checkers with an
+        explicit key ID instead of trusting keys or heads from the same export:
+      </p>
       <pre>
         <code>{`yarn workspace @rateloop/nextjs evidence:verify ./packet.json --public-key ./key.txt --key-id ed25519:…
-yarn workspace @rateloop/nextjs audit:verify ./audit-export.json --expected-head sha256:…`}</code>
+yarn workspace @rateloop/nextjs audit:verify ./audit-export.json --expected-head sha256:…
+yarn workspace @rateloop/nextjs attestation:verify ./attestation-witness.json \\
+  --signer-public-key ./trusted-attestation-signer.pem --signer-key-id ed25519:… \\
+  --rekor-public-key ./trusted-rekor-public-key.pem \\
+  --tsa-ca ./trusted-tsa-ca.pem --tsa-chain ./trusted-tsa-chain.pem`}</code>
       </pre>
       <p>
         Read <Link href="/docs/evidence">Evidence &amp; Compliance Mapping</Link> for verification boundaries,{` `}

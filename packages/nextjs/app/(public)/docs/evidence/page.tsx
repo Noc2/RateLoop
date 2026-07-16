@@ -141,8 +141,8 @@ export default function EvidencePage() {
       <ol>
         <li>
           <strong>Signature and key pin.</strong> Export the packet and obtain the expected key ID and public-key pin
-          from a trusted workspace source. Never treat the public key embedded in the same packet as its own trust
-          anchor. Then run:
+          from the authenticated workspace key history. In the Evidence Center, select the packet and download its
+          matching SPKI pin. Never treat the public key embedded in the same packet as its own trust anchor. Then run:
           <pre>
             <code>{`yarn workspace @rateloop/nextjs evidence:verify ./packet.json \\
   --public-key ./evidence-public-key.txt \\
@@ -156,8 +156,10 @@ export default function EvidencePage() {
         </li>
         <li>
           <strong>Chain references.</strong> For a packet that includes paid settlement evidence, compare its deployment
-          key, chain ID, contract, transaction receipt, indexed terminal event, and recomputed accounting with an
-          independently selected Base RPC or indexer. Missing chain evidence stays an explicit packet limitation.
+          key and block, chain ID, panel address, round-creation transaction hash, receipt block number and hash,
+          execution state, and stored indexed-event fields with an independently selected Base RPC or indexer. The
+          packet also records settlement mode, statement, and links; it does not embed a complete transaction receipt or
+          independently recompute chain accounting. Missing chain evidence stays an explicit packet limitation.
         </li>
         <li>
           <strong>Optional external receipts.</strong> When a completed attestation includes a non-null Rekor bundle,
@@ -167,6 +169,23 @@ export default function EvidencePage() {
           absent token means there is no TSA receipt.
         </li>
       </ol>
+      <p>
+        Download a completed witness from its public attestation URL. Select the signer, Rekor log key, and TSA
+        certificate chain independently, pin the witness signer key ID, then run:
+      </p>
+      <pre>
+        <code>{`yarn workspace @rateloop/nextjs attestation:verify ./attestation-witness.json \\
+  --signer-public-key ./trusted-attestation-signer.pem \\
+  --signer-key-id ed25519:… \\
+  --rekor-public-key ./trusted-rekor-public-key.pem \\
+  --tsa-ca ./trusted-tsa-ca.pem \\
+  --tsa-chain ./trusted-tsa-chain.pem`}</code>
+      </pre>
+      <p>
+        The TSA arguments are required when <code>rfc3161</code> is non-null; omit them for a witness without a
+        timestamp. The verifier checks the DSSE signature and statement binding, Rekor body, signed entry timestamp and
+        inclusion proof, and the RFC 3161 token when present.
+      </p>
       <p>
         The workspace audit chain is a separate export. Pin its expected head from another trusted record when possible:
       </p>
@@ -180,12 +199,14 @@ export default function EvidencePage() {
         <code>{`GET /api/account/workspaces/{workspaceId}/assurance/runs/{runId}/evidence
 GET /api/account/workspaces/{workspaceId}/assurance/coverage/export
 GET /api/account/workspaces/{workspaceId}/audit/export
-GET /api/account/workspaces/{workspaceId}/assurance/trusted-keys`}</code>
+GET /api/account/workspaces/{workspaceId}/assurance/trusted-keys
+GET /api/account/workspaces/{workspaceId}/assurance/trusted-keys?format=spki&keyId=ed25519:…
+GET /api/public/assurance/attestations/{jobId}`}</code>
       </pre>
       <p>
-        These routes require an authorized workspace session. A workspace retention policy cannot be configured below
-        six months, but that product floor does not determine the customer&apos;s legal or contractual retention
-        schedule.
+        The workspace routes require an authorized workspace session. The public witness is digest-only and is
+        retrievable only by its opaque job ID. A workspace retention policy cannot be configured below six months, but
+        that product floor does not determine the customer&apos;s legal or contractual retention schedule.
       </p>
 
       <h2 id="compliance-map">Compliance mapping</h2>
