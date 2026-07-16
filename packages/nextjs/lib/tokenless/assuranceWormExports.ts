@@ -75,6 +75,7 @@ export type AssuranceWormRuntime = {
 
 let runtimeOverride: AssuranceWormRuntime | null = null;
 let managedRuntime: AssuranceWormRuntime | null = null;
+let auditAppenderOverride: typeof appendAuditEvent | null = null;
 
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
@@ -272,6 +273,10 @@ function getRuntime() {
     },
   });
   return managedRuntime;
+}
+
+function appendWormAuditEvent(input: Parameters<typeof appendAuditEvent>[0]) {
+  return (auditAppenderOverride ?? appendAuditEvent)(input);
 }
 
 async function requireManager(client: Queryable, accountAddress: string, workspaceId: string) {
@@ -727,6 +732,75 @@ const JOB_SELECT = `SELECT j.*,r.receipt_id,r.object_version_id,r.etag,r.checksu
                      FROM tokenless_assurance_worm_export_jobs j
                      LEFT JOIN tokenless_assurance_worm_export_receipts r ON r.job_id=j.job_id`;
 
+const WORM_RECEIPT_SELECT = `SELECT receipt_id,object_version_id,etag,checksum_sha256,object_lock_mode,
+                                   retention_until AS receipt_retention_until,provider_receipt_hash,
+                                   delivered_at AS receipt_delivered_at
+                            FROM tokenless_assurance_worm_export_receipts WHERE job_id=$1`;
+
+async function requireCurrentWormLease(
+  client: Queryable,
+  jobId: string,
+  leaseGeneration: number,
+  lockForReceiptPersistence = false,
+) {
+  const current = await client.query(
+    `SELECT job_id FROM tokenless_assurance_worm_export_jobs
+     WHERE job_id=$1 AND state='delivering' AND lease_generation=$2${lockForReceiptPersistence ? " FOR UPDATE" : ""}`,
+    [jobId, leaseGeneration],
+  );
+  if (current.rows.length !== 1) {
+    throw new TokenlessServiceError("WORM export delivery lease was lost.", 409, "worm_export_lease_lost", true);
+  }
+}
+
+async function persistVerifiedWormReceipt(input: {
+  jobId: string;
+  leaseGeneration: number;
+  receiptId: string;
+  workspaceId: string;
+  objectVersionId: string;
+  etag: string;
+  checksumSha256: string;
+  retentionUntil: Date;
+  providerReceiptJson: string;
+  providerReceiptHash: string;
+  deliveredAt: Date;
+}) {
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    await requireCurrentWormLease(client, input.jobId, input.leaseGeneration, true);
+    await client.query(
+      `INSERT INTO tokenless_assurance_worm_export_receipts
+       (receipt_id,job_id,workspace_id,object_version_id,etag,checksum_sha256,object_lock_mode,
+        retention_until,provider_receipt_json,provider_receipt_hash,delivered_at)
+       VALUES ($1,$2,$3,$4,$5,$6,'COMPLIANCE',$7,$8,$9,$10)
+       ON CONFLICT (job_id) DO NOTHING`,
+      [
+        input.receiptId,
+        input.jobId,
+        input.workspaceId,
+        input.objectVersionId,
+        input.etag,
+        input.checksumSha256,
+        input.retentionUntil,
+        input.providerReceiptJson,
+        input.providerReceiptHash,
+        input.deliveredAt,
+      ],
+    );
+    const persisted = await client.query(WORM_RECEIPT_SELECT, [input.jobId]);
+    if (persisted.rows.length !== 1) throw new Error("worm_provider_receipt_not_persisted");
+    await client.query("COMMIT");
+    return persisted.rows[0] as Row;
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function enqueueAssuranceWormExport(input: {
   accountAddress: string;
   workspaceId: string;
@@ -907,6 +981,8 @@ export async function processAssuranceWormExportJob(input: { jobId: string; now?
     );
     leased = selected.rows[0] as Row;
     if (!leased) throw new TokenlessServiceError("WORM export job not found.", 404, "worm_export_not_found");
+    const receipt = await client.query(WORM_RECEIPT_SELECT, [input.jobId]);
+    Object.assign(leased, receipt.rows[0] ?? {});
     const state = text(leased, "state");
     if (state === "delivered" || state === "dead") {
       await client.query("COMMIT");
@@ -919,14 +995,24 @@ export async function processAssuranceWormExportJob(input: { jobId: string; now?
     if ((state === "delivering" && leaseExpires && new Date(leaseExpires) > now) || nextAttempt > now) {
       throw new TokenlessServiceError("WORM export job is not due.", 409, "worm_export_not_due", true);
     }
-    const attempt = integer(leased, "attempt_count") + 1;
-    await client.query(
+    const previousLeaseGeneration = integer(leased, "lease_generation");
+    if (previousLeaseGeneration >= 2_147_483_647) {
+      throw new TokenlessServiceError("WORM export lease generation is exhausted.", 409, "worm_export_lease_exhausted");
+    }
+    const leaseGeneration = previousLeaseGeneration + 1;
+    const attempt = integer(leased, "attempt_count") + (text(leased, "receipt_id") ? 0 : 1);
+    const claimed = await client.query(
       `UPDATE tokenless_assurance_worm_export_jobs
-       SET state='delivering',attempt_count=$2,lease_expires_at=$3,updated_at=$4,last_error_code=NULL
-       WHERE job_id=$1`,
-      [input.jobId, attempt, new Date(now.getTime() + LEASE_MS), now],
+       SET state='delivering',attempt_count=$2,lease_expires_at=$3,updated_at=$4,last_error_code=NULL,
+           lease_generation=$5
+       WHERE job_id=$1 AND lease_generation=$6`,
+      [input.jobId, attempt, new Date(now.getTime() + LEASE_MS), now, leaseGeneration, previousLeaseGeneration],
     );
+    if (claimed.rowCount !== 1) {
+      throw new TokenlessServiceError("WORM export delivery lease was lost.", 409, "worm_export_lease_lost", true);
+    }
     leased.attempt_count = attempt;
+    leased.lease_generation = leaseGeneration;
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
@@ -935,87 +1021,94 @@ export async function processAssuranceWormExportJob(input: { jobId: string; now?
     client.release();
   }
 
+  let auditStage = false;
+  let providerAccepted = false;
   try {
-    const runtime = getRuntime();
-    const payload = Buffer.from(text(leased, "payload_json")!, "utf8");
     const expectedHash = text(leased, "payload_hash")!;
-    if (sha256(payload) !== expectedHash) throw new Error("stored_payload_digest_mismatch");
-    const spec = destinationSpec(leased);
-    const receipt = await runtime.putLockedObject({
-      spec,
-      objectKey: text(leased, "object_key")!,
-      body: payload,
-      checksumSha256: expectedHash,
-      checksumSha256Base64: createHash("sha256").update(payload).digest("base64"),
-      retentionUntil: new Date(String(leased.retention_until)).toISOString(),
-      idempotencyKey: text(leased, "idempotency_key")!,
-    });
-    const receiptRetention = new Date(receipt.retentionUntil);
+    const leaseGeneration = integer(leased, "lease_generation");
+    if (!text(leased, "receipt_id")) {
+      const runtime = getRuntime();
+      const payload = Buffer.from(text(leased, "payload_json")!, "utf8");
+      if (sha256(payload) !== expectedHash) throw new Error("stored_payload_digest_mismatch");
+      const spec = destinationSpec(leased);
+      const receipt = await runtime.putLockedObject({
+        spec,
+        objectKey: text(leased, "object_key")!,
+        body: payload,
+        checksumSha256: expectedHash,
+        checksumSha256Base64: createHash("sha256").update(payload).digest("base64"),
+        retentionUntil: new Date(String(leased.retention_until)).toISOString(),
+        idempotencyKey: text(leased, "idempotency_key")!,
+      });
+      const receiptRetention = new Date(receipt.retentionUntil);
+      if (
+        !receipt.objectVersionId?.trim() ||
+        !receipt.etag?.trim() ||
+        receipt.checksumSha256 !== expectedHash ||
+        receipt.objectLockMode !== "COMPLIANCE" ||
+        !Number.isFinite(receiptRetention.getTime()) ||
+        receiptRetention < new Date(String(leased.retention_until))
+      ) {
+        throw new Error("provider_receipt_mismatch");
+      }
+      providerAccepted = true;
+      const deliveredAt = input.now ?? new Date();
+      const providerReceipt = {
+        schemaVersion: "rateloop.assurance-worm-provider-receipt.v1" as const,
+        workspaceId: text(leased, "workspace_id")!,
+        destinationId: text(leased, "destination_id")!,
+        destinationVersion: integer(leased, "destination_version"),
+        jobId: input.jobId,
+        bucketName: text(leased, "bucket_name")!,
+        objectKey: text(leased, "object_key")!,
+        objectVersionId: receipt.objectVersionId,
+        etag: receipt.etag,
+        checksumSha256: receipt.checksumSha256,
+        objectLockMode: receipt.objectLockMode,
+        retentionUntil: receiptRetention.toISOString(),
+        deliveredAt: deliveredAt.toISOString(),
+      };
+      const receiptJson = canonicalJson(providerReceipt);
+      const proposedReceiptHash = sha256(receiptJson);
+      const proposedReceiptId = deterministicId("awr", `${input.jobId}:${proposedReceiptHash}`);
+      const persisted = await persistVerifiedWormReceipt({
+        jobId: input.jobId,
+        leaseGeneration,
+        receiptId: proposedReceiptId,
+        workspaceId: text(leased, "workspace_id")!,
+        objectVersionId: receipt.objectVersionId,
+        etag: receipt.etag,
+        checksumSha256: expectedHash,
+        retentionUntil: receiptRetention,
+        providerReceiptJson: receiptJson,
+        providerReceiptHash: proposedReceiptHash,
+        deliveredAt,
+      });
+      Object.assign(leased, persisted);
+    }
+    const receiptId = text(leased, "receipt_id");
+    const receiptHash = text(leased, "provider_receipt_hash");
+    const deliveredAt = leased.receipt_delivered_at ? new Date(String(leased.receipt_delivered_at)) : null;
+    const receiptRetention = leased.receipt_retention_until ? new Date(String(leased.receipt_retention_until)) : null;
     if (
-      !receipt.objectVersionId?.trim() ||
-      !receipt.etag?.trim() ||
-      receipt.checksumSha256 !== expectedHash ||
-      receipt.objectLockMode !== "COMPLIANCE" ||
+      !receiptId ||
+      !receiptHash ||
+      !HASH.test(receiptHash) ||
+      !text(leased, "object_version_id") ||
+      !text(leased, "etag") ||
+      text(leased, "checksum_sha256") !== expectedHash ||
+      text(leased, "object_lock_mode") !== "COMPLIANCE" ||
+      !deliveredAt ||
+      !Number.isFinite(deliveredAt.getTime()) ||
+      !receiptRetention ||
       !Number.isFinite(receiptRetention.getTime()) ||
       receiptRetention < new Date(String(leased.retention_until))
     ) {
-      throw new Error("provider_receipt_mismatch");
+      throw new Error("stored_provider_receipt_invalid");
     }
-    const deliveredAt = input.now ?? new Date();
-    const providerReceipt = {
-      schemaVersion: "rateloop.assurance-worm-provider-receipt.v1" as const,
-      workspaceId: text(leased, "workspace_id")!,
-      destinationId: text(leased, "destination_id")!,
-      destinationVersion: integer(leased, "destination_version"),
-      jobId: input.jobId,
-      bucketName: text(leased, "bucket_name")!,
-      objectKey: text(leased, "object_key")!,
-      objectVersionId: receipt.objectVersionId,
-      etag: receipt.etag,
-      checksumSha256: receipt.checksumSha256,
-      objectLockMode: receipt.objectLockMode,
-      retentionUntil: receiptRetention.toISOString(),
-      deliveredAt: deliveredAt.toISOString(),
-    };
-    const receiptJson = canonicalJson(providerReceipt);
-    const receiptHash = sha256(receiptJson);
-    const receiptId = deterministicId("awr", `${input.jobId}:${receiptHash}`);
-    const finalize = await dbPool.connect();
-    try {
-      await finalize.query("BEGIN");
-      await finalize.query(
-        `INSERT INTO tokenless_assurance_worm_export_receipts
-         (receipt_id,job_id,workspace_id,object_version_id,etag,checksum_sha256,object_lock_mode,
-          retention_until,provider_receipt_json,provider_receipt_hash,delivered_at)
-         VALUES ($1,$2,$3,$4,$5,$6,'COMPLIANCE',$7,$8,$9,$10)
-         ON CONFLICT (job_id) DO NOTHING`,
-        [
-          receiptId,
-          input.jobId,
-          text(leased, "workspace_id")!,
-          receipt.objectVersionId,
-          receipt.etag,
-          expectedHash,
-          receiptRetention,
-          receiptJson,
-          receiptHash,
-          deliveredAt,
-        ],
-      );
-      await finalize.query(
-        `UPDATE tokenless_assurance_worm_export_jobs
-         SET state='delivered',lease_expires_at=NULL,delivered_at=$2,updated_at=$2,last_error_code=NULL
-         WHERE job_id=$1 AND state='delivering'`,
-        [input.jobId, deliveredAt],
-      );
-      await finalize.query("COMMIT");
-    } catch (error) {
-      await finalize.query("ROLLBACK");
-      throw error;
-    } finally {
-      finalize.release();
-    }
-    await appendAuditEvent({
+    auditStage = true;
+    await requireCurrentWormLease(dbPool, input.jobId, leaseGeneration);
+    await appendWormAuditEvent({
       workspaceId: text(leased, "workspace_id")!,
       actorKind: "system",
       actorReference: "service:assurance-worm-exporter",
@@ -1028,16 +1121,48 @@ export async function processAssuranceWormExportJob(input: { jobId: string; now?
       result: "success",
       metadata: { receiptId, providerReceiptHash: receiptHash, payloadHash: expectedHash },
       occurredAt: deliveredAt,
+      idempotencyKey: `worm-delivered:${input.jobId}:${receiptHash}`,
     });
+    const finalized = await dbPool.query(
+      `UPDATE tokenless_assurance_worm_export_jobs
+       SET state='delivered',lease_expires_at=NULL,delivered_at=$2,updated_at=$3,last_error_code=NULL
+       WHERE job_id=$1 AND state='delivering' AND lease_generation=$4`,
+      [input.jobId, deliveredAt, now, leaseGeneration],
+    );
+    if (finalized.rowCount !== 1) throw new Error("worm_delivery_finalize_conflict");
   } catch (error) {
     const attempt = integer(leased, "attempt_count");
-    const dead = attempt >= MAX_ATTEMPTS;
-    const code = error instanceof TokenlessServiceError ? error.code : "worm_provider_delivery_failed";
+    const durableReceipt = await dbPool.query(
+      "SELECT receipt_id FROM tokenless_assurance_worm_export_receipts WHERE job_id=$1",
+      [input.jobId],
+    );
+    const receiptCommitted = durableReceipt.rows.length === 1;
+    const receiptPersistencePending = providerAccepted && !receiptCommitted;
+    const dead = !receiptCommitted && !providerAccepted && attempt >= MAX_ATTEMPTS;
+    const retryAttempt = receiptPersistencePending ? Math.max(0, attempt - 1) : attempt;
+    const code =
+      error instanceof TokenlessServiceError
+        ? error.code
+        : auditStage
+          ? "worm_delivery_audit_failed"
+          : receiptCommitted
+            ? "worm_delivery_audit_pending"
+            : receiptPersistencePending
+              ? "worm_provider_receipt_persistence_failed"
+              : "worm_provider_delivery_failed";
     await dbPool.query(
       `UPDATE tokenless_assurance_worm_export_jobs
-       SET state=$2,lease_expires_at=NULL,next_attempt_at=$3,last_error_code=$4,updated_at=$5
-       WHERE job_id=$1 AND state='delivering'`,
-      [input.jobId, dead ? "dead" : "retry", new Date(now.getTime() + retryDelay(attempt)), code, now],
+       SET state=$2,lease_expires_at=NULL,next_attempt_at=$3,last_error_code=$4,updated_at=$5,attempt_count=$6
+       WHERE job_id=$1 AND state='delivering' AND lease_generation=$7`,
+      [
+        input.jobId,
+        dead ? "dead" : "retry",
+        new Date(now.getTime() + retryDelay(attempt)),
+        code,
+        now,
+        retryAttempt,
+        integer(leased, "lease_generation"),
+      ],
     );
   }
   const listed = await listAssuranceWormExports({ workspaceId: text(leased, "workspace_id")!, internal: true });
@@ -1095,6 +1220,10 @@ export async function processDueAssuranceWormExports(input: { now?: Date; limit?
 export function __setAssuranceWormRuntimeForTests(value: AssuranceWormRuntime | null) {
   runtimeOverride = value;
   managedRuntime = null;
+}
+
+export function __setAssuranceWormAuditAppenderForTests(value: typeof appendAuditEvent | null) {
+  auditAppenderOverride = value;
 }
 
 export const __assuranceWormTestUtils = { canonicalJson, containsMoneyClaim, normalizeDestination, sha256 };

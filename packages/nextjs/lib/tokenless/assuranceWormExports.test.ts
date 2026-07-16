@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { createWorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
 import {
   type AssuranceWormRuntime,
   __assuranceWormTestUtils,
+  __setAssuranceWormAuditAppenderForTests,
   __setAssuranceWormRuntimeForTests,
   buildAssuranceSupervisionReport,
   configureAssuranceWormDestination,
@@ -25,6 +27,7 @@ const OUTSIDER = "0x2222222222222222222222222222222222222222";
 const NOW = new Date("2026-07-16T12:00:00.000Z");
 const HASH = (character: string) => `sha256:${character.repeat(64)}`;
 const SECRET_REFERENCE = `sec_${"1".repeat(48)}`;
+let databaseResources: ReturnType<typeof createMemoryDatabaseResources>;
 
 function destinationBody() {
   return {
@@ -225,11 +228,13 @@ async function seedSupervisionEvidence(workspaceId: string) {
 }
 
 beforeEach(() => {
-  __setDatabaseResourcesForTests(createMemoryDatabaseResources());
+  databaseResources = createMemoryDatabaseResources();
+  __setDatabaseResourcesForTests(databaseResources);
   __setAssuranceWormRuntimeForTests(runtime());
 });
 
 afterEach(() => {
+  __setAssuranceWormAuditAppenderForTests(null);
   __setAssuranceWormRuntimeForTests(null);
   __setDatabaseResourcesForTests(null);
 });
@@ -378,6 +383,289 @@ test("due-job processing provides the scheduled retry boundary for durable expor
   assert.deepEqual(summary, { due: 1, delivered: 1, retry: 0, dead: 0, skipped: 0 });
 });
 
+test("a committed provider receipt remains retryable until one canonical delivery audit is durable", async () => {
+  const { workspaceId } = await createWorkspace({ name: "WORM audit boundary", ownerAddress: OWNER });
+  await configureAssuranceWormDestination({ accountAddress: OWNER, workspaceId, body: destinationBody(), now: NOW });
+  let providerPuts = 0;
+  __setAssuranceWormRuntimeForTests(
+    runtime({
+      async putLockedObject(input) {
+        providerPuts += 1;
+        return {
+          objectVersionId: "version-audit-boundary",
+          etag: '"etag-audit-boundary"',
+          checksumSha256: input.checksumSha256,
+          objectLockMode: "COMPLIANCE",
+          retentionUntil: input.retentionUntil,
+        };
+      },
+    }),
+  );
+  let failAfterAuditCommit = true;
+  __setAssuranceWormAuditAppenderForTests(async input => {
+    const result = await appendAuditEvent(input);
+    if (input.action === "assurance.worm_export.delivered" && failAfterAuditCommit) {
+      failAfterAuditCommit = false;
+      throw new Error("simulated_transport_failure_after_audit_commit");
+    }
+    return result;
+  });
+  const queued = await enqueueAssuranceWormExport({
+    accountAddress: OWNER,
+    workspaceId,
+    artifactType: "supervision_report",
+    sourceId: "supervision:audit-boundary",
+    artifact: supervisionArtifact(workspaceId),
+    now: NOW,
+  });
+
+  const retry = await processAssuranceWormExportJob({ jobId: queued.jobId, now: NOW });
+  assert.equal(retry.state, "retry");
+  assert.equal(retry.lastErrorCode, "worm_delivery_audit_failed");
+  assert.ok(retry.receipt);
+  assert.equal(providerPuts, 1);
+  const committedAudit = await dbClient.execute({
+    sql: "SELECT event_id FROM tokenless_audit_events WHERE workspace_id=? AND action=? AND target_id=?",
+    args: [workspaceId, "assurance.worm_export.delivered", queued.jobId],
+  });
+  assert.equal(committedAudit.rows.length, 1);
+
+  const delivered = await processAssuranceWormExportJob({
+    jobId: queued.jobId,
+    now: new Date(NOW.getTime() + 5_000),
+  });
+  assert.equal(delivered.state, "delivered");
+  assert.equal(delivered.attemptCount, 1);
+  assert.equal(providerPuts, 1);
+  const exactlyOnceAudit = await dbClient.execute({
+    sql: "SELECT event_id FROM tokenless_audit_events WHERE workspace_id=? AND action=? AND target_id=?",
+    args: [workspaceId, "assurance.worm_export.delivered", queued.jobId],
+  });
+  assert.deepEqual(exactlyOnceAudit.rows, committedAudit.rows);
+
+  await processAssuranceWormExportJob({ jobId: queued.jobId, now: new Date(NOW.getTime() + 10_000) });
+  const terminalAudit = await dbClient.execute({
+    sql: "SELECT event_id FROM tokenless_audit_events WHERE workspace_id=? AND action=? AND target_id=?",
+    args: [workspaceId, "assurance.worm_export.delivered", queued.jobId],
+  });
+  assert.deepEqual(terminalAudit.rows, committedAudit.rows);
+  assert.equal(providerPuts, 1);
+});
+
+test("a verified provider delivery cannot exhaust retries when receipt persistence rolls back", async () => {
+  const { workspaceId } = await createWorkspace({ name: "WORM receipt rollback", ownerAddress: OWNER });
+  await configureAssuranceWormDestination({ accountAddress: OWNER, workspaceId, body: destinationBody(), now: NOW });
+  let providerPuts = 0;
+  __setAssuranceWormRuntimeForTests(
+    runtime({
+      async putLockedObject(input) {
+        providerPuts += 1;
+        return {
+          objectVersionId: `version-receipt-rollback-${providerPuts}`,
+          etag: `"etag-receipt-rollback-${providerPuts}"`,
+          checksumSha256: input.checksumSha256,
+          objectLockMode: "COMPLIANCE",
+          retentionUntil: input.retentionUntil,
+        };
+      },
+    }),
+  );
+  const queued = await enqueueAssuranceWormExport({
+    accountAddress: OWNER,
+    workspaceId,
+    artifactType: "supervision_report",
+    sourceId: "supervision:receipt-rollback",
+    artifact: supervisionArtifact(workspaceId),
+    now: NOW,
+  });
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_worm_export_jobs SET attempt_count=7 WHERE job_id=?",
+    args: [queued.jobId],
+  });
+  const originalQuery = databaseResources.pool.query.bind(databaseResources.pool) as (
+    ...args: unknown[]
+  ) => Promise<unknown>;
+  let failReceiptPersistence = true;
+  (databaseResources.pool as unknown as { query: (...args: unknown[]) => Promise<unknown> }).query = async (
+    ...args
+  ) => {
+    const sql = typeof args[0] === "string" ? args[0] : String((args[0] as { text?: unknown })?.text ?? "");
+    if (failReceiptPersistence && sql.includes("INSERT INTO tokenless_assurance_worm_export_receipts")) {
+      failReceiptPersistence = false;
+      throw new Error("simulated_receipt_transaction_rollback");
+    }
+    return originalQuery(...args);
+  };
+
+  const retry = await processAssuranceWormExportJob({ jobId: queued.jobId, now: NOW });
+  assert.equal(retry.state, "retry");
+  assert.equal(retry.attemptCount, 7);
+  assert.equal(retry.lastErrorCode, "worm_provider_receipt_persistence_failed");
+  assert.equal(retry.receipt, null);
+  assert.equal(providerPuts, 1);
+
+  const delivered = await processAssuranceWormExportJob({
+    jobId: queued.jobId,
+    now: new Date(NOW.getTime() + 60 * 60_000),
+  });
+  assert.equal(delivered.state, "delivered");
+  assert.equal(delivered.attemptCount, 8);
+  assert.equal(delivered.receipt?.objectVersionId, "version-receipt-rollback-2");
+  assert.equal(providerPuts, 2);
+});
+
+test("an unknown receipt-commit outcome is re-read durably and cannot become a dead provider attempt", async () => {
+  const { workspaceId } = await createWorkspace({ name: "WORM unknown receipt outcome", ownerAddress: OWNER });
+  await configureAssuranceWormDestination({ accountAddress: OWNER, workspaceId, body: destinationBody(), now: NOW });
+  let providerPuts = 0;
+  __setAssuranceWormRuntimeForTests(
+    runtime({
+      async putLockedObject(input) {
+        providerPuts += 1;
+        return {
+          objectVersionId: "version-unknown-outcome",
+          etag: '"etag-unknown-outcome"',
+          checksumSha256: input.checksumSha256,
+          objectLockMode: "COMPLIANCE",
+          retentionUntil: input.retentionUntil,
+        };
+      },
+    }),
+  );
+  const queued = await enqueueAssuranceWormExport({
+    accountAddress: OWNER,
+    workspaceId,
+    artifactType: "supervision_report",
+    sourceId: "supervision:unknown-receipt-outcome",
+    artifact: supervisionArtifact(workspaceId),
+    now: NOW,
+  });
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_worm_export_jobs SET attempt_count=7 WHERE job_id=?",
+    args: [queued.jobId],
+  });
+  const originalQuery = databaseResources.pool.query.bind(databaseResources.pool) as (
+    ...args: unknown[]
+  ) => Promise<unknown>;
+  let receiptInsertSeen = false;
+  let failAfterReceiptCommit = true;
+  (databaseResources.pool as unknown as { query: (...args: unknown[]) => Promise<unknown> }).query = async (
+    ...args
+  ) => {
+    const result = await originalQuery(...args);
+    const sql = typeof args[0] === "string" ? args[0] : String((args[0] as { text?: unknown })?.text ?? "");
+    if (sql.includes("INSERT INTO tokenless_assurance_worm_export_receipts")) receiptInsertSeen = true;
+    if (failAfterReceiptCommit && receiptInsertSeen && sql.trim().toUpperCase() === "COMMIT") {
+      failAfterReceiptCommit = false;
+      receiptInsertSeen = false;
+      throw new Error("simulated_unknown_receipt_insert_outcome");
+    }
+    return result;
+  };
+
+  const retry = await processAssuranceWormExportJob({ jobId: queued.jobId, now: NOW });
+  assert.equal(retry.state, "retry");
+  assert.equal(retry.attemptCount, 8);
+  assert.equal(retry.lastErrorCode, "worm_delivery_audit_pending");
+  assert.ok(retry.receipt);
+  assert.equal(providerPuts, 1);
+
+  const delivered = await processAssuranceWormExportJob({
+    jobId: queued.jobId,
+    now: new Date(NOW.getTime() + 60 * 60_000),
+  });
+  assert.equal(delivered.state, "delivered");
+  assert.equal(delivered.attemptCount, 8);
+  assert.equal(providerPuts, 1);
+  const audit = await dbClient.execute({
+    sql: "SELECT event_id FROM tokenless_audit_events WHERE workspace_id=? AND action=? AND target_id=?",
+    args: [workspaceId, "assurance.worm_export.delivered", queued.jobId],
+  });
+  assert.equal(audit.rows.length, 1);
+});
+
+test("an expired worker cannot persist, audit, finalize, or reset a successor delivery", async () => {
+  const { workspaceId } = await createWorkspace({ name: "WORM fenced delivery", ownerAddress: OWNER });
+  await configureAssuranceWormDestination({ accountAddress: OWNER, workspaceId, body: destinationBody(), now: NOW });
+  let providerPuts = 0;
+  let markFirstStarted!: () => void;
+  const firstStarted = new Promise<void>(resolve => {
+    markFirstStarted = resolve;
+  });
+  let releaseFirstPut!: () => void;
+  const firstPutCanReturn = new Promise<void>(resolve => {
+    releaseFirstPut = resolve;
+  });
+  __setAssuranceWormRuntimeForTests(
+    runtime({
+      async putLockedObject(input) {
+        providerPuts += 1;
+        if (providerPuts === 1) {
+          markFirstStarted();
+          await firstPutCanReturn;
+          return {
+            objectVersionId: "version-expired-worker",
+            etag: '"etag-expired-worker"',
+            checksumSha256: input.checksumSha256,
+            objectLockMode: "COMPLIANCE",
+            retentionUntil: input.retentionUntil,
+          };
+        }
+        return {
+          objectVersionId: "version-current-worker",
+          etag: '"etag-current-worker"',
+          checksumSha256: input.checksumSha256,
+          objectLockMode: "COMPLIANCE",
+          retentionUntil: input.retentionUntil,
+        };
+      },
+    }),
+  );
+  const queued = await enqueueAssuranceWormExport({
+    accountAddress: OWNER,
+    workspaceId,
+    artifactType: "supervision_report",
+    sourceId: "supervision:fenced-delivery",
+    artifact: supervisionArtifact(workspaceId),
+    now: NOW,
+  });
+
+  const expiredWorker = processAssuranceWormExportJob({ jobId: queued.jobId, now: NOW });
+  await firstStarted;
+  const currentWorker = await processAssuranceWormExportJob({
+    jobId: queued.jobId,
+    now: new Date(NOW.getTime() + 60_001),
+  });
+  assert.equal(currentWorker.state, "delivered");
+  assert.equal(currentWorker.receipt?.objectVersionId, "version-current-worker");
+  releaseFirstPut();
+  const expiredResult = await expiredWorker;
+  assert.equal(expiredResult.state, "delivered");
+  assert.equal(expiredResult.receipt?.objectVersionId, "version-current-worker");
+  assert.equal(providerPuts, 2);
+
+  const durable = await dbClient.execute({
+    sql: `SELECT j.state,j.lease_generation,r.object_version_id,r.provider_receipt_hash
+          FROM tokenless_assurance_worm_export_jobs j
+          JOIN tokenless_assurance_worm_export_receipts r ON r.job_id=j.job_id
+          WHERE j.job_id=?`,
+    args: [queued.jobId],
+  });
+  assert.equal(durable.rows[0]?.state, "delivered");
+  assert.equal(Number(durable.rows[0]?.lease_generation), 2);
+  assert.equal(durable.rows[0]?.object_version_id, "version-current-worker");
+  const audit = await dbClient.execute({
+    sql: `SELECT metadata_json FROM tokenless_audit_events
+          WHERE workspace_id=? AND action=? AND target_id=?`,
+    args: [workspaceId, "assurance.worm_export.delivered", queued.jobId],
+  });
+  assert.equal(audit.rows.length, 1);
+  assert.equal(
+    JSON.parse(String(audit.rows[0]?.metadata_json)).providerReceiptHash,
+    durable.rows[0]?.provider_receipt_hash,
+  );
+});
+
 test("provider receipt mismatches remain retryable and never create a WORM receipt", async () => {
   const { workspaceId } = await createWorkspace({ name: "WORM mismatch", ownerAddress: OWNER });
   await configureAssuranceWormDestination({ accountAddress: OWNER, workspaceId, body: destinationBody(), now: NOW });
@@ -404,6 +692,35 @@ test("provider receipt mismatches remain retryable and never create a WORM recei
   });
   const failed = await processAssuranceWormExportJob({ jobId: queued.jobId, now: NOW });
   assert.equal(failed.state, "retry");
+  assert.equal(failed.receipt, null);
+  assert.equal(failed.lastErrorCode, "worm_provider_delivery_failed");
+});
+
+test("a genuine provider failure still becomes dead after the final provider attempt", async () => {
+  const { workspaceId } = await createWorkspace({ name: "WORM terminal provider failure", ownerAddress: OWNER });
+  await configureAssuranceWormDestination({ accountAddress: OWNER, workspaceId, body: destinationBody(), now: NOW });
+  __setAssuranceWormRuntimeForTests(
+    runtime({
+      async putLockedObject() {
+        throw new Error("provider_unavailable");
+      },
+    }),
+  );
+  const queued = await enqueueAssuranceWormExport({
+    accountAddress: OWNER,
+    workspaceId,
+    artifactType: "supervision_report",
+    sourceId: "supervision:terminal-provider-failure",
+    artifact: supervisionArtifact(workspaceId),
+    now: NOW,
+  });
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_worm_export_jobs SET attempt_count=7 WHERE job_id=?",
+    args: [queued.jobId],
+  });
+  const failed = await processAssuranceWormExportJob({ jobId: queued.jobId, now: NOW });
+  assert.equal(failed.state, "dead");
+  assert.equal(failed.attemptCount, 8);
   assert.equal(failed.receipt, null);
   assert.equal(failed.lastErrorCode, "worm_provider_delivery_failed");
 });
