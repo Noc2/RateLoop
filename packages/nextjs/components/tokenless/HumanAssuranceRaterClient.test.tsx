@@ -55,6 +55,13 @@ test("assigned review renders blinded choices, failure tags, rationale, lease de
             assertedBy: "client",
             verifiedAt: "2030-01-01T00:00:00.000Z",
           },
+          {
+            key: "expertise:code-review:typescript",
+            value: true,
+            source: "workspace_owner",
+            assertedBy: "client",
+            verifiedAt: "2030-01-01T00:00:00.000Z",
+          },
         ],
         rubric: {
           prompt: "Which response is better?",
@@ -85,6 +92,8 @@ test("assigned review renders blinded choices, failure tags, rationale, lease de
   assert.match(html, /Incorrect/);
   assert.match(html, /Decision rationale/);
   assert.match(html, /customer invitation/);
+  assert.match(html, /TypeScript code review/);
+  assert.match(html, /workspace owner/);
   assert.match(html, /No paid voucher attached/);
   assert.match(html, /Panels may include undisclosed calibration items/i);
   assert.match(html, /The server accepted 1 assigned response and completed the assignment/i);

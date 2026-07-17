@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import { REVIEWER_EXPERTISE } from "~~/lib/tokenless/reviewerExpertiseOptions";
 
 type QualificationProvenance = {
   key: string;
@@ -99,6 +100,18 @@ function formatDate(value: string) {
 function formatQualificationValue(value: QualificationProvenance["value"]) {
   if (Array.isArray(value)) return value.join(", ");
   return String(value);
+}
+
+function qualificationLabel(key: string) {
+  const expertiseKey = key.startsWith("expertise:") ? key.slice("expertise:".length) : key;
+  return (
+    REVIEWER_EXPERTISE.find(value => value.key === expertiseKey)?.label ??
+    key.replaceAll("_", " ").replaceAll(":", " · ")
+  );
+}
+
+function provenanceSourceLabel(source: string) {
+  return source.replaceAll("_", " ").replaceAll(":", " · ");
 }
 
 function artifactUrl(assignmentId: string, artifact: ArtifactLease) {
@@ -420,9 +433,9 @@ export function HumanAssuranceRaterClient({
                     <ul className="mt-3 grid gap-2 sm:grid-cols-2">
                       {task.qualificationProvenance.map(value => (
                         <li key={value.key} className="rounded-lg border border-white/10 bg-black/20 p-3 text-xs">
-                          <strong className="block text-base-content/75">{value.key.replaceAll("_", " ")}</strong>
+                          <strong className="block text-base-content/75">{qualificationLabel(value.key)}</strong>
                           <span className="mt-1 block text-base-content/50">
-                            {formatQualificationValue(value.value)} · {value.source}
+                            {formatQualificationValue(value.value)} · {provenanceSourceLabel(value.source)}
                           </span>
                         </li>
                       ))}
