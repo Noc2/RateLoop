@@ -934,10 +934,9 @@ export async function configureWorkspaceSetupPeople(input: {
     ) {
       throw new TokenlessServiceError("Invitation specialist areas are invalid.", 400, "invalid_agent_setup_people");
     }
+    const expertiseRequirements = review.requestProfile.expertiseRequirements ?? [];
     const expertiseDefinitions = expertiseDefinitionIds.map(definitionId => {
-      const requirement = review.requestProfile.expertiseRequirements.find(
-        candidate => candidate.definitionId === definitionId,
-      );
+      const requirement = expertiseRequirements.find(candidate => candidate.definitionId === definitionId);
       if (!requirement || requirement.sourceScope !== "customer_invited") {
         throw new TokenlessServiceError(
           "An invitation specialist area is not required by this review profile.",

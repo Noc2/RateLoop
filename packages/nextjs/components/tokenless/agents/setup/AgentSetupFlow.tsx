@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { type FormEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AgentConnectionTroubleshooting } from "../AgentConnectionTroubleshooting";
 import { buildAgentConnectionMessage } from "../agentConnectionMessage";
@@ -55,7 +55,10 @@ import { humanReviewConfirmationMessage } from "~~/components/tokenless/agents/h
 import { Button } from "~~/components/tokenless/ui/Button";
 import { DurationInput } from "~~/components/ui/DurationInput";
 import { type AgentSetupScreenStep, agentSetupUrl } from "~~/lib/tokenless/agentSetupNavigation";
-import type { ReviewerExpertiseDefinition } from "~~/lib/tokenless/reviewerExpertiseOptions";
+import type {
+  ReviewerExpertiseDefinition,
+  ReviewerExpertiseRequirement,
+} from "~~/lib/tokenless/reviewerExpertiseOptions";
 import type { AgentSetupReviewDraft, WorkspaceAgentSetupView } from "~~/lib/tokenless/workspaceAgentSetup";
 
 type SetupResponse = WorkspaceAgentSetupView;
@@ -96,6 +99,20 @@ const REVIEW_AUTHORITY_OPTIONS = [
 type ExpertiseDefinitionsResponse = {
   definitions: ReviewerExpertiseDefinition[];
   suggestedDefinitionIds: string[];
+};
+
+type PrivateExpertiseCoverage = {
+  ready: boolean;
+  status: "ready" | "action_required";
+  requirements: Array<
+    ReviewerExpertiseRequirement & {
+      label: string;
+      confirmedSeats: number;
+      pendingInvitationSeats: number;
+      missingSeats: number;
+      status: "ready" | "pending_confirmation" | "missing";
+    }
+  >;
 };
 
 function reviewAuthoritySummary(authority: AgentSetupReviewDraft["authority"]) {
@@ -155,11 +172,32 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     reviewCompensationFormValues(initialSetup.reviewDraft?.requestProfile, initialSetup.reviewDraft?.authority),
   );
   const [peopleDecision, setPeopleDecision] = useState<"invited" | "later">("invited");
+  const [invitationExpertiseIds, setInvitationExpertiseIds] = useState<string[]>(() =>
+    (initialSetup.reviewDraft?.requestProfile.expertiseRequirements ?? [])
+      .filter(requirement => requirement.sourceScope === "customer_invited")
+      .map(requirement => requirement.definitionId),
+  );
+  const [expertiseCoverage, setExpertiseCoverage] = useState<PrivateExpertiseCoverage | null>(null);
+  const [expertiseCoverageLoading, setExpertiseCoverageLoading] = useState(false);
+  const [expertiseCoverageError, setExpertiseCoverageError] = useState<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const connectionMessageRef = useRef<HTMLTextAreaElement>(null);
   const reviewDetailsRef = useRef<HTMLDetailsElement>(null);
+  const invitationExpertiseInitialized = useRef(false);
   const focusOnNavigation = useRef(false);
   const currentStep = setup.currentStep === "complete" ? "people" : setup.currentStep;
+  const privateExpertiseRequirements = useMemo(
+    () =>
+      (setup.reviewDraft?.requestProfile.expertiseRequirements ?? []).filter(
+        requirement => requirement.sourceScope === "customer_invited",
+      ),
+    [setup.reviewDraft?.requestProfile.expertiseRequirements],
+  );
+  const privateExpertiseCoverageKey = JSON.stringify({
+    groupId: setup.reviewDraft?.requestProfile.privateGroupId ?? setup.privateGroupId,
+    requirements: privateExpertiseRequirements,
+    responseWindowSeconds: setup.reviewDraft?.requestProfile.responseWindowSeconds,
+  });
   const expertiseSuggestionContext = [
     setup.agent?.displayName,
     setup.agent?.description,
@@ -233,7 +271,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   );
 
   useEffect(() => {
-    if (currentStep !== "reviews") return;
+    if (currentStep !== "reviews" && currentStep !== "people") return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       const query = new URLSearchParams();
@@ -276,6 +314,71 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       window.clearTimeout(timer);
     };
   }, [currentStep, expertiseSuggestionContext, reviewAudience.audience, reviewTiming.panelSize, setup.workspaceId]);
+
+  useEffect(() => {
+    if (currentStep !== "people") return;
+    const allowedDefinitionIds = privateExpertiseRequirements.map(requirement => requirement.definitionId);
+    setInvitationExpertiseIds(current => {
+      if (!invitationExpertiseInitialized.current) {
+        invitationExpertiseInitialized.current = true;
+        return allowedDefinitionIds;
+      }
+      return current.filter(definitionId => allowedDefinitionIds.includes(definitionId));
+    });
+  }, [currentStep, privateExpertiseCoverageKey, privateExpertiseRequirements]);
+
+  useEffect(() => {
+    if (currentStep !== "people") return;
+    const groupId = setup.reviewDraft?.requestProfile.privateGroupId ?? setup.privateGroupId;
+    if (!groupId || privateExpertiseRequirements.length === 0) {
+      setExpertiseCoverage(null);
+      setExpertiseCoverageError(null);
+      setExpertiseCoverageLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    const responseWindowSeconds = setup.reviewDraft?.requestProfile.responseWindowSeconds ?? 3_600;
+    const responseDeadline = new Date(Date.now() + Math.max(60, responseWindowSeconds) * 1_000).toISOString();
+    setExpertiseCoverageLoading(true);
+    setExpertiseCoverageError(null);
+    void fetch(
+      `/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/private-groups/${encodeURIComponent(groupId)}/expertise-coverage`,
+      {
+        method: "POST",
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requirements: privateExpertiseRequirements, responseDeadline }),
+        signal: controller.signal,
+      },
+    )
+      .then(readJson)
+      .then(body => {
+        if (!controller.signal.aborted) {
+          setExpertiseCoverage((body as { coverage?: PrivateExpertiseCoverage }).coverage ?? null);
+        }
+      })
+      .catch(cause => {
+        if (!controller.signal.aborted) {
+          setExpertiseCoverage(null);
+          setExpertiseCoverageError(
+            cause instanceof Error ? cause.message : "Specialist coverage could not be checked.",
+          );
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setExpertiseCoverageLoading(false);
+      });
+    return () => controller.abort();
+  }, [
+    currentStep,
+    privateExpertiseCoverageKey,
+    privateExpertiseRequirements,
+    setup.privateGroupId,
+    setup.reviewDraft?.requestProfile.privateGroupId,
+    setup.reviewDraft?.requestProfile.responseWindowSeconds,
+    setup.workspaceId,
+  ]);
 
   useEffect(
     () => setReviewTiming(reviewTimingFormValues(setup.reviewDraft?.requestProfile)),
@@ -709,6 +812,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             decision,
             createInvitation: decision === "invited",
             intendedEmail: form.get("intendedEmail") || null,
+            expertiseDefinitionIds: decision === "invited" ? invitationExpertiseIds : [],
           }),
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
@@ -751,7 +855,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   const backButton = back ? (
     <Button
       variant="secondary"
-      className="rateloop-back-action min-h-11 w-full gap-2 sm:w-auto"
+      className="rateloop-secondary-action rateloop-back-action min-h-11 w-full gap-2 sm:w-auto"
       type="button"
       disabled={busy}
       onClick={() => void loadStep(back)}
@@ -1614,9 +1718,67 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             <SetupStageHeader
               headingRef={headingRef}
               step="people"
-              title="People and funding"
-              description="Choose who can review and confirm how review is funded."
+              title="People"
+              description="Invite reviewers and check that required specialist seats are covered."
             />
+            {privateExpertiseRequirements.length > 0 ? (
+              <section className="surface-card-nested mt-5 p-4" aria-labelledby="setup-specialist-coverage-heading">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 id="setup-specialist-coverage-heading" className="font-semibold">
+                      Specialist coverage
+                    </h3>
+                    <p className="mt-1 text-sm text-base-content/60">
+                      Pending invitations do not make a request ready. Confirm each person&apos;s knowledge after they
+                      join.
+                    </p>
+                  </div>
+                  {expertiseCoverage ? (
+                    <span
+                      className={`rounded-md px-2 py-1 text-xs font-medium ${
+                        expertiseCoverage.ready
+                          ? "bg-emerald-300/10 text-emerald-100"
+                          : "bg-amber-200/10 text-amber-100"
+                      }`}
+                    >
+                      {expertiseCoverage.ready ? "Ready" : "Action required"}
+                    </span>
+                  ) : null}
+                </div>
+                {expertiseCoverageLoading ? (
+                  <p className="mt-4 text-sm text-base-content/55" aria-live="polite">
+                    Checking coverage…
+                  </p>
+                ) : expertiseCoverageError ? (
+                  <p className="mt-4 text-sm text-error" role="alert">
+                    {expertiseCoverageError}
+                  </p>
+                ) : (
+                  <ul className="mt-4 space-y-2">
+                    {privateExpertiseRequirements.map(requirement => {
+                      const coverage = expertiseCoverage?.requirements.find(
+                        candidate => candidate.definitionId === requirement.definitionId,
+                      );
+                      return (
+                        <li
+                          key={`${requirement.definitionId}:${requirement.definitionVersion}:${requirement.definitionHash}`}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm"
+                        >
+                          <span>{coverage?.label ?? expertiseRequirementLabel(requirement, expertiseDefinitions)}</span>
+                          <span className="text-base-content/55">
+                            {coverage
+                              ? `${coverage.confirmedSeats}/${requirement.minimumSeats} confirmed${
+                                  coverage.pendingInvitationSeats ? ` · ${coverage.pendingInvitationSeats} pending` : ""
+                                }`
+                              : `${requirement.minimumSeats} needed`}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </section>
+            ) : null}
             {!setup.peopleDecision ? (
               <form className="mt-5" onSubmit={configurePeople} aria-busy={busy}>
                 {setup.reviewDraft?.requestProfile.audience === "public_network" ? (
@@ -1656,19 +1818,56 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       </SetupChoiceGroup>
                     </fieldset>
                     {peopleDecision === "invited" ? (
-                      <label className="mt-4 block text-sm">
-                        Bind code to recipient email <span className="text-base-content/50">(optional)</span>
-                        <input
-                          className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                          type="email"
-                          name="intendedEmail"
-                          maxLength={320}
-                        />
-                        <span className="mt-1 block text-xs text-base-content/55">
-                          RateLoop does not send this email. The recipient must use the code while signed in with that
-                          address.
-                        </span>
-                      </label>
+                      <div className="mt-4 space-y-4">
+                        <label className="block text-sm">
+                          Bind code to recipient email{" "}
+                          {invitationExpertiseIds.length === 0 ? (
+                            <span className="text-base-content/50">(optional)</span>
+                          ) : null}
+                          <input
+                            className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                            type="email"
+                            name="intendedEmail"
+                            maxLength={320}
+                            required={invitationExpertiseIds.length > 0}
+                          />
+                          <span className="mt-1 block text-xs text-base-content/55">
+                            RateLoop does not send this email. The recipient must use the code while signed in with that
+                            address.
+                          </span>
+                        </label>
+                        {privateExpertiseRequirements.length > 0 ? (
+                          <fieldset className="rounded-lg border border-white/10 p-4">
+                            <legend className="px-1 text-sm font-medium">Intended specialist areas</legend>
+                            <p className="mt-1 text-xs leading-5 text-base-content/55">
+                              Choose what you expect this person to cover. These remain pending until you confirm them
+                              after redemption.
+                            </p>
+                            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                              {privateExpertiseRequirements.map(requirement => (
+                                <label
+                                  key={`${requirement.definitionId}:${requirement.definitionVersion}:${requirement.definitionHash}`}
+                                  className="flex cursor-pointer items-start gap-2 rounded-lg border border-white/10 p-3 text-sm"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    className="checkbox checkbox-sm mt-0.5"
+                                    checked={invitationExpertiseIds.includes(requirement.definitionId)}
+                                    onChange={event =>
+                                      setInvitationExpertiseIds(current =>
+                                        event.target.checked
+                                          ? [...current, requirement.definitionId]
+                                          : current.filter(definitionId => definitionId !== requirement.definitionId),
+                                      )
+                                    }
+                                  />
+                                  <span>{expertiseRequirementLabel(requirement, expertiseDefinitions)}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </fieldset>
+                        ) : null}
+                      </div>
                     ) : null}
                   </>
                 )}

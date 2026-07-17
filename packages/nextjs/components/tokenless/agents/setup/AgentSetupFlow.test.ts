@@ -29,13 +29,7 @@ test("progress is semantic, textual, keyboard-operable, and marks only the curre
 });
 
 test("guided setup renders one stage at a time and keeps implementation details absent", () => {
-  for (const heading of [
-    "Workspace",
-    "Connect your agent",
-    "Name this workflow",
-    "Set review behavior",
-    "People and funding",
-  ]) {
+  for (const heading of ["Workspace", "Connect your agent", "Name this workflow", "Set review behavior", "People"]) {
     assert.match(flowSource, new RegExp(heading));
   }
   assert.match(flowSource, /currentStep === "connect"/);
@@ -289,7 +283,7 @@ test("connection creation keeps the complete message visible and confirms clipbo
 });
 
 test("people and funding are conditional on the exact review audience and compensation", () => {
-  assert.match(flowSource, /People and funding/);
+  assert.match(flowSource, /title="People"/);
   assert.match(flowSource, /requestProfile\.audience === "public_network"/);
   assert.match(flowSource, /name="decision" value="not_required"/);
   assert.match(flowSource, /No invitation is needed/);
@@ -309,5 +303,17 @@ test("invitation copy states that email binds the code but is not delivered", ()
   assert.match(flowSource, /Copy this invitation code now/);
   assert.match(flowSource, /copyInvitationCode/);
   assert.match(flowSource, /notifications\.success\("Invitation code copied to clipboard\."\)/);
+  assert.match(flowSource, /Intended specialist areas/);
+  assert.match(flowSource, /expertiseDefinitionIds/);
+  assert.match(flowSource, /required=\{invitationExpertiseIds\.length > 0\}/);
   assert.doesNotMatch(flowSource, /defaultChecked/);
+});
+
+test("People shows confirmed and pending specialist coverage separately", () => {
+  assert.match(flowSource, /Specialist coverage/);
+  assert.match(flowSource, /Pending invitations do not make a request ready/);
+  assert.match(flowSource, /private-groups\/\$\{encodeURIComponent\(groupId\)\}\/expertise-coverage/);
+  assert.match(flowSource, /coverage\.confirmedSeats/);
+  assert.match(flowSource, /coverage\.pendingInvitationSeats/);
+  assert.match(flowSource, /expertiseCoverage\.ready \? "Ready" : "Action required"/);
 });
