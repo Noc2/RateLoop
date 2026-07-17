@@ -6,27 +6,15 @@ import { type BrowserSessionResponse, logoutBrowserSession, readBrowserSession }
 
 export const RATELOOP_SIGN_IN_LABEL = "Sign In";
 export const RATELOOP_THIRDWEB_AUTO_CONNECT = false;
+export const RATELOOP_SIGN_IN_ACTION_CLASS =
+  "rateloop-gradient-action h-10 min-h-10 px-[0.9rem] text-base font-bold leading-none whitespace-nowrap";
 
-export function rateLoopConnectButtonStyle(compact: boolean) {
-  return {
-    background: "linear-gradient(#121212, #121212) padding-box, var(--rateloop-spectrum-gradient) border-box",
-    border: compact ? "1.25px solid transparent" : "1px solid transparent",
-    borderRadius: "0.5rem",
-    boxShadow: "0 18px 36px rgb(0 0 0 / 0.32)",
-    color: "var(--rateloop-warm-white)",
-    ...(compact
-      ? {
-          fontSize: "1rem",
-          fontWeight: 700,
-          height: "2.5rem",
-          lineHeight: 1,
-          minHeight: "2.5rem",
-          minWidth: "max-content",
-          padding: "0.56rem 0.9rem",
-        }
-      : { minWidth: "8.5rem" }),
-    whiteSpace: "nowrap",
-  } as const;
+export function RateLoopSignInAction({ fill = false }: { fill?: boolean }) {
+  return (
+    <Link href="/sign-in" className={`${RATELOOP_SIGN_IN_ACTION_CLASS} ${fill ? "w-full" : "w-auto min-w-max"}`}>
+      {RATELOOP_SIGN_IN_LABEL}
+    </Link>
+  );
 }
 
 export function sessionLabel(session: BrowserSessionResponse | null) {
@@ -141,15 +129,5 @@ export function ThirdwebSessionButton({
     return <AuthenticatedSessionControl compact={compact} session={session} onSignOut={signOutRateLoopSession} />;
   }
 
-  return (
-    <Link
-      href="/sign-in"
-      className={`rateloop-gradient-action inline-flex items-center justify-center px-3 ${
-        compact ? "h-10 min-h-10 w-auto min-w-0 text-base font-bold leading-none" : "min-h-11 w-full text-sm"
-      }`}
-      style={rateLoopConnectButtonStyle(compact)}
-    >
-      {RATELOOP_SIGN_IN_LABEL}
-    </Link>
-  );
+  return <RateLoopSignInAction fill={!compact} />;
 }

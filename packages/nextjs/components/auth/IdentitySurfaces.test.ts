@@ -25,7 +25,8 @@ test("account sign-in is Better Auth first and explicitly creates no wallet", ()
   assert.match(signInSurface, /The Human Assurance/);
   assert.match(signInSurface, /rateloop-text-gradient/);
   assert.match(signInSurface, /<RateLoopLogo/);
-  assert.match(signInSurface, /surface-card w-full max-w-md rounded-2xl p-8 text-center/);
+  assert.match(signInSurface, /<Card as="section"/);
+  assert.match(signInSurface, /w-full max-w-md rounded-2xl p-8 text-center/);
 });
 
 test("wallet setup is explicit, purpose-bound, and supports thirdweb plus self-custody", () => {

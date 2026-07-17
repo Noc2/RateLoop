@@ -27,5 +27,6 @@ test("anonymous visitors see the Agents sign-in prompt without exposing workspac
   assert.doesNotMatch(promptSource, /btn-sm|min-h-11 w-full px-4/);
   assert.doesNotMatch(promptSource, /AgentWorkspacePanels|WorkspaceSettingsClient|Agent API keys|Create workspace/);
   assert.match(sharedSurfaceSource, /flex min-h-\[calc\(100vh-9rem\)\] grow items-center justify-center px-6 py-16/);
-  assert.match(sharedSurfaceSource, /surface-card w-full max-w-md rounded-2xl p-8 text-center/);
+  assert.match(sharedSurfaceSource, /<Card as="section"/);
+  assert.match(sharedSurfaceSource, /w-full max-w-md rounded-2xl p-8 text-center/);
 });

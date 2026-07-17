@@ -1,10 +1,11 @@
 import React from "react";
 import {
   AuthenticatedSessionControl,
+  RATELOOP_SIGN_IN_ACTION_CLASS,
   RATELOOP_SIGN_IN_LABEL,
   RATELOOP_THIRDWEB_AUTO_CONNECT,
+  RateLoopSignInAction,
   ThirdwebSessionButton,
-  rateLoopConnectButtonStyle,
   sessionLabel,
 } from "./ThirdwebSessionButton";
 import assert from "node:assert/strict";
@@ -63,21 +64,14 @@ test("the signed-out control links to provider-neutral sign-in", () => {
 
 test("the compatibility entry point keeps the original compact RateLoop sign-in treatment", () => {
   assert.equal(RATELOOP_SIGN_IN_LABEL, "Sign In");
-  assert.deepEqual(rateLoopConnectButtonStyle(true), {
-    background: "linear-gradient(#121212, #121212) padding-box, var(--rateloop-spectrum-gradient) border-box",
-    border: "1.25px solid transparent",
-    borderRadius: "0.5rem",
-    boxShadow: "0 18px 36px rgb(0 0 0 / 0.32)",
-    color: "var(--rateloop-warm-white)",
-    fontSize: "1rem",
-    fontWeight: 700,
-    height: "2.5rem",
-    lineHeight: 1,
-    minHeight: "2.5rem",
-    minWidth: "max-content",
-    padding: "0.56rem 0.9rem",
-    whiteSpace: "nowrap",
-  });
+  assert.match(RATELOOP_SIGN_IN_ACTION_CLASS, /h-10 min-h-10/);
+  assert.match(RATELOOP_SIGN_IN_ACTION_CLASS, /text-base font-bold/);
+  assert.doesNotMatch(RATELOOP_SIGN_IN_ACTION_CLASS, /text-sm|min-h-11/);
+
+  const compact = renderToStaticMarkup(<RateLoopSignInAction />).replace(/\s+/g, " ");
+  const filled = renderToStaticMarkup(<RateLoopSignInAction fill />).replace(/\s+/g, " ");
+  assert.match(compact, /w-auto min-w-max/);
+  assert.match(filled, /w-full/);
 });
 
 test("browser authentication never restores a previously connected external wallet", () => {
