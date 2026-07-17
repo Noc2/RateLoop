@@ -1082,7 +1082,7 @@ export async function generateAssuranceEvidencePacket(input: {
       return packet;
     }
     const frozen = requireFrozenSource(row);
-    const [caseResult, responseResult] = await Promise.all([
+    const [caseResult, responseResult, goldResult] = await Promise.all([
       client.query(
         `SELECT case_id, position, content_id, admission_policy_hash, deterministic_checks_hash,
                 deterministic_checks_status, round_id, round_status
@@ -1096,15 +1096,24 @@ export async function generateAssuranceEvidencePacket(input: {
          FROM tokenless_assurance_responses WHERE run_id = $1 ORDER BY response_id ASC`,
         [input.runId],
       ),
+      client.query(
+        `SELECT case_id FROM tokenless_assurance_run_gold_items WHERE run_id=$1 ORDER BY injection_ordinal`,
+        [input.runId],
+      ),
     ]);
     if (caseResult.rows.length === 0) evidenceError("The completed run has no frozen cases.");
-    const counts = await collectAggregationInputs(
-      client,
-      input.runId,
-      caseResult.rows,
-      responseResult.rows,
-      frozen.policy,
+    const goldCaseIds = new Set(goldResult.rows.map(value => rowString(value as QueryRow, "case_id")!));
+    const aggregationCases = caseResult.rows.filter(
+      value => !goldCaseIds.has(rowString(value as QueryRow, "case_id")!),
     );
+    const aggregationResponses = responseResult.rows.filter(
+      value => !goldCaseIds.has(rowString(value as QueryRow, "case_id")!),
+    );
+    if (aggregationCases.length === 0) evidenceError("The completed run has no customer-decision cases.");
+    const [counts, decisionCounts] = await Promise.all([
+      collectAggregationInputs(client, input.runId, caseResult.rows, responseResult.rows, frozen.policy),
+      collectAggregationInputs(client, input.runId, aggregationCases, aggregationResponses, frozen.policy),
+    ]);
     const persistedContext = await persistedReviewContext(client, {
       workspaceId: input.workspaceId,
       runId: input.runId,
@@ -1121,11 +1130,11 @@ export async function generateAssuranceEvidencePacket(input: {
     });
     const passRule = passRuleFrom(row, frozen.runManifest);
     const recomputation = privacySafeRecomputation(
-      counts.reviewerCounts,
-      counts.caseCounts,
-      counts.minimumAggregationSize,
+      decisionCounts.reviewerCounts,
+      decisionCounts.caseCounts,
+      decisionCounts.minimumAggregationSize,
     );
-    const aggregation = computeEvidenceAggregation(recomputation, counts.minimumAggregationSize, passRule);
+    const aggregation = computeEvidenceAggregation(recomputation, decisionCounts.minimumAggregationSize, passRule);
     const caseLeaves = caseResult.rows.map(caseLeaf).sort();
     const responseLeaves = responseResult.rows.map(responseLeaf).sort();
     const chainEvidence = await collectChainEvidence(client, caseResult.rows);
@@ -1155,9 +1164,10 @@ export async function generateAssuranceEvidencePacket(input: {
       generatedAt: generatedAt.toISOString(),
       privacy: {
         classification: rowString(row, "data_classification"),
-        minimumAggregationSize: counts.minimumAggregationSize,
+        minimumAggregationSize: decisionCounts.minimumAggregationSize,
         reviewerIdentitiesIncluded: false,
         rawRationaleIncluded: false,
+        calibrationItemsIncludedInVerdict: false,
       },
       frozen: {
         runManifestHash: frozen.runManifestHash,
@@ -1187,15 +1197,22 @@ export async function generateAssuranceEvidencePacket(input: {
           admissionPolicies: linkedAdmissionPolicies,
           ...persistedContext.versions,
         },
-        reviewerQualifications: privacySafeQualificationCounts(responseResult.rows, counts.minimumAggregationSize),
+        reviewerQualifications: privacySafeQualificationCounts(
+          aggregationResponses,
+          decisionCounts.minimumAggregationSize,
+        ),
         period: periodCoverage(row, responseResult.rows, aggregation),
       },
       roots: { caseRoot: evidenceMerkleRoot(caseLeaves), responseRoot: evidenceMerkleRoot(responseLeaves) },
       aggregation,
-      failureTagCounts: counts.failureTagCounts.filter(
-        (entry: { count: number }) => entry.count >= counts.minimumAggregationSize,
+      calibration: {
+        itemCount: goldCaseIds.size,
+        statusDisclosedOnlyInAggregate: true,
+      },
+      failureTagCounts: decisionCounts.failureTagCounts.filter(
+        (entry: { count: number }) => entry.count >= decisionCounts.minimumAggregationSize,
       ),
-      rationaleDigests: counts.rationaleDigests,
+      rationaleDigests: decisionCounts.rationaleDigests,
       settlement,
       chainEvidence,
       limitations,
