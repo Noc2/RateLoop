@@ -118,8 +118,13 @@ export function HumanAssuranceRaterClient({
   initialTask?: AssignmentTask | null;
   initialTermsHash?: string | string[];
 }) {
-  const [assignmentId, setAssignmentId] = useState(firstValue(initialAssignmentId));
-  const [termsHash, setTermsHash] = useState(firstValue(initialTermsHash));
+  const initialAssignment = firstValue(initialAssignmentId);
+  const initialTerms = firstValue(initialTermsHash);
+  const hasInvitationCredentials =
+    initialAssignment.trim().length >= 8 && /^sha256:[0-9a-f]{64}$/.test(initialTerms.trim());
+  const [assignmentId, setAssignmentId] = useState(initialAssignment);
+  const [termsHash, setTermsHash] = useState(initialTerms);
+  const [manualCredentialEntry, setManualCredentialEntry] = useState(false);
   const [confidentialityAccepted, setConfidentialityAccepted] = useState(false);
   const [task, setTask] = useState<AssignmentTask | null>(initialTask);
   const [drafts, setDrafts] = useState<Record<string, ReviewDraft>>(() =>
@@ -319,27 +324,57 @@ export function HumanAssuranceRaterClient({
               <Card as="section" variant="marketing" className="p-5 sm:p-7">
                 <h2 className="text-xl font-semibold">Assignment details</h2>
                 <form className="mt-4 space-y-4" onSubmit={openAssignment}>
-                  <label className="block text-sm text-base-content/60">
-                    Assignment ID
-                    <input
-                      className="input mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)] font-mono text-sm"
-                      value={assignmentId}
-                      onChange={event => setAssignmentId(event.target.value)}
-                      placeholder="haas_…"
-                      required
-                    />
-                  </label>
-                  <label className="block text-sm text-base-content/60">
-                    Confidentiality terms hash
-                    <input
-                      className="input mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)] font-mono text-sm"
-                      value={termsHash}
-                      onChange={event => setTermsHash(event.target.value)}
-                      placeholder="sha256:…"
-                      pattern="sha256:[0-9a-f]{64}"
-                      required
-                    />
-                  </label>
+                  {hasInvitationCredentials && !manualCredentialEntry ? (
+                    <div className="rounded-lg border border-white/10 bg-white/[0.02] p-4">
+                      <p className="text-sm font-semibold">Invitation details loaded</p>
+                      <p className="mt-1 text-xs text-base-content/55">This link identifies your assigned review.</p>
+                      <button
+                        type="button"
+                        className="mt-3 text-xs font-medium underline underline-offset-4"
+                        onClick={() => setManualCredentialEntry(true)}
+                      >
+                        Use different details
+                      </button>
+                    </div>
+                  ) : manualCredentialEntry ? (
+                    <div className="space-y-4">
+                      <label className="block text-sm text-base-content/60">
+                        Assignment ID
+                        <input
+                          className="input mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)] font-mono text-sm"
+                          value={assignmentId}
+                          onChange={event => setAssignmentId(event.target.value)}
+                          placeholder="haas_…"
+                          required
+                        />
+                      </label>
+                      <label className="block text-sm text-base-content/60">
+                        Confidentiality terms hash
+                        <input
+                          className="input mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)] font-mono text-sm"
+                          value={termsHash}
+                          onChange={event => setTermsHash(event.target.value)}
+                          placeholder="sha256:…"
+                          pattern="sha256:[0-9a-f]{64}"
+                          required
+                        />
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-white/10 bg-white/[0.02] p-4">
+                      <p className="text-sm font-semibold">Open your invitation link</p>
+                      <p className="mt-1 text-xs text-base-content/55">
+                        It includes the assignment and exact confidentiality terms.
+                      </p>
+                      <button
+                        type="button"
+                        className="mt-3 text-xs font-medium underline underline-offset-4"
+                        onClick={() => setManualCredentialEntry(true)}
+                      >
+                        Enter details manually
+                      </button>
+                    </div>
+                  )}
                   <label className="flex items-start gap-3 rounded-lg border border-white/10 bg-black/20 p-4 text-sm leading-6 text-base-content/65">
                     <input
                       type="checkbox"

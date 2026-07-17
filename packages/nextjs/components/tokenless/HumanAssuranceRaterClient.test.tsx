@@ -21,8 +21,9 @@ test("private rater queue opens one assigned task without unrelated eligibility 
   assert.match(html, /Private assignment/);
   assert.match(html, /Open your assigned review/);
   assert.match(html, /Assignment details/);
-  assert.match(html, /haas_private_assignment/);
-  assert.match(html, /Confidentiality terms hash/);
+  assert.match(html, /Invitation details loaded/);
+  assert.doesNotMatch(html, />Assignment ID</);
+  assert.doesNotMatch(html, />Confidentiality terms hash</);
   assert.match(html, /Only your assigned, blinded cases are returned/);
   assert.doesNotMatch(html, /Capability status|Review eligibility|No capability evidence is shown/);
   assert.doesNotMatch(html, /Tier \d|World ID|Self\.xyz|passport uniqueness|guaranteed base|on-chain payment/i);
