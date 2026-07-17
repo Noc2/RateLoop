@@ -2,6 +2,7 @@ import React from "react";
 import {
   TokenlessHandoffClient,
   decodeTokenlessHandoffFragment,
+  formatBpsPercent,
   formatUsdcAtomic,
   validateTokenlessHandoffBinding,
   validateTokenlessQuoteRequest,
@@ -169,6 +170,7 @@ test("quote request validation preserves editable binary and head-to-head choice
 test("exact USDC formatting never converts atomic values through floating point", () => {
   assert.equal(formatUsdcAtomic("31875000"), "31.875000 USDC");
   assert.equal(formatUsdcAtomic("9007199254740993123456"), "9,007,199,254,740,993.123456 USDC");
+  assert.equal(formatBpsPercent(750), "7.5%");
 });
 
 test("handoff client renders a fragment-local loading state without server payload access", () => {

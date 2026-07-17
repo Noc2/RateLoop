@@ -11,11 +11,11 @@ export const revalidate = 300;
 const whyItWorksFeatures = [
   {
     title: "Agent-native",
-    body: "MCP handoffs and x402 funding turn an agent request into a scoped human panel.",
+    body: "Agent handoffs and scoped funding turn a request into a human panel.",
     color: "#359EEE",
     links: [
-      ["MCP Adapter", "/docs/tech-stack#mcp-adapter"],
-      ["x402", "/docs/tech-stack#x402-usdc"],
+      ["Agent handoffs", "/docs/tech-stack#mcp-adapter"],
+      ["Scoped funding", "/docs/tech-stack#x402-usdc"],
     ],
   },
   {
@@ -23,10 +23,10 @@ const whyItWorksFeatures = [
     body: "Audience policies and sealed answers keep admission explicit and early judgments private.",
     color: "#03CEA4",
     links: [
-      ["Proof of Human", "/docs/tech-stack#proof-of-human"],
-      ["Audience Policies", "/docs/tech-stack#audience-policies"],
-      ["Commit-Reveal", "/docs/tech-stack#commit-reveal"],
-      ["drand/tlock", "/docs/tech-stack#drand-tlock"],
+      ["Human eligibility", "/docs/tech-stack#proof-of-human"],
+      ["Reviewer rules", "/docs/tech-stack#audience-policies"],
+      ["Sealed answers", "/docs/tech-stack#commit-reveal"],
+      ["Independent opening", "/docs/tech-stack#drand-tlock"],
     ],
   },
   {
@@ -34,10 +34,10 @@ const whyItWorksFeatures = [
     body: "Published scoring and Base USDC settlement make panel pay recomputable.",
     color: "#EF476F",
     links: [
-      ["RBTS", "/docs/tech-stack#robust-bayesian-truth-serum"],
-      ["Surprisingly Popular", "/docs/tech-stack#surprisingly-popular"],
-      ["Base + USDC", "/docs/tech-stack#base-usdc"],
-      ["Fund Core", "/docs/smart-contracts#tokenless-panel"],
+      ["Quality bonus", "/docs/tech-stack#robust-bayesian-truth-serum"],
+      ["Insight bonus", "/docs/tech-stack#surprisingly-popular"],
+      ["USDC settlement", "/docs/tech-stack#base-usdc"],
+      ["Fund safeguards", "/docs/smart-contracts#tokenless-panel"],
     ],
   },
   {

@@ -35,7 +35,7 @@ const INITIAL_FORM = {
   mappingId: "human-assurance",
   controlId: "",
   scopeId: "",
-  minimumCoverageBps: "9000",
+  minimumCoveragePercent: "90",
   requireSignedPacket: true,
 };
 
@@ -166,7 +166,7 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
                 mappingId: form.mappingId,
                 controlId: form.controlId,
                 scopeId: form.scopeId.trim() || null,
-                minimumCoverageBps: Number(form.minimumCoverageBps),
+                minimumCoverageBps: Math.round(Number(form.minimumCoveragePercent) * 100),
                 requireSignedPacket: form.requireSignedPacket,
               },
             ];
@@ -295,12 +295,13 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
               className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
               type="number"
               min={0}
-              max={10000}
-              value={form.minimumCoverageBps}
-              onChange={event => setForm(current => ({ ...current, minimumCoverageBps: event.target.value }))}
+              max={100}
+              step="0.1"
+              value={form.minimumCoveragePercent}
+              onChange={event => setForm(current => ({ ...current, minimumCoveragePercent: event.target.value }))}
               required
             />
-            <span className="mt-1 block text-xs text-base-content/45">Basis points; 9000 equals 90%.</span>
+            <span className="mt-1 block text-xs text-base-content/45">Percent of eligible evidence.</span>
           </label>
           <label className="flex items-center gap-2 text-sm text-base-content/65 sm:col-span-2">
             <input

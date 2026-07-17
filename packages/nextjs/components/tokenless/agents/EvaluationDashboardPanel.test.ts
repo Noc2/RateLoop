@@ -16,7 +16,8 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.match(source, /Quorum-case unanimity/);
   assert.match(source, /Calibration failure rate/);
   assert.match(source, /Comparable-case drift/);
-  assert.match(source, /Reviewer bonus variance/);
+  assert.match(source, /Quality score variance \(percentage points²\)/);
+  assert.doesNotMatch(source, /bps²/);
   assert.match(source, /How results are shown/);
   assert.match(source, /Workspace evaluation details/);
   assert.match(source, /persisted responses, evidence packets, and client decisions/);
@@ -40,7 +41,10 @@ test("run cards submit go/revise/stop and record per-output overrides without a 
   assert.match(source, /no choice is preselected/i);
   assert.match(source, /evidence\/decision/);
   assert.match(source, /run\.status === "completed" && run\.evidencePacketAvailable && !clientDecision/);
-  assert.doesNotMatch(source, /defaultChecked|defaultValue=\{?"(go|revise|stop|accepted|disregarded|overridden|reversed)/);
+  assert.doesNotMatch(
+    source,
+    /defaultChecked|defaultValue=\{?"(go|revise|stop|accepted|disregarded|overridden|reversed)/,
+  );
   // Per-output override record: four plain outcome buttons, mandatory reasons,
   // optional corrective action, append-only supersession semantics.
   assert.match(source, /\["accepted", "disregarded", "overridden", "reversed"\] as const/);

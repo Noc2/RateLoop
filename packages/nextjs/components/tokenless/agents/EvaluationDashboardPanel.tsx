@@ -345,8 +345,12 @@ function RunCard({ run, workspaceId }: { run: EvaluationRun; workspaceId: string
                 <dd className="mt-1 font-mono">{percent(run.mechanismHealth.comparableDriftBps)}</dd>
               </div>
               <div>
-                <dt className="text-xs text-base-content/45">Reviewer bonus variance (bps²)</dt>
-                <dd className="mt-1 font-mono">{run.mechanismHealth.rbtsScoreVarianceBps2 ?? "Not available"}</dd>
+                <dt className="text-xs text-base-content/45">Quality score variance (percentage points²)</dt>
+                <dd className="mt-1 font-mono">
+                  {run.mechanismHealth.rbtsScoreVarianceBps2 === null
+                    ? "Not available"
+                    : (run.mechanismHealth.rbtsScoreVarianceBps2 / 10_000).toFixed(2)}
+                </dd>
               </div>
             </>
           ) : null}

@@ -14,6 +14,9 @@ test("public rating progressively collects feedback without LREP and hides the a
   assert.match(source, /feedbackEnabled = task\.question\.rationale\?\.mode !== "off"/);
   assert.match(source, /\{feedbackEnabled &&/);
   assert.doesNotMatch(source, /\bLREP\b/);
+  assert.match(source, /Quality bonus up to/);
+  assert.match(source, /Insight bonus up to/);
+  assert.doesNotMatch(source, /RBTS up to|Surprise up to/);
 });
 
 test("an already reserved voucher retries the prepared device queue and waits for confirmation", () => {

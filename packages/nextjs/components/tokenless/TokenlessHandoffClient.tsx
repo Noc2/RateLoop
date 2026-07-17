@@ -218,6 +218,13 @@ export function formatUsdcAtomic(value: string) {
   return `${whole.toLocaleString("en-US")}.${fraction} USDC`;
 }
 
+export function formatBpsPercent(value: number) {
+  return `${(value / 100)
+    .toFixed(2)
+    .replace(/\.00$/, "")
+    .replace(/(\.\d)0$/, "$1")}%`;
+}
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "long" }).format(new Date(value));
 }
@@ -744,7 +751,7 @@ export function TokenlessHandoffClient() {
               <dl className="mt-5 grid gap-4 sm:grid-cols-2">
                 <SummaryItem label="Reviewer bounty" value={formatUsdcAtomic(quote.economics.bounty.fundedAtomic)} />
                 <SummaryItem
-                  label={`Platform fee · ${quote.economics.fee.bps} bps`}
+                  label={`Platform fee · ${formatBpsPercent(quote.economics.fee.bps)}`}
                   value={formatUsdcAtomic(quote.economics.fee.fundedAtomic)}
                 />
                 <SummaryItem

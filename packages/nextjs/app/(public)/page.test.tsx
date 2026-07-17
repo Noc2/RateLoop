@@ -64,19 +64,21 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /Trace review policy, human judgments, coverage, and settlement references\./i);
   assert.match(html, /href="\/docs\/evidence"[^>]*>Evidence guide<\/a>/i);
   for (const term of [
-    "MCP Adapter",
-    "x402",
-    "Proof of Human",
-    "Audience Policies",
-    "Commit-Reveal",
-    "drand/tlock",
-    "RBTS",
-    "Surprisingly Popular",
-    "Base + USDC",
-    "Fund Core",
+    "Agent handoffs",
+    "Scoped funding",
+    "Human eligibility",
+    "Reviewer rules",
+    "Sealed answers",
+    "Independent opening",
+    "Quality bonus",
+    "Insight bonus",
+    "USDC settlement",
+    "Fund safeguards",
   ]) {
     assert.match(html, new RegExp(term.replace(/[+]/g, "\\+")));
   }
+  const visibleText = html.replace(/<[^>]+>/g, " ");
+  assert.doesNotMatch(visibleText, /\bx402\b|Commit-Reveal|drand\/tlock|\bRBTS\b|Fund Core/);
   for (const href of [
     "/docs/tech-stack#mcp-adapter",
     "/docs/tech-stack#x402-usdc",

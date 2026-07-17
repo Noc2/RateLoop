@@ -335,8 +335,8 @@ export function PublicQuestionCard({
         </p>
         <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 border-t border-white/10 pt-4 text-xs text-base-content/45">
           <span>Guaranteed ${usdc(task.earnings.guaranteedBaseAtomic)}</span>
-          <span>RBTS up to ${usdc(task.earnings.possibleBonusAtomic)}</span>
-          <span>Surprise up to ${usdc(task.earnings.possibleSurpriseBonusAtomic)}</span>
+          <span>Quality bonus up to ${usdc(task.earnings.possibleBonusAtomic)}</span>
+          <span>Insight bonus up to ${usdc(task.earnings.possibleSurpriseBonusAtomic)}</span>
           <span>Attempt ${usdc(task.earnings.attemptCompensationAtomic)}</span>
         </div>
       </section>
