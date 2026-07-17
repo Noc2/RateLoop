@@ -17,6 +17,8 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.match(source, /Calibration failure rate/);
   assert.match(source, /Comparable-case drift/);
   assert.match(source, /Quality score variance \(percentage points²\)/);
+  assert.match(source, /BigInt\(value\)/);
+  assert.doesNotMatch(source, /rbtsScoreVarianceBps2 \/ 10_000/);
   assert.doesNotMatch(source, /bps²/);
   assert.match(source, /How results are shown/);
   assert.match(source, /Workspace evaluation details/);

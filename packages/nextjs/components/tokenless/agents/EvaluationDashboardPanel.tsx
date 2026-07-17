@@ -21,6 +21,16 @@ function percent(bps: number | null) {
   return bps === null ? "Suppressed" : `${(bps / 100).toFixed(1)}%`;
 }
 
+function percentagePointsSquared(value: string | null) {
+  if (value === null) return "Not available";
+  try {
+    const roundedHundredths = (BigInt(value) + 50n) / 100n;
+    return `${roundedHundredths / 100n}.${(roundedHundredths % 100n).toString().padStart(2, "0")}`;
+  } catch {
+    return "Not available";
+  }
+}
+
 function usdc(atomic: string) {
   try {
     const amount = BigInt(atomic);
@@ -347,11 +357,7 @@ function RunCard({ run, workspaceId }: { run: EvaluationRun; workspaceId: string
               </div>
               <div>
                 <dt className="text-xs text-base-content/45">Quality score variance (percentage points²)</dt>
-                <dd className="mt-1 font-mono">
-                  {run.mechanismHealth.rbtsScoreVarianceBps2 === null
-                    ? "Not available"
-                    : (run.mechanismHealth.rbtsScoreVarianceBps2 / 10_000).toFixed(2)}
-                </dd>
+                <dd className="mt-1 font-mono">{percentagePointsSquared(run.mechanismHealth.rbtsScoreVarianceBps2)}</dd>
               </div>
             </>
           ) : null}
