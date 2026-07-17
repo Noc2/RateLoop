@@ -582,6 +582,13 @@
       "when": 1784239200000,
       "tag": "0083_gold_quality",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1784242800000,
+      "tag": "0084_expertise_qualifications",
+      "breakpoints": true
     }
   ]
 }
