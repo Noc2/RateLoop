@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # Pin the base image by digest so Ponder production builds do not silently change
 # when the node:24-alpine tag moves. Keep this aligned with the keeper image.
-FROM node:24-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f
+FROM node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
 
 WORKDIR /app
 

@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1.7
 # INFO-3 (2026-05-21 repo audit): pin the base image by digest so builds are reproducible and
 # a future image push under the `24-alpine` tag cannot silently alter what we ship. Digest is
-# the multi-arch (amd64/arm64) manifest as of 2026-04-16. Bump alongside the digest in
+# the multi-arch manifest as of 2026-06-24. Bump alongside the digest in
 # Renovate / Dependabot config.
-FROM node:24-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f
+FROM node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
 
 WORKDIR /app
 
