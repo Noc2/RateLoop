@@ -174,6 +174,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   );
   const [pendingReviewConfirmation, setPendingReviewConfirmation] = useState<PendingReviewConfirmation | null>(null);
   const [confirmedReviewFingerprint, setConfirmedReviewFingerprint] = useState<string | null>(null);
+  const [peopleDecision, setPeopleDecision] = useState<"invited" | "later">("invited");
   const headingRef = useRef<HTMLHeadingElement>(null);
   const connectionMessageRef = useRef<HTMLTextAreaElement>(null);
   const reviewDetailsRef = useRef<HTMLDetailsElement>(null);
@@ -1376,7 +1377,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 {setup.reviewDraft?.requestProfile.audience === "public_network" ? (
                   <>
                     <input type="hidden" name="decision" value="not_required" />
-                    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm">
+                    <div className="surface-card-nested p-4 text-sm">
                       <p className="font-medium">RateLoop network</p>
                       <p className="mt-1 text-base-content/60">
                         No invitation is needed. Eligible network reviewers can receive public, synthetic, or safely
@@ -1386,57 +1387,48 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   </>
                 ) : (
                   <>
-                    <fieldset className="space-y-3">
+                    <fieldset>
                       <legend className="font-medium">Invite a reviewer now?</legend>
-                      <label className="flex gap-3 rounded-xl border border-white/10 p-4">
-                        <input
-                          className="radio mt-0.5"
-                          type="radio"
+                      <SetupChoiceGroup>
+                        <SetupRadioChoice
+                          id="agent-setup-people-invited"
                           name="decision"
                           value="invited"
-                          aria-label="Create a one-use code"
-                          defaultChecked
+                          checked={peopleDecision === "invited"}
+                          onChange={() => setPeopleDecision("invited")}
+                          label="Create a one-use code"
+                          description="The code expires in seven days."
                         />
-                        <span>
-                          <span className="font-medium">Create a one-use code</span>
-                          <span className="mt-1 block text-sm text-base-content/60">
-                            The code expires in seven days.
-                          </span>
-                        </span>
-                      </label>
-                      <label className="flex gap-3 rounded-xl border border-white/10 p-4">
-                        <input
-                          className="radio mt-0.5"
-                          type="radio"
+                        <SetupRadioChoice
+                          id="agent-setup-people-later"
                           name="decision"
                           value="later"
-                          aria-label="Invite later"
+                          checked={peopleDecision === "later"}
+                          onChange={() => setPeopleDecision("later")}
+                          label="Invite later"
+                          description="The saved reviewer group stays ready."
                         />
-                        <span>
-                          <span className="font-medium">Invite later</span>
-                          <span className="mt-1 block text-sm text-base-content/60">
-                            The saved reviewer group stays ready.
-                          </span>
+                      </SetupChoiceGroup>
+                    </fieldset>
+                    {peopleDecision === "invited" ? (
+                      <label className="mt-4 block text-sm">
+                        Bind code to recipient email <span className="text-base-content/50">(optional)</span>
+                        <input
+                          className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                          type="email"
+                          name="intendedEmail"
+                          maxLength={320}
+                        />
+                        <span className="mt-1 block text-xs text-base-content/55">
+                          RateLoop does not send this email. The recipient must use the code while signed in with that
+                          address.
                         </span>
                       </label>
-                    </fieldset>
-                    <label className="mt-4 block text-sm">
-                      Bind code to recipient email <span className="text-base-content/50">(optional)</span>
-                      <input
-                        className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                        type="email"
-                        name="intendedEmail"
-                        maxLength={320}
-                      />
-                      <span className="mt-1 block text-xs text-base-content/55">
-                        RateLoop does not send this email. The recipient must use the code while signed in with that
-                        address.
-                      </span>
-                    </label>
+                    ) : null}
                   </>
                 )}
                 {setup.reviewDraft?.requestProfile.compensationMode === "usdc" ? (
-                  <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm">
+                  <div className="surface-card-nested mt-4 p-4 text-sm">
                     <p className="font-medium">{reviewCompensation.usdcPerReviewer} USDC per accepted reviewer</p>
                     <p className="mt-1 text-base-content/60">
                       Available workspace funding is checked and reserved only when a request is prepared.
@@ -1444,7 +1436,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   </div>
                 ) : null}
                 {setup.reviewDraft?.requestProfile.feedbackBonusEnabled ? (
-                  <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm">
+                  <div className="surface-card-nested mt-4 p-4 text-sm">
                     <p className="font-medium">{reviewCompensation.feedbackBonusUsdc} USDC Feedback Bonus pool</p>
                     <p className="mt-1 text-base-content/60">
                       Funded separately before assignment. Only the saved human awarder can choose feedback to pay.
@@ -1473,7 +1465,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     </button>
                   </div>
                 ) : null}
-                <div className="rounded-xl border border-white/10 p-4 text-sm">
+                <div className="surface-card-nested p-4 text-sm">
                   <p>
                     <span className="text-base-content/55">Agent:</span> {setup.agent?.displayName ?? "Connected agent"}
                   </p>

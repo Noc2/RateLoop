@@ -289,9 +289,14 @@ test("people and funding are conditional on the exact review audience and compen
 });
 
 test("invitation copy states that email binds the code but is not delivered", () => {
+  assert.match(flowSource, /const \[peopleDecision, setPeopleDecision\]/);
+  assert.match(flowSource, /checked=\{peopleDecision === "invited"\}/);
+  assert.match(flowSource, /checked=\{peopleDecision === "later"\}/);
+  assert.match(flowSource, /peopleDecision === "invited" \? \(/);
   assert.match(flowSource, /Bind code to recipient email/);
   assert.match(flowSource, /RateLoop does not send this email/);
   assert.match(flowSource, /Copy this invitation code now/);
   assert.match(flowSource, /copyInvitationCode/);
   assert.match(flowSource, /notifications\.success\("Invitation code copied to clipboard\."\)/);
+  assert.doesNotMatch(flowSource, /defaultChecked/);
 });
