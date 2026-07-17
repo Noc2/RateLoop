@@ -2,6 +2,7 @@ import {
   buildContentSecurityPolicy,
   createContentSecurityPolicyNonce,
   resolveAgentOAuthFormActionRedirectOrigins,
+  resolveAgentOAuthFrameRedirectOrigins,
 } from "../lib/security/contentSecurityPolicy";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -86,6 +87,25 @@ test("OAuth consent CSP allows Chromium to follow the form redirect on the exact
     "http://[::1]:58520",
   ]);
   assert.equal(formAction, "form-action 'self' http://localhost:58520 http://127.0.0.1:58520 http://[::1]:58520");
+});
+
+test("OAuth consent CSP limits the hidden callback frame to the exact loopback port", () => {
+  const frameRedirectOrigins = resolveAgentOAuthFrameRedirectOrigins(
+    "/agent/oauth/authorize",
+    "http://127.0.0.1:58520/callback/codex",
+  );
+  const csp = buildContentSecurityPolicy({ frameRedirectOrigins, nonce: "testnonce" });
+  const frameSrc = csp
+    .split(";")
+    .map(directive => directive.trim())
+    .find(directive => directive.startsWith("frame-src "));
+
+  assert.deepEqual(frameRedirectOrigins, ["http://localhost:58520", "http://127.0.0.1:58520", "http://[::1]:58520"]);
+  assert.match(frameSrc ?? "", /http:\/\/localhost:58520 http:\/\/127\.0\.0\.1:58520 http:\/\/\[::1\]:58520$/);
+  assert.deepEqual(
+    resolveAgentOAuthFrameRedirectOrigins("/agent/oauth/authorize", "https://agent.example/callback"),
+    [],
+  );
 });
 
 test("OAuth callback form-action source is limited to a safe redirect origin on the consent page", () => {

@@ -8,6 +8,10 @@ const authorizePage = readFileSync(
 );
 const devicePage = readFileSync(new URL("../../../app/(public)/agent/oauth/device/page.tsx", import.meta.url), "utf8");
 const consentForm = readFileSync(new URL("./AgentOAuthConsentForm.tsx", import.meta.url), "utf8");
+const authorizeRoute = readFileSync(
+  new URL("../../../app/api/agent/oauth/authorize/route.ts", import.meta.url),
+  "utf8",
+);
 
 test("OAuth consent leads with the decision while retaining exact scopes as optional detail", () => {
   assert.match(authorizePage, /Allow \$\{authorization\.clientName\}/);
@@ -16,6 +20,20 @@ test("OAuth consent leads with the decision while retaining exact scopes as opti
   assert.doesNotMatch(authorizePage, /Allowed actions|Access and refresh tokens/);
   assert.match(consentForm, /name="decision" value="approve"/);
   assert.match(consentForm, /name="decision" value="deny"/);
+});
+
+test("loopback OAuth completion stays branded while preserving a no-JavaScript redirect", () => {
+  assert.match(consentForm, /x-rateloop-oauth-callback-relay/);
+  assert.match(consentForm, /Authentication complete/);
+  assert.match(consentForm, /Authorization canceled/);
+  assert.match(consentForm, /sandbox=""/);
+  assert.match(consentForm, /referrerPolicy="no-referrer"/);
+  assert.match(consentForm, /window\.close\(\)/);
+  assert.match(consentForm, /window\.location\.replace\("\/agents\?tab=overview"\)/);
+  assert.match(consentForm, /action="\/api\/agent\/oauth\/authorize"[\s\S]*method="post"/);
+  assert.match(authorizeRoute, /BROWSER_RELAY_HEADER/);
+  assert.match(authorizeRoute, /outcome \? \{ outcome \} : \{\}/);
+  assert.match(authorizeRoute, /NextResponse\.redirect\(destination, 303\)/);
 });
 
 test("device consent uses the same concise grant and keeps code and scopes available", () => {

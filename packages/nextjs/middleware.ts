@@ -3,17 +3,17 @@ import {
   buildContentSecurityPolicy,
   createContentSecurityPolicyNonce,
   resolveAgentOAuthFormActionRedirectOrigins,
+  resolveAgentOAuthFrameRedirectOrigins,
   resolveRuntimeContentSecurityPolicyOptions,
 } from "./lib/security/contentSecurityPolicy";
 
 export function middleware(request: NextRequest) {
   const nonce = createContentSecurityPolicyNonce();
+  const redirectUri = request.nextUrl.searchParams.get("redirect_uri");
   const contentSecurityPolicy = buildContentSecurityPolicy({
     ...resolveRuntimeContentSecurityPolicyOptions(),
-    formActionRedirectOrigins: resolveAgentOAuthFormActionRedirectOrigins(
-      request.nextUrl.pathname,
-      request.nextUrl.searchParams.get("redirect_uri"),
-    ),
+    formActionRedirectOrigins: resolveAgentOAuthFormActionRedirectOrigins(request.nextUrl.pathname, redirectUri),
+    frameRedirectOrigins: resolveAgentOAuthFrameRedirectOrigins(request.nextUrl.pathname, redirectUri),
     nonce,
   });
   const requestHeaders = new Headers(request.headers);

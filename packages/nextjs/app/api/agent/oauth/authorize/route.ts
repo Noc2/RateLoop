@@ -10,6 +10,32 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export const runtime = "nodejs";
 
+const BROWSER_RELAY_HEADER = "x-rateloop-oauth-callback-relay";
+
+function isLoopbackRedirect(value: string) {
+  const url = new URL(value);
+  return (
+    url.protocol === "http:" &&
+    (url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]" || url.hostname === "::1")
+  );
+}
+
+function oauthRedirect(
+  request: NextRequest,
+  destination: URL,
+  delivery: "callback" | "navigate",
+  relayAllowed: boolean,
+  outcome?: "approved" | "denied",
+) {
+  const headers = { "Cache-Control": "no-store", Pragma: "no-cache" };
+  if (relayAllowed && request.headers.get(BROWSER_RELAY_HEADER) === "1") {
+    return NextResponse.json({ redirectTo: destination.href, delivery, ...(outcome ? { outcome } : {}) }, { headers });
+  }
+  const response = NextResponse.redirect(destination, 303);
+  for (const [name, value] of Object.entries(headers)) response.headers.set(name, value);
+  return response;
+}
+
 function authorizationValues(form: FormData) {
   const fields = [
     "client_id",
@@ -41,6 +67,7 @@ export async function POST(request: NextRequest) {
     }
     const form = await request.formData();
     const validated = await validateAgentOAuthAuthorizationRequest(authorizationValues(form));
+    const relayAllowed = isLoopbackRedirect(validated.redirectUri);
     let session;
     try {
       session = await requireBrowserSession(request);
@@ -57,9 +84,11 @@ export async function POST(request: NextRequest) {
           ...(validated.state ? { state: validated.state } : {}),
         });
         const returnTo = `/agent/oauth/authorize?${query.toString()}`;
-        return NextResponse.redirect(
+        return oauthRedirect(
+          request,
           new URL(`/sign-in?returnTo=${encodeURIComponent(returnTo)}`, request.nextUrl.origin),
-          303,
+          "navigate",
+          relayAllowed,
         );
       }
       throw error;
@@ -70,7 +99,7 @@ export async function POST(request: NextRequest) {
       redirect.searchParams.set("error", "access_denied");
       redirect.searchParams.set("error_description", "The resource owner denied authorization.");
       if (validated.state) redirect.searchParams.set("state", validated.state);
-      return NextResponse.redirect(redirect, 303);
+      return oauthRedirect(request, redirect, "callback", relayAllowed, "denied");
     }
     if (decision !== "approve") throw new AgentOAuthError("invalid_request", "An authorization decision is required.");
     const issued = await issueAgentOAuthAuthorizationCode({
@@ -78,7 +107,7 @@ export async function POST(request: NextRequest) {
       subjectPrincipalId: session.principalId,
       consented: true,
     });
-    return NextResponse.redirect(issued.redirectUri, 303);
+    return oauthRedirect(request, new URL(issued.redirectUri), "callback", relayAllowed, "approved");
   } catch (error) {
     const oauth =
       error instanceof AgentOAuthError
@@ -92,7 +121,7 @@ export async function POST(request: NextRequest) {
           : new AgentOAuthError("server_error", "OAuth authorization failed.", 500);
     return NextResponse.json(
       { error: oauth.code, error_description: oauth.message },
-      { status: oauth.status, headers: { "Cache-Control": "no-store" } },
+      { status: oauth.status, headers: { "Cache-Control": "no-store", Pragma: "no-cache" } },
     );
   }
 }

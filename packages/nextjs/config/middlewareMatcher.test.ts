@@ -26,4 +26,8 @@ test("middleware permits the exact OAuth loopback callback port for consent form
     response.headers.get("Content-Security-Policy") ?? "",
     /(?:^|; )form-action 'self' http:\/\/localhost:58520 http:\/\/127\.0\.0\.1:58520 http:\/\/\[::1\]:58520(?:;|$)/,
   );
+  assert.match(
+    response.headers.get("Content-Security-Policy") ?? "",
+    /frame-src [^;]*http:\/\/localhost:58520 http:\/\/127\.0\.0\.1:58520 http:\/\/\[::1\]:58520(?:;|$)/,
+  );
 });

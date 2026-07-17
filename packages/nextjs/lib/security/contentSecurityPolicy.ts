@@ -1,6 +1,7 @@
 type ContentSecurityPolicyOptions = {
   baseRpcUrl?: string;
   formActionRedirectOrigins?: string[];
+  frameRedirectOrigins?: string[];
   isDev?: boolean;
   isVercelLiveEnabled?: boolean;
   nonce?: string;
@@ -44,6 +45,20 @@ export function resolveAgentOAuthFormActionRedirectOrigins(pathname: string, red
   }
 }
 
+export function resolveAgentOAuthFrameRedirectOrigins(pathname: string, redirectUri: string | null) {
+  if (pathname !== AGENT_OAUTH_AUTHORIZE_PATH || !redirectUri) return [];
+  try {
+    const url = new URL(redirectUri);
+    if (url.protocol !== "http:" || !isLoopbackHostname(url.hostname) || url.username || url.password || url.hash) {
+      return [];
+    }
+    const port = url.port ? `:${url.port}` : "";
+    return [`http://localhost${port}`, `http://127.0.0.1${port}`, `http://[::1]${port}`];
+  } catch {
+    return [];
+  }
+}
+
 export function createContentSecurityPolicyNonce() {
   return crypto.randomUUID().replaceAll("-", "");
 }
@@ -80,6 +95,13 @@ export function buildContentSecurityPolicy(options: ContentSecurityPolicyOptions
     ...(options.isDev ? ["http://localhost:*", "http://127.0.0.1:*"] : []),
   ]);
   const formActionSources = unique(["'self'", ...(options.formActionRedirectOrigins ?? [])]);
+  const frameSources = unique([
+    "'self'",
+    "https://embedded-wallet.thirdweb.com",
+    "https://www.youtube-nocookie.com",
+    ...vercelLive,
+    ...(options.frameRedirectOrigins ?? []),
+  ]);
 
   return [
     "default-src 'self'",
@@ -88,7 +110,7 @@ export function buildContentSecurityPolicy(options: ContentSecurityPolicyOptions
     "font-src 'self'",
     "img-src 'self' data: blob: https://*.thirdweb.com",
     `connect-src ${connectSources.join(" ")}`,
-    `frame-src 'self' https://embedded-wallet.thirdweb.com https://www.youtube-nocookie.com ${vercelLive.join(" ")}`.trim(),
+    `frame-src ${frameSources.join(" ")}`,
     "object-src 'none'",
     "base-uri 'self'",
     `form-action ${formActionSources.join(" ")}`,
