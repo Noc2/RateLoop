@@ -20,6 +20,7 @@ import {
 } from "~~/lib/tokenless/privateUnpaidReviewAdapter";
 import { createAgentPublishingPolicy, createWorkspace } from "~~/lib/tokenless/productCore";
 import { createReviewRequestProfile } from "~~/lib/tokenless/reviewRequestProfiles";
+import { attestInvitedReviewerExpertise } from "~~/lib/tokenless/reviewerExpertise";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const REVIEWER_A = "0x2222222222222222222222222222222222222222";
@@ -63,7 +64,7 @@ async function identity(address: string, email: string, now: Date) {
   });
 }
 
-async function fixture() {
+async function fixture(requiredExpertiseKeys: Array<"code-review:typescript"> = []) {
   const foundationNow = new Date("2026-07-16T09:00:00.000Z");
   await identity(REVIEWER_A, "reviewer-a@example.com", foundationNow);
   await identity(REVIEWER_B, "reviewer-b@example.com", foundationNow);
@@ -136,6 +137,7 @@ async function fixture() {
       responseWindowSeconds: 3_600,
       panelSize: 2,
       compensationMode: "unpaid",
+      requiredExpertiseKeys,
     },
   });
   const bindingId = "hrb_private_unpaid_adapter";
@@ -371,6 +373,57 @@ test("reserves exact named private members idempotently without public or paid s
   assert.equal(new Date(String(snapshots.rows[0]?.cutoff)).toISOString(), now.toISOString());
   assert.equal(new Date(String(snapshots.rows[0]?.reservation_deadline)).toISOString(), "2026-07-16T09:35:00.000Z");
   assert.equal(new Date(String(snapshots.rows[0]?.response_deadline)).toISOString(), first.responseDeadline);
+});
+
+test("profile expertise requirements fail closed through private assignment until every named seat qualifies", async () => {
+  const setup = await fixture(["code-review:typescript"]);
+  const assignment = () =>
+    requestPrivateUnpaidHumanReview({
+      principal: setup.principal,
+      opportunityId: setup.opportunityId,
+      privateReviewId: setup.prepared.privateReviewId,
+      reviewerAccountAddresses: [REVIEWER_A, REVIEWER_B],
+      now: new Date("2026-07-16T09:20:00.000Z"),
+    });
+  await assert.rejects(assignment, /not an active eligible member/u);
+  await attestInvitedReviewerExpertise({
+    accountAddress: OWNER,
+    workspaceId: setup.workspaceId,
+    projectId: setup.projectId,
+    cohortId: setup.cohortId,
+    reviewerAccountAddress: REVIEWER_A,
+    expertiseKeys: ["code-review:typescript"],
+    expiresAt: "2026-07-17T10:00:00.000Z",
+    now: new Date("2026-07-16T09:10:00.000Z"),
+  });
+  await assert.rejects(assignment, /not an active eligible member/u);
+  await attestInvitedReviewerExpertise({
+    accountAddress: OWNER,
+    workspaceId: setup.workspaceId,
+    projectId: setup.projectId,
+    cohortId: setup.cohortId,
+    reviewerAccountAddress: REVIEWER_B,
+    expertiseKeys: ["code-review:typescript"],
+    expiresAt: "2026-07-17T10:00:00.000Z",
+    now: new Date("2026-07-16T09:10:00.000Z"),
+  });
+  const delivered = await assignment();
+  assert.equal(delivered.assignments.length, 2);
+  const qualifications = await dbClient.execute({
+    sql: `SELECT reviewer_account_address,status FROM tokenless_reviewer_qualifications
+          WHERE workspace_id=? AND qualification_kind='expertise' ORDER BY reviewer_account_address`,
+    args: [setup.workspaceId],
+  });
+  assert.deepEqual(
+    qualifications.rows.map(value => ({
+      reviewer_account_address: value.reviewer_account_address,
+      status: value.status,
+    })),
+    [
+      { reviewer_account_address: REVIEWER_A, status: "active" },
+      { reviewer_account_address: REVIEWER_B, status: "active" },
+    ],
+  );
 });
 
 test("fails closed when the private project drifts after its foundation is frozen", async () => {

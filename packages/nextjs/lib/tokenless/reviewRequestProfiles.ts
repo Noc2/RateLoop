@@ -11,6 +11,10 @@ import {
   type HumanReviewCompensationMode,
   type HumanReviewContentBoundary,
 } from "~~/lib/tokenless/reviewCapabilities";
+import {
+  type ReviewerExpertiseKey,
+  normalizeReviewerExpertiseKeys,
+} from "~~/lib/tokenless/reviewerExpertiseVocabulary";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export const REVIEW_REQUEST_RATIONALE_MODES = ["off", "optional", "required"] as const;
@@ -45,7 +49,9 @@ export type ReviewRequestProfileInput = {
   privateGroupId?: string | null;
   privateGroupPolicyVersion?: number | null;
   privateGroupPolicyHash?: string | null;
+  requiredExpertiseKeys?: ReviewerExpertiseKey[];
   responseWindowSeconds: number;
+  expectedEffortSeconds?: number | null;
   panelSize: number;
   compensationMode: HumanReviewCompensationMode;
   bountyPerSeatAtomic?: string | null;
@@ -69,7 +75,9 @@ type NormalizedReviewRequestProfile = {
   privateGroupId: string | null;
   privateGroupPolicyVersion: number | null;
   privateGroupPolicyHash: string | null;
+  requiredExpertiseKeys: ReviewerExpertiseKey[];
   responseWindowSeconds: number;
+  expectedEffortSeconds: number | null;
   panelSize: number;
   compensationMode: HumanReviewCompensationMode;
   bountyPerSeatAtomic: string | null;
@@ -108,7 +116,9 @@ const INPUT_KEYS = new Set<keyof ReviewRequestProfileInput>([
   "privateGroupId",
   "privateGroupPolicyVersion",
   "privateGroupPolicyHash",
+  "requiredExpertiseKeys",
   "responseWindowSeconds",
+  "expectedEffortSeconds",
   "panelSize",
   "compensationMode",
   "bountyPerSeatAtomic",
@@ -247,6 +257,15 @@ export function normalizeReviewRequestProfileInput(value: unknown): NormalizedRe
     invalid("This review audience requires an exact private-group policy binding.");
   }
 
+  const requiredExpertiseKeys = normalizeReviewerExpertiseKeys(input.requiredExpertiseKeys ?? []);
+  const expectedEffortSeconds =
+    input.expectedEffortSeconds === null || input.expectedEffortSeconds === undefined
+      ? null
+      : boundedInteger(input.expectedEffortSeconds, "expectedEffortSeconds", 60, 14_400);
+  if (expectedEffortSeconds !== null && expectedEffortSeconds > responseWindowSeconds) {
+    invalid("expectedEffortSeconds cannot exceed the response window.");
+  }
+
   if ((audience === "public_network" || audience === "hybrid") && panelSize < 3) {
     invalid("Public-network and hybrid review require a panel size of at least 3.");
   }
@@ -309,7 +328,9 @@ export function normalizeReviewRequestProfileInput(value: unknown): NormalizedRe
     privateGroupId,
     privateGroupPolicyVersion,
     privateGroupPolicyHash,
+    requiredExpertiseKeys,
     responseWindowSeconds,
+    expectedEffortSeconds,
     panelSize,
     compensationMode,
     bountyPerSeatAtomic,
@@ -357,8 +378,10 @@ export function reviewRequestProfileSemanticDocument(profile: NormalizedReviewRe
               policyVersion: profile.privateGroupPolicyVersion,
               policyHash: profile.privateGroupPolicyHash,
             },
+      requiredExpertiseKeys: profile.requiredExpertiseKeys.length ? profile.requiredExpertiseKeys : undefined,
     },
     responseWindowSeconds: profile.responseWindowSeconds,
+    expectedEffortSeconds: profile.expectedEffortSeconds ?? undefined,
     panelSize: profile.panelSize,
     economics: {
       compensationMode: profile.compensationMode,
@@ -440,6 +463,19 @@ function profileFromRow(row: QueryRow): ReviewRequestProfile {
       ? null
       : rowInteger(row, "response_window_seconds");
   const panelSize = row.panel_size === null || row.panel_size === undefined ? null : rowInteger(row, "panel_size");
+  let requiredExpertiseKeys: ReviewerExpertiseKey[];
+  try {
+    requiredExpertiseKeys = normalizeReviewerExpertiseKeys(
+      JSON.parse(rowString(row, "required_expertise_keys_json") ?? "[]"),
+    );
+  } catch (error) {
+    if (error instanceof TokenlessServiceError) throw new Error("Database returned invalid reviewer expertise.");
+    throw error;
+  }
+  const expectedEffortSeconds =
+    row.expected_effort_seconds === null || row.expected_effort_seconds === undefined
+      ? null
+      : rowInteger(row, "expected_effort_seconds");
   if (
     !profileId ||
     !workspaceId ||
@@ -489,7 +525,9 @@ function profileFromRow(row: QueryRow): ReviewRequestProfile {
         ? null
         : rowInteger(row, "private_group_policy_version"),
     privateGroupPolicyHash: rowString(row, "private_group_policy_hash"),
+    requiredExpertiseKeys,
     responseWindowSeconds,
+    expectedEffortSeconds,
     panelSize,
     compensationMode,
     bountyPerSeatAtomic: rowString(row, "bounty_per_seat_atomic"),
@@ -580,6 +618,7 @@ const PROFILE_COLUMNS = `profile_id, version, workspace_id, agent_id, agent_vers
   positive_label, negative_label,
   rationale_mode, audience, content_boundary, private_sensitivity, private_group_id,
   private_group_policy_version, private_group_policy_hash, response_window_seconds, panel_size,
+  required_expertise_keys_json, expected_effort_seconds,
   compensation_mode, bounty_per_seat_atomic, feedback_bonus_enabled, feedback_bonus_pool_atomic,
   feedback_bonus_awarder_kind, feedback_bonus_awarder_account, feedback_bonus_award_window_seconds,
   configuration_status, profile_hash, created_by,
@@ -620,7 +659,9 @@ function insertValues(
     profile.privateGroupId,
     profile.privateGroupPolicyVersion,
     profile.privateGroupPolicyHash,
+    JSON.stringify(profile.requiredExpertiseKeys),
     profile.responseWindowSeconds,
+    profile.expectedEffortSeconds,
     profile.panelSize,
     profile.compensationMode,
     profile.bountyPerSeatAtomic,
@@ -638,12 +679,13 @@ function insertValues(
 const INSERT_PROFILE = `INSERT INTO tokenless_agent_review_request_profiles
   (profile_id, version, workspace_id, agent_id, agent_version_id, criterion, positive_label, negative_label,
    rationale_mode, audience, content_boundary, private_sensitivity, private_group_id,
-   private_group_policy_version, private_group_policy_hash, response_window_seconds, panel_size,
+   private_group_policy_version, private_group_policy_hash, required_expertise_keys_json,
+   response_window_seconds, expected_effort_seconds, panel_size,
    compensation_mode, bounty_per_seat_atomic, feedback_bonus_enabled, feedback_bonus_pool_atomic,
    feedback_bonus_awarder_kind, feedback_bonus_awarder_account, feedback_bonus_award_window_seconds,
    configuration_status, profile_hash, created_by,
    created_at, approved_by, approved_at, superseded_at)
-  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,'ready',$25,$26,$27,$26,$27,NULL)`;
+  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,'ready',$27,$28,$29,$28,$29,NULL)`;
 
 function isUniqueViolation(error: unknown) {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "23505");

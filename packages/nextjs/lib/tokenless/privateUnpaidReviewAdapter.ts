@@ -5,6 +5,11 @@ import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbPool } from "~~/lib/db";
 import { transitionHumanReviewOpportunityLifecycleInTransaction } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
 import type { ProductPrincipal } from "~~/lib/tokenless/productCore";
+import { qualificationProvenanceSatisfiesExpertise } from "~~/lib/tokenless/reviewerExpertise";
+import {
+  expertiseQualificationRules,
+  normalizeReviewerExpertiseKeys,
+} from "~~/lib/tokenless/reviewerExpertiseVocabulary";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
@@ -120,6 +125,13 @@ function assertExactFoundation(input: {
 }) {
   const row = input.row;
   const responseDeadline = date(row, "response_deadline");
+  const requiredExpertise = normalizeReviewerExpertiseKeys(
+    JSON.parse(text(row, "required_expertise_keys_json") ?? "[]"),
+  );
+  const storedQualificationRules = parseJsonDocument(row.cohort_qualification_rules_json, "cohort qualification rules");
+  if (!Array.isArray(storedQualificationRules)) throw new Error("Stored cohort qualification rules are invalid.");
+  const requiredRules = expertiseQualificationRules(requiredExpertise);
+  const requiredRuleKeys = new Set(requiredRules.map(rule => rule.key));
   const projectBindingHash = sha256({
     projectId: text(row, "project_id"),
     workspaceId: text(row, "workspace_id"),
@@ -137,7 +149,10 @@ function assertExactFoundation(input: {
     source: text(row, "cohort_source"),
     selection: text(row, "cohort_selection"),
     capacity: integer(row, "cohort_capacity", 1),
-    qualificationRules: parseJsonDocument(row.cohort_qualification_rules_json, "cohort qualification rules"),
+    qualificationRules: [
+      ...storedQualificationRules.filter(rule => !requiredRuleKeys.has(String((rule as Record<string, unknown>)?.key))),
+      ...requiredRules,
+    ],
   });
   if (
     text(row, "private_review_id") !== input.privateReviewId ||
@@ -219,6 +234,7 @@ async function loadFrozenFoundation(
             p.profile_id, p.version AS profile_version, p.profile_hash,
             p.agent_id AS profile_agent_id, p.agent_version_id AS profile_agent_version_id,
             p.audience AS profile_audience, p.content_boundary, p.compensation_mode, p.panel_size,
+            p.required_expertise_keys_json,
             p.private_group_id AS profile_private_group_id,
             o.opportunity_id, o.agent_id AS opportunity_agent_id,
             o.agent_version_id AS opportunity_agent_version_id,
@@ -436,6 +452,9 @@ async function requestPrivateHumanReviewAssignments(input: {
       qualificationJson: string;
       membershipSnapshotHash: string;
     }> = [];
+    const requiredExpertise = normalizeReviewerExpertiseKeys(
+      JSON.parse(text(row, "required_expertise_keys_json") ?? "[]"),
+    );
     for (const reviewer of reviewers) {
       const memberResult = await client.query(
         `SELECT m.status AS membership_status, m.allowed_project_ids_json,
@@ -465,6 +484,7 @@ async function requestPrivateHumanReviewAssignments(input: {
         joinedAt > now ||
         (expiresAt !== null && expiresAt < responseDeadline) ||
         (qualificationExpiresAt !== null && qualificationExpiresAt < responseDeadline) ||
+        !qualificationProvenanceSatisfiesExpertise(member?.qualification_provenance_json, requiredExpertise, now) ||
         (allowedProjects.length > 0 && !allowedProjects.includes(text(row, "project_id")!)) ||
         integer(member, "active_reservations") >= integer(member, "maximum_active_assignments", 1)
       ) {

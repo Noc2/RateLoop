@@ -7,6 +7,10 @@ import { AGENT_SETUP_SCREEN_STEPS, type AgentSetupScreenStep } from "~~/lib/toke
 import { getHumanReviewConfigurationForOwner } from "~~/lib/tokenless/humanReviewConfiguration";
 import { recordWorkspaceSetupFunnelEvent } from "~~/lib/tokenless/onboardingObservability";
 import { createPrivateGroupInvitation } from "~~/lib/tokenless/privateGroups";
+import {
+  type ReviewerExpertiseKey,
+  normalizeReviewerExpertiseKeys,
+} from "~~/lib/tokenless/reviewerExpertiseVocabulary";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export { agentSetupUrl } from "~~/lib/tokenless/agentSetupNavigation";
@@ -61,7 +65,9 @@ export type AgentSetupReviewDraft = {
     contentBoundary: "public_or_test" | "private_workspace";
     privateSensitivity: "internal" | "confidential" | "restricted" | "regulated" | null;
     privateGroupId: string | null;
+    requiredExpertiseKeys?: ReviewerExpertiseKey[];
     responseWindowSeconds: number | null;
+    expectedEffortSeconds?: number | null;
     panelSize: number | null;
     compensationMode: "unpaid" | "usdc";
     bountyPerSeatAtomic: string | null;
@@ -99,7 +105,9 @@ const DEFAULT_REVIEW_DRAFT: AgentSetupReviewDraft = {
     contentBoundary: "private_workspace",
     privateSensitivity: "confidential",
     privateGroupId: null,
+    requiredExpertiseKeys: [],
     responseWindowSeconds: 3_600,
+    expectedEffortSeconds: 600,
     panelSize: 2,
     compensationMode: "unpaid",
     bountyPerSeatAtomic: null,
@@ -280,7 +288,9 @@ function reviewDraftFromOwnerView(view: OwnerReviewView): AgentSetupReviewDraft 
       contentBoundary: profile.contentBoundary as AgentSetupReviewDraft["requestProfile"]["contentBoundary"],
       privateSensitivity: profile.privateSensitivity as AgentSetupReviewDraft["requestProfile"]["privateSensitivity"],
       privateGroupId: profile.privateGroupId,
+      requiredExpertiseKeys: normalizeReviewerExpertiseKeys(profile.requiredExpertiseKeys),
       responseWindowSeconds: profile.responseWindowSeconds,
+      expectedEffortSeconds: profile.expectedEffortSeconds,
       panelSize: profile.panelSize,
       compensationMode: profile.compensationMode as AgentSetupReviewDraft["requestProfile"]["compensationMode"],
       bountyPerSeatAtomic: profile.bountyPerSeatAtomic,

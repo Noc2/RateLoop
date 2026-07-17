@@ -1,6 +1,10 @@
 import type { TokenlessQuoteRequest } from "@rateloop/sdk";
 import { createHash } from "node:crypto";
 import "server-only";
+import {
+  type ReviewerExpertiseKey,
+  normalizeReviewerExpertiseKeys,
+} from "~~/lib/tokenless/reviewerExpertiseVocabulary";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export const HUMAN_REVIEW_PLATFORM_FEE_BPS = 750;
@@ -28,7 +32,9 @@ export type BoundHumanReviewRequestProfile = {
   contentBoundary: "private_workspace" | "public_or_test";
   privateSensitivity: "internal" | "confidential" | "restricted" | "regulated" | null;
   privateGroupId: string | null;
+  requiredExpertiseKeys?: ReviewerExpertiseKey[];
   responseWindowSeconds: number;
+  expectedEffortSeconds?: number | null;
   panelSize: number;
   compensationMode: "unpaid" | "usdc";
   bountyPerSeatAtomic: string | null;
@@ -77,8 +83,9 @@ export type HumanReviewPreparedRequest = {
     contentBoundary: "private_workspace" | "public_or_test";
     privateSensitivity: "internal" | "confidential" | "restricted" | "regulated" | null;
     privateGroupId: string | null;
+    requiredExpertiseKeys?: ReviewerExpertiseKey[];
   };
-  timing: { responseWindowSeconds: number; expiresAt: string };
+  timing: { responseWindowSeconds: number; expectedEffortSeconds?: number | null; expiresAt: string };
   panel: { size: number };
   contentCommitments: { source: string; suggestion: string };
   provenance: {
@@ -297,6 +304,14 @@ function exactProfile(profile: BoundHumanReviewRequestProfile) {
     MINIMUM_RESPONSE_WINDOW_SECONDS,
     MAXIMUM_RESPONSE_WINDOW_SECONDS,
   );
+  const requiredExpertiseKeys = normalizeReviewerExpertiseKeys(profile.requiredExpertiseKeys ?? []);
+  const expectedEffortSeconds =
+    profile.expectedEffortSeconds === null || profile.expectedEffortSeconds === undefined
+      ? null
+      : boundedInteger(profile.expectedEffortSeconds, "expected active review time", 60, 14_400);
+  if (expectedEffortSeconds !== null && expectedEffortSeconds > responseWindowSeconds) {
+    configurationError("Stored expected active review time exceeds the response window.");
+  }
   const panelSize = boundedInteger(profile.panelSize, "review panel size", 1, HUMAN_REVIEW_MAXIMUM_PANEL_SIZE);
   if (profile.audience !== "private_invited" && panelSize < 3) {
     configurationError("Stored public or hybrid review panel is too small.");
@@ -320,6 +335,8 @@ function exactProfile(profile: BoundHumanReviewRequestProfile) {
     positiveLabel,
     negativeLabel,
     responseWindowSeconds,
+    expectedEffortSeconds,
+    requiredExpertiseKeys,
     panelSize,
   };
 }
@@ -399,8 +416,13 @@ export function prepareHumanReviewRequest(input: {
       contentBoundary: profile.contentBoundary,
       privateSensitivity: profile.privateSensitivity,
       privateGroupId: profile.privateGroupId,
+      requiredExpertiseKeys: profile.requiredExpertiseKeys,
     },
-    timing: { responseWindowSeconds: profile.responseWindowSeconds, expiresAt: expiresAt.toISOString() },
+    timing: {
+      responseWindowSeconds: profile.responseWindowSeconds,
+      expectedEffortSeconds: profile.expectedEffortSeconds,
+      expiresAt: expiresAt.toISOString(),
+    },
     panel: { size: profile.panelSize },
     contentCommitments: { ...input.contentCommitments },
     provenance: {

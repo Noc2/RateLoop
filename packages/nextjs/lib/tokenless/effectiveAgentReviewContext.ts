@@ -15,6 +15,7 @@ import {
   REVIEW_REQUEST_PRIVATE_SENSITIVITIES,
   REVIEW_REQUEST_RATIONALE_MODES,
 } from "~~/lib/tokenless/reviewRequestProfiles";
+import { normalizeReviewerExpertiseKeys } from "~~/lib/tokenless/reviewerExpertise";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
@@ -204,7 +205,8 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
             r.criterion, r.positive_label, r.negative_label, r.rationale_mode,
             r.audience, r.content_boundary, r.private_sensitivity,
             r.private_group_id, r.private_group_policy_version, r.private_group_policy_hash,
-            r.response_window_seconds, r.panel_size, r.compensation_mode, r.bounty_per_seat_atomic,
+            r.required_expertise_keys_json,r.response_window_seconds,r.expected_effort_seconds,
+            r.panel_size,r.compensation_mode,r.bounty_per_seat_atomic,
             r.feedback_bonus_enabled,r.feedback_bonus_pool_atomic,r.feedback_bonus_awarder_kind,
             r.feedback_bonus_awarder_account,r.feedback_bonus_award_window_seconds,
             pp.enabled AS publishing_policy_enabled, pp.revoked_at AS publishing_policy_revoked_at,
@@ -446,9 +448,22 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
     invalidContext("Stored request-profile audience and privacy terms are contradictory.");
   }
   const responseWindowSeconds = optionalInteger(row, "response_window_seconds");
+  const expectedEffortSeconds = optionalInteger(row, "expected_effort_seconds");
   const panelSize = optionalInteger(row, "panel_size");
+  let requiredExpertiseKeys;
+  try {
+    requiredExpertiseKeys = normalizeReviewerExpertiseKeys(
+      JSON.parse(text(row, "required_expertise_keys_json") ?? "[]"),
+    );
+  } catch {
+    invalidContext("Stored reviewer expertise requirements are invalid.");
+  }
   if (
     (responseWindowSeconds !== null && (responseWindowSeconds < 1_200 || responseWindowSeconds > 86_400)) ||
+    (expectedEffortSeconds !== null &&
+      (expectedEffortSeconds < 60 ||
+        expectedEffortSeconds > 14_400 ||
+        expectedEffortSeconds > responseWindowSeconds!)) ||
     (panelSize !== null && panelSize > 100) ||
     (profileStatus === "ready" && (responseWindowSeconds === null || panelSize === null))
   ) {
@@ -524,8 +539,10 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
         privateGroupId && privateGroupPolicyVersion !== null && privateGroupPolicyHash
           ? { groupId: privateGroupId, policyVersion: privateGroupPolicyVersion, policyHash: privateGroupPolicyHash }
           : null,
+      requiredExpertiseKeys,
     },
     responseWindowSeconds,
+    expectedEffortSeconds,
     panelSize,
     compensation: { mode: compensationMode, bountyPerSeatAtomic },
     feedbackBonus: {

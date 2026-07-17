@@ -12,6 +12,7 @@ import { commitPrivateReviewArtifact, storeEncryptedPrivateReviewArtifacts } fro
 import { hashHumanAssuranceDocument } from "~~/lib/tokenless/humanAssurance";
 import type { ProductPrincipal } from "~~/lib/tokenless/productCore";
 import { authorizeProjectSubject } from "~~/lib/tokenless/projectAccess";
+import { expertiseQualificationRules, normalizeReviewerExpertiseKeys } from "~~/lib/tokenless/reviewerExpertise";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type QueryRow = Record<string, unknown>;
@@ -58,6 +59,23 @@ function parseJson(value: unknown, field: string) {
   } catch {
     throw new Error(`Database returned invalid ${field}.`);
   }
+}
+
+function effectiveCohortQualificationRules(row: QueryRow) {
+  const requiredExpertise = normalizeReviewerExpertiseKeys(
+    JSON.parse(rowString(row, "required_expertise_keys_json") ?? "[]"),
+  );
+  const stored = parseJson(row.qualification_rules_json, "cohort qualification rules");
+  if (!Array.isArray(stored)) throw new Error("Database returned invalid cohort qualification rules.");
+  const required = expertiseQualificationRules(requiredExpertise);
+  const requiredKeys = new Set(required.map(rule => rule.key));
+  return [
+    ...stored.filter(rule => {
+      if (!rule || typeof rule !== "object") throw new Error("Database returned invalid cohort qualification rules.");
+      return !requiredKeys.has(String((rule as Record<string, unknown>).key));
+    }),
+    ...required,
+  ];
 }
 
 function decodeArtifact(value: string, field: string) {
@@ -278,7 +296,8 @@ async function loadBinding(input: {
                  r.criterion, r.positive_label, r.negative_label, r.rationale_mode, r.audience,
                  r.content_boundary, r.private_sensitivity AS profile_private_sensitivity,
                  r.private_group_id, r.private_group_policy_version, r.private_group_policy_hash,
-                 r.response_window_seconds, r.configuration_status, r.approved_at, r.superseded_at,
+                 r.response_window_seconds, r.required_expertise_keys_json,
+                 r.configuration_status, r.approved_at, r.superseded_at,
                  g.workspace_id AS group_workspace_id, g.status AS group_status,
                  gp.allowed_project_ids_json, gp.data_classifications_json, gp.max_private_sensitivity,
                  c.cohort_id, c.source AS cohort_source, c.selection AS cohort_selection,
@@ -356,6 +375,7 @@ function assertBinding(input: {
   if (!PRIVATE_SENSITIVITIES.includes(maximum as (typeof PRIVATE_SENSITIVITIES)[number])) {
     throw new Error("Database returned an invalid private-group sensitivity.");
   }
+  effectiveCohortQualificationRules(row);
 }
 
 async function claimExistingPreparation(input: {
@@ -511,7 +531,7 @@ export async function preparePrivateReviewFoundation(input: {
     source: rowString(binding, "cohort_source"),
     selection: rowString(binding, "cohort_selection"),
     capacity: rowInteger(binding, "cohort_capacity"),
-    qualificationRules: parseJson(binding.qualification_rules_json, "cohort qualification rules"),
+    qualificationRules: effectiveCohortQualificationRules(binding),
   });
   const taskCommitment = hashHumanAssuranceDocument({
     kind: "binary_review",

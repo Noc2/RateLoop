@@ -2,6 +2,7 @@ import type { TokenlessAskResponse, TokenlessQuoteRequest } from "@rateloop/sdk"
 import { createHash } from "node:crypto";
 import "server-only";
 import { dbClient, dbPool } from "~~/lib/db";
+import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import { ensureFeedbackBonusPoolForDelivery } from "~~/lib/tokenless/feedbackBonusPoolProjection";
 import { hashHumanReviewConfiguration } from "~~/lib/tokenless/humanReviewConfiguration";
@@ -20,6 +21,11 @@ import {
   requireProductPrincipalScope,
 } from "~~/lib/tokenless/productCore";
 import { hashReviewRequestProfile } from "~~/lib/tokenless/reviewRequestProfiles";
+import { countEligibleNetworkExpertisePool } from "~~/lib/tokenless/reviewerExpertise";
+import {
+  expertiseQualificationRules,
+  normalizeReviewerExpertiseKeys,
+} from "~~/lib/tokenless/reviewerExpertiseVocabulary";
 import { TokenlessServiceError, createTokenlessAsk, createTokenlessQuote } from "~~/lib/tokenless/server";
 import { isWorldIdAssuranceEnabled } from "~~/lib/tokenless/worldIdAssurance";
 
@@ -227,7 +233,8 @@ async function loadFrozenOpportunity(
                  rrp.criterion, rrp.positive_label, rrp.negative_label, rrp.rationale_mode,
                  rrp.audience, rrp.content_boundary, rrp.private_sensitivity, rrp.private_group_id,
                  rrp.private_group_policy_version, rrp.private_group_policy_hash,
-                 rrp.response_window_seconds, rrp.panel_size, rrp.compensation_mode,
+                 rrp.required_expertise_keys_json,rrp.response_window_seconds,rrp.expected_effort_seconds,
+                 rrp.panel_size, rrp.compensation_mode,
                  rrp.bounty_per_seat_atomic,rrp.feedback_bonus_enabled,rrp.feedback_bonus_pool_atomic,
                  rrp.feedback_bonus_awarder_kind,rrp.feedback_bonus_awarder_account,
                  rrp.feedback_bonus_award_window_seconds,
@@ -298,7 +305,14 @@ async function loadFrozenOpportunity(
         ? null
         : oneOf(row, "private_sensitivity", ["internal", "confidential", "restricted", "regulated"] as const),
     privateGroupId: text(row, "private_group_id"),
+    requiredExpertiseKeys: normalizeReviewerExpertiseKeys(
+      JSON.parse(text(row, "required_expertise_keys_json") ?? "[]"),
+    ),
     responseWindowSeconds: integer(row, "response_window_seconds", 1_200, 86_400),
+    expectedEffortSeconds:
+      row.expected_effort_seconds === null || row.expected_effort_seconds === undefined
+        ? null
+        : integer(row, "expected_effort_seconds", 60, 14_400),
     panelSize: integer(row, "panel_size", 1, 100),
     compensationMode: oneOf(row, "compensation_mode", ["unpaid", "usdc"] as const),
     bountyPerSeatAtomic: text(row, "bounty_per_seat_atomic"),
@@ -327,7 +341,9 @@ async function loadFrozenOpportunity(
         ? null
         : integer(row, "private_group_policy_version"),
     privateGroupPolicyHash: text(row, "private_group_policy_hash"),
+    requiredExpertiseKeys: profile.requiredExpertiseKeys,
     responseWindowSeconds: profile.responseWindowSeconds,
+    expectedEffortSeconds: profile.expectedEffortSeconds,
     panelSize: profile.panelSize,
     compensationMode: profile.compensationMode,
     bountyPerSeatAtomic: profile.bountyPerSeatAtomic,
@@ -500,6 +516,38 @@ function assertRequestable(opportunity: FrozenOpportunity, principal: PublicPaid
       "RateLoop-network assurance is disabled. Enable TOKENLESS_NETWORK_PANELS_ENABLED on the hosted service before retrying.",
       404,
       "network_panels_disabled",
+    );
+  }
+}
+
+async function assertAdmissionPolicyExpertiseBinding(opportunity: FrozenOpportunity) {
+  const required = opportunity.requestProfile.requiredExpertiseKeys ?? [];
+  if (required.length === 0) return;
+  const policyHash = `sha256:${opportunity.admissionPolicyHash.slice(2)}`;
+  const result = await dbClient.execute({
+    sql: `SELECT policy_json FROM tokenless_assurance_audience_policies
+          WHERE policy_hash=? AND reviewer_source='rateloop_network'`,
+    args: [policyHash],
+  });
+  const requiredRules = expertiseQualificationRules(required);
+  const exact = result.rows.some(value => {
+    try {
+      const frozen = freezeAdmissionPolicy(JSON.parse(text(value as Row, "policy_json") ?? "null"));
+      if (frozen.admissionPolicyHash.toLowerCase() !== opportunity.admissionPolicyHash.toLowerCase()) return false;
+      const rules = new Map(frozen.policy.requiredQualifications.map(rule => [rule.key, rule] as const));
+      return requiredRules.every(rule => {
+        const actual = rules.get(rule.key);
+        return actual?.operator === "attested" && actual.value === true;
+      });
+    } catch {
+      return false;
+    }
+  });
+  if (!exact) {
+    throw new TokenlessServiceError(
+      "The frozen public admission policy does not enforce every expertise requirement in this review profile.",
+      409,
+      "expertise_admission_policy_mismatch",
     );
   }
 }
@@ -760,6 +808,19 @@ export async function requestPublicPaidHumanReview(
   const suggestionPayload = exactPayload(input.suggestionPayload, "suggestionPayload");
   const opportunity = await loadFrozenOpportunity(input.principal, input.opportunityId);
   assertRequestable(opportunity, input.principal);
+  if ((opportunity.requestProfile.requiredExpertiseKeys?.length ?? 0) > 0) {
+    await assertAdmissionPolicyExpertiseBinding(opportunity);
+    const expertisePool = await countEligibleNetworkExpertisePool({
+      expertiseKeys: opportunity.requestProfile.requiredExpertiseKeys,
+    });
+    if (!expertisePool.ready || expertisePool.eligible < opportunity.requestProfile.panelSize) {
+      throw new TokenlessServiceError(
+        "The RateLoop network does not currently have enough reviewers with every required expertise qualification.",
+        409,
+        "expertise_reviewer_pool_unavailable",
+      );
+    }
+  }
   if (sha256(sourcePayload) !== opportunity.sourceEvidenceHash) {
     throw new TokenlessServiceError(
       "sourcePayload does not match the committed source evidence.",
