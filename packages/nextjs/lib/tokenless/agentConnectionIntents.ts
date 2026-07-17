@@ -419,10 +419,52 @@ async function existingClaim(client: PoolClient, tokenFamilyId: string, intentId
   };
 }
 
+async function bindMcpSessionToClaim(
+  client: PoolClient,
+  input: {
+    mcpSessionHash: string | undefined;
+    principal: OAuthConnectionPrincipal;
+    workspaceId: string;
+    integrationId: string;
+    now: Date;
+  },
+) {
+  if (!input.mcpSessionHash) return;
+  if (!/^sha256:[0-9a-f]{64}$/u.test(input.mcpSessionHash)) {
+    throw new TokenlessServiceError("MCP session is invalid.", 400, "invalid_mcp_session");
+  }
+  const result = await client.query(
+    `UPDATE tokenless_mcp_sessions
+     SET workspace_id=$1,integration_id=$2,last_seen_at=$3
+     WHERE session_hash=$4 AND subject_principal_id=$5 AND token_family_id=$6
+       AND status='active' AND expires_at>$3
+       AND EXISTS (
+         SELECT 1 FROM tokenless_agent_oauth_token_families f
+         WHERE f.token_family_id=$6 AND f.subject_principal_id=$5
+           AND f.status='active' AND f.absolute_expires_at>$3
+       )
+       AND ((workspace_id IS NULL AND integration_id IS NULL)
+         OR (workspace_id=$1 AND integration_id=$2))
+     RETURNING session_hash`,
+    [
+      input.workspaceId,
+      input.integrationId,
+      input.now,
+      input.mcpSessionHash,
+      input.principal.subjectPrincipalId,
+      input.principal.tokenFamilyId,
+    ],
+  );
+  if (!result.rowCount) {
+    throw new TokenlessServiceError("MCP session is expired or bound elsewhere.", 404, "mcp_session_not_found");
+  }
+}
+
 export async function claimAgentConnectionIntent(input: {
   connectionUrl: string;
   origin: string;
   principal: OAuthConnectionPrincipal;
+  mcpSessionHash?: string;
 }) {
   requireSafeScopes(input.principal);
   const parsed = parseConnectionUrl(input.connectionUrl, input.origin);
@@ -432,6 +474,13 @@ export async function claimAgentConnectionIntent(input: {
     await client.query("BEGIN");
     const prior = await existingClaim(client, input.principal.tokenFamilyId, parsed.intentId);
     if (prior) {
+      await bindMcpSessionToClaim(client, {
+        mcpSessionHash: input.mcpSessionHash,
+        principal: input.principal,
+        workspaceId: prior.workspaceId,
+        integrationId: prior.integrationId,
+        now,
+      });
       await client.query("COMMIT");
       return { connection: prior, idempotent: true, nextAction: "Call rateloop_get_agent_context." };
     }
@@ -448,6 +497,13 @@ export async function claimAgentConnectionIntent(input: {
     if (text(intent, "claimed_token_family_id") === input.principal.tokenFamilyId) {
       const repeated = await existingClaim(client, input.principal.tokenFamilyId, parsed.intentId);
       if (!repeated) throw new Error("Claimed connection is missing its integration.");
+      await bindMcpSessionToClaim(client, {
+        mcpSessionHash: input.mcpSessionHash,
+        principal: input.principal,
+        workspaceId: repeated.workspaceId,
+        integrationId: repeated.integrationId,
+        now,
+      });
       await client.query("COMMIT");
       return { connection: repeated, idempotent: true, nextAction: "Call rateloop_get_agent_context." };
     }
@@ -597,6 +653,13 @@ export async function claimAgentConnectionIntent(input: {
         now,
       ],
     );
+    await bindMcpSessionToClaim(client, {
+      mcpSessionHash: input.mcpSessionHash,
+      principal: input.principal,
+      workspaceId,
+      integrationId,
+      now,
+    });
     await appendIntentEvent(client, {
       intentId: parsed.intentId,
       workspaceId,

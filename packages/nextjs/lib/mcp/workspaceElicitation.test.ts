@@ -48,7 +48,7 @@ test("builds capability-gated, content-free stable MCP form elicitation", () => 
   assert.equal(__workspaceElicitationTestUtils.elicitationMode("2025-03-26", { elicitation: {} }), "none");
   assert.equal(__workspaceElicitationTestUtils.elicitationMode("2025-06-18", {}), "none");
   assert.equal(__workspaceElicitationTestUtils.elicitationMode("2025-06-18", { elicitation: {} }), "form");
-  assert.equal(__workspaceElicitationTestUtils.elicitationMode("2025-11-25", { elicitation: { form: {} } }), "none");
+  assert.equal(__workspaceElicitationTestUtils.elicitationMode("2025-11-25", { elicitation: { form: {} } }), "form");
   assert.equal(__workspaceElicitationTestUtils.elicitationMode("2025-11-25", { elicitation: { url: {} } }), "none");
   const request = __workspaceElicitationTestUtils.elicitationRequest({
     id: `mcpel_${"a".repeat(48)}`,
@@ -124,8 +124,9 @@ test("normalizes response replays and distinguishes reject, decline, and cancel"
 });
 
 test("migration and route bind durable session delivery and response correlation", async () => {
-  const [migration, route, protocol, approvals, elicitation] = await Promise.all([
+  const [migration, preclaimMigration, route, protocol, approvals, elicitation] = await Promise.all([
     readFile(`${repoRoot}/packages/nextjs/drizzle/0091_mcp_elicitation_sessions.sql`, "utf8"),
+    readFile(`${repoRoot}/packages/nextjs/drizzle/0102_mcp_preclaim_sessions.sql`, "utf8"),
     readFile(`${repoRoot}/packages/nextjs/app/api/agent/v1/mcp/route.ts`, "utf8"),
     readFile(`${repoRoot}/packages/nextjs/lib/mcp/workspaceProtocol.ts`, "utf8"),
     readFile(`${repoRoot}/packages/nextjs/lib/tokenless/humanReviewApprovals.ts`, "utf8"),
@@ -142,6 +143,13 @@ test("migration and route bind durable session delivery and response correlation
   assert.match(migration, /processing_lease_id/u);
   assert.match(migration, /processing_response_json/u);
   assert.match(migration, /response_json.*responded_at/su);
+  assert.match(preclaimMigration, /ALTER COLUMN "workspace_id" DROP NOT NULL/u);
+  assert.match(preclaimMigration, /ALTER COLUMN "integration_id" DROP NOT NULL/u);
+  assert.match(preclaimMigration, /tokenless_mcp_sessions_binding_state_check/u);
+  assert.match(preclaimMigration, /workspace_id" IS NULL AND "integration_id" IS NULL/u);
+  assert.match(preclaimMigration, /workspace_id" IS NOT NULL AND "integration_id" IS NOT NULL/u);
+  assert.match(preclaimMigration, /DROP CONSTRAINT "tokenless_mcp_sessions_elicitation_mode_check"/u);
+  assert.match(preclaimMigration, /'2025-06-18','2025-11-25'/u);
   assert.match(route, /MCP-Session-Id/u);
   assert.match(route, /text\/event-stream/u);
   assert.match(route, /deliverWorkspaceMcpElicitation/u);

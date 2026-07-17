@@ -551,7 +551,13 @@ async function callOAuthTool(
   principal: Extract<AgentMcpPrincipal, { kind: "oauth" }>,
   name: string,
   args: unknown,
-  context: { origin: string; protocolVersion?: string; sessionId?: string; signal?: AbortSignal },
+  context: {
+    origin: string;
+    mcpSessionHash?: string;
+    protocolVersion?: string;
+    sessionId?: string;
+    signal?: AbortSignal;
+  },
 ) {
   try {
     if (name === "rateloop_claim_connection_intent") {
@@ -559,9 +565,13 @@ async function callOAuthTool(
       if (typeof input.connectionUrl !== "string") {
         throw new TokenlessServiceError("connectionUrl is required.", 400, "invalid_tool_arguments");
       }
+      if (!context.mcpSessionHash) {
+        throw new TokenlessServiceError("MCP-Session-Id is required.", 400, "mcp_session_required");
+      }
       return toolResult(
         await claimAgentConnectionIntent({
           connectionUrl: input.connectionUrl,
+          mcpSessionHash: context.mcpSessionHash,
           origin: context.origin,
           principal: principal.oauth,
         }),
@@ -649,12 +659,17 @@ export async function dispatchWorkspaceMcp(
       ? request.id
       : null;
   if (!notification && id === null && request.id !== null) return errorResponse(null, -32600, "Invalid Request");
-  if (request.method !== "initialize" && context.sessionId && principal.kind === "oauth" && principal.integration) {
-    await requireWorkspaceMcpSession({
+  let mcpSessionHash: string | undefined;
+  if (request.method !== "initialize" && principal.kind === "oauth") {
+    if (!context.sessionId) {
+      throw new TokenlessServiceError("MCP-Session-Id is required.", 400, "mcp_session_required");
+    }
+    const session = await requireWorkspaceMcpSession({
       sessionId: context.sessionId,
       principal,
       protocolVersion: context.protocolVersion ?? "",
     });
+    mcpSessionHash = session.sessionHash;
   }
   if (notification) return null;
   if (request.method === "initialize") {
@@ -730,6 +745,7 @@ export async function dispatchWorkspaceMcp(
     if (!params || typeof params.name !== "string") return errorResponse(id, -32602, "Invalid tool call parameters.");
     const toolContext = {
       origin: context.origin ?? "http://localhost",
+      ...(mcpSessionHash ? { mcpSessionHash } : {}),
       ...(context.sessionId ? { sessionId: context.sessionId } : {}),
       ...(context.protocolVersion ? { protocolVersion: context.protocolVersion } : {}),
       ...(context.signal ? { signal: context.signal } : {}),

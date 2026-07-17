@@ -708,6 +708,13 @@
       "when": 1784304000000,
       "tag": "0101_feedback_result_semantics",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1784307600000,
+      "tag": "0102_mcp_preclaim_sessions",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,11 @@
 import { createHash, randomBytes } from "node:crypto";
 import "server-only";
 import { dbClient, dbPool } from "~~/lib/db";
-import { TOKENLESS_MCP_PROTOCOL_VERSIONS, TOKENLESS_MCP_STABLE_PROTOCOL_VERSION } from "~~/lib/mcp/protocol";
+import {
+  TOKENLESS_MCP_PROTOCOL_VERSION,
+  TOKENLESS_MCP_PROTOCOL_VERSIONS,
+  TOKENLESS_MCP_STABLE_PROTOCOL_VERSION,
+} from "~~/lib/mcp/protocol";
 import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import { decideHumanReviewApprovalForOwner } from "~~/lib/tokenless/humanReviewApprovals";
 import type { HumanReviewRoutingResult } from "~~/lib/tokenless/humanReviewRequestRouter";
@@ -47,12 +51,10 @@ function requestId(input: { sessionHash: string; approvalId: string; revision: n
 }
 
 function oauthSessionPrincipal(principal: AgentMcpPrincipal) {
-  if (principal.kind !== "oauth" || !principal.integration || principal.connectionStatus !== "connected") {
-    return null;
-  }
+  if (principal.kind !== "oauth") return null;
   return {
-    workspaceId: principal.integration.workspaceId,
-    integrationId: principal.integration.integrationId,
+    workspaceId: principal.integration?.workspaceId ?? null,
+    integrationId: principal.integration?.integrationId ?? null,
     subjectPrincipalId: principal.oauth.subjectPrincipalId,
     tokenFamilyId: principal.oauth.tokenFamilyId,
     tokenExpiresAt: principal.oauth.expiresAt,
@@ -61,11 +63,11 @@ function oauthSessionPrincipal(principal: AgentMcpPrincipal) {
 
 function elicitationMode(protocolVersion: string, capabilities: unknown) {
   const value = object(capabilities);
-  return protocolVersion === TOKENLESS_MCP_STABLE_PROTOCOL_VERSION &&
-    value !== null &&
-    object(value.elicitation) !== null
-    ? ("form" as const)
-    : ("none" as const);
+  const elicitation = value === null ? null : object(value.elicitation);
+  const supportsForm =
+    (protocolVersion === TOKENLESS_MCP_STABLE_PROTOCOL_VERSION && elicitation !== null) ||
+    (protocolVersion === TOKENLESS_MCP_PROTOCOL_VERSION && elicitation !== null && object(elicitation.form) !== null);
+  return supportsForm ? ("form" as const) : ("none" as const);
 }
 
 function protocolVersion(value: string) {
@@ -284,32 +286,42 @@ export async function requireWorkspaceMcpSession(input: {
   try {
     await client.query("BEGIN");
     const result = await client.query(
-      `SELECT s.protocol_version,s.elicitation_mode
+      `SELECT s.protocol_version,s.elicitation_mode,s.workspace_id,s.integration_id
        FROM tokenless_mcp_sessions s
-       JOIN tokenless_agent_integrations i
-         ON i.integration_id=s.integration_id AND i.workspace_id=s.workspace_id
-         AND i.token_family_id=s.token_family_id
-         AND i.oauth_subject_principal_id=s.subject_principal_id
        JOIN tokenless_agent_oauth_token_families f
          ON f.token_family_id=s.token_family_id AND f.subject_principal_id=s.subject_principal_id
-       WHERE s.session_hash=$1 AND s.workspace_id=$2 AND s.integration_id=$3
-         AND s.subject_principal_id=$4 AND s.token_family_id=$5
-         AND s.protocol_version=$6 AND s.status='active' AND s.expires_at>$7
-         AND i.status='active' AND f.status='active' AND f.absolute_expires_at>$7
+       WHERE s.session_hash=$1 AND s.subject_principal_id=$2 AND s.token_family_id=$3
+         AND s.protocol_version=$4 AND s.status='active' AND s.expires_at>$5
+         AND f.status='active' AND f.absolute_expires_at>$5
        FOR UPDATE`,
-      [
-        hash,
-        owner.workspaceId,
-        owner.integrationId,
-        owner.subjectPrincipalId,
-        owner.tokenFamilyId,
-        requestedProtocolVersion,
-        now,
-      ],
+      [hash, owner.subjectPrincipalId, owner.tokenFamilyId, requestedProtocolVersion, now],
     );
     const row = result.rows[0] as Row | undefined;
     if (!row) {
       throw new TokenlessServiceError("MCP session is expired or mismatched.", 404, "mcp_session_not_found");
+    }
+    const workspaceId = text(row, "workspace_id");
+    const integrationId = text(row, "integration_id");
+    if ((workspaceId === null) !== (integrationId === null)) {
+      throw new TokenlessServiceError("MCP session binding is invalid.", 404, "mcp_session_not_found");
+    }
+    if (workspaceId === null) {
+      if (owner.workspaceId !== null || owner.integrationId !== null) {
+        throw new TokenlessServiceError("MCP session is not bound to this connection.", 404, "mcp_session_not_found");
+      }
+    } else {
+      if (workspaceId !== owner.workspaceId || integrationId !== owner.integrationId) {
+        throw new TokenlessServiceError("MCP session is not bound to this connection.", 404, "mcp_session_not_found");
+      }
+      const integration = await client.query(
+        `SELECT 1 FROM tokenless_agent_integrations
+         WHERE integration_id=$1 AND workspace_id=$2 AND token_family_id=$3
+           AND oauth_subject_principal_id=$4 AND status='active' FOR SHARE`,
+        [integrationId, workspaceId, owner.tokenFamilyId, owner.subjectPrincipalId],
+      );
+      if (!integration.rowCount) {
+        throw new TokenlessServiceError("MCP session is expired or mismatched.", 404, "mcp_session_not_found");
+      }
     }
     await client.query(
       `UPDATE tokenless_mcp_sessions SET last_seen_at=$1

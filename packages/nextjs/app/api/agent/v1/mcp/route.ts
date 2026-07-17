@@ -117,20 +117,11 @@ export async function POST(request: NextRequest) {
     const body = await readBody(request);
     const method = body && typeof body === "object" && !Array.isArray(body) && "method" in body ? body.method : null;
     const initializeSessionId =
-      method === "initialize" &&
-      principal.kind === "oauth" &&
-      principal.integration &&
-      principal.connectionStatus === "connected"
+      method === "initialize" && principal.kind === "oauth"
         ? `mcps_${randomBytes(32).toString("base64url")}`
         : undefined;
     const sessionId = request.headers.get("mcp-session-id")?.trim() || undefined;
-    if (
-      principal.kind === "oauth" &&
-      principal.integration &&
-      principal.connectionStatus === "connected" &&
-      method !== "initialize" &&
-      !sessionId
-    ) {
+    if (principal.kind === "oauth" && method !== "initialize" && !sessionId) {
       throw new TokenlessServiceError("MCP-Session-Id is required.", 400, "mcp_session_required");
     }
     const result = await dispatchWorkspaceMcp(body, principal, {
