@@ -180,10 +180,10 @@ codex plugin add rateloop@rateloop`}</CodeBlock>
       <h4>Authentication finished, but still waiting?</h4>
       <p>
         Codex&apos;s <strong>Authentication complete</strong> page confirms only the OAuth callback, not RateLoop
-        verification. Return to the same task. Treat the first missing-tool check as activation pending. If the protected
-        tools are still missing on a later active turn and Codex offers no native action, uninstall all existing RateLoop
-        plugins before resuming that task with the original message. Do not remove unrelated plugins or create a
-        replacement connection link.
+        verification. Return to the same task. Treat the first missing-tool check as activation pending. If the
+        protected tools are still missing on a later active turn and Codex offers no native action, uninstall all
+        existing RateLoop plugins before resuming that task with the original message. Do not remove unrelated plugins
+        or create a replacement connection link.
       </p>
 
       <h2>Four-purpose tool surface</h2>

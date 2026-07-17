@@ -375,8 +375,8 @@ describe("RateLoop agent host assets", () => {
     expect(guide).toContain(workspaceMcpUrl);
     expect(guide).toContain("host-native OAuth");
     expect(guide).toMatch(/standard OAuth\s+authorization challenge/);
-    expect(guide).toContain("Uninstall every existing RateLoop plugin");
-    expect(guide).toMatch(/Do not remove unrelated\s+plugins/);
+    expect(guide).toMatch(/uninstall every existing RateLoop plugin/i);
+    expect(guide).toMatch(/do not remove\s+unrelated plugins/i);
     expect(guide).toContain(
       "native VS Code manifest will be published only after",
     );
