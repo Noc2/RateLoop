@@ -20,6 +20,60 @@ const PACKET_FIELDS = [
   },
 ] as const;
 
+const OVERSIGHT_MATRIX = [
+  {
+    requirement: "Art 14(4)(a) · Monitor",
+    provides:
+      "An oversight dashboard (sampling, latency, disagreement, blocked outputs), in-app, email, and browser alerts, event webhooks, and per-agent capability cards.",
+    yours: "Watching those surfaces, understanding the agent's capacities and limitations, and acting on anomalies.",
+  },
+  {
+    requirement: "Art 14(4)(b) · Automation bias",
+    provides:
+      "Independent blinded review panels, decision prompts with no preselected choice, and override-rate visibility for the deciding person.",
+    yours: "Staying aware of the pull to over-rely on the system and keeping each decision a considered one.",
+  },
+  {
+    requirement: "Art 14(4)(c) · Interpret",
+    provides:
+      "An owner case view with the actual output, source context, reviewer rationales, and surfaced disagreement before the decision.",
+    yours: "Correctly interpreting the output within your domain, workflow, and context.",
+  },
+  {
+    requirement: "Art 14(4)(d) · Override",
+    provides:
+      "Recorded go, revise, and stop decisions, plus per-output override records with required reasons on the audit chain.",
+    yours: "Deciding when to disregard, override, or reverse an output.",
+  },
+  {
+    requirement: "Art 14(4)(e) · Stop",
+    provides:
+      "A fail-closed output gate — on host-enforced integrations output is held undelivered until a person decides — and a workspace stop control that halts new releases workspace-wide.",
+    yours: "Choosing which outputs are gated, when to intervene, and when to halt.",
+  },
+  {
+    requirement: "Art 26(2) · Assignment",
+    provides:
+      "Oversight designations with attestation records — competence basis, training completed, authority granted — exportable as an assignment record.",
+    yours: "Choosing those natural persons and ensuring they are competent, trained, and authorized.",
+  },
+  {
+    requirement: "Art 26(5) · Monitoring",
+    provides: "The same monitoring surfaces, coverage exports, and alerting, retained as workspace evidence.",
+    yours: "Monitoring operation against your instructions for use and pausing use when risks appear.",
+  },
+  {
+    requirement: "Art 26(6) · Log retention",
+    provides: "A six-month retention floor with retention export, scheduled enforcement, and legal hold.",
+    yours: "Your full legal and contractual retention schedule beyond that floor.",
+  },
+  {
+    requirement: "Art 4 · AI literacy",
+    provides: "Exportable training and calibration records for reviewers and oversight persons.",
+    yours: "Ensuring sufficient AI literacy across the staff who operate the system.",
+  },
+] as const;
+
 const COMPLIANCE_ROWS = [
   {
     framework: "ISO/IEC 42001:2023",
@@ -32,10 +86,9 @@ const COMPLIANCE_ROWS = [
   {
     framework: "EU AI Act",
     href: "https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng",
-    references: "Articles 12, 26(5)-(6), 72, and 73",
+    references: "Articles 12, 14(3)(b), 14(4), 26(2), 26(5)-(6), 72, and 73",
     artifacts: "Review packet, coverage export, audit chain, gate evidence, and host-reported execution context.",
-    boundary:
-      "May support a customer's logging, monitoring, retention, and incident work; it does not satisfy or replace those duties.",
+    boundary: "Supports your implementation and evidence of these duties; the duties remain yours.",
   },
   {
     framework: "NIST AI RMF",
@@ -105,16 +158,46 @@ export default function EvidencePage() {
 
       <aside className="not-prose my-8 rounded-2xl border-l-2 border-[var(--rateloop-yellow)] bg-amber-300/[0.06] p-5 sm:p-6">
         <p className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-[var(--rateloop-yellow)]">
-          What this is not
+          Shared responsibility
+        </p>
+        <p className="mt-3 max-w-4xl text-base font-semibold leading-7 text-base-content sm:text-lg">
+          Your people provide the oversight. RateLoop provides the instrument — and the proof.
         </p>
         <p className="mt-3 max-w-4xl text-sm leading-7 text-base-content/75 sm:text-base">
-          RateLoop never claims: to be the customer&apos;s EU AI Act Article 14/26 human oversight (oversight must be
-          assigned to the deployer&apos;s own natural persons with &quot;competence, training and authority&quot;); to
-          verify what model actually produced an output (execution provenance is host-reported and labelled so); to make
-          anyone &quot;compliant&quot; by itself; or to market SOC 2 / ISO / HIPAA / residency attestations RateLoop
-          does not hold.
+          Whether a specific deployment meets a legal requirement depends on your system, context, and organization —
+          you configure and operate RateLoop for your purpose; RateLoop provides the capabilities and the evidence.
         </p>
       </aside>
+
+      <h2 id="shared-responsibility">Who provides what</h2>
+      <div className="not-prose my-8 overflow-x-auto rounded-2xl border border-base-content/10">
+        <table className="w-full min-w-[54rem] border-collapse text-left text-sm">
+          <thead className="bg-base-content/[0.05] text-base-content">
+            <tr>
+              <th className="px-4 py-3 font-semibold">Requirement</th>
+              <th className="px-4 py-3 font-semibold">RateLoop provides</th>
+              <th className="px-4 py-3 font-semibold">You remain responsible for</th>
+            </tr>
+          </thead>
+          <tbody>
+            {OVERSIGHT_MATRIX.map(row => (
+              <tr key={row.requirement} className="border-t border-base-content/10 align-top">
+                <td className="whitespace-nowrap px-4 py-4 font-mono text-xs font-semibold text-base-content">
+                  {row.requirement}
+                </td>
+                <td className="px-4 py-4 leading-6 text-base-content/70">{row.provides}</td>
+                <td className="px-4 py-4 leading-6 text-base-content/60">{row.yours}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p>
+        RateLoop operates around your AI system, gating its outputs; it does not modify the system itself. Execution
+        provenance is host-reported and labelled so; RateLoop does not verify which model actually produced an output.
+        RateLoop does not market SOC 2 / ISO / HIPAA / residency attestations it does not hold, and no evidence export
+        by itself makes anyone compliant.
+      </p>
 
       <h2 id="packet">What an evidence packet contains</h2>
       <div className="not-prose my-8 grid gap-4 sm:grid-cols-2">
