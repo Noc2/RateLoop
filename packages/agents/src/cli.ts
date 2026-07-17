@@ -174,18 +174,21 @@ export async function runCli(args: string[]) {
         "RATELOOP_AGENT_API_KEY is required for autonomous publishing.",
       );
     }
-    if (!config.keystorePath || !config.keystorePassword) {
-      throw new Error(
-        "RATELOOP_AGENT_KEYSTORE_PATH and RATELOOP_AGENT_KEYSTORE_PASSWORD are required for autonomous publishing.",
-      );
-    }
-    const account = await loadTokenlessAgentAccount({
-      path: config.keystorePath,
-      password: config.keystorePassword,
-    });
     const maxWaitMs =
       readOptionalPositiveInteger(options, "max-wait-ms") ?? 300_000;
     if (command === "run") {
+      // Only `run` submits and signs; `resume` merely polls an existing operation with the API
+      // credential. Loading the keystore here keeps recovery-after-restart working when the signing
+      // key is intentionally offline.
+      if (!config.keystorePath || !config.keystorePassword) {
+        throw new Error(
+          "RATELOOP_AGENT_KEYSTORE_PATH and RATELOOP_AGENT_KEYSTORE_PASSWORD are required for autonomous publishing.",
+        );
+      }
+      const account = await loadTokenlessAgentAccount({
+        path: config.keystorePath,
+        password: config.keystorePassword,
+      });
       const request = await readJsonFile<TokenlessAutonomousRunInput>(
         requireString(options, "file"),
       );
