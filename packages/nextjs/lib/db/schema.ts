@@ -859,9 +859,11 @@ export const tokenlessAgentReviewRequestProfiles = pgTable(
     workspaceId: text("workspace_id").notNull(),
     agentId: text("agent_id").notNull(),
     agentVersionId: text("agent_version_id").notNull(),
-    criterion: text("criterion").notNull(),
-    positiveLabel: text("positive_label").notNull(),
-    negativeLabel: text("negative_label").notNull(),
+    questionAuthority: text("question_authority").notNull(),
+    resultSemantics: text("result_semantics").notNull(),
+    criterion: text("criterion"),
+    positiveLabel: text("positive_label"),
+    negativeLabel: text("negative_label"),
     rationaleMode: text("rationale_mode").notNull(),
     audience: text("audience").notNull(),
     contentBoundary: text("content_boundary").notNull(),
@@ -909,6 +911,35 @@ export const tokenlessAgentReviewRequestProfiles = pgTable(
 
 export type TokenlessAgentReviewRequestProfile = typeof tokenlessAgentReviewRequestProfiles.$inferSelect;
 export type NewTokenlessAgentReviewRequestProfile = typeof tokenlessAgentReviewRequestProfiles.$inferInsert;
+
+export const tokenlessAgentReviewOpportunityQuestions = pgTable(
+  "tokenless_agent_review_opportunity_questions",
+  {
+    workspaceId: text("workspace_id").notNull(),
+    opportunityId: text("opportunity_id").notNull(),
+    schemaVersion: text("schema_version").notNull(),
+    questionAuthority: text("question_authority").notNull(),
+    resultSemantics: text("result_semantics").notNull(),
+    questionHash: text("question_hash").notNull(),
+    contentBoundary: text("content_boundary").notNull(),
+    questionJson: text("question_json"),
+    questionCiphertext: text("question_ciphertext"),
+    questionKeyRef: text("question_key_ref"),
+    submittedByIntegrationId: text("submitted_by_integration_id").notNull(),
+    submittedAt: timestamp("submitted_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    pk: primaryKey({ columns: [table.workspaceId, table.opportunityId] }),
+    workspaceHashIdx: index("tokenless_agent_review_opportunity_questions_hash_idx").on(
+      table.workspaceId,
+      table.questionHash,
+      table.submittedAt,
+    ),
+  }),
+);
+
+export type TokenlessAgentReviewOpportunityQuestion = typeof tokenlessAgentReviewOpportunityQuestions.$inferSelect;
+export type NewTokenlessAgentReviewOpportunityQuestion = typeof tokenlessAgentReviewOpportunityQuestions.$inferInsert;
 
 export const tokenlessAgentHumanReviewBindings = pgTable(
   "tokenless_agent_human_review_bindings",

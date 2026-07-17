@@ -20,6 +20,12 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 export const REVIEW_REQUEST_RATIONALE_MODES = ["off", "optional", "required"] as const;
 export type ReviewRequestRationaleMode = (typeof REVIEW_REQUEST_RATIONALE_MODES)[number];
 
+export const REVIEW_REQUEST_QUESTION_AUTHORITIES = ["owner_fixed", "agent_per_request"] as const;
+export type ReviewRequestQuestionAuthority = (typeof REVIEW_REQUEST_QUESTION_AUTHORITIES)[number];
+
+export const REVIEW_REQUEST_RESULT_SEMANTICS = ["assurance", "feedback"] as const;
+export type ReviewRequestResultSemantics = (typeof REVIEW_REQUEST_RESULT_SEMANTICS)[number];
+
 export const REVIEW_REQUEST_PRIVATE_SENSITIVITIES = ["internal", "confidential", "restricted", "regulated"] as const;
 export type ReviewRequestPrivateSensitivity = (typeof REVIEW_REQUEST_PRIVATE_SENSITIVITIES)[number];
 
@@ -39,9 +45,10 @@ type QueryRow = Record<string, unknown>;
 export type ReviewRequestProfileInput = {
   agentId: string;
   agentVersionId: string;
-  criterion: string;
-  positiveLabel: string;
-  negativeLabel: string;
+  questionAuthority: ReviewRequestQuestionAuthority;
+  criterion?: string | null;
+  positiveLabel?: string | null;
+  negativeLabel?: string | null;
   rationaleMode: ReviewRequestRationaleMode;
   audience: HumanReviewAudience;
   contentBoundary: HumanReviewContentBoundary;
@@ -64,9 +71,11 @@ export type ReviewRequestProfileInput = {
 type NormalizedReviewRequestProfile = {
   agentId: string;
   agentVersionId: string;
-  criterion: string;
-  positiveLabel: string;
-  negativeLabel: string;
+  questionAuthority: ReviewRequestQuestionAuthority;
+  resultSemantics: ReviewRequestResultSemantics;
+  criterion: string | null;
+  positiveLabel: string | null;
+  negativeLabel: string | null;
   rationaleMode: ReviewRequestRationaleMode;
   audience: HumanReviewAudience;
   contentBoundary: HumanReviewContentBoundary;
@@ -104,6 +113,7 @@ export type ReviewRequestProfile = Omit<NormalizedReviewRequestProfile, "respons
 const INPUT_KEYS = new Set<keyof ReviewRequestProfileInput>([
   "agentId",
   "agentVersionId",
+  "questionAuthority",
   "criterion",
   "positiveLabel",
   "negativeLabel",
@@ -136,6 +146,7 @@ const NON_SEMANTIC_PROFILE_KEYS = new Set([
   "approvedBy",
   "approvedAt",
   "supersededAt",
+  "resultSemantics",
 ]);
 const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const ATOMIC_PATTERN = /^[1-9][0-9]*$/u;
@@ -195,11 +206,32 @@ export function normalizeReviewRequestProfileInput(value: unknown): NormalizedRe
 
   const agentId = requiredText(input.agentId, "agentId", 160);
   const agentVersionId = requiredText(input.agentVersionId, "agentVersionId", 160);
-  const criterion = requiredText(input.criterion, "criterion", 500);
-  const positiveLabel = requiredText(input.positiveLabel, "positiveLabel", 40);
-  const negativeLabel = requiredText(input.negativeLabel, "negativeLabel", 40);
-  if (positiveLabel.toLocaleLowerCase("en-US") === negativeLabel.toLocaleLowerCase("en-US")) {
-    invalid("positiveLabel and negativeLabel must be distinct.");
+  const questionAuthority = input.questionAuthority as ReviewRequestQuestionAuthority;
+  if (!REVIEW_REQUEST_QUESTION_AUTHORITIES.includes(questionAuthority)) invalid("questionAuthority is invalid.");
+  let criterion: string | null;
+  let positiveLabel: string | null;
+  let negativeLabel: string | null;
+  let resultSemantics: ReviewRequestResultSemantics;
+  if (questionAuthority === "owner_fixed") {
+    criterion = requiredText(input.criterion, "criterion", 500);
+    positiveLabel = requiredText(input.positiveLabel, "positiveLabel", 40);
+    negativeLabel = requiredText(input.negativeLabel, "negativeLabel", 40);
+    if (positiveLabel.toLocaleLowerCase("en-US") === negativeLabel.toLocaleLowerCase("en-US")) {
+      invalid("positiveLabel and negativeLabel must be distinct.");
+    }
+    resultSemantics = "assurance";
+  } else {
+    if (
+      (input.criterion !== null && input.criterion !== undefined) ||
+      (input.positiveLabel !== null && input.positiveLabel !== undefined) ||
+      (input.negativeLabel !== null && input.negativeLabel !== undefined)
+    ) {
+      invalid("Agent-per-request profiles cannot include a fixed criterion or answer labels.");
+    }
+    criterion = null;
+    positiveLabel = null;
+    negativeLabel = null;
+    resultSemantics = "feedback";
   }
   const rationaleMode = input.rationaleMode as ReviewRequestRationaleMode;
   const audience = input.audience as HumanReviewAudience;
@@ -232,6 +264,12 @@ export function normalizeReviewRequestProfileInput(value: unknown): NormalizedRe
     if (privateSensitivity === null) invalid("privateSensitivity is required for private workspace material.");
   } else if (privateSensitivity !== null) {
     invalid("privateSensitivity must be omitted for public or test material.");
+  }
+  if (
+    questionAuthority === "agent_per_request" &&
+    (audience !== "public_network" || contentBoundary !== "public_or_test")
+  ) {
+    invalid("Agent-written questions currently require public-safe RateLoop-network review.");
   }
 
   const privateGroupId = optionalText(input.privateGroupId, "privateGroupId", 160);
@@ -308,6 +346,8 @@ export function normalizeReviewRequestProfileInput(value: unknown): NormalizedRe
   return {
     agentId,
     agentVersionId,
+    questionAuthority,
+    resultSemantics,
     criterion,
     positiveLabel,
     negativeLabel,
@@ -346,15 +386,8 @@ function canonicalJson(value: unknown): string {
 }
 
 export function reviewRequestProfileSemanticDocument(profile: NormalizedReviewRequestProfile) {
-  return {
-    schemaVersion: "rateloop.review-request-profile.v1" as const,
+  const common = {
     agent: { agentId: profile.agentId, agentVersionId: profile.agentVersionId },
-    question: {
-      criterion: profile.criterion,
-      positiveLabel: profile.positiveLabel,
-      negativeLabel: profile.negativeLabel,
-      rationaleMode: profile.rationaleMode,
-    },
     audience: {
       audience: profile.audience,
       contentBoundary: profile.contentBoundary,
@@ -386,6 +419,38 @@ export function reviewRequestProfileSemanticDocument(profile: NormalizedReviewRe
         awardWindowSeconds: profile.feedbackBonusAwardWindowSeconds,
       },
     },
+  };
+  if (profile.questionAuthority === "owner_fixed") {
+    return {
+      schemaVersion: "rateloop.review-request-profile.v1" as const,
+      agent: common.agent,
+      question: {
+        criterion: profile.criterion,
+        positiveLabel: profile.positiveLabel,
+        negativeLabel: profile.negativeLabel,
+        rationaleMode: profile.rationaleMode,
+      },
+      audience: common.audience,
+      responseWindowSeconds: common.responseWindowSeconds,
+      panelSize: common.panelSize,
+      economics: common.economics,
+    };
+  }
+  return {
+    schemaVersion: "rateloop.review-request-profile.v2" as const,
+    agent: common.agent,
+    questionPolicy: {
+      authority: "agent_per_request" as const,
+      kind: "binary" as const,
+      maximumPromptLength: 500,
+      maximumLabelLength: 40,
+      rationaleMode: profile.rationaleMode,
+      resultSemantics: "feedback" as const,
+    },
+    audience: common.audience,
+    responseWindowSeconds: common.responseWindowSeconds,
+    panelSize: common.panelSize,
+    economics: common.economics,
   };
 }
 
@@ -428,6 +493,8 @@ function profileFromRow(row: QueryRow): ReviewRequestProfile {
   const workspaceId = rowString(row, "workspace_id");
   const agentId = rowString(row, "agent_id");
   const agentVersionId = rowString(row, "agent_version_id");
+  const questionAuthority = rowString(row, "question_authority") as ReviewRequestQuestionAuthority | null;
+  const resultSemantics = rowString(row, "result_semantics") as ReviewRequestResultSemantics | null;
   const criterion = rowString(row, "criterion");
   const positiveLabel = rowString(row, "positive_label");
   const negativeLabel = rowString(row, "negative_label");
@@ -465,9 +532,8 @@ function profileFromRow(row: QueryRow): ReviewRequestProfile {
     !workspaceId ||
     !agentId ||
     !agentVersionId ||
-    !criterion ||
-    !positiveLabel ||
-    !negativeLabel ||
+    !questionAuthority ||
+    !resultSemantics ||
     !rationaleMode ||
     !audience ||
     !contentBoundary ||
@@ -475,6 +541,12 @@ function profileFromRow(row: QueryRow): ReviewRequestProfile {
     !configurationStatus ||
     !profileHash ||
     !createdBy ||
+    !REVIEW_REQUEST_QUESTION_AUTHORITIES.includes(questionAuthority) ||
+    !REVIEW_REQUEST_RESULT_SEMANTICS.includes(resultSemantics) ||
+    (questionAuthority === "owner_fixed" &&
+      (resultSemantics !== "assurance" || !criterion || !positiveLabel || !negativeLabel)) ||
+    (questionAuthority === "agent_per_request" &&
+      (resultSemantics !== "feedback" || criterion !== null || positiveLabel !== null || negativeLabel !== null)) ||
     !REVIEW_REQUEST_RATIONALE_MODES.includes(rationaleMode) ||
     !HUMAN_REVIEW_AUDIENCES.includes(audience) ||
     !HUMAN_REVIEW_CONTENT_BOUNDARIES.includes(contentBoundary) ||
@@ -496,6 +568,8 @@ function profileFromRow(row: QueryRow): ReviewRequestProfile {
     workspaceId,
     agentId,
     agentVersionId,
+    questionAuthority,
+    resultSemantics,
     criterion,
     positiveLabel,
     negativeLabel,
@@ -597,8 +671,8 @@ async function validateBindings(client: PoolClient, workspaceId: string, profile
   }
 }
 
-const PROFILE_COLUMNS = `profile_id, version, workspace_id, agent_id, agent_version_id, criterion,
-  positive_label, negative_label,
+const PROFILE_COLUMNS = `profile_id, version, workspace_id, agent_id, agent_version_id,
+  question_authority, result_semantics, criterion, positive_label, negative_label,
   rationale_mode, audience, content_boundary, private_sensitivity, private_group_id,
   private_group_policy_version, private_group_policy_hash, response_window_seconds, panel_size,
   required_expertise_keys_json,
@@ -632,6 +706,8 @@ function insertValues(
     workspaceId,
     profile.agentId,
     profile.agentVersionId,
+    profile.questionAuthority,
+    profile.resultSemantics,
     profile.criterion,
     profile.positiveLabel,
     profile.negativeLabel,
@@ -659,7 +735,8 @@ function insertValues(
 }
 
 const INSERT_PROFILE = `INSERT INTO tokenless_agent_review_request_profiles
-  (profile_id, version, workspace_id, agent_id, agent_version_id, criterion, positive_label, negative_label,
+  (profile_id, version, workspace_id, agent_id, agent_version_id, question_authority, result_semantics,
+   criterion, positive_label, negative_label,
    rationale_mode, audience, content_boundary, private_sensitivity, private_group_id,
    private_group_policy_version, private_group_policy_hash, required_expertise_keys_json,
    response_window_seconds, panel_size,
@@ -667,7 +744,7 @@ const INSERT_PROFILE = `INSERT INTO tokenless_agent_review_request_profiles
    feedback_bonus_awarder_kind, feedback_bonus_awarder_account, feedback_bonus_award_window_seconds,
    configuration_status, profile_hash, created_by,
    created_at, approved_by, approved_at, superseded_at)
-  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,'ready',$26,$27,$28,$27,$28,NULL)`;
+  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,'ready',$28,$29,$30,$29,$30,NULL)`;
 
 function isUniqueViolation(error: unknown) {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "23505");

@@ -47,6 +47,7 @@ function privateProfile(agentId: string, agentVersionId: string, group: { groupI
   return {
     agentId,
     agentVersionId,
+    questionAuthority: "owner_fixed",
     criterion: " Is the suggested response safe to send? ",
     positiveLabel: " Send ",
     negativeLabel: "Do not send",
@@ -67,6 +68,7 @@ test("profile normalization rejects unknown fields and hashes only normalized se
   const input = {
     agentId: "agent_1",
     agentVersionId: "agent_version_1",
+    questionAuthority: "owner_fixed",
     criterion: " Is this correct? ",
     positiveLabel: " Yes ",
     negativeLabel: "No",
@@ -80,6 +82,8 @@ test("profile normalization rejects unknown fields and hashes only normalized se
   };
   const normalized = __reviewRequestProfileTestUtils.normalizeReviewRequestProfileInput(input);
   assert.equal(normalized.criterion, "Is this correct?");
+  assert.equal(normalized.questionAuthority, "owner_fixed");
+  assert.equal(normalized.resultSemantics, "assurance");
   assert.equal(normalized.positiveLabel, "Yes");
   assert.equal(normalized.negativeLabel, "No");
   assert.equal(
@@ -97,10 +101,86 @@ test("profile normalization rejects unknown fields and hashes only normalized se
   );
 });
 
+test("fixed profiles retain v1 hashes while agent-per-request profiles use feedback-only v2 policy terms", () => {
+  const fixed = {
+    agentId: "agent_1",
+    agentVersionId: "agent_version_1",
+    questionAuthority: "owner_fixed",
+    criterion: "Is this correct?",
+    positiveLabel: "Yes",
+    negativeLabel: "No",
+    rationaleMode: "optional",
+    audience: "public_network",
+    contentBoundary: "public_or_test",
+    responseWindowSeconds: 3_600,
+    panelSize: 3,
+    compensationMode: "usdc",
+    bountyPerSeatAtomic: "1000000",
+  };
+  const normalizedFixed = __reviewRequestProfileTestUtils.normalizeReviewRequestProfileInput(fixed);
+  const fixedDocument = __reviewRequestProfileTestUtils.reviewRequestProfileSemanticDocument(normalizedFixed);
+  assert.equal(fixedDocument.schemaVersion, "rateloop.review-request-profile.v1");
+  assert.equal(
+    hashReviewRequestProfile(normalizedFixed),
+    "sha256:37152028647c167f477fa2ced8daccf608515de26f724f3ed969c48578c428d5",
+  );
+
+  const dynamic = __reviewRequestProfileTestUtils.normalizeReviewRequestProfileInput({
+    ...fixed,
+    questionAuthority: "agent_per_request",
+    criterion: null,
+    positiveLabel: null,
+    negativeLabel: null,
+  });
+  const dynamicDocument = __reviewRequestProfileTestUtils.reviewRequestProfileSemanticDocument(dynamic);
+  assert.equal(dynamic.questionAuthority, "agent_per_request");
+  assert.equal(dynamic.resultSemantics, "feedback");
+  assert.equal(dynamic.criterion, null);
+  assert.equal(dynamicDocument.schemaVersion, "rateloop.review-request-profile.v2");
+  assert.deepEqual("questionPolicy" in dynamicDocument ? dynamicDocument.questionPolicy : null, {
+    authority: "agent_per_request",
+    kind: "binary",
+    maximumPromptLength: 500,
+    maximumLabelLength: 40,
+    rationaleMode: "optional",
+    resultSemantics: "feedback",
+  });
+  assert.notEqual(hashReviewRequestProfile(dynamic), hashReviewRequestProfile(normalizedFixed));
+
+  assert.throws(
+    () =>
+      __reviewRequestProfileTestUtils.normalizeReviewRequestProfileInput({
+        ...fixed,
+        questionAuthority: "agent_per_request",
+      }),
+    /cannot include a fixed criterion/i,
+  );
+  const { questionAuthority: _questionAuthority, ...missingAuthority } = fixed;
+  assert.throws(() => __reviewRequestProfileTestUtils.normalizeReviewRequestProfileInput(missingAuthority), /invalid/i);
+
+  assert.throws(
+    () =>
+      __reviewRequestProfileTestUtils.normalizeReviewRequestProfileInput({
+        ...dynamic,
+        audience: "private_invited",
+        contentBoundary: "private_workspace",
+        privateSensitivity: "internal",
+        privateGroupId: "group_1",
+        privateGroupPolicyVersion: 1,
+        privateGroupPolicyHash: `sha256:${"a".repeat(64)}`,
+        panelSize: 1,
+        compensationMode: "unpaid",
+        bountyPerSeatAtomic: null,
+      }),
+    /public-safe RateLoop-network review/i,
+  );
+});
+
 test("lane, content, group, and economics combinations fail closed", () => {
   const publicProfile = {
     agentId: "agent_1",
     agentVersionId: "version_1",
+    questionAuthority: "owner_fixed",
     criterion: "Is this correct?",
     positiveLabel: "Yes",
     negativeLabel: "No",
@@ -155,6 +235,7 @@ test("response windows, panel sizes, and USDC liability use exact bounded intege
   const base = {
     agentId: "agent_1",
     agentVersionId: "version_1",
+    questionAuthority: "owner_fixed",
     criterion: "Is this correct?",
     positiveLabel: "Yes",
     negativeLabel: "No",

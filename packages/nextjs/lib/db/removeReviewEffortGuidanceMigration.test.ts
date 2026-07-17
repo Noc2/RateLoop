@@ -14,6 +14,5 @@ test("active profiles require owner confirmation before obsolete effort guidance
   assert.match(migration, /SET "configuration_status" = 'action_required'/u);
   assert.match(migration, /DROP CONSTRAINT IF EXISTS/u);
   assert.match(migration, /DROP COLUMN IF EXISTS "expected_effort_seconds"/u);
-  assert.equal(journal.entries.at(-1)?.idx, 98);
-  assert.equal(journal.entries.at(-1)?.tag, "0098_remove_review_effort_guidance");
+  assert.equal(journal.entries.find(entry => entry.idx === 98)?.tag, "0098_remove_review_effort_guidance");
 });

@@ -49,6 +49,7 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
       "0086_enterprise_identity.sql",
       "0088_expertise_verification_queue.sql",
       "0094_assurance_override_decisions.sql",
+      "0099_agent_per_request_review_questions.sql",
     ].includes(file) &&
     (/^CREATE OR REPLACE FUNCTION/u.test(statement) || /^CREATE TRIGGER/u.test(statement))
   ) {
