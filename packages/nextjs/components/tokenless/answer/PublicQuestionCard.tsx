@@ -17,6 +17,12 @@ import {
   signTokenlessCommit,
 } from "~~/lib/tokenless/rater";
 import {
+  createDeviceRecoveryRecord,
+  generateDeviceRecoverySecret,
+  serializeDeviceRecoveryBackup,
+  storeDeviceRecovery,
+} from "~~/lib/tokenless/rater/deviceRecovery";
+import {
   PUBLIC_RATER_RESPONSE_BODY_MAX_LENGTH,
   PUBLIC_RATER_RESPONSE_CATEGORIES,
   type PublicRaterResponseCategory,
@@ -125,8 +131,8 @@ export function PublicQuestionCard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const [recoverySecret, setRecoverySecret] = useState("");
-  const [recoveryPackage, setRecoveryPackage] = useState<string | null>(null);
+  const [technicalStatus, setTechnicalStatus] = useState<string | null>(null);
+  const [recoveryBackup, setRecoveryBackup] = useState<string | null>(null);
   const [recoveryUrl, setRecoveryUrl] = useState<string | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(task.question.rationale?.mode === "required");
   const [feedbackCategory, setFeedbackCategory] = useState<PublicRaterResponseCategory>("opinion");
@@ -156,14 +162,14 @@ export function PublicQuestionCard({
   }, [answer, draftRestored, feedbackBody, feedbackCategory, prediction, sourceUrl, task.roundId]);
 
   useEffect(() => {
-    if (!recoveryPackage) {
+    if (!recoveryBackup) {
       setRecoveryUrl(null);
       return;
     }
-    const url = URL.createObjectURL(new Blob([recoveryPackage], { type: "application/json" }));
+    const url = URL.createObjectURL(new Blob([recoveryBackup], { type: "application/json" }));
     setRecoveryUrl(url);
     return () => URL.revokeObjectURL(url);
-  }, [recoveryPackage]);
+  }, [recoveryBackup]);
 
   useEffect(() => {
     if (!task.alreadyVouchered) return;
@@ -174,7 +180,8 @@ export function PublicQuestionCard({
         if (!active) return;
         const record = records.find(value => value.roundId === task.roundId) ?? null;
         setSavedCommit(record);
-        setStatus(
+        setStatus(record ? "Ready to retry" : "No saved submission");
+        setTechnicalStatus(
           record
             ? "A prepared submission is saved on this device. Retry it or check confirmation."
             : "This voucher was reserved in another session. No prepared submission is available on this device.",
@@ -189,6 +196,8 @@ export function PublicQuestionCard({
     if (!savedCommit) return;
     setBusy(true);
     setError(null);
+    setStatus("Submitting…");
+    setTechnicalStatus("Sending the saved transaction and checking confirmation.");
     try {
       const idempotencyKey = String(savedCommit.relayPayload.idempotencyKey ?? "");
       let committed = await readAnswerJson(
@@ -202,7 +211,7 @@ export function PublicQuestionCard({
       if (typeof committed.commitId !== "string") throw new Error("Commit response is incomplete.");
       const commitId = committed.commitId;
       for (let attempt = 0; attempt < 10 && committed.state === "submitted"; attempt += 1) {
-        setStatus(`Saved answer submitted · awaiting confirmation${attempt ? ` (${attempt + 1}/10)` : ""}`);
+        setTechnicalStatus(`Saved transaction sent; checking confirmation${attempt ? ` (${attempt + 1}/10)` : ""}.`);
         await wait(1_000);
         committed = await readAnswerJson(
           await fetch(`/api/rater/commits/${encodeURIComponent(commitId)}`, { credentials: "same-origin" }),
@@ -212,15 +221,19 @@ export function PublicQuestionCard({
         await createIndexedDbTokenlessCommitQueue().remove(savedCommit.queueId);
         setSavedCommit(null);
         clearReviewDraft("public", task.roundId);
-        setStatus("Answer and feedback confirmed. The panel rating stays hidden until settlement.");
+        setStatus("Recorded");
+        setTechnicalStatus("The answer is confirmed. The panel rating stays hidden until settlement.");
         onSubmitted();
       } else if (committed.state === "failed") {
         throw new Error("The sponsored transaction failed. The prepared submission remains saved for retry.");
       } else {
-        setStatus("Confirmation is still pending. The prepared submission remains saved on this device.");
+        setStatus("Submitting…");
+        setTechnicalStatus("Confirmation is pending. The prepared submission remains saved on this device.");
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to retry the saved submission.");
+      setError("We couldn’t finish recording your rating. Try again.");
+      setTechnicalStatus(cause instanceof Error ? cause.message : "Unable to retry the saved submission.");
+      setStatus("Ready to retry");
     } finally {
       setBusy(false);
     }
@@ -228,13 +241,11 @@ export function PublicQuestionCard({
 
   async function submitResponse() {
     if (paidAccess.state !== "ready" || !answer || prediction === null || task.alreadyVouchered) return;
-    if (recoverySecret.length < 12) {
-      setError("Choose a recovery secret of at least 12 characters before submitting paid work.");
-      return;
-    }
+    let preparedForRetry = false;
     setBusy(true);
     setError(null);
-    setStatus("Creating one-time answer and payout keys locally…");
+    setStatus("Submitting…");
+    setTechnicalStatus("Creating one-time answer and payout keys on this device.");
     try {
       const response = createPublicRaterResponse(
         {
@@ -256,10 +267,21 @@ export function PublicQuestionCard({
         predictedUpBps: (prediction * 100) as 1000 | 3000 | 5000 | 7000 | 9000,
         responseHash: response.responseHash,
       });
+      const recoverySecret = generateDeviceRecoverySecret();
       const exported = await exportTokenlessRecoveryPackage(secrets, recoverySecret);
-      localStorage.setItem(`rateloop:rater-recovery:${task.roundId}`, exported);
-      setRecoveryPackage(exported);
-      setStatus("Sealing your answer for the public beacon…");
+      const recoveryRecord = createDeviceRecoveryRecord({
+        roundId: task.roundId,
+        voteKey: secrets.reveal.voteKey,
+        recoverySecret,
+        recoveryPackage: exported,
+      });
+      const recoveryStored = storeDeviceRecovery(recoveryRecord);
+      setRecoveryBackup(serializeDeviceRecoveryBackup(recoveryRecord));
+      setTechnicalStatus(
+        recoveryStored
+          ? "The device recovery record is saved. Sealing the answer for the public beacon."
+          : "Device storage is unavailable. Download the backup before leaving this page.",
+      );
       const sealed = await sealTokenlessReveal({
         material: secrets.reveal,
         drandNetwork: task.beacon.network,
@@ -306,7 +328,8 @@ export function PublicQuestionCard({
         },
       });
       setSavedCommit(queuedCommit);
-      setStatus("Submitting through the sponsored gas-only relayer…");
+      preparedForRetry = true;
+      setTechnicalStatus("Sending the sponsored transaction.");
       const committed = await readAnswerJson(
         await fetch("/api/rater/commits", {
           method: "POST",
@@ -323,7 +346,7 @@ export function PublicQuestionCard({
       if (typeof committed.commitId !== "string") throw new Error("Commit response is incomplete.");
       let current = committed;
       for (let attempt = 0; attempt < 10 && current.state === "submitted"; attempt += 1) {
-        setStatus(`Answer submitted · awaiting confirmation${attempt ? ` (${attempt + 1}/10)` : ""}`);
+        setTechnicalStatus(`Transaction sent; checking confirmation${attempt ? ` (${attempt + 1}/10)` : ""}.`);
         await wait(1_000);
         current = await readAnswerJson(
           await fetch(`/api/rater/commits/${encodeURIComponent(committed.commitId)}`, {
@@ -335,20 +358,23 @@ export function PublicQuestionCard({
         await queue.remove(queueId);
         setSavedCommit(null);
         clearReviewDraft("public", task.roundId);
-        setStatus("Answer and feedback confirmed. The panel rating stays hidden until settlement.");
+        setStatus("Recorded");
+        setTechnicalStatus("The answer is confirmed. The panel rating stays hidden until settlement.");
         onSubmitted();
       } else if (current.state === "failed") {
         throw new Error(
           "The sponsored transaction failed. Your prepared submission is saved on this device for retry.",
         );
       } else {
-        setStatus(
-          "Answer submitted; confirmation is still pending. Your prepared submission remains saved on this device.",
-        );
+        setStatus("Submitting…");
+        setTechnicalStatus("Confirmation is pending. The prepared submission remains saved on this device.");
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to submit the sealed answer.");
-      setStatus(null);
+      setError("We couldn’t record your rating. Try again.");
+      setStatus(preparedForRetry ? "Ready to retry" : null);
+      setTechnicalStatus(
+        `${cause instanceof Error ? cause.message : "Unable to submit the sealed answer."}${preparedForRetry ? " The prepared submission remains on this device." : ""}`,
+      );
     } finally {
       setBusy(false);
     }
@@ -509,32 +535,25 @@ export function PublicQuestionCard({
                   </button>
                 ))}
               </div>
-              <label className="mt-5 block border-t border-white/10 pt-4 text-xs text-base-content/55">
-                Recovery secret
-                <input
-                  type="password"
-                  className="input input-sm mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  value={recoverySecret}
-                  onChange={event => setRecoverySecret(event.target.value)}
-                  minLength={12}
-                  maxLength={1024}
-                  autoComplete="new-password"
-                  placeholder="12+ characters"
-                />
-              </label>
               {recoveryUrl ? (
                 <a
                   href={recoveryUrl}
-                  download={`rateloop-round-${task.roundId}-recovery.json`}
+                  download={`rateloop-review-${task.roundId}-backup.json`}
                   className="mt-3 block text-center text-xs underline underline-offset-4"
                 >
-                  Save recovery package
+                  Download backup
                 </a>
               ) : null}
               {status ? (
                 <p role="status" className="mt-3 text-xs leading-5 text-emerald-100">
                   {status}
                 </p>
+              ) : null}
+              {technicalStatus ? (
+                <details className="mt-3 rounded-lg border border-white/10 px-3 py-2 text-xs text-base-content/55">
+                  <summary className="cursor-pointer font-medium text-base-content/70">Technical details</summary>
+                  <p className="mt-2 leading-5">{technicalStatus}</p>
+                </details>
               ) : null}
               {error ? (
                 <p role="alert" className="mt-3 text-xs leading-5 text-red-100">

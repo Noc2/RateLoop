@@ -7,6 +7,11 @@ import { ConnectButton, ThirdwebProvider, useActiveAccount } from "thirdweb/reac
 import { rateLoopThirdwebWallets, thirdwebBrowserClient } from "~~/lib/thirdweb/client";
 import type { PublicFeedbackBonusEntitlement } from "~~/lib/tokenless/feedbackBonusRecipientClaims";
 import {
+  LEGACY_RECOVERY_PREFIX,
+  listDeviceRecoveries,
+  parseDeviceRecoveryBackup,
+} from "~~/lib/tokenless/rater/deviceRecovery";
+import {
   assertFeedbackBonusEntitlementForRecovery,
   buildFeedbackBonusClaimAuthorization,
   verifyFeedbackBonusClaimEvidence,
@@ -14,9 +19,7 @@ import {
 import { importTokenlessRecoveryPackage } from "~~/lib/tokenless/rater/recovery";
 import type { TokenlessRaterRoundSecrets } from "~~/lib/tokenless/rater/types";
 
-const RECOVERY_PREFIX = "rateloop:rater-recovery:";
-
-type RecoverySource = { id: string; label: string; serialized: string };
+type RecoverySource = { id: string; label: string; recoveryPackage: string; recoverySecret: string | null };
 
 async function readJson(response: Response) {
   const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
@@ -53,15 +56,25 @@ function FeedbackBonusClaimsControls() {
   const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    const found: RecoverySource[] = [];
+    const found: RecoverySource[] = listDeviceRecoveries().map(record => ({
+      id: `device:${record.voteKey.toLowerCase()}`,
+      label: `Round ${record.roundId} · this device`,
+      recoveryPackage: record.recoveryPackage,
+      recoverySecret: record.recoverySecret,
+    }));
     try {
       for (let index = 0; index < localStorage.length; index += 1) {
         const key = localStorage.key(index);
-        if (!key?.startsWith(RECOVERY_PREFIX)) continue;
+        if (!key?.startsWith(LEGACY_RECOVERY_PREFIX)) continue;
         const serialized = localStorage.getItem(key);
         if (!serialized) continue;
-        const roundId = key.slice(RECOVERY_PREFIX.length);
-        found.push({ id: key, label: `Round ${roundId} · this device`, serialized });
+        const roundId = key.slice(LEGACY_RECOVERY_PREFIX.length);
+        found.push({
+          id: key,
+          label: `Round ${roundId} · legacy package`,
+          recoveryPackage: serialized,
+          recoverySecret: null,
+        });
       }
     } catch {
       // File import remains available when browser storage is blocked.
@@ -82,7 +95,14 @@ function FeedbackBonusClaimsControls() {
     if (!file) return;
     resetEvidence();
     try {
-      const source = { id: "uploaded", label: file.name, serialized: await file.text() };
+      const serialized = await file.text();
+      const backup = parseDeviceRecoveryBackup(serialized);
+      const source: RecoverySource = {
+        id: "uploaded",
+        label: file.name,
+        recoveryPackage: backup?.recoveryPackage ?? serialized,
+        recoverySecret: backup?.recoverySecret ?? null,
+      };
       setUploadedSource(source);
       setSelectedSource(source.id);
     } catch {
@@ -94,14 +114,19 @@ function FeedbackBonusClaimsControls() {
     const source =
       selectedSource === uploadedSource?.id ? uploadedSource : sources.find(value => value.id === selectedSource);
     if (!source) {
-      setError("Choose a saved recovery package or import one first.");
+      setError("Choose a saved review or import a backup first.");
+      return;
+    }
+    const secret = source.recoverySecret ?? recoverySecret;
+    if (secret.length < 12) {
+      setError("Enter the secret for this legacy package.");
       return;
     }
     setBusy(true);
     setError(null);
-    setStatus("Decrypting the recovery package in this browser…");
+    setStatus("Opening the saved review on this device…");
     try {
-      const recovered = await importTokenlessRecoveryPackage(source.serialized, recoverySecret);
+      const recovered = await importTokenlessRecoveryPackage(source.recoveryPackage, secret);
       const response = await readJson(
         await fetch(
           `/api/rater/feedback-bonus-entitlements?roundId=${encodeURIComponent(
@@ -116,7 +141,7 @@ function FeedbackBonusClaimsControls() {
       setItems(entitlements);
       setStatus(
         entitlements.length
-          ? "Live Feedback Bonus evidence matches this local recovery package."
+          ? "Feedback Bonus evidence matches this saved review."
           : "No Feedback Bonus is registered for this public response yet.",
       );
     } catch (cause) {
@@ -173,7 +198,7 @@ function FeedbackBonusClaimsControls() {
       setItems(current =>
         current.map(item => (item.poolId === entitlement.poolId ? { ...item, claimed: true } : item)),
       );
-      setStatus(`${usdc(entitlement.awardAmountAtomic)} claimed to the payout address in your recovery package.`);
+      setStatus(`${usdc(entitlement.awardAmountAtomic)} claimed to the saved payout address.`);
     } catch (cause) {
       setStatus(null);
       setError(cause instanceof Error ? cause.message : "Unable to claim this Feedback Bonus.");
@@ -183,6 +208,8 @@ function FeedbackBonusClaimsControls() {
   }
 
   const allSources = uploadedSource ? [...sources, uploadedSource] : sources;
+  const activeSource = allSources.find(source => source.id === selectedSource);
+  const needsLegacySecret = Boolean(activeSource && !activeSource.recoverySecret);
   const claimable = items.some(item => item.awarded && !item.claimed);
 
   return (
@@ -192,12 +219,11 @@ function FeedbackBonusClaimsControls() {
         Claim a Feedback Bonus
       </h2>
       <p className="mt-2 text-sm leading-6 text-base-content/60">
-        Your recovery package opens the payout commitment locally. Checking sends RateLoop only the public round and
-        vote key; claiming reveals the committed payout address and salt on-chain.
+        RateLoop checks the selected review on this device. Claim details stay behind the technical disclosure.
       </p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div className="mt-4">
         <label className="text-sm">
-          Recovery package
+          Saved review
           <select
             className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
             value={selectedSource}
@@ -206,7 +232,7 @@ function FeedbackBonusClaimsControls() {
               setSelectedSource(event.target.value);
             }}
           >
-            <option value="">Choose a package</option>
+            <option value="">Choose a review</option>
             {allSources.map(source => (
               <option key={source.id} value={source.id}>
                 {source.label}
@@ -214,25 +240,30 @@ function FeedbackBonusClaimsControls() {
             ))}
           </select>
         </label>
-        <label className="text-sm">
-          Recovery secret
-          <input
-            className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-            type="password"
-            value={recoverySecret}
-            onChange={event => {
-              resetEvidence();
-              setRecoverySecret(event.target.value);
-            }}
-            minLength={12}
-            maxLength={1024}
-            autoComplete="off"
-          />
-        </label>
       </div>
+      {needsLegacySecret ? (
+        <details className="mt-3 rounded-lg border border-white/10 p-3 text-sm text-base-content/60">
+          <summary className="cursor-pointer font-medium">Legacy recovery</summary>
+          <label className="mt-3 block text-xs">
+            Legacy recovery secret
+            <input
+              className="input input-sm mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+              type="password"
+              value={recoverySecret}
+              onChange={event => {
+                resetEvidence();
+                setRecoverySecret(event.target.value);
+              }}
+              minLength={12}
+              maxLength={1024}
+              autoComplete="off"
+            />
+          </label>
+        </details>
+      ) : null}
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <label className="rateloop-secondary-action cursor-pointer rounded-lg px-4 py-2 text-sm">
-          Import package
+          Import backup
           <input
             className="sr-only"
             type="file"
@@ -243,7 +274,7 @@ function FeedbackBonusClaimsControls() {
         <button
           type="button"
           className="rateloop-gradient-action px-4 text-sm"
-          disabled={busy || recoverySecret.length < 12 || !selectedSource}
+          disabled={busy || !selectedSource || (needsLegacySecret && recoverySecret.length < 12)}
           onClick={() => void checkEntitlements()}
         >
           {busy ? "Checking…" : "Check bonus"}
@@ -282,15 +313,15 @@ function FeedbackBonusClaimsControls() {
       {claimable && !account && thirdwebBrowserClient ? (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 p-4">
           <p className="text-sm text-base-content/60">
-            Any connected wallet can relay; funds go only to the committed payout address.
+            Connect a wallet to claim. Funds go only to the saved payout address.
           </p>
           <ConnectButton
             client={thirdwebBrowserClient}
             chain={baseSepolia}
             chains={[baseSepolia]}
             wallets={rateLoopThirdwebWallets}
-            connectButton={{ label: "Connect relayer wallet" }}
-            connectModal={{ showThirdwebBranding: false, size: "compact", title: "Connect a relayer wallet" }}
+            connectButton={{ label: "Connect wallet" }}
+            connectModal={{ showThirdwebBranding: false, size: "compact", title: "Connect wallet" }}
           />
         </div>
       ) : null}
@@ -304,6 +335,13 @@ function FeedbackBonusClaimsControls() {
           {error}
         </p>
       ) : null}
+      <details className="mt-4 text-xs text-base-content/55">
+        <summary className="cursor-pointer font-medium text-base-content/70">Technical details</summary>
+        <p className="mt-2 leading-5">
+          Checking sends only the public round and vote key. Claiming reveals the committed payout address and salt
+          on-chain. Any connected wallet may relay; funds still go to the committed payout address.
+        </p>
+      </details>
     </section>
   );
 }
