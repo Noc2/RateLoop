@@ -101,4 +101,5 @@ test("assigned review renders blinded choices, failure tags, rationale, lease de
   assert.match(html, /unpaid invited review, so no settlement reference is expected/i);
   assert.match(html, /Case 1 of 1/);
   assert.match(html, /Keyboard: 1 or 2 selects/);
+  assert.match(html, /Access:/);
 });

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { Hex } from "viem";
 import { type PublicQuestionMedia, QuestionMedia } from "~~/components/tokenless/answer/QuestionMedia";
+import { DeadlineChip } from "~~/components/tokenless/review/DeadlineChip";
 import { ReviewerShell } from "~~/components/tokenless/review/ReviewerShell";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { readJson } from "~~/lib/tokenless/http";
@@ -23,6 +24,7 @@ import {
 } from "~~/lib/tokenless/rater/publicResponse";
 import { buildPublicVoucherRequest } from "~~/lib/tokenless/rater/publicVoucherRequest";
 import type { TokenlessQueuedCommit } from "~~/lib/tokenless/rater/queue";
+import { clearReviewDraft, loadReviewDraft, saveReviewDraft } from "~~/lib/tokenless/reviewDrafts";
 import { formatUsdcAtomic } from "~~/lib/tokenless/usdc";
 
 export type PublicAnswerTask = {
@@ -88,6 +90,27 @@ function usdc(value: string) {
   return formatUsdcAtomic(value, { includeUnit: false, minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+type PublicReviewDraft = {
+  answer: "yes" | "no" | null;
+  prediction: number | null;
+  feedbackCategory: PublicRaterResponseCategory;
+  feedbackBody: string;
+  sourceUrl: string;
+};
+
+function isPublicReviewDraft(value: unknown): value is PublicReviewDraft {
+  if (!value || typeof value !== "object") return false;
+  const draft = value as Partial<PublicReviewDraft>;
+  return (
+    [null, "yes", "no"].includes(draft.answer ?? null) &&
+    (draft.prediction === null || [10, 30, 50, 70, 90].includes(draft.prediction ?? -1)) &&
+    typeof draft.feedbackCategory === "string" &&
+    PUBLIC_RATER_RESPONSE_CATEGORIES.includes(draft.feedbackCategory as PublicRaterResponseCategory) &&
+    typeof draft.feedbackBody === "string" &&
+    typeof draft.sourceUrl === "string"
+  );
+}
+
 export function PublicQuestionCard({
   task,
   paidAccess,
@@ -110,8 +133,27 @@ export function PublicQuestionCard({
   const [feedbackBody, setFeedbackBody] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [savedCommit, setSavedCommit] = useState<TokenlessQueuedCommit | null>(null);
+  const [draftRestored, setDraftRestored] = useState(false);
   const rationaleRef = useRef<HTMLTextAreaElement>(null);
   const feedbackEnabled = task.question.rationale?.mode !== "off";
+
+  useEffect(() => {
+    const draft = loadReviewDraft("public", task.roundId, isPublicReviewDraft);
+    if (draft) {
+      setAnswer(draft.answer);
+      setPrediction(draft.prediction);
+      setFeedbackCategory(draft.feedbackCategory);
+      setFeedbackBody(draft.feedbackBody);
+      setSourceUrl(draft.sourceUrl);
+      if (draft.feedbackBody || draft.sourceUrl) setFeedbackOpen(true);
+    }
+    setDraftRestored(true);
+  }, [task.roundId]);
+
+  useEffect(() => {
+    if (!draftRestored) return;
+    saveReviewDraft("public", task.roundId, { answer, prediction, feedbackCategory, feedbackBody, sourceUrl });
+  }, [answer, draftRestored, feedbackBody, feedbackCategory, prediction, sourceUrl, task.roundId]);
 
   useEffect(() => {
     if (!recoveryPackage) {
@@ -169,6 +211,7 @@ export function PublicQuestionCard({
       if (committed.state === "confirmed") {
         await createIndexedDbTokenlessCommitQueue().remove(savedCommit.queueId);
         setSavedCommit(null);
+        clearReviewDraft("public", task.roundId);
         setStatus("Answer and feedback confirmed. The panel rating stays hidden until settlement.");
         onSubmitted();
       } else if (committed.state === "failed") {
@@ -291,6 +334,7 @@ export function PublicQuestionCard({
       if (current.state === "confirmed") {
         await queue.remove(queueId);
         setSavedCommit(null);
+        clearReviewDraft("public", task.roundId);
         setStatus("Answer and feedback confirmed. The panel rating stays hidden until settlement.");
         onSubmitted();
       } else if (current.state === "failed") {
@@ -343,6 +387,7 @@ export function PublicQuestionCard({
         <>
           <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Public review</p>
           <p className="mt-1 text-sm text-base-content/60">Guaranteed ${usdc(task.earnings.guaranteedBaseAtomic)}</p>
+          <DeadlineChip deadline={task.voucherDeadline} label="Submit" />
         </>
       }
       onAdvance={() => void (savedCommit ? retrySavedCommit() : submitResponse())}
@@ -381,6 +426,7 @@ export function PublicQuestionCard({
                   <button
                     key={value}
                     type="button"
+                    aria-pressed={answer === value}
                     className={`tab-control flex items-center justify-center gap-1.5 px-3 py-3 text-sm font-semibold transition-colors ${
                       answer === value
                         ? value === "yes"
@@ -453,6 +499,7 @@ export function PublicQuestionCard({
                   <button
                     key={value}
                     type="button"
+                    aria-pressed={prediction === value}
                     className={`rounded-md px-1 py-2 text-xs transition-colors ${
                       prediction === value ? "pill-active" : "pill-inactive"
                     }`}

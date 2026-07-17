@@ -1,11 +1,13 @@
 "use client";
 
-import { FormEvent, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { DeadlineChip } from "~~/components/tokenless/review/DeadlineChip";
 import { ReviewerShell } from "~~/components/tokenless/review/ReviewerShell";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { Chip } from "~~/components/tokenless/ui/Chip";
 import { HttpJsonError, readJson } from "~~/lib/tokenless/http";
+import { clearReviewDraft, loadReviewDraft, saveReviewDraft } from "~~/lib/tokenless/reviewDrafts";
 import { REVIEWER_EXPERTISE } from "~~/lib/tokenless/reviewerExpertiseOptions";
 
 type QualificationProvenance = {
@@ -107,6 +109,18 @@ function emptyDrafts(cases: ReviewCase[]) {
   ) as Record<string, ReviewDraft>;
 }
 
+function isPrivateDrafts(value: unknown): value is Record<string, ReviewDraft> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  return Object.values(value).every(
+    draft =>
+      Boolean(draft && typeof draft === "object") &&
+      [null, "A", "B"].includes((draft as ReviewDraft).selectedOption) &&
+      Array.isArray((draft as ReviewDraft).failureTags) &&
+      (draft as ReviewDraft).failureTags.every(tag => typeof tag === "string") &&
+      typeof (draft as ReviewDraft).rationale === "string",
+  );
+}
+
 export function HumanAssuranceRaterClient({
   initialAssignmentId = "",
   initialServerAcceptance = null,
@@ -135,6 +149,7 @@ export function HumanAssuranceRaterClient({
   const [canRecover, setCanRecover] = useState(false);
   const [serverAcceptance, setServerAcceptance] = useState<AssuranceServerAcceptance | null>(initialServerAcceptance);
   const [activeCaseIndex, setActiveCaseIndex] = useState(0);
+  const [restoredDraftKey, setRestoredDraftKey] = useState<string | null>(null);
   const rationaleRef = useRef<HTMLTextAreaElement>(null);
 
   const leaseDeadline = useMemo(() => {
@@ -164,6 +179,24 @@ export function HumanAssuranceRaterClient({
       (drafts[activeCase.caseId]?.rationale.trim().length ?? 0) >= Math.max(10, task.rubric.rationale.minLength ?? 0) &&
       (drafts[activeCase.caseId]?.rationale.trim().length ?? 0) <= Math.min(2_000, task.rubric.rationale.maxLength),
   );
+
+  useEffect(() => {
+    if (!task || serverAcceptance) return;
+    const restored = loadReviewDraft("private", task.assignmentId, isPrivateDrafts);
+    if (restored) {
+      const next = emptyDrafts(task.cases);
+      for (const reviewCase of task.cases) {
+        if (restored[reviewCase.caseId]) next[reviewCase.caseId] = restored[reviewCase.caseId];
+      }
+      setDrafts(next);
+    }
+    setRestoredDraftKey(task.assignmentId);
+  }, [serverAcceptance, task]);
+
+  useEffect(() => {
+    if (!task || serverAcceptance || restoredDraftKey !== task.assignmentId) return;
+    saveReviewDraft("private", task.assignmentId, drafts);
+  }, [drafts, restoredDraftKey, serverAcceptance, task]);
 
   async function loadAssignment(id: string) {
     const body = await readJson(
@@ -289,6 +322,7 @@ export function HumanAssuranceRaterClient({
         throw new Error("The response acceptance was incomplete.");
       }
       setServerAcceptance(body as AssuranceServerAcceptance);
+      clearReviewDraft("private", task.assignmentId);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The server did not accept this response batch.");
     } finally {
@@ -443,6 +477,7 @@ export function HumanAssuranceRaterClient({
                     Private assignment
                   </p>
                   <p className="mt-1 text-sm text-base-content/60">Short-lived, logged access</p>
+                  <DeadlineChip deadline={leaseDeadline} label="Access" />
                 </>
               }
               onAdvance={advanceReview}

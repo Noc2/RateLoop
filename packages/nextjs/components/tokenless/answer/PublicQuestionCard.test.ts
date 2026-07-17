@@ -26,4 +26,8 @@ test("an already reserved voucher retries the prepared device queue and waits fo
   assert.match(source, /confirmation is still pending/i);
   assert.match(source, /remove\(savedCommit\.queueId\)/);
   assert.match(source, /<ReviewerShell/);
+  assert.match(source, /<DeadlineChip/);
+  assert.match(source, /loadReviewDraft\("public"/);
+  assert.match(source, /saveReviewDraft\("public"/);
+  assert.match(source, /clearReviewDraft\("public"/);
 });
