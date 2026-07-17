@@ -9,3 +9,9 @@ test("account and security notifications cannot be disabled", () => {
   assert.match(source, /disabled=\{savingPreferences \|\| option\.key === "accountSecurity"\}/);
   assert.match(source, /Required for important sign-in and account changes/);
 });
+
+test("oversight alert email is a listed preference that defaults to off", () => {
+  assert.match(source, /key: "oversightAlerts"/);
+  assert.match(source, /oversightAlerts: false/);
+  assert.match(source, /Email is opt-in/);
+});

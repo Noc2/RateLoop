@@ -40,10 +40,15 @@ test("tokenless notification preferences require every supported boolean", () =>
     paymentUpdates: true,
     askResults: true,
     accountSecurity: true,
+    oversightAlerts: false,
   });
   assert.throws(
     () => normalizeNotificationPreferences({ ...DEFAULT_TOKENLESS_NOTIFICATION_PREFERENCES, askResults: "yes" }),
     /askResults must be a boolean/,
+  );
+  assert.throws(
+    () => normalizeNotificationPreferences({ ...DEFAULT_TOKENLESS_NOTIFICATION_PREFERENCES, oversightAlerts: "on" }),
+    /oversightAlerts must be a boolean/,
   );
   assert.throws(
     () => normalizeNotificationPreferences({ ...DEFAULT_TOKENLESS_NOTIFICATION_PREFERENCES, accountSecurity: false }),
@@ -64,6 +69,7 @@ test("notification preferences accept an opaque Better Auth principal", async ()
     ...DEFAULT_TOKENLESS_NOTIFICATION_PREFERENCES,
     assignmentCompleted: false,
     askResults: false,
+    oversightAlerts: true,
   };
   assert.deepEqual(await upsertTokenlessNotificationPreferences(PRINCIPAL, preferences), preferences);
   assert.deepEqual(await getTokenlessNotificationPreferences(PRINCIPAL), preferences);

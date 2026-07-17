@@ -6,6 +6,8 @@ import { formatEvidenceDeliveryDate, readEvidenceDeliveryJson } from "./evidence
 
 const EVENT_TYPES = [
   ["ai.rateloop.review.completed", "Review completed"],
+  ["ai.rateloop.review.failed", "Review failed"],
+  ["ai.rateloop.review.expired", "Review expired"],
   ["ai.rateloop.packet.anchored", "Packet anchored"],
   ["ai.rateloop.gate.blocked", "Gate blocked"],
 ] as const;

@@ -9,6 +9,7 @@ export const TOKENLESS_NOTIFICATION_KEYS = [
   "paymentUpdates",
   "askResults",
   "accountSecurity",
+  "oversightAlerts",
 ] as const;
 
 export type TokenlessNotificationKey = (typeof TOKENLESS_NOTIFICATION_KEYS)[number];
@@ -27,6 +28,9 @@ export const DEFAULT_TOKENLESS_NOTIFICATION_PREFERENCES: TokenlessNotificationPr
   paymentUpdates: true,
   askResults: true,
   accountSecurity: true,
+  // Oversight alert email stays opt-in: the alert always lands in-app, but a
+  // person must enable the email channel deliberately.
+  oversightAlerts: false,
 };
 
 export const DEFAULT_TOKENLESS_EMAIL_SETTINGS: TokenlessEmailNotificationSettings = {
@@ -57,6 +61,7 @@ function preferencesFromRow(row: Row | undefined): TokenlessNotificationPreferen
     paymentUpdates: readBoolean(row, "payment_updates", true),
     askResults: readBoolean(row, "ask_results", true),
     accountSecurity: true,
+    oversightAlerts: readBoolean(row, "oversight_alerts", false),
   };
 }
 
@@ -89,7 +94,8 @@ export function normalizeNotificationEmail(value: unknown) {
 export async function getTokenlessNotificationPreferences(address: string) {
   const principal = principalAddress(address);
   const result = await dbClient.execute({
-    sql: `SELECT assignment_available, assignment_completed, payment_updates, ask_results, account_security
+    sql: `SELECT assignment_available, assignment_completed, payment_updates, ask_results, account_security,
+                 oversight_alerts
           FROM tokenless_notification_preferences
           WHERE principal_address = ? LIMIT 1`,
     args: [principal],
@@ -105,14 +111,15 @@ export async function upsertTokenlessNotificationPreferences(
   const now = new Date();
   await dbClient.execute({
     sql: `INSERT INTO tokenless_notification_preferences
-          (principal_address, assignment_available, assignment_completed, payment_updates, ask_results, account_security, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          (principal_address, assignment_available, assignment_completed, payment_updates, ask_results, account_security, oversight_alerts, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT (principal_address) DO UPDATE SET
             assignment_available = EXCLUDED.assignment_available,
             assignment_completed = EXCLUDED.assignment_completed,
             payment_updates = EXCLUDED.payment_updates,
             ask_results = EXCLUDED.ask_results,
             account_security = EXCLUDED.account_security,
+            oversight_alerts = EXCLUDED.oversight_alerts,
             updated_at = EXCLUDED.updated_at`,
     args: [
       principal,
@@ -121,6 +128,7 @@ export async function upsertTokenlessNotificationPreferences(
       preferences.paymentUpdates,
       preferences.askResults,
       true,
+      preferences.oversightAlerts,
       now,
       now,
     ],
@@ -185,7 +193,8 @@ function emailSettingsFromRow(row: Row | undefined, deliveryConfigured: boolean)
 export async function getTokenlessEmailNotificationSettings(address: string, deliveryConfigured: boolean) {
   const principal = principalAddress(address);
   const result = await dbClient.execute({
-    sql: `SELECT email, verified_at, assignment_available, assignment_completed, payment_updates, ask_results, account_security
+    sql: `SELECT email, verified_at, assignment_available, assignment_completed, payment_updates, ask_results,
+                 account_security, oversight_alerts
           FROM tokenless_notification_email_subscriptions
           WHERE principal_address = ? LIMIT 1`,
     args: [principal],
@@ -198,7 +207,7 @@ export async function getTokenlessEmailNotificationSubscription(address: string)
   const result = await dbClient.execute({
     sql: `SELECT principal_address, email, verified_at, verification_token_hash, verification_expires_at,
                  unsubscribe_token_hash, assignment_available, assignment_completed, payment_updates, ask_results,
-                 account_security, created_at, updated_at
+                 account_security, oversight_alerts, created_at, updated_at
           FROM tokenless_notification_email_subscriptions
           WHERE principal_address = ? LIMIT 1`,
     args: [principal],
@@ -236,8 +245,8 @@ export async function upsertTokenlessEmailNotificationSettings(
   await dbClient.execute({
     sql: `INSERT INTO tokenless_notification_email_subscriptions
           (principal_address, email, verified_at, verification_token_hash, verification_expires_at, unsubscribe_token_hash,
-           assignment_available, assignment_completed, payment_updates, ask_results, account_security, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           assignment_available, assignment_completed, payment_updates, ask_results, account_security, oversight_alerts, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT (principal_address) DO UPDATE SET
             email = EXCLUDED.email,
             verified_at = EXCLUDED.verified_at,
@@ -249,6 +258,7 @@ export async function upsertTokenlessEmailNotificationSettings(
             payment_updates = EXCLUDED.payment_updates,
             ask_results = EXCLUDED.ask_results,
             account_security = EXCLUDED.account_security,
+            oversight_alerts = EXCLUDED.oversight_alerts,
             updated_at = EXCLUDED.updated_at`,
     args: [
       principal,
@@ -262,6 +272,7 @@ export async function upsertTokenlessEmailNotificationSettings(
       preferences.paymentUpdates,
       preferences.askResults,
       true,
+      preferences.oversightAlerts,
       existing?.created_at ?? now,
       now,
     ],

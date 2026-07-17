@@ -22,6 +22,8 @@ const WEBHOOK_EVENTS = new Set([
   "result.ready",
   "result.updated",
   "ai.rateloop.review.completed",
+  "ai.rateloop.review.failed",
+  "ai.rateloop.review.expired",
   "ai.rateloop.packet.anchored",
   "ai.rateloop.gate.blocked",
 ]);

@@ -3,6 +3,7 @@ import "server-only";
 import { dbClient } from "~~/lib/db";
 import { sendTokenlessNotificationEmail } from "~~/lib/notifications/resend";
 import { type TokenlessNotificationKey, buildTokenlessSignedUnsubscribeToken } from "~~/lib/notifications/tokenless";
+import { materializeOversightAlertNotifications } from "~~/lib/tokenless/oversightAlerts";
 
 type Row = Record<string, unknown>;
 
@@ -247,7 +248,8 @@ export async function enqueueTokenlessNotificationEmails(input: { limit?: number
           WHERE d.delivery_id IS NULL AND s.verified_at IS NOT NULL AND s.unsubscribe_token_hash IS NOT NULL
             AND n.created_at >= s.verified_at
             AND n.preference_key IN (
-              'assignmentAvailable', 'assignmentCompleted', 'paymentUpdates', 'askResults', 'accountSecurity'
+              'assignmentAvailable', 'assignmentCompleted', 'paymentUpdates', 'askResults', 'accountSecurity',
+              'oversightAlerts'
             )
           ORDER BY n.created_at ASC LIMIT ?`,
     args: [bounded(input.limit)],
@@ -283,6 +285,7 @@ function preferenceEnabled(row: Row, key: string) {
     askResults: "ask_results",
     assignmentAvailable: "assignment_available",
     assignmentCompleted: "assignment_completed",
+    oversightAlerts: "oversight_alerts",
     paymentUpdates: "payment_updates",
   };
   const selected = column[key];
@@ -331,7 +334,8 @@ export async function deliverPendingTokenlessNotificationEmails(input: {
     sql: `SELECT d.delivery_id, d.notification_id, d.principal_address, d.preference_key, d.attempt_count,
                  n.title, n.body, n.href,
                  s.email, s.verified_at, s.unsubscribe_token_hash,
-                 s.assignment_available, s.assignment_completed, s.payment_updates, s.ask_results, s.account_security
+                 s.assignment_available, s.assignment_completed, s.payment_updates, s.ask_results, s.account_security,
+                 s.oversight_alerts
           FROM tokenless_notification_email_deliveries d
           JOIN tokenless_notifications n ON n.notification_id = d.notification_id
           LEFT JOIN tokenless_notification_email_subscriptions s ON s.principal_address = d.principal_address
@@ -407,13 +411,14 @@ export async function runTokenlessNotificationCycle(input: { appOrigin: string; 
   const now = input.now ?? new Date();
   const limit = bounded(input.limit);
   const materialized = await materializeTokenlessLifecycleNotifications({ now, limit });
+  const alerts = await materializeOversightAlertNotifications({ now, limit });
   const enqueued = await enqueueTokenlessNotificationEmails({ now, limit });
   const outcomes = await deliverPendingTokenlessNotificationEmails({ appOrigin: input.appOrigin, now, limit });
   return {
     dead: outcomes.filter(value => value.state === "dead").length,
     delivered: outcomes.filter(value => value.state === "delivered").length,
     enqueued: enqueued.inserted,
-    materialized: materialized.inserted,
+    materialized: materialized.inserted + alerts.inserted,
     retry: outcomes.filter(value => value.state === "retry").length,
     suppressed: outcomes.filter(value => value.state === "suppressed").length,
   };

@@ -14,6 +14,7 @@ import {
   listAssuranceEventStreams,
   listAssuranceEvents,
   projectAssuranceLifecycleEvents,
+  terminalFailureEventType,
 } from "~~/lib/tokenless/assuranceEventStreaming";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -487,6 +488,136 @@ test("lifecycle projection emits completed, blocked, and anchored events with ex
     args: [fixture.workspaceId],
   });
   assert.equal(Number(auditCount.rows[0]?.count), 4);
+});
+
+test("terminal failures project as review.failed or review.expired with gate-transition evidence", async () => {
+  // Classification: expiry signals mark the event as expired; everything else fails.
+  assert.equal(terminalFailureEventType(JSON.stringify(["all_assignments_expired"])), "ai.rateloop.review.expired");
+  assert.equal(terminalFailureEventType(JSON.stringify(["response_deadline_elapsed"])), "ai.rateloop.review.expired");
+  assert.equal(terminalFailureEventType(JSON.stringify(["adapter_failure"])), "ai.rateloop.review.failed");
+  assert.equal(terminalFailureEventType("not json"), "ai.rateloop.review.failed");
+
+  // The new event types carry gate-transition evidence, never a decision packet.
+  const failed = buildAssuranceCloudEvent({
+    workspaceId: "ws_test",
+    sourceEventId: "review:failed:transition_1",
+    eventType: "ai.rateloop.review.failed",
+    evidenceReference: {
+      schemaVersion: "rateloop.assurance-event-reference.v1",
+      kind: "gate_transition",
+      digest: HASH("7"),
+    },
+    evidenceChain: CHAIN_REFERENCE,
+    occurredAt: NOW,
+  });
+  assert.equal(failed.event.rateloopevidencekind, "gate_transition");
+  assert.equal(failed.ocsf.severity, "High");
+  assert.equal("ratelooppackethash" in failed.event, false);
+  assert.throws(
+    () =>
+      buildAssuranceCloudEvent({
+        workspaceId: "ws_test",
+        sourceEventId: "review:expired:transition_1",
+        eventType: "ai.rateloop.review.expired",
+        evidenceReference: PACKET_REFERENCE,
+        evidenceChain: CHAIN_REFERENCE,
+        occurredAt: NOW,
+      }),
+    /Blocked, failed, and expired events require a gate-transition reference/u,
+  );
+
+  const fixture = await seedLifecycleEventSources();
+  const insertTerminal = async (opportunityId: string, eventId: string, reasonCodes: string[], commitment: string) => {
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_agent_review_opportunity_lifecycles
+            (workspace_id,opportunity_id,state,state_revision,reason_codes_json,state_entered_at,terminal_at,
+             created_at,updated_at)
+            VALUES (?,?,'failed_terminal',3,?,?,?,?,?)`,
+      args: [fixture.workspaceId, opportunityId, JSON.stringify(reasonCodes), NOW, NOW, NOW, NOW],
+    });
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_agent_review_opportunity_transition_events
+            (event_id,workspace_id,opportunity_id,transition_key,from_state,to_state,from_revision,to_revision,
+             reason_codes_json,actor_kind,actor_reference,details_json,transition_commitment,occurred_at)
+            VALUES (?,?,?,?,'pending','failed_terminal',2,3,?,'service','stream-test','{}',?,?)`,
+      args: [
+        eventId,
+        fixture.workspaceId,
+        opportunityId,
+        `terminal:${opportunityId}`,
+        JSON.stringify(reasonCodes),
+        commitment,
+        NOW,
+      ],
+    });
+  };
+  // The seeded opportunities already project; add two fresh terminal failures.
+  const failedOpportunity = "aop_lifecycle_stream_failed";
+  const expiredOpportunity = "aop_lifecycle_stream_expired";
+  const seedOpportunity = async (opportunityId: string, externalId: string) => {
+    const template = await dbClient.execute({
+      sql: `SELECT * FROM tokenless_agent_review_opportunities WHERE workspace_id=? LIMIT 1`,
+      args: [fixture.workspaceId],
+    });
+    const row = template.rows[0] as Record<string, unknown>;
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_agent_review_opportunities
+            (opportunity_id,workspace_id,agent_id,agent_version_id,scope_id,policy_id,policy_version,
+             external_opportunity_id,suggestion_commitment,declared_confidence_bps,metadata_commitment,
+             metadata_complete,critical_risk,decision,review_rate_bps,selection_probability_bps,sample_bucket,
+             sampler_key_version,sampler_commitment,reason_codes_json,status,run_id,source_evidence_reference,
+             source_evidence_hash,human_review_binding_id,human_review_binding_version,request_profile_id,
+             request_profile_version,request_profile_hash,created_at,updated_at)
+            VALUES (?,?,?,?,?,?,1,?,?,9000,?,true,true,'required',10000,10000,1,'sampler-v1',?,'[]',
+                    'review_requested',NULL,'evidence/lifecycle',?,?,1,?,1,?,?,?)`,
+      args: [
+        opportunityId,
+        fixture.workspaceId,
+        row.agent_id,
+        row.agent_version_id,
+        row.scope_id,
+        row.policy_id,
+        externalId,
+        HASH("f"),
+        HASH("1"),
+        HASH("2"),
+        HASH("3"),
+        row.human_review_binding_id,
+        row.request_profile_id,
+        row.request_profile_hash,
+        NOW,
+        NOW,
+      ],
+    });
+  };
+  await seedOpportunity(failedOpportunity, "external-lifecycle-failed");
+  await seedOpportunity(expiredOpportunity, "external-lifecycle-expired");
+  const failedEventId = `hrtr_${"7".repeat(40)}`;
+  const expiredEventId = `hrtr_${"8".repeat(40)}`;
+  await insertTerminal(failedOpportunity, failedEventId, ["adapter_failure"], HASH("7"));
+  await insertTerminal(expiredOpportunity, expiredEventId, ["all_assignments_expired"], HASH("8"));
+
+  await projectAssuranceLifecycleEvents({ now: NOW, limit: 20 });
+  const stored = await dbClient.execute({
+    sql: `SELECT source_event_id,event_type,evidence_reference_kind,evidence_reference_digest,packet_hash
+          FROM tokenless_assurance_event_outbox
+          WHERE workspace_id=? AND event_type IN ('ai.rateloop.review.failed','ai.rateloop.review.expired')
+          ORDER BY event_type ASC`,
+    args: [fixture.workspaceId],
+  });
+  assert.equal(stored.rows.length, 2);
+  const byType = new Map(stored.rows.map(row => [String(row.event_type), row]));
+  assert.equal(String(byType.get("ai.rateloop.review.failed")?.source_event_id), failedEventId);
+  assert.equal(String(byType.get("ai.rateloop.review.failed")?.evidence_reference_digest), HASH("7"));
+  assert.equal(String(byType.get("ai.rateloop.review.expired")?.source_event_id), expiredEventId);
+  assert.equal(String(byType.get("ai.rateloop.review.expired")?.evidence_reference_digest), HASH("8"));
+  for (const row of stored.rows) {
+    assert.equal(row.evidence_reference_kind, "gate_transition");
+    assert.equal(row.packet_hash, null);
+  }
+
+  const replay = await projectAssuranceLifecycleEvents({ now: new Date(NOW.getTime() + 60_000), limit: 20 });
+  assert.equal(replay.scanned, 0);
 });
 
 test("deliveries retry with a stable payload and signature, recover expired leases, and re-check SSRF on every attempt", async () => {

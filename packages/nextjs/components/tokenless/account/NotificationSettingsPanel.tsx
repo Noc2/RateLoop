@@ -28,6 +28,11 @@ const notificationOptions = [
     label: "Account and security",
     description: "Required for important sign-in and account changes.",
   },
+  {
+    key: "oversightAlerts",
+    label: "Oversight alerts",
+    description: "Blocked gates, failed or expired reviews, workspace stops, and threshold alerts. Email is opt-in.",
+  },
 ] as const;
 
 type NotificationKey = (typeof notificationOptions)[number]["key"];
@@ -44,6 +49,7 @@ const defaultPreferences: Preferences = {
   paymentUpdates: true,
   askResults: true,
   accountSecurity: true,
+  oversightAlerts: false,
 };
 
 const defaultEmailSettings: EmailSettings = {
