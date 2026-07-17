@@ -17,6 +17,11 @@ import {
   revokeAgentPublishingPolicy,
 } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError, createTokenlessAsk, createTokenlessQuote } from "~~/lib/tokenless/server";
+import {
+  decodeTokenlessHandoffFragment,
+  validateTokenlessQuoteRequest,
+} from "~~/components/tokenless/TokenlessHandoffClient";
+import { createMcpHandoff } from "~~/lib/mcp/handoff";
 
 const ADDRESS_A: `0x${string}` = "0x1111111111111111111111111111111111111111";
 const ADDRESS_B: `0x${string}` = "0x2222222222222222222222222222222222222222";
@@ -533,6 +538,65 @@ test("policy revocation blocks the next delegated ask", async () => {
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "policy_revoked",
   );
+});
+
+test("a public browser handoff persists a discoverable public ask end to end", async () => {
+  // AUD-01 regression guard: the MCP handoff creator marks the ask public with a safe classification.
+  // The browser must carry that public-data contract through validation, quote, and ask so the persisted
+  // question record enters the public rater queue (raterService.listPaidRaterTasks requires visibility
+  // 'public' and a safe classification) instead of being silently downgraded to private/internal.
+  const redactionSummary = "Names and account identifiers were replaced with synthetic values.";
+  const handoff = createMcpHandoff(
+    {
+      confirmedNoSensitiveData: true,
+      dataClassification: "synthetic",
+      redactionSummary,
+      request: {
+        audience: { admissionPolicyHash: `0x${"ab".repeat(32)}`, source: "rateloop_network" },
+        budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
+        question: { kind: "binary", prompt: "Ship the synthetic reply?", rationale: { mode: "optional" } },
+        requestedPanelSize: 15,
+      },
+    },
+    "https://rateloop-tokenless.vercel.app",
+  );
+
+  // The browser decodes the fragment locally and re-validates the request it POSTs to /quote.
+  const decoded = decodeTokenlessHandoffFragment(new URL(handoff.handoffUrl).hash);
+  const browserRequest = validateTokenlessQuoteRequest(decoded.request);
+  assert.equal(browserRequest.visibility, "public");
+  assert.equal(browserRequest.dataClassification, "synthetic");
+  assert.equal(browserRequest.confirmedNoSensitiveData, true);
+
+  const { workspaceId, apiKeyId } = await workspaceWithKey();
+  await recordPrepaidLedgerEntry({ workspaceId, amountAtomic: "100000000", source: "invoice" });
+  const principal = { kind: "api_key" as const, apiKeyId, workspaceId, role: "member" as const };
+
+  const quote = await createTokenlessQuote(browserRequest);
+  await prepareProductAsk({
+    principal,
+    request: {
+      idempotencyKey: decoded.idempotencyKey,
+      payment: { mode: "prepaid" as const, workspaceId },
+      quoteId: quote.quoteId,
+    },
+  });
+
+  // The persisted question and content must satisfy the exact predicate the public rater queue applies.
+  const discoverable = await dbClient.execute({
+    sql: `SELECT q.visibility, q.data_classification, q.confirmed_no_sensitive_data, q.redaction_summary,
+                 c.data_classification AS content_classification
+          FROM tokenless_question_records q
+          JOIN tokenless_content_records c ON c.content_id = q.content_id
+          WHERE q.visibility = 'public' AND q.data_classification IN ('public', 'synthetic', 'redacted')`,
+  });
+  assert.equal(discoverable.rows.length, 1);
+  const row = discoverable.rows[0]!;
+  assert.equal(row.visibility, "public");
+  assert.equal(row.data_classification, "synthetic");
+  assert.equal(row.content_classification, "synthetic");
+  assert.equal(row.redaction_summary, redactionSummary);
+  assert.equal(Boolean(row.confirmed_no_sensitive_data), true);
 });
 
 test("x402 authorizations are limited to a short-lived signing window", () => {

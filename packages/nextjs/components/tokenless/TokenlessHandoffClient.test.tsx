@@ -27,10 +27,16 @@ test("insufficient prepaid handoffs link directly to workspace top-up settings",
   assert.match(handoffSource, /insufficientPrepaid/);
 });
 
+const REDACTION_SUMMARY = "Names and account identifiers were replaced with synthetic values.";
+
 function request(kind: "binary" | "head_to_head" = "binary") {
   return {
     audience: { admissionPolicyHash: `0x${"ab".repeat(32)}`, source: "rateloop_network" },
     budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
+    confirmedNoSensitiveData: true,
+    dataClassification: "synthetic",
+    redactionSummary: REDACTION_SUMMARY,
+    visibility: "public",
     question:
       kind === "binary"
         ? {
@@ -65,7 +71,7 @@ function payload(overrides: Record<string, unknown> = {}) {
     idempotencyKey: `mcp:${createHash("sha256").update(`${handoffId}\0${handoffToken}`).digest("base64url")}`,
     expiresAt: new Date(Number.parseInt("abcdef12", 36) * 1_000).toISOString(),
     dataClassification: "synthetic",
-    redactionSummary: "Names and account identifiers were replaced with synthetic values.",
+    redactionSummary: REDACTION_SUMMARY,
     request: request(),
     ...overrides,
   };
@@ -198,3 +204,45 @@ test("expired browser handoffs stop at one recovery action", () => {
   assert.match(handoffSource, /if \(handoff\.status === "expired"\)/);
   assert.match(handoffSource, /Ask the agent for a new link\./);
 });
+
+test("browser quote validation preserves the owner-approved public-data contract", () => {
+  const validated = validateTokenlessQuoteRequest(request());
+  assert.equal(validated.visibility, "public");
+  assert.equal(validated.dataClassification, "synthetic");
+  assert.equal(validated.redactionSummary, REDACTION_SUMMARY);
+  assert.equal(validated.confirmedNoSensitiveData, true);
+});
+
+test("browser quote validation rejects a stripped or downgraded public-data contract", () => {
+  const strip = (key: string) => {
+    const next = request() as Record<string, unknown>;
+    delete next[key];
+    return next;
+  };
+  assert.throws(() => validateTokenlessQuoteRequest(strip("visibility")), /request\.visibility must be/i);
+  assert.throws(() => validateTokenlessQuoteRequest(strip("dataClassification")), /request\.dataClassification must be/i);
+  assert.throws(
+    () => validateTokenlessQuoteRequest(strip("confirmedNoSensitiveData")),
+    /confirmedNoSensitiveData must be true/i,
+  );
+  assert.throws(
+    () => validateTokenlessQuoteRequest({ ...request(), dataClassification: "internal" }),
+    /dataClassification is unsupported/i,
+  );
+  assert.throws(
+    () => validateTokenlessQuoteRequest({ ...request(), dataClassification: "redacted", redactionSummary: "short" }),
+    /redaction summary of at least 10 characters/i,
+  );
+});
+
+test("handoff decoding rejects a privacy envelope that disagrees with the embedded request", () => {
+  assert.throws(
+    () => decodeTokenlessHandoffFragment(fragment(payload({ dataClassification: "public" }))),
+    /data classification does not match the embedded request/i,
+  );
+  assert.throws(
+    () => decodeTokenlessHandoffFragment(fragment(payload({ redactionSummary: `${REDACTION_SUMMARY} (edited)` }))),
+    /redaction summary does not match the embedded request/i,
+  );
+});
+

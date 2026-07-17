@@ -24,6 +24,7 @@ const BYTES32_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 const ATOMIC_PATTERN = /^(0|[1-9]\d*)$/;
 const REVIEWER_SOURCES = new Set(["customer_invited", "rateloop_network", "hybrid"]);
 const CLASSIFICATIONS = new Set(["public", "synthetic", "redacted"]);
+const VISIBILITIES = new Set(["public", "private"]);
 
 export type TokenlessHandoffPayload = {
   version: typeof HANDOFF_VERSION;
@@ -107,6 +108,20 @@ export function validateTokenlessQuoteRequest(value: unknown): TokenlessQuoteReq
   if (BigInt(attemptReserveAtomic) < BigInt(requestedPanelSize)) {
     throw new Error("request.budget.attemptReserveAtomic must cover every requested reviewer.");
   }
+  // Preserve the owner-approved public-data contract. The MCP handoff creator sets these four fields
+  // (lib/mcp/handoff.ts); dropping them here would let the server default the ask to private/internal,
+  // so a public paid ask would never enter the public rater queue.
+  const visibility = string(request.visibility, "request.visibility", 20);
+  if (!VISIBILITIES.has(visibility)) throw new Error("request.visibility must be public or private.");
+  const dataClassification = string(request.dataClassification, "request.dataClassification", 20);
+  if (!CLASSIFICATIONS.has(dataClassification)) throw new Error("request.dataClassification is unsupported.");
+  if (request.confirmedNoSensitiveData !== true) {
+    throw new Error("request.confirmedNoSensitiveData must be true for a browser handoff.");
+  }
+  const redactionSummary = string(request.redactionSummary, "request.redactionSummary", 1_000, true).trim();
+  if (dataClassification === "redacted" && redactionSummary.length < 10) {
+    throw new Error("Redacted questions require a redaction summary of at least 10 characters.");
+  }
   return {
     audience: {
       admissionPolicyHash: admissionPolicyHash as `0x${string}`,
@@ -117,9 +132,13 @@ export function validateTokenlessQuoteRequest(value: unknown): TokenlessQuoteReq
       bountyAtomic,
       feeBps: integer(budget.feeBps, "request.budget.feeBps", 0, 2_000),
     },
+    confirmedNoSensitiveData: true,
+    dataClassification: dataClassification as TokenlessQuoteRequest["dataClassification"],
     question: validateQuestion(request.question),
+    redactionSummary,
     requestedPanelSize,
     responseWindowSeconds,
+    visibility: visibility as TokenlessQuoteRequest["visibility"],
   };
 }
 
@@ -160,6 +179,15 @@ export function decodeTokenlessHandoffFragment(fragment: string, now = new Date(
     redactionSummary: string(payload.redactionSummary, "redactionSummary", 1_000, true),
     request: validateTokenlessQuoteRequest(payload.request),
   } satisfies TokenlessHandoffPayload;
+  // The outer handoff privacy envelope and the embedded request must describe the same data boundary.
+  // A mismatch means the fragment was tampered with or built inconsistently; reject rather than silently
+  // trusting either half.
+  if (result.dataClassification !== result.request.dataClassification) {
+    throw new Error("The handoff data classification does not match the embedded request.");
+  }
+  if (result.redactionSummary.trim() !== (result.request.redactionSummary ?? "").trim()) {
+    throw new Error("The handoff redaction summary does not match the embedded request.");
+  }
   if (expiresAtMs <= now.getTime())
     throw Object.assign(new Error("This handoff link has expired."), { payload: result });
   return result;
