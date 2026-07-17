@@ -6,8 +6,10 @@ RateLoop's workspace MCP endpoint uses Streamable HTTP and host-native OAuth:
 - URL: `https://rateloop-tokenless.vercel.app/api/agent/v1/mcp`
 - Download: [`/integrations/rateloop-workspace-mcp.json`](/integrations/rateloop-workspace-mcp.json)
 
-The downloadable JSON uses the common `mcpServers` shape used by compatible MCP clients. It contains no bearer token,
-API key, authorization header, or workspace identifier.
+The downloadable JSON is the URL-only configuration used by the bundled Codex and Claude plugins. MCP does not define
+a universal client configuration file: VS Code uses `servers`, Gemini CLI uses `mcpServers` with `httpUrl`, and hosted
+APIs use application-managed authorization. The download contains no bearer token, API key, authorization header, or
+workspace identifier. Use the primary Codex path or one named configuration below instead of renaming fields by guess.
 
 After the server is installed, paste the complete single-use RateLoop `/connect/aci_...#...` message into the agent once.
 The agent claims the intent, loads its bound policy, and verifies the connection. Installation, trust, organization policy,
@@ -48,6 +50,102 @@ unrelated plugins or create a replacement link.
 Do not put credentials in the MCP configuration. Do not create a background service or polling task to keep a connection
 alive.
 
+## Other MCP clients and support tiers
+
+RateLoop classifies the **host or integration** separately from the model. A model still needs reliable tool use, but the
+host owns MCP transport, OAuth, tool-result handling, approval UI, and session lifecycle. The syntax below was checked
+against the named vendors' documentation on 2026-07-17. Except where a row says **Verified**, that does not replace an
+end-to-end RateLoop install, authorization, lifecycle, and tool smoke test against a named client version.
+
+| Tier                | Meaning                                                                                                               |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Verified            | RateLoop runs release-gated install, authorization, lifecycle, and tool smoke tests against a named client version.   |
+| Protocol-compatible | The client documents Streamable HTTP and compatible OAuth, but RateLoop has not completed that release smoke test.    |
+| Application-managed | An SDK or hosted API can connect only after the embedding application obtains, refreshes, and supplies authorization. |
+| Public MCP only     | The host can use the separate unauthenticated browser-handoff server but cannot complete protected workspace OAuth.   |
+| Unsupported         | The host lacks remote HTTP MCP, OAuth, tool calling, or a required policy control.                                    |
+
+No protected-workspace host is yet in the **Verified** tier. The official MCP conformance runner has verified the public
+server's initialize and four-tool discovery path; it did not exercise an authenticated workspace connection.
+
+| Host or integration                                  | Current tier                      | Notes                                                                                                                                         |
+| ---------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Codex desktop with the RateLoop Workspace plugin     | Protocol-compatible; primary path | Bundled plugin, skill, and local contracts are tested. Add an installed-host release smoke test before naming a Codex version Verified.       |
+| Claude Code                                          | Protocol-compatible               | Remote HTTP OAuth is documented. Direct registration below does not install RateLoop's Claude hooks or make the host an enforcement boundary. |
+| GitHub Copilot Chat in local VS Code                 | Protocol-compatible               | This is the IDE client, not GitHub's cloud agent. RateLoop has not preregistered or guessed a VS Code OAuth client ID or redirect URI.        |
+| Gemini CLI                                           | Protocol-compatible               | Streamable HTTP, OAuth discovery, DCR, and server instructions are documented; its JSON transport field is `httpUrl`.                         |
+| OpenAI or Anthropic hosted MCP, and SDK integrations | Application-managed               | The embedding application owns token acquisition, refresh, storage, and injection. This is not the interactive plugin flow.                   |
+| GitHub Copilot cloud agent and code review           | Public MCP only                   | GitHub currently documents no support for remote OAuth MCP servers, so the protected workspace endpoint is unavailable.                       |
+| Non-tool-capable chat host                           | Unsupported                       | Model quality cannot substitute for an MCP agent loop.                                                                                        |
+
+### Claude Code
+
+Register the protected server at user scope, open Claude Code, run `/mcp`, and complete the browser authorization before
+pasting the single-use connection message:
+
+```sh
+claude mcp add --scope user --transport http rateloop-workspace https://rateloop-tokenless.vercel.app/api/agent/v1/mcp
+```
+
+This is the generic remote-server path. It does not install the repository's separate Claude plugin hooks or prove that
+Claude held an output. See [Anthropic's remote MCP and OAuth instructions](https://docs.anthropic.com/en/docs/claude-code/mcp).
+
+### GitHub Copilot Chat in local VS Code
+
+Put the protected server in the local IDE's user or workspace `mcp.json`, start it, then use VS Code's **Auth** action
+when it appears:
+
+```json
+{
+  "servers": {
+    "rateloop-workspace": {
+      "type": "http",
+      "url": "https://rateloop-tokenless.vercel.app/api/agent/v1/mcp"
+    }
+  }
+}
+```
+
+Do not add an invented `oauth.clientId` or redirect URI. If organization policy blocks MCP or authorization cannot be
+completed, prompts cannot bypass that control. This configuration is for
+[Copilot Chat in local VS Code](https://code.visualstudio.com/docs/agents/reference/mcp-configuration), not GitHub's
+cloud agent or code review.
+
+### Gemini CLI
+
+Register the protected server at user scope, start Gemini CLI, then run `/mcp auth rateloop-workspace` if authentication
+is required:
+
+```sh
+gemini mcp add --scope user --transport http rateloop-workspace https://rateloop-tokenless.vercel.app/api/agent/v1/mcp
+```
+
+The equivalent `settings.json` entry uses `httpUrl`, not `url` plus `type`:
+
+```json
+{
+  "mcpServers": {
+    "rateloop-workspace": {
+      "httpUrl": "https://rateloop-tokenless.vercel.app/api/agent/v1/mcp"
+    }
+  }
+}
+```
+
+Keep `trust` at its default `false` so tool confirmations remain available. See
+[Gemini CLI's Streamable HTTP and OAuth guidance](https://geminicli.com/docs/tools/mcp-server/).
+
+### Hosted APIs and GitHub cloud agents
+
+OpenAI and Anthropic hosted MCP connectors are application-managed: the caller must obtain and supply authorization and
+must not place tokens in prompts or static public configuration. GitHub Copilot cloud agent and code review are a
+different product from local Copilot Chat; GitHub currently documents that they cannot connect to a remote OAuth MCP
+server. They may use only RateLoop's separate public browser-handoff endpoint at
+`https://rateloop-tokenless.vercel.app/api/mcp` when repository policy and the public-data boundary allow it.
+
+Cursor or another host should not be presented with an install link, client ID, redirect URI, or copied JSON until that
+exact setup has been checked against its current vendor documentation and exercised in a RateLoop release smoke test.
+
 For the agent-readable packet fields, export routes, local verification commands, framework cross-references, and exact
 non-claims, read [`evidence.md`](./evidence.md). The browser version is [`/docs/evidence`](/docs/evidence).
 Framework-native LangGraph, OpenAI Agents, Claude Code, and MCP elicitation contracts are documented in
@@ -68,8 +166,7 @@ stale-plugin recovery above.
   `rateloop-workspace` contains the private workspace server and connection skill.
 - Install both plugins from the tokenless-pinned marketplace when both workflows are needed; do not add a second MCP entry
   manually. An unpinned `Noc2/RateLoop` Git marketplace resolves the separate legacy `main` product.
-- Generic clients may import the downloadable URL-only configuration when they support OAuth discovery for Streamable
-  HTTP MCP servers.
+- Do not present the downloadable plugin configuration as universal client JSON; use the named client syntax above.
 - A native VS Code manifest will be published only after RateLoop has verified and preregistered its public OAuth client
   ID and redirect behavior. No client ID or redirect URI is guessed in this repository.
 - Cursor installation metadata will be published only after its current deep-link format is verified. The repository does

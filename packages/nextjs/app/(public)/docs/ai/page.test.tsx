@@ -31,6 +31,15 @@ test("agent docs describe the approval-bound four-tool MCP surface and decision 
   assert.match(html, /first missing-tool check as activation pending/);
   assert.match(html, /still missing on a later active turn/);
   assert.doesNotMatch(html, /codex plugin marketplace add Noc2\/RateLoop(?:\s|<)/);
+  assert.match(html, /Other MCP clients and support levels/);
+  assert.match(html, /MCP compatibility belongs to the host and agent loop, not the model brand/);
+  assert.match(html, /Protocol-compatible/);
+  assert.match(html, /Application-managed/);
+  assert.match(html, /local GitHub Copilot Chat in VS Code/);
+  assert.match(html, /GitHub Copilot cloud agent and code review.*cannot use the protected workspace endpoint/i);
+  assert.match(html, /href="\/docs\/agent-connection\.md"/);
+  assert.match(html, /does not guess client IDs, redirect URIs, or install links/);
+  assert.doesNotMatch(html, /A common configuration shape|"mcpServers"/);
   assert.match(html, /rateloop_capabilities/);
   assert.match(html, /rateloop_create_handoff/);
   assert.match(html, /rateloop_get_handoff_status/);

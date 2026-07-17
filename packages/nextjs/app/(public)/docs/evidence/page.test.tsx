@@ -112,4 +112,13 @@ test("machine docs mirror evidence boundaries and are linked from agent setup", 
   assert.match(evidence, /rateloop-human-assurance-component-definition\.oscal\.json/);
   assert.match(connection, /\[`evidence\.md`\]\(\.\/evidence\.md\)/);
   assert.match(connection, /\[`\/docs\/evidence`\]\(\/docs\/evidence\)/);
+  assert.match(connection, /MCP does not define\s+a universal client configuration file/i);
+  assert.doesNotMatch(connection, /common `mcpServers` shape/);
+  assert.match(connection, /No protected-workspace host is yet in the \*\*Verified\*\* tier/);
+  assert.match(connection, /Claude Code[\s\S]*claude mcp add --scope user --transport http rateloop-workspace/);
+  assert.match(connection, /GitHub Copilot Chat in local VS Code[\s\S]*"servers"/);
+  assert.match(connection, /Gemini CLI[\s\S]*gemini mcp add --scope user --transport http rateloop-workspace/);
+  assert.match(connection, /"httpUrl": "https:\/\/rateloop-tokenless\.vercel\.app\/api\/agent\/v1\/mcp"/);
+  assert.match(connection, /GitHub Copilot cloud agent and code review[\s\S]*cannot connect to a remote OAuth MCP/i);
+  assert.match(connection, /should not be presented with an install link, client ID, redirect URI, or copied JSON/i);
 });

@@ -3,15 +3,6 @@ import { DocsTitle } from "~~/components/docs/DocsTitle";
 const remoteMcpUrl = "https://rateloop-tokenless.vercel.app/api/mcp";
 const workspaceMcpUrl = "https://rateloop-tokenless.vercel.app/api/agent/v1/mcp";
 
-const mcpConfiguration = `{
-  "mcpServers": {
-    "rateloop": {
-      "type": "http",
-      "url": "${remoteMcpUrl}"
-    }
-  }
-}`;
-
 const toolsListRequest = `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`;
 
 const capabilitiesRequest = `{
@@ -151,25 +142,11 @@ export default function TokenlessAgentDocsPage() {
         output. Use a host-enforced integration when blocking is mandatory.
       </p>
 
-      <h2>Supported agent clients</h2>
+      <h2>Connect with Codex</h2>
       <p>
-        The same remote MCP surface can be used from Claude Code, OpenAI Codex, Cursor, GitHub Copilot, Gemini CLI, and
-        OpenClaw when the client supports a remote HTTP MCP server. Client configuration syntax may differ; use the
-        client&apos;s current remote-MCP instructions.
+        Codex is the primary setup path. Pin the Git marketplace to the isolated tokenless branch, then install the
+        public RateLoop plugin:
       </p>
-
-      <h2>Connect to the remote MCP server</h2>
-      <p>
-        Register <code>{remoteMcpUrl}</code> as a remote HTTP MCP server. A common configuration shape is:
-      </p>
-      <CodeBlock>{mcpConfiguration}</CodeBlock>
-      <p>
-        Call <code>tools/list</code> after connecting. Its returned schemas are canonical and should take precedence
-        over copied examples.
-      </p>
-
-      <h3>Install the tokenless Codex plugin</h3>
-      <p>Pin the Git marketplace to the isolated tokenless branch with both plugin sources, then install RateLoop:</p>
       <CodeBlock>{`codex plugin marketplace add Noc2/RateLoop@tokenless --sparse .agents/plugins --sparse plugins/rateloop --sparse plugins/rateloop-workspace
 codex plugin add rateloop@rateloop`}</CodeBlock>
       <p>
@@ -186,8 +163,44 @@ codex plugin add rateloop@rateloop`}</CodeBlock>
         or create a replacement connection link.
       </p>
 
+      <details className="not-prose mt-8 rounded-xl border border-base-content/10 bg-base-200/40 p-4">
+        <summary className="cursor-pointer font-semibold text-base-content">
+          Other MCP clients and support levels
+        </summary>
+        <div className="mt-4 space-y-3 text-sm leading-6 text-base-content/70">
+          <p>
+            MCP compatibility belongs to the host and agent loop, not the model brand. A model must support tool use,
+            while its host must also implement remote Streamable HTTP, the required OAuth flow, tool results, and the
+            session lifecycle.
+          </p>
+          <ul className="list-disc space-y-2 pl-5">
+            <li>
+              <strong className="text-base-content">Protocol-compatible:</strong> Codex desktop is the primary path;
+              Claude Code, local GitHub Copilot Chat in VS Code, and Gemini CLI document the needed transport and OAuth
+              capabilities. RateLoop still requires installed-host release smoke tests before calling a named version
+              verified.
+            </li>
+            <li>
+              <strong className="text-base-content">Application-managed:</strong> hosted OpenAI or Anthropic MCP
+              connectors and SDK integrations require the embedding application to obtain, refresh, and supply
+              authorization.
+            </li>
+            <li>
+              <strong className="text-base-content">Public MCP only:</strong> GitHub Copilot cloud agent and code review
+              do not currently support remote OAuth MCP servers, so they cannot use the protected workspace endpoint.
+            </li>
+          </ul>
+          <p>
+            Use the <a href="/docs/agent-connection.md">host-specific setup and full support matrix</a>. It keeps other
+            clients separate from the Codex path and does not guess client IDs, redirect URIs, or install links.
+          </p>
+        </div>
+      </details>
+
       <h2>Four-purpose tool surface</h2>
-      <p>The public browser-handoff integration intentionally exposes only four RateLoop tools:</p>
+      <p>
+        The public browser-handoff server at <code>{remoteMcpUrl}</code> intentionally exposes only four RateLoop tools:
+      </p>
       <div className="not-prose grid gap-3 sm:grid-cols-2">
         {tools.map(([name, description]) => (
           <div key={name} className="rateloop-surface-card rounded-xl p-4">
