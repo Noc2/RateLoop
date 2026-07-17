@@ -91,6 +91,14 @@ function billingProfileFromRow(row: QueryRow) {
     registrationNumber: rowString(row, "trader_registration_number"),
     vatCountryCode: rowString(row, "vat_country_code"),
     vatId: rowString(row, "vat_id"),
+    billingAddress: {
+      country: rowString(row, "billing_country_code"),
+      line1: rowString(row, "billing_address_line1"),
+      line2: rowString(row, "billing_address_line2"),
+      city: rowString(row, "billing_city"),
+      postalCode: rowString(row, "billing_postal_code"),
+      state: rowString(row, "billing_state"),
+    },
   };
 }
 
@@ -100,7 +108,8 @@ export async function getWorkspaceBillingProfile(input: { accountAddress: string
   const result = await dbClient.execute({
     sql: `SELECT COALESCE(trader_status, 'unverified') AS trader_status,
                  trader_legal_name, trader_registration_number, trader_registered_address,
-                 vat_country_code, vat_id
+                 vat_country_code, vat_id, billing_country_code, billing_address_line1,
+                 billing_address_line2, billing_city, billing_postal_code, billing_state
           FROM tokenless_workspace_governance WHERE workspace_id = ? LIMIT 1`,
     args: [input.workspaceId],
   });
@@ -115,6 +124,12 @@ export async function updateWorkspaceBillingProfile(input: {
   registeredAddress: unknown;
   vatCountryCode?: unknown;
   vatId?: unknown;
+  billingCountryCode?: unknown;
+  billingAddressLine1?: unknown;
+  billingAddressLine2?: unknown;
+  billingCity?: unknown;
+  billingPostalCode?: unknown;
+  billingState?: unknown;
 }) {
   const access = await requireWorkspaceAccess(input.accountAddress, input.workspaceId);
   requireBillingManager(access);
@@ -123,6 +138,13 @@ export async function updateWorkspaceBillingProfile(input: {
   const registeredAddress = optionalProfileText(input.registeredAddress, "registeredAddress", 500);
   const vatCountryCode = optionalProfileText(input.vatCountryCode, "vatCountryCode", 2)?.toUpperCase() ?? null;
   const vatId = optionalProfileText(input.vatId, "vatId", 64);
+  const billingCountryCode =
+    optionalProfileText(input.billingCountryCode, "billingCountryCode", 2)?.toUpperCase() ?? null;
+  const billingAddressLine1 = optionalProfileText(input.billingAddressLine1, "billingAddressLine1", 200);
+  const billingAddressLine2 = optionalProfileText(input.billingAddressLine2, "billingAddressLine2", 200);
+  const billingCity = optionalProfileText(input.billingCity, "billingCity", 120);
+  const billingPostalCode = optionalProfileText(input.billingPostalCode, "billingPostalCode", 32);
+  const billingState = optionalProfileText(input.billingState, "billingState", 120);
   if (!legalName || !registeredAddress) {
     throw new TokenlessServiceError(
       "A legal name and registered business address are required.",
@@ -137,13 +159,37 @@ export async function updateWorkspaceBillingProfile(input: {
       "invalid_billing_profile",
     );
   }
+  const hasAnyBillingAddress = Boolean(
+    billingCountryCode ||
+      billingAddressLine1 ||
+      billingAddressLine2 ||
+      billingCity ||
+      billingPostalCode ||
+      billingState,
+  );
+  if (
+    hasAnyBillingAddress &&
+    (!billingCountryCode ||
+      !/^[A-Z]{2}$/.test(billingCountryCode) ||
+      !billingAddressLine1 ||
+      !billingCity ||
+      !billingPostalCode)
+  ) {
+    throw new TokenlessServiceError(
+      "A country, address line, city, and postal code are required for invoice funding.",
+      400,
+      "invalid_billing_profile",
+    );
+  }
   const now = new Date();
   const result = await dbClient.execute({
     sql: `INSERT INTO tokenless_workspace_governance
             (workspace_id, default_retention_days, trader_status, trader_legal_name,
              trader_registration_number, trader_registered_address, vat_country_code, vat_id,
+             billing_country_code, billing_address_line1, billing_address_line2, billing_city,
+             billing_postal_code, billing_state,
              updated_by, created_at, updated_at)
-          VALUES (?, 30, 'verified', ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, 30, 'verified', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT (workspace_id) DO UPDATE SET
             trader_status = 'verified',
             trader_legal_name = EXCLUDED.trader_legal_name,
@@ -151,10 +197,18 @@ export async function updateWorkspaceBillingProfile(input: {
             trader_registered_address = EXCLUDED.trader_registered_address,
             vat_country_code = EXCLUDED.vat_country_code,
             vat_id = EXCLUDED.vat_id,
+            billing_country_code = EXCLUDED.billing_country_code,
+            billing_address_line1 = EXCLUDED.billing_address_line1,
+            billing_address_line2 = EXCLUDED.billing_address_line2,
+            billing_city = EXCLUDED.billing_city,
+            billing_postal_code = EXCLUDED.billing_postal_code,
+            billing_state = EXCLUDED.billing_state,
             updated_by = EXCLUDED.updated_by,
             updated_at = EXCLUDED.updated_at
           RETURNING trader_status, trader_legal_name, trader_registration_number,
-                    trader_registered_address, vat_country_code, vat_id`,
+                    trader_registered_address, vat_country_code, vat_id,
+                    billing_country_code, billing_address_line1, billing_address_line2,
+                    billing_city, billing_postal_code, billing_state`,
     args: [
       input.workspaceId,
       legalName,
@@ -162,6 +216,12 @@ export async function updateWorkspaceBillingProfile(input: {
       registeredAddress,
       vatCountryCode,
       vatId,
+      billingCountryCode,
+      billingAddressLine1,
+      billingAddressLine2,
+      billingCity,
+      billingPostalCode,
+      billingState,
       normalizeAccountSubject(input.accountAddress),
       now,
       now,
@@ -262,7 +322,7 @@ export async function getWorkspaceBillingSummary(input: { accountAddress: string
   };
 }
 
-async function getOrCreateBillingCustomer(input: { legalName: string; workspaceId: string }) {
+export async function getOrCreateBillingCustomer(input: { legalName: string; workspaceId: string }) {
   const existing = await dbClient.execute({
     sql: "SELECT provider_customer_id FROM tokenless_workspace_billing_customers WHERE workspace_id = ? LIMIT 1",
     args: [input.workspaceId],
@@ -286,6 +346,20 @@ async function getOrCreateBillingCustomer(input: { legalName: string; workspaceI
   const mappedId = rowString(mapped.rows[0] as QueryRow, "provider_customer_id");
   if (!mappedId) throw new TokenlessServiceError("Unable to save the billing customer.", 500, "billing_provider_error");
   return mappedId;
+}
+
+export async function requireWorkspaceTopupAccess(input: { accountAddress: string; workspaceId: string }) {
+  const access = await requireWorkspaceAccess(input.accountAddress, input.workspaceId);
+  requireBillingManager(access);
+  const result = await dbClient.execute({
+    sql: `SELECT COALESCE(trader_status, 'unverified') AS trader_status,
+                 trader_legal_name, trader_registration_number, trader_registered_address,
+                 vat_country_code, vat_id, billing_country_code, billing_address_line1,
+                 billing_address_line2, billing_city, billing_postal_code, billing_state
+          FROM tokenless_workspace_governance WHERE workspace_id = ? LIMIT 1`,
+    args: [input.workspaceId],
+  });
+  return { access, profile: billingProfileFromRow(result.rows[0] as QueryRow) };
 }
 
 export async function startWorkspaceCheckout(input: { accountAddress: string; plan: unknown; workspaceId: string }) {

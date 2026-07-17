@@ -99,6 +99,8 @@ export const REQUIRED_TOKENLESS_PRODUCTION_VARIABLES = [
   "TOKENLESS_DAC7_POLICY",
   "TOKENLESS_NETWORK_PANELS_ENABLED",
   "TOKENLESS_SUBSCRIPTIONS_ENABLED",
+  "TOKENLESS_PREPAID_TOPUP_ENABLED",
+  "TOKENLESS_ENTERPRISE_IDENTITY_ENABLED",
   "WORLD_ID_APP_ID",
   "WORLD_ID_RP_ID",
   "WORLD_ID_RP_SIGNING_KEY",
@@ -334,6 +336,52 @@ export function validateTokenlessProductionReadiness({
       !/^price_[A-Za-z0-9_]+$/u.test(value(env, "STRIPE_EARLY_ACCESS_MONTHLY_PRICE_ID"))
     ) {
       errors.push("STRIPE_EARLY_ACCESS_MONTHLY_PRICE_ID must be a Stripe Price ID.");
+    }
+  }
+  const prepaidTopupsEnabled = value(env, "TOKENLESS_PREPAID_TOPUP_ENABLED");
+  if (prepaidTopupsEnabled !== "true" && prepaidTopupsEnabled !== "false") {
+    errors.push("TOKENLESS_PREPAID_TOPUP_ENABLED must be explicitly true or false in production.");
+  }
+  if (prepaidTopupsEnabled === "true") {
+    for (const name of [
+      "STRIPE_SECRET_KEY",
+      "STRIPE_WEBHOOK_SECRET",
+      "STRIPE_PREPAID_TOPUP_TAX_CODE",
+      "STRIPE_PREPAID_TOPUP_BANK_TRANSFER_TYPE",
+    ]) {
+      if (!value(env, name)) errors.push(`${name} is required when prepaid top-ups are enabled.`);
+    }
+    if (!/^sk_live_[A-Za-z0-9_]+$/u.test(value(env, "STRIPE_SECRET_KEY"))) {
+      errors.push("STRIPE_SECRET_KEY must be a live-mode secret in production when prepaid top-ups are enabled.");
+    }
+    if (!/^whsec_[A-Za-z0-9_]+$/u.test(value(env, "STRIPE_WEBHOOK_SECRET"))) {
+      errors.push("STRIPE_WEBHOOK_SECRET must be a Stripe webhook signing secret when prepaid top-ups are enabled.");
+    }
+    if (!/^txcd_[A-Za-z0-9_]+$/u.test(value(env, "STRIPE_PREPAID_TOPUP_TAX_CODE"))) {
+      errors.push("STRIPE_PREPAID_TOPUP_TAX_CODE must be a Stripe Tax code.");
+    }
+    if (value(env, "STRIPE_PREPAID_TOPUP_BANK_TRANSFER_TYPE") !== "us_bank_transfer") {
+      errors.push("STRIPE_PREPAID_TOPUP_BANK_TRANSFER_TYPE must be us_bank_transfer for USD top-ups.");
+    }
+  }
+  const enterpriseIdentityEnabled = value(env, "TOKENLESS_ENTERPRISE_IDENTITY_ENABLED");
+  if (enterpriseIdentityEnabled !== "true" && enterpriseIdentityEnabled !== "false") {
+    errors.push("TOKENLESS_ENTERPRISE_IDENTITY_ENABLED must be explicitly true or false in production.");
+  }
+  if (enterpriseIdentityEnabled === "true") {
+    const issuers = value(env, "TOKENLESS_SSO_TRUSTED_ISSUERS").split(",").filter(Boolean);
+    if (issuers.length === 0)
+      errors.push("TOKENLESS_SSO_TRUSTED_ISSUERS is required when enterprise identity is enabled.");
+    for (const issuer of issuers) {
+      try {
+        const url = new URL(issuer.trim());
+        if (url.protocol !== "https:" || url.origin !== issuer.trim().replace(/\/$/u, "") || url.pathname !== "/") {
+          throw new Error("invalid");
+        }
+      } catch {
+        errors.push("TOKENLESS_SSO_TRUSTED_ISSUERS must contain comma-separated HTTPS origins without paths.");
+        break;
+      }
     }
   }
   if (value(env, "BETTER_AUTH_SECRET").length < 32) {

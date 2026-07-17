@@ -75,6 +75,8 @@ function validFixture() {
     WORLD_ID_ENVIRONMENT: "production",
     TOKENLESS_NETWORK_PANELS_ENABLED: "true",
     TOKENLESS_SUBSCRIPTIONS_ENABLED: "false",
+    TOKENLESS_PREPAID_TOPUP_ENABLED: "false",
+    TOKENLESS_ENTERPRISE_IDENTITY_ENABLED: "false",
     TOKENLESS_DAC7_POLICY: "eu",
     TOKENLESS_EVIDENCE_TENANT_COMMITMENT_KEY: encodedKey(9),
     TOKENLESS_PSEUDONYM_KEY: encodedKey(14),
@@ -401,4 +403,33 @@ test("hosted release requires valid server-only Stripe configuration only when s
 
   valid.env.STRIPE_SECRET_KEY = `sk_test_${"d".repeat(32)}`;
   assert.match(validateTokenlessProductionReadiness(valid).join("\n"), /live-mode secret/);
+});
+
+test("prepaid top-ups require the live USD invoice rail when enabled", () => {
+  const missing = validFixture();
+  missing.env.TOKENLESS_PREPAID_TOPUP_ENABLED = "true";
+  const output = validateTokenlessProductionReadiness(missing).join("\n");
+  assert.match(output, /STRIPE_PREPAID_TOPUP_TAX_CODE is required/);
+  assert.match(output, /STRIPE_PREPAID_TOPUP_BANK_TRANSFER_TYPE is required/);
+
+  const valid = validFixture();
+  Object.assign(valid.env, {
+    TOKENLESS_PREPAID_TOPUP_ENABLED: "true",
+    STRIPE_SECRET_KEY: `sk_live_${"a".repeat(32)}`,
+    STRIPE_WEBHOOK_SECRET: `whsec_${"b".repeat(32)}`,
+    STRIPE_PREPAID_TOPUP_TAX_CODE: "txcd_10103000",
+    STRIPE_PREPAID_TOPUP_BANK_TRANSFER_TYPE: "us_bank_transfer",
+  });
+  assert.deepEqual(validateTokenlessProductionReadiness(valid), []);
+});
+
+test("enterprise identity requires explicit HTTPS OIDC issuer origins", () => {
+  const missing = validFixture();
+  missing.env.TOKENLESS_ENTERPRISE_IDENTITY_ENABLED = "true";
+  assert.match(validateTokenlessProductionReadiness(missing).join("\n"), /TOKENLESS_SSO_TRUSTED_ISSUERS is required/);
+
+  const valid = validFixture();
+  valid.env.TOKENLESS_ENTERPRISE_IDENTITY_ENABLED = "true";
+  valid.env.TOKENLESS_SSO_TRUSTED_ISSUERS = "https://login.example.com";
+  assert.deepEqual(validateTokenlessProductionReadiness(valid), []);
 });
