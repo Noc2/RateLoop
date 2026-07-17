@@ -111,3 +111,41 @@ jobs:
         run: yarn next:check-types
       - name: Build isolated tokenless app
         run: yarn next:build
+
+  browser-journeys:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: rateloop_ci_e2e
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d rateloop_ci_e2e"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      APP_URL: http://127.0.0.1:3100
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/rateloop_ci_e2e
+      E2E_BASE_URL: http://127.0.0.1:3100
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3100
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: true
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: yarn
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: Install browser
+        run: yarn workspace @rateloop/nextjs exec playwright install --with-deps chromium
+      - name: Run browser journeys
+        run: yarn workspace @rateloop/nextjs e2e

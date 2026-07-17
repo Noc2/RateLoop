@@ -68,7 +68,10 @@ or end-to-end paid-path testing is complete.
    under-quorum, beacon-failure, retry, and idempotent-replay paths. No fabricated result may satisfy this gate.
 6. **Verify browser and agent journeys.** Cover email OTP, passkeys, optional wallet binding, one-message agent OAuth,
    browser handoff approval, bounded wait/result, reviewer assignment, settlement receipt, and recovery on desktop and
-   mobile.
+   mobile. The deterministic browser gate is `yarn workspace @rateloop/nextjs e2e`; its Playwright journeys cover
+   workspace setup, review configuration, public and private answers, approval and Feedback Bonus handoff, automated
+   axe checks, and landing/hub visual baselines in `packages/nextjs/e2e/`. Keep live identity, wallet-signing,
+   settlement, recovery, and mobile evidence attached to this gate before enabling real users or real money.
 7. **Add operational evidence.** Record alerting, key rotation, backup restore, deletion, legal hold, incident response,
    founder continuity, worker liveness, and deployment rollback exercises for the isolated services. Exercise the
    configured KMS/Rekor/TSA witness, S3 Object Lock destination, SIEM webhook, OTLP ingest, and each enabled GRC
