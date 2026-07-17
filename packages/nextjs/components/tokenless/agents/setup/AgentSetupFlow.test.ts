@@ -71,20 +71,12 @@ test("review setup distinguishes a saved policy decision from delivery authority
 });
 
 test("review setup controls audience and shows only the relevant material boundary", () => {
-  for (const label of [
-    "Public network",
-    "Invited reviewers",
-    "Hybrid",
-    "Private material sensitivity",
-    "Internal",
-    "Confidential",
-    "Restricted",
-    "Regulated",
-  ]) {
+  for (const label of ["Public network", "Invited reviewers", "Hybrid", "private workspace material"]) {
     assert.match(flowSource, new RegExp(label));
   }
   assert.match(flowSource, /checked=\{reviewAudience\.audience === value\}/);
-  assert.match(flowSource, /reviewAudience\.audience === "private_invited"/);
+  assert.doesNotMatch(flowSource, /Private material sensitivity/);
+  assert.doesNotMatch(flowSource, /<option value="(?:internal|confidential|restricted|regulated)">/);
   assert.match(flowSource, /Public, synthetic, or safely redacted material only/);
   assert.match(flowSource, /Public and hybrid network assignments currently require a guaranteed bounty/);
   assert.match(flowSource, /buildReviewAudienceRequestProfile\(draft\.requestProfile, reviewAudience\)/);

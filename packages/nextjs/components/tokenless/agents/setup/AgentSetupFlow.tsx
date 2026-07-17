@@ -74,7 +74,7 @@ const REVIEW_FREQUENCY_OPTIONS = [
 
 const REVIEW_AUDIENCE_OPTIONS = [
   ["public_network", "Public network", "RateLoop network reviewers."],
-  ["private_invited", "Invited reviewers", "Only people you invite."],
+  ["private_invited", "Invited reviewers", "Only people you invite can review private workspace material."],
   ["hybrid", "Hybrid", "Invited and RateLoop network reviewers."],
 ] as const;
 
@@ -996,33 +996,11 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 </label>
               ))}
             </fieldset>
-            {reviewAudience.audience === "private_invited" ? (
-              <label className="mt-4 block rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm">
-                Private material sensitivity
-                <select
-                  className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  value={reviewAudience.privateSensitivity}
-                  onChange={event =>
-                    setReviewAudience(current => ({
-                      ...current,
-                      privateSensitivity: event.target.value as ReviewAudienceFormValues["privateSensitivity"],
-                    }))
-                  }
-                >
-                  <option value="internal">Internal</option>
-                  <option value="confidential">Confidential</option>
-                  <option value="restricted">Restricted</option>
-                  <option value="regulated">Regulated</option>
-                </select>
-                <span className="mt-2 block text-xs text-base-content/55">
-                  Only invited reviewers can receive this private workspace material.
-                </span>
-              </label>
-            ) : (
+            {reviewAudience.audience !== "private_invited" ? (
               <p className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm text-base-content/65">
                 Public, synthetic, or safely redacted material only.
               </p>
-            )}
+            ) : null}
             <fieldset className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-4">
               <legend className="px-1 text-sm font-medium">Required reviewer expertise</legend>
               <p className="mb-3 text-sm text-base-content/60">
