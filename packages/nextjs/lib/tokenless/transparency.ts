@@ -29,6 +29,7 @@ const WEBHOOK_EVENTS = new Set([
   "ai.rateloop.gate.blocked",
 ]);
 const MAX_DELIVERY_ATTEMPTS = 8;
+const WEBHOOK_DELIVERY_LEASE_MS = 60_000;
 const BPS_MAX = 10_000;
 const MAX_PONDER_COMMITS = 500;
 const FINALIZED_ROUND_STATE = 5;
@@ -1928,24 +1929,41 @@ export async function deliverPendingWebhooks(
   const now = input.now ?? new Date();
   const operationFilter = input.operationKey ? "AND p.operation_key = ?" : "";
   const due = await dbClient.execute({
-    sql: `SELECT d.delivery_id, d.idempotency_key, d.payload_json, d.attempt_count,
+    sql: `SELECT d.delivery_id, d.idempotency_key, d.payload_json, d.attempt_count, d.lease_generation,
                  e.url, e.secret_ciphertext
           FROM tokenless_webhook_deliveries d
           JOIN tokenless_webhook_endpoints e ON e.endpoint_id = d.endpoint_id
           JOIN tokenless_result_publications p ON p.publication_id = d.publication_id
-          WHERE d.state IN ('pending', 'retry') AND d.next_attempt_at <= ? AND e.active = true
+          WHERE e.active = true AND (
+            (d.state IN ('pending', 'retry') AND d.next_attempt_at <= ?)
+            OR (d.state = 'delivering' AND d.lease_expires_at <= ?)
+          )
           ${operationFilter}
           ORDER BY d.next_attempt_at ASC LIMIT ?`,
-    args: [now, ...(input.operationKey ? [input.operationKey] : []), Math.min(Math.max(input.limit ?? 25, 1), 100)],
+    args: [
+      now,
+      now,
+      ...(input.operationKey ? [input.operationKey] : []),
+      Math.min(Math.max(input.limit ?? 25, 1), 100),
+    ],
   });
   const outcomes = [];
   for (const value of due.rows) {
     const row = value as Row;
     const deliveryId = rowString(row, "delivery_id")!;
+    // Claim the row with a fresh lease generation, reclaiming any delivering row
+    // whose lease has expired (a crash between claim and completion). A stale
+    // worker's later completion write is fenced by the generation it captured.
+    const previousGeneration = Number(row.lease_generation ?? 0);
+    const claimGeneration = previousGeneration + 1;
+    const leaseExpiresAt = new Date(now.getTime() + WEBHOOK_DELIVERY_LEASE_MS);
     const claimed = await dbClient.execute({
-      sql: `UPDATE tokenless_webhook_deliveries SET state = 'delivering', updated_at = ?
-            WHERE delivery_id = ? AND state IN ('pending', 'retry')`,
-      args: [now, deliveryId],
+      sql: `UPDATE tokenless_webhook_deliveries
+            SET state = 'delivering', lease_expires_at = ?, lease_generation = ?, updated_at = ?
+            WHERE delivery_id = ? AND lease_generation = ? AND (
+              state IN ('pending', 'retry') OR (state = 'delivering' AND lease_expires_at <= ?)
+            )`,
+      args: [leaseExpiresAt, claimGeneration, now, deliveryId, previousGeneration, now],
     });
     if (claimed.rowCount !== 1) continue;
     const payload = rowString(row, "payload_json")!;
@@ -1973,10 +1991,12 @@ export async function deliverPendingWebhooks(
         pinnedAddress,
       });
       if (response.ok) {
-        await dbClient.execute({
-          sql: `UPDATE tokenless_webhook_deliveries SET state = 'delivered', attempt_count = ?, response_status = ?, last_error = NULL, delivered_at = ?, updated_at = ? WHERE delivery_id = ?`,
-          args: [attempt, response.status, now, now, deliveryId],
+        const completed = await dbClient.execute({
+          sql: `UPDATE tokenless_webhook_deliveries SET state = 'delivered', attempt_count = ?, response_status = ?, last_error = NULL, delivered_at = ?, lease_expires_at = NULL, updated_at = ? WHERE delivery_id = ? AND lease_generation = ? AND state = 'delivering'`,
+          args: [attempt, response.status, now, now, deliveryId, claimGeneration],
         });
+        // The lease was reclaimed by another worker mid-flight; drop this write.
+        if (completed.rowCount !== 1) continue;
         outcomes.push({ deliveryId, state: "delivered" });
         continue;
       }
@@ -1986,8 +2006,8 @@ export async function deliverPendingWebhooks(
       const delayMs = Math.min(30_000 * 2 ** (attempt - 1), 3_600_000);
       const message = error instanceof Error ? error.message.slice(0, 500) : "Delivery failed";
       const responseStatus = (error as { responseStatus?: number }).responseStatus ?? null;
-      await dbClient.execute({
-        sql: `UPDATE tokenless_webhook_deliveries SET state = ?, attempt_count = ?, response_status = ?, last_error = ?, next_attempt_at = ?, updated_at = ? WHERE delivery_id = ?`,
+      const rescheduled = await dbClient.execute({
+        sql: `UPDATE tokenless_webhook_deliveries SET state = ?, attempt_count = ?, response_status = ?, last_error = ?, next_attempt_at = ?, lease_expires_at = NULL, updated_at = ? WHERE delivery_id = ? AND lease_generation = ? AND state = 'delivering'`,
         args: [
           dead ? "dead" : "retry",
           attempt,
@@ -1996,8 +2016,11 @@ export async function deliverPendingWebhooks(
           new Date(now.getTime() + delayMs),
           now,
           deliveryId,
+          claimGeneration,
         ],
       });
+      // A newer worker owns the lease; do not overwrite its progress.
+      if (rescheduled.rowCount !== 1) continue;
       outcomes.push({ deliveryId, state: dead ? "dead" : "retry" });
     }
   }

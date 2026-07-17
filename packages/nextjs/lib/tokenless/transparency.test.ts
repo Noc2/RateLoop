@@ -692,6 +692,93 @@ test("webhook delivery pins the validated IP and ignores a rebinding second look
   assert.deepEqual(pinnedAddresses, ["93.184.216.34"]);
 });
 
+async function seedPendingDelivery() {
+  await seedFrozenIntegrityAssignments();
+  const endpoint = await createWorkspaceWebhook({
+    accountAddress: OWNER,
+    workspaceId: WORKSPACE,
+    url: "https://hooks.example.test/result",
+    eventTypes: ["result.ready"],
+    encryptionKey: ENCRYPTION_KEY,
+    resolveHostname: resolvePublic,
+  });
+  await subscribeAskWebhook({
+    operationKey: OPERATION,
+    workspaceId: WORKSPACE,
+    registration: { url: endpoint.url, eventTypes: ["result.ready"] },
+  });
+  await appendFinalizedRoundEvidence({
+    operationKey: OPERATION,
+    fetchImpl: ponderFetch(),
+    ponderUrl: "https://ponder.example.test",
+  });
+  await reviewAndPublishResult({ operationKey: OPERATION, appOrigin: "https://app.example.test", now: NOW });
+  const pending = await dbClient.execute({
+    sql: "SELECT delivery_id FROM tokenless_webhook_deliveries LIMIT 1",
+    args: [],
+  });
+  return String((pending.rows[0] as Record<string, unknown>).delivery_id);
+}
+
+test("a webhook delivery stranded in 'delivering' past its lease is reclaimed and delivered", async () => {
+  const deliveryId = await seedPendingDelivery();
+  // Simulate a worker that claimed the row and then crashed before completing.
+  await dbClient.execute({
+    sql: `UPDATE tokenless_webhook_deliveries
+          SET state = 'delivering', lease_generation = 1, lease_expires_at = ?
+          WHERE delivery_id = ?`,
+    args: [new Date(NOW.getTime() - 1_000), deliveryId],
+  });
+  const outcomes = await deliverPendingWebhooks({
+    fetchImpl: async () => new Response(null, { status: 204 }),
+    now: NOW,
+    encryptionKey: ENCRYPTION_KEY,
+    resolveHostname: resolvePublic,
+    operationKey: OPERATION,
+  });
+  assert.deepEqual(outcomes, [{ deliveryId, state: "delivered" }]);
+  const reclaimed = await dbClient.execute({
+    sql: "SELECT state, lease_generation, lease_expires_at FROM tokenless_webhook_deliveries WHERE delivery_id = ?",
+    args: [deliveryId],
+  });
+  const row = reclaimed.rows[0] as Record<string, unknown>;
+  assert.equal(String(row.state), "delivered");
+  // The reclaiming worker fenced its completion under a fresh generation.
+  assert.equal(Number(row.lease_generation), 2);
+  assert.equal(row.lease_expires_at, null);
+});
+
+test("a stale worker's completion write is rejected once the lease is reclaimed", async () => {
+  const deliveryId = await seedPendingDelivery();
+  // While the original worker is mid-flight, another worker reclaims the lease
+  // under a newer generation, exactly as it would after a lease expiry.
+  const fetchImpl = async () => {
+    await dbClient.execute({
+      sql: `UPDATE tokenless_webhook_deliveries
+            SET lease_generation = 2, lease_expires_at = ?
+            WHERE delivery_id = ?`,
+      args: [new Date(NOW.getTime() + 60_000), deliveryId],
+    });
+    return new Response(null, { status: 204 });
+  };
+  const outcomes = await deliverPendingWebhooks({
+    fetchImpl,
+    now: NOW,
+    encryptionKey: ENCRYPTION_KEY,
+    resolveHostname: resolvePublic,
+    operationKey: OPERATION,
+  });
+  // The stale worker held generation 1; its delivered write is fenced out.
+  assert.deepEqual(outcomes, []);
+  const fenced = await dbClient.execute({
+    sql: "SELECT state, lease_generation FROM tokenless_webhook_deliveries WHERE delivery_id = ?",
+    args: [deliveryId],
+  });
+  const row = fenced.rows[0] as Record<string, unknown>;
+  assert.equal(String(row.state), "delivering");
+  assert.equal(Number(row.lease_generation), 2);
+});
+
 test("finalized evidence publishes once and webhook retries preserve idempotency and signatures", async () => {
   await seedFrozenIntegrityAssignments();
   const genericResponses = await dbClient.execute({
