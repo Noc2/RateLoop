@@ -120,9 +120,6 @@ export function TokenlessLandingPage({
     <div className="flex grow flex-col items-center px-4 pb-16 pt-4 sm:pt-12 lg:pt-16">
       <div className="relative flex w-full max-w-6xl flex-col items-center">
         <section className="relative z-0 flex w-full flex-col lg:min-h-[34rem] lg:items-center lg:justify-center xl:min-h-[38rem]">
-          <div className="relative z-0 w-[min(28rem,84vw)] self-center sm:w-[min(44rem,94vw)] lg:pointer-events-none lg:absolute lg:-right-56 lg:-top-12 lg:w-[58rem] xl:-right-72 xl:-top-16 xl:w-[68rem]">
-            <TokenlessOrb />
-          </div>
           <div className="relative z-10 flex flex-col items-center lg:mr-auto lg:max-w-[40rem] lg:items-start lg:pb-8 lg:pt-24 xl:max-w-[43rem] xl:pt-28">
             <h1 className="hero-headline max-w-[14ch] text-center text-[3.25rem] text-base-content sm:text-[4.45rem] lg:text-left lg:text-[5.05rem] xl:text-[5.65rem]">
               <span className="block">The Human</span>
@@ -169,6 +166,9 @@ export function TokenlessLandingPage({
                 ))}
               </div>
             ) : null}
+          </div>
+          <div className="relative z-0 mt-5 w-[min(28rem,84vw)] self-center sm:w-[min(44rem,94vw)] lg:pointer-events-none lg:absolute lg:-right-56 lg:-top-12 lg:mt-0 lg:w-[58rem] xl:-right-72 xl:-top-16 xl:w-[68rem]">
+            <TokenlessOrb />
           </div>
           <SupportedAgentsSection />
         </section>

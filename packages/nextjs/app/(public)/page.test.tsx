@@ -35,6 +35,10 @@ test("landing page presents the tokenless human-assurance story", async () => {
     html.indexOf('href="/human?tab=discover"') < html.indexOf('href="/agents?tab=overview"'),
     "the Humans CTA should appear before the Agents CTA",
   );
+  assert.ok(
+    html.indexOf("The Human") < html.indexOf('class="orb-animation-shell'),
+    "the value proposition should precede the orb on small screens",
+  );
   assert.match(html, /<span class="font-semibold text-base-content">10<\/span> Verified Humans/);
   assert.match(html, /<span class="font-semibold text-base-content">21<\/span> Ratings/);
   assert.match(html, /<span class="font-semibold text-base-content">\$12<\/span> USDC Paid/);
