@@ -214,7 +214,12 @@ test("owner approves a request and prepares its human feedback award", async ({ 
     if (route.request().method() !== "PUT") return route.continue();
     return json(route, { approval: { ...approval, status: "approved", revision: 2 } });
   });
-  await page.route("**/feedback-bonus", route => json(route, { items: [bonus] }));
+  let bonusAwarded = false;
+  await page.route("**/feedback-bonus", route => json(route, { items: bonusAwarded ? [] : [bonus] }));
+  await page.route("**/feedback-bonus/*", route => {
+    bonusAwarded = true;
+    return json(route, { status: "confirmed" });
+  });
   await page.goto(`/agents?tab=inbox&workspace=${browserState.workspaceId}`);
   await expect(page.getByRole("heading", { name: "Requests awaiting approval" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Award Feedback Bonus" })).toBeVisible();
@@ -223,5 +228,5 @@ test("owner approves a request and prepares its human feedback award", async ({ 
   await expect(page.getByText("Approved and ready for the request adapter.")).toBeVisible();
   await page.getByLabel("Feedback Bonus award amount").fill("1.5");
   await page.getByRole("button", { name: "Award this feedback" }).click();
-  await expect(page.getByText("Connect the human awarder wallet first.")).toBeVisible();
+  await expect(page.getByText("No feedback bonuses need an award.")).toBeVisible();
 });

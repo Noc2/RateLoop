@@ -47,7 +47,6 @@ function AwardCard({ item, onAwarded }: { item: FeedbackBonusAwardInboxItem; onA
       if (BigInt(amountAtomic) > BigInt(item.remainingPoolAtomic)) {
         throw new Error(`This pool has ${formatFeedbackBonusUsdc(item.remainingPoolAtomic)} left.`);
       }
-      if (!account || !thirdwebBrowserClient) throw new Error("Connect the human awarder wallet first.");
       const idempotencyKey = `feedback-bonus:${item.opportunityId}:${item.feedbackId}`;
       const endpoint = `/api/account/workspaces/${encodeURIComponent(
         item.workspaceId,
@@ -64,6 +63,7 @@ function AwardCard({ item, onAwarded }: { item: FeedbackBonusAwardInboxItem; onA
         await onAwarded();
         return;
       }
+      if (!account || !thirdwebBrowserClient) throw new Error("Connect the human awarder wallet first.");
       if (prepared.status !== "human_wallet_required") {
         throw new Error("RateLoop did not return a human-wallet award authorization.");
       }

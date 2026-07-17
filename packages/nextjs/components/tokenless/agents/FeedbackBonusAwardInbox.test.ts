@@ -16,6 +16,10 @@ test("Feedback Bonus inbox preserves the legacy human award interaction", () => 
   assert.match(source, /method: "PUT"/u);
   assert.match(source, /Loading feedback bonuses/u);
   assert.match(source, /No feedback bonuses need an award/u);
+  assert.ok(
+    source.indexOf('prepared.status === "confirmed"') < source.indexOf("!account || !thirdwebBrowserClient"),
+    "a confirmed idempotent replay must not require a connected wallet",
+  );
   assert.doesNotMatch(source, /if \(!loaded \|\| \(items\.length === 0 && !error\)\) return null/u);
   assert.doesNotMatch(source, /auto(?:matic)? award/iu);
   assert.doesNotMatch(source, /payoutSalt|payoutAddress/u);
