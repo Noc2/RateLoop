@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
-import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
+import { __setDatabaseResourcesForTests, dbClient, dbPool } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import {
   MAX_CASE_IMPORT_BYTES,
@@ -14,6 +14,13 @@ import {
   recordDeterministicCheckResult,
   verifyBlindingCommitment,
 } from "~~/lib/tokenless/assuranceRunOrchestration";
+import {
+  __goldQualityTestUtils,
+  configureProjectGoldInjection,
+  createOwnerGoldItem,
+  promoteCompletedRunGoldQualifications,
+  recordGoldOutcomesForResponseBatch,
+} from "~~/lib/tokenless/goldQuality";
 import {
   createAssuranceAudiencePolicy,
   createAssuranceProject,
@@ -33,6 +40,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  __goldQualityTestUtils.setInjectionKeyring(null);
   __setDatabaseResourcesForTests(null);
 });
 
@@ -514,6 +522,169 @@ test("run orchestration freezes rubric, blinded cases, policy hash, rounds, aggr
   assert.equal(rerunFrozen.manifest.rerun.rootRunId, run.runId);
   assert.equal(rerunFrozen.manifest.rerun.previousManifestHash, frozen.manifestHash);
   assert.equal(rerunFrozen.manifest.rerun.ordinal, 2);
+});
+
+test("owner gold injection is manifest-bound, verdict-isolated, and promotes only after a completed sample", async () => {
+  const { principal, projectId, workspaceId } = await principalFixture();
+  const suite = await createAssuranceSuite({ principal, projectId, name: "Gold calibration", rubric: rubric() });
+  await Promise.all([
+    seedArtifact({ artifactId: "gold_base", projectId, role: "baseline", digestCharacter: "d" }),
+    seedArtifact({ artifactId: "gold_candidate", projectId, role: "candidate", digestCharacter: "e" }),
+  ]);
+  const imported = await importAssuranceCases({
+    principal,
+    suiteId: suite.suiteId,
+    suiteVersion: suite.version,
+    format: "json",
+    payload: JSON.stringify({
+      cases: Array.from({ length: 30 }, (_, index) => ({
+        title: `Calibration case ${index + 1}`,
+        instructions: "Compare both artifacts against the frozen rubric.",
+        baselineArtifactId: "gold_base",
+        candidateArtifactId: "gold_candidate",
+        contextArtifactIds: [],
+        deterministicChecks: [],
+      })),
+    }),
+  });
+  for (const value of imported.cases) await markAssuranceCaseReady({ principal, caseId: value.caseId });
+  await freezeAssuranceSuite({ principal, suiteId: suite.suiteId, suiteVersion: suite.version });
+  for (const value of imported.cases.slice(-5)) {
+    await createOwnerGoldItem({
+      accountAddress: OWNER,
+      workspaceId,
+      projectId,
+      caseId: value.caseId,
+      expectedChoice: "candidate",
+    });
+  }
+  await configureProjectGoldInjection({
+    accountAddress: OWNER,
+    workspaceId,
+    projectId,
+    invitedInjectionEnabled: true,
+    injectionRateBps: 2_000,
+    maximumItemsPerRun: 5,
+  });
+  __goldQualityTestUtils.setInjectionKeyring({
+    currentVersion: "test-v1",
+    keys: new Map([["test-v1", Buffer.alloc(32, 17)]]),
+  });
+  const audience = await createAssuranceAudiencePolicy({ principal, projectId, policy: policy() });
+  const run = await createAssuranceRun({
+    principal,
+    suiteId: suite.suiteId,
+    suiteVersion: suite.version,
+    audiencePolicyId: audience.policy.policyId,
+    audiencePolicyVersion: audience.policy.version,
+  });
+  const frozen = await freezeAssuranceRunOrchestration({ principal, runId: run.runId });
+  const injected = await dbClient.execute({
+    sql: `SELECT case_id FROM tokenless_assurance_run_gold_items WHERE run_id=? ORDER BY injection_ordinal`,
+    args: [run.runId],
+  });
+  assert.equal(injected.rowCount, 5);
+  assert.equal(frozen.manifest.aggregate.totalCases, 30);
+  assert.deepEqual(
+    new Set(frozen.manifest.cases.map(value => value.caseId)),
+    new Set(imported.cases.map(value => value.caseId)),
+  );
+  const usage = await dbClient.execute({
+    sql: "SELECT COUNT(*) AS count FROM tokenless_workspace_usage_allocations WHERE run_id=?",
+    args: [run.runId],
+  });
+  assert.equal(Number(usage.rows[0]?.count), 30);
+
+  const ordinaryCaseId = imported.cases[0]!.caseId;
+  const now = new Date("2026-07-17T12:00:00.000Z");
+  for (const [index, value] of [
+    { caseId: ordinaryCaseId, choice: "candidate" },
+    { caseId: String(injected.rows[0]!.case_id), choice: "baseline" },
+  ].entries()) {
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_assurance_responses
+            (response_id,run_id,case_id,reviewer_key,reviewer_source,choice,
+             failure_tag_keys_json,qualification_keys_json,assurance_capabilities_json,
+             response_digest,settlement_reference,validity,submitted_at,updated_at)
+            VALUES (?,?,?,'reviewer','customer_invited',?,'[]','[]','[]',?,?,'valid',?,?)`,
+      args: [
+        `gold_isolation_response_${index}`,
+        run.runId,
+        value.caseId,
+        value.choice,
+        `sha256:${String(index + 1).repeat(64)}`,
+        `offchain:gold-isolation:${index}`,
+        now,
+        now,
+      ],
+    });
+  }
+  const aggregate = await getAssuranceRunAggregateState({ principal, runId: run.runId });
+  assert.equal(aggregate.totalCases, 25);
+  assert.equal(aggregate.totalPanelCases, 30);
+  assert.equal(aggregate.calibrationCaseCount, 5);
+  assert.deepEqual(aggregate.responses, { baseline: 0, candidate: 1, tie: 0, valid: 1 });
+
+  await seedCompletedPaidPanel({
+    manifestHash: frozen.manifestHash,
+    policyHash: audience.policyHash,
+    policyId: audience.policy.policyId,
+    projectId,
+    runId: run.runId,
+    workspaceId,
+  });
+  const reviewer = `0x${"2".repeat(40)}`;
+  const goldAnswers = injected.rows.map((value, index) => ({
+    caseId: String(value.case_id),
+    canonicalChoice: index === 0 ? "baseline" : "candidate",
+  }));
+  assert.deepEqual(
+    await (async () => {
+      const client = await dbPool.connect();
+      try {
+        return await recordGoldOutcomesForResponseBatch(client, {
+          runId: run.runId,
+          workspaceId,
+          projectId,
+          assignmentId: `${run.runId}_assignment_0`,
+          reviewerKey: `hmac-sha256:test-v1:${"a".repeat(64)}`,
+          reviewerAccountAddress: reviewer,
+          reviewerSource: "customer_invited",
+          responses: goldAnswers,
+          now,
+        });
+      } finally {
+        client.release();
+      }
+    })(),
+    { scored: 5 },
+  );
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_runs SET status='completed' WHERE run_id=?",
+    args: [run.runId],
+  });
+  const client = await dbPool.connect();
+  try {
+    await promoteCompletedRunGoldQualifications(client, run.runId, now);
+  } finally {
+    client.release();
+  }
+  const qualification = await dbClient.execute({
+    sql: `SELECT qualification_kind,evidence_kind,status,qualification_value_json
+          FROM tokenless_reviewer_qualifications
+          WHERE workspace_id=? AND reviewer_account_address=? AND qualification_kind='gold'`,
+    args: [workspaceId, reviewer],
+  });
+  assert.equal(qualification.rowCount, 1);
+  assert.deepEqual(
+    {
+      qualification_kind: qualification.rows[0]?.qualification_kind,
+      evidence_kind: qualification.rows[0]?.evidence_kind,
+      status: qualification.rows[0]?.status,
+    },
+    { qualification_kind: "gold", evidence_kind: "gold_derived", status: "active" },
+  );
+  assert.equal(JSON.parse(String(qualification.rows[0]?.qualification_value_json)).accuracyBps, 8_000);
 });
 
 test("orchestration refuses to freeze definitions after a response exists", async () => {

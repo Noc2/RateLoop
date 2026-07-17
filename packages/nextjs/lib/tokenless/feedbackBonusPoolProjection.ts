@@ -304,7 +304,9 @@ async function assertLocalFeedbackBinding(
            FROM tokenless_assurance_responses r
            JOIN tokenless_agent_review_opportunities o
              ON o.run_id=r.run_id AND o.workspace_id=$1 AND o.opportunity_id=$2
-           WHERE r.response_id=$3 LIMIT 1`,
+           LEFT JOIN tokenless_assurance_run_gold_items gold
+             ON gold.run_id=r.run_id AND gold.case_id=r.case_id
+           WHERE r.response_id=$3 AND gold.case_id IS NULL LIMIT 1`,
           [input.workspaceId, input.opportunityId, responseId],
         );
   const row = result.rows[0] as Row | undefined;

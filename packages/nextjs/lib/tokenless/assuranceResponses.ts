@@ -9,6 +9,7 @@ import {
   assertAssuranceAssignmentSettlementAvailable,
   assertMatchingPrivateGroupSnapshot,
 } from "~~/lib/tokenless/audienceAssignments";
+import { recordGoldOutcomesForResponseBatch } from "~~/lib/tokenless/goldQuality";
 import { canonicalizeHumanAssuranceDocument, hashHumanAssuranceDocument } from "~~/lib/tokenless/humanAssurance";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -184,7 +185,10 @@ export async function readFeedbackBonusAssuranceResponse(input: {
        ON opportunity.run_id = response.run_id
       AND opportunity.workspace_id = $2
       AND opportunity.opportunity_id = $3
+     LEFT JOIN tokenless_assurance_run_gold_items gold
+       ON gold.run_id = response.run_id AND gold.case_id = response.case_id
      WHERE response.response_id = $1
+       AND gold.case_id IS NULL
        AND response.validity = 'valid'
        AND response.rationale_ciphertext IS NOT NULL
        AND response.rationale_key_ref IS NOT NULL
@@ -585,6 +589,17 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
         ],
       );
     }
+    await recordGoldOutcomesForResponseBatch(client, {
+      runId: rowString(assignment, "run_id")!,
+      reviewerKey: pseudonym,
+      reviewerAccountAddress: accountAddress,
+      assignmentId,
+      workspaceId: rowString(assignment, "workspace_id")!,
+      projectId: rowString(assignment, "project_id")!,
+      reviewerSource: rowString(assignment, "source") as "customer_invited" | "rateloop_network",
+      responses: records.map(record => ({ caseId: record.caseId, canonicalChoice: record.canonicalChoice })),
+      now,
+    });
     const completed = await client.query(
       `UPDATE tokenless_assurance_assignments SET status = 'completed', lease_state = 'expired', updated_at = $1
        WHERE assignment_id = $2 AND status = 'accepted'`,

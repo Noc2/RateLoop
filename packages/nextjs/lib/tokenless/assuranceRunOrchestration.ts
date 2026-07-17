@@ -6,6 +6,7 @@ import { reserveWorkspaceUsageAllocations } from "~~/lib/billing/entitlements";
 import { dbPool } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
+import { selectGoldCasesForFrozenRun } from "~~/lib/tokenless/goldQuality";
 import {
   type AssurancePrincipal,
   canonicalizeHumanAssuranceDocument,
@@ -726,13 +727,16 @@ export async function freezeAssuranceRunOrchestration(input: { principal: Assura
       throw new Error("Draft run already has orchestration rows.");
     }
     const casesResult = await client.query(
-      `SELECT case_id, position, baseline_artifact_id, candidate_artifact_id, deterministic_checks_json
-       FROM tokenless_assurance_cases
-       WHERE suite_id = $1 AND suite_version = $2 AND status = 'ready'
+      `SELECT c.case_id, c.position, c.baseline_artifact_id, c.candidate_artifact_id, c.deterministic_checks_json
+       FROM tokenless_assurance_cases c
+       LEFT JOIN tokenless_assurance_gold_items gold
+         ON gold.project_id=c.project_id AND gold.case_id=c.case_id AND gold.status='active'
+       WHERE c.suite_id = $1 AND c.suite_version = $2 AND c.status = 'ready'
+         AND gold.case_id IS NULL
        ORDER BY position ASC`,
       [rowString(run, "suite_id"), rowNumber(run, "suite_version")],
     );
-    if (casesResult.rows.length === 0) throw new Error("Frozen run suite has no ready cases.");
+    if (casesResult.rows.length === 0) throw new Error("Frozen run suite has no non-gold ready cases.");
     const suiteManifest = JSON.parse(suiteManifestJson) as Record<string, unknown>;
     if (hashHumanAssuranceDocument(suiteManifest) !== suiteManifestHash) {
       throw new Error("Frozen suite manifest hash does not match its content.");
@@ -746,8 +750,24 @@ export async function freezeAssuranceRunOrchestration(input: { principal: Assura
       throw new Error("Admission policy hash is invalid.");
     const rerun = await resolveRerunLineage(client, run);
     const now = new Date();
+    const baseCases = casesResult.rows as QueryRow[];
+    const goldCases = await selectGoldCasesForFrozenRun(client, {
+      runId: input.runId,
+      workspaceId: rowString(run, "workspace_id")!,
+      projectId: rowString(run, "project_id")!,
+      rubricId: rubric.rubricId,
+      rubricVersion: rubric.version,
+      reviewerSource: audiencePolicy.reviewerSource as "customer_invited" | "rateloop_network" | "hybrid",
+      baseCaseIds: baseCases.map(value => rowString(value, "case_id")!),
+      policyHash: rowString(run, "policy_hash")!,
+    });
+    const maximumBasePosition = Math.max(...baseCases.map(value => rowNumber(value, "position") ?? 0));
+    const plannedCases: Array<QueryRow & { gold_item_id?: string; selection_seed_hash?: string }> = [
+      ...baseCases,
+      ...goldCases.map((value, index) => ({ ...value, position: maximumBasePosition + index + 1 })),
+    ];
     const casePlans = [];
-    for (const rawCase of casesResult.rows) {
+    for (const rawCase of plannedCases) {
       const assuranceCase = rawCase as QueryRow;
       const caseId = rowString(assuranceCase, "case_id")!;
       const checks = validateChecks(JSON.parse(rowString(assuranceCase, "deterministic_checks_json") ?? "[]"));
@@ -792,6 +812,24 @@ export async function freezeAssuranceRunOrchestration(input: { principal: Assura
           now,
         ],
       );
+      const goldItemId = rowString(assuranceCase, "gold_item_id");
+      if (goldItemId) {
+        await client.query(
+          `INSERT INTO tokenless_assurance_run_gold_items
+           (workspace_id,project_id,run_id,case_id,gold_item_id,injection_ordinal,selection_seed_hash,created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+          [
+            rowString(run, "workspace_id"),
+            rowString(run, "project_id"),
+            input.runId,
+            caseId,
+            goldItemId,
+            goldCases.findIndex(value => value.gold_item_id === goldItemId) + 1,
+            rowString(assuranceCase, "selection_seed_hash"),
+            now,
+          ],
+        );
+      }
       casePlans.push({
         caseId,
         position,
@@ -847,9 +885,7 @@ export async function freezeAssuranceRunOrchestration(input: { principal: Assura
         roundStates: { planned: casePlans.length },
         deterministicChecks: {
           pending: casePlans.filter(plan => {
-            const source = casesResult.rows.find(
-              row => rowString(row as QueryRow, "case_id") === plan.caseId,
-            ) as QueryRow;
+            const source = plannedCases.find(row => rowString(row as QueryRow, "case_id") === plan.caseId) as QueryRow;
             return JSON.parse(rowString(source, "deterministic_checks_json") ?? "[]").length > 0;
           }).length,
         },
@@ -993,17 +1029,27 @@ export async function getAssuranceRunAggregateState(input: { principal: Assuranc
     }
     const [caseResult, responseResult] = await Promise.all([
       client.query(
-        `SELECT round_status, deterministic_checks_status, COUNT(*) AS count
-         FROM tokenless_assurance_run_cases WHERE run_id = $1
-         GROUP BY round_status, deterministic_checks_status`,
+        `SELECT rc.round_status, rc.deterministic_checks_status, COUNT(*) AS count
+         FROM tokenless_assurance_run_cases rc
+         LEFT JOIN tokenless_assurance_run_gold_items gold
+           ON gold.run_id=rc.run_id AND gold.case_id=rc.case_id
+         WHERE rc.run_id = $1 AND gold.case_id IS NULL
+         GROUP BY rc.round_status, rc.deterministic_checks_status`,
         [input.runId],
       ),
       client.query(
-        `SELECT choice, COUNT(*) AS count FROM tokenless_assurance_responses
-         WHERE run_id = $1 AND validity = 'valid' GROUP BY choice`,
+        `SELECT response.choice, COUNT(*) AS count FROM tokenless_assurance_responses response
+         LEFT JOIN tokenless_assurance_run_gold_items gold
+           ON gold.run_id=response.run_id AND gold.case_id=response.case_id
+         WHERE response.run_id = $1 AND response.validity = 'valid' AND gold.case_id IS NULL
+         GROUP BY response.choice`,
         [input.runId],
       ),
     ]);
+    const calibrationResult = await client.query(
+      "SELECT COUNT(*) AS count FROM tokenless_assurance_run_gold_items WHERE run_id=$1",
+      [input.runId],
+    );
     const roundStates: Record<string, number> = {};
     const deterministicChecks = { notApplicable: 0, pending: 0, passed: 0, failed: 0 };
     let totalCases = 0;
@@ -1047,6 +1093,8 @@ export async function getAssuranceRunAggregateState(input: { principal: Assuranc
       runId: input.runId,
       runStatus: rowString(run, "status"),
       totalCases,
+      totalPanelCases: totalCases + (rowNumber(calibrationResult.rows[0] as QueryRow, "count") ?? 0),
+      calibrationCaseCount: rowNumber(calibrationResult.rows[0] as QueryRow, "count") ?? 0,
       roundStates,
       deterministicChecks,
       responses: { ...choices, valid: validResponses },
