@@ -27,6 +27,11 @@ WORKDIR /app
 
 RUN YARN_ENABLE_IMMUTABLE_INSTALLS=true yarn workspaces focus @rateloop/ponder --production
 
+# The runtime starts through Yarn and does not need npm or npx. Remove npm's bundled
+# dependency tree so build-only tooling cannot add vulnerabilities to the shipped image.
+RUN rm -rf /usr/local/lib/node_modules/npm \
+  && rm -f /usr/local/bin/npm /usr/local/bin/npx
+
 RUN chown -R node:node /app/packages/ponder
 
 WORKDIR /app/packages/ponder
