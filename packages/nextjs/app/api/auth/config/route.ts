@@ -14,13 +14,14 @@ export async function GET() {
           emailOtp: config.emailOtpEnabled,
           google: config.googleEnabled,
           passkey: true,
+          sso: process.env.TOKENLESS_ENTERPRISE_IDENTITY_ENABLED?.trim().toLowerCase() === "true",
         },
       },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch {
     return NextResponse.json(
-      { configured: false, methods: { apple: false, emailOtp: false, google: false, passkey: false } },
+      { configured: false, methods: { apple: false, emailOtp: false, google: false, passkey: false, sso: false } },
       { headers: { "Cache-Control": "no-store" } },
     );
   }

@@ -108,6 +108,17 @@ export function BetterAuthSignIn() {
     await finishSignIn();
   }
 
+  async function signInWithSso() {
+    setBusy(true);
+    setError(null);
+    const callbackURL = `${window.location.origin}/sign-in?exchange=1&returnTo=${encodeURIComponent(safeReturnPath())}`;
+    const result = await betterAuthClient.signIn.sso({ email, callbackURL });
+    if (result.error) {
+      setError(result.error.message || "Company SSO is not available for this email domain.");
+      setBusy(false);
+    }
+  }
+
   async function addPasskey() {
     setBusy(true);
     setError(null);
@@ -196,6 +207,16 @@ export function BetterAuthSignIn() {
           >
             Email me a code
           </button>
+          {configuration.methods.sso ? (
+            <button
+              className="btn btn-outline min-h-11 w-full"
+              disabled={busy || !email.includes("@")}
+              onClick={() => void signInWithSso()}
+              type="button"
+            >
+              Continue with company SSO
+            </button>
+          ) : null}
         </form>
       )}
 

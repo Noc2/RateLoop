@@ -1,12 +1,13 @@
 "use client";
 
 import { passkeyClient } from "@better-auth/passkey/client";
+import { ssoClient } from "@better-auth/sso/client";
 import { emailOTPClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 
 export const betterAuthClient = createAuthClient({
   basePath: "/api/auth/better",
-  plugins: [emailOTPClient(), passkeyClient()],
+  plugins: [emailOTPClient(), passkeyClient(), ssoClient({ domainVerification: { enabled: true } })],
 });
 
 async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
@@ -27,7 +28,7 @@ export type BrowserSessionResponse = {
 
 export type BrowserAuthConfiguration = {
   configured: boolean;
-  methods: { apple: boolean; emailOtp: boolean; google: boolean; passkey: boolean };
+  methods: { apple: boolean; emailOtp: boolean; google: boolean; passkey: boolean; sso: boolean };
 };
 
 export async function readBrowserAuthConfiguration() {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBetterAuth } from "~~/lib/auth/betterAuth";
+import { assertEnterpriseSignInAllowed } from "~~/lib/auth/enterpriseIdentityPolicy";
 import { resolveBetterAuthPrincipal } from "~~/lib/auth/principal";
 import { AUTH_SESSION_COOKIE, AuthError, assertAuthRequestOrigin, createAuthSession } from "~~/lib/auth/session";
 import { appendSecurityAuditEvent } from "~~/lib/privacy/audit";
@@ -11,9 +12,20 @@ export async function POST(request: NextRequest) {
     assertAuthRequestOrigin(request.headers.get("origin"));
     const betterSession = await getBetterAuth().api.getSession({ headers: request.headers });
     if (!betterSession?.user?.id) throw new AuthError("Complete Better Auth sign-in before exchanging a session.", 401);
+    const authenticationMethod =
+      typeof betterSession.session.authenticationMethod === "string"
+        ? betterSession.session.authenticationMethod
+        : null;
+    await assertEnterpriseSignInAllowed(betterSession.user.email, authenticationMethod);
+    const principalMethod = authenticationMethod?.startsWith("sso:")
+      ? "sso"
+      : authenticationMethod?.startsWith("social:")
+        ? authenticationMethod.slice("social:".length)
+        : (authenticationMethod ?? undefined);
     const identity = await resolveBetterAuthPrincipal({
       betterAuthUserId: betterSession.user.id,
       displayName: betterSession.user.name,
+      method: principalMethod,
     });
     const session = await createAuthSession(identity);
     await appendSecurityAuditEvent({
