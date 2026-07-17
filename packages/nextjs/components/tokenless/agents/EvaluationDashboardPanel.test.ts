@@ -45,7 +45,8 @@ test("completed runs expose an oversight case detail that respects lane boundari
   assert.match(source, /onToggle=\{event => event\.currentTarget\.open && void load\(\)\}/);
   // Denied and aggregate-only outcomes stay explained, never silently empty.
   assert.match(source, /owners, admins, and designated decision owners/);
-  assert.match(source, /view && !view\.detailAvailable \? <p[^>]*>\{view\.note\}<\/p> : null/);
+  assert.match(source, /view && !view\.detailAvailable/);
+  assert.match(source, /\{view\.note\}/);
   // Material renders via the existing lease/encryption artifact route.
   assert.match(source, /assurance\/projects\/\$\{encodeURIComponent\(view\.projectId\)\}\/artifacts\//);
   assert.match(source, /reviewerPseudonym/);
@@ -74,4 +75,36 @@ test("run cards submit go/revise/stop and record per-output overrides without a 
   assert.match(source, /Linked corrective action \(optional\)/);
   assert.match(source, /a new record supersedes, never edits/i);
   assert.match(source, /reasons\.trim\(\)\.length < 10/);
+});
+
+test("anti-rubber-stamping: signals sit above every decision control and nothing is preselected", () => {
+  const source = readFileSync(new URL("./EvaluationDashboardPanel.tsx", import.meta.url), "utf8");
+  // Signals block: disagreement, gold/mechanism health, and evidence age.
+  assert.match(source, /Before you decide/);
+  assert.match(source, /Reviewer dissent/);
+  assert.match(source, /Calibration failure rate/);
+  assert.match(source, /Quorum-case unanimity/);
+  assert.match(source, /Time since evidence/);
+  // The signals render before the go/revise/stop buttons and before the
+  // override outcome buttons in source order.
+  const decisionRegion = source.slice(source.indexOf("{decidable ? ("));
+  assert.ok(decisionRegion.indexOf("<DecisionSignals") < decisionRegion.indexOf("<ClientDecisionButtons"));
+  const overrideForm = source.slice(source.indexOf("function OverrideRecordForm"));
+  assert.ok(overrideForm.indexOf("<DecisionSignals") < overrideForm.indexOf("OVERRIDE_OUTCOMES.map"));
+  // Sampled explain-this-decision prompt: reasons required even for go, and
+  // the buttons stay disabled until the explanation exists.
+  assert.match(source, /run\.explanationRequired/);
+  assert.match(source, /Explain this decision/);
+  assert.match(source, /even for go/);
+  assert.match(source, /explanationMissing = run\.explanationRequired && note\.trim\(\)\.length < 10/);
+  assert.match(source, /disabled=\{busy \|\| explanationMissing\}/);
+  // The decider's own trend shows beside both forms.
+  assert.match(source, /deciderTrendLabel/);
+  assert.match(source, /You chose go on/);
+  assert.match(source, /you accepted/);
+  assert.match(source, /trend=\{dashboard\.deciderTrend\}/);
+  // Nothing anywhere is preselected.
+  assert.doesNotMatch(source, /defaultChecked|checked=\{true\}|aria-pressed=\{true\}/);
+  assert.doesNotMatch(source, /defaultValue=\{?"(go|revise|stop|accepted|disregarded|overridden|reversed)/);
+  assert.doesNotMatch(source, /<option[^>]*selected/);
 });

@@ -1329,3 +1329,67 @@ test("override routes are session-scoped and mutations stay same-origin with an 
   assert.match(source, /POST_KEYS/u);
   assert.match(source, /private, no-store/u);
 });
+
+test("sampled runs require an explained decision even for go", async () => {
+  const fixture = await seedEvidenceFixture({
+    compensation: "unpaid",
+    minimumAggregationSize: 2,
+    sources: [
+      {
+        source: "customer_invited",
+        targetCount: 3,
+        responses: [
+          { choice: "candidate", validity: "valid" },
+          { choice: "candidate", validity: "valid" },
+          { choice: "baseline", validity: "valid" },
+        ],
+      },
+    ],
+  });
+  const signer = generateKeyPairSync("ed25519");
+  await generateAssuranceEvidencePacket({
+    accountAddress: OWNER,
+    workspaceId: fixture.workspaceId,
+    runId: fixture.runId,
+    signer: { privateKey: signer.privateKey },
+    tenantCommitmentKey: TENANT_KEY,
+  });
+  const originalRate = process.env.TOKENLESS_DECISION_EXPLANATION_RATE_BPS;
+  process.env.TOKENLESS_DECISION_EXPLANATION_RATE_BPS = "10000";
+  try {
+    await assert.rejects(
+      () =>
+        recordAssuranceClientDecision({
+          accountAddress: OWNER,
+          workspaceId: fixture.workspaceId,
+          runId: fixture.runId,
+          decision: "go",
+        }),
+      (error: unknown) => error instanceof TokenlessServiceError && error.code === "decision_explanation_required",
+    );
+    await assert.rejects(
+      () =>
+        recordAssuranceClientDecision({
+          accountAddress: OWNER,
+          workspaceId: fixture.workspaceId,
+          runId: fixture.runId,
+          decision: "go",
+          note: "short",
+        }),
+      (error: unknown) => error instanceof TokenlessServiceError && error.code === "decision_explanation_required",
+    );
+    const explained = await recordAssuranceClientDecision({
+      accountAddress: OWNER,
+      workspaceId: fixture.workspaceId,
+      runId: fixture.runId,
+      decision: "go",
+      note: "Unanimity on quorum cases and passing calibration justify release.",
+      now: NOW,
+    });
+    assert.equal(explained.decision, "go");
+    assert.match(String(explained.note), /justify release/);
+  } finally {
+    if (originalRate === undefined) delete process.env.TOKENLESS_DECISION_EXPLANATION_RATE_BPS;
+    else process.env.TOKENLESS_DECISION_EXPLANATION_RATE_BPS = originalRate;
+  }
+});

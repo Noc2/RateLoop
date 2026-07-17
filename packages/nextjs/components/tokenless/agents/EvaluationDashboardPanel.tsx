@@ -4,7 +4,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { AdaptiveCoverageSummary } from "~~/components/tokenless/agents/AdaptiveCoverageSummary";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import type { AssuranceMetricsSnapshot } from "~~/lib/tokenless/assuranceMetrics";
-import type { EvaluationDashboard, EvaluationRun } from "~~/lib/tokenless/evaluationDashboard";
+import type { DeciderDecisionTrend, EvaluationDashboard, EvaluationRun } from "~~/lib/tokenless/evaluationDashboard";
 import type { OversightRunCaseView } from "~~/lib/tokenless/oversightCaseView";
 
 type Workspace = { workspaceId: string; name: string; role: string };
@@ -124,17 +124,85 @@ function SampleNote({ run }: { run: EvaluationRun }) {
   return <p className="mt-2 text-xs text-base-content/45">{run.validResponses} valid responses</p>;
 }
 
+/**
+ * Signals a decider must see before the decision buttons: reviewer
+ * disagreement, calibration (gold) failures and mechanism health, and how old
+ * the evidence is. Rendered above every decision and override control.
+ */
+function DecisionSignals({ run }: { run: EvaluationRun }) {
+  const share = run.candidateSelectionShareBps;
+  const dissentBps = share === null ? null : Math.min(share, 10_000 - share);
+  const evidenceAgeHours = run.completedAt
+    ? Math.max(0, Math.round((Date.now() - new Date(run.completedAt).getTime()) / 3_600_000))
+    : null;
+  const signals: Array<[string, string]> = [
+    ["Reviewer dissent", dissentBps === null ? "Suppressed" : percent(dissentBps)],
+    [
+      "Calibration failure rate",
+      run.mechanismHealth?.goldFailureRateBps === null || run.mechanismHealth === null
+        ? "No calibration data"
+        : percent(run.mechanismHealth.goldFailureRateBps),
+    ],
+    [
+      "Quorum-case unanimity",
+      run.mechanismHealth?.unanimityRateBps === null || run.mechanismHealth === null
+        ? "No data"
+        : percent(run.mechanismHealth.unanimityRateBps),
+    ],
+    [
+      "Time since evidence",
+      evidenceAgeHours === null
+        ? "Not completed"
+        : evidenceAgeHours < 48
+          ? `${evidenceAgeHours} h`
+          : `${Math.round(evidenceAgeHours / 24)} days`,
+    ],
+  ];
+  return (
+    <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.02] p-3" role="note">
+      <p className="text-xs font-semibold text-base-content/55">Before you decide</p>
+      <dl className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+        {signals.map(([label, value]) => (
+          <div key={label}>
+            <dt className="text-base-content/40">{label}</dt>
+            <dd className="mt-0.5 font-mono">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+function deciderTrendLabel(trend: DeciderDecisionTrend | undefined) {
+  if (!trend) return null;
+  const parts: string[] = [];
+  if (trend.clientDecisions.total > 0) {
+    const share = Math.round((trend.clientDecisions.goCount / trend.clientDecisions.total) * 100);
+    parts.push(`You chose go on ${share}% of your last ${trend.clientDecisions.total} sign-offs`);
+  }
+  if (trend.overrides.total > 0) {
+    const share = Math.round((trend.overrides.acceptedCount / trend.overrides.total) * 100);
+    parts.push(`you accepted ${share}% of your last ${trend.overrides.total} recorded outcomes`);
+  }
+  return parts.length > 0 ? `${parts.join(" · ")}.` : null;
+}
+
 function ClientDecisionButtons({
   run,
   workspaceId,
+  trend,
   onDecided,
 }: {
   run: EvaluationRun;
   workspaceId: string;
+  trend?: DeciderDecisionTrend;
   onDecided: (decision: NonNullable<EvaluationRun["clientDecision"]>) => void;
 }) {
+  const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const explanationMissing = run.explanationRequired && note.trim().length < 10;
+  const trendLabel = deciderTrendLabel(trend);
 
   async function submit(decision: NonNullable<EvaluationRun["clientDecision"]>) {
     setBusy(true);
@@ -147,7 +215,7 @@ function ClientDecisionButtons({
             method: "POST",
             credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ decision }),
+            body: JSON.stringify({ decision, ...(note.trim() ? { note: note.trim() } : {}) }),
           },
         ),
       );
@@ -162,6 +230,23 @@ function ClientDecisionButtons({
   return (
     <div className="mt-3">
       <p className="text-xs text-base-content/45">Sign off on this run — no choice is preselected.</p>
+      {trendLabel ? <p className="mt-1 text-xs text-base-content/45">{trendLabel}</p> : null}
+      {run.explanationRequired ? (
+        <div className="mt-2 rounded-lg border border-amber-200/20 bg-amber-300/[0.06] p-3">
+          <p className="text-xs font-semibold text-amber-100/90">Explain this decision</p>
+          <p className="mt-1 text-xs leading-5 text-amber-100/70">
+            This run was sampled for an explained decision: write your reasons before choosing — even for go.
+          </p>
+          <textarea
+            className="textarea mt-2 w-full border-white/10 bg-[var(--rateloop-field)] text-sm"
+            placeholder="Reasons (required for this run, at least 10 characters)"
+            value={note}
+            maxLength={2000}
+            rows={2}
+            onChange={event => setNote(event.target.value)}
+          />
+        </div>
+      ) : null}
       <div className="mt-2 flex flex-wrap gap-2">
         {(["go", "revise", "stop"] as const).map(choice => (
           <button
@@ -169,7 +254,7 @@ function ClientDecisionButtons({
             type="button"
             className="btn btn-outline btn-sm"
             onClick={() => void submit(choice)}
-            disabled={busy}
+            disabled={busy || explanationMissing}
           >
             {decisionLabel(choice)}
           </button>
@@ -186,7 +271,15 @@ function ClientDecisionButtons({
 
 const OVERRIDE_OUTCOMES = ["accepted", "disregarded", "overridden", "reversed"] as const;
 
-function OverrideRecordForm({ run, workspaceId }: { run: EvaluationRun; workspaceId: string }) {
+function OverrideRecordForm({
+  run,
+  workspaceId,
+  trend,
+}: {
+  run: EvaluationRun;
+  workspaceId: string;
+  trend?: DeciderDecisionTrend;
+}) {
   const [reasons, setReasons] = useState("");
   const [correctiveAction, setCorrectiveAction] = useState("");
   const [recorded, setRecorded] = useState<string | null>(null);
@@ -223,12 +316,15 @@ function OverrideRecordForm({ run, workspaceId }: { run: EvaluationRun; workspac
     }
   }
 
+  const trendLabel = deciderTrendLabel(trend);
   return (
     <form className="mt-4 border-t border-white/10 pt-4" onSubmit={event => event.preventDefault()}>
       <p className="text-sm font-semibold text-base-content/65">Record what you did with this output</p>
       <p className="mt-1 text-xs text-base-content/45">
         Append-only record with mandatory reasons; a new record supersedes, never edits. No choice is preselected.
       </p>
+      {trendLabel ? <p className="mt-1 text-xs text-base-content/45">{trendLabel}</p> : null}
+      <DecisionSignals run={run} />
       {recorded ? (
         <p className="mt-2 text-xs text-emerald-100" role="status">
           Recorded as {recorded}. Recording again supersedes this record.
@@ -385,7 +481,15 @@ function OversightCaseDetail({ run, workspaceId }: { run: EvaluationRun; workspa
   );
 }
 
-function RunCard({ run, workspaceId }: { run: EvaluationRun; workspaceId: string }) {
+function RunCard({
+  run,
+  workspaceId,
+  trend,
+}: {
+  run: EvaluationRun;
+  workspaceId: string;
+  trend?: DeciderDecisionTrend;
+}) {
   const share = run.candidateSelectionShareBps;
   const [clientDecision, setClientDecision] = useState(run.clientDecision);
   const decision = decisionLabel(clientDecision);
@@ -410,7 +514,10 @@ function RunCard({ run, workspaceId }: { run: EvaluationRun; workspaceId: string
           </p>
           <SampleNote run={run} />
           {decidable ? (
-            <ClientDecisionButtons run={run} workspaceId={workspaceId} onDecided={setClientDecision} />
+            <>
+              <DecisionSignals run={run} />
+              <ClientDecisionButtons run={run} workspaceId={workspaceId} trend={trend} onDecided={setClientDecision} />
+            </>
           ) : null}
         </div>
         {run.candidateSelectionIntervalBps ? (
@@ -484,7 +591,7 @@ function RunCard({ run, workspaceId }: { run: EvaluationRun; workspaceId: string
         <code className="mt-3 block break-all text-[11px] text-base-content/35">{run.runId}</code>
       </details>
       {run.status === "completed" ? <OversightCaseDetail run={run} workspaceId={workspaceId} /> : null}
-      {run.status === "completed" ? <OverrideRecordForm run={run} workspaceId={workspaceId} /> : null}
+      {run.status === "completed" ? <OverrideRecordForm run={run} workspaceId={workspaceId} trend={trend} /> : null}
     </article>
   );
 }
@@ -656,7 +763,7 @@ export function EvaluationDashboardPanel({
               Results
             </h2>
             {dashboard.runs.map(run => (
-              <RunCard key={run.runId} run={run} workspaceId={workspaceId} />
+              <RunCard key={run.runId} run={run} workspaceId={workspaceId} trend={dashboard.deciderTrend} />
             ))}
           </section>
 

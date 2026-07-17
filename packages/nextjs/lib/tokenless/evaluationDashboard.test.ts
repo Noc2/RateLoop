@@ -329,6 +329,13 @@ test("evaluation dashboard suppresses small cells and never attributes legacy ru
   });
   assert.deepEqual(released.runs[0]?.attribution, { status: "unattributed", agentId: null, versionId: null });
   assert.ok(released.runs[0]?.candidateSelectionIntervalBps);
+  // Anti-rubber-stamping surfaces: the deterministic explanation flag and the
+  // caller's own decision trend (empty for a fresh workspace).
+  assert.equal(typeof released.runs[0]?.explanationRequired, "boolean");
+  assert.deepEqual(released.deciderTrend, {
+    clientDecisions: { total: 0, goCount: 0 },
+    overrides: { total: 0, acceptedCount: 0 },
+  });
 
   await assert.rejects(
     () => getWorkspaceEvaluationDashboard({ accountAddress: OUTSIDER, workspaceId }),

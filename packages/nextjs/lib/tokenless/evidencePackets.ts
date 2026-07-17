@@ -14,6 +14,7 @@ import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/acco
 import { dbPool } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { enqueueAssuranceAttestation } from "~~/lib/tokenless/assuranceAttestationPipeline";
+import { decisionExplanationRequired } from "~~/lib/tokenless/decisionPromptSampling";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Queryable = { query: (text: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> };
@@ -1329,6 +1330,15 @@ export async function recordAssuranceClientDecision(input: {
     throw new TokenlessServiceError("Decision must be go, revise, or stop.", 400, "invalid_assurance_decision");
   }
   const note = normalizeDecisionNote(input.note);
+  // Anti-rubber-stamping: a deterministic low-rate sample of runs requires an
+  // explained decision — written reasons even when the choice is `go`.
+  if (decisionExplanationRequired(input.runId) && (!note || note.length < 10)) {
+    throw new TokenlessServiceError(
+      "This run was sampled for an explained decision: add reasons of at least 10 characters, even for go.",
+      400,
+      "decision_explanation_required",
+    );
+  }
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");

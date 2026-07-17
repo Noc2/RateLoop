@@ -4,6 +4,7 @@ import { dbClient } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
 import { ADAPTIVE_REVIEW_STAGE_RATE_BPS, type AdaptiveReviewStage } from "~~/lib/tokenless/adaptiveReview";
 import { listWorkspaceAgents } from "~~/lib/tokenless/agentRegistry";
+import { decisionExplanationRequired } from "~~/lib/tokenless/decisionPromptSampling";
 import { listAgentPublishingPolicies } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { wilsonIntervalBps } from "~~/lib/tokenless/transparency";
@@ -36,9 +37,20 @@ export type EvaluationRun = {
   clientDecision: "go" | "revise" | "stop" | null;
   evidencePacketAvailable: boolean;
   evidencePacketDigest: string | null;
+  /** Deterministically sampled: this run requires written reasons even for go. */
+  explanationRequired: boolean;
   createdAt: string;
   completedAt: string | null;
   attribution: { status: "unattributed"; agentId: null; versionId: null };
+};
+
+/**
+ * The caller's own recent decision trend — shown beside the decision forms so
+ * a decider sees their own acceptance pattern before signing off again.
+ */
+export type DeciderDecisionTrend = {
+  clientDecisions: { total: number; goCount: number };
+  overrides: { total: number; acceptedCount: number };
 };
 
 export const ADAPTIVE_COVERAGE_REASON_CODES = [
@@ -98,6 +110,7 @@ export type EvaluationDashboard = {
     attributedRunCount: 0;
     adaptiveCoverage: AdaptiveCoverageTile[];
   }>;
+  deciderTrend: DeciderDecisionTrend;
   runs: EvaluationRun[];
   publishingPolicies: Array<{
     policyId: string;
@@ -198,11 +211,20 @@ export async function getWorkspaceEvaluationDashboard(input: {
   workspaceId: string;
 }): Promise<EvaluationDashboard> {
   const access = await requireWorkspaceAccess(input.accountAddress, input.workspaceId);
-  const [registry, runResult, responseResult, caseResult, policies, adaptiveScopeResult, adaptiveEventResult] =
-    await Promise.all([
-      listWorkspaceAgents(input),
-      dbClient.execute({
-        sql: `SELECT r.run_id, r.project_id, r.status, r.created_at, r.completed_at,
+  const [
+    registry,
+    runResult,
+    responseResult,
+    caseResult,
+    policies,
+    adaptiveScopeResult,
+    adaptiveEventResult,
+    trendDecisions,
+    trendOverrides,
+  ] = await Promise.all([
+    listWorkspaceAgents(input),
+    dbClient.execute({
+      sql: `SELECT r.run_id, r.project_id, r.status, r.created_at, r.completed_at,
                    p.name AS project_name, s.name AS suite_name,
                    ap.reviewer_source, ap.compensation, ap.buyer_privacy_json,
                    d.decision AS client_decision, ep.packet_id, ep.packet_digest,
@@ -218,10 +240,10 @@ export async function getWorkspaceEvaluationDashboard(input: {
             LEFT JOIN tokenless_assurance_mechanism_health mh ON mh.run_id = r.run_id
             WHERE p.workspace_id = ? AND p.status <> 'deleted'
             ORDER BY r.created_at DESC LIMIT 100`,
-        args: [input.workspaceId],
-      }),
-      dbClient.execute({
-        sql: `WITH selected_runs AS (
+      args: [input.workspaceId],
+    }),
+    dbClient.execute({
+      sql: `WITH selected_runs AS (
               SELECT r.run_id
               FROM tokenless_assurance_runs r
               JOIN tokenless_assurance_projects p ON p.project_id = r.project_id
@@ -240,10 +262,10 @@ export async function getWorkspaceEvaluationDashboard(input: {
               ON gold.run_id=resp.run_id AND gold.case_id=resp.case_id
             WHERE gold.case_id IS NULL
             GROUP BY selected_runs.run_id`,
-        args: [input.workspaceId],
-      }),
-      dbClient.execute({
-        sql: `WITH selected_runs AS (
+      args: [input.workspaceId],
+    }),
+    dbClient.execute({
+      sql: `WITH selected_runs AS (
               SELECT r.run_id
               FROM tokenless_assurance_runs r
               JOIN tokenless_assurance_projects p ON p.project_id = r.project_id
@@ -258,29 +280,44 @@ export async function getWorkspaceEvaluationDashboard(input: {
             LEFT JOIN tokenless_assurance_run_gold_items gold
               ON gold.run_id=rc.run_id AND gold.case_id=rc.case_id
             GROUP BY selected_runs.run_id`,
-        args: [input.workspaceId],
-      }),
-      access.canManage
-        ? listAgentPublishingPolicies({ accountAddress: access.address, workspaceId: input.workspaceId })
-        : Promise.resolve(null),
-      dbClient.execute({
-        sql: `SELECT s.scope_id,s.agent_id,s.agent_version_id,s.workflow_key,s.risk_tier,s.stage,
+      args: [input.workspaceId],
+    }),
+    access.canManage
+      ? listAgentPublishingPolicies({ accountAddress: access.address, workspaceId: input.workspaceId })
+      : Promise.resolve(null),
+    dbClient.execute({
+      sql: `SELECT s.scope_id,s.agent_id,s.agent_version_id,s.workflow_key,s.risk_tier,s.stage,
                    s.updated_at,p.production_floor_bps
             FROM tokenless_agent_evaluation_scopes s
             JOIN tokenless_agent_review_policies p
               ON p.workspace_id=s.workspace_id AND p.policy_id=s.policy_id AND p.version=s.policy_version
             WHERE s.workspace_id=? AND p.mode='adaptive'
             ORDER BY s.updated_at DESC,s.scope_id ASC`,
-        args: [input.workspaceId],
-      }),
-      dbClient.execute({
-        sql: `SELECT scope_id,from_stage,to_stage,reason_codes_json,created_at
+      args: [input.workspaceId],
+    }),
+    dbClient.execute({
+      sql: `SELECT scope_id,from_stage,to_stage,reason_codes_json,created_at
             FROM tokenless_agent_review_policy_events
             WHERE workspace_id=? AND event_type IN ('stage_changed','reset')
             ORDER BY created_at DESC,event_id DESC`,
-        args: [input.workspaceId],
-      }),
-    ]);
+      args: [input.workspaceId],
+    }),
+    dbClient.execute({
+      sql: `SELECT d.decision
+            FROM tokenless_assurance_client_decisions d
+            JOIN tokenless_assurance_runs r ON r.run_id = d.run_id
+            JOIN tokenless_assurance_projects p ON p.project_id = r.project_id
+            WHERE p.workspace_id = ? AND d.decided_by = ?
+            ORDER BY d.decided_at DESC LIMIT 50`,
+      args: [input.workspaceId, access.address],
+    }),
+    dbClient.execute({
+      sql: `SELECT outcome FROM tokenless_assurance_override_decisions
+            WHERE workspace_id = ? AND decided_by = ?
+            ORDER BY decided_at DESC LIMIT 50`,
+      args: [input.workspaceId, access.address],
+    }),
+  ]);
 
   const responsesByRun = new Map(
     (responseResult.rows as QueryRow[]).map(row => [rowString(row, "run_id")!, row] as const),
@@ -341,6 +378,7 @@ export async function getWorkspaceEvaluationDashboard(input: {
       clientDecision: rowString(row, "client_decision") as EvaluationRun["clientDecision"],
       evidencePacketAvailable: Boolean(rowString(row, "packet_id")),
       evidencePacketDigest: rowString(row, "packet_digest"),
+      explanationRequired: decisionExplanationRequired(runId),
       createdAt: iso(row.created_at),
       completedAt: row.completed_at ? iso(row.completed_at) : null,
       attribution: { status: "unattributed" as const, agentId: null, versionId: null },
@@ -415,6 +453,17 @@ export async function getWorkspaceEvaluationDashboard(input: {
       attributedRunCount: 0,
       adaptiveCoverage: coverageByAgentVersion.get(`${agent.agentId}\0${agent.currentVersion.versionId}`) ?? [],
     })),
+    deciderTrend: {
+      clientDecisions: {
+        total: trendDecisions.rows.length,
+        goCount: (trendDecisions.rows as QueryRow[]).filter(row => rowString(row, "decision") === "go").length,
+      },
+      overrides: {
+        total: trendOverrides.rows.length,
+        acceptedCount: (trendOverrides.rows as QueryRow[]).filter(row => rowString(row, "outcome") === "accepted")
+          .length,
+      },
+    },
     runs,
     publishingPolicies:
       policies?.map(policy => ({
