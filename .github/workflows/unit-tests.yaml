@@ -86,6 +86,9 @@ jobs:
       - uses: ./.github/actions/setup-foundry
       - name: Install dependencies
         run: yarn install --immutable
+      - name: Warm the Solidity compiler cache
+        working-directory: packages/foundry
+        run: forge build --skip script --skip test
       - name: Build deployment-profile contracts
         run: yarn foundry:build
       - name: Run root and deployment-tool tests
