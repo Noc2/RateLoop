@@ -100,6 +100,7 @@ export function AnswerPageClient({
 
   return (
     <AppPageShell outerClassName="pb-8" contentClassName="space-y-4">
+      <h1 className="sr-only">Review work</h1>
       <div className="flex flex-wrap items-center gap-2">
         {showScopeControls ? (
           <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Review sources">
@@ -126,7 +127,7 @@ export function AnswerPageClient({
         ) : null}
       </div>
 
-      <main className="space-y-4">
+      <div className="space-y-4">
         <AsyncSection loading={loading} loadingLabel="Loading review work">
           {null}
         </AsyncSection>
@@ -171,7 +172,7 @@ export function AnswerPageClient({
             {error}
           </p>
         ) : null}
-      </main>
+      </div>
     </AppPageShell>
   );
 }

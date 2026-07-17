@@ -42,6 +42,7 @@ export default async function AgentsPage({
 
   return (
     <AppPageShell outerClassName="pb-8" contentClassName="space-y-5">
+      {setup?.complete ? <h1 className="sr-only">Agent workspace</h1> : null}
       <AgentWorkspacePanels
         key={workspace?.workspaceId ?? "no-workspace"}
         activeTab={tab}

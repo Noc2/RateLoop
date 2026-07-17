@@ -352,7 +352,7 @@ export function HumanAssuranceRaterClient({
       </div>
 
       <div className="mt-8">
-        <main className="space-y-6">
+        <div className="space-y-6">
           {!task ? (
             <>
               <Card as="section" variant="marketing" className="p-5 sm:p-7">
@@ -675,7 +675,7 @@ export function HumanAssuranceRaterClient({
               {error}
             </p>
           ) : null}
-        </main>
+        </div>
       </div>
     </div>
   );
