@@ -20,7 +20,7 @@ export function HumanReviewExample() {
 
 export function AgentWorkspaceExample() {
   return (
-    <section className="surface-card-nested mb-5 rounded-xl p-4 text-left" aria-labelledby="example-workspace-title">
+    <section className="surface-card-nested rounded-xl p-4 text-left" aria-labelledby="example-workspace-title">
       <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Example workspace</p>
       <h3 id="example-workspace-title" className="mt-2 font-semibold">
         Support agent

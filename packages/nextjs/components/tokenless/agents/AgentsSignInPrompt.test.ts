@@ -12,18 +12,15 @@ test("anonymous visitors see the Agents sign-in prompt without exposing workspac
   assert.ok(
     pageSource.indexOf("if (!session) return <AgentsSignInPrompt />") < pageSource.indexOf("<AgentWorkspacePanels"),
   );
-  assert.match(promptSource, /<SignInSurface/);
+  assert.match(promptSource, /<SignedOutGate/);
   assert.match(promptSource, /title="Agents"/);
   assert.doesNotMatch(promptSource, /For Agents/);
   assert.match(promptSource, /Sign in to connect an agent/);
-  assert.match(promptSource, /<AgentWorkspaceExample \/>/);
-  assert.match(promptSource, /<ThirdwebSessionButton\s+compact/);
-  assert.match(promptSource, /if \(authenticated\) router\.refresh\(\)/);
+  assert.match(promptSource, /preview=\{<AgentWorkspaceExample \/>\}/);
   assert.match(promptSource, /href="\/docs\/ai"/);
-  assert.match(
-    promptSource,
-    /btn btn-outline h-10 min-h-10 w-auto min-w-0 px-\[0\.9rem\] text-base font-bold leading-none/,
-  );
+  assert.match(promptSource, /<Button/);
+  assert.match(promptSource, /variant="secondary"/);
+  assert.match(promptSource, /h-10 min-h-10 px-\[0\.9rem\] text-base font-bold leading-none/);
   assert.doesNotMatch(promptSource, /btn-sm|min-h-11 w-full px-4/);
   assert.doesNotMatch(promptSource, /AgentWorkspacePanels|WorkspaceSettingsClient|Agent API keys|Create workspace/);
   assert.match(sharedSurfaceSource, /flex min-h-\[calc\(100vh-9rem\)\] grow items-center justify-center px-6 py-16/);

@@ -82,7 +82,7 @@ test("Human profile and settings render their controls directly", () => {
     page.indexOf("if (!session) return <HumanAccountSignInPrompt tab={tab} />") <
       page.lastIndexOf("<HumanTabs active={tab} />"),
   );
-  assert.match(signInPrompt, /<SignInSurface/);
+  assert.match(signInPrompt, /<SignedOutGate/);
   assert.match(page, /findAuthSession/);
   assert.match(profileContent, /InvitationRouterPanel/);
   assert.match(profileContent, /PrivateGroupMembershipsPanel/);
