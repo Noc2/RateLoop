@@ -67,18 +67,36 @@ contract X402PanelSubmitterTest is Test {
         assertEq(panel.nextRoundId(), 1);
     }
 
-    function testAuthorizationFailsClosedWhenAdapterAlreadyHoldsTokens() external {
+    function testPreSeededDustDoesNotBrickAuthorizedRoundAndIsLeftBehind() external {
         TokenlessPanel.RoundTerms memory terms = _terms();
         bytes32 nonce = keccak256("stray-adapter-balance");
         (X402PanelSubmitter.Authorization memory authorization, bytes memory roundSignature) =
             _authorization(terms, nonce);
+        // Anyone can donate unsolicited USDC to the adapter; a delta-based check must ignore it.
         usdc.mint(address(adapter), 1);
+
+        uint256 roundId = adapter.createRoundWithAuthorization(funder, terms, authorization, roundSignature);
+        uint256 amount = terms.bountyAmount + terms.feeAmount + terms.attemptReserve;
+
+        assertTrue(usdc.authorizationState(funder, nonce));
+        assertEq(panel.getRound(roundId).funder, funder);
+        assertEq(usdc.balanceOf(address(panel)), amount);
+        // The donated dust unit remains behind, untouched by the round custody flow.
+        assertEq(usdc.balanceOf(address(adapter)), 1);
+        assertEq(usdc.allowance(address(adapter), address(panel)), 0);
+    }
+
+    function testFeeOnTransferAuthorizationStillFailsClosed() external {
+        TokenlessPanel.RoundTerms memory terms = _terms();
+        bytes32 nonce = keccak256("fee-on-transfer-round");
+        (X402PanelSubmitter.Authorization memory authorization, bytes memory roundSignature) =
+            _authorization(terms, nonce);
+        // A token that skims a unit on transfer must be rejected: the receive delta is short.
+        usdc.setTransferShortfall(1);
 
         vm.expectRevert(X402PanelSubmitter.TransferAmountMismatch.selector);
         adapter.createRoundWithAuthorization(funder, terms, authorization, roundSignature);
 
-        assertFalse(usdc.authorizationState(funder, nonce));
-        assertEq(usdc.balanceOf(address(adapter)), 1);
         assertEq(panel.nextRoundId(), 1);
     }
 
