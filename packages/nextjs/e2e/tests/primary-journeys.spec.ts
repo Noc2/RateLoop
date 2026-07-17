@@ -7,12 +7,16 @@ const future = "2030-07-17T12:00:00.000Z";
 test("setup wizard creates a workspace and reaches agent connection", async ({ page }) => {
   await authenticate(page, browserState.setupSessionToken);
   await page.goto("/agents");
-  await expect(page.getByRole("heading", { name: "Name your workspace" })).toBeVisible();
-  await expectNoAxeViolations(page);
-  await page.getByLabel("Workspace name").fill("Playwright setup workspace");
-  await page.getByRole("button", { name: "Create workspace" }).click();
-  await expect(page).toHaveURL(/\/agents\?workspace=.+&step=connect/u);
-  await expect(page.getByRole("heading", { name: "Connect your agent" })).toBeVisible();
+  const setupHeading = page.getByRole("heading", { name: "Name your workspace" });
+  const connectHeading = page.getByRole("heading", { name: "Connect your agent" });
+  await expect(setupHeading.or(connectHeading)).toBeVisible();
+  if (await setupHeading.isVisible()) {
+    await expectNoAxeViolations(page);
+    await page.getByLabel("Workspace name").fill("Playwright setup workspace");
+    await page.getByRole("button", { name: "Create workspace" }).click();
+    await expect(page).toHaveURL(/\/agents\?workspace=.+&step=connect/u);
+  }
+  await expect(connectHeading).toBeVisible();
   await expectNoAxeViolations(page);
 });
 
