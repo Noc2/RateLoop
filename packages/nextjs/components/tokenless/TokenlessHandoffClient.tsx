@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   type TokenlessAskResponse,
@@ -346,70 +346,86 @@ export function TokenlessHandoffClient() {
     };
   }, []);
 
+  const loadSession = useCallback(async (signal: AbortSignal) => {
+    try {
+      const sessionBody = record(
+        await readApiJson(
+          await fetch("/api/auth/session", { cache: "no-store", credentials: "same-origin", signal }),
+        ),
+        "session",
+      );
+      if (sessionBody.authenticated !== true || typeof sessionBody.principalId !== "string") {
+        setSession({ status: "anonymous" });
+        return;
+      }
+      if (typeof sessionBody.expiresAt !== "string") {
+        throw new Error("RateLoop returned an invalid signed-in session.");
+      }
+      setSession({
+        status: "authenticated",
+        principalId: sessionBody.principalId,
+        expiresAt: sessionBody.expiresAt,
+      });
+      setWorkspaceLoading(true);
+      try {
+        const workspaceBody = record(
+          await readApiJson(
+            await fetch("/api/account/workspaces", { cache: "no-store", credentials: "same-origin", signal }),
+          ),
+          "workspaces response",
+        );
+        const nextWorkspaces = Array.isArray(workspaceBody.workspaces)
+          ? (workspaceBody.workspaces as Workspace[]).filter(
+              workspace =>
+                typeof workspace?.workspaceId === "string" &&
+                typeof workspace?.name === "string" &&
+                typeof workspace?.prepaid?.availableAtomic === "string" &&
+                ATOMIC_PATTERN.test(workspace.prepaid.availableAtomic),
+            )
+          : [];
+        setWorkspaces(nextWorkspaces);
+        setSelectedWorkspaceId(current =>
+          current && nextWorkspaces.some(workspace => workspace.workspaceId === current)
+            ? current
+            : (nextWorkspaces[0]?.workspaceId ?? ""),
+        );
+      } catch (cause) {
+        if (!signal.aborted) {
+          setWorkspaceError(cause instanceof Error ? cause.message : "Unable to load prepaid workspaces.");
+        }
+      }
+    } catch (cause) {
+      if (!signal.aborted) {
+        setSession({ status: "error", message: cause instanceof Error ? cause.message : "Unable to load sign-in." });
+      }
+    } finally {
+      if (!signal.aborted) setWorkspaceLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const controller = new AbortController();
-    void (async () => {
-      try {
-        const sessionBody = record(
-          await readApiJson(
-            await fetch("/api/auth/session", {
-              cache: "no-store",
-              credentials: "same-origin",
-              signal: controller.signal,
-            }),
-          ),
-          "session",
-        );
-        if (sessionBody.authenticated !== true || typeof sessionBody.principalId !== "string") {
-          setSession({ status: "anonymous" });
-          return;
-        }
-        if (typeof sessionBody.expiresAt !== "string") {
-          throw new Error("RateLoop returned an invalid signed-in session.");
-        }
-        setSession({
-          status: "authenticated",
-          principalId: sessionBody.principalId,
-          expiresAt: sessionBody.expiresAt,
-        });
-        setWorkspaceLoading(true);
-        try {
-          const workspaceBody = record(
-            await readApiJson(
-              await fetch("/api/account/workspaces", {
-                cache: "no-store",
-                credentials: "same-origin",
-                signal: controller.signal,
-              }),
-            ),
-            "workspaces response",
-          );
-          const nextWorkspaces = Array.isArray(workspaceBody.workspaces)
-            ? (workspaceBody.workspaces as Workspace[]).filter(
-                workspace =>
-                  typeof workspace?.workspaceId === "string" &&
-                  typeof workspace?.name === "string" &&
-                  typeof workspace?.prepaid?.availableAtomic === "string" &&
-                  ATOMIC_PATTERN.test(workspace.prepaid.availableAtomic),
-              )
-            : [];
-          setWorkspaces(nextWorkspaces);
-          setSelectedWorkspaceId(nextWorkspaces[0]?.workspaceId ?? "");
-        } catch (cause) {
-          if (!controller.signal.aborted) {
-            setWorkspaceError(cause instanceof Error ? cause.message : "Unable to load prepaid workspaces.");
-          }
-        }
-      } catch (cause) {
-        if (!controller.signal.aborted) {
-          setSession({ status: "error", message: cause instanceof Error ? cause.message : "Unable to load sign-in." });
-        }
-      } finally {
-        if (!controller.signal.aborted) setWorkspaceLoading(false);
-      }
-    })();
+    void loadSession(controller.signal);
     return () => controller.abort();
-  }, []);
+  }, [loadSession]);
+
+  // When the user signs in through the separate tab and returns here, refresh the session so this
+  // tab picks it up. The private handoff fragment stays in this tab and is never navigated away, so
+  // the bearer capability is never exposed to the server or placed in a query string.
+  useEffect(() => {
+    if (session.status === "authenticated" || session.status === "loading") return;
+    const controller = new AbortController();
+    const refresh = () => {
+      if (document.visibilityState === "visible") void loadSession(controller.signal);
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      controller.abort();
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [loadSession, session.status]);
 
   const payload = handoff.status === "ready" || handoff.status === "expired" ? handoff.payload : null;
   const selectedWorkspace = workspaces.find(workspace => workspace.workspaceId === selectedWorkspaceId) ?? null;
@@ -815,10 +831,21 @@ export function TokenlessHandoffClient() {
                 Checking your RateLoop session…
               </p>
             ) : session.status === "anonymous" ? (
-              <p className="text-sm leading-6 text-base-content/70">
-                <strong className="text-base-content">Sign in required.</strong> Use the work account button in the
-                header, then reload this handoff link. The fragment remains local to the browser during sign-in.
-              </p>
+              <div className="text-sm leading-6 text-base-content/70">
+                <p>
+                  <strong className="text-base-content">Sign in required.</strong> Open sign-in in a new tab, then
+                  return to this tab to continue. This review link stays in this browser tab and is never sent to
+                  RateLoop during sign-in.
+                </p>
+                <a
+                  href="/sign-in"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-block font-semibold underline underline-offset-4"
+                >
+                  Sign in in a new tab
+                </a>
+              </div>
             ) : session.status === "error" ? (
               <p className="text-sm leading-6 text-error" role="alert">
                 {session.message}

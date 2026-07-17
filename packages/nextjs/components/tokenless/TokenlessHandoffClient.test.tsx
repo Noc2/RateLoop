@@ -205,6 +205,20 @@ test("expired browser handoffs stop at one recovery action", () => {
   assert.match(handoffSource, /Ask the agent for a new link\./);
 });
 
+test("signed-out handoffs open a fragment-safe sign-in in a separate tab and refresh on return", () => {
+  // AUD-15: the bearer handoff lives only in the URL fragment. Sign-in must not navigate this tab
+  // away (which would drop the fragment) or place the bearer in a server-visible URL.
+  assert.match(handoffSource, /href="\/sign-in"\s+target="_blank"\s+rel="noopener noreferrer"/);
+  assert.match(handoffSource, /Sign in in a new tab/);
+  // The session is re-checked when the user returns to this tab after signing in elsewhere.
+  assert.match(handoffSource, /const loadSession = useCallback/);
+  assert.match(handoffSource, /window\.addEventListener\("focus", refresh\)/);
+  assert.match(handoffSource, /document\.addEventListener\("visibilitychange", refresh\)/);
+  // The bearer capability must never be encoded into a query string / server-visible URL.
+  assert.doesNotMatch(handoffSource, /sign-in\?[^"'`\n]*(payload|handoffToken|returnTo|hash)/i);
+  assert.doesNotMatch(handoffSource, /[?&](returnTo|payload)=[^"'`\n]*(location\.hash|payload)/i);
+});
+
 test("browser quote validation preserves the owner-approved public-data contract", () => {
   const validated = validateTokenlessQuoteRequest(request());
   assert.equal(validated.visibility, "public");
