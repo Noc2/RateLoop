@@ -61,7 +61,7 @@ or end-to-end paid-path testing is complete.
 3. **Provision the signed EU bundle.** Supply matching EU Postgres, private Blob, managed KMS, log, backup, auth,
    support-access, Ponder, keeper, and external-processor evidence. Validate actual provider IDs and runtime regions;
    setting expected strings is not evidence.
-4. **Apply and verify migrations.** Run every journal entry through the current head (now `0082`) against the isolated
+4. **Apply and verify migrations.** Run every journal entry through the current head (now `0091`) against the isolated
    database, verify the resulting constraints, and test rollback/recovery procedures without pointing at legacy data.
 5. **Exercise the complete paid path.** Run a deployment-pinned Base Sepolia journey:
    `quote -> ask -> fund -> assign -> voucher -> commit -> reveal -> settle -> result -> claim`. Verify the normal,
