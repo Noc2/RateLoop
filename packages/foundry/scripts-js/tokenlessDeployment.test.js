@@ -99,9 +99,40 @@ test("reconstructs an isolated versioned tokenless Base Sepolia artifact", () =>
   assert.equal(artifact.contracts.TokenlessPanel.address, address(3));
   assert.equal(artifact.contracts.TokenlessFeedbackBonus.address, address(4));
   assert.equal(artifact.contracts.X402PanelSubmitter, undefined);
+  // The common start block is the earliest deployed block (TestUSDC at 101),
+  // not the latest, so Ponder never skips earlier constructor events.
+  assert.equal(artifact.deploymentBlockNumber, 101);
   assert.match(
     artifact.deploymentKey,
     /^tokenless-v4:84532:0x[0-9a-f]{40}:0x[0-9a-f]{40}:0x0{40}:0x[0-9a-f]{40}$/,
+  );
+});
+
+test("exports the earliest deployed block even when the adapter is deployed last", () => {
+  const artifact = reconstructTokenlessDeploymentFromBroadcast(
+    completeBroadcast({ includeAdapter: true }),
+  );
+  assert.equal(artifact.contracts.X402PanelSubmitter.deployedOnBlock, 105);
+  assert.equal(artifact.deploymentBlockNumber, 101);
+});
+
+test("rejects a deployment block that is not the earliest contract block", () => {
+  const artifact = reconstructTokenlessDeploymentFromBroadcast(
+    completeBroadcast({ includeAdapter: true }),
+  );
+  assert.equal(artifact.deploymentBlockNumber, 101);
+  assert.throws(
+    () =>
+      validateTokenlessDeploymentArtifact({
+        ...artifact,
+        deploymentBlockNumber: 105,
+      }),
+    /must equal the earliest contract deployment block/,
+  );
+  // The genuine minimum still validates.
+  assert.equal(
+    validateTokenlessDeploymentArtifact(artifact).deploymentBlockNumber,
+    101,
   );
 });
 

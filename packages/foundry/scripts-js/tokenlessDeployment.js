@@ -283,7 +283,10 @@ export function reconstructTokenlessDeploymentFromBroadcast(
     };
   }
 
-  const deploymentBlockNumber = Math.max(
+  // Ponder applies this single start block to every indexed contract, so it must
+  // be the earliest deployed block or constructor events emitted before the last
+  // deployment (e.g. the credential issuer's initial signer epoch) are skipped.
+  const deploymentBlockNumber = Math.min(
     ...Object.values(contracts).map((contract) => contract.deployedOnBlock),
   );
   const deploymentKey = buildTokenlessDeploymentKey({
@@ -377,6 +380,23 @@ export function validateTokenlessDeploymentArtifact(artifact) {
     contracts.TokenlessFeedbackBonus.address,
     "TokenlessFeedbackBonus address",
   );
+
+  // The exported common start block must equal the earliest deployed block of
+  // every included contract; Ponder indexes from it and any larger value would
+  // skip earlier constructor events.
+  const minimumDeployedBlock = Math.min(
+    ...Object.values(contracts).map((contract) =>
+      normalizeBlockNumber(contract.deployedOnBlock, "contract deployedOnBlock"),
+    ),
+  );
+  if (
+    normalizeBlockNumber(artifact.deploymentBlockNumber, "deploymentBlockNumber") !==
+    minimumDeployedBlock
+  ) {
+    throw new Error(
+      "Tokenless deployment block must equal the earliest contract deployment block.",
+    );
+  }
 
   const expectedKey = buildTokenlessDeploymentKey({
     chainId: artifact.chainId,
