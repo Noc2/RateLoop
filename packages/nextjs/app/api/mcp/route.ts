@@ -157,8 +157,17 @@ export async function OPTIONS(request: NextRequest) {
   }
 }
 
-export async function GET() {
-  return json({ error: { code: -32600, message: "Use POST for Streamable HTTP." }, id: null, jsonrpc: "2.0" }, 405, {
-    Allow: "POST, OPTIONS",
-  });
+export async function GET(request: NextRequest) {
+  try {
+    const cors = corsHeaders(request);
+    cors.set("Allow", "POST, OPTIONS");
+    return json(
+      { error: { code: -32600, message: "Use POST for Streamable HTTP." }, id: null, jsonrpc: "2.0" },
+      405,
+      cors,
+    );
+  } catch (error) {
+    if (error instanceof TokenlessMcpHttpError) return httpError(error);
+    return rpcError(500, "RateLoop MCP request failed.", -32603, { code: "internal_error" });
+  }
 }

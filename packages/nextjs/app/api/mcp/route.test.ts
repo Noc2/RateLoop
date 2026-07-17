@@ -11,15 +11,16 @@ function request(
   value: unknown,
   options: { headers?: Record<string, string>; method?: string; rawBody?: string } = {},
 ) {
+  const method = options.method ?? "POST";
   return new NextRequest("https://rateloop-tokenless.vercel.app/api/mcp", {
-    body: options.rawBody ?? JSON.stringify(value),
+    ...(!["GET", "HEAD"].includes(method) ? { body: options.rawBody ?? JSON.stringify(value) } : {}),
     headers: {
       accept: "application/json, text/event-stream",
       "content-type": "application/json",
       "x-real-ip": "203.0.113.10",
       ...options.headers,
     },
-    method: options.method ?? "POST",
+    method,
   });
 }
 
@@ -210,9 +211,22 @@ test("enforces same-origin browser access, Streamable HTTP headers, and body lim
 });
 
 test("GET is disabled and same-origin POST responses carry CORS without caching", async () => {
-  const getResponse = await GET();
+  const getResponse = await GET(
+    request(null, {
+      headers: { origin: "https://rateloop-tokenless.vercel.app" },
+      method: "GET",
+      rawBody: "",
+    }),
+  );
   assert.equal(getResponse.status, 405);
   assert.equal(getResponse.headers.get("allow"), "POST, OPTIONS");
+  assert.equal(getResponse.headers.get("access-control-allow-origin"), "https://rateloop-tokenless.vercel.app");
+
+  const forbiddenGet = await GET(
+    request(null, { headers: { origin: "https://attacker.example" }, method: "GET", rawBody: "" }),
+  );
+  assert.equal(forbiddenGet.status, 403);
+  assert.equal((await body(forbiddenGet)).error.data.code, "origin_forbidden");
 
   const response = await POST(
     request(
