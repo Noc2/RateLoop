@@ -169,7 +169,10 @@ test("one-time member invitations store only hashes, bind redemption to the brow
 
   // Sequential creation: audit-chain heads serialize with FOR UPDATE in
   // PostgreSQL, which the in-memory test database does not implement.
-  const created = [];
+  const created: Array<{
+    invitation: (typeof invitations)[number];
+    invite: Awaited<ReturnType<typeof createWorkspaceMemberInvite>>;
+  }> = [];
   for (const invitation of invitations) {
     created.push({
       invitation,
