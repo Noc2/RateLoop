@@ -72,7 +72,10 @@ contract TokenlessFeedbackBonus is EIP712, ReentrancyGuard {
 
     uint256 public nextPoolId = 1;
     mapping(uint256 poolId => Pool pool) private _pools;
-    mapping(bytes32 reviewId => uint256 poolId) public reviewPoolId;
+    /// @dev Keyed by `poolKeyFor(requester, reviewId)`, not the raw review ID, so pool uniqueness
+    ///      is bound to the authenticated paying requester (msg.sender at creation). A globally
+    ///      caller-chosen review ID can therefore no longer be squatted to brick a legitimate pool.
+    mapping(bytes32 poolKey => uint256 poolId) public reviewPoolId;
     mapping(bytes32 feedbackKey => FeedbackRecord record) private _feedback;
     mapping(bytes32 nullifier => bool used) public nullifierUsed;
     mapping(uint256 poolId => mapping(bytes32 responseHash => bool awarded)) public responseAwarded;
@@ -171,7 +174,8 @@ contract TokenlessFeedbackBonus is EIP712, ReentrancyGuard {
             terms.feedbackDeadline <= block.timestamp || terms.awardDeadline <= terms.feedbackDeadline
                 || uint256(terms.awardDeadline) > uint256(terms.feedbackDeadline) + MAX_AWARD_WINDOW
         ) revert InvalidDeadline();
-        if (reviewPoolId[terms.reviewId] != 0) revert PoolAlreadyExists();
+        bytes32 poolKey = poolKeyFor(payer, terms.reviewId);
+        if (reviewPoolId[poolKey] != 0) revert PoolAlreadyExists();
 
         poolId = nextPoolId++;
         _pools[poolId] = Pool({
@@ -186,7 +190,7 @@ contract TokenlessFeedbackBonus is EIP712, ReentrancyGuard {
             awardDeadline: terms.awardDeadline,
             refunded: false
         });
-        reviewPoolId[terms.reviewId] = poolId;
+        reviewPoolId[poolKey] = poolId;
 
         uint256 beforeBalance = usdc.balanceOf(address(this));
         usdc.safeTransferFrom(payer, address(this), terms.amount);
@@ -303,6 +307,14 @@ contract TokenlessFeedbackBonus is EIP712, ReentrancyGuard {
         _transferExact(pool.funder, amount);
 
         emit RemainderRefunded(poolId, pool.funder, amount);
+    }
+
+    /// @notice Namespaced pool-uniqueness key binding a review ID to the paying requester.
+    /// @dev `requester` is the account that funds the pool (msg.sender at creation). Because pool
+    ///      identity is namespaced by that authenticated account, an attacker who learns or
+    ///      predicts a legitimate review ID cannot front-run and permanently block it.
+    function poolKeyFor(address requester, bytes32 reviewId) public pure returns (bytes32) {
+        return keccak256(abi.encode(requester, reviewId));
     }
 
     function feedbackKeyFor(uint256 poolId, address voteKey) public pure returns (bytes32) {

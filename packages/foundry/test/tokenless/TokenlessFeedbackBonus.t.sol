@@ -53,8 +53,45 @@ contract TokenlessFeedbackBonusTest is Test {
         assertEq(pool.funder, funder);
         assertEq(pool.awarder, funder);
         assertEq(pool.depositedAmount, BONUS_POOL);
-        assertEq(bonus.reviewPoolId(REVIEW_ID), poolId);
+        assertEq(bonus.reviewPoolId(bonus.poolKeyFor(funder, REVIEW_ID)), poolId);
         assertEq(usdc.balanceOf(address(bonus)), BONUS_POOL);
+    }
+
+    function test_ReviewIdCannotBeSquattedAcrossDifferentRequesters() public {
+        // An attacker front-runs the legitimate requester with the same review ID. Pool
+        // uniqueness is namespaced by the paying requester, so it only occupies the attacker's
+        // namespace and cannot brick the legitimate requester's pool.
+        TokenlessFeedbackBonus.PoolTerms memory attackerTerms = _terms(REVIEW_ID);
+        vm.prank(payer);
+        uint256 attackerPool = bonus.createPool(attackerTerms, awarder);
+
+        TokenlessFeedbackBonus.PoolTerms memory requesterTerms = _terms(REVIEW_ID);
+        vm.prank(funder);
+        uint256 requesterPool = bonus.createPool(requesterTerms, awarder);
+
+        assertTrue(attackerPool != requesterPool);
+        assertEq(bonus.reviewPoolId(bonus.poolKeyFor(payer, REVIEW_ID)), attackerPool);
+        assertEq(bonus.reviewPoolId(bonus.poolKeyFor(funder, REVIEW_ID)), requesterPool);
+        assertEq(bonus.getPool(requesterPool).funder, funder);
+
+        // The paying requester still cannot create a second pool for the same review ID.
+        vm.prank(funder);
+        vm.expectRevert(TokenlessFeedbackBonus.PoolAlreadyExists.selector);
+        bonus.createPool(_terms(REVIEW_ID), awarder);
+    }
+
+    function test_CreatePoolForSquatIsBoundToThePayerNotTheNamedFunder() public {
+        // Even naming the victim as funder via the prepaid path cannot squat: the key is bound to
+        // the paying attacker (msg.sender), not the caller-chosen funder address.
+        vm.prank(payer);
+        uint256 squatPool = bonus.createPoolFor(_terms(REVIEW_ID), funder, awarder);
+
+        vm.prank(funder);
+        uint256 requesterPool = bonus.createPool(_terms(REVIEW_ID), awarder);
+
+        assertTrue(squatPool != requesterPool);
+        assertEq(bonus.reviewPoolId(bonus.poolKeyFor(payer, REVIEW_ID)), squatPool);
+        assertEq(bonus.reviewPoolId(bonus.poolKeyFor(funder, REVIEW_ID)), requesterPool);
     }
 
     function test_PrepaidPayerFreezesRequesterRefundAndHumanAwarder() public {
@@ -92,7 +129,7 @@ contract TokenlessFeedbackBonusTest is Test {
         vm.prank(funder);
         vm.expectRevert(TokenlessFeedbackBonus.TransferAmountMismatch.selector);
         bonus.createPool(second, awarder);
-        assertEq(bonus.reviewPoolId(second.reviewId), 0);
+        assertEq(bonus.reviewPoolId(bonus.poolKeyFor(funder, second.reviewId)), 0);
     }
 
     function test_RegistersOnlyCredentialedTimelyFeedbackWithVoteKeyConsent() public {
