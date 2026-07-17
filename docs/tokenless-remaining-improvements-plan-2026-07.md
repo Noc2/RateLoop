@@ -1,13 +1,17 @@
-# Remaining enterprise-analysis improvements — AI implementation plan (July 2026)
+# Remaining enterprise-analysis improvements — implementation record (July 2026)
 
-**Status:** implementation plan for the issues in the
-[enterprise analysis](tokenless-enterprise-analysis-2026-07.md) that a coding agent can deliver in this
-repository — code, schema, docs, and tests on the `tokenless` branch. Recommendation R1 already has its own
+**Status:** every AI-implementable numbered step in this record is implemented and tested on the `tokenless`
+branch. External release work remains gated: Stripe test/live configuration, a live customer IdP staging
+exercise, structured German e-invoice provider selection when required, legal/tax review, and the paid-network
+readiness gates. This record covers the issues in the
+[enterprise analysis](tokenless-enterprise-analysis-2026-07.md) that can be delivered in this repository.
+Recommendation R1 already has its own
 plan ([assurance-evidence plan](tokenless-assurance-evidence-plan-2026-07.md)); this document covers the
 rest. The [design of record](tokenless-immutable-implementation-plan-2026-07.md) and
 [production-readiness register](tokenless-production-readiness-2026-07.md) control decisions and release
 gates. Repository facts below were re-verified on this branch on 2026-07-16; several items the analysis
-flagged have since landed and are marked done.
+flagged have since landed and are marked done. W1 and W5 were re-audited against the repository and the primary
+LangGraph, OpenAI Agents SDK, Claude Code, and stable MCP 2025-06-18 documentation on 2026-07-17.
 
 **In scope (AI-implementable):** drift reconciliation (R9); the gold-standard quality leg and
 mechanism-health metrics (R3, R10); the fiat prepaid wrapper (R4); enterprise SSO/SCIM (the code slice of
@@ -15,8 +19,8 @@ R5); approval-primitive integration adapters (R6); reviewer expertise qualificat
 slice of R2).
 
 **Out of scope (human/business):** the SOC 2 / ISO audits themselves, external contract and privacy review,
-GTM execution (R7, R8), legal/tax advice, mainnet deployment approval, and pricing decisions. Items needing
-a one-line owner decision before code can proceed are collected in §8.
+GTM execution (R7, R8), legal/tax advice, mainnet deployment approval, and pricing decisions. Product decisions
+used for this implementation are recorded in §8.
 
 ## 1. Already resolved since the analysis (no work needed)
 
@@ -25,7 +29,7 @@ a one-line owner decision before code can proceed are collected in §8.
 - **A prepaid funding path exists end-to-end on the panel side**: `TokenlessPanel.createRoundFor`
   (`TokenlessPanel.sol:244`), `paymentMode: "wallet" | "x402" | "prepaid"` (`chain/payments.ts:66`),
   a prepaid funder signer, and `tokenless_prepaid_reservations` / `tokenless_prepaid_ledger_entries` with
-  reserve/consume logic. R4 therefore reduces to fiat *top-up* of an existing ledger (§4).
+  reserve/consume logic. R4 therefore reduces to fiat _top-up_ of an existing ledger (§4).
 - **The owner-approval and host-enforcement primitives exist**: `check_only | prepare_for_approval |
   ask_automatically` authority, the handoff MCP server, the host output-gate CLI
   (`packages/agents/host-gate/`), and Codex plugin lifecycle hooks (`plugins/rateloop-workspace/hooks/`).
@@ -37,17 +41,17 @@ a one-line owner decision before code can proceed are collected in §8.
 
 Precise stale spots, re-verified:
 
-| Location | Says | Reality | Fix |
-| --- | --- | --- | --- |
-| implementation plan `:69` | "two 15-case windows with at least 14 comparable agreements" | Wilson lower bound ≥ `DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS` (7,000) over ≥15-case windows, plus completion/latency/drift/severe-disagreement gates, ≥30 completed cases (`adaptiveReview.ts:66-117`) | Rewrite the narrative to describe the Wilson gate; keep 15/30/50/100 case counts |
-| implementation plan `:34,:221` | migration head `0053` | `0070_feedback_bonus_awarder_wallet` | Update, and change the phrasing to "the journal head at the time of writing" or reference `_journal.json` to stop this class of drift |
-| readiness register `:14,:64` | head `0051` | `0070` | Same |
-| environment parity `:88` | head `0068` | `0070` | Same |
-| implementation plan `:35-38` | `tokenless-v3` 4-slot key example | `tokenless-v4` 5-slot incl. feedback bonus | Update the example block |
-| CLAUDE.md vs design of record | CLAUDE.md: "Base Account is the active browser wallet stack; do not restore thirdweb". Code/docs: thirdweb optional wallet provisioning is implemented (`thirdwebWalletJwt.ts`, `TOKENLESS_THIRDWEB_WALLET_*`), and a test asserts no in-browser wallet connector mounts (`browserAuthIsolation.test.ts:10`) | Contradiction is real | **Decision required (§8)**; then record the decision in the design of record and align CLAUDE.md, env, and code |
+| Location                       | Says                                                                                        | Reality                                                                                                                                                                                                  | Fix                                                                                                  |
+| ------------------------------ | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| implementation plan `:69`      | "two 15-case windows with at least 14 comparable agreements"                                | Wilson lower bound ≥ `DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS` (7,000) over ≥15-case windows, plus completion/latency/drift/severe-disagreement gates, ≥30 completed cases (`adaptiveReview.ts:66-117`) | Rewrite the narrative to describe the Wilson gate; keep 15/30/50/100 case counts                     |
+| implementation plan `:34,:221` | migration head `0053`                                                                       | `_journal.json` is authoritative; `0091_mcp_elicitation_sessions` after this implementation                                                                                                             | Reference the journal and state the observed head only as revision context                           |
+| readiness register             | previously stale fixed head                                                                 | `0091` after this implementation                                                                                                                                                                         | Keep release verification pinned to the live journal head                                            |
+| environment parity `:88`       | head `0068`                                                                                 | `0091` after this implementation                                                                                                                                                                         | Same                                                                                                 |
+| implementation plan `:35-38`   | historical `tokenless-v3` 4-slot key without explaining v4                                  | Code/config require `tokenless-v4` with a fifth Feedback Bonus address, while no v4 deployment currently exists                                                                                          | Preserve the historical v3 artifact and explicitly separate it from the undeployed v4 runtime schema |
+| CLAUDE.md vs design of record  | CLAUDE.md prohibited thirdweb while the design and code retain optional wallet provisioning | Owner decision: keep the optional thirdweb-created app wallet after Better Auth and an explicit funding/payout/recovery request; never mount a browser connector or use a wallet for auth                | Record the decision in CLAUDE.md and the design of record                                            |
 
 Commits: `docs: reconcile adaptive gate narrative with implementation` · `docs: update migration heads and
-deployment key examples` · (post-decision) `docs: record wallet-stack decision`. Each with a doc-lint or
+deployment key examples` · `docs: record wallet-stack decision`. Each with a doc-lint or
 grep-based regression test where practical (e.g. a test asserting the parity doc's key version equals
 `TOKENLESS_DEPLOYMENT_KEY_VERSION`).
 
@@ -96,10 +100,14 @@ missing piece is only the fiat top-up bridge into the existing prepaid ledger.
 
 **Design (researched against current Stripe docs):** use **Stripe Invoicing funding invoices**, not Stripe
 Billing credit grants — grants only apply to metered subscription line items, and RateLoop's drawdown is its
-own internal ledger. Flow: workspace owner requests a top-up → RateLoop issues a Stripe invoice
-(`collection_method=send_invoice`, `days_until_due=30`, bank-transfer payment method enabled — SEPA virtual
-account in the EU) with Stripe Tax (German VAT / EU reverse charge via validated `tax_ids`) → on
-`invoice.paid`, an idempotent webhook credits `tokenless_prepaid_ledger_entries` → existing
+own internal ledger. The first shipped rail is deliberately **USD-only**: a workspace owner requests a
+top-up → RateLoop issues a Stripe invoice (`collection_method=send_invoice`, `days_until_due=30`,
+`customer_balance` with `us_bank_transfer`) with Stripe Tax. RateLoop credits only the immutable net USD
+amount after a canonical Stripe invoice is paid in full through the configured bank-transfer rail; tax is
+tracked in the invoice gross and is never converted into review credit. Paid-out-of-band invoices, existing
+customer-balance credit, partial/over/underpayment, currency or amount drift, and test/live-mode mismatch do
+not credit the ledger. On a valid `invoice.paid`, an idempotent webhook credits
+`tokenless_prepaid_ledger_entries` → existing
 `paymentMode:"prepaid"` funds rounds via `createRoundFor`; receipts continue to itemize bounty / platform
 fee / VAT per the legal reference.
 
@@ -118,9 +126,12 @@ Steps:
    download; surface the existing `insufficient_prepaid_balance` error path with a top-up call to action.
 5. `audit: record top-up lifecycle` — audit-chain events for request/issue/paid/credited (feeds the
    assurance-evidence exports).
-6. `docs: document fiat review funding` — including the German B2B e-invoicing caveat: Stripe emits PDF
-   invoices; XRechnung/ZUGFeRD issuance (mandatory for domestic German B2B from 2027/2028) requires a Stripe
-   marketplace partner — flagged as a decision (§8), not implemented now.
+6. `docs: document fiat review funding` — including the German B2B e-invoicing caveat. A plain Stripe PDF
+   is an unstructured "other invoice", not an E-Rechnung. Domestic German businesses have had to be able to
+   receive structured invoices since 2025; transitional issuance of other invoices remains available through
+   2026, and through 2027 where the issuer's prior-year turnover is at most EUR 800,000. Structured issuance
+   is therefore required from 2027 or 2028 depending on the issuer. XRechnung/ZUGFeRD generation and any
+   delivery partner remain deferred until a German customer requires the path; no partner is preselected.
 
 Dependency: real-money invoicing waits on the register's billing/legal gates; everything above ships and is
 exercisable in staging with Stripe test mode.
@@ -129,19 +140,19 @@ exercisable in staging with Stripe test mode.
 
 **Why:** hard procurement checkbox. **Researched fit:** Better Auth — already the auth layer
 (`lib/auth/betterAuth.ts`: email OTP, passkeys, gated Google/Apple) — now ships first-party MIT plugins:
-`@better-auth/sso` (generic OIDC + SAML 2.0 SP/IdP-initiated, DNS-TXT domain verification, organization
-auto-provisioning) and `@better-auth/scim` (SCIM 2.0, **/Users only — no /Groups yet**). This keeps SSO
-in-process with no new vendor; if a customer needs SCIM Groups or an exotic IdP, front it with self-hosted
-Ory Polis (ex-BoxyHQ SAML Jackson, Apache 2.0) consumed as a generic OIDC provider — documented as the
-fallback, not implemented now.
+`@better-auth/sso` (generic OIDC + SAML 2.0, DNS-TXT domain verification) and `@better-auth/scim` (SCIM 2.0,
+**/Users only — no /Groups yet**). IdP-initiated SAML is disabled; signed assertions, response correlation,
+timestamps, bounded clock skew, and current algorithms are required. This keeps SSO in-process with no new
+vendor. Ory Polis is not pre-approved: evaluate a fallback only if a real customer requires SCIM Groups or
+an unsupported IdP.
 
 Steps:
 
 1. `auth: add SSO plugin with domain verification` — `@better-auth/sso`, provider registration restricted to
    workspace owners/admins, DNS TXT domain proof required, no default providers.
-2. `auth: map SSO provisioning to workspace roles` — `organizationProvisioning` onto the existing
-   `owner/admin/member/billing` model (`workspaceGovernance.ts:10,31`); provisioned users land as `member`
-   unless mapped; role changes remain workspace-side.
+2. `auth: map SSO provisioning to workspace roles` — map the verified provider directly to the RateLoop
+   workspace; do not enable a parallel Better Auth organization authority. Provisioned users land as
+   `member`; existing RateLoop roles are never overwritten and role changes remain workspace-side.
 3. `auth: enforce SSO-only sign-in per verified domain` — the documented Better Auth pattern (block
    OTP/social for domains with an enforced provider); workspace setting, default off.
 4. `auth: add SCIM user provisioning` — `@better-auth/scim` with provider-scoped tokens;
@@ -149,8 +160,9 @@ Steps:
    group sync" claim).
 5. `settings-ui: add identity provider management` — provider CRUD, domain verification status, SCIM token
    management, last-sync surface; audit-chain events for every identity-admin action.
-6. `e2e: cover SSO and SCIM journeys` — mock IdP (samlify test fixtures / OIDC test provider), provisioning,
-   enforcement, deprovisioning.
+6. `e2e: cover SSO and SCIM journeys` — deterministic route/service fixtures cover provisioning,
+   enforcement, role preservation, deprovisioning, and credential revocation. A real OIDC/SAML IdP exercise
+   remains an explicit staging gate and is not represented as complete by fixture tests.
 
 Constraint honored: sessions stay short-lived and hashed; a client-reported IdP assertion is authentication,
 never workspace authorization (roles remain RateLoop-side) — consistent with the identity section of the
@@ -164,23 +176,34 @@ the customer's framework already has and own the sampled-assurance layer behind 
 exists (authority levels, durable pending, host gate, hooks); what is missing is the adapter surface for
 non-Codex hosts.
 
-Steps (new `packages/agents/integrations/` or per-adapter subpackages, each with contract tests against the
-existing MCP/SDK):
+Re-audit result: the framework primitives are resumable checkpoints, not long-lived synchronous calls. LangGraph JS
+restarts an interrupted node and therefore requires a durable checkpointer, a stable `thread_id`, and idempotent work
+before `interrupt()`. OpenAI Agents returns interruptions plus resumable RunState; the app must serialize that state and
+must not treat SDK approval as RateLoop release. Claude Code's durable async tool primitive is `PreToolUse` with
+`permissionDecision: "defer"`; `PermissionRequest` is synchronous allow/deny and `Stop` remains only the output guard.
+Stable MCP 2025-06-18 form elicitation is capability-gated, flat/primitive, accepts `accept | decline | cancel`, and must
+not request sensitive information. The previous stateless Streamable HTTP route could not originate and correlate an
+MCP server request; W5 therefore adds an authenticated `MCP-Session-Id`, durable request persistence, GET/SSE delivery,
+and correlated POST responses rather than pretending a response-only helper is an integration.
+
+Steps (under `packages/agents/src/integrations/` plus the workspace plugin, with contract tests):
 
 1. `agents: add framework adapter core` — a small TypeScript core wrapping the SDK flow
    (`evaluate → prepare/request → durable pending → result`) with the exact non-blocking semantics the state
    machine defines (never hold a tool call open for the response window).
-2. `agents: add LangGraph interrupt adapter` — a node/wrapper that calls `evaluate_review_requirement`,
-   raises `interrupt()` for `approval_required`, and resumes from the durable pending id; Python or JS per
-   LangGraph's supported runtimes (JS first — matches the repo).
-3. `agents: add OpenAI Agents interruption adapter` — same pattern over `needs_approval`/interruptions.
-4. `agents: add Claude Code hook adapter` — PermissionRequest/Stop-hook variant of the existing Codex hooks
-   (the plugin layout under `plugins/` already anticipates multiple hosts).
+2. `agents: add LangGraph interrupt adapter` — a JSON-safe JS `interrupt()` payload carrying only the durable pending
+   checkpoint; document the required checkpointer/thread and idempotent node restart.
+3. `agents: add OpenAI Agents interruption adapter` — bind `needsApproval`, persist adapter state beside RunState, and
+   allow the SDK interruption to be approved only after a one-shot RateLoop refresh verifies signed release evidence.
+4. `agents: add Claude Code hook adapter` — use `PreToolUse` `defer` for an armed non-terminal review, recheck the same
+   tool call after session resume, keep RateLoop progress tools callable, and retain `Stop` as the advisory output guard.
+   Claude enforces `defer` only in Claude Code 2.1.89+ non-interactive/SDK single-tool calls; interactive and multi-tool
+   sessions therefore remain advisory and must not be described as host-enforced.
 5. `mcp: support elicitation for owner-present approvals` — where the MCP host supports elicitation
    (spec ≥ June 2025), offer the approval confirmation in-session instead of only the browser handoff;
    capability-gated, advisory labeling rules unchanged.
-6. `webhooks: emit review lifecycle events` — CloudEvents envelope (`ai.rateloop.review.*`) shared with the
-   assurance plan's E2.8 (build once, consumed by both plans).
+6. **Already implemented; do not duplicate:** migration `0073`, `assuranceEventStreaming.ts`, and its contract tests
+   project review completion, packet anchoring, and gate blocking into the shared CloudEvents 1.0/OCSF delivery path.
 7. `docs: document framework integrations` — per-adapter quickstarts in the machine docs
    (`public/docs/`), each stating the advisory-vs-host-enforced status truthfully.
 
@@ -216,28 +239,27 @@ Steps:
 Dependency: paid-network expertise verification matters only once network panels are enabled; the invited
 (owner-attested) path has no gate and ships first.
 
-## 8. Decisions required before the affected commits (one line each)
+## 8. Decisions recorded for this implementation
 
-1. **Wallet stack (W1):** keep optional thirdweb wallet provisioning as designed, or replace with Base
-   Account — CLAUDE.md and the design of record currently contradict each other; code follows the design of
-   record today.
-2. **Gold seeding default (W2):** owner-seeded only at launch, or platform-synthetic gold in the public
-   lane from day one.
-3. **German e-invoicing partner (W3):** which Stripe marketplace partner (e.g. Billit) for
-   XRechnung/ZUGFeRD when domestic German B2B invoicing starts, or defer until a German customer requires it.
-4. **SSO fallback (W4):** whether to pre-approve self-hosted Ory Polis as the exotic-IdP/SCIM-Groups
-   fallback or wait for demand.
+1. **Wallet stack (W1):** keep the optional thirdweb-created app wallet only after Better Auth and an explicit
+   funding, payout, or recovery request; never use a browser wallet connector for authentication or authorization.
+2. **Gold seeding default (W2):** owner-seeded only at launch. Platform-synthetic public gold remains behind
+   a separate public-safety and network-readiness gate.
+3. **German e-invoicing partner (W3):** deferred until a German customer requires structured issuance;
+   select and approve a provider only against that customer's format and delivery requirements.
+4. **SSO fallback (W4):** demand-only; evaluate Ory Polis or another bridge only for a demonstrated
+   unsupported-IdP or SCIM-Groups requirement.
 
 ## 9. Sequencing
 
-| Order | Workstream | Gate |
-| --- | --- | --- |
-| 1 | W1 drift fixes | none — immediate |
-| 2 | W5 adapters + W2 steps 1–2, 5–7 (specs, schema, health metrics, UI guidance) | in-flight human-review commits merged (done) |
-| 3 | W3 fiat top-up (staging/test mode) · W6 steps 1–5 (invited path) | Stripe test config; setup flow stable |
-| 4 | W4 SSO/SCIM | staging exercise before any marketing claim |
-| 5 | W2 steps 3–4 (gold injection/scoring, public lane) · W6 step 6 | public-network readiness gate |
-| 6 | Real-money invoicing, paid-network expertise | register's billing/legal/paid-settlement gates |
+| Order | Workstream                                                                   | Gate                                           |
+| ----- | ---------------------------------------------------------------------------- | ---------------------------------------------- |
+| 1     | W1 drift fixes                                                               | none — immediate                               |
+| 2     | W5 adapters + W2 steps 1–2, 5–7 (specs, schema, health metrics, UI guidance) | in-flight human-review commits merged (done)   |
+| 3     | W3 fiat top-up (staging/test mode) · W6 steps 1–5 (invited path)             | Stripe test config; setup flow stable          |
+| 4     | W4 SSO/SCIM                                                                  | staging exercise before any marketing claim    |
+| 5     | W2 steps 3–4 (gold injection/scoring, public lane) · W6 step 6               | public-network readiness gate                  |
+| 6     | Real-money invoicing, paid-network expertise                                 | register's billing/legal/paid-settlement gates |
 
 Every workstream follows the standing rules: no fund-core change without a fresh coordinated deployment (none
 is needed here — all six are off-chain); the tokenless/`main` isolation rules; proportionate tests per
