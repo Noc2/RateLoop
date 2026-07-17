@@ -1,7 +1,7 @@
 import type { AgentSetupReviewDraft } from "~~/lib/tokenless/workspaceAgentSetup";
+import type { ReviewRequestProfileInput } from "./reviewCriterion";
 
 type ReviewRequestProfile = AgentSetupReviewDraft["requestProfile"];
-type ReviewRequestProfileInput = Omit<ReviewRequestProfile, "configurationStatus">;
 
 export const MIN_REVIEW_RESPONSE_WINDOW_SECONDS = 1_200;
 export const MAX_REVIEW_RESPONSE_WINDOW_SECONDS = 86_400;

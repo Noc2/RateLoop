@@ -70,6 +70,12 @@ function reviewAudienceLabel(request: HumanReviewConfiguration["request"]) {
   return "Invited + RateLoop network · public-safe material";
 }
 
+function reviewQuestionAuthorLabel(request: HumanReviewConfiguration["request"]) {
+  return request.questionAuthority === "agent_per_request"
+    ? "Agent writes each review question · feedback only"
+    : "One owner-set question";
+}
+
 function responseWindowLabel(seconds: number | null, panelSize: number | null) {
   if (seconds === null || panelSize === null) return "Not set";
   const duration =
@@ -324,7 +330,7 @@ function AgentHumanReviewConfigurationSummary({ agent }: { agent: WorkspaceAgent
         </Badge>
       </div>
       {configuration ? (
-        <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+        <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <dt className="text-xs text-base-content/45">Frequency</dt>
             <dd className="mt-1 text-sm font-medium">{reviewFrequencyLabel(configuration.selection)}</dd>
@@ -332,6 +338,10 @@ function AgentHumanReviewConfigurationSummary({ agent }: { agent: WorkspaceAgent
           <div>
             <dt className="text-xs text-base-content/45">Reviewers</dt>
             <dd className="mt-1 text-sm font-medium">{reviewAudienceLabel(configuration.request)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-base-content/45">Question author</dt>
+            <dd className="mt-1 text-sm font-medium">{reviewQuestionAuthorLabel(configuration.request)}</dd>
           </div>
           <div>
             <dt className="text-xs text-base-content/45">Response window</dt>

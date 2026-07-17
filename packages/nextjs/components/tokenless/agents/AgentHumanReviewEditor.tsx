@@ -9,6 +9,7 @@ import { formatUsdcAtomic, parseUsdcDecimal } from "~~/lib/tokenless/usdc";
 type Authority = "check_only" | "prepare_for_approval" | "ask_automatically";
 type Audience = "private_invited" | "public_network" | "hybrid";
 type Mode = "adaptive" | "always" | "manual" | "rules" | "fixed";
+type QuestionAuthority = "owner_fixed" | "agent_per_request";
 
 type OwnerView = {
   bindingRevision: number;
@@ -28,6 +29,7 @@ type OwnerView = {
 type PrivateGroup = { groupId: string; name: string; status: string };
 
 type Draft = {
+  questionAuthority: QuestionAuthority;
   mode: Mode;
   ratePercent: string;
   maximumUnreviewedGap: string;
@@ -86,6 +88,8 @@ function draftFromView(view: OwnerView): Draft {
   const rateBps =
     mode === "fixed" ? number(selection.fixedRateBps, 1_000) : number(selection.productionFloorBps, 1_000);
   return {
+    questionAuthority:
+      request.questionAuthority === "agent_per_request" ? "agent_per_request" : "owner_fixed",
     mode,
     ratePercent: String(rateBps / 100),
     maximumUnreviewedGap: String(number(selection.maximumUnreviewedGap, 20)),
@@ -132,6 +136,12 @@ function buildMutation(view: OwnerView, draft: Draft) {
   const configuration = view.configuration;
   if (!configuration) throw new Error("Human-review configuration is unavailable.");
   const currentSelection = configuration.selection.value;
+  if (draft.questionAuthority === "agent_per_request" && draft.mode === "adaptive") {
+    throw new Error("Agent-written questions cannot use adaptive review.");
+  }
+  if (draft.questionAuthority === "agent_per_request" && draft.audience !== "public_network") {
+    throw new Error("Agent-written questions require RateLoop network reviewers.");
+  }
   const requiredRiskTiers = [
     ...new Set(
       draft.requiredRiskTiers
@@ -161,9 +171,14 @@ function buildMutation(view: OwnerView, draft: Draft) {
     maximumLatencyMs: currentSelection.maximumLatencyMs,
   };
   const requestProfile = {
-    criterion: draft.criterion.trim(),
-    positiveLabel: draft.positiveLabel.trim(),
-    negativeLabel: draft.negativeLabel.trim(),
+    questionAuthority: draft.questionAuthority,
+    ...(draft.questionAuthority === "owner_fixed"
+      ? {
+          criterion: draft.criterion.trim(),
+          positiveLabel: draft.positiveLabel.trim(),
+          negativeLabel: draft.negativeLabel.trim(),
+        }
+      : {}),
     rationaleMode: draft.feedbackBonusEnabled && draft.rationaleMode === "off" ? "optional" : draft.rationaleMode,
     audience: draft.audience,
     contentBoundary: draft.audience === "private_invited" ? "private_workspace" : "public_or_test",
@@ -182,7 +197,10 @@ function buildMutation(view: OwnerView, draft: Draft) {
         : null,
     feedbackBonusAwardWindowSeconds: draft.feedbackBonusEnabled ? 604_800 : null,
   };
-  if (!requestProfile.criterion || !requestProfile.positiveLabel || !requestProfile.negativeLabel) {
+  if (
+    draft.questionAuthority === "owner_fixed" &&
+    (!requestProfile.criterion || !requestProfile.positiveLabel || !requestProfile.negativeLabel)
+  ) {
     throw new Error("Question and answer labels are required.");
   }
   if (
@@ -250,7 +268,12 @@ function buildMutation(view: OwnerView, draft: Draft) {
           : draft.authority === "prepare_for_approval"
             ? "Prepare and wait for owner approval"
             : "Ask automatically within the existing exact grant",
-      Question: requestProfile.criterion,
+      "Question author":
+        draft.questionAuthority === "agent_per_request" ? "Agent, for each review" : "Workspace owner",
+      Question:
+        draft.questionAuthority === "agent_per_request"
+          ? "Written by the agent for each review · feedback only"
+          : (requestProfile.criterion ?? ""),
     },
   };
 }
@@ -311,6 +334,27 @@ export function AgentHumanReviewEditor({
 
   function update<Key extends keyof Draft>(key: Key, value: Draft[Key]) {
     setDraft(current => (current ? { ...current, [key]: value } : current));
+    setPending(null);
+    setConfirmed(false);
+    setStatus(null);
+  }
+
+  function changeQuestionAuthority(questionAuthority: QuestionAuthority) {
+    setDraft(current =>
+      current
+        ? {
+            ...current,
+            questionAuthority,
+            ...(questionAuthority === "agent_per_request"
+              ? {
+                  mode: current.mode === "adaptive" ? ("always" as const) : current.mode,
+                  audience: "public_network" as const,
+                  compensationMode: "usdc" as const,
+                }
+              : {}),
+          }
+        : current,
+    );
     setPending(null);
     setConfirmed(false);
     setStatus(null);
@@ -385,33 +429,53 @@ export function AgentHumanReviewEditor({
       <form className="mt-6 space-y-5" onSubmit={submit}>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="text-sm sm:col-span-2">
-            Review question
-            <textarea
-              className="textarea mt-2 w-full"
-              rows={3}
-              value={draft.criterion}
-              onChange={event => update("criterion", event.target.value)}
-              required
-            />
+            Who writes the question?
+            <select
+              className="select mt-2 w-full"
+              value={draft.questionAuthority}
+              onChange={event => changeQuestionAuthority(event.target.value as QuestionAuthority)}
+            >
+              <option value="owner_fixed">Use one question</option>
+              <option value="agent_per_request">Let the agent ask each time</option>
+            </select>
           </label>
-          <label className="text-sm">
-            Positive label
-            <input
-              className="input mt-2 w-full"
-              value={draft.positiveLabel}
-              onChange={event => update("positiveLabel", event.target.value)}
-              required
-            />
-          </label>
-          <label className="text-sm">
-            Negative label
-            <input
-              className="input mt-2 w-full"
-              value={draft.negativeLabel}
-              onChange={event => update("negativeLabel", event.target.value)}
-              required
-            />
-          </label>
+          {draft.questionAuthority === "owner_fixed" ? (
+            <>
+              <label className="text-sm sm:col-span-2">
+                Review question
+                <textarea
+                  className="textarea mt-2 w-full"
+                  rows={3}
+                  value={draft.criterion}
+                  onChange={event => update("criterion", event.target.value)}
+                  required
+                />
+              </label>
+              <label className="text-sm">
+                Positive label
+                <input
+                  className="input mt-2 w-full"
+                  value={draft.positiveLabel}
+                  onChange={event => update("positiveLabel", event.target.value)}
+                  required
+                />
+              </label>
+              <label className="text-sm">
+                Negative label
+                <input
+                  className="input mt-2 w-full"
+                  value={draft.negativeLabel}
+                  onChange={event => update("negativeLabel", event.target.value)}
+                  required
+                />
+              </label>
+            </>
+          ) : (
+            <p className="text-sm leading-6 text-base-content/60 sm:col-span-2">
+              Agent-written questions collect feedback only. They use RateLoop network reviewers and never change
+              adaptive review coverage.
+            </p>
+          )}
           <label className="text-sm">
             Rationale
             <select
@@ -431,7 +495,9 @@ export function AgentHumanReviewEditor({
               value={draft.mode}
               onChange={event => update("mode", event.target.value as Mode)}
             >
-              <option value="adaptive">Adaptive</option>
+              <option value="adaptive" disabled={draft.questionAuthority === "agent_per_request"}>
+                Adaptive
+              </option>
               <option value="always">Every output</option>
               <option value="fixed">Fixed percentage</option>
               <option value="rules">Rules and conditions</option>
@@ -508,9 +574,13 @@ export function AgentHumanReviewEditor({
                 setConfirmed(false);
               }}
             >
-              <option value="private_invited">Invited reviewers</option>
+              <option value="private_invited" disabled={draft.questionAuthority === "agent_per_request"}>
+                Invited reviewers
+              </option>
               <option value="public_network">RateLoop network</option>
-              <option value="hybrid">Invited and RateLoop network</option>
+              <option value="hybrid" disabled={draft.questionAuthority === "agent_per_request"}>
+                Invited and RateLoop network
+              </option>
             </select>
           </label>
           {draft.audience !== "public_network" ? (

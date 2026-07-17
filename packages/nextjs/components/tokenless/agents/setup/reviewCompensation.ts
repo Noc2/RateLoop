@@ -1,7 +1,7 @@
 import type { AgentSetupReviewDraft } from "~~/lib/tokenless/workspaceAgentSetup";
+import type { ReviewRequestProfileInput } from "./reviewCriterion";
 
 type ReviewRequestProfile = AgentSetupReviewDraft["requestProfile"];
-type ReviewRequestProfileInput = Omit<ReviewRequestProfile, "configurationStatus">;
 
 export type ReviewCompensationFormValues = {
   compensationMode: ReviewRequestProfile["compensationMode"];

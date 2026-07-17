@@ -9,6 +9,9 @@ test("the contextual editor owns every human-review dimension through one canoni
   assert.match(source, /method: "PUT"/);
   assert.match(source, /expectedBindingVersion: view\.bindingRevision/);
   for (const label of [
+    "Who writes the question?",
+    "Use one question",
+    "Let the agent ask each time",
     "Review question",
     "Positive label",
     "Negative label",
@@ -40,4 +43,8 @@ test("the contextual editor owns every human-review dimension through one canoni
   assert.match(source, /Confirm exact changes/);
   assert.match(source, /I confirm this exact human-review configuration/);
   assert.match(source, /can never select or execute a Feedback Bonus award/);
+  assert.match(source, /Agent-written questions collect feedback only/);
+  assert.match(source, /Agent-written questions cannot use adaptive review/);
+  assert.match(source, /Agent-written questions require RateLoop network reviewers/);
+  assert.match(source, /Question author/);
 });

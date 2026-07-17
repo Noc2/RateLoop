@@ -50,9 +50,11 @@ export type AgentHumanReviewSummary = {
       effectiveRateRangeBps: { minimum: number; maximum: number } | null;
     };
     request: {
-      criterion: string;
-      positiveLabel: string;
-      negativeLabel: string;
+      questionAuthority: "owner_fixed" | "agent_per_request";
+      resultSemantics: "assurance" | "feedback";
+      criterion: string | null;
+      positiveLabel: string | null;
+      negativeLabel: string | null;
       rationaleMode: "off" | "optional" | "required";
       audience: HumanReviewAudience;
       contentBoundary: HumanReviewContentBoundary;
@@ -552,6 +554,7 @@ async function loadWorkspaceHumanReviewProjection(
     dbClient.execute({
       sql: `SELECT b.*, p.mode, p.agreement_threshold_bps, p.production_floor_bps, p.fixed_rate_bps,
                    p.maximum_unreviewed_gap, p.rules_json,
+                   r.question_authority, r.result_semantics,
                    r.criterion, r.positive_label, r.negative_label, r.rationale_mode, r.audience,
                    r.content_boundary, r.private_sensitivity, r.private_group_id,
                    r.private_group_policy_version, r.private_group_policy_hash,
@@ -872,9 +875,11 @@ function buildHumanReviewSummary(input: {
             : null,
       },
       request: {
-        criterion: rowString(configuration, "criterion")!,
-        positiveLabel: rowString(configuration, "positive_label")!,
-        negativeLabel: rowString(configuration, "negative_label")!,
+        questionAuthority: rowEnum(configuration, "question_authority", ["owner_fixed", "agent_per_request"] as const),
+        resultSemantics: rowEnum(configuration, "result_semantics", ["assurance", "feedback"] as const),
+        criterion: rowString(configuration, "criterion"),
+        positiveLabel: rowString(configuration, "positive_label"),
+        negativeLabel: rowString(configuration, "negative_label"),
         rationaleMode: rowEnum(configuration, "rationale_mode", REVIEW_RATIONALE_MODES),
         audience: rowEnum(configuration, "audience", REVIEW_AUDIENCES),
         contentBoundary: rowEnum(configuration, "content_boundary", REVIEW_CONTENT_BOUNDARIES),

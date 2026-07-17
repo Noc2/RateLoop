@@ -37,6 +37,9 @@ test("agent registry keeps the default row compact and reveals management on dem
   assert.match(source, /Review configuration/);
   assert.match(source, /Frequency/);
   assert.match(source, /Reviewers/);
+  assert.match(source, /Question author/);
+  assert.match(source, /One owner-set question/);
+  assert.match(source, /Agent writes each review question · feedback only/);
   assert.match(source, /Response window/);
   assert.match(source, /Base payment/);
   assert.match(source, /Feedback Bonus/);

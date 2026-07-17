@@ -8,6 +8,8 @@ import test from "node:test";
 import type { AgentSetupReviewDraft } from "~~/lib/tokenless/workspaceAgentSetup";
 
 const profile: Omit<AgentSetupReviewDraft["requestProfile"], "configurationStatus"> = {
+  questionAuthority: "owner_fixed",
+  resultSemantics: "assurance",
   criterion: "Is this response safe and correct?",
   positiveLabel: "Approve",
   negativeLabel: "Reject",

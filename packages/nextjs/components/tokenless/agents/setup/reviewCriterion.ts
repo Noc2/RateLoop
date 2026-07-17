@@ -2,7 +2,11 @@ import type { AgentSetupReviewDraft } from "~~/lib/tokenless/workspaceAgentSetup
 
 type ReviewRequestProfile = AgentSetupReviewDraft["requestProfile"];
 type ReviewRequestProfileDraft = Omit<ReviewRequestProfile, "configurationStatus">;
-type ReviewRequestProfileInput = Omit<ReviewRequestProfileDraft, "resultSemantics">;
+export type ReviewRequestProfileInput = Omit<
+  ReviewRequestProfileDraft,
+  "resultSemantics" | "criterion" | "positiveLabel" | "negativeLabel"
+> &
+  Partial<Pick<ReviewRequestProfileDraft, "criterion" | "positiveLabel" | "negativeLabel">>;
 
 export type ReviewCriterionFormValues = {
   questionAuthority: ReviewRequestProfile["questionAuthority"];
