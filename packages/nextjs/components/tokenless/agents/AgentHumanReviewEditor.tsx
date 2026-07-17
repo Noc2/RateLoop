@@ -46,7 +46,6 @@ type Draft = {
   rationaleMode: "off" | "optional" | "required";
   audience: Audience;
   privateGroupId: string;
-  privateSensitivity: "internal" | "confidential" | "restricted" | "regulated";
   responseWindowSeconds: string;
   panelSize: string;
   compensationMode: "unpaid" | "usdc";
@@ -104,7 +103,6 @@ function draftFromView(view: OwnerView): Draft {
     rationaleMode: String(request.rationaleMode ?? "required") as Draft["rationaleMode"],
     audience: String(request.audience ?? "private_invited") as Audience,
     privateGroupId: String(request.privateGroupId ?? ""),
-    privateSensitivity: String(request.privateSensitivity ?? "confidential") as Draft["privateSensitivity"],
     responseWindowSeconds: String(number(request.responseWindowSeconds, 3_600)),
     panelSize: String(number(request.panelSize, 1)),
     compensationMode: String(request.compensationMode ?? "unpaid") as Draft["compensationMode"],
@@ -190,7 +188,8 @@ function buildMutation(view: OwnerView, draft: Draft) {
     rationaleMode: draft.feedbackBonusEnabled && draft.rationaleMode === "off" ? "optional" : draft.rationaleMode,
     audience: draft.audience,
     contentBoundary: draft.audience === "private_invited" ? "private_workspace" : "public_or_test",
-    privateSensitivity: draft.audience === "private_invited" ? draft.privateSensitivity : null,
+    privateSensitivity:
+      draft.audience === "private_invited" ? (currentRequestProfile.privateSensitivity ?? "confidential") : null,
     privateGroupId,
     responseWindowSeconds,
     panelSize,
@@ -576,21 +575,6 @@ export function AgentHumanReviewEditor({
                     {group.name}
                   </option>
                 ))}
-              </select>
-            </label>
-          ) : null}
-          {draft.audience === "private_invited" ? (
-            <label className="text-sm">
-              Private material sensitivity
-              <select
-                className="select mt-2 w-full"
-                value={draft.privateSensitivity}
-                onChange={event => update("privateSensitivity", event.target.value as Draft["privateSensitivity"])}
-              >
-                <option value="internal">Internal</option>
-                <option value="confidential">Confidential</option>
-                <option value="restricted">Restricted</option>
-                <option value="regulated">Regulated</option>
               </select>
             </label>
           ) : null}

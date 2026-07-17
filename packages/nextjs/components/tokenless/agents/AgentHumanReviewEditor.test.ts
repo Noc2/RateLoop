@@ -22,7 +22,6 @@ test("the contextual editor owns every human-review dimension through one canoni
     "Maximum outputs between reviews",
     "Reviewers",
     "Invited reviewer group",
-    "Private material sensitivity",
     "Response window",
     "Reviewers per request",
     "Guaranteed bounty",
@@ -59,4 +58,6 @@ test("the contextual editor owns every human-review dimension through one canoni
   assert.match(source, /Agent-written questions collect feedback only/);
   assert.match(source, /Agent-written questions cannot use adaptive review/);
   assert.match(source, /Agent-written questions require RateLoop network reviewers/);
+  assert.doesNotMatch(source, /Private material sensitivity/);
+  assert.match(source, /currentRequestProfile\.privateSensitivity \?\? "confidential"/);
 });
