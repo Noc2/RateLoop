@@ -163,21 +163,51 @@ async function readCommit(
   );
 }
 
+// Every keeper write must confirm a *successful* receipt. A mined-but-reverted
+// transaction returns a receipt with status "reverted"; treating that as success
+// would let settlement, reveal, claim, stale-return or bonus-refund work fail
+// silently while health stays green.
+async function sendAndConfirm(
+  clients: TokenlessKeeperClients,
+  request: {
+    address: Address;
+    abi: unknown;
+    functionName: string;
+    args: readonly unknown[];
+  },
+) {
+  const hash = await clients.walletClient.writeContract({
+    address: request.address,
+    abi: request.abi,
+    functionName: request.functionName,
+    args: request.args,
+    account: clients.account,
+  });
+  const receipt = (await clients.publicClient.waitForTransactionReceipt({
+    hash,
+  })) as { status?: string } | null;
+  if (receipt?.status !== "success") {
+    throw new Error(
+      `Tokenless keeper transaction ${request.functionName} reverted on-chain (status ${String(
+        receipt?.status,
+      )}).`,
+    );
+  }
+  return hash;
+}
+
 async function writeAndConfirm(
   clients: TokenlessKeeperClients,
   panel: Address,
   functionName: string,
   args: readonly unknown[],
 ) {
-  const hash = await clients.walletClient.writeContract({
+  return sendAndConfirm(clients, {
     address: panel,
     abi: TokenlessPanelAbi,
     functionName,
     args,
-    account: clients.account,
   });
-  await clients.publicClient.waitForTransactionReceipt({ hash });
-  return hash;
 }
 
 function isExpectedRace(error: unknown) {
@@ -572,14 +602,12 @@ async function reconcileFeedbackBonusRemainders(params: {
       continue;
     }
     try {
-      const hash = await params.clients.walletClient.writeContract({
+      await sendAndConfirm(params.clients, {
         address: params.config.deployment.feedbackBonus,
         abi: TokenlessFeedbackBonusAbi,
         functionName: "refundRemainder",
         args: [poolId],
-        account: params.clients.account,
       });
-      await params.clients.publicClient.waitForTransactionReceipt({ hash });
       params.result.feedbackBonusRefundsExecuted += 1;
     } catch (error) {
       if (

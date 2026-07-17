@@ -6,6 +6,7 @@ import {
   validateTokenlessKeeperDeployment,
   type TokenlessKeeperClients,
 } from "../keeper.js";
+import { getConsecutiveErrors, recordError, renderMetrics } from "../metrics.js";
 import type { Logger } from "../logger.js";
 import { TokenlessPanelAbi } from "../tokenless-abi.js";
 import {
@@ -99,6 +100,7 @@ function clients(params: {
   writes?: string[];
   commitClaimed?: boolean;
   currentBlock?: bigint;
+  receiptStatus?: "success" | "reverted";
   feedbackBonusPool?: {
     depositedAmount: bigint;
     awardedAmount: bigint;
@@ -143,7 +145,9 @@ function clients(params: {
       async getBalance() {
         return 1n;
       },
-      async waitForTransactionReceipt() {},
+      async waitForTransactionReceipt() {
+        return { status: params.receiptStatus ?? "success" };
+      },
       async getLogs() {
         if (currentRound.commitCount === 0) return [];
         return [
@@ -303,6 +307,67 @@ describe("tokenless keeper orchestration", () => {
     );
     expect(writes).toContain("refundRemainder");
     expect(result.feedbackBonusRefundsExecuted).toBe(1);
+  });
+
+  it("treats a reverted receipt as failed work with zero success counters and degraded health", async () => {
+    const counter = (name: string) =>
+      Number(renderMetrics().match(new RegExp(`^${name} (\\d+)$`, "mu"))?.[1] ?? 0);
+    const writes: string[] = [];
+    await expect(
+      runTokenlessKeeper(
+        clients({
+          currentRound: round(),
+          writes,
+          now: 150n,
+          receiptStatus: "reverted",
+        }),
+        config,
+        logger,
+        decrypt,
+      ),
+    ).rejects.toThrow(/reverted on-chain/u);
+    // The write was submitted, but its mined receipt reverted, so the keeper
+    // never confirms the reveal and never records a successful run.
+    expect(writes).toEqual(["openReveal"]);
+
+    const revealsBefore = counter("keeper_votes_revealed_total");
+    const errorsBefore = counter("keeper_errors_total");
+    // index.ts records an error (and no run) for a tick that throws.
+    recordError();
+    recordError();
+    recordError();
+    expect(counter("keeper_votes_revealed_total")).toBe(revealsBefore);
+    expect(counter("keeper_errors_total")).toBe(errorsBefore + 3);
+    // Three consecutive errors trips the /health degraded threshold.
+    expect(getConsecutiveErrors()).toBeGreaterThanOrEqual(3);
+  });
+
+  it("does not count a reverted feedback bonus refund as executed", async () => {
+    const writes: string[] = [];
+    await expect(
+      runTokenlessKeeper(
+        clients({
+          currentRound: round({
+            state: TokenlessRoundState.Finalized,
+            staleReturned: true,
+            claimDeadline: 300n,
+          }),
+          feedbackBonusPool: {
+            depositedAmount: 1_000_000n,
+            awardedAmount: 250_000n,
+            awardDeadline: 300n,
+            refunded: false,
+          },
+          writes,
+          now: 301n,
+          receiptStatus: "reverted",
+        }),
+        config,
+        logger,
+        decrypt,
+      ),
+    ).rejects.toThrow(/reverted on-chain/u);
+    expect(writes).toContain("refundRemainder");
   });
 
   it("opens and reveals without any privileged role", async () => {
