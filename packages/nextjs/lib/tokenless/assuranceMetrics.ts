@@ -33,6 +33,16 @@ export type AssuranceMetricsSnapshot = {
   approvalRequired: number;
   scopesTruncated: boolean;
   scopes: AssuranceMetricScope[];
+  /**
+   * Current (non-superseded) per-output override records in the window.
+   * overrideRateBps = (overridden + reversed) / decided; null without data.
+   */
+  overrideDecisions: {
+    decided: number;
+    overridden: number;
+    reversed: number;
+    overrideRateBps: number | null;
+  };
   evidenceAnchor:
     | { state: "absent"; lagSeconds: null }
     | { state: "pending" | "completed" | "failed"; lagSeconds: number };
@@ -268,7 +278,7 @@ export async function authenticateAssuranceMetricsCredential(authorization: stri
 export async function collectWorkspaceAssuranceMetrics(input: { workspaceId: string; now?: Date }) {
   const now = input.now ?? new Date();
   const windowStart = new Date(now.getTime() - WINDOW_MS);
-  const [totals, scopeResult, anchorResult] = await Promise.all([
+  const [totals, scopeResult, anchorResult, overrideResult] = await Promise.all([
     dbClient.execute({
       sql: `SELECT
               (SELECT COUNT(*) FROM tokenless_agent_review_opportunity_transition_events
@@ -351,6 +361,11 @@ export async function collectWorkspaceAssuranceMetrics(input: { workspaceId: str
             ORDER BY created_at DESC,job_id DESC LIMIT 1`,
       args: [input.workspaceId],
     }),
+    dbClient.execute({
+      sql: `SELECT record_id, supersedes_record_id, outcome, decided_at
+            FROM tokenless_assurance_override_decisions WHERE workspace_id = ?`,
+      args: [input.workspaceId],
+    }),
   ]);
   const total = totals.rows[0] as Row;
   const rows = scopeResult.rows.slice(0, MAX_ASSURANCE_METRIC_SCOPES) as Row[];
@@ -385,6 +400,20 @@ export async function collectWorkspaceAssuranceMetrics(input: { workspaceId: str
           state: anchorState === "completed" ? "completed" : anchorState === "dead" ? "failed" : "pending",
           lagSeconds: Math.max(0, Math.floor((now.getTime() - anchorDate!.getTime()) / 1_000)),
         };
+  // Only current (non-superseded) override records inside the window count.
+  const overrideRows = overrideResult.rows as Row[];
+  const supersededOverrideIds = new Set(
+    overrideRows.map(row => text(row, "supersedes_record_id")).filter((value): value is string => value !== null),
+  );
+  const currentOverrides = overrideRows.filter(row => {
+    if (supersededOverrideIds.has(text(row, "record_id")!)) return false;
+    const decidedAt = row.decided_at instanceof Date ? row.decided_at : new Date(String(row.decided_at));
+    if (!Number.isFinite(decidedAt.getTime())) throw new Error("Database returned an invalid override timestamp.");
+    return decidedAt >= windowStart;
+  });
+  const overridesDecided = currentOverrides.length;
+  const overridden = currentOverrides.filter(row => text(row, "outcome") === "overridden").length;
+  const reversed = currentOverrides.filter(row => text(row, "outcome") === "reversed").length;
   return {
     windowSeconds: WINDOW_MS / 1_000,
     reviewsRequested: nonnegative(total, "requested"),
@@ -393,6 +422,13 @@ export async function collectWorkspaceAssuranceMetrics(input: { workspaceId: str
     approvalRequired: nonnegative(total, "approval_required"),
     scopesTruncated: scopeResult.rows.length > MAX_ASSURANCE_METRIC_SCOPES,
     scopes,
+    overrideDecisions: {
+      decided: overridesDecided,
+      overridden,
+      reversed,
+      overrideRateBps:
+        overridesDecided > 0 ? Math.floor(((overridden + reversed) * 10_000) / overridesDecided) : null,
+    },
     evidenceAnchor,
   } satisfies AssuranceMetricsSnapshot;
 }

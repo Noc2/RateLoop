@@ -48,11 +48,21 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
       "0077_assurance_automated_eval_receipts.sql",
       "0086_enterprise_identity.sql",
       "0088_expertise_verification_queue.sql",
+      "0094_assurance_override_decisions.sql",
     ].includes(file) &&
     (/^CREATE OR REPLACE FUNCTION/u.test(statement) || /^CREATE TRIGGER/u.test(statement))
   ) {
     // pg-mem does not implement PostgreSQL trigger functions. The production
     // migration installs the append-only guard; migration source tests cover it.
+    return null;
+  }
+  if (
+    file === "0094_assurance_override_decisions.sql" &&
+    /^CREATE UNIQUE INDEX "tokenless_assurance_override_decisions_chain_root_unique"/u.test(statement)
+  ) {
+    // pg-mem ignores the partial-index predicate and then serves run_id
+    // lookups from the (wrongly unique) index. Production enforces the single
+    // chain root; the migration source test covers the predicate.
     return null;
   }
   if (file === "0083_gold_quality.sql" && /^CREATE TABLE "tokenless_assurance_gold_items"/u.test(statement)) {

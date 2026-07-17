@@ -314,6 +314,8 @@ test("workspace SQL aggregation preserves tenant isolation and metric semantics"
   assert.equal(snapshot.scopes[0].disagreements / snapshot.scopes[0].comparable, 0.5);
   assert.equal(snapshot.scopes[0].latencyMilliseconds / snapshot.scopes[0].latencyCount / 1_000, 2);
   assert.deepEqual(snapshot.evidenceAnchor, { state: "completed", lagSeconds: 30 });
+  // Without override records the rate is null, never a misleading zero.
+  assert.deepEqual(snapshot.overrideDecisions, { decided: 0, overridden: 0, reversed: 0, overrideRateBps: null });
 
   const issued = await issueAssuranceMetricsCredential({
     accountAddress: OWNER,
@@ -414,6 +416,7 @@ test("OpenMetrics uses bounded labels and represents a missing evidence anchor a
     blocked: 1,
     approvalRequired: 1,
     scopesTruncated: false,
+    overrideDecisions: { decided: 2, overridden: 1, reversed: 0, overrideRateBps: 5_000 },
     evidenceAnchor: { state: "absent", lagSeconds: null },
     scopes: [
       {
@@ -452,6 +455,7 @@ test("OpenMetrics reports a real evidence-anchor state and lag", () => {
     blocked: 0,
     approvalRequired: 0,
     scopesTruncated: false,
+    overrideDecisions: { decided: 0, overridden: 0, reversed: 0, overrideRateBps: null },
     evidenceAnchor: { state: "pending", lagSeconds: 75 },
     scopes: [],
   });

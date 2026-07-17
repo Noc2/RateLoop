@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import type { AssuranceMetricsSnapshot } from "~~/lib/tokenless/assuranceMetrics";
 import type { EvaluationDashboard, EvaluationRun } from "~~/lib/tokenless/evaluationDashboard";
 
@@ -61,17 +61,22 @@ function AssuranceMetricsSummary({ snapshot }: { snapshot: AssuranceMetricsSnaps
     snapshot.evidenceAnchor.state === "absent"
       ? "No anchor"
       : `${snapshot.evidenceAnchor.state} · ${snapshot.evidenceAnchor.lagSeconds.toLocaleString()} sec`;
+  const overrideRate =
+    snapshot.overrideDecisions.overrideRateBps === null
+      ? "No data"
+      : `${(snapshot.overrideDecisions.overrideRateBps / 100).toFixed(1)}% of ${snapshot.overrideDecisions.decided}`;
   return (
     <section className="surface-card rounded-2xl p-6" aria-labelledby="assurance-metrics-heading">
       <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Last 30 days</p>
       <h2 id="assurance-metrics-heading" className="mt-2 text-xl font-semibold">
         Assurance operations
       </h2>
-      <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {[
           ["Sampling rate", sampling],
           ["Mean verdict latency", latency],
           ["Disagreement rate", disagreement],
+          ["Override rate", overrideRate],
           ["Latest evidence anchor", anchor],
         ].map(([label, value]) => (
           <div key={label} className="surface-card-nested rounded-xl p-4">
@@ -106,9 +111,158 @@ function SampleNote({ run }: { run: EvaluationRun }) {
   return <p className="mt-2 text-xs text-base-content/45">{run.validResponses} valid responses</p>;
 }
 
-function RunCard({ run }: { run: EvaluationRun }) {
+function ClientDecisionButtons({
+  run,
+  workspaceId,
+  onDecided,
+}: {
+  run: EvaluationRun;
+  workspaceId: string;
+  onDecided: (decision: NonNullable<EvaluationRun["clientDecision"]>) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(decision: NonNullable<EvaluationRun["clientDecision"]>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await readJson(
+        await fetch(
+          `/api/account/workspaces/${encodeURIComponent(workspaceId)}/assurance/runs/${encodeURIComponent(run.runId)}/evidence/decision`,
+          {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ decision }),
+          },
+        ),
+      );
+      onDecided(decision);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to record the decision.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-3">
+      <p className="text-xs text-base-content/45">Sign off on this run — no choice is preselected.</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {(["go", "revise", "stop"] as const).map(choice => (
+          <button
+            key={choice}
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={() => void submit(choice)}
+            disabled={busy}
+          >
+            {decisionLabel(choice)}
+          </button>
+        ))}
+      </div>
+      {error ? (
+        <p className="mt-2 text-xs text-red-100" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+const OVERRIDE_OUTCOMES = ["accepted", "disregarded", "overridden", "reversed"] as const;
+
+function OverrideRecordForm({ run, workspaceId }: { run: EvaluationRun; workspaceId: string }) {
+  const [reasons, setReasons] = useState("");
+  const [correctiveAction, setCorrectiveAction] = useState("");
+  const [recorded, setRecorded] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(event: FormEvent, outcome: (typeof OVERRIDE_OUTCOMES)[number]) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await readJson(
+        await fetch(
+          `/api/account/workspaces/${encodeURIComponent(workspaceId)}/assurance/runs/${encodeURIComponent(run.runId)}/evidence/overrides`,
+          {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              outcome,
+              reasons: reasons.trim(),
+              ...(correctiveAction.trim() ? { correctiveAction: correctiveAction.trim() } : {}),
+            }),
+          },
+        ),
+      );
+      setRecorded(outcome);
+      setReasons("");
+      setCorrectiveAction("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to record the override decision.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="mt-4 border-t border-white/10 pt-4" onSubmit={event => event.preventDefault()}>
+      <p className="text-sm font-semibold text-base-content/65">Record what you did with this output</p>
+      <p className="mt-1 text-xs text-base-content/45">
+        Append-only record with mandatory reasons; a new record supersedes, never edits. No choice is preselected.
+      </p>
+      {recorded ? (
+        <p className="mt-2 text-xs text-emerald-100" role="status">
+          Recorded as {recorded}. Recording again supersedes this record.
+        </p>
+      ) : null}
+      <textarea
+        className="textarea mt-3 w-full border-white/10 bg-[var(--rateloop-field)] text-sm"
+        placeholder="Reasons (required, 10-2000 characters)"
+        value={reasons}
+        onChange={event => setReasons(event.target.value)}
+        maxLength={2000}
+        rows={2}
+      />
+      <input
+        className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)] text-sm"
+        placeholder="Linked corrective action (optional)"
+        value={correctiveAction}
+        onChange={event => setCorrectiveAction(event.target.value)}
+        maxLength={2000}
+      />
+      <div className="mt-2 flex flex-wrap gap-2">
+        {OVERRIDE_OUTCOMES.map(outcome => (
+          <button
+            key={outcome}
+            type="button"
+            className="btn btn-outline btn-sm capitalize"
+            onClick={event => void submit(event, outcome)}
+            disabled={busy || reasons.trim().length < 10}
+          >
+            {outcome}
+          </button>
+        ))}
+      </div>
+      {error ? (
+        <p className="mt-2 text-xs text-red-100" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </form>
+  );
+}
+
+function RunCard({ run, workspaceId }: { run: EvaluationRun; workspaceId: string }) {
   const share = run.candidateSelectionShareBps;
-  const decision = decisionLabel(run.clientDecision);
+  const [clientDecision, setClientDecision] = useState(run.clientDecision);
+  const decision = decisionLabel(clientDecision);
+  const decidable = run.status === "completed" && run.evidencePacketAvailable && !clientDecision;
   return (
     <article className="surface-card rounded-2xl p-5" aria-labelledby={`evaluation-${run.runId}`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -128,6 +282,9 @@ function RunCard({ run }: { run: EvaluationRun }) {
             {decision ?? (share === null ? "Waiting for responses" : `${percent(share)} chose the candidate`)}
           </p>
           <SampleNote run={run} />
+          {decidable ? (
+            <ClientDecisionButtons run={run} workspaceId={workspaceId} onDecided={setClientDecision} />
+          ) : null}
         </div>
         {run.candidateSelectionIntervalBps ? (
           <div className="rounded-xl border border-white/10 bg-white/[0.025] p-4 text-sm">
@@ -199,6 +356,7 @@ function RunCard({ run }: { run: EvaluationRun }) {
         </p>
         <code className="mt-3 block break-all text-[11px] text-base-content/35">{run.runId}</code>
       </details>
+      {run.status === "completed" ? <OverrideRecordForm run={run} workspaceId={workspaceId} /> : null}
     </article>
   );
 }
@@ -370,7 +528,7 @@ export function EvaluationDashboardPanel({
               Results
             </h2>
             {dashboard.runs.map(run => (
-              <RunCard key={run.runId} run={run} />
+              <RunCard key={run.runId} run={run} workspaceId={workspaceId} />
             ))}
           </section>
 

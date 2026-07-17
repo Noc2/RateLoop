@@ -7,6 +7,7 @@ import {
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createPublicKey, generateKeyPairSync, sign } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,13 +15,17 @@ import { afterEach, beforeEach, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { exportAdaptiveCoverage } from "~~/lib/tokenless/adaptiveCoverageExport";
 import { createWorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
+import { collectWorkspaceAssuranceMetrics } from "~~/lib/tokenless/assuranceMetrics";
 import {
   assertEvidenceGenerationRequest,
   generateAssuranceEvidencePacket,
   getAssuranceClientDecision,
   getAssuranceEvidencePacket,
+  listAssuranceOverrideDecisions,
   recordAssuranceClientDecision,
+  recordAssuranceOverrideDecision,
   verifyEvidenceExport,
 } from "~~/lib/tokenless/evidencePackets";
 import { canonicalizeHumanAssuranceDocument, hashHumanAssuranceDocument } from "~~/lib/tokenless/humanAssurance";
@@ -1158,4 +1163,169 @@ test("callers cannot inject measured outcome fields", () => {
     () => assertEvidenceGenerationRequest({ candidateShareBps: 10_000 }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "caller_metrics_rejected",
   );
+});
+
+test("override records are decision-scoped, append-only, audit-chained, and aggregate into metrics and exports", async () => {
+  const fixture = await seedEvidenceFixture({
+    compensation: "unpaid",
+    minimumAggregationSize: 2,
+    sources: [
+      {
+        source: "customer_invited",
+        targetCount: 3,
+        responses: [
+          { choice: "candidate", validity: "valid" },
+          { choice: "candidate", validity: "valid" },
+          { choice: "baseline", validity: "valid" },
+        ],
+      },
+    ],
+  });
+  await insert(
+    "INSERT INTO tokenless_workspace_members (workspace_id, account_address, role, created_at) VALUES (?, ?, 'member', ?), (?, ?, 'member', ?)",
+    [fixture.workspaceId, DECISION_OWNER, NOW, fixture.workspaceId, MEMBER, NOW],
+  );
+  await insert(
+    `INSERT INTO tokenless_workspace_member_governance
+     (workspace_id, account_address, governance_role, created_by, created_at, updated_at)
+     VALUES (?, ?, 'decision_owner', ?, ?, ?)`,
+    [fixture.workspaceId, DECISION_OWNER, OWNER, NOW, NOW],
+  );
+  const signer = generateKeyPairSync("ed25519");
+  const packet = await generateAssuranceEvidencePacket({
+    accountAddress: OWNER,
+    workspaceId: fixture.workspaceId,
+    runId: fixture.runId,
+    signer: { privateKey: signer.privateKey },
+    tenantCommitmentKey: TENANT_KEY,
+  });
+  // Packets freeze before overrides exist: the packet carries counts only.
+  assert.deepEqual(packet.payload.overrideDecisions, {
+    atGeneration: { recorded: 0, byOutcome: { accepted: 0, disregarded: 0, overridden: 0, reversed: 0 } },
+    recordedSeparately: true,
+  });
+
+  await assert.rejects(
+    () =>
+      recordAssuranceOverrideDecision({
+        accountAddress: MEMBER,
+        workspaceId: fixture.workspaceId,
+        runId: fixture.runId,
+        outcome: "accepted",
+        reasons: "Members cannot record oversight override decisions.",
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "assurance_decision_forbidden",
+  );
+  await assert.rejects(
+    () =>
+      recordAssuranceOverrideDecision({
+        accountAddress: DECISION_OWNER,
+        workspaceId: fixture.workspaceId,
+        runId: fixture.runId,
+        outcome: "accepted",
+        reasons: "too short",
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_override_decision",
+  );
+  await assert.rejects(
+    () =>
+      recordAssuranceOverrideDecision({
+        accountAddress: DECISION_OWNER,
+        workspaceId: fixture.workspaceId,
+        runId: fixture.runId,
+        outcome: "escalated",
+        reasons: "Unsupported outcomes fail closed before any write.",
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_override_decision",
+  );
+
+  const first = await recordAssuranceOverrideDecision({
+    accountAddress: DECISION_OWNER,
+    workspaceId: fixture.workspaceId,
+    runId: fixture.runId,
+    outcome: "accepted",
+    reasons: "Panel verdict matches the observed output quality.",
+    now: NOW,
+  });
+  assert.equal(first.supersedesRecordId, null);
+  assert.equal(first.evidencePacketDigest, packet.packetDigest);
+  assert.match(first.recordDigest, /^sha256:[0-9a-f]{64}$/u);
+
+  const second = await recordAssuranceOverrideDecision({
+    accountAddress: DECISION_OWNER,
+    workspaceId: fixture.workspaceId,
+    runId: fixture.runId,
+    outcome: "reversed",
+    reasons: "The output shipped, then failed in production; decision reversed.",
+    correctiveAction: "Ticket OPS-1204: retrain the routing prompt.",
+    now: new Date(NOW.getTime() + 60_000),
+  });
+  assert.equal(second.supersedesRecordId, first.recordId);
+
+  // Append-only: the first record still exists unchanged and is marked superseded.
+  const listed = await listAssuranceOverrideDecisions({
+    accountAddress: OWNER,
+    workspaceId: fixture.workspaceId,
+    runId: fixture.runId,
+  });
+  assert.deepEqual(
+    listed.map(record => [record.outcome, record.current]),
+    [
+      ["reversed", true],
+      ["accepted", false],
+    ],
+  );
+  assert.equal(listed[1]?.reasons, "Panel verdict matches the observed output quality.");
+  assert.equal(listed[0]?.correctiveAction, "Ticket OPS-1204: retrain the routing prompt.");
+
+  const audit = await dbClient.execute({
+    sql: `SELECT action, metadata_json FROM tokenless_audit_events
+          WHERE workspace_id = ? AND action = 'oversight.override_recorded' ORDER BY sequence ASC`,
+    args: [fixture.workspaceId],
+  });
+  assert.equal(audit.rowCount, 2);
+  assert.match(String(audit.rows[1]?.metadata_json), /"outcome":"reversed"/u);
+  assert.doesNotMatch(String(audit.rows[1]?.metadata_json), /failed in production/u);
+
+  // Only the current record enters aggregates: 1 decided, 1 reversed.
+  const metrics = await collectWorkspaceAssuranceMetrics({
+    workspaceId: fixture.workspaceId,
+    now: new Date(NOW.getTime() + 120_000),
+  });
+  assert.deepEqual(metrics.overrideDecisions, {
+    decided: 1,
+    overridden: 0,
+    reversed: 1,
+    overrideRateBps: 10_000,
+  });
+
+  const exported = await exportAdaptiveCoverage({
+    accountAddress: OWNER,
+    workspaceId: fixture.workspaceId,
+    from: new Date(NOW.getTime() - 86_400_000),
+    to: new Date(NOW.getTime() + 120_000),
+    now: new Date(NOW.getTime() + 120_000),
+  });
+  assert.deepEqual(exported.overrideDecisions, {
+    decided: 1,
+    byOutcome: { accepted: 0, disregarded: 0, overridden: 0, reversed: 1 },
+    overrideRateBps: 10_000,
+  });
+  assert.doesNotMatch(JSON.stringify(exported.overrideDecisions), /failed in production|OPS-1204/u);
+});
+
+test("override routes are session-scoped and mutations stay same-origin with an exact field allowlist", () => {
+  const source = readFileSync(
+    new URL(
+      "../../app/api/account/workspaces/[workspaceId]/assurance/runs/[runId]/evidence/overrides/route.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  assert.match(source, /requireBrowserSession\(request\)/u);
+  assert.match(source, /requireBrowserSession\(request, \{ mutation: true \}\)/u);
+  assert.match(source, /listAssuranceOverrideDecisions/u);
+  assert.match(source, /recordAssuranceOverrideDecision/u);
+  assert.match(source, /POST_KEYS/u);
+  assert.match(source, /private, no-store/u);
 });

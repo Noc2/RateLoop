@@ -232,6 +232,32 @@ function rollup(row: Row) {
   };
 }
 
+/**
+ * Privacy-safe override-decision aggregation: current (non-superseded) record
+ * counts by outcome plus the derived override rate. Reasons text and deciding
+ * accounts never enter the export.
+ */
+function overrideDecisionSummary(rows: Row[], window: { start: Date; end: Date }) {
+  const supersededIds = new Set(
+    rows.map(row => text(row, "supersedes_record_id")).filter((value): value is string => value !== null),
+  );
+  const byOutcome = { accepted: 0, disregarded: 0, overridden: 0, reversed: 0 };
+  for (const row of rows) {
+    if (supersededIds.has(text(row, "record_id")!)) continue;
+    const decidedAt = new Date(iso(row, "decided_at"));
+    if (decidedAt < window.start || decidedAt >= window.end) continue;
+    const outcome = text(row, "outcome");
+    if (outcome && outcome in byOutcome) byOutcome[outcome as keyof typeof byOutcome] += 1;
+  }
+  const decided = Object.values(byOutcome).reduce((sum, value) => sum + value, 0);
+  return {
+    decided,
+    byOutcome,
+    overrideRateBps:
+      decided > 0 ? Math.floor(((byOutcome.overridden + byOutcome.reversed) * 10_000) / decided) : null,
+  };
+}
+
 function stageTransition(row: Row) {
   return {
     eventId: requiredText(row, "event_id"),
@@ -338,11 +364,19 @@ export async function exportAdaptiveCoverage(input: {
        ORDER BY account_address ASC`,
       [input.workspaceId],
     );
+    const overridesResult = await client.query(
+      `SELECT record_id,supersedes_record_id,outcome,decided_at
+       FROM tokenless_assurance_override_decisions
+       WHERE workspace_id=$1
+       ORDER BY decided_at ASC,record_id ASC LIMIT ${MAX_SERIES_ROWS + 1}`,
+      [input.workspaceId],
+    );
     assertBounded(scopesResult.rows, "scopes", MAX_SCOPES);
     assertBounded(decisionsResult.rows, "decisions", MAX_SERIES_ROWS);
     assertBounded(observationsResult.rows, "observations", MAX_SERIES_ROWS);
     assertBounded(rollupsResult.rows, "rollups", MAX_SERIES_ROWS);
     assertBounded(eventsResult.rows, "stage transitions", MAX_SERIES_ROWS);
+    assertBounded(overridesResult.rows, "override decisions", MAX_SERIES_ROWS);
 
     const decisionsByScope = groupByScope(decisionsResult.rows as Row[]);
     const observationsByScope = groupByScope(observationsResult.rows as Row[]);
@@ -424,6 +458,7 @@ export async function exportAdaptiveCoverage(input: {
         stageTransitions: eventsResult.rows.length,
       },
       oversightDesignations: summarizeOversightDesignationsForExport(oversightResult.rows as Row[], window.snapshotAt),
+      overrideDecisions: overrideDecisionSummary(overridesResult.rows as Row[], window),
       scopes,
     };
     const exported = { ...payload, exportDigest: sha256(payload) };

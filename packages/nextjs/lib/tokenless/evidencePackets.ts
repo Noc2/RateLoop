@@ -10,8 +10,9 @@ import {
 } from "../../scripts/assurance-evidence-core.mjs";
 import { type KeyObject, createHmac, createPrivateKey, createPublicKey, randomUUID, sign } from "node:crypto";
 import "server-only";
-import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
+import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbPool } from "~~/lib/db";
+import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { enqueueAssuranceAttestation } from "~~/lib/tokenless/assuranceAttestationPipeline";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -1155,6 +1156,7 @@ export async function generateAssuranceEvidencePacket(input: {
       responses: responseResult.rows,
     });
     const limitations = buildLimitations({ aggregation, settlement, chainEvidence });
+    const overrideDecisionCounts = await collectOverrideDecisionCounts(client, input.runId);
     const packetId = `haep_${randomUUID().replaceAll("-", "")}`;
     const generatedAt = input.now ?? new Date();
     const payload = {
@@ -1209,6 +1211,12 @@ export async function generateAssuranceEvidencePacket(input: {
       calibration: {
         itemCount: goldCaseIds.size,
         statusDisclosedOnlyInAggregate: true,
+      },
+      overrideDecisions: {
+        // Counts only; the append-only override records with reasons live
+        // outside the frozen packet and may grow after generation.
+        atGeneration: overrideDecisionCounts,
+        recordedSeparately: true,
       },
       failureTagCounts: decisionCounts.failureTagCounts.filter(
         (entry: { count: number }) => entry.count >= decisionCounts.minimumAggregationSize,
@@ -1397,6 +1405,232 @@ export async function getAssuranceClientDecision(input: {
       [input.runId],
     );
     return result.rows[0] ? publicDecision(result.rows[0]) : null;
+  } finally {
+    client.release();
+  }
+}
+
+export const ASSURANCE_OVERRIDE_OUTCOMES = ["accepted", "disregarded", "overridden", "reversed"] as const;
+export type AssuranceOverrideOutcome = (typeof ASSURANCE_OVERRIDE_OUTCOMES)[number];
+
+export type AssuranceOverrideDecision = {
+  schemaVersion: "rateloop.human-assurance.override-decision.v1";
+  recordId: string;
+  runId: string;
+  evidencePacketDigest: string | null;
+  outcome: AssuranceOverrideOutcome;
+  reasons: string;
+  correctiveAction: string | null;
+  supersedesRecordId: string | null;
+  decidedBy: string;
+  decidedAt: string;
+  recordDigest: string;
+  current: boolean;
+};
+
+function invalidOverrideDecision(message: string): never {
+  throw new TokenlessServiceError(message, 400, "invalid_override_decision");
+}
+
+function normalizeOverrideOutcome(value: unknown): AssuranceOverrideOutcome {
+  if (typeof value !== "string" || !ASSURANCE_OVERRIDE_OUTCOMES.includes(value as AssuranceOverrideOutcome)) {
+    invalidOverrideDecision("Outcome must be accepted, disregarded, overridden, or reversed.");
+  }
+  return value as AssuranceOverrideOutcome;
+}
+
+function normalizeOverrideReasons(value: unknown) {
+  if (typeof value !== "string") invalidOverrideDecision("Override reasons must be 10-2000 characters.");
+  const reasons = value.trim();
+  if (reasons.length < 10 || reasons.length > 2_000) {
+    invalidOverrideDecision("Override reasons must be 10-2000 characters.");
+  }
+  return reasons;
+}
+
+function normalizeCorrectiveAction(value: unknown) {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "string") invalidOverrideDecision("Corrective action must be at most 2000 characters.");
+  const note = value.trim();
+  if (note.length > 2_000) invalidOverrideDecision("Corrective action must be at most 2000 characters.");
+  return note || null;
+}
+
+function overrideDecisionFromRow(row: QueryRow, supersededIds: Set<string>): AssuranceOverrideDecision {
+  const decidedAt = row.decided_at instanceof Date ? row.decided_at : new Date(String(row.decided_at));
+  if (!Number.isFinite(decidedAt.getTime())) throw new Error("Stored override decision timestamp is invalid.");
+  return {
+    schemaVersion: "rateloop.human-assurance.override-decision.v1",
+    recordId: rowString(row, "record_id")!,
+    runId: rowString(row, "run_id")!,
+    evidencePacketDigest: rowString(row, "evidence_packet_digest"),
+    outcome: rowString(row, "outcome") as AssuranceOverrideOutcome,
+    reasons: rowString(row, "reasons")!,
+    correctiveAction: rowString(row, "corrective_action"),
+    supersedesRecordId: rowString(row, "supersedes_record_id"),
+    decidedBy: rowString(row, "decided_by")!,
+    decidedAt: decidedAt.toISOString(),
+    recordDigest: rowString(row, "record_digest")!,
+    current: !supersededIds.has(rowString(row, "record_id")!),
+  };
+}
+
+async function collectOverrideDecisionCounts(client: Queryable, runId: string) {
+  const result = await client.query(
+    `SELECT record_id, supersedes_record_id, outcome
+     FROM tokenless_assurance_override_decisions WHERE run_id = $1`,
+    [runId],
+  );
+  const supersededIds = new Set(
+    result.rows.map(row => rowString(row, "supersedes_record_id")).filter((value): value is string => value !== null),
+  );
+  const byOutcome = { accepted: 0, disregarded: 0, overridden: 0, reversed: 0 };
+  for (const row of result.rows) {
+    if (supersededIds.has(rowString(row, "record_id")!)) continue;
+    const outcome = rowString(row, "outcome") as AssuranceOverrideOutcome | null;
+    if (outcome && outcome in byOutcome) byOutcome[outcome] += 1;
+  }
+  return { recorded: Object.values(byOutcome).reduce((sum, value) => sum + value, 0), byOutcome };
+}
+
+/**
+ * Immutable per-output override record: an authorized person (owner, admin, or
+ * decision owner) records whether the human-review outcome was accepted,
+ * disregarded, overridden, or reversed, with mandatory reasons. Records are
+ * append-only — a new record supersedes the previous one, nothing is edited —
+ * and each recording lands in the workspace audit chain.
+ */
+export async function recordAssuranceOverrideDecision(input: {
+  accountAddress: string;
+  workspaceId: string;
+  runId: string;
+  outcome: unknown;
+  reasons: unknown;
+  correctiveAction?: unknown;
+  now?: Date;
+}): Promise<AssuranceOverrideDecision> {
+  const outcome = normalizeOverrideOutcome(input.outcome);
+  const reasons = normalizeOverrideReasons(input.reasons);
+  const correctiveAction = normalizeCorrectiveAction(input.correctiveAction);
+  const client = await dbPool.connect();
+  let record: AssuranceOverrideDecision;
+  let address: string;
+  let workspaceId: string;
+  try {
+    await client.query("BEGIN");
+    const access = await loadRunAccess(client, input, { lock: true, decision: true });
+    address = access.address;
+    workspaceId = input.workspaceId;
+    if (rowString(access.row, "status") !== "completed") {
+      evidenceError("Override decisions apply only to completed runs.", "assurance_run_not_completed", 409);
+    }
+    const projectId = rowString(access.row, "project_id");
+    const packetResult = await client.query(
+      "SELECT packet_digest FROM tokenless_assurance_evidence_packets WHERE run_id = $1 LIMIT 1",
+      [input.runId],
+    );
+    const chainResult = await client.query(
+      "SELECT record_id, supersedes_record_id FROM tokenless_assurance_override_decisions WHERE run_id = $1",
+      [input.runId],
+    );
+    const chainSuperseded = new Set(
+      chainResult.rows
+        .map(row => rowString(row, "supersedes_record_id"))
+        .filter((value): value is string => value !== null),
+    );
+    const head = chainResult.rows.find(row => !chainSuperseded.has(rowString(row, "record_id")!));
+    const supersedesRecordId = head ? rowString(head, "record_id") : null;
+    const recordId = `haor_${randomUUID().replaceAll("-", "")}`;
+    const decidedAt = input.now ?? new Date();
+    const payload = {
+      schemaVersion: "rateloop.human-assurance.override-decision.v1" as const,
+      recordId,
+      runId: input.runId,
+      evidencePacketDigest: rowString(packetResult.rows[0], "packet_digest"),
+      outcome,
+      reasons,
+      correctiveAction,
+      supersedesRecordId,
+      decidedBy: address,
+      decidedAt: decidedAt.toISOString(),
+    };
+    const recordDigest = sha256EvidenceValue(payload);
+    await client.query(
+      `INSERT INTO tokenless_assurance_override_decisions
+       (record_id, workspace_id, project_id, run_id, supersedes_record_id, outcome, reasons,
+        corrective_action, decided_by, decided_at, record_digest, record_json, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $10)`,
+      [
+        recordId,
+        input.workspaceId,
+        projectId,
+        input.runId,
+        supersedesRecordId,
+        outcome,
+        reasons,
+        correctiveAction,
+        address,
+        decidedAt,
+        recordDigest,
+        JSON.stringify({ ...payload, recordDigest }),
+      ],
+    );
+    await client.query("COMMIT");
+    record = { ...payload, recordDigest, current: true };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+  await appendAuditEvent({
+    workspaceId,
+    actorKind: isRateLoopPrincipalId(address) ? "principal" : "account",
+    actorReference: address,
+    assuranceMethod: "rateloop_session",
+    action: "oversight.override_recorded",
+    targetKind: "assurance_override_decision",
+    targetId: record.recordId,
+    purpose: "workspace_oversight_override",
+    reason: "authorized_person_recorded_override_decision",
+    result: "success",
+    metadata: {
+      runId: record.runId,
+      outcome: record.outcome,
+      supersedesRecordId: record.supersedesRecordId,
+      recordDigest: record.recordDigest,
+    },
+    occurredAt: new Date(record.decidedAt),
+  });
+  return record;
+}
+
+export async function listAssuranceOverrideDecisions(input: {
+  accountAddress: string;
+  workspaceId: string;
+  runId: string;
+}): Promise<AssuranceOverrideDecision[]> {
+  const client = await dbPool.connect();
+  try {
+    await loadRunAccess(client, input);
+    const packetResult = await client.query(
+      "SELECT packet_digest FROM tokenless_assurance_evidence_packets WHERE run_id = $1 LIMIT 1",
+      [input.runId],
+    );
+    const packetDigest = rowString(packetResult.rows[0], "packet_digest");
+    const result = await client.query(
+      `SELECT * FROM tokenless_assurance_override_decisions
+       WHERE run_id = $1
+       ORDER BY decided_at DESC, record_id DESC`,
+      [input.runId],
+    );
+    for (const row of result.rows) row.evidence_packet_digest = packetDigest;
+    const supersededIds = new Set(
+      result.rows
+        .map(row => rowString(row, "supersedes_record_id"))
+        .filter((value): value is string => value !== null),
+    );
+    return result.rows.map(row => overrideDecisionFromRow(row, supersededIds));
   } finally {
     client.release();
   }
