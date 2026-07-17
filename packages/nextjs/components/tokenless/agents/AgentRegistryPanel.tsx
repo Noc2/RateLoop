@@ -54,7 +54,7 @@ type HumanReviewConfiguration = NonNullable<WorkspaceAgent["humanReview"]["confi
 
 function reviewFrequencyLabel(selection: HumanReviewConfiguration["selection"]) {
   if (selection.mode === "always") return "Every eligible output";
-  if (selection.mode === "manual") return "Only after owner approval";
+  if (selection.mode === "manual") return "Manual handoff only";
   if (selection.mode === "fixed") return `${formatPercent(selection.fixedRateBps)} of eligible outputs`;
   if (selection.mode === "rules") return "When risk or confidence rules match";
   const range = selection.effectiveRateRangeBps;
@@ -113,6 +113,9 @@ function reviewCapability(agent: WorkspaceAgent) {
     return { blocked: true, label: "Blocked · finish review setup" };
   }
   if (!review.configuration.connected) return { blocked: true, label: "Blocked · reconnect the agent" };
+  if (review.configuration.selection.mode === "manual") {
+    return { blocked: false, label: "Manual handoffs only" };
+  }
   if (review.configuration.killSwitchActive) {
     return { blocked: true, label: "Blocked · automatic requests are off" };
   }
@@ -357,10 +360,12 @@ function AgentHumanReviewConfigurationSummary({ agent }: { agent: WorkspaceAgent
             <dt className="text-xs text-base-content/45">Feedback Bonus</dt>
             <dd className="mt-1 text-sm font-medium">{feedbackBonusLabel(configuration.request)}</dd>
           </div>
-          <div>
-            <dt className="text-xs text-base-content/45">Agent authority</dt>
-            <dd className="mt-1 text-sm font-medium">{reviewAuthorityLabel(configuration.authority)}</dd>
-          </div>
+          {configuration.selection.mode !== "manual" ? (
+            <div>
+              <dt className="text-xs text-base-content/45">Agent authority</dt>
+              <dd className="mt-1 text-sm font-medium">{reviewAuthorityLabel(configuration.authority)}</dd>
+            </div>
+          ) : null}
         </dl>
       ) : (
         <p className="mt-3 text-sm text-base-content/55">

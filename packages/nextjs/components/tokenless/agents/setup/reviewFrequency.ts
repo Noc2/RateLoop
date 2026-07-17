@@ -32,7 +32,7 @@ export function reviewFrequencyFormValues(selection: ReviewSelection | null | un
 export function reviewFrequencySummary(selection: ReviewSelection | null | undefined) {
   if (!selection) return "Adaptive review";
   if (selection.mode === "always") return "Every eligible output";
-  if (selection.mode === "manual") return "Only after owner approval";
+  if (selection.mode === "manual") return "Manual handoff only";
   if (selection.mode === "fixed") return `${percent(selection.fixedRateBps, 0)}% of eligible outputs`;
   if (selection.mode === "rules") return "When risk or confidence conditions match";
   return `Adaptive review, at least ${percent(selection.productionFloorBps, 1_000)}%`;
@@ -111,5 +111,6 @@ export function buildReviewFrequencySelection(
     }
     return { ...next, requiredRiskTiers, minimumConfidenceBps };
   }
+  if (form.mode === "manual") return { ...next, enforcementMode: "advisory" };
   return next;
 }

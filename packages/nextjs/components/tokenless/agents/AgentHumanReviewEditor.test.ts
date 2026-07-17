@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const source = readFileSync(new URL("./AgentHumanReviewEditor.tsx", import.meta.url), "utf8");
+const routingSource = readFileSync(new URL("./ReviewRoutingFields.tsx", import.meta.url), "utf8");
 
 test("the contextual editor owns every human-review dimension through one canonical API", () => {
   assert.match(source, /agents\/\$\{encodeURIComponent\(agentId\)\}\/human-review/);
@@ -16,7 +17,6 @@ test("the contextual editor owns every human-review dimension through one canoni
     "Positive label",
     "Negative label",
     "Rationale",
-    "Frequency",
     "Minimum review rate",
     "Outputs reviewed",
     "Maximum outputs between reviews",
@@ -32,15 +32,24 @@ test("the contextual editor owns every human-review dimension through one canoni
     "Add bonus",
     "Bonus pool",
     "Human awarder",
-    "Agent authority",
   ]) {
     assert.match(source, new RegExp(label));
   }
+  assert.match(source, /<ReviewRoutingFields/);
+  assert.match(routingSource, /When should RateLoop require human review\?/);
+  assert.match(routingSource, /If review is required, what may the agent do\?/);
+  assert.match(routingSource, /Manual handoff only/);
   assert.match(source, /publishingGrant: null/);
   assert.match(source, /delegation\.publishingPolicy\.id/);
   assert.match(source, /delegation\?\.allowedWorkflowKeys/);
-  assert.match(source, /disabled=\{!automaticAvailable\}/);
+  assert.match(routingSource, /disabled=\{value === "ask_automatically" && !automaticAvailable\}/);
+  assert.match(source, /mode === "manual" \? "check_only"/);
+  assert.match(source, /enforcementMode: draft\.mode === "manual" \? "advisory"/);
+  assert.match(source, /draft\.mode !== "manual"/);
+  assert.match(source, /requiredExpertiseKeys: strings\(currentRequestProfile\.requiredExpertiseKeys, \[\]\)/);
+  assert.match(source, /Array\.isArray\(currentRequestProfile\.expertiseRequirements\)/);
   assert.match(source, /humanReviewConfirmationMessage\(\{/);
+  assert.match(source, /authority,/);
   assert.match(source, /next\.confirmation && !window\.confirm\(next\.confirmation\)/);
   assert.match(source, /Save changes/);
   assert.doesNotMatch(source, /Confirm exact changes/);

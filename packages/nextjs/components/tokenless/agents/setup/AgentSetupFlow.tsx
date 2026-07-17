@@ -3,6 +3,7 @@
 import { type FormEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AgentConnectionTroubleshooting } from "../AgentConnectionTroubleshooting";
+import { ReviewRoutingFields, type ReviewRoutingMode, reviewRoutingStateForMode } from "../ReviewRoutingFields";
 import { buildAgentConnectionMessage } from "../agentConnectionMessage";
 import { AgentSetupProgress } from "./AgentSetupProgress";
 import { SetupActionBar } from "./SetupActionBar";
@@ -72,28 +73,10 @@ const ACTIVE_CONNECTION_STATES = new Set([
   "action_required",
 ]);
 
-const REVIEW_FREQUENCY_OPTIONS = [
-  ["adaptive", "Adaptive", "Learns from results and reduces review coverage safely.", "Recommended"],
-  ["always", "Every output", "Reviews every eligible output.", ""],
-  ["fixed", "Fixed percentage", "Reviews a fixed share of eligible outputs.", ""],
-  ["rules", "Rules and conditions", "Reviews outputs that match risk or confidence conditions.", ""],
-  ["manual", "Only after I approve", "RateLoop recommends a handoff; the agent cannot send it.", ""],
-] as const;
-
 const REVIEW_AUDIENCE_OPTIONS = [
   ["public_network", "Public network", "RateLoop network reviewers."],
   ["private_invited", "Invited reviewers", "Only people you invite can review private workspace material."],
   ["hybrid", "Hybrid", "Invited and RateLoop network reviewers."],
-] as const;
-
-const REVIEW_AUTHORITY_OPTIONS = [
-  ["check_only", "Check only", "Report whether review is required. Do not prepare or send a request."],
-  ["prepare_for_approval", "Prepare for approval", "Prepare a request, then wait for owner approval."],
-  [
-    "ask_automatically",
-    "Ask automatically",
-    "Send requests within the saved limits. Requires a separate owner-approved publishing and funding grant.",
-  ],
 ] as const;
 
 type ExpertiseDefinitionsResponse = {
@@ -115,10 +98,19 @@ type PrivateExpertiseCoverage = {
   >;
 };
 
-function reviewAuthoritySummary(authority: AgentSetupReviewDraft["authority"]) {
+function reviewAuthoritySummary(authority: AgentSetupReviewDraft["authority"], requiresFundingPermission: boolean) {
   if (authority === "prepare_for_approval") return "Prepare each required request and wait for owner approval";
-  if (authority === "ask_automatically") return "Send within the exact owner-approved publishing and funding grant";
+  if (authority === "ask_automatically") {
+    return requiresFundingPermission
+      ? "Send within the owner-approved publishing and funding grant"
+      : "Send within the owner-approved publishing grant; no funding permission is needed";
+  }
   return "Check whether review is required; do not prepare, send, or spend";
+}
+
+function reviewCompensationValues(draft: AgentSetupReviewDraft | null | undefined) {
+  const values = reviewCompensationFormValues(draft?.requestProfile, draft?.authority);
+  return draft?.selection.mode === "manual" ? { ...values, authority: "check_only" as const } : values;
 }
 
 async function readJson(response: Response) {
@@ -169,7 +161,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     reviewTimingFormValues(initialSetup.reviewDraft?.requestProfile),
   );
   const [reviewCompensation, setReviewCompensation] = useState<ReviewCompensationFormValues>(() =>
-    reviewCompensationFormValues(initialSetup.reviewDraft?.requestProfile, initialSetup.reviewDraft?.authority),
+    reviewCompensationValues(initialSetup.reviewDraft),
   );
   const [peopleDecision, setPeopleDecision] = useState<"invited" | "later">("invited");
   const [invitationExpertiseIds, setInvitationExpertiseIds] = useState<string[]>(() =>
@@ -385,13 +377,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     [setup.reviewDraft?.requestProfile],
   );
 
-  useEffect(
-    () =>
-      setReviewCompensation(
-        reviewCompensationFormValues(setup.reviewDraft?.requestProfile, setup.reviewDraft?.authority),
-      ),
-    [setup.reviewDraft?.authority, setup.reviewDraft?.requestProfile],
-  );
+  useEffect(() => setReviewCompensation(reviewCompensationValues(setup.reviewDraft)), [setup.reviewDraft]);
 
   useEffect(() => {
     if (currentStep !== "connect" || !ACTIVE_CONNECTION_STATES.has(setup.connection.status ?? "")) return;
@@ -693,6 +679,14 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     }
   }
 
+  function changeReviewMode(mode: ReviewRoutingMode) {
+    setReviewFrequency(current => ({ ...current, mode }));
+    setReviewCompensation(current => ({
+      ...current,
+      authority: reviewRoutingStateForMode(mode, current.authority).authority,
+    }));
+  }
+
   async function configureReviews(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const connectedAgent = setup.agent;
@@ -713,7 +707,9 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         reviewTiming.panelSize,
       );
       const timingProfile = buildReviewTimingRequestProfile(expertiseProfile, reviewTiming);
-      const { requestProfile, authority } = buildReviewCompensationConfiguration(timingProfile, reviewCompensation);
+      const compensationConfiguration = buildReviewCompensationConfiguration(timingProfile, reviewCompensation);
+      const requestProfile = compensationConfiguration.requestProfile;
+      const authority = selection.mode === "manual" ? "check_only" : compensationConfiguration.authority;
       const confirmation = humanReviewConfirmationMessage({
         authority,
         bountyPerSeatAtomic: requestProfile.compensationMode === "usdc" ? requestProfile.bountyPerSeatAtomic : null,
@@ -768,6 +764,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               selection,
               requestProfile: { ...requestProfile, privateGroupId },
               authority,
+              publishingGrant: authority === "ask_automatically" ? undefined : null,
             }),
             credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
@@ -1115,120 +1112,114 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 </label>
               </div>
             </fieldset>
-            <fieldset className="mt-7">
-              <legend className="text-xl font-semibold">When to review</legend>
-              <SetupChoiceGroup>
-                {REVIEW_FREQUENCY_OPTIONS.map(([value, label, description, badge]) => (
-                  <Fragment key={value}>
-                    <SetupRadioChoice
-                      id={`agent-setup-review-frequency-${value}`}
-                      name="mode"
-                      value={value}
-                      checked={reviewFrequency.mode === value}
-                      onChange={() => setReviewFrequency(current => ({ ...current, mode: value }))}
-                      label={label}
-                      description={description}
-                      badge={reviewCriterion.questionAuthority === "agent_per_request" ? undefined : badge || undefined}
-                      disabled={reviewCriterion.questionAuthority === "agent_per_request" && value === "adaptive"}
+            <ReviewRoutingFields
+              className="mt-7"
+              mode={reviewFrequency.mode}
+              authority={reviewCompensation.authority}
+              automaticAvailable={setup.capabilities.autonomousAccess}
+              automaticUnavailableReason={setup.capabilities.unavailableReason}
+              requiresFundingPermission={
+                reviewCompensation.compensationMode === "usdc" || reviewCompensation.feedbackBonusEnabled === true
+              }
+              adaptiveAvailable={reviewCriterion.questionAuthority !== "agent_per_request"}
+              onModeChange={changeReviewMode}
+              onAuthorityChange={authority => setReviewCompensation(current => ({ ...current, authority }))}
+            />
+            {reviewFrequency.mode === "adaptive" || reviewFrequency.mode === "fixed" ? (
+              <div className="mt-4 border-l-2 border-l-[var(--rateloop-pink)] bg-black/10 px-4 py-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="text-sm">
+                    {reviewFrequency.mode === "adaptive" ? "Minimum review rate (%)" : "Outputs reviewed (%)"}
+                    <input
+                      className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                      type="number"
+                      min={reviewFrequency.mode === "adaptive" ? 10 : 0.01}
+                      max={100}
+                      step={0.01}
+                      inputMode="decimal"
+                      value={
+                        reviewFrequency.mode === "adaptive"
+                          ? reviewFrequency.adaptiveFloorPercent
+                          : reviewFrequency.fixedPercent
+                      }
+                      onChange={event =>
+                        setReviewFrequency(current => ({
+                          ...current,
+                          [reviewFrequency.mode === "adaptive" ? "adaptiveFloorPercent" : "fixedPercent"]:
+                            event.target.value,
+                        }))
+                      }
+                      required
                     />
-                    {reviewFrequency.mode === value && (value === "adaptive" || value === "fixed") ? (
-                      <div className="border-b border-white/10 border-l-2 border-l-[var(--rateloop-pink)] bg-black/10 px-4 py-4 sm:ml-10">
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <label className="text-sm">
-                            {value === "adaptive" ? "Minimum review rate (%)" : "Outputs reviewed (%)"}
-                            <input
-                              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                              type="number"
-                              min={value === "adaptive" ? 10 : 0.01}
-                              max={100}
-                              step={0.01}
-                              inputMode="decimal"
-                              value={
-                                value === "adaptive"
-                                  ? reviewFrequency.adaptiveFloorPercent
-                                  : reviewFrequency.fixedPercent
-                              }
-                              onChange={event =>
-                                setReviewFrequency(current => ({
-                                  ...current,
-                                  [value === "adaptive" ? "adaptiveFloorPercent" : "fixedPercent"]: event.target.value,
-                                }))
-                              }
-                              required
-                            />
-                          </label>
-                          <label className="text-sm">
-                            Maximum outputs between reviews
-                            <input
-                              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                              type="number"
-                              min={1}
-                              max={10_000}
-                              step={1}
-                              inputMode="numeric"
-                              value={reviewFrequency.maximumUnreviewedGap}
-                              onChange={event =>
-                                setReviewFrequency(current => ({
-                                  ...current,
-                                  maximumUnreviewedGap: event.target.value,
-                                }))
-                              }
-                              required
-                            />
-                          </label>
-                        </div>
-                        <p className="mt-3 text-xs leading-5 text-base-content/55">
-                          {value === "adaptive" ? "Starts at 100% while calibrating. " : ""}
-                          Critical, incomplete, or low-confidence outputs can still require review.
-                        </p>
-                      </div>
-                    ) : null}
-                    {reviewFrequency.mode === value && value === "rules" ? (
-                      <div className="border-b border-white/10 border-l-2 border-l-[var(--rateloop-pink)] bg-black/10 px-4 py-4 sm:ml-10">
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <label className="text-sm">
-                            Review these risk levels
-                            <input
-                              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                              value={reviewFrequency.requiredRiskTiers}
-                              onChange={event =>
-                                setReviewFrequency(current => ({
-                                  ...current,
-                                  requiredRiskTiers: event.target.value,
-                                }))
-                              }
-                              placeholder="high, legal"
-                              maxLength={320}
-                            />
-                          </label>
-                          <label className="text-sm">
-                            Review below confidence (%) <span className="text-base-content/50">(optional)</span>
-                            <input
-                              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                              type="number"
-                              min={0}
-                              max={100}
-                              step={0.01}
-                              inputMode="decimal"
-                              value={reviewFrequency.minimumConfidencePercent}
-                              onChange={event =>
-                                setReviewFrequency(current => ({
-                                  ...current,
-                                  minimumConfidencePercent: event.target.value,
-                                }))
-                              }
-                            />
-                          </label>
-                        </div>
-                        <p className="mt-3 text-xs leading-5 text-base-content/55">
-                          Separate risk levels with commas. Critical or incomplete outputs always require review.
-                        </p>
-                      </div>
-                    ) : null}
-                  </Fragment>
-                ))}
-              </SetupChoiceGroup>
-            </fieldset>
+                  </label>
+                  <label className="text-sm">
+                    Maximum outputs between reviews
+                    <input
+                      className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                      type="number"
+                      min={1}
+                      max={10_000}
+                      step={1}
+                      inputMode="numeric"
+                      value={reviewFrequency.maximumUnreviewedGap}
+                      onChange={event =>
+                        setReviewFrequency(current => ({
+                          ...current,
+                          maximumUnreviewedGap: event.target.value,
+                        }))
+                      }
+                      required
+                    />
+                  </label>
+                </div>
+                <p className="mt-3 text-xs leading-5 text-base-content/55">
+                  {reviewFrequency.mode === "adaptive" ? "Starts at 100% while calibrating. " : ""}
+                  Critical, incomplete, or low-confidence outputs can still require review.
+                </p>
+              </div>
+            ) : null}
+            {reviewFrequency.mode === "rules" ? (
+              <div className="mt-4 border-l-2 border-l-[var(--rateloop-pink)] bg-black/10 px-4 py-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="text-sm">
+                    Review these risk levels
+                    <input
+                      className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                      value={reviewFrequency.requiredRiskTiers}
+                      onChange={event =>
+                        setReviewFrequency(current => ({
+                          ...current,
+                          requiredRiskTiers: event.target.value,
+                        }))
+                      }
+                      placeholder="high, legal"
+                      maxLength={320}
+                    />
+                  </label>
+                  <label className="text-sm">
+                    Review below confidence (%) <span className="text-base-content/50">(optional)</span>
+                    <input
+                      className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.01}
+                      inputMode="decimal"
+                      value={reviewFrequency.minimumConfidencePercent}
+                      onChange={event =>
+                        setReviewFrequency(current => ({
+                          ...current,
+                          minimumConfidencePercent: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+                <p className="mt-3 text-xs leading-5 text-base-content/55">
+                  Separate risk levels with commas. Critical or incomplete outputs always require review.
+                </p>
+              </div>
+            ) : null}
             <details ref={reviewDetailsRef} className="group mt-7 border-y border-white/10 py-5">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
                 <span className="min-w-0">
@@ -1687,23 +1678,6 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 </fieldset>
               </div>
             </details>
-            <fieldset className="mt-7">
-              <legend className="text-xl font-semibold">Agent authority</legend>
-              <SetupChoiceGroup>
-                {REVIEW_AUTHORITY_OPTIONS.map(([value, label, description]) => (
-                  <SetupRadioChoice
-                    key={value}
-                    id={`agent-setup-authority-${value}`}
-                    name="authority"
-                    value={value}
-                    checked={reviewCompensation.authority === value}
-                    onChange={() => setReviewCompensation(current => ({ ...current, authority: value }))}
-                    label={label}
-                    description={description}
-                  />
-                ))}
-              </SetupChoiceGroup>
-            </fieldset>
             <SetupActionBar>
               {backButton}
               <Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={busy}>
@@ -1937,10 +1911,16 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       {reviewCompensation.feedbackBonusUsdc} USDC · human-awarded
                     </p>
                   ) : null}
-                  <p className="mt-2">
-                    <span className="text-base-content/55">Authority:</span>{" "}
-                    {reviewAuthoritySummary(setup.reviewDraft?.authority ?? "check_only")}
-                  </p>
+                  {setup.reviewDraft?.selection.mode !== "manual" ? (
+                    <p className="mt-2">
+                      <span className="text-base-content/55">Authority:</span>{" "}
+                      {reviewAuthoritySummary(
+                        setup.reviewDraft?.authority ?? "check_only",
+                        setup.reviewDraft?.requestProfile.compensationMode === "usdc" ||
+                          setup.reviewDraft?.requestProfile.feedbackBonusEnabled === true,
+                      )}
+                    </p>
+                  ) : null}
                 </div>
                 <SetupActionBar className="mt-0">
                   {backButton}

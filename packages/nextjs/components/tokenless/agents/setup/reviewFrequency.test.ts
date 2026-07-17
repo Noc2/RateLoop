@@ -58,12 +58,13 @@ test("rule conditions normalize exact risk tiers and an optional confidence thre
   assert.equal(rules.fixedRateBps, null);
 });
 
-test("every-output and owner-approved modes clear inactive rate fields", () => {
+test("every-output and manual modes clear inactive rate fields", () => {
   for (const mode of ["always", "manual"] as const) {
     const result = buildReviewFrequencySelection({ ...selection, fixedRateBps: 500 }, form({ mode }));
     assert.equal(result.mode, mode);
     assert.equal(result.productionFloorBps, 0);
     assert.equal(result.fixedRateBps, null);
+    assert.equal(result.enforcementMode, mode === "manual" ? "advisory" : selection.enforcementMode);
   }
 });
 
@@ -100,7 +101,7 @@ test("mode-specific invalid and empty frequency fields fail before the owner sav
 
 test("saved frequency summaries preserve the exact visible mode", () => {
   assert.equal(reviewFrequencySummary({ ...selection, mode: "always" }), "Every eligible output");
-  assert.equal(reviewFrequencySummary({ ...selection, mode: "manual" }), "Only after owner approval");
+  assert.equal(reviewFrequencySummary({ ...selection, mode: "manual" }), "Manual handoff only");
   assert.equal(
     reviewFrequencySummary({ ...selection, mode: "fixed", productionFloorBps: 0, fixedRateBps: 250 }),
     "2.5% of eligible outputs",

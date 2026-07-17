@@ -2,14 +2,18 @@
 
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { humanReviewConfirmationMessage } from "./humanReviewConfirmation";
+import {
+  type ReviewRoutingAuthority as Authority,
+  type ReviewRoutingMode as Mode,
+  ReviewRoutingFields,
+  reviewRoutingStateForMode,
+} from "~~/components/tokenless/agents/ReviewRoutingFields";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { readJson } from "~~/lib/tokenless/http";
 import { formatUsdcAtomic, parseUsdcDecimal } from "~~/lib/tokenless/usdc";
 
-type Authority = "check_only" | "prepare_for_approval" | "ask_automatically";
 type Audience = "private_invited" | "public_network" | "hybrid";
-type Mode = "adaptive" | "always" | "manual" | "rules" | "fixed";
 type QuestionAuthority = "owner_fixed" | "agent_per_request";
 
 type OwnerView = {
@@ -109,7 +113,7 @@ function draftFromView(view: OwnerView): Draft {
     feedbackBonusUsdc: request.feedbackBonusPoolAtomic ? atomicToUsdc(request.feedbackBonusPoolAtomic) : "2",
     feedbackBonusAwarderKind: request.feedbackBonusAwarderKind === "designated" ? "designated" : "requester",
     feedbackBonusAwarderAccount: String(request.feedbackBonusAwarderAccount ?? ""),
-    authority: view.configuration.authority,
+    authority: mode === "manual" ? "check_only" : view.configuration.authority,
   };
 }
 
@@ -134,6 +138,8 @@ function buildMutation(view: OwnerView, draft: Draft) {
   const configuration = view.configuration;
   if (!configuration) throw new Error("Human-review configuration is unavailable.");
   const currentSelection = configuration.selection.value;
+  const currentRequestProfile = configuration.requestProfile.value;
+  const authority: Authority = draft.mode === "manual" ? "check_only" : draft.authority;
   if (draft.questionAuthority === "agent_per_request" && draft.mode === "adaptive") {
     throw new Error("Agent-written questions cannot use adaptive review.");
   }
@@ -156,7 +162,7 @@ function buildMutation(view: OwnerView, draft: Draft) {
   if (draft.audience !== "public_network" && !privateGroupId) throw new Error("Choose an invited reviewer group.");
   const selection = {
     mode: draft.mode,
-    enforcementMode: currentSelection.enforcementMode,
+    enforcementMode: draft.mode === "manual" ? "advisory" : currentSelection.enforcementMode,
     agreementThresholdBps: currentSelection.agreementThresholdBps,
     productionFloorBps: draft.mode === "adaptive" ? bps(draft.ratePercent, "Minimum review rate", 1_000) : 0,
     fixedRateBps: draft.mode === "fixed" ? bps(draft.ratePercent, "Fixed review rate", 1) : null,
@@ -169,6 +175,10 @@ function buildMutation(view: OwnerView, draft: Draft) {
     maximumLatencyMs: currentSelection.maximumLatencyMs,
   };
   const requestProfile = {
+    requiredExpertiseKeys: strings(currentRequestProfile.requiredExpertiseKeys, []),
+    expertiseRequirements: Array.isArray(currentRequestProfile.expertiseRequirements)
+      ? currentRequestProfile.expertiseRequirements
+      : [],
     questionAuthority: draft.questionAuthority,
     ...(draft.questionAuthority === "owner_fixed"
       ? {
@@ -209,7 +219,7 @@ function buildMutation(view: OwnerView, draft: Draft) {
     throw new Error("Enter the authenticated account for the designated Feedback Bonus awarder.");
   }
   let publishingGrant: Record<string, unknown> | null = null;
-  if (draft.authority === "ask_automatically") {
+  if (authority === "ask_automatically") {
     const delegation = configuration.delegation;
     const workflowKeys = delegation?.allowedWorkflowKeys ?? [];
     if (!delegation?.integrationId || workflowKeys.length === 0) {
@@ -223,25 +233,25 @@ function buildMutation(view: OwnerView, draft: Draft) {
     };
   }
   const body =
-    draft.authority === "ask_automatically"
+    authority === "ask_automatically"
       ? {
           expectedBindingVersion: view.bindingRevision,
           selection,
           requestProfile,
-          authority: draft.authority,
+          authority,
           publishingGrant,
         }
       : {
           expectedBindingVersion: view.bindingRevision,
           selection,
           requestProfile,
-          authority: draft.authority,
+          authority,
           publishingGrant: null,
         };
   return {
     body,
     confirmation: humanReviewConfirmationMessage({
-      authority: draft.authority,
+      authority,
       bountyPerSeatAtomic: compensationMode === "usdc" ? requestProfile.bountyPerSeatAtomic : null,
       feedbackBonusPoolAtomic: draft.feedbackBonusEnabled ? requestProfile.feedbackBonusPoolAtomic : null,
       panelSize,
@@ -303,6 +313,18 @@ export function AgentHumanReviewEditor({
 
   function update<Key extends keyof Draft>(key: Key, value: Draft[Key]) {
     setDraft(current => (current ? { ...current, [key]: value } : current));
+    setStatus(null);
+  }
+
+  function changeReviewMode(mode: Mode) {
+    setDraft(current =>
+      current
+        ? {
+            ...current,
+            ...reviewRoutingStateForMode(mode, current.authority),
+          }
+        : current,
+    );
     setStatus(null);
   }
 
@@ -445,22 +467,21 @@ export function AgentHumanReviewEditor({
               <option value="required">Required</option>
             </select>
           </label>
-          <label className="text-sm">
-            Frequency
-            <select
-              className="select mt-2 w-full"
-              value={draft.mode}
-              onChange={event => update("mode", event.target.value as Mode)}
-            >
-              <option value="adaptive" disabled={draft.questionAuthority === "agent_per_request"}>
-                Adaptive
-              </option>
-              <option value="always">Every output</option>
-              <option value="fixed">Fixed percentage</option>
-              <option value="rules">Rules and conditions</option>
-              <option value="manual">Only after owner approval</option>
-            </select>
-          </label>
+          <ReviewRoutingFields
+            className="sm:col-span-2"
+            mode={draft.mode}
+            authority={draft.authority}
+            automaticAvailable={automaticAvailable}
+            automaticUnavailableReason={
+              draft.compensationMode === "usdc" || draft.feedbackBonusEnabled
+                ? "Create an exact owner-approved publishing and funding grant for this workflow first."
+                : "Create an exact owner-approved publishing grant for this workflow first."
+            }
+            requiresFundingPermission={draft.compensationMode === "usdc" || draft.feedbackBonusEnabled}
+            adaptiveAvailable={draft.questionAuthority !== "agent_per_request"}
+            onModeChange={changeReviewMode}
+            onAuthorityChange={authority => update("authority", authority)}
+          />
           {draft.mode === "adaptive" || draft.mode === "fixed" ? (
             <label className="text-sm">
               {draft.mode === "adaptive" ? "Minimum review rate (%)" : "Outputs reviewed (%)"}
@@ -476,18 +497,20 @@ export function AgentHumanReviewEditor({
               />
             </label>
           ) : null}
-          <label className="text-sm">
-            Maximum outputs between reviews
-            <input
-              className="input mt-2 w-full"
-              type="number"
-              min={1}
-              max={10000}
-              value={draft.maximumUnreviewedGap}
-              onChange={event => update("maximumUnreviewedGap", event.target.value)}
-              required
-            />
-          </label>
+          {draft.mode !== "manual" ? (
+            <label className="text-sm">
+              Maximum outputs between reviews
+              <input
+                className="input mt-2 w-full"
+                type="number"
+                min={1}
+                max={10000}
+                value={draft.maximumUnreviewedGap}
+                onChange={event => update("maximumUnreviewedGap", event.target.value)}
+                required
+              />
+            </label>
+          ) : null}
           {draft.mode === "rules" ? (
             <>
               <label className="text-sm">
@@ -693,25 +716,6 @@ export function AgentHumanReviewEditor({
               </div>
             ) : null}
           </fieldset>
-          <label className="text-sm sm:col-span-2">
-            Agent authority
-            <select
-              className="select mt-2 w-full"
-              value={draft.authority}
-              onChange={event => update("authority", event.target.value as Authority)}
-            >
-              <option value="check_only">Check only</option>
-              <option value="prepare_for_approval">Prepare for owner approval</option>
-              <option value="ask_automatically" disabled={!automaticAvailable}>
-                Ask automatically within the existing exact grant
-              </option>
-            </select>
-            {!automaticAvailable ? (
-              <span className="mt-1 block text-xs text-base-content/50">
-                Automatic requests require a separate exact publishing and funding grant.
-              </span>
-            ) : null}
-          </label>
         </div>
         {error ? (
           <p className="alert alert-error text-sm" role="alert">

@@ -4,6 +4,7 @@ import test from "node:test";
 import { agentSetupUrl } from "~~/lib/tokenless/agentSetupNavigation";
 
 const flowSource = readFileSync(new URL("./AgentSetupFlow.tsx", import.meta.url), "utf8");
+const routingSource = readFileSync(new URL("../ReviewRoutingFields.tsx", import.meta.url), "utf8");
 const progressSource = readFileSync(new URL("./AgentSetupProgress.tsx", import.meta.url), "utf8");
 const choiceGroupSource = readFileSync(new URL("./SetupChoiceGroup.tsx", import.meta.url), "utf8");
 const startSource = readFileSync(new URL("./WorkspaceSetupStart.tsx", import.meta.url), "utf8");
@@ -39,7 +40,7 @@ test("guided setup renders one stage at a time and keeps implementation details 
   assert.match(flowSource, /\/agents\/\$\{encodeURIComponent\(connectedAgent\.agentId\)\}\/human-review/);
   assert.match(flowSource, /expectedBindingVersion: draft\.bindingRevision/);
   assert.match(flowSource, /bindingRevision: ownerView\.bindingRevision/);
-  assert.match(flowSource, /do not prepare, send, or spend/i);
+  assert.match(routingSource, /Do not prepare or send a request/i);
   assert.doesNotMatch(flowSource, /Audience policy binding|admission policy hash/i);
   assert.doesNotMatch(flowSource, /Deployment name/i);
 });
@@ -48,15 +49,11 @@ test("review setup distinguishes a saved policy decision from delivery authority
   assert.doesNotMatch(flowSource, /mark an eligible output for human review/i);
   assert.doesNotMatch(flowSource, /This saves a review policy/i);
   assert.doesNotMatch(flowSource, /safe\s+connection does not send requests or pay reviewers/i);
-  for (const label of [
-    "Adaptive",
-    "Every output",
-    "Fixed percentage",
-    "Rules and conditions",
-    "Only after I approve",
-  ]) {
-    assert.match(flowSource, new RegExp(label));
+  for (const label of ["Adaptive — Recommended", "Every output", "Fixed percentage", "Rules and conditions"]) {
+    assert.match(routingSource, new RegExp(label));
   }
+  assert.match(routingSource, /Manual handoff only/);
+  assert.match(routingSource, /Never requires review automatically\. You start each handoff\./);
   assert.match(flowSource, /Minimum review rate \(%\)/);
   assert.match(flowSource, /Outputs reviewed \(%\)/);
   assert.match(flowSource, /Maximum outputs between reviews/);
@@ -64,14 +61,17 @@ test("review setup distinguishes a saved policy decision from delivery authority
   assert.match(flowSource, /Review below confidence \(%\)/);
   assert.match(flowSource, /buildReviewFrequencySelection\(draft\.selection, reviewFrequency\)/);
   assert.doesNotMatch(flowSource, /Choose when this agent should involve people/i);
-  assert.doesNotMatch(flowSource, /reviewerAudience|contentBoundary: "private_workspace"|autonomousAccess/);
+  assert.doesNotMatch(flowSource, /reviewerAudience|contentBoundary: "private_workspace"/);
 });
 
-test("review setup uses compact shared choices and reveals only selected frequency details", () => {
-  assert.match(flowSource, /<SetupChoiceGroup>/);
-  assert.match(flowSource, /<SetupRadioChoice/);
-  assert.match(flowSource, /reviewFrequency\.mode === value && \(value === "adaptive" \|\| value === "fixed"\)/);
-  assert.match(flowSource, /reviewFrequency\.mode === value && value === "rules"/);
+test("review setup uses compact shared routing selects and reveals only selected frequency details", () => {
+  assert.match(flowSource, /<ReviewRoutingFields/);
+  assert.match(routingSource, /<select/);
+  assert.match(routingSource, /sm:grid-cols-2/);
+  assert.match(flowSource, /reviewFrequency\.mode === "adaptive" \|\| reviewFrequency\.mode === "fixed"/);
+  assert.match(flowSource, /reviewFrequency\.mode === "rules"/);
+  assert.match(flowSource, /mode === "manual"/);
+  assert.match(flowSource, /authority: "check_only"/);
   assert.match(flowSource, /Reviewers, timing and payment/);
   assert.match(flowSource, /reviewerDetailsSummary/);
   assert.match(choiceGroupSource, /surface-card-nested/);
@@ -108,7 +108,7 @@ test("review setup resumes a controlled question and compact answer format", () 
   }
   assert.match(flowSource, /questionAuthority === "owner_fixed"/);
   assert.match(flowSource, /Agent-written questions collect feedback only/);
-  assert.match(flowSource, /questionAuthority === "agent_per_request" && value === "adaptive"/);
+  assert.match(flowSource, /adaptiveAvailable=\{reviewCriterion\.questionAuthority !== "agent_per_request"\}/);
   assert.match(flowSource, /questionAuthority === "agent_per_request" && value !== "public_network"/);
   for (const option of ["off", "optional", "required"]) {
     assert.match(flowSource, new RegExp(`<option value="${option}">`, "u"));
@@ -168,18 +168,18 @@ test("review setup controls independent base compensation, optional Feedback Bon
     "Add bonus",
     "Bonus pool",
     "Human awarder",
-    "Agent authority",
     "Check only",
     "Prepare for approval",
     "Ask automatically",
   ]) {
-    assert.match(flowSource, new RegExp(label));
+    assert.match(`${flowSource}\n${routingSource}`, new RegExp(label));
   }
   assert.match(flowSource, /Public and hybrid network assignments currently require a guaranteed bounty/);
   assert.match(flowSource, /reviewCompensation\.feedbackBonusEnabled/);
   assert.match(flowSource, /feedbackBonusAwarderKind/);
   assert.match(flowSource, /value=\{reviewCompensation\.usdcPerReviewer\}/);
-  assert.match(flowSource, /checked=\{reviewCompensation\.authority === value\}/);
+  assert.match(flowSource, /authority=\{reviewCompensation\.authority\}/);
+  assert.match(flowSource, /automaticAvailable=\{setup\.capabilities\.autonomousAccess\}/);
   assert.match(flowSource, /buildReviewCompensationConfiguration\(timingProfile, reviewCompensation\)/);
   assert.match(flowSource, /requestProfile: \{ \.\.\.requestProfile, privateGroupId \}/);
   assert.match(flowSource, /\s+authority,\s+/);

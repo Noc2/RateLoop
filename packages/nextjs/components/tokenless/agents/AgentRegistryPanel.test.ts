@@ -45,6 +45,9 @@ test("agent registry keeps the default row compact and reveals management on dem
   assert.match(source, /Feedback Bonus/);
   assert.match(source, /Agent authority/);
   assert.match(source, /Every eligible output/);
+  assert.match(source, /Manual handoff only/);
+  assert.match(source, /Manual handoffs only/);
+  assert.match(source, /configuration\.selection\.mode !== "manual"/);
   assert.match(source, /Adaptive ·/);
   assert.match(source, /Invited reviewers · private workspace material/);
   assert.match(source, /RateLoop network · public-safe material/);
