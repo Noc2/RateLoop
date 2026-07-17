@@ -11,12 +11,18 @@ const pluginRoot = join(repoRoot, "plugins", "rateloop-workspace");
 const hookRoot = join(pluginRoot, "hooks");
 const updaterPath = join(hookRoot, "rateloop-advisory-state-update.mjs");
 const stopPath = join(hookRoot, "rateloop-advisory-stop-gate.mjs");
-const fixtureRoot = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "codex-hooks-v2");
+const fixtureRoot = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "fixtures",
+  "codex-hooks-v2",
+);
 const contractDirectory = "review-stop-gate-v1";
 const temporaryDirectories: string[] = [];
 
 async function fixture() {
-  return JSON.parse(await readFile(join(fixtureRoot, "evaluate-skipped.json"), "utf8")) as Record<string, any>;
+  return JSON.parse(
+    await readFile(join(fixtureRoot, "evaluate-skipped.json"), "utf8"),
+  ) as Record<string, any>;
 }
 
 async function pluginData() {
@@ -34,7 +40,9 @@ function runScript(script: string, data: string, input: Record<string, any>) {
   });
   expect(result.status).toBe(0);
   expect(result.stderr).toBe("");
-  return result.stdout.trim() === "" ? null : (JSON.parse(result.stdout) as Record<string, any>);
+  return result.stdout.trim() === ""
+    ? null
+    : (JSON.parse(result.stdout) as Record<string, any>);
 }
 
 function statePath(data: string, sessionId = "session_advisory_01") {
@@ -42,7 +50,10 @@ function statePath(data: string, sessionId = "session_advisory_01") {
 }
 
 async function state(data: string) {
-  return JSON.parse(await readFile(statePath(data), "utf8")) as Record<string, any>;
+  return JSON.parse(await readFile(statePath(data), "utf8")) as Record<
+    string,
+    any
+  >;
 }
 
 function stopInput(turnId = "turn_advisory_01") {
@@ -57,7 +68,12 @@ function stopInput(turnId = "turn_advisory_01") {
   };
 }
 
-function lifecycle(input: Record<string, any>, next: string, revision: number, terminal = false) {
+function lifecycle(
+  input: Record<string, any>,
+  next: string,
+  revision: number,
+  terminal = false,
+) {
   const enteredAt = Date.now() - 60_000 + revision * 1_000;
   input.tool_response.structuredContent.lifecycle = {
     state: next,
@@ -66,7 +82,8 @@ function lifecycle(input: Record<string, any>, next: string, revision: number, t
     reasonCodes: [`fixture_${next}`],
     stateEnteredAt: new Date(enteredAt).toISOString(),
   };
-  input.tool_response.structuredContent.decision = next === "skipped" ? "skip" : "required";
+  input.tool_response.structuredContent.decision =
+    next === "skipped" ? "skip" : "required";
   return input;
 }
 
@@ -103,21 +120,41 @@ async function installKeyring(data: string) {
 }
 
 afterEach(async () => {
-  await Promise.all(temporaryDirectories.splice(0).map(path => rm(path, { recursive: true, force: true })));
+  await Promise.all(
+    temporaryDirectories
+      .splice(0)
+      .map((path) => rm(path, { recursive: true, force: true })),
+  );
 });
 
 describe("RateLoop advisory PostToolUse integration", () => {
   it("uses only supported PostToolUse fields and identifies itself as advisory", async () => {
-    const config = JSON.parse(await readFile(join(hookRoot, "hooks.json"), "utf8")) as Record<string, any>;
-    const contract = await readFile(join(hookRoot, "ADVISORY_STATE_CONTRACT.md"), "utf8");
+    const config = JSON.parse(
+      await readFile(join(hookRoot, "hooks.json"), "utf8"),
+    ) as Record<string, any>;
+    const contract = await readFile(
+      join(hookRoot, "ADVISORY_STATE_CONTRACT.md"),
+      "utf8",
+    );
     const updater = await readFile(updaterPath, "utf8");
     const schema = JSON.parse(
-      await readFile(join(hookRoot, "schemas", "rateloop-advisory-stop-gate-state.schema.json"), "utf8"),
+      await readFile(
+        join(
+          hookRoot,
+          "schemas",
+          "rateloop-advisory-stop-gate-state.schema.json",
+        ),
+        "utf8",
+      ),
     ) as Record<string, any>;
 
-    expect(config.hooks.PostToolUse[0].matcher).toContain("evaluate_review_requirement");
+    expect(config.hooks.PostToolUse[0].matcher).toContain(
+      "evaluate_review_requirement",
+    );
     expect(config.hooks.PostToolUse[0].hooks[0].type).toBe("command");
-    expect(config.hooks.Stop[0].hooks[0].command).toContain("rateloop-advisory-stop-gate.mjs");
+    expect(config.hooks.Stop[0].hooks[0].command).toContain(
+      "rateloop-advisory-stop-gate.mjs",
+    );
     expect(contract).toContain("separately reviewable, trustable, disableable");
     expect(contract).toContain("is not verified host enforcement");
     expect(schema.$id).toContain("rateloop-advisory-stop-gate-state.v2.json");
@@ -131,7 +168,9 @@ describe("RateLoop advisory PostToolUse integration", () => {
     const data = await pluginData();
     const input = await fixture();
     expect(runScript(updaterPath, data, input)).toBeNull();
-    expect(await state(data)).toEqual(expect.objectContaining({ armed: false, lifecycle: "skipped" }));
+    expect(await state(data)).toEqual(
+      expect.objectContaining({ armed: false, lifecycle: "skipped" }),
+    );
     expect(runScript(stopPath, data, stopInput())).toBeNull();
     expect(runScript(stopPath, data, stopInput("turn_advisory_02"))).toBeNull();
   });
@@ -147,19 +186,25 @@ describe("RateLoop advisory PostToolUse integration", () => {
     expect(runScript(updaterPath, data, pending)).toBeNull();
     const before = await readFile(statePath(data), "utf8");
 
-    const conflict = asTool(lifecycle(await fixture(), "pending", 1), "wait_for_review", "tool_conflict_01");
+    const conflict = asTool(
+      lifecycle(await fixture(), "pending", 1),
+      "wait_for_review",
+      "tool_conflict_01",
+    );
     conflict.tool_response.structuredContent.continuation = {
       cursor: "cursor_conflicting_same_revision",
       retryAfterMs: 2_000,
       expiresAt: "2099-01-02T00:00:00.000Z",
     };
-    expect(runScript(updaterPath, data, conflict)?.systemMessage).toContain("lifecycle_revision_conflict");
+    expect(runScript(updaterPath, data, conflict)?.systemMessage).toContain(
+      "lifecycle_revision_conflict",
+    );
     expect(await readFile(statePath(data), "utf8")).toBe(before);
   });
 
   it.each(["approval_required", "request_ready", "pending"])(
     "arms an advisory Stop gate for %s",
-    async next => {
+    async (next) => {
       const data = await pluginData();
       const input = lifecycle(await fixture(), next, 1);
       if (next === "pending") {
@@ -170,9 +215,14 @@ describe("RateLoop advisory PostToolUse integration", () => {
         };
       }
       expect(runScript(updaterPath, data, input)).toBeNull();
-      expect(await state(data)).toEqual(expect.objectContaining({ armed: true, lifecycle: next }));
+      expect(await state(data)).toEqual(
+        expect.objectContaining({ armed: true, lifecycle: next }),
+      );
       expect(runScript(stopPath, data, stopInput())).toEqual(
-        expect.objectContaining({ continue: false, stopReason: `RateLoop advisory review gate: review_${next}` }),
+        expect.objectContaining({
+          continue: false,
+          stopReason: `RateLoop advisory review gate: review_${next}`,
+        }),
       );
     },
   );
@@ -187,11 +237,19 @@ describe("RateLoop advisory PostToolUse integration", () => {
     };
     expect(runScript(updaterPath, data, pending)).toBeNull();
 
-    const result = asTool(lifecycle(await fixture(), "completed", 2, true), "get_review_result", "tool_result_02");
+    const result = asTool(
+      lifecycle(await fixture(), "completed", 2, true),
+      "get_review_result",
+      "tool_result_02",
+    );
     result.turn_id = "turn_advisory_02";
     const missingEvidence = runScript(updaterPath, data, result);
-    expect(missingEvidence?.systemMessage).toContain("terminal_evidence_missing_recovery_required");
-    expect(runScript(stopPath, data, stopInput("turn_advisory_02"))?.stopReason).toBe(
+    expect(missingEvidence?.systemMessage).toContain(
+      "terminal_evidence_missing_recovery_required",
+    );
+    expect(
+      runScript(stopPath, data, stopInput("turn_advisory_02"))?.stopReason,
+    ).toBe(
       "RateLoop advisory review gate: terminal_evidence_missing_recovery_required",
     );
 
@@ -205,8 +263,10 @@ describe("RateLoop advisory PostToolUse integration", () => {
         integrationId: result.tool_response.structuredContent.integrationId,
         opportunityId: result.tool_response.structuredContent.opportunityId,
         terminalStatus: "completed",
-        outputCommitment: result.tool_response.structuredContent.frozen.evaluationCommitment,
-        policyBindingHash: result.tool_response.structuredContent.frozen.binding.hash,
+        outputCommitment:
+          result.tool_response.structuredContent.frozen.evaluationCommitment,
+        policyBindingHash:
+          result.tool_response.structuredContent.frozen.binding.hash,
         issuedAt: new Date().toISOString(),
       },
       signature: "",
@@ -214,12 +274,72 @@ describe("RateLoop advisory PostToolUse integration", () => {
     const stopModule = (await import(pathToFileURL(stopPath).href)) as {
       advisoryTerminalPayload(value: Record<string, any>): Buffer;
     };
-    evidence.signature = sign(null, stopModule.advisoryTerminalPayload(evidence), privateKey).toString("base64url");
+    evidence.signature = sign(
+      null,
+      stopModule.advisoryTerminalPayload(evidence),
+      privateKey,
+    ).toString("base64url");
     result.tool_response.structuredContent.terminalEvidence = evidence;
     result.tool_use_id = "tool_result_03";
     expect(runScript(updaterPath, data, result)).toBeNull();
     expect(runScript(stopPath, data, stopInput("turn_advisory_02"))).toBeNull();
   });
+
+  it.each(["inconclusive", "failed_terminal", "cancelled_before_commit"])(
+    "does not release on a signed %s terminal receipt",
+    async (terminalStatus) => {
+      const data = await pluginData();
+      const pending = lifecycle(await fixture(), "pending", 1);
+      pending.tool_response.structuredContent.continuation = {
+        cursor: "cursor_fixture_01",
+        retryAfterMs: 1_000,
+        expiresAt: "2099-01-01T00:00:00.000Z",
+      };
+      expect(runScript(updaterPath, data, pending)).toBeNull();
+
+      const result = asTool(
+        lifecycle(await fixture(), terminalStatus, 2, true),
+        "get_review_result",
+        `tool_result_${terminalStatus}`,
+      );
+      result.turn_id = "turn_advisory_02";
+      const { keyId, privateKey } = await installKeyring(data);
+      const evidence = {
+        schemaVersion: "rateloop.human-review-terminal-evidence.v1",
+        keyId,
+        payload: {
+          schemaVersion: "rateloop.human-review-terminal-payload.v1",
+          workspaceId: result.tool_response.structuredContent.workspaceId,
+          integrationId: result.tool_response.structuredContent.integrationId,
+          opportunityId: result.tool_response.structuredContent.opportunityId,
+          terminalStatus,
+          outputCommitment:
+            result.tool_response.structuredContent.frozen.evaluationCommitment,
+          policyBindingHash:
+            result.tool_response.structuredContent.frozen.binding.hash,
+          issuedAt: new Date().toISOString(),
+        },
+        signature: "",
+      };
+      const stopModule = (await import(pathToFileURL(stopPath).href)) as {
+        advisoryTerminalPayload(value: Record<string, any>): Buffer;
+      };
+      evidence.signature = sign(
+        null,
+        stopModule.advisoryTerminalPayload(evidence),
+        privateKey,
+      ).toString("base64url");
+      result.tool_response.structuredContent.terminalEvidence = evidence;
+
+      expect(runScript(updaterPath, data, result)).toBeNull();
+      expect(runScript(stopPath, data, stopInput("turn_advisory_02"))).toEqual(
+        expect.objectContaining({
+          continue: false,
+          stopReason: `RateLoop advisory review gate: terminal_${terminalStatus}_does_not_release`,
+        }),
+      );
+    },
+  );
 
   it("rejects workspace, opportunity, and local session mismatches", async () => {
     const data = await pluginData();
@@ -227,36 +347,60 @@ describe("RateLoop advisory PostToolUse integration", () => {
     expect(runScript(updaterPath, data, pending)).toBeNull();
     const before = await readFile(statePath(data), "utf8");
 
-    const wrongWorkspace = asTool(lifecycle(await fixture(), "pending", 2), "wait_for_review", "tool_wait_02");
-    wrongWorkspace.tool_response.structuredContent.workspaceId = "workspace_fixture_other";
-    expect(runScript(updaterPath, data, wrongWorkspace)?.systemMessage).toContain("workspace_integration_mismatch");
-    expect(await readFile(statePath(data), "utf8")).toBe(before);
-
-    const wrongIntegration = asTool(lifecycle(await fixture(), "pending", 2), "wait_for_review", "tool_wait_02b");
-    wrongIntegration.tool_response.structuredContent.integrationId = "integration_fixture_other";
-    expect(runScript(updaterPath, data, wrongIntegration)?.systemMessage).toContain(
-      "workspace_integration_mismatch",
+    const wrongWorkspace = asTool(
+      lifecycle(await fixture(), "pending", 2),
+      "wait_for_review",
+      "tool_wait_02",
     );
+    wrongWorkspace.tool_response.structuredContent.workspaceId =
+      "workspace_fixture_other";
+    expect(
+      runScript(updaterPath, data, wrongWorkspace)?.systemMessage,
+    ).toContain("workspace_integration_mismatch");
     expect(await readFile(statePath(data), "utf8")).toBe(before);
 
-    const wrongOpportunity = asTool(lifecycle(await fixture(), "pending", 2), "wait_for_review", "tool_wait_03");
+    const wrongIntegration = asTool(
+      lifecycle(await fixture(), "pending", 2),
+      "wait_for_review",
+      "tool_wait_02b",
+    );
+    wrongIntegration.tool_response.structuredContent.integrationId =
+      "integration_fixture_other";
+    expect(
+      runScript(updaterPath, data, wrongIntegration)?.systemMessage,
+    ).toContain("workspace_integration_mismatch");
+    expect(await readFile(statePath(data), "utf8")).toBe(before);
+
+    const wrongOpportunity = asTool(
+      lifecycle(await fixture(), "pending", 2),
+      "wait_for_review",
+      "tool_wait_03",
+    );
     wrongOpportunity.tool_input.opportunityId = "opportunity_fixture_other";
-    expect(runScript(updaterPath, data, wrongOpportunity)?.systemMessage).toContain("tool_opportunity_mismatch");
+    expect(
+      runScript(updaterPath, data, wrongOpportunity)?.systemMessage,
+    ).toContain("tool_opportunity_mismatch");
     expect(await readFile(statePath(data), "utf8")).toBe(before);
 
     const conflictingSkip = lifecycle(await fixture(), "skipped", 2, true);
     conflictingSkip.tool_use_id = "tool_conflicting_skip";
-    expect(runScript(updaterPath, data, conflictingSkip)?.systemMessage).toContain(
-      "armed_opportunity_cannot_be_skipped",
-    );
+    expect(
+      runScript(updaterPath, data, conflictingSkip)?.systemMessage,
+    ).toContain("armed_opportunity_cannot_be_skipped");
     expect(await readFile(statePath(data), "utf8")).toBe(before);
 
     const corrupted = JSON.parse(before) as Record<string, any>;
     corrupted.sessionId = "session_advisory_other";
     await writeFile(statePath(data), `${JSON.stringify(corrupted)}\n`, "utf8");
     const currentBytes = await readFile(statePath(data), "utf8");
-    const next = asTool(lifecycle(await fixture(), "pending", 2), "wait_for_review", "tool_wait_04");
-    expect(runScript(updaterPath, data, next)?.systemMessage).toContain("state_session_turn_mismatch");
+    const next = asTool(
+      lifecycle(await fixture(), "pending", 2),
+      "wait_for_review",
+      "tool_wait_04",
+    );
+    expect(runScript(updaterPath, data, next)?.systemMessage).toContain(
+      "state_session_turn_mismatch",
+    );
     expect(await readFile(statePath(data), "utf8")).toBe(currentBytes);
   });
 
@@ -265,9 +409,15 @@ describe("RateLoop advisory PostToolUse integration", () => {
     const pending = lifecycle(await fixture(), "pending", 1);
     expect(runScript(updaterPath, data, pending)).toBeNull();
     const before = await readFile(statePath(data), "utf8");
-    const failed = asTool(lifecycle(await fixture(), "pending", 2), "wait_for_review", "tool_wait_failed");
+    const failed = asTool(
+      lifecycle(await fixture(), "pending", 2),
+      "wait_for_review",
+      "tool_wait_failed",
+    );
     failed.tool_response.isError = true;
-    expect(runScript(updaterPath, data, failed)?.systemMessage).toContain("mcp_tool_failed");
+    expect(runScript(updaterPath, data, failed)?.systemMessage).toContain(
+      "mcp_tool_failed",
+    );
     expect(await readFile(statePath(data), "utf8")).toBe(before);
   });
 });

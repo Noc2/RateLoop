@@ -16,8 +16,18 @@ const KEY_IDENTIFIER = /^[A-Za-z0-9._:-]{1,128}$/;
 const OPAQUE_IDENTIFIER = /^[A-Za-z0-9._:-]{8,200}$/;
 const SHA256 = /^sha256:[0-9a-f]{64}$/;
 const BASE64URL_SIGNATURE = /^[A-Za-z0-9_-]{86}$/;
-const NONTERMINAL_STATES = new Set(["approval_required", "request_ready", "pending", "blocked"]);
-const TERMINAL_STATES = new Set(["completed", "inconclusive", "failed_terminal", "cancelled_before_commit"]);
+const NONTERMINAL_STATES = new Set([
+  "approval_required",
+  "request_ready",
+  "pending",
+  "blocked",
+]);
+const TERMINAL_STATES = new Set([
+  "completed",
+  "inconclusive",
+  "failed_terminal",
+  "cancelled_before_commit",
+]);
 const STATE_KEYS = [
   "schemaVersion",
   "armed",
@@ -47,13 +57,18 @@ function exactKeys(value, keys) {
   if (!isRecord(value)) return false;
   const actual = Object.keys(value).sort();
   const expected = [...keys].sort();
-  return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
+  return (
+    actual.length === expected.length &&
+    actual.every((key, index) => key === expected[index])
+  );
 }
 
 function isIsoDate(value) {
   if (typeof value !== "string") return false;
   const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value;
+  return (
+    Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value
+  );
 }
 
 async function readStdin() {
@@ -74,7 +89,12 @@ async function readBoundedJson(path, contractRoot) {
     lstat(path),
   ]);
   const relativePath = relative(rootPath, filePath);
-  if (metadata.isSymbolicLink() || !metadata.isFile() || relativePath.startsWith("..") || isAbsolute(relativePath)) {
+  if (
+    metadata.isSymbolicLink() ||
+    !metadata.isFile() ||
+    relativePath.startsWith("..") ||
+    isAbsolute(relativePath)
+  ) {
     throw new Error("state_path_invalid");
   }
   const bytes = await readFile(path);
@@ -87,12 +107,20 @@ function emit(output) {
 }
 
 function block(code, message) {
-  emit({ continue: false, stopReason: `RateLoop advisory review gate: ${code}`, systemMessage: message });
+  emit({
+    continue: false,
+    stopReason: `RateLoop advisory review gate: ${code}`,
+    systemMessage: message,
+  });
 }
 
 function validateStopInput(value) {
   if (!isRecord(value) || value.hook_event_name !== "Stop") return null;
-  if (!LOCAL_IDENTIFIER.test(value.session_id) || !LOCAL_IDENTIFIER.test(value.turn_id)) return null;
+  if (
+    !LOCAL_IDENTIFIER.test(value.session_id) ||
+    !LOCAL_IDENTIFIER.test(value.turn_id)
+  )
+    return null;
   return { sessionId: value.session_id, turnId: value.turn_id };
 }
 
@@ -101,14 +129,24 @@ export function validateAdvisoryGateState(value, input, options = {}) {
     throw new Error("state_shape_invalid");
   }
   if (typeof value.armed !== "boolean") throw new Error("state_armed_invalid");
-  if (value.sessionId !== input.sessionId || (!options.allowPriorTurn && value.turnId !== input.turnId)) {
+  if (
+    value.sessionId !== input.sessionId ||
+    (!options.allowPriorTurn && value.turnId !== input.turnId)
+  ) {
     throw new Error("state_session_turn_mismatch");
   }
   for (const field of ["sessionId", "turnId", "lastToolUseId"]) {
-    if (!LOCAL_IDENTIFIER.test(value[field])) throw new Error("state_local_identifier_invalid");
+    if (!LOCAL_IDENTIFIER.test(value[field]))
+      throw new Error("state_local_identifier_invalid");
   }
-  for (const field of ["gateId", "workspaceId", "integrationId", "opportunityId"]) {
-    if (!OPAQUE_IDENTIFIER.test(value[field])) throw new Error("state_opaque_identifier_invalid");
+  for (const field of [
+    "gateId",
+    "workspaceId",
+    "integrationId",
+    "opportunityId",
+  ]) {
+    if (!OPAQUE_IDENTIFIER.test(value[field]))
+      throw new Error("state_opaque_identifier_invalid");
   }
   if (
     !Number.isSafeInteger(value.lifecycleRevision) ||
@@ -118,18 +156,31 @@ export function validateAdvisoryGateState(value, input, options = {}) {
   ) {
     throw new Error("state_lifecycle_revision_invalid");
   }
-  const recognized = value.lifecycle === "skipped" || NONTERMINAL_STATES.has(value.lifecycle) || TERMINAL_STATES.has(value.lifecycle);
+  const recognized =
+    value.lifecycle === "skipped" ||
+    NONTERMINAL_STATES.has(value.lifecycle) ||
+    TERMINAL_STATES.has(value.lifecycle);
   if (!recognized) throw new Error("state_lifecycle_invalid");
-  if (value.lifecycleTerminal !== (value.lifecycle === "skipped" || TERMINAL_STATES.has(value.lifecycle))) {
+  if (
+    value.lifecycleTerminal !==
+    (value.lifecycle === "skipped" || TERMINAL_STATES.has(value.lifecycle))
+  ) {
     throw new Error("state_terminal_flag_invalid");
   }
-  if (value.armed !== (value.lifecycle !== "skipped")) throw new Error("state_armed_lifecycle_mismatch");
-  if (!SHA256.test(value.outputCommitment) || !SHA256.test(value.policyBindingHash)) {
+  if (value.armed !== (value.lifecycle !== "skipped"))
+    throw new Error("state_armed_lifecycle_mismatch");
+  if (
+    !SHA256.test(value.outputCommitment) ||
+    !SHA256.test(value.policyBindingHash)
+  ) {
     throw new Error("state_commitment_invalid");
   }
-  if (!SHA256.test(value.envelopeCommitment)) throw new Error("state_envelope_commitment_invalid");
-  if (!isIsoDate(value.armedAt) || !isIsoDate(value.expiresAt)) throw new Error("state_time_invalid");
-  if (Date.parse(value.expiresAt) <= Date.parse(value.armedAt)) throw new Error("state_expiry_invalid");
+  if (!SHA256.test(value.envelopeCommitment))
+    throw new Error("state_envelope_commitment_invalid");
+  if (!isIsoDate(value.armedAt) || !isIsoDate(value.expiresAt))
+    throw new Error("state_time_invalid");
+  if (Date.parse(value.expiresAt) <= Date.parse(value.armedAt))
+    throw new Error("state_expiry_invalid");
   if (value.terminalEvidence !== null && !isRecord(value.terminalEvidence)) {
     throw new Error("state_terminal_evidence_invalid");
   }
@@ -154,13 +205,19 @@ export function advisoryTerminalPayload(evidence) {
 }
 
 function validateTerminalEvidence(evidence, state) {
-  if (!exactKeys(evidence, ["schemaVersion", "keyId", "payload", "signature"])) {
+  if (
+    !exactKeys(evidence, ["schemaVersion", "keyId", "payload", "signature"])
+  ) {
     throw new Error("terminal_evidence_shape_invalid");
   }
-  if (evidence.schemaVersion !== EVIDENCE_SCHEMA || !KEY_IDENTIFIER.test(evidence.keyId)) {
+  if (
+    evidence.schemaVersion !== EVIDENCE_SCHEMA ||
+    !KEY_IDENTIFIER.test(evidence.keyId)
+  ) {
     throw new Error("terminal_evidence_schema_invalid");
   }
-  if (!BASE64URL_SIGNATURE.test(evidence.signature)) throw new Error("terminal_signature_invalid");
+  if (!BASE64URL_SIGNATURE.test(evidence.signature))
+    throw new Error("terminal_signature_invalid");
   const payload = evidence.payload;
   const payloadKeys = [
     "schemaVersion",
@@ -172,7 +229,10 @@ function validateTerminalEvidence(evidence, state) {
     "policyBindingHash",
     "issuedAt",
   ];
-  if (!exactKeys(payload, payloadKeys) || payload.schemaVersion !== PAYLOAD_SCHEMA) {
+  if (
+    !exactKeys(payload, payloadKeys) ||
+    payload.schemaVersion !== PAYLOAD_SCHEMA
+  ) {
     throw new Error("terminal_payload_invalid");
   }
   if (
@@ -185,11 +245,16 @@ function validateTerminalEvidence(evidence, state) {
   ) {
     throw new Error("terminal_binding_mismatch");
   }
-  if (!TERMINAL_STATES.has(payload.terminalStatus) || !isIsoDate(payload.issuedAt)) {
+  if (
+    !TERMINAL_STATES.has(payload.terminalStatus) ||
+    !isIsoDate(payload.issuedAt)
+  ) {
     throw new Error("terminal_payload_invalid");
   }
-  if (Date.parse(payload.issuedAt) < Date.parse(state.armedAt)) throw new Error("terminal_evidence_stale");
-  if (Date.parse(payload.issuedAt) > Date.now() + 300_000) throw new Error("terminal_evidence_from_future");
+  if (Date.parse(payload.issuedAt) < Date.parse(state.armedAt))
+    throw new Error("terminal_evidence_stale");
+  if (Date.parse(payload.issuedAt) > Date.now() + 300_000)
+    throw new Error("terminal_evidence_from_future");
   return evidence;
 }
 
@@ -226,14 +291,32 @@ function validateKeyring(value, keyId) {
   return candidate;
 }
 
-export async function verifyAdvisoryTerminalEvidence(evidence, state, pluginData) {
+export async function verifyAdvisoryTerminalEvidence(
+  evidence,
+  state,
+  pluginData,
+) {
   const validated = validateTerminalEvidence(evidence, state);
   const contractRoot = join(pluginData, CONTRACT_DIRECTORY);
-  const keyring = await readBoundedJson(join(contractRoot, "trusted-keys.json"), contractRoot);
-  const publicKey = createPublicKey({ key: validateKeyring(keyring, validated.keyId), format: "jwk" });
-  if (!verify(null, advisoryTerminalPayload(validated), publicKey, Buffer.from(validated.signature, "base64url"))) {
+  const keyring = await readBoundedJson(
+    join(contractRoot, "trusted-keys.json"),
+    contractRoot,
+  );
+  const publicKey = createPublicKey({
+    key: validateKeyring(keyring, validated.keyId),
+    format: "jwk",
+  });
+  if (
+    !verify(
+      null,
+      advisoryTerminalPayload(validated),
+      publicKey,
+      Buffer.from(validated.signature, "base64url"),
+    )
+  ) {
     throw new Error("terminal_signature_invalid");
   }
+  return validated;
 }
 
 async function main() {
@@ -250,11 +333,21 @@ async function main() {
   const statePath = join(contractRoot, "sessions", `${input.sessionId}.json`);
   let state;
   try {
-    state = validateAdvisoryGateState(await readBoundedJson(statePath, contractRoot), input, {
-      allowPriorTurn: true,
-    });
+    state = validateAdvisoryGateState(
+      await readBoundedJson(statePath, contractRoot),
+      input,
+      {
+        allowPriorTurn: true,
+      },
+    );
   } catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return;
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === "ENOENT"
+    )
+      return;
     block(
       "state_invalid_recovery_required",
       "Advisory RateLoop review state is unreadable, invalid, or bound to another turn. A trusted host must refresh or explicitly disarm it; plugin trust is not host enforcement.",
@@ -272,7 +365,16 @@ async function main() {
   }
   if (state.terminalEvidence) {
     try {
-      await verifyAdvisoryTerminalEvidence(state.terminalEvidence, state, pluginData);
+      const evidence = await verifyAdvisoryTerminalEvidence(
+        state.terminalEvidence,
+        state,
+        pluginData,
+      );
+      if (evidence.payload.terminalStatus === "completed") return;
+      block(
+        `terminal_${evidence.payload.terminalStatus}_does_not_release`,
+        "RateLoop signed this terminal lifecycle, but it does not authorize release. Inconclusive review requires separately verified release policy; failed and cancelled review never release output.",
+      );
       return;
     } catch {
       block(

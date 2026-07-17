@@ -10,12 +10,19 @@ const repoRoot = fileURLToPath(new URL("../../../../", import.meta.url));
 const pluginRoot = join(repoRoot, "plugins", "rateloop-workspace");
 const hookRoot = join(pluginRoot, "hooks");
 const scriptPath = join(hookRoot, "rateloop-stop-gate.mjs");
-const fixtureRoot = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "codex-hooks");
+const fixtureRoot = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "fixtures",
+  "codex-hooks",
+);
 const contractDirectory = "review-stop-gate-v1";
 const temporaryDirectories: string[] = [];
 
 async function fixture(name: string) {
-  return JSON.parse(await readFile(join(fixtureRoot, name), "utf8")) as Record<string, any>;
+  return JSON.parse(await readFile(join(fixtureRoot, name), "utf8")) as Record<
+    string,
+    any
+  >;
 }
 
 async function runHook(options: {
@@ -37,9 +44,17 @@ async function runHook(options: {
     await writeFile(statePath, `${JSON.stringify(options.state)}\n`, "utf8");
   }
   if (options.keyring) {
-    const keyringPath = join(pluginData, contractDirectory, "trusted-keys.json");
+    const keyringPath = join(
+      pluginData,
+      contractDirectory,
+      "trusted-keys.json",
+    );
     await mkdir(dirname(keyringPath), { recursive: true });
-    await writeFile(keyringPath, `${JSON.stringify(options.keyring)}\n`, "utf8");
+    await writeFile(
+      keyringPath,
+      `${JSON.stringify(options.keyring)}\n`,
+      "utf8",
+    );
   }
 
   const result = spawnSync(process.execPath, [scriptPath], {
@@ -50,11 +65,17 @@ async function runHook(options: {
   });
   expect(result.status).toBe(0);
   expect(result.stderr).toBe("");
-  return result.stdout.trim() === "" ? null : (JSON.parse(result.stdout) as Record<string, any>);
+  return result.stdout.trim() === ""
+    ? null
+    : (JSON.parse(result.stdout) as Record<string, any>);
 }
 
 afterEach(async () => {
-  await Promise.all(temporaryDirectories.splice(0).map(path => rm(path, { recursive: true, force: true })));
+  await Promise.all(
+    temporaryDirectories
+      .splice(0)
+      .map((path) => rm(path, { recursive: true, force: true })),
+  );
 });
 
 describe("RateLoop Codex Stop hook", () => {
@@ -62,13 +83,22 @@ describe("RateLoop Codex Stop hook", () => {
     const manifest = JSON.parse(
       await readFile(join(pluginRoot, ".codex-plugin", "plugin.json"), "utf8"),
     ) as Record<string, any>;
-    const config = JSON.parse(await readFile(join(hookRoot, "hooks.json"), "utf8")) as Record<string, any>;
+    const config = JSON.parse(
+      await readFile(join(hookRoot, "hooks.json"), "utf8"),
+    ) as Record<string, any>;
     const stateSchema = JSON.parse(
-      await readFile(join(hookRoot, "schemas", "rateloop-stop-gate-state.schema.json"), "utf8"),
+      await readFile(
+        join(hookRoot, "schemas", "rateloop-stop-gate-state.schema.json"),
+        "utf8",
+      ),
     ) as Record<string, any>;
     const keyringSchema = JSON.parse(
       await readFile(
-        join(hookRoot, "schemas", "rateloop-stop-gate-trusted-keys.schema.json"),
+        join(
+          hookRoot,
+          "schemas",
+          "rateloop-stop-gate-trusted-keys.schema.json",
+        ),
         "utf8",
       ),
     ) as Record<string, any>;
@@ -79,6 +109,22 @@ describe("RateLoop Codex Stop hook", () => {
     expect(manifest).not.toHaveProperty("hooks");
     expect(config).toEqual({
       hooks: {
+        PreToolUse: [
+          {
+            matcher: "^(?!mcp__rateloop[-_]workspace__rateloop_).+",
+            hooks: [
+              {
+                type: "command",
+                command:
+                  'node "${CLAUDE_PLUGIN_ROOT:-$PLUGIN_ROOT}/hooks/rateloop-claude-pre-tool-use.mjs"',
+                commandWindows:
+                  'if defined CLAUDE_PLUGIN_ROOT (node "%CLAUDE_PLUGIN_ROOT%\\hooks\\rateloop-claude-pre-tool-use.mjs") else (node "%PLUGIN_ROOT%\\hooks\\rateloop-claude-pre-tool-use.mjs")',
+                timeout: 5,
+                statusMessage: "Checking RateLoop approval before tool use",
+              },
+            ],
+          },
+        ],
         PostToolUse: [
           {
             matcher:
@@ -86,8 +132,10 @@ describe("RateLoop Codex Stop hook", () => {
             hooks: [
               {
                 type: "command",
-                command: 'node "$PLUGIN_ROOT/hooks/rateloop-advisory-state-update.mjs"',
-                commandWindows: 'node "%PLUGIN_ROOT%\\hooks\\rateloop-advisory-state-update.mjs"',
+                command:
+                  'node "${CLAUDE_PLUGIN_ROOT:-$PLUGIN_ROOT}/hooks/rateloop-advisory-state-update.mjs"',
+                commandWindows:
+                  'if defined CLAUDE_PLUGIN_ROOT (node "%CLAUDE_PLUGIN_ROOT%\\hooks\\rateloop-advisory-state-update.mjs") else (node "%PLUGIN_ROOT%\\hooks\\rateloop-advisory-state-update.mjs")',
                 timeout: 5,
                 statusMessage: "Updating advisory RateLoop review state",
               },
@@ -99,8 +147,10 @@ describe("RateLoop Codex Stop hook", () => {
             hooks: [
               {
                 type: "command",
-                command: 'node "$PLUGIN_ROOT/hooks/rateloop-advisory-stop-gate.mjs"',
-                commandWindows: 'node "%PLUGIN_ROOT%\\hooks\\rateloop-advisory-stop-gate.mjs"',
+                command:
+                  'node "${CLAUDE_PLUGIN_ROOT:-$PLUGIN_ROOT}/hooks/rateloop-advisory-stop-gate.mjs"',
+                commandWindows:
+                  'if defined CLAUDE_PLUGIN_ROOT (node "%CLAUDE_PLUGIN_ROOT%\\hooks\\rateloop-advisory-stop-gate.mjs") else (node "%PLUGIN_ROOT%\\hooks\\rateloop-advisory-stop-gate.mjs")',
                 timeout: 5,
                 statusMessage: "Checking advisory RateLoop review state",
               },
@@ -116,9 +166,15 @@ describe("RateLoop Codex Stop hook", () => {
       "pending",
       "blocked",
     ]);
-    expect(keyringSchema.$id).toContain("rateloop-stop-gate-trusted-keys.v1.json");
-    expect(keyringSchema.properties.keys.items.properties.algorithm.const).toBe("Ed25519");
-    expect(readme).toContain("separately reviews and trusts the exact hook definition");
+    expect(keyringSchema.$id).toContain(
+      "rateloop-stop-gate-trusted-keys.v1.json",
+    );
+    expect(keyringSchema.properties.keys.items.properties.algorithm.const).toBe(
+      "Ed25519",
+    );
+    expect(readme).toContain(
+      "separately reviews and trusts the exact hook definition",
+    );
     expect(readme).toContain("does not make the integration host-enforced");
     expect(readme).toContain("deliberately ignore `transcript_path`");
     expect(script).not.toContain("transcript_path");
@@ -129,11 +185,15 @@ describe("RateLoop Codex Stop hook", () => {
 
   it("continues when no gate is armed", async () => {
     expect(await runHook({})).toBeNull();
-    expect(await runHook({ state: await fixture("disarmed-state.json") })).toBeNull();
+    expect(
+      await runHook({ state: await fixture("disarmed-state.json") }),
+    ).toBeNull();
   });
 
   it("blocks Stop for an armed required or pending review", async () => {
-    const output = await runHook({ state: await fixture("pending-state.json") });
+    const output = await runHook({
+      state: await fixture("pending-state.json"),
+    });
     expect(output).toEqual(
       expect.objectContaining({
         continue: false,
@@ -143,7 +203,9 @@ describe("RateLoop Codex Stop hook", () => {
   });
 
   it("fails closed after expiry and requires explicit recovery", async () => {
-    const output = await runHook({ state: await fixture("expired-pending-state.json") });
+    const output = await runHook({
+      state: await fixture("expired-pending-state.json"),
+    });
     expect(output).toEqual(
       expect.objectContaining({
         continue: false,
