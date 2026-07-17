@@ -41,7 +41,10 @@ compatibility work. Hosted tokenless work must stay in the isolated
 `rateloop.ai`.
 
 Keep the established RateLoop website design unchanged while removing obsolete
-features. Base Account is the active browser wallet/authentication stack; do not
-restore thirdweb. Treat the current checked-in deployment artifact as stale
+features. Better Auth is the browser authentication stack. Wallets remain optional,
+purpose-bound adapters: preserve existing self-custodial wallet proofs and the
+optional thirdweb-created app wallet after an authenticated user explicitly requests
+funding, payout, or recovery. Never mount a thirdweb browser connector or treat a
+wallet as identity or authorization. Treat the current checked-in deployment artifact as stale
 after fund-core changes until a fresh complete Base Sepolia deployment key is
 installed across the isolated app, Ponder, keeper, and database.
