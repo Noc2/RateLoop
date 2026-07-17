@@ -3,6 +3,10 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbPool } from "~~/lib/db";
+import {
+  type ReviewerExpertiseRequirement,
+  normalizeReviewerExpertiseRequirementsSelection,
+} from "~~/lib/tokenless/reviewerExpertiseOptions";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
@@ -453,6 +457,66 @@ export async function activeExactReviewerExpertiseKeysThroughDeadline(input: {
   } finally {
     client.release();
   }
+}
+
+export async function countEligibleNetworkExactExpertisePool(input: {
+  requirements: unknown;
+  panelSize: number;
+  responseDeadline: unknown;
+  now?: Date;
+}) {
+  let requirements: ReviewerExpertiseRequirement[];
+  try {
+    requirements = normalizeReviewerExpertiseRequirementsSelection(input.requirements, input.panelSize);
+  } catch {
+    throw new TokenlessServiceError("Network specialist requirements are invalid.", 400, "invalid_reviewer_expertise");
+  }
+  if (
+    requirements.some(
+      requirement => requirement.sourceScope !== "rateloop_network" || requirement.minimumSeats !== input.panelSize,
+    )
+  ) {
+    throw new TokenlessServiceError(
+      "Network specialist requirements must cover every reviewer seat.",
+      400,
+      "invalid_reviewer_expertise",
+    );
+  }
+  const now = input.now ?? new Date();
+  const responseDeadline = parseFutureDate(input.responseDeadline, "Response deadline", now);
+  const result = await dbPool.query(
+    `SELECT rater_id,expertise_definition_id,expertise_definition_version,expertise_definition_hash
+     FROM tokenless_reviewer_qualifications
+     WHERE reviewer_source='rateloop_network' AND qualification_kind='expertise'
+       AND expertise_record_schema_version=2 AND evidence_kind='platform_verified_credential'
+       AND workspace_id IS NULL AND status='active' AND expires_at>=$1
+     ORDER BY rater_id,expertise_definition_id,expertise_definition_version`,
+    [responseDeadline],
+  );
+  const keysByRater = new Map<string, Set<string>>();
+  for (const row of result.rows as Row[]) {
+    const raterId = text(row, "rater_id");
+    const definitionId = text(row, "expertise_definition_id");
+    const definitionVersion = integer(row, "expertise_definition_version");
+    const definitionHash = text(row, "expertise_definition_hash");
+    if (!raterId || !definitionId || !definitionHash || !HASH_PATTERN.test(definitionHash)) continue;
+    const keys = keysByRater.get(raterId) ?? new Set<string>();
+    keys.add(
+      exactReviewerExpertiseDefinitionKey({
+        definitionId,
+        definitionVersion,
+        definitionHash: definitionHash as `sha256:${string}`,
+      }),
+    );
+    keysByRater.set(raterId, keys);
+  }
+  const requiredKeys = requirements.map(exactReviewerExpertiseDefinitionKey);
+  return {
+    requirements,
+    eligible: [...keysByRater.values()].filter(keys => requiredKeys.every(key => keys.has(key))).length,
+    ready: true,
+    responseDeadline: responseDeadline.toISOString(),
+  };
 }
 
 export async function listPrivateGroupExpertiseCoverage(input: {

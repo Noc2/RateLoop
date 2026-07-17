@@ -12,6 +12,7 @@ import {
   type ExactReviewerExpertiseDefinition,
   __reviewerExpertiseAssignmentsTestUtils,
   activeExactReviewerExpertiseKeysThroughDeadline,
+  countEligibleNetworkExactExpertisePool,
   exactReviewerExpertiseDefinitionKey,
   listPrivateGroupExpertiseCoverage,
   replacePrivateGroupMemberExpertise,
@@ -417,5 +418,63 @@ test("candidate expertise keys require both grant and membership through the dea
       now,
     }),
     [],
+  );
+});
+
+test("network exact expertise counts only credentials valid through the response deadline", async () => {
+  await identity(REVIEWER, "network-reviewer@example.test");
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 10 * 86_400_000);
+  const typescript = await definition("code-review:typescript");
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_rater_profiles
+          (rater_id,account_address,nullifier_seed_ciphertext,nullifier_key_version,nullifier_key_domain,
+           created_at,updated_at)
+          VALUES ('rater_exact_network',?,'ciphertext','v1','vote_mapping',?,?)`,
+    args: [REVIEWER, now, now],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_reviewer_qualifications
+          (qualification_id,rater_id,reviewer_source,qualification_kind,cohort_ids_json,
+           qualification_keys_json,evidence_kind,workspace_id,evidence_reference_hash,
+           qualification_value_json,verified_at,expires_at,status,created_at,updated_at,revoked_at,
+           expertise_record_schema_version,expertise_definition_id,expertise_definition_version,
+           expertise_definition_hash,source_invitation_id,asserted_by,revoked_by)
+          VALUES ('qual_exp_network_exact','rater_exact_network','rateloop_network','expertise','[]','[]',
+                  'platform_verified_credential',NULL,?,'{}',?,?,'active',?,?,NULL,2,?,?,?,NULL,
+                  'system:expertise-verification',NULL)`,
+    args: [
+      `sha256:${"a".repeat(64)}`,
+      now,
+      expiresAt,
+      now,
+      now,
+      typescript.definitionId,
+      typescript.definitionVersion,
+      typescript.definitionHash,
+    ],
+  });
+  const requirement = { ...typescript, minimumSeats: 1, sourceScope: "rateloop_network" as const };
+  assert.equal(
+    (
+      await countEligibleNetworkExactExpertisePool({
+        requirements: [requirement],
+        panelSize: 1,
+        responseDeadline: new Date(now.getTime() + 5 * 86_400_000),
+        now,
+      })
+    ).eligible,
+    1,
+  );
+  assert.equal(
+    (
+      await countEligibleNetworkExactExpertisePool({
+        requirements: [requirement],
+        panelSize: 1,
+        responseDeadline: new Date(now.getTime() + 11 * 86_400_000),
+        now,
+      })
+    ).eligible,
+    0,
   );
 });

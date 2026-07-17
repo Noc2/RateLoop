@@ -30,6 +30,11 @@ import {
 import { hashReviewRequestProfile } from "~~/lib/tokenless/reviewRequestProfiles";
 import { countEligibleNetworkExpertisePool } from "~~/lib/tokenless/reviewerExpertise";
 import {
+  countEligibleNetworkExactExpertisePool,
+  exactReviewerExpertiseDefinitionKey,
+} from "~~/lib/tokenless/reviewerExpertiseAssignments";
+import { normalizeReviewerExpertiseRequirementsSelection } from "~~/lib/tokenless/reviewerExpertiseOptions";
+import {
   expertiseQualificationRules,
   normalizeReviewerExpertiseKeys,
 } from "~~/lib/tokenless/reviewerExpertiseVocabulary";
@@ -247,7 +252,7 @@ async function loadFrozenOpportunity(
                  rrp.criterion, rrp.positive_label, rrp.negative_label, rrp.rationale_mode,
                  rrp.audience, rrp.content_boundary, rrp.private_sensitivity, rrp.private_group_id,
                  rrp.private_group_policy_version, rrp.private_group_policy_hash,
-                 rrp.required_expertise_keys_json,rrp.response_window_seconds,
+                 rrp.required_expertise_keys_json,rrp.expertise_requirements_json,rrp.response_window_seconds,
                  rrp.panel_size, rrp.compensation_mode,
                  rrp.bounty_per_seat_atomic,rrp.feedback_bonus_enabled,rrp.feedback_bonus_pool_atomic,
                  rrp.feedback_bonus_awarder_kind,rrp.feedback_bonus_awarder_account,
@@ -313,6 +318,7 @@ async function loadFrozenOpportunity(
   ) {
     throw new TokenlessServiceError("Stored review bindings are invalid.", 500, "review_configuration_invalid");
   }
+  const panelSize = integer(row, "panel_size", 1, 100);
   const profile: BoundHumanReviewRequestProfile = {
     id: text(row, "profile_id") ?? "",
     version: integer(row, "request_profile_version"),
@@ -335,8 +341,12 @@ async function loadFrozenOpportunity(
     requiredExpertiseKeys: normalizeReviewerExpertiseKeys(
       JSON.parse(text(row, "required_expertise_keys_json") ?? "[]"),
     ),
+    expertiseRequirements: normalizeReviewerExpertiseRequirementsSelection(
+      JSON.parse(text(row, "expertise_requirements_json") ?? "[]"),
+      panelSize,
+    ),
     responseWindowSeconds: integer(row, "response_window_seconds", 1_200, 86_400),
-    panelSize: integer(row, "panel_size", 1, 100),
+    panelSize,
     compensationMode: oneOf(row, "compensation_mode", ["unpaid", "usdc"] as const),
     bountyPerSeatAtomic: text(row, "bounty_per_seat_atomic"),
     feedbackBonusEnabled: bool(row, "feedback_bonus_enabled"),
@@ -366,6 +376,7 @@ async function loadFrozenOpportunity(
         : integer(row, "private_group_policy_version"),
     privateGroupPolicyHash: text(row, "private_group_policy_hash"),
     requiredExpertiseKeys: profile.requiredExpertiseKeys,
+    expertiseRequirements: profile.expertiseRequirements,
     responseWindowSeconds: profile.responseWindowSeconds,
     panelSize: profile.panelSize,
     compensationMode: profile.compensationMode,
@@ -624,14 +635,22 @@ function assertRequestable(opportunity: FrozenOpportunity, principal: PublicPaid
 
 async function assertAdmissionPolicyExpertiseBinding(opportunity: FrozenOpportunity) {
   const required = opportunity.requestProfile.requiredExpertiseKeys ?? [];
-  if (required.length === 0) return;
+  const exactRequirements = opportunity.requestProfile.expertiseRequirements ?? [];
+  if (required.length === 0 && exactRequirements.length === 0) return;
   const policyHash = `sha256:${opportunity.admissionPolicyHash.slice(2)}`;
   const result = await dbClient.execute({
     sql: `SELECT policy_json FROM tokenless_assurance_audience_policies
           WHERE policy_hash=? AND reviewer_source='rateloop_network'`,
     args: [policyHash],
   });
-  const requiredRules = expertiseQualificationRules(required);
+  const requiredRules = [
+    ...expertiseQualificationRules(required),
+    ...exactRequirements.map(requirement => ({
+      key: exactReviewerExpertiseDefinitionKey(requirement),
+      operator: "attested" as const,
+      value: true,
+    })),
+  ];
   const exact = result.rows.some(value => {
     try {
       const frozen = freezeAdmissionPolicy(JSON.parse(text(value as Row, "policy_json") ?? "null"));
@@ -930,18 +949,11 @@ export async function requestPublicPaidHumanReview(
     input.effectiveQuestionHash,
   );
   assertRequestable(opportunity, input.principal);
-  if ((opportunity.requestProfile.requiredExpertiseKeys?.length ?? 0) > 0) {
+  const requiresExpertise =
+    (opportunity.requestProfile.requiredExpertiseKeys?.length ?? 0) > 0 ||
+    (opportunity.requestProfile.expertiseRequirements?.length ?? 0) > 0;
+  if (requiresExpertise) {
     await assertAdmissionPolicyExpertiseBinding(opportunity);
-    const expertisePool = await countEligibleNetworkExpertisePool({
-      expertiseKeys: opportunity.requestProfile.requiredExpertiseKeys,
-    });
-    if (!expertisePool.ready || expertisePool.eligible < opportunity.requestProfile.panelSize) {
-      throw new TokenlessServiceError(
-        "The RateLoop network does not currently have enough reviewers with every required expertise qualification.",
-        409,
-        "expertise_reviewer_pool_unavailable",
-      );
-    }
   }
   if (sha256(sourcePayload) !== opportunity.sourceEvidenceHash) {
     throw new TokenlessServiceError(
@@ -959,6 +971,24 @@ export async function requestPublicPaidHumanReview(
   }
   const approval = await loadFrozenApproval(input.principal.integration.workspaceId, opportunity.opportunityId);
   const preparation = prepareExactRequest({ opportunity, approval, sourcePayload, suggestionPayload });
+  if (requiresExpertise) {
+    const expertisePool = opportunity.requestProfile.expertiseRequirements?.length
+      ? await countEligibleNetworkExactExpertisePool({
+          requirements: opportunity.requestProfile.expertiseRequirements,
+          panelSize: opportunity.requestProfile.panelSize,
+          responseDeadline: preparation.preparedRequest.timing.expiresAt,
+        })
+      : await countEligibleNetworkExpertisePool({
+          expertiseKeys: opportunity.requestProfile.requiredExpertiseKeys,
+        });
+    if (!expertisePool.ready || expertisePool.eligible < opportunity.requestProfile.panelSize) {
+      throw new TokenlessServiceError(
+        "The RateLoop network does not currently have enough reviewers with every required expertise qualification.",
+        409,
+        "expertise_reviewer_pool_unavailable",
+      );
+    }
+  }
   await ensureFeedbackBonusPoolForDelivery({
     workspaceId: input.principal.integration.workspaceId,
     agentId: input.principal.integration.agentId,

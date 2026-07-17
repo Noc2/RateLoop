@@ -302,8 +302,10 @@ export async function decideExpertiseVerificationRequest(input: {
         `INSERT INTO tokenless_reviewer_qualifications
          (qualification_id,rater_id,reviewer_source,qualification_kind,cohort_ids_json,
           qualification_keys_json,evidence_kind,workspace_id,evidence_reference_hash,
-          qualification_value_json,verified_at,expires_at,status,created_at,updated_at)
-         VALUES ($1,$2,'rateloop_network','expertise','[]',$3,'platform_verified_credential',NULL,$4,$5,$6,$7,'active',$6,$6)`,
+          qualification_value_json,verified_at,expires_at,status,created_at,updated_at,
+          expertise_record_schema_version)
+         VALUES ($1,$2,'rateloop_network','expertise','[]',$3,'platform_verified_credential',NULL,$4,$5,$6,$7,
+                 'active',$6,$6,1)`,
         [
           qualificationId,
           raterId,
@@ -314,6 +316,77 @@ export async function decideExpertiseVerificationRequest(input: {
           expiresAt,
         ],
       );
+      for (const expertiseKey of expertiseKeys) {
+        const definitionResult = await client.query(
+          `SELECT definition_id,version,definition_hash,label
+           FROM tokenless_reviewer_expertise_definitions
+           WHERE scope='global' AND slug=$1 AND network_eligible=true
+             AND status='active' AND superseded_at IS NULL
+           LIMIT 1 FOR SHARE`,
+          [expertiseKey],
+        );
+        const definition = definitionResult.rows[0] as Row | undefined;
+        if (!definition) {
+          throw new TokenlessServiceError(
+            "A verified specialist area is unavailable in the current network catalog.",
+            409,
+            "reviewer_expertise_definition_unavailable",
+          );
+        }
+        const definitionId = text(definition, "definition_id");
+        const definitionVersion = integer(definition, "version");
+        const definitionHash = text(definition, "definition_hash");
+        if (!definitionId || !definitionHash || !HASH_PATTERN.test(definitionHash)) {
+          throw new TokenlessServiceError(
+            "A verified specialist area is unavailable in the current network catalog.",
+            409,
+            "reviewer_expertise_definition_unavailable",
+          );
+        }
+        await client.query(
+          `UPDATE tokenless_reviewer_qualifications
+           SET status='revoked',revoked_at=$1,revoked_by=$2,updated_at=$1
+           WHERE rater_id=$3 AND reviewer_source='rateloop_network'
+             AND qualification_kind='expertise' AND expertise_record_schema_version=2
+             AND expertise_definition_id=$4 AND expertise_definition_version=$5 AND status='active'`,
+          [now, operator, raterId, definitionId, definitionVersion],
+        );
+        const exactQualificationId = `qual_exp_${createHash("sha256")
+          .update(`${input.requestId}:${definitionId}:${definitionVersion}`)
+          .digest("hex")
+          .slice(0, 32)}`;
+        await client.query(
+          `INSERT INTO tokenless_reviewer_qualifications
+           (qualification_id,rater_id,reviewer_source,qualification_kind,cohort_ids_json,
+            qualification_keys_json,evidence_kind,workspace_id,evidence_reference_hash,
+            qualification_value_json,verified_at,expires_at,status,created_at,updated_at,revoked_at,
+            expertise_record_schema_version,expertise_definition_id,expertise_definition_version,
+            expertise_definition_hash,source_invitation_id,asserted_by,revoked_by)
+           VALUES ($1,$2,'rateloop_network','expertise','[]','[]','platform_verified_credential',NULL,$3,$4,
+                   $5,$6,'active',$5,$5,NULL,2,$7,$8,$9,NULL,$10,NULL)`,
+          [
+            exactQualificationId,
+            raterId,
+            evidenceReferenceHash,
+            stableJson({
+              schemaVersion: "rateloop.exact-network-expertise-credential.v1",
+              verificationRequestId: input.requestId,
+              definition: {
+                definitionId,
+                definitionVersion,
+                definitionHash,
+                label: text(definition, "label"),
+              },
+            }),
+            now,
+            expiresAt,
+            definitionId,
+            definitionVersion,
+            definitionHash,
+            operator,
+          ],
+        );
+      }
     }
     await appendVerificationEvent(client, {
       requestId: input.requestId,
@@ -372,9 +445,16 @@ export async function revokeExpertiseVerificationRequest(input: {
     );
     await client.query(
       `UPDATE tokenless_reviewer_qualifications
+       SET status='revoked',revoked_at=$1,revoked_by=$2,updated_at=$1
+       WHERE rater_id=$3 AND qualification_kind='expertise'
+         AND expertise_record_schema_version=2 AND evidence_reference_hash=$4 AND status='active'`,
+      [now, operator, text(row, "rater_id"), text(row, "evidence_reference_hash")],
+    );
+    await client.query(
+      `UPDATE tokenless_reviewer_qualifications
        SET status='revoked',revoked_at=$1,updated_at=$1
        WHERE rater_id=$2 AND qualification_kind='expertise'
-         AND evidence_reference_hash=$3 AND status='active'`,
+         AND expertise_record_schema_version=1 AND evidence_reference_hash=$3 AND status='active'`,
       [now, text(row, "rater_id"), text(row, "evidence_reference_hash")],
     );
     await appendVerificationEvent(client, {
