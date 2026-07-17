@@ -12,8 +12,8 @@ test("0101 backfills assurance semantics without changing existing result identi
   assert.match(migration, /SET "result_semantics" = 'assurance'/u);
   assert.match(migration, /ALTER COLUMN "result_semantics" SET NOT NULL/u);
   assert.doesNotMatch(migration, /SET\s+"(?:result_envelope_commitment|result_commitment|observation_id)"/u);
-  assert.equal(journal.entries.at(-1)?.idx, 101);
-  assert.equal(journal.entries.at(-1)?.tag, "0101_feedback_result_semantics");
+  const entry = journal.entries.find((e) => e.idx === 101);
+  assert.equal(entry?.tag, "0101_feedback_result_semantics");
 });
 
 test("0101 makes feedback terminal results non-comparable at the database boundary", () => {
