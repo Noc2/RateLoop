@@ -20,6 +20,18 @@ type JsonRpcId = string | number | null;
 type JsonRecord = Record<string, unknown>;
 
 const emptyInputSchema = { additionalProperties: false, properties: {}, type: "object" } as const;
+const readOnlyClosedAnnotations = {
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+  readOnlyHint: true,
+} as const;
+const createHandoffAnnotations = {
+  destructiveHint: false,
+  idempotentHint: false,
+  openWorldHint: true,
+  readOnlyHint: false,
+} as const;
 const bearerInputSchema = {
   additionalProperties: false,
   properties: {
@@ -140,12 +152,15 @@ const questionSchema = {
 
 export const tokenlessMcpTools = [
   {
+    annotations: readOnlyClosedAnnotations,
     description:
       "Report the public RateLoop human-assurance handoff boundary, environment, and audience sources. This adapter does not expose quote, ask, upload, or payment APIs.",
     inputSchema: emptyInputSchema,
     name: "rateloop_capabilities",
+    title: "Get RateLoop capabilities",
   },
   {
+    annotations: createHandoffAnnotations,
     description:
       "Prepare a 24-hour browser handoff for public, synthetic, or safely redacted content. The returned URL and token are secret bearer capabilities; do not log, persist, or share them beyond the intended approver.",
     inputSchema: {
@@ -195,18 +210,23 @@ export const tokenlessMcpTools = [
       type: "object",
     },
     name: "rateloop_create_handoff",
+    title: "Create human-assurance handoff",
   },
   {
+    annotations: readOnlyClosedAnnotations,
     description:
       "Read handoff progress without starting or reconciling work. Requires the secret bearer token returned by rateloop_create_handoff.",
     inputSchema: bearerInputSchema,
     name: "rateloop_get_handoff_status",
+    title: "Get handoff status",
   },
   {
+    annotations: readOnlyClosedAnnotations,
     description:
       "Read the completed assurance result without starting or reconciling work. Requires the secret bearer token returned by rateloop_create_handoff.",
     inputSchema: bearerInputSchema,
     name: "rateloop_get_result",
+    title: "Get assurance result",
   },
 ] as const;
 

@@ -91,6 +91,30 @@ test("lists exactly the four browser handoff tools and reports live capabilities
     listedBody.result.tools.map((tool: { name: string }) => tool.name),
     ["rateloop_capabilities", "rateloop_create_handoff", "rateloop_get_handoff_status", "rateloop_get_result"],
   );
+  assert.deepEqual(
+    listedBody.result.tools.map((tool: { annotations: Record<string, boolean>; title: string }) => ({
+      annotations: tool.annotations,
+      title: tool.title,
+    })),
+    [
+      {
+        annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: false, readOnlyHint: true },
+        title: "Get RateLoop capabilities",
+      },
+      {
+        annotations: { destructiveHint: false, idempotentHint: false, openWorldHint: true, readOnlyHint: false },
+        title: "Create human-assurance handoff",
+      },
+      {
+        annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: false, readOnlyHint: true },
+        title: "Get handoff status",
+      },
+      {
+        annotations: { destructiveHint: false, idempotentHint: true, openWorldHint: false, readOnlyHint: true },
+        title: "Get assurance result",
+      },
+    ],
+  );
   assert.equal(JSON.stringify(listedBody).includes("rateloop_quote"), false);
   assert.equal(JSON.stringify(listedBody).includes("rateloop_ask"), false);
 
