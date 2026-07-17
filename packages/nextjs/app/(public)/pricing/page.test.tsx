@@ -21,6 +21,7 @@ test("pricing page keeps two plans and discloses costs progressively", async () 
   assert.match(html, /250 completed review decisions/);
   assert.match(html, /href="\/agents\?tab=overview"/);
   assert.match(html, /href="\/agents\?tab=overview&amp;billing=upgrade"/);
+  assert.match(html, /href="mailto:hawigxyz@proton\.me\?subject=RateLoop%20Demo"[^>]*>Book Demo<\/a>/);
   assert.match(html, /Paid panels/);
   assert.match(html, /Explain paid panel costs/);
   assert.match(html, /not included in the \$29 subscription/);

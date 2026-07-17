@@ -11,7 +11,7 @@ export const revalidate = 300;
 const whyItWorksFeatures = [
   {
     title: "Agent-native",
-    body: "Agent handoffs and scoped funding turn a request into a human panel.",
+    body: "Agent handoffs and funding route requests to a human panel.",
     color: "#359EEE",
     links: [
       ["Agent handoffs", "/docs/tech-stack#mcp-adapter"],

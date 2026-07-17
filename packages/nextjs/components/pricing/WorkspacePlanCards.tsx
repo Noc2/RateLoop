@@ -86,6 +86,14 @@ export function WorkspacePlanCards({ subscriptionsEnabled }: WorkspacePlanCardsP
               >
                 {cta}
               </Link>
+              {isPaid ? (
+                <Link
+                  href="mailto:hawigxyz@proton.me?subject=RateLoop%20Demo"
+                  className="btn btn-ghost mt-2 min-h-11 w-full justify-center text-sm"
+                >
+                  Book Demo
+                </Link>
+              ) : null}
             </div>
           </article>
         );
