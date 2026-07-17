@@ -17,6 +17,7 @@ function newBindingId() {
 function authProvider(method: string | undefined): AuthProvider {
   if (method === "apple" || method === "google" || method === "passkey") return `better_auth:${method}`;
   if (method === "email-otp") return "better_auth:email-otp";
+  if (method === "sso" || method?.startsWith("sso:")) return "better_auth:sso";
   return "better_auth";
 }
 

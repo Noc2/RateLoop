@@ -14,7 +14,8 @@ export type AuthProvider =
   | "better_auth:apple"
   | "better_auth:email-otp"
   | "better_auth:google"
-  | "better_auth:passkey";
+  | "better_auth:passkey"
+  | "better_auth:sso";
 
 export type BrowserIdentity = {
   principalId: string;
