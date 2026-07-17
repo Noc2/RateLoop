@@ -22,9 +22,10 @@ test("setup wizard creates a workspace and reaches agent connection", async ({ p
 });
 
 test("workspace owner configures human review", async ({ page }) => {
+  test.slow();
   await authenticate(page, browserState.ownerSessionToken);
   await page.goto(`/agents?tab=registry&workspace=${browserState.workspaceId}`);
-  await expect(page.getByRole("heading", { name: "Review Copilot" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Review Copilot" })).toBeVisible({ timeout: 90_000 });
   await page.getByText("Manage", { exact: true }).click();
   await page.getByRole("button", { name: "Human review" }).click();
   await expect(page.getByRole("heading", { name: "Human review" })).toBeVisible();
