@@ -651,7 +651,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       <p className="sr-only" aria-live="polite">
         {announcement}
       </p>
-      <div className="mt-8 max-w-2xl">
+      <div className="mt-8 w-full">
         {currentStep === "workspace" ? (
           <form onSubmit={saveWorkspace}>
             <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-semibold outline-none">

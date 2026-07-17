@@ -208,9 +208,9 @@ test("workspace step remains editable when revisited", () => {
   assert.match(flowSource, /Save and continue/);
 });
 
-test("setup content and navigation stay left-aligned with back before the primary action", () => {
-  assert.match(flowSource, /<div className="mt-8 max-w-2xl">/);
-  assert.doesNotMatch(flowSource, /mx-auto mt-8 max-w-2xl/);
+test("setup content uses the full available width with back before the primary action", () => {
+  assert.match(flowSource, /<div className="mt-8 w-full">/);
+  assert.doesNotMatch(flowSource, /max-w-2xl/);
   assert.match(
     flowSource,
     /<div className="mt-6 flex items-center gap-3">\s*\{backButton\}\s*\{setup\.connection\.status/,
