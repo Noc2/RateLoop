@@ -20,6 +20,7 @@ import {
   REVIEW_REQUEST_RATIONALE_MODES,
 } from "~~/lib/tokenless/reviewRequestProfiles";
 import { normalizeReviewerExpertiseKeys } from "~~/lib/tokenless/reviewerExpertise";
+import { normalizeReviewerExpertiseRequirementsSelection } from "~~/lib/tokenless/reviewerExpertiseOptions";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
@@ -204,7 +205,8 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
             r.criterion, r.positive_label, r.negative_label, r.rationale_mode,
             r.audience, r.content_boundary, r.private_sensitivity,
             r.private_group_id, r.private_group_policy_version, r.private_group_policy_hash,
-            r.required_expertise_keys_json,r.response_window_seconds,
+            r.semantic_schema_version,r.required_expertise_keys_json,r.expertise_requirements_json,
+            r.response_window_seconds,
             r.panel_size,r.compensation_mode,r.bounty_per_seat_atomic,
             r.feedback_bonus_enabled,r.feedback_bonus_pool_atomic,r.feedback_bonus_awarder_kind,
             r.feedback_bonus_awarder_account,r.feedback_bonus_award_window_seconds,
@@ -470,9 +472,14 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
   const responseWindowSeconds = optionalInteger(row, "response_window_seconds");
   const panelSize = optionalInteger(row, "panel_size");
   let requiredExpertiseKeys;
+  let expertiseRequirements;
   try {
     requiredExpertiseKeys = normalizeReviewerExpertiseKeys(
       JSON.parse(text(row, "required_expertise_keys_json") ?? "[]"),
+    );
+    expertiseRequirements = normalizeReviewerExpertiseRequirementsSelection(
+      JSON.parse(text(row, "expertise_requirements_json") ?? "[]"),
+      panelSize ?? 1,
     );
   } catch {
     invalidContext("Stored reviewer expertise requirements are invalid.");
@@ -480,7 +487,17 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
   if (
     (responseWindowSeconds !== null && (responseWindowSeconds < 1_200 || responseWindowSeconds > 86_400)) ||
     (panelSize !== null && panelSize > 100) ||
-    (profileStatus === "ready" && (responseWindowSeconds === null || panelSize === null))
+    (profileStatus === "ready" && (responseWindowSeconds === null || panelSize === null)) ||
+    (requiredExpertiseKeys.length > 0 && expertiseRequirements.length > 0) ||
+    (expertiseRequirements.length > 0 &&
+      (Number(row.semantic_schema_version) !== 3 ||
+        (audience === "private_invited" &&
+          expertiseRequirements.some(requirement => requirement.sourceScope !== "customer_invited")) ||
+        (audience === "public_network" &&
+          expertiseRequirements.some(
+            requirement => requirement.sourceScope !== "rateloop_network" || requirement.minimumSeats !== panelSize,
+          )) ||
+        audience === "hybrid"))
   ) {
     invalidContext("The ready request profile is incomplete.");
   }
@@ -554,6 +571,7 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
           ? { groupId: privateGroupId, policyVersion: privateGroupPolicyVersion, policyHash: privateGroupPolicyHash }
           : null,
       requiredExpertiseKeys,
+      expertiseRequirements,
     },
     responseWindowSeconds,
     panelSize,

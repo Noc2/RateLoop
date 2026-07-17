@@ -14,6 +14,7 @@ import {
   prepareHumanReviewRequest,
 } from "~~/lib/tokenless/humanReviewRequestPreparation";
 import { hashReviewRequestProfile } from "~~/lib/tokenless/reviewRequestProfiles";
+import { normalizeReviewerExpertiseRequirementsSelection } from "~~/lib/tokenless/reviewerExpertiseOptions";
 import { normalizeReviewerExpertiseKeys } from "~~/lib/tokenless/reviewerExpertiseVocabulary";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -147,6 +148,20 @@ function profileFromRow(row: Row): BoundHumanReviewRequestProfile {
   if (!profileHash || !HASH_PATTERN.test(profileHash)) {
     throw new TokenlessServiceError("Stored request profile hash is invalid.", 500, "review_configuration_invalid");
   }
+  const panelSize = integer(row, "panel_size", 1, 100);
+  let expertiseRequirements;
+  try {
+    expertiseRequirements = normalizeReviewerExpertiseRequirementsSelection(
+      JSON.parse(text(row, "expertise_requirements_json") ?? "[]"),
+      panelSize,
+    );
+  } catch {
+    throw new TokenlessServiceError(
+      "Stored exact specialist requirements are invalid.",
+      500,
+      "review_configuration_invalid",
+    );
+  }
   return {
     id: text(row, "profile_id") ?? "",
     version: integer(row, "profile_version"),
@@ -169,8 +184,9 @@ function profileFromRow(row: Row): BoundHumanReviewRequestProfile {
     requiredExpertiseKeys: normalizeReviewerExpertiseKeys(
       stringArray(row.required_expertise_keys_json, "required expertise keys"),
     ),
+    expertiseRequirements,
     responseWindowSeconds: integer(row, "response_window_seconds", 1_200, 86_400),
-    panelSize: integer(row, "panel_size", 1, 100),
+    panelSize,
     compensationMode: oneOf(row, "compensation_mode", ["unpaid", "usdc"] as const),
     bountyPerSeatAtomic: text(row, "bounty_per_seat_atomic"),
     feedbackBonusEnabled: boolean(row, "feedback_bonus_enabled"),
@@ -255,7 +271,7 @@ async function loadAndVerifyOpportunity(
             rrp.criterion, rrp.positive_label, rrp.negative_label, rrp.rationale_mode,
             rrp.audience, rrp.content_boundary, rrp.private_sensitivity, rrp.private_group_id,
             rrp.private_group_policy_version, rrp.private_group_policy_hash,
-            rrp.required_expertise_keys_json, rrp.response_window_seconds,
+            rrp.required_expertise_keys_json, rrp.expertise_requirements_json, rrp.response_window_seconds,
             rrp.panel_size, rrp.compensation_mode,
             rrp.bounty_per_seat_atomic, rrp.feedback_bonus_enabled, rrp.feedback_bonus_pool_atomic,
             rrp.feedback_bonus_awarder_kind, rrp.feedback_bonus_awarder_account,
@@ -310,6 +326,7 @@ async function loadAndVerifyOpportunity(
     privateGroupPolicyVersion: optionalInteger(row, "private_group_policy_version"),
     privateGroupPolicyHash: text(row, "private_group_policy_hash"),
     requiredExpertiseKeys: profile.requiredExpertiseKeys,
+    expertiseRequirements: profile.expertiseRequirements,
     responseWindowSeconds: profile.responseWindowSeconds,
     panelSize: profile.panelSize,
     compensationMode: profile.compensationMode,

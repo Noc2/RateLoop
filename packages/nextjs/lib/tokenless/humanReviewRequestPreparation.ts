@@ -8,6 +8,10 @@ import {
   serializeFrozenBinaryReviewQuestion,
 } from "~~/lib/tokenless/humanReviewQuestions";
 import {
+  type ReviewerExpertiseRequirement,
+  normalizeReviewerExpertiseRequirementsSelection,
+} from "~~/lib/tokenless/reviewerExpertiseOptions";
+import {
   type ReviewerExpertiseKey,
   normalizeReviewerExpertiseKeys,
 } from "~~/lib/tokenless/reviewerExpertiseVocabulary";
@@ -41,6 +45,7 @@ export type BoundHumanReviewRequestProfile = {
   privateSensitivity: "internal" | "confidential" | "restricted" | "regulated" | null;
   privateGroupId: string | null;
   requiredExpertiseKeys?: ReviewerExpertiseKey[];
+  expertiseRequirements?: ReviewerExpertiseRequirement[];
   responseWindowSeconds: number;
   panelSize: number;
   compensationMode: "unpaid" | "usdc";
@@ -94,6 +99,7 @@ export type HumanReviewPreparedRequest = {
     privateSensitivity: "internal" | "confidential" | "restricted" | "regulated" | null;
     privateGroupId: string | null;
     requiredExpertiseKeys?: ReviewerExpertiseKey[];
+    expertiseRequirements?: ReviewerExpertiseRequirement[];
   };
   timing: { responseWindowSeconds: number; expiresAt: string };
   panel: { size: number };
@@ -321,6 +327,15 @@ function exactProfile(profile: BoundHumanReviewRequestProfile) {
   );
   const requiredExpertiseKeys = normalizeReviewerExpertiseKeys(profile.requiredExpertiseKeys ?? []);
   const panelSize = boundedInteger(profile.panelSize, "review panel size", 1, HUMAN_REVIEW_MAXIMUM_PANEL_SIZE);
+  let expertiseRequirements: ReviewerExpertiseRequirement[];
+  try {
+    expertiseRequirements = normalizeReviewerExpertiseRequirementsSelection(
+      profile.expertiseRequirements ?? [],
+      panelSize,
+    );
+  } catch {
+    configurationError("Stored exact specialist requirements are invalid.");
+  }
   if (profile.audience !== "private_invited" && panelSize < 3) {
     configurationError("Stored public or hybrid review panel is too small.");
   }
@@ -332,6 +347,18 @@ function exactProfile(profile: BoundHumanReviewRequestProfile) {
     (profile.contentBoundary === "public_or_test" && profile.privateSensitivity !== null)
   ) {
     configurationError("Stored review audience and material boundary are inconsistent.");
+  }
+  if (
+    (requiredExpertiseKeys.length > 0 && expertiseRequirements.length > 0) ||
+    (profile.audience === "private_invited" &&
+      expertiseRequirements.some(requirement => requirement.sourceScope !== "customer_invited")) ||
+    (profile.audience === "public_network" &&
+      expertiseRequirements.some(
+        requirement => requirement.sourceScope !== "rateloop_network" || requirement.minimumSeats !== panelSize,
+      )) ||
+    (profile.audience === "hybrid" && expertiseRequirements.length > 0)
+  ) {
+    configurationError("Stored exact specialist requirements do not match the review audience.");
   }
   if (
     questionAuthority === "agent_per_request" &&
@@ -349,6 +376,7 @@ function exactProfile(profile: BoundHumanReviewRequestProfile) {
     agentVersionId: requiredText(profile.agentVersionId, "agent version ID", 160),
     responseWindowSeconds,
     requiredExpertiseKeys,
+    expertiseRequirements,
     panelSize,
   };
 }
@@ -480,6 +508,7 @@ export function prepareHumanReviewRequest(input: {
       privateSensitivity: profile.privateSensitivity,
       privateGroupId: profile.privateGroupId,
       requiredExpertiseKeys: profile.requiredExpertiseKeys,
+      ...(profile.expertiseRequirements.length ? { expertiseRequirements: profile.expertiseRequirements } : {}),
     },
     timing: {
       responseWindowSeconds: profile.responseWindowSeconds,

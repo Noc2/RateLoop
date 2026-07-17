@@ -41,6 +41,9 @@ import {
   type ReviewerExpertiseKey,
   qualificationProvenanceSatisfiesExpertise,
 } from "~~/lib/tokenless/reviewerExpertise";
+import { exactReviewerExpertiseDefinitionKey } from "~~/lib/tokenless/reviewerExpertiseAssignments";
+import { chooseExpertiseCoveredPanel } from "~~/lib/tokenless/reviewerExpertiseCoverage";
+import type { ReviewerExpertiseRequirement } from "~~/lib/tokenless/reviewerExpertiseOptions";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { isWorkspaceStopEngaged } from "~~/lib/tokenless/workspaceStopControl";
 
@@ -101,6 +104,7 @@ export type FrozenHumanReviewRoutingContext = {
     privateSensitivity: "internal" | "confidential" | "restricted" | "regulated" | null;
     privateGroup: { id: string; policyVersion: number; policyHash: `sha256:${string}` } | null;
     requiredExpertiseKeys?: ReviewerExpertiseKey[];
+    expertiseRequirements?: ReviewerExpertiseRequirement[];
     responseWindowSeconds: number;
     panelSize: number;
     compensationMode: "unpaid" | "usdc";
@@ -501,6 +505,7 @@ async function loadFrozenContext(
           }
         : null,
       requiredExpertiseKeys: profile.audience.requiredExpertiseKeys,
+      expertiseRequirements: profile.audience.expertiseRequirements,
       responseWindowSeconds: profile.responseWindowSeconds!,
       panelSize: profile.panelSize!,
       compensationMode: profile.compensation.mode,
@@ -565,9 +570,11 @@ async function resolveExactPrivateBinding(
   }
   const responseDeadline = new Date(now.getTime() + profile.responseWindowSeconds * 1_000);
   const requiredExpertise = profile.requiredExpertiseKeys ?? [];
+  const exactExpertiseRequirements = profile.expertiseRequirements ?? [];
   const result = await dbClient.execute({
     sql: `SELECT p.project_id,p.retention_days,c.cohort_id,c.capacity,c.active_reservations,
-                 cr.reviewer_account_address,cr.qualification_provenance_json,m.allowed_project_ids_json
+                 cr.reviewer_account_address,cr.qualification_provenance_json,m.allowed_project_ids_json,
+                 q.expertise_definition_id,q.expertise_definition_version,q.expertise_definition_hash
           FROM tokenless_assurance_projects p
           JOIN tokenless_assurance_cohorts c
             ON c.project_id=p.project_id AND c.private_group_id=?
@@ -585,6 +592,10 @@ async function resolveExactPrivateBinding(
             ON m.group_id=g.group_id AND m.principal_address=cr.reviewer_account_address
            AND m.status='active' AND m.joined_at<=?
            AND (m.membership_expires_at IS NULL OR m.membership_expires_at>?)
+          LEFT JOIN tokenless_reviewer_qualifications q
+            ON q.workspace_id=p.workspace_id AND q.reviewer_account_address=cr.reviewer_account_address
+           AND q.reviewer_source='customer_invited' AND q.qualification_kind='expertise'
+           AND q.expertise_record_schema_version=2 AND q.status='active' AND q.expires_at>=?
           WHERE p.workspace_id=? AND p.status='active' AND p.visibility='private'
             AND p.data_classification=? AND p.private_sensitivity=?
           ORDER BY p.project_id,c.cohort_id,cr.reviewer_account_address`,
@@ -594,6 +605,7 @@ async function resolveExactPrivateBinding(
       group.policyHash,
       responseDeadline,
       now,
+      responseDeadline,
       responseDeadline,
       context.workspaceId,
       profile.privateSensitivity,
@@ -608,7 +620,7 @@ async function resolveExactPrivateBinding(
       retentionDays: number;
       capacity: number;
       reservations: number;
-      reviewers: Set<string>;
+      reviewers: Map<string, Set<string>>;
     }
   >();
   for (const value of result.rows) {
@@ -631,27 +643,61 @@ async function resolveExactPrivateBinding(
       retentionDays: positiveInteger(row, "retention_days"),
       capacity: positiveInteger(row, "capacity"),
       reservations: Number(row.active_reservations),
-      reviewers: new Set<string>(),
+      reviewers: new Map<string, Set<string>>(),
     };
     if (!Number.isSafeInteger(candidate.reservations) || candidate.reservations < 0) continue;
-    candidate.reviewers.add(reviewer);
+    const reviewerExpertise = candidate.reviewers.get(reviewer) ?? new Set<string>();
+    const definitionId = text(row, "expertise_definition_id");
+    const definitionVersion = Number(row.expertise_definition_version);
+    const definitionHash = text(row, "expertise_definition_hash");
+    if (
+      definitionId &&
+      Number.isSafeInteger(definitionVersion) &&
+      definitionVersion > 0 &&
+      definitionHash &&
+      HASH_PATTERN.test(definitionHash)
+    ) {
+      reviewerExpertise.add(
+        exactReviewerExpertiseDefinitionKey({
+          definitionId,
+          definitionVersion,
+          definitionHash: definitionHash as `sha256:${string}`,
+        }),
+      );
+    }
+    candidate.reviewers.set(reviewer, reviewerExpertise);
     candidates.set(key, candidate);
   }
-  const exact = [...candidates.values()].filter(candidate => {
+  const exact = [...candidates.values()].flatMap(candidate => {
     const projectAllowed = caps.allowedProjectIds.length === 0 || caps.allowedProjectIds.includes(candidate.projectId);
     const retentionAllowed = caps.maxRetentionDays === null || candidate.retentionDays <= caps.maxRetentionDays;
-    return (
-      projectAllowed &&
-      retentionAllowed &&
-      candidate.reviewers.size === profile.panelSize &&
-      candidate.capacity - candidate.reservations >= profile.panelSize
-    );
+    if (
+      !projectAllowed ||
+      !retentionAllowed ||
+      candidate.reviewers.size < profile.panelSize ||
+      candidate.capacity - candidate.reservations < profile.panelSize
+    ) {
+      return [];
+    }
+    const reviewerAccountAddresses = exactExpertiseRequirements.length
+      ? chooseExpertiseCoveredPanel(
+          [...candidate.reviewers.entries()].map(([id, expertiseKeys]) => ({ id, expertiseKeys: [...expertiseKeys] })),
+          profile.panelSize,
+          exactExpertiseRequirements.map(requirement => ({
+            key: exactReviewerExpertiseDefinitionKey(requirement),
+            minimumSeats: requirement.minimumSeats,
+          })),
+        )
+      : candidate.reviewers.size === profile.panelSize
+        ? [...candidate.reviewers.keys()].sort()
+        : null;
+    return reviewerAccountAddresses ? [{ ...candidate, reviewerAccountAddresses }] : [];
   });
   if (exact.length !== 1) return null;
   return {
     projectId: exact[0]!.projectId,
     cohortId: exact[0]!.cohortId,
-    reviewerAccountAddresses: [...exact[0]!.reviewers].sort(),
+    reviewerAccountAddresses: exact[0]!.reviewerAccountAddresses,
   };
 }
 
@@ -771,6 +817,7 @@ function prepareFrozenRoutingRequest(
       privateSensitivity: profile.privateSensitivity,
       privateGroupId: profile.privateGroup?.id ?? null,
       requiredExpertiseKeys: profile.requiredExpertiseKeys,
+      expertiseRequirements: profile.expertiseRequirements,
       responseWindowSeconds: profile.responseWindowSeconds,
       panelSize: profile.panelSize,
       compensationMode: profile.compensationMode,

@@ -109,6 +109,47 @@ test("prepares and hashes owner-bound question, audience, timing, panel, economi
   assert.equal(Object.isFrozen(prepared.quoteTerms.budget), true);
 });
 
+test("freezes exact specialist requirements into the prepared request", () => {
+  const expertiseRequirements = [
+    {
+      definitionId: "expd_financial_analysis",
+      definitionVersion: 2,
+      definitionHash: HASH("b"),
+      minimumSeats: 5,
+      sourceScope: "rateloop_network" as const,
+    },
+  ];
+  const base = {
+    opportunityId: "aop_expertise",
+    workflowKey: "refund-review",
+    selectionPolicy: { id: "rpol_exact", version: 3 },
+    contentCommitments: {
+      source: hashPreparedPayload("source"),
+      suggestion: hashPreparedPayload("suggestion"),
+    },
+    preparedAt: NOW,
+    expiresAt: new Date(NOW.getTime() + 3_600_000),
+    sourcePayload: "source",
+    suggestionPayload: "suggestion",
+  };
+  const prepared = prepareHumanReviewRequest({
+    ...base,
+    requestProfile: { ...profile(), expertiseRequirements },
+  });
+  assert.deepEqual(prepared.preparedRequest.audience.expertiseRequirements, expertiseRequirements);
+  assert.throws(
+    () =>
+      prepareHumanReviewRequest({
+        ...base,
+        requestProfile: {
+          ...profile(),
+          expertiseRequirements: [{ ...expertiseRequirements[0]!, minimumSeats: 4 }],
+        },
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "review_configuration_invalid",
+  );
+});
+
 test("derives a zero-liability envelope for an unpaid invited profile", () => {
   const economics = deriveHumanReviewEconomics({
     compensationMode: "unpaid",

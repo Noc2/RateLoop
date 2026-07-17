@@ -5,6 +5,10 @@ import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/acco
 import { dbPool } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import {
+  type ReviewerExpertiseRequirement,
+  normalizeReviewerExpertiseRequirementsSelection,
+} from "~~/lib/tokenless/reviewerExpertiseOptions";
+import {
   type ReviewerExpertiseKey,
   normalizeReviewerExpertiseKeys,
 } from "~~/lib/tokenless/reviewerExpertiseVocabulary";
@@ -34,6 +38,7 @@ export type HumanReviewPreparedRequest = {
     privateSensitivity: "internal" | "confidential" | "restricted" | "regulated" | null;
     privateGroupId: string | null;
     requiredExpertiseKeys?: ReviewerExpertiseKey[];
+    expertiseRequirements?: ReviewerExpertiseRequirement[];
   };
   timing: { responseWindowSeconds: number; expiresAt: string };
   panel: { size: number };
@@ -214,6 +219,7 @@ function preparedRequest(value: unknown): HumanReviewPreparedRequest {
   exactKeys(question, "question", questionKeys);
   const audienceKeys = ["kind", "contentBoundary", "privateSensitivity", "privateGroupId"];
   if (audience.requiredExpertiseKeys !== undefined) audienceKeys.push("requiredExpertiseKeys");
+  if (audience.expertiseRequirements !== undefined) audienceKeys.push("expertiseRequirements");
   exactKeys(audience, "audience", audienceKeys);
   exactKeys(timing, "timing", ["responseWindowSeconds", "expiresAt"]);
   exactKeys(panel, "panel", ["size"]);
@@ -263,13 +269,30 @@ function preparedRequest(value: unknown): HumanReviewPreparedRequest {
     throw new Error("Stored audience and content-boundary terms are inconsistent.");
   }
   const responseWindowSeconds = integer(timing.responseWindowSeconds, "response window", 1_200, 86_400);
+  const panelSize = integer(panel.size, "panel size", audienceKind === "private_invited" ? 1 : 3, 100);
   let requiredExpertiseKeys: ReviewerExpertiseKey[];
+  let expertiseRequirements: ReviewerExpertiseRequirement[];
   try {
     requiredExpertiseKeys = normalizeReviewerExpertiseKeys(audience.requiredExpertiseKeys ?? []);
+    expertiseRequirements = normalizeReviewerExpertiseRequirementsSelection(
+      audience.expertiseRequirements ?? [],
+      panelSize,
+    );
   } catch {
-    throw new Error("Stored required expertise keys are invalid.");
+    throw new Error("Stored specialist requirements are invalid.");
   }
-  const panelSize = integer(panel.size, "panel size", audienceKind === "private_invited" ? 1 : 3, 100);
+  if (
+    (requiredExpertiseKeys.length > 0 && expertiseRequirements.length > 0) ||
+    (audienceKind === "private_invited" &&
+      expertiseRequirements.some(requirement => requirement.sourceScope !== "customer_invited")) ||
+    (audienceKind === "public_network" &&
+      expertiseRequirements.some(
+        requirement => requirement.sourceScope !== "rateloop_network" || requirement.minimumSeats !== panelSize,
+      )) ||
+    (audienceKind === "hybrid" && expertiseRequirements.length > 0)
+  ) {
+    throw new Error("Stored specialist requirements do not match the audience.");
+  }
   const positiveLabel = requiredString(question.positiveLabel, "positive label");
   const negativeLabel = requiredString(question.negativeLabel, "negative label");
   if (positiveLabel.toLocaleLowerCase("en-US") === negativeLabel.toLocaleLowerCase("en-US")) {
@@ -297,6 +320,7 @@ function preparedRequest(value: unknown): HumanReviewPreparedRequest {
       privateSensitivity,
       privateGroupId,
       requiredExpertiseKeys,
+      ...(expertiseRequirements.length ? { expertiseRequirements } : {}),
     },
     timing: {
       responseWindowSeconds,

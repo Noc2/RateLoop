@@ -6,6 +6,9 @@ import { dbPool } from "~~/lib/db";
 import { transitionHumanReviewOpportunityLifecycleInTransaction } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
 import type { ProductPrincipal } from "~~/lib/tokenless/productCore";
 import { qualificationProvenanceSatisfiesExpertise } from "~~/lib/tokenless/reviewerExpertise";
+import { exactReviewerExpertiseDefinitionKey } from "~~/lib/tokenless/reviewerExpertiseAssignments";
+import { chooseExpertiseCoveredPanel } from "~~/lib/tokenless/reviewerExpertiseCoverage";
+import { normalizeReviewerExpertiseRequirementsSelection } from "~~/lib/tokenless/reviewerExpertiseOptions";
 import {
   expertiseQualificationRules,
   normalizeReviewerExpertiseKeys,
@@ -67,14 +70,6 @@ function parseStringArray(value: unknown, field: string) {
     const parsed = JSON.parse(String(value)) as unknown;
     if (!Array.isArray(parsed) || parsed.some(entry => typeof entry !== "string")) throw new Error();
     return [...new Set(parsed)].sort();
-  } catch {
-    throw new Error(`Stored ${field} is invalid.`);
-  }
-}
-
-function canonicalJsonDocument(value: unknown, field: string) {
-  try {
-    return stableJson(JSON.parse(String(value)) as unknown);
   } catch {
     throw new Error(`Stored ${field} is invalid.`);
   }
@@ -234,7 +229,7 @@ async function loadFrozenFoundation(
             p.profile_id, p.version AS profile_version, p.profile_hash,
             p.agent_id AS profile_agent_id, p.agent_version_id AS profile_agent_version_id,
             p.audience AS profile_audience, p.content_boundary, p.compensation_mode, p.panel_size,
-            p.required_expertise_keys_json,
+            p.required_expertise_keys_json,p.expertise_requirements_json,
             p.private_group_id AS profile_private_group_id,
             o.opportunity_id, o.agent_id AS opportunity_agent_id,
             o.agent_version_id AS opportunity_agent_version_id,
@@ -455,9 +450,14 @@ async function requestPrivateHumanReviewAssignments(input: {
     const requiredExpertise = normalizeReviewerExpertiseKeys(
       JSON.parse(text(row, "required_expertise_keys_json") ?? "[]"),
     );
+    const exactExpertiseRequirements = normalizeReviewerExpertiseRequirementsSelection(
+      JSON.parse(text(row, "expertise_requirements_json") ?? "[]"),
+      panelSize,
+    );
+    const exactExpertiseByReviewer = new Map<string, Set<string>>();
     for (const reviewer of reviewers) {
       const memberResult = await client.query(
-        `SELECT m.status AS membership_status, m.allowed_project_ids_json,
+        `SELECT m.status AS membership_status, m.allowed_project_ids_json,m.source_invitation_id,
                 m.membership_expires_at, m.joined_at,
                 cr.status AS cohort_reviewer_status, cr.qualification_provenance_json,
                 cr.qualification_expires_at, cr.maximum_active_assignments, cr.active_reservations
@@ -484,7 +484,11 @@ async function requestPrivateHumanReviewAssignments(input: {
         joinedAt > now ||
         (expiresAt !== null && expiresAt < responseDeadline) ||
         (qualificationExpiresAt !== null && qualificationExpiresAt < responseDeadline) ||
-        !qualificationProvenanceSatisfiesExpertise(member?.qualification_provenance_json, requiredExpertise, now) ||
+        !qualificationProvenanceSatisfiesExpertise(
+          member?.qualification_provenance_json,
+          requiredExpertise,
+          responseDeadline,
+        ) ||
         (allowedProjects.length > 0 && !allowedProjects.includes(text(row, "project_id")!)) ||
         integer(member, "active_reservations") >= integer(member, "maximum_active_assignments", 1)
       ) {
@@ -494,10 +498,48 @@ async function requestPrivateHumanReviewAssignments(input: {
           "private_reviewer_not_eligible",
         );
       }
-      const qualificationJson = canonicalJsonDocument(
+      const exactResult = await client.query(
+        `SELECT qualification_id,expertise_definition_id,expertise_definition_version,
+                expertise_definition_hash,evidence_reference_hash,verified_at,expires_at,
+                source_invitation_id,asserted_by
+         FROM tokenless_reviewer_qualifications
+         WHERE workspace_id=$1 AND reviewer_account_address=$2
+           AND reviewer_source='customer_invited' AND qualification_kind='expertise'
+           AND expertise_record_schema_version=2 AND status='active' AND expires_at>=$3
+           AND source_invitation_id=$4
+         ORDER BY expertise_definition_id,expertise_definition_version,qualification_id`,
+        [text(row, "workspace_id"), reviewer, responseDeadline, text(member, "source_invitation_id")],
+      );
+      const exactQualificationRecords = (exactResult.rows as Row[]).map(qualification => ({
+        kind: "exact_expertise",
+        qualificationId: text(qualification, "qualification_id"),
+        definitionId: text(qualification, "expertise_definition_id"),
+        definitionVersion: integer(qualification, "expertise_definition_version", 1),
+        definitionHash: text(qualification, "expertise_definition_hash"),
+        evidenceReferenceHash: text(qualification, "evidence_reference_hash"),
+        verifiedAt: date(qualification, "verified_at").toISOString(),
+        expiresAt: date(qualification, "expires_at").toISOString(),
+        sourceInvitationId: text(qualification, "source_invitation_id"),
+        assertedBy: text(qualification, "asserted_by"),
+      }));
+      const exactKeys = new Set(
+        exactQualificationRecords.map(qualification =>
+          exactReviewerExpertiseDefinitionKey({
+            definitionId: qualification.definitionId!,
+            definitionVersion: qualification.definitionVersion,
+            definitionHash: qualification.definitionHash as `sha256:${string}`,
+          }),
+        ),
+      );
+      exactExpertiseByReviewer.set(reviewer, exactKeys);
+      const legacyQualificationProvenance = parseJsonDocument(
         member.qualification_provenance_json,
         "reviewer qualification provenance",
       );
+      if (!Array.isArray(legacyQualificationProvenance)) {
+        throw new Error("Stored reviewer qualification provenance is invalid.");
+      }
+      const qualificationJson = stableJson([...legacyQualificationProvenance, ...exactQualificationRecords]);
       snapshots.push({
         reviewer,
         joinedAt,
@@ -515,6 +557,26 @@ async function requestPrivateHumanReviewAssignments(input: {
           cutoffAt: now.toISOString(),
         }),
       });
+    }
+    if (
+      exactExpertiseRequirements.length > 0 &&
+      !chooseExpertiseCoveredPanel(
+        reviewers.map(reviewer => ({
+          id: reviewer,
+          expertiseKeys: [...(exactExpertiseByReviewer.get(reviewer) ?? [])],
+        })),
+        panelSize,
+        exactExpertiseRequirements.map(requirement => ({
+          key: exactReviewerExpertiseDefinitionKey(requirement),
+          minimumSeats: requirement.minimumSeats,
+        })),
+      )
+    ) {
+      throw new TokenlessServiceError(
+        "The named reviewer panel no longer covers every specialist requirement through the response deadline.",
+        409,
+        "private_reviewer_expertise_coverage_unavailable",
+      );
     }
     const membershipSnapshotHash = sha256({
       schemaVersion: "rateloop.private-review-panel-snapshot.v1",

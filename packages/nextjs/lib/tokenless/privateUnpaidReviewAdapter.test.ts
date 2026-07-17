@@ -21,6 +21,8 @@ import {
 import { createAgentPublishingPolicy, createWorkspace } from "~~/lib/tokenless/productCore";
 import { createReviewRequestProfile } from "~~/lib/tokenless/reviewRequestProfiles";
 import { attestInvitedReviewerExpertise } from "~~/lib/tokenless/reviewerExpertise";
+import { replacePrivateGroupMemberExpertise } from "~~/lib/tokenless/reviewerExpertiseAssignments";
+import { createWorkspaceReviewerExpertiseDefinition } from "~~/lib/tokenless/reviewerExpertiseDefinitions";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const REVIEWER_A = "0x2222222222222222222222222222222222222222";
@@ -64,7 +66,10 @@ async function identity(address: string, email: string, now: Date) {
   });
 }
 
-async function fixture(requiredExpertiseKeys: Array<"code-review:typescript"> = []) {
+async function fixture(
+  requiredExpertiseKeys: Array<"code-review:typescript"> = [],
+  exactMinimumSeats: number | null = null,
+) {
   const foundationNow = new Date("2026-07-16T09:00:00.000Z");
   await identity(REVIEWER_A, "reviewer-a@example.com", foundationNow);
   await identity(REVIEWER_B, "reviewer-b@example.com", foundationNow);
@@ -118,12 +123,23 @@ async function fixture(requiredExpertiseKeys: Array<"code-review:typescript"> = 
     purpose: "Review confidential suggestions without base compensation.",
     policy: { defaultCompensation: "unpaid", dataClassifications: ["confidential"] },
   });
+  const expertiseDefinition = exactMinimumSeats
+    ? (
+        await createWorkspaceReviewerExpertiseDefinition({
+          accountAddress: OWNER,
+          workspaceId,
+          label: "Private release controls",
+          description: "Can assess the workspace's private release and rollback controls.",
+        })
+      ).definition
+    : null;
   const profile = await createReviewRequestProfile({
     accountAddress: OWNER,
     workspaceId,
     profile: {
       agentId: approved.agent.agentId,
       agentVersionId: approved.agent.versionId,
+      questionAuthority: "owner_fixed",
       criterion: "Is this suggestion correct and safe?",
       positiveLabel: "Approve",
       negativeLabel: "Reject",
@@ -138,6 +154,17 @@ async function fixture(requiredExpertiseKeys: Array<"code-review:typescript"> = 
       panelSize: 2,
       compensationMode: "unpaid",
       requiredExpertiseKeys,
+      expertiseRequirements: expertiseDefinition
+        ? [
+            {
+              definitionId: expertiseDefinition.definitionId,
+              definitionVersion: expertiseDefinition.version,
+              definitionHash: expertiseDefinition.hash,
+              minimumSeats: exactMinimumSeats!,
+              sourceScope: "customer_invited",
+            },
+          ]
+        : undefined,
     },
   });
   const bindingId = "hrb_private_unpaid_adapter";
@@ -194,12 +221,46 @@ async function fixture(requiredExpertiseKeys: Array<"code-review:typescript"> = 
     args: [cohortId, project.projectId, group.groupId, OWNER, foundationNow, foundationNow],
   });
   for (const reviewer of [REVIEWER_A, REVIEWER_B]) {
+    const invitationId = `pgi_private_${reviewer.slice(2, 10)}`;
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_private_group_invitations
+            (invitation_id,workspace_id,group_id,token_hash,token_prefix,role,
+             allowed_project_ids_json,intended_account_address,expires_at,maximum_redemptions,
+             redemption_count,last_used_at,created_by,created_at)
+            VALUES (?,?,?, ?,?,'reviewer',?,?,?,1,1,?,?,?)`,
+      args: [
+        invitationId,
+        workspaceId,
+        group.groupId,
+        hash(`token:${reviewer}`),
+        reviewer.slice(2, 18),
+        JSON.stringify([project.projectId]),
+        reviewer,
+        new Date("2026-07-23T09:00:00.000Z"),
+        foundationNow,
+        OWNER,
+        foundationNow,
+      ],
+    });
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_private_group_invitation_redemptions
+            (invitation_id,principal_address,group_id,redeemed_at) VALUES (?,?,?,?)`,
+      args: [invitationId, reviewer, group.groupId, foundationNow],
+    });
     await dbClient.execute({
       sql: `INSERT INTO tokenless_private_group_memberships
-            (group_id,principal_address,role,status,allowed_project_ids_json,membership_expires_at,
+            (group_id,principal_address,role,status,allowed_project_ids_json,source_invitation_id,membership_expires_at,
              joined_at,created_by,updated_at)
-            VALUES (?,?,'reviewer','active',?,NULL,?,?,?)`,
-      args: [group.groupId, reviewer, JSON.stringify([project.projectId]), foundationNow, OWNER, foundationNow],
+            VALUES (?,?,'reviewer','active',?,?,NULL,?,?,?)`,
+      args: [
+        group.groupId,
+        reviewer,
+        JSON.stringify([project.projectId]),
+        invitationId,
+        foundationNow,
+        OWNER,
+        foundationNow,
+      ],
     });
     await dbClient.execute({
       sql: `INSERT INTO tokenless_assurance_cohort_reviewers
@@ -310,6 +371,8 @@ async function fixture(requiredExpertiseKeys: Array<"code-review:typescript"> = 
     workspaceId,
     projectId: project.projectId,
     cohortId,
+    groupId: group.groupId,
+    expertiseDefinition,
   };
 }
 
@@ -423,6 +486,46 @@ test("profile expertise requirements fail closed through private assignment unti
       { reviewer_account_address: REVIEWER_A, status: "active" },
       { reviewer_account_address: REVIEWER_B, status: "active" },
     ],
+  );
+});
+
+test("exact specialist coverage is revalidated collectively through the response deadline", async () => {
+  const setup = await fixture([], 1);
+  const assignment = () =>
+    requestPrivateUnpaidHumanReview({
+      principal: setup.principal,
+      opportunityId: setup.opportunityId,
+      privateReviewId: setup.prepared.privateReviewId,
+      reviewerAccountAddresses: [REVIEWER_A, REVIEWER_B],
+      now: new Date("2026-07-16T09:20:00.000Z"),
+    });
+  await assert.rejects(assignment, /no longer covers every specialist requirement/u);
+  await replacePrivateGroupMemberExpertise({
+    accountAddress: OWNER,
+    workspaceId: setup.workspaceId,
+    groupId: setup.groupId,
+    reviewerAccountAddress: REVIEWER_A,
+    definitions: [
+      {
+        definitionId: setup.expertiseDefinition!.definitionId,
+        definitionVersion: setup.expertiseDefinition!.version,
+        definitionHash: setup.expertiseDefinition!.hash,
+      },
+    ],
+    expiresAt: "2026-07-17T10:00:00.000Z",
+    now: new Date("2026-07-16T09:10:00.000Z"),
+  });
+  const delivered = await assignment();
+  assert.equal(delivered.assignments.length, 2);
+  const evidence = await dbClient.execute({
+    sql: `SELECT qualification_snapshot_json FROM tokenless_private_unpaid_review_assignments
+          WHERE reviewer_account_address=? LIMIT 1`,
+    args: [REVIEWER_A],
+  });
+  assert.match(String(evidence.rows[0]?.qualification_snapshot_json), /exact_expertise/u);
+  assert.match(
+    String(evidence.rows[0]?.qualification_snapshot_json),
+    new RegExp(setup.expertiseDefinition!.definitionId, "u"),
   );
 });
 
