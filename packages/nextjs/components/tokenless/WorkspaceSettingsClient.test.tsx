@@ -43,6 +43,41 @@ test("workspace billing profile collects self-declared business invoice details"
   assert.match(source, /Provide both VAT country and VAT ID/);
   assert.match(source, /not an external\s+identity or company verification/);
   assert.match(source, /Save billing details/);
+  assert.match(source, /Invoice funding address/);
+  assert.match(source, /billingAddressLine1/);
+  assert.match(source, /billingPostalCode/);
+  assert.match(source, /required=\{hasInvoiceFundingAddress\}/);
+});
+
+test("workspace prepaid funding shows the balance, invoice link, and signed ledger", () => {
+  assert.match(source, /Add prepaid balance by USD invoice/);
+  assert.match(source, /Create invoice/);
+  assert.match(source, /Top-up invoices/);
+  assert.match(source, /Open invoice/);
+  assert.match(source, /Balance ledger/);
+  assert.match(source, /signedUsdc\(entry\.amountAtomic\)/);
+  assert.match(source, /initialWorkspaceId/);
+  assert.match(source, /htmlFor="workspace-prepaid-topup-amount"/);
+  assert.match(source, /Workspace owners and billing members can add prepaid balance/);
+  assert.match(source, /Loading prepaid funding/);
+});
+
+test("enterprise identity settings cover provider lifecycle and workspace-local SCIM", () => {
+  assert.match(source, /Configure SSO and SCIM/);
+  assert.match(source, /Add identity provider/);
+  assert.match(source, /Get TXT token/);
+  assert.match(source, /SSO-only/);
+  assert.match(source, /Save provider/);
+  assert.match(source, /Delete this identity provider/);
+  assert.match(source, /SCIM Users endpoint/);
+  assert.match(source, /SCIM Groups are not supported/);
+  assert.match(source, /Last sync:/);
+  assert.match(source, /Revoke this SCIM token/);
+  assert.match(source, /identityFormDirty/);
+  assert.match(source, /selected && canManageIdentity/);
+  assert.match(source, /Enterprise identity is not enabled for this deployment/);
+  assert.match(source, /Copy this SCIM bearer token now/);
+  assert.match(source, /Publish this domain verification token/);
 });
 
 test("workspace setup does not expose manual agent credentials or result webhooks", () => {

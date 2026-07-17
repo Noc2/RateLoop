@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   type TokenlessAskResponse,
   type TokenlessQuestion,
@@ -821,15 +822,27 @@ export function TokenlessHandoffClient() {
                     ))}
                   </select>
                   {insufficientPrepaid ? (
-                    <p className="mt-2 text-sm text-error" role="alert">
-                      This workspace has less available prepaid USDC than the quoted total.
-                    </p>
+                    <div className="mt-2 text-sm text-error" role="alert">
+                      <p>This workspace has less available prepaid USDC than the quoted total.</p>
+                      <Link
+                        className="mt-1 inline-block font-semibold underline underline-offset-4"
+                        href={`/agents?workspace=${encodeURIComponent(selectedWorkspace.workspaceId)}&tab=overview#panel-funding`}
+                      >
+                        Top up balance
+                      </Link>
+                    </div>
                   ) : null}
                 </>
               ) : (
-                <p className="mt-2 text-sm leading-6 text-base-content/60">
-                  No prepaid workspace is available. Create and fund one in Account before submitting this handoff.
-                </p>
+                <div className="mt-2 text-sm leading-6 text-base-content/60">
+                  <p>No prepaid workspace is available. Create and fund one before submitting this handoff.</p>
+                  <Link
+                    className="font-semibold underline underline-offset-4"
+                    href="/agents?tab=overview#panel-funding"
+                  >
+                    Top up balance
+                  </Link>
+                </div>
               )}
             </div>
           ) : null}

@@ -18,6 +18,14 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
 };
 const handoffSource = readFileSync(new URL("./TokenlessHandoffClient.tsx", import.meta.url), "utf8");
 
+test("insufficient prepaid handoffs link directly to workspace top-up settings", () => {
+  assert.match(handoffSource, /Top up balance/);
+  assert.match(handoffSource, /\/agents\?tab=overview#panel-funding/);
+  assert.match(handoffSource, /workspace=\$\{encodeURIComponent\(selectedWorkspace\.workspaceId\)\}/);
+  assert.match(handoffSource, /import Link from "next\/link"/);
+  assert.match(handoffSource, /insufficientPrepaid/);
+});
+
 function request(kind: "binary" | "head_to_head" = "binary") {
   return {
     audience: { admissionPolicyHash: `0x${"ab".repeat(32)}`, source: "rateloop_network" },

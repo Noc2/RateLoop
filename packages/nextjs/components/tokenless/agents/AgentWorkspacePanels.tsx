@@ -112,7 +112,9 @@ export function AgentWorkspacePanels({
       ) : null}
 
       <div key={workspaceId} className="space-y-5">
-        {hasConnectedAgent && resolvedTab === "overview" ? <WorkspaceSettingsClient /> : null}
+        {hasConnectedAgent && resolvedTab === "overview" ? (
+          <WorkspaceSettingsClient initialWorkspaceId={workspaceId} />
+        ) : null}
         {hasConnectedAgent && resolvedTab === "overview" && workspace.role === "owner" ? (
           <WorkspaceDeletionPanel workspaceId={workspace.workspaceId} workspaceName={workspace.name} />
         ) : null}

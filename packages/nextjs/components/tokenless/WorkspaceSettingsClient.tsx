@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { WorkspaceRequestScope } from "~~/lib/tokenless/workspaceRequestScope";
 
 type Workspace = {
   workspaceId: string;
@@ -31,6 +32,53 @@ type BillingProfile = {
   registeredAddress: string | null;
   vatCountryCode: string | null;
   vatId: string | null;
+  billingAddress: {
+    country: string | null;
+    line1: string | null;
+    line2: string | null;
+    city: string | null;
+    postalCode: string | null;
+    state: string | null;
+  };
+};
+
+type PrepaidTopups = {
+  enabled: boolean;
+  topups: Array<{
+    topupId: string;
+    amountUsd: string;
+    state: "draft" | "sent" | "paid" | "credited" | "failed";
+    hostedInvoiceUrl: string | null;
+    invoicePdfUrl: string | null;
+    invoiceNumber: string | null;
+    requestedAt: string | null;
+  }>;
+  ledger: Array<{
+    entryId: string;
+    amountAtomic: string;
+    source: string;
+    reference: string | null;
+    settledAt: string | null;
+  }>;
+  reservations: Array<{ reservationId: string; amountAtomic: string; status: string; createdAt: string | null }>;
+};
+
+type WorkspaceIdentity = {
+  enabled: boolean;
+  providers: Array<{
+    providerId: string;
+    protocol: "oidc" | "saml";
+    domain: string;
+    domainVerified: boolean;
+    enforceSso: boolean;
+    lastSsoAt: string | null;
+  }>;
+  scim: Array<{
+    providerId: string;
+    lastSyncAt: string | null;
+    lastSyncResult: string | null;
+  }>;
+  limitations: { scimGroups: false };
 };
 
 class RequestFailure extends Error {
@@ -60,6 +108,11 @@ function usdc(value: string) {
   );
 }
 
+function signedUsdc(value: string) {
+  const atomic = BigInt(value);
+  return `${atomic >= 0n ? "+" : "-"}$${usdc((atomic >= 0n ? atomic : -atomic).toString())}`;
+}
+
 function dateLabel(value: string | null) {
   if (!value) return "—";
   const date = new Date(value);
@@ -72,7 +125,7 @@ function billingStatusLabel(status: string) {
   return status.replaceAll("_", " ");
 }
 
-export function WorkspaceSettingsClient() {
+export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWorkspaceId?: string }) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspacesLoading, setWorkspacesLoading] = useState(true);
   const [selectedId, setSelectedId] = useState("");
@@ -90,9 +143,77 @@ export function WorkspaceSettingsClient() {
     registeredAddress: "",
     vatCountryCode: "",
     vatId: "",
+    billingCountryCode: "",
+    billingAddressLine1: "",
+    billingAddressLine2: "",
+    billingCity: "",
+    billingPostalCode: "",
+    billingState: "",
+  });
+  const [topups, setTopups] = useState<PrepaidTopups | null>(null);
+  const [topupAmount, setTopupAmount] = useState("");
+  const [topupBusy, setTopupBusy] = useState(false);
+  const [topupError, setTopupError] = useState<string | null>(null);
+  const [showIdentity, setShowIdentity] = useState(false);
+  const [identity, setIdentity] = useState<WorkspaceIdentity | null>(null);
+  const [identityBusy, setIdentityBusy] = useState(false);
+  const [identityError, setIdentityError] = useState<string | null>(null);
+  const [identityToken, setIdentityToken] = useState<string | null>(null);
+  const [identityEndpoint, setIdentityEndpoint] = useState<string | null>(null);
+  const [identityForm, setIdentityForm] = useState({
+    providerId: "",
+    protocol: "oidc" as "oidc" | "saml",
+    domain: "",
+    issuer: "",
+    clientId: "",
+    clientSecret: "",
+    entryPoint: "",
+    certificate: "",
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [workspaceRequests] = useState(() => new WorkspaceRequestScope());
+  const selected = workspaces.find(workspace => workspace.workspaceId === selectedId);
+  const canManageTopups = selected?.role === "owner" || selected?.role === "billing";
+  const canManageIdentity = selected?.role === "owner" || selected?.role === "admin";
+  const hasInvoiceFundingAddress = Boolean(
+    billingProfile.billingCountryCode ||
+      billingProfile.billingAddressLine1 ||
+      billingProfile.billingAddressLine2 ||
+      billingProfile.billingCity ||
+      billingProfile.billingPostalCode ||
+      billingProfile.billingState,
+  );
+
+  const selectWorkspace = useCallback(
+    (workspaceId: string) => {
+      if (!workspaceRequests.selectWorkspace(workspaceId)) return;
+      setSelectedId(workspaceId);
+      setShowBillingProfile(false);
+      setBillingProfileSaved(false);
+      setTopups(null);
+      setTopupAmount("");
+      setTopupBusy(false);
+      setTopupError(null);
+      setShowIdentity(false);
+      setIdentity(null);
+      setIdentityBusy(false);
+      setIdentityError(null);
+      setIdentityToken(null);
+      setIdentityEndpoint(null);
+      setIdentityForm(current => ({
+        ...current,
+        providerId: "",
+        domain: "",
+        issuer: "",
+        clientId: "",
+        clientSecret: "",
+        entryPoint: "",
+        certificate: "",
+      }));
+    },
+    [workspaceRequests],
+  );
 
   const loadWorkspaces = useCallback(async () => {
     const body = await readJson(
@@ -100,10 +221,15 @@ export function WorkspaceSettingsClient() {
     );
     const next = body.workspaces as Workspace[];
     setWorkspaces(next);
-    setSelectedId(current =>
-      current && next.some(workspace => workspace.workspaceId === current) ? current : (next[0]?.workspaceId ?? ""),
+    const current = workspaceRequests.currentWorkspaceId;
+    selectWorkspace(
+      current && next.some(workspace => workspace.workspaceId === current)
+        ? current
+        : initialWorkspaceId && next.some(workspace => workspace.workspaceId === initialWorkspaceId)
+          ? initialWorkspaceId
+          : (next[0]?.workspaceId ?? ""),
     );
-  }, []);
+  }, [initialWorkspaceId, selectWorkspace, workspaceRequests]);
 
   const loadBilling = useCallback(async (workspaceId: string) => {
     if (!workspaceId) {
@@ -136,9 +262,60 @@ export function WorkspaceSettingsClient() {
       registeredAddress: body.registeredAddress ?? "",
       vatCountryCode: body.vatCountryCode ?? "",
       vatId: body.vatId ?? "",
+      billingCountryCode: body.billingAddress.country ?? "",
+      billingAddressLine1: body.billingAddress.line1 ?? "",
+      billingAddressLine2: body.billingAddress.line2 ?? "",
+      billingCity: body.billingAddress.city ?? "",
+      billingPostalCode: body.billingAddress.postalCode ?? "",
+      billingState: body.billingAddress.state ?? "",
     });
     return body;
   }, []);
+
+  const loadTopups = useCallback(
+    async (workspaceId: string) => {
+      if (!workspaceId) return null;
+      const request = workspaceRequests.begin(workspaceId, "topups:load");
+      try {
+        const next = (await readJson(
+          await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/billing/topups`, {
+            cache: "no-store",
+            credentials: "same-origin",
+            signal: request.signal,
+          }),
+        )) as PrepaidTopups;
+        if (!request.isCurrent()) return null;
+        setTopups(next);
+        setTopupError(null);
+        return next;
+      } finally {
+        request.finish();
+      }
+    },
+    [workspaceRequests],
+  );
+
+  const loadIdentity = useCallback(
+    async (workspaceId: string) => {
+      const request = workspaceRequests.begin(workspaceId, "identity:load");
+      try {
+        const next = (await readJson(
+          await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/identity`, {
+            cache: "no-store",
+            credentials: "same-origin",
+            signal: request.signal,
+          }),
+        )) as WorkspaceIdentity;
+        if (!request.isCurrent()) return null;
+        setIdentity(next);
+        setIdentityError(null);
+        return next;
+      } finally {
+        request.finish();
+      }
+    },
+    [workspaceRequests],
+  );
 
   useEffect(() => {
     void loadWorkspaces()
@@ -152,6 +329,17 @@ export function WorkspaceSettingsClient() {
       setBillingError(cause instanceof Error ? cause.message : "Unable to load billing status.");
     });
   }, [loadBilling, selectedId]);
+
+  useEffect(() => {
+    setTopups(null);
+    setTopupError(null);
+    if (!selectedId || !canManageTopups) return;
+    const workspaceId = selectedId;
+    void loadTopups(workspaceId).catch(cause => {
+      if (!workspaceRequests.isWorkspaceCurrent(workspaceId)) return;
+      setTopupError(cause instanceof Error ? cause.message : "Unable to load prepaid funding.");
+    });
+  }, [canManageTopups, loadTopups, selectedId, workspaceRequests]);
 
   useEffect(() => {
     const state = new URLSearchParams(window.location.search).get("billing");
@@ -248,6 +436,12 @@ export function WorkspaceSettingsClient() {
             registeredAddress: billingProfile.registeredAddress,
             vatCountryCode: billingProfile.vatCountryCode || null,
             vatId: billingProfile.vatId || null,
+            billingCountryCode: billingProfile.billingCountryCode || null,
+            billingAddressLine1: billingProfile.billingAddressLine1 || null,
+            billingAddressLine2: billingProfile.billingAddressLine2 || null,
+            billingCity: billingProfile.billingCity || null,
+            billingPostalCode: billingProfile.billingPostalCode || null,
+            billingState: billingProfile.billingState || null,
           }),
         }),
       )) as BillingProfile;
@@ -257,12 +451,184 @@ export function WorkspaceSettingsClient() {
         registeredAddress: body.registeredAddress ?? "",
         vatCountryCode: body.vatCountryCode ?? "",
         vatId: body.vatId ?? "",
+        billingCountryCode: body.billingAddress.country ?? "",
+        billingAddressLine1: body.billingAddress.line1 ?? "",
+        billingAddressLine2: body.billingAddress.line2 ?? "",
+        billingCity: body.billingAddress.city ?? "",
+        billingPostalCode: body.billingAddress.postalCode ?? "",
+        billingState: body.billingAddress.state ?? "",
       });
       setBillingProfileSaved(true);
     } catch (cause) {
       setBillingError(cause instanceof Error ? cause.message : "Unable to save billing details.");
     } finally {
       setBillingProfileBusy(false);
+    }
+  }
+
+  async function createTopup(event: FormEvent) {
+    event.preventDefault();
+    if (!selectedId || !/^\d{1,6}(?:\.\d{1,2})?$/u.test(topupAmount)) return;
+    const workspaceId = selectedId;
+    const request = workspaceRequests.begin(workspaceId, "topups:action");
+    const [whole, fraction = ""] = topupAmount.split(".");
+    const amountAtomic = (BigInt(whole!) * 1_000_000n + BigInt(fraction.padEnd(2, "0")) * 10_000n).toString();
+    setTopupBusy(true);
+    setTopupError(null);
+    try {
+      await readJson(
+        await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/billing/topups`, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amountAtomic, idempotencyKey: `browser:${crypto.randomUUID()}` }),
+          signal: request.signal,
+        }),
+      );
+      if (!request.isCurrent()) return;
+      setTopupAmount("");
+      await loadTopups(workspaceId);
+      if (!request.isCurrent()) return;
+      await loadWorkspaces();
+    } catch (cause) {
+      if (request.isCurrent()) {
+        setTopupError(cause instanceof Error ? cause.message : "Unable to request a prepaid top-up.");
+      }
+    } finally {
+      if (request.isCurrent()) setTopupBusy(false);
+      request.finish();
+    }
+  }
+
+  async function toggleIdentitySettings() {
+    if (!selectedId) return;
+    const workspaceId = selectedId;
+    const next = !showIdentity;
+    setShowIdentity(next);
+    setIdentityToken(null);
+    setIdentityEndpoint(null);
+    if (!next) return;
+    setIdentityBusy(true);
+    setIdentityError(null);
+    try {
+      await loadIdentity(workspaceId);
+    } catch (cause) {
+      if (workspaceRequests.isWorkspaceCurrent(workspaceId)) {
+        setIdentityError(cause instanceof Error ? cause.message : "Unable to load enterprise identity.");
+      }
+    } finally {
+      if (workspaceRequests.isWorkspaceCurrent(workspaceId)) setIdentityBusy(false);
+    }
+  }
+
+  async function saveIdentityProvider(event: FormEvent) {
+    event.preventDefault();
+    if (!selectedId) return;
+    setIdentityBusy(true);
+    setIdentityError(null);
+    try {
+      const editing = Boolean(identityForm.providerId);
+      const payload = Object.fromEntries(
+        Object.entries({
+          protocol: identityForm.protocol,
+          domain: identityForm.domain,
+          issuer: identityForm.issuer,
+          clientId: identityForm.clientId,
+          clientSecret: identityForm.clientSecret,
+          entryPoint: identityForm.entryPoint,
+          certificate: identityForm.certificate,
+        }).filter(([, value]) => value !== ""),
+      );
+      const body = await readJson(
+        await fetch(
+          editing
+            ? `/api/account/workspaces/${encodeURIComponent(selectedId)}/identity/providers/${encodeURIComponent(identityForm.providerId)}`
+            : `/api/account/workspaces/${encodeURIComponent(selectedId)}/identity`,
+          {
+            method: editing ? "PATCH" : "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          },
+        ),
+      );
+      setIdentityToken(typeof body.domainVerificationToken === "string" ? body.domainVerificationToken : null);
+      setIdentityEndpoint(null);
+      setIdentityForm(current => ({
+        ...current,
+        providerId: "",
+        domain: "",
+        issuer: "",
+        clientId: "",
+        clientSecret: "",
+        entryPoint: "",
+        certificate: "",
+      }));
+      await loadIdentity(selectedId);
+    } catch (cause) {
+      setIdentityError(cause instanceof Error ? cause.message : "Unable to save the identity provider.");
+    } finally {
+      setIdentityBusy(false);
+    }
+  }
+
+  async function identityProviderAction(
+    providerId: string,
+    action: "request-verification" | "verify" | "enforce" | "delete",
+    enabled?: boolean,
+  ) {
+    if (!selectedId) return;
+    if (action === "delete" && !window.confirm("Delete this identity provider and its linked SSO accounts?")) return;
+    setIdentityBusy(true);
+    setIdentityError(null);
+    try {
+      const providerPath = `/api/account/workspaces/${encodeURIComponent(selectedId)}/identity/providers/${encodeURIComponent(providerId)}`;
+      const response = await readJson(
+        await fetch(
+          action === "request-verification" || action === "verify"
+            ? `${providerPath}/domain-verification`
+            : providerPath,
+          {
+            method: action === "delete" ? "DELETE" : action === "request-verification" ? "POST" : "PATCH",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            ...(action === "enforce" ? { body: JSON.stringify({ enforceSso: enabled }) } : {}),
+          },
+        ),
+      );
+      if (typeof response.domainVerificationToken === "string") {
+        setIdentityToken(response.domainVerificationToken);
+        setIdentityEndpoint(null);
+      }
+      await loadIdentity(selectedId);
+    } catch (cause) {
+      setIdentityError(cause instanceof Error ? cause.message : "Unable to update the identity provider.");
+    } finally {
+      setIdentityBusy(false);
+    }
+  }
+
+  async function scimAction(providerId?: string) {
+    if (!selectedId) return;
+    if (providerId && !window.confirm("Revoke this SCIM token? Provisioning will stop immediately.")) return;
+    setIdentityBusy(true);
+    setIdentityError(null);
+    try {
+      const body = await readJson(
+        await fetch(
+          providerId
+            ? `/api/account/workspaces/${encodeURIComponent(selectedId)}/identity/scim/${encodeURIComponent(providerId)}`
+            : `/api/account/workspaces/${encodeURIComponent(selectedId)}/identity/scim`,
+          { method: providerId ? "DELETE" : "POST", credentials: "same-origin" },
+        ),
+      );
+      setIdentityToken(typeof body.scimToken === "string" ? body.scimToken : null);
+      setIdentityEndpoint(typeof body.endpoint === "string" ? body.endpoint : null);
+      await loadIdentity(selectedId);
+    } catch (cause) {
+      setIdentityError(cause instanceof Error ? cause.message : "Unable to update SCIM provisioning.");
+    } finally {
+      setIdentityBusy(false);
     }
   }
 
@@ -287,10 +653,20 @@ export function WorkspaceSettingsClient() {
     }
   }
 
-  const selected = workspaces.find(workspace => workspace.workspaceId === selectedId);
   const usageTotal = billing ? billing.usage.completed + billing.usage.reserved : 0;
   const usagePercent = billing?.usage.limit ? Math.min(100, Math.round((usageTotal / billing.usage.limit) * 100)) : 0;
   const billingWarning = ["past_due", "unpaid", "incomplete", "incomplete_expired"].includes(billing?.status ?? "");
+  const editingIdentityProvider = identity?.providers.find(provider => provider.providerId === identityForm.providerId);
+  const identityFormDirty =
+    !identityForm.providerId ||
+    identityForm.domain !== editingIdentityProvider?.domain ||
+    Boolean(
+      identityForm.issuer ||
+        identityForm.clientId ||
+        identityForm.clientSecret ||
+        identityForm.entryPoint ||
+        identityForm.certificate,
+    );
 
   const workspaceForm = (
     <form className="mt-4" onSubmit={createWorkspace}>
@@ -548,6 +924,89 @@ export function WorkspaceSettingsClient() {
                             required
                           />
                         </label>
+                        <p className="text-xs font-semibold text-base-content/65 sm:col-span-2">
+                          Invoice funding address <span className="font-normal text-base-content/35">(optional)</span>
+                        </p>
+                        <label className="text-xs text-base-content/55">
+                          Country
+                          <input
+                            className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)] uppercase"
+                            value={billingProfile.billingCountryCode}
+                            onChange={event =>
+                              setBillingProfile(current => ({
+                                ...current,
+                                billingCountryCode: event.target.value.toUpperCase(),
+                              }))
+                            }
+                            placeholder="US"
+                            pattern="[A-Za-z]{2}"
+                            maxLength={2}
+                            required={hasInvoiceFundingAddress}
+                          />
+                        </label>
+                        <label className="text-xs text-base-content/55">
+                          Postal code
+                          <input
+                            className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                            value={billingProfile.billingPostalCode}
+                            onChange={event =>
+                              setBillingProfile(current => ({ ...current, billingPostalCode: event.target.value }))
+                            }
+                            maxLength={32}
+                            autoComplete="postal-code"
+                            required={hasInvoiceFundingAddress}
+                          />
+                        </label>
+                        <label className="text-xs text-base-content/55 sm:col-span-2">
+                          Address line 1
+                          <input
+                            className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                            value={billingProfile.billingAddressLine1}
+                            onChange={event =>
+                              setBillingProfile(current => ({ ...current, billingAddressLine1: event.target.value }))
+                            }
+                            maxLength={200}
+                            autoComplete="address-line1"
+                            required={hasInvoiceFundingAddress}
+                          />
+                        </label>
+                        <label className="text-xs text-base-content/55 sm:col-span-2">
+                          Address line 2 <span className="text-base-content/35">(optional)</span>
+                          <input
+                            className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                            value={billingProfile.billingAddressLine2}
+                            onChange={event =>
+                              setBillingProfile(current => ({ ...current, billingAddressLine2: event.target.value }))
+                            }
+                            maxLength={200}
+                            autoComplete="address-line2"
+                          />
+                        </label>
+                        <label className="text-xs text-base-content/55">
+                          City
+                          <input
+                            className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                            value={billingProfile.billingCity}
+                            onChange={event =>
+                              setBillingProfile(current => ({ ...current, billingCity: event.target.value }))
+                            }
+                            maxLength={120}
+                            autoComplete="address-level2"
+                            required={hasInvoiceFundingAddress}
+                          />
+                        </label>
+                        <label className="text-xs text-base-content/55">
+                          State or region <span className="text-base-content/35">(optional)</span>
+                          <input
+                            className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                            value={billingProfile.billingState}
+                            onChange={event =>
+                              setBillingProfile(current => ({ ...current, billingState: event.target.value }))
+                            }
+                            maxLength={120}
+                            autoComplete="address-level1"
+                          />
+                        </label>
                         <label className="text-xs text-base-content/55">
                           VAT country <span className="text-base-content/35">(optional)</span>
                           <input
@@ -604,13 +1063,17 @@ export function WorkspaceSettingsClient() {
             </section>
 
             {selected ? (
-              <section aria-labelledby="panel-funding" className="mt-5 rounded-xl border border-white/10 p-5">
+              <section
+                id="panel-funding"
+                aria-labelledby="panel-funding-heading"
+                className="mt-5 rounded-xl border border-white/10 p-5"
+              >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">
                       Separate from subscription billing
                     </p>
-                    <h2 id="panel-funding" className="mt-2 text-xl font-semibold">
+                    <h2 id="panel-funding-heading" className="mt-2 text-xl font-semibold">
                       Panel funding
                     </h2>
                   </div>
@@ -618,7 +1081,7 @@ export function WorkspaceSettingsClient() {
                     How panel costs work
                   </Link>
                 </div>
-                <div className="mt-5 grid grid-cols-3 gap-2 border-t border-white/10 pt-4 text-center">
+                <div className="mt-5 grid gap-3 border-t border-white/10 pt-4 text-center sm:grid-cols-3">
                   <div>
                     <span className="block text-lg font-semibold">${usdc(selected.prepaid.settledAtomic)}</span>
                     <span className="text-xs text-base-content/45">Settled USDC</span>
@@ -632,6 +1095,414 @@ export function WorkspaceSettingsClient() {
                     <span className="text-xs text-base-content/45">Available USDC</span>
                   </div>
                 </div>
+                {canManageTopups && topups?.enabled ? (
+                  <form
+                    className="mt-5 flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row"
+                    onSubmit={createTopup}
+                  >
+                    <div className="grow text-xs text-base-content/55">
+                      <label htmlFor="workspace-prepaid-topup-amount">Add prepaid balance by USD invoice</label>
+                      <div className="mt-1.5 flex rounded-lg border border-white/10 bg-[var(--rateloop-field)]">
+                        <span className="px-3 py-2.5 text-base-content/45">$</span>
+                        <input
+                          id="workspace-prepaid-topup-amount"
+                          className="min-w-0 grow bg-transparent px-1 py-2.5 outline-none"
+                          value={topupAmount}
+                          onChange={event => setTopupAmount(event.target.value)}
+                          inputMode="decimal"
+                          pattern="\d{1,6}(\.\d{1,2})?"
+                          placeholder="500.00"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <button className="rateloop-gradient-action min-h-10 self-end px-4" disabled={topupBusy}>
+                      {topupBusy ? "Creating invoice…" : "Create invoice"}
+                    </button>
+                  </form>
+                ) : canManageTopups && topups ? (
+                  <p className="mt-4 text-xs leading-5 text-base-content/45">
+                    USD invoice funding is not enabled for this deployment.
+                  </p>
+                ) : canManageTopups && !topupError ? (
+                  <p className="mt-4 text-xs leading-5 text-base-content/45" role="status">
+                    Loading prepaid funding…
+                  </p>
+                ) : !canManageTopups ? (
+                  <p className="mt-4 text-xs leading-5 text-base-content/45">
+                    Workspace owners and billing members can add prepaid balance.
+                  </p>
+                ) : null}
+                {topupError ? (
+                  <p className="mt-3 text-sm text-red-100" role="alert">
+                    {topupError}
+                  </p>
+                ) : null}
+                {topups?.topups.length ? (
+                  <div className="mt-5 border-t border-white/10 pt-4">
+                    <h3 className="text-sm font-semibold">Top-up invoices</h3>
+                    <ul className="mt-3 space-y-2">
+                      {topups.topups.map(topup => (
+                        <li
+                          key={topup.topupId}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-base-content/[0.035] px-3 py-2 text-xs"
+                        >
+                          <span>
+                            ${topup.amountUsd} · <span className="capitalize">{topup.state}</span>
+                            {topup.invoiceNumber ? ` · ${topup.invoiceNumber}` : ""}
+                          </span>
+                          {topup.hostedInvoiceUrl || topup.invoicePdfUrl ? (
+                            <a
+                              className="font-semibold underline underline-offset-4"
+                              href={topup.hostedInvoiceUrl ?? topup.invoicePdfUrl ?? undefined}
+                              rel="noreferrer"
+                              target="_blank"
+                            >
+                              {topup.state === "credited" ? "View invoice" : "Open invoice"}
+                            </a>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {topups?.ledger.length || topups?.reservations.length ? (
+                  <details className="mt-4 rounded-lg border border-white/10 p-3">
+                    <summary className="cursor-pointer text-sm font-semibold">Balance ledger</summary>
+                    <ul className="mt-3 space-y-2 text-xs text-base-content/60">
+                      {topups.ledger.map(entry => (
+                        <li className="flex justify-between gap-3" key={entry.entryId}>
+                          <span>{entry.source.replaceAll("_", " ")}</span>
+                          <span className="font-mono">{signedUsdc(entry.amountAtomic)}</span>
+                        </li>
+                      ))}
+                      {topups.reservations.map(reservation => (
+                        <li className="flex justify-between gap-3" key={reservation.reservationId}>
+                          <span className="capitalize">{reservation.status} reservation</span>
+                          <span className="font-mono">-${usdc(reservation.amountAtomic)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                ) : null}
+              </section>
+            ) : null}
+
+            {selected && canManageIdentity ? (
+              <section aria-labelledby="enterprise-identity" className="mt-5 rounded-xl border border-white/10 p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">
+                      Access control
+                    </p>
+                    <h2 id="enterprise-identity" className="mt-2 text-xl font-semibold">
+                      Enterprise identity
+                    </h2>
+                  </div>
+                  <button
+                    className="btn rateloop-secondary-action min-h-10 px-4"
+                    type="button"
+                    aria-expanded={showIdentity}
+                    onClick={() => void toggleIdentitySettings()}
+                  >
+                    {showIdentity ? "Close" : "Configure SSO and SCIM"}
+                  </button>
+                </div>
+                {showIdentity ? (
+                  <div className="mt-5 space-y-5 border-t border-white/10 pt-5">
+                    {identity && !identity.enabled ? (
+                      <p className="rounded-lg border border-white/10 bg-white/[0.02] p-4 text-sm text-base-content/60">
+                        Enterprise identity is not enabled for this deployment.
+                      </p>
+                    ) : null}
+                    {identity?.enabled ? (
+                      <>
+                        {identityToken ? (
+                          <div className="rounded-lg border border-amber-300/25 bg-amber-300/[0.06] p-3">
+                            <p className="text-xs font-semibold text-amber-50">
+                              {identityEndpoint
+                                ? "Copy this SCIM bearer token now"
+                                : "Publish this domain verification token"}
+                            </p>
+                            <code className="mt-2 block break-all rounded bg-black/25 p-2 text-xs">
+                              {identityToken}
+                            </code>
+                            {identityEndpoint ? (
+                              <>
+                                <p className="mt-2 break-all text-xs text-base-content/60">
+                                  SCIM Users endpoint: <code>{identityEndpoint}</code>
+                                </p>
+                                <p className="mt-2 text-xs text-base-content/50">
+                                  This bearer token is shown only once.
+                                </p>
+                              </>
+                            ) : (
+                              <p className="mt-2 text-xs text-base-content/50">
+                                Add this value to the DNS TXT record requested by your identity provider.
+                              </p>
+                            )}
+                          </div>
+                        ) : null}
+                        {identity.providers.map(provider => (
+                          <article className="rounded-lg border border-white/10 p-4" key={provider.providerId}>
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <h3 className="font-semibold">{provider.domain}</h3>
+                                <p className="mt-1 text-xs uppercase tracking-wide text-base-content/45">
+                                  {provider.protocol} ·{" "}
+                                  {provider.domainVerified ? "domain verified" : "verification required"}
+                                </p>
+                              </div>
+                              <label className="flex items-center gap-2 text-xs text-base-content/65">
+                                <input
+                                  type="checkbox"
+                                  className="toggle toggle-sm"
+                                  checked={provider.enforceSso}
+                                  disabled={identityBusy || !provider.domainVerified}
+                                  onChange={event =>
+                                    void identityProviderAction(provider.providerId, "enforce", event.target.checked)
+                                  }
+                                />
+                                SSO-only
+                              </label>
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-3 text-xs">
+                              {!provider.domainVerified ? (
+                                <>
+                                  <button
+                                    className="font-semibold underline underline-offset-4"
+                                    disabled={identityBusy}
+                                    onClick={() =>
+                                      void identityProviderAction(provider.providerId, "request-verification")
+                                    }
+                                    type="button"
+                                  >
+                                    Get TXT token
+                                  </button>
+                                  <button
+                                    className="font-semibold underline underline-offset-4"
+                                    disabled={identityBusy}
+                                    onClick={() => void identityProviderAction(provider.providerId, "verify")}
+                                    type="button"
+                                  >
+                                    Check DNS
+                                  </button>
+                                </>
+                              ) : null}
+                              <button
+                                className="underline underline-offset-4"
+                                disabled={identityBusy}
+                                onClick={() =>
+                                  setIdentityForm({
+                                    providerId: provider.providerId,
+                                    protocol: provider.protocol,
+                                    domain: provider.domain,
+                                    issuer: "",
+                                    clientId: "",
+                                    clientSecret: "",
+                                    entryPoint: "",
+                                    certificate: "",
+                                  })
+                                }
+                                type="button"
+                              >
+                                Update
+                              </button>
+                              <button
+                                className="text-red-200 underline underline-offset-4"
+                                disabled={identityBusy}
+                                onClick={() => void identityProviderAction(provider.providerId, "delete")}
+                                type="button"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </article>
+                        ))}
+                        <form className="rounded-lg border border-white/10 p-4" onSubmit={saveIdentityProvider}>
+                          <h3 className="font-semibold">
+                            {identityForm.providerId ? "Update identity provider" : "Add identity provider"}
+                          </h3>
+                          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                            <label className="text-xs text-base-content/55">
+                              Protocol
+                              <select
+                                className="select mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                                value={identityForm.protocol}
+                                disabled={Boolean(identityForm.providerId)}
+                                onChange={event =>
+                                  setIdentityForm(current => ({
+                                    ...current,
+                                    protocol: event.target.value as "oidc" | "saml",
+                                  }))
+                                }
+                              >
+                                <option value="oidc">OpenID Connect</option>
+                                <option value="saml">SAML 2.0</option>
+                              </select>
+                            </label>
+                            <label className="text-xs text-base-content/55">
+                              Email domain
+                              <input
+                                className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                                value={identityForm.domain}
+                                onChange={event =>
+                                  setIdentityForm(current => ({ ...current, domain: event.target.value }))
+                                }
+                                placeholder="company.example"
+                                required
+                              />
+                            </label>
+                            <label className="text-xs text-base-content/55 sm:col-span-2">
+                              Issuer URL
+                              <input
+                                className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                                type="url"
+                                value={identityForm.issuer}
+                                onChange={event =>
+                                  setIdentityForm(current => ({ ...current, issuer: event.target.value }))
+                                }
+                                placeholder="https://id.company.example"
+                                required={!identityForm.providerId}
+                              />
+                            </label>
+                            {identityForm.protocol === "oidc" ? (
+                              <>
+                                <label className="text-xs text-base-content/55">
+                                  Client ID
+                                  <input
+                                    className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                                    value={identityForm.clientId}
+                                    onChange={event =>
+                                      setIdentityForm(current => ({ ...current, clientId: event.target.value }))
+                                    }
+                                    required={!identityForm.providerId}
+                                  />
+                                </label>
+                                <label className="text-xs text-base-content/55">
+                                  Client secret
+                                  <input
+                                    className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                                    type="password"
+                                    autoComplete="new-password"
+                                    value={identityForm.clientSecret}
+                                    onChange={event =>
+                                      setIdentityForm(current => ({ ...current, clientSecret: event.target.value }))
+                                    }
+                                    required={!identityForm.providerId}
+                                  />
+                                </label>
+                              </>
+                            ) : (
+                              <>
+                                <label className="text-xs text-base-content/55 sm:col-span-2">
+                                  SSO entry point
+                                  <input
+                                    className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                                    type="url"
+                                    value={identityForm.entryPoint}
+                                    onChange={event =>
+                                      setIdentityForm(current => ({ ...current, entryPoint: event.target.value }))
+                                    }
+                                    required={!identityForm.providerId}
+                                  />
+                                </label>
+                                <label className="text-xs text-base-content/55 sm:col-span-2">
+                                  Signing certificate
+                                  <textarea
+                                    className="textarea mt-1.5 min-h-24 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)] font-mono text-xs"
+                                    value={identityForm.certificate}
+                                    onChange={event =>
+                                      setIdentityForm(current => ({ ...current, certificate: event.target.value }))
+                                    }
+                                    required={!identityForm.providerId}
+                                  />
+                                </label>
+                              </>
+                            )}
+                          </div>
+                          <div className="mt-4 flex flex-wrap gap-3">
+                            <button
+                              className="rateloop-gradient-action min-h-10 px-4"
+                              disabled={identityBusy || !identityFormDirty}
+                            >
+                              {identityForm.providerId ? "Save provider" : "Add provider"}
+                            </button>
+                            {identityForm.providerId ? (
+                              <button
+                                className="btn rateloop-secondary-action min-h-10 px-4"
+                                type="button"
+                                onClick={() =>
+                                  setIdentityForm(current => ({
+                                    ...current,
+                                    providerId: "",
+                                    domain: "",
+                                    issuer: "",
+                                    clientId: "",
+                                    clientSecret: "",
+                                    entryPoint: "",
+                                    certificate: "",
+                                  }))
+                                }
+                              >
+                                Cancel
+                              </button>
+                            ) : null}
+                          </div>
+                        </form>
+                        <div className="rounded-lg border border-white/10 p-4">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <h3 className="font-semibold">SCIM user provisioning</h3>
+                              <p className="mt-1 text-xs leading-5 text-base-content/45">
+                                Users are provisioned into this workspace only. SCIM Groups are not supported.
+                              </p>
+                            </div>
+                            {identity?.scim.length ? null : (
+                              <button
+                                className="btn rateloop-secondary-action min-h-9 px-3"
+                                disabled={identityBusy}
+                                onClick={() => void scimAction()}
+                                type="button"
+                              >
+                                Create SCIM token
+                              </button>
+                            )}
+                          </div>
+                          {identity?.scim.map(connection => (
+                            <div
+                              className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs"
+                              key={connection.providerId}
+                            >
+                              <span>
+                                Last sync: {dateLabel(connection.lastSyncAt)} ·{" "}
+                                {connection.lastSyncResult ?? "not used"}
+                              </span>
+                              <button
+                                className="text-red-200 underline underline-offset-4"
+                                disabled={identityBusy}
+                                onClick={() => void scimAction(connection.providerId)}
+                                type="button"
+                              >
+                                Revoke token
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : null}
+                    {identityBusy ? (
+                      <p className="text-sm text-base-content/50" role="status">
+                        Updating enterprise identity…
+                      </p>
+                    ) : null}
+                    {identityError ? (
+                      <p className="text-sm text-red-100" role="alert">
+                        {identityError}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
               </section>
             ) : null}
           </>
