@@ -62,6 +62,9 @@ function ApprovalCard({
           <h3 id={`approval-heading-${approval.approvalId}`} className="mt-1 text-lg font-semibold">
             {request.question.criterion}
           </h3>
+          {request.question.questionAuthority === "agent_per_request" ? (
+            <p className="mt-2 text-xs font-medium text-[var(--rateloop-yellow)]">Agent-written feedback question</p>
+          ) : null}
         </div>
         <Badge className="self-start capitalize">{approval.status}</Badge>
       </div>
@@ -130,6 +133,12 @@ function ApprovalCard({
               {request.question.rationaleMode}
             </dd>
           </div>
+          {request.question.questionHash ? (
+            <div>
+              <dt className="text-base-content/45">Question commitment</dt>
+              <dd className="mt-1 break-all font-mono">{request.question.questionHash}</dd>
+            </div>
+          ) : null}
           <div>
             <dt className="text-base-content/45">Agent version</dt>
             <dd className="mt-1 break-all font-mono">

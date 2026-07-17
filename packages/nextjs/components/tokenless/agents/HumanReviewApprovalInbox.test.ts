@@ -19,6 +19,8 @@ test("approval inbox shows frozen terms and submits optimistic approve or reject
     "Material",
     "Expires",
     "Frozen terms and provenance",
+    "Agent-written feedback question",
+    "Question commitment",
     "Source commitment",
     "Suggestion commitment",
   ]) {

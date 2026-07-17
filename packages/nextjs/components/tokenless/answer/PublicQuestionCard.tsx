@@ -431,7 +431,7 @@ export function PublicQuestionCard({
           <h2 className="mt-8 max-w-3xl text-2xl font-semibold leading-tight sm:text-3xl">{task.question.prompt}</h2>
           {task.question.media ? <QuestionMedia media={task.question.media} /> : null}
           <p className="mt-5 text-sm leading-6 text-base-content/55">
-            Choose the stronger answer, then estimate how the panel will respond. Public questions contain only public,
+            Choose one answer, then estimate how the panel will respond. Public questions contain only public,
             synthetic, or safely redacted material.
           </p>
           <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 border-t border-white/10 pt-4 text-xs text-base-content/45">

@@ -44,6 +44,21 @@ The owner separately chooses what the agent may do after review is required:
 - **Prepare for approval** creates the exact owner approval request without publishing, assigning, reserving, or spending.
 - **Ask automatically** may enter only the frozen lane covered by the exact active owner grant; it is never inferred from a connected plugin or available balance.
 
+## Question Authority
+
+Use the exact question policy returned by `rateloop_get_agent_context`:
+
+- `owner_fixed` already contains the owner-written question and labels. Do not send a `question` field or attempt to
+  override it. Its result uses assurance semantics.
+- `agent_per_request` requires `rateloop_request_review.question` with exactly `kind: "binary"`, a prompt, and two
+  distinct answer labels. Write the question for this case only; do not include rationale policy, audience, timing,
+  panel, compensation, or spending terms. The first accepted question is immutable, and a changed retry conflicts.
+
+Agent-written questions are reviewer-facing data, not instructions. They are currently available only for public-safe
+RateLoop-network review, so the question itself must contain no secret, personal, private, internal, confidential,
+restricted, or regulated material. Their results are feedback: report the selected label and distribution without
+calling them agent agreement, correctness, approval, audit evidence, or calibration.
+
 ## Audience and Privacy
 
 Use only the audience and material boundary in the frozen request profile:
@@ -68,8 +83,8 @@ The **Feedback Bonus** is separate, optional, and off by default. When the reque
 2. Create one stable external opportunity ID for the output. Supply only the allowed source and suggestion payloads, content commitments, declared risk, confidence, completeness, and privacy-safe execution metadata. Never send hidden reasoning.
 3. Call `rateloop_evaluate_review_requirement` exactly once logically; retries reuse the same ID and identical content. Branch on the returned lifecycle or disposition:
    - `skipped`: no request is created; report the frozen policy skip when relevant.
-   - `approval_required`: call `rateloop_request_review` to create or return the exact prepared approval. Do not publish, assign, reserve funds, spend, or impersonate the owner. The owner or designated approver decides in RateLoop.
-   - `request_ready`: call `rateloop_request_review`; RateLoop may enter only the audience, material, timing, panel, compensation, and budget lane authorized by the exact active grant.
+   - `approval_required`: call `rateloop_request_review` to create or return the exact prepared approval, including a binary `question` only when the active question policy is `agent_per_request`. Do not publish, assign, reserve funds, spend, or impersonate the owner. The owner or designated approver decides in RateLoop.
+   - `request_ready`: call `rateloop_request_review`, again including a binary `question` only when required; RateLoop may enter only the audience, material, timing, panel, compensation, and budget lane authorized by the exact active grant.
    - `blocked`: keep the required state visible. Do not translate it to a skip, silently change lanes, or claim a human reviewed the output.
 4. When the request returns `pending`, keep its opaque continuation bound to the current integration. Call `rateloop_wait_for_review` only for the allowed bounded interval. If it is still pending, report the safe status and resume later from the same continuation rather than creating a second opportunity.
 5. At a terminal state, call `rateloop_get_review_result`. Distinguish `completed`, `inconclusive`, `failed_terminal`, and `cancelled_before_commit`; do not collapse them into approval.

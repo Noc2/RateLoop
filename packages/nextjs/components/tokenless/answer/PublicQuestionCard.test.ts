@@ -38,3 +38,8 @@ test("an already reserved voucher retries the prepared device queue and waits fo
   assert.match(source, /Technical details/);
   assert.doesNotMatch(source, /Recovery secret/);
 });
+
+test("binary review instructions stay neutral for feedback questions", () => {
+  assert.match(source, /Choose one answer, then estimate how the panel will respond/);
+  assert.doesNotMatch(source, /Choose the stronger answer/);
+});
