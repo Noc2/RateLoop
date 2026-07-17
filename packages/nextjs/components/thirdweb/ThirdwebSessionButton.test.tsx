@@ -64,9 +64,9 @@ test("the signed-out control links to provider-neutral sign-in", () => {
 
 test("the compatibility entry point keeps the original compact RateLoop sign-in treatment", () => {
   assert.equal(RATELOOP_SIGN_IN_LABEL, "Sign In");
-  assert.match(RATELOOP_SIGN_IN_ACTION_CLASS, /h-10 min-h-10/);
+  assert.match(RATELOOP_SIGN_IN_ACTION_CLASS, /rateloop-sign-in-action/);
   assert.match(RATELOOP_SIGN_IN_ACTION_CLASS, /text-base font-bold/);
-  assert.doesNotMatch(RATELOOP_SIGN_IN_ACTION_CLASS, /text-sm|min-h-11/);
+  assert.doesNotMatch(RATELOOP_SIGN_IN_ACTION_CLASS, /text-sm|min-h-11|h-12|min-h-12/);
 
   const compact = renderToStaticMarkup(<RateLoopSignInAction />).replace(/\s+/g, " ");
   const filled = renderToStaticMarkup(<RateLoopSignInAction fill />).replace(/\s+/g, " ");

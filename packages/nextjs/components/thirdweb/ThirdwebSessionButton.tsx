@@ -7,7 +7,7 @@ import { type BrowserSessionResponse, logoutBrowserSession, readBrowserSession }
 export const RATELOOP_SIGN_IN_LABEL = "Sign In";
 export const RATELOOP_THIRDWEB_AUTO_CONNECT = false;
 export const RATELOOP_SIGN_IN_ACTION_CLASS =
-  "rateloop-gradient-action h-10 min-h-10 px-[0.9rem] text-base font-bold leading-none whitespace-nowrap";
+  "rateloop-gradient-action rateloop-sign-in-action px-[0.9rem] text-base font-bold leading-none whitespace-nowrap";
 
 export function RateLoopSignInAction({ fill = false }: { fill?: boolean }) {
   return (

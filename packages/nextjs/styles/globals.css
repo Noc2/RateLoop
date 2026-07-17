@@ -251,6 +251,11 @@
   transform: translateY(-1px);
 }
 
+.rateloop-sign-in-action {
+  height: 2.5rem;
+  min-height: 2.5rem;
+}
+
 .rateloop-gradient-notification {
   --rateloop-gradient-border-size: 1.25px;
   --rateloop-gradient-orbit-angle: 0deg;
