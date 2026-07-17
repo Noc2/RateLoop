@@ -4,6 +4,7 @@ import { useCallback, useReducer, useState } from "react";
 import { useRouter } from "next/navigation";
 import { WorkspaceDeletionPanel } from "../WorkspaceDeletionPanel";
 import { WorkspaceSettingsClient } from "../WorkspaceSettingsClient";
+import { WorkspaceStopBanner, WorkspaceStopPanel } from "../WorkspaceStopControl";
 import { AgentConnectionPanel } from "./AgentConnectionPanel";
 import { AgentHumanReviewEditor } from "./AgentHumanReviewEditor";
 import { AgentRegistryPanel } from "./AgentRegistryPanel";
@@ -84,6 +85,8 @@ export function AgentWorkspacePanels({
 
   return (
     <div className="space-y-5">
+      {/* Persistent across every agents tab while the workspace stop is engaged. */}
+      <WorkspaceStopBanner workspaceId={workspaceId} />
       {hasConnectedAgent ? (
         <AgentTabs active={resolvedTab} visibleTabs={visibleTabs} workspaceId={workspaceId} />
       ) : null}
@@ -112,6 +115,9 @@ export function AgentWorkspacePanels({
       ) : null}
 
       <div key={workspaceId} className="space-y-5">
+        {hasConnectedAgent && resolvedTab === "overview" && canManage ? (
+          <WorkspaceStopPanel workspaceId={workspaceId} />
+        ) : null}
         {hasConnectedAgent && resolvedTab === "overview" ? (
           <WorkspaceSettingsClient initialWorkspaceId={workspaceId} />
         ) : null}

@@ -837,6 +837,44 @@ export async function rotateHumanReviewContinuation(input: {
   }
 }
 
+/**
+ * Workspace-stop primitive: revokes every active continuation in a workspace
+ * inside the caller's transaction. Each revocation appends the standard
+ * `revoked` continuation event attributed to the continuation's bound
+ * credential; the initiating human actor is recorded by the caller in the
+ * workspace audit chain.
+ */
+export async function revokeWorkspaceHumanReviewContinuations(
+  client: PoolClient,
+  input: { workspaceId: string; reasonCode: string; now: Date },
+): Promise<number> {
+  const active = await client.query(
+    `SELECT * FROM tokenless_agent_review_continuations
+     WHERE workspace_id = $1 AND status = 'active' ORDER BY continuation_id ASC FOR UPDATE`,
+    [input.workspaceId],
+  );
+  for (const value of active.rows as Row[]) {
+    await client.query(
+      `UPDATE tokenless_agent_review_continuations
+       SET status = 'revoked', revoked_at = $1
+       WHERE continuation_id = $2 AND status = 'active'`,
+      [input.now, text(value, "continuation_id")],
+    );
+    await appendEvent(client, {
+      row: value,
+      type: "revoked",
+      credential: {
+        integrationId: text(value, "integration_id")!,
+        kind: text(value, "caller_credential_kind") as HumanReviewContinuationCredential["kind"],
+        id: text(value, "caller_credential_id")!,
+      },
+      reasonCode: input.reasonCode,
+      occurredAt: input.now,
+    });
+  }
+  return active.rows.length;
+}
+
 export async function revokeHumanReviewContinuation(input: {
   credential: HumanReviewContinuationCredential;
   token: string;

@@ -159,6 +159,7 @@ function routeFixture(frozen: FrozenHumanReviewRoutingContext) {
     },
   } satisfies TokenlessAskResponse;
   const dependencies: Parameters<typeof createHumanReviewRequestRouter>[0] = {
+    isWorkspaceStopped: async () => false,
     loadContext: async () => frozen,
     prepareApproval: async () => {
       calls.approval += 1;

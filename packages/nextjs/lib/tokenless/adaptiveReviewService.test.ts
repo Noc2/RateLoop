@@ -338,13 +338,14 @@ test("automatic disposition requires both an exact owner grant and a ready publi
     publishingPolicyId: "agpol_exact",
   };
   const policy = { publishingPolicyId: "agpol_exact" };
-  const disposition = (grantActive: boolean, networkPanelsEnabled: boolean) =>
+  const disposition = (grantActive: boolean, networkPanelsEnabled: boolean, workspaceStopped = false) =>
     __adaptiveReviewServiceTestUtils.initialLifecycleDisposition({
       decision: "required",
       binding: binding as never,
       policy: policy as never,
       grant: { active: grantActive, reason: grantActive ? "active_exact_owner_grant" : "owner_grant_inactive" },
       networkPanelsEnabled,
+      workspaceStopped,
     });
   assert.deepEqual(disposition(false, true), {
     state: "approval_required",
@@ -358,6 +359,11 @@ test("automatic disposition requires both an exact owner grant and a ready publi
     state: "request_ready",
     reason: "public_paid_lane_ready",
   });
+  // An engaged workspace stop fails everything closed before any lane logic.
+  assert.deepEqual(disposition(true, true, true), {
+    state: "blocked",
+    reason: "workspace_stopped",
+  });
   assert.deepEqual(
     __adaptiveReviewServiceTestUtils.initialLifecycleDisposition({
       decision: "required",
@@ -365,6 +371,7 @@ test("automatic disposition requires both an exact owner grant and a ready publi
       policy: policy as never,
       grant: { active: true, reason: "active_exact_owner_grant" },
       networkPanelsEnabled: true,
+      workspaceStopped: false,
     }),
     { state: "approval_required", reason: "owner_approval_required" },
   );

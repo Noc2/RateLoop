@@ -913,7 +913,14 @@ function initialLifecycleDisposition(input: {
   policy: ReviewPolicyRow;
   grant: IntegrationReviewGrant;
   networkPanelsEnabled: boolean;
+  workspaceStopped: boolean;
 }) {
+  if (input.workspaceStopped) {
+    // The workspace-wide stop control fails every new opportunity closed,
+    // including ones the policy would otherwise skip: no output may release
+    // while the stop is engaged.
+    return { state: "blocked" as const, reason: "workspace_stopped" };
+  }
   if (input.decision !== "required") {
     return { state: "skipped" as const, reason: "selection_skipped" };
   }
@@ -1386,6 +1393,11 @@ export async function evaluateAdaptiveReviewRequirement(input: {
       );
     }
     if (!opportunity) {
+      const stopState = await client.query(
+        "SELECT 1 FROM tokenless_workspace_stop_states WHERE workspace_id = $1 AND status = 'engaged' LIMIT 1",
+        [workspaceId],
+      );
+      const workspaceStopped = stopState.rows.length > 0;
       const decision = decisionForMode({ policy, request, scope, sampler });
       const disposition = initialLifecycleDisposition({
         decision: decision.decision,
@@ -1396,6 +1408,7 @@ export async function evaluateAdaptiveReviewRequirement(input: {
           decision.required && binding.authority === "ask_automatically" && grant.active
             ? isWorldIdAssuranceEnabled()
             : false,
+        workspaceStopped,
       });
       const status = projectedLegacyOpportunityStatus(disposition.state);
       const inserted = await client.query(

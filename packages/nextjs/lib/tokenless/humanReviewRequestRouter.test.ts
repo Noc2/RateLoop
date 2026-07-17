@@ -159,7 +159,7 @@ const foundation = {
 
 function dependencies(
   frozen: FrozenHumanReviewRoutingContext,
-  options: { privateBinding?: ExactPrivateReviewBinding | null } = {},
+  options: { privateBinding?: ExactPrivateReviewBinding | null; workspaceStopped?: boolean } = {},
 ) {
   const calls = {
     prepare: 0,
@@ -178,6 +178,7 @@ function dependencies(
     paidAssignmentInput: null as null | Record<string, unknown>,
   };
   const deps = {
+    isWorkspaceStopped: async () => options.workspaceStopped ?? false,
     loadContext: async () => frozen,
     prepareApproval: async () => {
       calls.prepare += 1;
@@ -287,6 +288,28 @@ const publicMaterial = {
     confirmedNoSensitiveData: true as const,
   },
 };
+
+test("an engaged workspace stop blocks every release path before any preparation or delivery side effect", async () => {
+  const { calls, router } = dependencies(context(), { workspaceStopped: true });
+  const result = await router({
+    principal,
+    opportunityId: "opportunity_router",
+    sourcePayload: "source",
+    suggestionPayload: "suggestion",
+    now: NOW,
+  });
+  assert.equal(result.action, "blocked");
+  assert.equal(result.action === "blocked" && result.code, "workspace_stopped");
+  assert.equal(result.action === "blocked" && result.retryable, true);
+  assert.deepEqual(result.sideEffects, {
+    prepared: false,
+    published: false,
+    assigned: false,
+    fundsReserved: false,
+    spent: false,
+  });
+  assert.deepEqual(calls.order, []);
+});
 
 test("check-only returns the recorded requirement without any preparation or delivery side effect", async () => {
   const { calls, router } = dependencies(context({ authority: "check_only" }));

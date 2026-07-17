@@ -10,6 +10,7 @@ import {
   consumeHumanReviewContinuation,
   issueHumanReviewContinuation,
   revokeHumanReviewContinuation,
+  revokeWorkspaceHumanReviewContinuations,
   rotateHumanReviewContinuation,
 } from "~~/lib/tokenless/humanReviewContinuations";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -468,5 +469,71 @@ test("OAuth bindings are exact and terminal states return no polling continuatio
   for (const row of events.rows) {
     assert.match(String(row.event_commitment), /^sha256:[0-9a-f]{64}$/u);
     assert.match(String(row.actor_credential_commitment), /^sha256:[0-9a-f]{64}$/u);
+  }
+});
+
+test("a workspace stop revokes every active continuation in one workspace and appends revoked events", async () => {
+  const api = await issueHumanReviewContinuation({
+    credential: API_CREDENTIAL,
+    opportunityId: "opp_api",
+    lifecycleRevision: 2,
+    allowedNextOperation: "request_review",
+    issuanceKey: "issue:opp_api:stop",
+    now: NOW,
+  });
+  const oauth = await issueHumanReviewContinuation({
+    credential: OAUTH_CREDENTIAL,
+    opportunityId: "opp_oauth",
+    lifecycleRevision: 4,
+    allowedNextOperation: "wait_for_review",
+    issuanceKey: "issue:opp_oauth:stop",
+    now: NOW,
+  });
+  assert.ok(api.continuation && oauth.continuation);
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const revoked = await revokeWorkspaceHumanReviewContinuations(client, {
+      workspaceId: "ws_api",
+      reasonCode: "workspace_stop_engaged",
+      now: new Date(NOW.getTime() + 1_000),
+    });
+    await client.query("COMMIT");
+    assert.equal(revoked, 1);
+  } finally {
+    client.release();
+  }
+
+  const statuses = await pool.query(
+    "SELECT workspace_id,status FROM tokenless_agent_review_continuations ORDER BY workspace_id",
+  );
+  assert.deepEqual(
+    statuses.rows.map(row => `${row.workspace_id}:${row.status}`),
+    ["ws_api:revoked", "ws_oauth:active"],
+  );
+  const events = await pool.query(
+    `SELECT workspace_id,event_type,reason_code FROM tokenless_agent_review_continuation_events
+     WHERE event_type = 'revoked'`,
+  );
+  assert.equal(events.rows.length, 1);
+  assert.equal(events.rows[0]?.workspace_id, "ws_api");
+  assert.equal(events.rows[0]?.reason_code, "workspace_stop_engaged");
+
+  // Idempotent: a second stop finds nothing active to revoke.
+  const again = await pool.connect();
+  try {
+    await again.query("BEGIN");
+    assert.equal(
+      await revokeWorkspaceHumanReviewContinuations(again, {
+        workspaceId: "ws_api",
+        reasonCode: "workspace_stop_engaged",
+        now: new Date(NOW.getTime() + 2_000),
+      }),
+      0,
+    );
+    await again.query("COMMIT");
+  } finally {
+    again.release();
   }
 });

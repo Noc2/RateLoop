@@ -37,6 +37,7 @@ import {
   qualificationProvenanceSatisfiesExpertise,
 } from "~~/lib/tokenless/reviewerExpertise";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import { isWorkspaceStopEngaged } from "~~/lib/tokenless/workspaceStopControl";
 
 type Row = Record<string, unknown>;
 type IntegrationPrincipal = Extract<AgentMcpPrincipal, { kind: "integration" }>;
@@ -190,12 +191,13 @@ export type HumanReviewRoutingResult =
       opportunityId: string;
       authority: HumanReviewAuthorityLevel;
       lane: HumanReviewLane;
-      code: "automatic_grant_inactive" | "lane_not_implemented" | "private_routing_configuration_required";
+      code: "automatic_grant_inactive" | "lane_not_implemented" | "private_routing_configuration_required" | "workspace_stopped";
       retryable: boolean;
       sideEffects: { prepared: false; published: false; assigned: false; fundsReserved: false; spent: false };
     };
 
 type RouterDependencies = {
+  isWorkspaceStopped?: (workspaceId: string) => Promise<boolean>;
   loadContext: (
     principal: IntegrationPrincipal,
     opportunityId: string,
@@ -806,6 +808,7 @@ async function ensureRoutingFeedbackBonus(
 }
 
 const DEFAULT_DEPENDENCIES: RouterDependencies = {
+  isWorkspaceStopped: isWorkspaceStopEngaged,
   loadContext: loadFrozenContext,
   prepareApproval: prepareHumanReviewForOwnerApproval,
   publishPublicPaid: requestPublicPaidHumanReview,
@@ -831,6 +834,17 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
       authority: context.binding.authority,
       lane: context.requestProfile.lane,
     };
+    if (await (dependencies.isWorkspaceStopped ?? isWorkspaceStopEngaged)(context.workspaceId)) {
+      // The workspace stop control halts every review-triggered release path
+      // until a manager releases the stop and re-grants agents individually.
+      return {
+        ...common,
+        action: "blocked",
+        code: "workspace_stopped",
+        retryable: true,
+        sideEffects: NO_SIDE_EFFECTS,
+      };
+    }
     if (context.decision !== "required") {
       return { ...common, action: "no_review_required", sideEffects: NO_SIDE_EFFECTS };
     }
