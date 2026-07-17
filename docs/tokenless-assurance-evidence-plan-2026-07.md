@@ -20,11 +20,16 @@ disagreement, available cost/settlement references, and how review coverage adap
 regulators, insurers, and GRC tooling can consume. No single packet is claimed to contain every field from that combined
 evidence set.
 
-**What RateLoop never claims:** to be the customer's EU AI Act Article 14/26 human oversight (oversight must
-be assigned to the deployer's own natural persons with "competence, training and authority" —
-[official Article 26 text](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-26)); to verify what model actually produced an
-output (execution provenance is host-reported and labelled so); to make anyone "compliant" by itself; or to
-market SOC 2 / ISO / HIPAA / residency attestations RateLoop does not hold (per the readiness register).
+**What RateLoop never claims:** to verify what model actually produced an output (execution provenance is
+host-reported and labelled so); to make anyone "compliant" by itself; or to market SOC 2 / ISO / HIPAA /
+residency attestations RateLoop does not hold (per the readiness register). On Article 14/26 human oversight
+the framing is shared responsibility, per the
+[human-oversight plan](tokenless-human-oversight-plan-2026-07.md): oversight is performed by the deployer's
+own natural persons with "competence, training and authority"
+([official Article 26 text](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-26)) — in the invited
+lane those persons are the customer's personnel, and RateLoop is the instrument they use to monitor,
+interpret, override, and stop, plus the evidence of each step. RateLoop itself is never the oversight, and
+the anonymous public network does not by itself discharge Article 26(2).
 
 This split is not defensive fine print — it is the sales pitch. Auditors reject policy-only oversight and ask
 for operating evidence: intervention/override logs, escalation-trigger definitions, reviewer competence
@@ -221,8 +226,11 @@ public claim must match the deployed system exactly.
    Merkle/recomputation, source-derived settlement references where present, Rekor/TSA witness evidence once exercised);
    the compliance map table (artifact ↔
    ISO 42001 A.6/A.9.2 · EU AI Act Art. 12/26/72/73 · NIST AI RMF MEASURE/MANAGE · FINRA 24-09 · 17a-4)
-   with correct citations; and a prominent **"What this is not"** box (the §1 non-claims, verbatim). This is
-   product documentation of exact behavior — permitted and expected — not a trust-status page.
+   with correct citations; and a prominent **"What this is not"** box (the §1 non-claims, verbatim). The box
+   was later replaced by the shared-responsibility matrix per the
+   [human-oversight plan](tokenless-human-oversight-plan-2026-07.md) O2.1; the remaining true non-claims stay
+   as ordinary factual sentences. This is product documentation of exact behavior — permitted and expected —
+   not a trust-status page.
 2. **Machine-doc mirror** `public/docs/evidence.md` for agent consumption, linked from the connection-intent
    documentation pointer like `agent-connection.md`.
 3. **Cross-link updates:** the existing "5. Evidence, not an automatic decision" section of
@@ -235,7 +243,9 @@ public claim must match the deployed system exactly.
 4. **Implemented:** one new `whyItWorksFeatures` card in section 03 ("Why It Works"): *"Evidence your auditors can
    check"* — tracing review policy, human judgments, coverage, and available settlement references — chip-linking to
    `/docs/evidence`. This deliberately narrower copy does not imply that production signing or offline-verifier
-   capability gates have passed.
+   capability gates have passed. The card was later retitled *"Human oversight, operationalized"* with the
+   shared-responsibility line and a `/docs/human-oversight` chip, per the
+   [human-oversight plan](tokenless-human-oversight-plan-2026-07.md) O2.3.
 5. **Intentionally deferred:** a dedicated section ("0X — Evidence, Not **Trust**") between How-It-Works and
    Why-It-Works using the existing card/rail idiom: three cards — *Decision packets* (signed, recomputable),
    *Tamper-evident by construction* (hash chain + external anchors), *Fits your compliance stack*

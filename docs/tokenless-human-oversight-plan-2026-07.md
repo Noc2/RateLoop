@@ -1,12 +1,14 @@
 # Human-oversight positioning and capability plan (July 2026)
 
-**Status:** plan to reposition RateLoop from "evidence layer that disclaims oversight" to **the instrument a
-deployer's own people use to perform EU AI Act human oversight** — and to close the product gaps that make
-the positive claims true before the website says them. This supersedes the negative-first framing of the
-"What this is not" box on [/docs/evidence](../packages/nextjs/app/(public)/docs/evidence/page.tsx) (and its
-machine mirror) with a shared-responsibility model. It refines, not contradicts, the
+**Status:** implementation record. RateLoop is repositioned from "evidence layer that disclaims oversight" to
+**the instrument a deployer's own people use to perform EU AI Act human oversight**, with the product gaps
+closed before the website said it. The negative-first "What this is not" box on
+[/docs/evidence](../packages/nextjs/app/(public)/docs/evidence/page.tsx) (and its machine mirror) is replaced
+by the shared-responsibility model, `/docs/human-oversight` maps each Article 14(4) measure to its capability,
+and the landing page leads with the oversight card and FAQ — all shipped on this branch for the tokenless
+preview. This refines, not contradicts, the
 [assurance-evidence plan](tokenless-assurance-evidence-plan-2026-07.md): the claims-match discipline stays;
-what changes is which claims become true and how they are framed. Research inputs current as of 2026-07-17;
+what changed is which claims became true and how they are framed. Research inputs current as of 2026-07-17;
 repository facts re-verified on this branch.
 
 ## 1. Why the repositioning is legitimate
@@ -38,7 +40,10 @@ repository facts re-verified on this branch.
   deployment meets a legal requirement depends on your system, context, and organization — you configure and
   operate RateLoop for your purpose; RateLoop provides the capabilities and the evidence."*
 
-## 2. Capability status against Article 14(4) and 26 (re-verified on this branch)
+## 2. Capability status against Article 14(4) and 26 (pre-implementation baseline)
+
+This table records the state before workstream O1; the O1 commits on this branch (`oversight: attest oversight
+designations` through `compliance: map incidents to the Article 73 template`) closed the listed gaps.
 
 | Requirement | Status today | Biggest gap |
 | --- | --- | --- |
@@ -122,28 +127,31 @@ Ordering rule: each copy change ships in the same release as, never before, its 
 
 ## 5. Claims gate table
 
-| Public phrase | May ship when |
-| --- | --- |
-| "Human-oversight platform for AI agent outputs" (Rung 1) | Now |
-| "Designed for teams preparing for EU AI Act Articles 14/26" (Rung 2) | With the /docs/human-oversight mapping page |
-| "Helps deployers implement and evidence Article 14(3)(b)/26 oversight measures" (Rung 3) | O1 items 1–3 deployed (oversight persons + stop control + override records) |
-| "Independent blinded panels and override metrics counter automation bias" (Rung 4b) | O1 item 7 |
-| "Every override is recorded with reasons" (Rung 4d) | O1 item 3 |
-| "Output held in a safe state until a human decides; workspace stop interrupts everything" (Rung 4e) | O1 item 2 + gate semantics doc |
-| "Exportable assignment, training, and literacy records" (Rung 4·26(2)/Art 4) | O1 items 1, 8 |
-| "Case-level proof that oversight occurred before the output shipped" (Rung 5) | WORM delivery exercised end-to-end |
-| "Compliant / certifies / satisfies Article 14 / presumption of conformity" | Never |
+| Public phrase | May ship when | Status |
+| --- | --- | --- |
+| "Human-oversight platform for AI agent outputs" (Rung 1) | Now | Shipped on this branch (tokenless preview) |
+| "Designed for teams preparing for EU AI Act Articles 14/26" (Rung 2) | With the /docs/human-oversight mapping page | Shipped on this branch (tokenless preview) |
+| "Helps deployers implement and evidence Article 14(3)(b)/26 oversight measures" (Rung 3) | O1 items 1–3 deployed (oversight persons + stop control + override records) | Shipped on this branch (tokenless preview) |
+| "Independent blinded panels and override metrics counter automation bias" (Rung 4b) | O1 item 7 | Shipped on this branch (tokenless preview) |
+| "Every override is recorded with reasons" (Rung 4d) | O1 item 3 | Shipped on this branch (tokenless preview) |
+| "Output held in a safe state until a human decides; workspace stop interrupts everything" (Rung 4e) | O1 item 2 + gate semantics doc | Shipped on this branch (tokenless preview) |
+| "Exportable assignment, training, and literacy records" (Rung 4·26(2)/Art 4) | O1 items 1, 8 | Shipped on this branch (tokenless preview) |
+| "Case-level proof that oversight occurred before the output shipped" (Rung 5) | WORM delivery exercised end-to-end | Still gated — WORM delivery not yet exercised |
+| "Compliant / certifies / satisfies Article 14 / presumption of conformity" | Never | Unchanged — permanent refusal |
 
 ## 6. Decisions and human tasks
 
 1. **Legal review before Rung 3+ copy publishes** — the phrasing above follows the market norm and avoids
    outcome claims, but article-specific marketing language should pass counsel review (human task, one
-   round).
+   round). **Decision:** deferred by owner decision for this test deployment; counsel review remains
+   required before any production publication of Rung 3+ copy.
 2. **Marketing tense** — with the Digital Omnibus deferring Annex III high-risk obligations to 2027-12-02,
    frame as "get oversight-ready" rather than deadline pressure; Article 4 literacy (in force, not deferred)
    is the honest near-term hook.
 3. **Naming** — whether the oversight designation reuses `decision_owner` or introduces `oversight_person`
-   (one-line owner decision; the plan works either way).
+   (one-line owner decision; the plan works either way). **Decision:** `decision_owner` is reused as the
+   oversight designation, extended with the attestation fields; no separate `oversight_person` role is
+   introduced.
 
 ## 7. Sequencing
 
