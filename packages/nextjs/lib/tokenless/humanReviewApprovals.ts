@@ -24,6 +24,9 @@ export type HumanReviewPreparedRequest = {
     positiveLabel: string;
     negativeLabel: string;
     rationaleMode: "off" | "optional" | "required";
+    questionHash?: string;
+    questionAuthority?: "owner_fixed" | "agent_per_request";
+    resultSemantics?: "assurance" | "feedback";
   };
   audience: {
     kind: "private_invited" | "public_network" | "hybrid";
@@ -202,15 +205,13 @@ function preparedRequest(value: unknown): HumanReviewPreparedRequest {
         } as const)
       : feedbackBonusEconomics(root.feedbackBonus);
   exactKeys(requestProfile, "request profile", ["id", "version", "hash"]);
-  exactKeys(question, "question", [
-    "criterion",
-    "positiveLabel",
-    "negativeLabel",
-    "rationaleMode",
-    "questionHash",
-    "questionAuthority",
-    "resultSemantics",
-  ]);
+  const questionKeys = ["criterion", "positiveLabel", "negativeLabel", "rationaleMode"];
+  const hasQuestionBinding =
+    question.questionHash !== undefined ||
+    question.questionAuthority !== undefined ||
+    question.resultSemantics !== undefined;
+  if (hasQuestionBinding) questionKeys.push("questionHash", "questionAuthority", "resultSemantics");
+  exactKeys(question, "question", questionKeys);
   const audienceKeys = ["kind", "contentBoundary", "privateSensitivity", "privateGroupId"];
   if (audience.requiredExpertiseKeys !== undefined) audienceKeys.push("requiredExpertiseKeys");
   exactKeys(audience, "audience", audienceKeys);
@@ -219,14 +220,20 @@ function preparedRequest(value: unknown): HumanReviewPreparedRequest {
   exactKeys(contentCommitments, "content commitments", ["source", "suggestion"]);
   exactKeys(provenance, "provenance", ["agentId", "agentVersionId", "selectionPolicyId", "selectionPolicyVersion"]);
   const rationaleMode = oneOf(question.rationaleMode, "rationale mode", ["off", "optional", "required"] as const);
-  const questionAuthority = oneOf(question.questionAuthority, "question authority", [
-    "owner_fixed",
-    "agent_per_request",
-  ] as const);
-  const resultSemantics = oneOf(question.resultSemantics, "result semantics", ["assurance", "feedback"] as const);
+  const questionBinding = hasQuestionBinding
+    ? {
+        questionHash: hash(question.questionHash, "question hash"),
+        questionAuthority: oneOf(question.questionAuthority, "question authority", [
+          "owner_fixed",
+          "agent_per_request",
+        ] as const),
+        resultSemantics: oneOf(question.resultSemantics, "result semantics", ["assurance", "feedback"] as const),
+      }
+    : null;
   if (
-    (questionAuthority === "owner_fixed" && resultSemantics !== "assurance") ||
-    (questionAuthority === "agent_per_request" && resultSemantics !== "feedback")
+    questionBinding &&
+    ((questionBinding.questionAuthority === "owner_fixed" && questionBinding.resultSemantics !== "assurance") ||
+      (questionBinding.questionAuthority === "agent_per_request" && questionBinding.resultSemantics !== "feedback"))
   ) {
     throw new Error("Stored question authority and result semantics are inconsistent.");
   }
@@ -282,9 +289,7 @@ function preparedRequest(value: unknown): HumanReviewPreparedRequest {
       positiveLabel,
       negativeLabel,
       rationaleMode,
-      questionHash: hash(question.questionHash, "question hash"),
-      questionAuthority,
-      resultSemantics,
+      ...(questionBinding ?? {}),
     },
     audience: {
       kind: audienceKind,

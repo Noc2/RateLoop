@@ -757,7 +757,7 @@ async function finalizePublicPaidAsk(input: {
        FROM tokenless_agent_review_opportunities o
        LEFT JOIN tokenless_agent_review_opportunity_questions q
          ON q.workspace_id=o.workspace_id AND q.opportunity_id=o.opportunity_id
-       WHERE o.workspace_id = $1 AND o.opportunity_id = $2 FOR UPDATE OF o`,
+       WHERE o.workspace_id = $1 AND o.opportunity_id = $2 FOR UPDATE`,
       [workspaceId, input.opportunity.opportunityId],
     );
     const row = opportunityResult.rows[0] as Row | undefined;
