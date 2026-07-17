@@ -66,10 +66,12 @@ Every customer-facing custody, privacy, identity, and settlement claim must matc
 4. **Evaluation.** The result updates evidence for the exact agent version, policy, workflow, risk tier, and reviewer
    audience. Evidence never becomes a global agent score.
 
-Review begins at 100%. Within the same scope, two independent 15-case windows with at least 14 comparable agreements
-may reduce baseline review to 50%; 50 more stable cases may reduce it to 25%; 100 more may reduce it to the 10%
-monitoring floor. A complete evidence window below threshold restores 100% calibration. High-risk rules and explicit
-owner requirements always override the adaptive baseline.
+Review begins at 100%. Within the same scope, two independent windows of at least 15 comparable cases may reduce the
+baseline to 50% only when each window's Wilson lower confidence bound meets the policy agreement threshold (7,000 bps
+by default), the completion, human-agreement, latency, and drift gates pass, no severe disagreement remains open, and
+at least 30 comparable cases have completed. Fifty more stable cases may reduce review to 25%; 100 more may reduce it
+to the 10% monitoring floor. A completed window that fails a reset gate restores 100% calibration. Critical-risk rules,
+the maximum-unreviewed gap, incomplete metadata, and explicit owner requirements always override the adaptive baseline.
 
 ## Workspace and agent setup
 
