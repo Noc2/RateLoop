@@ -69,21 +69,19 @@ test("owners can load and approve a prepared request", async () => {
   const userEvent = (await import("@testing-library/user-event")).default;
   const { HumanReviewApprovalInbox } = await import("./HumanReviewApprovalInbox");
   const requests: Array<{ input: string; init?: RequestInit }> = [];
-  let listCount = 0;
   const previousFetch = globalThis.fetch;
   globalThis.fetch = async (input, init) => {
     requests.push({ input: String(input), init });
     if (init?.method === "PUT") return Response.json({ approval: { ...approval, status: "approved" } });
-    listCount += 1;
-    return Response.json({ approvals: listCount === 1 ? [approval] : [] });
+    return Response.json({ approvals: [approval] });
   };
 
   try {
     render(<HumanReviewApprovalInbox workspaceId="workspace one" />);
-    const approve = await screen.findByRole("button", { name: "Approve request" });
+    const approve = await screen.findByRole("button", { name: "Approve" });
     assert.equal(screen.getByText("Is this release ready?").textContent, "Is this release ready?");
     await userEvent.setup().click(approve);
-    await waitFor(() => assert.ok(screen.getByText("No requests need approval")));
+    await waitFor(() => assert.ok(screen.getByText("Approved and ready for the request adapter.")));
 
     const mutation = requests.find(request => request.init?.method === "PUT");
     assert.ok(mutation);
@@ -95,6 +93,7 @@ test("owners can load and approve a prepared request", async () => {
       decision: "approve",
       note: null,
     });
+    assert.equal(requests.filter(request => request.init?.method !== "PUT").length, 1);
   } finally {
     cleanup();
     globalThis.fetch = previousFetch;

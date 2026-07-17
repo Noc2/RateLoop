@@ -1,6 +1,9 @@
 import {
+  agentTabHref,
   connectedAgentTabs,
   isUsableAgentConnection,
+  nextAgentTabIndex,
+  resolveAgentTabParam,
   resolveAvailableAgentTab,
   selectRequestedWorkspace,
 } from "./agentWorkspaceState";
@@ -9,6 +12,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const panelsSource = readFileSync(new URL("./AgentWorkspacePanels.tsx", import.meta.url), "utf8");
+const tabsSource = readFileSync(new URL("./AgentTabs.tsx", import.meta.url), "utf8");
+const editorSource = readFileSync(new URL("./AgentHumanReviewEditor.tsx", import.meta.url), "utf8");
 const pageSource = readFileSync(new URL("../../../app/(app)/agents/page.tsx", import.meta.url), "utf8");
 
 test("the requested accessible workspace wins and invalid requests fail closed to the first workspace", () => {
@@ -38,11 +43,26 @@ test("only active, connected, unexpired integrations complete onboarding", () =>
   );
 });
 
-test("connected navigation exposes only sections backed by relevant state", () => {
-  assert.deepEqual(connectedAgentTabs(), ["overview", "agents", "evidence"]);
-  assert.deepEqual(connectedAgentTabs({ hasGroups: true }), ["overview", "agents", "evidence", "groups"]);
-  assert.deepEqual(connectedAgentTabs({ hasEvaluations: true }), ["overview", "agents", "evidence", "evaluations"]);
-  assert.equal(resolveAvailableAgentTab("groups", connectedAgentTabs()), "agents");
+test("connected navigation splits the owner stack into URL-backed task tabs", () => {
+  assert.deepEqual(connectedAgentTabs(), ["overview", "connect", "inbox", "registry", "evaluations", "evidence"]);
+  assert.deepEqual(connectedAgentTabs({ canManage: false }), ["overview", "registry", "evaluations", "evidence"]);
+  assert.equal(resolveAvailableAgentTab("connect", connectedAgentTabs({ canManage: false })), "overview");
+  assert.equal(resolveAgentTabParam("agents"), "connect");
+  assert.equal(resolveAgentTabParam("groups"), "registry");
+  assert.equal(resolveAgentTabParam("unknown"), "overview");
+  assert.equal(agentTabHref("inbox", "workspace one"), "/agents?tab=inbox&workspace=workspace+one");
+});
+
+test("agent tabs use roving focus and arrow, Home, and End navigation", () => {
+  assert.equal(nextAgentTabIndex(0, "ArrowLeft", 6), 5);
+  assert.equal(nextAgentTabIndex(5, "ArrowRight", 6), 0);
+  assert.equal(nextAgentTabIndex(3, "Home", 6), 0);
+  assert.equal(nextAgentTabIndex(2, "End", 6), 5);
+  assert.match(tabsSource, /role="tablist"/);
+  assert.match(tabsSource, /role="tab"/);
+  assert.match(tabsSource, /aria-selected=/);
+  assert.match(tabsSource, /tabIndex=\{active === tab\.value \? 0 : -1\}/);
+  assert.match(panelsSource, /role="tabpanel"/);
 });
 
 test("the server resolves onboarding before the client renders downstream panels", () => {
@@ -50,10 +70,8 @@ test("the server resolves onboarding before the client renders downstream panels
   assert.match(pageSource, /selectRequestedWorkspace\(workspaces, requestedWorkspaceId\)/);
   assert.match(pageSource, /getWorkspaceAgentSetup\(/);
   assert.match(pageSource, /requestedStep/);
-  assert.match(pageSource, /listPrivateGroups\(/);
-  assert.match(pageSource, /getWorkspaceEvaluationDashboard\(/);
-  assert.match(pageSource, /initialHasGroups=\{hasGroups\}/);
-  assert.match(pageSource, /initialHasEvaluations=\{hasEvaluations\}/);
+  assert.doesNotMatch(pageSource, /listPrivateGroups\(/);
+  assert.doesNotMatch(pageSource, /getWorkspaceEvaluationDashboard\(/);
   assert.doesNotMatch(panelsSource, /fetch\("\/api\/account\/workspaces"/);
   assert.match(panelsSource, /workspaces\.length > 1/);
   assert.match(panelsSource, /return <WorkspaceSetupStart \/>/);
@@ -61,15 +79,18 @@ test("the server resolves onboarding before the client renders downstream panels
   assert.match(panelsSource, /<AgentSetupFlow initialSetup=\{initialSetup\} \/>/);
   assert.match(panelsSource, /\{hasConnectedAgent \? \(/);
   assert.match(panelsSource, /workspaceId=\{workspaceId\}/);
-  assert.match(panelsSource, /hasConnectedAgent && resolvedTab === "agents"/);
-  assert.match(panelsSource, /resolvedTab === "groups"/);
+  assert.match(panelsSource, /hasConnectedAgent && resolvedTab === "connect"/);
+  assert.match(panelsSource, /hasConnectedAgent && resolvedTab === "inbox"/);
+  assert.match(panelsSource, /hasConnectedAgent && resolvedTab === "registry"/);
   assert.match(panelsSource, /resolvedTab === "evaluations"/);
   assert.match(panelsSource, /resolvedTab === "evidence"/);
 });
 
 test("completed read-only workspaces never render connection or policy mutations", () => {
   assert.match(panelsSource, /const canManage = workspace\.role === "owner" \|\| workspace\.role === "admin"/);
-  assert.match(panelsSource, /hasConnectedAgent && resolvedTab === "agents" && canManage/);
+  assert.match(panelsSource, /connectedAgentTabs\(\{ canManage \}\)/);
+  assert.match(panelsSource, /hasConnectedAgent && resolvedTab === "connect" && canManage/);
+  assert.match(panelsSource, /hasConnectedAgent && resolvedTab === "inbox" && canManage/);
 });
 
 test("workspace managers see the human-review approval inbox on the agent task path", () => {
@@ -95,6 +116,8 @@ test("one canonical human-review editor renders only for the selected agent", ()
   assert.match(panelsSource, /key=\{reviewAgentId\}/);
   assert.match(panelsSource, /agentId=\{reviewAgentId\}/);
   assert.doesNotMatch(panelsSource, /AgentReviewPolicyPanel|AgentPublishingPolicyPanel/);
+  assert.match(editorSource, /Back to registry/);
+  assert.doesNotMatch(editorSource, />\s*Close\s*</);
 });
 
 test("agent and human-review mutations still refresh dependent panels", () => {

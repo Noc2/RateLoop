@@ -20,22 +20,39 @@ export function isUsableAgentConnection(connection: ConnectionOption, now = Date
 }
 
 export function connectedAgentTabs({
-  hasGroups = false,
-  hasEvaluations = false,
+  canManage = true,
 }: {
-  hasGroups?: boolean;
-  hasEvaluations?: boolean;
+  canManage?: boolean;
 } = {}): AgentTab[] {
-  return [
-    "overview",
-    "agents",
-    "evidence",
-    ...(hasGroups ? (["groups"] as const) : []),
-    ...(hasEvaluations ? (["evaluations"] as const) : []),
-  ];
+  return canManage
+    ? ["overview", "connect", "inbox", "registry", "evaluations", "evidence"]
+    : ["overview", "registry", "evaluations", "evidence"];
 }
 
 export function resolveAvailableAgentTab(requested: AgentTab, available: AgentTab[]): AgentTab {
   if (available.includes(requested)) return requested;
-  return available.includes("agents") ? "agents" : (available[0] ?? "agents");
+  return available.includes("overview") ? "overview" : (available[0] ?? "overview");
+}
+
+const currentAgentTabs = new Set<AgentTab>(["overview", "connect", "inbox", "registry", "evaluations", "evidence"]);
+
+export function resolveAgentTabParam(requested?: string): AgentTab {
+  if (requested === "agents") return "connect";
+  if (requested === "groups") return "registry";
+  return currentAgentTabs.has(requested as AgentTab) ? (requested as AgentTab) : "overview";
+}
+
+export function agentTabHref(tab: AgentTab, workspaceId?: string) {
+  const params = new URLSearchParams({ tab });
+  if (workspaceId) params.set("workspace", workspaceId);
+  return `/agents?${params.toString()}`;
+}
+
+export function nextAgentTabIndex(currentIndex: number, key: string, tabCount: number) {
+  if (tabCount <= 0) return -1;
+  if (key === "Home") return 0;
+  if (key === "End") return tabCount - 1;
+  if (key === "ArrowRight") return (currentIndex + 1) % tabCount;
+  if (key === "ArrowLeft") return (currentIndex - 1 + tabCount) % tabCount;
+  return currentIndex;
 }

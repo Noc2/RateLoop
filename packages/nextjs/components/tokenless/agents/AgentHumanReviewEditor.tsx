@@ -356,6 +356,11 @@ export function AgentHumanReviewEditor({
   if (!draft || !view) {
     return (
       <Card as="section" id="agent-human-review-editor" className="rounded-2xl p-6">
+        {onClose ? (
+          <Button type="button" size="sm" variant="ghost" onClick={onClose}>
+            ← Back to registry
+          </Button>
+        ) : null}
         <p className="text-sm text-base-content/60">{error ?? "Loading human-review configuration…"}</p>
       </Card>
     );
@@ -366,14 +371,16 @@ export function AgentHumanReviewEditor({
 
   return (
     <Card as="section" id="agent-human-review-editor" className="rounded-2xl p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      {onClose ? (
+        <Button type="button" size="sm" variant="ghost" onClick={onClose} disabled={busy}>
+          ← Back to registry
+        </Button>
+      ) : null}
+      <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold">Human review</h2>
           <p className="mt-1 text-sm text-base-content/60">Edit the complete configuration for this agent.</p>
         </div>
-        <Button type="button" size="sm" variant="secondary" onClick={onClose} disabled={busy}>
-          Close
-        </Button>
       </div>
       <form className="mt-6 space-y-5" onSubmit={submit}>
         <div className="grid gap-4 sm:grid-cols-2">

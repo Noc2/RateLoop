@@ -26,7 +26,15 @@ test("approval inbox shows frozen terms and submits optimistic approve or reject
   }
   assert.match(source, /preparedRequestHash: approval\.preparedRequestHash/);
   assert.match(source, /derivedEconomicsHash: approval\.derivedEconomicsHash/);
-  assert.match(source, /decision: "approve" \| "reject"/);
+  assert.match(source, /decision: ApprovalDecision/);
   assert.match(source, /method: "PUT"/);
   assert.match(source, /cache: "no-store"/);
+  assert.match(source, /applyOptimisticApprovalDecision/);
+  assert.match(source, /confirmApprovalDecision/);
+  assert.match(source, /rollbackApprovalDecision/);
+  assert.doesNotMatch(source, /await load\(undefined, false\)/);
+  assert.match(source, /Could not \$\{action\} the request/);
+  assert.match(source, /Keys: J\/K move · A approve · D decline/);
+  assert.match(source, /aria-keyshortcuts="J K A D"/);
+  assert.match(source, /key === "j" \|\| key === "k"/);
 });

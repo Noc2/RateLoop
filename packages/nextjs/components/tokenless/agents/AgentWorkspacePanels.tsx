@@ -25,16 +25,12 @@ type Workspace = { workspaceId: string; name: string; role: string };
 export function AgentWorkspacePanels({
   activeTab,
   initialHasConnectedAgent,
-  initialHasEvaluations,
-  initialHasGroups,
   initialSetup,
   initialWorkspaceId,
   workspaces,
 }: {
   activeTab: AgentTab;
   initialHasConnectedAgent: boolean;
-  initialHasEvaluations: boolean;
-  initialHasGroups: boolean;
   initialSetup: WorkspaceAgentSetupView | null;
   initialWorkspaceId: string;
   workspaces: Workspace[];
@@ -54,7 +50,7 @@ export function AgentWorkspacePanels({
 
   const workspace = workspaces.find(entry => entry.workspaceId === workspaceId) ?? workspaces[0];
   const canManage = workspace.role === "owner" || workspace.role === "admin";
-  const visibleTabs = connectedAgentTabs({ hasEvaluations: initialHasEvaluations, hasGroups: initialHasGroups });
+  const visibleTabs = connectedAgentTabs({ canManage });
   const resolvedTab = resolveAvailableAgentTab(activeTab, visibleTabs);
 
   if (initialSetup && !initialSetup.complete) {
@@ -114,7 +110,14 @@ export function AgentWorkspacePanels({
         </div>
       ) : null}
 
-      <div key={workspaceId} className="space-y-5">
+      <div
+        key={workspaceId}
+        id="agent-workspace-panel"
+        role="tabpanel"
+        aria-labelledby={`agent-tab-${resolvedTab}`}
+        tabIndex={0}
+        className="space-y-5 outline-none focus-visible:ring-2 focus-visible:ring-[var(--rateloop-blue)]"
+      >
         {hasConnectedAgent && resolvedTab === "overview" && canManage ? (
           <WorkspaceStopPanel workspaceId={workspaceId} />
         ) : null}
@@ -124,7 +127,10 @@ export function AgentWorkspacePanels({
         {hasConnectedAgent && resolvedTab === "overview" && workspace.role === "owner" ? (
           <WorkspaceDeletionPanel workspaceId={workspace.workspaceId} workspaceName={workspace.name} />
         ) : null}
-        {hasConnectedAgent && resolvedTab === "agents" && canManage ? (
+        {hasConnectedAgent && resolvedTab === "overview" ? (
+          <WorkspaceEvidenceSummaryStrip workspaceId={workspaceId} canManage={canManage} />
+        ) : null}
+        {hasConnectedAgent && resolvedTab === "connect" && canManage ? (
           <AgentConnectionPanel
             workspaceId={workspaceId}
             publishingRevision={publishingRevision}
@@ -132,16 +138,13 @@ export function AgentWorkspacePanels({
             onConnectionStateChange={handleConnectionState}
           />
         ) : null}
-        {hasConnectedAgent && resolvedTab === "agents" && canManage ? (
+        {hasConnectedAgent && resolvedTab === "inbox" && canManage ? (
           <HumanReviewApprovalInbox workspaceId={workspaceId} />
         ) : null}
-        {hasConnectedAgent && resolvedTab === "agents" && canManage ? (
+        {hasConnectedAgent && resolvedTab === "inbox" && canManage ? (
           <FeedbackBonusAwardInbox workspaceId={workspaceId} />
         ) : null}
-        {hasConnectedAgent && resolvedTab === "agents" ? (
-          <WorkspaceEvidenceSummaryStrip workspaceId={workspaceId} canManage={canManage} />
-        ) : null}
-        {hasConnectedAgent && resolvedTab === "agents" ? (
+        {hasConnectedAgent && resolvedTab === "registry" && !reviewAgentId ? (
           <AgentRegistryPanel
             workspaceId={workspaceId}
             agentRevision={agentRevision}
@@ -150,7 +153,7 @@ export function AgentWorkspacePanels({
             onReviewAgentChange={setReviewAgentId}
           />
         ) : null}
-        {hasConnectedAgent && resolvedTab === "agents" && canManage && reviewAgentId ? (
+        {hasConnectedAgent && resolvedTab === "registry" && canManage && reviewAgentId ? (
           <AgentHumanReviewEditor
             key={reviewAgentId}
             workspaceId={workspaceId}
@@ -159,7 +162,7 @@ export function AgentWorkspacePanels({
             onClose={() => setReviewAgentId(null)}
           />
         ) : null}
-        {hasConnectedAgent && resolvedTab === "groups" && canManage ? (
+        {hasConnectedAgent && resolvedTab === "registry" && canManage && !reviewAgentId ? (
           <PrivateGroupsPanel initialWorkspaceId={workspaceId} showWorkspaceSelector={false} />
         ) : null}
         {hasConnectedAgent && resolvedTab === "evaluations" ? (
