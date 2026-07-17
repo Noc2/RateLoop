@@ -103,9 +103,9 @@ export function InvitationRouterPanel({ onPrivateGroupAccepted }: { onPrivateGro
     <section className="surface-card rounded-2xl p-6">
       <h1 className="text-2xl font-semibold">Add invitation</h1>
       <form className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={checkInvitation}>
-        <label className="grow text-sm text-base-content/60">
-          Invitation token
+        <div className="grow">
           <input
+            aria-label="Invitation token"
             type="password"
             autoComplete="off"
             value={token}
@@ -115,11 +115,11 @@ export function InvitationRouterPanel({ onPrivateGroupAccepted }: { onPrivateGro
               setStatus(null);
               setError(null);
             }}
-            className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)] font-mono text-sm"
+            className="input w-full border-white/10 bg-[var(--rateloop-field)] font-mono text-sm"
             placeholder="Paste invitation token"
             required
           />
-        </label>
+        </div>
         <button type="submit" className="rateloop-gradient-action px-5" disabled={busy || !token.trim()}>
           {busy ? "Checking…" : "Continue"}
         </button>
