@@ -118,6 +118,57 @@ jobs:
       - name: Build isolated tokenless app
         run: yarn next:build
 
+  mcp-conformance:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: rateloop_ci_mcp
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d rateloop_ci_mcp"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      APP_URL: http://127.0.0.1:3200
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/rateloop_ci_mcp
+      NEXT_PUBLIC_APP_URL: http://127.0.0.1:3200
+      TOKENLESS_MCP_RATE_LIMIT_SECRET: tokenless-mcp-conformance-ci-secret-32-bytes
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: true
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: yarn
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: Migrate the isolated MCP database
+        run: yarn workspace @rateloop/nextjs exec drizzle-kit migrate
+      - name: Start the public MCP server
+        run: |
+          yarn workspace @rateloop/nextjs exec next dev --hostname 127.0.0.1 --port 3200 > /tmp/rateloop-mcp.log 2>&1 &
+          for attempt in {1..60}; do
+            if curl --silent --output /dev/null http://127.0.0.1:3200/api/mcp; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/rateloop-mcp.log
+          exit 1
+      - name: Verify MCP initialization conformance
+        run: yarn dlx @modelcontextprotocol/conformance@0.1.16 server --url http://127.0.0.1:3200/api/mcp --scenario server-initialize
+      - name: Verify MCP tool discovery conformance
+        run: yarn dlx @modelcontextprotocol/conformance@0.1.16 server --url http://127.0.0.1:3200/api/mcp --scenario tools-list
+
   browser-journeys:
     runs-on: ubuntu-latest
     services:
