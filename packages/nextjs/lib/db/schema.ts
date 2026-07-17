@@ -143,6 +143,10 @@ export const user = pgTable("tokenless_better_auth_users", {
   image: text("image"),
   createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
   updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
+  role: text("role"),
+  banned: boolean("banned").default(false),
+  banReason: text("ban_reason"),
+  banExpires: timestamp("ban_expires", { mode: "date", withTimezone: true }),
 });
 
 export const session = pgTable(
@@ -158,8 +162,42 @@ export const session = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    impersonatedBy: text("impersonated_by"),
+    authenticationMethod: text("authentication_method"),
   },
   table => ({ userIdx: index("tokenless_better_auth_sessions_user_idx").on(table.userId, table.expiresAt) }),
+);
+
+export const ssoProvider = pgTable(
+  "tokenless_better_auth_sso_providers",
+  {
+    id: text("id").primaryKey(),
+    issuer: text("issuer").notNull(),
+    oidcConfig: text("oidc_config"),
+    samlConfig: text("saml_config"),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    providerId: text("provider_id").notNull().unique(),
+    organizationId: text("organization_id"),
+    domain: text("domain").notNull(),
+    domainVerified: boolean("domain_verified").default(false),
+  },
+  table => ({ userIdx: index("tokenless_better_auth_sso_user_idx").on(table.userId) }),
+);
+
+export const scimProvider = pgTable(
+  "tokenless_better_auth_scim_providers",
+  {
+    id: text("id").primaryKey(),
+    providerId: text("provider_id").notNull().unique(),
+    scimToken: text("scim_token").notNull().unique(),
+    organizationId: text("organization_id"),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+  },
+  table => ({ userIdx: index("tokenless_better_auth_scim_user_idx").on(table.userId) }),
 );
 
 export const account = pgTable(

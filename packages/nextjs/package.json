@@ -30,6 +30,8 @@
   },
   "dependencies": {
     "@better-auth/passkey": "1.6.23",
+    "@better-auth/scim": "1.6.23",
+    "@better-auth/sso": "1.6.23",
     "@rateloop/contracts": "workspace:*",
     "@rateloop/sdk": "workspace:*",
     "@tanstack/react-query": "~5.59.15",
