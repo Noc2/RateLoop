@@ -19,7 +19,6 @@ import {
   type ReviewCompensationFormValues,
   buildReviewCompensationConfiguration,
   reviewCompensationFormValues,
-  usdcAtomicToDecimal,
 } from "./reviewCompensation";
 import {
   REVIEW_ANSWER_LABEL_MAX_LENGTH,
@@ -29,10 +28,12 @@ import {
   reviewCriterionFormValues,
 } from "./reviewCriterion";
 import {
-  REVIEWER_EXPERTISE,
   type ReviewExpertiseFormValues,
   buildReviewExpertiseRequestProfile,
-  reviewExpertiseEligibilityStatus,
+  expertiseRequirementLabel,
+  hydrateLegacyExpertiseRequirements,
+  requirementForDefinition,
+  requirementsForAudience,
   reviewExpertiseFormValues,
 } from "./reviewExpertise";
 import {
@@ -50,9 +51,11 @@ import {
   reviewTimingFormValues,
 } from "./reviewTiming";
 import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
+import { humanReviewConfirmationMessage } from "~~/components/tokenless/agents/humanReviewConfirmation";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { DurationInput } from "~~/components/ui/DurationInput";
 import { type AgentSetupScreenStep, agentSetupUrl } from "~~/lib/tokenless/agentSetupNavigation";
+import type { ReviewerExpertiseDefinition } from "~~/lib/tokenless/reviewerExpertiseOptions";
 import type { AgentSetupReviewDraft, WorkspaceAgentSetupView } from "~~/lib/tokenless/workspaceAgentSetup";
 
 type SetupResponse = WorkspaceAgentSetupView;
@@ -90,44 +93,15 @@ const REVIEW_AUTHORITY_OPTIONS = [
   ],
 ] as const;
 
-type PendingReviewConfirmation = {
-  fingerprint: string;
-  selection: AgentSetupReviewDraft["selection"];
-  requestProfile: Omit<AgentSetupReviewDraft["requestProfile"], "configurationStatus">;
-  authority: AgentSetupReviewDraft["authority"];
+type ExpertiseDefinitionsResponse = {
+  definitions: ReviewerExpertiseDefinition[];
+  suggestedDefinitionIds: string[];
 };
-
-type ExpertiseEligibility = {
-  eligible: number;
-  feasible: boolean;
-  invited: { eligible: number; total: number };
-  network: { eligible: number; total: number; ready: boolean };
-};
-
-type ExpertiseEligibilityState = { key: string; value: ExpertiseEligibility };
-
-function reviewAudienceSummary(audience: AgentSetupReviewDraft["requestProfile"]["audience"]) {
-  if (audience === "public_network") return "RateLoop public network; public, synthetic, or redacted material only";
-  if (audience === "hybrid") return "Invited reviewers and the public RateLoop network; public-safe material only";
-  return "Invited reviewers only; private workspace material";
-}
 
 function reviewAuthoritySummary(authority: AgentSetupReviewDraft["authority"]) {
   if (authority === "prepare_for_approval") return "Prepare each required request and wait for owner approval";
   if (authority === "ask_automatically") return "Send within the exact owner-approved publishing and funding grant";
   return "Check whether review is required; do not prepare, send, or spend";
-}
-
-function formatResponseWindow(seconds: number | null) {
-  if (seconds === null) return "Not configured";
-  if (seconds % 3_600 === 0) return `${seconds / 3_600} ${seconds === 3_600 ? "hour" : "hours"}`;
-  if (seconds % 60 === 0) return `${seconds / 60} minutes`;
-  return `${seconds} seconds`;
-}
-
-function formatConsentUsdc(atomic: bigint) {
-  if (atomic === 0n) return "0";
-  return usdcAtomicToDecimal(atomic.toString());
 }
 
 async function readJson(response: Response) {
@@ -166,47 +140,54 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   const [reviewExpertise, setReviewExpertise] = useState<ReviewExpertiseFormValues>(() =>
     reviewExpertiseFormValues(initialSetup.reviewDraft?.requestProfile),
   );
-  const [expertiseEligibility, setExpertiseEligibility] = useState<ExpertiseEligibilityState | null>(null);
+  const [expertiseDefinitions, setExpertiseDefinitions] = useState<ReviewerExpertiseDefinition[]>([]);
+  const [suggestedExpertiseIds, setSuggestedExpertiseIds] = useState<string[]>([]);
+  const [expertiseDefinitionsLoading, setExpertiseDefinitionsLoading] = useState(false);
+  const [expertiseDefinitionsError, setExpertiseDefinitionsError] = useState<string | null>(null);
+  const [showCustomExpertise, setShowCustomExpertise] = useState(false);
+  const [customExpertiseLabel, setCustomExpertiseLabel] = useState("");
+  const [customExpertiseDescription, setCustomExpertiseDescription] = useState("");
+  const [creatingCustomExpertise, setCreatingCustomExpertise] = useState(false);
   const [reviewTiming, setReviewTiming] = useState<ReviewTimingFormValues>(() =>
     reviewTimingFormValues(initialSetup.reviewDraft?.requestProfile),
   );
   const [reviewCompensation, setReviewCompensation] = useState<ReviewCompensationFormValues>(() =>
     reviewCompensationFormValues(initialSetup.reviewDraft?.requestProfile, initialSetup.reviewDraft?.authority),
   );
-  const [pendingReviewConfirmation, setPendingReviewConfirmation] = useState<PendingReviewConfirmation | null>(null);
-  const [confirmedReviewFingerprint, setConfirmedReviewFingerprint] = useState<string | null>(null);
   const [peopleDecision, setPeopleDecision] = useState<"invited" | "later">("invited");
   const headingRef = useRef<HTMLHeadingElement>(null);
   const connectionMessageRef = useRef<HTMLTextAreaElement>(null);
   const reviewDetailsRef = useRef<HTMLDetailsElement>(null);
   const focusOnNavigation = useRef(false);
   const currentStep = setup.currentStep === "complete" ? "people" : setup.currentStep;
-  const currentReviewFingerprint = JSON.stringify({
-    reviewAudience,
-    reviewCompensation,
-    reviewCriterion,
-    reviewExpertise,
-    reviewFrequency,
-    reviewTiming,
-  });
-  const expertiseEligibilityKey = JSON.stringify({
-    audience: reviewAudience.audience,
-    privateGroupId: setup.reviewDraft?.requestProfile.privateGroupId ?? setup.privateGroupId,
-    requiredExpertiseKeys: reviewExpertise.requiredExpertiseKeys,
-    workspaceId: setup.workspaceId,
-  });
-  const expertiseEligibilityStatus = reviewExpertiseEligibilityStatus({
-    audience: reviewAudience.audience,
-    eligibility: expertiseEligibility?.key === expertiseEligibilityKey ? expertiseEligibility.value : null,
-    panelSize: reviewTiming.panelSize,
-    requiredExpertiseCount: reviewExpertise.requiredExpertiseKeys.length,
-  });
+  const expertiseSuggestionContext = [
+    setup.agent?.displayName,
+    setup.agent?.description,
+    reviewCriterion.criterion,
+    reviewFrequency.requiredRiskTiers,
+  ]
+    .filter(Boolean)
+    .join(" ");
   const reviewerCount = reviewTiming.panelSize || "—";
   const reviewerDetailsSummary = `${
     reviewAudience.audience === "private_invited" ? "Invited reviewers · private material" : "Public-safe material"
   } · ${reviewerCount} reviewer${reviewerCount === "1" ? "" : "s"} · ${
     reviewCompensation.compensationMode === "usdc" ? `${reviewCompensation.usdcPerReviewer || "—"} USDC each` : "Unpaid"
   }`;
+  const selectedExpertiseIds = new Set(reviewExpertise.requirements.map(requirement => requirement.definitionId));
+  const selectableExpertiseDefinitions = expertiseDefinitions.filter(
+    definition =>
+      !selectedExpertiseIds.has(definition.definitionId) &&
+      (reviewAudience.audience === "private_invited" || (definition.scope === "global" && definition.networkEligible)),
+  );
+  const suggestedExpertiseDefinitions = suggestedExpertiseIds
+    .map(definitionId => selectableExpertiseDefinitions.find(definition => definition.definitionId === definitionId))
+    .filter((definition): definition is ReviewerExpertiseDefinition => Boolean(definition));
+  const exampleExpertiseDefinitions = (
+    suggestedExpertiseDefinitions.length > 0
+      ? suggestedExpertiseDefinitions
+      : selectableExpertiseDefinitions.filter(definition => definition.scope === "global")
+  ).slice(0, 3);
   const loadStep = useCallback(
     async (step: AgentSetupScreenStep, options?: { replace?: boolean; focus?: boolean }) => {
       const url = agentSetupUrl(setup.workspaceId, step);
@@ -253,41 +234,48 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
 
   useEffect(() => {
     if (currentStep !== "reviews") return;
-    setExpertiseEligibility(null);
-    if (reviewExpertise.requiredExpertiseKeys.length === 0) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      const query = new URLSearchParams({ audience: reviewAudience.audience });
-      const privateGroupId = setup.reviewDraft?.requestProfile.privateGroupId ?? setup.privateGroupId;
-      if (privateGroupId) query.set("privateGroupId", privateGroupId);
-      for (const key of reviewExpertise.requiredExpertiseKeys) query.append("expertise", key);
+      const query = new URLSearchParams();
+      if (expertiseSuggestionContext.trim()) query.set("context", expertiseSuggestionContext);
+      setExpertiseDefinitionsLoading(true);
+      setExpertiseDefinitionsError(null);
       void fetch(
-        `/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/reviewer-expertise/eligibility?${query}`,
+        `/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/reviewer-expertise/definitions?${query}`,
         { cache: "no-store", credentials: "same-origin", signal: controller.signal },
       )
-        .then(async response => (response.ok ? ((await response.json()) as ExpertiseEligibility) : null))
-        .then(value => {
-          if (!controller.signal.aborted && value) {
-            setExpertiseEligibility({ key: expertiseEligibilityKey, value });
+        .then(readJson)
+        .then(body => {
+          if (controller.signal.aborted) return;
+          const result = body as unknown as ExpertiseDefinitionsResponse;
+          const definitions = Array.isArray(result.definitions) ? result.definitions : [];
+          setExpertiseDefinitions(definitions);
+          setSuggestedExpertiseIds(Array.isArray(result.suggestedDefinitionIds) ? result.suggestedDefinitionIds : []);
+          setReviewExpertise(current =>
+            hydrateLegacyExpertiseRequirements({
+              audience: reviewAudience.audience,
+              definitions,
+              panelSize: reviewTiming.panelSize,
+              values: current,
+            }),
+          );
+        })
+        .catch(cause => {
+          if (!controller.signal.aborted) {
+            setExpertiseDefinitionsError(
+              cause instanceof Error ? cause.message : "Specialist areas could not be loaded.",
+            );
           }
         })
-        .catch(() => {
-          if (!controller.signal.aborted) setExpertiseEligibility(null);
+        .finally(() => {
+          if (!controller.signal.aborted) setExpertiseDefinitionsLoading(false);
         });
     }, 250);
     return () => {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [
-    currentStep,
-    expertiseEligibilityKey,
-    reviewAudience.audience,
-    reviewExpertise.requiredExpertiseKeys,
-    setup.privateGroupId,
-    setup.reviewDraft?.requestProfile.privateGroupId,
-    setup.workspaceId,
-  ]);
+  }, [currentStep, expertiseSuggestionContext, reviewAudience.audience, reviewTiming.panelSize, setup.workspaceId]);
 
   useEffect(
     () => setReviewTiming(reviewTimingFormValues(setup.reviewDraft?.requestProfile)),
@@ -419,6 +407,128 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     }
   }
 
+  function addExpertiseDefinition(definition: ReviewerExpertiseDefinition) {
+    setReviewExpertise(current => {
+      if (
+        current.requirements.some(requirement => requirement.definitionId === definition.definitionId) ||
+        current.requirements.length >= 8
+      ) {
+        return current;
+      }
+      return {
+        ...current,
+        needsSpecialists: true,
+        requirements: [
+          ...current.requirements,
+          requirementForDefinition({
+            audience: reviewAudience.audience,
+            definition,
+            panelSize: reviewTiming.panelSize,
+          }),
+        ],
+      };
+    });
+    setError(null);
+  }
+
+  function removeExpertiseRequirement(definitionId: string) {
+    setReviewExpertise(current => ({
+      ...current,
+      requirements: current.requirements.filter(requirement => requirement.definitionId !== definitionId),
+      legacyRequiredExpertiseKeys: current.legacyRequiredExpertiseKeys.filter(key => {
+        const definition = expertiseDefinitions.find(candidate => candidate.key === key);
+        return definition?.definitionId !== definitionId;
+      }),
+    }));
+  }
+
+  function changeReviewAudience(audience: AgentSetupReviewDraft["requestProfile"]["audience"]) {
+    setReviewAudience(current => ({ ...current, audience }));
+    const requirements = requirementsForAudience({
+      audience,
+      definitions: expertiseDefinitions,
+      panelSize: reviewTiming.panelSize,
+      requirements: reviewExpertise.requirements,
+    });
+    if (audience === "hybrid" && reviewExpertise.needsSpecialists) {
+      setAnnouncement(
+        reviewExpertise.legacyRequiredExpertiseKeys.length
+          ? "The saved legacy all-seat specialist requirement remains active for the hybrid panel."
+          : "Hybrid specialist seats need separate invited and network policies and are not available yet.",
+      );
+    } else if (requirements.length < reviewExpertise.requirements.length) {
+      setAnnouncement(
+        "Workspace-only specialist areas were removed because network review requires RateLoop-verified areas.",
+      );
+    }
+    setReviewExpertise(current => {
+      const next = {
+        ...current,
+        needsSpecialists:
+          audience === "hybrid" ? current.legacyRequiredExpertiseKeys.length > 0 : current.needsSpecialists,
+        requirements,
+        legacyRequiredExpertiseKeys:
+          audience === "hybrid" && current.legacyRequiredExpertiseKeys.length === 0
+            ? []
+            : current.legacyRequiredExpertiseKeys,
+      };
+      return audience === "hybrid" && next.legacyRequiredExpertiseKeys.length
+        ? hydrateLegacyExpertiseRequirements({
+            audience,
+            definitions: expertiseDefinitions,
+            panelSize: reviewTiming.panelSize,
+            values: next,
+          })
+        : next;
+    });
+    if (audience !== "private_invited") {
+      setShowCustomExpertise(false);
+      setReviewCompensation(current => ({ ...current, compensationMode: "usdc" }));
+    }
+  }
+
+  function changeQuestionAuthority(questionAuthority: ReviewCriterionFormValues["questionAuthority"]) {
+    setReviewCriterion(current => ({ ...current, questionAuthority }));
+    if (questionAuthority === "agent_per_request") {
+      setReviewFrequency(current => (current.mode === "adaptive" ? { ...current, mode: "always" } : current));
+      changeReviewAudience("public_network");
+      setAnnouncement("Agent-written questions use public-network feedback and cannot change adaptive coverage.");
+    }
+  }
+
+  async function createCustomExpertiseDefinition() {
+    const label = customExpertiseLabel.trim();
+    const description = customExpertiseDescription.trim();
+    if (!label || !description) {
+      setError("Name the specialist area and explain what qualifies someone.");
+      return;
+    }
+    setCreatingCustomExpertise(true);
+    setError(null);
+    try {
+      const body = await readJson(
+        await fetch(`/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/reviewer-expertise/definitions`, {
+          method: "POST",
+          body: JSON.stringify({ label, description }),
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      const definition = body.definition as ReviewerExpertiseDefinition | undefined;
+      if (!definition?.definitionId) throw new Error("The specialist area could not be confirmed.");
+      setExpertiseDefinitions(current => [...current, definition]);
+      addExpertiseDefinition(definition);
+      setCustomExpertiseLabel("");
+      setCustomExpertiseDescription("");
+      setShowCustomExpertise(false);
+      setAnnouncement(`${definition.label} was added to this workspace and selected.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to create the specialist area.");
+    } finally {
+      setCreatingCustomExpertise(false);
+    }
+  }
+
   async function saveWorkspace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = workspaceName.trim();
@@ -489,31 +599,27 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     }
     setError(null);
     try {
-      if (!expertiseEligibilityStatus.feasible) {
-        throw new Error(expertiseEligibilityStatus.summary);
-      }
       const draft = setup.reviewDraft;
       if (!draft) throw new Error("Review behavior is unavailable. Reload setup and try again.");
       const selection = buildReviewFrequencySelection(draft.selection, reviewFrequency);
       const audienceProfile = buildReviewAudienceRequestProfile(draft.requestProfile, reviewAudience);
       const criterionProfile = buildReviewCriterionRequestProfile(audienceProfile, reviewCriterion);
-      const expertiseProfile = buildReviewExpertiseRequestProfile(criterionProfile, reviewExpertise);
+      const expertiseProfile = buildReviewExpertiseRequestProfile(
+        criterionProfile,
+        reviewExpertise,
+        reviewTiming.panelSize,
+      );
       const timingProfile = buildReviewTimingRequestProfile(expertiseProfile, reviewTiming);
       const { requestProfile, authority } = buildReviewCompensationConfiguration(timingProfile, reviewCompensation);
-      if (pendingReviewConfirmation?.fingerprint !== currentReviewFingerprint) {
-        setPendingReviewConfirmation({
-          fingerprint: currentReviewFingerprint,
-          selection,
-          requestProfile,
-          authority,
-        });
-        setConfirmedReviewFingerprint(null);
-        setAnnouncement("Review the exact human-review terms, then confirm and save them.");
-        return;
-      }
-      if (confirmedReviewFingerprint !== currentReviewFingerprint) {
-        throw new Error("Confirm the exact human-review terms before saving them.");
-      }
+      const confirmation = humanReviewConfirmationMessage({
+        authority,
+        bountyPerSeatAtomic: requestProfile.compensationMode === "usdc" ? requestProfile.bountyPerSeatAtomic : null,
+        feedbackBonusPoolAtomic: requestProfile.feedbackBonusEnabled
+          ? (requestProfile.feedbackBonusPoolAtomic ?? null)
+          : null,
+        panelSize: requestProfile.panelSize,
+      });
+      if (confirmation && !window.confirm(confirmation)) return;
       setBusy(true);
       const audience = requestProfile.audience;
       let privateGroupId =
@@ -812,44 +918,80 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               title="Set review behavior"
               description="Choose when this workflow needs human review. Nothing is sent or charged during setup."
             />
-            <label className="mt-8 block text-sm font-medium">
-              Review question
-              <textarea
-                className="textarea mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                rows={3}
-                value={reviewCriterion.criterion}
-                onChange={event => setReviewCriterion(current => ({ ...current, criterion: event.target.value }))}
-                maxLength={REVIEW_CRITERION_MAX_LENGTH}
-                required
-              />
-            </label>
+            <fieldset className="mt-8">
+              <legend className="text-xl font-semibold">Who writes the question?</legend>
+              <SetupChoiceGroup>
+                <SetupRadioChoice
+                  id="agent-setup-question-owner-fixed"
+                  name="questionAuthority"
+                  value="owner_fixed"
+                  checked={reviewCriterion.questionAuthority === "owner_fixed"}
+                  onChange={() => changeQuestionAuthority("owner_fixed")}
+                  label="Use one question"
+                  description="Set one question and answer format for every review."
+                />
+                <SetupRadioChoice
+                  id="agent-setup-question-agent-per-request"
+                  name="questionAuthority"
+                  value="agent_per_request"
+                  checked={reviewCriterion.questionAuthority === "agent_per_request"}
+                  onChange={() => changeQuestionAuthority("agent_per_request")}
+                  label="Let the agent ask each time"
+                  description="The agent supplies a question and two answers for each review."
+                />
+              </SetupChoiceGroup>
+            </fieldset>
+            {reviewCriterion.questionAuthority === "owner_fixed" ? (
+              <label className="mt-6 block text-sm font-medium">
+                Review question
+                <textarea
+                  className="textarea mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                  rows={3}
+                  value={reviewCriterion.criterion}
+                  onChange={event => setReviewCriterion(current => ({ ...current, criterion: event.target.value }))}
+                  maxLength={REVIEW_CRITERION_MAX_LENGTH}
+                  required
+                />
+              </label>
+            ) : (
+              <p className="mt-5 border-l-2 border-l-[var(--rateloop-yellow)] pl-4 text-sm leading-6 text-base-content/65">
+                Agent-written questions collect feedback only. They use RateLoop network reviewers and never change
+                adaptive review coverage.
+              </p>
+            )}
             <fieldset className="surface-card-nested mt-5 p-4">
-              <legend className="px-1 text-sm font-medium">Answer format</legend>
+              <legend className="px-1 text-sm font-medium">
+                {reviewCriterion.questionAuthority === "owner_fixed" ? "Answer format" : "Written feedback"}
+              </legend>
               <div className="grid gap-4 sm:grid-cols-3">
-                <label className="text-sm">
-                  Positive label
-                  <input
-                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                    value={reviewCriterion.positiveLabel}
-                    onChange={event =>
-                      setReviewCriterion(current => ({ ...current, positiveLabel: event.target.value }))
-                    }
-                    maxLength={REVIEW_ANSWER_LABEL_MAX_LENGTH}
-                    required
-                  />
-                </label>
-                <label className="text-sm">
-                  Negative label
-                  <input
-                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                    value={reviewCriterion.negativeLabel}
-                    onChange={event =>
-                      setReviewCriterion(current => ({ ...current, negativeLabel: event.target.value }))
-                    }
-                    maxLength={REVIEW_ANSWER_LABEL_MAX_LENGTH}
-                    required
-                  />
-                </label>
+                {reviewCriterion.questionAuthority === "owner_fixed" ? (
+                  <>
+                    <label className="text-sm">
+                      Positive label
+                      <input
+                        className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                        value={reviewCriterion.positiveLabel}
+                        onChange={event =>
+                          setReviewCriterion(current => ({ ...current, positiveLabel: event.target.value }))
+                        }
+                        maxLength={REVIEW_ANSWER_LABEL_MAX_LENGTH}
+                        required
+                      />
+                    </label>
+                    <label className="text-sm">
+                      Negative label
+                      <input
+                        className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                        value={reviewCriterion.negativeLabel}
+                        onChange={event =>
+                          setReviewCriterion(current => ({ ...current, negativeLabel: event.target.value }))
+                        }
+                        maxLength={REVIEW_ANSWER_LABEL_MAX_LENGTH}
+                        required
+                      />
+                    </label>
+                  </>
+                ) : null}
                 <label className="text-sm">
                   Rationale
                   <select
@@ -882,7 +1024,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       onChange={() => setReviewFrequency(current => ({ ...current, mode: value }))}
                       label={label}
                       description={description}
-                      badge={badge || undefined}
+                      badge={reviewCriterion.questionAuthority === "agent_per_request" ? undefined : badge || undefined}
+                      disabled={reviewCriterion.questionAuthority === "agent_per_request" && value === "adaptive"}
                     />
                     {reviewFrequency.mode === value && (value === "adaptive" || value === "fixed") ? (
                       <div className="border-b border-white/10 border-l-2 border-l-[var(--rateloop-pink)] bg-black/10 px-4 py-4 sm:ml-10">
@@ -1006,14 +1149,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                         name="audience"
                         value={value}
                         checked={reviewAudience.audience === value}
-                        onChange={() => {
-                          setReviewAudience(current => ({ ...current, audience: value }));
-                          if (value !== "private_invited") {
-                            setReviewCompensation(current => ({ ...current, compensationMode: "usdc" }));
-                          }
-                        }}
+                        onChange={() => changeReviewAudience(value)}
                         label={label}
                         description={description}
+                        disabled={
+                          reviewCriterion.questionAuthority === "agent_per_request" && value !== "public_network"
+                        }
                       />
                     ))}
                   </SetupChoiceGroup>
@@ -1024,41 +1165,238 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   </p>
                 ) : null}
                 <fieldset className="mt-6 border-t border-white/10 pt-5">
-                  <legend className="text-lg font-semibold">Required reviewer expertise</legend>
-                  <p className="mb-3 text-sm text-base-content/60">
-                    Optional. A request is blocked unless the selected audience can fill every seat.
+                  <legend className="text-lg font-semibold">Does this review need specialist knowledge?</legend>
+                  <p className="mt-1 text-sm leading-6 text-base-content/60">
+                    Choose knowledge needed to answer the review question. You&apos;ll confirm suitable people in the
+                    next step.
                   </p>
-                  <div className="surface-card-nested mt-3 grid overflow-hidden sm:grid-cols-2">
-                    {REVIEWER_EXPERTISE.map(option => (
-                      <label
-                        key={option.key}
-                        className="flex min-h-12 items-center gap-3 border-b border-white/10 p-3 text-sm sm:odd:border-r"
-                      >
-                        <input
-                          className="checkbox checkbox-sm"
-                          type="checkbox"
-                          checked={reviewExpertise.requiredExpertiseKeys.includes(option.key)}
-                          onChange={event =>
-                            setReviewExpertise(current => ({
-                              requiredExpertiseKeys: event.target.checked
-                                ? [...current.requiredExpertiseKeys, option.key]
-                                : current.requiredExpertiseKeys.filter(key => key !== option.key),
-                            }))
-                          }
-                        />
-                        <span>{option.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                  <p
-                    className={`mt-3 text-sm ${
-                      !expertiseEligibilityStatus.feasible ? "text-error" : "text-base-content/60"
-                    }`}
-                    aria-live="polite"
-                  >
-                    {expertiseEligibilityStatus.summary}
-                  </p>
+                  <SetupChoiceGroup>
+                    <SetupRadioChoice
+                      id="agent-setup-specialists-no"
+                      name="specialistKnowledge"
+                      value="no"
+                      checked={!reviewExpertise.needsSpecialists}
+                      onChange={() =>
+                        setReviewExpertise(current => ({
+                          ...current,
+                          needsSpecialists: false,
+                          requirements: [],
+                          legacyRequiredExpertiseKeys: [],
+                        }))
+                      }
+                      label="No specialist needed"
+                      description="Any otherwise eligible reviewer may take a seat."
+                    />
+                    <SetupRadioChoice
+                      id="agent-setup-specialists-yes"
+                      name="specialistKnowledge"
+                      value="yes"
+                      checked={reviewExpertise.needsSpecialists}
+                      onChange={() => setReviewExpertise(current => ({ ...current, needsSpecialists: true }))}
+                      label="Require specialist knowledge"
+                      description="Choose one or more areas and the seats each area must cover."
+                      disabled={reviewAudience.audience === "hybrid"}
+                    />
+                  </SetupChoiceGroup>
+                  {reviewAudience.audience === "hybrid" ? (
+                    <p className="mt-3 text-sm leading-6 text-base-content/60">
+                      {reviewExpertise.legacyRequiredExpertiseKeys.length
+                        ? "This saved all-seat requirement remains active. New hybrid specialist rules need separately frozen invited and network seats."
+                        : "Hybrid specialist panels need separately frozen invited and network seats. Choose one reviewer source to require specialist knowledge today."}
+                    </p>
+                  ) : null}
                 </fieldset>
+                {reviewExpertise.needsSpecialists ? (
+                  <section
+                    className="mt-5 border-l-2 border-l-[var(--rateloop-pink)] pl-4"
+                    aria-labelledby="agent-setup-specialist-areas-heading"
+                  >
+                    <h3 id="agent-setup-specialist-areas-heading" className="font-semibold">
+                      Specialist areas
+                    </h3>
+                    {reviewExpertise.requirements.length ? (
+                      <ul className="mt-3 space-y-3">
+                        {reviewExpertise.requirements.map(requirement => {
+                          const definition = expertiseDefinitions.find(
+                            candidate => candidate.definitionId === requirement.definitionId,
+                          );
+                          return (
+                            <li key={requirement.definitionId} className="surface-card-nested rounded-xl p-4">
+                              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="min-w-0">
+                                  <p className="font-medium">
+                                    {definition?.label ?? expertiseRequirementLabel(requirement, expertiseDefinitions)}
+                                  </p>
+                                  {definition?.description ? (
+                                    <p className="mt-1 text-sm leading-6 text-base-content/55">
+                                      {definition.description}
+                                    </p>
+                                  ) : null}
+                                </div>
+                                <button
+                                  className="btn btn-sm rateloop-secondary-action shrink-0"
+                                  type="button"
+                                  onClick={() => removeExpertiseRequirement(requirement.definitionId)}
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                              {reviewAudience.audience === "private_invited" ? (
+                                <label className="mt-3 block max-w-48 text-sm">
+                                  Reviewers needed
+                                  <input
+                                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                                    type="number"
+                                    min={1}
+                                    max={Math.max(1, Number(reviewTiming.panelSize) || 1)}
+                                    step={1}
+                                    inputMode="numeric"
+                                    value={requirement.minimumSeats}
+                                    onChange={event =>
+                                      setReviewExpertise(current => ({
+                                        ...current,
+                                        requirements: current.requirements.map(candidate =>
+                                          candidate.definitionId === requirement.definitionId
+                                            ? { ...candidate, minimumSeats: Number(event.target.value) }
+                                            : candidate,
+                                        ),
+                                      }))
+                                    }
+                                    required
+                                  />
+                                </label>
+                              ) : (
+                                <p className="mt-3 text-sm text-base-content/60">
+                                  Required for all {reviewTiming.panelSize || "—"} network reviewers.
+                                </p>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <p className="mt-2 text-sm text-base-content/60">Choose at least one specialist area.</p>
+                    )}
+
+                    {exampleExpertiseDefinitions.length ? (
+                      <div className="mt-5">
+                        <p className="text-sm font-medium">
+                          {suggestedExpertiseDefinitions.length ? "Suggested for this workflow" : "Examples"}
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {exampleExpertiseDefinitions.map(definition => (
+                            <button
+                              key={definition.definitionId}
+                              className="btn btn-sm rateloop-secondary-action"
+                              type="button"
+                              onClick={() => addExpertiseDefinition(definition)}
+                            >
+                              + {definition.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {expertiseDefinitionsLoading ? (
+                      <p className="mt-4 text-sm text-base-content/55" role="status">
+                        Loading specialist areas…
+                      </p>
+                    ) : null}
+                    {expertiseDefinitionsError ? (
+                      <p className="mt-4 text-sm text-error" role="alert">
+                        {expertiseDefinitionsError}
+                      </p>
+                    ) : null}
+
+                    {selectableExpertiseDefinitions.length ? (
+                      <details className="mt-4 rounded-xl border border-white/10 p-4">
+                        <summary className="cursor-pointer text-sm font-semibold text-base-content/75">
+                          Browse specialist areas
+                        </summary>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          {selectableExpertiseDefinitions.map(definition => (
+                            <button
+                              key={definition.definitionId}
+                              className="min-h-11 rounded-lg border border-white/10 px-3 py-2 text-left text-sm hover:border-white/20"
+                              type="button"
+                              onClick={() => addExpertiseDefinition(definition)}
+                            >
+                              <span className="font-medium">{definition.label}</span>
+                              <span className="mt-1 block text-xs leading-5 text-base-content/50">
+                                {definition.description}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </details>
+                    ) : null}
+
+                    {reviewAudience.audience === "private_invited" ? (
+                      <div className="mt-4">
+                        {!showCustomExpertise ? (
+                          <button
+                            className="btn btn-sm rateloop-secondary-action"
+                            type="button"
+                            onClick={() => setShowCustomExpertise(true)}
+                            disabled={reviewExpertise.requirements.length >= 8}
+                          >
+                            Define another specialist area
+                          </button>
+                        ) : (
+                          <div className="surface-card-nested rounded-xl p-4">
+                            <p className="font-medium">New workspace specialist area</p>
+                            <div className="mt-3 grid gap-3">
+                              <label className="text-sm">
+                                Name
+                                <input
+                                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                                  value={customExpertiseLabel}
+                                  onChange={event => setCustomExpertiseLabel(event.target.value)}
+                                  maxLength={80}
+                                  placeholder="German employment law"
+                                />
+                              </label>
+                              <label className="text-sm">
+                                What qualifies someone?
+                                <textarea
+                                  className="textarea mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                                  rows={2}
+                                  value={customExpertiseDescription}
+                                  onChange={event => setCustomExpertiseDescription(event.target.value)}
+                                  maxLength={320}
+                                  placeholder="Experience reviewing German employment contracts"
+                                />
+                              </label>
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <button
+                                className="btn btn-sm rateloop-secondary-action"
+                                type="button"
+                                disabled={creatingCustomExpertise}
+                                onClick={() => void createCustomExpertiseDefinition()}
+                              >
+                                {creatingCustomExpertise ? "Adding…" : "Add area"}
+                              </button>
+                              <button
+                                className="btn btn-sm border-transparent bg-transparent"
+                                type="button"
+                                disabled={creatingCustomExpertise}
+                                onClick={() => setShowCustomExpertise(false)}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="mt-4 text-xs leading-5 text-base-content/55">
+                        Network review uses RateLoop-verified areas and requires every reviewer to qualify.
+                      </p>
+                    )}
+                  </section>
+                ) : null}
                 <fieldset className="mt-6 border-t border-white/10 pt-5">
                   <legend className="text-lg font-semibold">Review round</legend>
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -1087,7 +1425,19 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                         max={MAX_REVIEW_PANEL_SIZE}
                         step={1}
                         value={reviewTiming.panelSize}
-                        onChange={event => setReviewTiming(current => ({ ...current, panelSize: event.target.value }))}
+                        onChange={event => {
+                          const nextPanelSize = event.target.value;
+                          setReviewTiming(current => ({ ...current, panelSize: nextPanelSize }));
+                          setReviewExpertise(current => ({
+                            ...current,
+                            requirements: requirementsForAudience({
+                              audience: reviewAudience.audience,
+                              definitions: expertiseDefinitions,
+                              panelSize: nextPanelSize,
+                              requirements: current.requirements,
+                            }),
+                          }));
+                        }}
                         required
                       />
                     </label>
@@ -1250,117 +1600,10 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 ))}
               </SetupChoiceGroup>
             </fieldset>
-            {pendingReviewConfirmation?.fingerprint === currentReviewFingerprint ? (
-              <section
-                aria-labelledby="agent-setup-review-consent-heading"
-                className="surface-card-nested mt-7 border-l-2 border-l-[var(--rateloop-pink)] p-5"
-              >
-                <h2 id="agent-setup-review-consent-heading" className="text-xl font-semibold">
-                  Confirm these exact terms
-                </h2>
-                <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-                  <div>
-                    <dt className="text-base-content/55">When</dt>
-                    <dd>{reviewFrequencySummary(pendingReviewConfirmation.selection)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-base-content/55">Who and what</dt>
-                    <dd>{reviewAudienceSummary(pendingReviewConfirmation.requestProfile.audience)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-base-content/55">Required expertise</dt>
-                    <dd>
-                      {pendingReviewConfirmation.requestProfile.requiredExpertiseKeys?.length
-                        ? pendingReviewConfirmation.requestProfile.requiredExpertiseKeys
-                            .map(key => REVIEWER_EXPERTISE.find(option => option.key === key)?.label ?? key)
-                            .join(", ")
-                        : "None"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-base-content/55">Question</dt>
-                    <dd>{pendingReviewConfirmation.requestProfile.criterion}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-base-content/55">Answers</dt>
-                    <dd>
-                      {pendingReviewConfirmation.requestProfile.positiveLabel} /{` `}
-                      {pendingReviewConfirmation.requestProfile.negativeLabel}; rationale{` `}
-                      {pendingReviewConfirmation.requestProfile.rationaleMode}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-base-content/55">Round</dt>
-                    <dd>
-                      {pendingReviewConfirmation.requestProfile.panelSize} reviewers;{` `}
-                      {formatResponseWindow(pendingReviewConfirmation.requestProfile.responseWindowSeconds)} to answer
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-base-content/55">Base payment</dt>
-                    <dd>
-                      {pendingReviewConfirmation.requestProfile.compensationMode === "usdc" &&
-                      pendingReviewConfirmation.requestProfile.bountyPerSeatAtomic
-                        ? `${usdcAtomicToDecimal(pendingReviewConfirmation.requestProfile.bountyPerSeatAtomic)} USDC per accepted reviewer`
-                        : "Unpaid; no base reviewer bounty"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-base-content/55">Feedback Bonus</dt>
-                    <dd>
-                      {pendingReviewConfirmation.requestProfile.feedbackBonusEnabled &&
-                      pendingReviewConfirmation.requestProfile.feedbackBonusPoolAtomic
-                        ? `${usdcAtomicToDecimal(pendingReviewConfirmation.requestProfile.feedbackBonusPoolAtomic)} USDC pool · ${
-                            pendingReviewConfirmation.requestProfile.feedbackBonusAwarderKind === "designated"
-                              ? "designated human awarder"
-                              : "requester awards"
-                          }`
-                        : "Off"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-base-content/55">Maximum payment consent</dt>
-                    <dd>
-                      {formatConsentUsdc(
-                        BigInt(
-                          pendingReviewConfirmation.requestProfile.compensationMode === "usdc" &&
-                            pendingReviewConfirmation.requestProfile.bountyPerSeatAtomic
-                            ? pendingReviewConfirmation.requestProfile.bountyPerSeatAtomic
-                            : "0",
-                        ) *
-                          BigInt(pendingReviewConfirmation.requestProfile.panelSize ?? 0) +
-                          BigInt(pendingReviewConfirmation.requestProfile.feedbackBonusPoolAtomic ?? "0"),
-                      )}{" "}
-                      USDC before base-review fee and attempt reserve
-                    </dd>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <dt className="text-base-content/55">Agent authority</dt>
-                    <dd>{reviewAuthoritySummary(pendingReviewConfirmation.authority)}</dd>
-                  </div>
-                </dl>
-                <label className="mt-4 flex gap-3 border-t border-white/10 pt-4 text-sm">
-                  <input
-                    className="checkbox checkbox-sm mt-0.5"
-                    type="checkbox"
-                    checked={confirmedReviewFingerprint === currentReviewFingerprint}
-                    onChange={event =>
-                      setConfirmedReviewFingerprint(event.target.checked ? currentReviewFingerprint : null)
-                    }
-                    required
-                  />
-                  <span>I confirm this exact human-review configuration.</span>
-                </label>
-              </section>
-            ) : null}
             <SetupActionBar>
               {backButton}
               <Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={busy}>
-                {busy
-                  ? "Saving…"
-                  : pendingReviewConfirmation?.fingerprint === currentReviewFingerprint
-                    ? "Save and continue"
-                    : "Review settings"}
+                {busy ? "Saving…" : "Save and continue"}
               </Button>
             </SetupActionBar>
           </form>

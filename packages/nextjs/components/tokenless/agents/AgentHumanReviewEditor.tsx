@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { humanReviewConfirmationMessage } from "./humanReviewConfirmation";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { readJson } from "~~/lib/tokenless/http";
@@ -53,8 +54,6 @@ type Draft = {
   authority: Authority;
 };
 
-type PendingChange = { fingerprint: string; body: Record<string, unknown>; summary: Record<string, string> };
-
 function number(value: unknown, fallback: number) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -88,8 +87,7 @@ function draftFromView(view: OwnerView): Draft {
   const rateBps =
     mode === "fixed" ? number(selection.fixedRateBps, 1_000) : number(selection.productionFloorBps, 1_000);
   return {
-    questionAuthority:
-      request.questionAuthority === "agent_per_request" ? "agent_per_request" : "owner_fixed",
+    questionAuthority: request.questionAuthority === "agent_per_request" ? "agent_per_request" : "owner_fixed",
     mode,
     ratePercent: String(rateBps / 100),
     maximumUnreviewedGap: String(number(selection.maximumUnreviewedGap, 20)),
@@ -242,39 +240,12 @@ function buildMutation(view: OwnerView, draft: Draft) {
         };
   return {
     body,
-    summary: {
-      Frequency:
-        draft.mode === "always"
-          ? "Every eligible output"
-          : draft.mode === "manual"
-            ? "Only after owner approval"
-            : `${draft.mode} · ${draft.ratePercent}%`,
-      Audience:
-        draft.audience === "private_invited"
-          ? "Invited reviewers; private workspace material"
-          : draft.audience === "hybrid"
-            ? "Invited and RateLoop network; public-safe material"
-            : "RateLoop network; public-safe material",
-      Round: `${panelSize} reviewer${panelSize === 1 ? "" : "s"} · ${responseWindowSeconds} seconds`,
-      Payment: compensationMode === "usdc" ? `${draft.bountyUsdc} USDC per accepted reviewer` : "Unpaid",
-      "Feedback Bonus": draft.feedbackBonusEnabled
-        ? `${draft.feedbackBonusUsdc} USDC · ${
-            draft.feedbackBonusAwarderKind === "designated" ? "designated human" : "requester"
-          } awards selected feedback`
-        : "Off",
-      Authority:
-        draft.authority === "check_only"
-          ? "Check only"
-          : draft.authority === "prepare_for_approval"
-            ? "Prepare and wait for owner approval"
-            : "Ask automatically within the existing exact grant",
-      "Question author":
-        draft.questionAuthority === "agent_per_request" ? "Agent, for each review" : "Workspace owner",
-      Question:
-        draft.questionAuthority === "agent_per_request"
-          ? "Written by the agent for each review · feedback only"
-          : (requestProfile.criterion ?? ""),
-    },
+    confirmation: humanReviewConfirmationMessage({
+      authority: draft.authority,
+      bountyPerSeatAtomic: compensationMode === "usdc" ? requestProfile.bountyPerSeatAtomic : null,
+      feedbackBonusPoolAtomic: draft.feedbackBonusEnabled ? requestProfile.feedbackBonusPoolAtomic : null,
+      panelSize,
+    }),
   };
 }
 
@@ -292,8 +263,6 @@ export function AgentHumanReviewEditor({
   const [view, setView] = useState<OwnerView | null>(null);
   const [groups, setGroups] = useState<PrivateGroup[]>([]);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [pending, setPending] = useState<PendingChange | null>(null);
-  const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -334,8 +303,6 @@ export function AgentHumanReviewEditor({
 
   function update<Key extends keyof Draft>(key: Key, value: Draft[Key]) {
     setDraft(current => (current ? { ...current, [key]: value } : current));
-    setPending(null);
-    setConfirmed(false);
     setStatus(null);
   }
 
@@ -355,8 +322,6 @@ export function AgentHumanReviewEditor({
           }
         : current,
     );
-    setPending(null);
-    setConfirmed(false);
     setStatus(null);
   }
 
@@ -366,13 +331,7 @@ export function AgentHumanReviewEditor({
     setError(null);
     try {
       const next = buildMutation(view, draft);
-      const fingerprint = JSON.stringify(next.body);
-      if (pending?.fingerprint !== fingerprint) {
-        setPending({ fingerprint, ...next });
-        setConfirmed(false);
-        return;
-      }
-      if (!confirmed) throw new Error("Confirm the exact changes before saving them.");
+      if (next.confirmation && !window.confirm(next.confirmation)) return;
       setBusy(true);
       await readJson(
         await fetch(
@@ -386,8 +345,6 @@ export function AgentHumanReviewEditor({
         ),
       );
       await load();
-      setPending(null);
-      setConfirmed(false);
       setStatus("Human-review configuration saved.");
       onSaved?.();
     } catch (cause) {
@@ -570,8 +527,6 @@ export function AgentHumanReviewEditor({
                       }
                     : current,
                 );
-                setPending(null);
-                setConfirmed(false);
               }}
             >
               <option value="private_invited" disabled={draft.questionAuthority === "agent_per_request"}>
@@ -758,29 +713,6 @@ export function AgentHumanReviewEditor({
             ) : null}
           </label>
         </div>
-        {pending ? (
-          <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
-            <h3 className="font-medium">Confirm exact changes</h3>
-            <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-              {Object.entries(pending.summary).map(([label, value]) => (
-                <div key={label}>
-                  <dt className="text-base-content/50">{label}</dt>
-                  <dd>{value}</dd>
-                </div>
-              ))}
-            </dl>
-            <label className="mt-4 flex gap-3 border-t border-white/10 pt-4 text-sm">
-              <input
-                className="checkbox checkbox-sm"
-                type="checkbox"
-                checked={confirmed}
-                onChange={event => setConfirmed(event.target.checked)}
-                required
-              />
-              <span>I confirm this exact human-review configuration.</span>
-            </label>
-          </div>
-        ) : null}
         {error ? (
           <p className="alert alert-error text-sm" role="alert">
             {error}
@@ -792,7 +724,7 @@ export function AgentHumanReviewEditor({
           </p>
         ) : null}
         <Button type="submit" disabled={busy}>
-          {busy ? "Saving…" : pending ? "Save changes" : "Review changes"}
+          {busy ? "Saving…" : "Save changes"}
         </Button>
       </form>
     </Card>

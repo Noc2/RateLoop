@@ -100,9 +100,22 @@ test("review setup controls audience and shows only the relevant material bounda
 });
 
 test("review setup resumes a controlled question and compact answer format", () => {
-  for (const label of ["Review question", "Answer format", "Positive label", "Negative label", "Rationale"]) {
+  for (const label of [
+    "Who writes the question?",
+    "Use one question",
+    "Let the agent ask each time",
+    "Review question",
+    "Answer format",
+    "Positive label",
+    "Negative label",
+    "Rationale",
+  ]) {
     assert.match(flowSource, new RegExp(label));
   }
+  assert.match(flowSource, /questionAuthority === "owner_fixed"/);
+  assert.match(flowSource, /Agent-written questions collect feedback only/);
+  assert.match(flowSource, /questionAuthority === "agent_per_request" && value === "adaptive"/);
+  assert.match(flowSource, /questionAuthority === "agent_per_request" && value !== "public_network"/);
   for (const option of ["off", "optional", "required"]) {
     assert.match(flowSource, new RegExp(`<option value="${option}">`, "u"));
   }
@@ -129,14 +142,25 @@ test("review setup uses one duration control for the frozen response deadline", 
   assert.doesNotMatch(flowSource, /slo\.estimatedSeconds/);
 });
 
-test("review setup fails closed while a changed expertise pool is being checked", () => {
-  const reset = flowSource.indexOf("setExpertiseEligibility(null)");
-  const request = flowSource.indexOf("/reviewer-expertise/eligibility?");
-  assert.ok(reset >= 0 && request > reset);
-  assert.match(flowSource, /requiredExpertiseKeys\.length === 0/);
-  assert.match(flowSource, /expertiseEligibility\?\.key === expertiseEligibilityKey/);
-  assert.match(flowSource, /setExpertiseEligibility\(\{ key: expertiseEligibilityKey, value \}\)/);
-  assert.match(flowSource, /if \(!expertiseEligibilityStatus\.feasible\)/);
+test("review setup defines specialist requirements and leaves pool coverage to People", () => {
+  for (const label of [
+    "Does this review need specialist knowledge?",
+    "No specialist needed",
+    "Require specialist knowledge",
+    "Suggested for this workflow",
+    "Examples",
+    "Reviewers needed",
+    "Define another specialist area",
+    "What qualifies someone?",
+  ]) {
+    assert.match(flowSource, new RegExp(label.replace(/[?]/gu, "\\?")));
+  }
+  assert.match(flowSource, /reviewer-expertise\/definitions\?/);
+  assert.match(flowSource, /method: "POST"/);
+  assert.match(flowSource, /reviewExpertise\.requirements/);
+  assert.match(flowSource, /Required for all.*network reviewers/);
+  assert.doesNotMatch(flowSource, /reviewer-expertise\/eligibility/);
+  assert.doesNotMatch(flowSource, /expertiseEligibilityStatus/);
 });
 
 test("review setup controls independent base compensation, optional Feedback Bonus, and agent authority", () => {
@@ -170,32 +194,18 @@ test("review setup controls independent base compensation, optional Feedback Bon
   assert.doesNotMatch(flowSource, /authority: draft\.authority/);
 });
 
-test("review setup requires exact informed consent before it persists the configuration", () => {
-  for (const label of [
-    "Confirm these exact terms",
-    "When",
-    "Who and what",
-    "Question",
-    "Answers",
-    "Round",
-    "Base payment",
-    "Feedback Bonus",
-    "Maximum payment consent",
-    "Agent authority",
-    "I confirm this exact human-review configuration",
-  ]) {
-    assert.match(flowSource, new RegExp(label));
-  }
-  assert.match(flowSource, /pendingReviewConfirmation\?\.fingerprint !== currentReviewFingerprint/);
-  assert.match(flowSource, /confirmedReviewFingerprint !== currentReviewFingerprint/);
-  assert.match(flowSource, /Review settings/);
+test("review setup saves directly and confirms only spending or automatic sending", () => {
+  assert.match(flowSource, /humanReviewConfirmationMessage\(\{/);
+  assert.match(flowSource, /authority,/);
+  assert.match(flowSource, /bountyPerSeatAtomic:/);
+  assert.match(flowSource, /feedbackBonusPoolAtomic:/);
+  assert.match(flowSource, /panelSize: requestProfile\.panelSize/);
+  assert.match(flowSource, /confirmation && !window\.confirm\(confirmation\)/);
   assert.match(flowSource, /Save and continue/);
-  assert.match(flowSource, /reviewFrequencySummary\(pendingReviewConfirmation\.selection\)/);
-  assert.match(flowSource, /reviewAudienceSummary\(pendingReviewConfirmation\.requestProfile\.audience\)/);
-  assert.match(flowSource, /formatResponseWindow\(pendingReviewConfirmation\.requestProfile\.responseWindowSeconds\)/);
-  assert.match(flowSource, /usdcAtomicToDecimal\(pendingReviewConfirmation\.requestProfile\.bountyPerSeatAtomic\)/);
-  assert.match(flowSource, /reviewAuthoritySummary\(pendingReviewConfirmation\.authority\)/);
-  assert.match(flowSource, /pendingReviewConfirmation\.requestProfile\.feedbackBonusPoolAtomic/);
+  assert.doesNotMatch(flowSource, /Confirm these exact terms/);
+  assert.doesNotMatch(flowSource, /I confirm this exact human-review configuration/);
+  assert.doesNotMatch(flowSource, /pendingReviewConfirmation/);
+  assert.doesNotMatch(flowSource, /confirmedReviewFingerprint/);
 });
 
 test("setup separates the connected client from per-run model provenance", () => {

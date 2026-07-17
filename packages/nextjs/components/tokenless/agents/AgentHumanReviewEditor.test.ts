@@ -40,11 +40,14 @@ test("the contextual editor owns every human-review dimension through one canoni
   assert.match(source, /delegation\.publishingPolicy\.id/);
   assert.match(source, /delegation\?\.allowedWorkflowKeys/);
   assert.match(source, /disabled=\{!automaticAvailable\}/);
-  assert.match(source, /Confirm exact changes/);
-  assert.match(source, /I confirm this exact human-review configuration/);
+  assert.match(source, /humanReviewConfirmationMessage\(\{/);
+  assert.match(source, /next\.confirmation && !window\.confirm\(next\.confirmation\)/);
+  assert.match(source, /Save changes/);
+  assert.doesNotMatch(source, /Confirm exact changes/);
+  assert.doesNotMatch(source, /I confirm this exact human-review configuration/);
+  assert.doesNotMatch(source, /Review changes/);
   assert.match(source, /can never select or execute a Feedback Bonus award/);
   assert.match(source, /Agent-written questions collect feedback only/);
   assert.match(source, /Agent-written questions cannot use adaptive review/);
   assert.match(source, /Agent-written questions require RateLoop network reviewers/);
-  assert.match(source, /Question author/);
 });

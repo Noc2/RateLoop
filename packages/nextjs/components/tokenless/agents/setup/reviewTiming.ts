@@ -1,5 +1,5 @@
-import type { AgentSetupReviewDraft } from "~~/lib/tokenless/workspaceAgentSetup";
 import type { ReviewRequestProfileInput } from "./reviewCriterion";
+import type { AgentSetupReviewDraft } from "~~/lib/tokenless/workspaceAgentSetup";
 
 type ReviewRequestProfile = AgentSetupReviewDraft["requestProfile"];
 
