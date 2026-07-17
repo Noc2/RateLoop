@@ -81,3 +81,25 @@ test("agent registry keeps the default row compact and reveals management on dem
   assert.doesNotMatch(source, /method: "POST"[\s\S]{0,200}\/agents/);
   assert.doesNotMatch(source, /verified model|model accuracy|truth score/i);
 });
+
+test("the capability card combines owner-stated limits with labeled host-reported metadata", () => {
+  const source = readFileSync(new URL("./AgentRegistryPanel.tsx", import.meta.url), "utf8");
+  assert.match(source, /Capabilities and limits/);
+  assert.match(source, /Intended purpose/);
+  assert.match(source, /Known limitations/);
+  assert.match(source, /Do-not-use conditions/);
+  assert.match(source, /Not stated yet\./);
+  // Owner-editable through the dedicated statement endpoint only.
+  assert.match(source, /capability-statement/);
+  assert.match(source, /method: "PUT"/);
+  assert.match(source, /Save capability statement/);
+  // Observed data joins the card: declared model, coverage stage, workflows,
+  // risk tiers, and the evaluation profile.
+  assert.match(source, /Declared model/);
+  assert.match(source, /Coverage stage/);
+  assert.match(source, /Observed workflows/);
+  assert.match(source, /Observed risk tiers/);
+  assert.match(source, /Evaluation profile/);
+  // Host-reported labeling stays.
+  assert.match(source, /reported by the connected host, not independently verified/);
+});

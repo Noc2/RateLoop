@@ -257,6 +257,55 @@ function overrideDecisionSummary(rows: Row[], window: { start: Date; end: Date }
   };
 }
 
+/**
+ * Per-agent capability card for the export: owner-stated purpose and limits
+ * plus declared metadata (host/owner-reported, not independently verified) and
+ * the observed evaluation scopes. Deciding accounts never enter the export.
+ */
+function capabilityStatements(agentRows: Row[], versionRows: Row[], scopeRows: Row[]) {
+  const latestVersionByAgent = new Map<string, Row>();
+  for (const row of versionRows) {
+    const agentId = text(row, "agent_id");
+    if (agentId && !latestVersionByAgent.has(agentId)) latestVersionByAgent.set(agentId, row);
+  }
+  const scopesByAgent = new Map<string, Row[]>();
+  for (const row of scopeRows) {
+    const agentId = text(row, "agent_id");
+    if (!agentId) continue;
+    scopesByAgent.set(agentId, [...(scopesByAgent.get(agentId) ?? []), row]);
+  }
+  return agentRows.map(row => {
+    const agentId = requiredText(row, "agent_id");
+    const version = latestVersionByAgent.get(agentId);
+    return {
+      agentId,
+      externalId: requiredText(row, "external_id"),
+      status: requiredText(row, "status"),
+      ownerStatement: {
+        intendedPurpose: text(row, "intended_purpose"),
+        knownLimitations: text(row, "known_limitations"),
+        doNotUseConditions: text(row, "do_not_use_conditions"),
+        updatedAt: row.capability_statement_updated_at ? iso(row, "capability_statement_updated_at") : null,
+      },
+      declared: {
+        displayName: text(version, "display_name"),
+        provider: text(version, "declared_provider"),
+        model: text(version, "declared_model"),
+        modelVersion: text(version, "declared_model_version"),
+        deploymentName: text(version, "declared_deployment_name"),
+        environment: text(version, "environment"),
+        verification: "host_reported_not_independently_verified" as const,
+      },
+      observedScopes: (scopesByAgent.get(agentId) ?? []).map(scope => ({
+        scopeId: requiredText(scope, "scope_id"),
+        workflowKey: requiredText(scope, "workflow_key"),
+        riskTier: requiredText(scope, "risk_tier"),
+        stage: requiredText(scope, "stage"),
+      })),
+    };
+  });
+}
+
 function stageTransition(row: Row) {
   return {
     eventId: requiredText(row, "event_id"),
@@ -370,6 +419,19 @@ export async function exportAdaptiveCoverage(input: {
        ORDER BY decided_at ASC,record_id ASC LIMIT ${MAX_SERIES_ROWS + 1}`,
       [input.workspaceId],
     );
+    const agentsResult = await client.query(
+      `SELECT agent_id,external_id,status,intended_purpose,known_limitations,do_not_use_conditions,
+              capability_statement_updated_at
+       FROM tokenless_agents WHERE workspace_id=$1 ORDER BY agent_id ASC`,
+      [input.workspaceId],
+    );
+    const agentVersionsResult = await client.query(
+      `SELECT agent_id,version_number,display_name,declared_provider,declared_model,
+              declared_model_version,declared_deployment_name,environment
+       FROM tokenless_agent_versions WHERE workspace_id=$1
+       ORDER BY agent_id ASC,version_number DESC`,
+      [input.workspaceId],
+    );
     assertBounded(scopesResult.rows, "scopes", MAX_SCOPES);
     assertBounded(decisionsResult.rows, "decisions", MAX_SERIES_ROWS);
     assertBounded(observationsResult.rows, "observations", MAX_SERIES_ROWS);
@@ -458,6 +520,11 @@ export async function exportAdaptiveCoverage(input: {
       },
       oversightDesignations: summarizeOversightDesignationsForExport(oversightResult.rows as Row[], window.snapshotAt),
       overrideDecisions: overrideDecisionSummary(overridesResult.rows as Row[], window),
+      capabilityStatements: capabilityStatements(
+        agentsResult.rows as Row[],
+        agentVersionsResult.rows as Row[],
+        scopesResult.rows as Row[],
+      ),
       scopes,
     };
     const exported = { ...payload, exportDigest: sha256(payload) };

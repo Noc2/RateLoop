@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
@@ -7,6 +8,7 @@ import {
   createWorkspaceAgentVersion,
   deactivateWorkspaceAgent,
   listWorkspaceAgents,
+  updateWorkspaceAgentCapabilityStatement,
 } from "~~/lib/tokenless/agentRegistry";
 import { createWorkspace, createWorkspaceApiKey } from "~~/lib/tokenless/productCore";
 
@@ -1137,4 +1139,122 @@ test("external IDs and declared model metadata are validated before persistence"
       }),
     /Declared provider/,
   );
+});
+
+test("owner-editable capability statements persist, audit, and stay owner/admin-gated", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Capability card", ownerAddress: OWNER });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_workspace_members (workspace_id, account_address, role, created_at)
+          VALUES (?, ?, 'member', ?)`,
+    args: [workspaceId, MEMBER, new Date()],
+  });
+  const agent = await createWorkspaceAgent({
+    accountAddress: OWNER,
+    workspaceId,
+    externalId: "capability-card",
+    version: version("2026-07-14"),
+  });
+  // Default: nothing stated yet.
+  assert.deepEqual(agent.capabilityStatement, {
+    intendedPurpose: null,
+    knownLimitations: null,
+    doNotUseConditions: null,
+    updatedAt: null,
+    updatedBy: null,
+  });
+
+  const updated = await updateWorkspaceAgentCapabilityStatement({
+    accountAddress: OWNER,
+    workspaceId,
+    agentId: agent.agentId,
+    statement: {
+      intendedPurpose: "Draft support replies for low-risk tickets.",
+      knownLimitations: "Struggles with refunds and legal questions.",
+      doNotUseConditions: "  Never use for medical or legal advice.  ",
+    },
+  });
+  assert.equal(updated.capabilityStatement.intendedPurpose, "Draft support replies for low-risk tickets.");
+  assert.equal(updated.capabilityStatement.doNotUseConditions, "Never use for medical or legal advice.");
+  assert.equal(updated.capabilityStatement.updatedBy, OWNER.toLowerCase());
+  assert.notEqual(updated.capabilityStatement.updatedAt, null);
+
+  // Clearing a field stores null, and member reads redact the updating account.
+  const cleared = await updateWorkspaceAgentCapabilityStatement({
+    accountAddress: OWNER,
+    workspaceId,
+    agentId: agent.agentId,
+    statement: { intendedPurpose: "Draft support replies.", knownLimitations: "", doNotUseConditions: null },
+  });
+  assert.equal(cleared.capabilityStatement.knownLimitations, null);
+  const memberView = await listWorkspaceAgents({ accountAddress: MEMBER, workspaceId });
+  assert.equal(memberView.agents[0]?.capabilityStatement.intendedPurpose, "Draft support replies.");
+  assert.equal(memberView.agents[0]?.capabilityStatement.updatedBy, null);
+
+  await assert.rejects(
+    () =>
+      updateWorkspaceAgentCapabilityStatement({
+        accountAddress: MEMBER,
+        workspaceId,
+        agentId: agent.agentId,
+        statement: { intendedPurpose: "member write" },
+      }),
+    /Workspace not found/,
+  );
+  await assert.rejects(
+    () =>
+      updateWorkspaceAgentCapabilityStatement({
+        accountAddress: OWNER,
+        workspaceId,
+        agentId: agent.agentId,
+        statement: { intendedPurpose: "x".repeat(2001) },
+      }),
+    /at most 2000 characters/,
+  );
+  await assert.rejects(
+    () =>
+      updateWorkspaceAgentCapabilityStatement({
+        accountAddress: OWNER,
+        workspaceId,
+        agentId: agent.agentId,
+        statement: { unsupported: true } as never,
+      }),
+    /Capability statements carry only/,
+  );
+  await assert.rejects(
+    () =>
+      updateWorkspaceAgentCapabilityStatement({
+        accountAddress: OWNER,
+        workspaceId,
+        agentId: "agt_missing",
+        statement: { intendedPurpose: "ghost" },
+      }),
+    /Agent not found/,
+  );
+
+  const audit = await dbClient.execute({
+    sql: `SELECT event_type, details_json FROM tokenless_agent_audit_events
+          WHERE workspace_id = ? AND agent_id = ? ORDER BY created_at ASC`,
+    args: [workspaceId, agent.agentId],
+  });
+  const capabilityEvents = audit.rows.filter(row => row.event_type === "agent.capability_statement_updated");
+  assert.equal(capabilityEvents.length, 2);
+  assert.deepEqual(JSON.parse(String(capabilityEvents[1]?.details_json)), {
+    hasIntendedPurpose: true,
+    hasKnownLimitations: false,
+    hasDoNotUseConditions: false,
+  });
+});
+
+test("the capability-statement route is a same-origin mutation of the registry service", () => {
+  const source = readFileSync(
+    new URL(
+      "../../app/api/account/workspaces/[workspaceId]/agents/[agentId]/capability-statement/route.ts",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  assert.match(source, /requireBrowserSession\(request, \{ mutation: true \}\)/u);
+  assert.match(source, /updateWorkspaceAgentCapabilityStatement/u);
+  assert.match(source, /export async function PUT/u);
+  assert.doesNotMatch(source, /export async function (GET|POST|DELETE)/u);
 });
