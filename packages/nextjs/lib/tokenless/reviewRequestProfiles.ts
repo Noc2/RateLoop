@@ -11,6 +11,11 @@ import {
   type HumanReviewCompensationMode,
   type HumanReviewContentBoundary,
 } from "~~/lib/tokenless/reviewCapabilities";
+import { validateReviewerExpertiseRequirementsWithClient } from "~~/lib/tokenless/reviewerExpertiseDefinitions";
+import {
+  type ReviewerExpertiseRequirement,
+  normalizeReviewerExpertiseRequirementsSelection,
+} from "~~/lib/tokenless/reviewerExpertiseOptions";
 import {
   type ReviewerExpertiseKey,
   normalizeReviewerExpertiseKeys,
@@ -39,6 +44,7 @@ export const MAXIMUM_FEEDBACK_BONUS_AWARD_WINDOW_SECONDS = 31_536_000;
 export const DEFAULT_FEEDBACK_BONUS_AWARD_WINDOW_SECONDS = 604_800;
 
 export type FeedbackBonusAwarderKind = "requester" | "designated";
+export type ReviewRequestProfileSemanticSchemaVersion = 1 | 2 | 3;
 
 type QueryRow = Record<string, unknown>;
 
@@ -57,6 +63,7 @@ export type ReviewRequestProfileInput = {
   privateGroupPolicyVersion?: number | null;
   privateGroupPolicyHash?: string | null;
   requiredExpertiseKeys?: ReviewerExpertiseKey[];
+  expertiseRequirements?: ReviewerExpertiseRequirement[];
   responseWindowSeconds: number;
   panelSize: number;
   compensationMode: HumanReviewCompensationMode;
@@ -84,6 +91,8 @@ type NormalizedReviewRequestProfile = {
   privateGroupPolicyVersion: number | null;
   privateGroupPolicyHash: string | null;
   requiredExpertiseKeys: ReviewerExpertiseKey[];
+  expertiseRequirements: ReviewerExpertiseRequirement[];
+  semanticSchemaVersion: ReviewRequestProfileSemanticSchemaVersion;
   responseWindowSeconds: number;
   panelSize: number;
   compensationMode: HumanReviewCompensationMode;
@@ -125,6 +134,7 @@ const INPUT_KEYS = new Set<keyof ReviewRequestProfileInput>([
   "privateGroupPolicyVersion",
   "privateGroupPolicyHash",
   "requiredExpertiseKeys",
+  "expertiseRequirements",
   "responseWindowSeconds",
   "panelSize",
   "compensationMode",
@@ -147,6 +157,7 @@ const NON_SEMANTIC_PROFILE_KEYS = new Set([
   "approvedAt",
   "supersededAt",
   "resultSemantics",
+  "semanticSchemaVersion",
 ]);
 const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const ATOMIC_PATTERN = /^[1-9][0-9]*$/u;
@@ -293,6 +304,39 @@ export function normalizeReviewRequestProfileInput(value: unknown): NormalizedRe
   }
 
   const requiredExpertiseKeys = normalizeReviewerExpertiseKeys(input.requiredExpertiseKeys ?? []);
+  let expertiseRequirements: ReviewerExpertiseRequirement[];
+  try {
+    expertiseRequirements = normalizeReviewerExpertiseRequirementsSelection(
+      input.expertiseRequirements ?? [],
+      panelSize,
+    );
+  } catch (error) {
+    invalid(error instanceof Error ? error.message : "Specialist requirements are invalid.");
+  }
+  if (requiredExpertiseKeys.length > 0 && expertiseRequirements.length > 0) {
+    invalid("Legacy all-seat expertise and exact specialist requirements cannot be used together.");
+  }
+  if (expertiseRequirements.length > 0) {
+    if (audience === "hybrid") {
+      invalid("Hybrid specialist requirements need separately frozen invited and network seat classes.");
+    }
+    if (
+      audience === "private_invited" &&
+      expertiseRequirements.some(requirement => requirement.sourceScope !== "customer_invited")
+    ) {
+      invalid("Private specialist requirements must use invited reviewers.");
+    }
+    if (
+      audience === "public_network" &&
+      expertiseRequirements.some(
+        requirement => requirement.sourceScope !== "rateloop_network" || requirement.minimumSeats !== panelSize,
+      )
+    ) {
+      invalid("Public-network specialist requirements must apply to every network reviewer.");
+    }
+  }
+  const semanticSchemaVersion: ReviewRequestProfileSemanticSchemaVersion =
+    expertiseRequirements.length > 0 ? 3 : questionAuthority === "owner_fixed" ? 1 : 2;
 
   if ((audience === "public_network" || audience === "hybrid") && panelSize < 3) {
     invalid("Public-network and hybrid review require a panel size of at least 3.");
@@ -359,6 +403,8 @@ export function normalizeReviewRequestProfileInput(value: unknown): NormalizedRe
     privateGroupPolicyVersion,
     privateGroupPolicyHash,
     requiredExpertiseKeys,
+    expertiseRequirements,
+    semanticSchemaVersion,
     responseWindowSeconds,
     panelSize,
     compensationMode,
@@ -420,6 +466,54 @@ export function reviewRequestProfileSemanticDocument(profile: NormalizedReviewRe
       },
     },
   };
+  if (profile.semanticSchemaVersion === 3) {
+    return {
+      schemaVersion: "rateloop.review-request-profile.v3" as const,
+      agent: common.agent,
+      question:
+        profile.questionAuthority === "owner_fixed"
+          ? {
+              authority: "owner_fixed" as const,
+              kind: "binary" as const,
+              criterion: profile.criterion,
+              positiveLabel: profile.positiveLabel,
+              negativeLabel: profile.negativeLabel,
+              rationaleMode: profile.rationaleMode,
+              resultSemantics: "assurance" as const,
+            }
+          : {
+              authority: "agent_per_request" as const,
+              kind: "binary" as const,
+              maximumPromptLength: 500,
+              maximumLabelLength: 40,
+              rationaleMode: profile.rationaleMode,
+              resultSemantics: "feedback" as const,
+            },
+      audience: {
+        audience: profile.audience,
+        contentBoundary: profile.contentBoundary,
+        privateSensitivity: profile.privateSensitivity,
+        privateGroupPolicy:
+          profile.privateGroupId === null
+            ? null
+            : {
+                groupId: profile.privateGroupId,
+                policyVersion: profile.privateGroupPolicyVersion,
+                policyHash: profile.privateGroupPolicyHash,
+              },
+        expertiseRequirements: profile.expertiseRequirements.map(requirement => ({
+          definitionId: requirement.definitionId,
+          definitionVersion: requirement.definitionVersion,
+          definitionHash: requirement.definitionHash,
+          minimumSeats: requirement.minimumSeats,
+          sourceScope: requirement.sourceScope,
+        })),
+      },
+      responseWindowSeconds: common.responseWindowSeconds,
+      panelSize: common.panelSize,
+      economics: common.economics,
+    };
+  }
   if (profile.questionAuthority === "owner_fixed") {
     return {
       schemaVersion: "rateloop.review-request-profile.v1" as const,
@@ -518,10 +612,16 @@ function profileFromRow(row: QueryRow): ReviewRequestProfile {
       ? null
       : rowInteger(row, "response_window_seconds");
   const panelSize = row.panel_size === null || row.panel_size === undefined ? null : rowInteger(row, "panel_size");
+  const semanticSchemaVersion = rowInteger(row, "semantic_schema_version") as ReviewRequestProfileSemanticSchemaVersion;
   let requiredExpertiseKeys: ReviewerExpertiseKey[];
+  let expertiseRequirements: ReviewerExpertiseRequirement[];
   try {
     requiredExpertiseKeys = normalizeReviewerExpertiseKeys(
       JSON.parse(rowString(row, "required_expertise_keys_json") ?? "[]"),
+    );
+    expertiseRequirements = normalizeReviewerExpertiseRequirementsSelection(
+      JSON.parse(rowString(row, "expertise_requirements_json") ?? "[]"),
+      panelSize ?? MAXIMUM_REVIEW_PANEL_SIZE,
     );
   } catch (error) {
     if (error instanceof TokenlessServiceError) throw new Error("Database returned invalid reviewer expertise.");
@@ -541,6 +641,7 @@ function profileFromRow(row: QueryRow): ReviewRequestProfile {
     !configurationStatus ||
     !profileHash ||
     !createdBy ||
+    ![1, 2, 3].includes(semanticSchemaVersion) ||
     !REVIEW_REQUEST_QUESTION_AUTHORITIES.includes(questionAuthority) ||
     !REVIEW_REQUEST_RESULT_SEMANTICS.includes(resultSemantics) ||
     (questionAuthority === "owner_fixed" &&
@@ -558,6 +659,11 @@ function profileFromRow(row: QueryRow): ReviewRequestProfile {
     (!feedbackBonusEnabled && (feedbackBonusPoolAtomic !== null || feedbackBonusAwardWindowSeconds !== null)) ||
     !["ready", "action_required"].includes(configurationStatus) ||
     !HASH_PATTERN.test(profileHash) ||
+    (semanticSchemaVersion === 1 && questionAuthority !== "owner_fixed") ||
+    (semanticSchemaVersion === 2 && questionAuthority !== "agent_per_request") ||
+    (semanticSchemaVersion === 3 && expertiseRequirements.length === 0) ||
+    (semanticSchemaVersion !== 3 && expertiseRequirements.length > 0) ||
+    (semanticSchemaVersion === 3 && requiredExpertiseKeys.length > 0) ||
     (configurationStatus === "ready" && (responseWindowSeconds === null || panelSize === null))
   ) {
     throw new Error("Database returned an invalid review request profile.");
@@ -584,6 +690,8 @@ function profileFromRow(row: QueryRow): ReviewRequestProfile {
         : rowInteger(row, "private_group_policy_version"),
     privateGroupPolicyHash: rowString(row, "private_group_policy_hash"),
     requiredExpertiseKeys,
+    expertiseRequirements,
+    semanticSchemaVersion,
     responseWindowSeconds,
     panelSize,
     compensationMode,
@@ -675,7 +783,7 @@ const PROFILE_COLUMNS = `profile_id, version, workspace_id, agent_id, agent_vers
   question_authority, result_semantics, criterion, positive_label, negative_label,
   rationale_mode, audience, content_boundary, private_sensitivity, private_group_id,
   private_group_policy_version, private_group_policy_hash, response_window_seconds, panel_size,
-  required_expertise_keys_json,
+  semantic_schema_version, required_expertise_keys_json, expertise_requirements_json,
   compensation_mode, bounty_per_seat_atomic, feedback_bonus_enabled, feedback_bonus_pool_atomic,
   feedback_bonus_awarder_kind, feedback_bonus_awarder_account, feedback_bonus_award_window_seconds,
   configuration_status, profile_hash, created_by,
@@ -718,7 +826,9 @@ function insertValues(
     profile.privateGroupId,
     profile.privateGroupPolicyVersion,
     profile.privateGroupPolicyHash,
+    profile.semanticSchemaVersion,
     JSON.stringify(profile.requiredExpertiseKeys),
+    JSON.stringify(profile.expertiseRequirements),
     profile.responseWindowSeconds,
     profile.panelSize,
     profile.compensationMode,
@@ -738,13 +848,14 @@ const INSERT_PROFILE = `INSERT INTO tokenless_agent_review_request_profiles
   (profile_id, version, workspace_id, agent_id, agent_version_id, question_authority, result_semantics,
    criterion, positive_label, negative_label,
    rationale_mode, audience, content_boundary, private_sensitivity, private_group_id,
-   private_group_policy_version, private_group_policy_hash, required_expertise_keys_json,
+   private_group_policy_version, private_group_policy_hash, semantic_schema_version,
+   required_expertise_keys_json, expertise_requirements_json,
    response_window_seconds, panel_size,
    compensation_mode, bounty_per_seat_atomic, feedback_bonus_enabled, feedback_bonus_pool_atomic,
    feedback_bonus_awarder_kind, feedback_bonus_awarder_account, feedback_bonus_award_window_seconds,
    configuration_status, profile_hash, created_by,
    created_at, approved_by, approved_at, superseded_at)
-  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,'ready',$28,$29,$30,$29,$30,NULL)`;
+  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,'ready',$30,$31,$32,$31,$32,NULL)`;
 
 function isUniqueViolation(error: unknown) {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "23505");
@@ -764,6 +875,12 @@ export async function createReviewRequestProfile(input: {
   try {
     await client.query("BEGIN");
     await validateBindings(client, input.workspaceId, profile);
+    await validateReviewerExpertiseRequirementsWithClient(client, {
+      workspaceId: input.workspaceId,
+      audience: profile.audience,
+      panelSize: profile.panelSize,
+      requirements: profile.expertiseRequirements,
+    });
     const duplicate = await client.query(
       `SELECT 1 FROM tokenless_agent_review_request_profiles
        WHERE workspace_id = $1 AND agent_id = $2 AND agent_version_id = $3 AND superseded_at IS NULL`,
@@ -811,6 +928,12 @@ export async function updateReviewRequestProfile(input: {
   try {
     await client.query("BEGIN");
     await validateBindings(client, input.workspaceId, profile);
+    await validateReviewerExpertiseRequirementsWithClient(client, {
+      workspaceId: input.workspaceId,
+      audience: profile.audience,
+      panelSize: profile.panelSize,
+      requirements: profile.expertiseRequirements,
+    });
     const current = await client.query(
       `SELECT version, agent_id, profile_hash FROM tokenless_agent_review_request_profiles
        WHERE workspace_id = $1 AND profile_id = $2 AND superseded_at IS NULL FOR UPDATE`,

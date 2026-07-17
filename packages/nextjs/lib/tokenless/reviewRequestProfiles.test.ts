@@ -13,6 +13,7 @@ import {
   listReviewRequestProfiles,
   updateReviewRequestProfile,
 } from "~~/lib/tokenless/reviewRequestProfiles";
+import { createWorkspaceReviewerExpertiseDefinition } from "~~/lib/tokenless/reviewerExpertiseDefinitions";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
@@ -125,13 +126,14 @@ test("fixed profiles retain v1 hashes while agent-per-request profiles use feedb
     "sha256:37152028647c167f477fa2ced8daccf608515de26f724f3ed969c48578c428d5",
   );
 
-  const dynamic = __reviewRequestProfileTestUtils.normalizeReviewRequestProfileInput({
+  const dynamicInput = {
     ...fixed,
     questionAuthority: "agent_per_request",
     criterion: null,
     positiveLabel: null,
     negativeLabel: null,
-  });
+  };
+  const dynamic = __reviewRequestProfileTestUtils.normalizeReviewRequestProfileInput(dynamicInput);
   const dynamicDocument = __reviewRequestProfileTestUtils.reviewRequestProfileSemanticDocument(dynamic);
   assert.equal(dynamic.questionAuthority, "agent_per_request");
   assert.equal(dynamic.resultSemantics, "feedback");
@@ -146,6 +148,10 @@ test("fixed profiles retain v1 hashes while agent-per-request profiles use feedb
     resultSemantics: "feedback",
   });
   assert.notEqual(hashReviewRequestProfile(dynamic), hashReviewRequestProfile(normalizedFixed));
+  assert.equal(
+    hashReviewRequestProfile(dynamic),
+    "sha256:8cb7079628f7692a30d2c3e263cef25802ec96aa02bca2e2c36c7d141cd61a5d",
+  );
 
   assert.throws(
     () =>
@@ -155,13 +161,13 @@ test("fixed profiles retain v1 hashes while agent-per-request profiles use feedb
       }),
     /cannot include a fixed criterion/i,
   );
-  const { questionAuthority: _questionAuthority, ...missingAuthority } = fixed;
+  const missingAuthority = Object.fromEntries(Object.entries(fixed).filter(([key]) => key !== "questionAuthority"));
   assert.throws(() => __reviewRequestProfileTestUtils.normalizeReviewRequestProfileInput(missingAuthority), /invalid/i);
 
   assert.throws(
     () =>
       __reviewRequestProfileTestUtils.normalizeReviewRequestProfileInput({
-        ...dynamic,
+        ...dynamicInput,
         audience: "private_invited",
         contentBoundary: "private_workspace",
         privateSensitivity: "internal",
@@ -174,6 +180,135 @@ test("fixed profiles retain v1 hashes while agent-per-request profiles use feedb
       }),
     /public-safe RateLoop-network review/i,
   );
+});
+
+test("exact specialist requirements use ordered v3 semantics without reinterpreting legacy all-seat keys", () => {
+  const base = {
+    agentId: "agent_1",
+    agentVersionId: "agent_version_1",
+    questionAuthority: "owner_fixed",
+    criterion: "Is this correct?",
+    positiveLabel: "Yes",
+    negativeLabel: "No",
+    rationaleMode: "optional",
+    audience: "private_invited",
+    contentBoundary: "private_workspace",
+    privateSensitivity: "confidential",
+    privateGroupId: "pgrp_1",
+    privateGroupPolicyVersion: 1,
+    privateGroupPolicyHash: `sha256:${"1".repeat(64)}`,
+    responseWindowSeconds: 3_600,
+    panelSize: 3,
+    compensationMode: "unpaid",
+  };
+  const requirements = [
+    {
+      definitionId: "expd_workspace_typescript_review",
+      definitionVersion: 2,
+      definitionHash: `sha256:${"b".repeat(64)}`,
+      minimumSeats: 1,
+      sourceScope: "customer_invited",
+    },
+    {
+      definitionId: "expd_code_review_security",
+      definitionVersion: 1,
+      definitionHash: `sha256:${"a".repeat(64)}`,
+      minimumSeats: 2,
+      sourceScope: "customer_invited",
+    },
+  ];
+  const normalized = __reviewRequestProfileTestUtils.normalizeReviewRequestProfileInput({
+    ...base,
+    expertiseRequirements: requirements,
+  });
+  assert.equal(normalized.semanticSchemaVersion, 3);
+  assert.deepEqual(
+    normalized.expertiseRequirements.map(requirement => requirement.definitionId),
+    ["expd_code_review_security", "expd_workspace_typescript_review"],
+  );
+  const document = __reviewRequestProfileTestUtils.reviewRequestProfileSemanticDocument(normalized);
+  assert.equal(document.schemaVersion, "rateloop.review-request-profile.v3");
+  if (document.schemaVersion !== "rateloop.review-request-profile.v3") assert.fail("Expected v3 semantics.");
+  assert.deepEqual(document.audience.expertiseRequirements, [
+    {
+      definitionId: "expd_code_review_security",
+      definitionVersion: 1,
+      definitionHash: `sha256:${"a".repeat(64)}`,
+      minimumSeats: 2,
+      sourceScope: "customer_invited",
+    },
+    {
+      definitionId: "expd_workspace_typescript_review",
+      definitionVersion: 2,
+      definitionHash: `sha256:${"b".repeat(64)}`,
+      minimumSeats: 1,
+      sourceScope: "customer_invited",
+    },
+  ]);
+  const hash = hashReviewRequestProfile(normalized);
+  const changedFirstRequirement = (change: Record<string, unknown>) =>
+    hashReviewRequestProfile({
+      ...normalized,
+      expertiseRequirements: normalized.expertiseRequirements.map((requirement, index) =>
+        index === 0 ? { ...requirement, ...change } : requirement,
+      ),
+    });
+  for (const change of [
+    { definitionId: "expd_changed_security" },
+    { definitionVersion: 2 },
+    { definitionHash: `sha256:${"d".repeat(64)}` },
+    { minimumSeats: 1 },
+  ]) {
+    assert.notEqual(hash, changedFirstRequirement(change));
+  }
+  assert.throws(() => changedFirstRequirement({ sourceScope: "rateloop_network" }), /invited reviewers/i);
+  assert.throws(
+    () =>
+      __reviewRequestProfileTestUtils.normalizeReviewRequestProfileInput({
+        ...base,
+        requiredExpertiseKeys: ["code-review:security"],
+        expertiseRequirements: requirements,
+      }),
+    /cannot be used together/i,
+  );
+});
+
+test("exact specialist requirements persist with their semantic version and immutable tuple", async () => {
+  const { workspaceId, agent, group } = await fixture();
+  const { definition } = await createWorkspaceReviewerExpertiseDefinition({
+    accountAddress: OWNER,
+    workspaceId,
+    label: "TypeScript release review",
+    description: "Can assess this workspace's TypeScript release and runtime constraints.",
+  });
+  const expertiseRequirements = [
+    {
+      definitionId: definition.definitionId,
+      definitionVersion: definition.version,
+      definitionHash: definition.hash,
+      minimumSeats: 1,
+      sourceScope: "customer_invited",
+    },
+  ];
+  const created = await createReviewRequestProfile({
+    accountAddress: OWNER,
+    workspaceId,
+    profile: {
+      ...privateProfile(agent.agentId, agent.currentVersion.versionId, group),
+      expertiseRequirements,
+    },
+  });
+  assert.equal(created.semanticSchemaVersion, 3);
+  assert.deepEqual(created.expertiseRequirements, expertiseRequirements);
+  assert.deepEqual(created.requiredExpertiseKeys, []);
+  const stored = await dbClient.execute({
+    sql: `SELECT semantic_schema_version,required_expertise_keys_json,expertise_requirements_json
+          FROM tokenless_agent_review_request_profiles WHERE profile_id=? AND version=1`,
+    args: [created.profileId],
+  });
+  assert.equal(Number(stored.rows[0]?.semantic_schema_version), 3);
+  assert.deepEqual(JSON.parse(String(stored.rows[0]?.required_expertise_keys_json)), []);
+  assert.deepEqual(JSON.parse(String(stored.rows[0]?.expertise_requirements_json)), expertiseRequirements);
 });
 
 test("lane, content, group, and economics combinations fail closed", () => {
