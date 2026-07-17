@@ -36,11 +36,14 @@ export function SignInSurface({
           <div className="mb-8">
             <RateLoopLogo className="mx-auto h-20 w-20" idPrefix="sign-in-brand" />
             <p className="mt-4 font-display text-2xl font-semibold leading-tight text-base-content">
-              The Human Assurance <span className="rateloop-text-gradient">Loop</span>
+              The Human Assurance Loop
             </p>
           </div>
         ) : null}
-        <Heading id={titleId} className="font-display text-2xl font-semibold text-base-content">
+        <Heading
+          id={titleId}
+          className={`font-display text-2xl font-semibold ${branded ? "rateloop-text-gradient" : "text-base-content"}`}
+        >
           {title}
         </Heading>
         {description ? (

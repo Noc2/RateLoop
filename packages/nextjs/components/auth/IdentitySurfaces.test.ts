@@ -22,8 +22,9 @@ test("account sign-in is Better Auth first and explicitly creates no wallet", ()
   assert.match(signInPage, /<SignInSurface/);
   assert.match(signInPage, /branded title="Sign in"/);
   assert.doesNotMatch(signInPage, /No wallet required/i);
-  assert.match(signInSurface, /The Human Assurance/);
-  assert.match(signInSurface, /rateloop-text-gradient/);
+  assert.match(signInSurface, /The Human Assurance Loop/);
+  assert.doesNotMatch(signInSurface, /Assurance <span[^>]+>Loop/);
+  assert.match(signInSurface, /branded \? "rateloop-text-gradient" : "text-base-content"/);
   assert.match(signInSurface, /<RateLoopLogo/);
   assert.match(signInSurface, /<Card as="section"/);
   assert.match(signInSurface, /w-full max-w-md rounded-2xl p-8 text-center/);
