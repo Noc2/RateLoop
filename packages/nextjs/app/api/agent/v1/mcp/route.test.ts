@@ -268,6 +268,11 @@ test("pairing initialization tells the agent to register immediately and returns
   assert.equal(registration.registration.status, "claimed");
   assert.equal(registration.pollAfterMs, 3_000);
   assert.match(registration.nextAction, /rateloop_get_registration_status/);
+
+  const nullId = await POST(request({ id: null, jsonrpc: "2.0", method: "ping" }, issued.secret));
+  const nullIdBody = await nullId.json();
+  assert.equal(nullIdBody.error.code, -32600);
+  assert.equal(nullIdBody.id, null);
 });
 
 test("one preferred OAuth tool connects a fresh workspace without reflecting the connection secret", async () => {

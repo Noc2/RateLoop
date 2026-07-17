@@ -83,6 +83,16 @@ test("implements initialization, ping, and notification semantics", async () => 
   );
   assert.equal(notification.status, 202);
   assert.equal(await notification.text(), "");
+
+  const nullId = await POST(
+    request(
+      { id: null, jsonrpc: "2.0", method: "ping" },
+      { headers: { "mcp-protocol-version": "2025-11-25", "x-real-ip": "203.0.113.20" } },
+    ),
+  );
+  const nullIdBody = await body(nullId);
+  assert.equal(nullIdBody.error.code, -32600);
+  assert.equal(nullIdBody.id, null);
 });
 
 test("lists exactly the four browser handoff tools and reports live capabilities", async () => {

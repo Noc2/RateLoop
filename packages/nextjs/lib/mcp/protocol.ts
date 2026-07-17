@@ -298,10 +298,10 @@ export async function dispatchTokenlessMcp(value: unknown, origin: string) {
   const isNotification = !("id" in request);
   const id = isNotification
     ? null
-    : typeof request.id === "string" || typeof request.id === "number" || request.id === null
+    : typeof request.id === "string" || typeof request.id === "number"
       ? request.id
       : null;
-  if (!isNotification && id === null && request.id !== null) return errorResponse(null, -32600, "Invalid Request");
+  if (!isNotification && id === null) return errorResponse(null, -32600, "Invalid Request");
   if (isNotification) return null;
 
   if (request.method === "initialize") {

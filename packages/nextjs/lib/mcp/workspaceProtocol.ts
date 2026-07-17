@@ -695,12 +695,8 @@ export async function dispatchWorkspaceMcp(
     return errorResponse(null, -32600, "Invalid Request");
   }
   const notification = !("id" in request);
-  const id = notification
-    ? null
-    : typeof request.id === "string" || typeof request.id === "number" || request.id === null
-      ? request.id
-      : null;
-  if (!notification && id === null && request.id !== null) return errorResponse(null, -32600, "Invalid Request");
+  const id = notification ? null : typeof request.id === "string" || typeof request.id === "number" ? request.id : null;
+  if (!notification && id === null) return errorResponse(null, -32600, "Invalid Request");
   let mcpSessionHash: string | undefined;
   if (request.method !== "initialize" && principal.kind === "oauth") {
     if (!context.sessionId) {
