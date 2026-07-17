@@ -575,6 +575,13 @@
       "when": 1784235600000,
       "tag": "0082_worm_delivery_lease_fencing",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1784239200000,
+      "tag": "0083_gold_quality",
+      "breakpoints": true
     }
   ]
 }

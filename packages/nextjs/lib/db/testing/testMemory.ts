@@ -53,6 +53,15 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
     // migration installs the append-only guard; migration source tests cover it.
     return null;
   }
+  if (file === "0083_gold_quality.sql" && /^CREATE TABLE "tokenless_assurance_gold_items"/u.test(statement)) {
+    // pg-mem does not recognize the composite UNIQUE added to rubrics by the
+    // preceding ALTER when resolving this FK. Production retains and source-
+    // tests the stronger project-scoped FK; memory tests use the existing PK.
+    return statement.replace(
+      /FOREIGN KEY \("project_id", "rubric_id", "rubric_version"\)\s+REFERENCES "tokenless_assurance_rubrics"\("project_id", "rubric_id", "version"\)/u,
+      'FOREIGN KEY ("rubric_id", "rubric_version") REFERENCES "tokenless_assurance_rubrics"("rubric_id", "version")',
+    );
+  }
   if (file !== "0058_human_review_binding_backfill.sql") return statement;
 
   // The in-memory test database applies migrations to a guaranteed-empty schema.
