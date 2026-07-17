@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SignInSurface } from "~~/components/auth/SignInSurface";
+import { AgentWorkspaceExample } from "~~/components/tokenless/SignedOutExamples";
 
 const ThirdwebSessionButton = dynamic(
   () => import("~~/components/thirdweb/ThirdwebSessionButton").then(module => module.ThirdwebSessionButton),
@@ -19,6 +20,7 @@ export function AgentsSignInPrompt() {
       title="Agents"
       titleId="agents-sign-in-title"
     >
+      <AgentWorkspaceExample />
       <div className="flex flex-col items-center justify-center gap-3 sm:flex-row">
         <div className="w-full sm:w-auto">
           <ThirdwebSessionButton

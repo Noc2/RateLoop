@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
+import { HumanReviewExample } from "~~/components/tokenless/SignedOutExamples";
 import {
   type PrivateAnswerAssignment,
   PrivateAssignmentCard,
@@ -153,6 +154,7 @@ export function AnswerPageClient({
             <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-base-content/60">
               Review work is available to eligible, signed-in RateLoop humans.
             </p>
+            <HumanReviewExample />
             <div className="mx-auto mt-5 max-w-xs">
               <ThirdwebSessionButton />
             </div>

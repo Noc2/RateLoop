@@ -48,6 +48,7 @@ test("Human Discover keeps sign-in requirements concise", () => {
   assert.match(page, /Sign in to discover review work/);
   assert.match(page, /eligible, signed-in RateLoop humans/);
   assert.match(page, /ThirdwebSessionButton/);
+  assert.match(page, /<HumanReviewExample \/>/);
 });
 
 test("Human Discover discloses source filters only when both queues have work", () => {
