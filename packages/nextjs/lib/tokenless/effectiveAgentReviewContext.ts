@@ -205,7 +205,7 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
             r.criterion, r.positive_label, r.negative_label, r.rationale_mode,
             r.audience, r.content_boundary, r.private_sensitivity,
             r.private_group_id, r.private_group_policy_version, r.private_group_policy_hash,
-            r.required_expertise_keys_json,r.response_window_seconds,r.expected_effort_seconds,
+            r.required_expertise_keys_json,r.response_window_seconds,
             r.panel_size,r.compensation_mode,r.bounty_per_seat_atomic,
             r.feedback_bonus_enabled,r.feedback_bonus_pool_atomic,r.feedback_bonus_awarder_kind,
             r.feedback_bonus_awarder_account,r.feedback_bonus_award_window_seconds,
@@ -448,7 +448,6 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
     invalidContext("Stored request-profile audience and privacy terms are contradictory.");
   }
   const responseWindowSeconds = optionalInteger(row, "response_window_seconds");
-  const expectedEffortSeconds = optionalInteger(row, "expected_effort_seconds");
   const panelSize = optionalInteger(row, "panel_size");
   let requiredExpertiseKeys;
   try {
@@ -460,10 +459,6 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
   }
   if (
     (responseWindowSeconds !== null && (responseWindowSeconds < 1_200 || responseWindowSeconds > 86_400)) ||
-    (expectedEffortSeconds !== null &&
-      (expectedEffortSeconds < 60 ||
-        expectedEffortSeconds > 14_400 ||
-        expectedEffortSeconds > responseWindowSeconds!)) ||
     (panelSize !== null && panelSize > 100) ||
     (profileStatus === "ready" && (responseWindowSeconds === null || panelSize === null))
   ) {
@@ -542,7 +537,6 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
       requiredExpertiseKeys,
     },
     responseWindowSeconds,
-    expectedEffortSeconds,
     panelSize,
     compensation: { mode: compensationMode, bountyPerSeatAtomic },
     feedbackBonus: {

@@ -96,7 +96,6 @@ export type FrozenHumanReviewRoutingContext = {
     privateGroup: { id: string; policyVersion: number; policyHash: `sha256:${string}` } | null;
     requiredExpertiseKeys?: ReviewerExpertiseKey[];
     responseWindowSeconds: number;
-    expectedEffortSeconds?: number | null;
     panelSize: number;
     compensationMode: "unpaid" | "usdc";
     bountyPerSeatAtomic: string | null;
@@ -489,7 +488,6 @@ async function loadFrozenContext(
         : null,
       requiredExpertiseKeys: profile.audience.requiredExpertiseKeys,
       responseWindowSeconds: profile.responseWindowSeconds!,
-      expectedEffortSeconds: profile.expectedEffortSeconds,
       panelSize: profile.panelSize!,
       compensationMode: profile.compensation.mode,
       bountyPerSeatAtomic: profile.compensation.bountyPerSeatAtomic,
@@ -751,7 +749,6 @@ function prepareFrozenRoutingRequest(
       privateGroupId: profile.privateGroup?.id ?? null,
       requiredExpertiseKeys: profile.requiredExpertiseKeys,
       responseWindowSeconds: profile.responseWindowSeconds,
-      expectedEffortSeconds: profile.expectedEffortSeconds,
       panelSize: profile.panelSize,
       compensationMode: profile.compensationMode,
       bountyPerSeatAtomic: profile.bountyPerSeatAtomic,

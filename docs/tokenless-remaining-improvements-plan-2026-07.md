@@ -84,11 +84,7 @@ Implementation steps (each one commit with tests):
 5. `review: add mechanism-health metrics` — per-scope unanimity rate, RBTS bonus variance, gold failure
    rate, comparable-case drift; persisted alongside adaptive evidence and exposed on the workspace evaluation
    dashboard and (later) the assurance metrics endpoint (assurance plan E2.7).
-6. `setup-ui: present bounty guidance in effective-hourly terms` — quote panel bounties with an estimated
-   per-reviewer effective hourly rate derived from the response window and expected effort, alongside the
-   existing per-seat math (piece-rate pay is the known quality anti-pattern; guidance only, no economics
-   change).
-7. `docs: extend limitations with gold-item scope` — R10 candor: what gold does and does not prove.
+6. `docs: extend limitations with gold-item scope` — R10 candor: what gold does and does not prove.
 
 Dependency: none on unfinished lanes for the invited path; public-lane injection ships behind the same
 readiness gate as public paid panels.

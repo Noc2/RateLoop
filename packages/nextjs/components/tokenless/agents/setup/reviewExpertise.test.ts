@@ -1,6 +1,5 @@
 import {
   buildReviewExpertiseRequestProfile,
-  estimatedEffectiveHourlyUsdc,
   reviewExpertiseEligibilityStatus,
   reviewExpertiseFormValues,
 } from "./reviewExpertise";
@@ -51,9 +50,4 @@ test("expertise eligibility requires the selected panel size in the correct audi
       summary: "3 of 3 reviewers needed are eligible, including 2 invited and 1 public-network.",
     },
   );
-});
-
-test("effective-hourly guidance uses expected active work rather than the response deadline", () => {
-  assert.equal(estimatedEffectiveHourlyUsdc({ bountyPerSeatAtomic: "2500000", expectedEffortSeconds: 900 }), "10");
-  assert.equal(estimatedEffectiveHourlyUsdc({ bountyPerSeatAtomic: null, expectedEffortSeconds: 900 }), null);
 });

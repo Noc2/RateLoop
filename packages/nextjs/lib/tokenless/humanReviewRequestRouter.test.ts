@@ -51,7 +51,6 @@ function context(input?: {
   grantActive?: boolean;
   feedbackBonus?: boolean;
   requiredExpertiseKeys?: FrozenHumanReviewRoutingContext["requestProfile"]["requiredExpertiseKeys"];
-  expectedEffortSeconds?: number | null;
   lane?: FrozenHumanReviewRoutingContext["requestProfile"]["lane"];
   lifecycleState?: string;
 }): FrozenHumanReviewRoutingContext {
@@ -86,7 +85,6 @@ function context(input?: {
       privateGroup: privateLane ? { id: "group_router", policyVersion: 2, policyHash: HASH } : null,
       requiredExpertiseKeys: input?.requiredExpertiseKeys ?? [],
       responseWindowSeconds: 3_600,
-      expectedEffortSeconds: input?.expectedEffortSeconds ?? null,
       panelSize: privateLane ? 2 : 3,
       compensationMode: lane === "private_invited_unpaid" ? "unpaid" : "usdc",
       bountyPerSeatAtomic: lane === "private_invited_unpaid" ? null : "1000000",
@@ -497,7 +495,6 @@ test("private paid automatic routing uses the distinct paid adapter with frozen 
       lane: "private_invited_paid",
       lifecycleState: "blocked",
       requiredExpertiseKeys: ["code-review:security"],
-      expectedEffortSeconds: 600,
     }),
   );
   const result = await router({
@@ -518,7 +515,6 @@ test("private paid automatic routing uses the distinct paid adapter with frozen 
     economics: { compensationMode: string; bountyPerSeatAtomic: string; panelSize: number };
     preparedRequest: {
       audience: { kind: string; contentBoundary: string; requiredExpertiseKeys?: string[] };
-      timing: { expectedEffortSeconds?: number | null };
     };
   };
   assert.equal(paid.projectId, privateBinding.projectId);
@@ -533,7 +529,6 @@ test("private paid automatic routing uses the distinct paid adapter with frozen 
   assert.equal(paid.preparedRequest.audience.kind, "private_invited");
   assert.equal(paid.preparedRequest.audience.contentBoundary, "private_workspace");
   assert.deepEqual(paid.preparedRequest.audience.requiredExpertiseKeys, ["code-review:security"]);
-  assert.equal(paid.preparedRequest.timing.expectedEffortSeconds, 600);
 });
 
 test("unsupported hybrid routing remains blocked without falling back to either implemented lane", async () => {

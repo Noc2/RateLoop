@@ -27,17 +27,6 @@ export function buildReviewExpertiseRequestProfile(
   return { ...profile, requiredExpertiseKeys: normalizeReviewerExpertiseSelection(values.requiredExpertiseKeys) };
 }
 
-export function estimatedEffectiveHourlyUsdc(input: {
-  bountyPerSeatAtomic: string | null;
-  expectedEffortSeconds: number | null;
-}) {
-  if (!input.bountyPerSeatAtomic || !input.expectedEffortSeconds) return null;
-  const millionthsPerHour = (BigInt(input.bountyPerSeatAtomic) * 3_600n) / BigInt(input.expectedEffortSeconds);
-  const whole = millionthsPerHour / 1_000_000n;
-  const fraction = (millionthsPerHour % 1_000_000n).toString().padStart(6, "0").replace(/0+$/u, "");
-  return fraction ? `${whole}.${fraction}` : whole.toString();
-}
-
 export function reviewExpertiseEligibilityStatus(input: {
   audience: ReviewRequestProfile["audience"];
   eligibility: ReviewExpertiseEligibility | null;

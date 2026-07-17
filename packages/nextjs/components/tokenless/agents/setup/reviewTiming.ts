@@ -5,20 +5,16 @@ type ReviewRequestProfileInput = Omit<ReviewRequestProfile, "configurationStatus
 
 export const MIN_REVIEW_RESPONSE_WINDOW_SECONDS = 1_200;
 export const MAX_REVIEW_RESPONSE_WINDOW_SECONDS = 86_400;
-export const MIN_REVIEW_EXPECTED_EFFORT_SECONDS = 60;
-export const MAX_REVIEW_EXPECTED_EFFORT_SECONDS = 14_400;
 export const MAX_REVIEW_PANEL_SIZE = 500;
 
 export type ReviewTimingFormValues = {
   responseWindowSeconds: string;
-  expectedEffortSeconds?: string;
   panelSize: string;
 };
 
 export function reviewTimingFormValues(profile: ReviewRequestProfile | null | undefined): ReviewTimingFormValues {
   return {
     responseWindowSeconds: String(profile?.responseWindowSeconds ?? 3_600),
-    expectedEffortSeconds: String(profile?.expectedEffortSeconds ?? 600),
     panelSize: String(profile?.panelSize ?? 1),
   };
 }
@@ -44,11 +40,5 @@ export function buildReviewTimingRequestProfile(
   );
   const minimumPanelSize = profile.audience === "private_invited" ? 1 : 3;
   const panelSize = requiredInteger(values.panelSize, "Reviewer count", minimumPanelSize, MAX_REVIEW_PANEL_SIZE);
-  const expectedEffortSeconds = requiredInteger(
-    values.expectedEffortSeconds ?? "600",
-    "Expected active review time",
-    MIN_REVIEW_EXPECTED_EFFORT_SECONDS,
-    Math.min(MAX_REVIEW_EXPECTED_EFFORT_SECONDS, responseWindowSeconds),
-  );
-  return { ...profile, responseWindowSeconds, expectedEffortSeconds, panelSize };
+  return { ...profile, responseWindowSeconds, panelSize };
 }

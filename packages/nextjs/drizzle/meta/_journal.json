@@ -680,6 +680,13 @@
       "when": 1784289600000,
       "tag": "0097_remove_agent_deployment_name",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1784293200000,
+      "tag": "0098_remove_review_effort_guidance",
+      "breakpoints": true
     }
   ]
 }

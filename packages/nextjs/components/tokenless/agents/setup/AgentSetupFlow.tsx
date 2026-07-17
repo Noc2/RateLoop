@@ -28,7 +28,6 @@ import {
   REVIEWER_EXPERTISE,
   type ReviewExpertiseFormValues,
   buildReviewExpertiseRequestProfile,
-  estimatedEffectiveHourlyUsdc,
   reviewExpertiseEligibilityStatus,
   reviewExpertiseFormValues,
 } from "./reviewExpertise";
@@ -39,10 +38,8 @@ import {
   reviewFrequencySummary,
 } from "./reviewFrequency";
 import {
-  MAX_REVIEW_EXPECTED_EFFORT_SECONDS,
   MAX_REVIEW_PANEL_SIZE,
   MAX_REVIEW_RESPONSE_WINDOW_SECONDS,
-  MIN_REVIEW_EXPECTED_EFFORT_SECONDS,
   MIN_REVIEW_RESPONSE_WINDOW_SECONDS,
   type ReviewTimingFormValues,
   buildReviewTimingRequestProfile,
@@ -197,13 +194,6 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     panelSize: reviewTiming.panelSize,
     requiredExpertiseCount: reviewExpertise.requiredExpertiseKeys.length,
   });
-  const pendingEffectiveHourlyUsdc = pendingReviewConfirmation
-    ? estimatedEffectiveHourlyUsdc({
-        bountyPerSeatAtomic: pendingReviewConfirmation.requestProfile.bountyPerSeatAtomic,
-        expectedEffortSeconds: pendingReviewConfirmation.requestProfile.expectedEffortSeconds ?? null,
-      })
-    : null;
-
   const loadStep = useCallback(
     async (step: AgentSetupScreenStep, options?: { replace?: boolean; focus?: boolean }) => {
       const url = agentSetupUrl(setup.workspaceId, step);
@@ -1025,7 +1015,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             </fieldset>
             <fieldset className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-4">
               <legend className="px-1 text-sm font-medium">Review round</legend>
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="text-sm">
                   <p>Response window</p>
                   <DurationInput
@@ -1038,24 +1028,6 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     summarySuffix="Frozen when a request opens"
                     onChangeSeconds={responseWindowSeconds =>
                       setReviewTiming(current => ({ ...current, responseWindowSeconds }))
-                    }
-                  />
-                </div>
-                <div className="text-sm">
-                  <p>Expected active review time</p>
-                  <DurationInput
-                    id="agent-setup-review-expected-effort"
-                    className="mt-2"
-                    ariaLabel="Expected active review time"
-                    valueSeconds={reviewTiming.expectedEffortSeconds ?? "600"}
-                    minSeconds={MIN_REVIEW_EXPECTED_EFFORT_SECONDS}
-                    maxSeconds={Math.min(
-                      MAX_REVIEW_EXPECTED_EFFORT_SECONDS,
-                      Number(reviewTiming.responseWindowSeconds) || MAX_REVIEW_EXPECTED_EFFORT_SECONDS,
-                    )}
-                    summarySuffix="Estimate only; not the answer deadline"
-                    onChangeSeconds={expectedEffortSeconds =>
-                      setReviewTiming(current => ({ ...current, expectedEffortSeconds }))
                     }
                   />
                 </div>
@@ -1137,10 +1109,6 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   />
                 </label>
               ) : null}
-              <p className="mt-3 text-xs text-base-content/55">
-                Effective-hourly guidance uses expected active work, never the response deadline. It does not change
-                reviewer pay.
-              </p>
             </fieldset>
             <fieldset className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-4">
               <legend className="px-1 text-sm font-medium">Feedback Bonus</legend>
@@ -1299,16 +1267,6 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       pendingReviewConfirmation.requestProfile.bountyPerSeatAtomic
                         ? `${usdcAtomicToDecimal(pendingReviewConfirmation.requestProfile.bountyPerSeatAtomic)} USDC per accepted reviewer`
                         : "Unpaid; no base reviewer bounty"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-base-content/55">Effective-hourly guidance</dt>
-                    <dd>
-                      {pendingEffectiveHourlyUsdc
-                        ? `${pendingEffectiveHourlyUsdc} USDC/hour from ${formatResponseWindow(
-                            pendingReviewConfirmation.requestProfile.expectedEffortSeconds ?? null,
-                          )} expected active work`
-                        : "Not applicable"}
                     </dd>
                   </div>
                   <div>

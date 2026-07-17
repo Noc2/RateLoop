@@ -233,7 +233,7 @@ async function loadFrozenOpportunity(
                  rrp.criterion, rrp.positive_label, rrp.negative_label, rrp.rationale_mode,
                  rrp.audience, rrp.content_boundary, rrp.private_sensitivity, rrp.private_group_id,
                  rrp.private_group_policy_version, rrp.private_group_policy_hash,
-                 rrp.required_expertise_keys_json,rrp.response_window_seconds,rrp.expected_effort_seconds,
+                 rrp.required_expertise_keys_json,rrp.response_window_seconds,
                  rrp.panel_size, rrp.compensation_mode,
                  rrp.bounty_per_seat_atomic,rrp.feedback_bonus_enabled,rrp.feedback_bonus_pool_atomic,
                  rrp.feedback_bonus_awarder_kind,rrp.feedback_bonus_awarder_account,
@@ -309,10 +309,6 @@ async function loadFrozenOpportunity(
       JSON.parse(text(row, "required_expertise_keys_json") ?? "[]"),
     ),
     responseWindowSeconds: integer(row, "response_window_seconds", 1_200, 86_400),
-    expectedEffortSeconds:
-      row.expected_effort_seconds === null || row.expected_effort_seconds === undefined
-        ? null
-        : integer(row, "expected_effort_seconds", 60, 14_400),
     panelSize: integer(row, "panel_size", 1, 100),
     compensationMode: oneOf(row, "compensation_mode", ["unpaid", "usdc"] as const),
     bountyPerSeatAtomic: text(row, "bounty_per_seat_atomic"),
@@ -343,7 +339,6 @@ async function loadFrozenOpportunity(
     privateGroupPolicyHash: text(row, "private_group_policy_hash"),
     requiredExpertiseKeys: profile.requiredExpertiseKeys,
     responseWindowSeconds: profile.responseWindowSeconds,
-    expectedEffortSeconds: profile.expectedEffortSeconds,
     panelSize: profile.panelSize,
     compensationMode: profile.compensationMode,
     bountyPerSeatAtomic: profile.bountyPerSeatAtomic,

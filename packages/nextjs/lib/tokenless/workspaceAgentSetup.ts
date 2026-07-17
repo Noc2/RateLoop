@@ -66,7 +66,6 @@ export type AgentSetupReviewDraft = {
     privateGroupId: string | null;
     requiredExpertiseKeys?: ReviewerExpertiseKey[];
     responseWindowSeconds: number | null;
-    expectedEffortSeconds?: number | null;
     panelSize: number | null;
     compensationMode: "unpaid" | "usdc";
     bountyPerSeatAtomic: string | null;
@@ -106,7 +105,6 @@ const DEFAULT_REVIEW_DRAFT: AgentSetupReviewDraft = {
     privateGroupId: null,
     requiredExpertiseKeys: [],
     responseWindowSeconds: 3_600,
-    expectedEffortSeconds: 600,
     panelSize: 2,
     compensationMode: "unpaid",
     bountyPerSeatAtomic: null,
@@ -288,7 +286,6 @@ function reviewDraftFromOwnerView(view: OwnerReviewView): AgentSetupReviewDraft 
       privateGroupId: profile.privateGroupId,
       requiredExpertiseKeys: normalizeReviewerExpertiseKeys(profile.requiredExpertiseKeys),
       responseWindowSeconds: profile.responseWindowSeconds,
-      expectedEffortSeconds: profile.expectedEffortSeconds,
       panelSize: profile.panelSize,
       compensationMode: profile.compensationMode as AgentSetupReviewDraft["requestProfile"]["compensationMode"],
       bountyPerSeatAtomic: profile.bountyPerSeatAtomic,

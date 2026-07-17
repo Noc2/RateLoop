@@ -26,7 +26,6 @@ const profile: Omit<AgentSetupReviewDraft["requestProfile"], "configurationStatu
 test("review timing resumes the exact frozen window and panel size", () => {
   assert.deepEqual(reviewTimingFormValues({ ...profile, configurationStatus: "ready" }), {
     responseWindowSeconds: "3600",
-    expectedEffortSeconds: "600",
     panelSize: "1",
   });
 });

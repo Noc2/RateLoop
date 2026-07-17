@@ -32,7 +32,7 @@ export type HumanReviewPreparedRequest = {
     privateGroupId: string | null;
     requiredExpertiseKeys?: ReviewerExpertiseKey[];
   };
-  timing: { responseWindowSeconds: number; expectedEffortSeconds?: number | null; expiresAt: string };
+  timing: { responseWindowSeconds: number; expiresAt: string };
   panel: { size: number };
   contentCommitments: { source: string; suggestion: string };
   provenance: {
@@ -206,9 +206,7 @@ function preparedRequest(value: unknown): HumanReviewPreparedRequest {
   const audienceKeys = ["kind", "contentBoundary", "privateSensitivity", "privateGroupId"];
   if (audience.requiredExpertiseKeys !== undefined) audienceKeys.push("requiredExpertiseKeys");
   exactKeys(audience, "audience", audienceKeys);
-  const timingKeys = ["responseWindowSeconds", "expiresAt"];
-  if (timing.expectedEffortSeconds !== undefined) timingKeys.push("expectedEffortSeconds");
-  exactKeys(timing, "timing", timingKeys);
+  exactKeys(timing, "timing", ["responseWindowSeconds", "expiresAt"]);
   exactKeys(panel, "panel", ["size"]);
   exactKeys(contentCommitments, "content commitments", ["source", "suggestion"]);
   exactKeys(provenance, "provenance", ["agentId", "agentVersionId", "selectionPolicyId", "selectionPolicyVersion"]);
@@ -245,13 +243,6 @@ function preparedRequest(value: unknown): HumanReviewPreparedRequest {
   } catch {
     throw new Error("Stored required expertise keys are invalid.");
   }
-  const expectedEffortSeconds =
-    timing.expectedEffortSeconds === null || timing.expectedEffortSeconds === undefined
-      ? null
-      : integer(timing.expectedEffortSeconds, "expected active review time", 60, 14_400);
-  if (expectedEffortSeconds !== null && expectedEffortSeconds > responseWindowSeconds) {
-    throw new Error("Stored expected active review time exceeds the response window.");
-  }
   const panelSize = integer(panel.size, "panel size", audienceKind === "private_invited" ? 1 : 3, 100);
   const positiveLabel = requiredString(question.positiveLabel, "positive label");
   const negativeLabel = requiredString(question.negativeLabel, "negative label");
@@ -282,7 +273,6 @@ function preparedRequest(value: unknown): HumanReviewPreparedRequest {
     },
     timing: {
       responseWindowSeconds,
-      expectedEffortSeconds,
       expiresAt: dateIso(timing.expiresAt, "prepared request expiry"),
     },
     panel: { size: panelSize },

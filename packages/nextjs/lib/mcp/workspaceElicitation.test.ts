@@ -28,7 +28,7 @@ function approvalResult() {
           requiredExpertiseKeys: ["software_security"],
         },
         panel: { size: 5 },
-        timing: { responseWindowSeconds: 3600, expectedEffortSeconds: 600 },
+        timing: { responseWindowSeconds: 3600 },
         requestProfile: { hash: `sha256:${"a".repeat(64)}` },
         contentCommitments: {
           source: `sha256:${"b".repeat(64)}`,
@@ -60,7 +60,6 @@ test("builds capability-gated, content-free stable MCP form elicitation", () => 
   assert.match(request.params.message, /Question: Which response is safer\?/u);
   assert.match(request.params.message, /material: private_workspace/u);
   assert.match(request.params.message, /required expertise: software_security/u);
-  assert.match(request.params.message, /expected active review time: 600s/u);
   assert.match(request.params.message, /compensation: 1000000 atomic USDC per seat/u);
   assert.match(request.params.message, /optional feedback bonus: 1000000 atomic USDC/u);
   assert.doesNotMatch(JSON.stringify(request), /sourcePayload|suggestionPayload|reviewer/u);

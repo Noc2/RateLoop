@@ -34,7 +34,6 @@ export type BoundHumanReviewRequestProfile = {
   privateGroupId: string | null;
   requiredExpertiseKeys?: ReviewerExpertiseKey[];
   responseWindowSeconds: number;
-  expectedEffortSeconds?: number | null;
   panelSize: number;
   compensationMode: "unpaid" | "usdc";
   bountyPerSeatAtomic: string | null;
@@ -85,7 +84,7 @@ export type HumanReviewPreparedRequest = {
     privateGroupId: string | null;
     requiredExpertiseKeys?: ReviewerExpertiseKey[];
   };
-  timing: { responseWindowSeconds: number; expectedEffortSeconds?: number | null; expiresAt: string };
+  timing: { responseWindowSeconds: number; expiresAt: string };
   panel: { size: number };
   contentCommitments: { source: string; suggestion: string };
   provenance: {
@@ -305,13 +304,6 @@ function exactProfile(profile: BoundHumanReviewRequestProfile) {
     MAXIMUM_RESPONSE_WINDOW_SECONDS,
   );
   const requiredExpertiseKeys = normalizeReviewerExpertiseKeys(profile.requiredExpertiseKeys ?? []);
-  const expectedEffortSeconds =
-    profile.expectedEffortSeconds === null || profile.expectedEffortSeconds === undefined
-      ? null
-      : boundedInteger(profile.expectedEffortSeconds, "expected active review time", 60, 14_400);
-  if (expectedEffortSeconds !== null && expectedEffortSeconds > responseWindowSeconds) {
-    configurationError("Stored expected active review time exceeds the response window.");
-  }
   const panelSize = boundedInteger(profile.panelSize, "review panel size", 1, HUMAN_REVIEW_MAXIMUM_PANEL_SIZE);
   if (profile.audience !== "private_invited" && panelSize < 3) {
     configurationError("Stored public or hybrid review panel is too small.");
@@ -335,7 +327,6 @@ function exactProfile(profile: BoundHumanReviewRequestProfile) {
     positiveLabel,
     negativeLabel,
     responseWindowSeconds,
-    expectedEffortSeconds,
     requiredExpertiseKeys,
     panelSize,
   };
@@ -420,7 +411,6 @@ export function prepareHumanReviewRequest(input: {
     },
     timing: {
       responseWindowSeconds: profile.responseWindowSeconds,
-      expectedEffortSeconds: profile.expectedEffortSeconds,
       expiresAt: expiresAt.toISOString(),
     },
     panel: { size: profile.panelSize },

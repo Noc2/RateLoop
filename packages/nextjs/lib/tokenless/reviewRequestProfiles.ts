@@ -51,7 +51,6 @@ export type ReviewRequestProfileInput = {
   privateGroupPolicyHash?: string | null;
   requiredExpertiseKeys?: ReviewerExpertiseKey[];
   responseWindowSeconds: number;
-  expectedEffortSeconds?: number | null;
   panelSize: number;
   compensationMode: HumanReviewCompensationMode;
   bountyPerSeatAtomic?: string | null;
@@ -77,7 +76,6 @@ type NormalizedReviewRequestProfile = {
   privateGroupPolicyHash: string | null;
   requiredExpertiseKeys: ReviewerExpertiseKey[];
   responseWindowSeconds: number;
-  expectedEffortSeconds: number | null;
   panelSize: number;
   compensationMode: HumanReviewCompensationMode;
   bountyPerSeatAtomic: string | null;
@@ -118,7 +116,6 @@ const INPUT_KEYS = new Set<keyof ReviewRequestProfileInput>([
   "privateGroupPolicyHash",
   "requiredExpertiseKeys",
   "responseWindowSeconds",
-  "expectedEffortSeconds",
   "panelSize",
   "compensationMode",
   "bountyPerSeatAtomic",
@@ -258,13 +255,6 @@ export function normalizeReviewRequestProfileInput(value: unknown): NormalizedRe
   }
 
   const requiredExpertiseKeys = normalizeReviewerExpertiseKeys(input.requiredExpertiseKeys ?? []);
-  const expectedEffortSeconds =
-    input.expectedEffortSeconds === null || input.expectedEffortSeconds === undefined
-      ? null
-      : boundedInteger(input.expectedEffortSeconds, "expectedEffortSeconds", 60, 14_400);
-  if (expectedEffortSeconds !== null && expectedEffortSeconds > responseWindowSeconds) {
-    invalid("expectedEffortSeconds cannot exceed the response window.");
-  }
 
   if ((audience === "public_network" || audience === "hybrid") && panelSize < 3) {
     invalid("Public-network and hybrid review require a panel size of at least 3.");
@@ -330,7 +320,6 @@ export function normalizeReviewRequestProfileInput(value: unknown): NormalizedRe
     privateGroupPolicyHash,
     requiredExpertiseKeys,
     responseWindowSeconds,
-    expectedEffortSeconds,
     panelSize,
     compensationMode,
     bountyPerSeatAtomic,
@@ -381,7 +370,6 @@ export function reviewRequestProfileSemanticDocument(profile: NormalizedReviewRe
       requiredExpertiseKeys: profile.requiredExpertiseKeys.length ? profile.requiredExpertiseKeys : undefined,
     },
     responseWindowSeconds: profile.responseWindowSeconds,
-    expectedEffortSeconds: profile.expectedEffortSeconds ?? undefined,
     panelSize: profile.panelSize,
     economics: {
       compensationMode: profile.compensationMode,
@@ -472,10 +460,6 @@ function profileFromRow(row: QueryRow): ReviewRequestProfile {
     if (error instanceof TokenlessServiceError) throw new Error("Database returned invalid reviewer expertise.");
     throw error;
   }
-  const expectedEffortSeconds =
-    row.expected_effort_seconds === null || row.expected_effort_seconds === undefined
-      ? null
-      : rowInteger(row, "expected_effort_seconds");
   if (
     !profileId ||
     !workspaceId ||
@@ -527,7 +511,6 @@ function profileFromRow(row: QueryRow): ReviewRequestProfile {
     privateGroupPolicyHash: rowString(row, "private_group_policy_hash"),
     requiredExpertiseKeys,
     responseWindowSeconds,
-    expectedEffortSeconds,
     panelSize,
     compensationMode,
     bountyPerSeatAtomic: rowString(row, "bounty_per_seat_atomic"),
@@ -618,7 +601,7 @@ const PROFILE_COLUMNS = `profile_id, version, workspace_id, agent_id, agent_vers
   positive_label, negative_label,
   rationale_mode, audience, content_boundary, private_sensitivity, private_group_id,
   private_group_policy_version, private_group_policy_hash, response_window_seconds, panel_size,
-  required_expertise_keys_json, expected_effort_seconds,
+  required_expertise_keys_json,
   compensation_mode, bounty_per_seat_atomic, feedback_bonus_enabled, feedback_bonus_pool_atomic,
   feedback_bonus_awarder_kind, feedback_bonus_awarder_account, feedback_bonus_award_window_seconds,
   configuration_status, profile_hash, created_by,
@@ -661,7 +644,6 @@ function insertValues(
     profile.privateGroupPolicyHash,
     JSON.stringify(profile.requiredExpertiseKeys),
     profile.responseWindowSeconds,
-    profile.expectedEffortSeconds,
     profile.panelSize,
     profile.compensationMode,
     profile.bountyPerSeatAtomic,
@@ -680,12 +662,12 @@ const INSERT_PROFILE = `INSERT INTO tokenless_agent_review_request_profiles
   (profile_id, version, workspace_id, agent_id, agent_version_id, criterion, positive_label, negative_label,
    rationale_mode, audience, content_boundary, private_sensitivity, private_group_id,
    private_group_policy_version, private_group_policy_hash, required_expertise_keys_json,
-   response_window_seconds, expected_effort_seconds, panel_size,
+   response_window_seconds, panel_size,
    compensation_mode, bounty_per_seat_atomic, feedback_bonus_enabled, feedback_bonus_pool_atomic,
    feedback_bonus_awarder_kind, feedback_bonus_awarder_account, feedback_bonus_award_window_seconds,
    configuration_status, profile_hash, created_by,
    created_at, approved_by, approved_at, superseded_at)
-  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,'ready',$27,$28,$29,$28,$29,NULL)`;
+  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,'ready',$26,$27,$28,$27,$28,NULL)`;
 
 function isUniqueViolation(error: unknown) {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "23505");

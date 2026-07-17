@@ -105,9 +105,6 @@ function elicitationRequest(input: {
   const expertise = prepared.audience.requiredExpertiseKeys?.length
     ? prepared.audience.requiredExpertiseKeys.join(", ")
     : "none";
-  const expectedEffort = prepared.timing.expectedEffortSeconds
-    ? `${prepared.timing.expectedEffortSeconds}s`
-    : "not specified";
   return {
     jsonrpc: "2.0" as const,
     id: input.id,
@@ -120,7 +117,6 @@ function elicitationRequest(input: {
         `required expertise: ${expertise}; ` +
         `panel: ${prepared.panel.size}; ` +
         `response window: ${prepared.timing.responseWindowSeconds}s; ` +
-        `expected active review time: ${expectedEffort}; ` +
         `compensation: ${
           approval.economics.compensationMode === "unpaid"
             ? "unpaid"

@@ -635,7 +635,6 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
         privateGroupId: null,
         requiredExpertiseKeys: ["code-review:security"],
         responseWindowSeconds: 3_600,
-        expectedEffortSeconds: 600,
         panelSize: 5,
         compensationMode: "usdc",
         bountyPerSeatAtomic: "1000000",
@@ -715,7 +714,6 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
         privateGroupId: null,
         requiredExpertiseKeys: ["code-review:security"],
         responseWindowSeconds: 3_600,
-        expectedEffortSeconds: 600,
         panelSize: 5,
         compensationMode: "usdc",
         bountyPerSeatAtomic: "1000000",
@@ -905,7 +903,6 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
   assert.equal(elicitationRequest.id, queued.rows[0]?.request_id);
   assert.match(elicitationRequest.params.message, /Question: Is this output correct and safe to use\?/u);
   assert.match(elicitationRequest.params.message, /required expertise: code-review:security/u);
-  assert.match(elicitationRequest.params.message, /expected active review time: 600s/u);
   assert.doesNotMatch(eventBody, /public fixture|candidate/u);
 
   const acceptedResponse = {

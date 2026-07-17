@@ -176,9 +176,7 @@ common prior, which mixed expert/crowd panels violate; and crisply binary criter
 practice) drive near-unanimous rounds where quality-score variance collapses and the bonus stops
 discriminating. Mitigating design facts: only ≤20% of pay is mechanism-contingent, pay is
 independent-per-rater with no pool coupling, and commit–reveal removes on-platform herding — but off-platform
-collusion rings (the attack that broke the 2014 experiment) are untouched. Separately, per-task piece rates
-are the pay structure MTurk chose and Prolific's data indicts; effective-hourly-rate discipline correlates
-with quality ([Prolific](https://www.prolific.com/resources/data-quality-of-platforms-and-panels-for-online-behavioral-research)).
+collusion rings (the attack that broke the 2014 experiment) are untouched.
 
 ### 5. With no stake, sybil defense rides entirely on credential issuance
 
@@ -256,7 +254,7 @@ ground-truth items (gold questions with known answers injected at a low, undiscl
 practice both say dominates pure peer prediction, directly addresses collusion and lazy-consensus, and keeps
 working when rounds are near-unanimous. Keep RBTS as the marginal bonus allocator; use gold performance for
 admission, calibration, and network reputation. Also: monitor per-scope unanimity rates as a mechanism-health
-metric, and present bounty guidance in effective-hourly terms rather than pure piece rate.
+metric.
 
 **R4 — Build the fiat wrapper for review spend.** Invoiced prepaid review credits (Stripe, net terms, VAT
 itemized) that the platform treasury converts into USDC round funding via the existing `createRoundFor` /
