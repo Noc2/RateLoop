@@ -29,6 +29,30 @@ test("workspace managers can issue secret-once invitations and revoke access", (
   assert.doesNotMatch(panel, /localStorage|sessionStorage/);
 });
 
+test("workspace managers intend and confirm exact specialist definitions", () => {
+  const panel = source("./PrivateGroupsPanel.tsx");
+
+  assert.match(panel, /reviewer-expertise\/definitions/);
+  assert.match(panel, /definitionVersion: definition\.version/);
+  assert.match(panel, /definitionHash: definition\.hash/);
+  assert.match(panel, /Intended specialist areas \(optional\)/);
+  assert.match(panel, /required=\{invitationExpertiseIds\.length > 0\}/);
+  assert.match(panel, /maximumRedemptions: selectedExpertiseDefinitions\.length > 0 \? 1/);
+  assert.match(panel, /expertiseDefinitions: selectedExpertiseDefinitions/);
+  assert.match(panel, /expertiseExpiresAt: expertiseExpiresAt\?\.toISOString\(\) \?\? null/);
+  assert.match(panel, /365 \* 86_400_000/);
+  assert.match(panel, /remain pending after redemption until you confirm the member&apos;s knowledge/);
+  assert.match(panel, /pending owner confirmation/);
+
+  assert.match(panel, /Confirm specialist knowledge/);
+  assert.match(panel, /RateLoop has not independently verified/);
+  assert.match(panel, /Saving replaces any current specialist confirmation/);
+  assert.match(panel, /method: "PUT"/);
+  assert.match(panel, /members\/\$\{encodeURIComponent\(member\.principalAddress\)\}\/expertise/);
+  assert.match(panel, /body: JSON\.stringify\(\{\s+definitions,\s+expiresAt:/);
+  assert.match(panel, /Confirmation expires/);
+});
+
 test("humans preview an invitation before redemption and can leave memberships", () => {
   const panel = source("../human/PrivateGroupMembershipsPanel.tsx");
   const invitations = source("../account/InvitationRouterPanel.tsx");

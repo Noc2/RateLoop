@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
+import type { ReviewerExpertiseDefinition } from "~~/lib/tokenless/reviewerExpertiseOptions";
 
 type Workspace = { workspaceId: string; name: string; role: string };
 type GroupPolicy = {
@@ -25,12 +26,24 @@ type PrivateGroupMember = {
   principalAddress: string;
   role: string;
   status: string;
+  sourceInvitationId: string | null;
   membershipExpiresAt: string | null;
   joinedAt: string | null;
   endedAt: string | null;
   endReason: string | null;
 };
 type PrivateGroupDetail = PrivateGroup & { members: PrivateGroupMember[] };
+type ExactExpertiseDefinition = {
+  definitionId: string;
+  definitionVersion: number;
+  definitionHash: `sha256:${string}`;
+};
+type IntendedExpertiseDefinition = ExactExpertiseDefinition & {
+  label: string | null;
+  description: string | null;
+  expiresAt: string | null;
+  status: string | null;
+};
 type PrivateGroupInvitation = {
   invitationId: string;
   tokenPrefix: string;
@@ -42,6 +55,7 @@ type PrivateGroupInvitation = {
   maximumRedemptions: number;
   redemptionCount: number;
   revokedAt: string | null;
+  intendedExpertise: IntendedExpertiseDefinition[];
 };
 type IssuedInvitation = {
   invitationId: string;
@@ -69,6 +83,30 @@ function shortAddress(value: string) {
   return value.length > 16 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value;
 }
 
+function exactExpertiseDefinition(definition: ReviewerExpertiseDefinition): ExactExpertiseDefinition {
+  return {
+    definitionId: definition.definitionId,
+    definitionVersion: definition.version,
+    definitionHash: definition.hash,
+  };
+}
+
+function oneYearFromNow() {
+  return new Date(Date.now() + 365 * 86_400_000);
+}
+
+function localDateTimeValue(value: Date) {
+  const offset = value.getTimezoneOffset() * 60_000;
+  return new Date(value.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function defaultExpertiseExpiry(membershipExpiresAt: string | null) {
+  const oneYear = oneYearFromNow();
+  if (!membershipExpiresAt) return localDateTimeValue(oneYear);
+  const membershipExpiry = new Date(membershipExpiresAt);
+  return localDateTimeValue(membershipExpiry < oneYear ? membershipExpiry : oneYear);
+}
+
 function invitationStatus(invitation: PrivateGroupInvitation) {
   if (invitation.revokedAt) return "revoked";
   if (invitation.expiresAt && new Date(invitation.expiresAt) <= new Date()) return "expired";
@@ -90,6 +128,8 @@ export function PrivateGroupsPanel({
   const [groupId, setGroupId] = useState("");
   const [group, setGroup] = useState<PrivateGroupDetail | null>(null);
   const [invitations, setInvitations] = useState<PrivateGroupInvitation[]>([]);
+  const [expertiseDefinitions, setExpertiseDefinitions] = useState<ReviewerExpertiseDefinition[]>([]);
+  const [expertiseDefinitionsError, setExpertiseDefinitionsError] = useState<string | null>(null);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [showIssueInvitation, setShowIssueInvitation] = useState(false);
   const [issuedInvitation, setIssuedInvitation] = useState<IssuedInvitation | null>(null);
@@ -111,6 +151,33 @@ export function PrivateGroupsPanel({
   const [intendedAccountAddress, setIntendedAccountAddress] = useState("");
   const [intendedEmail, setIntendedEmail] = useState("");
   const [intendedEmailDomain, setIntendedEmailDomain] = useState("");
+  const [invitationExpertiseIds, setInvitationExpertiseIds] = useState<string[]>([]);
+  const [expertiseMemberAddress, setExpertiseMemberAddress] = useState("");
+  const [memberExpertiseIds, setMemberExpertiseIds] = useState<string[]>([]);
+  const [memberExpertiseExpiresAt, setMemberExpertiseExpiresAt] = useState("");
+
+  const loadExpertiseDefinitions = useCallback(async (selectedWorkspaceId: string, signal?: AbortSignal) => {
+    if (!selectedWorkspaceId) {
+      setExpertiseDefinitions([]);
+      setExpertiseDefinitionsError(null);
+      return;
+    }
+    try {
+      const body = await readJson(
+        await fetch(
+          `/api/account/workspaces/${encodeURIComponent(selectedWorkspaceId)}/reviewer-expertise/definitions`,
+          { cache: "no-store", credentials: "same-origin", signal },
+        ),
+      );
+      if (signal?.aborted) return;
+      setExpertiseDefinitions((body.definitions ?? []) as ReviewerExpertiseDefinition[]);
+      setExpertiseDefinitionsError(null);
+    } catch (cause) {
+      if (signal?.aborted) return;
+      setExpertiseDefinitions([]);
+      setExpertiseDefinitionsError(cause instanceof Error ? cause.message : "Unable to load specialist areas.");
+    }
+  }, []);
 
   const loadGroup = useCallback(async (selectedWorkspaceId: string, selectedGroupId: string, signal?: AbortSignal) => {
     if (!selectedWorkspaceId || !selectedGroupId) {
@@ -177,7 +244,10 @@ export function PrivateGroupsPanel({
           ? initialWorkspaceId
           : (manageable[0]?.workspaceId ?? "");
         setWorkspaceId(selectedWorkspaceId);
-        await loadGroups(selectedWorkspaceId, undefined, controller.signal);
+        await Promise.all([
+          loadGroups(selectedWorkspaceId, undefined, controller.signal),
+          loadExpertiseDefinitions(selectedWorkspaceId, controller.signal),
+        ]);
       } catch (cause) {
         if (!controller.signal.aborted) {
           setError(cause instanceof Error ? cause.message : "Unable to load private groups.");
@@ -187,17 +257,19 @@ export function PrivateGroupsPanel({
       }
     })();
     return () => controller.abort();
-  }, [initialWorkspaceId, loadGroups]);
+  }, [initialWorkspaceId, loadExpertiseDefinitions, loadGroups]);
 
   async function selectWorkspace(nextWorkspaceId: string) {
     setWorkspaceId(nextWorkspaceId);
     setIssuedInvitation(null);
     setShowIssueInvitation(false);
+    setInvitationExpertiseIds([]);
+    setExpertiseMemberAddress("");
     setError(null);
     setStatus(null);
     setLoading(true);
     try {
-      await loadGroups(nextWorkspaceId);
+      await Promise.all([loadGroups(nextWorkspaceId), loadExpertiseDefinitions(nextWorkspaceId)]);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to load private groups.");
     } finally {
@@ -210,6 +282,8 @@ export function PrivateGroupsPanel({
     setGroup(null);
     setIssuedInvitation(null);
     setShowIssueInvitation(false);
+    setInvitationExpertiseIds([]);
+    setExpertiseMemberAddress("");
     setError(null);
     setStatus(null);
     setLoading(true);
@@ -260,6 +334,10 @@ export function PrivateGroupsPanel({
 
   async function issueInvitation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (invitationExpertiseIds.length > 0 && !intendedEmail.trim()) {
+      setError("Enter the recipient email before choosing intended specialist areas.");
+      return;
+    }
     setBusy(true);
     setError(null);
     setStatus(null);
@@ -267,6 +345,16 @@ export function PrivateGroupsPanel({
     try {
       const ttlDays = Number(inviteTtlDays);
       const expiresAt = new Date(Date.now() + ttlDays * 86_400_000).toISOString();
+      const selectedExpertiseDefinitions = expertiseDefinitions
+        .filter(definition => invitationExpertiseIds.includes(definition.definitionId))
+        .map(exactExpertiseDefinition);
+      const oneYearExpertiseExpiry = oneYearFromNow();
+      const membershipExpiry = membershipExpiresAt ? new Date(membershipExpiresAt) : null;
+      const expertiseExpiresAt = selectedExpertiseDefinitions.length
+        ? membershipExpiry && membershipExpiry < oneYearExpertiseExpiry
+          ? membershipExpiry
+          : oneYearExpertiseExpiry
+        : null;
       const body = await readJson(
         await fetch(
           `/api/account/workspaces/${encodeURIComponent(workspaceId)}/private-groups/${encodeURIComponent(groupId)}/invitations`,
@@ -276,11 +364,13 @@ export function PrivateGroupsPanel({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               expiresAt,
-              maximumRedemptions: Number(maximumRedemptions),
+              maximumRedemptions: selectedExpertiseDefinitions.length > 0 ? 1 : Number(maximumRedemptions),
               membershipExpiresAt: membershipExpiresAt ? new Date(membershipExpiresAt).toISOString() : null,
               intendedAccountAddress: intendedAccountAddress.trim() || null,
               intendedEmail: intendedEmail.trim() || null,
-              intendedEmailDomain: intendedEmailDomain.trim() || null,
+              intendedEmailDomain: selectedExpertiseDefinitions.length > 0 ? null : intendedEmailDomain.trim() || null,
+              expertiseDefinitions: selectedExpertiseDefinitions,
+              expertiseExpiresAt: expertiseExpiresAt?.toISOString() ?? null,
             }),
           },
         ),
@@ -289,10 +379,67 @@ export function PrivateGroupsPanel({
       setIntendedAccountAddress("");
       setIntendedEmail("");
       setIntendedEmailDomain("");
+      setInvitationExpertiseIds([]);
       await loadGroup(workspaceId, groupId);
       setStatus("Invitation created. Copy it before leaving this page.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to issue the invitation.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function openMemberExpertise(member: PrivateGroupMember) {
+    const intended = invitations
+      .find(invitation => invitation.invitationId === member.sourceInvitationId)
+      ?.intendedExpertise?.filter(definition => definition.status === "pending");
+    setExpertiseMemberAddress(member.principalAddress);
+    setMemberExpertiseIds(
+      (intended ?? [])
+        .map(definition => definition.definitionId)
+        .filter(definitionId => expertiseDefinitions.some(definition => definition.definitionId === definitionId)),
+    );
+    setMemberExpertiseExpiresAt(
+      intended?.[0]?.expiresAt
+        ? localDateTimeValue(new Date(intended[0].expiresAt))
+        : defaultExpertiseExpiry(member.membershipExpiresAt),
+    );
+  }
+
+  async function confirmMemberExpertise(event: FormEvent<HTMLFormElement>, member: PrivateGroupMember) {
+    event.preventDefault();
+    const definitions = expertiseDefinitions
+      .filter(definition => memberExpertiseIds.includes(definition.definitionId))
+      .map(exactExpertiseDefinition);
+    if (definitions.length === 0) {
+      setError("Choose at least one specialist area to confirm.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setStatus(null);
+    try {
+      await readJson(
+        await fetch(
+          `/api/account/workspaces/${encodeURIComponent(workspaceId)}/private-groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(member.principalAddress)}/expertise`,
+          {
+            method: "PUT",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              definitions,
+              expiresAt: new Date(memberExpertiseExpiresAt).toISOString(),
+            }),
+          },
+        ),
+      );
+      await loadGroup(workspaceId, groupId);
+      setExpertiseMemberAddress("");
+      setMemberExpertiseIds([]);
+      setMemberExpertiseExpiresAt("");
+      setStatus(`Specialist knowledge confirmed for ${shortAddress(member.principalAddress)}.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to confirm specialist knowledge.");
     } finally {
       setBusy(false);
     }
@@ -558,11 +705,69 @@ export function PrivateGroupsPanel({
                 value={intendedEmail}
                 onChange={event => setIntendedEmail(event.target.value)}
                 placeholder="person@company.com"
+                required={invitationExpertiseIds.length > 0}
               />
               <span className="mt-2 block text-xs text-base-content/45">
                 Leave blank to create a one-use invitation code.
               </span>
             </label>
+            <fieldset className="rounded-lg border border-white/10 p-4">
+              <legend className="px-1 text-sm font-semibold text-base-content/75">
+                Intended specialist areas (optional)
+              </legend>
+              <p className="mt-1 text-xs leading-5 text-base-content/45">
+                These remain pending after redemption until you confirm the member&apos;s knowledge.
+              </p>
+              {expertiseDefinitions.length ? (
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  {expertiseDefinitions.map(definition => (
+                    <label
+                      key={definition.definitionId}
+                      htmlFor={`invitation-expertise-${definition.definitionId}`}
+                      aria-label={definition.label}
+                      className="flex cursor-pointer items-start gap-3 rounded-lg border border-white/10 p-3 text-sm text-base-content/70"
+                    >
+                      <input
+                        id={`invitation-expertise-${definition.definitionId}`}
+                        type="checkbox"
+                        className="checkbox checkbox-sm mt-0.5"
+                        checked={invitationExpertiseIds.includes(definition.definitionId)}
+                        onChange={event => {
+                          if (event.target.checked && invitationExpertiseIds.length >= 8) {
+                            setError("Choose up to eight intended specialist areas.");
+                            return;
+                          }
+                          setInvitationExpertiseIds(current =>
+                            event.target.checked
+                              ? [...current, definition.definitionId]
+                              : current.filter(definitionId => definitionId !== definition.definitionId),
+                          );
+                          if (event.target.checked) {
+                            setMaximumRedemptions("1");
+                            setIntendedEmailDomain("");
+                          }
+                        }}
+                      />
+                      <span>
+                        <span className="block font-medium text-base-content/80">{definition.label}</span>
+                        <span className="mt-1 block text-xs leading-5 text-base-content/45">
+                          {definition.description}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              ) : expertiseDefinitionsError ? (
+                <p className="mt-3 text-xs text-red-100">{expertiseDefinitionsError}</p>
+              ) : (
+                <p className="mt-3 text-xs text-base-content/45">No specialist areas are available yet.</p>
+              )}
+              {invitationExpertiseIds.length > 0 ? (
+                <p className="mt-3 text-xs text-base-content/50">
+                  A recipient email is required. This invitation will be limited to one redemption.
+                </p>
+              ) : null}
+            </fieldset>
             <details className="rounded-lg border border-white/10 p-4">
               <summary className="cursor-pointer text-sm font-semibold text-base-content/75">
                 Invitation restrictions
@@ -589,6 +794,7 @@ export function PrivateGroupsPanel({
                     max={1000}
                     value={maximumRedemptions}
                     onChange={event => setMaximumRedemptions(event.target.value)}
+                    disabled={invitationExpertiseIds.length > 0}
                     required
                   />
                 </label>
@@ -617,6 +823,7 @@ export function PrivateGroupsPanel({
                     value={intendedEmailDomain}
                     onChange={event => setIntendedEmailDomain(event.target.value)}
                     placeholder="company.com"
+                    disabled={invitationExpertiseIds.length > 0}
                   />
                 </label>
               </div>
@@ -672,6 +879,81 @@ export function PrivateGroupsPanel({
                         </button>
                       ) : null}
                     </div>
+                    {member.status === "active" && member.sourceInvitationId ? (
+                      <details
+                        className="mt-3 border-t border-white/10 pt-3"
+                        open={expertiseMemberAddress === member.principalAddress}
+                        onToggle={event => {
+                          if (event.currentTarget.open) {
+                            if (expertiseMemberAddress !== member.principalAddress) openMemberExpertise(member);
+                          } else if (expertiseMemberAddress === member.principalAddress) {
+                            setExpertiseMemberAddress("");
+                          }
+                        }}
+                      >
+                        <summary className="cursor-pointer text-xs font-semibold text-base-content/65">
+                          Confirm specialist knowledge
+                        </summary>
+                        <form className="mt-4 space-y-4" onSubmit={event => void confirmMemberExpertise(event, member)}>
+                          <p className="text-xs leading-5 text-base-content/45">
+                            Confirm only areas you know this person can review. RateLoop has not independently verified
+                            them. Saving replaces any current specialist confirmation.
+                          </p>
+                          {expertiseDefinitions.length ? (
+                            <fieldset className="grid gap-2 sm:grid-cols-2">
+                              <legend className="sr-only">Specialist areas to confirm</legend>
+                              {expertiseDefinitions.map(definition => (
+                                <label
+                                  key={definition.definitionId}
+                                  className="flex cursor-pointer items-start gap-2 rounded-lg border border-white/10 p-3 text-xs text-base-content/65"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    className="checkbox checkbox-xs mt-0.5"
+                                    checked={memberExpertiseIds.includes(definition.definitionId)}
+                                    onChange={event =>
+                                      setMemberExpertiseIds(current =>
+                                        event.target.checked
+                                          ? [...current, definition.definitionId]
+                                          : current.filter(definitionId => definitionId !== definition.definitionId),
+                                      )
+                                    }
+                                  />
+                                  <span>{definition.label}</span>
+                                </label>
+                              ))}
+                            </fieldset>
+                          ) : (
+                            <p className="text-xs text-red-100">
+                              {expertiseDefinitionsError ?? "No specialist areas are available yet."}
+                            </p>
+                          )}
+                          <label className="block text-xs text-base-content/55">
+                            Confirmation expires
+                            <input
+                              type="datetime-local"
+                              className="input input-sm mt-2 w-full border-white/10 bg-[var(--rateloop-field)] sm:max-w-xs"
+                              value={memberExpertiseExpiresAt}
+                              onChange={event => setMemberExpertiseExpiresAt(event.target.value)}
+                              min={localDateTimeValue(new Date(Date.now() + 60_000))}
+                              max={
+                                member.membershipExpiresAt
+                                  ? localDateTimeValue(new Date(member.membershipExpiresAt))
+                                  : undefined
+                              }
+                              required
+                            />
+                          </label>
+                          <button
+                            type="submit"
+                            className="btn btn-sm rateloop-secondary-action"
+                            disabled={busy || memberExpertiseIds.length === 0 || !memberExpertiseExpiresAt}
+                          >
+                            {busy ? "Saving…" : "Confirm selected areas"}
+                          </button>
+                        </form>
+                      </details>
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -688,6 +970,9 @@ export function PrivateGroupsPanel({
               <ul className="mt-5 space-y-3">
                 {invitations.map(invitation => {
                   const currentStatus = invitationStatus(invitation);
+                  const pendingExpertise = (invitation.intendedExpertise ?? []).filter(
+                    definition => definition.status === "pending",
+                  );
                   return (
                     <li key={invitation.invitationId} className="surface-card-nested rounded-lg p-4 text-sm">
                       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -706,6 +991,27 @@ export function PrivateGroupsPanel({
                                   ? `Domain: ${invitation.intendedEmailDomain}`
                                   : "Unbound"}
                           </p>
+                          {pendingExpertise.length ? (
+                            <div className="mt-3">
+                              <p className="text-xs font-medium text-amber-100/80">
+                                Intended specialist areas · pending owner confirmation
+                              </p>
+                              <ul className="mt-2 flex flex-wrap gap-2" aria-label="Pending intended specialist areas">
+                                {pendingExpertise.map(definition => (
+                                  <li
+                                    key={`${definition.definitionId}:${definition.definitionVersion}:${definition.definitionHash}`}
+                                    className="rounded-md bg-amber-200/[0.07] px-2 py-1 text-xs text-amber-50/75"
+                                  >
+                                    {definition.label ??
+                                      expertiseDefinitions.find(
+                                        candidate => candidate.definitionId === definition.definitionId,
+                                      )?.label ??
+                                      "Specialist area"}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="rounded-md bg-white/[0.06] px-2 py-1 text-xs capitalize text-base-content/60">
