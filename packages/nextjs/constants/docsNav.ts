@@ -10,6 +10,7 @@ export const DOCS_NAV = [
   {
     section: "Platform",
     links: [
+      { label: "Human Oversight", href: "/docs/human-oversight" },
       { label: "Compliance", href: "/docs/evidence" },
       { label: "Agents & MCP", href: "/docs/ai" },
       { label: "Tech Stack", href: "/docs/tech-stack" },

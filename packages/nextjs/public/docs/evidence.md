@@ -26,7 +26,8 @@ configure and operate RateLoop for your purpose; RateLoop provides the capabilit
 RateLoop operates around your AI system, gating its outputs; it does not modify the system itself.
 Execution provenance is host-reported and labelled so; RateLoop does not verify which model actually produced an
 output. RateLoop does not market SOC 2 / ISO / HIPAA / residency attestations it does not hold, and no evidence
-export by itself makes anyone compliant.
+export by itself makes anyone compliant. The capability-by-capability mapping behind each row lives in
+[`human-oversight.md`](./human-oversight.md); the browser version is [`/docs/human-oversight`](/docs/human-oversight).
 
 ## Packet fields
 

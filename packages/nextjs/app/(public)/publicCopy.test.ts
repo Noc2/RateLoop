@@ -5,6 +5,7 @@ import test from "node:test";
 const PUBLIC_COPY_FILES = [
   "./page.tsx",
   "./docs/page.tsx",
+  "./docs/human-oversight/page.tsx",
   "./docs/ai/page.tsx",
   "./docs/how-it-works/page.tsx",
   "./docs/use-cases/page.tsx",

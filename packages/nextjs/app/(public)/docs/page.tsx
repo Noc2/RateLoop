@@ -82,6 +82,10 @@ export default function DocsPage() {
           accountable owner decisions.
         </li>
         <li>
+          <Link href="/docs/human-oversight">Human Oversight</Link> maps monitoring, override, and stop capabilities to
+          the EU AI Act Article 14(4) oversight measures your people carry out.
+        </li>
+        <li>
           <Link href="/docs/how-it-works">How It Works</Link> follows the agent, reviewer, and settlement journeys.
         </li>
         <li>
