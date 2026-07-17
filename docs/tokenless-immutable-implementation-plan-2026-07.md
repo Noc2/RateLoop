@@ -32,8 +32,9 @@ The active package graph is tokenless-only:
   evidence packets, and the Human Assurance Loop.
 
 The ordered application migration source of truth is
-[`packages/nextjs/drizzle/meta/_journal.json`](../packages/nextjs/drizzle/meta/_journal.json); at this revision its head
-is `0091_mcp_elicitation_sessions`. The runtime deployment schema is `tokenless-v4`, whose complete identity adds
+[`packages/nextjs/drizzle/meta/_journal.json`](../packages/nextjs/drizzle/meta/_journal.json); its final entry is the
+authoritative head. Read that entry directly rather than trusting a head number copied into prose here, which drifts as
+migrations land. The runtime deployment schema is `tokenless-v4`, whose complete identity adds
 the Feedback Bonus address as a fifth slot. No v4 contract bundle has been deployed or checked in. The latest historical
 Base Sepolia bundle remains the disposable four-slot `tokenless-v3` deployment at block `44132668`, with complete key:
 
