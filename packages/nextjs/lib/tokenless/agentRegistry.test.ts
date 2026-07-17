@@ -27,7 +27,6 @@ function version(modelVersion: string) {
     provider: "OpenAI",
     model: "gpt-5",
     modelVersion,
-    deploymentName: "support-prod",
     environment: "production" as const,
   };
 }

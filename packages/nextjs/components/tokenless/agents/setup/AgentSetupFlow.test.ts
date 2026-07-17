@@ -44,6 +44,7 @@ test("guided setup renders one stage at a time and keeps implementation details 
   assert.match(flowSource, /bindingRevision: ownerView\.bindingRevision/);
   assert.match(flowSource, /do not prepare, send, or spend/i);
   assert.doesNotMatch(flowSource, /Audience policy binding|admission policy hash/i);
+  assert.doesNotMatch(flowSource, /Deployment name/i);
 });
 
 test("review setup distinguishes a saved policy decision from delivery authority", () => {

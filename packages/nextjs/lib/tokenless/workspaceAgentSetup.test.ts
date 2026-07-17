@@ -160,7 +160,6 @@ test("setup binds one verified connection and completes without publishing or sp
       provider: connected.agent!.provider,
       model: connected.agent!.model,
       modelVersion: connected.agent!.modelVersion,
-      deploymentName: connected.agent!.deploymentName,
       environment: "production",
     },
   });
@@ -268,7 +267,6 @@ test("prepare-for-approval setup skips private people and preserves a safe null 
       provider: connected.agent!.provider,
       model: connected.agent!.model,
       modelVersion: connected.agent!.modelVersion,
-      deploymentName: connected.agent!.deploymentName,
       environment: "production",
     },
   });
@@ -340,7 +338,6 @@ test("automatic setup atomically binds the exact owner-approved workflows and sp
       provider: connected.agent!.provider,
       model: connected.agent!.model,
       modelVersion: connected.agent!.modelVersion,
-      deploymentName: connected.agent!.deploymentName,
       environment: "production",
     },
   });
@@ -513,7 +510,6 @@ test("setup resumes a legacy v1 review choice as one unsaved v2 draft", async ()
       provider: connected.agent!.provider,
       model: connected.agent!.model,
       modelVersion: connected.agent!.modelVersion,
-      deploymentName: connected.agent!.deploymentName,
       environment: "production",
     },
   });

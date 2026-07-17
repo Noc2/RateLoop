@@ -673,6 +673,13 @@
       "when": 1784286000000,
       "tag": "0096_agent_capability_statements",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1784289600000,
+      "tag": "0097_remove_agent_deployment_name",
+      "breakpoints": true
     }
   ]
 }

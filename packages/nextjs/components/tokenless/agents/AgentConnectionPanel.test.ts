@@ -68,6 +68,7 @@ test("legacy pairings remain manageable but cannot be issued from the default pa
   assert.match(source, /\/agent-pairings\//);
   assert.match(source, /\/approve/);
   assert.match(source, /\/reject/);
+  assert.doesNotMatch(source, /Deployment name/i);
   assert.doesNotMatch(
     source,
     /fetch\(`\/api\/account\/workspaces\/\$\{encodeURIComponent\(workspaceId\)\}\/agent-pairings`, \{[\s\S]{0,120}method: "POST"/,

@@ -25,6 +25,8 @@ test("agent registry keeps the default row compact and reveals management on dem
   assert.doesNotMatch(form, />\s*Declared provider/);
   assert.doesNotMatch(form, />\s*Declared model/);
   assert.doesNotMatch(form, />\s*Model version/);
+  assert.doesNotMatch(form, /Deployment name/i);
+  assert.doesNotMatch(source, /declaredDeploymentName|>Deployment</i);
   assert.match(source, /const \[showArchived, setShowArchived\] = useState\(false\)/);
   assert.match(source, /showArchived \? agents : agents\.filter\(agent => agent\.status === "active"\)/);
   assert.match(source, /Show archived \(\$\{archivedAgentCount\}\)/);

@@ -134,7 +134,6 @@ export const pairingMcpTools = [
         provider: { maxLength: 120, minLength: 1, type: "string" },
         model: { maxLength: 160, minLength: 1, type: "string" },
         modelVersion: { maxLength: 160, type: ["string", "null"] },
-        deploymentName: { maxLength: 160, type: ["string", "null"] },
         environment: { enum: ["staging", "production"], type: "string" },
         requestedWorkflowKeys: {
           items: identifierSchema,
@@ -382,7 +381,6 @@ async function callPairingTool(
           "provider",
           "model",
           "modelVersion",
-          "deploymentName",
           "environment",
           "requestedWorkflowKeys",
         ],

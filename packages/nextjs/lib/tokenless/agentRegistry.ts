@@ -23,7 +23,6 @@ export type AgentVersionInput = {
   provider: string;
   model: string;
   modelVersion?: string | null;
-  deploymentName?: string | null;
   environment: AgentEnvironment;
 };
 
@@ -35,7 +34,6 @@ export type AgentVersionSnapshot = {
   declaredProvider: string;
   declaredModel: string;
   declaredModelVersion: string | null;
-  declaredDeploymentName: string | null;
   environment: AgentEnvironment;
   configurationCommitment: string;
   createdBy: string | null;
@@ -352,7 +350,6 @@ function normalizeVersionInput(input: AgentVersionInput) {
     provider: bounded(input.provider, "Declared provider", 120) as string,
     model: bounded(input.model, "Declared model", 160) as string,
     modelVersion: bounded(input.modelVersion, "Declared model version", 160, { optional: true }),
-    deploymentName: bounded(input.deploymentName, "Declared deployment name", 160, { optional: true }),
     environment,
   };
   return {
@@ -424,7 +421,6 @@ function versionFromRow(row: QueryRow, canManage: boolean): AgentVersionSnapshot
     declaredProvider: provider,
     declaredModel: model,
     declaredModelVersion: rowString(row, "declared_model_version"),
-    declaredDeploymentName: rowString(row, "declared_deployment_name"),
     environment,
     configurationCommitment: commitment,
     createdBy: canManage ? createdBy : null,
@@ -1119,7 +1115,7 @@ async function loadWorkspaceAgents(workspaceId: string, canManage: boolean): Pro
     }),
     dbClient.execute({
       sql: `SELECT version_id, agent_id, version_number, display_name, description,
-                   declared_provider, declared_model, declared_model_version, declared_deployment_name,
+                   declared_provider, declared_model, declared_model_version,
                    environment, configuration_commitment, created_by AS version_created_by,
                    created_at AS version_created_at
             FROM tokenless_agent_versions
@@ -1239,9 +1235,9 @@ export async function createWorkspaceAgent(input: {
     await client.query(
       `INSERT INTO tokenless_agent_versions
        (version_id, agent_id, workspace_id, version_number, display_name, description,
-        declared_provider, declared_model, declared_model_version, declared_deployment_name,
+        declared_provider, declared_model, declared_model_version,
         environment, configuration_commitment, created_by, created_at)
-       VALUES ($1, $2, $3, 1, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+       VALUES ($1, $2, $3, 1, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
       [
         versionId,
         agentId,
@@ -1251,7 +1247,6 @@ export async function createWorkspaceAgent(input: {
         version.provider,
         version.model,
         version.modelVersion,
-        version.deploymentName,
         version.environment,
         version.configurationCommitment,
         access.address,
@@ -1330,9 +1325,9 @@ export async function createWorkspaceAgentVersion(input: {
     await client.query(
       `INSERT INTO tokenless_agent_versions
        (version_id, agent_id, workspace_id, version_number, display_name, description,
-        declared_provider, declared_model, declared_model_version, declared_deployment_name,
+        declared_provider, declared_model, declared_model_version,
         environment, configuration_commitment, created_by, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
       [
         versionId,
         input.agentId,
@@ -1343,7 +1338,6 @@ export async function createWorkspaceAgentVersion(input: {
         version.provider,
         version.model,
         version.modelVersion,
-        version.deploymentName,
         version.environment,
         version.configurationCommitment,
         access.address,

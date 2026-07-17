@@ -776,10 +776,6 @@ export function AgentRegistryPanel({
                       <dt className="text-xs text-base-content/45">Environment</dt>
                       <dd className="mt-1 capitalize">{agent.currentVersion.environment}</dd>
                     </div>
-                    <div>
-                      <dt className="text-xs text-base-content/45">Deployment</dt>
-                      <dd className="mt-1">{agent.currentVersion.declaredDeploymentName ?? "—"}</dd>
-                    </div>
                     {agent.ownerAccountAddress ? (
                       <div>
                         <dt className="text-xs text-base-content/45">Owner</dt>
@@ -806,7 +802,6 @@ export function AgentRegistryPanel({
                         </div>
                         <p className="mt-2 text-base-content/60">
                           {version.displayName} · <span className="capitalize">{version.environment}</span>
-                          {version.declaredDeploymentName ? ` · ${version.declaredDeploymentName}` : ""}
                         </p>
                         <code className="mt-2 block break-all text-[11px] text-base-content/40">
                           sha256:{version.configurationCommitment}

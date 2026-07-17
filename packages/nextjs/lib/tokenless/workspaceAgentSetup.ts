@@ -29,7 +29,6 @@ type AgentIdentityInput = {
   provider?: string | null;
   model?: string | null;
   modelVersion?: string | null;
-  deploymentName?: string | null;
   environment?: "staging" | "production";
 };
 
@@ -197,7 +196,6 @@ function normalizeIdentity(input: AgentIdentityInput) {
     provider: bounded(input.provider ?? "unknown", "Provider", 120)!,
     model: bounded(input.model ?? "unknown", "Model", 160)!,
     modelVersion: bounded(input.modelVersion, "Model version", 160, true),
-    deploymentName: bounded(input.deploymentName, "Deployment name", 160, true),
     environment,
   };
   return { ...normalized, configurationCommitment: digest(stableJson(normalized)) };
@@ -382,7 +380,7 @@ export async function getWorkspaceAgentSetup(input: {
                  i.review_policy_id AS integration_review_policy_id,
                  i.review_policy_version AS integration_review_policy_version,
                  v.display_name,v.description,v.declared_provider,v.declared_model,
-                 v.declared_model_version,v.declared_deployment_name,v.environment
+                 v.declared_model_version,v.environment
           FROM tokenless_workspace_agent_setups s
           LEFT JOIN tokenless_agent_connection_intents ci ON ci.intent_id=s.primary_connection_intent_id
           LEFT JOIN tokenless_agent_integrations i
@@ -469,7 +467,6 @@ export async function getWorkspaceAgentSetup(input: {
             provider: rowString(row, "declared_provider")!,
             model: rowString(row, "declared_model")!,
             modelVersion: rowString(row, "declared_model_version"),
-            deploymentName: rowString(row, "declared_deployment_name"),
             environment: rowString(row, "environment")!,
             observedClientName: rowString(row, "observed_client_name"),
             observedClientVersion: rowString(row, "observed_client_version"),
@@ -585,7 +582,7 @@ export async function confirmWorkspaceSetupAgent(input: {
     const intentId = rowString(setup, "primary_connection_intent_id");
     const integrationResult = await client.query(
       `SELECT i.*,ci.status AS connection_status,v.version_number,v.display_name,v.description,
-              v.declared_provider,v.declared_model,v.declared_model_version,v.declared_deployment_name,v.environment
+              v.declared_provider,v.declared_model,v.declared_model_version,v.environment
        FROM tokenless_agent_integrations i
        JOIN tokenless_agent_connection_intents ci ON ci.intent_id=i.connection_intent_id
        JOIN tokenless_agent_versions v ON v.version_id=i.agent_version_id
@@ -602,7 +599,6 @@ export async function confirmWorkspaceSetupAgent(input: {
       rowString(integration, "declared_provider") === version.provider &&
       rowString(integration, "declared_model") === version.model &&
       rowString(integration, "declared_model_version") === version.modelVersion &&
-      rowString(integration, "declared_deployment_name") === version.deploymentName &&
       rowString(integration, "environment") === version.environment;
     const integrationId = rowString(integration, "integration_id")!;
     const agentId = rowString(integration, "agent_id")!;
@@ -616,9 +612,9 @@ export async function confirmWorkspaceSetupAgent(input: {
       await client.query(
         `INSERT INTO tokenless_agent_versions
          (version_id,agent_id,workspace_id,version_number,display_name,description,declared_provider,
-          declared_model,declared_model_version,declared_deployment_name,environment,
+          declared_model,declared_model_version,environment,
           configuration_commitment,created_by,created_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
         [
           confirmedVersionId,
           agentId,
@@ -629,7 +625,6 @@ export async function confirmWorkspaceSetupAgent(input: {
           version.provider,
           version.model,
           version.modelVersion,
-          version.deploymentName,
           version.environment,
           version.configurationCommitment,
           access.actor,

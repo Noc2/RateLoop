@@ -119,7 +119,6 @@ async function connectedWorkspace(ownerAddress: string) {
       provider: connected.agent.provider,
       model: connected.agent.model,
       modelVersion: connected.agent.modelVersion,
-      deploymentName: connected.agent.deploymentName,
       environment: "production",
     },
   });

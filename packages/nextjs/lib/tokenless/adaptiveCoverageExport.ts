@@ -293,7 +293,6 @@ function capabilityStatements(agentRows: Row[], versionRows: Row[], scopeRows: R
         provider: text(version, "declared_provider"),
         model: text(version, "declared_model"),
         modelVersion: text(version, "declared_model_version"),
-        deploymentName: text(version, "declared_deployment_name"),
         environment: text(version, "environment"),
         verification: "host_reported_not_independently_verified" as const,
       },
@@ -435,7 +434,7 @@ export async function exportAdaptiveCoverage(input: {
     );
     const agentVersionsResult = await client.query(
       `SELECT agent_id,version_number,display_name,declared_provider,declared_model,
-              declared_model_version,declared_deployment_name,environment
+              declared_model_version,environment
        FROM tokenless_agent_versions WHERE workspace_id=$1
        ORDER BY agent_id ASC,version_number DESC`,
       [input.workspaceId],

@@ -23,7 +23,6 @@ export function AgentVersionForm({
   const [externalId, setExternalId] = useState("");
   const [displayName, setDisplayName] = useState(current?.displayName ?? "");
   const [description, setDescription] = useState(current?.description ?? "");
-  const [deploymentName, setDeploymentName] = useState(current?.declaredDeploymentName ?? "");
   const [environment, setEnvironment] = useState<HostedAgentEnvironment>(
     current?.environment === "staging" ? "staging" : "production",
   );
@@ -37,7 +36,6 @@ export function AgentVersionForm({
       provider: "unknown",
       model: "unknown",
       modelVersion: null,
-      deploymentName: deploymentName || null,
       environment,
     });
   }
@@ -68,16 +66,6 @@ export function AgentVersionForm({
             placeholder="Support quality agent"
             maxLength={120}
             required
-          />
-        </label>
-        <label className="text-sm text-base-content/65">
-          Deployment name
-          <input
-            className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-            value={deploymentName}
-            onChange={event => setDeploymentName(event.target.value)}
-            placeholder="Optional internal deployment"
-            maxLength={160}
           />
         </label>
         <label className="text-sm text-base-content/65">

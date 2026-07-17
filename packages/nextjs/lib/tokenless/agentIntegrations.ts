@@ -41,7 +41,6 @@ export type AgentRegistrationInput = {
   provider: string;
   model: string;
   modelVersion?: string | null;
-  deploymentName?: string | null;
   environment: AgentEnvironment;
   clientName?: string | null;
   clientVersion?: string | null;
@@ -173,7 +172,6 @@ function normalizeRegistration(value: unknown): AgentRegistrationInput {
     provider: bounded(input.provider, "Provider", 120)!,
     model: bounded(input.model, "Model", 160)!,
     modelVersion: bounded(input.modelVersion, "Model version", 160, true),
-    deploymentName: bounded(input.deploymentName, "Deployment name", 160, true),
     environment,
     clientName: bounded(input.clientName, "Client name", 120, true),
     clientVersion: bounded(input.clientVersion, "Client version", 120, true),
@@ -210,7 +208,6 @@ function pairingFromRow(row: Row) {
     provider: text(row, "declared_provider"),
     model: text(row, "declared_model"),
     modelVersion: text(row, "declared_model_version"),
-    deploymentName: text(row, "declared_deployment_name"),
     environment: text(row, "environment"),
     clientName: text(row, "client_name"),
     clientVersion: text(row, "client_version"),
@@ -534,7 +531,7 @@ export async function submitAgentRegistration(input: {
   const value = normalizeRegistration(input.registration);
   const now = new Date();
   const result = await dbClient.execute({
-    sql: `UPDATE tokenless_agent_pairing_sessions SET status = 'claimed', external_id = ?, display_name = ?, description = ?, declared_provider = ?, declared_model = ?, declared_model_version = ?, declared_deployment_name = ?, environment = ?, client_name = COALESCE(?, client_name), client_version = COALESCE(?, client_version), client_capabilities_json = ?, requested_workflow_keys_json = ?, claimed_at = COALESCE(claimed_at, ?) WHERE pairing_id = ? AND status IN ('open','claimed') AND expires_at > ? RETURNING *`,
+    sql: `UPDATE tokenless_agent_pairing_sessions SET status = 'claimed', external_id = ?, display_name = ?, description = ?, declared_provider = ?, declared_model = ?, declared_model_version = ?, environment = ?, client_name = COALESCE(?, client_name), client_version = COALESCE(?, client_version), client_capabilities_json = ?, requested_workflow_keys_json = ?, claimed_at = COALESCE(claimed_at, ?) WHERE pairing_id = ? AND status IN ('open','claimed') AND expires_at > ? RETURNING *`,
     args: [
       value.externalId,
       value.displayName,
@@ -542,7 +539,6 @@ export async function submitAgentRegistration(input: {
       value.provider,
       value.model,
       value.modelVersion ?? null,
-      value.deploymentName ?? null,
       value.environment,
       value.clientName ?? null,
       value.clientVersion ?? null,
@@ -598,7 +594,6 @@ function versionCommitment(registration: AgentRegistrationInput) {
       provider: registration.provider,
       model: registration.model,
       modelVersion: registration.modelVersion ?? null,
-      deploymentName: registration.deploymentName ?? null,
       environment: registration.environment,
     }),
   );
@@ -633,7 +628,7 @@ async function insertApproval(
     [agentId, input.workspaceId, input.registration.externalId, input.actor, now],
   );
   await client.query(
-    `INSERT INTO tokenless_agent_versions (version_id, agent_id, workspace_id, version_number, display_name, description, declared_provider, declared_model, declared_model_version, declared_deployment_name, environment, configuration_commitment, created_by, created_at) VALUES ($1,$2,$3,1,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+    `INSERT INTO tokenless_agent_versions (version_id, agent_id, workspace_id, version_number, display_name, description, declared_provider, declared_model, declared_model_version, environment, configuration_commitment, created_by, created_at) VALUES ($1,$2,$3,1,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
     [
       versionId,
       agentId,
@@ -643,7 +638,6 @@ async function insertApproval(
       input.registration.provider,
       input.registration.model,
       input.registration.modelVersion ?? null,
-      input.registration.deploymentName ?? null,
       input.registration.environment,
       versionCommitment(input.registration),
       input.actor,
@@ -770,7 +764,6 @@ export async function approveAgentPairing(input: {
       provider: body.provider ?? pairing.declared_provider,
       model: body.model ?? pairing.declared_model,
       modelVersion: body.modelVersion ?? pairing.declared_model_version,
-      deploymentName: body.deploymentName ?? pairing.declared_deployment_name,
       environment: body.environment ?? pairing.environment,
       clientName: pairing.client_name,
       clientVersion: pairing.client_version,

@@ -381,7 +381,6 @@ function versionCommitment(input: { clientId: string; clientName: string; tokenF
     stableJson({
       clientId: input.clientId,
       clientName: input.clientName,
-      declaredDeploymentName: null,
       declaredModel: "unknown",
       declaredModelVersion: null,
       declaredProvider: "unknown",
@@ -494,8 +493,8 @@ export async function claimAgentConnectionIntent(input: {
     await client.query(
       `INSERT INTO tokenless_agent_versions
        (version_id,agent_id,workspace_id,version_number,display_name,description,declared_provider,declared_model,
-        declared_model_version,declared_deployment_name,environment,configuration_commitment,created_by,created_at)
-       VALUES ($1,$2,$3,1,$4,$5,'unknown','unknown',NULL,NULL,'production',$6,$7,$8)`,
+        declared_model_version,environment,configuration_commitment,created_by,created_at)
+       VALUES ($1,$2,$3,1,$4,$5,'unknown','unknown',NULL,'production',$6,$7,$8)`,
       [
         agentVersionId,
         agentId,

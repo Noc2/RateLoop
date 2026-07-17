@@ -30,7 +30,6 @@ export async function POST(request: NextRequest, context: Context) {
       "provider",
       "model",
       "modelVersion",
-      "deploymentName",
       "environment",
     ]);
     if (Object.keys(agent).some(key => !allowedAgentFields.has(key))) {
@@ -47,7 +46,6 @@ export async function POST(request: NextRequest, context: Context) {
           provider?: string | null;
           model?: string | null;
           modelVersion?: string | null;
-          deploymentName?: string | null;
           environment?: "staging" | "production";
         },
       }),

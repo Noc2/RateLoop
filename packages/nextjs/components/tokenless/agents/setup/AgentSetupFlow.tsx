@@ -458,7 +458,6 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               provider: "unknown",
               model: "unknown",
               modelVersion: null,
-              deploymentName: form.get("deploymentName") || null,
               environment: connectedAgent.environment,
             },
           }),
@@ -758,15 +757,6 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   name="description"
                   defaultValue={setup.agent.description ?? ""}
                   maxLength={1000}
-                />
-              </label>
-              <label className="text-sm">
-                Deployment name <span className="text-base-content/50">(optional)</span>
-                <input
-                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  name="deploymentName"
-                  defaultValue={setup.agent.deploymentName ?? ""}
-                  maxLength={160}
                 />
               </label>
             </div>

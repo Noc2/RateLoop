@@ -24,7 +24,6 @@ type AgentPairing = {
   declaredProvider: string;
   declaredModel: string;
   declaredModelVersion: string;
-  declaredDeploymentName: string;
   environment: "staging" | "production";
   clientName: string;
   clientVersion: string;
@@ -100,7 +99,6 @@ type ApprovalPayload = {
   provider: string;
   model: string;
   modelVersion: string | null;
-  deploymentName: string | null;
   environment: "staging" | "production";
   publishingPolicyId: string;
   allowedWorkflowKeys: string[];
@@ -165,7 +163,6 @@ export function normalizeAgentPairing(value: unknown): AgentPairing {
     declaredProvider: stringField(row, "declaredProvider", "provider"),
     declaredModel: stringField(row, "declaredModel", "model"),
     declaredModelVersion: stringField(row, "declaredModelVersion", "modelVersion"),
-    declaredDeploymentName: stringField(row, "declaredDeploymentName", "deploymentName"),
     environment: environment === "staging" ? "staging" : "production",
     clientName: stringField(row, "clientName"),
     clientVersion: stringField(row, "clientVersion"),
@@ -365,7 +362,6 @@ function PairingApprovalCard({
   const [declaredProvider, setDeclaredProvider] = useState(pairing.declaredProvider);
   const [declaredModel, setDeclaredModel] = useState(pairing.declaredModel);
   const [declaredModelVersion, setDeclaredModelVersion] = useState(pairing.declaredModelVersion);
-  const [declaredDeploymentName, setDeclaredDeploymentName] = useState(pairing.declaredDeploymentName);
   const [environment, setEnvironment] = useState(pairing.environment);
   const [selectedPublishingPolicyId, setSelectedPublishingPolicyId] = useState("");
   const [allowedWorkflows, setAllowedWorkflows] = useState(pairing.requestedWorkflowKeys.join(", "));
@@ -385,7 +381,6 @@ function PairingApprovalCard({
         provider: declaredProvider,
         model: declaredModel,
         modelVersion: declaredModelVersion || null,
-        deploymentName: declaredDeploymentName || null,
         environment,
         publishingPolicyId,
         allowedWorkflowKeys: workflowKeys(allowedWorkflows),
@@ -475,15 +470,6 @@ function PairingApprovalCard({
               className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
               value={declaredModelVersion}
               onChange={event => setDeclaredModelVersion(event.target.value)}
-              maxLength={160}
-            />
-          </label>
-          <label className="text-sm text-base-content/65">
-            Deployment name (optional)
-            <input
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={declaredDeploymentName}
-              onChange={event => setDeclaredDeploymentName(event.target.value)}
               maxLength={160}
             />
           </label>

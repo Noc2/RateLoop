@@ -30,7 +30,6 @@ async function fixture() {
       provider: "OpenAI",
       model: "gpt-5",
       modelVersion: "2026-07-14",
-      deploymentName: "support-production",
       environment: "production",
     },
   });

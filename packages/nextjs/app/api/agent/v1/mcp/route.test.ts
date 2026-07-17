@@ -191,6 +191,7 @@ test("pairing initialization tells the agent to register immediately and returns
     ["rateloop_register_agent", "rateloop_get_registration_status"],
   );
   assert.match(listedBody.result.tools[0].description, /Call immediately after connecting/);
+  assert.equal("deploymentName" in listedBody.result.tools[0].inputSchema.properties, false);
 
   const registered = await POST(
     request(
