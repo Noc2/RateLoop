@@ -8,6 +8,8 @@ const DOM_GLOBALS = [
   "navigator",
   "HTMLElement",
   "HTMLInputElement",
+  "HTMLTextAreaElement",
+  "HTMLSelectElement",
   "HTMLButtonElement",
   "Node",
   "Event",

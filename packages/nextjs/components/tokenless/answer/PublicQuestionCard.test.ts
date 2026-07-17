@@ -21,8 +21,9 @@ test("public rating progressively collects feedback without LREP and hides the a
 
 test("an already reserved voucher retries the prepared device queue and waits for confirmation", () => {
   assert.match(source, /createIndexedDbTokenlessCommitQueue\(\)\s*\.list\(\)/);
-  assert.match(source, /Retry saved submission/);
+  assert.match(source, /Retry submission/);
   assert.match(source, /\/api\/rater\/commits\/\$\{encodeURIComponent/);
   assert.match(source, /confirmation is still pending/i);
   assert.match(source, /remove\(savedCommit\.queueId\)/);
+  assert.match(source, /<ReviewerShell/);
 });

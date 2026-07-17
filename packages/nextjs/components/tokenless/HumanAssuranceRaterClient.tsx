@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useMemo, useRef, useState } from "react";
+import { ReviewerShell } from "~~/components/tokenless/review/ReviewerShell";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { Chip } from "~~/components/tokenless/ui/Chip";
@@ -128,6 +129,8 @@ export function HumanAssuranceRaterClient({
   const [error, setError] = useState<string | null>(null);
   const [canRecover, setCanRecover] = useState(false);
   const [serverAcceptance, setServerAcceptance] = useState<AssuranceServerAcceptance | null>(initialServerAcceptance);
+  const [activeCaseIndex, setActiveCaseIndex] = useState(0);
+  const rationaleRef = useRef<HTMLTextAreaElement>(null);
 
   const leaseDeadline = useMemo(() => {
     const values = task?.cases.flatMap(reviewCase => [
@@ -148,6 +151,14 @@ export function HumanAssuranceRaterClient({
         return draft?.selectedOption && rationaleLength >= minimum && rationaleLength <= maximum;
       }),
   );
+  const activeCase = task?.cases[activeCaseIndex] ?? null;
+  const activeCaseComplete = Boolean(
+    task &&
+      activeCase &&
+      drafts[activeCase.caseId]?.selectedOption &&
+      (drafts[activeCase.caseId]?.rationale.trim().length ?? 0) >= Math.max(10, task.rubric.rationale.minLength ?? 0) &&
+      (drafts[activeCase.caseId]?.rationale.trim().length ?? 0) <= Math.min(2_000, task.rubric.rationale.maxLength),
+  );
 
   async function loadAssignment(id: string) {
     const body = await readJson(
@@ -160,6 +171,7 @@ export function HumanAssuranceRaterClient({
     const nextTask = body as AssignmentTask;
     setTask(nextTask);
     setDrafts(emptyDrafts(nextTask.cases));
+    setActiveCaseIndex(0);
     setServerAcceptance(null);
     setCanRecover(false);
   }
@@ -279,6 +291,15 @@ export function HumanAssuranceRaterClient({
     }
   }
 
+  function advanceReview() {
+    if (!task || !activeCase || !activeCaseComplete || serverAcceptance) return;
+    if (activeCaseIndex < task.cases.length - 1) {
+      setActiveCaseIndex(index => index + 1);
+      return;
+    }
+    void submitResponses();
+  }
+
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:py-10">
       <div className="border-l-2 border-[var(--rateloop-green)] pl-6">
@@ -366,8 +387,36 @@ export function HumanAssuranceRaterClient({
               </Card>
             </>
           ) : (
-            <section className="space-y-6">
-              <div className="rateloop-surface-card p-5 sm:p-7">
+            <ReviewerShell
+              advanceDisabled={
+                busyAction !== null ||
+                serverAcceptance !== null ||
+                (activeCaseIndex === task.cases.length - 1 ? !completeDraft : !activeCaseComplete)
+              }
+              advanceLabel={
+                serverAcceptance
+                  ? "Review recorded"
+                  : activeCaseIndex === task.cases.length - 1
+                    ? "Submit review"
+                    : "Next case"
+              }
+              busyLabel={busyAction === "response" ? "Submitting…" : null}
+              caseIndex={activeCaseIndex}
+              laneHeader={
+                <>
+                  <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">
+                    Private assignment
+                  </p>
+                  <p className="mt-1 text-sm text-base-content/60">Short-lived, logged access</p>
+                </>
+              }
+              onAdvance={advanceReview}
+              onSelectFirst={() => activeCase && updateDraft(activeCase.caseId, { selectedOption: "A" })}
+              onSelectSecond={() => activeCase && updateDraft(activeCase.caseId, { selectedOption: "B" })}
+              rationaleRef={rationaleRef}
+              totalCases={task.cases.length}
+            >
+              <Card className="rounded-2xl p-5 sm:p-7">
                 <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/10 pb-4">
                   <div>
                     <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">
@@ -381,6 +430,7 @@ export function HumanAssuranceRaterClient({
                     onClick={() => {
                       setTask(null);
                       setDrafts({});
+                      setActiveCaseIndex(0);
                       setServerAcceptance(null);
                     }}
                   >
@@ -429,136 +479,125 @@ export function HumanAssuranceRaterClient({
                     <p className="mt-3 text-xs text-base-content/45">No additional qualification claims were used.</p>
                   )}
                 </div>
-              </div>
+              </Card>
 
-              {task.cases.map((reviewCase, caseIndex) => {
-                const draft = drafts[reviewCase.caseId] ?? {
-                  selectedOption: null,
-                  failureTags: [],
-                  rationale: "",
-                };
-                const failureTags = reviewCase.failureTags?.length ? reviewCase.failureTags : task.rubric.failureTags;
-                return (
-                  <article key={reviewCase.caseId} className="rateloop-surface-card p-5 sm:p-7">
-                    <p className="font-mono text-xs uppercase tracking-widest text-base-content/45">
-                      Case {String(caseIndex + 1).padStart(2, "0")}
-                    </p>
-                    <h3 className="mt-2 text-2xl font-semibold">{reviewCase.title}</h3>
-                    <p className="mt-3 text-sm leading-6 text-base-content/60">{reviewCase.instructions}</p>
-                    {reviewCase.objectiveReference ? (
-                      <p className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3 text-xs leading-5 text-base-content/55">
-                        Objective reference: {reviewCase.objectiveReference}
-                      </p>
-                    ) : null}
-                    <fieldset className="mt-6">
-                      <legend className="text-sm font-semibold">{task.rubric.prompt}</legend>
-                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                        {reviewCase.options.map(option => (
-                          <label
-                            key={option.key}
-                            className={`rounded-lg border p-4 transition-colors ${
-                              draft.selectedOption === option.key
-                                ? "border-[var(--rateloop-green)] bg-emerald-300/10"
-                                : "border-white/10 bg-black/20 hover:border-white/25"
-                            }`}
-                          >
-                            <span className="flex items-center justify-between gap-3">
-                              <span className="flex items-center gap-3 font-semibold">
-                                <input
-                                  type="radio"
-                                  name={`choice-${reviewCase.caseId}`}
-                                  value={option.key}
-                                  checked={draft.selectedOption === option.key}
-                                  disabled={serverAcceptance !== null}
-                                  onChange={() => updateDraft(reviewCase.caseId, { selectedOption: option.key })}
-                                />
-                                Candidate {option.key}
-                              </span>
-                              {serverAcceptance ? (
-                                <span className="text-xs text-base-content/40">Access closed</span>
-                              ) : (
-                                <a
-                                  href={artifactUrl(task.assignmentId, option)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-xs font-semibold underline underline-offset-4"
-                                >
-                                  Open private artifact
-                                </a>
-                              )}
-                            </span>
-                            <span className="mt-3 block break-all font-mono text-[11px] text-base-content/40">
-                              {option.artifactId}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                    </fieldset>
+              {activeCase
+                ? (() => {
+                    const reviewCase = activeCase;
+                    const draft = drafts[reviewCase.caseId] ?? {
+                      selectedOption: null,
+                      failureTags: [],
+                      rationale: "",
+                    };
+                    const failureTags = reviewCase.failureTags?.length
+                      ? reviewCase.failureTags
+                      : task.rubric.failureTags;
+                    return (
+                      <Card as="article" key={reviewCase.caseId} className="rounded-2xl p-5 sm:p-7">
+                        <p className="font-mono text-xs uppercase tracking-widest text-base-content/45">
+                          Case {String(activeCaseIndex + 1).padStart(2, "0")}
+                        </p>
+                        <h3 className="mt-2 text-2xl font-semibold">{reviewCase.title}</h3>
+                        <p className="mt-3 text-sm leading-6 text-base-content/60">{reviewCase.instructions}</p>
+                        {reviewCase.objectiveReference ? (
+                          <p className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3 text-xs leading-5 text-base-content/55">
+                            Objective reference: {reviewCase.objectiveReference}
+                          </p>
+                        ) : null}
+                        <fieldset className="mt-6">
+                          <legend className="text-sm font-semibold">{task.rubric.prompt}</legend>
+                          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                            {reviewCase.options.map(option => (
+                              <label
+                                key={option.key}
+                                className={`rounded-lg border p-4 transition-colors ${
+                                  draft.selectedOption === option.key
+                                    ? "border-[var(--rateloop-green)] bg-emerald-300/10"
+                                    : "border-white/10 bg-black/20 hover:border-white/25"
+                                }`}
+                              >
+                                <span className="flex items-center justify-between gap-3">
+                                  <span className="flex items-center gap-3 font-semibold">
+                                    <input
+                                      type="radio"
+                                      name={`choice-${reviewCase.caseId}`}
+                                      value={option.key}
+                                      checked={draft.selectedOption === option.key}
+                                      disabled={serverAcceptance !== null}
+                                      onChange={() => updateDraft(reviewCase.caseId, { selectedOption: option.key })}
+                                    />
+                                    Candidate {option.key}
+                                  </span>
+                                  {serverAcceptance ? (
+                                    <span className="text-xs text-base-content/40">Access closed</span>
+                                  ) : (
+                                    <a
+                                      href={artifactUrl(task.assignmentId, option)}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-xs font-semibold underline underline-offset-4"
+                                    >
+                                      Open private artifact
+                                    </a>
+                                  )}
+                                </span>
+                                <span className="mt-3 block break-all font-mono text-[11px] text-base-content/40">
+                                  {option.artifactId}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        </fieldset>
 
-                    <fieldset className="mt-6 border-t border-white/10 pt-5">
-                      <legend className="text-sm font-semibold">Failure tags</legend>
-                      <p className="mt-1 text-xs leading-5 text-base-content/45">
-                        Select every issue that materially affected your decision.
-                      </p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {failureTags.map(tag => (
-                          <Chip
-                            key={tag.key}
-                            checked={draft.failureTags.includes(tag.key)}
+                        <fieldset className="mt-6 border-t border-white/10 pt-5">
+                          <legend className="text-sm font-semibold">Failure tags</legend>
+                          <p className="mt-1 text-xs leading-5 text-base-content/45">
+                            Select every issue that materially affected your decision.
+                          </p>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {failureTags.map(tag => (
+                              <Chip
+                                key={tag.key}
+                                checked={draft.failureTags.includes(tag.key)}
+                                disabled={serverAcceptance !== null}
+                                onChange={() => toggleFailureTag(reviewCase.caseId, tag.key)}
+                              >
+                                {tag.label}
+                              </Chip>
+                            ))}
+                          </div>
+                        </fieldset>
+
+                        <label className="mt-6 block text-sm font-semibold">
+                          Decision rationale
+                          <textarea
+                            ref={rationaleRef}
+                            className="textarea mt-2 min-h-32 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)] text-sm leading-6"
+                            value={draft.rationale}
+                            onChange={event => updateDraft(reviewCase.caseId, { rationale: event.target.value })}
+                            minLength={Math.max(10, task.rubric.rationale.minLength ?? 0)}
+                            maxLength={Math.min(2_000, task.rubric.rationale.maxLength)}
                             disabled={serverAcceptance !== null}
-                            onChange={() => toggleFailureTag(reviewCase.caseId, tag.key)}
-                          >
-                            {tag.label}
-                          </Chip>
-                        ))}
-                      </div>
-                    </fieldset>
+                            placeholder="Identify the concrete difference that determined your choice."
+                            required
+                          />
+                        </label>
+                      </Card>
+                    );
+                  })()
+                : null}
 
-                    <label className="mt-6 block text-sm font-semibold">
-                      Decision rationale
-                      <textarea
-                        className="textarea mt-2 min-h-32 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)] text-sm leading-6"
-                        value={draft.rationale}
-                        onChange={event => updateDraft(reviewCase.caseId, { rationale: event.target.value })}
-                        minLength={Math.max(10, task.rubric.rationale.minLength ?? 0)}
-                        maxLength={Math.min(2_000, task.rubric.rationale.maxLength)}
-                        disabled={serverAcceptance !== null}
-                        placeholder="Identify the concrete difference that determined your choice."
-                        required
-                      />
-                    </label>
-                  </article>
-                );
-              })}
-
-              <div className="rateloop-surface-card p-5 sm:p-7">
-                <button
-                  type="button"
-                  className="rateloop-gradient-action w-full px-6"
-                  disabled={!completeDraft || busyAction !== null || serverAcceptance !== null}
-                  onClick={() => void submitResponses()}
-                >
-                  {busyAction === "response"
-                    ? "Submitting assigned review…"
-                    : serverAcceptance
-                      ? "Response batch accepted"
-                      : "Submit assigned review"}
-                </button>
-                {serverAcceptance ? (
-                  <p role="status" className="mt-4 rounded-lg bg-emerald-300/10 p-3 text-sm leading-6 text-emerald-100">
+              {serverAcceptance ? (
+                <Card className="rounded-2xl p-5 sm:p-7">
+                  <p role="status" className="rounded-lg bg-emerald-300/10 p-3 text-sm leading-6 text-emerald-100">
                     {serverAcceptance.replay ? "The server confirmed" : "The server accepted"}{" "}
                     {serverAcceptance.responseCount} assigned response
                     {serverAcceptance.responseCount === 1 ? "" : "s"} and completed the assignment. This was an unpaid
                     invited review, so no settlement reference is expected.
                   </p>
-                ) : (
-                  <p className="mt-3 text-xs leading-5 text-base-content/45">
-                    Choose A or B and satisfy the frozen rationale length for every case (within the 10-2000 character
-                    safety limit). The assignment completes only if the server persists the entire batch.
-                  </p>
-                )}
-              </div>
-            </section>
+                </Card>
+              ) : null}
+            </ReviewerShell>
           )}
 
           {error ? (

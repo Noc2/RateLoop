@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { Hex } from "viem";
 import { type PublicQuestionMedia, QuestionMedia } from "~~/components/tokenless/answer/QuestionMedia";
-import { Button } from "~~/components/tokenless/ui/Button";
+import { ReviewerShell } from "~~/components/tokenless/review/ReviewerShell";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { readJson } from "~~/lib/tokenless/http";
 import {
@@ -110,6 +110,7 @@ export function PublicQuestionCard({
   const [feedbackBody, setFeedbackBody] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [savedCommit, setSavedCommit] = useState<TokenlessQueuedCommit | null>(null);
+  const rationaleRef = useRef<HTMLTextAreaElement>(null);
   const feedbackEnabled = task.question.rationale?.mode !== "off";
 
   useEffect(() => {
@@ -321,201 +322,218 @@ export function PublicQuestionCard({
   );
 
   return (
-    <article className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_17.25rem] xl:items-start">
-      <Card as="section" className="min-h-72 rounded-lg p-5 sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-base-content/45">
-          <span>Public panel</span>
-          <span>Round {task.roundId}</span>
-        </div>
-        <h2 className="mt-8 max-w-3xl text-2xl font-semibold leading-tight sm:text-3xl">{task.question.prompt}</h2>
-        {task.question.media ? <QuestionMedia media={task.question.media} /> : null}
-        <p className="mt-5 text-sm leading-6 text-base-content/55">
-          Choose the stronger answer, then estimate how the panel will respond. Public questions contain only public,
-          synthetic, or safely redacted material.
-        </p>
-        <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 border-t border-white/10 pt-4 text-xs text-base-content/45">
-          <span>Guaranteed ${usdc(task.earnings.guaranteedBaseAtomic)}</span>
-          <span>Quality bonus up to ${usdc(task.earnings.possibleBonusAtomic)}</span>
-          <span>Insight bonus up to ${usdc(task.earnings.possibleSurpriseBonusAtomic)}</span>
-          <span>Attempt ${usdc(task.earnings.attemptCompensationAtomic)}</span>
-        </div>
-      </Card>
-
-      <Card as="aside" className="rounded-lg p-4 sm:p-5">
-        {paidAccess.state === "ready" ? (
-          <>
-            <p className="text-sm font-semibold">Your rating</p>
-            <p className="mt-1 text-xs text-base-content/50">Rating hidden until settlement.</p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              {(["yes", "no"] as const).map((value, index) => (
-                <button
-                  key={value}
-                  type="button"
-                  className={`tab-control flex items-center justify-center gap-1.5 px-3 py-3 text-sm font-semibold transition-colors ${
-                    answer === value
-                      ? value === "yes"
-                        ? "border-transparent bg-[var(--rateloop-green)] text-black"
-                        : "border-transparent bg-[var(--rateloop-pink)] text-white"
-                      : "pill-inactive"
-                  }`}
-                  onClick={() => setAnswer(value)}
-                >
-                  <ThumbIcon down={value === "no"} />
-                  {options[index]}
-                </button>
-              ))}
-            </div>
-            {feedbackEnabled && answer && !feedbackOpen ? (
-              <button
-                type="button"
-                className="mt-4 text-xs font-medium underline underline-offset-4"
-                onClick={() => setFeedbackOpen(true)}
-              >
-                Add feedback
-              </button>
-            ) : null}
-            {feedbackEnabled && feedbackOpen ? (
-              <fieldset className="mt-5 border-t border-white/10 pt-4">
-                <legend className="text-xs font-semibold">
-                  {task.question.rationale?.mode === "required" ? "Feedback required" : "Optional feedback"}
-                </legend>
-                <select
-                  aria-label="Feedback category"
-                  className="select select-sm mt-3 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  value={feedbackCategory}
-                  onChange={event => setFeedbackCategory(event.target.value as PublicRaterResponseCategory)}
-                >
-                  {PUBLIC_RATER_RESPONSE_CATEGORIES.map(category => (
-                    <option key={category} value={category}>
-                      {category.replace("_", " ")}
-                    </option>
-                  ))}
-                </select>
-                <textarea
-                  aria-label="Feedback"
-                  className="textarea mt-2 min-h-28 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  value={feedbackBody}
-                  onChange={event => setFeedbackBody(event.target.value)}
-                  minLength={
-                    task.question.rationale?.mode === "required" ? (task.question.rationale.minLength ?? 1) : 0
-                  }
-                  maxLength={feedbackMaximum}
-                  placeholder="Opinion, evidence, ambiguity, or concerns…"
-                />
-                <div className="text-right text-[11px] text-base-content/45">
-                  {feedbackBody.length}/{feedbackMaximum}
-                </div>
-                <input
-                  type="url"
-                  aria-label="Source URL"
-                  className="input input-sm mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  value={sourceUrl}
-                  onChange={event => setSourceUrl(event.target.value)}
-                  maxLength={2_048}
-                  placeholder="HTTPS source, optional"
-                />
-              </fieldset>
-            ) : null}
-            <p className="mt-5 text-xs leading-5 text-base-content/50">Predict the share choosing the first option</p>
-            <div className="mt-2 grid grid-cols-5 gap-1.5">
-              {[10, 30, 50, 70, 90].map(value => (
-                <button
-                  key={value}
-                  type="button"
-                  className={`rounded-md px-1 py-2 text-xs transition-colors ${
-                    prediction === value ? "pill-active" : "pill-inactive"
-                  }`}
-                  onClick={() => setPrediction(value)}
-                >
-                  {value}%
-                </button>
-              ))}
-            </div>
-            <label className="mt-5 block border-t border-white/10 pt-4 text-xs text-base-content/55">
-              Recovery secret
-              <input
-                type="password"
-                className="input input-sm mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                value={recoverySecret}
-                onChange={event => setRecoverySecret(event.target.value)}
-                minLength={12}
-                maxLength={1024}
-                autoComplete="new-password"
-                placeholder="12+ characters"
-              />
-            </label>
-            <Button
-              type="button"
-              className="mt-4 w-full px-4 text-sm disabled:cursor-not-allowed disabled:opacity-45"
-              disabled={busy || (!savedCommit && (!answer || prediction === null || task.alreadyVouchered))}
-              onClick={() => void (savedCommit ? retrySavedCommit() : submitResponse())}
-            >
-              {busy
-                ? "Working…"
-                : savedCommit
-                  ? "Retry saved submission"
-                  : task.alreadyVouchered
-                    ? "No saved submission on this device"
-                    : "Submit rating"}
-            </Button>
-            {recoveryUrl ? (
-              <a
-                href={recoveryUrl}
-                download={`rateloop-round-${task.roundId}-recovery.json`}
-                className="mt-3 block text-center text-xs underline underline-offset-4"
-              >
-                Save recovery package
-              </a>
-            ) : null}
-            {status ? (
-              <p role="status" className="mt-3 text-xs leading-5 text-emerald-100">
-                {status}
-              </p>
-            ) : null}
-            {error ? (
-              <p role="alert" className="mt-3 text-xs leading-5 text-red-100">
-                {error}
-              </p>
-            ) : null}
-            <Link
-              href="/human?tab=profile&section=paid-work"
-              className="mt-4 block text-center text-xs underline underline-offset-4"
-            >
-              Paid-work eligibility
-            </Link>
-          </>
-        ) : (
-          <div className="flex min-h-52 flex-col justify-center">
-            <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-yellow)]">Paid work</p>
-            <h3 className="mt-2 text-lg font-semibold">
-              {paidAccess.state === "payout_wallet_required"
-                ? "Add a payout wallet"
-                : paidAccess.eligibilityStatus === "expired"
-                  ? "Renew paid-work access"
-                  : paidAccess.eligibilityStatus === "review"
-                    ? "Eligibility review pending"
-                    : paidAccess.eligibilityStatus === "blocked"
-                      ? "Paid work unavailable"
-                      : "Complete paid-work eligibility"}
-            </h3>
-            <p className="mt-3 text-xs leading-5 text-base-content/55">
-              {paidAccess.state === "payout_wallet_required"
-                ? "Public reviews can be browsed now. Add a purpose-bound wallet before submitting paid work."
-                : "Every paid-work check must be complete before RateLoop issues your first voucher."}
-            </p>
-            <Link
-              href={
-                paidAccess.state === "payout_wallet_required"
-                  ? "/settings/wallets"
-                  : "/human?tab=profile&section=paid-work"
-              }
-              className="rateloop-gradient-action mt-5 w-full px-4 text-center text-sm"
-            >
-              {paidAccess.state === "payout_wallet_required" ? "Add payout wallet" : "Review paid-work access"}
-            </Link>
+    <ReviewerShell
+      advanceDisabled={
+        paidAccess.state !== "ready" ||
+        busy ||
+        (!savedCommit && (!answer || prediction === null || task.alreadyVouchered))
+      }
+      advanceLabel={
+        paidAccess.state !== "ready"
+          ? "Paid work required"
+          : savedCommit
+            ? "Retry submission"
+            : task.alreadyVouchered
+              ? "No saved submission"
+              : "Submit rating"
+      }
+      busyLabel={busy ? "Submitting…" : null}
+      caseIndex={0}
+      laneHeader={
+        <>
+          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Public review</p>
+          <p className="mt-1 text-sm text-base-content/60">Guaranteed ${usdc(task.earnings.guaranteedBaseAtomic)}</p>
+        </>
+      }
+      onAdvance={() => void (savedCommit ? retrySavedCommit() : submitResponse())}
+      onSelectFirst={() => paidAccess.state === "ready" && setAnswer("yes")}
+      onSelectSecond={() => paidAccess.state === "ready" && setAnswer("no")}
+      rationaleRef={rationaleRef}
+      totalCases={1}
+    >
+      <article className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_17.25rem] xl:items-start">
+        <Card as="section" className="min-h-72 rounded-lg p-5 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-base-content/45">
+            <span>Public panel</span>
+            <span>Round {task.roundId}</span>
           </div>
-        )}
-      </Card>
-    </article>
+          <h2 className="mt-8 max-w-3xl text-2xl font-semibold leading-tight sm:text-3xl">{task.question.prompt}</h2>
+          {task.question.media ? <QuestionMedia media={task.question.media} /> : null}
+          <p className="mt-5 text-sm leading-6 text-base-content/55">
+            Choose the stronger answer, then estimate how the panel will respond. Public questions contain only public,
+            synthetic, or safely redacted material.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 border-t border-white/10 pt-4 text-xs text-base-content/45">
+            <span>Guaranteed ${usdc(task.earnings.guaranteedBaseAtomic)}</span>
+            <span>Quality bonus up to ${usdc(task.earnings.possibleBonusAtomic)}</span>
+            <span>Insight bonus up to ${usdc(task.earnings.possibleSurpriseBonusAtomic)}</span>
+            <span>Attempt ${usdc(task.earnings.attemptCompensationAtomic)}</span>
+          </div>
+        </Card>
+
+        <Card className="rounded-lg p-4 sm:p-5">
+          {paidAccess.state === "ready" ? (
+            <>
+              <p className="text-sm font-semibold">Your rating</p>
+              <p className="mt-1 text-xs text-base-content/50">Rating hidden until settlement.</p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {(["yes", "no"] as const).map((value, index) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={`tab-control flex items-center justify-center gap-1.5 px-3 py-3 text-sm font-semibold transition-colors ${
+                      answer === value
+                        ? value === "yes"
+                          ? "border-transparent bg-[var(--rateloop-green)] text-black"
+                          : "border-transparent bg-[var(--rateloop-pink)] text-white"
+                        : "pill-inactive"
+                    }`}
+                    onClick={() => setAnswer(value)}
+                  >
+                    <ThumbIcon down={value === "no"} />
+                    {options[index]}
+                  </button>
+                ))}
+              </div>
+              {feedbackEnabled && answer && !feedbackOpen ? (
+                <button
+                  type="button"
+                  className="mt-4 text-xs font-medium underline underline-offset-4"
+                  onClick={() => setFeedbackOpen(true)}
+                >
+                  Add feedback
+                </button>
+              ) : null}
+              {feedbackEnabled && feedbackOpen ? (
+                <fieldset className="mt-5 border-t border-white/10 pt-4">
+                  <legend className="text-xs font-semibold">
+                    {task.question.rationale?.mode === "required" ? "Feedback required" : "Optional feedback"}
+                  </legend>
+                  <select
+                    aria-label="Feedback category"
+                    className="select select-sm mt-3 w-full border-white/10 bg-[var(--rateloop-field)]"
+                    value={feedbackCategory}
+                    onChange={event => setFeedbackCategory(event.target.value as PublicRaterResponseCategory)}
+                  >
+                    {PUBLIC_RATER_RESPONSE_CATEGORIES.map(category => (
+                      <option key={category} value={category}>
+                        {category.replace("_", " ")}
+                      </option>
+                    ))}
+                  </select>
+                  <textarea
+                    ref={rationaleRef}
+                    aria-label="Feedback"
+                    className="textarea mt-2 min-h-28 w-full border-white/10 bg-[var(--rateloop-field)]"
+                    value={feedbackBody}
+                    onChange={event => setFeedbackBody(event.target.value)}
+                    minLength={
+                      task.question.rationale?.mode === "required" ? (task.question.rationale.minLength ?? 1) : 0
+                    }
+                    maxLength={feedbackMaximum}
+                    placeholder="Opinion, evidence, ambiguity, or concerns…"
+                  />
+                  <div className="text-right text-[11px] text-base-content/45">
+                    {feedbackBody.length}/{feedbackMaximum}
+                  </div>
+                  <input
+                    type="url"
+                    aria-label="Source URL"
+                    className="input input-sm mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                    value={sourceUrl}
+                    onChange={event => setSourceUrl(event.target.value)}
+                    maxLength={2_048}
+                    placeholder="HTTPS source, optional"
+                  />
+                </fieldset>
+              ) : null}
+              <p className="mt-5 text-xs leading-5 text-base-content/50">Predict the share choosing the first option</p>
+              <div className="mt-2 grid grid-cols-5 gap-1.5">
+                {[10, 30, 50, 70, 90].map(value => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={`rounded-md px-1 py-2 text-xs transition-colors ${
+                      prediction === value ? "pill-active" : "pill-inactive"
+                    }`}
+                    onClick={() => setPrediction(value)}
+                  >
+                    {value}%
+                  </button>
+                ))}
+              </div>
+              <label className="mt-5 block border-t border-white/10 pt-4 text-xs text-base-content/55">
+                Recovery secret
+                <input
+                  type="password"
+                  className="input input-sm mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                  value={recoverySecret}
+                  onChange={event => setRecoverySecret(event.target.value)}
+                  minLength={12}
+                  maxLength={1024}
+                  autoComplete="new-password"
+                  placeholder="12+ characters"
+                />
+              </label>
+              {recoveryUrl ? (
+                <a
+                  href={recoveryUrl}
+                  download={`rateloop-round-${task.roundId}-recovery.json`}
+                  className="mt-3 block text-center text-xs underline underline-offset-4"
+                >
+                  Save recovery package
+                </a>
+              ) : null}
+              {status ? (
+                <p role="status" className="mt-3 text-xs leading-5 text-emerald-100">
+                  {status}
+                </p>
+              ) : null}
+              {error ? (
+                <p role="alert" className="mt-3 text-xs leading-5 text-red-100">
+                  {error}
+                </p>
+              ) : null}
+              <Link
+                href="/human?tab=profile&section=paid-work"
+                className="mt-4 block text-center text-xs underline underline-offset-4"
+              >
+                Paid-work eligibility
+              </Link>
+            </>
+          ) : (
+            <div className="flex min-h-52 flex-col justify-center">
+              <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-yellow)]">Paid work</p>
+              <h3 className="mt-2 text-lg font-semibold">
+                {paidAccess.state === "payout_wallet_required"
+                  ? "Add a payout wallet"
+                  : paidAccess.eligibilityStatus === "expired"
+                    ? "Renew paid-work access"
+                    : paidAccess.eligibilityStatus === "review"
+                      ? "Eligibility review pending"
+                      : paidAccess.eligibilityStatus === "blocked"
+                        ? "Paid work unavailable"
+                        : "Complete paid-work eligibility"}
+              </h3>
+              <p className="mt-3 text-xs leading-5 text-base-content/55">
+                {paidAccess.state === "payout_wallet_required"
+                  ? "Public reviews can be browsed now. Add a purpose-bound wallet before submitting paid work."
+                  : "Every paid-work check must be complete before RateLoop issues your first voucher."}
+              </p>
+              <Link
+                href={
+                  paidAccess.state === "payout_wallet_required"
+                    ? "/settings/wallets"
+                    : "/human?tab=profile&section=paid-work"
+                }
+                className="rateloop-gradient-action mt-5 w-full px-4 text-center text-sm"
+              >
+                {paidAccess.state === "payout_wallet_required" ? "Add payout wallet" : "Review paid-work access"}
+              </Link>
+            </div>
+          )}
+        </Card>
+      </article>
+    </ReviewerShell>
   );
 }
