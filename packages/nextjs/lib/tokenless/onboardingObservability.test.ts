@@ -14,9 +14,57 @@ import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const OWNER = "rlp_onboarding_owner_0001";
+const OTHER_OWNER = "rlp_onboarding_owner_0002";
+const HASH = (character: string) => `sha256:${character.repeat(64)}`;
 
 beforeEach(() => __setDatabaseResourcesForTests(createMemoryDatabaseResources()));
 afterEach(() => __setDatabaseResourcesForTests(null));
+
+async function allowFocusedTransitionFixtures() {
+  await dbClient.execute(
+    `ALTER TABLE tokenless_agent_review_opportunity_lifecycles
+     DROP CONSTRAINT tokenless_agent_review_opportunity_lifecycles_opportunity_fk`,
+  );
+}
+
+async function seedCompletedReviewTransition(input: {
+  workspaceId: string;
+  opportunityId: string;
+  completedAt: Date;
+  sensitiveMarker: string;
+}) {
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_review_opportunity_lifecycles
+          (workspace_id,opportunity_id,state,state_revision,reason_codes_json,state_entered_at,
+           terminal_at,created_at,updated_at)
+          VALUES (?,?,'completed',3,'[]',?,?,?,?)`,
+    args: [
+      input.workspaceId,
+      input.opportunityId,
+      input.completedAt,
+      input.completedAt,
+      new Date(input.completedAt.getTime() - 1_000),
+      input.completedAt,
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_review_opportunity_transition_events
+          (event_id,workspace_id,opportunity_id,transition_key,from_state,to_state,from_revision,to_revision,
+           reason_codes_json,actor_kind,actor_reference,details_json,transition_commitment,occurred_at)
+          VALUES (?,?,?,?,'pending','completed',2,3,?,'service',?,?,?,?)`,
+    args: [
+      `arte_${input.opportunityId}`,
+      input.workspaceId,
+      input.opportunityId,
+      `complete:${input.opportunityId}`,
+      JSON.stringify([input.sensitiveMarker]),
+      input.sensitiveMarker,
+      JSON.stringify({ privateReviewContent: input.sensitiveMarker }),
+      HASH(input.opportunityId.slice(-1)),
+      input.completedAt,
+    ],
+  });
+}
 
 test("the client event parser accepts only the content-free copied signal", () => {
   assert.deepEqual(parseConnectionMessageCopiedPayload({ event: "connection_message_copied" }), {
@@ -145,7 +193,9 @@ test("guided setup events retain only the allowlisted event, revision, and elaps
     sql: "SELECT created_at FROM tokenless_workspaces WHERE workspace_id = ?",
     args: [workspace.workspaceId],
   });
-  const createdAt = new Date(String(created.rows[0]?.created_at));
+  const rawCreatedAt = created.rows[0]?.created_at;
+  const storedCreatedAt = rawCreatedAt instanceof Date ? rawCreatedAt : new Date(String(rawCreatedAt));
+  const createdAt = new Date(Math.floor(storedCreatedAt.getTime() / 1_000) * 1_000);
   await recordWorkspaceSetupFunnelEvent({
     accountAddress: OWNER,
     workspaceId: workspace.workspaceId,
@@ -165,4 +215,62 @@ test("guided setup events retain only the allowlisted event, revision, and elaps
   });
   assert.deepEqual(audit.rows, [{ action: "onboarding.review_behavior_confirmed", metadata_json: '{"revision":4}' }]);
   assert.doesNotMatch(JSON.stringify({ funnel, audit: audit.rows }), /Sensitive setup name|agent|email|amount/u);
+});
+
+test("the funnel derives one activation event from the workspace's earliest completed review", async () => {
+  const workspace = await createWorkspace({ name: "Activation workspace", ownerAddress: OWNER });
+  const otherWorkspace = await createWorkspace({ name: "Other tenant", ownerAddress: OTHER_OWNER });
+  const created = await dbClient.execute({
+    sql: "SELECT created_at FROM tokenless_workspaces WHERE workspace_id = ?",
+    args: [workspace.workspaceId],
+  });
+  const createdAt = new Date(String(created.rows[0]?.created_at));
+  await allowFocusedTransitionFixtures();
+  await seedCompletedReviewTransition({
+    workspaceId: workspace.workspaceId,
+    opportunityId: "activation_later_a",
+    completedAt: new Date(createdAt.getTime() + 30_000),
+    sensitiveMarker: "private-later-review-content",
+  });
+  await seedCompletedReviewTransition({
+    workspaceId: workspace.workspaceId,
+    opportunityId: "activation_first_b",
+    completedAt: new Date(createdAt.getTime() + 15_000),
+    sensitiveMarker: "private-first-review-content",
+  });
+  await seedCompletedReviewTransition({
+    workspaceId: otherWorkspace.workspaceId,
+    opportunityId: "activation_other_c",
+    completedAt: new Date(createdAt.getTime() + 5_000),
+    sensitiveMarker: "other-tenant-private-content",
+  });
+
+  const funnel = await loadWorkspaceOnboardingFunnel(workspace.workspaceId);
+  const firstReviewCompletedAt = new Date(createdAt.getTime() + 15_000);
+  assert.deepEqual(
+    funnel.events.filter(event => event.event === "first_review_completed"),
+    [
+      {
+        attempt: null,
+        elapsedMs: firstReviewCompletedAt.getTime() - new Date(funnel.workspaceCreatedAt).getTime(),
+        event: "first_review_completed",
+        occurredAt: firstReviewCompletedAt.toISOString(),
+      },
+    ],
+  );
+  assert.doesNotMatch(
+    JSON.stringify(funnel),
+    /activation_|private-(?:first|later)-review-content|other-tenant-private-content/u,
+  );
+});
+
+test("the activation event is absent until a completed review transition exists", async () => {
+  const workspace = await createWorkspace({ name: "Not activated", ownerAddress: OWNER });
+
+  const funnel = await loadWorkspaceOnboardingFunnel(workspace.workspaceId);
+
+  assert.equal(
+    funnel.events.some(event => event.event === "first_review_completed"),
+    false,
+  );
 });

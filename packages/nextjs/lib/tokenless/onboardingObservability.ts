@@ -27,6 +27,7 @@ export const ONBOARDING_FUNNEL_EVENTS = [
   "reviewer_invitation_issued",
   "reviewers_deferred",
   "workspace_setup_completed",
+  "first_review_completed",
 ] as const;
 
 export type OnboardingFunnelEventName = (typeof ONBOARDING_FUNNEL_EVENTS)[number];
@@ -188,7 +189,7 @@ export async function loadWorkspaceOnboardingFunnel(workspaceId: string) {
   if (!workspaceCreatedAt) {
     throw new TokenlessServiceError("Workspace not found.", 404, "workspace_not_found");
   }
-  const [attemptResult, copiedResult, approvalResult, setupResult] = await Promise.all([
+  const [attemptResult, copiedResult, approvalResult, setupResult, firstReviewCompletedResult] = await Promise.all([
     dbClient.execute({
       sql: `SELECT intent_id,status,created_at,claimed_at,connected_at,cancelled_at,rejected_at,
                    last_diagnostic_code,last_diagnostic_at,hard_expires_at
@@ -215,6 +216,12 @@ export async function loadWorkspaceOnboardingFunnel(workspaceId: string) {
               .join(",")})
             ORDER BY occurred_at ASC`,
       args: [workspaceId, ...Object.values(SETUP_EVENT_ACTIONS)],
+    }),
+    dbClient.execute({
+      sql: `SELECT MIN(occurred_at) AS occurred_at
+            FROM tokenless_agent_review_opportunity_transition_events
+            WHERE workspace_id = ? AND to_state = 'completed'`,
+      args: [workspaceId],
     }),
   ]);
 
@@ -311,6 +318,16 @@ export async function loadWorkspaceOnboardingFunnel(workspaceId: string) {
       elapsedMs: elapsedMs(workspaceCreatedAt, occurredAt),
       event,
       occurredAt: occurredAt.toISOString(),
+    });
+  }
+
+  const firstReviewCompletedAt = rowDate(firstReviewCompletedResult.rows[0] as Row | undefined, "occurred_at");
+  if (firstReviewCompletedAt) {
+    events.push({
+      attempt: null,
+      elapsedMs: elapsedMs(workspaceCreatedAt, firstReviewCompletedAt),
+      event: "first_review_completed",
+      occurredAt: firstReviewCompletedAt.toISOString(),
     });
   }
 
