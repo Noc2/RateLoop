@@ -14,9 +14,13 @@ test("connection message contains one intent URL and no operational credential i
   assert.match(message, /Treat this as a new connection if a previous RateLoop workspace was deleted/);
   assert.match(message, /Preserve this link privately/);
   assert.match(message, /Only interrupt me for a host-presented install, trust, or OAuth action/);
-  assert.match(message, /if no workspace tools appear and I must uninstall existing RateLoop plugins/);
+  assert.match(message, /first missing RateLoop workspace-tool check as activation pending/);
+  assert.match(message, /do not ask me to uninstall then/);
   assert.match(message, /host's Continue action when offered/);
   assert.match(message, /check for RateLoop workspace tools on the next active turn/);
+  assert.match(message, /still missing on a later active turn and the host offers no action/);
+  assert.match(message, /tell me once to uninstall all existing RateLoop plugins/);
+  assert.match(message, /never repeat that recovery/);
   assert.match(message, /never ask me to paste the link or approve the same action again/);
   assert.match(message, /Report success only after RateLoop verifies the connection/);
   assert.equal(message.match(/\$rateloop-workspace-connection/g)?.length, 1);

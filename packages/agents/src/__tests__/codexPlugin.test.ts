@@ -217,11 +217,21 @@ describe("RateLoop agent host assets", () => {
     );
     expect(skill).toContain("replacement for a deleted workspace");
     expect(skill).toContain("revokes its OAuth token family");
+    expect(skill).toContain(
+      "Treat the first missing workspace-tool inventory for a connection intent as activation pending",
+    );
+    expect(skill).toContain(
+      "never diagnose a stale install or recommend uninstall from that first check",
+    );
     expect(skill).toContain("uninstall every existing RateLoop plugin");
+    expect(skill).toContain(
+      "Only if a later active turn still lacks the workspace tools after the first missing-tool check",
+    );
+    expect(skill).toContain("Never repeat that uninstall recovery for the same intent");
     expect(skill).toContain("Never tell them to remove unrelated plugins");
     expect(skill).toContain("host actually presents");
     expect(skill).toContain(
-      "check the workspace tool inventory once on the next active turn",
+      "On the next active turn after the first missing-tool check, check the workspace tool inventory once more",
     );
     expect(skill).toContain("Do not run a second login");
     expect(skill).toContain(
