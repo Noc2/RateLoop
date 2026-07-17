@@ -38,7 +38,7 @@ const CHAIN_REFERENCE = {
     blockNumber: "123456",
   },
 };
-const resolvePublic = async () => ["203.0.113.10"];
+const resolvePublic = async () => ["93.184.216.34"];
 const HASH = (character: string) => `sha256:${character.repeat(64)}`;
 const PACKET_REFERENCE = {
   schemaVersion: "rateloop.assurance-event-reference.v1" as const,

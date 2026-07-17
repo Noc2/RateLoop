@@ -1,6 +1,7 @@
 import { TOKENLESS_SCHEMA_VERSION, type TokenlessResult, parseTokenlessResult } from "@rateloop/sdk";
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { lookup } from "node:dns/promises";
+import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
 import "server-only";
 import { type Address, type Hex, encodeAbiParameters, keccak256 } from "viem";
@@ -394,27 +395,111 @@ export function decryptWebhookSigningSecret(value: string, rawKey?: string) {
   return decryptSecret(value, rawKey);
 }
 
-function isPrivateHost(hostname: string) {
+function ipv4ToNumber(octets: number[]) {
+  return ((octets[0] * 256 + octets[1]) * 256 + octets[2]) * 256 + octets[3];
+}
+
+// IANA IPv4 Special-Purpose Address Registry entries whose "Globally Reachable"
+// value is False (plus the multicast and reserved blocks). Any address inside
+// one of these ranges must never be used as a webhook destination.
+const NON_GLOBAL_IPV4_CIDRS: ReadonlyArray<readonly [number, number]> = [
+  [ipv4ToNumber([0, 0, 0, 0]), 8], // "this network"
+  [ipv4ToNumber([10, 0, 0, 0]), 8], // private
+  [ipv4ToNumber([100, 64, 0, 0]), 10], // carrier-grade NAT
+  [ipv4ToNumber([127, 0, 0, 0]), 8], // loopback
+  [ipv4ToNumber([169, 254, 0, 0]), 16], // link-local
+  [ipv4ToNumber([172, 16, 0, 0]), 12], // private
+  [ipv4ToNumber([192, 0, 0, 0]), 24], // IETF protocol assignments
+  [ipv4ToNumber([192, 0, 2, 0]), 24], // TEST-NET-1 documentation
+  [ipv4ToNumber([192, 88, 99, 0]), 24], // 6to4 relay anycast
+  [ipv4ToNumber([192, 168, 0, 0]), 16], // private
+  [ipv4ToNumber([198, 18, 0, 0]), 15], // benchmarking
+  [ipv4ToNumber([198, 51, 100, 0]), 24], // TEST-NET-2 documentation
+  [ipv4ToNumber([203, 0, 113, 0]), 24], // TEST-NET-3 documentation
+  [ipv4ToNumber([224, 0, 0, 0]), 4], // multicast
+  [ipv4ToNumber([240, 0, 0, 0]), 4], // reserved incl. 255.255.255.255 broadcast
+];
+
+function isNonGlobalIpv4(octets: number[]) {
+  const value = ipv4ToNumber(octets);
+  return NON_GLOBAL_IPV4_CIDRS.some(([network, prefix]) => {
+    const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0;
+    return (value & mask) >>> 0 === (network & mask) >>> 0;
+  });
+}
+
+function ipv6ToBigInt(value: string): bigint | null {
+  // Fold an embedded dotted-quad (e.g. ::ffff:192.168.0.1) into hex groups.
+  let text = value;
+  const embedded = text.match(/(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (embedded) {
+    const octets = embedded.slice(1, 5).map(Number);
+    if (octets.some(part => part > 255)) return null;
+    const high = ((octets[0] << 8) | octets[1]).toString(16);
+    const low = ((octets[2] << 8) | octets[3]).toString(16);
+    text = `${text.slice(0, embedded.index)}${high}:${low}`;
+  }
+  const halves = text.split("::");
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(":") : [];
+  const tail = halves.length === 2 ? (halves[1] ? halves[1].split(":") : []) : [];
+  const missing = 8 - head.length - tail.length;
+  if (halves.length === 2 ? missing < 1 : missing !== 0) return null;
+  const groups = halves.length === 2 ? [...head, ...Array(missing).fill("0"), ...tail] : head;
+  if (groups.length !== 8) return null;
+  let result = 0n;
+  for (const group of groups) {
+    if (!/^[0-9a-f]{1,4}$/.test(group)) return null;
+    result = (result << 16n) | BigInt(parseInt(group, 16));
+  }
+  return result;
+}
+
+const NON_GLOBAL_IPV6_CIDRS: ReadonlyArray<readonly [bigint, number]> = [
+  [ipv6ToBigInt("::")!, 128], // unspecified
+  [ipv6ToBigInt("::1")!, 128], // loopback
+  [ipv6ToBigInt("100::")!, 64], // discard-only
+  [ipv6ToBigInt("2001:db8::")!, 32], // documentation
+  [ipv6ToBigInt("3fff::")!, 20], // documentation (RFC 9637)
+  [ipv6ToBigInt("fc00::")!, 7], // unique local
+  [ipv6ToBigInt("fe80::")!, 10], // link-local
+  [ipv6ToBigInt("fec0::")!, 10], // deprecated site-local
+  [ipv6ToBigInt("ff00::")!, 8], // multicast
+];
+
+const IPV4_MAPPED_PREFIX = ipv6ToBigInt("::ffff:0:0")! >> 32n; // ::ffff:0:0/96
+const NAT64_PREFIX = ipv6ToBigInt("64:ff9b::")! >> 32n; // 64:ff9b::/96
+
+function isNonGlobalIpv6(value: string) {
+  const bits = ipv6ToBigInt(value);
+  if (bits === null) return true; // fail closed on any unparseable form
+  const high96 = bits >> 32n;
+  const embeddedOctets = [
+    Number((bits >> 24n) & 0xffn),
+    Number((bits >> 16n) & 0xffn),
+    Number((bits >> 8n) & 0xffn),
+    Number(bits & 0xffn),
+  ];
+  // IPv4-mapped (::ffff:0:0/96), deprecated IPv4-compatible (::/96, excluding
+  // :: and ::1), and NAT64 (64:ff9b::/96) all embed an IPv4 address whose own
+  // routability governs the connection.
+  if (high96 === IPV4_MAPPED_PREFIX) return isNonGlobalIpv4(embeddedOctets);
+  if (high96 === NAT64_PREFIX) return isNonGlobalIpv4(embeddedOctets);
+  if (high96 === 0n && bits !== 0n && bits !== 1n) return isNonGlobalIpv4(embeddedOctets);
+  return NON_GLOBAL_IPV6_CIDRS.some(([network, prefix]) => {
+    const shift = 128n - BigInt(prefix);
+    return bits >> shift === network >> shift;
+  });
+}
+
+// True for any host that is not a single, globally routable unicast IP address.
+// Hostnames that cannot be classified statically (they resolve later) are not
+// rejected here; assertPublicWebhookDestination validates the resolved IPs.
+function isNonGlobalHost(hostname: string) {
   const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, "");
   if (normalized === "localhost" || normalized.endsWith(".localhost") || normalized.endsWith(".local")) return true;
-  if (isIP(normalized) === 4) {
-    const [a, b] = normalized.split(".").map(Number);
-    return (
-      a === 10 ||
-      a === 127 ||
-      a === 0 ||
-      (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168)
-    );
-  }
-  if (isIP(normalized) === 6)
-    return (
-      normalized === "::1" ||
-      normalized.startsWith("fc") ||
-      normalized.startsWith("fd") ||
-      normalized.startsWith("fe80:")
-    );
+  if (isIP(normalized) === 4) return isNonGlobalIpv4(normalized.split(".").map(Number));
+  if (isIP(normalized) === 6) return isNonGlobalIpv6(normalized);
   return false;
 }
 
@@ -432,7 +517,7 @@ export function validateWebhookUrl(value: string, production = process.env.NODE_
       "invalid_webhook_url",
     );
   }
-  if (isPrivateHost(url.hostname)) {
+  if (isNonGlobalHost(url.hostname)) {
     throw new TokenlessServiceError("Webhook URL cannot target a private or local host.", 400, "invalid_webhook_url");
   }
   if (production && url.port && url.port !== "443") {
@@ -449,21 +534,68 @@ async function defaultResolveHostname(hostname: string) {
   return (await lookup(hostname, { all: true, verbatim: true })).map(result => result.address);
 }
 
-export async function assertPublicWebhookDestination(url: string, resolver: ResolveHostname = defaultResolveHostname) {
+// Resolves the destination hostname exactly once, rejects the delivery if any
+// resolved address is not globally routable, and returns the single address the
+// caller must pin for the actual connection. Pinning the resolved IP closes the
+// DNS-rebinding window between validation and the fetch.
+export async function assertPublicWebhookDestination(
+  url: string,
+  resolver: ResolveHostname = defaultResolveHostname,
+): Promise<string> {
   let addresses: string[];
   try {
     addresses = await resolver(new URL(url).hostname);
   } catch {
     throw new TokenlessServiceError("Webhook hostname could not be resolved.", 400, "invalid_webhook_url");
   }
-  if (addresses.length === 0 || addresses.some(isPrivateHost)) {
+  if (addresses.length === 0 || addresses.some(address => !isIP(address) || isNonGlobalHost(address))) {
     throw new TokenlessServiceError(
       "Webhook hostname cannot resolve to a private or local address.",
       400,
       "invalid_webhook_url",
     );
   }
+  return addresses[0];
 }
+
+export type WebhookFetch = (input: string, init: RequestInit & { pinnedAddress: string }) => Promise<Response>;
+
+// Default webhook transport. Connects to the pre-validated, pinned IP while
+// keeping the original hostname for TLS SNI and the Host header, so the socket
+// can never reach an address other than the one that passed validation.
+export const deliverOverPinnedAddress: WebhookFetch = async (input, init) => {
+  const url = new URL(input);
+  const headers = new Headers(init.headers);
+  headers.set("host", url.host);
+  const body = typeof init.body === "string" ? init.body : "";
+  const pinned = init.pinnedAddress;
+  const family = isIP(pinned);
+  if (family === 0) throw new Error("Pinned webhook address is not an IP literal.");
+  return await new Promise<Response>((resolve, reject) => {
+    const request = httpsRequest(
+      {
+        protocol: url.protocol,
+        hostname: url.hostname,
+        servername: url.hostname,
+        port: url.port ? Number(url.port) : 443,
+        path: `${url.pathname}${url.search}`,
+        method: init.method ?? "POST",
+        headers: Object.fromEntries(headers.entries()),
+        lookup: (_hostname, _options, callback) => callback(null, pinned, family),
+      },
+      response => {
+        response.resume();
+        response.on("end", () => resolve(new Response(null, { status: response.statusCode ?? 502 })));
+        response.on("error", reject);
+      },
+    );
+    request.on("error", reject);
+    request.setTimeout(10_000, () => request.destroy(new Error("Webhook delivery timed out.")));
+    init.signal?.addEventListener("abort", () => request.destroy(new Error("Webhook delivery aborted.")));
+    if (body) request.write(body);
+    request.end();
+  });
+};
 
 function parseEventTypes(value: unknown) {
   if (
@@ -1784,7 +1916,7 @@ async function enqueuePublicationWebhooks(input: {
 
 export async function deliverPendingWebhooks(
   input: {
-    fetchImpl?: typeof fetch;
+    fetchImpl?: WebhookFetch;
     now?: Date;
     limit?: number;
     encryptionKey?: string;
@@ -1792,7 +1924,7 @@ export async function deliverPendingWebhooks(
     operationKey?: string;
   } = {},
 ) {
-  const fetchImpl = input.fetchImpl ?? fetch;
+  const fetchImpl = input.fetchImpl ?? deliverOverPinnedAddress;
   const now = input.now ?? new Date();
   const operationFilter = input.operationKey ? "AND p.operation_key = ?" : "";
   const due = await dbClient.execute({
@@ -1826,7 +1958,7 @@ export async function deliverPendingWebhooks(
       .digest("hex")}`;
     const attempt = Number(row.attempt_count) + 1;
     try {
-      await assertPublicWebhookDestination(rowString(row, "url")!, input.resolveHostname);
+      const pinnedAddress = await assertPublicWebhookDestination(rowString(row, "url")!, input.resolveHostname);
       const response = await fetchImpl(rowString(row, "url")!, {
         method: "POST",
         headers: {
@@ -1838,6 +1970,7 @@ export async function deliverPendingWebhooks(
         body: payload,
         redirect: "error",
         signal: AbortSignal.timeout(10_000),
+        pinnedAddress,
       });
       if (response.ok) {
         await dbClient.execute({

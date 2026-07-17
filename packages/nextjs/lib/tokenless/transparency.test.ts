@@ -6,6 +6,7 @@ import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import {
   appendFinalizedRoundEvidence,
   appendPostRoundIntegrityReviewRecord,
+  assertPublicWebhookDestination,
   createWorkspaceWebhook,
   deliverPendingWebhooks,
   inspectWorkspaceTransparency,
@@ -33,7 +34,7 @@ const BEACON_HASH = `0x${"64".repeat(32)}`;
 const DEPLOYMENT = `tokenless-v4:84532:${PANEL}:${ISSUER}:${ADAPTER}:${FEEDBACK_BONUS}`;
 const ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64url");
 const NOW = new Date("2026-07-12T18:00:00.000Z");
-const resolvePublic = async () => ["203.0.113.10"];
+const resolvePublic = async () => ["93.184.216.34"];
 
 const roundTerms = {
   contentId: CONTENT_ID,
@@ -580,6 +581,115 @@ test("webhook registration rejects SSRF targets and returns its secret only once
   const listed = await listWorkspaceWebhooks({ accountAddress: OWNER, workspaceId: WORKSPACE });
   assert.equal(listed[0]?.endpointId, created.endpointId);
   assert.equal("signingSecret" in listed[0]!, false);
+});
+
+test("webhook URL classifier rejects every non-globally-routable address range", () => {
+  const nonGlobal = [
+    "https://0.0.0.0/hook",
+    "https://10.1.2.3/hook",
+    "https://100.64.0.1/hook", // carrier-grade NAT
+    "https://127.0.0.1/hook",
+    "https://169.254.10.10/hook", // link-local
+    "https://172.16.5.5/hook",
+    "https://192.0.0.8/hook", // IETF protocol assignments
+    "https://192.0.2.5/hook", // TEST-NET-1
+    "https://192.88.99.1/hook", // 6to4 relay anycast
+    "https://192.168.1.1/hook",
+    "https://198.18.0.1/hook", // benchmarking
+    "https://198.51.100.7/hook", // TEST-NET-2
+    "https://203.0.113.7/hook", // TEST-NET-3
+    "https://[::1]/hook", // loopback
+    "https://[::]/hook", // unspecified
+    "https://[fc00::1]/hook", // unique local
+    "https://[fd12:3456::1]/hook", // unique local
+    "https://[fe80::1]/hook", // link-local
+    "https://[ff02::1]/hook", // multicast
+    "https://[2001:db8::1]/hook", // documentation
+    "https://[3fff::1]/hook", // documentation (RFC 9637)
+    "https://[64:ff9b::0a00:0001]/hook", // NAT64 embedding 10.0.0.1
+    "https://[::ffff:192.168.0.1]/hook", // IPv4-mapped IPv6 private
+    "https://[::ffff:127.0.0.1]/hook", // IPv4-mapped IPv6 loopback
+  ];
+  for (const url of nonGlobal) {
+    assert.throws(() => validateWebhookUrl(url, false), /private or local host/, url);
+  }
+  const global = [
+    "https://93.184.216.34/hook",
+    "https://8.8.8.8/hook",
+    "https://[2606:4700:4700::1111]/hook", // Cloudflare DNS
+    "https://[::ffff:93.184.216.34]/hook", // IPv4-mapped public address
+    "https://hooks.example.test/hook",
+  ];
+  for (const url of global) {
+    assert.equal(validateWebhookUrl(url, false), new URL(url).toString(), url);
+  }
+});
+
+test("resolved webhook destinations reject non-global addresses and pin the first resolved IP", async () => {
+  await assert.rejects(
+    assertPublicWebhookDestination("https://hooks.example.test/hook", async () => ["203.0.113.7"]),
+    /private or local address/,
+  );
+  await assert.rejects(
+    assertPublicWebhookDestination("https://hooks.example.test/hook", async () => ["93.184.216.34", "10.0.0.5"]),
+    /private or local address/,
+  );
+  await assert.rejects(
+    assertPublicWebhookDestination("https://hooks.example.test/hook", async () => []),
+    /private or local address/,
+  );
+  assert.equal(
+    await assertPublicWebhookDestination("https://hooks.example.test/hook", async () => ["93.184.216.34", "8.8.4.4"]),
+    "93.184.216.34",
+  );
+});
+
+test("webhook delivery pins the validated IP and ignores a rebinding second lookup", async () => {
+  await seedFrozenIntegrityAssignments();
+  const endpoint = await createWorkspaceWebhook({
+    accountAddress: OWNER,
+    workspaceId: WORKSPACE,
+    url: "https://hooks.example.test/result",
+    eventTypes: ["result.ready"],
+    encryptionKey: ENCRYPTION_KEY,
+    resolveHostname: resolvePublic,
+  });
+  await subscribeAskWebhook({
+    operationKey: OPERATION,
+    workspaceId: WORKSPACE,
+    registration: { url: endpoint.url, eventTypes: ["result.ready"] },
+  });
+  await appendFinalizedRoundEvidence({
+    operationKey: OPERATION,
+    fetchImpl: ponderFetch(),
+    ponderUrl: "https://ponder.example.test",
+  });
+  await reviewAndPublishResult({ operationKey: OPERATION, appOrigin: "https://app.example.test", now: NOW });
+
+  let resolverCalls = 0;
+  const rebindingResolver = async () => {
+    resolverCalls += 1;
+    // A rebinding operator returns a public address during validation and a
+    // network-local address on any subsequent lookup.
+    return resolverCalls === 1 ? ["93.184.216.34"] : ["169.254.169.254"];
+  };
+  const pinnedAddresses: Array<string | undefined> = [];
+  const fetchImpl = async (_url: string, init: RequestInit & { pinnedAddress?: string }) => {
+    pinnedAddresses.push(init.pinnedAddress);
+    return new Response(null, { status: 204 });
+  };
+  const outcomes = await deliverPendingWebhooks({
+    fetchImpl,
+    now: NOW,
+    encryptionKey: ENCRYPTION_KEY,
+    resolveHostname: rebindingResolver,
+    operationKey: OPERATION,
+  });
+  assert.equal(outcomes[0]?.state, "delivered");
+  // The hostname is resolved exactly once and its address is pinned for the
+  // connection; the rebinding second lookup is never consulted.
+  assert.equal(resolverCalls, 1);
+  assert.deepEqual(pinnedAddresses, ["93.184.216.34"]);
 });
 
 test("finalized evidence publishes once and webhook retries preserve idempotency and signatures", async () => {

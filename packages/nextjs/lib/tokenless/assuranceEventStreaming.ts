@@ -5,10 +5,12 @@ import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
   type ResolveHostname,
+  type WebhookFetch,
   assertPublicWebhookDestination,
   createWorkspaceWebhook,
   deactivateWorkspaceWebhook,
   decryptWebhookSigningSecret,
+  deliverOverPinnedAddress,
   listWorkspaceWebhooks,
   stableTransparencyJson,
 } from "~~/lib/tokenless/transparency";
@@ -800,7 +802,7 @@ export async function listAssuranceEvents(input: { accountAddress: string; works
 
 export async function deliverPendingAssuranceEvents(
   input: {
-    fetchImpl?: typeof fetch;
+    fetchImpl?: WebhookFetch;
     now?: Date;
     limit?: number;
     encryptionKey?: string;
@@ -808,7 +810,7 @@ export async function deliverPendingAssuranceEvents(
     workspaceId?: string;
   } = {},
 ) {
-  const fetchImpl = input.fetchImpl ?? fetch;
+  const fetchImpl = input.fetchImpl ?? deliverOverPinnedAddress;
   const now = input.now ?? new Date();
   const workspaceFilter = input.workspaceId ? "AND o.workspace_id = ?" : "";
   const due = await dbClient.execute({
@@ -849,7 +851,7 @@ export async function deliverPendingAssuranceEvents(
         .update(`${timestamp}.${payload}`)
         .digest("hex")}`;
       const url = text(row, "url")!;
-      await assertPublicWebhookDestination(url, input.resolveHostname);
+      const pinnedAddress = await assertPublicWebhookDestination(url, input.resolveHostname);
       const response = await fetchImpl(url, {
         method: "POST",
         headers: {
@@ -862,6 +864,7 @@ export async function deliverPendingAssuranceEvents(
         body: payload,
         redirect: "error",
         signal: AbortSignal.timeout(10_000),
+        pinnedAddress,
       });
       if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status}`), { responseStatus: response.status });
       await dbClient.execute({
