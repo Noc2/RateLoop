@@ -406,7 +406,11 @@ export function HumanAssuranceRaterClient({
                   </div>
                 </div>
                 <div className="mt-5 border-t border-white/10 pt-5">
-                  <p className="font-mono text-xs uppercase tracking-widest text-base-content/45">
+                  <p className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-xs leading-5 text-base-content/60">
+                    Panels may include undisclosed calibration items. They use the same instructions and compensation as
+                    every other assigned case.
+                  </p>
+                  <p className="mt-4 font-mono text-xs uppercase tracking-widest text-base-content/45">
                     Assignment qualification
                   </p>
                   <p className="mt-2 text-xs leading-5 text-base-content/50">

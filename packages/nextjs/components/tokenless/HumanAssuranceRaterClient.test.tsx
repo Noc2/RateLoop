@@ -86,6 +86,7 @@ test("assigned review renders blinded choices, failure tags, rationale, lease de
   assert.match(html, /Decision rationale/);
   assert.match(html, /customer invitation/);
   assert.match(html, /No paid voucher attached/);
+  assert.match(html, /Panels may include undisclosed calibration items/i);
   assert.match(html, /The server accepted 1 assigned response and completed the assignment/i);
   assert.match(html, /unpaid invited review, so no settlement reference is expected/i);
 });
