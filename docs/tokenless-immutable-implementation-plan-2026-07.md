@@ -31,8 +31,11 @@ The active package graph is tokenless-only:
 - `packages/nextjs` implements Better Auth, workspaces, agent OAuth, reviewer access, payments, privacy controls,
   evidence packets, and the Human Assurance Loop.
 
-The ordered application migration journal runs from `0000` through `0053_account_workspace_deletion.sql`. The current
-checked-in Base Sepolia bundle is the disposable `tokenless-v3` deployment at block `44132668`, with complete key:
+The ordered application migration source of truth is
+[`packages/nextjs/drizzle/meta/_journal.json`](../packages/nextjs/drizzle/meta/_journal.json); at this revision its head
+is `0091_mcp_elicitation_sessions`. The runtime deployment schema is `tokenless-v4`, whose complete identity adds
+the Feedback Bonus address as a fifth slot. No v4 contract bundle has been deployed or checked in. The latest historical
+Base Sepolia bundle remains the disposable four-slot `tokenless-v3` deployment at block `44132668`, with complete key:
 
 ```text
 tokenless-v3:84532:0xf97d28e02f7301b4f6cb19160e1176eaf3e4f19a:0x67a89f76ae9a89866a0e62785d7999efe1c5e592:0x8a9b7af03f3cf362ba98180700bc92fbb72fcbc9
@@ -220,7 +223,7 @@ Operational instructions are intentionally separate from product design:
 ## Remaining release phases
 
 1. **Hosted staging:** managed signing, complete paid assignment-to-settlement wiring, signed EU resource evidence,
-   migration verification through `0053`, and deployment-pinned end-to-end exercises.
+   migration verification through the head recorded in `_journal.json`, and deployment-pinned end-to-end exercises.
 2. **Real users and money:** external contract/privacy review, paid eligibility and DAC7 operations, sanctions and B2B
    controls, reviewer appeals/recovery, operational drills, security testing, and evidence-packet verification.
 3. **Hardening at traction:** audit the small immutable core, run a public bounty and soak period, deploy the final

@@ -84,8 +84,9 @@ add `rateloop.ai`. If optional thirdweb wallet creation is enabled, configure it
 tokenless JWKS URL, and restrict its browser origins to the same isolated hosts.
 
 Apply every migration recorded in `packages/nextjs/drizzle/meta/_journal.json` in order before smoke testing the
-human-assurance APIs or enabling a hosted release. The current journal runs from `0000` through
-`0068_feedback_bonus_awards.sql`. Isolated Vercel production builds apply and verify pending journal entries
+human-assurance APIs or enabling a hosted release. At this revision the journal head is
+`0091_mcp_elicitation_sessions`; `_journal.json`, rather than a copied range in this document, remains authoritative.
+Isolated Vercel production builds apply and verify pending journal entries
 before compiling; preview and local builds never mutate a database. The app must fail closed when moderation,
 eligibility, deployment, signer, or pipeline configuration is incomplete.
 
