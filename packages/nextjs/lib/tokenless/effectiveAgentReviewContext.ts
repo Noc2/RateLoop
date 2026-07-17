@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import "server-only";
 import { dbClient } from "~~/lib/db";
 import { type AgentMcpPrincipal, OWNER_APPROVED_AGENT_SCOPES } from "~~/lib/tokenless/agentIntegrations";
+import { humanReviewRequiresPayment } from "~~/lib/tokenless/humanReviewGrantScopes";
 import {
   HUMAN_REVIEW_QUESTION_AUTHORITIES,
   HUMAN_REVIEW_RESULT_SEMANTICS,
@@ -152,6 +153,7 @@ function grantReason(input: {
   connectionReady: boolean;
   scopes: string[];
   workflows: string[];
+  paymentRequired: boolean;
 }) {
   if (!input.configuredPolicy) return "not_configured" as const;
   if (
@@ -167,6 +169,9 @@ function grantReason(input: {
   if (!input.publishingPolicyActive) return "publishing_policy_inactive" as const;
   if (!input.connectionReady) return "connection_not_ready" as const;
   if (!input.scopes.includes(REQUIRED_PUBLISHING_SCOPE)) return "publish_scope_missing" as const;
+  if (input.paymentRequired && !input.scopes.includes(REQUIRED_SPENDING_SCOPE)) {
+    return "payment_scope_missing" as const;
+  }
   if (input.workflows.length === 0) return "workflow_scope_missing" as const;
   return "active" as const;
 }
@@ -549,6 +554,7 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
     connectionReady,
     scopes: grantedScopes,
     workflows: allowedWorkflowKeys,
+    paymentRequired: humanReviewRequiresPayment({ compensationMode, feedbackBonusEnabled }),
   });
   const exactGrantActive = reason === "active";
 
@@ -607,7 +613,7 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
     grantedScopes.includes(REQUIRED_PUBLISHING_SCOPE);
   const canSpend =
     canPublish &&
-    (compensationMode === "usdc" || feedbackBonusEnabled) &&
+    humanReviewRequiresPayment({ compensationMode, feedbackBonusEnabled }) &&
     grantedScopes.includes(REQUIRED_SPENDING_SCOPE);
 
   return {

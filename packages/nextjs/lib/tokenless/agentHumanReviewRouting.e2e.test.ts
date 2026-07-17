@@ -286,3 +286,46 @@ test("check-only, owner-approval, and automatic authority route each supported a
     }
   }
 });
+
+test("private unpaid routing needs publish scope only while a Feedback Bonus also needs payment scope", async () => {
+  const unpaid = context({
+    authority: "ask_automatically",
+    lane: "private_invited_unpaid",
+    responseWindowSeconds: 3_600,
+  });
+  unpaid.grant.grantedScopes = ["panel:publish"];
+  unpaid.grant.credentialScopes = ["panel:publish"];
+  const unpaidFixture = routeFixture(unpaid);
+  const assigned = await unpaidFixture.route({
+    principal,
+    opportunityId: unpaid.opportunityId,
+    sourcePayload: "private source",
+    suggestionPayload: "private suggestion",
+    material: material(unpaid),
+    now: NOW,
+  });
+  assert.equal(assigned.action, "private_review_assigned");
+
+  const bonus = context({
+    authority: "ask_automatically",
+    lane: "private_invited_unpaid",
+    responseWindowSeconds: 3_600,
+  });
+  bonus.requestProfile.feedbackBonusEnabled = true;
+  bonus.requestProfile.feedbackBonusPoolAtomic = "1000000";
+  bonus.requestProfile.feedbackBonusAwardWindowSeconds = 86_400;
+  bonus.grant.grantedScopes = ["panel:publish"];
+  bonus.grant.credentialScopes = ["panel:publish"];
+  const bonusFixture = routeFixture(bonus);
+  const blocked = await bonusFixture.route({
+    principal,
+    opportunityId: bonus.opportunityId,
+    sourcePayload: "private source",
+    suggestionPayload: "private suggestion",
+    material: material(bonus),
+    now: NOW,
+  });
+  assert.equal(blocked.action, "blocked");
+  assert.equal(blocked.action === "blocked" ? blocked.code : null, "automatic_grant_inactive");
+  assert.equal(bonusFixture.calls.activate, 0);
+});

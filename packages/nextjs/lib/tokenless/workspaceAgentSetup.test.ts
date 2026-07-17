@@ -560,6 +560,153 @@ test("automatic setup atomically binds the exact owner-approved workflows and sp
   assert.equal(downgradeEvent.rowCount, 1);
 });
 
+test("unpaid private automatic review grants publishing without payment and rejects later funded changes", async () => {
+  const { workspaceId, integrationId } = await connectedSetup();
+  const connected = await getWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId });
+  const confirmed = await confirmWorkspaceSetupAgent({
+    accountAddress: OWNER,
+    workspaceId,
+    revision: connected.revision,
+    agent: {
+      displayName: connected.agent!.displayName,
+      description: connected.agent!.description,
+      provider: connected.agent!.provider,
+      model: connected.agent!.model,
+      modelVersion: connected.agent!.modelVersion,
+      environment: "production",
+    },
+  });
+  const group = await createPrivateGroup({
+    accountAddress: OWNER,
+    workspaceId,
+    name: "Unpaid automatic reviewers",
+    purpose: "Review private workspace material without payment.",
+    policy: { defaultCompensation: "unpaid", dataClassifications: ["internal", "confidential"] },
+  });
+  const publishing = await createAgentPublishingPolicy({
+    accountAddress: OWNER,
+    workspaceId,
+    policy: {
+      name: "Private automatic review",
+      allowedPaymentModes: ["prepaid"],
+      maxPanelAtomic: "6000000",
+      maxDailyAtomic: "60000000",
+      maxMonthlyAtomic: "600000000",
+      maxPanelSize: 3,
+      maxBountyAtomic: "3000000",
+      maxFeeBps: 2_000,
+      maxAttemptReserveAtomic: "3000000",
+      allowedReviewerSources: ["customer_invited"],
+      allowedAdmissionPolicyHashes: [`0x${"c".repeat(64)}`],
+      allowedDataClassifications: ["confidential"],
+      onPolicyMiss: "deny",
+    },
+  });
+  const body = {
+    expectedBindingVersion: null as number | null,
+    selection: {
+      mode: "always",
+      enforcementMode: "advisory",
+      agreementThresholdBps: 8_000,
+      productionFloorBps: 0,
+      fixedRateBps: null,
+      maximumUnreviewedGap: 20,
+      requiredRiskTiers: ["high"],
+      criticalRiskTiers: ["critical"],
+      minimumConfidenceBps: 7_000,
+      maximumLatencyMs: 120_000,
+    },
+    requestProfile: {
+      questionAuthority: "owner_fixed",
+      criterion: "Is this response safe and correct?",
+      positiveLabel: "Approve",
+      negativeLabel: "Reject",
+      rationaleMode: "required",
+      audience: "private_invited",
+      contentBoundary: "private_workspace",
+      privateSensitivity: "confidential",
+      privateGroupId: group.groupId,
+      responseWindowSeconds: 3_600,
+      panelSize: 2,
+      compensationMode: "unpaid",
+      bountyPerSeatAtomic: null,
+      feedbackBonusEnabled: false,
+    },
+    authority: "ask_automatically",
+    publishingGrant: {
+      integrationId,
+      publishingPolicyId: publishing.policyId,
+      publishingPolicyVersion: publishing.version ?? 1,
+      allowedWorkflowKeys: ["general-assistance"],
+    },
+  };
+  const saved = await putHumanReviewConfigurationForOwner({
+    accountAddress: OWNER,
+    workspaceId,
+    agentId: connected.agent!.agentId,
+    body,
+  });
+  const granted = await dbClient.execute({
+    sql: "SELECT granted_scopes_json FROM tokenless_agent_integrations WHERE integration_id=?",
+    args: [integrationId],
+  });
+  const unpaidScopes = JSON.parse(String(granted.rows[0]?.granted_scopes_json)) as string[];
+  assert.ok(unpaidScopes.includes("panel:publish"));
+  assert.ok(!unpaidScopes.includes("payment:submit"));
+  const ownerView = await getHumanReviewConfigurationForOwner({
+    accountAddress: OWNER,
+    workspaceId,
+    agentId: connected.agent!.agentId,
+  });
+  assert.deepEqual(ownerView.configuration?.delegation?.allowedWorkflowKeys, ["general-assistance"]);
+
+  const reviews = await configureWorkspaceSetupReviews({
+    accountAddress: OWNER,
+    workspaceId,
+    revision: confirmed.revision,
+    bindingRevision: saved.configuration.version,
+  });
+  const people = await configureWorkspaceSetupPeople({
+    accountAddress: OWNER,
+    workspaceId,
+    revision: reviews.revision,
+    decision: "later",
+  });
+  await completeWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId, revision: people.revision });
+
+  const bodyWithoutGrant: Partial<typeof body> = { ...body };
+  delete bodyWithoutGrant.publishingGrant;
+  for (const requestProfile of [
+    {
+      ...body.requestProfile,
+      compensationMode: "usdc",
+      bountyPerSeatAtomic: "1000000",
+    },
+    {
+      ...body.requestProfile,
+      feedbackBonusEnabled: true,
+      feedbackBonusPoolAtomic: "1000000",
+      feedbackBonusAwarderKind: "requester",
+      feedbackBonusAwarderAccount: null,
+      feedbackBonusAwardWindowSeconds: 86_400,
+    },
+  ]) {
+    await assert.rejects(
+      putHumanReviewConfigurationForOwner({
+        accountAddress: OWNER,
+        workspaceId,
+        agentId: connected.agent!.agentId,
+        body: {
+          ...bodyWithoutGrant,
+          expectedBindingVersion: saved.configuration.version,
+          requestProfile,
+        },
+      }),
+      (error: unknown) => error instanceof TokenlessServiceError && error.code === "human_review_delegation_required",
+    );
+  }
+});
+
 test("setup rejects future steps, stale revisions, and unsaved review configuration", async () => {
   assert.equal(clampAgentSetupStep("people", "agent"), "agent");
   assert.equal(clampAgentSetupStep("connect", "agent"), "connect");

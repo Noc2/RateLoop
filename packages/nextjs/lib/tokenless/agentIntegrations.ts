@@ -7,12 +7,16 @@ import { dbClient, dbPool } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS } from "~~/lib/tokenless/adaptiveReviewDefaults";
 import {
-  AGENT_OAUTH_SAFE_SCOPES,
   type AgentOAuthAccessPrincipal,
   AgentOAuthError,
   authenticateAgentOAuthAccessToken,
 } from "~~/lib/tokenless/agentOAuth";
 import { AGENT_ENVIRONMENTS, type AgentEnvironment } from "~~/lib/tokenless/agentRegistry";
+import {
+  type HumanReviewPaymentProfile,
+  OWNER_APPROVED_AGENT_SCOPES,
+  automaticHumanReviewGrantScopes,
+} from "~~/lib/tokenless/humanReviewGrantScopes";
 import {
   type ProductPrincipal,
   TOKENLESS_AGENT_SCOPES,
@@ -30,9 +34,7 @@ const WORKFLOW_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
 const PAIRING_TTL_MS = 10 * 60_000;
 const ACTIVE_TTL_MS = 90 * 24 * 60 * 60_000;
 
-export const OWNER_APPROVED_AGENT_SCOPES = [
-  ...new Set([...AGENT_OAUTH_SAFE_SCOPES, ...TOKENLESS_AGENT_SCOPES]),
-] as const;
+export { OWNER_APPROVED_AGENT_SCOPES } from "~~/lib/tokenless/humanReviewGrantScopes";
 
 export type AgentRegistrationInput = {
   externalId: string;
@@ -886,7 +888,7 @@ export async function activateAgentIntegrationPublishing(input: {
   const actor = await management(input.accountAddress, input.workspaceId);
   const activation = publishingActivationBody(input.body);
   const now = new Date();
-  const scopes = [...OWNER_APPROVED_AGENT_SCOPES];
+  let scopes = [...OWNER_APPROVED_AGENT_SCOPES];
   const client = await dbPool.connect();
   let activated:
     | {
@@ -950,6 +952,28 @@ export async function activateAgentIntegrationPublishing(input: {
         "review_policy_not_found",
       );
     }
+    const activeBindingResult = await client.query(
+      `SELECT b.binding_id,b.version,b.selection_policy_id,b.selection_policy_version,
+              b.authority,b.publishing_policy_id,b.publishing_policy_version,
+              r.compensation_mode,r.feedback_bonus_enabled
+       FROM tokenless_agent_human_review_bindings b
+       LEFT JOIN tokenless_agent_review_request_profiles r
+         ON r.workspace_id=b.workspace_id AND r.profile_id=b.request_profile_id
+        AND r.version=b.request_profile_version AND r.profile_hash=b.request_profile_hash
+        AND r.agent_id=b.agent_id AND r.agent_version_id=b.agent_version_id
+       WHERE b.workspace_id=$1 AND b.agent_id=$2 AND b.agent_version_id=$3
+         AND b.enabled=true AND b.superseded_at IS NULL
+       FOR SHARE`,
+      [input.workspaceId, agentId, agentVersionId],
+    );
+    const activeBinding = activeBindingResult.rows[0] as Row | undefined;
+    if ((activeBindingResult.rowCount ?? 0) > 1) {
+      throw new TokenlessServiceError(
+        "The active human-review configuration is ambiguous.",
+        409,
+        "human_review_configuration_required",
+      );
+    }
     const publishingResult = await client.query(
       `SELECT policy_id, version FROM tokenless_agent_publishing_policies
        WHERE workspace_id = $1 AND policy_id = $2 AND enabled = true AND revoked_at IS NULL
@@ -964,13 +988,7 @@ export async function activateAgentIntegrationPublishing(input: {
     const reviewPolicyId = text(review, "policy_id")!;
     let reviewPolicyVersion = integer(review, "version");
     if (text(review, "publishing_policy_id") !== activation.publishingPolicyId) {
-      const activeBinding = await client.query(
-        `SELECT 1 FROM tokenless_agent_human_review_bindings
-         WHERE workspace_id = $1 AND selection_policy_id = $2 AND selection_policy_version = $3
-           AND enabled = true AND superseded_at IS NULL FOR SHARE`,
-        [input.workspaceId, reviewPolicyId, reviewPolicyVersion],
-      );
-      if (activeBinding.rowCount) {
+      if (activeBinding) {
         throw new TokenlessServiceError(
           "Change autonomous review through the human-review configuration so its exact bindings stay atomic.",
           409,
@@ -1031,6 +1049,37 @@ export async function activateAgentIntegrationPublishing(input: {
       grantedScopes: jsonArray(integration.granted_scopes_json, "granted scopes"),
     };
     const publishingPolicyVersion = integer(publishing, "version");
+    if (activeBinding) {
+      const compensationMode = text(activeBinding, "compensation_mode");
+      if (compensationMode !== "unpaid" && compensationMode !== "usdc") {
+        throw new TokenlessServiceError(
+          "The active human-review payment profile is invalid.",
+          409,
+          "human_review_configuration_required",
+        );
+      }
+      const paymentProfile: HumanReviewPaymentProfile = {
+        compensationMode,
+        feedbackBonusEnabled:
+          activeBinding.feedback_bonus_enabled === true || activeBinding.feedback_bonus_enabled === "t",
+      };
+      if (
+        text(activeBinding, "selection_policy_id") !== reviewPolicyId ||
+        integer(activeBinding, "selection_policy_version") !== reviewPolicyVersion ||
+        text(activeBinding, "authority") !== "ask_automatically" ||
+        text(activeBinding, "publishing_policy_id") !== activation.publishingPolicyId ||
+        optionalInteger(activeBinding, "publishing_policy_version") !== publishingPolicyVersion ||
+        text(integration, "human_review_binding_id") !== text(activeBinding, "binding_id") ||
+        optionalInteger(integration, "human_review_binding_version") !== integer(activeBinding, "version")
+      ) {
+        throw new TokenlessServiceError(
+          "Change autonomous review through the human-review configuration so its exact bindings stay atomic.",
+          409,
+          "human_review_configuration_required",
+        );
+      }
+      scopes = automaticHumanReviewGrantScopes(paymentProfile);
+    }
     await client.query(
       `UPDATE tokenless_agent_integrations
        SET agent_version_id = $1, review_policy_id = $2, review_policy_version = $3,
@@ -1136,7 +1185,7 @@ export async function activateAgentIntegrationPublishing(input: {
       allowedWorkflowKeys: activation.allowedWorkflowKeys,
       grantedScopes: scopes,
       canPublish: true,
-      canSpend: true,
+      canSpend: scopes.includes("payment:submit"),
     },
   };
 }

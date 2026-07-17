@@ -19,6 +19,7 @@ import {
   normalizeAgentExecutionProvenance,
 } from "~~/lib/tokenless/agentExecutionProvenance";
 import { decideFixedReview } from "~~/lib/tokenless/fixedReview";
+import { humanReviewRequiresPayment } from "~~/lib/tokenless/humanReviewGrantScopes";
 import {
   type HumanReviewOpportunityState,
   transitionHumanReviewOpportunityLifecycleInTransaction,
@@ -87,6 +88,7 @@ type HumanReviewBindingRow = {
   audience: "private_invited" | "public_network" | "hybrid";
   contentBoundary: "private_workspace" | "public_or_test";
   compensationMode: "unpaid" | "usdc";
+  feedbackBonusEnabled: boolean;
 };
 
 type IntegrationReviewGrant = { active: boolean; reason: string };
@@ -642,7 +644,8 @@ async function loadHumanReviewBinding(
     `SELECT b.binding_id, b.version AS binding_version,
             b.request_profile_id, b.request_profile_version, b.request_profile_hash,
             b.authority, b.publishing_policy_id, b.publishing_policy_version,
-            r.configuration_status, r.audience, r.content_boundary, r.compensation_mode
+            r.configuration_status, r.audience, r.content_boundary, r.compensation_mode,
+            r.feedback_bonus_enabled
      FROM tokenless_agent_human_review_bindings b
      JOIN tokenless_agent_review_request_profiles r
        ON r.workspace_id = b.workspace_id
@@ -667,6 +670,7 @@ async function loadHumanReviewBinding(
   const audience = rowString(row, "audience");
   const contentBoundary = rowString(row, "content_boundary");
   const compensationMode = rowString(row, "compensation_mode");
+  const feedbackBonusEnabled = rowBoolean(row, "feedback_bonus_enabled");
   const publishingPolicyId = rowString(row, "publishing_policy_id");
   const publishingPolicyVersion = rowOptionalInteger(row, "publishing_policy_version");
   if (
@@ -708,6 +712,7 @@ async function loadHumanReviewBinding(
     audience: audience as HumanReviewBindingRow["audience"],
     contentBoundary: contentBoundary as HumanReviewBindingRow["contentBoundary"],
     compensationMode: compensationMode as HumanReviewBindingRow["compensationMode"],
+    feedbackBonusEnabled,
   };
 }
 
@@ -787,7 +792,7 @@ async function verifyIntegrationBinding(
     policyActive &&
     workflows.includes(input.request.workflowKey) &&
     scopes.includes("panel:publish") &&
-    scopes.includes("payment:submit");
+    (!humanReviewRequiresPayment(input.binding) || scopes.includes("payment:submit"));
   return { active, reason: active ? "active_exact_owner_grant" : "owner_grant_inactive" };
 }
 

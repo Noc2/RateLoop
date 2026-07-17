@@ -5,6 +5,7 @@ import { dbClient, dbPool } from "~~/lib/db";
 import { SAFE_AGENT_CONNECTION_SCOPES, createAgentConnectionIntent } from "~~/lib/tokenless/agentConnectionIntents";
 import { AGENT_SETUP_SCREEN_STEPS, type AgentSetupScreenStep } from "~~/lib/tokenless/agentSetupNavigation";
 import { getHumanReviewConfigurationForOwner } from "~~/lib/tokenless/humanReviewConfiguration";
+import { sameAutomaticHumanReviewGrantScopes } from "~~/lib/tokenless/humanReviewGrantScopes";
 import { recordWorkspaceSetupFunnelEvent } from "~~/lib/tokenless/onboardingObservability";
 import { createPrivateGroupInvitation } from "~~/lib/tokenless/privateGroups";
 import { MAXIMUM_REVIEW_PANEL_SIZE } from "~~/lib/tokenless/reviewRequestProfiles";
@@ -1055,7 +1056,8 @@ export async function completeWorkspaceAgentSetup(input: {
     const bindingResult = await client.query(
       `SELECT b.selection_policy_id,b.selection_policy_version,b.publishing_policy_id,b.publishing_policy_version,
               b.authority,
-              r.audience,r.private_group_id,r.configuration_status,r.response_window_seconds,r.panel_size
+              r.audience,r.private_group_id,r.configuration_status,r.response_window_seconds,r.panel_size,
+              r.compensation_mode,r.feedback_bonus_enabled
        FROM tokenless_agent_human_review_bindings b
        JOIN tokenless_agent_review_policies p
          ON p.workspace_id=b.workspace_id AND p.policy_id=b.selection_policy_id
@@ -1102,8 +1104,10 @@ export async function completeWorkspaceAgentSetup(input: {
       rowString(integration, "activation_mode") === "owner_approved" &&
       rowString(integration, "publishing_policy_id") === publishingPolicyId &&
       rowOptionalNumber(integration, "publishing_policy_version") === publishingPolicyVersion &&
-      integrationScopes.includes("panel:publish") &&
-      integrationScopes.includes("payment:submit") &&
+      sameAutomaticHumanReviewGrantScopes(integrationScopes, {
+        compensationMode: rowString(binding, "compensation_mode") as "unpaid" | "usdc",
+        feedbackBonusEnabled: binding?.feedback_bonus_enabled === true || binding?.feedback_bonus_enabled === "t",
+      }) &&
       allowedWorkflowKeys.length > 0;
     const safeAuthority = authority === "check_only" || authority === "prepare_for_approval";
     const groupMatches = requiresInvitedGroup

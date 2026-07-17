@@ -5,7 +5,12 @@ import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/acco
 import { dbClient, dbPool } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { SAFE_AGENT_CONNECTION_SCOPES } from "~~/lib/tokenless/agentConnectionIntents";
-import { OWNER_APPROVED_AGENT_SCOPES } from "~~/lib/tokenless/agentIntegrations";
+import {
+  type HumanReviewPaymentProfile,
+  automaticHumanReviewGrantScopes,
+  humanReviewRequiresPayment,
+  sameAutomaticHumanReviewGrantScopes,
+} from "~~/lib/tokenless/humanReviewGrantScopes";
 import {
   HUMAN_REVIEW_AUTHORITY_LEVELS,
   type HumanReviewAuthorityLevel,
@@ -65,7 +70,6 @@ export type PutHumanReviewConfigurationInput = {
 
 const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const WORKFLOW_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u;
-const REQUIRED_AUTOMATIC_SCOPES = ["panel:publish", "payment:submit"] as const;
 const SAFE_EVALUATION_SCOPES = ["evaluation:read", "review:decide"] as const;
 const OWNER_BODY_KEYS = new Set([
   "expectedBindingVersion",
@@ -297,6 +301,7 @@ async function exactAutomaticDelegation(
     agentId: string;
     agentVersionId: string;
     publishingPolicy: HumanReviewVersionReference;
+    paymentProfile: HumanReviewPaymentProfile;
     now: Date;
   },
 ) {
@@ -324,8 +329,7 @@ async function exactAutomaticDelegation(
     const scopes = parseStringArray((row as Row).granted_scopes_json, "delegation scopes");
     const workflows = parseStringArray((row as Row).allowed_workflow_keys_json, "delegation workflows");
     return (
-      sameStringSet(scopes, OWNER_APPROVED_AGENT_SCOPES) &&
-      REQUIRED_AUTOMATIC_SCOPES.every(scope => scopes.includes(scope)) &&
+      sameAutomaticHumanReviewGrantScopes(scopes, input.paymentProfile) &&
       workflows.length >= 1 &&
       workflows.length <= 32 &&
       workflows.every(workflow => WORKFLOW_PATTERN.test(workflow))
@@ -387,7 +391,8 @@ async function validateExactObjects(
     );
   }
   const profile = await client.query(
-    `SELECT audience, configuration_status, profile_hash, approved_at
+    `SELECT audience, configuration_status, profile_hash, approved_at,
+            compensation_mode, feedback_bonus_enabled
      FROM tokenless_agent_review_request_profiles
      WHERE workspace_id = $1 AND profile_id = $2 AND version = $3
        AND agent_id = $4 AND agent_version_id = $5 AND superseded_at IS NULL
@@ -404,6 +409,14 @@ async function validateExactObjects(
     );
   }
   const profileAudience = rowString(profileRow, "audience");
+  const compensationMode = rowString(profileRow, "compensation_mode");
+  if (compensationMode !== "unpaid" && compensationMode !== "usdc") {
+    throw new Error("Database returned invalid review compensation.");
+  }
+  const paymentProfile: HumanReviewPaymentProfile = {
+    compensationMode,
+    feedbackBonusEnabled: profileRow?.feedback_bonus_enabled === true || profileRow?.feedback_bonus_enabled === "t",
+  };
   const policyAudience = selectionAudience(selectionRow.audience_policy_json);
   if (profileAudience !== policyAudience) {
     throw new TokenlessServiceError(
@@ -444,6 +457,7 @@ async function validateExactObjects(
         agentId: input.agentId,
         agentVersionId: input.agentVersionId,
         publishingPolicy: input.publishingPolicy,
+        paymentProfile,
         now: input.now,
       }))
     ) {
@@ -970,6 +984,7 @@ async function prepareExactPublishingGrant(
     publishingPolicyId: string;
     publishingPolicyVersion: number;
     allowedWorkflowKeys: string[];
+    paymentProfile: HumanReviewPaymentProfile;
     now: Date;
   },
 ): Promise<PreparedPublishingGrant> {
@@ -1034,7 +1049,7 @@ async function prepareExactPublishingGrant(
     integrationId: input.integrationId,
     publishingPolicy: { id: input.publishingPolicyId, version: input.publishingPolicyVersion },
     allowedWorkflowKeys: input.allowedWorkflowKeys,
-    grantedScopes: [...OWNER_APPROVED_AGENT_SCOPES],
+    grantedScopes: automaticHumanReviewGrantScopes(input.paymentProfile),
     policyCaps: {
       maxPanelAtomic: rowString(policy, "max_panel_atomic")!,
       maxDailyAtomic: rowString(policy, "max_daily_atomic")!,
@@ -1425,14 +1440,10 @@ export async function putHumanReviewConfigurationForOwner(input: PutHumanReviewC
     let preparedGrant: PreparedPublishingGrant | undefined;
     if (body.publishingGrant === null) publishingPolicy = null;
     else if (body.publishingGrant) {
-      preparedGrant = await prepareExactPublishingGrant(client, {
-        workspaceId: input.workspaceId,
-        agentId: input.agentId,
-        agentVersionId: agent.agentVersionId,
-        ...body.publishingGrant,
-        now,
-      });
-      publishingPolicy = preparedGrant.publishingPolicy;
+      publishingPolicy = {
+        id: body.publishingGrant.publishingPolicyId,
+        version: body.publishingGrant.publishingPolicyVersion,
+      };
     }
     const group = await resolvePrivateGroupTuple(client, {
       workspaceId: input.workspaceId,
@@ -1454,6 +1465,17 @@ export async function putHumanReviewConfigurationForOwner(input: PutHumanReviewC
       requirements: profile.expertiseRequirements,
     });
     assertPrivateSensitivityAllowed(profile.privateSensitivity, group.maximumSensitivity);
+    if (body.publishingGrant) {
+      preparedGrant = await prepareExactPublishingGrant(client, {
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        agentVersionId: agent.agentVersionId,
+        ...body.publishingGrant,
+        paymentProfile: profile,
+        now,
+      });
+      publishingPolicy = preparedGrant.publishingPolicy;
+    }
     const selection = normalizeManagedReviewPolicyInput({
       ...body.selection,
       agentId: input.agentId,
@@ -1747,6 +1769,10 @@ export async function getHumanReviewConfigurationForOwner(input: {
     const publishingPolicy = publishingPolicyId
       ? { id: publishingPolicyId, version: rowInteger(bindingRow, "publishing_policy_version") }
       : null;
+    const paymentRequired = humanReviewRequiresPayment({
+      compensationMode: requestProfile.compensationMode as "unpaid" | "usdc",
+      feedbackBonusEnabled: requestProfile.feedbackBonusEnabled,
+    });
     const delegationConnection = publishingPolicy
       ? (connections.find(
           candidate =>
@@ -1756,7 +1782,7 @@ export async function getHumanReviewConfigurationForOwner(input: {
             candidate.publishingPolicyId === publishingPolicy.id &&
             candidate.publishingPolicyVersion === publishingPolicy.version &&
             candidate.safeAccess.canPublish &&
-            candidate.safeAccess.canSpend,
+            (!paymentRequired || candidate.safeAccess.canSpend),
         ) ?? null)
       : null;
     const authority = rowString(bindingRow, "authority") as HumanReviewAuthorityLevel;

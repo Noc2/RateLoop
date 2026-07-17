@@ -778,9 +778,7 @@ function hasExactAutonomousGrant(context: FrozenHumanReviewRoutingContext) {
     return false;
   }
   if (
-    (context.requestProfile.lane === "public_paid_network" ||
-      context.requestProfile.lane === "private_invited_paid" ||
-      context.requestProfile.lane === "hybrid_public_safe") &&
+    (context.requestProfile.compensationMode === "usdc" || context.requestProfile.feedbackBonusEnabled) &&
     (!context.grant.grantedScopes.includes("payment:submit") ||
       !context.grant.credentialScopes.includes("payment:submit"))
   ) {

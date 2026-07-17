@@ -7,6 +7,7 @@ import { AUTH_SESSION_COOKIE, createAuthSession } from "~~/lib/auth/session";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import {
+  SAFE_AGENT_CONNECTION_SCOPES,
   claimAgentConnectionIntent,
   createAgentConnectionIntent,
   verifyAgentConnection,
@@ -24,6 +25,8 @@ import {
   registerAgentOAuthClient,
   validateAgentOAuthAuthorizationRequest,
 } from "~~/lib/tokenless/agentOAuth";
+import { putHumanReviewConfigurationForOwner } from "~~/lib/tokenless/humanReviewConfiguration";
+import { createPrivateGroup } from "~~/lib/tokenless/privateGroups";
 import { TOKENLESS_AGENT_SCOPES, createAgentPublishingPolicy, createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -185,6 +188,79 @@ test("browser consent atomically upgrades one connected OAuth integration to exa
   assert.equal(integrationEvent.rows[0]?.actor_reference, setup.principalId);
   assert.match(String(integrationEvent.rows[0]?.details_json), /browser_owner_step_up/);
   assert.match(String(integrationEvent.rows[0]?.details_json), /explicitBrowserConsent/);
+});
+
+test("legacy publishing activation preserves a bound unpaid private review without payment authority", async () => {
+  const setup = await connectOAuthAgent("unpaidgrant");
+  const policy = await publishingPolicy(setup.principalId, setup.workspaceId);
+  const group = await createPrivateGroup({
+    accountAddress: setup.principalId,
+    workspaceId: setup.workspaceId,
+    name: "Unpaid reviewers",
+    purpose: "Review private workspace material without payment.",
+    policy: { defaultCompensation: "unpaid", dataClassifications: ["internal", "confidential"] },
+  });
+  const saved = await putHumanReviewConfigurationForOwner({
+    accountAddress: setup.principalId,
+    workspaceId: setup.workspaceId,
+    agentId: setup.connected.integration.agentId,
+    body: {
+      expectedBindingVersion: null,
+      selection: {
+        mode: "always",
+        enforcementMode: "advisory",
+        agreementThresholdBps: 8_000,
+        productionFloorBps: 0,
+        fixedRateBps: null,
+        maximumUnreviewedGap: 20,
+        requiredRiskTiers: ["high"],
+        criticalRiskTiers: ["critical"],
+        minimumConfidenceBps: 7_000,
+        maximumLatencyMs: 120_000,
+      },
+      requestProfile: {
+        questionAuthority: "owner_fixed",
+        criterion: "Is this response safe and correct?",
+        positiveLabel: "Approve",
+        negativeLabel: "Reject",
+        rationaleMode: "required",
+        audience: "private_invited",
+        contentBoundary: "private_workspace",
+        privateSensitivity: "confidential",
+        privateGroupId: group.groupId,
+        responseWindowSeconds: 3_600,
+        panelSize: 2,
+        compensationMode: "unpaid",
+        bountyPerSeatAtomic: null,
+        feedbackBonusEnabled: false,
+      },
+      authority: "ask_automatically",
+      publishingGrant: {
+        integrationId: setup.connected.integration.integrationId,
+        publishingPolicyId: policy.policyId,
+        publishingPolicyVersion: policy.version ?? 1,
+        allowedWorkflowKeys: ["general-assistance"],
+      },
+    },
+  });
+  assert.equal(saved.configuration.authority, "ask_automatically");
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_integrations
+          SET activation_mode='preauthorized_safe',publishing_policy_id=NULL,publishing_policy_version=NULL,
+              granted_scopes_json=? WHERE integration_id=?`,
+    args: [JSON.stringify(SAFE_AGENT_CONNECTION_SCOPES), setup.connected.integration.integrationId],
+  });
+
+  const activated = await activateAgentIntegrationPublishing({
+    accountAddress: setup.principalId,
+    workspaceId: setup.workspaceId,
+    integrationId: setup.connected.integration.integrationId,
+    body: { publishingPolicyId: policy.policyId, allowedWorkflowKeys: ["general-assistance"] },
+  });
+  assert.equal(activated.integration.canPublish, true);
+  assert.equal(activated.integration.canSpend, false);
+  assert.ok(activated.integration.grantedScopes.includes("panel:publish"));
+  assert.ok(!activated.integration.grantedScopes.includes("payment:submit"));
 });
 
 test("publishing step-up fails closed for a publishing policy from another workspace", async () => {
