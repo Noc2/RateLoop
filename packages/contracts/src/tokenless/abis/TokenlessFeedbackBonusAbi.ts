@@ -47,6 +47,32 @@ export const TokenlessFeedbackBonusAbi = [
   },
   {
     "type": "function",
+    "name": "MAX_FEEDBACK_HORIZON",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_FEEDBACK_WINDOW",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "VOUCHER_TYPEHASH",
     "inputs": [],
     "outputs": [
@@ -536,6 +562,30 @@ export const TokenlessFeedbackBonusAbi = [
   },
   {
     "type": "function",
+    "name": "poolKeyFor",
+    "inputs": [
+      {
+        "name": "requester",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "reviewId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
     "name": "refundRemainder",
     "inputs": [
       {
@@ -676,7 +726,7 @@ export const TokenlessFeedbackBonusAbi = [
     "name": "reviewPoolId",
     "inputs": [
       {
-        "name": "reviewId",
+        "name": "poolKey",
         "type": "bytes32",
         "internalType": "bytes32"
       }

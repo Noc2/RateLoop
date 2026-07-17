@@ -60,6 +60,19 @@ export const TokenlessPanelAbi = [
   },
   {
     "type": "function",
+    "name": "MAX_BEACON_FAILURE_HORIZON",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_CLAIM_GRACE_PERIOD",
     "inputs": [],
     "outputs": [
@@ -80,6 +93,58 @@ export const TokenlessPanelAbi = [
         "name": "",
         "type": "uint16",
         "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_REVEAL_HORIZON",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_BEACON_GRACE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_COMMIT_WINDOW",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MIN_REVEAL_WINDOW",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
       }
     ],
     "stateMutability": "view"
@@ -898,6 +963,11 @@ export const TokenlessPanelAbi = [
           },
           {
             "name": "revealCount",
+            "type": "uint32",
+            "internalType": "uint32"
+          },
+          {
+            "name": "compensatedRevealCount",
             "type": "uint32",
             "internalType": "uint32"
           },
