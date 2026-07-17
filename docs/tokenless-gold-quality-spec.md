@@ -30,3 +30,11 @@ Completed runs persist the unanimity rate among non-gold cases that reached the 
 share, RBTS score mean and variance, gold failure rate, and comparable-scope drift. Finalized transparency
 evidence carries only aggregate score sums and squared-score sums. Metrics are idempotently recomputed when
 index evidence arrives late and are shown as diagnostic evidence, not as settlement inputs.
+
+## Abuse boundaries and limitations
+
+Gold detects disagreement with the seeded answer; it does not prove the answer is correct, prevent an owner
+from mislabelling a case, establish reviewer identity, or establish broad domain competence. Repeated exposure
+can leak a corpus, so selection is secret and bounded. Owner-derived calibration is tenant-scoped to prevent
+one customer from poisoning another customer's reviewer pool. Platform-synthetic gold must complete a
+separate public-safety and readiness review before activation.
