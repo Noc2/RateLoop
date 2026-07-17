@@ -697,6 +697,7 @@ function privacySafeQualificationCounts(responses: QueryRow[], minimumAggregatio
     orderedTiers: false,
     minimumAggregationSize,
     categories: [...reviewersByQualification.entries()]
+      .filter(([, reviewers]) => reviewers.size >= minimumAggregationSize)
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([key, reviewers]) => ({ key, ...privacySafeCount(reviewers.size) })),
     unqualified: privacySafeCount(unqualifiedReviewerCount),

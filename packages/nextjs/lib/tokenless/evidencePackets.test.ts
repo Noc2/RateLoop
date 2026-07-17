@@ -782,6 +782,53 @@ test("evidence derives private aggregates, verifies only against trusted pins, a
   }
 });
 
+test("evidence omits qualification labels held by fewer reviewers than the privacy threshold", async () => {
+  const fixture = await seedEvidenceFixture({
+    compensation: "unpaid",
+    minimumAggregationSize: 3,
+    sources: [
+      {
+        source: "customer_invited",
+        targetCount: 4,
+        responses: [
+          { choice: "candidate", validity: "valid" },
+          { choice: "candidate", validity: "valid" },
+          { choice: "baseline", validity: "valid" },
+          { choice: "baseline", validity: "valid" },
+        ],
+      },
+    ],
+  });
+  await insert(`UPDATE tokenless_assurance_responses SET qualification_keys_json=? WHERE response_id='response_0_0'`, [
+    JSON.stringify(["code-review:typescript", "finance:broker-dealer-supervision"]),
+  ]);
+  for (const responseId of ["response_0_1", "response_0_2"]) {
+    await insert(`UPDATE tokenless_assurance_responses SET qualification_keys_json=? WHERE response_id=?`, [
+      JSON.stringify(["code-review:typescript"]),
+      responseId,
+    ]);
+  }
+
+  const signer = generateKeyPairSync("ed25519");
+  const packet = await generateAssuranceEvidencePacket({
+    accountAddress: OWNER,
+    workspaceId: fixture.workspaceId,
+    runId: fixture.runId,
+    now: NOW,
+    signer: { privateKey: signer.privateKey },
+    tenantCommitmentKey: TENANT_KEY,
+  });
+
+  assert.deepEqual(packet.payload.reviewContext.reviewerQualifications, {
+    taxonomy: "explicit_qualification_categories",
+    orderedTiers: false,
+    minimumAggregationSize: 3,
+    categories: [{ key: "code-review:typescript", suppressed: false, reviewerCount: 3 }],
+    unqualified: { suppressed: true },
+  });
+  assert.doesNotMatch(JSON.stringify(packet.payload), /finance:broker-dealer-supervision/);
+});
+
 test("evidence binds an agent-triggered review to its frozen trigger, policy/profile versions, and gate transition", async () => {
   const fixture = await seedEvidenceFixture({
     compensation: "unpaid",
