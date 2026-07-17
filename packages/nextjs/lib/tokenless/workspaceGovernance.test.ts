@@ -167,8 +167,11 @@ test("one-time member invitations store only hashes, bind redemption to the brow
     },
   ];
 
-  const created = await Promise.all(
-    invitations.map(async invitation => ({
+  // Sequential creation: audit-chain heads serialize with FOR UPDATE in
+  // PostgreSQL, which the in-memory test database does not implement.
+  const created = [];
+  for (const invitation of invitations) {
+    created.push({
       invitation,
       invite: await createWorkspaceMemberInvite({
         accountAddress: OWNER_A,
@@ -178,8 +181,8 @@ test("one-time member invitations store only hashes, bind redemption to the brow
         governanceRole: invitation.governanceRole,
         intendedAccountAddress: invitation.address,
       }),
-    })),
-  );
+    });
+  }
 
   const storedInvites = await dbClient.execute(
     "SELECT invite_id, invite_token_hash, intended_account_address FROM tokenless_workspace_member_invites",
@@ -356,4 +359,60 @@ test("only owners and admins manage governance while client and cost-center read
       ],
     }),
   );
+});
+
+test("membership grants, upgrades, and invite redemptions land in the workspace audit chain with role names", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Audited roles", ownerAddress: OWNER_A });
+  const client = await createClient(workspaceId, OWNER_A, "Audited client");
+
+  const memberInvite = await createWorkspaceMemberInvite({
+    accountAddress: OWNER_A,
+    workspaceId,
+    clientId: client.clientId,
+    accessRole: "member",
+    governanceRole: "decision_owner",
+    intendedAccountAddress: DECISION_OWNER,
+  });
+  await redeemWorkspaceMemberInviteWithBaseAccount({ token: memberInvite.token, baseAccountAddress: DECISION_OWNER });
+
+  const adminInvite = await createWorkspaceMemberInvite({
+    accountAddress: OWNER_A,
+    workspaceId,
+    accessRole: "admin",
+    governanceRole: "decision_owner",
+    intendedAccountAddress: DECISION_OWNER,
+  });
+  await redeemWorkspaceMemberInviteWithBaseAccount({ token: adminInvite.token, baseAccountAddress: DECISION_OWNER });
+
+  const events = await dbClient.execute({
+    sql: `SELECT action, actor_reference, target_kind, target_id, metadata_json, previous_digest, event_digest
+          FROM tokenless_audit_events WHERE workspace_id = ? ORDER BY sequence ASC`,
+    args: [workspaceId],
+  });
+  const rows = events.rows as Array<Record<string, unknown>>;
+  assert.deepEqual(
+    rows.map(row => row.action),
+    [
+      "workspace.member_invited",
+      "workspace.role_assigned",
+      "workspace.member_invited",
+      "workspace.role_assigned",
+      "workspace.role_changed",
+    ],
+  );
+  const invited = rows[0]!;
+  assert.equal(invited.target_kind, "workspace_member_invite");
+  assert.match(String(invited.metadata_json), /"accessRole":"member"/u);
+  assert.match(String(invited.metadata_json), /"governanceRole":"decision_owner"/u);
+  const assigned = rows[1]!;
+  assert.equal(assigned.target_kind, "workspace_member");
+  assert.equal(assigned.target_id, DECISION_OWNER.toLowerCase());
+  assert.match(String(assigned.metadata_json), /"governanceRole":"decision_owner"/u);
+  const changed = rows[4]!;
+  assert.match(String(changed.metadata_json), /"previousAccessRole":"member"/u);
+  assert.match(String(changed.metadata_json), /"accessRole":"admin"/u);
+  // The chain is contiguous: every event links to its predecessor.
+  for (let index = 1; index < rows.length; index += 1) {
+    assert.equal(rows[index]!.previous_digest, rows[index - 1]!.event_digest);
+  }
 });

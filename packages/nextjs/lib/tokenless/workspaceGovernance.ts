@@ -1,7 +1,9 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import "server-only";
 import { getAddress } from "viem";
+import { isRateLoopPrincipalId } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
+import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export const WORKSPACE_GOVERNANCE_ROLES = ["consultant", "end_client", "decision_owner", "billing"] as const;
@@ -219,6 +221,32 @@ function clientFromRow(row: QueryRow): WorkspaceClient {
     configuredRetentionDays: rowNumber(row, "retention_days"),
     effectiveRetentionDays,
   };
+}
+
+async function appendMembershipAuditEvent(input: {
+  workspaceId: string;
+  actor: string;
+  action: "workspace.member_invited" | "workspace.role_assigned" | "workspace.role_changed" | "workspace.role_removed";
+  targetKind: string;
+  targetId: string;
+  reason: string;
+  metadata: Record<string, unknown>;
+  occurredAt: Date;
+}) {
+  await appendAuditEvent({
+    workspaceId: input.workspaceId,
+    actorKind: isRateLoopPrincipalId(input.actor) ? "principal" : "account",
+    actorReference: input.actor,
+    assuranceMethod: "rateloop_session",
+    action: input.action,
+    targetKind: input.targetKind,
+    targetId: input.targetId,
+    purpose: "workspace_membership_governance",
+    reason: input.reason,
+    result: "success",
+    metadata: input.metadata,
+    occurredAt: input.occurredAt,
+  });
 }
 
 async function ensureGovernanceDefaults(workspaceId: string, updatedBy: string) {
@@ -455,6 +483,21 @@ export async function createWorkspaceMemberInvite(input: {
       now,
     ],
   });
+  await appendMembershipAuditEvent({
+    workspaceId: input.workspaceId,
+    actor: manager.accountAddress,
+    action: "workspace.member_invited",
+    targetKind: "workspace_member_invite",
+    targetId: inviteId,
+    reason: "workspace_manager_created_member_invite",
+    metadata: {
+      accessRole: input.accessRole,
+      governanceRole: input.governanceRole,
+      clientBound: clientId !== null,
+      expiresAt: expiresAt.toISOString(),
+    },
+    occurredAt: now,
+  });
   return { inviteId, token, expiresAt: expiresAt.toISOString() };
 }
 
@@ -572,6 +615,34 @@ export async function redeemWorkspaceMemberInviteWithBaseAccount(input: { token:
       throw new TokenlessServiceError("Invitation is no longer available.", 410, "invite_unavailable");
     }
     await client.query("COMMIT");
+    await appendMembershipAuditEvent({
+      workspaceId,
+      actor: accountAddress,
+      action: "workspace.role_assigned",
+      targetKind: "workspace_member",
+      targetId: accountAddress,
+      reason: "workspace_member_invite_redeemed",
+      metadata: {
+        inviteId,
+        accessRole:
+          existingRole && ACCESS_ROLE_RANK[accessRole] <= ACCESS_ROLE_RANK[existingRole] ? existingRole : accessRole,
+        governanceRole,
+        invitedBy: rowString(row, "created_by"),
+      },
+      occurredAt: now,
+    });
+    if (existingRole && ACCESS_ROLE_RANK[accessRole] > ACCESS_ROLE_RANK[existingRole]) {
+      await appendMembershipAuditEvent({
+        workspaceId,
+        actor: accountAddress,
+        action: "workspace.role_changed",
+        targetKind: "workspace_member",
+        targetId: accountAddress,
+        reason: "workspace_member_invite_upgraded_access_role",
+        metadata: { inviteId, previousAccessRole: existingRole, accessRole, governanceRole },
+        occurredAt: now,
+      });
+    }
     return { workspaceId, clientId, accessRole, governanceRole, accountAddress };
   } catch (error) {
     await client.query("ROLLBACK");

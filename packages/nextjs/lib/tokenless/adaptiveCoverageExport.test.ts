@@ -306,6 +306,64 @@ test("owner export is bounded, canonical, complete, and records its digest in th
   );
 });
 
+test("the export carries privacy-safe oversight designation summaries without competence free text", async () => {
+  const setup = await fixture("oversight");
+  const empty = await exportAdaptiveCoverage({
+    accountAddress: setup.identity.principalId,
+    workspaceId: setup.workspaceId,
+    from: FROM,
+    to: TO,
+    now: SNAPSHOT,
+  });
+  assert.deepEqual(empty.oversightDesignations, {
+    role: "decision_owner",
+    counts: { total: 0, active: 0, expired: 0, revoked: 0 },
+    designations: [],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_oversight_attestations
+          (attestation_id,workspace_id,account_address,competence_basis,training_records_json,
+           authority_scope,attested_by,attested_at,expires_at,status,created_at,updated_at)
+          VALUES (?,?,?,?,?,?,?,?,?,'active',?,?)`,
+    args: [
+      "ovat_coverage_oversight",
+      setup.workspaceId,
+      ADMIN,
+      "Free-text competence basis that must never leave the workspace UI.",
+      JSON.stringify([{ name: "Oversight calibration", completedAt: "2026-06-01T00:00:00.000Z", scope: "support" }]),
+      "both",
+      setup.identity.principalId,
+      new Date("2026-06-15T00:00:00.000Z"),
+      new Date("2027-06-15T00:00:00.000Z"),
+      new Date("2026-06-15T00:00:00.000Z"),
+      new Date("2026-06-15T00:00:00.000Z"),
+    ],
+  });
+  const exported = await exportAdaptiveCoverage({
+    accountAddress: setup.identity.principalId,
+    workspaceId: setup.workspaceId,
+    from: FROM,
+    to: TO,
+    now: SNAPSHOT,
+  });
+  assert.deepEqual(exported.oversightDesignations, {
+    role: "decision_owner",
+    counts: { total: 1, active: 1, expired: 0, revoked: 0 },
+    designations: [
+      {
+        memberReference: ADMIN,
+        role: "decision_owner",
+        authorityScope: "both",
+        status: "active",
+        attestedAt: "2026-06-15T00:00:00.000Z",
+        expiresAt: "2027-06-15T00:00:00.000Z",
+        trainingRecordNames: ["Oversight calibration"],
+      },
+    ],
+  });
+  assert.doesNotMatch(JSON.stringify(exported), /never leave the workspace UI/u);
+});
+
 test("only active workspace owners and admins can export and windows fail closed", async () => {
   const setup = await fixture("authorization");
   const adminExport = await exportAdaptiveCoverage({

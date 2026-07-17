@@ -4,6 +4,7 @@ import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/acco
 import { dbPool } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { enqueueAssuranceAttestation } from "~~/lib/tokenless/assuranceAttestationPipeline";
+import { summarizeOversightDesignationsForExport } from "~~/lib/tokenless/oversightAttestations";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
@@ -330,6 +331,13 @@ export async function exportAdaptiveCoverage(input: {
        ORDER BY created_at ASC,event_id ASC LIMIT ${MAX_SERIES_ROWS + 1}`,
       [input.workspaceId, window.start, window.end],
     );
+    const oversightResult = await client.query(
+      `SELECT account_address,authority_scope,status,attested_at,expires_at,training_records_json
+       FROM tokenless_oversight_attestations
+       WHERE workspace_id=$1
+       ORDER BY account_address ASC`,
+      [input.workspaceId],
+    );
     assertBounded(scopesResult.rows, "scopes", MAX_SCOPES);
     assertBounded(decisionsResult.rows, "decisions", MAX_SERIES_ROWS);
     assertBounded(observationsResult.rows, "observations", MAX_SERIES_ROWS);
@@ -415,6 +423,7 @@ export async function exportAdaptiveCoverage(input: {
         rollups: rollupsResult.rows.length,
         stageTransitions: eventsResult.rows.length,
       },
+      oversightDesignations: summarizeOversightDesignationsForExport(oversightResult.rows as Row[], window.snapshotAt),
       scopes,
     };
     const exported = { ...payload, exportDigest: sha256(payload) };
