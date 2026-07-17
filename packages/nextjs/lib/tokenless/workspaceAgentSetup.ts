@@ -992,8 +992,7 @@ export async function completeWorkspaceAgentSetup(input: {
     const bindingResult = await client.query(
       `SELECT b.selection_policy_id,b.selection_policy_version,b.publishing_policy_id,b.publishing_policy_version,
               b.authority,
-              r.audience,r.private_group_id,r.configuration_status,r.response_window_seconds,r.panel_size,
-              g.status AS group_status
+              r.audience,r.private_group_id,r.configuration_status,r.response_window_seconds,r.panel_size
        FROM tokenless_agent_human_review_bindings b
        JOIN tokenless_agent_review_policies p
          ON p.workspace_id=b.workspace_id AND p.policy_id=b.selection_policy_id
@@ -1002,8 +1001,6 @@ export async function completeWorkspaceAgentSetup(input: {
          ON r.workspace_id=b.workspace_id AND r.profile_id=b.request_profile_id
         AND r.version=b.request_profile_version AND r.profile_hash=b.request_profile_hash
         AND r.superseded_at IS NULL
-       LEFT JOIN tokenless_private_groups g
-         ON g.workspace_id=b.workspace_id AND g.group_id=r.private_group_id
        WHERE b.workspace_id=$1 AND b.binding_id=$2 AND b.version=$3
          AND b.agent_id=$4 AND b.agent_version_id=$5 AND b.enabled=true AND b.superseded_at IS NULL
        FOR SHARE`,
@@ -1017,6 +1014,19 @@ export async function completeWorkspaceAgentSetup(input: {
     );
     const binding = bindingResult.rows[0] as Row | undefined;
     const requiresInvitedGroup = rowString(binding, "audience") !== "public_network";
+    const groupStatus =
+      requiresInvitedGroup && groupId
+        ? rowString(
+            (
+              await client.query(
+                `SELECT status FROM tokenless_private_groups
+                 WHERE workspace_id=$1 AND group_id=$2 FOR SHARE`,
+                [input.workspaceId, groupId],
+              )
+            ).rows[0] as Row | undefined,
+            "status",
+          )
+        : null;
     const authority = rowString(binding, "authority");
     const publishingPolicyId = rowString(binding, "publishing_policy_id");
     const publishingPolicyVersion = rowOptionalNumber(binding, "publishing_policy_version");
@@ -1037,7 +1047,7 @@ export async function completeWorkspaceAgentSetup(input: {
       ? Boolean(
           groupId &&
             rowString(binding, "private_group_id") === groupId &&
-            rowString(binding, "group_status") === "active",
+            groupStatus === "active",
         )
       : groupId === null && rowString(binding, "private_group_id") === null;
     if (
