@@ -56,6 +56,7 @@ async function fixture(options: { policyAudience?: "private_invited" | "public_n
   const profileInput = {
     agentId: agent.agentId,
     agentVersionId: agent.currentVersion.versionId,
+    questionAuthority: "owner_fixed" as const,
     criterion: "Is this suggestion safe and correct?",
     positiveLabel: "Approve",
     negativeLabel: "Reject",

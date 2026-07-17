@@ -86,6 +86,7 @@ const OWNER_SELECTION_KEYS = new Set([
   "maximumLatencyMs",
 ]);
 const OWNER_PROFILE_KEYS = new Set([
+  "questionAuthority",
   "criterion",
   "positiveLabel",
   "negativeLabel",
@@ -733,6 +734,35 @@ function normalizeOwnerMutation(value: unknown) {
   }
   const selection = objectWithAllowedKeys(body.selection, "selection", OWNER_SELECTION_KEYS);
   const requestProfile = objectWithAllowedKeys(body.requestProfile, "requestProfile", OWNER_PROFILE_KEYS);
+  if (!("questionAuthority" in requestProfile)) {
+    configurationError("requestProfile.questionAuthority is required.", "invalid_human_review_owner_request");
+  }
+  if (requestProfile.questionAuthority !== "owner_fixed" && requestProfile.questionAuthority !== "agent_per_request") {
+    configurationError(
+      "requestProfile.questionAuthority must be owner_fixed or agent_per_request.",
+      "invalid_human_review_owner_request",
+    );
+  }
+  if (requestProfile.questionAuthority === "agent_per_request") {
+    if (["criterion", "positiveLabel", "negativeLabel"].some(key => key in requestProfile)) {
+      configurationError(
+        "Agent-written question profiles must omit the fixed criterion and answer labels.",
+        "invalid_human_review_owner_request",
+      );
+    }
+    if (requestProfile.audience !== "public_network" || requestProfile.contentBoundary !== "public_or_test") {
+      configurationError(
+        "Agent-written questions currently require the public reviewer network and public or test material.",
+        "invalid_human_review_owner_request",
+      );
+    }
+    if (selection.mode === "adaptive") {
+      configurationError(
+        "Adaptive review requires one owner-fixed question; choose another review frequency for agent-written questions.",
+        "invalid_human_review_owner_request",
+      );
+    }
+  }
   const authority = body.authority as HumanReviewAuthorityLevel;
   if (!HUMAN_REVIEW_AUTHORITY_LEVELS.includes(authority)) {
     configurationError("Human-review authority is invalid.", "invalid_human_review_owner_request");
@@ -842,9 +872,11 @@ function ownerProfileFromRow(row: Row) {
   return {
     agentId: rowString(row, "agent_id")!,
     agentVersionId: rowString(row, "agent_version_id")!,
-    criterion: rowString(row, "criterion")!,
-    positiveLabel: rowString(row, "positive_label")!,
-    negativeLabel: rowString(row, "negative_label")!,
+    questionAuthority: rowString(row, "question_authority")!,
+    resultSemantics: rowString(row, "result_semantics")!,
+    criterion: rowString(row, "criterion"),
+    positiveLabel: rowString(row, "positive_label"),
+    negativeLabel: rowString(row, "negative_label"),
     rationaleMode: rowString(row, "rationale_mode")!,
     audience: rowString(row, "audience")!,
     contentBoundary: rowString(row, "content_boundary")!,
@@ -1285,7 +1317,8 @@ async function versionOwnerProfile(
   }
   await client.query(
     `INSERT INTO tokenless_agent_review_request_profiles
-     (profile_id, version, workspace_id, agent_id, agent_version_id, criterion, positive_label, negative_label,
+     (profile_id, version, workspace_id, agent_id, agent_version_id, question_authority, result_semantics,
+      criterion, positive_label, negative_label,
       rationale_mode, audience, content_boundary, private_sensitivity, private_group_id,
       private_group_policy_version, private_group_policy_hash, required_expertise_keys_json,
       response_window_seconds, panel_size,
@@ -1293,13 +1326,15 @@ async function versionOwnerProfile(
       feedback_bonus_awarder_kind, feedback_bonus_awarder_account, feedback_bonus_award_window_seconds,
       configuration_status, profile_hash, created_by,
       created_at, approved_by, approved_at, superseded_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,'ready',$26,$27,$28,$27,$28,NULL)`,
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,'ready',$28,$29,$30,$29,$30,NULL)`,
     [
       profileId,
       version,
       input.workspaceId,
       input.profile.agentId,
       input.profile.agentVersionId,
+      input.profile.questionAuthority,
+      input.profile.resultSemantics,
       input.profile.criterion,
       input.profile.positiveLabel,
       input.profile.negativeLabel,
@@ -1397,6 +1432,31 @@ export async function putHumanReviewConfigurationForOwner(input: PutHumanReviewC
       audience: profile.audience,
       publishingPolicyId: publishingPolicy?.id ?? null,
     });
+    if (profile.questionAuthority === "agent_per_request") {
+      if (profile.resultSemantics !== "feedback") {
+        configurationError(
+          "Agent-written questions must use feedback result semantics.",
+          "invalid_human_review_owner_request",
+        );
+      }
+      if (profile.audience !== "public_network" || profile.contentBoundary !== "public_or_test") {
+        configurationError(
+          "Agent-written questions currently require the public reviewer network and public or test material.",
+          "invalid_human_review_owner_request",
+        );
+      }
+      if (selection.mode === "adaptive") {
+        configurationError(
+          "Adaptive review requires one owner-fixed question; choose another review frequency for agent-written questions.",
+          "invalid_human_review_owner_request",
+        );
+      }
+    } else if (profile.resultSemantics !== "assurance") {
+      configurationError(
+        "Owner-fixed questions must use assurance result semantics.",
+        "invalid_human_review_owner_request",
+      );
+    }
     const requestProfile = await versionOwnerProfile(client, {
       workspaceId: input.workspaceId,
       actor,
@@ -1599,6 +1659,7 @@ export async function getHumanReviewConfigurationForOwner(input: {
         `SELECT b.*, p.mode, p.agreement_threshold_bps, p.production_floor_bps, p.fixed_rate_bps,
                 p.maximum_unreviewed_gap, p.rules_json, p.audience_policy_json,
                 p.publishing_policy_id AS selection_publishing_policy_id,
+                r.question_authority, r.result_semantics,
                 r.criterion, r.positive_label, r.negative_label, r.rationale_mode, r.audience,
                 r.content_boundary, r.private_sensitivity, r.private_group_id, r.private_group_policy_version,
                 r.private_group_policy_hash, r.response_window_seconds, r.panel_size,

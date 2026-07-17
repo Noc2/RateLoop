@@ -56,9 +56,11 @@ export type AgentSetupReviewDraft = {
     maximumLatencyMs: number | null;
   };
   requestProfile: {
-    criterion: string;
-    positiveLabel: string;
-    negativeLabel: string;
+    questionAuthority: "owner_fixed" | "agent_per_request";
+    resultSemantics: "assurance" | "feedback";
+    criterion: string | null;
+    positiveLabel: string | null;
+    negativeLabel: string | null;
     rationaleMode: "off" | "optional" | "required";
     audience: "private_invited" | "public_network" | "hybrid";
     contentBoundary: "public_or_test" | "private_workspace";
@@ -95,6 +97,8 @@ const DEFAULT_REVIEW_DRAFT: AgentSetupReviewDraft = {
     maximumLatencyMs: 120_000,
   },
   requestProfile: {
+    questionAuthority: "owner_fixed",
+    resultSemantics: "assurance",
     criterion: "Is this response safe and correct?",
     positiveLabel: "Approve",
     negativeLabel: "Reject",
@@ -233,7 +237,12 @@ function migrateReviewDraft(input: unknown): AgentSetupReviewDraft {
         ? (body.bindingRevision ?? null)
         : null,
     selection: { ...DEFAULT_REVIEW_DRAFT.selection, ...body.selection, mode: mode! },
-    requestProfile: { ...DEFAULT_REVIEW_DRAFT.requestProfile, ...body.requestProfile },
+    requestProfile: {
+      ...DEFAULT_REVIEW_DRAFT.requestProfile,
+      ...body.requestProfile,
+      questionAuthority: body.requestProfile?.questionAuthority ?? "owner_fixed",
+      resultSemantics: body.requestProfile?.resultSemantics ?? "assurance",
+    },
   };
 }
 
@@ -248,6 +257,8 @@ function reviewDraftFromOwnerView(view: OwnerReviewView): AgentSetupReviewDraft 
     !(["adaptive", "always", "manual", "rules", "fixed"] as unknown[]).includes(selection.mode) ||
     !(["advisory", "host_enforced"] as unknown[]).includes(selection.enforcementMode) ||
     !(["off", "optional", "required"] as unknown[]).includes(profile.rationaleMode) ||
+    !(["owner_fixed", "agent_per_request"] as unknown[]).includes(profile.questionAuthority) ||
+    !(["assurance", "feedback"] as unknown[]).includes(profile.resultSemantics) ||
     !(["private_invited", "public_network", "hybrid"] as unknown[]).includes(profile.audience) ||
     !(["public_or_test", "private_workspace"] as unknown[]).includes(profile.contentBoundary) ||
     !([null, "internal", "confidential", "restricted", "regulated"] as unknown[]).includes(
@@ -276,6 +287,8 @@ function reviewDraftFromOwnerView(view: OwnerReviewView): AgentSetupReviewDraft 
       maximumLatencyMs: selection.maximumLatencyMs ?? null,
     },
     requestProfile: {
+      questionAuthority: profile.questionAuthority as AgentSetupReviewDraft["requestProfile"]["questionAuthority"],
+      resultSemantics: profile.resultSemantics as AgentSetupReviewDraft["requestProfile"]["resultSemantics"],
       criterion: profile.criterion,
       positiveLabel: profile.positiveLabel,
       negativeLabel: profile.negativeLabel,
@@ -306,6 +319,19 @@ function isReviewDraftReady(draft: AgentSetupReviewDraft | null): draft is Agent
     draft &&
       draft.bindingRevision !== null &&
       draft.requestProfile.configurationStatus === "ready" &&
+      ((draft.requestProfile.questionAuthority === "owner_fixed" &&
+        draft.requestProfile.resultSemantics === "assurance" &&
+        Boolean(draft.requestProfile.criterion) &&
+        Boolean(draft.requestProfile.positiveLabel) &&
+        Boolean(draft.requestProfile.negativeLabel)) ||
+        (draft.requestProfile.questionAuthority === "agent_per_request" &&
+          draft.requestProfile.resultSemantics === "feedback" &&
+          draft.requestProfile.criterion === null &&
+          draft.requestProfile.positiveLabel === null &&
+          draft.requestProfile.negativeLabel === null &&
+          draft.requestProfile.audience === "public_network" &&
+          draft.requestProfile.contentBoundary === "public_or_test" &&
+          draft.selection.mode !== "adaptive")) &&
       Number.isSafeInteger(draft.requestProfile.responseWindowSeconds) &&
       Number(draft.requestProfile.responseWindowSeconds) >= 1_200 &&
       Number.isSafeInteger(draft.requestProfile.panelSize) &&

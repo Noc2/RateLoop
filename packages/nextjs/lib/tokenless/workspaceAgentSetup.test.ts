@@ -103,8 +103,10 @@ async function saveSetupReviewConfiguration(input: {
   mode?: "adaptive" | "always";
   audience?: "private_invited" | "public_network";
   authority?: "check_only" | "prepare_for_approval";
+  questionAuthority?: "owner_fixed" | "agent_per_request" | "omit";
 }) {
   const audience = input.audience ?? "private_invited";
+  const questionAuthority = input.questionAuthority ?? "owner_fixed";
   return putHumanReviewConfigurationForOwner({
     accountAddress: OWNER,
     workspaceId: input.workspaceId,
@@ -124,9 +126,14 @@ async function saveSetupReviewConfiguration(input: {
         maximumLatencyMs: 120_000,
       },
       requestProfile: {
-        criterion: "Is this response safe and correct?",
-        positiveLabel: "Approve",
-        negativeLabel: "Reject",
+        ...(questionAuthority === "omit" ? {} : { questionAuthority }),
+        ...(questionAuthority === "agent_per_request"
+          ? {}
+          : {
+              criterion: "Is this response safe and correct?",
+              positiveLabel: "Approve",
+              negativeLabel: "Reject",
+            }),
         rationaleMode: "required",
         audience,
         contentBoundary: audience === "public_network" ? "public_or_test" : "private_workspace",
@@ -375,6 +382,7 @@ test("automatic setup atomically binds the exact owner-approved workflows and sp
       maximumLatencyMs: 120_000,
     },
     requestProfile: {
+      questionAuthority: "owner_fixed",
       criterion: "Is this response safe and correct?",
       positiveLabel: "Approve",
       negativeLabel: "Reject",
@@ -497,6 +505,53 @@ test("setup rejects future steps, stale revisions, and unsaved review configurat
   );
 });
 
+test("setup requires explicit question authority and isolates agent-written feedback configuration", async () => {
+  const { workspaceId } = await connectedSetup();
+  const connected = await getWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId });
+  const agentId = connected.agent!.agentId;
+
+  await assert.rejects(
+    saveSetupReviewConfiguration({ workspaceId, agentId, audience: "public_network", mode: "always", questionAuthority: "omit" }),
+    /questionAuthority is required/u,
+  );
+  await assert.rejects(
+    saveSetupReviewConfiguration({
+      workspaceId,
+      agentId,
+      audience: "private_invited",
+      mode: "always",
+      questionAuthority: "agent_per_request",
+    }),
+    /public reviewer network and public or test material/u,
+  );
+  await assert.rejects(
+    saveSetupReviewConfiguration({
+      workspaceId,
+      agentId,
+      audience: "public_network",
+      mode: "adaptive",
+      questionAuthority: "agent_per_request",
+    }),
+    /Adaptive review requires one owner-fixed question/u,
+  );
+
+  await saveSetupReviewConfiguration({
+    workspaceId,
+    agentId,
+    audience: "public_network",
+    mode: "always",
+    questionAuthority: "agent_per_request",
+  });
+  const view = await getHumanReviewConfigurationForOwner({ accountAddress: OWNER, workspaceId, agentId });
+  const profile = view.configuration!.requestProfile.value;
+  assert.equal(profile.questionAuthority, "agent_per_request");
+  assert.equal(profile.resultSemantics, "feedback");
+  assert.equal(profile.criterion, null);
+  assert.equal(profile.positiveLabel, null);
+  assert.equal(profile.negativeLabel, null);
+  assert.equal(profile.rationaleMode, "required");
+});
+
 test("setup resumes a legacy v1 review choice as one unsaved v2 draft", async () => {
   const { workspaceId } = await connectedSetup();
   const connected = await getWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId });
@@ -548,6 +603,8 @@ test("setup resumes a legacy v1 review choice as one unsaved v2 draft", async ()
   assert.ok(resumed.reviewDraft);
   assert.equal(resumed.reviewDraft!.schemaVersion, "rateloop.workspace-agent-setup-review.v2");
   assert.equal(resumed.reviewDraft!.selection.mode, "always");
+  assert.equal(resumed.reviewDraft!.requestProfile.questionAuthority, "owner_fixed");
+  assert.equal(resumed.reviewDraft!.requestProfile.resultSemantics, "assurance");
   assert.equal(resumed.reviewDraft!.bindingRevision, null);
   assert.equal(resumed.reviewDraft!.requestProfile.privateGroupId, null);
   const bindings = await dbClient.execute({

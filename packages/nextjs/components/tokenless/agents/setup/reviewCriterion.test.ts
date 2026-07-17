@@ -9,6 +9,8 @@ import test from "node:test";
 import type { AgentSetupReviewDraft } from "~~/lib/tokenless/workspaceAgentSetup";
 
 const profile: Omit<AgentSetupReviewDraft["requestProfile"], "configurationStatus"> = {
+  questionAuthority: "owner_fixed",
+  resultSemantics: "assurance",
   criterion: "Is this response safe and correct?",
   positiveLabel: "Approve",
   negativeLabel: "Reject",
@@ -34,6 +36,7 @@ test("criterion form resumes the exact saved question and answer format", () => 
       configurationStatus: "ready",
     }),
     {
+      questionAuthority: "owner_fixed",
       criterion: "Is the cited source authoritative?",
       positiveLabel: "Supported",
       negativeLabel: "Unsupported",
@@ -44,6 +47,7 @@ test("criterion form resumes the exact saved question and answer format", () => 
 
 test("criterion composition trims exact text fields and preserves unrelated profile fields", () => {
   const result = buildReviewCriterionRequestProfile(profile, {
+    questionAuthority: "owner_fixed",
     criterion: "  Is the answer supported?  ",
     positiveLabel: "  Yes  ",
     negativeLabel: "  No  ",
@@ -56,6 +60,24 @@ test("criterion composition trims exact text fields and preserves unrelated prof
   assert.equal(result.rationaleMode, "off");
   assert.equal(result.audience, "private_invited");
   assert.equal(result.responseWindowSeconds, 3_600);
+  assert.equal("resultSemantics" in result, false);
+});
+
+test("agent-per-request composition omits fixed text and keeps owner-controlled rationale", () => {
+  const result = buildReviewCriterionRequestProfile(profile, {
+    questionAuthority: "agent_per_request",
+    criterion: "This must not be sent",
+    positiveLabel: "Approve",
+    negativeLabel: "Reject",
+    rationaleMode: "optional",
+  });
+
+  assert.equal(result.questionAuthority, "agent_per_request");
+  assert.equal(result.rationaleMode, "optional");
+  assert.equal("criterion" in result, false);
+  assert.equal("positiveLabel" in result, false);
+  assert.equal("negativeLabel" in result, false);
+  assert.equal("resultSemantics" in result, false);
 });
 
 test("criterion composition rejects missing text and equivalent answer labels", () => {
