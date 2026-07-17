@@ -150,6 +150,10 @@ function RunCard({ run }: { run: EvaluationRun }) {
             <dd className="mt-1 font-mono">{run.caseCount}</dd>
           </div>
           <div>
+            <dt className="text-xs text-base-content/45">Calibration items</dt>
+            <dd className="mt-1 font-mono">{run.calibrationCaseCount}</dd>
+          </div>
+          <div>
             <dt className="text-xs text-base-content/45">Reviewers</dt>
             <dd className="mt-1 font-mono">{run.distinctReviewers}</dd>
           </div>
@@ -169,6 +173,26 @@ function RunCard({ run }: { run: EvaluationRun }) {
             <dt className="text-xs text-base-content/45">Created</dt>
             <dd className="mt-1">{new Date(run.createdAt).toLocaleString()}</dd>
           </div>
+          {run.mechanismHealth ? (
+            <>
+              <div>
+                <dt className="text-xs text-base-content/45">Quorum-case unanimity</dt>
+                <dd className="mt-1 font-mono">{percent(run.mechanismHealth.unanimityRateBps)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-base-content/45">Calibration failure rate</dt>
+                <dd className="mt-1 font-mono">{percent(run.mechanismHealth.goldFailureRateBps)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-base-content/45">Comparable-case drift</dt>
+                <dd className="mt-1 font-mono">{percent(run.mechanismHealth.comparableDriftBps)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-base-content/45">Reviewer bonus variance (bps²)</dt>
+                <dd className="mt-1 font-mono">{run.mechanismHealth.rbtsScoreVarianceBps2 ?? "Not available"}</dd>
+              </div>
+            </>
+          ) : null}
         </dl>
         <p className="mt-4 text-xs leading-5 text-base-content/45">
           This run has no immutable agent-version reference, so it is excluded from per-agent comparisons.

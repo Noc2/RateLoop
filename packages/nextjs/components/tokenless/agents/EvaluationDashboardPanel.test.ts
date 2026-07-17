@@ -12,6 +12,11 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.match(source, /dashboard && dashboard\.runs\.length > 0/);
   assert.match(source, /decisionLabel\(run\.clientDecision\)/);
   assert.match(source, /Evidence and run details/);
+  assert.match(source, /Calibration items/);
+  assert.match(source, /Quorum-case unanimity/);
+  assert.match(source, /Calibration failure rate/);
+  assert.match(source, /Comparable-case drift/);
+  assert.match(source, /Reviewer bonus variance/);
   assert.match(source, /How results are shown/);
   assert.match(source, /Workspace evaluation details/);
   assert.match(source, /persisted responses, evidence packets, and client decisions/);

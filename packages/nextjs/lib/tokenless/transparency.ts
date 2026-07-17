@@ -71,6 +71,8 @@ export type IndexedFinalizedEvidence = {
     scoringSeed: string;
     totalFinalizedLiabilityAtomic: string;
     totalRbtsScoreBps: string;
+    /** Added in-place for mechanism-health aggregation; absent on historical evidence. */
+    totalSquaredRbtsScoreBps2?: string;
     version: typeof RBTS_SCORING_VERSION;
   };
   roundTerms: {
@@ -618,6 +620,8 @@ function validateFinalizedEvidence(value: IndexedFinalizedEvidence) {
     !UNSIGNED_INTEGER.test(value.scoring.revealSetSum) ||
     !UNSIGNED_INTEGER.test(value.scoring.totalFinalizedLiabilityAtomic) ||
     !UNSIGNED_INTEGER.test(value.scoring.totalRbtsScoreBps) ||
+    (value.scoring.totalSquaredRbtsScoreBps2 !== undefined &&
+      !UNSIGNED_INTEGER.test(value.scoring.totalSquaredRbtsScoreBps2)) ||
     !UNSIGNED_INTEGER.test(value.scoring.fixedBasePayAtomic) ||
     !UNSIGNED_INTEGER.test(value.scoring.maximumBonusAtomic) ||
     !BYTES32.test(value.scoring.entropy) ||
@@ -1082,6 +1086,9 @@ async function deriveFinalizedRoundEvidenceBundle(input: {
       throw new TokenlessServiceError("Indexed RBTS score evidence is inconsistent.", 409, "indexed_evidence_invalid");
     }
   }
+  const totalSquaredRbtsScoreBps2 = [...normativeSettlement.scores.values()]
+    .reduce((total, score) => total + BigInt(score.rbtsScoreBps) * BigInt(score.rbtsScoreBps), 0n)
+    .toString();
   const vouchersResult = await dbClient.execute({
     sql: `SELECT v.vote_key, v.admission_policy_hash, v.content_id, v.issuer_address,
                  v.assurance_snapshot_hash, p.account_address, s.snapshot_json,
@@ -1266,6 +1273,7 @@ async function deriveFinalizedRoundEvidenceBundle(input: {
       scoringSeed,
       totalFinalizedLiabilityAtomic: totalFinalizedLiability,
       totalRbtsScoreBps,
+      totalSquaredRbtsScoreBps2,
       version: RBTS_SCORING_VERSION,
     },
     roundTerms: {

@@ -146,11 +146,21 @@ test("evaluation dashboard suppresses small cells and never attributes legacy ru
       ],
     });
   }
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_mechanism_health
+          (run_id,workspace_id,project_id,scope_hash,non_gold_case_count,unanimous_case_count,
+           valid_response_count,candidate_share_bps,rbts_score_count,eligible_chain_case_count,
+           indexed_chain_case_count,rbts_score_mean_bps,rbts_score_variance_bps2,gold_outcome_count,
+           gold_failure_count,comparable_drift_bps,observed_at)
+          VALUES (?,?,?, ?,1,1,3,6666,0,0,0,NULL,NULL,0,0,NULL,?)`,
+    args: [run.runId, workspaceId, projectId, hash("mechanism-scope"), now],
+  });
 
   const suppressed = await getWorkspaceEvaluationDashboard({ accountAddress: OWNER, workspaceId });
   assert.equal(suppressed.runs[0]?.sampleStatus, "suppressed");
   assert.equal(suppressed.runs[0]?.candidateSelectionShareBps, null);
   assert.equal(suppressed.runs[0]?.choices, null);
+  assert.equal(suppressed.runs[0]?.mechanismHealth, null);
   assert.equal(suppressed.agents[0]?.attributedRunCount, 0);
   assert.equal(suppressed.summary.attributedRuns, 0);
 
@@ -166,6 +176,12 @@ test("evaluation dashboard suppresses small cells and never attributes legacy ru
   const released = await getWorkspaceEvaluationDashboard({ accountAddress: OWNER, workspaceId });
   assert.equal(released.runs[0]?.sampleStatus, "small");
   assert.equal(released.runs[0]?.candidateSelectionShareBps, 6_666);
+  assert.deepEqual(released.runs[0]?.mechanismHealth, {
+    unanimityRateBps: 10_000,
+    rbtsScoreVarianceBps2: null,
+    goldFailureRateBps: null,
+    comparableDriftBps: null,
+  });
   assert.deepEqual(released.runs[0]?.attribution, { status: "unattributed", agentId: null, versionId: null });
   assert.ok(released.runs[0]?.candidateSelectionIntervalBps);
 

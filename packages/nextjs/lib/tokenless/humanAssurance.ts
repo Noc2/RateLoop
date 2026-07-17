@@ -15,6 +15,7 @@ import { dbClient, dbPool } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
 import { assertCredentialDataPolicy, assertDataIngressPolicy } from "~~/lib/privacy/dataPolicy";
 import { promoteCompletedRunGoldQualifications } from "~~/lib/tokenless/goldQuality";
+import { recordAssuranceMechanismHealth } from "~~/lib/tokenless/mechanismHealth";
 import type { ProductPrincipal } from "~~/lib/tokenless/productCore";
 import {
   type ProjectAccessSubjectKind,
@@ -1079,6 +1080,7 @@ async function completeAssuranceRun(principal: AssurancePrincipal, runId: string
       completionError("The run changed while it was being completed.", "assurance_run_conflict");
     }
     await promoteCompletedRunGoldQualifications(client, runId, now);
+    await recordAssuranceMechanismHealth(client, runId, now);
     await consumeWorkspaceUsageAllocations(client, runId, now);
     await client.query("COMMIT");
     return { runId, status: "completed" as const };

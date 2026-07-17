@@ -18,6 +18,13 @@ export type EvaluationRun = {
   reviewerSource: string;
   compensation: string;
   caseCount: number;
+  calibrationCaseCount: number;
+  mechanismHealth: {
+    unanimityRateBps: number | null;
+    rbtsScoreVarianceBps2: string | null;
+    goldFailureRateBps: number | null;
+    comparableDriftBps: number | null;
+  } | null;
   validResponses: number;
   distinctReviewers: number;
   minimumAggregationSize: number;
@@ -132,7 +139,9 @@ export async function getWorkspaceEvaluationDashboard(input: {
       sql: `SELECT r.run_id, r.project_id, r.status, r.created_at, r.completed_at,
                    p.name AS project_name, s.name AS suite_name,
                    ap.reviewer_source, ap.compensation, ap.buyer_privacy_json,
-                   d.decision AS client_decision, ep.packet_id, ep.packet_digest
+                   d.decision AS client_decision, ep.packet_id, ep.packet_digest,
+                   mh.non_gold_case_count,mh.unanimous_case_count,mh.rbts_score_variance_bps2,
+                   mh.gold_outcome_count,mh.gold_failure_count,mh.comparable_drift_bps
             FROM tokenless_assurance_runs r
             JOIN tokenless_assurance_projects p ON p.project_id = r.project_id
             JOIN tokenless_assurance_suites s ON s.suite_id = r.suite_id AND s.version = r.suite_version
@@ -140,6 +149,7 @@ export async function getWorkspaceEvaluationDashboard(input: {
               ON ap.policy_id = r.audience_policy_id AND ap.version = r.audience_policy_version
             LEFT JOIN tokenless_assurance_client_decisions d ON d.run_id = r.run_id
             LEFT JOIN tokenless_assurance_evidence_packets ep ON ep.run_id = r.run_id
+            LEFT JOIN tokenless_assurance_mechanism_health mh ON mh.run_id = r.run_id
             WHERE p.workspace_id = ? AND p.status <> 'deleted'
             ORDER BY r.created_at DESC LIMIT 100`,
       args: [input.workspaceId],
@@ -160,6 +170,9 @@ export async function getWorkspaceEvaluationDashboard(input: {
                    COUNT(CASE WHEN resp.validity = 'valid' AND resp.choice = 'tie' THEN 1 END) AS tie
             FROM selected_runs
             LEFT JOIN tokenless_assurance_responses resp ON resp.run_id = selected_runs.run_id
+            LEFT JOIN tokenless_assurance_run_gold_items gold
+              ON gold.run_id=resp.run_id AND gold.case_id=resp.case_id
+            WHERE gold.case_id IS NULL
             GROUP BY selected_runs.run_id`,
       args: [input.workspaceId],
     }),
@@ -171,9 +184,13 @@ export async function getWorkspaceEvaluationDashboard(input: {
               WHERE p.workspace_id = ? AND p.status <> 'deleted'
               ORDER BY r.created_at DESC LIMIT 100
             )
-            SELECT selected_runs.run_id, COUNT(rc.case_id) AS case_count
+            SELECT selected_runs.run_id,
+                   COUNT(rc.case_id) FILTER (WHERE gold.case_id IS NULL) AS case_count,
+                   COUNT(gold.case_id) AS calibration_case_count
             FROM selected_runs
             LEFT JOIN tokenless_assurance_run_cases rc ON rc.run_id = selected_runs.run_id
+            LEFT JOIN tokenless_assurance_run_gold_items gold
+              ON gold.run_id=rc.run_id AND gold.case_id=rc.case_id
             GROUP BY selected_runs.run_id`,
       args: [input.workspaceId],
     }),
@@ -195,6 +212,9 @@ export async function getWorkspaceEvaluationDashboard(input: {
     const minimum = minimumAggregationSize(row.buyer_privacy_json);
     const released = distinctReviewers >= minimum;
     const sampleStatus = !released ? "suppressed" : validResponses < 30 ? "small" : "sufficient";
+    const nonGoldCaseCount = rowNumber(row, "non_gold_case_count");
+    const goldOutcomeCount = rowNumber(row, "gold_outcome_count");
+    const hasMechanismHealth = row.non_gold_case_count !== null && row.non_gold_case_count !== undefined;
     return {
       runId,
       projectId: rowString(row, "project_id")!,
@@ -204,6 +224,24 @@ export async function getWorkspaceEvaluationDashboard(input: {
       reviewerSource: rowString(row, "reviewer_source")!,
       compensation: rowString(row, "compensation")!,
       caseCount: rowNumber(casesByRun.get(runId), "case_count"),
+      calibrationCaseCount: rowNumber(casesByRun.get(runId), "calibration_case_count"),
+      mechanismHealth:
+        hasMechanismHealth && released
+          ? {
+              unanimityRateBps: nonGoldCaseCount
+                ? Math.floor((rowNumber(row, "unanimous_case_count") * 10_000) / nonGoldCaseCount)
+                : null,
+              rbtsScoreVarianceBps2: rowString(row, "rbts_score_variance_bps2"),
+              goldFailureRateBps:
+                goldOutcomeCount >= minimum
+                  ? Math.floor((rowNumber(row, "gold_failure_count") * 10_000) / goldOutcomeCount)
+                  : null,
+              comparableDriftBps:
+                row.comparable_drift_bps === null || row.comparable_drift_bps === undefined
+                  ? null
+                  : rowNumber(row, "comparable_drift_bps"),
+            }
+          : null,
       validResponses,
       distinctReviewers,
       minimumAggregationSize: minimum,
