@@ -356,6 +356,66 @@ export async function listAgentConnections(input: { accountAddress: string; work
   };
 }
 
+export async function rehydrateOAuthAgentMcpPrincipal(
+  oauth: AgentOAuthAccessPrincipal,
+): Promise<Extract<AgentMcpPrincipal, { kind: "oauth" }>> {
+  const now = new Date();
+  if (oauth.expiresAt <= now) {
+    throw new TokenlessServiceError("The OAuth access token expired.", 401, "invalid_token");
+  }
+  const integrationResult = await dbClient.execute({
+    sql: `SELECT i.*, c.status AS connection_status, rp.audience_policy_json
+            FROM tokenless_agent_integrations i
+            JOIN tokenless_agent_connection_intents c ON c.intent_id = i.connection_intent_id
+            JOIN tokenless_agent_oauth_token_families f
+              ON f.token_family_id = i.token_family_id
+             AND f.subject_principal_id = i.oauth_subject_principal_id
+            JOIN tokenless_agent_review_policies rp
+              ON rp.workspace_id = i.workspace_id AND rp.policy_id = i.review_policy_id
+             AND rp.version = i.review_policy_version
+            WHERE i.token_family_id = ? AND i.oauth_subject_principal_id = ?
+              AND i.oauth_client_id = ? AND i.status = 'active'
+              AND f.client_id = ? AND f.subject_principal_id = ?
+              AND f.resource = ? AND f.status = 'active' AND f.absolute_expires_at > ?
+            LIMIT 1`,
+    args: [
+      oauth.tokenFamilyId,
+      oauth.subjectPrincipalId,
+      oauth.clientId,
+      oauth.clientId,
+      oauth.subjectPrincipalId,
+      oauth.resource,
+      now,
+    ],
+  });
+  const row = integrationResult.rows[0] as Row | undefined;
+  if (!row) return { kind: "oauth", oauth, principal: null, integration: null, connectionStatus: null };
+  await dbClient.execute({
+    sql: "UPDATE tokenless_agent_integrations SET last_seen_at = ?, updated_at = ? WHERE integration_id = ?",
+    args: [now, now, text(row, "integration_id")],
+  });
+  const grantedScopes = jsonArray(row.granted_scopes_json, "granted scopes");
+  if (grantedScopes.some(scope => !(OWNER_APPROVED_AGENT_SCOPES as readonly string[]).includes(scope))) {
+    throw new TokenlessServiceError("Agent integration scopes are invalid.", 500, "agent_integration_invalid");
+  }
+  const principal: ApiPrincipal = {
+    kind: "api_key",
+    apiKeyId: oauth.tokenFamilyId,
+    workspaceId: text(row, "workspace_id")!,
+    role: "member",
+    scopes: TOKENLESS_AGENT_SCOPES.filter(scope => grantedScopes.includes(scope)) as TokenlessAgentScope[],
+    policyId: text(row, "publishing_policy_id"),
+    expiresAt: oauth.expiresAt.toISOString(),
+  };
+  return {
+    kind: "oauth",
+    oauth,
+    principal,
+    integration: { ...bindingFromRow(row), lastSeenAt: now.toISOString() },
+    connectionStatus: text(row, "connection_status"),
+  };
+}
+
 export async function authenticateAgentMcpPrincipal(authorization: string | null): Promise<AgentMcpPrincipal> {
   if (/^Bearer\s+rlo_at_/i.test(authorization ?? "")) {
     let oauth: AgentOAuthAccessPrincipal;
@@ -367,45 +427,7 @@ export async function authenticateAgentMcpPrincipal(authorization: string | null
       }
       throw error;
     }
-    const integrationResult = await dbClient.execute({
-      sql: `SELECT i.*, c.status AS connection_status, rp.audience_policy_json
-            FROM tokenless_agent_integrations i
-            JOIN tokenless_agent_connection_intents c ON c.intent_id = i.connection_intent_id
-            JOIN tokenless_agent_review_policies rp
-              ON rp.workspace_id = i.workspace_id AND rp.policy_id = i.review_policy_id
-             AND rp.version = i.review_policy_version
-            WHERE i.token_family_id = ? AND i.status = 'active' LIMIT 1`,
-      args: [oauth.tokenFamilyId],
-    });
-    const row = integrationResult.rows[0] as Row | undefined;
-    if (!row) {
-      return { kind: "oauth", oauth, principal: null, integration: null, connectionStatus: null };
-    }
-    const now = new Date();
-    await dbClient.execute({
-      sql: "UPDATE tokenless_agent_integrations SET last_seen_at = ?, updated_at = ? WHERE integration_id = ?",
-      args: [now, now, text(row, "integration_id")],
-    });
-    const grantedScopes = jsonArray(row.granted_scopes_json, "granted scopes");
-    if (grantedScopes.some(scope => !(OWNER_APPROVED_AGENT_SCOPES as readonly string[]).includes(scope))) {
-      throw new TokenlessServiceError("Agent integration scopes are invalid.", 500, "agent_integration_invalid");
-    }
-    const principal: ApiPrincipal = {
-      kind: "api_key",
-      apiKeyId: oauth.tokenFamilyId,
-      workspaceId: text(row, "workspace_id")!,
-      role: "member",
-      scopes: TOKENLESS_AGENT_SCOPES.filter(scope => grantedScopes.includes(scope)) as TokenlessAgentScope[],
-      policyId: text(row, "publishing_policy_id"),
-      expiresAt: oauth.expiresAt.toISOString(),
-    };
-    return {
-      kind: "oauth",
-      oauth,
-      principal,
-      integration: { ...bindingFromRow(row), lastSeenAt: now.toISOString() },
-      connectionStatus: text(row, "connection_status"),
-    };
+    return rehydrateOAuthAgentMcpPrincipal(oauth);
   }
   const match = authorization ? /^Bearer\s+(.+)$/i.exec(authorization) : null;
   if (!match || !TOKEN_PATTERN.test(match[1]))

@@ -19,6 +19,7 @@ import {
   recordOAuthAgentContextRead,
   recordOAuthMcpClientMetadata,
   recordPairingClientMetadata,
+  rehydrateOAuthAgentMcpPrincipal,
   submitAgentRegistration,
 } from "~~/lib/tokenless/agentIntegrations";
 import { getEffectiveAgentReviewContext } from "~~/lib/tokenless/effectiveAgentReviewContext";
@@ -296,6 +297,18 @@ export const workspaceMcpTools = [
 
 const connectionIntentMcpTools = [
   {
+    name: "rateloop_connect_workspace",
+    annotations: idempotentAdditiveClosedAnnotations,
+    description:
+      "Preferred one-call workspace connection. Idempotently claim the complete private connection URL, load the newly bound canonical agent context, and verify the safe connection. The URL is accepted only as a protected argument and is never returned.",
+    inputSchema: {
+      additionalProperties: false,
+      properties: { connectionUrl: { maxLength: 4_096, minLength: 1, type: "string" } },
+      required: ["connectionUrl"],
+      type: "object",
+    },
+  },
+  {
     name: "rateloop_claim_connection_intent",
     annotations: idempotentAdditiveClosedAnnotations,
     description:
@@ -318,8 +331,9 @@ const connectionIntentMcpTools = [
 
 export const oauthWorkspaceMcpTools = [
   connectionIntentMcpTools[0],
-  workspaceMcpTools[0],
   connectionIntentMcpTools[1],
+  workspaceMcpTools[0],
+  connectionIntentMcpTools[2],
   ...workspaceMcpTools.slice(1),
 ] as const;
 
@@ -560,7 +574,7 @@ async function callOAuthTool(
   },
 ) {
   try {
-    if (name === "rateloop_claim_connection_intent") {
+    if (name === "rateloop_connect_workspace" || name === "rateloop_claim_connection_intent") {
       const input = requireObjectWithKeys(args, ["connectionUrl"], "connectionUrl is required.");
       if (typeof input.connectionUrl !== "string") {
         throw new TokenlessServiceError("connectionUrl is required.", 400, "invalid_tool_arguments");
@@ -568,14 +582,42 @@ async function callOAuthTool(
       if (!context.mcpSessionHash) {
         throw new TokenlessServiceError("MCP-Session-Id is required.", 400, "mcp_session_required");
       }
-      return toolResult(
-        await claimAgentConnectionIntent({
-          connectionUrl: input.connectionUrl,
-          mcpSessionHash: context.mcpSessionHash,
-          origin: context.origin,
-          principal: principal.oauth,
-        }),
-      );
+      const claim = await claimAgentConnectionIntent({
+        connectionUrl: input.connectionUrl,
+        mcpSessionHash: context.mcpSessionHash,
+        origin: context.origin,
+        principal: principal.oauth,
+      });
+      if (name === "rateloop_claim_connection_intent") return toolResult(claim);
+      const rehydrated = await rehydrateOAuthAgentMcpPrincipal(principal.oauth);
+      if (!rehydrated.integration || !rehydrated.principal) {
+        throw new TokenlessServiceError(
+          "The claimed workspace connection is not ready. Retry this same connection call.",
+          409,
+          "connection_not_ready",
+          true,
+        );
+      }
+      const integrationPrincipal: Extract<AgentMcpPrincipal, { kind: "integration" }> = {
+        kind: "integration",
+        principal: rehydrated.principal,
+        integration: rehydrated.integration,
+      };
+      const agentContext = await getEffectiveAgentReviewContext(integrationPrincipal);
+      await recordOAuthAgentContextRead(rehydrated);
+      const verification = await verifyAgentConnection({
+        principal: rehydrated.oauth,
+        integrationId: rehydrated.integration.integrationId,
+      });
+      return toolResult({
+        schemaVersion: "rateloop.workspace-connection.v1",
+        connected: true,
+        idempotent: claim.idempotent,
+        connection: verification.connection,
+        context: agentContext,
+        verification,
+        nextAction: "follow_bound_policy",
+      });
     }
     if (!principal.integration || !principal.principal) return connectionNotReady();
     const integrationPrincipal: Extract<AgentMcpPrincipal, { kind: "integration" }> = {
@@ -723,7 +765,7 @@ export async function dispatchWorkspaceMcp(
           : principal.kind === "oauth"
             ? principal.integration
               ? `A RateLoop workspace connection is available. Keep the complete connection URL private. Call rateloop_get_agent_context, then rateloop_verify_connection. After verification, follow the returned workflow and human-review policy. ${boundWorkspaceInstructions()}`
-              : "Complete the user's one-time RateLoop connection now. Call rateloop_claim_connection_intent exactly once with the complete connection URL from the user's message. Never quote, log, fetch, or reproduce that URL. Then call rateloop_get_agent_context and rateloop_verify_connection without asking for another paste or creating a polling service."
+              : "Complete the user's one-time RateLoop connection now. Prefer one rateloop_connect_workspace call with the complete connection URL from the user's message. Never quote, log, fetch, or reproduce that URL. If the preferred tool is unavailable, use rateloop_claim_connection_intent, rateloop_get_agent_context, and rateloop_verify_connection as the granular fallback without asking for another paste or creating a polling service."
             : `This registration is approved. Immediately call rateloop_get_agent_context and follow its bound policy. This credential is bound to one workspace agent, immutable workflow version, and owner policy. ${boundWorkspaceInstructions()} Caller-supplied identity or policy identifiers are never trusted.`,
       protocolVersion: negotiatedVersion,
       serverInfo: { name: "rateloop-tokenless-workspace", version: "1.2.0" },

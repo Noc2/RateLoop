@@ -206,10 +206,18 @@ describe("RateLoop agent host assets", () => {
     );
     expect(skill).toContain("fragment is non-empty");
     expect(skill).toContain("Parse and validate the URL locally");
+    expect(skill).toContain("rateloop_connect_workspace");
+    expect(skill).toContain("prefer `rateloop_connect_workspace`");
     expect(skill).toContain("rateloop_claim_connection_intent");
     expect(skill).toContain('{ "connectionUrl": "<complete URL>" }');
     expect(skill).toContain("rateloop_get_agent_context");
     expect(skill).toContain("rateloop_verify_connection");
+    expect(skill).toContain("granular fallback");
+    expect(skill).toContain(
+      "retry `rateloop_connect_workspace` with the same privately held URL",
+    );
+    expect(skill).toContain("machine-readable `nextAction`");
+    expect(skill).not.toContain("atomically resumes");
     expect(skill).toContain("Check the current tool inventory");
     expect(skill).toContain("structured **RateLoop Workspace** plugin mention");
     expect(skill).toContain(
@@ -223,13 +231,17 @@ describe("RateLoop agent host assets", () => {
     expect(skill).toContain(
       "never diagnose a stale install or recommend uninstall from that first check",
     );
-    expect(skill).toContain("The RateLoop connection is pending host activation");
+    expect(skill).toContain(
+      "The RateLoop connection is pending host activation",
+    );
     expect(skill).toContain("Do not ask the user to start a new task");
     expect(skill).toContain("Uninstall every existing RateLoop plugin");
     expect(skill).toContain(
       "Only if a later active turn still lacks the workspace tools after the first missing-tool check",
     );
-    expect(skill).toContain("Never tell the user to reinstall a plugin, start a new task");
+    expect(skill).toContain(
+      "Never tell the user to reinstall a plugin, start a new task",
+    );
     expect(skill).toContain("Never tell them to remove unrelated plugins");
     expect(skill).toContain("host actually presents");
     expect(skill).toContain(
@@ -239,9 +251,11 @@ describe("RateLoop agent host assets", () => {
     expect(skill).toContain(
       "If no prompt is visible, do not claim that one is pending",
     );
-    expect(skill).toContain("The RateLoop workspace tools are still unavailable");
     expect(skill).toContain(
-      "Never report the workspace connected or ready unless `rateloop_verify_connection` succeeded",
+      "The RateLoop workspace tools are still unavailable",
+    );
+    expect(skill).toContain(
+      "Never report the workspace connected or ready unless `rateloop_connect_workspace` returned `connected: true` with a successful `verification`",
     );
     expect(skill).toContain("Never create a heartbeat");
     expect(skill).toContain("Never poll registration status");
@@ -286,9 +300,7 @@ describe("RateLoop agent host assets", () => {
 
     const tools = [
       ...new Set(
-        [...skill.matchAll(/`(rateloop_[a-z_]+)`/g)].map(
-          match => match[1],
-        ),
+        [...skill.matchAll(/`(rateloop_[a-z_]+)`/g)].map((match) => match[1]),
       ),
     ].sort();
     expect(tools).toEqual(
@@ -324,7 +336,11 @@ describe("RateLoop agent host assets", () => {
     ]) {
       expect(skill).toContain(`**${policy}**`);
     }
-    for (const authority of ["Check only", "Prepare for approval", "Ask automatically"]) {
+    for (const authority of [
+      "Check only",
+      "Prepare for approval",
+      "Ask automatically",
+    ]) {
       expect(skill).toContain(`**${authority}**`);
     }
     for (const audience of [

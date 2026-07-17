@@ -158,6 +158,56 @@ async function setup() {
   return { workspaceId, approved, audiencePolicyHash, reviewBinding, token: issued.secret };
 }
 
+async function setupOAuthConnectionIntent() {
+  const principalId = `rlp_${"c".repeat(24)}`;
+  const now = new Date();
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_principals (principal_id,status,created_at,updated_at)
+          VALUES (?, 'active', ?, ?)`,
+    args: [principalId, now, now],
+  });
+  const { workspaceId } = await createWorkspace({ name: "Atomic OAuth", ownerAddress: principalId });
+  const intent = await createAgentConnectionIntent({
+    accountAddress: principalId,
+    workspaceId,
+    origin: "https://rateloop-tokenless.vercel.app",
+  });
+  const redirectUri = "http://127.0.0.1:43220/oauth/callback";
+  const verifier = "w".repeat(64);
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  const oauthClient = await registerAgentOAuthClient({
+    client_name: "Atomic MCP client",
+    redirect_uris: [redirectUri],
+  });
+  const authorization = await validateAgentOAuthAuthorizationRequest(
+    new URLSearchParams({
+      client_id: oauthClient.client_id,
+      redirect_uri: redirectUri,
+      response_type: "code",
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+      resource: getCanonicalAgentMcpResource(),
+      scope: oauthClient.scope,
+    }),
+  );
+  const codeRedirect = await issueAgentOAuthAuthorizationCode({
+    request: authorization,
+    subjectPrincipalId: principalId,
+    consented: true,
+  });
+  const code = new URL(codeRedirect.redirectUri).searchParams.get("code");
+  assert.ok(code);
+  const tokens = await exchangeAgentOAuthToken({
+    grantType: "authorization_code",
+    clientId: oauthClient.client_id,
+    code,
+    redirectUri,
+    codeVerifier: verifier,
+    resource: getCanonicalAgentMcpResource(),
+  });
+  return { intent, principalId, tokens, workspaceId };
+}
+
 test("pairing initialization tells the agent to register immediately and returns the next automatic action", async () => {
   const { workspaceId } = await createWorkspace({ name: "Automatic pairing", ownerAddress: OWNER });
   const issued = await createAgentPairing({
@@ -218,6 +268,78 @@ test("pairing initialization tells the agent to register immediately and returns
   assert.equal(registration.registration.status, "claimed");
   assert.equal(registration.pollAfterMs, 3_000);
   assert.match(registration.nextAction, /rateloop_get_registration_status/);
+});
+
+test("one preferred OAuth tool connects a fresh workspace without reflecting the connection secret", async () => {
+  const { intent, tokens, workspaceId } = await setupOAuthConnectionIntent();
+  const initialized = await POST(
+    request(
+      {
+        id: 1,
+        jsonrpc: "2.0",
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-11-25",
+          capabilities: {},
+          clientInfo: { name: "Atomic MCP client", version: "1.0.0" },
+        },
+      },
+      tokens.access_token,
+    ),
+  );
+  const sessionId = initialized.headers.get("mcp-session-id");
+  assert.match(sessionId ?? "", /^mcps_[A-Za-z0-9_-]{32,128}$/u);
+  const invoke = () =>
+    POST(
+      request(
+        {
+          id: 2,
+          jsonrpc: "2.0",
+          method: "tools/call",
+          params: { name: "rateloop_connect_workspace", arguments: { connectionUrl: intent.connectionUrl } },
+        },
+        tokens.access_token,
+        sessionId!,
+      ),
+    );
+
+  const firstResponse = await invoke();
+  const first = (await firstResponse.json()).result.structuredContent;
+  assert.equal(first.schemaVersion, "rateloop.workspace-connection.v1");
+  assert.equal(first.connected, true);
+  assert.equal(first.idempotent, false);
+  assert.equal(first.nextAction, "follow_bound_policy");
+  assert.equal(first.connection.status, "connected");
+  assert.equal(first.connection.workspaceId, workspaceId);
+  assert.equal(first.context.workspaceId, workspaceId);
+  assert.equal(first.verification.connection.status, "connected");
+  const firstJson = JSON.stringify(first);
+  assert.equal(firstJson.includes(intent.connectionUrl), false);
+  assert.equal(firstJson.includes(new URL(intent.connectionUrl).hash), false);
+
+  const secondResponse = await invoke();
+  const second = (await secondResponse.json()).result.structuredContent;
+  assert.equal(second.connected, true);
+  assert.equal(second.idempotent, true);
+  assert.equal(second.nextAction, "follow_bound_policy");
+  assert.deepEqual(second.connection, first.connection);
+  assert.deepEqual(second.context, first.context);
+  assert.deepEqual(second.verification, first.verification);
+  const secondJson = JSON.stringify(second);
+  assert.equal(secondJson.includes(intent.connectionUrl), false);
+  assert.equal(secondJson.includes(new URL(intent.connectionUrl).hash), false);
+
+  const state = await dbClient.execute({
+    sql: `SELECT
+            (SELECT COUNT(*) FROM tokenless_agents WHERE workspace_id=?) AS agents,
+            (SELECT COUNT(*) FROM tokenless_agent_integrations WHERE workspace_id=?) AS integrations,
+            (SELECT COUNT(*) FROM tokenless_agent_integration_events
+             WHERE integration_id=? AND event_type='connected') AS connected_events`,
+    args: [workspaceId, workspaceId, first.connection.integrationId],
+  });
+  assert.equal(Number(state.rows[0]?.agents ?? 0), 1);
+  assert.equal(Number(state.rows[0]?.integrations ?? 0), 1);
+  assert.equal(Number(state.rows[0]?.connected_events ?? 0), 1);
 });
 
 test("OAuth keeps one stable tool list while one message claims, loads, and verifies the connection", async () => {
@@ -310,6 +432,7 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
   assert.equal((await missingSession.json()).error.data.code, "mcp_session_required");
 
   const names = [
+    "rateloop_connect_workspace",
     "rateloop_claim_connection_intent",
     "rateloop_get_agent_context",
     "rateloop_verify_connection",
@@ -334,6 +457,14 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
     names,
   );
   const tool = (name: string) => beforeTools.find(candidate => candidate.name === name);
+  assert.deepEqual(tool("rateloop_connect_workspace")?.annotations, {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  });
+  assert.match(tool("rateloop_connect_workspace")?.description ?? "", /Preferred one-call workspace connection/u);
+  assert.match(tool("rateloop_connect_workspace")?.description ?? "", /never returned/u);
   assert.deepEqual(tool("rateloop_claim_connection_intent")?.annotations, {
     readOnlyHint: false,
     destructiveHint: false,
@@ -437,6 +568,23 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
   assert.equal(claimedSession.rows[0]?.integration_id, claim.connection.integrationId);
   assert.equal(claimedSession.rows[0]?.subject_principal_id, principalId);
   assert.equal(claimedSession.rows[0]?.token_family_id, initialSession.rows[0]?.token_family_id);
+  const atomicRecoveryResponse = await POST(
+    oauthRequest({
+      id: 121,
+      jsonrpc: "2.0",
+      method: "tools/call",
+      params: { name: "rateloop_connect_workspace", arguments: { connectionUrl: intent.connectionUrl } },
+    }),
+  );
+  const atomicRecovery = (await atomicRecoveryResponse.json()).result.structuredContent;
+  assert.equal(atomicRecovery.schemaVersion, "rateloop.workspace-connection.v1");
+  assert.equal(atomicRecovery.connected, true);
+  assert.equal(atomicRecovery.idempotent, true);
+  assert.equal(atomicRecovery.connection.status, "connected");
+  assert.equal(atomicRecovery.context.workspaceId, workspaceId);
+  assert.equal(atomicRecovery.verification.connection.status, "connected");
+  assert.equal(JSON.stringify(atomicRecovery).includes(intent.connectionUrl), false);
+  assert.equal(JSON.stringify(atomicRecovery).includes(new URL(intent.connectionUrl).hash), false);
   const context = await POST(
     oauthRequest({
       id: 13,
@@ -446,6 +594,7 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
     }),
   );
   const agentContext = (await context.json()).result.structuredContent;
+  assert.deepEqual(atomicRecovery.context, agentContext);
   assert.equal(agentContext.schemaVersion, "rateloop.agent-context.v2");
   assert.equal(agentContext.workspaceId, workspaceId);
   assert.match(agentContext.reviewPolicy.audiencePolicyHash, /^sha256:[a-f0-9]{64}$/);
@@ -463,6 +612,7 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
     }),
   );
   const firstVerification = (await verified.json()).result.structuredContent;
+  assert.deepEqual(atomicRecovery.verification, firstVerification);
   assert.equal(firstVerification.connection.status, "connected");
   const ping = await POST(oauthRequest({ id: 15, jsonrpc: "2.0", method: "ping", params: {} }));
   assert.deepEqual((await ping.json()).result, {});
