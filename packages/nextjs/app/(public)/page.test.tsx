@@ -64,8 +64,10 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /Agent-native/);
   assert.match(html, /Verified and blind/);
   assert.match(html, /Useful signal, auditable pay/);
-  assert.match(html, /Evidence your auditors can check/);
-  assert.match(html, /Trace review policy, human judgments, coverage, and settlement references\./i);
+  assert.match(html, /Human oversight, operationalized/);
+  assert.doesNotMatch(html, /Evidence your auditors can check|Trace review policy/i);
+  assert.match(html, /Your people provide the oversight\. RateLoop provides the instrument — and the proof\./);
+  assert.match(html, /href="\/docs\/human-oversight"[^>]*>Human Oversight<\/a>/i);
   assert.match(html, /href="\/docs\/evidence"[^>]*>Evidence guide<\/a>/i);
   for (const term of [
     "Agent handoffs",
@@ -94,6 +96,7 @@ test("landing page presents the tokenless human-assurance story", async () => {
     "/docs/tech-stack#surprisingly-popular",
     "/docs/tech-stack#base-usdc",
     "/docs/smart-contracts#tokenless-panel",
+    "/docs/human-oversight",
     "/docs/evidence",
   ]) {
     assert.match(html, new RegExp(`href="${href}"`));
@@ -152,7 +155,10 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /Can an Agent Run Reviews Automatically\?/);
   assert.match(html, /approve its connection and limits/i);
   assert.match(html, /What Does the Blockchain Record\?/);
-  assert.equal(html.match(/<details/g)?.length, 4);
+  assert.match(html, /Does RateLoop help with EU AI Act human oversight\?/);
+  assert.match(html, /monitor, override, and stop AI outputs through RateLoop/i);
+  assert.match(html, /Configuring RateLoop and using it correctly for your purpose remain yours\./);
+  assert.equal(html.match(/<details/g)?.length, 5);
   assert.match(html, /href="\/docs"/);
   assert.ok(html.indexOf('id="use-cases"') < html.indexOf('id="how-it-works"'));
   assert.ok(html.indexOf('id="how-it-works"') < html.indexOf('id="why-it-works"'));
@@ -173,5 +179,5 @@ test("landing page presents the tokenless human-assurance story", async () => {
     .replace(/&[a-zA-Z0-9#]+;/g, " ")
     .trim()
     .split(/\s+/).length;
-  assert.ok(visibleWords <= 430, `landing page should stay under 430 visible words; found ${visibleWords}`);
+  assert.ok(visibleWords <= 480, `landing page should stay under 480 visible words; found ${visibleWords}`);
 });

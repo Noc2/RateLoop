@@ -41,10 +41,13 @@ const whyItWorksFeatures = [
     ],
   },
   {
-    title: "Evidence your auditors can check",
-    body: "Trace review policy, human judgments, coverage, and settlement references.",
+    title: "Human oversight, operationalized",
+    body: "Your people provide the oversight. RateLoop provides the instrument — and the proof.",
     color: "var(--rateloop-yellow)",
-    links: [["Evidence guide", "/docs/evidence"]],
+    links: [
+      ["Human Oversight", "/docs/human-oversight"],
+      ["Evidence guide", "/docs/evidence"],
+    ],
   },
 ] as const;
 
@@ -85,6 +88,10 @@ const questions = [
   [
     "What Does the Blockchain Record?",
     "Funding terms, accepted commitments, scoring inputs, and settlement evidence. Private context stays off-chain, and the chain record does not replace your final judgment.",
+  ],
+  [
+    "Does RateLoop help with EU AI Act human oversight?",
+    "Yes. Your designated people monitor, override, and stop AI outputs through RateLoop, and each decision leaves exportable evidence. Configuring RateLoop and using it correctly for your purpose remain yours.",
   ],
 ] as const;
 
