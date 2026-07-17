@@ -2,6 +2,7 @@
 
 import { type FormEvent, useState } from "react";
 import { AgentSetupProgress } from "./AgentSetupProgress";
+import { SetupStageHeader } from "./SetupStageHeader";
 
 const INITIAL_STAGES = [
   { key: "workspace" as const, status: "current" as const },
@@ -51,10 +52,13 @@ export function WorkspaceSetupStart() {
         onNavigate={() => undefined}
         allowNavigation={false}
       />
-      <form className="mx-auto mt-8 max-w-xl" onSubmit={createWorkspace}>
-        <h1 className="text-2xl font-semibold">Name your workspace</h1>
-        <p className="mt-2 text-sm text-base-content/65">Use a team or project name. You can manage it later.</p>
-        <label className="mt-5 block text-sm" htmlFor="setup-workspace-name">
+      <form className="mx-auto mt-8 w-full max-w-4xl" onSubmit={createWorkspace}>
+        <SetupStageHeader
+          step="workspace"
+          title="Name your workspace"
+          description="Use a team or project name. You can change it later."
+        />
+        <label className="mt-8 block text-sm font-medium" htmlFor="setup-workspace-name">
           Workspace name
         </label>
         <input

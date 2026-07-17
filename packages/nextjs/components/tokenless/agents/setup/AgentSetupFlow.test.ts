@@ -6,6 +6,7 @@ import { agentSetupUrl } from "~~/lib/tokenless/agentSetupNavigation";
 const flowSource = readFileSync(new URL("./AgentSetupFlow.tsx", import.meta.url), "utf8");
 const progressSource = readFileSync(new URL("./AgentSetupProgress.tsx", import.meta.url), "utf8");
 const startSource = readFileSync(new URL("./WorkspaceSetupStart.tsx", import.meta.url), "utf8");
+const stageHeaderSource = readFileSync(new URL("./SetupStageHeader.tsx", import.meta.url), "utf8");
 
 test("setup uses one canonical URL and a focused workspace creation stage", () => {
   assert.equal(agentSetupUrl("ws one", "connect"), "/agents?workspace=ws%20one&step=connect");
@@ -208,8 +209,14 @@ test("workspace step remains editable when revisited", () => {
   assert.match(flowSource, /Save and continue/);
 });
 
-test("setup content uses the full available width with back before the primary action", () => {
-  assert.match(flowSource, /<div className="mt-8 w-full">/);
+test("setup uses one branded stage header and a readable content width", () => {
+  assert.equal(flowSource.match(/<SetupStageHeader/g)?.length, 6);
+  assert.match(startSource, /<SetupStageHeader/);
+  assert.match(stageHeaderSource, /font-display/);
+  assert.match(stageHeaderSource, /text-3xl/);
+  assert.match(stageHeaderSource, /AGENT_SETUP_STAGE_VISUALS/);
+  assert.match(flowSource, /<div className="mx-auto mt-8 w-full max-w-4xl">/);
+  assert.match(startSource, /<form className="mx-auto mt-8 w-full max-w-4xl"/);
   assert.doesNotMatch(flowSource, /max-w-2xl/);
   assert.match(
     flowSource,

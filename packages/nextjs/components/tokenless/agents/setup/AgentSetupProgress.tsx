@@ -1,6 +1,6 @@
 import type { AgentSetupScreenStep } from "~~/lib/tokenless/agentSetupNavigation";
 
-const LABELS: Record<AgentSetupScreenStep, string> = {
+export const AGENT_SETUP_STAGE_LABELS: Record<AgentSetupScreenStep, string> = {
   workspace: "Workspace",
   connect: "Connect",
   agent: "Agent",
@@ -8,7 +8,10 @@ const LABELS: Record<AgentSetupScreenStep, string> = {
   people: "People",
 };
 
-const STAGE_VISUALS: Record<AgentSetupScreenStep, { number: string; color: string; nextColor: string }> = {
+export const AGENT_SETUP_STAGE_VISUALS: Record<
+  AgentSetupScreenStep,
+  { number: string; color: string; nextColor: string }
+> = {
   workspace: {
     number: "01",
     color: "var(--rateloop-blue)",
@@ -53,7 +56,7 @@ export function AgentSetupProgress({
   allowNavigation?: boolean;
 }) {
   const currentIndex = stages.findIndex(stage => stage.key === currentStep);
-  const currentVisual = STAGE_VISUALS[currentStep];
+  const currentVisual = AGENT_SETUP_STAGE_VISUALS[currentStep];
   return (
     <nav aria-label="Workspace setup progress">
       <div className="flex items-center justify-between gap-4">
@@ -62,12 +65,12 @@ export function AgentSetupProgress({
         </p>
         <p className="flex items-center gap-2 text-sm font-medium">
           <span className="h-2 w-2 rounded-full" style={{ background: currentVisual.color }} aria-hidden="true" />
-          {LABELS[currentStep]}
+          {AGENT_SETUP_STAGE_LABELS[currentStep]}
         </p>
       </div>
       <ol className="mt-4 grid grid-cols-5" aria-label={`Step ${currentIndex + 1} of ${stages.length}`}>
         {stages.map((stage, index) => {
-          const visual = STAGE_VISUALS[stage.key];
+          const visual = AGENT_SETUP_STAGE_VISUALS[stage.key];
           const statusLabel =
             stage.key === currentStep ? "Current" : stage.status === "complete" ? "Complete" : "Not started";
           const completedConnector = index < currentIndex;
@@ -104,7 +107,7 @@ export function AgentSetupProgress({
                 <span style={stage.status === "not_started" ? undefined : { color: visual.color }}>
                   {visual.number}
                 </span>{" "}
-                {LABELS[stage.key]}
+                {AGENT_SETUP_STAGE_LABELS[stage.key]}
               </span>
               <span className="sr-only">{statusLabel}</span>
             </>

@@ -4,6 +4,7 @@ import { type FormEvent, useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation";
 import { buildAgentConnectionMessage } from "../agentConnectionMessage";
 import { AgentSetupProgress } from "./AgentSetupProgress";
+import { SetupStageHeader } from "./SetupStageHeader";
 import {
   type ReviewAudienceFormValues,
   buildReviewAudienceRequestProfile,
@@ -335,10 +336,14 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
           onNavigate={() => undefined}
           allowNavigation={false}
         />
-        <h1 ref={headingRef} tabIndex={-1} className="mt-8 text-2xl font-semibold outline-none">
-          Workspace setup is not finished
-        </h1>
-        <p className="mt-2 text-sm text-base-content/65">Ask a workspace owner to finish the current step.</p>
+        <div className="mx-auto mt-8 w-full max-w-4xl">
+          <SetupStageHeader
+            headingRef={headingRef}
+            step={currentStep}
+            title="Workspace setup is not finished"
+            description="Ask a workspace owner to finish this step."
+          />
+        </div>
       </section>
     );
   }
@@ -640,13 +645,16 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       <p className="sr-only" aria-live="polite">
         {announcement}
       </p>
-      <div className="mt-8 w-full">
+      <div className="mx-auto mt-8 w-full max-w-4xl">
         {currentStep === "workspace" ? (
           <form onSubmit={saveWorkspace}>
-            <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-semibold outline-none">
-              Workspace
-            </h1>
-            <label className="mt-5 block text-sm text-base-content/70" htmlFor="agent-setup-workspace-name">
+            <SetupStageHeader
+              headingRef={headingRef}
+              step="workspace"
+              title="Name your workspace"
+              description="Use a team or project name. You can change it later."
+            />
+            <label className="mt-8 block text-sm font-medium" htmlFor="agent-setup-workspace-name">
               Workspace name
             </label>
             <input
@@ -669,12 +677,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
 
         {currentStep === "connect" ? (
           <>
-            <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-semibold outline-none">
-              Connect your agent
-            </h1>
-            <p className="mt-2 text-sm text-base-content/65">
-              Copy one message into the agent chat. RateLoop will continue here after the connection is verified.
-            </p>
+            <SetupStageHeader
+              headingRef={headingRef}
+              step="connect"
+              title="Connect your agent"
+              description="Copy one message into the agent chat. RateLoop continues here after verification."
+            />
             <div className="mt-6 flex items-center gap-3">
               {backButton}
               {setup.connection.status === "connected" ? (
@@ -723,13 +731,13 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
 
         {currentStep === "agent" && setup.agent ? (
           <form onSubmit={confirmAgent}>
-            <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-semibold outline-none">
-              Name this workflow
-            </h1>
-            <p className="mt-2 text-sm text-base-content/65">
-              The connected client stays separate from the model, effort, and timing reported for each eligible run.
-            </p>
-            <div className="mt-5 grid gap-4">
+            <SetupStageHeader
+              headingRef={headingRef}
+              step="agent"
+              title="Name this workflow"
+              description="The connected client stays separate from the model, effort, and timing reported for each eligible run."
+            />
+            <div className="mt-8 grid gap-4">
               <label className="text-sm">
                 Workflow name
                 <input
@@ -772,10 +780,13 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
 
         {currentStep === "reviews" ? (
           <form onSubmit={configureReviews}>
-            <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-semibold outline-none">
-              Set review behavior
-            </h1>
-            <label className="mt-5 block text-sm">
+            <SetupStageHeader
+              headingRef={headingRef}
+              step="reviews"
+              title="Set review behavior"
+              description="Choose when this workflow needs human review. Nothing is sent or charged during setup."
+            />
+            <label className="mt-8 block text-sm font-medium">
               Review question
               <textarea
                 className="textarea mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
@@ -1336,9 +1347,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
 
         {currentStep === "people" ? (
           <>
-            <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-semibold outline-none">
-              People and funding
-            </h1>
+            <SetupStageHeader
+              headingRef={headingRef}
+              step="people"
+              title="People and funding"
+              description="Choose who can review and confirm how review is funded."
+            />
             {!setup.peopleDecision ? (
               <form className="mt-5" onSubmit={configurePeople}>
                 {setup.reviewDraft?.requestProfile.audience === "public_network" ? (
