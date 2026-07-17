@@ -7,6 +7,7 @@ const flowSource = readFileSync(new URL("./AgentSetupFlow.tsx", import.meta.url)
 const progressSource = readFileSync(new URL("./AgentSetupProgress.tsx", import.meta.url), "utf8");
 const choiceGroupSource = readFileSync(new URL("./SetupChoiceGroup.tsx", import.meta.url), "utf8");
 const startSource = readFileSync(new URL("./WorkspaceSetupStart.tsx", import.meta.url), "utf8");
+const actionBarSource = readFileSync(new URL("./SetupActionBar.tsx", import.meta.url), "utf8");
 const stageHeaderSource = readFileSync(new URL("./SetupStageHeader.tsx", import.meta.url), "utf8");
 
 test("setup uses one canonical URL and a focused workspace creation stage", () => {
@@ -231,11 +232,22 @@ test("setup uses one branded stage header and a readable content width", () => {
   assert.match(flowSource, /<div className="mx-auto mt-8 w-full max-w-4xl">/);
   assert.match(startSource, /<form className="mx-auto mt-8 w-full max-w-4xl"/);
   assert.doesNotMatch(flowSource, /max-w-2xl/);
-  assert.match(
-    flowSource,
-    /<div className="mt-6 flex items-center gap-3">\s*\{backButton\}\s*\{setup\.connection\.status/,
-  );
+  assert.match(flowSource, /<SetupActionBar>\s*\{backButton\}\s*\{setup\.connection\.status/);
   assert.equal(flowSource.match(/\{backButton\}/g)?.length, 6);
+});
+
+test("setup uses one responsive action pattern and exposes busy forms", () => {
+  assert.equal(flowSource.match(/<SetupActionBar/g)?.length, 6);
+  assert.match(startSource, /<SetupActionBar>/);
+  assert.match(actionBarSource, /flex-col/);
+  assert.match(actionBarSource, /sm:flex-row/);
+  assert.match(actionBarSource, /border-t/);
+  assert.match(flowSource, /variant="secondary"/);
+  assert.match(flowSource, /disabled=\{busy\}/);
+  assert.equal(flowSource.match(/aria-busy=\{busy\}/g)?.length, 4);
+  assert.match(startSource, /aria-busy=\{busy\}/);
+  assert.doesNotMatch(flowSource, /className="rateloop-gradient-action px-5"/);
+  assert.doesNotMatch(startSource, /<button className="rateloop-gradient-action/);
 });
 
 test("connection polling cleans up timers and preserves explicit-navigation focus", () => {

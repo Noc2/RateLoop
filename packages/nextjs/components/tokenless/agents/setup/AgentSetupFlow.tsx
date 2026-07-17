@@ -4,6 +4,7 @@ import { type FormEvent, Fragment, useCallback, useEffect, useRef, useState } fr
 import { useRouter } from "next/navigation";
 import { buildAgentConnectionMessage } from "../agentConnectionMessage";
 import { AgentSetupProgress } from "./AgentSetupProgress";
+import { SetupActionBar } from "./SetupActionBar";
 import { SetupChoiceGroup, SetupRadioChoice } from "./SetupChoiceGroup";
 import { SetupStageHeader } from "./SetupStageHeader";
 import {
@@ -48,6 +49,7 @@ import {
   reviewTimingFormValues,
 } from "./reviewTiming";
 import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
+import { Button } from "~~/components/tokenless/ui/Button";
 import { DurationInput } from "~~/components/ui/DurationInput";
 import { type AgentSetupScreenStep, agentSetupUrl } from "~~/lib/tokenless/agentSetupNavigation";
 import type { AgentSetupReviewDraft, WorkspaceAgentSetupView } from "~~/lib/tokenless/workspaceAgentSetup";
@@ -638,13 +640,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
 
   const back = stepBefore(currentStep);
   const backButton = back ? (
-    <button
-      className="btn rateloop-secondary-action rateloop-back-action h-auto self-stretch gap-2 px-5"
+    <Button
+      variant="secondary"
+      className="rateloop-back-action min-h-11 w-full gap-2 sm:w-auto"
       type="button"
+      disabled={busy}
       onClick={() => void loadStep(back)}
     >
       Back
-    </button>
+    </Button>
   ) : null;
   return (
     <section className="surface-card rounded-2xl p-5 sm:p-7">
@@ -654,7 +658,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       </p>
       <div className="mx-auto mt-8 w-full max-w-4xl">
         {currentStep === "workspace" ? (
-          <form onSubmit={saveWorkspace}>
+          <form onSubmit={saveWorkspace} aria-busy={busy}>
             <SetupStageHeader
               headingRef={headingRef}
               step="workspace"
@@ -673,12 +677,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               maxLength={120}
               required
             />
-            <div className="mt-6 flex items-center gap-3">
+            <SetupActionBar>
               {backButton}
-              <button className="rateloop-gradient-action px-5" disabled={busy || !workspaceName.trim()}>
+              <Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={busy || !workspaceName.trim()}>
                 {busy ? "Saving…" : workspaceName.trim() === setup.workspaceName ? "Continue" : "Save and continue"}
-              </button>
-            </div>
+              </Button>
+            </SetupActionBar>
           </form>
         ) : null}
 
@@ -690,15 +694,20 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               title="Connect your agent"
               description="Copy one message into the agent chat. RateLoop continues here after verification."
             />
-            <div className="mt-6 flex items-center gap-3">
+            <SetupActionBar>
               {backButton}
               {setup.connection.status === "connected" ? (
-                <button className="rateloop-gradient-action px-5" type="button" onClick={() => void loadStep("agent")}>
+                <Button
+                  className="min-h-11 w-full sm:w-auto"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void loadStep("agent")}
+                >
                   Check agent
-                </button>
+                </Button>
               ) : (
-                <button
-                  className="rateloop-gradient-action px-5"
+                <Button
+                  className="min-h-11 w-full sm:w-auto"
                   type="button"
                   disabled={busy}
                   onClick={() => void createConnectionMessage()}
@@ -708,9 +717,9 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     : setup.connection.intentId
                       ? "Create a new connection message"
                       : "Create connection message"}
-                </button>
+                </Button>
               )}
-            </div>
+            </SetupActionBar>
             {connectionMessage ? (
               <div className="mt-5">
                 <label className="block text-sm font-medium" htmlFor="agent-setup-connection-message">
@@ -737,7 +746,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         ) : null}
 
         {currentStep === "agent" && setup.agent ? (
-          <form onSubmit={confirmAgent}>
+          <form onSubmit={confirmAgent} aria-busy={busy}>
             <SetupStageHeader
               headingRef={headingRef}
               step="agent"
@@ -776,17 +785,17 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 artifacts, or workspace administration.
               </p>
             </div>
-            <div className="mt-6 flex items-center gap-3">
+            <SetupActionBar>
               {backButton}
-              <button className="rateloop-gradient-action px-5" disabled={busy}>
+              <Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={busy}>
                 {busy ? "Confirming…" : "Confirm workflow"}
-              </button>
-            </div>
+              </Button>
+            </SetupActionBar>
           </form>
         ) : null}
 
         {currentStep === "reviews" ? (
-          <form onSubmit={configureReviews}>
+          <form onSubmit={configureReviews} aria-busy={busy}>
             <SetupStageHeader
               headingRef={headingRef}
               step="reviews"
@@ -1338,16 +1347,16 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 Review the exact terms before saving. No request is published and no funds are spent during setup.
               </p>
             )}
-            <div className="mt-6 flex items-center gap-3">
+            <SetupActionBar>
               {backButton}
-              <button className="rateloop-gradient-action px-5" disabled={busy}>
+              <Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={busy}>
                 {busy
                   ? "Saving…"
                   : pendingReviewConfirmation?.fingerprint === currentReviewFingerprint
                     ? "Save and continue"
                     : "Review settings"}
-              </button>
-            </div>
+              </Button>
+            </SetupActionBar>
           </form>
         ) : null}
 
@@ -1360,7 +1369,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               description="Choose who can review and confirm how review is funded."
             />
             {!setup.peopleDecision ? (
-              <form className="mt-5" onSubmit={configurePeople}>
+              <form className="mt-5" onSubmit={configurePeople} aria-busy={busy}>
                 {setup.reviewDraft?.requestProfile.audience === "public_network" ? (
                   <>
                     <input type="hidden" name="decision" value="not_required" />
@@ -1439,12 +1448,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     </p>
                   </div>
                 ) : null}
-                <div className="mt-6 flex items-center gap-3">
+                <SetupActionBar>
                   {backButton}
-                  <button className="rateloop-gradient-action px-5" disabled={busy}>
+                  <Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={busy}>
                     {busy ? "Saving…" : "Continue"}
-                  </button>
-                </div>
+                  </Button>
+                </SetupActionBar>
               </form>
             ) : (
               <div className="mt-5 space-y-4">
@@ -1494,24 +1503,28 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     {reviewAuthoritySummary(setup.reviewDraft?.authority ?? "check_only")}
                   </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <SetupActionBar className="mt-0">
                   {backButton}
-                  <button
-                    className="rateloop-gradient-action px-5"
+                  <Button
+                    className="min-h-11 w-full sm:w-auto"
                     type="button"
                     disabled={busy}
                     onClick={() => void finishSetup()}
                   >
                     {busy ? "Finishing…" : "Finish setup"}
-                  </button>
-                </div>
+                  </Button>
+                </SetupActionBar>
               </div>
             )}
           </>
         ) : null}
 
         {error ? (
-          <p id="agent-setup-error" role="alert" className="mt-5 text-sm text-error">
+          <p
+            id="agent-setup-error"
+            role="alert"
+            className="mt-5 rounded-lg border border-error/20 bg-error/10 px-4 py-3 text-sm text-error"
+          >
             {error}
           </p>
         ) : null}

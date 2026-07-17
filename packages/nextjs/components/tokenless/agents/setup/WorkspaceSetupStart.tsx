@@ -2,7 +2,9 @@
 
 import { type FormEvent, useState } from "react";
 import { AgentSetupProgress } from "./AgentSetupProgress";
+import { SetupActionBar } from "./SetupActionBar";
 import { SetupStageHeader } from "./SetupStageHeader";
+import { Button } from "~~/components/tokenless/ui/Button";
 
 const INITIAL_STAGES = [
   { key: "workspace" as const, status: "current" as const },
@@ -52,7 +54,7 @@ export function WorkspaceSetupStart() {
         onNavigate={() => undefined}
         allowNavigation={false}
       />
-      <form className="mx-auto mt-8 w-full max-w-4xl" onSubmit={createWorkspace}>
+      <form className="mx-auto mt-8 w-full max-w-4xl" onSubmit={createWorkspace} aria-busy={busy}>
         <SetupStageHeader
           step="workspace"
           title="Name your workspace"
@@ -71,11 +73,17 @@ export function WorkspaceSetupStart() {
           required
           aria-describedby={error ? "workspace-setup-error" : undefined}
         />
-        <button className="rateloop-gradient-action mt-5 px-5" disabled={busy}>
-          {busy ? "Creating…" : "Create workspace"}
-        </button>
+        <SetupActionBar>
+          <Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={busy}>
+            {busy ? "Creating…" : "Create workspace"}
+          </Button>
+        </SetupActionBar>
         {error ? (
-          <p id="workspace-setup-error" role="alert" className="mt-4 text-sm text-error">
+          <p
+            id="workspace-setup-error"
+            role="alert"
+            className="mt-4 rounded-lg border border-error/20 bg-error/10 px-4 py-3 text-sm text-error"
+          >
             {error}
           </p>
         ) : null}
