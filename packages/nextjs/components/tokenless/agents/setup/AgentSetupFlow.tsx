@@ -785,10 +785,6 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-semibold outline-none">
               Set review behavior
             </h1>
-            <p className="mt-2 text-sm text-base-content/65">
-              Choose when RateLoop should mark an eligible output for human review. This saves a review policy; the safe
-              connection does not send requests or pay reviewers.
-            </p>
             <label className="mt-5 block text-sm">
               Review question
               <textarea

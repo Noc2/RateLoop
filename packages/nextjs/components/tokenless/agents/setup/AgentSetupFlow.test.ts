@@ -48,9 +48,9 @@ test("guided setup renders one stage at a time and keeps implementation details 
 });
 
 test("review setup distinguishes a saved policy decision from delivery authority", () => {
-  assert.match(flowSource, /mark an eligible output for human review/i);
-  assert.match(flowSource, /This saves a review policy/i);
-  assert.match(flowSource, /safe\s+connection does not send requests or pay reviewers/i);
+  assert.doesNotMatch(flowSource, /mark an eligible output for human review/i);
+  assert.doesNotMatch(flowSource, /This saves a review policy/i);
+  assert.doesNotMatch(flowSource, /safe\s+connection does not send requests or pay reviewers/i);
   for (const label of [
     "Adaptive",
     "Every output",
