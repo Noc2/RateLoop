@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Card } from "~~/components/tokenless/ui/Card";
 import type { AgentAssuranceScopeSummary, AgentRegistry } from "~~/lib/tokenless/agentRegistry";
 import type { EvaluationDashboard } from "~~/lib/tokenless/evaluationDashboard";
+import { readJson } from "~~/lib/tokenless/http";
 
 type Summary = {
   packet: { createdAt: string; suiteName: string } | null;
@@ -19,16 +21,6 @@ export function anchorForPacketDigest(packetDigest: string | null, attestations:
   if (attestation?.state === "completed") return "completed" as const;
   if (attestation?.state === "dead") return "failed" as const;
   return attestation ? ("pending" as const) : ("absent" as const);
-}
-
-async function json<T>(response: Response): Promise<T> {
-  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!response.ok) {
-    throw new Error(
-      typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : "Request failed.",
-    );
-  }
-  return body as T;
 }
 
 function stageLabel(stage: Summary["stage"]) {
@@ -56,10 +48,10 @@ export function WorkspaceEvidenceSummaryStrip({ workspaceId, canManage }: { work
       try {
         const base = `/api/account/workspaces/${encodeURIComponent(workspaceId)}`;
         const [registry, dashboard, attestationBody] = await Promise.all([
-          json<AgentRegistry>(
+          readJson<AgentRegistry>(
             await fetch(`${base}/agents`, { cache: "no-store", credentials: "same-origin", signal: controller.signal }),
           ),
-          json<EvaluationDashboard>(
+          readJson<EvaluationDashboard>(
             await fetch(`${base}/evaluations`, {
               cache: "no-store",
               credentials: "same-origin",
@@ -67,7 +59,7 @@ export function WorkspaceEvidenceSummaryStrip({ workspaceId, canManage }: { work
             }),
           ),
           canManage
-            ? json<{ attestations: PacketAttestation[] }>(
+            ? readJson<{ attestations: PacketAttestation[] }>(
                 await fetch(`${base}/assurance/attestations?limit=100`, {
                   cache: "no-store",
                   credentials: "same-origin",
@@ -102,7 +94,7 @@ export function WorkspaceEvidenceSummaryStrip({ workspaceId, canManage }: { work
 
   if (error) return null;
   return (
-    <section className="surface-card rounded-2xl p-4" aria-label="Workspace evidence summary">
+    <Card as="section" className="rounded-2xl p-4" aria-label="Workspace evidence summary">
       <dl className="grid gap-4 sm:grid-cols-3">
         <div>
           <dt className="text-xs text-base-content/45">Last decision packet</dt>
@@ -121,6 +113,6 @@ export function WorkspaceEvidenceSummaryStrip({ workspaceId, canManage }: { work
           <dd className="mt-1 text-sm font-medium">{anchorLabel(summary?.anchor ?? "absent")}</dd>
         </div>
       </dl>
-    </section>
+    </Card>
   );
 }

@@ -1,6 +1,10 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { Button } from "~~/components/tokenless/ui/Button";
+import { Card } from "~~/components/tokenless/ui/Card";
+import { readJson } from "~~/lib/tokenless/http";
+import { formatUsdcAtomic, parseUsdcDecimal } from "~~/lib/tokenless/usdc";
 
 type Authority = "check_only" | "prepare_for_approval" | "ask_automatically";
 type Audience = "private_invited" | "public_network" | "hybrid";
@@ -49,16 +53,6 @@ type Draft = {
 
 type PendingChange = { fingerprint: string; body: Record<string, unknown>; summary: Record<string, string> };
 
-async function readJson(response: Response) {
-  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!response.ok) {
-    throw new Error(
-      typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : "Request failed.",
-    );
-  }
-  return body;
-}
-
 function number(value: unknown, fallback: number) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -70,18 +64,18 @@ function strings(value: unknown, fallback: string[]) {
 
 function atomicToUsdc(value: unknown) {
   if (typeof value !== "string" || !/^[1-9]\d*$/u.test(value)) return "1";
-  const atomic = BigInt(value);
-  const whole = atomic / 1_000_000n;
-  const fraction = (atomic % 1_000_000n).toString().padStart(6, "0").replace(/0+$/u, "");
-  return fraction ? `${whole}.${fraction}` : whole.toString();
+  return formatUsdcAtomic(value, { includeUnit: false, useGrouping: false });
 }
 
 function usdcToAtomic(value: string) {
-  const match = /^(0|[1-9]\d*)(?:\.(\d{1,6}))?$/u.exec(value.trim());
-  if (!match) throw new Error("USDC per reviewer must have at most six decimal places.");
-  const atomic = BigInt(match[1]!) * 1_000_000n + BigInt((match[2] ?? "").padEnd(6, "0") || "0");
-  if (atomic <= 0n) throw new Error("USDC per reviewer must be greater than zero.");
-  return atomic.toString();
+  let atomic: string;
+  try {
+    atomic = parseUsdcDecimal(value);
+  } catch {
+    throw new Error("USDC per reviewer must have at most six decimal places.");
+  }
+  if (BigInt(atomic) <= 0n) throw new Error("USDC per reviewer must be greater than zero.");
+  return atomic;
 }
 
 function draftFromView(view: OwnerView): Draft {
@@ -361,9 +355,9 @@ export function AgentHumanReviewEditor({
 
   if (!draft || !view) {
     return (
-      <section id="agent-human-review-editor" className="surface-card rounded-2xl p-6">
+      <Card as="section" id="agent-human-review-editor" className="rounded-2xl p-6">
         <p className="text-sm text-base-content/60">{error ?? "Loading human-review configuration…"}</p>
-      </section>
+      </Card>
     );
   }
   const automaticAvailable = Boolean(
@@ -371,15 +365,15 @@ export function AgentHumanReviewEditor({
   );
 
   return (
-    <section id="agent-human-review-editor" className="surface-card rounded-2xl p-6">
+    <Card as="section" id="agent-human-review-editor" className="rounded-2xl p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold">Human review</h2>
           <p className="mt-1 text-sm text-base-content/60">Edit the complete configuration for this agent.</p>
         </div>
-        <button type="button" className="btn btn-sm rateloop-secondary-action" onClick={onClose} disabled={busy}>
+        <Button type="button" size="sm" variant="secondary" onClick={onClose} disabled={busy}>
           Close
-        </button>
+        </Button>
       </div>
       <form className="mt-6 space-y-5" onSubmit={submit}>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -605,22 +599,24 @@ export function AgentHumanReviewEditor({
               Optional, separately funded, and awarded only by the saved human.
             </p>
             <div className="mt-3 grid grid-cols-2 gap-2 sm:max-w-sm">
-              <button
+              <Button
                 type="button"
-                className={`btn btn-sm ${!draft.feedbackBonusEnabled ? "btn-primary" : "btn-outline"}`}
+                size="sm"
+                variant={!draft.feedbackBonusEnabled ? "primary" : "secondary"}
                 aria-pressed={!draft.feedbackBonusEnabled}
                 onClick={() => update("feedbackBonusEnabled", false)}
               >
                 No bonus
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className={`btn btn-sm ${draft.feedbackBonusEnabled ? "btn-primary" : "btn-outline"}`}
+                size="sm"
+                variant={draft.feedbackBonusEnabled ? "primary" : "secondary"}
                 aria-pressed={draft.feedbackBonusEnabled}
                 onClick={() => update("feedbackBonusEnabled", true)}
               >
                 Add bonus
-              </button>
+              </Button>
             </div>
             {draft.feedbackBonusEnabled ? (
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -718,10 +714,10 @@ export function AgentHumanReviewEditor({
             {status}
           </p>
         ) : null}
-        <button className="rateloop-gradient-action px-5" disabled={busy}>
+        <Button type="submit" disabled={busy}>
           {busy ? "Saving…" : pending ? "Save changes" : "Review changes"}
-        </button>
+        </Button>
       </form>
-    </section>
+    </Card>
   );
 }

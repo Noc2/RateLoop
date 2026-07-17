@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AgentVersionForm } from "~~/components/tokenless/agents/AgentVersionForm";
+import { Badge } from "~~/components/tokenless/ui/Badge";
+import { Button } from "~~/components/tokenless/ui/Button";
+import { Card } from "~~/components/tokenless/ui/Card";
 import type {
   AgentAssuranceScopeSummary,
   AgentExecutionModelProfile,
@@ -9,16 +12,8 @@ import type {
   AgentVersionInput,
   WorkspaceAgent,
 } from "~~/lib/tokenless/agentRegistry";
-
-async function readJson(response: Response) {
-  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!response.ok) {
-    throw new Error(
-      typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : "Request failed.",
-    );
-  }
-  return body;
-}
+import { readJson } from "~~/lib/tokenless/http";
+import { formatUsdcAtomic } from "~~/lib/tokenless/usdc";
 
 function shortAddress(value: string) {
   return value.length > 14 ? `${value.slice(0, 8)}…${value.slice(-6)}` : value;
@@ -88,18 +83,12 @@ function responseWindowLabel(seconds: number | null, panelSize: number | null) {
 function basePaymentLabel(request: HumanReviewConfiguration["request"]) {
   if (request.compensationMode === "unpaid") return "Unpaid";
   if (request.bountyPerSeatAtomic === null) return "Not set";
-  const atomic = BigInt(request.bountyPerSeatAtomic);
-  const whole = atomic / 1_000_000n;
-  const fraction = (atomic % 1_000_000n).toString().padStart(6, "0").replace(/0+$/u, "");
-  return `${whole.toLocaleString("en-US")}${fraction ? `.${fraction}` : ""} USDC / reviewer`;
+  return formatUsdcAtomic(request.bountyPerSeatAtomic).replace(" USDC", " USDC / reviewer");
 }
 
 function feedbackBonusLabel(request: HumanReviewConfiguration["request"]) {
   if (!request.feedbackBonusEnabled || request.feedbackBonusPoolAtomic === null) return "Off";
-  const atomic = BigInt(request.feedbackBonusPoolAtomic);
-  const whole = atomic / 1_000_000n;
-  const fraction = (atomic % 1_000_000n).toString().padStart(6, "0").replace(/0+$/u, "");
-  return `${whole.toLocaleString("en-US")}${fraction ? `.${fraction}` : ""} USDC · ${
+  return `${formatUsdcAtomic(request.feedbackBonusPoolAtomic)} · ${
     request.feedbackBonusAwarderKind === "designated" ? "designated human" : "requester"
   } awards`;
 }
@@ -137,18 +126,19 @@ function AgentHumanReviewConfigurationSummary({ agent }: { agent: WorkspaceAgent
   const configuration = agent.humanReview.configuration;
   const capability = reviewCapability(agent);
   return (
-    <section className="surface-card-nested mt-4 rounded-xl p-4" aria-labelledby={`review-config-${agent.agentId}`}>
+    <Card
+      as="section"
+      variant="nested"
+      className="mt-4 rounded-xl p-4"
+      aria-labelledby={`review-config-${agent.agentId}`}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 id={`review-config-${agent.agentId}`} className="text-sm font-semibold">
           Review configuration
         </h3>
-        <span
-          className={`badge border-0 text-xs ${
-            capability.blocked ? "bg-amber-300/10 text-amber-100" : "bg-emerald-300/10 text-emerald-100"
-          }`}
-        >
+        <Badge variant={capability.blocked ? "warning" : "success"} className="text-xs">
           {capability.label}
-        </span>
+        </Badge>
       </div>
       {configuration ? (
         <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
@@ -184,7 +174,7 @@ function AgentHumanReviewConfigurationSummary({ agent }: { agent: WorkspaceAgent
           Choose when review runs, who answers, the response window, payment, and agent authority.
         </p>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -510,20 +500,12 @@ export function AgentRegistryPanel({
 
       <div className="space-y-4">
         {visibleAgents.map(agent => (
-          <article key={agent.agentId} className="surface-card rounded-2xl p-5">
+          <Card as="article" key={agent.agentId} className="rounded-2xl p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="font-semibold">{agent.currentVersion.displayName}</h2>
-                  <span
-                    className={`badge border-0 ${
-                      agent.status === "active"
-                        ? "bg-emerald-300/10 text-emerald-100"
-                        : "bg-white/[0.06] text-base-content/50"
-                    }`}
-                  >
-                    {agent.status}
-                  </span>
+                  <Badge variant={agent.status === "active" ? "success" : "neutral"}>{agent.status}</Badge>
                 </div>
                 <p className="mt-1 text-sm text-base-content/55">Workflow v{agent.currentVersion.versionNumber}</p>
               </div>
@@ -535,17 +517,19 @@ export function AgentRegistryPanel({
               <div className="mt-4 space-y-4">
                 {registry?.canManage && agent.status === "active" ? (
                   <div className="flex flex-wrap gap-2">
-                    <button
+                    <Button
                       type="button"
-                      className="btn btn-sm rateloop-secondary-action"
+                      size="sm"
+                      variant="secondary"
                       disabled={busy}
                       onClick={() => setEditingAgent(current => (current?.agentId === agent.agentId ? null : agent))}
                     >
                       Change workflow version
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
-                      className="btn btn-sm rateloop-secondary-action"
+                      size="sm"
+                      variant="secondary"
                       aria-expanded={activeReviewAgentId === agent.agentId}
                       aria-controls="agent-human-review-editor"
                       disabled={busy}
@@ -554,15 +538,17 @@ export function AgentRegistryPanel({
                       }
                     >
                       Human review
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
-                      className="btn btn-sm btn-ghost text-error"
+                      size="sm"
+                      variant="ghost"
+                      className="text-error"
                       disabled={busy}
                       onClick={() => void deactivate(agent)}
                     >
                       Deactivate
-                    </button>
+                    </Button>
                   </div>
                 ) : null}
 
@@ -644,20 +630,21 @@ export function AgentRegistryPanel({
                 </details>
               </div>
             </details>
-          </article>
+          </Card>
         ))}
       </div>
 
       {!loading && archivedAgentCount > 0 ? (
         <div className="flex justify-end">
-          <button
+          <Button
             type="button"
-            className="btn btn-sm rateloop-secondary-action"
+            size="sm"
+            variant="secondary"
             aria-pressed={showArchived}
             onClick={() => setShowArchived(current => !current)}
           >
             {showArchived ? "Hide archived" : `Show archived (${archivedAgentCount})`}
-          </button>
+          </Button>
         </div>
       ) : null}
 

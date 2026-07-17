@@ -1,6 +1,10 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import { Button } from "~~/components/tokenless/ui/Button";
+import { Card } from "~~/components/tokenless/ui/Card";
+import { Chip } from "~~/components/tokenless/ui/Chip";
+import { HttpJsonError, readJson } from "~~/lib/tokenless/http";
 import { REVIEWER_EXPERTISE } from "~~/lib/tokenless/reviewerExpertiseOptions";
 
 type QualificationProvenance = {
@@ -60,35 +64,11 @@ export type AssuranceServerAcceptance = {
   settlementStatus: "not_applicable";
 };
 
-class AssuranceRequestError extends Error {
-  constructor(
-    message: string,
-    readonly code: string | null,
-    readonly status: number,
-  ) {
-    super(message);
-  }
-}
-
 function firstValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 }
 
-async function readJson(response: Response) {
-  const body = (await response.json()) as Record<string, unknown>;
-  if (!response.ok) {
-    throw new AssuranceRequestError(
-      typeof body.message === "string"
-        ? body.message
-        : typeof body.error === "string"
-          ? body.error
-          : "The private review request failed.",
-      typeof body.code === "string" ? body.code : null,
-      response.status,
-    );
-  }
-  return body;
-}
+const PRIVATE_REVIEW_JSON_OPTIONS = { fallbackMessage: "The private review request failed." };
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -175,6 +155,7 @@ export function HumanAssuranceRaterClient({
         cache: "no-store",
         credentials: "same-origin",
       }),
+      PRIVATE_REVIEW_JSON_OPTIONS,
     );
     const nextTask = body as AssignmentTask;
     setTask(nextTask);
@@ -197,11 +178,12 @@ export function HumanAssuranceRaterClient({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ confidentialityTermsHash: termsHash.trim() }),
         }),
+        PRIVATE_REVIEW_JSON_OPTIONS,
       );
       await loadAssignment(id);
     } catch (cause) {
       const recoverable =
-        cause instanceof AssuranceRequestError &&
+        cause instanceof HttpJsonError &&
         (cause.code === "assignment_expired" || cause.code === "artifact_lease_expired" || cause.status === 410);
       setCanRecover(recoverable);
       setError(cause instanceof Error ? cause.message : "Unable to open this assignment.");
@@ -222,6 +204,7 @@ export function HumanAssuranceRaterClient({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ confidentialityTermsHash: termsHash.trim() }),
         }),
+        PRIVATE_REVIEW_JSON_OPTIONS,
       );
       setCanRecover(false);
       await openAssignment();
@@ -276,6 +259,7 @@ export function HumanAssuranceRaterClient({
             }),
           }),
         }),
+        PRIVATE_REVIEW_JSON_OPTIONS,
       );
       if (
         body.accepted !== true ||
@@ -311,7 +295,7 @@ export function HumanAssuranceRaterClient({
         <main className="space-y-6">
           {!task ? (
             <>
-              <section className="rateloop-surface-card p-5 sm:p-7">
+              <Card as="section" variant="marketing" className="p-5 sm:p-7">
                 <h2 className="text-xl font-semibold">Assignment details</h2>
                 <form className="mt-4 space-y-4" onSubmit={openAssignment}>
                   <label className="block text-sm text-base-content/60">
@@ -347,9 +331,9 @@ export function HumanAssuranceRaterClient({
                       share, or reuse assigned material outside this review.
                     </span>
                   </label>
-                  <button
+                  <Button
                     type="submit"
-                    className="rateloop-gradient-action w-full px-6"
+                    className="w-full px-6"
                     disabled={
                       busyAction !== null ||
                       !confidentialityAccepted ||
@@ -358,17 +342,18 @@ export function HumanAssuranceRaterClient({
                     }
                   >
                     {busyAction === "assignment" ? "Checking assignment…" : "Accept terms and open assignment"}
-                  </button>
+                  </Button>
                 </form>
                 {canRecover ? (
-                  <button
+                  <Button
                     type="button"
-                    className="btn rateloop-secondary-action mt-4 min-h-12 w-full px-5 text-sm"
+                    variant="secondary"
+                    className="mt-4 min-h-12 w-full text-sm"
                     disabled={busyAction !== null}
                     onClick={() => void recoverAssignment()}
                   >
                     {busyAction === "recovery" ? "Restoring access…" : "Retry expired assignment access"}
-                  </button>
+                  </Button>
                 ) : null}
                 <details className="mt-4 rounded-lg border border-white/10 px-4 py-3 text-sm text-base-content/60">
                   <summary className="cursor-pointer font-medium text-base-content/75">Privacy and access</summary>
@@ -378,7 +363,7 @@ export function HumanAssuranceRaterClient({
                     <li>Do not include personal data in your rationale.</li>
                   </ul>
                 </details>
-              </section>
+              </Card>
             </>
           ) : (
             <section className="space-y-6">
@@ -517,23 +502,14 @@ export function HumanAssuranceRaterClient({
                       </p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {failureTags.map(tag => (
-                          <label
+                          <Chip
                             key={tag.key}
-                            className={`rounded-full border px-3 py-2 text-xs transition-colors ${
-                              draft.failureTags.includes(tag.key)
-                                ? "border-[var(--rateloop-pink)] bg-pink-300/10 text-pink-100"
-                                : "border-white/10 text-base-content/55 hover:border-white/25"
-                            }`}
+                            checked={draft.failureTags.includes(tag.key)}
+                            disabled={serverAcceptance !== null}
+                            onChange={() => toggleFailureTag(reviewCase.caseId, tag.key)}
                           >
-                            <input
-                              type="checkbox"
-                              className="sr-only"
-                              checked={draft.failureTags.includes(tag.key)}
-                              disabled={serverAcceptance !== null}
-                              onChange={() => toggleFailureTag(reviewCase.caseId, tag.key)}
-                            />
                             {tag.label}
-                          </label>
+                          </Chip>
                         ))}
                       </div>
                     </fieldset>

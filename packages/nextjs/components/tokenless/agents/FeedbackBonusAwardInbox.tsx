@@ -4,33 +4,29 @@ import { useCallback, useEffect, useState } from "react";
 import { prepareTransaction, sendTransaction } from "thirdweb";
 import { baseSepolia } from "thirdweb/chains";
 import { ConnectButton, ThirdwebProvider, useActiveAccount } from "thirdweb/react";
+import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
+import { Badge } from "~~/components/tokenless/ui/Badge";
+import { Button } from "~~/components/tokenless/ui/Button";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { rateLoopThirdwebWallets, thirdwebBrowserClient } from "~~/lib/thirdweb/client";
 import type { FeedbackBonusAwardInboxItem } from "~~/lib/tokenless/feedbackBonusAwards";
 import type { FeedbackBonusHumanWalletAuthorization } from "~~/lib/tokenless/feedbackBonusHumanWalletExecution";
-
-async function readJson(response: Response) {
-  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!response.ok) {
-    throw new Error(
-      typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : "Request failed.",
-    );
-  }
-  return body;
-}
+import { readJson } from "~~/lib/tokenless/http";
+import { formatUsdcAtomic, parseUsdcDecimal } from "~~/lib/tokenless/usdc";
 
 export function formatFeedbackBonusUsdc(atomic: string) {
-  const amount = BigInt(atomic);
-  const whole = amount / 1_000_000n;
-  const fraction = (amount % 1_000_000n).toString().padStart(6, "0").replace(/0+$/u, "");
-  return `${whole.toLocaleString()}${fraction ? `.${fraction}` : ""} USDC`;
+  return formatUsdcAtomic(atomic);
 }
 
 function decimalToAtomic(value: string) {
-  const match = /^(0|[1-9]\d*)(?:\.(\d{1,6}))?$/u.exec(value.trim());
-  if (!match) throw new Error("Award amount must be USDC with up to six decimal places.");
-  const result = BigInt(match[1]!) * 1_000_000n + BigInt((match[2] ?? "").padEnd(6, "0") || "0");
-  if (result <= 0n) throw new Error("Award amount must be greater than zero.");
-  return result.toString();
+  let result: string;
+  try {
+    result = parseUsdcDecimal(value);
+  } catch {
+    throw new Error("Award amount must be USDC with up to six decimal places.");
+  }
+  if (BigInt(result) <= 0n) throw new Error("Award amount must be greater than zero.");
+  return result;
 }
 
 function AwardCard({ item, onAwarded }: { item: FeedbackBonusAwardInboxItem; onAwarded: () => Promise<void> }) {
@@ -108,7 +104,7 @@ function AwardCard({ item, onAwarded }: { item: FeedbackBonusAwardInboxItem; onA
   }
 
   return (
-    <article className="surface-card rounded-2xl p-5" aria-labelledby={`feedback-bonus-${item.feedbackId}`}>
+    <Card as="article" className="rounded-2xl p-5" aria-labelledby={`feedback-bonus-${item.feedbackId}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="font-mono text-xs uppercase tracking-wider text-[var(--rateloop-pink)]">Feedback Bonus</p>
@@ -116,9 +112,7 @@ function AwardCard({ item, onAwarded }: { item: FeedbackBonusAwardInboxItem; onA
             Select useful written feedback
           </h3>
         </div>
-        <span className="rounded-md bg-white/[0.06] px-2 py-1 text-xs">
-          {formatFeedbackBonusUsdc(item.remainingPoolAtomic)} left
-        </span>
+        <Badge>{formatFeedbackBonusUsdc(item.remainingPoolAtomic)} left</Badge>
       </div>
       <blockquote className="mt-4 whitespace-pre-wrap rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm leading-6 text-base-content/75">
         {item.feedbackBody}
@@ -137,9 +131,9 @@ function AwardCard({ item, onAwarded }: { item: FeedbackBonusAwardInboxItem; onA
             <span className="text-base-content/50">USDC</span>
           </div>
         </label>
-        <button type="button" className="rateloop-gradient-action px-5" disabled={busy} onClick={() => void award()}>
+        <Button type="button" disabled={busy} onClick={() => void award()}>
           {busy ? "Confirming…" : "Award this feedback"}
-        </button>
+        </Button>
       </div>
       <p className="mt-3 text-xs text-base-content/50">
         Award by {new Date(item.awardDeadline).toLocaleString()}. Awards are final and use the feedback&apos;s immutable
@@ -150,7 +144,7 @@ function AwardCard({ item, onAwarded }: { item: FeedbackBonusAwardInboxItem; onA
           {error}
         </p>
       ) : null}
-    </article>
+    </Card>
   );
 }
 
@@ -191,7 +185,7 @@ function FeedbackBonusAwardInboxControls({ workspaceId }: { workspaceId: string 
         </p>
       </div>
       {!account && thirdwebBrowserClient ? (
-        <div className="surface-card flex flex-wrap items-center justify-between gap-4 rounded-2xl p-4">
+        <Card className="flex flex-wrap items-center justify-between gap-4 rounded-2xl p-4">
           <p className="text-sm text-base-content/60">Connect the human awarder wallet to make a final award.</p>
           <ConnectButton
             client={thirdwebBrowserClient}
@@ -201,27 +195,19 @@ function FeedbackBonusAwardInboxControls({ workspaceId }: { workspaceId: string 
             connectButton={{ label: "Connect awarder wallet" }}
             connectModal={{ showThirdwebBranding: false, size: "compact", title: "Connect the awarder wallet" }}
           />
-        </div>
+        </Card>
       ) : null}
-      {error ? (
-        <p className="rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error" role="alert">
-          {error}
-        </p>
-      ) : null}
-      {!loaded ? (
-        <div className="surface-card rounded-xl p-5 text-sm text-base-content/60" role="status">
-          <span className="loading loading-spinner loading-sm mr-2 text-primary" aria-hidden="true" />
-          Loading feedback bonuses…
-        </div>
-      ) : null}
-      {loaded && items.length === 0 && !error ? (
-        <div className="surface-card rounded-xl p-5 text-sm text-base-content/60">
-          No feedback bonuses need an award.
-        </div>
-      ) : null}
-      {items.map(item => (
-        <AwardCard key={`${item.opportunityId}:${item.feedbackId}`} item={item} onAwarded={load} />
-      ))}
+      <AsyncSection
+        loading={!loaded}
+        loadingLabel="Loading feedback bonuses…"
+        error={error}
+        empty={items.length === 0}
+        emptyTitle="No feedback bonuses need an award."
+      >
+        {items.map(item => (
+          <AwardCard key={`${item.opportunityId}:${item.feedbackId}`} item={item} onAwarded={load} />
+        ))}
+      </AsyncSection>
     </section>
   );
 }

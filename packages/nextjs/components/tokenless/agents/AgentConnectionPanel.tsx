@@ -5,6 +5,10 @@ import { InfoPopover } from "../InfoPopover";
 import { buildAgentConnectionMessage } from "./agentConnectionMessage";
 import { isUsableAgentConnection } from "./agentWorkspaceState";
 import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
+import { Badge } from "~~/components/tokenless/ui/Badge";
+import { Button } from "~~/components/tokenless/ui/Button";
+import { Card } from "~~/components/tokenless/ui/Card";
+import { readJson } from "~~/lib/tokenless/http";
 
 type PairingStatus = "open" | "claimed" | "approved" | "rejected" | "expired" | "revoked";
 
@@ -245,16 +249,6 @@ function normalizePublishingPolicy(value: unknown): PublishingPolicy {
   };
 }
 
-async function readJson(response: Response) {
-  const body = record(await response.json().catch(() => ({})));
-  if (!response.ok) {
-    throw new Error(
-      typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : "Request failed.",
-    );
-  }
-  return body;
-}
-
 function workflowKeys(value: string) {
   const entries = [
     ...new Set(
@@ -409,7 +403,7 @@ function PairingApprovalCard({
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h4 className="font-semibold">Agent is waiting for approval</h4>
-            <span className="badge border-0 bg-amber-300/10 text-amber-100">declared metadata</span>
+            <Badge variant="warning">declared metadata</Badge>
           </div>
           <p className="mt-2 text-sm text-base-content/60">
             {pairing.clientName || "Unknown MCP client"}
@@ -954,7 +948,7 @@ export function AgentConnectionPanel({
   return (
     <div className="space-y-5">
       {isFreshWorkspace ? (
-        <section className="surface-card rounded-2xl p-6">
+        <Card as="section" className="rounded-2xl p-6">
           <div>
             <h2 className="text-2xl font-semibold">Connect your agent</h2>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-base-content/60">
@@ -962,14 +956,13 @@ export function AgentConnectionPanel({
             </p>
           </div>
           <div className="mt-5 flex flex-wrap items-center gap-3">
-            <button
+            <Button
               type="button"
-              className="rateloop-gradient-action px-5"
               disabled={!workspaceId || loading || Boolean(busyAction) || activeConnectionIntents.length > 0}
               onClick={() => void copyConnectionMessage()}
             >
               {busyAction === "create-intent" ? "Creating and copying…" : "Copy connection message"}
-            </button>
+            </Button>
             <InfoPopover label="About safe agent access">
               This creates safe access. The agent cannot spend, publish, read private workspace content, or change
               workspace settings.
@@ -985,7 +978,7 @@ export function AgentConnectionPanel({
               {error}
             </p>
           ) : null}
-        </section>
+        </Card>
       ) : null}
 
       {!isFreshWorkspace && status ? (
@@ -1000,7 +993,7 @@ export function AgentConnectionPanel({
       ) : null}
 
       {manualConnectionMessage ? (
-        <section className="surface-card rounded-2xl p-5" aria-labelledby="manual-agent-message-heading">
+        <Card as="section" className="rounded-2xl p-5" aria-labelledby="manual-agent-message-heading">
           <h3 id="manual-agent-message-heading" className="font-semibold">
             Connection message
           </h3>
@@ -1016,22 +1009,14 @@ export function AgentConnectionPanel({
             onFocus={event => event.currentTarget.select()}
           />
           <div className="mt-3 flex flex-wrap gap-3">
-            <button
-              type="button"
-              className="btn btn-sm rateloop-secondary-action"
-              onClick={() => void copyVisibleConnectionMessage()}
-            >
+            <Button type="button" size="sm" variant="secondary" onClick={() => void copyVisibleConnectionMessage()}>
               Copy message
-            </button>
-            <button
-              type="button"
-              className="btn btn-sm rateloop-secondary-action"
-              onClick={() => setManualConnectionMessage(null)}
-            >
+            </Button>
+            <Button type="button" size="sm" variant="secondary" onClick={() => setManualConnectionMessage(null)}>
               Hide message
-            </button>
+            </Button>
           </div>
-        </section>
+        </Card>
       ) : null}
 
       {reveal ? (

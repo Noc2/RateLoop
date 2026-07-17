@@ -1,23 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
+import { Badge } from "~~/components/tokenless/ui/Badge";
+import { Button } from "~~/components/tokenless/ui/Button";
+import { Card } from "~~/components/tokenless/ui/Card";
+import { readJson } from "~~/lib/tokenless/http";
 import type { HumanReviewApproval } from "~~/lib/tokenless/humanReviewApprovals";
-
-async function readJson(response: Response) {
-  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!response.ok) {
-    throw new Error(
-      typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : "Request failed.",
-    );
-  }
-  return body;
-}
+import { formatUsdcAtomic } from "~~/lib/tokenless/usdc";
 
 export function formatApprovalUsdc(atomic: string) {
-  const amount = BigInt(atomic);
-  const whole = amount / 1_000_000n;
-  const fraction = (amount % 1_000_000n).toString().padStart(6, "0").replace(/0+$/u, "");
-  return `${whole.toLocaleString()}${fraction ? `.${fraction}` : ""} USDC`;
+  return formatUsdcAtomic(atomic);
 }
 
 function audienceLabel(kind: string) {
@@ -46,7 +39,7 @@ function ApprovalCard({
     }
   }
   return (
-    <article className="surface-card rounded-2xl p-5" aria-labelledby={`approval-${approval.approvalId}`}>
+    <Card as="article" className="rounded-2xl p-5" aria-labelledby={`approval-${approval.approvalId}`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="font-mono text-xs uppercase tracking-wider text-[var(--rateloop-blue)]">
@@ -56,7 +49,7 @@ function ApprovalCard({
             {request.question.criterion}
           </h3>
         </div>
-        <span className="self-start rounded-md bg-white/[0.06] px-2 py-1 text-xs capitalize">{approval.status}</span>
+        <Badge className="self-start capitalize">{approval.status}</Badge>
       </div>
 
       <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
@@ -154,17 +147,17 @@ function ApprovalCard({
 
       {approval.status === "pending" ? (
         <div className="mt-5 flex flex-wrap gap-3">
-          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void act("approve")}>
+          <Button type="button" disabled={busy} onClick={() => void act("approve")}>
             Approve request
-          </button>
-          <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => void act("reject")}>
+          </Button>
+          <Button type="button" variant="ghost" disabled={busy} onClick={() => void act("reject")}>
             Reject
-          </button>
+          </Button>
         </div>
       ) : (
         <p className="mt-5 text-sm text-base-content/55">Approved and ready for the request adapter.</p>
       )}
-    </article>
+    </Card>
   );
 }
 
@@ -239,21 +232,18 @@ export function HumanReviewApprovalInbox({ workspaceId }: { workspaceId: string 
           Review the frozen audience, timing, panel, and cost before anything is published or funded.
         </p>
       </div>
-      {error ? (
-        <p className="rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error" role="alert">
-          {error}
-        </p>
-      ) : null}
-      {loading ? <p className="text-sm text-base-content/55">Loading approval requests…</p> : null}
-      {!loading && approvals.length === 0 ? (
-        <div className="surface-card rounded-2xl p-6">
-          <p className="font-semibold">No requests need approval</p>
-          <p className="mt-1 text-sm text-base-content/55">Prepared review requests will appear here.</p>
-        </div>
-      ) : null}
-      {approvals.map(approval => (
-        <ApprovalCard key={approval.approvalId} approval={approval} decide={decide} />
-      ))}
+      <AsyncSection
+        loading={loading}
+        loadingLabel="Loading approval requests…"
+        error={error}
+        empty={approvals.length === 0}
+        emptyTitle="No requests need approval"
+        emptyDescription="Prepared review requests will appear here."
+      >
+        {approvals.map(approval => (
+          <ApprovalCard key={approval.approvalId} approval={approval} decide={decide} />
+        ))}
+      </AsyncSection>
     </section>
   );
 }

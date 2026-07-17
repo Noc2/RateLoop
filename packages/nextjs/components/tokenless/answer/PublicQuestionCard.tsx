@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Hex } from "viem";
 import { type PublicQuestionMedia, QuestionMedia } from "~~/components/tokenless/answer/QuestionMedia";
+import { Button } from "~~/components/tokenless/ui/Button";
+import { Card } from "~~/components/tokenless/ui/Card";
+import { readJson } from "~~/lib/tokenless/http";
 import {
   createIndexedDbTokenlessCommitQueue,
   createTokenlessRaterRoundSecrets,
@@ -20,6 +23,7 @@ import {
 } from "~~/lib/tokenless/rater/publicResponse";
 import { buildPublicVoucherRequest } from "~~/lib/tokenless/rater/publicVoucherRequest";
 import type { TokenlessQueuedCommit } from "~~/lib/tokenless/rater/queue";
+import { formatUsdcAtomic } from "~~/lib/tokenless/usdc";
 
 export type PublicAnswerTask = {
   operationKey: string;
@@ -54,10 +58,8 @@ export type PaidTaskAccess =
   | { state: "payout_wallet_required" }
   | { state: "eligibility_required"; eligibilityStatus: string };
 
-async function readJson(response: Response) {
-  const body = (await response.json()) as Record<string, unknown>;
-  if (!response.ok) throw new Error(typeof body.message === "string" ? body.message : "Answer request failed.");
-  return body;
+function readAnswerJson(response: Response) {
+  return readJson(response, { errorFields: ["message"], fallbackMessage: "Answer request failed." });
 }
 
 function randomNonce(): Hex {
@@ -83,9 +85,7 @@ function ThumbIcon({ down = false }: { down?: boolean }) {
 }
 
 function usdc(value: string) {
-  return new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
-    Number(BigInt(value)) / 1_000_000,
-  );
+  return formatUsdcAtomic(value, { includeUnit: false, minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export function PublicQuestionCard({
@@ -148,7 +148,7 @@ export function PublicQuestionCard({
     setError(null);
     try {
       const idempotencyKey = String(savedCommit.relayPayload.idempotencyKey ?? "");
-      let committed = await readJson(
+      let committed = await readAnswerJson(
         await fetch("/api/rater/commits", {
           method: "POST",
           credentials: "same-origin",
@@ -161,7 +161,7 @@ export function PublicQuestionCard({
       for (let attempt = 0; attempt < 10 && committed.state === "submitted"; attempt += 1) {
         setStatus(`Saved answer submitted · awaiting confirmation${attempt ? ` (${attempt + 1}/10)` : ""}`);
         await wait(1_000);
-        committed = await readJson(
+        committed = await readAnswerJson(
           await fetch(`/api/rater/commits/${encodeURIComponent(commitId)}`, { credentials: "same-origin" }),
         );
       }
@@ -222,7 +222,7 @@ export function PublicQuestionCard({
         beaconRound: task.beacon.round,
       });
       const idempotencyBase = `voucher:web:${task.roundId}`;
-      const voucherBody = await readJson(
+      const voucherBody = await readAnswerJson(
         await fetch("/api/rater/vouchers", {
           method: "POST",
           credentials: "same-origin",
@@ -263,7 +263,7 @@ export function PublicQuestionCard({
       });
       setSavedCommit(queuedCommit);
       setStatus("Submitting through the sponsored gas-only relayer…");
-      const committed = await readJson(
+      const committed = await readAnswerJson(
         await fetch("/api/rater/commits", {
           method: "POST",
           credentials: "same-origin",
@@ -281,7 +281,7 @@ export function PublicQuestionCard({
       for (let attempt = 0; attempt < 10 && current.state === "submitted"; attempt += 1) {
         setStatus(`Answer submitted · awaiting confirmation${attempt ? ` (${attempt + 1}/10)` : ""}`);
         await wait(1_000);
-        current = await readJson(
+        current = await readAnswerJson(
           await fetch(`/api/rater/commits/${encodeURIComponent(committed.commitId)}`, {
             credentials: "same-origin",
           }),
@@ -322,7 +322,7 @@ export function PublicQuestionCard({
 
   return (
     <article className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_17.25rem] xl:items-start">
-      <section className="surface-card min-h-72 rounded-lg p-5 sm:p-6">
+      <Card as="section" className="min-h-72 rounded-lg p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-base-content/45">
           <span>Public panel</span>
           <span>Round {task.roundId}</span>
@@ -339,9 +339,9 @@ export function PublicQuestionCard({
           <span>Insight bonus up to ${usdc(task.earnings.possibleSurpriseBonusAtomic)}</span>
           <span>Attempt ${usdc(task.earnings.attemptCompensationAtomic)}</span>
         </div>
-      </section>
+      </Card>
 
-      <aside className="surface-card rounded-lg p-4 sm:p-5">
+      <Card as="aside" className="rounded-lg p-4 sm:p-5">
         {paidAccess.state === "ready" ? (
           <>
             <p className="text-sm font-semibold">Your rating</p>
@@ -444,9 +444,9 @@ export function PublicQuestionCard({
                 placeholder="12+ characters"
               />
             </label>
-            <button
+            <Button
               type="button"
-              className="rateloop-gradient-action mt-4 w-full px-4 text-sm disabled:cursor-not-allowed disabled:opacity-45"
+              className="mt-4 w-full px-4 text-sm disabled:cursor-not-allowed disabled:opacity-45"
               disabled={busy || (!savedCommit && (!answer || prediction === null || task.alreadyVouchered))}
               onClick={() => void (savedCommit ? retrySavedCommit() : submitResponse())}
             >
@@ -457,7 +457,7 @@ export function PublicQuestionCard({
                   : task.alreadyVouchered
                     ? "No saved submission on this device"
                     : "Submit rating"}
-            </button>
+            </Button>
             {recoveryUrl ? (
               <a
                 href={recoveryUrl}
@@ -515,7 +515,7 @@ export function PublicQuestionCard({
             </Link>
           </div>
         )}
-      </aside>
+      </Card>
     </article>
   );
 }
