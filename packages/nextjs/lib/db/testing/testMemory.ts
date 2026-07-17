@@ -46,6 +46,8 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
       "0067_paid_review_voucher_receipts.sql",
       "0068_feedback_bonus_awards.sql",
       "0077_assurance_automated_eval_receipts.sql",
+      "0086_enterprise_identity.sql",
+      "0088_expertise_verification_queue.sql",
     ].includes(file) &&
     (/^CREATE OR REPLACE FUNCTION/u.test(statement) || /^CREATE TRIGGER/u.test(statement))
   ) {
@@ -90,6 +92,12 @@ export function createMemoryDatabaseResources(): DatabaseResources {
     implementation: value => [...value].reduce((hash, character) => (hash * 31 + character.charCodeAt(0)) | 0, 0),
   });
   memoryDb.public.registerFunction({
+    name: "mod",
+    args: [DataType.float, DataType.integer],
+    returns: DataType.float,
+    implementation: (left, right) => left % right,
+  });
+  memoryDb.public.registerFunction({
     name: "convert_to",
     args: [DataType.text, DataType.text],
     returns: DataType.bytea,
@@ -120,7 +128,19 @@ export function createMemoryDatabaseResources(): DatabaseResources {
     implementation: () => true,
   });
   memoryDb.public.registerFunction({
+    name: "pg_try_advisory_lock",
+    args: [DataType.integer],
+    returns: DataType.bool,
+    implementation: () => true,
+  });
+  memoryDb.public.registerFunction({
     name: "pg_advisory_unlock",
+    args: [DataType.integer],
+    returns: DataType.bool,
+    implementation: () => true,
+  });
+  memoryDb.public.registerFunction({
+    name: "pg_advisory_xact_lock",
     args: [DataType.integer],
     returns: DataType.bool,
     implementation: () => true,

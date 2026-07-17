@@ -1,5 +1,10 @@
 import { createHash } from "node:crypto";
 import "server-only";
+import {
+  drainEnterpriseIdentityAuditOutbox,
+  reconcileEnterpriseIdentityAuditReservations,
+} from "~~/lib/auth/enterpriseIdentityAudit";
+import { drainPrepaidTopupAuditOutbox, reconcilePrepaidTopups } from "~~/lib/billing/prepaidTopups";
 import { dbClient } from "~~/lib/db";
 import { runTokenlessNotificationCycle } from "~~/lib/notifications/delivery";
 import { expireDeletedAuthSubjectGuards, reconcileWorkspaceDeletionJobs } from "~~/lib/privacy/deletionReconciliation";
@@ -12,6 +17,7 @@ import {
 import { processDueGrcReconciliations } from "~~/lib/tokenless/assuranceGrcConnectors";
 import { processDueAssuranceWormExports } from "~~/lib/tokenless/assuranceWormExports";
 import { processDueEvidenceRetentionEnforcement } from "~~/lib/tokenless/evidenceRetentionEnforcement";
+import { refreshCompletedAssuranceMechanismHealth } from "~~/lib/tokenless/mechanismHealth";
 import { processPublicQuestionMediaDeletionByAssetId } from "~~/lib/tokenless/publicQuestionMedia";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { processSurpriseBountyPayments } from "~~/lib/tokenless/surpriseBountyService";
@@ -126,6 +132,11 @@ type MaintenanceProcessors = {
   processEvidenceRetention: typeof processDueEvidenceRetentionEnforcement;
   reconcileDeletionJobs: typeof reconcileWorkspaceDeletionJobs;
   expireDeletedAuthGuards: typeof expireDeletedAuthSubjectGuards;
+  reconcilePrepaidTopups: typeof reconcilePrepaidTopups;
+  drainPrepaidTopupAudit: typeof drainPrepaidTopupAuditOutbox;
+  drainEnterpriseIdentityAudit: typeof drainEnterpriseIdentityAuditOutbox;
+  reconcileEnterpriseIdentityAudit: typeof reconcileEnterpriseIdentityAuditReservations;
+  refreshMechanismHealth: typeof refreshCompletedAssuranceMechanismHealth;
 };
 
 const defaultProcessors: MaintenanceProcessors = {
@@ -146,6 +157,11 @@ const defaultProcessors: MaintenanceProcessors = {
   processEvidenceRetention: processDueEvidenceRetentionEnforcement,
   reconcileDeletionJobs: reconcileWorkspaceDeletionJobs,
   expireDeletedAuthGuards: expireDeletedAuthSubjectGuards,
+  reconcilePrepaidTopups,
+  drainPrepaidTopupAudit: drainPrepaidTopupAuditOutbox,
+  drainEnterpriseIdentityAudit: drainEnterpriseIdentityAuditOutbox,
+  reconcileEnterpriseIdentityAudit: reconcileEnterpriseIdentityAuditReservations,
+  refreshMechanismHealth: refreshCompletedAssuranceMechanismHealth,
 };
 
 async function claimDueWork(now: Date, limit: number) {
@@ -301,6 +317,11 @@ export async function runTokenlessScheduledMaintenance(input: {
       now,
       limit: workLimit,
     });
+    const prepaidTopups = await processors.reconcilePrepaidTopups({ now, limit: workLimit });
+    const prepaidTopupAudit = await processors.drainPrepaidTopupAudit({ limit: webhookLimit });
+    const enterpriseIdentityAuditReservations = await processors.reconcileEnterpriseIdentityAudit(webhookLimit);
+    const enterpriseIdentityAudit = await processors.drainEnterpriseIdentityAudit(now, webhookLimit);
+    const mechanismHealth = await processors.refreshMechanismHealth({ now, limit: workLimit });
     const assuranceEventProjection = await processors.projectAssuranceEvents({
       now,
       limit: webhookLimit,
@@ -352,7 +373,10 @@ export async function runTokenlessScheduledMaintenance(input: {
       evidenceRetention.backlog > 0 ||
       assuranceEvents.projection.retry > 0 ||
       assuranceEvents.delivery.retry > 0 ||
-      assuranceEvents.delivery.dead > 0
+      assuranceEvents.delivery.dead > 0 ||
+      prepaidTopups.failed > 0 ||
+      prepaidTopupAudit.attempted > prepaidTopupAudit.delivered ||
+      enterpriseIdentityAudit.retry > 0
         ? "degraded"
         : "healthy";
     const summary = {
@@ -368,6 +392,9 @@ export async function runTokenlessScheduledMaintenance(input: {
       attestations,
       evidenceRetention,
       assuranceEvents,
+      prepaidTopups: { reconciliation: prepaidTopups, audit: prepaidTopupAudit },
+      enterpriseIdentityAudit: { reservations: enterpriseIdentityAuditReservations, delivery: enterpriseIdentityAudit },
+      mechanismHealth,
       adaptiveRollups: "not_scheduled_until_a_persisted_rollup_processor_exists",
     };
     await dbClient.execute({

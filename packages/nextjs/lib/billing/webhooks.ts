@@ -1,4 +1,5 @@
 import { EARLY_ACCESS_PRICE_VERSION } from "./plans";
+import { drainPrepaidTopupAuditOutbox, projectPrepaidInvoice } from "./prepaidTopups";
 import { getEarlyAccessPriceId, getStripe, getStripeWebhookSecret } from "./stripe";
 import { createHash } from "node:crypto";
 import type { PoolClient } from "pg";
@@ -13,6 +14,7 @@ const HANDLED_EVENTS = new Set([
   "customer.subscription.deleted",
   "invoice.paid",
   "invoice.payment_failed",
+  "invoice.voided",
 ]);
 
 function providerId(value: string | { id: string } | null | undefined) {
@@ -159,7 +161,18 @@ export async function processStripeWebhook(input: { event: Stripe.Event; rawBody
     if (existing.rows[0] && existing.rows[0].payload_sha256 !== payloadSha256) {
       throw new Error("event_payload_mismatch");
     }
-    if (existing.rows[0]?.processing_status === "processed") return { duplicate: true };
+    if (existing.rows[0]?.processing_status === "processed") {
+      if (input.event.type.startsWith("invoice.")) {
+        const invoiceId = (input.event.data.object as Stripe.Invoice).id;
+        const topup = await client.query(
+          "SELECT topup_id FROM tokenless_prepaid_topup_intents WHERE provider='stripe' AND provider_invoice_id=$1",
+          [invoiceId],
+        );
+        const topupId = topup.rows[0]?.topup_id;
+        if (typeof topupId === "string") await drainPrepaidTopupAuditOutbox({ topupId });
+      }
+      return { duplicate: true };
+    }
 
     const receivedAt = new Date();
     await client.query(
@@ -173,30 +186,44 @@ export async function processStripeWebhook(input: { event: Stripe.Event; rawBody
     );
 
     try {
+      let topupId: string | null = null;
       if (HANDLED_EVENTS.has(input.event.type)) {
         const subscription = await subscriptionForEvent(input.event);
-        if (subscription) {
-          await client.query("BEGIN");
-          try {
+        const eventInvoice = input.event.type.startsWith("invoice.")
+          ? (input.event.data.object as Stripe.Invoice)
+          : null;
+        let topupInvoice = Boolean(eventInvoice?.metadata?.rateloop_purpose === "prepaid_topup");
+        if (eventInvoice && !topupInvoice) {
+          const local = await client.query(
+            "SELECT topup_id FROM tokenless_prepaid_topup_intents WHERE provider='stripe' AND provider_invoice_id=$1",
+            [eventInvoice.id],
+          );
+          topupInvoice = local.rowCount === 1;
+        }
+        const invoice = eventInvoice && topupInvoice ? await getStripe().invoices.retrieve(eventInvoice.id) : null;
+        await client.query("BEGIN");
+        try {
+          if (subscription) {
             await projectSubscription(client, input.event, subscription);
-            await client.query(
-              `UPDATE tokenless_billing_webhook_events
-               SET processing_status = 'processed', processed_at = $1, error_code = NULL
-               WHERE provider_event_id = $2`,
-              [new Date(), input.event.id],
-            );
-            await client.query("COMMIT");
-          } catch (error) {
-            await client.query("ROLLBACK");
-            throw error;
           }
-        } else {
+          if (invoice) {
+            const projected = await projectPrepaidInvoice(client, {
+              eventCreatedAt: new Date(input.event.created * 1000),
+              eventId: input.event.id,
+              invoice,
+            });
+            if (projected.matched) topupId = invoice.metadata?.rateloop_topup_id ?? null;
+          }
           await client.query(
             `UPDATE tokenless_billing_webhook_events
              SET processing_status = 'processed', processed_at = $1, error_code = NULL
              WHERE provider_event_id = $2`,
             [new Date(), input.event.id],
           );
+          await client.query("COMMIT");
+        } catch (error) {
+          await client.query("ROLLBACK");
+          throw error;
         }
       } else {
         await client.query(
@@ -206,6 +233,7 @@ export async function processStripeWebhook(input: { event: Stripe.Event; rawBody
           [new Date(), input.event.id],
         );
       }
+      if (topupId) await drainPrepaidTopupAuditOutbox({ topupId });
       return { duplicate: false };
     } catch (error) {
       await client.query(
