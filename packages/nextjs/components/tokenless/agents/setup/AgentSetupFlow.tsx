@@ -176,6 +176,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   const [confirmedReviewFingerprint, setConfirmedReviewFingerprint] = useState<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const connectionMessageRef = useRef<HTMLTextAreaElement>(null);
+  const reviewDetailsRef = useRef<HTMLDetailsElement>(null);
   const focusOnNavigation = useRef(false);
   const currentStep = setup.currentStep === "complete" ? "people" : setup.currentStep;
   const currentReviewFingerprint = JSON.stringify({
@@ -795,7 +796,13 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         ) : null}
 
         {currentStep === "reviews" ? (
-          <form onSubmit={configureReviews} aria-busy={busy}>
+          <form
+            onSubmit={configureReviews}
+            onInvalid={event => {
+              if (reviewDetailsRef.current?.contains(event.target as Node)) reviewDetailsRef.current.open = true;
+            }}
+            aria-busy={busy}
+          >
             <SetupStageHeader
               headingRef={headingRef}
               step="reviews"
@@ -972,7 +979,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 ))}
               </SetupChoiceGroup>
             </fieldset>
-            <details className="group mt-7 border-y border-white/10 py-5">
+            <details ref={reviewDetailsRef} className="group mt-7 border-y border-white/10 py-5">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
                 <span className="min-w-0">
                   <span className="block text-lg font-semibold">Reviewers, timing and payment</span>

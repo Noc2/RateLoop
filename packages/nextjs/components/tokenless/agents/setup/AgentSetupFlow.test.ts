@@ -250,6 +250,14 @@ test("setup uses one responsive action pattern and exposes busy forms", () => {
   assert.doesNotMatch(startSource, /<button className="rateloop-gradient-action/);
 });
 
+test("review validation reveals invalid fields inside the disclosure", () => {
+  assert.match(flowSource, /const reviewDetailsRef = useRef<HTMLDetailsElement>\(null\)/);
+  assert.match(flowSource, /onInvalid=\{event =>/);
+  assert.match(flowSource, /reviewDetailsRef\.current\?\.contains\(event\.target as Node\)/);
+  assert.match(flowSource, /reviewDetailsRef\.current\.open = true/);
+  assert.match(flowSource, /<details ref=\{reviewDetailsRef\}/);
+});
+
 test("connection polling cleans up timers and preserves explicit-navigation focus", () => {
   assert.match(flowSource, /document\.addEventListener\("visibilitychange"/);
   assert.match(flowSource, /document\.removeEventListener\("visibilitychange"/);
