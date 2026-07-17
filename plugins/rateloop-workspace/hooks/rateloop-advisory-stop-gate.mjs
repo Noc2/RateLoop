@@ -8,6 +8,8 @@ import { pathToFileURL } from "node:url";
 const STATE_SCHEMA = "rateloop.advisory-stop-gate.v2";
 const EVIDENCE_SCHEMA = "rateloop.human-review-terminal-evidence.v1";
 const PAYLOAD_SCHEMA = "rateloop.human-review-terminal-payload.v1";
+const SKIP_EVIDENCE_SCHEMA = "rateloop.human-review-skip-release-evidence.v1";
+const SKIP_PAYLOAD_SCHEMA = "rateloop.human-review-skip-release-payload.v1";
 const KEYRING_SCHEMA = "rateloop.stop-gate-trusted-keys.v1";
 const CONTRACT_DIRECTORY = "review-stop-gate-v1";
 const MAX_FILE_BYTES = 64 * 1024;
@@ -42,6 +44,7 @@ const STATE_KEYS = [
   "lifecycleTerminal",
   "outputCommitment",
   "policyBindingHash",
+  "scopeCommitment",
   "armedAt",
   "expiresAt",
   "lastToolUseId",
@@ -167,8 +170,19 @@ export function validateAdvisoryGateState(value, input, options = {}) {
   ) {
     throw new Error("state_terminal_flag_invalid");
   }
-  if (value.armed !== (value.lifecycle !== "skipped"))
+  if (value.lifecycle === "skipped") {
+    if (
+      (value.armed &&
+        (value.terminalEvidence !== null || value.scopeCommitment !== null)) ||
+      (!value.armed &&
+        (!isRecord(value.terminalEvidence) ||
+          !SHA256.test(value.scopeCommitment)))
+    ) {
+      throw new Error("state_armed_lifecycle_mismatch");
+    }
+  } else if (!value.armed || value.scopeCommitment !== null) {
     throw new Error("state_armed_lifecycle_mismatch");
+  }
   if (
     !SHA256.test(value.outputCommitment) ||
     !SHA256.test(value.policyBindingHash)
@@ -189,6 +203,23 @@ export function validateAdvisoryGateState(value, input, options = {}) {
 
 export function advisoryTerminalPayload(evidence) {
   const payload = evidence.payload;
+  if (evidence.schemaVersion === SKIP_EVIDENCE_SCHEMA) {
+    return Buffer.from(
+      JSON.stringify({
+        schemaVersion: payload.schemaVersion,
+        workspaceId: payload.workspaceId,
+        integrationId: payload.integrationId,
+        opportunityId: payload.opportunityId,
+        decision: payload.decision,
+        terminalStatus: payload.terminalStatus,
+        outputCommitment: payload.outputCommitment,
+        policyBindingHash: payload.policyBindingHash,
+        scopeCommitment: payload.scopeCommitment,
+        issuedAt: payload.issuedAt,
+      }),
+      "utf8",
+    );
+  }
   return Buffer.from(
     JSON.stringify({
       schemaVersion: payload.schemaVersion,
@@ -210,15 +241,50 @@ function validateTerminalEvidence(evidence, state) {
   ) {
     throw new Error("terminal_evidence_shape_invalid");
   }
-  if (
-    evidence.schemaVersion !== EVIDENCE_SCHEMA ||
-    !KEY_IDENTIFIER.test(evidence.keyId)
-  ) {
+  if (!KEY_IDENTIFIER.test(evidence.keyId)) {
     throw new Error("terminal_evidence_schema_invalid");
   }
   if (!BASE64URL_SIGNATURE.test(evidence.signature))
     throw new Error("terminal_signature_invalid");
   const payload = evidence.payload;
+  if (evidence.schemaVersion === SKIP_EVIDENCE_SCHEMA) {
+    const payloadKeys = [
+      "schemaVersion",
+      "workspaceId",
+      "integrationId",
+      "opportunityId",
+      "decision",
+      "terminalStatus",
+      "outputCommitment",
+      "policyBindingHash",
+      "scopeCommitment",
+      "issuedAt",
+    ];
+    if (
+      !exactKeys(payload, payloadKeys) ||
+      payload.schemaVersion !== SKIP_PAYLOAD_SCHEMA ||
+      payload.workspaceId !== state.workspaceId ||
+      payload.integrationId !== state.integrationId ||
+      payload.opportunityId !== state.opportunityId ||
+      payload.decision !== "skipped" ||
+      payload.terminalStatus !== "skipped" ||
+      payload.outputCommitment !== state.outputCommitment ||
+      payload.policyBindingHash !== state.policyBindingHash ||
+      payload.scopeCommitment !== state.scopeCommitment ||
+      !SHA256.test(payload.scopeCommitment) ||
+      !isIsoDate(payload.issuedAt)
+    ) {
+      throw new Error("terminal_binding_mismatch");
+    }
+    if (Date.parse(payload.issuedAt) < Date.parse(state.armedAt))
+      throw new Error("terminal_evidence_stale");
+    if (Date.parse(payload.issuedAt) > Date.now() + 300_000)
+      throw new Error("terminal_evidence_from_future");
+    return evidence;
+  }
+  if (evidence.schemaVersion !== EVIDENCE_SCHEMA) {
+    throw new Error("terminal_evidence_schema_invalid");
+  }
   const payloadKeys = [
     "schemaVersion",
     "workspaceId",
@@ -355,7 +421,28 @@ async function main() {
     return;
   }
 
-  if (!state.armed) return;
+  if (!state.armed) {
+    try {
+      const evidence = await verifyAdvisoryTerminalEvidence(
+        state.terminalEvidence,
+        state,
+        pluginData,
+      );
+      if (
+        evidence.schemaVersion === SKIP_EVIDENCE_SCHEMA &&
+        evidence.payload.terminalStatus === "skipped"
+      ) {
+        return;
+      }
+    } catch {
+      // Fall through to the fail-closed recovery response below.
+    }
+    block(
+      "skip_release_evidence_invalid_recovery_required",
+      "RateLoop selection skip release evidence is missing, mismatched, or not signed by a trusted key. Refresh the exact opportunity or use the separately authorized recovery path.",
+    );
+    return;
+  }
   if (state.turnId !== input.turnId) {
     block(
       "armed_state_turn_mismatch_recovery_required",
@@ -385,6 +472,13 @@ async function main() {
     }
   }
   if (state.lifecycleTerminal) {
+    if (state.lifecycle === "skipped") {
+      block(
+        "skip_release_evidence_missing_recovery_required",
+        "RateLoop selected a skip but no matching signed skip release evidence is available. Refresh the exact opportunity or use the separately authorized recovery path.",
+      );
+      return;
+    }
     block(
       "terminal_evidence_missing_recovery_required",
       "RateLoop reported a terminal lifecycle without signed terminal evidence. The advisory gate remains armed until signed evidence or separately authorized recovery is recorded.",

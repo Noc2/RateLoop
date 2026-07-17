@@ -123,7 +123,23 @@ async function main() {
     return;
   }
 
-  if (!state.armed) return;
+  if (!state.armed) {
+    try {
+      const evidence = await verifyAdvisoryTerminalEvidence(
+        state.terminalEvidence,
+        state,
+        pluginData,
+      );
+      if (evidence.payload.terminalStatus === "skipped") return;
+    } catch {
+      // Fall through to a fail-closed denial below.
+    }
+    emitDecision(
+      "deny",
+      "RateLoop selection skip release evidence is invalid. Refresh the exact opportunity before running this tool.",
+    );
+    return;
+  }
   if (state.terminalEvidence) {
     try {
       const evidence = await verifyAdvisoryTerminalEvidence(

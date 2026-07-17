@@ -43,7 +43,7 @@ async function installState(data: string, lifecycle = "approval_required") {
     path,
     `${JSON.stringify({
       schemaVersion: "rateloop.advisory-stop-gate.v2",
-      armed: lifecycle !== "skipped",
+      armed: true,
       sessionId: "session_claude_01",
       turnId: "turn_claude_01",
       gateId: "gate_claude_01",
@@ -62,6 +62,7 @@ async function installState(data: string, lifecycle = "approval_required") {
         ].includes(lifecycle),
       outputCommitment: `sha256:${"a".repeat(64)}`,
       policyBindingHash: `sha256:${"b".repeat(64)}`,
+      scopeCommitment: null,
       armedAt: "2026-07-16T08:00:00.000Z",
       expiresAt: "2099-07-17T08:00:00.000Z",
       lastToolUseId: "tool_claude_00",
@@ -82,17 +83,25 @@ async function installSignedTerminalEvidence(data: string, lifecycle: string) {
   );
   const state = JSON.parse(await readFile(path, "utf8")) as Record<string, any>;
   const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+  const skipped = lifecycle === "skipped";
+  const scopeCommitment = `sha256:${"d".repeat(64)}`;
   const evidence = {
-    schemaVersion: "rateloop.human-review-terminal-evidence.v1",
+    schemaVersion: skipped
+      ? "rateloop.human-review-skip-release-evidence.v1"
+      : "rateloop.human-review-terminal-evidence.v1",
     keyId: "claude-test-key",
     payload: {
-      schemaVersion: "rateloop.human-review-terminal-payload.v1",
+      schemaVersion: skipped
+        ? "rateloop.human-review-skip-release-payload.v1"
+        : "rateloop.human-review-terminal-payload.v1",
       workspaceId: state.workspaceId,
       integrationId: state.integrationId,
       opportunityId: state.opportunityId,
+      ...(skipped ? { decision: "skipped" } : {}),
       terminalStatus: lifecycle,
       outputCommitment: state.outputCommitment,
       policyBindingHash: state.policyBindingHash,
+      ...(skipped ? { scopeCommitment } : {}),
       issuedAt: new Date().toISOString(),
     },
     signature: "",
@@ -107,6 +116,10 @@ async function installSignedTerminalEvidence(data: string, lifecycle: string) {
     privateKey,
   ).toString("base64url");
   state.terminalEvidence = evidence;
+  if (skipped) {
+    state.armed = false;
+    state.scopeCommitment = scopeCommitment;
+  }
   await writeFile(path, `${JSON.stringify(state)}\n`, "utf8");
   const keyringPath = join(data, "review-stop-gate-v1", "trusted-keys.json");
   await mkdir(dirname(keyringPath), { recursive: true });
@@ -185,9 +198,15 @@ describe("RateLoop Claude PreToolUse adapter", () => {
     expect(run(data, input(), false)).toBeNull();
   });
 
-  it("allows an authenticated selection skip", async () => {
+  it("denies an unsigned selection skip", async () => {
     const data = await pluginData();
     await installState(data, "skipped");
+    expect(run(data)?.hookSpecificOutput.permissionDecision).toBe("deny");
+  });
+
+  it("allows a selection skip only with matching signed release evidence", async () => {
+    const data = await pluginData();
+    await installSignedTerminalEvidence(data, "skipped");
     expect(run(data)).toBeNull();
   });
 

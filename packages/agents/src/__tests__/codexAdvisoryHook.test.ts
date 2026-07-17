@@ -164,15 +164,80 @@ describe("RateLoop advisory PostToolUse integration", () => {
     expect(updater).not.toMatch(/\bfetch\s*\(/);
   });
 
-  it("disarms after an authenticated selection skip", async () => {
+  it("keeps an unsigned selection skip armed and fails closed", async () => {
     const data = await pluginData();
     const input = await fixture();
+    expect(runScript(updaterPath, data, input)?.systemMessage).toContain(
+      "skip_release_evidence_missing_recovery_required",
+    );
+    expect(await state(data)).toEqual(
+      expect.objectContaining({
+        armed: true,
+        lifecycle: "skipped",
+        scopeCommitment: null,
+        terminalEvidence: null,
+      }),
+    );
+    expect(runScript(stopPath, data, stopInput())?.stopReason).toBe(
+      "RateLoop advisory review gate: skip_release_evidence_missing_recovery_required",
+    );
+  });
+
+  it("disarms only for a signed skip release bound to scope, policy, and output", async () => {
+    const data = await pluginData();
+    const input = await fixture();
+    expect(runScript(updaterPath, data, input)?.systemMessage).toContain(
+      "skip_release_evidence_missing_recovery_required",
+    );
+    expect(await state(data)).toEqual(
+      expect.objectContaining({ armed: true, lifecycle: "skipped" }),
+    );
+    const { keyId, privateKey } = await installKeyring(data);
+    const release = {
+      schemaVersion: "rateloop.human-review-skip-release-evidence.v1",
+      keyId,
+      payload: {
+        schemaVersion: "rateloop.human-review-skip-release-payload.v1",
+        workspaceId: input.tool_response.structuredContent.workspaceId,
+        integrationId: input.tool_response.structuredContent.integrationId,
+        opportunityId: input.tool_response.structuredContent.opportunityId,
+        decision: "skipped",
+        terminalStatus: "skipped",
+        outputCommitment:
+          input.tool_response.structuredContent.frozen.evaluationCommitment,
+        policyBindingHash:
+          input.tool_response.structuredContent.frozen.binding.hash,
+        scopeCommitment: `sha256:${"4".repeat(64)}`,
+        issuedAt: new Date().toISOString(),
+      },
+      signature: "",
+    };
+    const stopModule = (await import(pathToFileURL(stopPath).href)) as {
+      advisoryTerminalPayload(value: Record<string, any>): Buffer;
+    };
+    release.signature = sign(
+      null,
+      stopModule.advisoryTerminalPayload(release),
+      privateKey,
+    ).toString("base64url");
+    input.tool_response.structuredContent.terminalEvidence = release;
+
     expect(runScript(updaterPath, data, input)).toBeNull();
     expect(await state(data)).toEqual(
-      expect.objectContaining({ armed: false, lifecycle: "skipped" }),
+      expect.objectContaining({
+        armed: false,
+        lifecycle: "skipped",
+        scopeCommitment: release.payload.scopeCommitment,
+      }),
     );
     expect(runScript(stopPath, data, stopInput())).toBeNull();
-    expect(runScript(stopPath, data, stopInput("turn_advisory_02"))).toBeNull();
+
+    const tampered = await state(data);
+    tampered.scopeCommitment = `sha256:${"5".repeat(64)}`;
+    await writeFile(statePath(data), `${JSON.stringify(tampered)}\n`, "utf8");
+    expect(runScript(stopPath, data, stopInput())?.stopReason).toBe(
+      "RateLoop advisory review gate: skip_release_evidence_invalid_recovery_required",
+    );
   });
 
   it("rejects a conflicting non-terminal envelope at the same lifecycle revision", async () => {

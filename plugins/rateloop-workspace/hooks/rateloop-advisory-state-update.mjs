@@ -215,7 +215,11 @@ function validateToolEnvelope(input) {
   }
   if (
     envelope.terminalEvidence !== null &&
-    input.tool !== "get_review_result"
+    input.tool !== "get_review_result" &&
+    !(
+      input.tool === "evaluate_review_requirement" &&
+      envelope.lifecycle.state === "skipped"
+    )
   ) {
     throw new Error("terminal_evidence_tool_invalid");
   }
@@ -315,11 +319,18 @@ function gateId(input, envelope) {
     .slice(0, 48)}`;
 }
 
-function buildState(input, envelope, existing) {
+function buildState(input, envelope, existing, skipReleaseVerified = false) {
   const sameOpportunity = existing?.opportunityId === envelope.opportunityId;
+  const projection = projectedEnvelope(envelope);
+  const skipEvidence =
+    envelope.lifecycle.state === "skipped" &&
+    envelope.terminalEvidence?.schemaVersion ===
+      "rateloop.human-review-skip-release-evidence.v1"
+      ? envelope.terminalEvidence
+      : null;
   return {
     schemaVersion: STATE_SCHEMA,
-    armed: envelope.lifecycle.state !== "skipped",
+    armed: envelope.lifecycle.state !== "skipped" || !skipReleaseVerified,
     sessionId: input.sessionId,
     turnId: input.turnId,
     gateId: sameOpportunity ? existing.gateId : gateId(input, envelope),
@@ -331,13 +342,23 @@ function buildState(input, envelope, existing) {
     lifecycleTerminal: envelope.lifecycle.terminal,
     outputCommitment: envelope.frozen.evaluationCommitment,
     policyBindingHash: envelope.frozen.binding.hash,
+    scopeCommitment: skipReleaseVerified
+      ? skipEvidence.payload.scopeCommitment
+      : null,
     armedAt: sameOpportunity
       ? existing.armedAt
       : envelope.lifecycle.stateEnteredAt,
     expiresAt: gateExpiry(envelope),
     lastToolUseId: input.toolUseId,
-    envelopeCommitment: sha256(projectedEnvelope(envelope)),
-    terminalEvidence: envelope.terminalEvidence,
+    envelopeCommitment: sha256(
+      envelope.lifecycle.state === "skipped" && !skipReleaseVerified
+        ? { ...projection, terminalEvidence: null }
+        : projection,
+    ),
+    terminalEvidence:
+      envelope.lifecycle.state === "skipped" && !skipReleaseVerified
+        ? null
+        : envelope.terminalEvidence,
   };
 }
 
@@ -399,13 +420,28 @@ async function authorizeTransition(input, envelope, existing, pluginData) {
         existing,
         pluginData,
       );
-      if (evidence.payload.terminalStatus !== "completed") {
+      if (
+        evidence.payload.terminalStatus !== "completed" &&
+        evidence.payload.terminalStatus !== "skipped"
+      ) {
         throw new Error("prior_opportunity_does_not_release");
       }
     }
     return;
   }
-  if (existing.armed && envelope.lifecycle.state === "skipped") {
+  const signedSkipAugmentation =
+    existing.armed &&
+    existing.lifecycle === "skipped" &&
+    existing.lifecycleTerminal &&
+    existing.terminalEvidence === null &&
+    envelope.lifecycle.state === "skipped" &&
+    envelope.terminalEvidence !== null &&
+    envelope.lifecycle.revision === existing.lifecycleRevision;
+  if (
+    existing.armed &&
+    envelope.lifecycle.state === "skipped" &&
+    !signedSkipAugmentation
+  ) {
     throw new Error("armed_opportunity_cannot_be_skipped");
   }
   if (envelope.lifecycle.revision < existing.lifecycleRevision)
@@ -493,15 +529,43 @@ async function main() {
   try {
     const existing = await readExistingState(statePath, contractRoot, input);
     await authorizeTransition(input, envelope, existing, pluginDataRoot);
-    const state = buildState(input, envelope, existing);
-    if (state.terminalEvidence)
+    let state = buildState(input, envelope, existing);
+    if (envelope.lifecycle.state === "skipped") {
+      if (envelope.terminalEvidence) {
+        try {
+          const candidate = buildState(input, envelope, existing, true);
+          const evidence = await verifyAdvisoryTerminalEvidence(
+            candidate.terminalEvidence,
+            candidate,
+            pluginDataRoot,
+          );
+          if (evidence.payload.terminalStatus !== "skipped") {
+            throw new Error("skip_release_evidence_invalid");
+          }
+          state = candidate;
+        } catch {
+          await writeStateAtomically(statePath, state);
+          warn("skip_release_evidence_invalid_recovery_required");
+          return;
+        }
+      }
+    } else if (state.terminalEvidence) {
       await verifyAdvisoryTerminalEvidence(
         state.terminalEvidence,
         state,
         pluginDataRoot,
       );
+    }
     await writeStateAtomically(statePath, state);
-    if (state.armed && state.lifecycleTerminal && !state.terminalEvidence) {
+    if (state.lifecycle === "skipped" && state.armed) {
+      warn("skip_release_evidence_missing_recovery_required");
+    }
+    if (
+      state.armed &&
+      state.lifecycleTerminal &&
+      state.lifecycle !== "skipped" &&
+      !state.terminalEvidence
+    ) {
       warn("terminal_evidence_missing_recovery_required");
     }
   } catch (error) {

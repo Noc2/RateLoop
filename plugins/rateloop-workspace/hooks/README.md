@@ -20,7 +20,8 @@ The keyring must conform to [`schemas/rateloop-stop-gate-trusted-keys.schema.jso
 
 ## Active decision contract
 
-- No state file or an authenticated MCP selection skip lets the turn stop, but neither is signed host-output release evidence and neither can be described as enforced review.
+- No state file means the advisory plugin has not armed a gate; it is not evidence that review was enforced.
+- An authenticated MCP selection skip stays armed unless it carries matching trusted Ed25519 skip-release evidence bound to the exact workspace, integration, opportunity, output, policy, and scope. Missing, invalid, or mismatched evidence fails closed. The Stop hook re-verifies the persisted receipt before allowing output.
 - The updater accepts only the supported RateLoop workspace MCP result envelopes and binds state to the exact workspace, integration, opportunity, session, turn, frozen policy, and monotonic lifecycle revision.
 - An armed non-terminal state is valid only for `approval_required`, `request_ready`, `pending`, or `blocked` and for the exact Codex session and turn.
 - A matching signed `completed` terminal receipt lets the advisory turn stop. A signed `inconclusive` receipt remains blocked because this compact receipt does not carry the separately verified policy decision needed to release it. Signed `failed_terminal` and `cancelled_before_commit` receipts never release output.
@@ -40,8 +41,8 @@ tools. In Claude Code 2.1.89 or newer, an armed non-terminal gate returns `PreTo
 produce a single tool call. Interactive sessions and responses with multiple tool calls ignore `defer` and must not be
 described as gated. In a supported run, the same tool call is checked again when the host resumes the Claude session.
 RateLoop progress tools are excluded so the agent can request, wait for, and fetch the exact review. A verified
-`completed` terminal receipt allows the tool; inconclusive, failed, cancelled, unreadable, expired, or invalid evidence
-denies it.
+`completed` terminal receipt or matching signed skip-release receipt allows the tool; unsigned skips and inconclusive,
+failed, cancelled, unreadable, expired, or invalid evidence deny it.
 
 This is a Claude durable-approval primitive only in those supported non-interactive, single-tool modes.
 `PermissionRequest` provides synchronous allow/deny only, while the existing `Stop` hook remains the advisory output

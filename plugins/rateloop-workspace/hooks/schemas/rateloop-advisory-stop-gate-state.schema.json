@@ -18,6 +18,7 @@
     "lifecycleTerminal",
     "outputCommitment",
     "policyBindingHash",
+    "scopeCommitment",
     "armedAt",
     "expiresAt",
     "lastToolUseId",
@@ -76,6 +77,9 @@
     "policyBindingHash": {
       "$ref": "#/$defs/sha256"
     },
+    "scopeCommitment": {
+      "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/sha256" }]
+    },
     "armedAt": {
       "type": "string",
       "format": "date-time"
@@ -97,6 +101,9 @@
         },
         {
           "$ref": "#/$defs/terminalEvidence"
+        },
+        {
+          "$ref": "#/$defs/skipReleaseEvidence"
         }
       ]
     }
@@ -113,6 +120,68 @@
     "sha256": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "skipReleaseEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "keyId", "payload", "signature"],
+      "properties": {
+        "schemaVersion": {
+          "const": "rateloop.human-review-skip-release-evidence.v1"
+        },
+        "keyId": {
+          "$ref": "#/$defs/localIdentifier"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schemaVersion",
+            "workspaceId",
+            "integrationId",
+            "opportunityId",
+            "decision",
+            "terminalStatus",
+            "outputCommitment",
+            "policyBindingHash",
+            "scopeCommitment",
+            "issuedAt"
+          ],
+          "properties": {
+            "schemaVersion": {
+              "const": "rateloop.human-review-skip-release-payload.v1"
+            },
+            "workspaceId": {
+              "$ref": "#/$defs/opaqueIdentifier"
+            },
+            "integrationId": {
+              "$ref": "#/$defs/opaqueIdentifier"
+            },
+            "opportunityId": {
+              "$ref": "#/$defs/opaqueIdentifier"
+            },
+            "decision": { "const": "skipped" },
+            "terminalStatus": { "const": "skipped" },
+            "outputCommitment": {
+              "$ref": "#/$defs/sha256"
+            },
+            "policyBindingHash": {
+              "$ref": "#/$defs/sha256"
+            },
+            "scopeCommitment": {
+              "$ref": "#/$defs/sha256"
+            },
+            "issuedAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        },
+        "signature": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{86}$"
+        }
+      }
     },
     "terminalEvidence": {
       "type": "object",
@@ -152,7 +221,12 @@
               "$ref": "#/$defs/opaqueIdentifier"
             },
             "terminalStatus": {
-              "enum": ["completed", "inconclusive", "failed_terminal", "cancelled_before_commit"]
+              "enum": [
+                "completed",
+                "inconclusive",
+                "failed_terminal",
+                "cancelled_before_commit"
+              ]
             },
             "outputCommitment": {
               "$ref": "#/$defs/sha256"
