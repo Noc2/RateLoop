@@ -179,7 +179,6 @@ function FeedbackBonusAwardInboxControls({ workspaceId }: { workspaceId: string 
 
   useEffect(() => void load(), [load]);
 
-  if (!loaded || (items.length === 0 && !error)) return null;
   return (
     <section className="space-y-4" aria-labelledby="feedback-bonus-award-inbox-title">
       <div>
@@ -208,6 +207,17 @@ function FeedbackBonusAwardInboxControls({ workspaceId }: { workspaceId: string 
         <p className="rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error" role="alert">
           {error}
         </p>
+      ) : null}
+      {!loaded ? (
+        <div className="surface-card rounded-xl p-5 text-sm text-base-content/60" role="status">
+          <span className="loading loading-spinner loading-sm mr-2 text-primary" aria-hidden="true" />
+          Loading feedback bonuses…
+        </div>
+      ) : null}
+      {loaded && items.length === 0 && !error ? (
+        <div className="surface-card rounded-xl p-5 text-sm text-base-content/60">
+          No feedback bonuses need an award.
+        </div>
       ) : null}
       {items.map(item => (
         <AwardCard key={`${item.opportunityId}:${item.feedbackId}`} item={item} onAwarded={load} />

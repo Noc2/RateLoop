@@ -14,6 +14,9 @@ test("Feedback Bonus inbox preserves the legacy human award interaction", () => 
   assert.match(source, /sendTransaction/u);
   assert.match(source, /human_wallet_required/u);
   assert.match(source, /method: "PUT"/u);
+  assert.match(source, /Loading feedback bonuses/u);
+  assert.match(source, /No feedback bonuses need an award/u);
+  assert.doesNotMatch(source, /if \(!loaded \|\| \(items\.length === 0 && !error\)\) return null/u);
   assert.doesNotMatch(source, /auto(?:matic)? award/iu);
   assert.doesNotMatch(source, /payoutSalt|payoutAddress/u);
 });
