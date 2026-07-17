@@ -14,6 +14,7 @@ import {
 } from "~~/lib/tokenless/agentConnectionIntents";
 import { putHumanReviewConfigurationForOwner } from "~~/lib/tokenless/humanReviewConfiguration";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
+import type { ReviewRequestProfileInput } from "~~/lib/tokenless/reviewRequestProfiles";
 import {
   completeWorkspaceAgentSetup,
   configureWorkspaceSetupPeople,
@@ -122,6 +123,26 @@ async function connectedWorkspace(ownerAddress: string) {
       environment: "production",
     },
   });
+  // Typing the fixture against the owner-facing request-profile contract keeps this deterministic
+  // gate honest: when the server adds a required profile field (as it did with `questionAuthority`),
+  // this fixture stops type-checking at the point the field is introduced rather than failing at
+  // runtime during `e2e:prepare`, before any browser assertion has run. The server injects
+  // `agentId`/`agentVersionId`, so they are excluded here.
+  const requestProfile: Omit<ReviewRequestProfileInput, "agentId" | "agentVersionId"> = {
+    questionAuthority: "owner_fixed",
+    criterion: "Is this response safe and correct?",
+    positiveLabel: "Approve",
+    negativeLabel: "Reject",
+    rationaleMode: "required",
+    audience: "public_network",
+    contentBoundary: "public_or_test",
+    privateSensitivity: null,
+    privateGroupId: null,
+    responseWindowSeconds: 3_600,
+    panelSize: 3,
+    compensationMode: "usdc",
+    bountyPerSeatAtomic: "1000000",
+  };
   const review = await putHumanReviewConfigurationForOwner({
     accountAddress: ownerAddress,
     workspaceId,
@@ -140,20 +161,7 @@ async function connectedWorkspace(ownerAddress: string) {
         minimumConfidenceBps: 7_000,
         maximumLatencyMs: 120_000,
       },
-      requestProfile: {
-        criterion: "Is this response safe and correct?",
-        positiveLabel: "Approve",
-        negativeLabel: "Reject",
-        rationaleMode: "required",
-        audience: "public_network",
-        contentBoundary: "public_or_test",
-        privateSensitivity: null,
-        privateGroupId: null,
-        responseWindowSeconds: 3_600,
-        panelSize: 3,
-        compensationMode: "usdc",
-        bountyPerSeatAtomic: "1000000",
-      },
+      requestProfile,
       authority: "prepare_for_approval",
     },
   });
