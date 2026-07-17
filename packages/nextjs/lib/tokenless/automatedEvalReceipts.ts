@@ -671,7 +671,14 @@ export async function exportAutomatedEvalLabeledData(input: {
        ON e.workspace_id=r.workspace_id AND e.receipt_id=r.receipt_id
      JOIN tokenless_agent_human_review_result_observations h
        ON h.workspace_id=e.workspace_id AND h.opportunity_id=e.opportunity_id
+     JOIN tokenless_agent_review_opportunities o
+       ON o.workspace_id=h.workspace_id AND o.opportunity_id=h.opportunity_id
+     JOIN tokenless_agent_review_request_profiles rp
+       ON rp.workspace_id=o.workspace_id
+      AND rp.profile_id=o.request_profile_id AND rp.version=o.request_profile_version
+      AND rp.profile_hash=o.request_profile_hash
      WHERE r.workspace_id=$1 AND h.result_observed_at >= $2 AND h.result_observed_at < $3
+       AND rp.result_semantics='assurance'
        AND h.outcome IN ('positive','negative')
      ORDER BY h.result_observed_at,e.opportunity_id
      LIMIT $4`,

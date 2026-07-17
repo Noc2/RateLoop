@@ -281,21 +281,49 @@ export async function collectWorkspaceAssuranceMetrics(input: { workspaceId: str
   const [totals, scopeResult, anchorResult, overrideResult] = await Promise.all([
     dbClient.execute({
       sql: `SELECT
-              (SELECT COUNT(*) FROM tokenless_agent_review_opportunity_transition_events
-               WHERE workspace_id = ? AND to_state = 'pending' AND occurred_at >= ?) AS requested,
-              (SELECT COUNT(*) FROM tokenless_agent_review_opportunity_transition_events
-               WHERE workspace_id = ? AND to_state = 'completed' AND occurred_at >= ?) AS completed,
-              (SELECT COUNT(*) FROM tokenless_agent_review_opportunity_lifecycles
-               WHERE workspace_id = ? AND state = 'blocked') AS blocked,
-              (SELECT COUNT(*) FROM tokenless_agent_review_opportunity_lifecycles
-               WHERE workspace_id = ? AND state = 'approval_required') AS approval_required`,
+              (SELECT COUNT(*) FROM tokenless_agent_review_opportunity_transition_events e
+               JOIN tokenless_agent_review_opportunities o
+                 ON o.workspace_id=e.workspace_id AND o.opportunity_id=e.opportunity_id
+               JOIN tokenless_agent_review_request_profiles rp
+                 ON rp.workspace_id=o.workspace_id AND rp.profile_id=o.request_profile_id
+                AND rp.version=o.request_profile_version AND rp.profile_hash=o.request_profile_hash
+               WHERE e.workspace_id = ? AND e.to_state = 'pending' AND e.occurred_at >= ?
+                 AND rp.result_semantics = 'assurance') AS requested,
+              (SELECT COUNT(*) FROM tokenless_agent_review_opportunity_transition_events e
+               JOIN tokenless_agent_review_opportunities o
+                 ON o.workspace_id=e.workspace_id AND o.opportunity_id=e.opportunity_id
+               JOIN tokenless_agent_review_request_profiles rp
+                 ON rp.workspace_id=o.workspace_id AND rp.profile_id=o.request_profile_id
+                AND rp.version=o.request_profile_version AND rp.profile_hash=o.request_profile_hash
+               WHERE e.workspace_id = ? AND e.to_state = 'completed' AND e.occurred_at >= ?
+                 AND rp.result_semantics = 'assurance') AS completed,
+              (SELECT COUNT(*) FROM tokenless_agent_review_opportunity_lifecycles l
+               JOIN tokenless_agent_review_opportunities o
+                 ON o.workspace_id=l.workspace_id AND o.opportunity_id=l.opportunity_id
+               JOIN tokenless_agent_review_request_profiles rp
+                 ON rp.workspace_id=o.workspace_id AND rp.profile_id=o.request_profile_id
+                AND rp.version=o.request_profile_version AND rp.profile_hash=o.request_profile_hash
+               WHERE l.workspace_id = ? AND l.state = 'blocked'
+                 AND rp.result_semantics = 'assurance') AS blocked,
+              (SELECT COUNT(*) FROM tokenless_agent_review_opportunity_lifecycles l
+               JOIN tokenless_agent_review_opportunities o
+                 ON o.workspace_id=l.workspace_id AND o.opportunity_id=l.opportunity_id
+               JOIN tokenless_agent_review_request_profiles rp
+                 ON rp.workspace_id=o.workspace_id AND rp.profile_id=o.request_profile_id
+                AND rp.version=o.request_profile_version AND rp.profile_hash=o.request_profile_hash
+               WHERE l.workspace_id = ? AND l.state = 'approval_required'
+                 AND rp.result_semantics = 'assurance') AS approval_required`,
       args: [input.workspaceId, windowStart, input.workspaceId, windowStart, input.workspaceId, input.workspaceId],
     }),
     dbClient.execute({
       sql: `WITH opportunity_counts AS (
-              SELECT scope_id, COUNT(*) AS eligible
-              FROM tokenless_agent_review_opportunities
-              WHERE workspace_id = ? AND created_at >= ? GROUP BY scope_id
+              SELECT o.scope_id, COUNT(*) AS eligible
+              FROM tokenless_agent_review_opportunities o
+              JOIN tokenless_agent_review_request_profiles rp
+                ON rp.workspace_id=o.workspace_id AND rp.profile_id=o.request_profile_id
+               AND rp.version=o.request_profile_version AND rp.profile_hash=o.request_profile_hash
+              WHERE o.workspace_id = ? AND o.created_at >= ? AND rp.result_semantics = 'assurance'
+              GROUP BY o.scope_id
             ), transition_counts AS (
               SELECT o.scope_id,
                      SUM(CASE WHEN e.to_state = 'pending' THEN 1 ELSE 0 END) AS requested,
@@ -303,15 +331,25 @@ export async function collectWorkspaceAssuranceMetrics(input: { workspaceId: str
               FROM tokenless_agent_review_opportunity_transition_events e
               JOIN tokenless_agent_review_opportunities o
                 ON o.workspace_id = e.workspace_id AND o.opportunity_id = e.opportunity_id
-              WHERE e.workspace_id = ? AND e.occurred_at >= ? AND o.created_at >= ? GROUP BY o.scope_id
+              JOIN tokenless_agent_review_request_profiles rp
+                ON rp.workspace_id=o.workspace_id AND rp.profile_id=o.request_profile_id
+               AND rp.version=o.request_profile_version AND rp.profile_hash=o.request_profile_hash
+              WHERE e.workspace_id = ? AND e.occurred_at >= ? AND o.created_at >= ?
+                AND rp.result_semantics = 'assurance' GROUP BY o.scope_id
             ), observation_counts AS (
-              SELECT scope_id,
+              SELECT ob.scope_id,
                      SUM(CASE WHEN comparable AND agreement IN ('agree','disagree') THEN 1 ELSE 0 END) AS comparable,
                      SUM(CASE WHEN comparable AND agreement = 'disagree' THEN 1 ELSE 0 END) AS disagreements,
                      SUM(CASE WHEN latency_ms IS NOT NULL THEN latency_ms ELSE 0 END) AS latency_milliseconds,
                      SUM(CASE WHEN latency_ms IS NOT NULL THEN 1 ELSE 0 END) AS latency_count
-              FROM tokenless_agent_evaluation_observations
-              WHERE workspace_id = ? AND finalized_at >= ? GROUP BY scope_id
+              FROM tokenless_agent_evaluation_observations ob
+              JOIN tokenless_agent_review_opportunities o
+                ON o.workspace_id=ob.workspace_id AND o.opportunity_id=ob.opportunity_id
+              JOIN tokenless_agent_review_request_profiles rp
+                ON rp.workspace_id=o.workspace_id AND rp.profile_id=o.request_profile_id
+               AND rp.version=o.request_profile_version AND rp.profile_hash=o.request_profile_hash
+              WHERE ob.workspace_id = ? AND ob.finalized_at >= ? AND rp.result_semantics = 'assurance'
+              GROUP BY ob.scope_id
             ), lifecycle_counts AS (
               SELECT o.scope_id,
                      SUM(CASE WHEN l.state = 'blocked' THEN 1 ELSE 0 END) AS blocked,
@@ -319,7 +357,10 @@ export async function collectWorkspaceAssuranceMetrics(input: { workspaceId: str
               FROM tokenless_agent_review_opportunity_lifecycles l
               JOIN tokenless_agent_review_opportunities o
                 ON o.workspace_id = l.workspace_id AND o.opportunity_id = l.opportunity_id
-              WHERE l.workspace_id = ? GROUP BY o.scope_id
+              JOIN tokenless_agent_review_request_profiles rp
+                ON rp.workspace_id=o.workspace_id AND rp.profile_id=o.request_profile_id
+               AND rp.version=o.request_profile_version AND rp.profile_hash=o.request_profile_hash
+              WHERE l.workspace_id = ? AND rp.result_semantics = 'assurance' GROUP BY o.scope_id
             )
             SELECT s.scope_id,s.stage,
                    COALESCE(oc.eligible,0) AS eligible,

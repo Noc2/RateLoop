@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
-import { finalizeAdaptiveReviewEvidence } from "~~/lib/tokenless/adaptiveReviewEvidence";
+import {
+  __adaptiveReviewEvidenceTestUtils,
+  finalizeAdaptiveReviewEvidence,
+} from "~~/lib/tokenless/adaptiveReviewEvidence";
 import {
   type AdaptiveReviewIntegrationPrincipal,
   __adaptiveReviewOrchestrationTestUtils,
@@ -302,6 +305,7 @@ test("idempotently derives comparable yes evidence from the bound server result"
   const replay = await finalizeAdaptiveReviewEvidence({ operationKey: setup.operationKey });
 
   assert.deepEqual(completed.result, result);
+  assert.ok(first);
   assert.deepEqual(replay, first);
   assert.equal(first.agreement, "agree");
   assert.equal(first.comparable, true);
@@ -328,12 +332,14 @@ test("maps no to disagreement and invalidates comparability after a terminal del
   const setup = await fixture();
   await storedResult(setup.operationKey, { selected: "no", preferenceShareBps: 2_500, participantCount: 4 });
   const disagreement = await finalizeAdaptiveReviewEvidence({ operationKey: setup.operationKey });
+  assert.ok(disagreement);
   assert.equal(disagreement.agreement, "disagree");
   assert.equal(disagreement.comparable, true);
   assert.equal(disagreement.humanHumanAgreementBps, 7_500);
 
   await storedResult(setup.operationKey, { status: "delisted", participantCount: 4 });
   const delisted = await finalizeAdaptiveReviewEvidence({ operationKey: setup.operationKey });
+  assert.ok(delisted);
   assert.equal(delisted.observationId, disagreement.observationId);
   assert.equal(delisted.agreement, "inconclusive");
   assert.equal(delisted.comparable, false);
@@ -343,6 +349,21 @@ test("maps no to disagreement and invalidates comparability after a terminal del
   const stored = await observationRow(setup.decision.opportunityId);
   assert.equal(stored?.comparable, false);
   assert.equal(stored?.agreement, "inconclusive");
+});
+
+test("agent-authored feedback results never become adaptive observations", async () => {
+  const setup = await fixture();
+  const result = await storedResult(setup.operationKey);
+  const observation = __adaptiveReviewEvidenceTestUtils.observationFromResult({
+    row: {
+      result_semantics: "feedback",
+      question_authority: "agent_per_request",
+      question_hash: __adaptiveReviewOrchestrationTestUtils.sha256("Would you buy this product?"),
+    },
+    result,
+    operationKey: setup.operationKey,
+  });
+  assert.equal(observation, null);
 });
 
 test("fails before terminal evidence", async () => {

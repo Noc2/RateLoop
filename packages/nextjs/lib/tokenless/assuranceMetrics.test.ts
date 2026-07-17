@@ -336,6 +336,24 @@ test("workspace SQL aggregation preserves tenant isolation and metric semantics"
   assert.doesNotMatch(output, new RegExp(second.scopeId, "u"));
 });
 
+test("feedback profiles contribute no assurance metrics", async () => {
+  const setup = await metricsFixture("feedback");
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_request_profiles
+          SET question_authority='agent_per_request',result_semantics='feedback',
+              criterion=NULL,positive_label=NULL,negative_label=NULL
+          WHERE workspace_id=? AND profile_id=?`,
+    args: [setup.workspaceId, setup.binding.profileId],
+  });
+
+  const snapshot = await collectWorkspaceAssuranceMetrics({ workspaceId: setup.workspaceId, now: NOW });
+  assert.equal(snapshot.reviewsRequested, 0);
+  assert.equal(snapshot.reviewsCompleted, 0);
+  assert.equal(snapshot.blocked, 0);
+  assert.equal(snapshot.approvalRequired, 0);
+  assert.deepEqual(snapshot.scopes, []);
+});
+
 test("scope series are capped at the fixed low-cardinality limit and expose truncation", async () => {
   const setup = await metricsFixture("cardinality");
   for (let index = 0; index < 100; index += 1) {

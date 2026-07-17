@@ -46,6 +46,7 @@ export type HumanReviewResultObservation = {
   };
   lane: HumanReviewResultLane;
   outcome: HumanReviewResultOutcome;
+  resultSemantics: "assurance" | "feedback";
   calibrationComparable: boolean;
   responseCount: number;
   terminalEvidenceCommitment: string | null;
@@ -207,7 +208,9 @@ async function loadFrozenOpportunity(client: QueryableClient, envelope: HumanRev
             p.maximum_unreviewed_gap,p.rules_json,p.audience_policy_json,
             p.publishing_policy_id AS review_publishing_policy_id,
             b.canonical_hash AS binding_hash,
-            rp.profile_hash,rp.audience AS profile_audience,rp.compensation_mode
+            rp.profile_hash,rp.audience AS profile_audience,rp.compensation_mode,
+            rp.question_authority,rp.result_semantics,
+            opportunity_question.question_hash
      FROM tokenless_agent_review_opportunities o
      JOIN tokenless_agent_review_opportunity_lifecycles l
        ON l.workspace_id=o.workspace_id AND l.opportunity_id=o.opportunity_id
@@ -220,6 +223,9 @@ async function loadFrozenOpportunity(client: QueryableClient, envelope: HumanRev
        ON rp.workspace_id=o.workspace_id
       AND rp.profile_id=o.request_profile_id AND rp.version=o.request_profile_version
       AND rp.profile_hash=o.request_profile_hash
+     LEFT JOIN tokenless_agent_review_opportunity_questions opportunity_question
+       ON opportunity_question.workspace_id=o.workspace_id
+      AND opportunity_question.opportunity_id=o.opportunity_id
      LEFT JOIN tokenless_agent_executions e ON e.execution_id=o.execution_id
      LEFT JOIN (
        SELECT d.workspace_id,d.opportunity_id,r.integration_id,r.response_deadline
@@ -289,6 +295,19 @@ function realizedCostAtomic(envelope: HumanReviewResultEnvelope) {
 }
 
 function deriveAdaptiveObservation(row: Row, envelope: HumanReviewResultEnvelope): DerivedAdaptiveObservation | null {
+  const resultSemantics = string(row, "result_semantics");
+  if (resultSemantics === "feedback") {
+    if (
+      string(row, "question_authority") !== "agent_per_request" ||
+      !HASH_PATTERN.test(string(row, "question_hash") ?? "")
+    ) {
+      throw new Error("Stored feedback question binding is invalid.");
+    }
+    return null;
+  }
+  if (resultSemantics !== "assurance" || string(row, "question_authority") !== "owner_fixed") {
+    throw new Error("Stored review-result semantics are invalid.");
+  }
   if (envelope.outcome === "failed" || envelope.outcome === "cancelled") return null;
   const workspaceId = envelope.workspaceId;
   const opportunityId = envelope.opportunityId;
@@ -392,7 +411,7 @@ async function assertNoAdaptiveObservation(client: QueryableClient, envelope: Hu
   );
   if (stored.rowCount !== 0) {
     throw new TokenlessServiceError(
-      "A failed or cancelled result cannot be calibration evidence.",
+      "This result cannot be calibration evidence.",
       409,
       "human_review_result_observation_conflict",
     );
@@ -410,6 +429,10 @@ function observationFromRow(row: Row, replayed: boolean): HumanReviewResultObser
     ["terminal evidence commitment", terminalEvidenceCommitment],
   ] as const) {
     if (value !== null && !HASH_PATTERN.test(value)) throw new Error(`Stored ${field} is invalid.`);
+  }
+  const resultSemantics = string(row, "result_semantics");
+  if (resultSemantics !== "assurance" && resultSemantics !== "feedback") {
+    throw new Error("Stored result_semantics is invalid.");
   }
   return {
     observationId: string(row, "observation_id")!,
@@ -442,6 +465,7 @@ function observationFromRow(row: Row, replayed: boolean): HumanReviewResultObser
     },
     lane: string(row, "lane") as HumanReviewResultLane,
     outcome: string(row, "outcome") as HumanReviewResultOutcome,
+    resultSemantics,
     calibrationComparable: boolean(row, "calibration_comparable"),
     responseCount: integer(row, "response_count"),
     terminalEvidenceCommitment,
@@ -452,7 +476,12 @@ function observationFromRow(row: Row, replayed: boolean): HumanReviewResultObser
   };
 }
 
-function observationMatchesEnvelope(row: Row, envelope: HumanReviewResultEnvelope, envelopeCommitment: string) {
+function observationMatchesEnvelope(
+  row: Row,
+  envelope: HumanReviewResultEnvelope,
+  envelopeCommitment: string,
+  resultSemantics: "assurance" | "feedback",
+) {
   return (
     string(row, "workspace_id") === envelope.workspaceId &&
     string(row, "opportunity_id") === envelope.opportunityId &&
@@ -462,7 +491,8 @@ function observationMatchesEnvelope(row: Row, envelope: HumanReviewResultEnvelop
     string(row, "lifecycle_state") === envelope.lifecycle.state &&
     integer(row, "lifecycle_revision") === envelope.lifecycle.revision &&
     string(row, "lane") === envelope.lane &&
-    string(row, "outcome") === envelope.outcome
+    string(row, "outcome") === envelope.outcome &&
+    string(row, "result_semantics") === resultSemantics
   );
 }
 
@@ -481,6 +511,10 @@ export async function observeHumanReviewResult(input: { envelope: unknown }): Pr
     await client.query("BEGIN");
     const opportunity = await loadFrozenOpportunity(client, envelope);
     assertExactFrozenResult(opportunity, envelope);
+    const resultSemantics = string(opportunity, "result_semantics");
+    if (resultSemantics !== "assurance" && resultSemantics !== "feedback") {
+      throw new Error("Stored review-result semantics are invalid.");
+    }
     const adaptive = deriveAdaptiveObservation(opportunity, envelope);
 
     const existingResult = await client.query(
@@ -490,7 +524,7 @@ export async function observeHumanReviewResult(input: { envelope: unknown }): Pr
     );
     const existing = existingResult.rows[0] as Row | undefined;
     if (existing) {
-      if (!observationMatchesEnvelope(existing, envelope, envelopeCommitment)) {
+      if (!observationMatchesEnvelope(existing, envelope, envelopeCommitment, resultSemantics)) {
         throw new TokenlessServiceError(
           "A different terminal result is already recorded for this opportunity.",
           409,
@@ -515,11 +549,11 @@ export async function observeHumanReviewResult(input: { envelope: unknown }): Pr
         result_envelope_commitment,result_commitment,lifecycle_state,lifecycle_revision,
         selection_policy_id,selection_policy_version,selection_policy_hash,
         human_review_binding_id,human_review_binding_version,human_review_binding_hash,
-        request_profile_id,request_profile_version,request_profile_hash,lane,outcome,
+        request_profile_id,request_profile_version,request_profile_hash,lane,outcome,result_semantics,
         calibration_comparable,response_count,terminal_evidence_commitment,adaptive_observation_id,
         result_observed_at,created_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,
-               $22,$23,$24,$25,$26,$27)
+               $22,$23,$24,$25,$26,$27,$28)
        RETURNING *`,
       [
         observationId,
@@ -543,6 +577,7 @@ export async function observeHumanReviewResult(input: { envelope: unknown }): Pr
         envelope.frozen.requestProfile.hash,
         envelope.lane,
         envelope.outcome,
+        resultSemantics,
         adaptive?.comparable ?? false,
         envelope.panel.responseCount,
         terminalEvidenceCommitment,

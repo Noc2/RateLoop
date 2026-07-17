@@ -286,6 +286,7 @@ test("records one immutable comparable observation and exact replays never doubl
   assert.equal(replay.replayed, true);
   assert.equal(replay.observationId, first.observationId);
   assert.equal(first.outcome, "positive");
+  assert.equal(first.resultSemantics, "assurance");
   assert.equal(first.calibrationComparable, true);
   assert.match(first.resultEnvelopeCommitment, /^sha256:[0-9a-f]{64}$/u);
   assert.equal(first.resultCommitment, setup.envelope.commitments.result);
@@ -392,6 +393,19 @@ test("negative and inconclusive outcomes append once while failed and cancelled 
     { agreement: "inconclusive", comparable: false },
   ]);
   assert.equal(await count("tokenless_agent_human_review_result_observations"), 4);
+});
+
+test("agent-authored feedback results never derive adaptive evidence", async () => {
+  const setup = await fixture("feedback-semantics");
+  const derived = __humanReviewResultObservationTestUtils.deriveAdaptiveObservation(
+    {
+      result_semantics: "feedback",
+      question_authority: "agent_per_request",
+      question_hash: hash("feedback-question"),
+    },
+    setup.envelope,
+  );
+  assert.equal(derived, null);
 });
 
 test("a crash between adaptive derivation and the immutable row rolls back and retries cleanly", async () => {

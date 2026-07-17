@@ -281,7 +281,7 @@ export async function getAdaptiveHumanReviewResult(input: {
   schemaVersion: "rateloop.adaptive-review-result.v1";
   opportunityId: string;
   result: TokenlessResult;
-  observation: AdaptiveReviewObservation;
+  observation: AdaptiveReviewObservation | null;
 }> {
   const opportunity = await requireBoundOperation(input);
   const result = await getTokenlessResult(opportunity.operationKey!);

@@ -76,7 +76,28 @@ function observationFromResult(input: {
   row: QueryRow;
   result: TokenlessResult;
   operationKey: string;
-}): AdaptiveReviewObservation {
+}): AdaptiveReviewObservation | null {
+  const resultSemantics = rowString(input.row, "result_semantics");
+  if (resultSemantics === "feedback") {
+    if (
+      rowString(input.row, "question_authority") !== "agent_per_request" ||
+      !/^sha256:[0-9a-f]{64}$/u.test(rowString(input.row, "question_hash") ?? "")
+    ) {
+      throw new TokenlessServiceError(
+        "The stored feedback question binding is invalid.",
+        500,
+        "stored_review_question_invalid",
+      );
+    }
+    return null;
+  }
+  if (resultSemantics !== "assurance" || rowString(input.row, "question_authority") !== "owner_fixed") {
+    throw new TokenlessServiceError(
+      "The stored review-result semantics are invalid.",
+      500,
+      "stored_review_question_invalid",
+    );
+  }
   const workspaceId = rowString(input.row, "workspace_id")!;
   const opportunityId = rowString(input.row, "opportunity_id")!;
   const scopeId = rowString(input.row, "scope_id")!;
@@ -131,7 +152,7 @@ function observationFromResult(input: {
  */
 export async function finalizeAdaptiveReviewEvidence(input: {
   operationKey: string;
-}): Promise<AdaptiveReviewObservation> {
+}): Promise<AdaptiveReviewObservation | null> {
   const operationKey = input.operationKey.trim();
   if (!/^op_[A-Za-z0-9]{16,160}$/.test(operationKey)) {
     throw new TokenlessServiceError("A valid operationKey is required.", 400, "invalid_operation_key");
@@ -144,11 +165,21 @@ export async function finalizeAdaptiveReviewEvidence(input: {
               o.decision, o.status, o.operation_key, o.execution_id,
               o.source_evidence_hash, o.suggestion_commitment, o.created_at,
               e.integration_id,
+              rp.question_authority, rp.result_semantics,
+              opportunity_question.question_hash,
               a.result_json
        FROM tokenless_agent_review_opportunities o
        JOIN tokenless_agent_asks a ON a.operation_key = o.operation_key
        JOIN tokenless_agent_executions e
          ON e.workspace_id = o.workspace_id AND e.execution_id = o.execution_id
+       JOIN tokenless_agent_review_request_profiles rp
+         ON rp.workspace_id = o.workspace_id
+        AND rp.profile_id = o.request_profile_id
+        AND rp.version = o.request_profile_version
+        AND rp.profile_hash = o.request_profile_hash
+       LEFT JOIN tokenless_agent_review_opportunity_questions opportunity_question
+         ON opportunity_question.workspace_id = o.workspace_id
+        AND opportunity_question.opportunity_id = o.opportunity_id
        WHERE o.operation_key = $1
        FOR UPDATE`,
       [operationKey],
@@ -178,8 +209,9 @@ export async function finalizeAdaptiveReviewEvidence(input: {
       operationKey,
     });
     const now = new Date();
-    await client.query(
-      `INSERT INTO tokenless_agent_evaluation_observations
+    if (observation)
+      await client.query(
+        `INSERT INTO tokenless_agent_evaluation_observations
        (observation_id, workspace_id, scope_id, opportunity_id, execution_id, operation_key, run_id, evidence_reference,
         source_payload_hash, agent_outcome_commitment, human_outcome_commitment, agreement, comparable,
         responding_human_count, human_human_agreement_bps, latency_ms, cost_atomic, finalized_at, created_at)
@@ -198,36 +230,50 @@ export async function finalizeAdaptiveReviewEvidence(input: {
          latency_ms = EXCLUDED.latency_ms,
          cost_atomic = EXCLUDED.cost_atomic,
          finalized_at = EXCLUDED.finalized_at`,
-      [
-        observation.observationId,
-        observation.workspaceId,
-        observation.scopeId,
-        observation.opportunityId,
-        observation.executionId,
-        observation.operationKey,
-        observation.evidenceReference,
-        observation.sourcePayloadHash,
-        observation.agentOutcomeCommitment,
-        observation.humanOutcomeCommitment,
-        observation.agreement,
-        observation.comparable,
-        observation.respondingHumanCount,
-        observation.humanHumanAgreementBps,
-        observation.latencyMs,
-        observation.costAtomic,
-        new Date(observation.finalizedAt),
-        now,
-      ],
-    );
+        [
+          observation.observationId,
+          observation.workspaceId,
+          observation.scopeId,
+          observation.opportunityId,
+          observation.executionId,
+          observation.operationKey,
+          observation.evidenceReference,
+          observation.sourcePayloadHash,
+          observation.agentOutcomeCommitment,
+          observation.humanOutcomeCommitment,
+          observation.agreement,
+          observation.comparable,
+          observation.respondingHumanCount,
+          observation.humanHumanAgreementBps,
+          observation.latencyMs,
+          observation.costAtomic,
+          new Date(observation.finalizedAt),
+          now,
+        ],
+      );
+    else {
+      const existing = await client.query(
+        `SELECT observation_id FROM tokenless_agent_evaluation_observations
+         WHERE workspace_id = $1 AND opportunity_id = $2`,
+        [rowString(row, "workspace_id"), rowString(row, "opportunity_id")],
+      );
+      if (existing.rowCount !== 0) {
+        throw new TokenlessServiceError(
+          "Feedback results cannot be adaptive evidence.",
+          409,
+          "review_binding_conflict",
+        );
+      }
+    }
+    const finalizedAt = new Date(observation?.finalizedAt ?? storedResult.updatedAt);
     await client.query(
       `UPDATE tokenless_agent_review_opportunities
        SET status = 'completed', updated_at = $1
        WHERE opportunity_id = $2 AND operation_key = $3`,
-      [new Date(observation.finalizedAt), observation.opportunityId, operationKey],
+      [finalizedAt, rowString(row, "opportunity_id"), operationKey],
     );
     const integrationId = rowString(row, "integration_id");
     if (rowString(row, "status") === "review_requested" && integrationId) {
-      const finalizedAt = new Date(observation.finalizedAt);
       await client.query(
         `UPDATE tokenless_agent_integrations
          SET last_result_at = CASE
@@ -239,7 +285,7 @@ export async function finalizeAdaptiveReviewEvidence(input: {
         [
           finalizedAt,
           integrationId,
-          observation.workspaceId,
+          rowString(row, "workspace_id"),
           rowString(row, "agent_id"),
           rowString(row, "agent_version_id"),
         ],
