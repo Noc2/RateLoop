@@ -156,6 +156,14 @@ export const SITE_SEARCH_INDEX: readonly SiteSearchEntry[] = [
     keywords: ["auditor", "compliance map", "Ed25519", "Merkle", "OSCAL", "host reported provenance"],
   },
   {
+    title: "Human Oversight",
+    href: "/docs/human-oversight",
+    area: "Docs",
+    description:
+      "See how monitoring, override, stop, designation, and training capabilities map to EU AI Act oversight measures.",
+    keywords: ["human oversight", "EU AI Act", "Article 14", "override", "stop control", "shared responsibility"],
+  },
+  {
     title: "Check assurance evidence",
     href: "/docs/evidence#verify",
     area: "Docs",
