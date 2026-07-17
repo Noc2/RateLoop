@@ -53,7 +53,6 @@ export function TokenlessOrb() {
           timeline.timeScale(0.5);
           timeline.delay(index / Math.max(ellipses.length - 1, 1));
         });
-        container.dataset.animation = "enhanced";
       }, container);
     };
 
@@ -63,75 +62,33 @@ export function TokenlessOrb() {
           if (!entries.some(entry => entry.isIntersecting)) return;
           intersectionObserver?.disconnect();
           intersectionObserver = null;
-          void startAnimation().catch(() => undefined);
+          void startAnimation();
         },
         { rootMargin: "160px" },
       );
       intersectionObserver.observe(container);
     } else {
-      void startAnimation().catch(() => undefined);
+      void startAnimation();
     }
 
     return () => {
       cancelled = true;
       intersectionObserver?.disconnect();
       animationContext?.revert();
-      delete container.dataset.animation;
     };
   }, []);
 
   return (
     <div ref={containerRef} className="orb-animation-shell mx-auto w-full" aria-hidden="true">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="150 140 500 360" className="h-auto w-full">
-        <defs>
-          <linearGradient id="rateloop-orb-fallback-gradient" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#359EEE" />
-            <stop offset="0.34" stopColor="#03CEA4" />
-            <stop offset="0.67" stopColor="#FFC43D" />
-            <stop offset="1" stopColor="#EF476F" />
-          </linearGradient>
-        </defs>
-        <g className="orb-static-fallback" opacity="0.72">
-          <ellipse
-            cx="400"
-            cy="300"
-            rx="112"
-            ry="112"
-            fill="none"
-            stroke="url(#rateloop-orb-fallback-gradient)"
-            strokeWidth="2"
-          />
-          <ellipse
-            cx="400"
-            cy="300"
-            rx="152"
-            ry="84"
-            fill="none"
-            stroke="url(#rateloop-orb-fallback-gradient)"
-            strokeOpacity="0.62"
-            strokeWidth="1.5"
-            transform="rotate(-28 400 300)"
-          />
-          <ellipse
-            cx="400"
-            cy="300"
-            rx="178"
-            ry="56"
-            fill="none"
-            stroke="url(#rateloop-orb-fallback-gradient)"
-            strokeOpacity="0.42"
-            strokeWidth="1.25"
-            transform="rotate(32 400 300)"
-          />
-        </g>
         {Array.from({ length: ELLIPSE_COUNT }, (_, index) => (
           <ellipse
             key={index}
             className="ell"
             cx="400"
             cy="300"
-            rx={110 + index * 1.8}
-            ry={Math.max(48, 110 - index * 1.8)}
+            rx="110"
+            ry="110"
             fill="none"
             stroke={ORB_COLORS[index % ORB_COLORS.length]}
             strokeOpacity={Math.max(0.08, 0.75 - index / ELLIPSE_COUNT)}
