@@ -66,11 +66,12 @@ export default async function AgentConnectionPage({ params }: { params: Promise<
   };
   const appOrigin = getOptionalAppUrl()?.replace(/\/$/, "") ?? "";
   const machineHandoff = {
-    schemaVersion: "2026-07-15",
+    schemaVersion: "2026-07-17",
     kind: "rateloop.agent-connection-handoff",
     intent,
     representation: `${appOrigin}/api/agent/v1/connection-intents/${intentId}`,
     mcpResource: `${appOrigin}/api/agent/v1/mcp`,
+    connectionTool: "rateloop_connect_workspace",
     claimTool: "rateloop_claim_connection_intent",
   };
 
@@ -78,7 +79,7 @@ export default async function AgentConnectionPage({ params }: { params: Promise<
     <main className="mx-auto w-full max-w-4xl px-5 py-12 sm:py-16">
       <script
         type="application/json"
-        data-rateloop-agent-connection="2026-07-15"
+        data-rateloop-agent-connection="2026-07-17"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(machineHandoff).replaceAll("<", "\\u003c") }}
       />
       <section className="surface-card rounded-2xl p-6 sm:p-8" aria-labelledby="agent-connection-heading">

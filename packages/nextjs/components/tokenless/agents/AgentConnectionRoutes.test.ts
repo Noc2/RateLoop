@@ -45,7 +45,8 @@ test("onboarding telemetry is authenticated and server-allowlisted", () => {
 
 test("public intent handoff is versioned, non-consuming, and never echoes a fragment", () => {
   assert.match(publicApi, /getPublicAgentConnectionIntent/);
-  assert.match(publicApi, /schemaVersion: "2026-07-15"/);
+  assert.match(publicApi, /schemaVersion: "2026-07-17"/);
+  assert.match(publicApi, /rateloop_connect_workspace/);
   assert.match(publicApi, /rateloop_claim_connection_intent/);
   assert.match(publicApi, /rateloop_get_agent_context/);
   assert.match(publicApi, /rateloop_verify_connection/);
@@ -55,7 +56,8 @@ test("public intent handoff is versioned, non-consuming, and never echoes a frag
 });
 
 test("public connection page exposes safe human and machine handoff state", () => {
-  assert.match(publicPage, /data-rateloop-agent-connection="2026-07-15"/);
+  assert.match(publicPage, /data-rateloop-agent-connection="2026-07-17"/);
+  assert.match(publicPage, /rateloop_connect_workspace/);
   assert.match(publicPage, /rateloop_claim_connection_intent/);
   assert.match(publicPage, /Agent connected/);
   assert.match(publicPage, /Complete by/);

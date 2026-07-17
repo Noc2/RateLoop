@@ -12,13 +12,15 @@ APIs use application-managed authorization. The download contains no bearer toke
 workspace identifier. Use the primary Codex path or one named configuration below instead of renaming fields by guess.
 
 After the server is installed, paste the complete single-use RateLoop `/connect/aci_...#...` message into the agent once.
-The agent claims the intent, loads its bound policy, and verifies the connection. Installation, trust, organization policy,
-and OAuth consent remain controls of the agent host; they cannot be bypassed by a prompt.
+The preferred `rateloop_connect_workspace` tool claims the intent, loads its bound policy, and verifies the connection in
+one resumable call. Installation, trust, organization policy, and OAuth consent remain controls of the agent host; they
+cannot be bypassed by a prompt.
 
 Installing the server does not start a background reviewer and does not make an already-running task call RateLoop. The
-active task must expose the workspace tools. A new connection calls `rateloop_get_agent_context`, then
-`rateloop_verify_connection`; do not report the workspace connected until verification succeeds. Before every eligible
-output, the agent reloads context and calls `rateloop_evaluate_review_requirement`. A required review then follows
+active task must expose the workspace tools. A new connection prefers `rateloop_connect_workspace`; only when that tool
+is unavailable does it use `rateloop_claim_connection_intent`, `rateloop_get_agent_context`, then
+`rateloop_verify_connection`. Do not report the workspace connected until either path returns successful verification.
+Before every eligible output, the agent reloads context and calls `rateloop_evaluate_review_requirement`. A required review then follows
 `rateloop_request_review -> rateloop_wait_for_review -> rateloop_get_review_result` within the exact authority returned
 by the workspace.
 
@@ -34,10 +36,10 @@ handoff tools. The same message works for a first connection and after a previou
 OAuth approval is a one-time action for the connection attempt. Follow only the continuation, restart, or new-task action
 the host actually presents; Codex's structured plugin setup offers **Continue** when same-task resumption is available.
 Treat the first missing-tool check as activation pending, including when the task resumed after host setup. On the next
-active turn, check again and complete claim, context, and verification when the tools appear. Do not invent a reload
-button or settings path, start a second login or nested runtime, or report success before verification. Connection claim
-and verification are closed-domain, non-destructive, idempotent MCP actions; publishing and spending remain separately
-classified and approval-bound.
+active turn, check again and use the one-call connector when the tools appear, with claim, context, and verification as
+its granular fallback. Do not invent a reload button or settings path, start a second login or nested runtime, or report
+success before verification. Connection operations are closed-domain, non-destructive, idempotent MCP actions;
+publishing and spending remain separately classified and approval-bound.
 
 ### Authentication finished, but still waiting?
 

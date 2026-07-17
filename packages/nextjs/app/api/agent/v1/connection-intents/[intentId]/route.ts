@@ -14,11 +14,16 @@ export async function GET(request: NextRequest, context: Context) {
     const origin = request.nextUrl.origin;
     return NextResponse.json(
       {
-        schemaVersion: "2026-07-15",
+        schemaVersion: "2026-07-17",
         kind: "rateloop.agent-connection-handoff",
         intent,
         canonicalUrl: `${origin}/connect/${intentId}`,
         mcpResource: `${origin}/api/agent/v1/mcp`,
+        connect: {
+          tool: "rateloop_connect_workspace",
+          input: "Pass the complete original connection URL, including its local fragment, as connectionUrl.",
+          success: "Require connected=true and follow the returned context and nextAction.",
+        },
         claim: {
           tool: "rateloop_claim_connection_intent",
           input: "Pass the complete original connection URL, including its local fragment, as connectionUrl.",
