@@ -163,6 +163,14 @@ Results itemize bounty, fee, attempt reserve, refunds, and compensation. A termi
 
 The CLI intentionally has no implicit production origin, MCP transport, local signer, contract-address override, or legacy chain configuration. A scoped API key is attached only to authenticated paid operations and assurance project/run requests sent to the configured tokenless origin.
 
+## Framework approval adapters
+
+The package exports a non-blocking review-gate core plus LangGraph, OpenAI Agents SDK, and stable MCP form-elicitation
+mappings. A driver wraps the workspace review tools and verifies RateLoop's signed output-release evidence. Serializable
+pending state contains only opportunity and frozen commitment references; it never contains source or suggestion
+payloads. See the machine-readable
+[`framework-integrations.md`](../nextjs/public/docs/framework-integrations.md) quickstarts and trust boundaries.
+
 `media-upload` accepts JPG, PNG, or WEBP input up to 10 MB. It sends file bytes as multipart data directly from disk,
 requires `RATELOOP_AGENT_API_KEY`, and prints only the staged descriptor. The public MCP surface remains four tools and
 does not accept raw image bytes.

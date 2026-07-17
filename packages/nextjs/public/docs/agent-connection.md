@@ -46,6 +46,8 @@ alive.
 
 For the agent-readable packet fields, export routes, local verification commands, framework cross-references, and exact
 non-claims, read [`evidence.md`](./evidence.md). The browser version is [`/docs/evidence`](/docs/evidence).
+Framework-native LangGraph, OpenAI Agents, Claude Code, and MCP elicitation contracts are documented in
+[`framework-integrations.md`](./framework-integrations.md).
 
 Generic MCP and ordinary Codex hooks are advisory: the host can bypass them and they do not prove that output remained
 blocked. Only a verified adapter that owns the downstream output boundary and validates RateLoop's signed evidence may

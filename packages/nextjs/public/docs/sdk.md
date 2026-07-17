@@ -50,4 +50,5 @@ yarn workspace @rateloop/nextjs attestation:verify ./attestation-witness.json \
 ```
 
 See [Evidence & Compliance Mapping](./evidence.md) for packet fields, verification boundaries, and framework
-cross-references.
+cross-references. For resumable approval primitives, signed release requirements, and host-enforcement boundaries, see
+[Framework approval integrations](./framework-integrations.md).
