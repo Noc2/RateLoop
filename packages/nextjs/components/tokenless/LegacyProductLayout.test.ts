@@ -15,7 +15,8 @@ test("Human Discover keeps the compact legacy feed and action-rail composition",
   assert.match(page, /tab-control/);
   assert.doesNotMatch(page, /display-section|answer-query|Answer safely/);
   assert.match(card, /17\.25rem/);
-  assert.match(card, /surface-card/);
+  assert.match(card, /import \{ Card \}/);
+  assert.match(card, /<Card/);
   assert.match(tabs, /Discover/);
   assert.match(tabs, /Profile/);
   assert.match(tabs, /Settings/);
