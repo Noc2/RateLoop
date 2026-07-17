@@ -2,6 +2,7 @@
 
 import { type FormEvent, Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AgentConnectionTroubleshooting } from "../AgentConnectionTroubleshooting";
 import { buildAgentConnectionMessage } from "../agentConnectionMessage";
 import { AgentSetupProgress } from "./AgentSetupProgress";
 import { SetupActionBar } from "./SetupActionBar";
@@ -742,6 +743,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 >
                   Copy message
                 </button>
+                <AgentConnectionTroubleshooting />
               </div>
             ) : null}
           </>

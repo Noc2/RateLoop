@@ -275,6 +275,7 @@ test("connection creation keeps the complete message visible and confirms clipbo
   assert.match(flowSource, /Copy message/);
   assert.match(flowSource, /notifications\.success\("Connection message copied to clipboard\."\)/);
   assert.match(flowSource, /notifications\.error\("Clipboard access was blocked\./);
+  assert.match(flowSource, /<AgentConnectionTroubleshooting \/>/);
 });
 
 test("people and funding are conditional on the exact review audience and compensation", () => {

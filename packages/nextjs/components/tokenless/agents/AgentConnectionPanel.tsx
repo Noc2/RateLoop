@@ -2,6 +2,7 @@
 
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { InfoPopover } from "../InfoPopover";
+import { AgentConnectionTroubleshooting } from "./AgentConnectionTroubleshooting";
 import { buildAgentConnectionMessage } from "./agentConnectionMessage";
 import { isUsableAgentConnection } from "./agentWorkspaceState";
 import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
@@ -1003,6 +1004,7 @@ export function AgentConnectionPanel({
               Hide message
             </Button>
           </div>
+          <AgentConnectionTroubleshooting />
         </Card>
       ) : null}
 

@@ -31,15 +31,19 @@ handoff tools. The same message works for a first connection and after a previou
 
 OAuth approval is a one-time action for the connection attempt. Follow only the continuation, restart, or new-task action
 the host actually presents; Codex's structured plugin setup offers **Continue** when same-task resumption is available.
-On the next active turn, check for the workspace tools and complete claim, context, and verification. Do not invent a
-reload button or settings path, start a second login or nested runtime, or report success before verification. Connection
-claim and verification are closed-domain, non-destructive, idempotent MCP actions; publishing and spending remain
-separately classified and approval-bound.
+Treat the first missing-tool check as activation pending, including when the task resumed after host setup. On the next
+active turn, check again and complete claim, context, and verification when the tools appear. Do not invent a reload
+button or settings path, start a second login or nested runtime, or report success before verification. Connection claim
+and verification are closed-domain, non-destructive, idempotent MCP actions; publishing and spending remain separately
+classified and approval-bound.
 
-If the protected workspace tools remain unavailable and the host offers no native action, a stale RateLoop plugin install
-may be blocking activation. Uninstall every existing RateLoop plugin, including `rateloop` and `rateloop-workspace`, then
-resume the same task. Keep the original connection intent in the task and do not paste or generate a replacement link.
-Do not remove unrelated plugins.
+### Authentication finished, but still waiting?
+
+A host page that says **Authentication complete** confirms the OAuth callback, not a verified RateLoop workspace
+connection. Return to the same task and use **Continue** if offered. Only if the protected tools are still missing on a
+later active turn and the host offers no native action should you uninstall every existing RateLoop plugin, including
+`rateloop` and `rateloop-workspace`. Then resume the same task with the original connection message. Do not remove
+unrelated plugins or create a replacement link.
 
 Do not put credentials in the MCP configuration. Do not create a background service or polling task to keep a connection
 alive.

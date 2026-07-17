@@ -35,6 +35,7 @@ test("the complete connection message stays visible with accessible copy recover
   assert.match(source, /copyVisibleConnectionMessage/);
   assert.match(source, /complete message is selected below for one manual copy/);
   assert.match(source, /notifications\.success\("Connection message copied to clipboard\."\)/);
+  assert.match(source, /<AgentConnectionTroubleshooting \/>/);
 });
 
 test("connection status polling pauses completely while the page is hidden", () => {

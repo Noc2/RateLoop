@@ -23,8 +23,13 @@ test("agent docs describe the approval-bound four-tool MCP surface and decision 
   assert.match(html, /codex plugin add rateloop@rateloop/);
   assert.match(html, /rateloop-workspace@rateloop/);
   assert.match(html, /uninstall all existing RateLoop plugins/);
-  assert.match(html, /do not remove unrelated plugins/);
+  assert.match(html, /do not remove unrelated plugins/i);
   assert.match(html, /Continue/);
+  assert.match(html, /Authentication finished, but still waiting\?/);
+  assert.match(html, /Authentication complete/);
+  assert.match(html, /confirms only the OAuth callback, not RateLoop verification/);
+  assert.match(html, /first missing-tool check as activation pending/);
+  assert.match(html, /still missing on a later active turn/);
   assert.doesNotMatch(html, /codex plugin marketplace add Noc2\/RateLoop(?:\s|<)/);
   assert.match(html, /rateloop_capabilities/);
   assert.match(html, /rateloop_create_handoff/);
