@@ -202,7 +202,15 @@ function preparedRequest(value: unknown): HumanReviewPreparedRequest {
         } as const)
       : feedbackBonusEconomics(root.feedbackBonus);
   exactKeys(requestProfile, "request profile", ["id", "version", "hash"]);
-  exactKeys(question, "question", ["criterion", "positiveLabel", "negativeLabel", "rationaleMode"]);
+  exactKeys(question, "question", [
+    "criterion",
+    "positiveLabel",
+    "negativeLabel",
+    "rationaleMode",
+    "questionHash",
+    "questionAuthority",
+    "resultSemantics",
+  ]);
   const audienceKeys = ["kind", "contentBoundary", "privateSensitivity", "privateGroupId"];
   if (audience.requiredExpertiseKeys !== undefined) audienceKeys.push("requiredExpertiseKeys");
   exactKeys(audience, "audience", audienceKeys);
@@ -211,6 +219,17 @@ function preparedRequest(value: unknown): HumanReviewPreparedRequest {
   exactKeys(contentCommitments, "content commitments", ["source", "suggestion"]);
   exactKeys(provenance, "provenance", ["agentId", "agentVersionId", "selectionPolicyId", "selectionPolicyVersion"]);
   const rationaleMode = oneOf(question.rationaleMode, "rationale mode", ["off", "optional", "required"] as const);
+  const questionAuthority = oneOf(question.questionAuthority, "question authority", [
+    "owner_fixed",
+    "agent_per_request",
+  ] as const);
+  const resultSemantics = oneOf(question.resultSemantics, "result semantics", ["assurance", "feedback"] as const);
+  if (
+    (questionAuthority === "owner_fixed" && resultSemantics !== "assurance") ||
+    (questionAuthority === "agent_per_request" && resultSemantics !== "feedback")
+  ) {
+    throw new Error("Stored question authority and result semantics are inconsistent.");
+  }
   const audienceKind = oneOf(audience.kind, "audience kind", ["private_invited", "public_network", "hybrid"] as const);
   const contentBoundary = oneOf(audience.contentBoundary, "content boundary", [
     "private_workspace",
@@ -263,6 +282,9 @@ function preparedRequest(value: unknown): HumanReviewPreparedRequest {
       positiveLabel,
       negativeLabel,
       rationaleMode,
+      questionHash: hash(question.questionHash, "question hash"),
+      questionAuthority,
+      resultSemantics,
     },
     audience: {
       kind: audienceKind,

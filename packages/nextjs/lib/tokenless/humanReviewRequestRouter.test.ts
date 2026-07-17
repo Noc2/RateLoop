@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { test } from "node:test";
 import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import type { PreparedOwnerApproval } from "~~/lib/tokenless/humanReviewApprovalPreparation";
+import { hashFrozenBinaryReviewQuestion, resolveHumanReviewQuestion } from "~~/lib/tokenless/humanReviewQuestions";
 import {
   type ExactPrivateReviewBinding,
   type FrozenHumanReviewRoutingContext,
@@ -53,10 +54,12 @@ function context(input?: {
   requiredExpertiseKeys?: FrozenHumanReviewRoutingContext["requestProfile"]["requiredExpertiseKeys"];
   lane?: FrozenHumanReviewRoutingContext["requestProfile"]["lane"];
   lifecycleState?: string;
+  questionAuthority?: "owner_fixed" | "agent_per_request";
 }): FrozenHumanReviewRoutingContext {
   const lane = input?.lane ?? "public_paid_network";
   const privateLane = lane === "private_invited_unpaid" || lane === "private_invited_paid";
   const grantActive = input?.grantActive ?? true;
+  const questionAuthority = input?.questionAuthority ?? "owner_fixed";
   return {
     workspaceId: "workspace_router",
     integrationId: "integration_router",
@@ -93,9 +96,11 @@ function context(input?: {
       feedbackBonusAwarderKind: "requester",
       feedbackBonusAwarderAccount: null,
       feedbackBonusAwardWindowSeconds: input?.feedbackBonus ? 604_800 : null,
-      criterion: "Is the reply accurate?",
-      positiveLabel: "Accurate",
-      negativeLabel: "Needs changes",
+      questionAuthority,
+      resultSemantics: questionAuthority === "owner_fixed" ? "assurance" : "feedback",
+      criterion: questionAuthority === "owner_fixed" ? "Is the reply accurate?" : null,
+      positiveLabel: questionAuthority === "owner_fixed" ? "Accurate" : null,
+      negativeLabel: questionAuthority === "owner_fixed" ? "Needs changes" : null,
       rationaleMode: "required",
     },
     grant: {
@@ -170,6 +175,7 @@ function dependencies(
     hybrid: 0,
     feedbackBonus: 0,
     feedbackBonusEligibility: 0,
+    freeze: 0,
     order: [] as string[],
     foundationInput: null as null | Record<string, unknown>,
     assignmentInput: null as null | Record<string, unknown>,
@@ -178,6 +184,27 @@ function dependencies(
   const deps = {
     isWorkspaceStopped: async () => options.workspaceStopped ?? false,
     loadContext: async () => frozen,
+    freezeQuestion: async (input: { callerQuestion?: unknown }) => {
+      calls.freeze += 1;
+      const question = resolveHumanReviewQuestion({
+        policy: {
+          questionAuthority: frozen.requestProfile.questionAuthority ?? "owner_fixed",
+          resultSemantics: frozen.requestProfile.resultSemantics ?? "assurance",
+          criterion: frozen.requestProfile.criterion,
+          positiveLabel: frozen.requestProfile.positiveLabel,
+          negativeLabel: frozen.requestProfile.negativeLabel,
+          rationaleMode: frozen.requestProfile.rationaleMode,
+        },
+        ...(input.callerQuestion === undefined ? {} : { callerQuestion: input.callerQuestion }),
+      });
+      return {
+        question,
+        questionHash: hashFrozenBinaryReviewQuestion(question),
+        contentBoundary: frozen.requestProfile.contentBoundary,
+        persisted: question.questionAuthority === "agent_per_request",
+        replayed: false,
+      };
+    },
     prepareApproval: async () => {
       calls.prepare += 1;
       calls.order.push("prepare");
@@ -288,7 +315,9 @@ const publicMaterial = {
 };
 
 test("an engaged workspace stop blocks every release path before any preparation or delivery side effect", async () => {
-  const { calls, router } = dependencies(context(), { workspaceStopped: true });
+  const { calls, router } = dependencies(context({ questionAuthority: "agent_per_request" }), {
+    workspaceStopped: true,
+  });
   const result = await router({
     principal,
     opportunityId: "opportunity_router",
@@ -307,10 +336,11 @@ test("an engaged workspace stop blocks every release path before any preparation
     spent: false,
   });
   assert.deepEqual(calls.order, []);
+  assert.equal(calls.freeze, 0);
 });
 
 test("check-only returns the recorded requirement without any preparation or delivery side effect", async () => {
-  const { calls, router } = dependencies(context({ authority: "check_only" }));
+  const { calls, router } = dependencies(context({ authority: "check_only", questionAuthority: "agent_per_request" }));
   const result = await router({
     principal,
     opportunityId: "opportunity_router",
@@ -327,6 +357,20 @@ test("check-only returns the recorded requirement without any preparation or del
     spent: false,
   });
   assert.deepEqual(calls.order, []);
+  assert.equal(calls.freeze, 0);
+});
+
+test("a skipped opportunity never requires or freezes a per-request question", async () => {
+  const { calls, router } = dependencies(context({ decision: "skip", questionAuthority: "agent_per_request" }));
+  const result = await router({
+    principal,
+    opportunityId: "opportunity_router",
+    sourcePayload: "source",
+    suggestionPayload: "suggestion",
+    now: NOW,
+  });
+  assert.equal(result.action, "no_review_required");
+  assert.equal(calls.freeze, 0);
 });
 
 test("prepare-for-approval uses only the immutable approval service and needs no publication declaration", async () => {
@@ -341,6 +385,7 @@ test("prepare-for-approval uses only the immutable approval service and needs no
   assert.equal(result.action, "owner_approval_required");
   assert.equal(result.action === "owner_approval_required" ? result.approval.approvalId : null, "approval_router");
   assert.deepEqual(calls.order, ["prepare"]);
+  assert.equal(calls.freeze, 1);
 });
 
 test("inactive automatic grants block before activation, publication, assignment, reservation, or spending", async () => {
@@ -355,6 +400,24 @@ test("inactive automatic grants block before activation, publication, assignment
   });
   assert.equal(result.action, "blocked");
   assert.equal(result.action === "blocked" ? result.code : null, "automatic_grant_inactive");
+  assert.deepEqual(calls.order, []);
+  assert.equal(calls.freeze, 0);
+});
+
+test("an actionable dynamic public review requires one exact agent-written question", async () => {
+  const { calls, router } = dependencies(context({ questionAuthority: "agent_per_request" }));
+  await assert.rejects(
+    router({
+      principal,
+      opportunityId: "opportunity_router",
+      sourcePayload: "source",
+      suggestionPayload: "suggestion",
+      material: publicMaterial,
+      now: NOW,
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "review_question_required",
+  );
+  assert.equal(calls.freeze, 1);
   assert.deepEqual(calls.order, []);
 });
 
@@ -544,6 +607,7 @@ test("unsupported hybrid routing remains blocked without falling back to either 
   assert.equal(result.action, "blocked");
   assert.equal(result.action === "blocked" ? result.code : null, "lane_not_implemented");
   assert.deepEqual(calls.order, []);
+  assert.equal(calls.freeze, 0);
 });
 
 test("hybrid routing activates only with an exact frozen split and the dedicated adapter", async () => {

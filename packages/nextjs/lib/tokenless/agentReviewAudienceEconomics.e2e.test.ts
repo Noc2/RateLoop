@@ -110,6 +110,7 @@ test("private review freezes base bounty and Feedback Bonus as two independent s
   const base = {
     agentId: "agent_economics_hash",
     agentVersionId: "agent_version_economics_hash",
+    questionAuthority: "owner_fixed" as const,
     criterion: "Which answer is best?",
     positiveLabel: "Use",
     negativeLabel: "Revise",

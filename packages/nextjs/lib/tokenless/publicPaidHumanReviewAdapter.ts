@@ -8,6 +8,13 @@ import { ensureFeedbackBonusPoolForDelivery } from "~~/lib/tokenless/feedbackBon
 import { hashHumanReviewConfiguration } from "~~/lib/tokenless/humanReviewConfiguration";
 import { transitionHumanReviewOpportunityLifecycleInTransaction } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
 import {
+  BINARY_REVIEW_QUESTION_SCHEMA_VERSION,
+  type FrozenBinaryReviewQuestion,
+  hashFrozenBinaryReviewQuestion,
+  resolveHumanReviewQuestion,
+  serializeFrozenBinaryReviewQuestion,
+} from "~~/lib/tokenless/humanReviewQuestions";
+import {
   type BoundHumanReviewRequestProfile,
   type PreparedHumanReviewRequest,
   hashPreparedHumanReviewValue,
@@ -52,6 +59,8 @@ export type PublicPaidHumanReviewRequest = {
   suggestionPayload: string;
   publication: PublicPaidHumanReviewPublication;
   appOrigin: string;
+  effectiveQuestion?: FrozenBinaryReviewQuestion;
+  effectiveQuestionHash?: `sha256:${string}`;
 };
 
 type FrozenOpportunity = {
@@ -75,6 +84,8 @@ type FrozenOpportunity = {
   requestProfile: BoundHumanReviewRequestProfile;
   selectionPolicy: { id: string; version: number };
   admissionPolicyHash: `0x${string}`;
+  effectiveQuestion: FrozenBinaryReviewQuestion;
+  effectiveQuestionHash: `sha256:${string}`;
   policy: {
     reviewEnabled: boolean;
     reviewSuperseded: boolean;
@@ -208,6 +219,8 @@ function exactPayload(value: string, field: "sourcePayload" | "suggestionPayload
 async function loadFrozenOpportunity(
   principal: PublicPaidHumanReviewPrincipal,
   opportunityId: string,
+  effectiveQuestion?: FrozenBinaryReviewQuestion,
+  effectiveQuestionHash?: `sha256:${string}`,
 ): Promise<FrozenOpportunity> {
   assertPrincipal(principal);
   const integration = principal.integration;
@@ -230,6 +243,7 @@ async function loadFrozenOpportunity(
                  b.publishing_policy_version AS binding_publishing_policy_version,
                  rrp.profile_id, rrp.version AS request_profile_version, rrp.profile_hash,
                  rrp.agent_id AS profile_agent_id, rrp.agent_version_id AS profile_agent_version_id,
+                 rrp.question_authority, rrp.result_semantics,
                  rrp.criterion, rrp.positive_label, rrp.negative_label, rrp.rationale_mode,
                  rrp.audience, rrp.content_boundary, rrp.private_sensitivity, rrp.private_group_id,
                  rrp.private_group_policy_version, rrp.private_group_policy_hash,
@@ -243,6 +257,15 @@ async function loadFrozenOpportunity(
                  pp.allowed_admission_policy_hashes_json,
                  a.idempotency_key AS operation_idempotency_key,
                  own.workspace_id AS operation_workspace_id
+                 ,q.schema_version AS frozen_question_schema_version
+                 ,q.question_authority AS frozen_question_authority
+                 ,q.result_semantics AS frozen_result_semantics
+                 ,q.question_hash AS frozen_question_hash
+                 ,q.content_boundary AS frozen_question_content_boundary
+                 ,q.question_json AS frozen_question_json
+                 ,q.question_ciphertext AS frozen_question_ciphertext
+                 ,q.question_key_ref AS frozen_question_key_ref
+                 ,q.submitted_by_integration_id AS frozen_question_integration_id
           FROM tokenless_agent_review_opportunities o
           JOIN tokenless_agent_review_opportunity_lifecycles l
             ON l.workspace_id = o.workspace_id AND l.opportunity_id = o.opportunity_id
@@ -262,6 +285,8 @@ async function loadFrozenOpportunity(
             ON pp.workspace_id = o.workspace_id AND pp.policy_id = ? AND pp.version = ?
           LEFT JOIN tokenless_agent_asks a ON a.operation_key = o.operation_key
           LEFT JOIN tokenless_ask_ownership own ON own.operation_key = o.operation_key
+          LEFT JOIN tokenless_agent_review_opportunity_questions q
+            ON q.workspace_id = o.workspace_id AND q.opportunity_id = o.opportunity_id
           WHERE o.workspace_id = ? AND o.agent_id = ? AND o.agent_version_id = ?
             AND o.policy_id = ? AND o.policy_version = ? AND o.opportunity_id = ?
           LIMIT 1`,
@@ -294,9 +319,11 @@ async function loadFrozenOpportunity(
     hash: profileHash as `sha256:${string}`,
     agentId: text(row, "profile_agent_id") ?? "",
     agentVersionId: text(row, "profile_agent_version_id") ?? "",
-    criterion: text(row, "criterion") ?? "",
-    positiveLabel: text(row, "positive_label") ?? "",
-    negativeLabel: text(row, "negative_label") ?? "",
+    questionAuthority: oneOf(row, "question_authority", ["owner_fixed", "agent_per_request"] as const),
+    resultSemantics: oneOf(row, "result_semantics", ["assurance", "feedback"] as const),
+    criterion: text(row, "criterion"),
+    positiveLabel: text(row, "positive_label"),
+    negativeLabel: text(row, "negative_label"),
     rationaleMode: oneOf(row, "rationale_mode", ["off", "optional", "required"] as const),
     audience: oneOf(row, "audience", ["private_invited", "public_network", "hybrid"] as const),
     contentBoundary: oneOf(row, "content_boundary", ["private_workspace", "public_or_test"] as const),
@@ -324,6 +351,7 @@ async function loadFrozenOpportunity(
   const expectedProfileHash = hashReviewRequestProfile({
     agentId: profile.agentId,
     agentVersionId: profile.agentVersionId,
+    questionAuthority: profile.questionAuthority ?? "owner_fixed",
     criterion: profile.criterion,
     positiveLabel: profile.positiveLabel,
     negativeLabel: profile.negativeLabel,
@@ -387,6 +415,83 @@ async function loadFrozenOpportunity(
       "review_configuration_mismatch",
     );
   }
+  let candidateQuestion: FrozenBinaryReviewQuestion | undefined = effectiveQuestion;
+  if (!candidateQuestion && profile.questionAuthority === "agent_per_request") {
+    try {
+      const parsed = JSON.parse(text(row, "frozen_question_json") ?? "null") as FrozenBinaryReviewQuestion;
+      if (!parsed || typeof parsed !== "object") throw new Error();
+      candidateQuestion = parsed;
+    } catch {
+      throw new TokenlessServiceError(
+        "The persisted public review question is invalid.",
+        409,
+        "review_question_conflict",
+      );
+    }
+  }
+  const resolvedQuestion = candidateQuestion
+    ? resolveHumanReviewQuestion({
+        policy: {
+          questionAuthority: profile.questionAuthority ?? "owner_fixed",
+          resultSemantics: profile.resultSemantics ?? "assurance",
+          criterion: profile.criterion,
+          positiveLabel: profile.positiveLabel,
+          negativeLabel: profile.negativeLabel,
+          rationaleMode: profile.rationaleMode,
+        },
+        ...(profile.questionAuthority === "agent_per_request"
+          ? {
+              callerQuestion: {
+                kind: candidateQuestion.kind,
+                prompt: candidateQuestion.prompt,
+                positiveLabel: candidateQuestion.positiveLabel,
+                negativeLabel: candidateQuestion.negativeLabel,
+              },
+            }
+          : {}),
+      })
+    : resolveHumanReviewQuestion({
+        policy: {
+          questionAuthority: profile.questionAuthority ?? "owner_fixed",
+          resultSemantics: profile.resultSemantics ?? "assurance",
+          criterion: profile.criterion,
+          positiveLabel: profile.positiveLabel,
+          negativeLabel: profile.negativeLabel,
+          rationaleMode: profile.rationaleMode,
+        },
+      });
+  const resolvedQuestionHash = hashFrozenBinaryReviewQuestion(resolvedQuestion);
+  if (
+    (effectiveQuestion &&
+      serializeFrozenBinaryReviewQuestion(effectiveQuestion) !==
+        serializeFrozenBinaryReviewQuestion(resolvedQuestion)) ||
+    (effectiveQuestionHash !== undefined && effectiveQuestionHash !== resolvedQuestionHash)
+  ) {
+    throw new TokenlessServiceError(
+      "The public review question does not match its frozen terms.",
+      409,
+      "review_question_conflict",
+    );
+  }
+  const persistedQuestionMatches =
+    profile.questionAuthority === "owner_fixed"
+      ? text(row, "frozen_question_hash") === null
+      : text(row, "frozen_question_schema_version") === BINARY_REVIEW_QUESTION_SCHEMA_VERSION &&
+        text(row, "frozen_question_authority") === "agent_per_request" &&
+        text(row, "frozen_result_semantics") === "feedback" &&
+        text(row, "frozen_question_hash") === resolvedQuestionHash &&
+        text(row, "frozen_question_content_boundary") === "public_or_test" &&
+        text(row, "frozen_question_json") === serializeFrozenBinaryReviewQuestion(resolvedQuestion) &&
+        row.frozen_question_ciphertext === null &&
+        row.frozen_question_key_ref === null &&
+        text(row, "frozen_question_integration_id") === integration.integrationId;
+  if (!persistedQuestionMatches) {
+    throw new TokenlessServiceError(
+      "The public review opportunity is not bound to the exact frozen question.",
+      409,
+      "review_question_conflict",
+    );
+  }
   return {
     opportunityId: text(row, "opportunity_id")!,
     decision: text(row, "decision") ?? "",
@@ -411,6 +516,8 @@ async function loadFrozenOpportunity(
     requestProfile: profile,
     selectionPolicy: { id: text(row, "policy_id")!, version: integer(row, "policy_version") },
     admissionPolicyHash: parseAdmissionHash(row.allowed_admission_policy_hashes_json),
+    effectiveQuestion: resolvedQuestion,
+    effectiveQuestionHash: resolvedQuestionHash,
     policy: {
       reviewEnabled: bool(row, "review_policy_enabled"),
       reviewSuperseded: row.review_policy_superseded_at !== null && row.review_policy_superseded_at !== undefined,
@@ -583,6 +690,8 @@ function prepareExactRequest(input: {
     expiresAt,
     sourcePayload: input.sourcePayload,
     suggestionPayload: input.suggestionPayload,
+    effectiveQuestion: opportunity.effectiveQuestion,
+    effectiveQuestionHash: opportunity.effectiveQuestionHash,
   });
   if (approval) {
     const tupleMatches =
@@ -622,6 +731,8 @@ function deterministicAdapterKey(opportunity: FrozenOpportunity, preparation: Pr
       suggestion: opportunity.suggestionCommitment,
     },
     derivedEconomicsHash: preparation.derivedEconomicsHash,
+    preparedRequestHash: preparation.preparedRequestHash,
+    questionHash: preparation.questionHash,
   });
   return `adaptive-public-paid:${hash.slice("sha256:".length)}`;
 }
@@ -641,9 +752,12 @@ async function finalizePublicPaidAsk(input: {
     const opportunityResult = await client.query(
       `SELECT operation_key, status, human_review_binding_id, human_review_binding_version,
               request_profile_id, request_profile_version, request_profile_hash,
-              source_evidence_hash, suggestion_commitment
-       FROM tokenless_agent_review_opportunities
-       WHERE workspace_id = $1 AND opportunity_id = $2 FOR UPDATE`,
+              source_evidence_hash, suggestion_commitment,
+              q.question_hash AS frozen_question_hash,q.question_json AS frozen_question_json
+       FROM tokenless_agent_review_opportunities o
+       LEFT JOIN tokenless_agent_review_opportunity_questions q
+         ON q.workspace_id=o.workspace_id AND q.opportunity_id=o.opportunity_id
+       WHERE o.workspace_id = $1 AND o.opportunity_id = $2 FOR UPDATE OF o`,
       [workspaceId, input.opportunity.opportunityId],
     );
     const row = opportunityResult.rows[0] as Row | undefined;
@@ -656,6 +770,11 @@ async function finalizePublicPaidAsk(input: {
       text(row, "request_profile_hash") !== input.opportunity.requestProfile.hash ||
       text(row, "source_evidence_hash") !== input.opportunity.sourceEvidenceHash ||
       text(row, "suggestion_commitment") !== input.opportunity.suggestionCommitment ||
+      (input.opportunity.requestProfile.questionAuthority === "owner_fixed"
+        ? text(row, "frozen_question_hash") !== null
+        : text(row, "frozen_question_hash") !== input.preparation.questionHash ||
+          text(row, "frozen_question_json") !==
+            serializeFrozenBinaryReviewQuestion(input.opportunity.effectiveQuestion)) ||
       (text(row, "operation_key") !== null && text(row, "operation_key") !== input.operationKey)
     ) {
       throw new TokenlessServiceError(
@@ -750,6 +869,9 @@ async function finalizePublicPaidAsk(input: {
         bindingVersion: input.opportunity.binding.version,
         requestProfileHash: input.opportunity.requestProfile.hash,
         preparedRequestHash: input.preparation.preparedRequestHash,
+        questionHash: input.preparation.questionHash,
+        questionAuthority: input.opportunity.effectiveQuestion.questionAuthority,
+        resultSemantics: input.opportunity.effectiveQuestion.resultSemantics,
         derivedEconomicsHash: input.preparation.derivedEconomicsHash,
       },
     });
@@ -801,7 +923,12 @@ export async function requestPublicPaidHumanReview(
   const publication = normalizePublicPaidReviewPublication(input.publication);
   const sourcePayload = exactPayload(input.sourcePayload, "sourcePayload");
   const suggestionPayload = exactPayload(input.suggestionPayload, "suggestionPayload");
-  const opportunity = await loadFrozenOpportunity(input.principal, input.opportunityId);
+  const opportunity = await loadFrozenOpportunity(
+    input.principal,
+    input.opportunityId,
+    input.effectiveQuestion,
+    input.effectiveQuestionHash,
+  );
   assertRequestable(opportunity, input.principal);
   if ((opportunity.requestProfile.requiredExpertiseKeys?.length ?? 0) > 0) {
     await assertAdmissionPolicyExpertiseBinding(opportunity);

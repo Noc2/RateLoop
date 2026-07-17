@@ -320,10 +320,21 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
   const requestReviewTool = tool("rateloop_request_review");
   assert.match(requestReviewTool?.description ?? "", /exact owner-bound authority and lane/);
   assert.match(requestReviewTool?.description ?? "", /Check-only records the requirement without preparing/);
-  assert.match(requestReviewTool?.description ?? "", /private unpaid work/);
-  assert.match(requestReviewTool?.description ?? "", /derives the question, panel, response window, bounty, fee/);
+  assert.match(requestReviewTool?.description ?? "", /requires one binary agent-written question/);
+  assert.match(requestReviewTool?.description ?? "", /derives the panel, response window, bounty, fee/);
   assert.equal("economics" in (requestReviewTool?.inputSchema?.properties ?? {}), false);
   assert.deepEqual(requestReviewTool?.inputSchema?.required, ["opportunityId", "sourcePayload", "suggestionPayload"]);
+  assert.deepEqual(requestReviewTool?.inputSchema?.properties?.question, {
+    additionalProperties: false,
+    properties: {
+      kind: { const: "binary", type: "string" },
+      prompt: { maxLength: 500, minLength: 1, type: "string" },
+      positiveLabel: { maxLength: 40, minLength: 1, type: "string" },
+      negativeLabel: { maxLength: 40, minLength: 1, type: "string" },
+    },
+    required: ["kind", "prompt", "positiveLabel", "negativeLabel"],
+    type: "object",
+  });
   assert.deepEqual(requestReviewTool?.inputSchema?.properties?.material, {
     oneOf: [
       {
@@ -625,6 +636,7 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
         maximumLatencyMs: 120_000,
       },
       requestProfile: {
+        questionAuthority: "owner_fixed",
         criterion: "Is this output correct and safe to use?",
         positiveLabel: "Approve",
         negativeLabel: "Reject",
@@ -704,6 +716,7 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
         maximumLatencyMs: 120_000,
       },
       requestProfile: {
+        questionAuthority: "owner_fixed",
         criterion: "Is this output correct and safe to use?",
         positiveLabel: "Approve",
         negativeLabel: "Reject",
@@ -884,7 +897,9 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
       "2025-06-18",
     ),
   );
-  const preparedResult = (await prepared.json()).result.structuredContent;
+  const preparedPayload = await prepared.json();
+  assert.ok(preparedPayload.result, JSON.stringify(preparedPayload));
+  const preparedResult = preparedPayload.result.structuredContent;
   assert.equal(preparedResult.action, "owner_approval_required", JSON.stringify(preparedResult));
   const queued = await dbClient.execute({
     sql: `SELECT request_id,state FROM tokenless_mcp_elicitation_requests

@@ -127,6 +127,7 @@ async function fixture(lane: "public_paid" | "private_unpaid") {
     profileHash = hashReviewRequestProfile({
       agentId: approved.agent.agentId,
       agentVersionId: approved.agent.versionId,
+      questionAuthority: "owner_fixed",
       criterion: "Is this output correct and safe to use",
       positiveLabel: "Approve",
       negativeLabel: "Reject",

@@ -3,6 +3,10 @@ import "server-only";
 import { dbClient } from "~~/lib/db";
 import { type AgentMcpPrincipal, OWNER_APPROVED_AGENT_SCOPES } from "~~/lib/tokenless/agentIntegrations";
 import {
+  HUMAN_REVIEW_QUESTION_AUTHORITIES,
+  HUMAN_REVIEW_RESULT_SEMANTICS,
+} from "~~/lib/tokenless/humanReviewQuestions";
+import {
   HUMAN_REVIEW_AUDIENCES,
   HUMAN_REVIEW_AUTHORITY_LEVELS,
   HUMAN_REVIEW_COMPENSATION_MODES,
@@ -92,12 +96,6 @@ function valueStringArray(value: unknown, field: string) {
     invalidContext(`Stored ${field} is invalid.`);
   }
   return [...new Set(value as string[])].sort();
-}
-
-function requiredText(row: Row, key: string) {
-  const value = text(row, key);
-  if (!value) invalidContext(`Stored ${key} is invalid.`);
-  return value;
 }
 
 function nullableRuleInteger(value: unknown, field: string, maximum: number) {
@@ -202,6 +200,7 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
             b.publishing_policy_id AS binding_publishing_policy_id,
             b.publishing_policy_version AS binding_publishing_policy_version,
             r.configuration_status AS profile_status, r.superseded_at AS profile_superseded_at,
+            r.question_authority, r.result_semantics,
             r.criterion, r.positive_label, r.negative_label, r.rationale_mode,
             r.audience, r.content_boundary, r.private_sensitivity,
             r.private_group_id, r.private_group_policy_version, r.private_group_policy_hash,
@@ -419,6 +418,8 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
     invalidContext("Stored request-profile status is invalid.");
   }
   const rationaleMode = enumValue(row, "rationale_mode", REVIEW_REQUEST_RATIONALE_MODES);
+  const questionAuthority = enumValue(row, "question_authority", HUMAN_REVIEW_QUESTION_AUTHORITIES);
+  const resultSemantics = enumValue(row, "result_semantics", HUMAN_REVIEW_RESULT_SEMANTICS);
   const audience = enumValue(row, "audience", HUMAN_REVIEW_AUDIENCES);
   const contentBoundary = enumValue(row, "content_boundary", HUMAN_REVIEW_CONTENT_BOUNDARIES);
   const compensationMode = enumValue(row, "compensation_mode", HUMAN_REVIEW_COMPENSATION_MODES);
@@ -446,6 +447,25 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
     ((audience === "private_invited" || audience === "hybrid") && profileStatus === "ready" && privateGroupId === null)
   ) {
     invalidContext("Stored request-profile audience and privacy terms are contradictory.");
+  }
+  const criterion = text(row, "criterion");
+  const positiveLabel = text(row, "positive_label");
+  const negativeLabel = text(row, "negative_label");
+  if (
+    (questionAuthority === "owner_fixed" &&
+      (resultSemantics !== "assurance" || !criterion || !positiveLabel || !negativeLabel)) ||
+    (questionAuthority === "agent_per_request" &&
+      (resultSemantics !== "feedback" ||
+        criterion !== null ||
+        positiveLabel !== null ||
+        negativeLabel !== null ||
+        audience !== "public_network" ||
+        contentBoundary !== "public_or_test")) ||
+    (positiveLabel !== null &&
+      negativeLabel !== null &&
+      positiveLabel.toLocaleLowerCase("en-US") === negativeLabel.toLocaleLowerCase("en-US"))
+  ) {
+    invalidContext("Stored review question authority is invalid for this request profile.");
   }
   const responseWindowSeconds = optionalInteger(row, "response_window_seconds");
   const panelSize = optionalInteger(row, "panel_size");
@@ -520,11 +540,10 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
     version: requestProfileVersion,
     hash: requestProfileHash,
     status: profileStatus,
-    criterion: requiredText(row, "criterion"),
-    labels: {
-      positive: requiredText(row, "positive_label"),
-      negative: requiredText(row, "negative_label"),
-    },
+    questionAuthority,
+    resultSemantics,
+    criterion,
+    labels: { positive: positiveLabel, negative: negativeLabel },
     rationaleMode,
     audience: {
       type: audience,

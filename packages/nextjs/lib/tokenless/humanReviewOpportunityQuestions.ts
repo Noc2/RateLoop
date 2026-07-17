@@ -178,7 +178,7 @@ export function createHumanReviewOpportunityQuestionFreezer(
          WHERE o.workspace_id=$1 AND o.opportunity_id=$2
            AND l.terminal_at IS NULL
            AND l.state IN ('approval_required','request_ready','pending','blocked')
-         FOR UPDATE OF o`,
+         FOR UPDATE`,
         [workspaceId, opportunityId, integrationId],
       );
       const opportunityRow = opportunityResult.rows[0] as Row | undefined;

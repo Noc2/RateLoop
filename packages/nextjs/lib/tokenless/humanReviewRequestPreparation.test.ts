@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
+import { hashFrozenBinaryReviewQuestion, resolveHumanReviewQuestion } from "~~/lib/tokenless/humanReviewQuestions";
 import {
   HUMAN_REVIEW_FIXED_BASE_BPS,
   HUMAN_REVIEW_PLATFORM_FEE_BPS,
@@ -22,6 +23,8 @@ function profile() {
     hash: HASH("a"),
     agentId: "agent_exact",
     agentVersionId: "version_exact",
+    questionAuthority: "owner_fixed" as const,
+    resultSemantics: "assurance" as const,
     criterion: "Is the proposed refund correct and safe to approve?",
     positiveLabel: "Approve",
     negativeLabel: "Reject",
@@ -171,4 +174,77 @@ test("canonical hashes are independent of object insertion order", () => {
   const right = { nested: { a: "x", b: true }, z: 1 };
   assert.equal(__humanReviewRequestPreparationTestUtils.canonicalJson(left), '{"nested":{"a":"x","b":true},"z":1}');
   assert.equal(hashPreparedHumanReviewValue(left), hashPreparedHumanReviewValue(right));
+});
+
+test("binds each dynamic feedback question into the prepared request and deterministic hash", () => {
+  const dynamicProfile = {
+    ...profile(),
+    questionAuthority: "agent_per_request" as const,
+    resultSemantics: "feedback" as const,
+    criterion: null,
+    positiveLabel: null,
+    negativeLabel: null,
+  };
+  const exact = (prompt: string) => {
+    const effectiveQuestion = resolveHumanReviewQuestion({
+      policy: dynamicProfile,
+      callerQuestion: {
+        kind: "binary",
+        prompt,
+        positiveLabel: "Would buy",
+        negativeLabel: "Would not buy",
+      },
+    });
+    return prepareHumanReviewRequest({
+      opportunityId: "aop_market",
+      workflowKey: "market-research",
+      requestProfile: dynamicProfile,
+      selectionPolicy: { id: "rpol_exact", version: 3 },
+      contentCommitments: {
+        source: hashPreparedPayload("source"),
+        suggestion: hashPreparedPayload("suggestion"),
+      },
+      preparedAt: NOW,
+      expiresAt: new Date(NOW.getTime() + 3_600_000),
+      sourcePayload: "source",
+      suggestionPayload: "suggestion",
+      effectiveQuestion,
+      effectiveQuestionHash: hashFrozenBinaryReviewQuestion(effectiveQuestion),
+    });
+  };
+  const first = exact("Would you buy this product?");
+  const second = exact("Would you recommend this product?");
+  assert.equal(first.preparedRequest.question.resultSemantics, "feedback");
+  assert.equal(first.preparedRequest.question.questionAuthority, "agent_per_request");
+  assert.equal(first.preparedRequest.question.criterion, "Would you buy this product?");
+  assert.notEqual(first.questionHash, second.questionHash);
+  assert.notEqual(first.preparedRequestHash, second.preparedRequestHash);
+});
+
+test("fails closed when a dynamic public profile reaches preparation without a frozen question", () => {
+  assert.throws(
+    () =>
+      prepareHumanReviewRequest({
+        opportunityId: "aop_market",
+        workflowKey: "market-research",
+        requestProfile: {
+          ...profile(),
+          questionAuthority: "agent_per_request",
+          resultSemantics: "feedback",
+          criterion: null,
+          positiveLabel: null,
+          negativeLabel: null,
+        },
+        selectionPolicy: { id: "rpol_exact", version: 3 },
+        contentCommitments: {
+          source: hashPreparedPayload("source"),
+          suggestion: hashPreparedPayload("suggestion"),
+        },
+        preparedAt: NOW,
+        expiresAt: new Date(NOW.getTime() + 3_600_000),
+        sourcePayload: "source",
+        suggestionPayload: "suggestion",
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "review_question_required",
+  );
 });

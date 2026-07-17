@@ -4,6 +4,7 @@ import "server-only";
 import { dbPool } from "~~/lib/db";
 import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import { hashHumanReviewConfiguration } from "~~/lib/tokenless/humanReviewConfiguration";
+import type { FrozenBinaryReviewQuestion } from "~~/lib/tokenless/humanReviewQuestions";
 import {
   type BoundHumanReviewRequestProfile,
   type HumanReviewDerivedEconomics,
@@ -152,9 +153,11 @@ function profileFromRow(row: Row): BoundHumanReviewRequestProfile {
     hash: profileHash as `sha256:${string}`,
     agentId: text(row, "profile_agent_id") ?? "",
     agentVersionId: text(row, "profile_agent_version_id") ?? "",
-    criterion: text(row, "criterion") ?? "",
-    positiveLabel: text(row, "positive_label") ?? "",
-    negativeLabel: text(row, "negative_label") ?? "",
+    questionAuthority: oneOf(row, "question_authority", ["owner_fixed", "agent_per_request"] as const),
+    resultSemantics: oneOf(row, "result_semantics", ["assurance", "feedback"] as const),
+    criterion: text(row, "criterion"),
+    positiveLabel: text(row, "positive_label"),
+    negativeLabel: text(row, "negative_label"),
     rationaleMode: oneOf(row, "rationale_mode", ["off", "optional", "required"] as const),
     audience: oneOf(row, "audience", ["private_invited", "public_network", "hybrid"] as const),
     contentBoundary: oneOf(row, "content_boundary", ["private_workspace", "public_or_test"] as const),
@@ -248,6 +251,7 @@ async function loadAndVerifyOpportunity(
             b.canonical_hash AS binding_canonical_hash, b.superseded_at AS binding_superseded_at,
             rrp.profile_id, rrp.version AS profile_version, rrp.profile_hash,
             rrp.agent_id AS profile_agent_id, rrp.agent_version_id AS profile_agent_version_id,
+            rrp.question_authority, rrp.result_semantics,
             rrp.criterion, rrp.positive_label, rrp.negative_label, rrp.rationale_mode,
             rrp.audience, rrp.content_boundary, rrp.private_sensitivity, rrp.private_group_id,
             rrp.private_group_policy_version, rrp.private_group_policy_hash,
@@ -294,6 +298,7 @@ async function loadAndVerifyOpportunity(
   const exactProfileHash = hashReviewRequestProfile({
     agentId: profile.agentId,
     agentVersionId: profile.agentVersionId,
+    questionAuthority: profile.questionAuthority ?? "owner_fixed",
     criterion: profile.criterion,
     positiveLabel: profile.positiveLabel,
     negativeLabel: profile.negativeLabel,
@@ -399,7 +404,14 @@ async function loadAndVerifyOpportunity(
 
 function prepareExact(
   opportunity: FrozenApprovalOpportunity,
-  input: { sourcePayload: string; suggestionPayload: string; preparedAt: Date; expiresAt: Date },
+  input: {
+    sourcePayload: string;
+    suggestionPayload: string;
+    preparedAt: Date;
+    expiresAt: Date;
+    effectiveQuestion?: FrozenBinaryReviewQuestion;
+    effectiveQuestionHash?: `sha256:${string}`;
+  },
 ) {
   return prepareHumanReviewRequest({
     opportunityId: opportunity.opportunityId,
@@ -414,6 +426,8 @@ function prepareExact(
     expiresAt: input.expiresAt,
     sourcePayload: input.sourcePayload,
     suggestionPayload: input.suggestionPayload,
+    effectiveQuestion: input.effectiveQuestion,
+    effectiveQuestionHash: input.effectiveQuestionHash,
   });
 }
 
@@ -481,6 +495,8 @@ export async function prepareHumanReviewForOwnerApproval(input: {
   opportunityId: string;
   sourcePayload: string;
   suggestionPayload: string;
+  effectiveQuestion?: FrozenBinaryReviewQuestion;
+  effectiveQuestionHash?: `sha256:${string}`;
   now?: Date;
 }): Promise<PreparedOwnerApproval> {
   const now = input.now ?? new Date();
@@ -518,6 +534,8 @@ export async function prepareHumanReviewForOwnerApproval(input: {
         suggestionPayload: input.suggestionPayload,
         preparedAt: date(existing, "created_at"),
         expiresAt: date(existing, "expires_at"),
+        effectiveQuestion: input.effectiveQuestion,
+        effectiveQuestionHash: input.effectiveQuestionHash,
       });
       assertExactStoredApproval(existing, preparation, opportunity);
       await client.query("COMMIT");
@@ -538,6 +556,8 @@ export async function prepareHumanReviewForOwnerApproval(input: {
       suggestionPayload: input.suggestionPayload,
       preparedAt: now,
       expiresAt,
+      effectiveQuestion: input.effectiveQuestion,
+      effectiveQuestionHash: input.effectiveQuestionHash,
     });
     const approvalId = deterministicApprovalId({
       workspaceId: opportunity.workspaceId,

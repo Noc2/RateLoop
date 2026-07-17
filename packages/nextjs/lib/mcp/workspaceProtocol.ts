@@ -92,6 +92,17 @@ const publicReviewPublicationSchema = {
   required: ["visibility", "dataClassification", "confirmedNoSensitiveData"],
   type: "object",
 } as const;
+const perRequestBinaryQuestionSchema = {
+  additionalProperties: false,
+  properties: {
+    kind: { const: "binary", type: "string" },
+    prompt: { maxLength: 500, minLength: 1, type: "string" },
+    positiveLabel: { maxLength: 40, minLength: 1, type: "string" },
+    negativeLabel: { maxLength: 40, minLength: 1, type: "string" },
+  },
+  required: ["kind", "prompt", "positiveLabel", "negativeLabel"],
+  type: "object",
+} as const;
 const readOnlyClosedAnnotations = {
   readOnlyHint: true,
   destructiveHint: false,
@@ -219,13 +230,14 @@ export const workspaceMcpTools = [
     name: "rateloop_request_review",
     annotations: consequentialOpenAnnotations,
     description:
-      "Route a required frozen opportunity using its exact owner-bound authority and lane. Check-only records the requirement without preparing, publishing, assigning, reserving, or spending. Prepare-for-approval creates only an immutable owner approval. Automatic routing requires the exact active grant: public paid work goes only to the RateLoop network, while private unpaid work goes only to one unambiguous owner-configured invited group. RateLoop derives the question, panel, response window, bounty, fee, and accepted-work reserve; callers cannot override those terms.",
+      "Route a required frozen opportunity using its exact owner-bound authority and lane. Check-only records the requirement without preparing, publishing, assigning, reserving, or spending. Prepare-for-approval creates only an immutable owner approval. Automatic routing requires the exact active grant. The bound profile either forbids question overrides or requires one binary agent-written question for this public-network request; RateLoop always derives the panel, response window, bounty, fee, and accepted-work reserve.",
     inputSchema: {
       additionalProperties: false,
       properties: {
         opportunityId: identifierSchema,
         sourcePayload: { maxLength: 3_000, minLength: 1, type: "string" },
         suggestionPayload: { maxLength: 3_000, minLength: 1, type: "string" },
+        question: perRequestBinaryQuestionSchema,
         material: {
           oneOf: [
             {
@@ -485,7 +497,7 @@ async function callIntegrationTool(
     if (name === "rateloop_request_review") {
       const input = requireObjectWithKeys(
         args,
-        ["opportunityId", "sourcePayload", "suggestionPayload", "material"],
+        ["opportunityId", "sourcePayload", "suggestionPayload", "question", "material"],
         "Review request arguments are invalid.",
       );
       return toolResult(
@@ -494,6 +506,7 @@ async function callIntegrationTool(
           opportunityId: input.opportunityId as string,
           sourcePayload: input.sourcePayload as string,
           suggestionPayload: input.suggestionPayload as string,
+          ...(input.question === undefined ? {} : { question: input.question }),
           material: reviewMaterial(input.material, context.origin),
         }),
       );

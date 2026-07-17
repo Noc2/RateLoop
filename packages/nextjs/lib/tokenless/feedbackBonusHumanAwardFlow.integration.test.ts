@@ -34,6 +34,7 @@ function privateProfile(input: {
   return {
     agentId: "agent_feedback_bonus_flow",
     agentVersionId: "agent_version_feedback_bonus_flow",
+    questionAuthority: "owner_fixed",
     criterion: "Should this private agent answer be used?",
     positiveLabel: "Use",
     negativeLabel: "Revise",

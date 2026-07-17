@@ -18,6 +18,11 @@ import {
   prepareHumanReviewForOwnerApproval,
 } from "~~/lib/tokenless/humanReviewApprovalPreparation";
 import { transitionHumanReviewOpportunityLifecycle } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
+import {
+  type FrozenHumanReviewOpportunityQuestion,
+  freezeHumanReviewOpportunityQuestion,
+} from "~~/lib/tokenless/humanReviewOpportunityQuestions";
+import { hashFrozenBinaryReviewQuestion, resolveHumanReviewQuestion } from "~~/lib/tokenless/humanReviewQuestions";
 import { prepareHumanReviewRequest } from "~~/lib/tokenless/humanReviewRequestPreparation";
 import type { FrozenHybridReviewSplit, HybridHumanReviewResult } from "~~/lib/tokenless/hybridHumanReviewAdapter";
 import { requirePaidReviewEligibility } from "~~/lib/tokenless/paidReviewEligibilityPreflight";
@@ -64,6 +69,7 @@ export type HumanReviewRoutingRequest = {
   opportunityId: string;
   sourcePayload: string;
   suggestionPayload: string;
+  question?: unknown;
   material?: HumanReviewRoutingMaterial;
   now?: Date;
 };
@@ -104,9 +110,11 @@ export type FrozenHumanReviewRoutingContext = {
     feedbackBonusAwarderKind: "requester" | "designated";
     feedbackBonusAwarderAccount: string | null;
     feedbackBonusAwardWindowSeconds: number | null;
-    criterion: string;
-    positiveLabel: string;
-    negativeLabel: string;
+    questionAuthority?: "owner_fixed" | "agent_per_request";
+    resultSemantics?: "assurance" | "feedback";
+    criterion: string | null;
+    positiveLabel: string | null;
+    negativeLabel: string | null;
     rationaleMode: "off" | "optional" | "required";
   };
   grant: {
@@ -206,6 +214,7 @@ type RouterDependencies = {
     opportunityId: string,
     now: Date,
   ) => Promise<FrozenHumanReviewRoutingContext>;
+  freezeQuestion?: typeof freezeHumanReviewOpportunityQuestion;
   prepareApproval: typeof prepareHumanReviewForOwnerApproval;
   publishPublicPaid: typeof requestPublicPaidHumanReview;
   resolvePrivateBinding: (
@@ -216,6 +225,7 @@ type RouterDependencies = {
   activateAutonomousLane: (
     context: FrozenHumanReviewRoutingContext,
     privateBinding: ExactPrivateReviewBinding | null,
+    frozenQuestion: FrozenHumanReviewOpportunityQuestion,
     now: Date,
   ) => Promise<void>;
   preparePrivateFoundation: typeof preparePrivateReviewFoundation;
@@ -274,6 +284,7 @@ function sha256(value: string) {
 function deterministicPrivateIdempotencyKey(
   context: FrozenHumanReviewRoutingContext,
   binding: ExactPrivateReviewBinding,
+  questionHash: string,
 ) {
   const canonical = JSON.stringify({
     schemaVersion: "rateloop.private-review-route-key.v1",
@@ -289,6 +300,7 @@ function deterministicPrivateIdempotencyKey(
     projectId: binding.projectId,
     cohortId: binding.cohortId,
     reviewers: [...binding.reviewerAccountAddresses].sort(),
+    questionHash,
   });
   return `private-route-${sha256(canonical)}`;
 }
@@ -296,6 +308,7 @@ function deterministicPrivateIdempotencyKey(
 function deterministicActivationKey(
   context: FrozenHumanReviewRoutingContext,
   privateBinding: ExactPrivateReviewBinding | null,
+  questionHash: string,
 ) {
   const canonical = JSON.stringify({
     schemaVersion: "rateloop.autonomous-review-activation.v1",
@@ -311,6 +324,7 @@ function deterministicActivationKey(
       lane: context.requestProfile.lane,
     },
     privateBinding,
+    questionHash,
   });
   return `route-ready:${sha256(canonical)}`;
 }
@@ -496,6 +510,8 @@ async function loadFrozenContext(
       feedbackBonusAwarderKind: profile.feedbackBonus.awarderKind,
       feedbackBonusAwarderAccount: profile.feedbackBonus.awarderAccount,
       feedbackBonusAwardWindowSeconds: profile.feedbackBonus.awardWindowSeconds,
+      questionAuthority: profile.questionAuthority,
+      resultSemantics: profile.resultSemantics,
       criterion: profile.criterion,
       positiveLabel: profile.labels.positive,
       negativeLabel: profile.labels.negative,
@@ -642,6 +658,7 @@ async function resolveExactPrivateBinding(
 async function activateExactAutonomousLane(
   context: FrozenHumanReviewRoutingContext,
   privateBinding: ExactPrivateReviewBinding | null,
+  frozenQuestion: FrozenHumanReviewOpportunityQuestion,
   now: Date,
 ) {
   if (context.lifecycle.state === "request_ready" || context.lifecycle.state === "pending") return;
@@ -655,7 +672,7 @@ async function activateExactAutonomousLane(
   await transitionHumanReviewOpportunityLifecycle({
     workspaceId: context.workspaceId,
     opportunityId: context.opportunityId,
-    transitionKey: deterministicActivationKey(context, privateBinding),
+    transitionKey: deterministicActivationKey(context, privateBinding, frozenQuestion.questionHash),
     expectedState: context.lifecycle.state,
     expectedRevision: context.lifecycle.revision,
     toState: "request_ready",
@@ -670,6 +687,9 @@ async function activateExactAutonomousLane(
       requestProfileVersion: context.requestProfile.version,
       requestProfileHash: context.requestProfile.hash,
       lane: context.requestProfile.lane,
+      questionHash: frozenQuestion.questionHash,
+      questionAuthority: frozenQuestion.question.questionAuthority,
+      resultSemantics: frozenQuestion.question.resultSemantics,
       publishingPolicy: context.grant.configuredPolicy,
       ...(privateBinding
         ? {
@@ -726,6 +746,7 @@ function hasExactAutonomousGrant(context: FrozenHumanReviewRoutingContext) {
 function prepareFrozenRoutingRequest(
   context: FrozenHumanReviewRoutingContext,
   input: HumanReviewRoutingRequest,
+  frozenQuestion: FrozenHumanReviewOpportunityQuestion,
   now: Date,
 ) {
   const profile = context.requestProfile;
@@ -739,6 +760,8 @@ function prepareFrozenRoutingRequest(
       hash: profile.hash,
       agentId: context.agent.id,
       agentVersionId: context.agent.versionId,
+      questionAuthority: profile.questionAuthority ?? "owner_fixed",
+      resultSemantics: profile.resultSemantics ?? "assurance",
       criterion: profile.criterion,
       positiveLabel: profile.positiveLabel,
       negativeLabel: profile.negativeLabel,
@@ -764,6 +787,51 @@ function prepareFrozenRoutingRequest(
     expiresAt: new Date(preparedAt.getTime() + profile.responseWindowSeconds * 1_000),
     sourcePayload: input.sourcePayload,
     suggestionPayload: input.suggestionPayload,
+    effectiveQuestion: frozenQuestion.question,
+    effectiveQuestionHash: frozenQuestion.questionHash,
+  });
+}
+
+async function freezeRoutingQuestion(
+  dependencies: RouterDependencies,
+  context: FrozenHumanReviewRoutingContext,
+  input: HumanReviewRoutingRequest,
+  now: Date,
+) {
+  if (dependencies.freezeQuestion) {
+    return dependencies.freezeQuestion({
+      workspaceId: context.workspaceId,
+      opportunityId: context.opportunityId,
+      integrationId: context.integrationId,
+      ...(input.question === undefined ? {} : { callerQuestion: input.question }),
+      now,
+    });
+  }
+  if (context.requestProfile.questionAuthority === "agent_per_request") {
+    throw new TokenlessServiceError(
+      "Agent-written review questions require immutable question storage.",
+      503,
+      "review_question_freezer_unavailable",
+      true,
+    );
+  }
+  const question = resolveHumanReviewQuestion({
+    policy: {
+      questionAuthority: "owner_fixed",
+      resultSemantics: "assurance",
+      criterion: context.requestProfile.criterion,
+      positiveLabel: context.requestProfile.positiveLabel,
+      negativeLabel: context.requestProfile.negativeLabel,
+      rationaleMode: context.requestProfile.rationaleMode,
+    },
+    ...(input.question === undefined ? {} : { callerQuestion: input.question }),
+  });
+  return Object.freeze({
+    question,
+    questionHash: hashFrozenBinaryReviewQuestion(question),
+    contentBoundary: context.requestProfile.contentBoundary,
+    persisted: false,
+    replayed: false,
   });
 }
 
@@ -771,6 +839,7 @@ async function ensureRoutingFeedbackBonus(
   dependencies: RouterDependencies,
   context: FrozenHumanReviewRoutingContext,
   input: HumanReviewRoutingRequest,
+  frozenQuestion: FrozenHumanReviewOpportunityQuestion,
   now: Date,
   reviewerAccounts: readonly string[] = [],
 ): Promise<FeedbackBonusPoolBinding | null> {
@@ -796,7 +865,7 @@ async function ensureRoutingFeedbackBonus(
       await dependencies.requireFeedbackBonusEligibility(account, now);
     }
   }
-  const preparation = prepareFrozenRoutingRequest(context, input, now);
+  const preparation = prepareFrozenRoutingRequest(context, input, frozenQuestion, now);
   const feedbackDeadline = new Date(preparation.preparedRequest.timing.expiresAt);
   return dependencies.ensureFeedbackBonus({
     workspaceId: context.workspaceId,
@@ -811,6 +880,7 @@ async function ensureRoutingFeedbackBonus(
 const DEFAULT_DEPENDENCIES: RouterDependencies = {
   isWorkspaceStopped: isWorkspaceStopEngaged,
   loadContext: loadFrozenContext,
+  freezeQuestion: freezeHumanReviewOpportunityQuestion,
   prepareApproval: prepareHumanReviewForOwnerApproval,
   publishPublicPaid: requestPublicPaidHumanReview,
   resolvePrivateBinding: resolveExactPrivateBinding,
@@ -867,11 +937,14 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
       };
     }
     if (context.binding.authority === "prepare_for_approval") {
+      const frozenQuestion = await freezeRoutingQuestion(dependencies, context, input, now);
       const approval = await dependencies.prepareApproval({
         principal: input.principal,
         opportunityId: context.opportunityId,
         sourcePayload: input.sourcePayload,
         suggestionPayload: input.suggestionPayload,
+        effectiveQuestion: frozenQuestion.question,
+        effectiveQuestionHash: frozenQuestion.questionHash,
         now,
       });
       return {
@@ -910,14 +983,21 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
           sideEffects: NO_SIDE_EFFECTS,
         };
       }
+    }
+    const frozenQuestion = await freezeRoutingQuestion(dependencies, context, input, now);
+    if (context.requestProfile.lane === "hybrid_public_safe") {
+      const material = input.material!;
+      const split = material.kind === "public" ? material.hybridSplit : undefined;
+      if (!dependencies.assignHybrid || !split) throw new Error("Hybrid material was checked before routing.");
       await ensureRoutingFeedbackBonus(
         dependencies,
         context,
         input,
+        frozenQuestion,
         now,
         [...split.invited.candidates, ...split.network.candidates].map(candidate => candidate.accountAddress),
       );
-      await dependencies.activateAutonomousLane(context, null, now);
+      await dependencies.activateAutonomousLane(context, null, frozenQuestion, now);
       return {
         schemaVersion: "rateloop.human-review-route.v1",
         action: "hybrid_review_requested",
@@ -930,8 +1010,8 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
     if (context.requestProfile.lane === "public_paid_network") {
       const material = input.material!;
       if (material.kind !== "public") throw new Error("Public material was checked before routing.");
-      await ensureRoutingFeedbackBonus(dependencies, context, input, now);
-      await dependencies.activateAutonomousLane(context, null, now);
+      await ensureRoutingFeedbackBonus(dependencies, context, input, frozenQuestion, now);
+      await dependencies.activateAutonomousLane(context, null, frozenQuestion, now);
       const requested = await dependencies.publishPublicPaid({
         principal: input.principal,
         opportunityId: context.opportunityId,
@@ -939,6 +1019,8 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
         suggestionPayload: input.suggestionPayload,
         publication: material.publication,
         appOrigin: material.appOrigin,
+        effectiveQuestion: frozenQuestion.question,
+        effectiveQuestionHash: frozenQuestion.questionHash,
       });
       return {
         schemaVersion: "rateloop.human-review-route.v1",
@@ -961,10 +1043,17 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
         sideEffects: NO_SIDE_EFFECTS,
       };
     }
-    await ensureRoutingFeedbackBonus(dependencies, context, input, now, privateBinding.reviewerAccountAddresses);
-    await dependencies.activateAutonomousLane(context, privateBinding, now);
+    await ensureRoutingFeedbackBonus(
+      dependencies,
+      context,
+      input,
+      frozenQuestion,
+      now,
+      privateBinding.reviewerAccountAddresses,
+    );
+    await dependencies.activateAutonomousLane(context, privateBinding, frozenQuestion, now);
     const request: HumanAssurancePrivateReviewCreateRequest = {
-      idempotencyKey: deterministicPrivateIdempotencyKey(context, privateBinding),
+      idempotencyKey: deterministicPrivateIdempotencyKey(context, privateBinding, frozenQuestion.questionHash),
       integrationId: context.integrationId,
       projectId: privateBinding.projectId,
       requestProfile: {
@@ -996,7 +1085,7 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
       );
     }
     if (context.requestProfile.lane === "private_invited_paid") {
-      const prepared = prepareFrozenRoutingRequest(context, input, now);
+      const prepared = prepareFrozenRoutingRequest(context, input, frozenQuestion, now);
       const delivery = await dependencies.assignPrivatePaid({
         principal: input.principal.principal,
         integrationId: context.integrationId,

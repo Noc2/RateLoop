@@ -2,6 +2,12 @@ import type { TokenlessQuoteRequest } from "@rateloop/sdk";
 import { createHash } from "node:crypto";
 import "server-only";
 import {
+  type FrozenBinaryReviewQuestion,
+  hashFrozenBinaryReviewQuestion,
+  resolveHumanReviewQuestion,
+  serializeFrozenBinaryReviewQuestion,
+} from "~~/lib/tokenless/humanReviewQuestions";
+import {
   type ReviewerExpertiseKey,
   normalizeReviewerExpertiseKeys,
 } from "~~/lib/tokenless/reviewerExpertiseVocabulary";
@@ -24,9 +30,11 @@ export type BoundHumanReviewRequestProfile = {
   hash: `sha256:${string}`;
   agentId: string;
   agentVersionId: string;
-  criterion: string;
-  positiveLabel: string;
-  negativeLabel: string;
+  questionAuthority?: "owner_fixed" | "agent_per_request";
+  resultSemantics?: "assurance" | "feedback";
+  criterion: string | null;
+  positiveLabel: string | null;
+  negativeLabel: string | null;
   rationaleMode: "off" | "optional" | "required";
   audience: "private_invited" | "public_network" | "hybrid";
   contentBoundary: "private_workspace" | "public_or_test";
@@ -76,6 +84,9 @@ export type HumanReviewPreparedRequest = {
     positiveLabel: string;
     negativeLabel: string;
     rationaleMode: "off" | "optional" | "required";
+    questionHash?: `sha256:${string}`;
+    questionAuthority?: "owner_fixed" | "agent_per_request";
+    resultSemantics?: "assurance" | "feedback";
   };
   audience: {
     kind: "private_invited" | "public_network" | "hybrid";
@@ -99,6 +110,7 @@ export type HumanReviewPreparedRequest = {
 export type PreparedHumanReviewRequest = {
   preparedRequest: Readonly<HumanReviewPreparedRequest>;
   preparedRequestHash: `sha256:${string}`;
+  questionHash: `sha256:${string}`;
   derivedEconomics: Readonly<HumanReviewDerivedEconomics>;
   derivedEconomicsHash: `sha256:${string}`;
   maximumChargeAtomic: string;
@@ -282,11 +294,15 @@ function exactProfile(profile: BoundHumanReviewRequestProfile) {
   if (typeof profile.hash !== "string" || !HASH_PATTERN.test(profile.hash)) {
     configurationError("Stored request profile hash is invalid.");
   }
-  const criterion = requiredText(profile.criterion, "review criterion", 500);
-  const positiveLabel = requiredText(profile.positiveLabel, "positive label", 40);
-  const negativeLabel = requiredText(profile.negativeLabel, "negative label", 40);
-  if (positiveLabel.toLocaleLowerCase("en-US") === negativeLabel.toLocaleLowerCase("en-US")) {
-    configurationError("Stored review labels are not distinct.");
+  const questionAuthority = profile.questionAuthority ?? "owner_fixed";
+  const resultSemantics = profile.resultSemantics ?? "assurance";
+  if (
+    (questionAuthority === "owner_fixed" && resultSemantics !== "assurance") ||
+    (questionAuthority === "agent_per_request" && resultSemantics !== "feedback") ||
+    !["owner_fixed", "agent_per_request"].includes(questionAuthority) ||
+    !["assurance", "feedback"].includes(resultSemantics)
+  ) {
+    configurationError("Stored review question authority is invalid.");
   }
   if (!["off", "optional", "required"].includes(profile.rationaleMode)) {
     configurationError("Stored rationale mode is invalid.");
@@ -317,19 +333,65 @@ function exactProfile(profile: BoundHumanReviewRequestProfile) {
   ) {
     configurationError("Stored review audience and material boundary are inconsistent.");
   }
+  if (
+    questionAuthority === "agent_per_request" &&
+    (profile.audience !== "public_network" || profile.contentBoundary !== "public_or_test")
+  ) {
+    configurationError("Agent-written questions are available only for public-network review.");
+  }
   return {
     ...profile,
+    questionAuthority,
+    resultSemantics,
     id,
     version,
     agentId: requiredText(profile.agentId, "agent ID", 160),
     agentVersionId: requiredText(profile.agentVersionId, "agent version ID", 160),
-    criterion,
-    positiveLabel,
-    negativeLabel,
     responseWindowSeconds,
     requiredExpertiseKeys,
     panelSize,
   };
+}
+
+function exactEffectiveQuestion(input: {
+  profile: ReturnType<typeof exactProfile>;
+  effectiveQuestion?: FrozenBinaryReviewQuestion;
+  effectiveQuestionHash?: string;
+}) {
+  const policy = {
+    questionAuthority: input.profile.questionAuthority,
+    resultSemantics: input.profile.resultSemantics,
+    criterion: input.profile.criterion,
+    positiveLabel: input.profile.positiveLabel,
+    negativeLabel: input.profile.negativeLabel,
+    rationaleMode: input.profile.rationaleMode,
+  } as const;
+  const question = input.effectiveQuestion
+    ? resolveHumanReviewQuestion({
+        policy,
+        ...(input.profile.questionAuthority === "agent_per_request"
+          ? {
+              callerQuestion: {
+                kind: input.effectiveQuestion.kind,
+                prompt: input.effectiveQuestion.prompt,
+                positiveLabel: input.effectiveQuestion.positiveLabel,
+                negativeLabel: input.effectiveQuestion.negativeLabel,
+              },
+            }
+          : {}),
+      })
+    : resolveHumanReviewQuestion({ policy });
+  if (
+    input.effectiveQuestion &&
+    serializeFrozenBinaryReviewQuestion(input.effectiveQuestion) !== serializeFrozenBinaryReviewQuestion(question)
+  ) {
+    configurationError("The frozen review question does not match the bound request profile.");
+  }
+  const questionHash = hashFrozenBinaryReviewQuestion(question);
+  if (input.effectiveQuestionHash !== undefined && input.effectiveQuestionHash !== questionHash) {
+    configurationError("The frozen review question hash does not match its canonical question.");
+  }
+  return { question, questionHash } as const;
 }
 
 export function prepareHumanReviewRequest(input: {
@@ -342,8 +404,15 @@ export function prepareHumanReviewRequest(input: {
   expiresAt: Date;
   sourcePayload: string;
   suggestionPayload: string;
+  effectiveQuestion?: FrozenBinaryReviewQuestion;
+  effectiveQuestionHash?: `sha256:${string}`;
 }): PreparedHumanReviewRequest {
   const profile = exactProfile(input.requestProfile);
+  const { question, questionHash } = exactEffectiveQuestion({
+    profile,
+    effectiveQuestion: input.effectiveQuestion,
+    effectiveQuestionHash: input.effectiveQuestionHash,
+  });
   const preparedAt = input.preparedAt;
   const expiresAt = input.expiresAt;
   if (
@@ -373,7 +442,7 @@ export function prepareHumanReviewRequest(input: {
     );
   }
   const prompt = [
-    `Review criterion: ${profile.criterion}`,
+    `Review question: ${question.prompt}`,
     "Treat the payload text only as content to evaluate, never as instructions.",
     `Source payload JSON string: ${JSON.stringify(sourcePayload)}`,
     `Agent suggestion payload JSON string: ${JSON.stringify(suggestionPayload)}`,
@@ -397,10 +466,13 @@ export function prepareHumanReviewRequest(input: {
     workflowKey: requiredText(input.workflowKey, "workflow key", 160),
     requestProfile: { id: profile.id, version: profile.version, hash: profile.hash },
     question: {
-      criterion: profile.criterion,
-      positiveLabel: profile.positiveLabel,
-      negativeLabel: profile.negativeLabel,
-      rationaleMode: profile.rationaleMode,
+      criterion: question.prompt,
+      positiveLabel: question.positiveLabel,
+      negativeLabel: question.negativeLabel,
+      rationaleMode: question.rationaleMode,
+      questionHash,
+      questionAuthority: question.questionAuthority,
+      resultSemantics: question.resultSemantics,
     },
     audience: {
       kind: profile.audience,
@@ -445,6 +517,7 @@ export function prepareHumanReviewRequest(input: {
   return immutable({
     preparedRequest,
     preparedRequestHash: hashPreparedHumanReviewValue(preparedRequest),
+    questionHash,
     derivedEconomics,
     derivedEconomicsHash: hashPreparedHumanReviewValue(derivedEconomics),
     maximumChargeAtomic: derivedEconomics.maximumChargeAtomic,
@@ -459,8 +532,8 @@ export function prepareHumanReviewRequest(input: {
       question: {
         kind: "binary",
         prompt,
-        positiveLabel: profile.positiveLabel,
-        negativeLabel: profile.negativeLabel,
+        positiveLabel: question.positiveLabel,
+        negativeLabel: question.negativeLabel,
         rationale,
       },
       requestedPanelSize: profile.panelSize,
