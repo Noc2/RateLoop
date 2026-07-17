@@ -77,6 +77,14 @@ test("billing members can self-declare a business profile without changing reten
     workspaceId: "ws_acme",
   });
   assert.deepEqual(profile, {
+    billingAddress: {
+      city: null,
+      country: null,
+      line1: null,
+      line2: null,
+      postalCode: null,
+      state: null,
+    },
     complete: true,
     legalName: "Acme GmbH",
     registeredAddress: "Example Street 1, Berlin",
