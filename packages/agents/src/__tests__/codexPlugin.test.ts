@@ -223,11 +223,13 @@ describe("RateLoop agent host assets", () => {
     expect(skill).toContain(
       "never diagnose a stale install or recommend uninstall from that first check",
     );
-    expect(skill).toContain("uninstall every existing RateLoop plugin");
+    expect(skill).toContain("The RateLoop connection is pending host activation");
+    expect(skill).toContain("Do not ask the user to start a new task");
+    expect(skill).toContain("Uninstall every existing RateLoop plugin");
     expect(skill).toContain(
       "Only if a later active turn still lacks the workspace tools after the first missing-tool check",
     );
-    expect(skill).toContain("Never repeat that uninstall recovery for the same intent");
+    expect(skill).toContain("Never tell the user to reinstall a plugin, start a new task");
     expect(skill).toContain("Never tell them to remove unrelated plugins");
     expect(skill).toContain("host actually presents");
     expect(skill).toContain(
@@ -237,7 +239,7 @@ describe("RateLoop agent host assets", () => {
     expect(skill).toContain(
       "If no prompt is visible, do not claim that one is pending",
     );
-    expect(skill).toContain("connection is not verified in the current task");
+    expect(skill).toContain("The RateLoop workspace tools are still unavailable");
     expect(skill).toContain(
       "Never report the workspace connected or ready unless `rateloop_verify_connection` succeeded",
     );
