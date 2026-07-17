@@ -144,6 +144,7 @@ function configuredLaneMessage(lane: keyof typeof HUMAN_REVIEW_LANE_IMPLEMENTATI
 }
 
 function grantReason(input: {
+  selectionMode: (typeof REVIEW_POLICY_MODES)[number];
   configuredPolicy: { policyId: string; version: number } | null;
   integrationPolicy: { policyId: string; version: number } | null;
   authority: string;
@@ -155,6 +156,7 @@ function grantReason(input: {
   workflows: string[];
   paymentRequired: boolean;
 }) {
+  if (input.selectionMode === "manual") return "manual_handoff_only" as const;
   if (!input.configuredPolicy) return "not_configured" as const;
   if (
     !input.integrationPolicy ||
@@ -545,6 +547,7 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
   const integrationBindingMatches = integrationBindingId === bindingId && integrationBindingVersion === bindingVersion;
   const connectionReady = text(row, "connection_intent_id") === null || text(row, "connection_status") === "connected";
   const reason = grantReason({
+    selectionMode,
     configuredPolicy,
     integrationPolicy,
     authority,
