@@ -336,6 +336,42 @@ contract TokenlessPanelTest is Test {
         panel.createRound(terms);
     }
 
+    function test_RevealAndBeaconHorizonsAreBoundedFromCreation() public {
+        // A round pinned to the maximum permitted reveal and beacon horizons is still valid.
+        TokenlessPanel.RoundTerms memory terms = _terms(3, 3);
+        terms.commitDeadline = uint64(block.timestamp + 10 minutes);
+        terms.revealDeadline = uint64(block.timestamp + panel.MAX_REVEAL_HORIZON());
+        terms.beaconFailureDeadline = uint64(block.timestamp + panel.MAX_REVEAL_HORIZON() + panel.MIN_BEACON_GRACE());
+        vm.prank(funder);
+        panel.createRound(terms);
+
+        // Reveal deadline beyond the maximum horizon strands accepted work and is rejected.
+        terms = _terms(3, 3);
+        terms.revealDeadline = uint64(block.timestamp + panel.MAX_REVEAL_HORIZON() + 1);
+        terms.beaconFailureDeadline = terms.revealDeadline + 10 minutes;
+        _expectInvalidDeadline(terms);
+
+        // Beacon-failure deadline beyond the maximum horizon is rejected.
+        terms = _terms(3, 3);
+        terms.beaconFailureDeadline = uint64(block.timestamp + panel.MAX_BEACON_FAILURE_HORIZON() + 1);
+        _expectInvalidDeadline(terms);
+
+        // A reveal window narrower than the minimum operational window is rejected.
+        terms = _terms(3, 3);
+        terms.revealDeadline = terms.commitDeadline + 1;
+        _expectInvalidDeadline(terms);
+
+        // A beacon grace narrower than the minimum operational window is rejected.
+        terms = _terms(3, 3);
+        terms.beaconFailureDeadline = terms.revealDeadline + 1;
+        _expectInvalidDeadline(terms);
+
+        // A commit window narrower than the minimum operational window is rejected.
+        terms = _terms(3, 3);
+        terms.commitDeadline = uint64(block.timestamp + 1);
+        _expectInvalidDeadline(terms);
+    }
+
     function test_BlockedCreditRecipientsCannotPreventFinalizationOrRaterClaim() public {
         (uint256 roundId, Rater[3] memory raters) = _healthyRound();
         _beginHealthySettlement(roundId);
@@ -461,6 +497,12 @@ contract TokenlessPanelTest is Test {
     function _expectInvalidTerms(TokenlessPanel.RoundTerms memory terms) internal {
         vm.prank(funder);
         vm.expectRevert(TokenlessPanel.InvalidTerms.selector);
+        panel.createRound(terms);
+    }
+
+    function _expectInvalidDeadline(TokenlessPanel.RoundTerms memory terms) internal {
+        vm.prank(funder);
+        vm.expectRevert(TokenlessPanel.InvalidDeadline.selector);
         panel.createRound(terms);
     }
 

@@ -73,9 +73,9 @@ contract TokenlessPanelInvariantHandler is Test {
             minimumReveals: 3,
             maximumCommits: 3,
             admissionPolicyHash: ADMISSION_POLICY_HASH,
-            commitDeadline: uint64(block.timestamp + 10),
-            revealDeadline: uint64(block.timestamp + 20),
-            beaconFailureDeadline: uint64(block.timestamp + 30),
+            commitDeadline: uint64(block.timestamp + 10 minutes),
+            revealDeadline: uint64(block.timestamp + 20 minutes),
+            beaconFailureDeadline: uint64(block.timestamp + 30 minutes),
             beaconRound: uint64(10_000 + _roundIds.length),
             claimGracePeriod: 1 hours,
             feeRecipient: address(this)

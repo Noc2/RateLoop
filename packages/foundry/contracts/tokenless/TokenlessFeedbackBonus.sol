@@ -17,6 +17,10 @@ contract TokenlessFeedbackBonus is EIP712, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint64 public constant MAX_AWARD_WINDOW = 365 days;
+    // Minimum operational window and maximum custody-liveness horizon for the feedback deadline,
+    // measured from creation, so malformed terms cannot lock a funder's pool for years.
+    uint64 public constant MIN_FEEDBACK_WINDOW = 5 minutes;
+    uint64 public constant MAX_FEEDBACK_HORIZON = 90 days;
 
     bytes32 public constant VOUCHER_TYPEHASH = keccak256(
         "Voucher(address voteKey,bytes32 reviewId,bytes32 contentId,uint256 poolId,bytes32 nullifier,bytes32 admissionPolicyHash,uint64 issuerEpoch,uint64 expiresAt)"
@@ -171,7 +175,9 @@ contract TokenlessFeedbackBonus is EIP712, ReentrancyGuard {
         if (terms.reviewId == bytes32(0) || terms.contentId == bytes32(0) || terms.admissionPolicyHash == bytes32(0)) revert InvalidTerms();
         if (terms.amount == 0) revert InvalidAmount();
         if (
-            terms.feedbackDeadline <= block.timestamp || terms.awardDeadline <= terms.feedbackDeadline
+            uint256(terms.feedbackDeadline) < block.timestamp + MIN_FEEDBACK_WINDOW
+                || uint256(terms.feedbackDeadline) > block.timestamp + MAX_FEEDBACK_HORIZON
+                || terms.awardDeadline <= terms.feedbackDeadline
                 || uint256(terms.awardDeadline) > uint256(terms.feedbackDeadline) + MAX_AWARD_WINDOW
         ) revert InvalidDeadline();
         bytes32 poolKey = poolKeyFor(payer, terms.reviewId);

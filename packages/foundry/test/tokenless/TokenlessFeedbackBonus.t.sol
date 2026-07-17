@@ -269,6 +269,31 @@ contract TokenlessFeedbackBonusTest is Test {
         assertEq(usdc.balanceOf(address(bonus)), 0);
     }
 
+    function test_FeedbackHorizonIsBoundedFromCreation() public {
+        // A feedback deadline pinned to the maximum permitted horizon is still valid.
+        TokenlessFeedbackBonus.PoolTerms memory maxHorizon = _terms(keccak256("max-horizon-review"));
+        maxHorizon.feedbackDeadline = uint64(block.timestamp + bonus.MAX_FEEDBACK_HORIZON());
+        maxHorizon.awardDeadline = maxHorizon.feedbackDeadline + 1 hours;
+        vm.prank(funder);
+        bonus.createPool(maxHorizon, awarder);
+
+        // A feedback deadline beyond the maximum horizon can lock the funder for years and is rejected.
+        TokenlessFeedbackBonus.PoolTerms memory tooLong = _terms(keccak256("too-long-horizon-review"));
+        tooLong.feedbackDeadline = uint64(block.timestamp + bonus.MAX_FEEDBACK_HORIZON() + 1);
+        tooLong.awardDeadline = tooLong.feedbackDeadline + 1 hours;
+        vm.prank(funder);
+        vm.expectRevert(TokenlessFeedbackBonus.InvalidDeadline.selector);
+        bonus.createPool(tooLong, awarder);
+
+        // A feedback window narrower than the minimum operational window is rejected.
+        TokenlessFeedbackBonus.PoolTerms memory tooShort = _terms(keccak256("too-short-window-review"));
+        tooShort.feedbackDeadline = uint64(block.timestamp + 1);
+        tooShort.awardDeadline = uint64(block.timestamp + 2 hours);
+        vm.prank(funder);
+        vm.expectRevert(TokenlessFeedbackBonus.InvalidDeadline.selector);
+        bonus.createPool(tooShort, awarder);
+    }
+
     function _terms(bytes32 reviewId) internal view returns (TokenlessFeedbackBonus.PoolTerms memory) {
         return TokenlessFeedbackBonus.PoolTerms({
             reviewId: reviewId,

@@ -22,6 +22,15 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
     uint64 public constant MAX_CLAIM_GRACE_PERIOD = 365 days;
     uint8 public constant SCORING_VERSION = 2;
 
+    // Minimum operational windows and maximum custody-liveness horizons measured from creation.
+    // The horizons bound how long a valid commit can wait before settlement becomes reachable, so
+    // malformed or hostile terms cannot strand the bounty, attempt reserve, and accepted-work path.
+    uint64 public constant MIN_COMMIT_WINDOW = 5 minutes;
+    uint64 public constant MIN_REVEAL_WINDOW = 5 minutes;
+    uint64 public constant MIN_BEACON_GRACE = 5 minutes;
+    uint64 public constant MAX_REVEAL_HORIZON = 90 days;
+    uint64 public constant MAX_BEACON_FAILURE_HORIZON = 120 days;
+
     bytes32 public constant VOUCHER_TYPEHASH = keccak256(
         "Voucher(address voteKey,bytes32 contentId,uint256 roundId,bytes32 nullifier,bytes32 admissionPolicyHash,uint64 issuerEpoch,uint64 expiresAt)"
     );
@@ -781,9 +790,14 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
                 || terms.attemptReserve < fixedBasePay * terms.maximumCommits
         ) revert InvalidTerms();
         if (
-            terms.commitDeadline <= block.timestamp || terms.revealDeadline <= terms.commitDeadline
-                || terms.beaconFailureDeadline <= terms.revealDeadline || terms.claimGracePeriod == 0
-                || terms.claimGracePeriod > MAX_CLAIM_GRACE_PERIOD
+            uint256(terms.commitDeadline) < block.timestamp + MIN_COMMIT_WINDOW
+                || uint256(terms.revealDeadline) < uint256(terms.commitDeadline) + MIN_REVEAL_WINDOW
+                || uint256(terms.beaconFailureDeadline) < uint256(terms.revealDeadline) + MIN_BEACON_GRACE
+                || terms.claimGracePeriod == 0 || terms.claimGracePeriod > MAX_CLAIM_GRACE_PERIOD
+        ) revert InvalidDeadline();
+        if (
+            uint256(terms.revealDeadline) > block.timestamp + MAX_REVEAL_HORIZON
+                || uint256(terms.beaconFailureDeadline) > block.timestamp + MAX_BEACON_FAILURE_HORIZON
         ) revert InvalidDeadline();
         if (terms.feeAmount > (terms.bountyAmount * MAX_FEE_BPS) / 10_000) revert InvalidTerms();
         if (terms.feeAmount != 0 && terms.feeRecipient == address(0)) revert InvalidAddress();
