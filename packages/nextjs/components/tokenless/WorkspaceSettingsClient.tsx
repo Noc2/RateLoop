@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { WorkspaceRequestScope } from "~~/lib/tokenless/workspaceRequestScope";
 
@@ -127,6 +128,7 @@ function billingStatusLabel(status: string) {
 }
 
 export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWorkspaceId?: string }) {
+  const router = useRouter();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspacesLoading, setWorkspacesLoading] = useState(true);
   const [selectedId, setSelectedId] = useState("");
@@ -232,46 +234,66 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
     );
   }, [initialWorkspaceId, selectWorkspace, workspaceRequests]);
 
-  const loadBilling = useCallback(async (workspaceId: string) => {
-    if (!workspaceId) {
-      setBilling(null);
-      return null;
-    }
-    const body = await readJson(
-      await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/billing`, {
-        cache: "no-store",
-        credentials: "same-origin",
-      }),
-    );
-    const next = ((body.billing as BillingSummary | undefined) ?? body) as BillingSummary;
-    setBilling(next);
-    setBillingError(null);
-    return next;
-  }, []);
+  const loadBilling = useCallback(
+    async (workspaceId: string) => {
+      if (!workspaceId) {
+        setBilling(null);
+        return null;
+      }
+      const request = workspaceRequests.begin(workspaceId, "billing:load");
+      try {
+        const body = await readJson(
+          await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/billing`, {
+            cache: "no-store",
+            credentials: "same-origin",
+            signal: request.signal,
+          }),
+        );
+        const next = ((body.billing as BillingSummary | undefined) ?? body) as BillingSummary;
+        if (!request.isCurrent()) return null;
+        setBilling(next);
+        setBillingError(null);
+        return next;
+      } finally {
+        request.finish();
+      }
+    },
+    [workspaceRequests],
+  );
 
-  const loadBillingProfile = useCallback(async (workspaceId: string) => {
-    if (!workspaceId) return null;
-    const body = (await readJson(
-      await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/billing/profile`, {
-        cache: "no-store",
-        credentials: "same-origin",
-      }),
-    )) as BillingProfile;
-    setBillingProfile({
-      legalName: body.legalName ?? "",
-      registrationNumber: body.registrationNumber ?? "",
-      registeredAddress: body.registeredAddress ?? "",
-      vatCountryCode: body.vatCountryCode ?? "",
-      vatId: body.vatId ?? "",
-      billingCountryCode: body.billingAddress.country ?? "",
-      billingAddressLine1: body.billingAddress.line1 ?? "",
-      billingAddressLine2: body.billingAddress.line2 ?? "",
-      billingCity: body.billingAddress.city ?? "",
-      billingPostalCode: body.billingAddress.postalCode ?? "",
-      billingState: body.billingAddress.state ?? "",
-    });
-    return body;
-  }, []);
+  const loadBillingProfile = useCallback(
+    async (workspaceId: string) => {
+      if (!workspaceId) return null;
+      const request = workspaceRequests.begin(workspaceId, "billing:profile:load");
+      try {
+        const body = (await readJson(
+          await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/billing/profile`, {
+            cache: "no-store",
+            credentials: "same-origin",
+            signal: request.signal,
+          }),
+        )) as BillingProfile;
+        if (!request.isCurrent()) return null;
+        setBillingProfile({
+          legalName: body.legalName ?? "",
+          registrationNumber: body.registrationNumber ?? "",
+          registeredAddress: body.registeredAddress ?? "",
+          vatCountryCode: body.vatCountryCode ?? "",
+          vatId: body.vatId ?? "",
+          billingCountryCode: body.billingAddress.country ?? "",
+          billingAddressLine1: body.billingAddress.line1 ?? "",
+          billingAddressLine2: body.billingAddress.line2 ?? "",
+          billingCity: body.billingAddress.city ?? "",
+          billingPostalCode: body.billingAddress.postalCode ?? "",
+          billingState: body.billingAddress.state ?? "",
+        });
+        return body;
+      } finally {
+        request.finish();
+      }
+    },
+    [workspaceRequests],
+  );
 
   const loadTopups = useCallback(
     async (workspaceId: string) => {
@@ -326,10 +348,12 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
 
   useEffect(() => {
     void loadBilling(selectedId).catch(cause => {
+      // Ignore a failure for a workspace that is no longer active (its request was superseded/aborted).
+      if (!workspaceRequests.isWorkspaceCurrent(selectedId)) return;
       setBilling(null);
       setBillingError(cause instanceof Error ? cause.message : "Unable to load billing status.");
     });
-  }, [loadBilling, selectedId]);
+  }, [loadBilling, selectedId, workspaceRequests]);
 
   useEffect(() => {
     setTopups(null);
@@ -718,14 +742,18 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
           <>
             <label className="mt-4 block text-sm text-base-content/60">
               Active workspace
+              {/*
+                The URL-backed parent (AgentWorkspacePanels) is the single source of truth for the active
+                workspace. Navigating the parent route re-renders every sibling panel (stop, deletion,
+                evidence, funding) together, so this control can never leave settings pointing at a
+                different workspace than the rest of the page.
+              */}
               <select
                 className="select mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
                 value={selectedId}
-                onChange={event => {
-                  setSelectedId(event.target.value);
-                  setShowBillingProfile(false);
-                  setBillingProfileSaved(false);
-                }}
+                onChange={event =>
+                  router.push(`/agents?tab=overview&workspace=${encodeURIComponent(event.target.value)}`)
+                }
               >
                 {workspaces.map(workspace => (
                   <option key={workspace.workspaceId} value={workspace.workspaceId}>

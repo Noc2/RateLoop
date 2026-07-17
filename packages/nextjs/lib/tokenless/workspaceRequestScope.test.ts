@@ -79,6 +79,39 @@ test("a deferred identity action cannot expose an old token, error, or busy-stat
   assert.deepEqual(state, { busy: false, error: null, token: "workspace-b-secret" });
 });
 
+test("a deferred billing response cannot overwrite the newly selected workspace", async () => {
+  const scope = new WorkspaceRequestScope();
+  const workspaceA = deferred<{ plan: string }>();
+  const workspaceB = deferred<{ plan: string }>();
+  const committed: string[] = [];
+
+  async function loadBilling(workspaceId: string, response: ReturnType<typeof deferred<{ plan: string }>>) {
+    const request = scope.begin(workspaceId, "billing:load");
+    try {
+      const body = await response.promise;
+      if (!request.isCurrent()) return;
+      committed.push(body.plan);
+    } finally {
+      request.finish();
+    }
+  }
+
+  scope.selectWorkspace("workspace-a");
+  const loadA = loadBilling("workspace-a", workspaceA);
+
+  scope.selectWorkspace("workspace-b");
+  assert.equal(scope.isWorkspaceCurrent("workspace-a"), false);
+  const loadB = loadBilling("workspace-b", workspaceB);
+
+  workspaceB.resolve({ plan: "workspace-b-plan" });
+  await loadB;
+  // The stale workspace-a response resolves last but must not overwrite the active workspace-b billing.
+  workspaceA.resolve({ plan: "workspace-a-plan" });
+  await loadA;
+
+  assert.deepEqual(committed, ["workspace-b-plan"]);
+});
+
 test("a newer request on the same channel supersedes an older response", async () => {
   const scope = new WorkspaceRequestScope();
   scope.selectWorkspace("workspace-a");

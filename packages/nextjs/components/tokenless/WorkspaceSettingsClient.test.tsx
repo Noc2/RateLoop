@@ -94,6 +94,27 @@ test("workspace setup does not expose manual agent credentials or result webhook
   assert.equal(existsSync(webhookRoute), false);
 });
 
+test("the active-workspace control navigates the URL-backed parent route as the single source of truth", () => {
+  // AUD-04: the inner selector must not locally diverge from the parent workspace. Navigating the
+  // parent route re-renders every sibling panel together instead of only calling setSelectedId.
+  assert.match(source, /Active workspace/);
+  assert.match(
+    source,
+    /router\.push\(`\/agents\?tab=overview&workspace=\$\{encodeURIComponent\(event\.target\.value\)\}`\)/,
+  );
+  assert.match(source, /const router = useRouter\(\)/);
+  assert.doesNotMatch(source, /onChange=\{event => \{\s*setSelectedId\(event\.target\.value\)/);
+});
+
+test("billing and billing-profile loads are workspace-scoped like top-up and identity", () => {
+  // AUD-04: every billing/profile request carries the same generation+workspace guard so a stale
+  // response for a previous workspace can never overwrite the active workspace display.
+  assert.match(source, /workspaceRequests\.begin\(workspaceId, "billing:load"\)/);
+  assert.match(source, /workspaceRequests\.begin\(workspaceId, "billing:profile:load"\)/);
+  assert.match(source, /if \(!request\.isCurrent\(\)\) return null;\s*setBilling\(next\)/);
+  assert.match(source, /if \(!workspaceRequests\.isWorkspaceCurrent\(selectedId\)\) return;/);
+});
+
 test("workspace management creation continues into guided agent setup", () => {
   assert.match(source, /Create your workspace/);
   assert.match(source, /Name it, then connect your agent/);
