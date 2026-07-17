@@ -91,8 +91,8 @@ export default async function AgentOAuthDevicePage({ searchParams }: { searchPar
   const terminalCopy = {
     approved: {
       eyebrow: "Approved",
-      title: "Connection approved",
-      message: "You can close this page. The agent host will finish automatically.",
+      title: "Authorization approved",
+      message: "Return to the same agent task. RateLoop will show the connection after verification.",
     },
     denied: {
       eyebrow: "Denied",
@@ -100,9 +100,9 @@ export default async function AgentOAuthDevicePage({ searchParams }: { searchPar
       message: "You can close this page.",
     },
     consumed: {
-      eyebrow: "Connected",
-      title: "Agent connected",
-      message: "You can close this page.",
+      eyebrow: "Authenticated",
+      title: "Authentication complete",
+      message: "Return to the same agent task. RateLoop will show the connection after verification.",
     },
     expired: {
       eyebrow: "Expired",

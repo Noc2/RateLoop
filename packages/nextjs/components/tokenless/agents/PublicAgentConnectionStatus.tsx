@@ -37,7 +37,7 @@ export function PublicAgentConnectionStatus() {
       role="status"
       aria-live="polite"
     >
-      Connection link verified. Return to your agent to continue.
+      Connection link found. Return to your agent to continue.
     </p>
   );
 }

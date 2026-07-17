@@ -106,13 +106,17 @@ export function AgentOAuthConsentForm({ autoAuthorize, values }: Props) {
       <div className="mt-8 border-t border-white/10 pt-8 text-center" role="status" aria-live="polite">
         <RateLoopLogo className="mx-auto h-16 w-16" idPrefix="agent-oauth-complete" />
         <p className="mt-5 font-mono text-xs uppercase tracking-[0.22em] text-[var(--rateloop-green)]">
-          {callbackOutcome === "approved" ? "Agent connected" : "Connection canceled"}
+          {callbackOutcome === "approved" ? "Authorization approved" : "Connection canceled"}
         </p>
         <h2 className="mt-3 text-3xl font-semibold tracking-tight">
           {callbackOutcome === "approved" ? "Authentication complete" : "Authorization canceled"}
         </h2>
         <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-base-content/65">
-          {callbackDelivered ? "Returning to RateLoop…" : "Finishing the secure callback…"}
+          {callbackDelivered && callbackOutcome === "approved"
+            ? "Return to the same agent task. RateLoop will show the connection after verification."
+            : callbackDelivered
+              ? "Returning to RateLoop…"
+              : "Finishing the secure callback…"}
         </p>
         <Link href="/agents?tab=overview" className="rateloop-gradient-action mt-6 min-h-11 px-5">
           Back to Agents

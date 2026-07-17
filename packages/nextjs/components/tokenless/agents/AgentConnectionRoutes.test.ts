@@ -71,6 +71,6 @@ test("claim fragment is inspected only in the browser and never stored or sent",
   assert.doesNotMatch(publicPage, /location\.hash|searchParams/);
   assert.doesNotMatch(publicClient, /fetch\(|sendBeacon|localStorage|sessionStorage/);
   assert.doesNotMatch(publicClient, /setFragmentState\(claim/);
-  assert.match(publicClient, /Connection link verified\. Return to your agent to continue\./);
+  assert.match(publicClient, /Connection link found\. Return to your agent to continue\./);
   assert.doesNotMatch(publicClient, /activation claim is present|reconstruct or add a claim/);
 });
