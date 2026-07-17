@@ -109,16 +109,28 @@ test("review setup resumes a controlled question and compact answer format", () 
   assert.doesNotMatch(flowSource, /form\.get\("(?:criterion|positiveLabel|negativeLabel|rationaleMode)"\)/);
 });
 
-test("review setup uses the legacy duration control for an explicit frozen response window", () => {
+test("review setup uses duration controls for the frozen deadline and separate active-effort guidance", () => {
   assert.match(flowSource, /Review round/);
   assert.match(flowSource, /Response window/);
   assert.match(flowSource, /Reviewers per request/);
   assert.match(flowSource, /<DurationInput/);
   assert.match(flowSource, /valueSeconds=\{reviewTiming\.responseWindowSeconds\}/);
+  assert.match(flowSource, /Expected active review time/);
+  assert.match(flowSource, /valueSeconds=\{reviewTiming\.expectedEffortSeconds \?\? "600"\}/);
   assert.match(flowSource, /summarySuffix="Frozen when a request opens"/);
   assert.match(flowSource, /reviewAudience\.audience === "private_invited" \? 1 : 3/);
-  assert.match(flowSource, /buildReviewTimingRequestProfile\(criterionProfile, reviewTiming\)/);
+  assert.match(flowSource, /buildReviewTimingRequestProfile\(expertiseProfile, reviewTiming\)/);
   assert.doesNotMatch(flowSource, /slo\.estimatedSeconds/);
+});
+
+test("review setup fails closed while a changed expertise pool is being checked", () => {
+  const reset = flowSource.indexOf("setExpertiseEligibility(null)");
+  const request = flowSource.indexOf("/reviewer-expertise/eligibility?");
+  assert.ok(reset >= 0 && request > reset);
+  assert.match(flowSource, /requiredExpertiseKeys\.length === 0/);
+  assert.match(flowSource, /expertiseEligibility\?\.key === expertiseEligibilityKey/);
+  assert.match(flowSource, /setExpertiseEligibility\(\{ key: expertiseEligibilityKey, value \}\)/);
+  assert.match(flowSource, /if \(!expertiseEligibilityStatus\.feasible\)/);
 });
 
 test("review setup controls independent base compensation, optional Feedback Bonus, and agent authority", () => {

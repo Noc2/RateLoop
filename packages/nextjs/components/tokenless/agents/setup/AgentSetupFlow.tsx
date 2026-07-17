@@ -25,14 +25,24 @@ import {
   reviewCriterionFormValues,
 } from "./reviewCriterion";
 import {
+  REVIEWER_EXPERTISE,
+  type ReviewExpertiseFormValues,
+  buildReviewExpertiseRequestProfile,
+  estimatedEffectiveHourlyUsdc,
+  reviewExpertiseEligibilityStatus,
+  reviewExpertiseFormValues,
+} from "./reviewExpertise";
+import {
   type ReviewFrequencyFormValues,
   buildReviewFrequencySelection,
   reviewFrequencyFormValues,
   reviewFrequencySummary,
 } from "./reviewFrequency";
 import {
+  MAX_REVIEW_EXPECTED_EFFORT_SECONDS,
   MAX_REVIEW_PANEL_SIZE,
   MAX_REVIEW_RESPONSE_WINDOW_SECONDS,
+  MIN_REVIEW_EXPECTED_EFFORT_SECONDS,
   MIN_REVIEW_RESPONSE_WINDOW_SECONDS,
   type ReviewTimingFormValues,
   buildReviewTimingRequestProfile,
@@ -84,6 +94,15 @@ type PendingReviewConfirmation = {
   requestProfile: Omit<AgentSetupReviewDraft["requestProfile"], "configurationStatus">;
   authority: AgentSetupReviewDraft["authority"];
 };
+
+type ExpertiseEligibility = {
+  eligible: number;
+  feasible: boolean;
+  invited: { eligible: number; total: number };
+  network: { eligible: number; total: number; ready: boolean };
+};
+
+type ExpertiseEligibilityState = { key: string; value: ExpertiseEligibility };
 
 function reviewAudienceSummary(audience: AgentSetupReviewDraft["requestProfile"]["audience"]) {
   if (audience === "public_network") return "RateLoop public network; public, synthetic, or redacted material only";
@@ -142,6 +161,10 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   const [reviewCriterion, setReviewCriterion] = useState<ReviewCriterionFormValues>(() =>
     reviewCriterionFormValues(initialSetup.reviewDraft?.requestProfile),
   );
+  const [reviewExpertise, setReviewExpertise] = useState<ReviewExpertiseFormValues>(() =>
+    reviewExpertiseFormValues(initialSetup.reviewDraft?.requestProfile),
+  );
+  const [expertiseEligibility, setExpertiseEligibility] = useState<ExpertiseEligibilityState | null>(null);
   const [reviewTiming, setReviewTiming] = useState<ReviewTimingFormValues>(() =>
     reviewTimingFormValues(initialSetup.reviewDraft?.requestProfile),
   );
@@ -158,9 +181,28 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     reviewAudience,
     reviewCompensation,
     reviewCriterion,
+    reviewExpertise,
     reviewFrequency,
     reviewTiming,
   });
+  const expertiseEligibilityKey = JSON.stringify({
+    audience: reviewAudience.audience,
+    privateGroupId: setup.reviewDraft?.requestProfile.privateGroupId ?? setup.privateGroupId,
+    requiredExpertiseKeys: reviewExpertise.requiredExpertiseKeys,
+    workspaceId: setup.workspaceId,
+  });
+  const expertiseEligibilityStatus = reviewExpertiseEligibilityStatus({
+    audience: reviewAudience.audience,
+    eligibility: expertiseEligibility?.key === expertiseEligibilityKey ? expertiseEligibility.value : null,
+    panelSize: reviewTiming.panelSize,
+    requiredExpertiseCount: reviewExpertise.requiredExpertiseKeys.length,
+  });
+  const pendingEffectiveHourlyUsdc = pendingReviewConfirmation
+    ? estimatedEffectiveHourlyUsdc({
+        bountyPerSeatAtomic: pendingReviewConfirmation.requestProfile.bountyPerSeatAtomic,
+        expectedEffortSeconds: pendingReviewConfirmation.requestProfile.expectedEffortSeconds ?? null,
+      })
+    : null;
 
   const loadStep = useCallback(
     async (step: AgentSetupScreenStep, options?: { replace?: boolean; focus?: boolean }) => {
@@ -200,6 +242,49 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     () => setReviewCriterion(reviewCriterionFormValues(setup.reviewDraft?.requestProfile)),
     [setup.reviewDraft?.requestProfile],
   );
+
+  useEffect(
+    () => setReviewExpertise(reviewExpertiseFormValues(setup.reviewDraft?.requestProfile)),
+    [setup.reviewDraft?.requestProfile],
+  );
+
+  useEffect(() => {
+    if (currentStep !== "reviews") return;
+    setExpertiseEligibility(null);
+    if (reviewExpertise.requiredExpertiseKeys.length === 0) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      const query = new URLSearchParams({ audience: reviewAudience.audience });
+      const privateGroupId = setup.reviewDraft?.requestProfile.privateGroupId ?? setup.privateGroupId;
+      if (privateGroupId) query.set("privateGroupId", privateGroupId);
+      for (const key of reviewExpertise.requiredExpertiseKeys) query.append("expertise", key);
+      void fetch(
+        `/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/reviewer-expertise/eligibility?${query}`,
+        { cache: "no-store", credentials: "same-origin", signal: controller.signal },
+      )
+        .then(async response => (response.ok ? ((await response.json()) as ExpertiseEligibility) : null))
+        .then(value => {
+          if (!controller.signal.aborted && value) {
+            setExpertiseEligibility({ key: expertiseEligibilityKey, value });
+          }
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setExpertiseEligibility(null);
+        });
+    }, 250);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [
+    currentStep,
+    expertiseEligibilityKey,
+    reviewAudience.audience,
+    reviewExpertise.requiredExpertiseKeys,
+    setup.privateGroupId,
+    setup.reviewDraft?.requestProfile.privateGroupId,
+    setup.workspaceId,
+  ]);
 
   useEffect(
     () => setReviewTiming(reviewTimingFormValues(setup.reviewDraft?.requestProfile)),
@@ -398,12 +483,16 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     }
     setError(null);
     try {
+      if (!expertiseEligibilityStatus.feasible) {
+        throw new Error(expertiseEligibilityStatus.summary);
+      }
       const draft = setup.reviewDraft;
       if (!draft) throw new Error("Review behavior is unavailable. Reload setup and try again.");
       const selection = buildReviewFrequencySelection(draft.selection, reviewFrequency);
       const audienceProfile = buildReviewAudienceRequestProfile(draft.requestProfile, reviewAudience);
       const criterionProfile = buildReviewCriterionRequestProfile(audienceProfile, reviewCriterion);
-      const timingProfile = buildReviewTimingRequestProfile(criterionProfile, reviewTiming);
+      const expertiseProfile = buildReviewExpertiseRequestProfile(criterionProfile, reviewExpertise);
+      const timingProfile = buildReviewTimingRequestProfile(expertiseProfile, reviewTiming);
       const { requestProfile, authority } = buildReviewCompensationConfiguration(timingProfile, reviewCompensation);
       if (pendingReviewConfirmation?.fingerprint !== currentReviewFingerprint) {
         setPendingReviewConfirmation({
@@ -921,8 +1010,44 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               </p>
             )}
             <fieldset className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-4">
+              <legend className="px-1 text-sm font-medium">Required reviewer expertise</legend>
+              <p className="mb-3 text-sm text-base-content/60">
+                Optional. A request is blocked unless the selected audience can fill every seat.
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {REVIEWER_EXPERTISE.map(option => (
+                  <label
+                    key={option.key}
+                    className="flex items-center gap-3 rounded-lg border border-white/10 p-3 text-sm"
+                  >
+                    <input
+                      className="checkbox checkbox-sm"
+                      type="checkbox"
+                      checked={reviewExpertise.requiredExpertiseKeys.includes(option.key)}
+                      onChange={event =>
+                        setReviewExpertise(current => ({
+                          requiredExpertiseKeys: event.target.checked
+                            ? [...current.requiredExpertiseKeys, option.key]
+                            : current.requiredExpertiseKeys.filter(key => key !== option.key),
+                        }))
+                      }
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+              <p
+                className={`mt-3 text-sm ${
+                  !expertiseEligibilityStatus.feasible ? "text-error" : "text-base-content/60"
+                }`}
+                aria-live="polite"
+              >
+                {expertiseEligibilityStatus.summary}
+              </p>
+            </fieldset>
+            <fieldset className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-4">
               <legend className="px-1 text-sm font-medium">Review round</legend>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-3">
                 <label className="text-sm">
                   Response window
                   <DurationInput
@@ -935,6 +1060,24 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     summarySuffix="Frozen when a request opens"
                     onChangeSeconds={responseWindowSeconds =>
                       setReviewTiming(current => ({ ...current, responseWindowSeconds }))
+                    }
+                  />
+                </label>
+                <label className="text-sm">
+                  Expected active review time
+                  <DurationInput
+                    id="agent-setup-review-expected-effort"
+                    className="mt-2"
+                    ariaLabel="Expected active review time"
+                    valueSeconds={reviewTiming.expectedEffortSeconds ?? "600"}
+                    minSeconds={MIN_REVIEW_EXPECTED_EFFORT_SECONDS}
+                    maxSeconds={Math.min(
+                      MAX_REVIEW_EXPECTED_EFFORT_SECONDS,
+                      Number(reviewTiming.responseWindowSeconds) || MAX_REVIEW_EXPECTED_EFFORT_SECONDS,
+                    )}
+                    summarySuffix="Estimate only; not the answer deadline"
+                    onChangeSeconds={expectedEffortSeconds =>
+                      setReviewTiming(current => ({ ...current, expectedEffortSeconds }))
                     }
                   />
                 </label>
@@ -1014,6 +1157,10 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   />
                 </label>
               ) : null}
+              <p className="mt-3 text-xs text-base-content/55">
+                Effective-hourly guidance uses expected active work, never the response deadline. It does not change
+                reviewer pay.
+              </p>
             </fieldset>
             <fieldset className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-4">
               <legend className="px-1 text-sm font-medium">Feedback Bonus</legend>
@@ -1136,6 +1283,16 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     <dd>{reviewAudienceSummary(pendingReviewConfirmation.requestProfile.audience)}</dd>
                   </div>
                   <div>
+                    <dt className="text-base-content/55">Required expertise</dt>
+                    <dd>
+                      {pendingReviewConfirmation.requestProfile.requiredExpertiseKeys?.length
+                        ? pendingReviewConfirmation.requestProfile.requiredExpertiseKeys
+                            .map(key => REVIEWER_EXPERTISE.find(option => option.key === key)?.label ?? key)
+                            .join(", ")
+                        : "None"}
+                    </dd>
+                  </div>
+                  <div>
                     <dt className="text-base-content/55">Question</dt>
                     <dd>{pendingReviewConfirmation.requestProfile.criterion}</dd>
                   </div>
@@ -1161,6 +1318,16 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       pendingReviewConfirmation.requestProfile.bountyPerSeatAtomic
                         ? `${usdcAtomicToDecimal(pendingReviewConfirmation.requestProfile.bountyPerSeatAtomic)} USDC per accepted reviewer`
                         : "Unpaid; no base reviewer bounty"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-base-content/55">Effective-hourly guidance</dt>
+                    <dd>
+                      {pendingEffectiveHourlyUsdc
+                        ? `${pendingEffectiveHourlyUsdc} USDC/hour from ${formatResponseWindow(
+                            pendingReviewConfirmation.requestProfile.expectedEffortSeconds ?? null,
+                          )} expected active work`
+                        : "Not applicable"}
                     </dd>
                   </div>
                   <div>
