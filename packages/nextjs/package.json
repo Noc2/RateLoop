@@ -20,7 +20,7 @@
     "db:migrate:hosted": "node scripts/migrate-hosted-database.mjs",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "e2e": "yarn build:workspace-deps && yarn e2e:prepare && playwright test",
+    "e2e": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && yarn e2e:prepare && playwright test\"",
     "e2e:prepare": "node --import ../../scripts/register-node-test-env.mjs --import tsx e2e/scripts/prepare.ts",
     "evidence:verify": "node scripts/verify-assurance-evidence.mjs",
     "attestation:verify": "node scripts/verify-assurance-attestation.mjs",
