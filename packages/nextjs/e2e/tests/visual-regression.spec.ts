@@ -26,7 +26,12 @@ async function signedOutGateTreatment(page: Page, titleId: string) {
 test("landing and signed-out hubs retain their visual hierarchy", async ({ page }) => {
   await page.goto("/");
   await settleVisuals(page);
-  await expect(page.locator("main")).toHaveScreenshot("landing-main.png", { maxDiffPixelRatio: 0.01 });
+  const animatedOrb = page.locator(".orb-animation-shell");
+  await expect(animatedOrb.locator(".ell")).toHaveCount(30);
+  await expect(page.locator("main")).toHaveScreenshot("landing-main.png", {
+    mask: [animatedOrb],
+    maxDiffPixelRatio: 0.01,
+  });
 
   await page.goto("/agents");
   await settleVisuals(page);
