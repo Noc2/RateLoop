@@ -16,8 +16,7 @@ test("0099 preserves existing profiles as fixed assurance without rewriting thei
   assert.match(migration, /SET "question_authority" = 'owner_fixed',\s+"result_semantics" = 'assurance'/u);
   assert.doesNotMatch(migration, /SET\s+"profile_hash"/u);
   assert.doesNotMatch(migration, /UPDATE\s+"tokenless_agent_human_review_bindings"/u);
-  assert.equal(journal.entries.at(-1)?.idx, 99);
-  assert.equal(journal.entries.at(-1)?.tag, "0099_agent_per_request_review_questions");
+  assert.equal(journal.entries.find(entry => entry.idx === 99)?.tag, "0099_agent_per_request_review_questions");
 });
 
 test("0099 stores a true discriminated question policy instead of placeholder fixed text", () => {

@@ -66,6 +66,6 @@ test("expertise-bearing invitations are pending, bound, single-redemption attest
 });
 
 test("workspace expertise migration follows the per-request question migration", () => {
+  assert.equal(journal.entries.find(entry => entry.idx === 99)?.tag, "0099_agent_per_request_review_questions");
   assert.equal(journal.entries.find(entry => entry.idx === 100)?.tag, "0100_workspace_expertise_definitions");
-  assert.equal(journal.entries.at(-1)?.idx, 100);
 });

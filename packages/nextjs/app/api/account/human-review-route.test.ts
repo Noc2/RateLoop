@@ -82,6 +82,7 @@ function ownerBody(groupId: string, expectedBindingVersion: number | null, autho
       maximumLatencyMs: 120_000,
     },
     requestProfile: {
+      questionAuthority: "owner_fixed",
       criterion: "Is this response safe and correct?",
       positiveLabel: "Approve",
       negativeLabel: "Reject",
