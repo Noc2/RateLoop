@@ -105,7 +105,7 @@ export function SiteSearch({ mobile = false }: { mobile?: boolean }) {
               clear();
             }
           }}
-          className={`input input-sm h-9 w-full rounded-lg border-0 bg-base-content/[0.12] text-base text-base-content !shadow-none outline-none placeholder:text-base-content/60 focus:bg-base-content/[0.15] focus:outline-none focus:ring-0 [&::-webkit-search-cancel-button]:appearance-none ${
+          className={`input input-sm h-9 w-full rounded-lg border-0 bg-base-content/[0.12] text-base text-base-content !shadow-none placeholder:text-base-content/60 focus:bg-base-content/[0.15] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--rateloop-blue)] [&::-webkit-search-cancel-button]:appearance-none ${
             mobile ? "pl-8 pr-8" : "px-4 text-center"
           }`}
           placeholder="Search"
@@ -118,7 +118,7 @@ export function SiteSearch({ mobile = false }: { mobile?: boolean }) {
             type="button"
             aria-label="Clear site search"
             onClick={clear}
-            className="absolute right-2 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full bg-base-content/10 text-base-content/65 transition-colors hover:bg-base-content/20 hover:text-base-content"
+            className="absolute right-1.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full bg-base-content/10 text-base-content/65 transition-colors hover:bg-base-content/20 hover:text-base-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--rateloop-blue)]"
           >
             <XMarkIcon className="h-3 w-3" />
           </button>

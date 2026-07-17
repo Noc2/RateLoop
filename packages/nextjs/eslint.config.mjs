@@ -1,4 +1,5 @@
 import { FlatCompat } from "@eslint/eslintrc";
+import jsxA11y from "eslint-plugin-jsx-a11y";
 import prettierPlugin from "eslint-plugin-prettier";
 import { defineConfig } from "eslint/config";
 import path from "node:path";
@@ -21,6 +22,7 @@ export default defineConfig([
     extends: compat.extends("next/core-web-vitals", "next/typescript", "prettier"),
 
     rules: {
+      ...jsxA11y.flatConfigs.recommended.rules,
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/ban-ts-comment": "off",
       "@next/next/no-img-element": "off",

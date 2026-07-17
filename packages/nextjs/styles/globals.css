@@ -356,10 +356,25 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
   .rateloop-assurance-tracer,
   .rateloop-assurance-node,
   .rateloop-gradient-notification {
     animation: none;
+  }
+
+  .rateloop-gradient-action:hover,
+  .group:hover .group-hover\:translate-x-0\.5,
+  .group:hover .group-hover\:scale-105 {
+    transform: none;
   }
 }
 
