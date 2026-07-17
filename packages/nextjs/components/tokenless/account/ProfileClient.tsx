@@ -69,18 +69,20 @@ export function ProfileClient() {
     <div className="space-y-5">
       <section className="surface-card rounded-2xl p-6">
         <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Profile</p>
-        <h2 className="mt-2 text-xl font-semibold">How RateLoop addresses you</h2>
+        <h2 id="profile-display-name-heading" className="mt-2 text-xl font-semibold">
+          Display name
+        </h2>
         <form className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={save}>
-          <label className="grow text-sm text-base-content/60">
-            Display name
+          <div className="grow">
             <input
+              aria-labelledby="profile-display-name-heading"
               value={displayName}
               onChange={event => setDisplayName(event.target.value)}
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+              className="input w-full border-white/10 bg-[var(--rateloop-field)]"
               maxLength={80}
               placeholder={profile?.providerDisplayName ?? "Your private name"}
             />
-          </label>
+          </div>
           <button type="submit" className="rateloop-gradient-action px-5" disabled={busy}>
             {busy ? "Saving…" : "Save profile"}
           </button>
