@@ -111,6 +111,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         bytes32 admissionPolicyHash;
         uint32 commitCount;
         uint32 revealCount;
+        uint32 compensatedRevealCount;
         uint32 frozenRevealCount;
         uint32 aggregateCursor;
         uint32 scoreCursor;
@@ -390,8 +391,15 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         record.predictedUpBps = predictedUpBps;
         record.responseHash = responseHash;
         record.revealed = true;
-        round.revealCount += 1;
-        _roundRevealKeys[roundId].push(commitKey);
+        // Every valid opening through the beacon-failure deadline earns fixed accepted-work
+        // compensation, but only reveals at or before the disclosed reveal deadline enter the
+        // frozen scoring set (quorum, majority verdict, peer assignment, and RBTS). A late
+        // opening therefore cannot change the scored set after the public window has closed.
+        round.compensatedRevealCount += 1;
+        if (block.timestamp <= round.revealDeadline) {
+            round.revealCount += 1;
+            _roundRevealKeys[roundId].push(commitKey);
+        }
 
         emit RevealAccepted(roundId, commitKey, vote, predictedUpBps, responseHash);
     }
@@ -408,10 +416,13 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         }
         if (round.revealCount < round.minimumReveals) {
             if (block.timestamp <= round.beaconFailureDeadline) revert InvalidDeadline();
-            if (round.revealCount == 0) {
+            // Quorum is measured on the timely scoring set, but every valid revealer (timely or
+            // late) is compensated for accepted work. A beacon failure is the case where nobody
+            // revealed at all; any valid opening moves the round to under-quorum compensation.
+            if (round.compensatedRevealCount == 0) {
                 _terminalCompensation(roundId, round, RoundState.BeaconFailureCompensation, 0);
             } else {
-                _terminalCompensation(roundId, round, RoundState.UnderQuorumCompensation, round.revealCount);
+                _terminalCompensation(roundId, round, RoundState.UnderQuorumCompensation, round.compensatedRevealCount);
             }
             return;
         }
@@ -588,7 +599,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         round.staleReturned = true;
         uint256 allocation = round.state == RoundState.Finalized
             ? round.totalFinalizedLiability
-            : round.compensationPerRecipient * round.revealCount;
+            : round.compensationPerRecipient * round.compensatedRevealCount;
         amount = allocation - round.totalPaid;
         _accrueCredit(roundId, round.funder, amount);
         emit StaleSharesReturned(roundId, round.funder, amount);

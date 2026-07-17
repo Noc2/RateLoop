@@ -192,9 +192,62 @@ contract TokenlessPanelTest is Test {
         _commit(roundId, alice);
         vm.warp(_round(roundId).revealDeadline + 1);
         _reveal(roundId, alice);
+
+        // A reveal after the disclosed reveal deadline is compensation-only: it must never join
+        // the frozen scoring set, so it cannot change quorum, the verdict, peers, or RBTS.
+        assertEq(_round(roundId).revealCount, 0);
+        assertEq(_round(roundId).compensatedRevealCount, 1);
+        vm.expectRevert();
+        panel.roundRevealKey(roundId, 0);
+
         vm.warp(_round(roundId).beaconFailureDeadline + 1);
         panel.beginSettlement(roundId);
+        assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.UnderQuorumCompensation));
+        assertEq(panel.withdrawableCredit(funder), BOUNTY + FEE + RESERVE - FIXED_BASE);
         assertEq(panel.claimCompensation(alice.commitKey, alice.payout, alice.salt), FIXED_BASE);
+    }
+
+    function test_LateRevealsCannotForceQuorumOrEnterTheScoredSet() public {
+        uint256 roundId = _createRound(3, 3);
+        Rater memory alice = _rater(0x321, 1, 7_000, "alice", roundId);
+        Rater memory bob = _rater(0x322, 0, 3_000, "bob", roundId);
+        Rater memory carol = _rater(0x323, 1, 5_000, "carol", roundId);
+        _commit(roundId, alice);
+        _commit(roundId, bob);
+        _commit(roundId, carol);
+
+        // Two timely reveals stay below the minimum of three.
+        vm.warp(_round(roundId).commitDeadline + 1);
+        _reveal(roundId, alice);
+        _reveal(roundId, bob);
+        assertEq(_round(roundId).revealCount, 2);
+        assertEq(_round(roundId).compensatedRevealCount, 2);
+
+        // A late reveal cannot front-run settlement to force the round into a scored path: it
+        // does not raise the scored reveal count even though it earns accepted-work compensation.
+        vm.warp(_round(roundId).revealDeadline + 1);
+        _reveal(roundId, carol);
+        assertEq(_round(roundId).revealCount, 2);
+        assertEq(_round(roundId).compensatedRevealCount, 3);
+        vm.expectRevert();
+        panel.roundRevealKey(roundId, 2);
+
+        vm.warp(_round(roundId).beaconFailureDeadline + 1);
+        panel.beginSettlement(roundId);
+        assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.UnderQuorumCompensation));
+
+        // Every valid revealer, timely or late, still receives the fixed accepted-work amount and
+        // the funder is refunded exactly the unused remainder. Settlement conservation holds.
+        assertEq(panel.withdrawableCredit(funder), BOUNTY + FEE + RESERVE - (FIXED_BASE * 3));
+        assertEq(panel.claimCompensation(alice.commitKey, alice.payout, alice.salt), FIXED_BASE);
+        assertEq(panel.claimCompensation(bob.commitKey, bob.payout, bob.salt), FIXED_BASE);
+        assertEq(panel.claimCompensation(carol.commitKey, carol.payout, carol.salt), FIXED_BASE);
+
+        vm.warp(_round(roundId).claimDeadline + 1);
+        assertEq(panel.returnStaleShares(roundId), 0);
+        vm.prank(funder);
+        panel.withdrawCredit(funder);
+        assertEq(usdc.balanceOf(address(panel)), 0);
     }
 
     function test_ZeroCommitRoundFullyRefundsAndFirstCommitDisablesCancellation() public {
