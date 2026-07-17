@@ -603,6 +603,13 @@
       "when": 1784250000000,
       "tag": "0086_enterprise_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1784253600000,
+      "tag": "0087_review_effort_guidance",
+      "breakpoints": true
     }
   ]
 }
