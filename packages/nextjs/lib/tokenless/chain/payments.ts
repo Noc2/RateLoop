@@ -18,6 +18,13 @@ import { reserveSurpriseBountyCapacity } from "~~/lib/tokenless/surpriseBountySe
 
 const QUICKNET_T_GENESIS_SECONDS = 1_689_232_296;
 const QUICKNET_T_PERIOD_SECONDS = 3;
+// A single server-funded execution holds an exclusive claim lease for this long.
+// It must comfortably cover approval + createRound broadcast and receipt
+// confirmation so a live worker is never displaced, yet still expire so a truly
+// crashed worker can be resumed. Fencing tokens guarantee a resumed worker can
+// never overwrite a newer claim's writes even if the lease lapses mid-flight.
+const CLAIM_LEASE_MS = 10 * 60 * 1_000;
+const MAX_FENCING_TOKEN = 2_147_483_647;
 const APPROVE_ABI = [
   {
     type: "function",
@@ -525,17 +532,30 @@ async function persistConfirmation(input: {
   roundId: bigint;
   blockNumber: bigint;
   blockHash: Hash;
+  fencingToken?: number;
 }) {
   const client = await dbPool.connect();
   const now = new Date();
   try {
     await client.query("BEGIN");
     const locked = await client.query(
-      "SELECT state, round_id, submission_transaction_hash, payment_reference FROM tokenless_chain_executions WHERE operation_key = $1 FOR UPDATE",
+      "SELECT state, round_id, submission_transaction_hash, payment_reference, claim_fencing_token FROM tokenless_chain_executions WHERE operation_key = $1 FOR UPDATE",
       [input.expected.operationKey],
     );
     const row = locked.rows[0] as QueryRow | undefined;
     if (!row) throw new TokenlessServiceError("Chain execution not found.", 404, "chain_execution_not_found");
+    // Server-funded confirmations carry the claim generation; refuse to persist
+    // if a newer claim has superseded this worker so a stale/resumed worker can
+    // never overwrite the winning claim's receipt binding. Wallet confirmations
+    // are user-broadcast and rely on the round_id conflict guard below instead.
+    if (input.fencingToken !== undefined && Number(row.claim_fencing_token ?? 0) !== input.fencingToken) {
+      throw new TokenlessServiceError(
+        "The chain execution claim was superseded before confirmation.",
+        409,
+        "execution_claim_superseded",
+        true,
+      );
+    }
     const existingRound = rowString(row, "round_id");
     const existingHash = rowString(row, "submission_transaction_hash");
     if (
@@ -553,6 +573,7 @@ async function persistConfirmation(input: {
       `UPDATE tokenless_chain_executions
        SET state = 'confirmed', submission_transaction_hash = $1, round_id = $2,
            receipt_block_number = $3, receipt_block_hash = $4, failure_code = NULL,
+           claim_owner = NULL, claim_expires_at = NULL,
            confirmed_at = $5, updated_at = $5
        WHERE operation_key = $6`,
       [
@@ -580,7 +601,7 @@ async function persistConfirmation(input: {
       await client.query(
         `INSERT INTO tokenless_prepaid_ledger_entries
          (entry_id, workspace_id, delta_atomic, settlement_status, source, external_reference, created_at, settled_at)
-         SELECT $1, workspace_id, $2, 'settled', 'chain_round', $3, $4, $4
+         SELECT $1, workspace_id, $2::numeric, 'settled', 'chain_round', $3, $4::timestamptz, $4::timestamptz
          FROM tokenless_prepaid_reservations WHERE reservation_id = $5
          ON CONFLICT (external_reference) DO NOTHING`,
         [
@@ -695,6 +716,7 @@ async function allocateNonce(input: {
   config: TokenlessChainConfig;
   signer: Address;
   runtime: TokenlessChainRuntime;
+  fencingToken: number;
 }) {
   const existing = await dbClient.execute({
     sql: `SELECT ${input.column} FROM tokenless_chain_executions WHERE execution_id = ? LIMIT 1`,
@@ -726,10 +748,23 @@ async function allocateNonce(input: {
        WHERE deployment_key = $3 AND signer_address = $4`,
       [nonce + 1, new Date(), input.config.deploymentKey, input.signer.toLowerCase()],
     );
-    await client.query(
-      `UPDATE tokenless_chain_executions SET ${input.column} = $1, updated_at = $2 WHERE execution_id = $3`,
-      [nonce, new Date(), input.executionId],
+    // Fence the per-execution nonce write by the active claim generation. If a
+    // newer claim has superseded this worker the update matches zero rows and we
+    // roll back, releasing the shared signer nonce we just reserved so a stale
+    // worker can never burn a nonce or broadcast against a superseded claim.
+    const fenced = await client.query(
+      `UPDATE tokenless_chain_executions SET ${input.column} = $1, updated_at = $2
+       WHERE execution_id = $3 AND claim_fencing_token = $4`,
+      [nonce, new Date(), input.executionId, input.fencingToken],
     );
+    if (fenced.rowCount !== 1) {
+      throw new TokenlessServiceError(
+        "The chain execution claim was superseded before the nonce could be fenced.",
+        409,
+        "execution_claim_superseded",
+        true,
+      );
+    }
     await client.query("COMMIT");
     return nonce;
   } catch (error) {
@@ -744,11 +779,89 @@ async function storeTransactionHash(
   executionId: string,
   column: "approval_transaction_hash" | "submission_transaction_hash",
   hash: Hash,
+  fencingToken: number,
 ) {
-  await dbClient.execute({
-    sql: `UPDATE tokenless_chain_executions SET ${column} = ?, state = 'broadcast', updated_at = ? WHERE execution_id = ?`,
-    args: [hash, new Date(), executionId],
+  const result = await dbClient.execute({
+    sql: `UPDATE tokenless_chain_executions SET ${column} = ?, state = 'broadcast', updated_at = ?
+          WHERE execution_id = ? AND claim_fencing_token = ?`,
+    args: [hash, new Date(), executionId, fencingToken],
   });
+  if (result.rowCount !== 1) {
+    throw new TokenlessServiceError(
+      "The chain execution claim was superseded before the transaction hash could be fenced.",
+      409,
+      "execution_claim_superseded",
+      true,
+    );
+  }
+}
+
+type ChainExecutionClaim = { fencingToken: number; owner: string; token: string };
+
+// Atomically acquire the exclusive execution claim before any chain work. Uses a
+// compare-and-swap on the monotonic fencing token under a row lock: exactly one
+// concurrent caller can advance the generation, so a second request observing the
+// same pre-broadcast state cannot also broadcast. An expired lease (crashed
+// worker) may be re-claimed, which is safe because persisted hashes/nonces are
+// reused on resume and every write is fenced by the claim generation.
+async function claimChainExecution(
+  operationKey: string,
+  now: Date,
+): Promise<{ status: "claimed"; claim: ChainExecutionClaim } | { status: "confirmed" } | { status: "in_progress" }> {
+  const owner = `chx-worker-${randomUUID()}`;
+  const token = `chl_${randomBytes(16).toString("hex")}`;
+  const expiresAt = new Date(now.getTime() + CLAIM_LEASE_MS);
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const locked = await client.query(
+      `SELECT state, claim_owner, claim_expires_at, claim_fencing_token
+       FROM tokenless_chain_executions WHERE operation_key = $1 FOR UPDATE`,
+      [operationKey],
+    );
+    const row = locked.rows[0] as QueryRow | undefined;
+    if (!row) {
+      await client.query("ROLLBACK");
+      throw new TokenlessServiceError("Chain execution not found.", 404, "chain_execution_not_found");
+    }
+    if (rowString(row, "state") === "confirmed") {
+      await client.query("COMMIT");
+      return { status: "confirmed" };
+    }
+    const leaseExpiry = row.claim_expires_at ? new Date(String(row.claim_expires_at)) : null;
+    const leaseHeld = rowString(row, "claim_owner") !== null && leaseExpiry !== null && leaseExpiry > now;
+    if (leaseHeld) {
+      await client.query("COMMIT");
+      return { status: "in_progress" };
+    }
+    const previousFence = Number(row.claim_fencing_token ?? 0);
+    if (previousFence >= MAX_FENCING_TOKEN) {
+      await client.query("ROLLBACK");
+      throw new TokenlessServiceError(
+        "The chain execution claim generation is exhausted.",
+        409,
+        "execution_claim_exhausted",
+      );
+    }
+    const fencingToken = previousFence + 1;
+    const claimed = await client.query(
+      `UPDATE tokenless_chain_executions
+       SET claim_owner = $2, claim_token = $3, claim_expires_at = $4, claim_fencing_token = $5, updated_at = $6
+       WHERE operation_key = $1 AND claim_fencing_token = $7`,
+      [operationKey, owner, token, expiresAt, fencingToken, now, previousFence],
+    );
+    if (claimed.rowCount !== 1) {
+      await client.query("ROLLBACK");
+      return { status: "in_progress" };
+    }
+    await client.query("COMMIT");
+    return { status: "claimed", claim: { fencingToken, owner, token } };
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function executeServerChainPayment(
@@ -759,10 +872,31 @@ export async function executeServerChainPayment(
   const runtime = options.runtime ?? getTokenlessChainRuntime(config);
   const expected = await prepareChainPayment(operationKey, { config, runtime });
   if (expected.paymentMode === "wallet") return expected;
+
+  // Take the exclusive claim before reading any nonce or broadcasting. A second
+  // concurrent request cannot claim and must not broadcast: it either observes
+  // the already-confirmed result or is told the execution is in flight and should
+  // retry. This is the primary defense against double-funding one reservation.
+  const claimOutcome = await claimChainExecution(operationKey, new Date());
+  if (claimOutcome.status === "confirmed") {
+    return { ...(await getChainPaymentInstructions(operationKey)), paymentState: "confirmed" };
+  }
+  if (claimOutcome.status === "in_progress") {
+    throw new TokenlessServiceError(
+      "This payment is already being executed on-chain. Retry shortly.",
+      409,
+      "execution_in_progress",
+      true,
+    );
+  }
+  const { fencingToken } = claimOutcome.claim;
+
+  // Re-read under the fresh claim so a resumed worker reuses any persisted
+  // approval/submission hash instead of broadcasting a duplicate transaction.
   const row = await executionRow(operationKey);
   const executionId = rowString(row, "execution_id")!;
   const terms = toOnchainTerms(expected.roundTerms);
-  let submissionHash = expected.transactionHash;
+  let submissionHash = rowString(row, "submission_transaction_hash") as Hash | null;
 
   if (expected.paymentMode === "prepaid") {
     if (!runtime.prepaidAccount || !runtime.prepaidWallet) {
@@ -790,6 +924,7 @@ export async function executeServerChainPayment(
         config,
         signer: runtime.prepaidAccount.address,
         runtime,
+        fencingToken,
       });
       approvalHash = await runtime.prepaidWallet.sendTransaction({
         account: runtime.prepaidAccount,
@@ -803,7 +938,7 @@ export async function executeServerChainPayment(
         nonce,
         value: 0n,
       });
-      await storeTransactionHash(executionId, "approval_transaction_hash", approvalHash);
+      await storeTransactionHash(executionId, "approval_transaction_hash", approvalHash, fencingToken);
     }
     const approvalReceipt = await runtime.publicClient.waitForTransactionReceipt({ hash: approvalHash });
     if (approvalReceipt.status !== "success") {
@@ -823,6 +958,7 @@ export async function executeServerChainPayment(
         config,
         signer: runtime.prepaidAccount.address,
         runtime,
+        fencingToken,
       });
       submissionHash = await runtime.prepaidWallet.sendTransaction({
         account: runtime.prepaidAccount,
@@ -832,7 +968,7 @@ export async function executeServerChainPayment(
         nonce,
         value: 0n,
       });
-      await storeTransactionHash(executionId, "submission_transaction_hash", submissionHash);
+      await storeTransactionHash(executionId, "submission_transaction_hash", submissionHash, fencingToken);
     }
   } else {
     if (!runtime.relayerAccount || !runtime.relayerWallet) {
@@ -872,6 +1008,7 @@ export async function executeServerChainPayment(
         config,
         signer: runtime.relayerAccount.address,
         runtime,
+        fencingToken,
       });
       submissionHash = await runtime.relayerWallet.sendTransaction({
         account: runtime.relayerAccount,
@@ -885,7 +1022,7 @@ export async function executeServerChainPayment(
         nonce,
         value: 0n,
       });
-      await storeTransactionHash(executionId, "submission_transaction_hash", submissionHash);
+      await storeTransactionHash(executionId, "submission_transaction_hash", submissionHash, fencingToken);
     }
   }
 
@@ -901,6 +1038,7 @@ export async function executeServerChainPayment(
     roundId: match.roundId,
     blockNumber: receipt.blockNumber,
     blockHash: receipt.blockHash,
+    fencingToken,
   });
   return { ...(await getChainPaymentInstructions(operationKey)), paymentState: "confirmed" };
 }
