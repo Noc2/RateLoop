@@ -29,6 +29,7 @@ export function SetupRadioChoice({
   return (
     <label
       htmlFor={id}
+      aria-label={label}
       className={classNames(
         "flex min-h-16 gap-3 border-b border-white/10 px-4 py-3 transition-colors last:border-b-0",
         checked ? "bg-white/[0.045] shadow-[inset_2px_0_0_var(--rateloop-warm-white)]" : "hover:bg-white/[0.025]",
@@ -46,14 +47,16 @@ export function SetupRadioChoice({
         onChange={onChange}
       />
       <span className="min-w-0 grow">
-        <span className="font-medium">{label}</span>
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="font-medium">{label}</span>
+          {badge ? (
+            <span className="inline-flex rounded-full border border-white/10 bg-white/[0.06] px-2 py-0.5 text-[11px] font-medium leading-4 text-base-content/65">
+              {badge}
+            </span>
+          ) : null}
+        </span>
         <span className="mt-1 block text-sm leading-6 text-base-content/60">{description}</span>
       </span>
-      {badge ? (
-        <span className="mt-0.5 shrink-0 rounded-full bg-white/[0.08] px-2 py-1 text-xs font-medium text-base-content/70">
-          {badge}
-        </span>
-      ) : null}
     </label>
   );
 }

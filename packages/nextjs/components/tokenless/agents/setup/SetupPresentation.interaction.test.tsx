@@ -59,6 +59,11 @@ test("setup primitives retain compact responsive behavior", () => {
   assert.match(choiceGroupSource, /overflow-hidden/);
 });
 
+test("choice badges stay compact beside their labels", () => {
+  assert.match(choiceGroupSource, /flex flex-wrap items-center gap-x-2 gap-y-1/);
+  assert.match(choiceGroupSource, /inline-flex rounded-full[\s\S]*px-2 py-0\.5 text-\[11px\]/);
+});
+
 test("shared setup presentation passes a rendered semantic audit", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const markup = renderToStaticMarkup(
