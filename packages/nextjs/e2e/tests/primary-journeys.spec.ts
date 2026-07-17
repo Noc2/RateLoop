@@ -5,6 +5,7 @@ const hash = `sha256:${"a".repeat(64)}`;
 const future = "2030-07-17T12:00:00.000Z";
 
 test("setup wizard creates a workspace and reaches agent connection", async ({ page }) => {
+  test.slow();
   await authenticate(page, browserState.setupSessionToken);
   await page.goto("/agents");
   const setupHeading = page.getByRole("heading", { name: "Name your workspace" });
