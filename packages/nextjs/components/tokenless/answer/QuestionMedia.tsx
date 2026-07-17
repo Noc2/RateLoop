@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type PublicQuestionMedia =
   | { kind: "images"; items: Array<{ alt: string; assetId: string; digest: `sha256:${string}` }> }
@@ -9,15 +9,26 @@ export type PublicQuestionMedia =
 export function QuestionMedia({ media }: { media: PublicQuestionMedia }) {
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
   const [playVideo, setPlayVideo] = useState(false);
+  const imageButtonsRef = useRef<Array<HTMLButtonElement | null>>([]);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  const closePreview = useCallback(() => {
+    const previousIndex = selectedImage;
+    setSelectedImage(null);
+    window.setTimeout(() => {
+      if (previousIndex !== null) imageButtonsRef.current[previousIndex]?.focus();
+    }, 0);
+  }, [selectedImage]);
 
   useEffect(() => {
     if (selectedImage === null) return;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setSelectedImage(null);
+      if (event.key === "Escape") closePreview();
     };
+    closeButtonRef.current?.focus();
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [selectedImage]);
+  }, [closePreview, selectedImage]);
 
   if (media.kind === "youtube") {
     return (
@@ -58,6 +69,9 @@ export function QuestionMedia({ media }: { media: PublicQuestionMedia }) {
         {media.items.map((image, index) => (
           <button
             key={image.assetId}
+            ref={element => {
+              imageButtonsRef.current[index] = element;
+            }}
             type="button"
             className={`overflow-hidden rounded-xl border border-white/10 bg-black/30 text-left transition-colors hover:border-white/25 ${
               media.items.length === 3 && index === 0 ? "col-span-2" : ""
@@ -65,7 +79,6 @@ export function QuestionMedia({ media }: { media: PublicQuestionMedia }) {
             onClick={() => setSelectedImage(index)}
             aria-label={`Open image ${index + 1}: ${image.alt}`}
           >
-            {}
             <img
               src={`/api/public-media/images/${encodeURIComponent(image.assetId)}`}
               alt={image.alt}
@@ -80,19 +93,24 @@ export function QuestionMedia({ media }: { media: PublicQuestionMedia }) {
           role="dialog"
           aria-modal="true"
           aria-label="Question image preview"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm"
-          onClick={() => setSelectedImage(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
         >
-          <div className="relative max-h-full max-w-6xl" onClick={event => event.stopPropagation()}>
+          <button
+            type="button"
+            className="absolute inset-0 cursor-default bg-black/85 backdrop-blur-sm"
+            onClick={closePreview}
+            aria-label="Close image preview"
+          />
+          <div className="relative z-10 max-h-full max-w-6xl">
             <button
+              ref={closeButtonRef}
               type="button"
               className="absolute right-2 top-2 z-10 rounded-full bg-black/70 px-3 py-1.5 text-sm text-white"
-              onClick={() => setSelectedImage(null)}
+              onClick={closePreview}
               aria-label="Close image preview"
             >
               Close
             </button>
-            {}
             <img
               src={`/api/public-media/images/${encodeURIComponent(media.items[selectedImage]!.assetId)}`}
               alt={media.items[selectedImage]!.alt}
