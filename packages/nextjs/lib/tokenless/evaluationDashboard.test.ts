@@ -15,6 +15,7 @@ import {
   markAssuranceCaseReady,
 } from "~~/lib/tokenless/humanAssurance";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
+import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
 
 const OWNER: `0x${string}` = "0x1111111111111111111111111111111111111111";
 const OUTSIDER = "0x2222222222222222222222222222222222222222";
@@ -37,6 +38,116 @@ async function seedArtifact(projectId: string, role: "baseline" | "candidate") {
     args: [artifactId, projectId, role, role, hash(artifactId), `artifact://test/${artifactId}`, now, now],
   });
   return artifactId;
+}
+
+async function seedAdaptiveCoverage(workspaceId: string, agent: Awaited<ReturnType<typeof createWorkspaceAgent>>) {
+  const policyId = "arp_evaluation_coverage";
+  const scopeId = "aesc_evaluation_coverage";
+  const latestChangeAt = new Date("2026-07-16T12:00:00.000Z");
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_review_policies
+          (policy_id,version,workspace_id,agent_id,agent_version_id,mode,enabled,
+           agreement_threshold_bps,production_floor_bps,maximum_unreviewed_gap,rules_json,
+           audience_policy_json,created_by,approved_by,created_at)
+          VALUES (?,1,?,?,?,'adaptive',true,7000,6000,20,'{}',?,?,?,?)`,
+    args: [
+      policyId,
+      workspaceId,
+      agent.agentId,
+      agent.currentVersion.versionId,
+      JSON.stringify({ reviewerSource: "public_network" }),
+      OWNER,
+      OWNER,
+      new Date("2026-07-14T12:00:00.000Z"),
+    ],
+  });
+  const binding = await seedReadyHumanReviewBinding({
+    workspaceId,
+    agentId: agent.agentId,
+    agentVersionId: agent.currentVersion.versionId,
+    policyId,
+    actor: OWNER,
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_evaluation_scopes
+          (scope_id,workspace_id,agent_id,agent_version_id,policy_id,policy_version,
+           workflow_key,risk_tier,audience_policy_hash,partition_commitment,execution_profile_hash,
+           execution_profile_json,human_review_binding_id,human_review_binding_version,
+           request_profile_id,request_profile_version,request_profile_hash,stage,
+           completed_comparable_cases,stable_cases_since_stage,unreviewed_since_last_sample,
+           stage_entered_at,updated_at)
+          VALUES (?,?,?,?,?,1,'support-reply','low',?,?,?,'{}',?,1,?,1,?,
+                  'high_coverage',60,30,0,?,?)`,
+    args: [
+      scopeId,
+      workspaceId,
+      agent.agentId,
+      agent.currentVersion.versionId,
+      policyId,
+      hash("coverage-audience"),
+      hash("coverage-partition"),
+      hash("coverage-execution-profile"),
+      binding.bindingId,
+      binding.profileId,
+      binding.profileHash,
+      latestChangeAt,
+      latestChangeAt,
+    ],
+  });
+  for (const change of [
+    {
+      id: "arpe_coverage_first",
+      type: "stage_changed",
+      from: "calibrating",
+      to: "high_coverage",
+      reason: "two_stable_windows",
+      at: new Date("2026-07-14T12:00:00.000Z"),
+    },
+    {
+      id: "arpe_coverage_reset",
+      type: "reset",
+      from: "high_coverage",
+      to: "calibrating",
+      reason: "agreement_below_threshold",
+      at: new Date("2026-07-15T12:00:00.000Z"),
+    },
+    {
+      id: "arpe_coverage_latest",
+      type: "stage_changed",
+      from: "calibrating",
+      to: "high_coverage",
+      reason: "two_stable_windows",
+      at: latestChangeAt,
+    },
+    {
+      id: "arpe_coverage_forced",
+      type: "forced_review",
+      from: "high_coverage",
+      to: "high_coverage",
+      reason: "must-not-enter-coverage-history",
+      at: new Date("2026-07-17T12:00:00.000Z"),
+    },
+  ]) {
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_agent_review_policy_events
+            (event_id,workspace_id,scope_id,policy_id,policy_version,event_type,from_stage,to_stage,
+             reason_codes_json,actor_type,actor_reference,event_commitment,created_at)
+            VALUES (?,?,?,?,1,?,?,?,?, 'service','private-adaptive-actor',?,?)`,
+      args: [
+        change.id,
+        workspaceId,
+        scopeId,
+        policyId,
+        change.type,
+        change.from,
+        change.to,
+        JSON.stringify([change.reason]),
+        hash(change.id),
+        change.at,
+      ],
+    });
+  }
+  return { scopeId };
 }
 
 test("evaluation dashboard suppresses small cells and never attributes legacy runs to registered agents", async () => {
@@ -113,7 +224,7 @@ test("evaluation dashboard suppresses small cells and never attributes legacy ru
     audiencePolicyId: audience.policy.policyId,
     audiencePolicyVersion: audience.policy.version,
   });
-  await createWorkspaceAgent({
+  const agent = await createWorkspaceAgent({
     accountAddress: OWNER,
     workspaceId,
     externalId: "support-agent",
@@ -124,6 +235,7 @@ test("evaluation dashboard suppresses small cells and never attributes legacy ru
       environment: "production",
     },
   });
+  const coverageFixture = await seedAdaptiveCoverage(workspaceId, agent);
 
   const now = new Date();
   for (const [index, choice] of ["candidate", "baseline"].entries()) {
@@ -163,6 +275,39 @@ test("evaluation dashboard suppresses small cells and never attributes legacy ru
   assert.equal(suppressed.runs[0]?.mechanismHealth, null);
   assert.equal(suppressed.agents[0]?.attributedRunCount, 0);
   assert.equal(suppressed.summary.attributedRuns, 0);
+  assert.deepEqual(suppressed.agents[0]?.adaptiveCoverage, [
+    {
+      scopeId: coverageFixture.scopeId,
+      workflowKey: "support-reply",
+      riskTier: "low",
+      stage: "high_coverage",
+      reviewRateBps: 6_000,
+      changes: [
+        {
+          fromRateBps: 10_000,
+          toRateBps: 6_000,
+          reason: "two_stable_windows",
+          changedAt: "2026-07-16T12:00:00.000Z",
+        },
+        {
+          fromRateBps: 6_000,
+          toRateBps: 10_000,
+          reason: "agreement_below_threshold",
+          changedAt: "2026-07-15T12:00:00.000Z",
+        },
+        {
+          fromRateBps: 10_000,
+          toRateBps: 6_000,
+          reason: "two_stable_windows",
+          changedAt: "2026-07-14T12:00:00.000Z",
+        },
+      ],
+    },
+  ]);
+  assert.doesNotMatch(
+    JSON.stringify(suppressed.agents[0]?.adaptiveCoverage),
+    /private-adaptive-actor|must-not-enter-coverage-history|arpe_coverage/u,
+  );
 
   await dbClient.execute({
     sql: `INSERT INTO tokenless_assurance_responses

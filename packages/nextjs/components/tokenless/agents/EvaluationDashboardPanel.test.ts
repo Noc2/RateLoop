@@ -32,6 +32,8 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.match(source, /Disagreement rate/);
   assert.match(source, /Override rate/);
   assert.match(source, /Latest evidence anchor/);
+  assert.match(source, /AdaptiveCoverageSummary/);
+  assert.match(source, /<AdaptiveCoverageSummary agents=\{dashboard\.agents\}/);
   assert.doesNotMatch(source, /leaderboard|top agent|worst agent/i);
 });
 

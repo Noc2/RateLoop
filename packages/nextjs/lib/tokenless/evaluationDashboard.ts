@@ -2,6 +2,7 @@ import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
+import { ADAPTIVE_REVIEW_STAGE_RATE_BPS, type AdaptiveReviewStage } from "~~/lib/tokenless/adaptiveReview";
 import { listWorkspaceAgents } from "~~/lib/tokenless/agentRegistry";
 import { listAgentPublishingPolicies } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -40,6 +41,38 @@ export type EvaluationRun = {
   attribution: { status: "unattributed"; agentId: null; versionId: null };
 };
 
+export const ADAPTIVE_COVERAGE_REASON_CODES = [
+  "two_stable_windows",
+  "fifty_stable_cases",
+  "one_hundred_stable_cases",
+  "agreement_below_threshold",
+  "completion_gate_failed",
+  "human_agreement_gate_failed",
+  "latency_gate_failed",
+  "drift_gate_failed",
+  "missing_metadata",
+  "severe_disagreement_open",
+  "policy_evidence_changed",
+] as const;
+
+export type AdaptiveCoverageReasonCode = (typeof ADAPTIVE_COVERAGE_REASON_CODES)[number];
+
+export type AdaptiveCoverageChange = {
+  fromRateBps: number;
+  toRateBps: number;
+  reason: AdaptiveCoverageReasonCode;
+  changedAt: string;
+};
+
+export type AdaptiveCoverageTile = {
+  scopeId: string;
+  workflowKey: string;
+  riskTier: string;
+  stage: AdaptiveReviewStage;
+  reviewRateBps: number;
+  changes: AdaptiveCoverageChange[];
+};
+
 export type EvaluationDashboard = {
   workspaceId: string;
   callerRole: TokenlessWorkspaceRole;
@@ -63,6 +96,7 @@ export type EvaluationDashboard = {
     declaredModel: string;
     environment: string;
     attributedRunCount: 0;
+    adaptiveCoverage: AdaptiveCoverageTile[];
   }>;
   runs: EvaluationRun[];
   publishingPolicies: Array<{
@@ -110,6 +144,37 @@ function minimumAggregationSize(value: unknown) {
   }
 }
 
+const adaptiveCoverageReasonCodes = new Set<string>(ADAPTIVE_COVERAGE_REASON_CODES);
+
+function adaptiveStage(value: unknown) {
+  const stage = String(value ?? "") as AdaptiveReviewStage;
+  if (!(stage in ADAPTIVE_REVIEW_STAGE_RATE_BPS)) {
+    throw new Error("Database returned an invalid adaptive coverage stage.");
+  }
+  return stage;
+}
+
+function adaptiveReviewRateBps(stage: AdaptiveReviewStage, productionFloorBps: number) {
+  if (productionFloorBps > 10_000) throw new Error("Database returned an invalid adaptive production floor.");
+  return Math.max(ADAPTIVE_REVIEW_STAGE_RATE_BPS[stage], productionFloorBps);
+}
+
+function adaptiveCoverageReason(value: unknown): AdaptiveCoverageReasonCode {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(String(value ?? "[]"));
+  } catch {
+    throw new Error("Database returned invalid adaptive coverage reasons.");
+  }
+  if (!Array.isArray(parsed) || parsed.some(reason => typeof reason !== "string")) {
+    throw new Error("Database returned invalid adaptive coverage reasons.");
+  }
+  const reason = parsed[0];
+  return reason && adaptiveCoverageReasonCodes.has(reason)
+    ? (reason as AdaptiveCoverageReasonCode)
+    : "policy_evidence_changed";
+}
+
 async function requireWorkspaceAccess(accountAddress: string, workspaceId: string) {
   let address: string;
   try {
@@ -133,10 +198,11 @@ export async function getWorkspaceEvaluationDashboard(input: {
   workspaceId: string;
 }): Promise<EvaluationDashboard> {
   const access = await requireWorkspaceAccess(input.accountAddress, input.workspaceId);
-  const [registry, runResult, responseResult, caseResult, policies] = await Promise.all([
-    listWorkspaceAgents(input),
-    dbClient.execute({
-      sql: `SELECT r.run_id, r.project_id, r.status, r.created_at, r.completed_at,
+  const [registry, runResult, responseResult, caseResult, policies, adaptiveScopeResult, adaptiveEventResult] =
+    await Promise.all([
+      listWorkspaceAgents(input),
+      dbClient.execute({
+        sql: `SELECT r.run_id, r.project_id, r.status, r.created_at, r.completed_at,
                    p.name AS project_name, s.name AS suite_name,
                    ap.reviewer_source, ap.compensation, ap.buyer_privacy_json,
                    d.decision AS client_decision, ep.packet_id, ep.packet_digest,
@@ -152,10 +218,10 @@ export async function getWorkspaceEvaluationDashboard(input: {
             LEFT JOIN tokenless_assurance_mechanism_health mh ON mh.run_id = r.run_id
             WHERE p.workspace_id = ? AND p.status <> 'deleted'
             ORDER BY r.created_at DESC LIMIT 100`,
-      args: [input.workspaceId],
-    }),
-    dbClient.execute({
-      sql: `WITH selected_runs AS (
+        args: [input.workspaceId],
+      }),
+      dbClient.execute({
+        sql: `WITH selected_runs AS (
               SELECT r.run_id
               FROM tokenless_assurance_runs r
               JOIN tokenless_assurance_projects p ON p.project_id = r.project_id
@@ -174,10 +240,10 @@ export async function getWorkspaceEvaluationDashboard(input: {
               ON gold.run_id=resp.run_id AND gold.case_id=resp.case_id
             WHERE gold.case_id IS NULL
             GROUP BY selected_runs.run_id`,
-      args: [input.workspaceId],
-    }),
-    dbClient.execute({
-      sql: `WITH selected_runs AS (
+        args: [input.workspaceId],
+      }),
+      dbClient.execute({
+        sql: `WITH selected_runs AS (
               SELECT r.run_id
               FROM tokenless_assurance_runs r
               JOIN tokenless_assurance_projects p ON p.project_id = r.project_id
@@ -192,12 +258,29 @@ export async function getWorkspaceEvaluationDashboard(input: {
             LEFT JOIN tokenless_assurance_run_gold_items gold
               ON gold.run_id=rc.run_id AND gold.case_id=rc.case_id
             GROUP BY selected_runs.run_id`,
-      args: [input.workspaceId],
-    }),
-    access.canManage
-      ? listAgentPublishingPolicies({ accountAddress: access.address, workspaceId: input.workspaceId })
-      : Promise.resolve(null),
-  ]);
+        args: [input.workspaceId],
+      }),
+      access.canManage
+        ? listAgentPublishingPolicies({ accountAddress: access.address, workspaceId: input.workspaceId })
+        : Promise.resolve(null),
+      dbClient.execute({
+        sql: `SELECT s.scope_id,s.agent_id,s.agent_version_id,s.workflow_key,s.risk_tier,s.stage,
+                   s.updated_at,p.production_floor_bps
+            FROM tokenless_agent_evaluation_scopes s
+            JOIN tokenless_agent_review_policies p
+              ON p.workspace_id=s.workspace_id AND p.policy_id=s.policy_id AND p.version=s.policy_version
+            WHERE s.workspace_id=? AND p.mode='adaptive'
+            ORDER BY s.updated_at DESC,s.scope_id ASC`,
+        args: [input.workspaceId],
+      }),
+      dbClient.execute({
+        sql: `SELECT scope_id,from_stage,to_stage,reason_codes_json,created_at
+            FROM tokenless_agent_review_policy_events
+            WHERE workspace_id=? AND event_type IN ('stage_changed','reset')
+            ORDER BY created_at DESC,event_id DESC`,
+        args: [input.workspaceId],
+      }),
+    ]);
 
   const responsesByRun = new Map(
     (responseResult.rows as QueryRow[]).map(row => [rowString(row, "run_id")!, row] as const),
@@ -264,6 +347,49 @@ export async function getWorkspaceEvaluationDashboard(input: {
     } satisfies EvaluationRun;
   });
 
+  const changesByScope = new Map<string, QueryRow[]>();
+  for (const value of adaptiveEventResult.rows) {
+    const row = value as QueryRow;
+    const scopeId = rowString(row, "scope_id");
+    if (!scopeId) throw new Error("Database returned an invalid adaptive coverage event.");
+    changesByScope.set(scopeId, [...(changesByScope.get(scopeId) ?? []), row]);
+  }
+
+  const coverageByAgentVersion = new Map<string, AdaptiveCoverageTile[]>();
+  for (const value of adaptiveScopeResult.rows) {
+    const row = value as QueryRow;
+    const scopeId = rowString(row, "scope_id");
+    const agentId = rowString(row, "agent_id");
+    const agentVersionId = rowString(row, "agent_version_id");
+    const workflowKey = rowString(row, "workflow_key");
+    const riskTier = rowString(row, "risk_tier");
+    if (!scopeId || !agentId || !agentVersionId || !workflowKey || !riskTier) {
+      throw new Error("Database returned an invalid adaptive coverage scope.");
+    }
+    const stage = adaptiveStage(row.stage);
+    const productionFloorBps = rowNumber(row, "production_floor_bps");
+    const changes = (changesByScope.get(scopeId) ?? []).map(change => {
+      const fromStage = adaptiveStage(change.from_stage);
+      const toStage = adaptiveStage(change.to_stage);
+      return {
+        fromRateBps: adaptiveReviewRateBps(fromStage, productionFloorBps),
+        toRateBps: adaptiveReviewRateBps(toStage, productionFloorBps),
+        reason: adaptiveCoverageReason(change.reason_codes_json),
+        changedAt: iso(change.created_at),
+      } satisfies AdaptiveCoverageChange;
+    });
+    const key = `${agentId}\0${agentVersionId}`;
+    const tile: AdaptiveCoverageTile = {
+      scopeId,
+      workflowKey,
+      riskTier,
+      stage,
+      reviewRateBps: adaptiveReviewRateBps(stage, productionFloorBps),
+      changes,
+    };
+    coverageByAgentVersion.set(key, [...(coverageByAgentVersion.get(key) ?? []), tile]);
+  }
+
   return {
     workspaceId: input.workspaceId,
     callerRole: access.role,
@@ -287,6 +413,7 @@ export async function getWorkspaceEvaluationDashboard(input: {
       declaredModel: agent.currentVersion.declaredModel,
       environment: agent.currentVersion.environment,
       attributedRunCount: 0,
+      adaptiveCoverage: coverageByAgentVersion.get(`${agent.agentId}\0${agent.currentVersion.versionId}`) ?? [],
     })),
     runs,
     publishingPolicies:

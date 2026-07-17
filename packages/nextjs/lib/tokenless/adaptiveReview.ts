@@ -29,7 +29,7 @@ export type AdaptiveScopeState = {
   unreviewedSinceLastSample: number;
 };
 
-const STAGE_RATE_BPS: Record<AdaptiveReviewStage, number> = {
+export const ADAPTIVE_REVIEW_STAGE_RATE_BPS: Record<AdaptiveReviewStage, number> = {
   calibrating: 10_000,
   high_coverage: 5_000,
   medium_coverage: 2_500,
@@ -128,7 +128,7 @@ export function nextAdaptiveStage(input: {
   }
   return {
     stage: state.stage,
-    reviewRateBps: Math.max(STAGE_RATE_BPS[state.stage], policy.productionFloorBps),
+    reviewRateBps: Math.max(ADAPTIVE_REVIEW_STAGE_RATE_BPS[state.stage], policy.productionFloorBps),
     reason: latestPasses ? "evidence_window_incomplete" : "quality_gate_not_met",
   };
 }
@@ -149,7 +149,7 @@ export function decideAdaptiveReview(input: {
   if (!input.opportunityId || !input.scopeId || !input.samplerKeyVersion) {
     throw new Error("Adaptive review identity is incomplete.");
   }
-  const baseRate = Math.max(STAGE_RATE_BPS[input.state.stage], input.policy.productionFloorBps);
+  const baseRate = Math.max(ADAPTIVE_REVIEW_STAGE_RATE_BPS[input.state.stage], input.policy.productionFloorBps);
   const forcedReasons: string[] = [];
   if (input.criticalRisk) forcedReasons.push("critical_risk");
   if (!input.metadataComplete) forcedReasons.push("missing_metadata");

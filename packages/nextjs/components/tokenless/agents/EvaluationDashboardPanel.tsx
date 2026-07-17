@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useEffect, useState } from "react";
+import { AdaptiveCoverageSummary } from "~~/components/tokenless/agents/AdaptiveCoverageSummary";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import type { AssuranceMetricsSnapshot } from "~~/lib/tokenless/assuranceMetrics";
 import type { EvaluationDashboard, EvaluationRun } from "~~/lib/tokenless/evaluationDashboard";
@@ -520,6 +521,8 @@ export function EvaluationDashboardPanel({
           Assurance operations metrics are temporarily unavailable.
         </p>
       ) : null}
+
+      {dashboard ? <AdaptiveCoverageSummary agents={dashboard.agents} /> : null}
 
       {!loading && dashboard?.runs.length === 0 ? (
         <section className="surface-card rounded-2xl p-6" aria-labelledby="evaluations-empty-heading">
