@@ -80,6 +80,7 @@ function PreferenceToggle({
       </span>
       <input
         type="checkbox"
+        aria-label={option.label}
         className="toggle toggle-sm toggle-primary mt-1"
         checked={checked}
         disabled={disabled}

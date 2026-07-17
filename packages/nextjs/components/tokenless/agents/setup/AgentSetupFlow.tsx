@@ -859,9 +859,16 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             <fieldset className="mt-5 space-y-3">
               <legend className="font-medium">How often should RateLoop require human review?</legend>
               {REVIEW_FREQUENCY_OPTIONS.map(([value, label, description, badge]) => (
-                <label key={value} className="flex gap-3 rounded-xl border border-white/10 p-4">
+                <label
+                  key={value}
+                  htmlFor={`agent-setup-review-frequency-${value}`}
+                  className="flex gap-3 rounded-xl border border-white/10 p-4"
+                >
+                  <span className="sr-only">Review frequency option</span>
                   <input
+                    id={`agent-setup-review-frequency-${value}`}
                     className="radio mt-0.5"
+                    aria-label={label}
                     type="radio"
                     name="mode"
                     value={value}
@@ -961,9 +968,16 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             <fieldset className="mt-6 space-y-3">
               <legend className="font-medium">Who should review?</legend>
               {REVIEW_AUDIENCE_OPTIONS.map(([value, label, description]) => (
-                <label key={value} className="flex gap-3 rounded-xl border border-white/10 p-4">
+                <label
+                  key={value}
+                  htmlFor={`agent-setup-review-audience-${value}`}
+                  className="flex gap-3 rounded-xl border border-white/10 p-4"
+                >
+                  <span className="sr-only">Review audience option</span>
                   <input
+                    id={`agent-setup-review-audience-${value}`}
                     className="radio mt-0.5"
+                    aria-label={label}
                     type="radio"
                     name="audience"
                     value={value}
@@ -1048,8 +1062,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             <fieldset className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-4">
               <legend className="px-1 text-sm font-medium">Review round</legend>
               <div className="grid gap-4 sm:grid-cols-3">
-                <label className="text-sm">
-                  Response window
+                <div className="text-sm">
+                  <p>Response window</p>
                   <DurationInput
                     id="agent-setup-review-response-window"
                     className="mt-2"
@@ -1062,9 +1076,9 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       setReviewTiming(current => ({ ...current, responseWindowSeconds }))
                     }
                   />
-                </label>
-                <label className="text-sm">
-                  Expected active review time
+                </div>
+                <div className="text-sm">
+                  <p>Expected active review time</p>
                   <DurationInput
                     id="agent-setup-review-expected-effort"
                     className="mt-2"
@@ -1080,7 +1094,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       setReviewTiming(current => ({ ...current, expectedEffortSeconds }))
                     }
                   />
-                </label>
+                </div>
                 <label className="text-sm">
                   Reviewers per request
                   <input
@@ -1103,6 +1117,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 <label className="flex gap-3 rounded-lg border border-white/10 p-3 text-sm">
                   <input
                     className="radio mt-0.5"
+                    aria-label="No bounty"
                     type="radio"
                     name="compensationMode"
                     value="unpaid"
@@ -1120,6 +1135,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 <label className="flex gap-3 rounded-lg border border-white/10 p-3 text-sm">
                   <input
                     className="radio mt-0.5"
+                    aria-label="Add USDC bounty"
                     type="radio"
                     name="compensationMode"
                     value="usdc"
@@ -1252,6 +1268,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 <label key={value} className="flex gap-3 rounded-xl border border-white/10 p-4">
                   <input
                     className="radio mt-0.5"
+                    aria-label={label}
                     type="radio"
                     name="authority"
                     value={value}
@@ -1418,7 +1435,14 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     <fieldset className="space-y-3">
                       <legend className="font-medium">Invite a reviewer now?</legend>
                       <label className="flex gap-3 rounded-xl border border-white/10 p-4">
-                        <input className="radio mt-0.5" type="radio" name="decision" value="invited" defaultChecked />
+                        <input
+                          className="radio mt-0.5"
+                          type="radio"
+                          name="decision"
+                          value="invited"
+                          aria-label="Create a one-use code"
+                          defaultChecked
+                        />
                         <span>
                           <span className="font-medium">Create a one-use code</span>
                           <span className="mt-1 block text-sm text-base-content/60">
@@ -1427,7 +1451,13 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                         </span>
                       </label>
                       <label className="flex gap-3 rounded-xl border border-white/10 p-4">
-                        <input className="radio mt-0.5" type="radio" name="decision" value="later" />
+                        <input
+                          className="radio mt-0.5"
+                          type="radio"
+                          name="decision"
+                          value="later"
+                          aria-label="Invite later"
+                        />
                         <span>
                           <span className="font-medium">Invite later</span>
                           <span className="mt-1 block text-sm text-base-content/60">
