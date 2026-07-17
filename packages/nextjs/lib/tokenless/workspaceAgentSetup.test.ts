@@ -15,6 +15,8 @@ import {
 import { loadWorkspaceOnboardingFunnel } from "~~/lib/tokenless/onboardingObservability";
 import { createPrivateGroup } from "~~/lib/tokenless/privateGroups";
 import { createAgentPublishingPolicy, createWorkspace } from "~~/lib/tokenless/productCore";
+import { createWorkspaceReviewerExpertiseDefinition } from "~~/lib/tokenless/reviewerExpertiseDefinitions";
+import type { ReviewerExpertiseRequirement } from "~~/lib/tokenless/reviewerExpertiseOptions";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
   agentSetupUrl,
@@ -104,6 +106,7 @@ async function saveSetupReviewConfiguration(input: {
   audience?: "private_invited" | "public_network";
   authority?: "check_only" | "prepare_for_approval";
   questionAuthority?: "owner_fixed" | "agent_per_request" | "omit";
+  expertiseRequirements?: ReviewerExpertiseRequirement[];
 }) {
   const audience = input.audience ?? "private_invited";
   const questionAuthority = input.questionAuthority ?? "owner_fixed";
@@ -139,6 +142,7 @@ async function saveSetupReviewConfiguration(input: {
         contentBoundary: audience === "public_network" ? "public_or_test" : "private_workspace",
         privateSensitivity: audience === "public_network" ? null : "confidential",
         privateGroupId: audience === "public_network" ? null : input.groupId,
+        expertiseRequirements: input.expertiseRequirements,
         responseWindowSeconds: 3_600,
         panelSize: audience === "public_network" ? 3 : 2,
         compensationMode: audience === "public_network" ? "usdc" : "unpaid",
@@ -148,6 +152,61 @@ async function saveSetupReviewConfiguration(input: {
     },
   });
 }
+
+test("setup resumes exact workspace specialist requirements without weakening the frozen profile", async () => {
+  const { workspaceId } = await connectedSetup();
+  const connected = await getWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId });
+  const confirmed = await confirmWorkspaceSetupAgent({
+    accountAddress: OWNER,
+    workspaceId,
+    revision: connected.revision,
+    agent: {
+      displayName: connected.agent!.displayName,
+      description: connected.agent!.description,
+      provider: connected.agent!.provider,
+      model: connected.agent!.model,
+      modelVersion: connected.agent!.modelVersion,
+      environment: "production",
+    },
+  });
+  const group = await createPrivateGroup({
+    accountAddress: OWNER,
+    workspaceId,
+    name: "Specialist reviewers",
+    purpose: "Review specialist private work.",
+  });
+  const { definition } = await createWorkspaceReviewerExpertiseDefinition({
+    accountAddress: OWNER,
+    workspaceId,
+    label: "Workspace release review",
+    description: "Can assess the workspace's release procedure and rollback controls.",
+  });
+  const expertiseRequirements: ReviewerExpertiseRequirement[] = [
+    {
+      definitionId: definition.definitionId,
+      definitionVersion: definition.version,
+      definitionHash: definition.hash,
+      minimumSeats: 1,
+      sourceScope: "customer_invited",
+    },
+  ];
+  const saved = await saveSetupReviewConfiguration({
+    workspaceId,
+    agentId: connected.agent!.agentId,
+    groupId: group.groupId,
+    expertiseRequirements,
+  });
+  await configureWorkspaceSetupReviews({
+    accountAddress: OWNER,
+    workspaceId,
+    revision: confirmed.revision,
+    bindingRevision: saved.configuration.version,
+  });
+
+  const setup = await getWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId, requestedStep: "reviews" });
+  assert.deepEqual(setup.reviewDraft?.requestProfile.expertiseRequirements, expertiseRequirements);
+  assert.deepEqual(setup.reviewDraft?.requestProfile.requiredExpertiseKeys, []);
+});
 
 test("setup binds one verified connection and completes without publishing or spending authority", async () => {
   const { workspaceId, integrationId } = await connectedSetup();
@@ -511,7 +570,13 @@ test("setup requires explicit question authority and isolates agent-written feed
   const agentId = connected.agent!.agentId;
 
   await assert.rejects(
-    saveSetupReviewConfiguration({ workspaceId, agentId, audience: "public_network", mode: "always", questionAuthority: "omit" }),
+    saveSetupReviewConfiguration({
+      workspaceId,
+      agentId,
+      audience: "public_network",
+      mode: "always",
+      questionAuthority: "omit",
+    }),
     /questionAuthority is required/u,
   );
   await assert.rejects(

@@ -18,6 +18,7 @@ import {
   hashReviewRequestProfile,
   normalizeReviewRequestProfileInput,
 } from "~~/lib/tokenless/reviewRequestProfiles";
+import { validateReviewerExpertiseRequirementsWithClient } from "~~/lib/tokenless/reviewerExpertiseDefinitions";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
@@ -96,6 +97,7 @@ const OWNER_PROFILE_KEYS = new Set([
   "privateSensitivity",
   "privateGroupId",
   "requiredExpertiseKeys",
+  "expertiseRequirements",
   "responseWindowSeconds",
   "panelSize",
   "compensationMode",
@@ -884,7 +886,9 @@ function ownerProfileFromRow(row: Row) {
     privateGroupId: rowString(row, "private_group_id"),
     privateGroupPolicyVersion: nullableInteger(row, "private_group_policy_version"),
     privateGroupPolicyHash: rowString(row, "private_group_policy_hash"),
+    semanticSchemaVersion: rowInteger(row, "semantic_schema_version"),
     requiredExpertiseKeys: JSON.parse(rowString(row, "required_expertise_keys_json") ?? "[]") as string[],
+    expertiseRequirements: JSON.parse(rowString(row, "expertise_requirements_json") ?? "[]") as unknown[],
     responseWindowSeconds: nullableInteger(row, "response_window_seconds"),
     panelSize: nullableInteger(row, "panel_size"),
     compensationMode: rowString(row, "compensation_mode")!,
@@ -1320,13 +1324,14 @@ async function versionOwnerProfile(
      (profile_id, version, workspace_id, agent_id, agent_version_id, question_authority, result_semantics,
       criterion, positive_label, negative_label,
       rationale_mode, audience, content_boundary, private_sensitivity, private_group_id,
-      private_group_policy_version, private_group_policy_hash, required_expertise_keys_json,
+      private_group_policy_version, private_group_policy_hash, semantic_schema_version,
+      required_expertise_keys_json, expertise_requirements_json,
       response_window_seconds, panel_size,
       compensation_mode, bounty_per_seat_atomic, feedback_bonus_enabled, feedback_bonus_pool_atomic,
       feedback_bonus_awarder_kind, feedback_bonus_awarder_account, feedback_bonus_award_window_seconds,
       configuration_status, profile_hash, created_by,
       created_at, approved_by, approved_at, superseded_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,'ready',$28,$29,$30,$29,$30,NULL)`,
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,'ready',$30,$31,$32,$31,$32,NULL)`,
     [
       profileId,
       version,
@@ -1345,7 +1350,9 @@ async function versionOwnerProfile(
       input.profile.privateGroupId,
       input.profile.privateGroupPolicyVersion,
       input.profile.privateGroupPolicyHash,
+      input.profile.semanticSchemaVersion,
       stableJson(input.profile.requiredExpertiseKeys),
+      stableJson(input.profile.expertiseRequirements),
       input.profile.responseWindowSeconds,
       input.profile.panelSize,
       input.profile.compensationMode,
@@ -1423,6 +1430,12 @@ export async function putHumanReviewConfigurationForOwner(input: PutHumanReviewC
       privateGroupId: group.id,
       privateGroupPolicyVersion: group.version,
       privateGroupPolicyHash: group.hash,
+    });
+    await validateReviewerExpertiseRequirementsWithClient(client, {
+      workspaceId: input.workspaceId,
+      audience: profile.audience,
+      panelSize: profile.panelSize,
+      requirements: profile.expertiseRequirements,
     });
     assertPrivateSensitivityAllowed(profile.privateSensitivity, group.maximumSensitivity);
     const selection = normalizeManagedReviewPolicyInput({
@@ -1663,7 +1676,7 @@ export async function getHumanReviewConfigurationForOwner(input: {
                 r.criterion, r.positive_label, r.negative_label, r.rationale_mode, r.audience,
                 r.content_boundary, r.private_sensitivity, r.private_group_id, r.private_group_policy_version,
                 r.private_group_policy_hash, r.response_window_seconds, r.panel_size,
-                r.required_expertise_keys_json,
+                r.semantic_schema_version, r.required_expertise_keys_json, r.expertise_requirements_json,
                 r.compensation_mode, r.bounty_per_seat_atomic, r.feedback_bonus_enabled,
                 r.feedback_bonus_pool_atomic, r.feedback_bonus_awarder_kind,
                 r.feedback_bonus_awarder_account, r.feedback_bonus_award_window_seconds,

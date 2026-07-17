@@ -7,6 +7,11 @@ import { AGENT_SETUP_SCREEN_STEPS, type AgentSetupScreenStep } from "~~/lib/toke
 import { getHumanReviewConfigurationForOwner } from "~~/lib/tokenless/humanReviewConfiguration";
 import { recordWorkspaceSetupFunnelEvent } from "~~/lib/tokenless/onboardingObservability";
 import { createPrivateGroupInvitation } from "~~/lib/tokenless/privateGroups";
+import { MAXIMUM_REVIEW_PANEL_SIZE } from "~~/lib/tokenless/reviewRequestProfiles";
+import {
+  type ReviewerExpertiseRequirement,
+  normalizeReviewerExpertiseRequirementsSelection,
+} from "~~/lib/tokenless/reviewerExpertiseOptions";
 import {
   type ReviewerExpertiseKey,
   normalizeReviewerExpertiseKeys,
@@ -67,6 +72,7 @@ export type AgentSetupReviewDraft = {
     privateSensitivity: "internal" | "confidential" | "restricted" | "regulated" | null;
     privateGroupId: string | null;
     requiredExpertiseKeys?: ReviewerExpertiseKey[];
+    expertiseRequirements?: ReviewerExpertiseRequirement[];
     responseWindowSeconds: number | null;
     panelSize: number | null;
     compensationMode: "unpaid" | "usdc";
@@ -108,6 +114,7 @@ const DEFAULT_REVIEW_DRAFT: AgentSetupReviewDraft = {
     privateSensitivity: "confidential",
     privateGroupId: null,
     requiredExpertiseKeys: [],
+    expertiseRequirements: [],
     responseWindowSeconds: 3_600,
     panelSize: 2,
     compensationMode: "unpaid",
@@ -298,6 +305,10 @@ function reviewDraftFromOwnerView(view: OwnerReviewView): AgentSetupReviewDraft 
       privateSensitivity: profile.privateSensitivity as AgentSetupReviewDraft["requestProfile"]["privateSensitivity"],
       privateGroupId: profile.privateGroupId,
       requiredExpertiseKeys: normalizeReviewerExpertiseKeys(profile.requiredExpertiseKeys),
+      expertiseRequirements: normalizeReviewerExpertiseRequirementsSelection(
+        profile.expertiseRequirements,
+        profile.panelSize ?? MAXIMUM_REVIEW_PANEL_SIZE,
+      ),
       responseWindowSeconds: profile.responseWindowSeconds,
       panelSize: profile.panelSize,
       compensationMode: profile.compensationMode as AgentSetupReviewDraft["requestProfile"]["compensationMode"],
