@@ -6,7 +6,7 @@ import { getPublicAgentConnectionIntent } from "~~/lib/tokenless/agentConnection
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
-  title: "Agent connection | RateLoop",
+  title: "Agent connection",
   description: "Resume a secure RateLoop workspace connection.",
   referrer: "no-referrer",
   robots: { follow: false, index: false },

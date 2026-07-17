@@ -27,8 +27,8 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.doesNotMatch(html, /class="rateloop-text-gradient[^\"]*">Assurance/);
   assert.match(html, /Scale AI autonomy without scaling blind trust\./);
   assert.doesNotMatch(html, /Human checks decrease only when scoped evidence stays strong/);
-  assert.match(html, /<span>Humans<\/span>/);
-  assert.match(html, /<span>Agents<\/span>/);
+  assert.match(html, /<span>Start Reviewing<\/span>/);
+  assert.match(html, /<span>Connect Agent<\/span>/);
   assert.doesNotMatch(html, /For Humans|For Agents/);
   assert.equal(html.match(/aria-hidden="true" class="text-lg leading-none/g)?.length, 2);
   assert.ok(
@@ -95,7 +95,7 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.doesNotMatch(html, /See evidence/);
   assert.doesNotMatch(html, /Privacy and Security with Clear Limits/i);
   assert.match(html, /Pricing, Kept/);
-  assert.match(html, /Workspace plans cover RateLoop decisions/);
+  assert.match(html, /Plans cover RateLoop decisions/);
   assert.match(html, /\$29/);
   assert.match(html, /25 completed review decisions/);
   assert.match(html, /250 completed review decisions/);

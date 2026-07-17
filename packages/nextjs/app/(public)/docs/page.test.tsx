@@ -25,6 +25,7 @@ test("documentation introduction presents the focused production path", async ()
   assert.match(html, /Define:.*Review:.*Settle:.*Decide:/i);
   assert.match(html, /The final decision stays with you/i);
   assert.match(html, /href="\/docs\/use-cases"/i);
+  assert.match(html, /href="\/docs\/evidence"/i);
   assert.match(html, /href="\/docs\/how-it-works"/i);
   assert.match(html, /href="\/docs\/tech-stack"/i);
   assert.match(html, /href="\/docs\/smart-contracts"/i);

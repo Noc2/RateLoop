@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
 
 export const metadata = {
-  title: "Human Assurance Use Cases | RateLoop Docs",
+  title: "Human Assurance Use Cases",
   description:
     "Concrete examples of where independent human judgment can check AI-generated customer replies, research, interfaces, and policy-routed outputs.",
 } satisfies Metadata;

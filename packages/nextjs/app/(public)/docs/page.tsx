@@ -75,6 +75,9 @@ export default function DocsPage() {
       <h2>Where to go next</h2>
       <ul>
         <li>
+          <Link href="/docs/evidence">Evidence</Link> shows what RateLoop records and how to verify it independently.
+        </li>
+        <li>
           <Link href="/docs/use-cases">Use Cases</Link> maps concrete AI workflow problems to bounded human checks and
           accountable owner decisions.
         </li>

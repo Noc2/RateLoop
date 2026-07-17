@@ -6,7 +6,7 @@ import { SurprisinglyPopularBonusChart } from "~~/components/docs/SurprisinglyPo
 import { TokenlessArchitectureDiagram } from "~~/components/docs/TokenlessArchitectureDiagram";
 
 export const metadata = {
-  title: "Tech Stack | RateLoop Docs",
+  title: "Tech Stack",
   description:
     "MCP, x402 USDC funding, Proof of Human, sealed review, RBTS incentives, and immutable Base settlement in RateLoop.",
 } satisfies Metadata;

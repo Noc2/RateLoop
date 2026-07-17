@@ -3,7 +3,7 @@ import { BetterAuthSignIn } from "~~/components/auth/BetterAuthSignIn";
 import { SignInSurface } from "~~/components/auth/SignInSurface";
 
 export const metadata: Metadata = {
-  title: "Sign-In | RateLoop",
+  title: "Sign in",
   description: "Sign in to your RateLoop account.",
 };
 

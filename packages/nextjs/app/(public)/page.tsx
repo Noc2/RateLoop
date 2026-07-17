@@ -135,7 +135,7 @@ export function TokenlessLandingPage({
             </p>
             <div className="mt-6 flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row">
               <Link href="/human?tab=discover" className="group rateloop-gradient-action min-h-11 gap-2 px-5 text-base">
-                <span>Humans</span>
+                <span>Start Reviewing</span>
                 <span
                   aria-hidden="true"
                   className="text-lg leading-none transition-transform group-hover:translate-x-0.5"
@@ -147,7 +147,7 @@ export function TokenlessLandingPage({
                 href="/agents?tab=overview"
                 className="group btn min-h-11 gap-2 rounded-lg border-0 bg-base-content/[0.11] px-5 text-base hover:bg-base-content/[0.18]"
               >
-                <span>Agents</span>
+                <span>Connect Agent</span>
                 <span
                   aria-hidden="true"
                   className="text-lg leading-none transition-transform group-hover:translate-x-0.5"
@@ -254,7 +254,7 @@ export function TokenlessLandingPage({
             Pricing, Kept
           </SectionTitle>
           <p className="mb-8 max-w-3xl text-lg leading-8 text-base-content/65 sm:mb-10 sm:text-xl">
-            Workspace plans cover RateLoop decisions. Paid reviewer costs are separate.
+            Plans cover RateLoop decisions. Reviewer pay is separate.
           </p>
           <WorkspacePlanCards subscriptionsEnabled={subscriptionsEnabled} />
         </section>

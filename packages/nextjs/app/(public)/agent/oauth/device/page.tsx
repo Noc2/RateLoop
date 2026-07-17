@@ -6,7 +6,7 @@ import { AgentOAuthError } from "~~/lib/tokenless/agentOAuth";
 import { getAgentOAuthDeviceApproval } from "~~/lib/tokenless/agentOAuthDevice";
 
 export const metadata: Metadata = {
-  title: "Connect agent | RateLoop",
+  title: "Connect agent",
   description: "Approve a least-privilege RateLoop workspace connection from an agent host.",
 };
 

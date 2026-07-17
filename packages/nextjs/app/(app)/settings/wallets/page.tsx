@@ -5,7 +5,7 @@ import { WalletBindingsClient } from "~~/components/auth/WalletBindingsClient";
 import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
 
 export const metadata: Metadata = {
-  title: "Wallets | RateLoop",
+  title: "Wallets",
   description: "Optionally bind a purpose-scoped funding, payout, or recovery wallet.",
 };
 

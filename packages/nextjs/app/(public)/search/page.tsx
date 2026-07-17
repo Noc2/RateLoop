@@ -4,7 +4,7 @@ import { AnswerPageClient } from "~~/components/tokenless/answer/AnswerPageClien
 import { SiteSearchResults } from "~~/components/tokenless/navigation/SiteSearchResults";
 
 export const metadata: Metadata = {
-  title: "Search | RateLoop",
+  title: "Search",
   description: "Search RateLoop pages, documentation, and Discover review work.",
 };
 

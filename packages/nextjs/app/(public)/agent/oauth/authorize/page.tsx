@@ -6,7 +6,7 @@ import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
 import { AgentOAuthError, validateAgentOAuthAuthorizationRequest } from "~~/lib/tokenless/agentOAuth";
 
 export const metadata: Metadata = {
-  title: "Authorize agent | RateLoop",
+  title: "Authorize agent",
   description: "Authorize a least-privilege RateLoop workspace connection.",
 };
 

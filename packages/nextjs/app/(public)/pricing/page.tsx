@@ -4,7 +4,7 @@ import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { TOKENLESS_BILLING_PLANS, formatUsdPrice } from "~~/lib/billing/plans";
 
 export const metadata: Metadata = {
-  title: "Pricing | RateLoop",
+  title: "Pricing",
   description: "Simple workspace pricing for auditable human assurance of AI work.",
 };
 
