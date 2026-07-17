@@ -23,6 +23,14 @@ test("tokenless shell exposes Humans, Agents, and Docs without the legacy produc
   assert.doesNotMatch(source, /href: "\/(rate|ask|settings)"|Validate|Earn|Start a validation/);
 });
 
+test("tokenless navigation uses the shared page background", () => {
+  const source = readFileSync(new URL("./TokenlessShell.tsx", import.meta.url), "utf8");
+
+  assert.match(source, /<header className="[^"]*bg-base-100/);
+  assert.match(source, /<aside className="[^"]*bg-base-100/);
+  assert.doesNotMatch(source, /bg-black(?:\/\d+)?/);
+});
+
 test("tokenless site search restores the established navbar treatment", () => {
   const source = readFileSync(new URL("./navigation/SiteSearch.tsx", import.meta.url), "utf8");
 
