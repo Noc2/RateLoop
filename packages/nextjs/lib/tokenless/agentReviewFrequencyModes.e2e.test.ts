@@ -73,6 +73,7 @@ async function configuredAgent(input: { mode: ReviewPolicyMode; index: number })
     profile: {
       agentId: agent.agentId,
       agentVersionId: agent.currentVersion.versionId,
+      questionAuthority: "owner_fixed",
       criterion: "Is this answer correct and safe to use?",
       positiveLabel: "Approve",
       negativeLabel: "Reject",

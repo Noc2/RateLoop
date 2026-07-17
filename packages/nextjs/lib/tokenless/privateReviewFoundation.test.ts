@@ -119,6 +119,7 @@ async function fixture() {
     profile: {
       agentId: approved.agent.agentId,
       agentVersionId: approved.agent.versionId,
+      questionAuthority: "owner_fixed",
       criterion: "Is this suggestion correct and safe?",
       positiveLabel: "Approve",
       negativeLabel: "Reject",
