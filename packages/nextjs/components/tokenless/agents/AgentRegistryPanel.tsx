@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AgentVersionForm } from "~~/components/tokenless/agents/AgentVersionForm";
+import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { Badge } from "~~/components/tokenless/ui/Badge";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
@@ -492,11 +493,9 @@ export function AgentRegistryPanel({
 
   return (
     <div className="space-y-5">
-      {loading ? (
-        <p className="text-sm text-base-content/55" role="status">
-          <span className="loading loading-spinner loading-sm mr-2" /> Loading agent…
-        </p>
-      ) : null}
+      <AsyncSection loading={loading} loadingLabel="Loading agents">
+        {null}
+      </AsyncSection>
 
       <div className="space-y-4">
         {visibleAgents.map(agent => (

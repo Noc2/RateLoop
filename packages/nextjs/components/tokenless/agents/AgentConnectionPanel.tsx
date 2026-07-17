@@ -5,6 +5,7 @@ import { InfoPopover } from "../InfoPopover";
 import { buildAgentConnectionMessage } from "./agentConnectionMessage";
 import { isUsableAgentConnection } from "./agentWorkspaceState";
 import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
+import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { Badge } from "~~/components/tokenless/ui/Badge";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
@@ -1064,11 +1065,9 @@ export function AgentConnectionPanel({
         </section>
       ) : null}
 
-      {loading ? (
-        <div className="surface-card rounded-2xl p-6 text-sm text-base-content/55" role="status">
-          <span className="loading loading-spinner loading-sm mr-2" /> Loading agent connections…
-        </div>
-      ) : null}
+      <AsyncSection loading={loading} loadingLabel="Loading agent connections">
+        {null}
+      </AsyncSection>
 
       {!loading && workspaceId && activeConnectionIntents.length > 0 ? (
         <section className="surface-card rounded-2xl p-6" aria-labelledby="pending-agent-connections-heading">

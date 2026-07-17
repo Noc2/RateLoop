@@ -5,6 +5,7 @@ import { GrcEvidenceDelivery } from "./GrcEvidenceDelivery";
 import { MetricsEvidenceAccess } from "./MetricsEvidenceAccess";
 import { SiemEvidenceDelivery } from "./SiemEvidenceDelivery";
 import { WormEvidenceDelivery } from "./WormEvidenceDelivery";
+import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import type { EvaluationDashboard } from "~~/lib/tokenless/evaluationDashboard";
 
 type EvidencePacket = {
@@ -370,11 +371,9 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
           {error}
         </div>
       ) : null}
-      {loading ? (
-        <div className="surface-card rounded-2xl p-6 text-sm text-base-content/55" role="status">
-          <span className="loading loading-spinner loading-sm mr-2" /> Loading evidence…
-        </div>
-      ) : null}
+      <AsyncSection loading={loading} loadingLabel="Loading evidence">
+        {null}
+      </AsyncSection>
 
       {!loading && packets.length === 0 ? (
         <section className="surface-card rounded-2xl p-6">

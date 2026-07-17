@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useEffect, useState } from "react";
+import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import type { AssuranceMetricsSnapshot } from "~~/lib/tokenless/assuranceMetrics";
 import type { EvaluationDashboard, EvaluationRun } from "~~/lib/tokenless/evaluationDashboard";
 
@@ -497,11 +498,9 @@ export function EvaluationDashboardPanel({
           {error}
         </div>
       ) : null}
-      {loading ? (
-        <div className="surface-card rounded-2xl p-6 text-sm text-base-content/55" role="status">
-          <span className="loading loading-spinner loading-sm mr-2" /> Loading evaluations…
-        </div>
-      ) : null}
+      <AsyncSection loading={loading} loadingLabel="Loading evaluations">
+        {null}
+      </AsyncSection>
       {!loading && workspaces.length === 0 ? (
         <div className="surface-card rounded-2xl p-6">
           <h3 className="font-semibold">Create a workspace first</h3>

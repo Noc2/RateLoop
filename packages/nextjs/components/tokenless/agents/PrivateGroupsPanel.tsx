@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
+import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 
 type Workspace = { workspaceId: string; name: string; role: string };
 type GroupPolicy = {
@@ -474,11 +475,9 @@ export function PrivateGroupsPanel({
         </section>
       ) : null}
 
-      {loading ? (
-        <div className="surface-card rounded-2xl p-6 text-sm text-base-content/55" role="status">
-          <span className="loading loading-spinner loading-sm mr-2" /> Loading groups…
-        </div>
-      ) : null}
+      <AsyncSection loading={loading} loadingLabel="Loading private groups">
+        {null}
+      </AsyncSection>
       {!loading && workspaces.length === 0 ? (
         <div className="surface-card rounded-2xl p-6 text-sm leading-6 text-base-content/55">
           You need an owner or admin role in a workspace before you can manage private groups.

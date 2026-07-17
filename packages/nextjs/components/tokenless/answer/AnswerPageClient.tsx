@@ -14,6 +14,7 @@ import {
   type PublicAnswerTask,
   PublicQuestionCard,
 } from "~~/components/tokenless/answer/PublicQuestionCard";
+import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { AnswerRequestError, loadAnswerQueues } from "~~/lib/tokenless/answerQueue";
 
 type VisibleScope = "all" | "public" | "private";
@@ -126,12 +127,9 @@ export function AnswerPageClient({
       </div>
 
       <main className="space-y-4">
-        {loading ? (
-          <div className="surface-card rounded-lg p-6 text-sm text-base-content/55">
-            <span className="loading loading-spinner loading-sm mr-2 text-primary" />
-            Loading…
-          </div>
-        ) : null}
+        <AsyncSection loading={loading} loadingLabel="Loading review work">
+          {null}
+        </AsyncSection>
         {!loading && !signedOut && scope !== "public"
           ? assignments.map(assignment => (
               <PrivateAssignmentCard key={assignment.assignmentId} assignment={assignment} />
