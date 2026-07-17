@@ -17,9 +17,11 @@ implementation plans; current readers should not need that history to understand
 - [Agent human-review configuration](tokenless-agent-human-review-configuration.md)
 - [Agent review state machine](tokenless-agent-review-state-machine.md)
 - [Feedback Bonus v1](tokenless-feedback-bonus-v1-spec.md)
+- [Gold quality and mechanism health](tokenless-gold-quality-spec.md)
 - [RBTS v1](tokenless-rbts-v1-spec.md)
 - [RBTS worked examples](tokenless-rbts-v1-worked-examples.md)
 - [Surprisingly Popular bounty v1](tokenless-surprise-bounty-v1-spec.md)
+- [Reviewer expertise](tokenless-reviewer-expertise-spec.md)
 
 ## Operations
 
