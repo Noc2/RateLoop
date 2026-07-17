@@ -69,7 +69,6 @@ test("review setup distinguishes a saved policy decision from delivery authority
   assert.match(flowSource, /Review these risk levels/);
   assert.match(flowSource, /Review below confidence \(%\)/);
   assert.match(flowSource, /buildReviewFrequencySelection\(draft\.selection, reviewFrequency\)/);
-  assert.match(flowSource, /No request is published and no funds are spent during setup/i);
   assert.doesNotMatch(flowSource, /Choose when this agent should involve people/i);
   assert.doesNotMatch(flowSource, /reviewerAudience|contentBoundary: "private_workspace"|autonomousAccess/);
 });

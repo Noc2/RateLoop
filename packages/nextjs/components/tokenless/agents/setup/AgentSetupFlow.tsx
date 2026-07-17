@@ -1349,11 +1349,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   <span>I confirm this exact human-review configuration.</span>
                 </label>
               </section>
-            ) : (
-              <p className="mt-4 text-xs text-base-content/55">
-                Review the exact terms before saving. No request is published and no funds are spent during setup.
-              </p>
-            )}
+            ) : null}
             <SetupActionBar>
               {backButton}
               <Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={busy}>
