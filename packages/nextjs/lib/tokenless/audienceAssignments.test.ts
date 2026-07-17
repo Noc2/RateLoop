@@ -30,6 +30,7 @@ import {
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { createProjectOwnerAssignment } from "~~/lib/tokenless/projectAccess";
 import { listReviewerAssignments } from "~~/lib/tokenless/reviewerAssignments";
+import { attestInvitedReviewerExpertise } from "~~/lib/tokenless/reviewerExpertise";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
@@ -968,6 +969,17 @@ test("durable private-group membership gates reservation discovery and acceptanc
   const visible = await listReviewerAssignments({ accountAddress: REVIEWER });
   assert.equal(visible[0]?.assignmentId, reserved.assignmentId);
   assert.equal(visible[0]?.privateGroup?.groupId, group.groupId);
+  const expertiseNow = new Date();
+  await attestInvitedReviewerExpertise({
+    accountAddress: OWNER,
+    workspaceId: project.workspaceId,
+    projectId: project.projectId,
+    cohortId: cohort.cohortId,
+    reviewerAccountAddress: SECOND_REVIEWER,
+    expertiseKeys: ["code-review:typescript"],
+    expiresAt: new Date(expertiseNow.getTime() + 86_400_000).toISOString(),
+    now: expertiseNow,
+  });
 
   await removePrivateGroupMember({
     accountAddress: OWNER,
@@ -1000,6 +1012,12 @@ test("durable private-group membership gates reservation discovery and acceptanc
     reviewerAccountAddress: SECOND_REVIEWER,
     confidentialityTermsHash: TERMS_HASH,
   });
+  const refreshedExpertise = await dbClient.execute({
+    sql: `SELECT qualification_provenance_json FROM tokenless_assurance_cohort_reviewers
+          WHERE project_id=? AND cohort_id=? AND reviewer_account_address=?`,
+    args: [project.projectId, cohort.cohortId, SECOND_REVIEWER],
+  });
+  assert.match(String(refreshedExpertise.rows[0]?.qualification_provenance_json), /expertise:code-review:typescript/u);
   await acceptAudienceAssignment({
     baseAccountAddress: SECOND_REVIEWER,
     assignmentId: acceptedReservation.assignmentId,

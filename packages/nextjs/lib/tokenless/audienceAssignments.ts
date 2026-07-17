@@ -13,6 +13,7 @@ import { issueArtifactLease } from "~~/lib/tokenless/artifactPrivacy";
 import { selectDiversifiedIntegrityPanel } from "~~/lib/tokenless/integrityAssignment";
 import { integrityReviewerLookup } from "~~/lib/tokenless/integrityEpochs";
 import { requirePaidReviewEligibilityInTransaction } from "~~/lib/tokenless/paidReviewEligibilityPreflight";
+import { exactReviewerExpertiseDefinitionKey } from "~~/lib/tokenless/reviewerExpertiseAssignments";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export const AUDIENCE_SOURCES = ["customer_invited", "rateloop_network", "hybrid"] as const;
@@ -981,7 +982,7 @@ async function activePrivateGroupCandidates(
   const policyVersion = rowNumber(input.subpanel, "private_group_policy_version");
   const policyHash = rowString(input.subpanel, "private_group_policy_hash");
   const groupResult = await client.query(
-    `SELECT g.status, gp.policy_hash, gp.policy_json
+    `SELECT g.status,g.workspace_id, gp.policy_hash, gp.policy_json
      FROM tokenless_private_groups g
      JOIN tokenless_private_group_policy_versions gp ON gp.group_id = g.group_id AND gp.version = $2
      WHERE g.group_id = $1 LIMIT 1 FOR SHARE`,
@@ -1038,6 +1039,60 @@ async function activePrivateGroupCandidates(
         ...(membershipExpiresAt ? { expiresAt: membershipExpiresAt.toISOString() } : {}),
       },
     ];
+    const qualifications = await client.query(
+      `SELECT qualification_keys_json,evidence_kind,evidence_reference_hash,verified_at,expires_at,
+              expertise_record_schema_version,expertise_definition_id,expertise_definition_version,
+              expertise_definition_hash,asserted_by
+       FROM tokenless_reviewer_qualifications
+       WHERE workspace_id=$1 AND reviewer_account_address=$2 AND reviewer_source='customer_invited'
+         AND qualification_kind='expertise' AND status='active' AND expires_at>$3
+       ORDER BY expertise_record_schema_version,expertise_definition_id`,
+      [rowString(group, "workspace_id"), address, input.now],
+    );
+    for (const value of qualifications.rows) {
+      const qualification = value as QueryRow;
+      const verifiedAt = rowDate(qualification, "verified_at");
+      const expiresAt = rowDate(qualification, "expires_at");
+      const assertedBy = rowString(qualification, "asserted_by") ?? "workspace_owner";
+      const schemaVersion = rowNumber(qualification, "expertise_record_schema_version");
+      if (!verifiedAt || !expiresAt || (schemaVersion !== 1 && schemaVersion !== 2)) {
+        throw new Error("Stored reviewer expertise qualification is invalid.");
+      }
+      let keys: string[];
+      if (schemaVersion === 2) {
+        const definitionId = rowString(qualification, "expertise_definition_id");
+        const definitionVersion = rowNumber(qualification, "expertise_definition_version");
+        const definitionHash = rowString(qualification, "expertise_definition_hash");
+        if (
+          !definitionId ||
+          definitionVersion === null ||
+          definitionVersion < 1 ||
+          !definitionHash ||
+          !HASH_PATTERN.test(definitionHash)
+        ) {
+          throw new Error("Stored exact reviewer expertise qualification is invalid.");
+        }
+        keys = [
+          exactReviewerExpertiseDefinitionKey({
+            definitionId,
+            definitionVersion,
+            definitionHash: definitionHash as `sha256:${string}`,
+          }),
+        ];
+      } else {
+        keys = parseJson<string[]>(qualification.qualification_keys_json, "qualification keys");
+      }
+      for (const key of keys) {
+        provenance.push({
+          key,
+          value: true,
+          source: rowString(qualification, "evidence_kind") ?? "owner_attested",
+          assertedBy,
+          verifiedAt: verifiedAt.toISOString(),
+          expiresAt: expiresAt.toISOString(),
+        });
+      }
+    }
     await client.query(
       `INSERT INTO tokenless_assurance_cohort_reviewers
        (project_id, cohort_id, reviewer_account_address, qualification_provenance_json,

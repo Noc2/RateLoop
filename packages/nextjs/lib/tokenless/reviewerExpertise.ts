@@ -169,8 +169,9 @@ export async function attestInvitedReviewerExpertise(input: {
       sql: `INSERT INTO tokenless_reviewer_qualifications
             (qualification_id,rater_id,reviewer_account_address,reviewer_source,qualification_kind,
              cohort_ids_json,qualification_keys_json,evidence_kind,workspace_id,evidence_reference_hash,
-             qualification_value_json,verified_at,expires_at,status,created_at,updated_at)
-            VALUES (?,NULL,?,'customer_invited','expertise',?,?,'owner_attested',?,?,?, ?,?,'active',?,?)
+             qualification_value_json,verified_at,expires_at,status,created_at,updated_at,
+             expertise_record_schema_version)
+            VALUES (?,NULL,?,'customer_invited','expertise',?,?,'owner_attested',?,?,?, ?,?,'active',?,?,1)
             ON CONFLICT (qualification_id) DO UPDATE SET
               cohort_ids_json=EXCLUDED.cohort_ids_json,
               qualification_keys_json=EXCLUDED.qualification_keys_json,
