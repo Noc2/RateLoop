@@ -13,10 +13,11 @@ export const runtime = "nodejs";
 type Context = { params: Promise<{ workspaceId: string; groupId: string }> };
 type InvitationBody = Omit<
   CreatePrivateGroupInvitationInput,
-  "accountAddress" | "workspaceId" | "groupId" | "expiresAt" | "membershipExpiresAt"
+  "accountAddress" | "workspaceId" | "groupId" | "expiresAt" | "membershipExpiresAt" | "expertiseExpiresAt" | "now"
 > & {
   expiresAt?: string;
   membershipExpiresAt?: string | null;
+  expertiseExpiresAt?: string | null;
 };
 
 function optionalDate(value: string | null | undefined) {
@@ -52,6 +53,7 @@ export async function POST(request: NextRequest, context: Context) {
       groupId,
       expiresAt: optionalDate(body.expiresAt) ?? undefined,
       membershipExpiresAt: optionalDate(body.membershipExpiresAt),
+      expertiseExpiresAt: optionalDate(body.expertiseExpiresAt),
     });
     return NextResponse.json({ invitation }, { status: 201 });
   } catch (error) {

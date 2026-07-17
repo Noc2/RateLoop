@@ -10,6 +10,9 @@ const INVITATION_TOKEN_PATTERN = /^rlgi_([a-f0-9]{16})_([A-Za-z0-9_-]{43})$/u;
 const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const DEFAULT_INVITATION_TTL_MS = 7 * 86_400_000;
 const MAX_INVITATION_TTL_MS = 30 * 86_400_000;
+const DEFAULT_EXPERTISE_TTL_MS = 365 * 86_400_000;
+const MAX_EXPERTISE_TTL_MS = 2 * 365 * 86_400_000;
+const EXPERTISE_DEFINITION_ID_PATTERN = /^expd_[a-z0-9_]{3,120}$/u;
 const EMAIL_PATTERN = /^[^\s@]+@([^\s@]+)$/u;
 const DOMAIN_PATTERN =
   /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
@@ -47,6 +50,15 @@ export type CreatePrivateGroupInvitationInput = {
   intendedAccountAddress?: string | null;
   intendedEmail?: string | null;
   intendedEmailDomain?: string | null;
+  expertiseDefinitions?: unknown;
+  expertiseExpiresAt?: Date | null;
+  now?: Date;
+};
+
+type InvitationExpertiseDefinition = {
+  definitionId: string;
+  definitionVersion: number;
+  definitionHash: string;
 };
 
 function rowString(row: Row | undefined, key: string) {
@@ -172,6 +184,63 @@ function normalizeDomain(value: string) {
     throw new TokenlessServiceError("intendedEmailDomain is invalid.", 400, "invalid_private_group_invitation");
   }
   return normalized;
+}
+
+function normalizeInvitationExpertiseDefinitions(value: unknown): InvitationExpertiseDefinition[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value) || value.length > 8) {
+    throw new TokenlessServiceError(
+      "Invitation specialist areas must contain at most eight definitions.",
+      400,
+      "invalid_private_group_invitation",
+    );
+  }
+  const definitions = value.map(entry => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      throw new TokenlessServiceError(
+        "Invitation specialist area is invalid.",
+        400,
+        "invalid_private_group_invitation",
+      );
+    }
+    const body = entry as Record<string, unknown>;
+    if (
+      Object.keys(body).some(key => !["definitionId", "definitionVersion", "definitionHash"].includes(key)) ||
+      typeof body.definitionId !== "string" ||
+      !EXPERTISE_DEFINITION_ID_PATTERN.test(body.definitionId) ||
+      !Number.isSafeInteger(body.definitionVersion) ||
+      Number(body.definitionVersion) < 1 ||
+      typeof body.definitionHash !== "string" ||
+      !HASH_PATTERN.test(body.definitionHash)
+    ) {
+      throw new TokenlessServiceError(
+        "Invitation specialist area is invalid.",
+        400,
+        "invalid_private_group_invitation",
+      );
+    }
+    return {
+      definitionId: body.definitionId,
+      definitionVersion: Number(body.definitionVersion),
+      definitionHash: body.definitionHash,
+    };
+  });
+  definitions.sort(
+    (left, right) =>
+      left.definitionId.localeCompare(right.definitionId) || left.definitionVersion - right.definitionVersion,
+  );
+  if (
+    definitions.some(
+      (definition, index) => index > 0 && definitions[index - 1]!.definitionId === definition.definitionId,
+    )
+  ) {
+    throw new TokenlessServiceError(
+      "Each invitation specialist area can be selected only once.",
+      400,
+      "invalid_private_group_invitation",
+    );
+  }
+  return definitions;
 }
 
 async function validateProjects(client: Pick<Client, "query">, workspaceId: string, projectIds: string[]) {
@@ -519,7 +588,7 @@ function validateInvitationToken(token: string) {
 
 export async function createPrivateGroupInvitation(input: CreatePrivateGroupInvitationInput) {
   const manager = await requirePrivateGroupManager(input);
-  const now = new Date();
+  const now = input.now ?? new Date();
   const expiresAt = input.expiresAt ?? new Date(now.getTime() + DEFAULT_INVITATION_TTL_MS);
   const ttl = expiresAt.getTime() - now.getTime();
   if (!Number.isFinite(expiresAt.getTime()) || ttl < 60_000 || ttl > MAX_INVITATION_TTL_MS) {
@@ -547,6 +616,33 @@ export async function createPrivateGroupInvitation(input: CreatePrivateGroupInvi
     : null;
   const intendedEmail = input.intendedEmail ? normalizeEmail(input.intendedEmail) : null;
   const intendedDomain = input.intendedEmailDomain ? normalizeDomain(input.intendedEmailDomain) : null;
+  const expertiseDefinitions = normalizeInvitationExpertiseDefinitions(input.expertiseDefinitions);
+  const expertiseExpiresAt = expertiseDefinitions.length
+    ? (input.expertiseExpiresAt ?? new Date(now.getTime() + DEFAULT_EXPERTISE_TTL_MS))
+    : null;
+  if (
+    expertiseExpiresAt &&
+    (!Number.isFinite(expertiseExpiresAt.getTime()) ||
+      expertiseExpiresAt <= now ||
+      expertiseExpiresAt.getTime() - now.getTime() > MAX_EXPERTISE_TTL_MS ||
+      (membershipExpiresAt !== null && expertiseExpiresAt > membershipExpiresAt))
+  ) {
+    throw new TokenlessServiceError(
+      "Specialist confirmation expiry must be within two years and no later than membership expiry.",
+      400,
+      "invalid_private_group_invitation",
+    );
+  }
+  if (
+    expertiseDefinitions.length > 0 &&
+    (maximumRedemptions !== 1 || (!intendedAccount && !intendedEmail) || intendedDomain !== null)
+  ) {
+    throw new TokenlessServiceError(
+      "An invitation with intended specialist areas must be one-use and bound to one account or email.",
+      400,
+      "invalid_private_group_invitation",
+    );
+  }
   const prefix = randomBytes(8).toString("hex");
   const token = `rlgi_${prefix}_${randomBytes(32).toString("base64url")}`;
   const invitationId = `pgi_${randomUUID().replaceAll("-", "")}`;
@@ -554,6 +650,23 @@ export async function createPrivateGroupInvitation(input: CreatePrivateGroupInvi
   try {
     await client.query("BEGIN");
     await validateProjects(client, input.workspaceId, allowedProjectIds);
+    for (const definition of expertiseDefinitions) {
+      const available = await client.query(
+        `SELECT 1 FROM tokenless_reviewer_expertise_definitions
+         WHERE definition_id=$1 AND version=$2 AND definition_hash=$3
+           AND status='active' AND superseded_at IS NULL
+           AND (scope='global' OR workspace_id=$4)
+         LIMIT 1 FOR SHARE`,
+        [definition.definitionId, definition.definitionVersion, definition.definitionHash, input.workspaceId],
+      );
+      if (available.rowCount !== 1) {
+        throw new TokenlessServiceError(
+          "An intended specialist area is unavailable.",
+          409,
+          "reviewer_expertise_definition_unavailable",
+        );
+      }
+    }
     await client.query(
       `INSERT INTO tokenless_private_group_invitations
        (invitation_id, workspace_id, group_id, token_hash, token_prefix, role,
@@ -577,6 +690,35 @@ export async function createPrivateGroupInvitation(input: CreatePrivateGroupInvi
         now,
       ],
     );
+    for (const definition of expertiseDefinitions) {
+      const evidenceReferenceHash = policyHash({
+        schemaVersion: "rateloop.private-group-invitation-expertise.v1",
+        invitationId,
+        workspaceId: input.workspaceId,
+        groupId: input.groupId,
+        definition,
+        assertedBy: manager,
+        assertedAt: now.toISOString(),
+        expiresAt: expertiseExpiresAt!.toISOString(),
+      });
+      await client.query(
+        `INSERT INTO tokenless_private_group_invitation_expertise_attestations
+         (attestation_id,invitation_id,expertise_definition_id,expertise_definition_version,
+          expertise_definition_hash,asserted_by,asserted_at,expires_at,evidence_reference_hash,status)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending')`,
+        [
+          `pgiea_${randomUUID().replaceAll("-", "")}`,
+          invitationId,
+          definition.definitionId,
+          definition.definitionVersion,
+          definition.definitionHash,
+          manager,
+          now,
+          expertiseExpiresAt,
+          evidenceReferenceHash,
+        ],
+      );
+    }
     await appendEvent(client, {
       workspaceId: input.workspaceId,
       groupId: input.groupId,
@@ -588,6 +730,7 @@ export async function createPrivateGroupInvitation(input: CreatePrivateGroupInvi
         hasAccountBinding: Boolean(intendedAccount),
         hasEmailBinding: Boolean(intendedEmail),
         hasDomainBinding: Boolean(intendedDomain),
+        intendedSpecialistAreaCount: expertiseDefinitions.length,
       },
       now,
     });
@@ -599,6 +742,8 @@ export async function createPrivateGroupInvitation(input: CreatePrivateGroupInvi
       expiresAt: expiresAt.toISOString(),
       membershipExpiresAt: membershipExpiresAt?.toISOString() ?? null,
       maximumRedemptions,
+      expertiseDefinitions,
+      expertiseExpiresAt: expertiseExpiresAt?.toISOString() ?? null,
     };
   } catch (error) {
     await client.query("ROLLBACK");
@@ -623,6 +768,35 @@ export async function listPrivateGroupInvitations(input: {
           WHERE workspace_id = ? AND group_id = ? ORDER BY created_at DESC`,
     args: [input.workspaceId, input.groupId],
   });
+  const expertise = await dbClient.execute({
+    sql: `SELECT a.invitation_id,a.expertise_definition_id,a.expertise_definition_version,
+                 a.expertise_definition_hash,a.expires_at,a.status,d.label,d.description
+          FROM tokenless_private_group_invitation_expertise_attestations a
+          JOIN tokenless_private_group_invitations i ON i.invitation_id=a.invitation_id
+          JOIN tokenless_reviewer_expertise_definitions d
+            ON d.definition_id=a.expertise_definition_id
+           AND d.version=a.expertise_definition_version
+           AND d.definition_hash=a.expertise_definition_hash
+          WHERE i.workspace_id=? AND i.group_id=?
+          ORDER BY a.invitation_id,d.label,a.expertise_definition_id`,
+    args: [input.workspaceId, input.groupId],
+  });
+  const expertiseByInvitation = new Map<string, Array<Record<string, unknown>>>();
+  for (const value of expertise.rows as Row[]) {
+    const invitationId = rowString(value, "invitation_id");
+    if (!invitationId) continue;
+    const entries = expertiseByInvitation.get(invitationId) ?? [];
+    entries.push({
+      definitionId: rowString(value, "expertise_definition_id"),
+      definitionVersion: rowNumber(value, "expertise_definition_version"),
+      definitionHash: rowString(value, "expertise_definition_hash"),
+      label: rowString(value, "label"),
+      description: rowString(value, "description"),
+      expiresAt: rowDate(value, "expires_at")?.toISOString() ?? null,
+      status: rowString(value, "status"),
+    });
+    expertiseByInvitation.set(invitationId, entries);
+  }
   return result.rows.map(value => {
     const row = value as Row;
     return {
@@ -641,6 +815,7 @@ export async function listPrivateGroupInvitations(input: {
       revokedAt: rowDate(row, "revoked_at")?.toISOString() ?? null,
       createdBy: rowString(row, "created_by"),
       createdAt: rowDate(row, "created_at")?.toISOString() ?? null,
+      intendedExpertise: expertiseByInvitation.get(rowString(row, "invitation_id") ?? "") ?? [],
     };
   });
 }
@@ -899,6 +1074,12 @@ export async function revokePrivateGroupInvitation(input: {
     if (result.rowCount !== 1) {
       throw new TokenlessServiceError("Invitation not found.", 404, "private_group_invitation_not_found");
     }
+    await client.query(
+      `UPDATE tokenless_private_group_invitation_expertise_attestations
+       SET status='revoked',revoked_at=$1,revoked_by=$2
+       WHERE invitation_id=$3 AND status='pending'`,
+      [now, manager, input.invitationId],
+    );
     await appendEvent(client, {
       workspaceId: input.workspaceId,
       groupId: input.groupId,
