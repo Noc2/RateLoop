@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { WorkspaceRequestScope } from "~~/lib/tokenless/workspaceRequestScope";
 
 type Workspace = {
@@ -1084,15 +1085,30 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                 <div className="mt-5 grid gap-3 border-t border-white/10 pt-4 text-center sm:grid-cols-3">
                   <div>
                     <span className="block text-lg font-semibold">${usdc(selected.prepaid.settledAtomic)}</span>
-                    <span className="text-xs text-base-content/45">Settled USDC</span>
+                    <span className="inline-flex items-center gap-1 text-xs text-base-content/45">
+                      Settled USDC
+                      <InfoPopover label="About settled USDC">
+                        Funds credited to this workspace after payment settlement.
+                      </InfoPopover>
+                    </span>
                   </div>
                   <div>
                     <span className="block text-lg font-semibold">${usdc(selected.prepaid.reservedAtomic)}</span>
-                    <span className="text-xs text-base-content/45">Reserved USDC</span>
+                    <span className="inline-flex items-center gap-1 text-xs text-base-content/45">
+                      Reserved USDC
+                      <InfoPopover label="About reserved USDC">
+                        Funds committed to review work that has not reached its paid terminal state.
+                      </InfoPopover>
+                    </span>
                   </div>
                   <div>
                     <span className="block text-lg font-semibold">${usdc(selected.prepaid.availableAtomic)}</span>
-                    <span className="text-xs text-base-content/45">Available USDC</span>
+                    <span className="inline-flex items-center gap-1 text-xs text-base-content/45">
+                      Available USDC
+                      <InfoPopover label="About available USDC">
+                        Settled funds that are not reserved and can fund new review work.
+                      </InfoPopover>
+                    </span>
                   </div>
                 </div>
                 {canManageTopups && topups?.enabled ? (

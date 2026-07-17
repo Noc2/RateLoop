@@ -12,6 +12,12 @@ test("workspace settings keeps subscription and panel funding separate", () => {
   assert.match(source, /Settled USDC/);
   assert.match(source, /Reserved USDC/);
   assert.match(source, /Available USDC/);
+  assert.match(source, /About settled USDC/);
+  assert.match(source, /Funds credited to this workspace after payment settlement/);
+  assert.match(source, /About reserved USDC/);
+  assert.match(source, /Funds committed to review work that has not reached its paid terminal state/);
+  assert.match(source, /About available USDC/);
+  assert.match(source, /Settled funds that are not reserved and can fund new review work/);
   assert.match(source, /Separate from subscription billing/);
   assert.match(source, /\/billing\/\$\{kind\}/);
   assert.match(source, /kind: "checkout" \| "portal"/);
