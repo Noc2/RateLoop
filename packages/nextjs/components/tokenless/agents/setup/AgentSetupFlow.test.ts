@@ -5,6 +5,7 @@ import { agentSetupUrl } from "~~/lib/tokenless/agentSetupNavigation";
 
 const flowSource = readFileSync(new URL("./AgentSetupFlow.tsx", import.meta.url), "utf8");
 const progressSource = readFileSync(new URL("./AgentSetupProgress.tsx", import.meta.url), "utf8");
+const choiceGroupSource = readFileSync(new URL("./SetupChoiceGroup.tsx", import.meta.url), "utf8");
 const startSource = readFileSync(new URL("./WorkspaceSetupStart.tsx", import.meta.url), "utf8");
 const stageHeaderSource = readFileSync(new URL("./SetupStageHeader.tsx", import.meta.url), "utf8");
 
@@ -70,6 +71,18 @@ test("review setup distinguishes a saved policy decision from delivery authority
   assert.match(flowSource, /No request is published and no funds are spent during setup/i);
   assert.doesNotMatch(flowSource, /Choose when this agent should involve people/i);
   assert.doesNotMatch(flowSource, /reviewerAudience|contentBoundary: "private_workspace"|autonomousAccess/);
+});
+
+test("review setup uses compact shared choices and reveals only selected frequency details", () => {
+  assert.match(flowSource, /<SetupChoiceGroup>/);
+  assert.match(flowSource, /<SetupRadioChoice/);
+  assert.match(flowSource, /reviewFrequency\.mode === value && \(value === "adaptive" \|\| value === "fixed"\)/);
+  assert.match(flowSource, /reviewFrequency\.mode === value && value === "rules"/);
+  assert.match(flowSource, /Reviewers, timing and payment/);
+  assert.match(flowSource, /reviewerDetailsSummary/);
+  assert.match(choiceGroupSource, /surface-card-nested/);
+  assert.match(choiceGroupSource, /min-h-16/);
+  assert.doesNotMatch(choiceGroupSource, /#[\da-f]{3,8}/iu);
 });
 
 test("review setup controls audience and shows only the relevant material boundary", () => {

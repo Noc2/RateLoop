@@ -1,9 +1,10 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { type FormEvent, Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { buildAgentConnectionMessage } from "../agentConnectionMessage";
 import { AgentSetupProgress } from "./AgentSetupProgress";
+import { SetupChoiceGroup, SetupRadioChoice } from "./SetupChoiceGroup";
 import { SetupStageHeader } from "./SetupStageHeader";
 import {
   type ReviewAudienceFormValues,
@@ -195,6 +196,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     panelSize: reviewTiming.panelSize,
     requiredExpertiseCount: reviewExpertise.requiredExpertiseKeys.length,
   });
+  const reviewerCount = reviewTiming.panelSize || "—";
+  const reviewerDetailsSummary = `${
+    reviewAudience.audience === "private_invited" ? "Invited reviewers · private material" : "Public-safe material"
+  } · ${reviewerCount} reviewer${reviewerCount === "1" ? "" : "s"} · ${
+    reviewCompensation.compensationMode === "usdc" ? `${reviewCompensation.usdcPerReviewer || "—"} USDC each` : "Unpaid"
+  }`;
   const loadStep = useCallback(
     async (step: AgentSetupScreenStep, options?: { replace?: boolean; focus?: boolean }) => {
       const url = agentSetupUrl(setup.workspaceId, step);
@@ -797,9 +804,9 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 required
               />
             </label>
-            <fieldset className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-4">
+            <fieldset className="surface-card-nested mt-5 p-4">
               <legend className="px-1 text-sm font-medium">Answer format</legend>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-3">
                 <label className="text-sm">
                   Positive label
                   <input
@@ -824,7 +831,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     required
                   />
                 </label>
-                <label className="text-sm sm:col-span-2">
+                <label className="text-sm">
                   Rationale
                   <select
                     className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
@@ -843,394 +850,393 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 </label>
               </div>
             </fieldset>
-            <fieldset className="mt-5 space-y-3">
-              <legend className="font-medium">How often should RateLoop require human review?</legend>
-              {REVIEW_FREQUENCY_OPTIONS.map(([value, label, description, badge]) => (
-                <label
-                  key={value}
-                  htmlFor={`agent-setup-review-frequency-${value}`}
-                  className="flex gap-3 rounded-xl border border-white/10 p-4"
-                >
-                  <span className="sr-only">Review frequency option</span>
-                  <input
-                    id={`agent-setup-review-frequency-${value}`}
-                    className="radio mt-0.5"
-                    aria-label={label}
-                    type="radio"
-                    name="mode"
-                    value={value}
-                    checked={reviewFrequency.mode === value}
-                    onChange={() => setReviewFrequency(current => ({ ...current, mode: value }))}
-                  />
-                  <span>
-                    <span className="font-medium">{label}</span>
-                    {badge ? <span className="ml-2 text-xs text-primary">{badge}</span> : null}
-                    <span className="mt-1 block text-sm text-base-content/60">{description}</span>
-                  </span>
-                </label>
-              ))}
-            </fieldset>
-            {reviewFrequency.mode === "adaptive" || reviewFrequency.mode === "fixed" ? (
-              <div className="mt-4 grid gap-4 rounded-xl border border-white/10 bg-white/[0.02] p-4 sm:grid-cols-2">
-                <label className="text-sm">
-                  {reviewFrequency.mode === "adaptive" ? "Minimum review rate (%)" : "Outputs reviewed (%)"}
-                  <input
-                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                    type="number"
-                    min={reviewFrequency.mode === "adaptive" ? 10 : 0.01}
-                    max={100}
-                    step={0.01}
-                    inputMode="decimal"
-                    value={
-                      reviewFrequency.mode === "adaptive"
-                        ? reviewFrequency.adaptiveFloorPercent
-                        : reviewFrequency.fixedPercent
-                    }
-                    onChange={event =>
-                      setReviewFrequency(current => ({
-                        ...current,
-                        [reviewFrequency.mode === "adaptive" ? "adaptiveFloorPercent" : "fixedPercent"]:
-                          event.target.value,
-                      }))
-                    }
-                    required
-                  />
-                </label>
-                <label className="text-sm">
-                  Maximum outputs between reviews
-                  <input
-                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                    type="number"
-                    min={1}
-                    max={10_000}
-                    step={1}
-                    inputMode="numeric"
-                    value={reviewFrequency.maximumUnreviewedGap}
-                    onChange={event =>
-                      setReviewFrequency(current => ({ ...current, maximumUnreviewedGap: event.target.value }))
-                    }
-                    required
-                  />
-                </label>
-                <p className="text-xs text-base-content/55 sm:col-span-2">
-                  {reviewFrequency.mode === "adaptive" ? "Starts at 100% while calibrating. " : ""}
-                  Critical, incomplete, or low-confidence outputs can require additional review.
-                </p>
-              </div>
-            ) : null}
-            {reviewFrequency.mode === "rules" ? (
-              <div className="mt-4 grid gap-4 rounded-xl border border-white/10 bg-white/[0.02] p-4 sm:grid-cols-2">
-                <label className="text-sm">
-                  Review these risk levels
-                  <input
-                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                    value={reviewFrequency.requiredRiskTiers}
-                    onChange={event =>
-                      setReviewFrequency(current => ({ ...current, requiredRiskTiers: event.target.value }))
-                    }
-                    placeholder="high, legal"
-                    maxLength={320}
-                  />
-                </label>
-                <label className="text-sm">
-                  Review below confidence (%) <span className="text-base-content/50">(optional)</span>
-                  <input
-                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={0.01}
-                    inputMode="decimal"
-                    value={reviewFrequency.minimumConfidencePercent}
-                    onChange={event =>
-                      setReviewFrequency(current => ({ ...current, minimumConfidencePercent: event.target.value }))
-                    }
-                  />
-                </label>
-                <p className="text-xs text-base-content/55 sm:col-span-2">
-                  Separate risk levels with commas. Critical or incomplete outputs always require review.
-                </p>
-              </div>
-            ) : null}
-            <fieldset className="mt-6 space-y-3">
-              <legend className="font-medium">Who should review?</legend>
-              {REVIEW_AUDIENCE_OPTIONS.map(([value, label, description]) => (
-                <label
-                  key={value}
-                  htmlFor={`agent-setup-review-audience-${value}`}
-                  className="flex gap-3 rounded-xl border border-white/10 p-4"
-                >
-                  <span className="sr-only">Review audience option</span>
-                  <input
-                    id={`agent-setup-review-audience-${value}`}
-                    className="radio mt-0.5"
-                    aria-label={label}
-                    type="radio"
-                    name="audience"
-                    value={value}
-                    checked={reviewAudience.audience === value}
-                    onChange={() => {
-                      setReviewAudience(current => ({ ...current, audience: value }));
-                      if (value !== "private_invited") {
-                        setReviewCompensation(current => ({ ...current, compensationMode: "usdc" }));
-                      }
-                    }}
-                  />
-                  <span>
-                    <span className="font-medium">{label}</span>
-                    <span className="mt-1 block text-sm text-base-content/60">{description}</span>
-                  </span>
-                </label>
-              ))}
-            </fieldset>
-            {reviewAudience.audience !== "private_invited" ? (
-              <p className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm text-base-content/65">
-                Public, synthetic, or safely redacted material only.
-              </p>
-            ) : null}
-            <fieldset className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-4">
-              <legend className="px-1 text-sm font-medium">Required reviewer expertise</legend>
-              <p className="mb-3 text-sm text-base-content/60">
-                Optional. A request is blocked unless the selected audience can fill every seat.
-              </p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {REVIEWER_EXPERTISE.map(option => (
-                  <label
-                    key={option.key}
-                    className="flex items-center gap-3 rounded-lg border border-white/10 p-3 text-sm"
-                  >
-                    <input
-                      className="checkbox checkbox-sm"
-                      type="checkbox"
-                      checked={reviewExpertise.requiredExpertiseKeys.includes(option.key)}
-                      onChange={event =>
-                        setReviewExpertise(current => ({
-                          requiredExpertiseKeys: event.target.checked
-                            ? [...current.requiredExpertiseKeys, option.key]
-                            : current.requiredExpertiseKeys.filter(key => key !== option.key),
-                        }))
-                      }
+            <fieldset className="mt-7">
+              <legend className="text-xl font-semibold">When to review</legend>
+              <SetupChoiceGroup>
+                {REVIEW_FREQUENCY_OPTIONS.map(([value, label, description, badge]) => (
+                  <Fragment key={value}>
+                    <SetupRadioChoice
+                      id={`agent-setup-review-frequency-${value}`}
+                      name="mode"
+                      value={value}
+                      checked={reviewFrequency.mode === value}
+                      onChange={() => setReviewFrequency(current => ({ ...current, mode: value }))}
+                      label={label}
+                      description={description}
+                      badge={badge || undefined}
                     />
-                    <span>{option.label}</span>
-                  </label>
+                    {reviewFrequency.mode === value && (value === "adaptive" || value === "fixed") ? (
+                      <div className="border-b border-white/10 border-l-2 border-l-[var(--rateloop-pink)] bg-black/10 px-4 py-4 sm:ml-10">
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <label className="text-sm">
+                            {value === "adaptive" ? "Minimum review rate (%)" : "Outputs reviewed (%)"}
+                            <input
+                              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                              type="number"
+                              min={value === "adaptive" ? 10 : 0.01}
+                              max={100}
+                              step={0.01}
+                              inputMode="decimal"
+                              value={
+                                value === "adaptive"
+                                  ? reviewFrequency.adaptiveFloorPercent
+                                  : reviewFrequency.fixedPercent
+                              }
+                              onChange={event =>
+                                setReviewFrequency(current => ({
+                                  ...current,
+                                  [value === "adaptive" ? "adaptiveFloorPercent" : "fixedPercent"]: event.target.value,
+                                }))
+                              }
+                              required
+                            />
+                          </label>
+                          <label className="text-sm">
+                            Maximum outputs between reviews
+                            <input
+                              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                              type="number"
+                              min={1}
+                              max={10_000}
+                              step={1}
+                              inputMode="numeric"
+                              value={reviewFrequency.maximumUnreviewedGap}
+                              onChange={event =>
+                                setReviewFrequency(current => ({
+                                  ...current,
+                                  maximumUnreviewedGap: event.target.value,
+                                }))
+                              }
+                              required
+                            />
+                          </label>
+                        </div>
+                        <p className="mt-3 text-xs leading-5 text-base-content/55">
+                          {value === "adaptive" ? "Starts at 100% while calibrating. " : ""}
+                          Critical, incomplete, or low-confidence outputs can still require review.
+                        </p>
+                      </div>
+                    ) : null}
+                    {reviewFrequency.mode === value && value === "rules" ? (
+                      <div className="border-b border-white/10 border-l-2 border-l-[var(--rateloop-pink)] bg-black/10 px-4 py-4 sm:ml-10">
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <label className="text-sm">
+                            Review these risk levels
+                            <input
+                              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                              value={reviewFrequency.requiredRiskTiers}
+                              onChange={event =>
+                                setReviewFrequency(current => ({
+                                  ...current,
+                                  requiredRiskTiers: event.target.value,
+                                }))
+                              }
+                              placeholder="high, legal"
+                              maxLength={320}
+                            />
+                          </label>
+                          <label className="text-sm">
+                            Review below confidence (%) <span className="text-base-content/50">(optional)</span>
+                            <input
+                              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                              type="number"
+                              min={0}
+                              max={100}
+                              step={0.01}
+                              inputMode="decimal"
+                              value={reviewFrequency.minimumConfidencePercent}
+                              onChange={event =>
+                                setReviewFrequency(current => ({
+                                  ...current,
+                                  minimumConfidencePercent: event.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                        </div>
+                        <p className="mt-3 text-xs leading-5 text-base-content/55">
+                          Separate risk levels with commas. Critical or incomplete outputs always require review.
+                        </p>
+                      </div>
+                    ) : null}
+                  </Fragment>
                 ))}
-              </div>
-              <p
-                className={`mt-3 text-sm ${
-                  !expertiseEligibilityStatus.feasible ? "text-error" : "text-base-content/60"
-                }`}
-                aria-live="polite"
-              >
-                {expertiseEligibilityStatus.summary}
-              </p>
+              </SetupChoiceGroup>
             </fieldset>
-            <fieldset className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-4">
-              <legend className="px-1 text-sm font-medium">Review round</legend>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="text-sm">
-                  <p>Response window</p>
-                  <DurationInput
-                    id="agent-setup-review-response-window"
-                    className="mt-2"
-                    ariaLabel="Response window"
-                    valueSeconds={reviewTiming.responseWindowSeconds}
-                    minSeconds={MIN_REVIEW_RESPONSE_WINDOW_SECONDS}
-                    maxSeconds={MAX_REVIEW_RESPONSE_WINDOW_SECONDS}
-                    summarySuffix="Frozen when a request opens"
-                    onChangeSeconds={responseWindowSeconds =>
-                      setReviewTiming(current => ({ ...current, responseWindowSeconds }))
-                    }
-                  />
-                </div>
-                <label className="text-sm">
-                  Reviewers per request
-                  <input
-                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                    type="number"
-                    inputMode="numeric"
-                    min={reviewAudience.audience === "private_invited" ? 1 : 3}
-                    max={MAX_REVIEW_PANEL_SIZE}
-                    step={1}
-                    value={reviewTiming.panelSize}
-                    onChange={event => setReviewTiming(current => ({ ...current, panelSize: event.target.value }))}
-                    required
-                  />
-                </label>
-              </div>
-            </fieldset>
-            <fieldset className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-4">
-              <legend className="px-1 text-sm font-medium">Guaranteed bounty</legend>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="flex gap-3 rounded-lg border border-white/10 p-3 text-sm">
-                  <input
-                    className="radio mt-0.5"
-                    aria-label="No bounty"
-                    type="radio"
-                    name="compensationMode"
-                    value="unpaid"
-                    checked={
-                      reviewAudience.audience === "private_invited" && reviewCompensation.compensationMode === "unpaid"
-                    }
-                    disabled={reviewAudience.audience !== "private_invited"}
-                    onChange={() => setReviewCompensation(current => ({ ...current, compensationMode: "unpaid" }))}
-                  />
-                  <span>
-                    <span className="font-medium">No bounty</span>
-                    <span className="mt-1 block text-base-content/60">No guaranteed payment.</span>
-                  </span>
-                </label>
-                <label className="flex gap-3 rounded-lg border border-white/10 p-3 text-sm">
-                  <input
-                    className="radio mt-0.5"
-                    aria-label="Add USDC bounty"
-                    type="radio"
-                    name="compensationMode"
-                    value="usdc"
-                    checked={
-                      reviewAudience.audience !== "private_invited" || reviewCompensation.compensationMode === "usdc"
-                    }
-                    onChange={() => setReviewCompensation(current => ({ ...current, compensationMode: "usdc" }))}
-                  />
-                  <span>
-                    <span className="font-medium">Add USDC bounty</span>
-                    <span className="mt-1 block text-base-content/60">Pay each accepted reviewer.</span>
-                  </span>
-                </label>
-              </div>
-              {reviewAudience.audience !== "private_invited" ? (
-                <p className="mt-3 text-xs text-base-content/55">
-                  Public and hybrid network assignments currently require a guaranteed bounty. Bonus-only network review
-                  will appear after its dedicated assignment adapter is available.
-                </p>
-              ) : null}
-              {reviewCompensation.compensationMode === "usdc" ? (
-                <label className="mt-4 block text-sm">
-                  USDC per reviewer
-                  <input
-                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                    type="text"
-                    inputMode="decimal"
-                    pattern="[0-9]+([.][0-9]{1,6})?"
-                    maxLength={REVIEW_USDC_DECIMAL_MAX_LENGTH}
-                    value={reviewCompensation.usdcPerReviewer}
-                    onChange={event =>
-                      setReviewCompensation(current => ({ ...current, usdcPerReviewer: event.target.value }))
-                    }
-                    required
-                  />
-                </label>
-              ) : null}
-            </fieldset>
-            <fieldset className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-4">
-              <legend className="px-1 text-sm font-medium">Feedback Bonus</legend>
-              <p className="text-sm text-base-content/60">
-                Optional and separate from the guaranteed bounty. A human later chooses useful written feedback to pay.
-              </p>
-              <div className="mt-3 grid grid-cols-2 gap-2 sm:max-w-md">
-                <button
-                  type="button"
-                  aria-pressed={!reviewCompensation.feedbackBonusEnabled}
-                  className={`btn btn-sm ${!reviewCompensation.feedbackBonusEnabled ? "btn-primary" : "btn-outline"}`}
-                  onClick={() => setReviewCompensation(current => ({ ...current, feedbackBonusEnabled: false }))}
+            <details className="group mt-7 border-y border-white/10 py-5">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
+                <span className="min-w-0">
+                  <span className="block text-lg font-semibold">Reviewers, timing and payment</span>
+                  <span className="mt-1 block text-sm leading-6 text-base-content/55">{reviewerDetailsSummary}</span>
+                </span>
+                <span
+                  aria-hidden="true"
+                  className="shrink-0 text-xl text-base-content/55 transition-transform group-open:rotate-45"
                 >
-                  No bonus
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={reviewCompensation.feedbackBonusEnabled}
-                  className={`btn btn-sm ${reviewCompensation.feedbackBonusEnabled ? "btn-primary" : "btn-outline"}`}
-                  onClick={() => setReviewCompensation(current => ({ ...current, feedbackBonusEnabled: true }))}
-                >
-                  Add bonus
-                </button>
-              </div>
-              {reviewCompensation.feedbackBonusEnabled ? (
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <label className="text-sm">
-                    Bonus pool
-                    <div className="input mt-2 flex w-full items-center gap-2 border-white/10 bg-[var(--rateloop-field)]">
+                  +
+                </span>
+              </summary>
+              <div className="pb-1 pt-6">
+                <fieldset>
+                  <legend className="text-lg font-semibold">Who should review?</legend>
+                  <SetupChoiceGroup>
+                    {REVIEW_AUDIENCE_OPTIONS.map(([value, label, description]) => (
+                      <SetupRadioChoice
+                        key={value}
+                        id={`agent-setup-review-audience-${value}`}
+                        name="audience"
+                        value={value}
+                        checked={reviewAudience.audience === value}
+                        onChange={() => {
+                          setReviewAudience(current => ({ ...current, audience: value }));
+                          if (value !== "private_invited") {
+                            setReviewCompensation(current => ({ ...current, compensationMode: "usdc" }));
+                          }
+                        }}
+                        label={label}
+                        description={description}
+                      />
+                    ))}
+                  </SetupChoiceGroup>
+                </fieldset>
+                {reviewAudience.audience !== "private_invited" ? (
+                  <p className="mt-4 border-l-2 border-l-[var(--rateloop-yellow)] pl-4 text-sm leading-6 text-base-content/65">
+                    Public, synthetic, or safely redacted material only.
+                  </p>
+                ) : null}
+                <fieldset className="mt-6 border-t border-white/10 pt-5">
+                  <legend className="text-lg font-semibold">Required reviewer expertise</legend>
+                  <p className="mb-3 text-sm text-base-content/60">
+                    Optional. A request is blocked unless the selected audience can fill every seat.
+                  </p>
+                  <div className="surface-card-nested mt-3 grid overflow-hidden sm:grid-cols-2">
+                    {REVIEWER_EXPERTISE.map(option => (
+                      <label
+                        key={option.key}
+                        className="flex min-h-12 items-center gap-3 border-b border-white/10 p-3 text-sm sm:odd:border-r"
+                      >
+                        <input
+                          className="checkbox checkbox-sm"
+                          type="checkbox"
+                          checked={reviewExpertise.requiredExpertiseKeys.includes(option.key)}
+                          onChange={event =>
+                            setReviewExpertise(current => ({
+                              requiredExpertiseKeys: event.target.checked
+                                ? [...current.requiredExpertiseKeys, option.key]
+                                : current.requiredExpertiseKeys.filter(key => key !== option.key),
+                            }))
+                          }
+                        />
+                        <span>{option.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p
+                    className={`mt-3 text-sm ${
+                      !expertiseEligibilityStatus.feasible ? "text-error" : "text-base-content/60"
+                    }`}
+                    aria-live="polite"
+                  >
+                    {expertiseEligibilityStatus.summary}
+                  </p>
+                </fieldset>
+                <fieldset className="mt-6 border-t border-white/10 pt-5">
+                  <legend className="text-lg font-semibold">Review round</legend>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="text-sm">
+                      <p>Response window</p>
+                      <DurationInput
+                        id="agent-setup-review-response-window"
+                        className="mt-2"
+                        ariaLabel="Response window"
+                        valueSeconds={reviewTiming.responseWindowSeconds}
+                        minSeconds={MIN_REVIEW_RESPONSE_WINDOW_SECONDS}
+                        maxSeconds={MAX_REVIEW_RESPONSE_WINDOW_SECONDS}
+                        summarySuffix="Frozen when a request opens"
+                        onChangeSeconds={responseWindowSeconds =>
+                          setReviewTiming(current => ({ ...current, responseWindowSeconds }))
+                        }
+                      />
+                    </div>
+                    <label className="text-sm">
+                      Reviewers per request
                       <input
-                        className="min-w-0 grow bg-transparent outline-none"
+                        className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                        type="number"
+                        inputMode="numeric"
+                        min={reviewAudience.audience === "private_invited" ? 1 : 3}
+                        max={MAX_REVIEW_PANEL_SIZE}
+                        step={1}
+                        value={reviewTiming.panelSize}
+                        onChange={event => setReviewTiming(current => ({ ...current, panelSize: event.target.value }))}
+                        required
+                      />
+                    </label>
+                  </div>
+                </fieldset>
+                <fieldset className="mt-6 border-t border-white/10 pt-5">
+                  <legend className="text-lg font-semibold">Guaranteed bounty</legend>
+                  <SetupChoiceGroup>
+                    <SetupRadioChoice
+                      id="agent-setup-compensation-unpaid"
+                      name="compensationMode"
+                      value="unpaid"
+                      checked={
+                        reviewAudience.audience === "private_invited" &&
+                        reviewCompensation.compensationMode === "unpaid"
+                      }
+                      disabled={reviewAudience.audience !== "private_invited"}
+                      onChange={() => setReviewCompensation(current => ({ ...current, compensationMode: "unpaid" }))}
+                      label="No bounty"
+                      description="No guaranteed payment."
+                    />
+                    <SetupRadioChoice
+                      id="agent-setup-compensation-usdc"
+                      name="compensationMode"
+                      value="usdc"
+                      checked={
+                        reviewAudience.audience !== "private_invited" || reviewCompensation.compensationMode === "usdc"
+                      }
+                      onChange={() => setReviewCompensation(current => ({ ...current, compensationMode: "usdc" }))}
+                      label="Add USDC bounty"
+                      description="Pay each accepted reviewer."
+                    />
+                  </SetupChoiceGroup>
+                  {reviewAudience.audience !== "private_invited" ? (
+                    <p className="mt-3 text-xs text-base-content/55">
+                      Public and hybrid network assignments currently require a guaranteed bounty. Bonus-only network
+                      review will appear after its dedicated assignment adapter is available.
+                    </p>
+                  ) : null}
+                  {reviewCompensation.compensationMode === "usdc" ? (
+                    <label className="mt-4 block text-sm">
+                      USDC per reviewer
+                      <input
+                        className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
                         type="text"
                         inputMode="decimal"
                         pattern="[0-9]+([.][0-9]{1,6})?"
                         maxLength={REVIEW_USDC_DECIMAL_MAX_LENGTH}
-                        value={reviewCompensation.feedbackBonusUsdc}
+                        value={reviewCompensation.usdcPerReviewer}
                         onChange={event =>
-                          setReviewCompensation(current => ({ ...current, feedbackBonusUsdc: event.target.value }))
+                          setReviewCompensation(current => ({ ...current, usdcPerReviewer: event.target.value }))
                         }
-                        required
-                      />
-                      <span className="text-base-content/50">USDC</span>
-                    </div>
-                  </label>
-                  <label className="text-sm">
-                    Human awarder
-                    <select
-                      className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                      value={reviewCompensation.feedbackBonusAwarderKind}
-                      onChange={event =>
-                        setReviewCompensation(current => ({
-                          ...current,
-                          feedbackBonusAwarderKind: event.target.value as "requester" | "designated",
-                        }))
-                      }
-                    >
-                      <option value="requester">Me (requester)</option>
-                      <option value="designated">Designated authenticated human</option>
-                    </select>
-                  </label>
-                  {reviewCompensation.feedbackBonusAwarderKind === "designated" ? (
-                    <label className="text-sm sm:col-span-2">
-                      Awarder account
-                      <input
-                        className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                        value={reviewCompensation.feedbackBonusAwarderAccount}
-                        onChange={event =>
-                          setReviewCompensation(current => ({
-                            ...current,
-                            feedbackBonusAwarderAccount: event.target.value,
-                          }))
-                        }
-                        placeholder="Authenticated RateLoop account"
-                        maxLength={320}
                         required
                       />
                     </label>
                   ) : null}
-                  <p className="text-xs text-base-content/55 sm:col-span-2">
-                    The agent may prepare or fund this exact pool within its grant, but it can never select or execute
-                    an award.
+                </fieldset>
+                <fieldset className="mt-6 border-t border-white/10 pt-5">
+                  <legend className="text-lg font-semibold">Feedback Bonus</legend>
+                  <p className="text-sm text-base-content/60">
+                    Optional and separate from the guaranteed bounty. A human later chooses useful written feedback to
+                    pay.
                   </p>
-                </div>
-              ) : null}
-            </fieldset>
-            <fieldset className="mt-5 space-y-3">
-              <legend className="font-medium">Agent authority</legend>
-              {REVIEW_AUTHORITY_OPTIONS.map(([value, label, description]) => (
-                <label key={value} className="flex gap-3 rounded-xl border border-white/10 p-4">
-                  <input
-                    className="radio mt-0.5"
-                    aria-label={label}
-                    type="radio"
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:max-w-md">
+                    <button
+                      type="button"
+                      aria-pressed={!reviewCompensation.feedbackBonusEnabled}
+                      className={`btn btn-sm ${!reviewCompensation.feedbackBonusEnabled ? "btn-primary" : "btn-outline"}`}
+                      onClick={() => setReviewCompensation(current => ({ ...current, feedbackBonusEnabled: false }))}
+                    >
+                      No bonus
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={reviewCompensation.feedbackBonusEnabled}
+                      className={`btn btn-sm ${reviewCompensation.feedbackBonusEnabled ? "btn-primary" : "btn-outline"}`}
+                      onClick={() => setReviewCompensation(current => ({ ...current, feedbackBonusEnabled: true }))}
+                    >
+                      Add bonus
+                    </button>
+                  </div>
+                  {reviewCompensation.feedbackBonusEnabled ? (
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                      <label className="text-sm">
+                        Bonus pool
+                        <div className="input mt-2 flex w-full items-center gap-2 border-white/10 bg-[var(--rateloop-field)]">
+                          <input
+                            className="min-w-0 grow bg-transparent outline-none"
+                            type="text"
+                            inputMode="decimal"
+                            pattern="[0-9]+([.][0-9]{1,6})?"
+                            maxLength={REVIEW_USDC_DECIMAL_MAX_LENGTH}
+                            value={reviewCompensation.feedbackBonusUsdc}
+                            onChange={event =>
+                              setReviewCompensation(current => ({ ...current, feedbackBonusUsdc: event.target.value }))
+                            }
+                            required
+                          />
+                          <span className="text-base-content/50">USDC</span>
+                        </div>
+                      </label>
+                      <label className="text-sm">
+                        Human awarder
+                        <select
+                          className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                          value={reviewCompensation.feedbackBonusAwarderKind}
+                          onChange={event =>
+                            setReviewCompensation(current => ({
+                              ...current,
+                              feedbackBonusAwarderKind: event.target.value as "requester" | "designated",
+                            }))
+                          }
+                        >
+                          <option value="requester">Me (requester)</option>
+                          <option value="designated">Designated authenticated human</option>
+                        </select>
+                      </label>
+                      {reviewCompensation.feedbackBonusAwarderKind === "designated" ? (
+                        <label className="text-sm sm:col-span-2">
+                          Awarder account
+                          <input
+                            className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                            value={reviewCompensation.feedbackBonusAwarderAccount}
+                            onChange={event =>
+                              setReviewCompensation(current => ({
+                                ...current,
+                                feedbackBonusAwarderAccount: event.target.value,
+                              }))
+                            }
+                            placeholder="Authenticated RateLoop account"
+                            maxLength={320}
+                            required
+                          />
+                        </label>
+                      ) : null}
+                      <p className="text-xs text-base-content/55 sm:col-span-2">
+                        {
+                          "The agent may prepare or fund this exact pool within its grant, but it can never select or execute an award."
+                        }
+                      </p>
+                    </div>
+                  ) : null}
+                </fieldset>
+              </div>
+            </details>
+            <fieldset className="mt-7">
+              <legend className="text-xl font-semibold">Agent authority</legend>
+              <SetupChoiceGroup>
+                {REVIEW_AUTHORITY_OPTIONS.map(([value, label, description]) => (
+                  <SetupRadioChoice
+                    key={value}
+                    id={`agent-setup-authority-${value}`}
                     name="authority"
                     value={value}
                     checked={reviewCompensation.authority === value}
                     onChange={() => setReviewCompensation(current => ({ ...current, authority: value }))}
+                    label={label}
+                    description={description}
                   />
-                  <span>
-                    <span className="font-medium">{label}</span>
-                    <span className="mt-1 block text-sm text-base-content/60">{description}</span>
-                  </span>
-                </label>
-              ))}
+                ))}
+              </SetupChoiceGroup>
             </fieldset>
             {pendingReviewConfirmation?.fingerprint === currentReviewFingerprint ? (
               <section
                 aria-labelledby="agent-setup-review-consent-heading"
-                className="mt-6 rounded-xl border border-primary/30 bg-primary/5 p-4"
+                className="surface-card-nested mt-7 border-l-2 border-l-[var(--rateloop-pink)] p-5"
               >
-                <h2 id="agent-setup-review-consent-heading" className="font-medium">
+                <h2 id="agent-setup-review-consent-heading" className="text-xl font-semibold">
                   Confirm these exact terms
                 </h2>
                 <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
