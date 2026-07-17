@@ -12,10 +12,14 @@ An opportunity is uniquely addressed by `(workspace_id, integration_id, external
 - request-profile ID and version;
 - delegation-grant ID and version, when present;
 - workflow, risk tier, audience-policy hash, and privacy classification;
+- question authority and result semantics;
 - source and suggestion commitments; and
 - the deterministic sampling proof.
 
-No later policy edit mutates that snapshot.
+No later policy edit mutates that snapshot. For a required review, the first valid request also freezes the exact binary
+question, labels, owner-controlled rationale mode, author, schema version, and canonical hash before any approval,
+publication, assignment, reservation, or spend. A retry with different question content fails with
+`review_question_conflict`. Agent-written feedback questions never enter the metadata-only policy-evaluation call.
 
 ## States
 
@@ -27,8 +31,8 @@ No later policy edit mutates that snapshot.
 | `request_ready` | Exact request terms are frozen and authorized. | `pending`, `blocked`, `cancelled_before_commit` |
 | `pending` | Assignment or funded-round work is active. | `completed`, `inconclusive`, `failed_terminal` |
 | `blocked` | Review remains required and output release is not authorized. | `approval_required`, `request_ready` after an explicit owner action; otherwise terminal for the host attempt |
-| `completed` | A bounded result and exactly one adaptive observation were finalized. | Terminal |
-| `inconclusive` | The lane reached a valid under-quorum or no-verdict terminal result and exactly one observation was finalized. | Terminal |
+| `completed` | A bounded result was finalized. Comparable assurance results also finalize exactly one adaptive observation; feedback results do not. | Terminal |
+| `inconclusive` | The lane reached a valid under-quorum or no-verdict terminal result. Assurance requests finalize one inconclusive observation; feedback requests do not. | Terminal |
 | `failed_terminal` | The lane exhausted its specified recovery path. Accepted work has already reached its paid terminal path. | Terminal |
 | `cancelled_before_commit` | The owner cancelled before any paid rater commit or accepted invited assignment. | Terminal |
 
@@ -47,7 +51,10 @@ Decision mapping:
 
 ## Approval
 
-An approval record contains the exact prepared request profile, content commitments, derived economics, maximum charge, expiry, and owner decision. Preparing a request may stage encrypted private bytes, but cannot assign reviewers, publish a public question, reserve workspace funds, or submit chain payment.
+An approval record contains the exact prepared request profile, frozen question hash, author and result semantics,
+content commitments, derived economics, maximum charge, expiry, and owner decision. Preparing a request may stage
+encrypted private bytes, but cannot assign reviewers, publish a public question, reserve workspace funds, or submit
+chain payment.
 
 Approval is single-use. Editing creates a new immutable revision and invalidates the prior approval target. Denial records the owner decision; it never records a policy skip. A host that requires enforcement keeps the output blocked unless its separately configured owner-override rules permit release.
 
@@ -78,9 +85,14 @@ Every adapter returns:
 - human-human agreement and latency when available;
 - exact cost and compensation state;
 - source, suggestion, policy, audience, and result commitments; and
+- the frozen question hash, author, result semantics, and selected answer label; and
 - public evidence references or private opaque references appropriate to the lane.
 
-One transaction inserts the evaluation observation, updates the scope stage/counters, records any policy-stage event, and marks the opportunity terminal. The unique opportunity constraint makes duplicate finalization harmless. Private payloads and reviewer identity never enter the adaptive rollup.
+For `assurance` semantics, one transaction inserts the evaluation observation, updates the scope stage and counters,
+records any policy-stage event, and marks the opportunity terminal. For `feedback` semantics, finalization stores the
+bounded result but creates no adaptive observation, changes no calibration counter or coverage stage, and exports no
+human correctness label. The unique opportunity constraint makes duplicate finalization harmless. Private payloads,
+private question text, and reviewer identity never enter the adaptive rollup.
 
 ## Failure and compensation
 

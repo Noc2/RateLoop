@@ -45,9 +45,20 @@ blocked state that the agent must report.
 
 ## Choose the question, panel, and response window
 
-Set the binary review question, labels, and whether written rationale is off, optional, or required. Then choose panel
-size and the human response window. The response window is how long assigned humans have to answer; it is frozen when
-the request starts. It is separate from protocol-controlled reveal, settlement, claim, and recovery periods.
+Choose **Use one question** for a stable owner-written question and labels. This is the default and the only mode that
+can produce comparable assurance evidence for adaptive review.
+
+Choose **Let the agent ask each time** when each case needs a different feedback question, such as “Would you buy this
+product?” or “Do you like this design?” The agent supplies one binary question and two answer labels with the review
+request. The first accepted request freezes them, and retries cannot change them. These answers are feedback only: they
+are not recorded as agent agreement, approval, correctness, or calibration evidence, and this mode cannot use adaptive
+frequency. It is initially limited to RateLoop-network review of public, synthetic, or owner-confirmed redacted
+material; private invited and hybrid delivery remain unavailable until their binary question path uses the encrypted
+artifact boundary.
+
+In either mode, the owner controls whether written rationale is off, optional, or required. Then choose panel size and
+the human response window. The response window is how long assigned humans have to answer; it is frozen when the request
+starts. It is separate from protocol-controlled reveal, settlement, claim, and recovery periods.
 
 The standard presets are 20 minutes, 1 hour, 4 hours, and 24 hours. A lane may be unavailable when RateLoop cannot
 credibly fill the selected panel within that window. Editing a default does not change an active deadline.
@@ -95,7 +106,8 @@ workspace tools in the active task, and the agent must call them for each eligib
 1. `rateloop_get_agent_context`, then `rateloop_verify_connection` when connecting or reconnecting;
 2. `rateloop_evaluate_review_requirement` with privacy-safe execution metadata;
 3. stop on `approval_required`, `request_ready`, `pending`, or `blocked`, and use `rateloop_request_review` only when the
-   returned grant permits it;
+   returned grant permits it; include one bounded binary question only when the returned question policy requires an
+   agent-written question;
 4. use `rateloop_wait_for_review`, then `rateloop_get_review_result`; and
 5. resume only from the policy-authorized terminal result.
 

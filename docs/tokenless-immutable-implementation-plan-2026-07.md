@@ -76,6 +76,14 @@ at least 30 comparable cases have completed. Fifty more stable cases may reduce 
 to the 10% monitoring floor. A completed window that fails a reset gate restores 100% calibration. Critical-risk rules,
 the maximum-unreviewed gap, incomplete metadata, and explicit owner requirements always override the adaptive baseline.
 
+The owner separately chooses question authority. An owner-fixed binary question uses `assurance` semantics and may
+produce comparable evidence. An agent-per-request binary question uses `feedback` semantics so a preference such as
+“Would you buy this?” cannot be misread as agreement with the agent. The exact agent-written question is frozen before
+any consequential review action, cannot change on retry, and never creates adaptive observations, calibration labels,
+coverage reductions, disagreement alerts, or correctness claims. Agent-written mode is incompatible with adaptive
+selection. Its initial availability is restricted to public-safe RateLoop-network review; private and hybrid delivery
+remain fail-closed until the question itself uses the encrypted private artifact boundary.
+
 ## Workspace and agent setup
 
 The detailed owner-facing policy choices, audience and material matrix, timing, compensation, and delegation semantics are frozen in

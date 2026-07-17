@@ -124,8 +124,10 @@ The first three rows belong on the landing page. The full set belongs in the doc
 
 The public explanation must match the implementation:
 
-- The recurring adaptive path compares an exact source payload with an exact agent suggestion and asks a frozen binary
-  acceptance question. Do not describe it as an arbitrary survey builder.
+- The recurring adaptive path compares an exact source payload with an exact agent suggestion and asks a frozen,
+  owner-written binary acceptance question. Separately, an owner may let the agent write a binary feedback question for
+  each public-safe network review. Feedback answers never enter adaptive agreement or correctness evidence, so do not
+  describe that option as auditing or as an unrestricted survey builder.
 - A direct one-off panel can use a binary or head-to-head question. Repeated adaptive evidence should not mix those
   shapes silently.
 - Images and YouTube video are supported question media. A screenshot review is credible; claiming that panelists test

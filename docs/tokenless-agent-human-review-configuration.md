@@ -45,9 +45,26 @@ Audience and material sensitivity are separate dimensions.
 
 `private`, `internal`, `confidential`, `restricted`, and `regulated` artifacts never enter public question records. Hybrid review cannot autonomously derive a public projection from private material.
 
-## Question and rationale
+## Question authority and rationale
 
-The adaptive path is a committed binary criterion. The owner supplies a short criterion and optional labels; the agent supplies only the case-specific source and suggestion payloads allowed by the frozen template. Written rationale is independently configured as `off`, `optional`, or `required`. Arbitrary agent-authored questionnaires are outside this release.
+The owner chooses who writes the binary question:
+
+- **Use one question** freezes an owner-written criterion and two answer labels in the request profile. Results use
+  `assurance` semantics and may contribute to adaptive agreement only when every other comparability gate passes.
+- **Let the agent ask each time** lets the connected agent supply one bounded binary question and two answer labels for
+  each required review. Results use `feedback` semantics: they report the selected answer and distribution, never
+  agent agreement, correctness, approval, or audit calibration.
+
+Question authority never delegates audience, material classification, timing, panel size, compensation, rationale, or
+spending. Written rationale remains owner-controlled as `off`, `optional`, or `required`. The first valid review request
+freezes the exact question, labels, author, semantics, and hash before approval, publication, assignment, reservation,
+or spend. An idempotent retry must match that snapshot; changed wording or labels fail with a conflict.
+
+Agent-written questions are binary-only, are treated as reviewer-facing data rather than instructions, and must obey the
+same material boundary as the reviewed case. They are incompatible with adaptive selection because feedback answers are
+not comparable evidence and must never reduce later review coverage. The initial release permits this mode only for the
+RateLoop network with public, synthetic, or owner-confirmed redacted material. Invited and hybrid lanes fail closed until
+private binary-question delivery stores and leases the question under the encrypted artifact boundary.
 
 ## Timing and panel
 
