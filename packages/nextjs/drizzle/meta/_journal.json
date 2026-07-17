@@ -610,6 +610,13 @@
       "when": 1784253600000,
       "tag": "0087_review_effort_guidance",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1784257200000,
+      "tag": "0088_expertise_verification_queue",
+      "breakpoints": true
     }
   ]
 }
