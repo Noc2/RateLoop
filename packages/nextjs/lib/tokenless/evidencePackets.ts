@@ -215,7 +215,13 @@ function tenantCommitment(workspaceId: string, key: Buffer) {
   return `hmac-sha256:${createHmac("sha256", key).update(workspaceId).digest("hex")}`;
 }
 
-async function loadRunAccess(
+/**
+ * Shared run-access gate: workspace write roles for reads, and the decision
+ * gate (owner, admin, or `decision_owner` governance role) when
+ * `options.decision` is set. Exported for oversight surfaces that must apply
+ * exactly the same boundary — never reimplement it.
+ */
+export async function loadRunAccess(
   client: Queryable,
   input: { accountAddress: string; workspaceId: string; runId: string },
   options: { lock?: boolean; decision?: boolean } = {},

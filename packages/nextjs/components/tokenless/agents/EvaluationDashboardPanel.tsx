@@ -5,6 +5,7 @@ import { AdaptiveCoverageSummary } from "~~/components/tokenless/agents/Adaptive
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import type { AssuranceMetricsSnapshot } from "~~/lib/tokenless/assuranceMetrics";
 import type { EvaluationDashboard, EvaluationRun } from "~~/lib/tokenless/evaluationDashboard";
+import type { OversightRunCaseView } from "~~/lib/tokenless/oversightCaseView";
 
 type Workspace = { workspaceId: string; name: string; role: string };
 
@@ -270,6 +271,120 @@ function OverrideRecordForm({ run, workspaceId }: { run: EvaluationRun; workspac
   );
 }
 
+function OversightCaseDetail({ run, workspaceId }: { run: EvaluationRun; workspaceId: string }) {
+  const [view, setView] = useState<OversightRunCaseView | null>(null);
+  const [state, setState] = useState<"idle" | "loading" | "denied" | "error">("idle");
+
+  async function load() {
+    if (view || state === "loading") return;
+    setState("loading");
+    try {
+      const response = await fetch(
+        `/api/account/workspaces/${encodeURIComponent(workspaceId)}/assurance/runs/${encodeURIComponent(run.runId)}/cases`,
+        { cache: "no-store", credentials: "same-origin" },
+      );
+      if (response.status === 403) {
+        setState("denied");
+        return;
+      }
+      setView((await readJson(response)) as unknown as OversightRunCaseView);
+      setState("idle");
+    } catch {
+      setState("error");
+    }
+  }
+
+  return (
+    <details className="mt-4 border-t border-white/10 pt-4" onToggle={event => event.currentTarget.open && void load()}>
+      <summary className="cursor-pointer text-sm font-semibold text-base-content/65">Case detail (oversight)</summary>
+      {state === "loading" ? <p className="mt-3 text-xs text-base-content/45">Loading case material…</p> : null}
+      {state === "denied" ? (
+        <p className="mt-3 text-xs text-base-content/55">
+          Case material opens only for workspace owners, admins, and designated decision owners.
+        </p>
+      ) : null}
+      {state === "error" ? (
+        <p className="mt-3 text-xs text-red-100" role="alert">
+          Unable to load the case detail.
+        </p>
+      ) : null}
+      {view && !view.detailAvailable ? (
+        <p className="mt-3 text-xs leading-5 text-base-content/55">{view.note}</p>
+      ) : null}
+      {view?.detailAvailable ? (
+        <div className="mt-3 space-y-3">
+          {view.note ? <p className="text-xs leading-5 text-base-content/55">{view.note}</p> : null}
+          {view.cases.map(caseView => (
+            <article key={caseView.caseId} className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h4 className="text-sm font-semibold">
+                  {caseView.title}
+                  {caseView.isCalibration ? (
+                    <span className="ml-2 rounded bg-white/[0.08] px-1.5 py-0.5 text-[10px] uppercase">
+                      Calibration
+                    </span>
+                  ) : null}
+                </h4>
+                <p className="text-xs text-base-content/45">
+                  {caseView.choiceCounts.candidate} candidate · {caseView.choiceCounts.baseline} baseline
+                  {caseView.disagreementBps !== null ? ` · ${percent(caseView.disagreementBps)} dissent` : ""}
+                </p>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-base-content/60">{caseView.instructions}</p>
+              <p className="mt-2 flex flex-wrap gap-2 text-xs">
+                {caseView.artifacts.map(artifact => (
+                  <a
+                    key={artifact.artifactId}
+                    className="rounded-md bg-white/[0.06] px-2 py-1 capitalize text-[var(--rateloop-blue)]"
+                    href={`/api/account/workspaces/${encodeURIComponent(workspaceId)}/assurance/projects/${encodeURIComponent(view.projectId)}/artifacts/${encodeURIComponent(artifact.artifactId)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {artifact.role}: {artifact.label ?? artifact.artifactId}
+                  </a>
+                ))}
+              </p>
+              {caseView.responses.length > 0 ? (
+                <ul className="mt-3 space-y-2">
+                  {caseView.responses.map((response, index) => (
+                    <li key={`${caseView.caseId}-${index}`} className="rounded-lg bg-black/20 p-3 text-xs leading-5">
+                      <p className="text-base-content/45">
+                        {response.reviewerPseudonym} · chose {response.choice}
+                        {response.failureTagKeys.length > 0 ? ` · ${response.failureTagKeys.join(", ")}` : ""}
+                      </p>
+                      {response.rationale ? (
+                        <p className="mt-1 whitespace-pre-wrap text-base-content/70">{response.rationale}</p>
+                      ) : (
+                        <p className="mt-1 text-base-content/40">No workspace-owned rationale for this response.</p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-3 text-xs text-base-content/40">No valid responses recorded for this case.</p>
+              )}
+            </article>
+          ))}
+          {view.overrideDecisions.length > 0 ? (
+            <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+              <h4 className="text-sm font-semibold">Override history</h4>
+              <ul className="mt-2 space-y-1 text-xs leading-5 text-base-content/60">
+                {view.overrideDecisions.map(decision => (
+                  <li key={decision.recordId}>
+                    <span className="capitalize">{decision.outcome}</span>
+                    {decision.current ? "" : " (superseded)"} · {new Date(decision.decidedAt).toLocaleString()} —{" "}
+                    {decision.reasons}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </details>
+  );
+}
+
 function RunCard({ run, workspaceId }: { run: EvaluationRun; workspaceId: string }) {
   const share = run.candidateSelectionShareBps;
   const [clientDecision, setClientDecision] = useState(run.clientDecision);
@@ -368,6 +483,7 @@ function RunCard({ run, workspaceId }: { run: EvaluationRun; workspaceId: string
         </p>
         <code className="mt-3 block break-all text-[11px] text-base-content/35">{run.runId}</code>
       </details>
+      {run.status === "completed" ? <OversightCaseDetail run={run} workspaceId={workspaceId} /> : null}
       {run.status === "completed" ? <OverrideRecordForm run={run} workspaceId={workspaceId} /> : null}
     </article>
   );

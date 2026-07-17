@@ -643,6 +643,16 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
   }
 }
 
+/**
+ * Decrypts one stored rationale for the workspace-owned oversight case view.
+ * The caller must already have enforced the decision-gated run access and the
+ * customer-invited lane: the workspace owns invited-lane review material,
+ * while RateLoop-network responses stay aggregate-only everywhere.
+ */
+export function decryptWorkspaceOwnedRationale(row: QueryRow) {
+  return decryptRationale(row);
+}
+
 export function __setAssuranceResponseKeyringsForTests(value: AssuranceResponseKeyrings | null) {
   keyringsOverride = value;
 }

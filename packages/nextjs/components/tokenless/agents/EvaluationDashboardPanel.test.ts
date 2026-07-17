@@ -37,6 +37,23 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.doesNotMatch(source, /leaderboard|top agent|worst agent/i);
 });
 
+test("completed runs expose an oversight case detail that respects lane boundaries", () => {
+  const source = readFileSync(new URL("./EvaluationDashboardPanel.tsx", import.meta.url), "utf8");
+  assert.match(source, /Case detail \(oversight\)/);
+  // Lazy fetch through the dedicated access-checked endpoint.
+  assert.match(source, /\/cases`/);
+  assert.match(source, /onToggle=\{event => event\.currentTarget\.open && void load\(\)\}/);
+  // Denied and aggregate-only outcomes stay explained, never silently empty.
+  assert.match(source, /owners, admins, and designated decision owners/);
+  assert.match(source, /view && !view\.detailAvailable \? <p[^>]*>\{view\.note\}<\/p> : null/);
+  // Material renders via the existing lease/encryption artifact route.
+  assert.match(source, /assurance\/projects\/\$\{encodeURIComponent\(view\.projectId\)\}\/artifacts\//);
+  assert.match(source, /reviewerPseudonym/);
+  assert.match(source, /dissent/);
+  assert.match(source, /Override history/);
+  assert.match(source, /No workspace-owned rationale for this response\./);
+});
+
 test("run cards submit go/revise/stop and record per-output overrides without a preselected choice", () => {
   const source = readFileSync(new URL("./EvaluationDashboardPanel.tsx", import.meta.url), "utf8");
   // Go/revise/stop write control: plain buttons, nothing preselected, wired to
