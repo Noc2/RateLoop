@@ -849,6 +849,7 @@ export async function configureWorkspaceSetupPeople(input: {
   groupId?: unknown;
   createInvitation?: unknown;
   intendedEmail?: unknown;
+  expertiseDefinitionIds?: unknown;
 }) {
   const access = await requireManager(input.accountAddress, input.workspaceId);
   const expectedRevision = requiredRevision(input.revision);
@@ -924,12 +925,46 @@ export async function configureWorkspaceSetupPeople(input: {
       input.intendedEmail === undefined || input.intendedEmail === null || input.intendedEmail === ""
         ? null
         : bounded(input.intendedEmail, "Recipient email", 320);
+    const expertiseDefinitionIds = input.expertiseDefinitionIds ?? [];
+    if (
+      !Array.isArray(expertiseDefinitionIds) ||
+      expertiseDefinitionIds.length > 8 ||
+      expertiseDefinitionIds.some(value => typeof value !== "string") ||
+      new Set(expertiseDefinitionIds).size !== expertiseDefinitionIds.length
+    ) {
+      throw new TokenlessServiceError("Invitation specialist areas are invalid.", 400, "invalid_agent_setup_people");
+    }
+    const expertiseDefinitions = expertiseDefinitionIds.map(definitionId => {
+      const requirement = review.requestProfile.expertiseRequirements.find(
+        candidate => candidate.definitionId === definitionId,
+      );
+      if (!requirement || requirement.sourceScope !== "customer_invited") {
+        throw new TokenlessServiceError(
+          "An invitation specialist area is not required by this review profile.",
+          400,
+          "invalid_agent_setup_people",
+        );
+      }
+      return {
+        definitionId: requirement.definitionId,
+        definitionVersion: requirement.definitionVersion,
+        definitionHash: requirement.definitionHash,
+      };
+    });
+    if (expertiseDefinitions.length > 0 && !intendedEmail) {
+      throw new TokenlessServiceError(
+        "Enter the recipient email before assigning intended specialist areas.",
+        400,
+        "invalid_agent_setup_people",
+      );
+    }
     invitation = await createPrivateGroupInvitation({
       accountAddress: access.actor,
       workspaceId: input.workspaceId,
       groupId: boundGroupId,
       intendedEmail,
       maximumRedemptions: 1,
+      expertiseDefinitions,
     });
   }
   const now = new Date();

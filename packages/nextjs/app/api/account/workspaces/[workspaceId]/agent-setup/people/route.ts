@@ -17,7 +17,10 @@ export async function POST(request: NextRequest, context: Context) {
       !body ||
       Array.isArray(body) ||
       Object.keys(body).some(
-        key => !["revision", "decision", "groupId", "createInvitation", "intendedEmail"].includes(key),
+        key =>
+          !["revision", "decision", "groupId", "createInvitation", "intendedEmail", "expertiseDefinitionIds"].includes(
+            key,
+          ),
       )
     ) {
       throw new TokenlessServiceError("People setup is invalid.", 400, "invalid_agent_setup_people");
@@ -31,6 +34,7 @@ export async function POST(request: NextRequest, context: Context) {
         groupId: body.groupId,
         createInvitation: body.createInvitation,
         intendedEmail: body.intendedEmail,
+        expertiseDefinitionIds: body.expertiseDefinitionIds,
       }),
       { headers: { "Cache-Control": "private, no-store, max-age=0" } },
     );

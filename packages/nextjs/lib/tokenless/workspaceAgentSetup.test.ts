@@ -13,7 +13,7 @@ import {
   putHumanReviewConfigurationForOwner,
 } from "~~/lib/tokenless/humanReviewConfiguration";
 import { loadWorkspaceOnboardingFunnel } from "~~/lib/tokenless/onboardingObservability";
-import { createPrivateGroup } from "~~/lib/tokenless/privateGroups";
+import { createPrivateGroup, listPrivateGroupInvitations } from "~~/lib/tokenless/privateGroups";
 import { createAgentPublishingPolicy, createWorkspace } from "~~/lib/tokenless/productCore";
 import { createWorkspaceReviewerExpertiseDefinition } from "~~/lib/tokenless/reviewerExpertiseDefinitions";
 import type { ReviewerExpertiseRequirement } from "~~/lib/tokenless/reviewerExpertiseOptions";
@@ -196,7 +196,7 @@ test("setup resumes exact workspace specialist requirements without weakening th
     groupId: group.groupId,
     expertiseRequirements,
   });
-  await configureWorkspaceSetupReviews({
+  const reviews = await configureWorkspaceSetupReviews({
     accountAddress: OWNER,
     workspaceId,
     revision: confirmed.revision,
@@ -206,6 +206,29 @@ test("setup resumes exact workspace specialist requirements without weakening th
   const setup = await getWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId, requestedStep: "reviews" });
   assert.deepEqual(setup.reviewDraft?.requestProfile.expertiseRequirements, expertiseRequirements);
   assert.deepEqual(setup.reviewDraft?.requestProfile.requiredExpertiseKeys, []);
+
+  const people = await configureWorkspaceSetupPeople({
+    accountAddress: OWNER,
+    workspaceId,
+    revision: reviews.revision,
+    decision: "invited",
+    createInvitation: true,
+    intendedEmail: "specialist@example.com",
+    expertiseDefinitionIds: [definition.definitionId],
+  });
+  assert.deepEqual(people.invitation?.expertiseDefinitions, [
+    {
+      definitionId: definition.definitionId,
+      definitionVersion: definition.version,
+      definitionHash: definition.hash,
+    },
+  ]);
+  const invitations = await listPrivateGroupInvitations({
+    accountAddress: OWNER,
+    workspaceId,
+    groupId: group.groupId,
+  });
+  assert.equal(invitations[0]?.intendedExpertise[0]?.status, "pending");
 });
 
 test("setup binds one verified connection and completes without publishing or spending authority", async () => {
