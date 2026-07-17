@@ -320,7 +320,7 @@ describe("RateLoop agent host assets", () => {
       "Every eligible output",
       "Fixed percentage",
       "Risk rules",
-      "Manual only",
+      "Manual handoff only",
     ]) {
       expect(skill).toContain(`**${policy}**`);
     }

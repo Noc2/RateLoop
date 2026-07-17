@@ -34,7 +34,7 @@ The owner chooses the frequency; the agent does not decide ad hoc whether a resu
 - **Every eligible output** requires review every time.
 - **Fixed percentage** uses RateLoop's deterministic sample and maximum-unreviewed-gap rule.
 - **Risk rules** use the configured risk tiers, confidence threshold, and completeness rules.
-- **Manual only** creates no automatic opportunity; the owner or host explicitly starts one.
+- **Manual handoff only** never requires review automatically; the owner or host starts each handoff.
 
 Critical risk and incomplete metadata override sampling. A missing grant, exceeded budget, or unavailable lane never turns a required review into `skip`; it produces `approval_required` or `blocked`.
 
@@ -42,7 +42,9 @@ The owner separately chooses what the agent may do after review is required:
 
 - **Check only** records the requirement but cannot prepare, publish, assign, reserve, or spend.
 - **Prepare for approval** creates the exact owner approval request without publishing, assigning, reserving, or spending.
-- **Ask automatically** may enter only the frozen lane covered by the exact active owner grant; it is never inferred from a connected plugin or available balance.
+- **Ask automatically** may enter only the frozen lane covered by the exact active owner publishing grant; it is never
+  inferred from a connected plugin or available balance. Private invited review with no bounty or Feedback Bonus does
+  not require funding permission. Any bounty or Feedback Bonus also requires the exact active payment scope and budget.
 
 ## Question Authority
 

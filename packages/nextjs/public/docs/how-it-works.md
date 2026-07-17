@@ -51,8 +51,8 @@ Workspace owners change audience, frequency, response window, panel, compensatio
 agent's **Manage → Human review** editor. The connected workspace MCP uses `rateloop_get_agent_context ->
 rateloop_evaluate_review_requirement -> skip or rateloop_request_review -> rateloop_wait_for_review ->
 rateloop_get_review_result -> rateloop_get_assurance_state`. Its basic safe connection can evaluate review requirements
-but cannot spend or publish. Paid or autonomous review requires a separate owner-approved publishing grant with explicit
-limits.
+but cannot spend or publish. Autonomous review requires a separate owner-approved publishing grant with explicit
+limits. Funding permission is additionally required only when the request includes a bounty or Feedback Bonus.
 
 Installing MCP does not create a background check. The tools must be available in the active task, the connection must
 pass `rateloop_verify_connection`, and the agent must call the evaluation flow for each eligible output. A policy edit is

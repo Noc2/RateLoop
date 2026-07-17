@@ -12,7 +12,8 @@ The owner configures one **Human review** journey. The implementation keeps thre
 
 1. a **selection policy** decides whether an eligible output needs review;
 2. a **request profile** freezes who may see the case, what they answer, how long they have, the panel size, and compensation defaults; and
-3. a **delegation grant** decides whether the connected agent may only check policy, prepare an owner-approved request, or publish and spend within exact limits.
+3. a **delegation grant** decides whether the connected agent may only check policy, prepare an owner-approved request,
+   or send automatically within exact publishing limits and, when payment is enabled, funding limits.
 
 Changing one object never widens another. A request is authorized only when the exact active versions are bound to the integration. Active opportunities and funded rounds retain their frozen versions when a future policy is edited.
 
@@ -28,8 +29,7 @@ An eligible output is a completed response in a workflow explicitly bound to the
 | Every eligible output | Requires review for every eligible output. |
 | Fixed percentage | Uses deterministic sampling at the configured rate and forces review when the maximum unreviewed gap is reached. |
 | Risk rules | Requires review for configured risk tiers, incomplete metadata, or confidence below the owner threshold. |
-| Owner-approved only | Creates a prepared request for owner approval and never publishes autonomously. |
-| Manual only | Records no automatic opportunity; the owner or host explicitly starts a handoff. |
+| Manual handoff only | Never requires review automatically. The owner or host starts each handoff. |
 
 Critical-risk and incomplete-metadata safety rules override sampling. A request or spend cap never converts a required decision into `skip`; it yields `approval_required` or `blocked`.
 
@@ -84,7 +84,13 @@ Delegation has exactly three owner-visible levels:
 
 - **Check only** — evaluate policy and report the required next action.
 - **Prepare for approval** — persist the exact request for browser approval; no assignment, publication, or spend occurs beforehand.
-- **Ask automatically** — publish and spend only within the exact workflow, audience, material, timing, panel, payment, expiry, and budget limits of the active grant.
+- **Ask automatically** — send only within the exact workflow, audience, material, timing, panel, expiry, and publishing
+  limits of the active grant. A private invited request with no bounty or Feedback Bonus needs no funding permission;
+  any bounty or Feedback Bonus additionally requires the exact funding permission and budget limits.
+
+**Manual handoff only** makes delegation inapplicable: the effective authority is **Check only**, enforcement is
+advisory, and no publishing or funding grant is retained. Returning to an automatic frequency starts from **Check
+only** so an earlier hidden delegation cannot reactivate.
 
 ## Capability truthfulness
 

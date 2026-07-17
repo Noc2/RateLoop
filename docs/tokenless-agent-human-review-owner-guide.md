@@ -25,7 +25,7 @@ agent card is the durable place to inspect the effective values and reopen the c
 Choosing an audience never declassifies material. Private, internal, confidential, restricted, and regulated artifacts
 cannot be published to the network or converted into a public hybrid request by the agent.
 
-## Choose how often the agent asks
+## Choose when review is required
 
 Frequency applies once per **eligible output**, not on a wall-clock timer. An eligible output is a completed response in
 the workflow bound to this policy; setup messages, tool chatter, health checks, status updates, and delivery of an
@@ -37,8 +37,7 @@ already-recorded result do not count.
 - **Fixed percentage** uses deterministic sampling at the chosen rate and enforces the configured maximum unreviewed
   gap.
 - **Risk rules** asks for configured risk tiers, incomplete metadata, or confidence below the owner threshold.
-- **Owner-approved only** prepares an exact request for a human owner to approve.
-- **Manual only** never starts an automatic opportunity.
+- **Manual handoff only** never requires review automatically. You start each handoff.
 
 A spend cap, unavailable lane, or missing approval never turns a required review into a skip. It produces an approval or
 blocked state that the agent must report.
@@ -93,7 +92,11 @@ the disclosed deadline. The connected agent, automatic score, and RateLoop opera
 - **Prepare for approval** saves the exact request and economics for a workspace human to approve. Nothing is assigned,
   published, reserved, or spent before approval.
 - **Ask automatically** lets the agent ask only within the active grant's exact workflow, audience, material, timing,
-  panel, payment, expiry, and budget limits.
+  panel, expiry, and publishing limits. Private invited review with no bounty or Feedback Bonus needs no funding
+  permission. A bounty or Feedback Bonus additionally requires the exact funding permission and budget limits.
+
+When **Manual handoff only** is selected, Agent authority is hidden and safely reset to **Check only**. Selecting another
+frequency does not restore an earlier automatic grant.
 
 Automatic authority does not override capability readiness, privacy rules, paid eligibility, the workspace kill switch,
 or a revoked grant.
