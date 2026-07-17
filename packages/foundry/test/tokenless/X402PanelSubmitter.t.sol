@@ -67,6 +67,21 @@ contract X402PanelSubmitterTest is Test {
         assertEq(panel.nextRoundId(), 1);
     }
 
+    function testAuthorizationFailsClosedWhenAdapterAlreadyHoldsTokens() external {
+        TokenlessPanel.RoundTerms memory terms = _terms();
+        bytes32 nonce = keccak256("stray-adapter-balance");
+        (X402PanelSubmitter.Authorization memory authorization, bytes memory roundSignature) =
+            _authorization(terms, nonce);
+        usdc.mint(address(adapter), 1);
+
+        vm.expectRevert(X402PanelSubmitter.TransferAmountMismatch.selector);
+        adapter.createRoundWithAuthorization(funder, terms, authorization, roundSignature);
+
+        assertFalse(usdc.authorizationState(funder, nonce));
+        assertEq(usdc.balanceOf(address(adapter)), 1);
+        assertEq(panel.nextRoundId(), 1);
+    }
+
     function testRoundEnvelopeBindsTheImmutableTargetPanel() external {
         TokenlessPanel.RoundTerms memory terms = _terms();
         bytes32 nonce = keccak256("panel-bound-round");

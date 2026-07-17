@@ -66,7 +66,6 @@ contract X402PanelSubmitter is EIP712, ReentrancyGuard {
         if (signatureError != ECDSA.RecoverError.NoError || recovered != funder) revert InvalidSignature();
 
         uint256 amount = terms.bountyAmount + terms.feeAmount + terms.attemptReserve;
-        uint256 beforeBalance = usdc.balanceOf(address(this));
         authorizationToken.receiveWithAuthorization(
             funder,
             address(this),
@@ -78,13 +77,13 @@ contract X402PanelSubmitter is EIP712, ReentrancyGuard {
             authorization.r,
             authorization.s
         );
-        if (usdc.balanceOf(address(this)) - beforeBalance != amount) revert TransferAmountMismatch();
+        if (usdc.balanceOf(address(this)) != amount) revert TransferAmountMismatch();
 
         usdc.forceApprove(address(panel), amount);
         roundId = panel.createRoundFor(terms, funder);
         usdc.forceApprove(address(panel), 0);
 
-        if (usdc.balanceOf(address(this)) != beforeBalance) revert TransferAmountMismatch();
+        if (usdc.balanceOf(address(this)) != 0) revert TransferAmountMismatch();
         emit RoundSubmitted(funder, roundId, amount);
     }
 
