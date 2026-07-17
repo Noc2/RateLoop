@@ -83,8 +83,11 @@ jobs:
         with:
           node-version: "24"
           cache: yarn
+      - uses: ./.github/actions/setup-foundry
       - name: Install dependencies
         run: yarn install --immutable
+      - name: Build deployment-profile contracts
+        run: yarn foundry:build
       - name: Run root and deployment-tool tests
         run: yarn test:node
 
