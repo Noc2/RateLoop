@@ -39,7 +39,7 @@ test("guided setup renders one stage at a time and keeps implementation details 
   assert.match(flowSource, /currentStep === "people"/);
   assert.match(flowSource, /\/agents\/\$\{encodeURIComponent\(connectedAgent\.agentId\)\}\/human-review/);
   assert.match(flowSource, /expectedBindingVersion: draft\.bindingRevision/);
-  assert.match(flowSource, /bindingRevision: ownerView\.bindingRevision/);
+  assert.match(flowSource, /bindingRevision: Number\(ownerView\.bindingRevision\)/);
   assert.match(routingSource, /Do not prepare or send a request/i);
   assert.doesNotMatch(flowSource, /Audience policy binding|admission policy hash/i);
   assert.doesNotMatch(flowSource, /Deployment name/i);
@@ -186,6 +186,21 @@ test("review setup controls independent base compensation, optional Feedback Bon
   assert.match(flowSource, /agent may prepare or fund this exact pool/i);
   assert.match(flowSource, /can never select or execute\s+an award/i);
   assert.doesNotMatch(flowSource, /authority: draft\.authority/);
+});
+
+test("review save and wizard advance run as one retry-safe operation", () => {
+  // AUD-14: the review save and the wizard advance must be a single retry-safe operation so a
+  // partial failure adopts the authoritative binding version instead of stranding a stale one.
+  assert.match(flowSource, /saveReviewConfigurationAndAdvance\(\{/);
+  assert.match(flowSource, /putHumanReviewConfiguration: async \(\) =>/);
+  assert.match(flowSource, /advanceSetup: async bindingRevision =>/);
+  assert.match(flowSource, /reloadAuthoritativeBindingRevision: async \(\) =>/);
+  assert.match(flowSource, /adoptBindingRevision: bindingRevision =>/);
+  // Adopt must preserve in-progress edits by touching only bindingRevision.
+  assert.match(
+    flowSource,
+    /reviewDraft: \{ \.\.\.current\.reviewDraft, bindingRevision \}/,
+  );
 });
 
 test("review setup saves directly and confirms only spending or automatic sending", () => {

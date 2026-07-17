@@ -9,6 +9,7 @@ import { AgentSetupProgress } from "./AgentSetupProgress";
 import { SetupActionBar } from "./SetupActionBar";
 import { SetupChoiceGroup, SetupRadioChoice } from "./SetupChoiceGroup";
 import { SetupStageHeader } from "./SetupStageHeader";
+import { saveReviewConfigurationAndAdvance } from "./reviewConfigurationSave";
 import {
   type ReviewAudienceFormValues,
   buildReviewAudienceRequestProfile,
@@ -754,37 +755,63 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
           privateGroupId = group.groupId;
         }
       }
-      const ownerView = await readJson(
-        await fetch(
-          `/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/agents/${encodeURIComponent(connectedAgent.agentId)}/human-review`,
-          {
-            method: "PUT",
-            body: JSON.stringify({
-              expectedBindingVersion: draft.bindingRevision,
-              selection,
-              requestProfile: { ...requestProfile, privateGroupId },
-              authority,
-              publishingGrant: authority === "ask_automatically" ? undefined : null,
-            }),
-            credentials: "same-origin",
-            headers: { "Content-Type": "application/json" },
-          },
-        ),
-      );
-      if (!Number.isSafeInteger(ownerView.bindingRevision) || Number(ownerView.bindingRevision) < 1) {
-        throw new Error("The saved review configuration could not be confirmed.");
-      }
-      await readJson(
-        await fetch(`/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/agent-setup/configure-reviews`, {
-          method: "POST",
-          body: JSON.stringify({
-            revision: setup.revision,
-            bindingRevision: ownerView.bindingRevision,
-          }),
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
-        }),
-      );
+      // Save the human-review configuration and advance the wizard as one retry-safe operation. If
+      // the advance fails or the save response is lost after the server committed, the helper adopts
+      // the authoritative binding version so Retry does not resend a stale expectedBindingVersion
+      // that the server would permanently reject (AUD-14).
+      await saveReviewConfigurationAndAdvance({
+        putHumanReviewConfiguration: async () => {
+          const ownerView = await readJson(
+            await fetch(
+              `/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/agents/${encodeURIComponent(connectedAgent.agentId)}/human-review`,
+              {
+                method: "PUT",
+                body: JSON.stringify({
+                  expectedBindingVersion: draft.bindingRevision,
+                  selection,
+                  requestProfile: { ...requestProfile, privateGroupId },
+                  authority,
+                  publishingGrant: authority === "ask_automatically" ? undefined : null,
+                }),
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+              },
+            ),
+          );
+          return { bindingRevision: Number(ownerView.bindingRevision) };
+        },
+        advanceSetup: async bindingRevision => {
+          await readJson(
+            await fetch(
+              `/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/agent-setup/configure-reviews`,
+              {
+                method: "POST",
+                body: JSON.stringify({ revision: setup.revision, bindingRevision }),
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+              },
+            ),
+          );
+        },
+        reloadAuthoritativeBindingRevision: async () => {
+          const response = await fetch(
+            `/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/agent-setup?step=reviews`,
+            { cache: "no-store", credentials: "same-origin" },
+          );
+          const next = (await readJson(response)) as unknown as SetupResponse;
+          const authoritative = next.reviewDraft?.bindingRevision;
+          return typeof authoritative === "number" ? authoritative : null;
+        },
+        adoptBindingRevision: bindingRevision => {
+          // Update only the binding version so in-progress form edits are preserved (the shared
+          // requestProfile/selection references stay identical, so the sync effects do not re-run).
+          setSetup(current =>
+            current.reviewDraft
+              ? { ...current, reviewDraft: { ...current.reviewDraft, bindingRevision } }
+              : current,
+          );
+        },
+      });
       await loadStep("people");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to save review behavior.");
