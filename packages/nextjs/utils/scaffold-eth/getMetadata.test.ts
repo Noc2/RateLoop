@@ -30,7 +30,9 @@ type MetadataSnapshot = {
 
 function loadMetadataWithEnv(
   env: {
+    APP_URL?: string;
     NODE_ENV?: string;
+    NEXT_PUBLIC_APP_URL?: string;
     PORT?: string;
     VERCEL_ENV?: string;
     VERCEL_PROJECT_PRODUCTION_URL?: string;
@@ -144,6 +146,8 @@ function loadMetadataWithEnv(
 test("getMetadata uses localhost URLs and the updated brand copy when no production hostname is configured", () => {
   const metadata = loadMetadataWithEnv(
     {
+      APP_URL: undefined,
+      NEXT_PUBLIC_APP_URL: undefined,
       PORT: "4321",
       VERCEL_ENV: undefined,
       VERCEL_PROJECT_PRODUCTION_URL: undefined,
