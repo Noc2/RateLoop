@@ -68,12 +68,14 @@ async function insertReviewProjectionPolicy(input: {
   });
   await dbClient.execute({
     sql: `INSERT INTO tokenless_agent_review_request_profiles
-          (profile_id, version, workspace_id, agent_id, agent_version_id, criterion, positive_label,
+          (profile_id, version, workspace_id, agent_id, agent_version_id, question_authority, result_semantics,
+           criterion, positive_label,
            negative_label, rationale_mode, audience, content_boundary, private_sensitivity,
            private_group_id, private_group_policy_version, private_group_policy_hash,
            response_window_seconds, panel_size, compensation_mode, bounty_per_seat_atomic,
            configuration_status, profile_hash, created_by, created_at, approved_by, approved_at)
-          VALUES (?, 1, ?, ?, ?, 'Check whether this response is correct', 'Approve', 'Reject', 'required',
+          VALUES (?, 1, ?, ?, ?, 'owner_fixed', 'assurance',
+                  'Check whether this response is correct', 'Approve', 'Reject', 'required',
                   'public_network', 'public_or_test', NULL, NULL, NULL, NULL, 3600, 3, 'usdc',
                   '2500000', 'ready', ?, ?, ?, ?, ?)`,
     args: [
@@ -318,12 +320,14 @@ test("agent registry returns source-derived human-assurance evidence without poo
   });
   await dbClient.execute({
     sql: `INSERT INTO tokenless_agent_review_request_profiles
-          (profile_id, version, workspace_id, agent_id, agent_version_id, criterion, positive_label,
+          (profile_id, version, workspace_id, agent_id, agent_version_id, question_authority, result_semantics,
+           criterion, positive_label,
            negative_label, rationale_mode, audience, content_boundary, private_sensitivity,
            private_group_id, private_group_policy_version, private_group_policy_hash,
            response_window_seconds, panel_size, compensation_mode, bounty_per_seat_atomic,
            configuration_status, profile_hash, created_by, created_at, approved_by, approved_at)
-          VALUES (?, 1, ?, ?, ?, 'Check whether this response is correct', 'Approve', 'Reject', 'required',
+          VALUES (?, 1, ?, ?, ?, 'owner_fixed', 'assurance',
+                  'Check whether this response is correct', 'Approve', 'Reject', 'required',
                   'public_network', 'public_or_test', NULL, NULL, NULL, NULL, 3600, 3, 'usdc',
                   '1000000', 'ready', ?, ?, ?, ?, ?)`,
     args: [

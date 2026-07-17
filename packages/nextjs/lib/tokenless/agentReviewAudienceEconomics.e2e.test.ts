@@ -49,6 +49,7 @@ test("all audiences persist optional Feedback Bonus while private review also su
         const profileInput = {
           agentId: agent.agentId,
           agentVersionId: agent.currentVersion.versionId,
+          questionAuthority: "owner_fixed" as const,
           criterion: "Which answer is safest and most useful?",
           positiveLabel: "Use",
           negativeLabel: "Revise",
