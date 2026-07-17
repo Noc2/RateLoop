@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
+import { SignedOutGate } from "~~/components/auth/SignedOutGate";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { HumanReviewExample } from "~~/components/tokenless/SignedOutExamples";
 import {
@@ -32,11 +32,6 @@ function paidTaskAccess(value: unknown): PaidTaskAccess {
   }
   return { state: "eligibility_required", eligibilityStatus: "not_started" };
 }
-
-const ThirdwebSessionButton = dynamic(
-  () => import("~~/components/thirdweb/ThirdwebSessionButton").then(module => module.ThirdwebSessionButton),
-  { ssr: false },
-);
 
 export function AnswerPageClient({
   initialQuery = "",
@@ -147,17 +142,14 @@ export function AnswerPageClient({
             ))
           : null}
         {!loading && signedOut ? (
-          <section className="surface-card rounded-2xl p-6 text-center">
-            <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Human access</p>
-            <h2 className="mt-2 text-xl font-semibold">Sign in to discover review work</h2>
-            <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-base-content/60">
-              Review work is available to eligible, signed-in RateLoop humans.
-            </p>
-            <HumanReviewExample />
-            <div className="mx-auto mt-5 max-w-xs">
-              <ThirdwebSessionButton />
-            </div>
-          </section>
+          <SignedOutGate
+            description="Review work is available to eligible, signed-in RateLoop humans."
+            headingLevel={2}
+            layout="embedded"
+            preview={<HumanReviewExample />}
+            title="Sign in to discover review work"
+            titleId="human-discover-sign-in-title"
+          />
         ) : null}
         {!loading && !signedOut && !error && tasks.length === 0 && assignments.length === 0 ? (
           <div className="surface-card flex min-h-48 flex-col items-center justify-center gap-4 rounded-lg p-6 text-center">
