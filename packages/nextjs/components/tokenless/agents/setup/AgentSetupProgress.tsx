@@ -8,6 +8,34 @@ const LABELS: Record<AgentSetupScreenStep, string> = {
   people: "People",
 };
 
+const STAGE_VISUALS: Record<AgentSetupScreenStep, { number: string; color: string; nextColor: string }> = {
+  workspace: {
+    number: "01",
+    color: "var(--rateloop-blue)",
+    nextColor: "var(--rateloop-green)",
+  },
+  connect: {
+    number: "02",
+    color: "var(--rateloop-green)",
+    nextColor: "var(--rateloop-yellow)",
+  },
+  agent: {
+    number: "03",
+    color: "var(--rateloop-yellow)",
+    nextColor: "var(--rateloop-pink)",
+  },
+  reviews: {
+    number: "04",
+    color: "var(--rateloop-pink)",
+    nextColor: "var(--rateloop-shell-border-strong)",
+  },
+  people: {
+    number: "05",
+    color: "var(--rateloop-warm-white)",
+    nextColor: "var(--rateloop-shell-border-strong)",
+  },
+};
+
 type ProgressStage = {
   key: AgentSetupScreenStep;
   status: "complete" | "current" | "not_started";
@@ -25,35 +53,85 @@ export function AgentSetupProgress({
   allowNavigation?: boolean;
 }) {
   const currentIndex = stages.findIndex(stage => stage.key === currentStep);
+  const currentVisual = STAGE_VISUALS[currentStep];
   return (
     <nav aria-label="Workspace setup progress">
-      <p className="text-sm font-medium text-base-content/70">Step {currentIndex + 1} of 5</p>
-      <ol className="mt-3 grid gap-2 sm:grid-cols-5">
+      <div className="flex items-center justify-between gap-4">
+        <p className="font-mono text-xs uppercase tracking-[0.22em] text-base-content/55">
+          Step {currentIndex + 1} of {stages.length}
+        </p>
+        <p className="flex items-center gap-2 text-sm font-medium">
+          <span className="h-2 w-2 rounded-full" style={{ background: currentVisual.color }} aria-hidden="true" />
+          {LABELS[currentStep]}
+        </p>
+      </div>
+      <ol className="mt-4 grid grid-cols-5" aria-label={`Step ${currentIndex + 1} of ${stages.length}`}>
         {stages.map((stage, index) => {
+          const visual = STAGE_VISUALS[stage.key];
           const statusLabel =
             stage.key === currentStep ? "Current" : stage.status === "complete" ? "Complete" : "Not started";
+          const completedConnector = index < currentIndex;
+          const markerStyle =
+            stage.key === "people" && stage.key === currentStep
+              ? {
+                  borderColor: "transparent",
+                  background:
+                    "linear-gradient(var(--rateloop-surface-elevated), var(--rateloop-surface-elevated)) padding-box, var(--rateloop-spectrum-gradient) border-box",
+                }
+              : { borderColor: stage.status === "not_started" ? undefined : visual.color };
           const content = (
             <>
-              <span className="block text-xs uppercase tracking-[0.14em] text-base-content/50">{index + 1}</span>
-              <span className="mt-1 block font-medium">{LABELS[stage.key]}</span>
-              <span className="mt-1 block text-xs text-base-content/55">{statusLabel}</span>
+              <span
+                className={`relative z-10 flex h-6 w-6 items-center justify-center rounded-full border-2 bg-[var(--rateloop-surface-elevated)] ${
+                  stage.key === currentStep
+                    ? "shadow-[0_0_0_4px_rgb(245_245_245/0.08)]"
+                    : stage.status === "not_started"
+                      ? "border-[color:var(--rateloop-shell-border-strong)]"
+                      : ""
+                }`}
+                style={markerStyle}
+                aria-hidden="true"
+              >
+                {stage.status === "complete" ? (
+                  <span className="h-2 w-2 rounded-full" style={{ background: visual.color }} />
+                ) : null}
+              </span>
+              <span
+                className={`mt-3 hidden font-mono text-xs sm:block ${
+                  stage.status === "not_started" ? "text-base-content/45" : "text-base-content"
+                }`}
+              >
+                <span style={stage.status === "not_started" ? undefined : { color: visual.color }}>
+                  {visual.number}
+                </span>{" "}
+                {LABELS[stage.key]}
+              </span>
+              <span className="sr-only">{statusLabel}</span>
             </>
           );
-          const className = `rounded-xl border px-3 py-3 text-left ${
-            stage.key === currentStep
-              ? "border-primary/60 bg-primary/10"
-              : stage.status === "complete"
-                ? "border-white/15 bg-white/[0.03]"
-                : "border-white/8 bg-transparent text-base-content/60"
-          }`;
           return (
-            <li key={stage.key}>
+            <li key={stage.key} className="relative min-w-0">
+              {index < stages.length - 1 ? (
+                <span
+                  className="absolute left-3 right-[-0.75rem] top-[0.6875rem] h-px"
+                  style={{
+                    background: completedConnector
+                      ? `linear-gradient(90deg, ${visual.color}, ${visual.nextColor})`
+                      : "var(--rateloop-shell-border-strong)",
+                  }}
+                  aria-hidden="true"
+                />
+              ) : null}
               {allowNavigation && stage.status === "complete" && stage.key !== currentStep ? (
-                <button className={`${className} w-full`} type="button" onClick={() => onNavigate(stage.key)}>
+                <button
+                  className="relative min-h-11 w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--rateloop-blue)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--rateloop-surface-elevated)]"
+                  type="button"
+                  onClick={() => onNavigate(stage.key)}
+                >
                   {content}
                 </button>
               ) : (
-                <div className={className} aria-current={stage.key === currentStep ? "step" : undefined}>
+                <div className="relative min-h-11" aria-current={stage.key === currentStep ? "step" : undefined}>
                   {content}
                 </div>
               )}
