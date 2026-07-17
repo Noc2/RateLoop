@@ -362,6 +362,14 @@ test("the export carries privacy-safe oversight designation summaries without co
     ],
   });
   assert.doesNotMatch(JSON.stringify(exported), /never leave the workspace UI/u);
+  // The Article 4-shaped training-records block rides along in the coverage
+  // export with the same no-free-text discipline.
+  assert.equal(exported.trainingRecords.schemaVersion, "rateloop.training-records.v1");
+  assert.equal(exported.trainingRecords.oversightPersons.length, 1);
+  assert.deepEqual(exported.trainingRecords.oversightPersons[0]?.trainingRecords, [
+    { name: "Oversight calibration", completedAt: "2026-06-01T00:00:00.000Z", scope: "support" },
+  ]);
+  assert.deepEqual(exported.trainingRecords.reviewerQualifications, []);
 });
 
 test("only active workspace owners and admins can export and windows fail closed", async () => {

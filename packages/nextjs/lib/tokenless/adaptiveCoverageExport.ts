@@ -6,6 +6,7 @@ import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { enqueueAssuranceAttestation } from "~~/lib/tokenless/assuranceAttestationPipeline";
 import { summarizeOversightDesignationsForExport } from "~~/lib/tokenless/oversightAttestations";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import { TRAINING_RECORDS_SCHEMA_VERSION, buildTrainingRecordsPayload } from "~~/lib/tokenless/trainingRecordsExport";
 
 type Row = Record<string, unknown>;
 
@@ -412,6 +413,13 @@ export async function exportAdaptiveCoverage(input: {
        ORDER BY account_address ASC`,
       [input.workspaceId],
     );
+    const qualificationResult = await client.query(
+      `SELECT qualification_id,rater_id,reviewer_account_address,reviewer_source,qualification_kind,
+              qualification_keys_json,evidence_kind,verified_at,expires_at,status
+       FROM tokenless_reviewer_qualifications WHERE workspace_id=$1
+       ORDER BY qualification_id ASC LIMIT ${MAX_SERIES_ROWS + 1}`,
+      [input.workspaceId],
+    );
     const overridesResult = await client.query(
       `SELECT record_id,supersedes_record_id,outcome,decided_at
        FROM tokenless_assurance_override_decisions
@@ -438,6 +446,7 @@ export async function exportAdaptiveCoverage(input: {
     assertBounded(rollupsResult.rows, "rollups", MAX_SERIES_ROWS);
     assertBounded(eventsResult.rows, "stage transitions", MAX_SERIES_ROWS);
     assertBounded(overridesResult.rows, "override decisions", MAX_SERIES_ROWS);
+    assertBounded(qualificationResult.rows, "reviewer qualifications", MAX_SERIES_ROWS);
 
     const decisionsByScope = groupByScope(decisionsResult.rows as Row[]);
     const observationsByScope = groupByScope(observationsResult.rows as Row[]);
@@ -520,6 +529,15 @@ export async function exportAdaptiveCoverage(input: {
       },
       oversightDesignations: summarizeOversightDesignationsForExport(oversightResult.rows as Row[], window.snapshotAt),
       overrideDecisions: overrideDecisionSummary(overridesResult.rows as Row[], window),
+      trainingRecords: {
+        schemaVersion: TRAINING_RECORDS_SCHEMA_VERSION,
+        ...buildTrainingRecordsPayload({
+          workspaceId: input.workspaceId,
+          oversightRows: oversightResult.rows as Row[],
+          qualificationRows: qualificationResult.rows as Row[],
+          now: window.snapshotAt,
+        }),
+      },
       capabilityStatements: capabilityStatements(
         agentsResult.rows as Row[],
         agentVersionsResult.rows as Row[],
