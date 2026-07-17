@@ -28,6 +28,11 @@ export const TOKENLESS_DEPLOYMENT_CONTRACTS = [
     args: [placeholderAddress, placeholderAddress],
   },
   {
+    label: "TokenlessFeedbackBonus",
+    artifact: "TokenlessFeedbackBonus",
+    args: [placeholderAddress, placeholderAddress],
+  },
+  {
     label: "X402PanelSubmitter",
     artifact: "X402PanelSubmitter",
     args: [placeholderAddress, placeholderAddress],

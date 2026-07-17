@@ -1,4 +1,4 @@
-# RateLoop tokenless-v2 indexer
+# RateLoop tokenless-v4 indexer
 
 This package indexes only the greenfield `TokenlessPanel` and `CredentialIssuer` deployment. Removed protocol generations have no compatibility surface here.
 
@@ -7,7 +7,7 @@ This package indexes only the greenfield `TokenlessPanel` and `CredentialIssuer`
 Every row and database namespace is bound to:
 
 ```text
-tokenless-v2:<chainId>:<panel>:<issuer>:<adapter-or-zero>
+tokenless-v4:<chainId>:<panel>:<issuer>:<adapter-or-zero>:<feedbackBonus>
 ```
 
 Startup fails if `RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY` conflicts with the configured addresses. A changed core, issuer, or adapter therefore gets a fresh index instead of silently mixing deployments.

@@ -1,4 +1,4 @@
-# RateLoop tokenless-v2 keeper
+# RateLoop tokenless-v4 keeper
 
 Permissionless liveness automation for the disposable tokenless Base Sepolia deployment. The keeper has no protocol role and no fund authority. Any account can execute every call it makes.
 
@@ -19,7 +19,7 @@ There are no frontend-fee, governance, oracle, correlation-root, reward-pool, fe
 Production startup only accepts Base Sepolia (`84532`) and requires:
 
 ```text
-tokenless-v2:<chainId>:<panel>:<credentialIssuer>:<x402PanelSubmitter-or-zero>
+tokenless-v4:<chainId>:<panel>:<credentialIssuer>:<x402PanelSubmitter-or-zero>:<feedbackBonus>
 ```
 
 The configured addresses must match that key. Startup also verifies bytecode at the panel and issuer, checks the panel's immutable `credentialIssuer`, confirms the RPC chain, and rejects a deployment block ahead of the chain. This prevents a legacy or mixed deployment bundle from looking healthy.
