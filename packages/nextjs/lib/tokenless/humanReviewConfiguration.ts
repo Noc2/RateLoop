@@ -358,7 +358,7 @@ async function validateExactObjects(
     throw new TokenlessServiceError("Active agent version not found.", 404, "agent_version_not_found");
   }
   const selection = await client.query(
-    `SELECT audience_policy_json FROM tokenless_agent_review_policies
+    `SELECT mode, rules_json, audience_policy_json FROM tokenless_agent_review_policies
      WHERE workspace_id = $1 AND policy_id = $2 AND version = $3
        AND agent_id = $4 AND agent_version_id = $5 AND enabled = true AND superseded_at IS NULL
      FOR SHARE`,
@@ -369,6 +369,21 @@ async function validateExactObjects(
       "The active selection-policy version does not belong to this workspace and agent version.",
       409,
       "human_review_selection_policy_mismatch",
+    );
+  }
+  const selectionRow = selection.rows[0] as Row;
+  const selectionMode = rowString(selectionRow, "mode");
+  const selectionRules = parseJsonObject(selectionRow.rules_json, "review rules");
+  if (
+    selectionMode === "manual" &&
+    (selectionRules.enforcementMode !== "advisory" ||
+      input.authority !== "check_only" ||
+      input.publishingPolicy !== null)
+  ) {
+    throw new TokenlessServiceError(
+      "Manual handoff configurations must be advisory, check-only, and have no publishing grant.",
+      409,
+      "human_review_manual_invariant_mismatch",
     );
   }
   const profile = await client.query(
@@ -389,7 +404,7 @@ async function validateExactObjects(
     );
   }
   const profileAudience = rowString(profileRow, "audience");
-  const policyAudience = selectionAudience((selection.rows[0] as Row).audience_policy_json);
+  const policyAudience = selectionAudience(selectionRow.audience_policy_json);
   if (profileAudience !== policyAudience) {
     throw new TokenlessServiceError(
       "The request profile owns the reviewer audience; the selection policy must use the same audience.",
@@ -812,18 +827,19 @@ function normalizeOwnerMutation(value: unknown) {
       };
     }
   }
-  if (publishingGrant && authority !== "ask_automatically") {
+  if (publishingGrant && authority !== "ask_automatically" && selection.mode !== "manual") {
     configurationError(
       "A publishing grant may be activated only for automatic review asks.",
       "human_review_publishing_grant_requires_automatic",
     );
   }
+  const manual = selection.mode === "manual";
   return {
-    authority,
+    authority: manual ? ("check_only" as const) : authority,
     expectedBindingVersion: expectedBindingVersion === null ? null : Number(expectedBindingVersion),
-    publishingGrant,
+    publishingGrant: manual ? null : publishingGrant,
     requestProfile,
-    selection,
+    selection: manual ? { ...selection, enforcementMode: "advisory" } : selection,
   };
 }
 

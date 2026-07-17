@@ -6,6 +6,7 @@ import { createWorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
 import {
   humanReviewEvaluationPartition,
   humanReviewReplayIdentity,
+  putHumanReviewConfigurationForOwner,
   saveHumanReviewConfiguration,
   saveHumanReviewConfigurationInTransaction,
 } from "~~/lib/tokenless/humanReviewConfiguration";
@@ -20,7 +21,12 @@ const OWNER = "0x1111111111111111111111111111111111111111";
 beforeEach(() => __setDatabaseResourcesForTests(createMemoryDatabaseResources()));
 afterEach(() => __setDatabaseResourcesForTests(null));
 
-async function fixture(options: { policyAudience?: "private_invited" | "public_network" } = {}) {
+async function fixture(
+  options: {
+    policyAudience?: "private_invited" | "public_network";
+    policyMode?: "adaptive" | "manual";
+  } = {},
+) {
   const { workspaceId } = await createWorkspace({ name: "Atomic review configuration", ownerAddress: OWNER });
   const agent = await createWorkspaceAgent({
     accountAddress: OWNER,
@@ -43,7 +49,7 @@ async function fixture(options: { policyAudience?: "private_invited" | "public_n
   const policyInput = {
     agentId: agent.agentId,
     agentVersionId: agent.currentVersion.versionId,
-    mode: "adaptive" as const,
+    mode: options.policyMode ?? ("adaptive" as const),
     enforcementMode: "advisory" as const,
     agreementThresholdBps: 8_000,
     productionFloorBps: 1_000,
@@ -74,6 +80,75 @@ async function fixture(options: { policyAudience?: "private_invited" | "public_n
   const profile = await createReviewRequestProfile({ accountAddress: OWNER, workspaceId, profile: profileInput });
   return { workspaceId, agent, group, policy, policyInput, profile, profileInput };
 }
+
+test("manual handoff normalizes owner mutations and rejects contradictory direct bindings", async () => {
+  const setup = await fixture({ policyMode: "manual" });
+  const normalized = await putHumanReviewConfigurationForOwner({
+    accountAddress: OWNER,
+    workspaceId: setup.workspaceId,
+    agentId: setup.agent.agentId,
+    body: {
+      expectedBindingVersion: null,
+      selection: {
+        mode: "manual",
+        enforcementMode: "host_enforced",
+        agreementThresholdBps: 8_000,
+        productionFloorBps: 0,
+        fixedRateBps: null,
+        maximumUnreviewedGap: 20,
+        requiredRiskTiers: [],
+        criticalRiskTiers: ["critical"],
+        minimumConfidenceBps: null,
+        maximumLatencyMs: null,
+      },
+      requestProfile: {
+        questionAuthority: "owner_fixed",
+        criterion: setup.profileInput.criterion,
+        positiveLabel: setup.profileInput.positiveLabel,
+        negativeLabel: setup.profileInput.negativeLabel,
+        rationaleMode: setup.profileInput.rationaleMode,
+        audience: setup.profileInput.audience,
+        contentBoundary: setup.profileInput.contentBoundary,
+        privateSensitivity: setup.profileInput.privateSensitivity,
+        privateGroupId: setup.profileInput.privateGroupId,
+        requiredExpertiseKeys: [],
+        responseWindowSeconds: setup.profileInput.responseWindowSeconds,
+        panelSize: setup.profileInput.panelSize,
+        compensationMode: setup.profileInput.compensationMode,
+        bountyPerSeatAtomic: null,
+        feedbackBonusEnabled: false,
+      },
+      authority: "prepare_for_approval",
+    },
+  });
+  assert.equal(normalized.configuration.authority, "check_only");
+  assert.equal(normalized.configuration.publishingPolicy, null);
+  const policy = await dbClient.execute({
+    sql: `SELECT mode,rules_json FROM tokenless_agent_review_policies
+          WHERE workspace_id=? AND policy_id=? AND version=?`,
+    args: [
+      setup.workspaceId,
+      normalized.configuration.selectionPolicy.id,
+      normalized.configuration.selectionPolicy.version,
+    ],
+  });
+  assert.equal(policy.rows[0]?.mode, "manual");
+  assert.equal(JSON.parse(String(policy.rows[0]?.rules_json)).enforcementMode, "advisory");
+
+  await assert.rejects(
+    () =>
+      saveHumanReviewConfiguration({
+        accountAddress: OWNER,
+        workspaceId: setup.workspaceId,
+        agentId: setup.agent.agentId,
+        agentVersionId: setup.agent.currentVersion.versionId,
+        expectedBindingVersion: normalized.configuration.version,
+        authority: "prepare_for_approval",
+      }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "human_review_manual_invariant_mismatch",
+  );
+});
 
 test("optimistic saves append one binding version while carrying forward unchanged object versions", async () => {
   const setup = await fixture();
