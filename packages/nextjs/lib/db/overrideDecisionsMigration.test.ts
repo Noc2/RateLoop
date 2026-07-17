@@ -2,10 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-const migration = readFileSync(
-  new URL("../../drizzle/0094_assurance_override_decisions.sql", import.meta.url),
-  "utf8",
-);
+const migration = readFileSync(new URL("../../drizzle/0094_assurance_override_decisions.sql", import.meta.url), "utf8");
 
 test("override decisions are tenant-bound, outcome-scoped, reason-mandatory, and append-only", () => {
   assert.match(migration, /CREATE TABLE "tokenless_assurance_override_decisions"/u);

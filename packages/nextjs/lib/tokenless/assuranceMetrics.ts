@@ -426,8 +426,7 @@ export async function collectWorkspaceAssuranceMetrics(input: { workspaceId: str
       decided: overridesDecided,
       overridden,
       reversed,
-      overrideRateBps:
-        overridesDecided > 0 ? Math.floor(((overridden + reversed) * 10_000) / overridesDecided) : null,
+      overrideRateBps: overridesDecided > 0 ? Math.floor(((overridden + reversed) * 10_000) / overridesDecided) : null,
     },
     evidenceAnchor,
   } satisfies AssuranceMetricsSnapshot;

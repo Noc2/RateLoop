@@ -1044,11 +1044,7 @@ export async function completeWorkspaceAgentSetup(input: {
       allowedWorkflowKeys.length > 0;
     const safeAuthority = authority === "check_only" || authority === "prepare_for_approval";
     const groupMatches = requiresInvitedGroup
-      ? Boolean(
-          groupId &&
-            rowString(binding, "private_group_id") === groupId &&
-            groupStatus === "active",
-        )
+      ? Boolean(groupId && rowString(binding, "private_group_id") === groupId && groupStatus === "active")
       : groupId === null && rowString(binding, "private_group_id") === null;
     if (
       !binding ||

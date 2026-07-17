@@ -191,7 +191,11 @@ export type HumanReviewRoutingResult =
       opportunityId: string;
       authority: HumanReviewAuthorityLevel;
       lane: HumanReviewLane;
-      code: "automatic_grant_inactive" | "lane_not_implemented" | "private_routing_configuration_required" | "workspace_stopped";
+      code:
+        | "automatic_grant_inactive"
+        | "lane_not_implemented"
+        | "private_routing_configuration_required"
+        | "workspace_stopped";
       retryable: boolean;
       sideEffects: { prepared: false; published: false; assigned: false; fundsReserved: false; spent: false };
     };

@@ -51,10 +51,7 @@ export function WorkspaceStopBanner({ workspaceId }: { workspaceId: string }) {
   const stop = useWorkspaceStopState(workspaceId, 0);
   if (stop?.status !== "engaged") return null;
   return (
-    <div
-      className="rounded-xl border border-red-400/40 bg-red-400/10 p-4 text-sm leading-6 text-red-100"
-      role="alert"
-    >
+    <div className="rounded-xl border border-red-400/40 bg-red-400/10 p-4 text-sm leading-6 text-red-100" role="alert">
       <p className="font-semibold">All agent activity is stopped for this workspace.</p>
       <p className="mt-1 text-red-100/80">
         Stopped {new Date(stop.engagedAt).toLocaleString()} — {stop.reason}. New outputs stay blocked and no

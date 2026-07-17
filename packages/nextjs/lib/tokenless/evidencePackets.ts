@@ -1626,9 +1626,7 @@ export async function listAssuranceOverrideDecisions(input: {
     );
     for (const row of result.rows) row.evidence_packet_digest = packetDigest;
     const supersededIds = new Set(
-      result.rows
-        .map(row => rowString(row, "supersedes_record_id"))
-        .filter((value): value is string => value !== null),
+      result.rows.map(row => rowString(row, "supersedes_record_id")).filter((value): value is string => value !== null),
     );
     return result.rows.map(row => overrideDecisionFromRow(row, supersededIds));
   } finally {

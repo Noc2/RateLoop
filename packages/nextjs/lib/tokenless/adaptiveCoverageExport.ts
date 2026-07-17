@@ -253,8 +253,7 @@ function overrideDecisionSummary(rows: Row[], window: { start: Date; end: Date }
   return {
     decided,
     byOutcome,
-    overrideRateBps:
-      decided > 0 ? Math.floor(((byOutcome.overridden + byOutcome.reversed) * 10_000) / decided) : null,
+    overrideRateBps: decided > 0 ? Math.floor(((byOutcome.overridden + byOutcome.reversed) * 10_000) / decided) : null,
   };
 }
 

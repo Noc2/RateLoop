@@ -29,5 +29,8 @@ test("the engaged banner persists across agents pages and the panel mounts on th
   assert.match(controlSource, /All agent activity is stopped for this workspace\./);
   assert.match(controlSource, /each agent needs a fresh\s+publishing grant/);
   assert.match(panelsSource, /<WorkspaceStopBanner workspaceId=\{workspaceId\} \/>/);
-  assert.match(panelsSource, /resolvedTab === "overview" && canManage \? \(\s*<WorkspaceStopPanel workspaceId=\{workspaceId\} \/>/);
+  assert.match(
+    panelsSource,
+    /resolvedTab === "overview" && canManage \? \(\s*<WorkspaceStopPanel workspaceId=\{workspaceId\} \/>/,
+  );
 });
