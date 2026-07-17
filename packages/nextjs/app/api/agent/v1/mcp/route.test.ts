@@ -2,10 +2,11 @@ import { NextRequest } from "next/server";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
-import { POST } from "~~/app/api/agent/v1/mcp/route";
+import { GET, POST } from "~~/app/api/agent/v1/mcp/route";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { tokenlessMcpTools } from "~~/lib/mcp/protocol";
+import { deliverWorkspaceMcpElicitation, requireWorkspaceMcpSession } from "~~/lib/mcp/workspaceElicitation";
 import { requestWorkspaceDeletion } from "~~/lib/privacy/workspaceDeletion";
 import { __adaptiveReviewServiceTestUtils } from "~~/lib/tokenless/adaptiveReviewService";
 import { createAgentConnectionIntent } from "~~/lib/tokenless/agentConnectionIntents";
@@ -55,16 +56,31 @@ afterEach(() => {
   else process.env.APP_URL = originalAppUrl;
 });
 
-function request(value: unknown, token?: string) {
+function request(value: unknown, token?: string, sessionId?: string, protocolVersion = "2025-11-25") {
   return new NextRequest("https://rateloop-tokenless.vercel.app/api/agent/v1/mcp", {
     method: "POST",
     body: JSON.stringify(value),
     headers: {
       accept: "application/json, text/event-stream",
       "content-type": "application/json",
-      "mcp-protocol-version": "2025-11-25",
+      "mcp-protocol-version": protocolVersion,
       "x-real-ip": "203.0.113.90",
       ...(token ? { authorization: `Bearer ${token}` } : {}),
+      ...(sessionId ? { "mcp-session-id": sessionId } : {}),
+    },
+  });
+}
+
+function streamRequest(token: string, sessionId: string, protocolVersion: string, lastEventId?: string) {
+  return new NextRequest("https://rateloop-tokenless.vercel.app/api/agent/v1/mcp", {
+    method: "GET",
+    headers: {
+      accept: "text/event-stream",
+      authorization: `Bearer ${token}`,
+      "mcp-protocol-version": protocolVersion,
+      "mcp-session-id": sessionId,
+      "x-real-ip": "203.0.113.90",
+      ...(lastEventId ? { "last-event-id": lastEventId } : {}),
     },
   });
 }
@@ -408,6 +424,25 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
   const firstVerification = (await verified.json()).result.structuredContent;
   assert.equal(firstVerification.connection.status, "connected");
 
+  const invalidInitialization = await POST(
+    request(
+      {
+        id: 140,
+        jsonrpc: "2.0",
+        method: "initialize",
+        params: { protocolVersion: "2025-11-25" },
+      },
+      tokens.access_token,
+    ),
+  );
+  assert.ok((await invalidInitialization.json()).error);
+  assert.equal(invalidInitialization.headers.get("mcp-session-id"), null);
+  const sessionsAfterInvalidInitialize = await dbClient.execute({
+    sql: "SELECT COUNT(*) AS total FROM tokenless_mcp_sessions",
+    args: [],
+  });
+  assert.equal(Number(sessionsAfterInvalidInitialize.rows[0]?.total ?? 0), 0);
+
   const resumedInitialization = await POST(
     request(
       {
@@ -428,25 +463,40 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
   assert.match(resumedInitializationBody.result.instructions, /exact human-review configuration/i);
   assert.match(resumedInitializationBody.result.instructions, /publishing-policy reference alone never grants/i);
   assert.match(resumedInitializationBody.result.instructions, /safeAccess and the exact publishingGrant/i);
+  const sessionId = resumedInitialization.headers.get("mcp-session-id");
+  assert.match(sessionId ?? "", /^mcps_[A-Za-z0-9_-]{32,128}$/u);
+  const currentSession = await dbClient.execute({
+    sql: `SELECT protocol_version,elicitation_mode FROM tokenless_mcp_sessions
+          WHERE session_hash=?`,
+    args: [`sha256:${createHash("sha256").update(sessionId!).digest("hex")}`],
+  });
+  assert.deepEqual(currentSession.rows[0], {
+    protocol_version: "2025-11-25",
+    elicitation_mode: "none",
+  });
+  const oauthRequest = (value: unknown) => request(value, tokens.access_token, sessionId!);
+  const connectedPrincipal = await authenticateAgentMcpPrincipal(`Bearer ${tokens.access_token}`);
+  await requireWorkspaceMcpSession({
+    sessionId: sessionId!,
+    principal: connectedPrincipal,
+    protocolVersion: "2025-11-25",
+  });
 
-  const resumedTools = await POST(
-    request({ id: 142, jsonrpc: "2.0", method: "tools/list", params: {} }, tokens.access_token),
-  );
+  const resumedTools = await POST(oauthRequest({ id: 142, jsonrpc: "2.0", method: "tools/list", params: {} }));
+  const resumedToolsBody = await resumedTools.json();
+  assert.ok(resumedToolsBody.result, JSON.stringify(resumedToolsBody));
   assert.deepEqual(
-    (await resumedTools.json()).result.tools.map((candidate: { name: string }) => candidate.name),
+    resumedToolsBody.result.tools.map((candidate: { name: string }) => candidate.name),
     names,
   );
 
   const repeatedClaim = await POST(
-    request(
-      {
-        id: 143,
-        jsonrpc: "2.0",
-        method: "tools/call",
-        params: { name: "rateloop_claim_connection_intent", arguments: { connectionUrl: intent.connectionUrl } },
-      },
-      tokens.access_token,
-    ),
+    oauthRequest({
+      id: 143,
+      jsonrpc: "2.0",
+      method: "tools/call",
+      params: { name: "rateloop_claim_connection_intent", arguments: { connectionUrl: intent.connectionUrl } },
+    }),
   );
   const resumedClaim = (await repeatedClaim.json()).result.structuredContent;
   assert.equal(resumedClaim.idempotent, true);
@@ -454,28 +504,22 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
   assert.equal(resumedClaim.connection.status, "connected");
 
   const resumedContext = await POST(
-    request(
-      {
-        id: 144,
-        jsonrpc: "2.0",
-        method: "tools/call",
-        params: { name: "rateloop_get_agent_context", arguments: {} },
-      },
-      tokens.access_token,
-    ),
+    oauthRequest({
+      id: 144,
+      jsonrpc: "2.0",
+      method: "tools/call",
+      params: { name: "rateloop_get_agent_context", arguments: {} },
+    }),
   );
   assert.deepEqual((await resumedContext.json()).result.structuredContent, agentContext);
 
   const repeatedVerification = await POST(
-    request(
-      {
-        id: 145,
-        jsonrpc: "2.0",
-        method: "tools/call",
-        params: { name: "rateloop_verify_connection", arguments: {} },
-      },
-      tokens.access_token,
-    ),
+    oauthRequest({
+      id: 145,
+      jsonrpc: "2.0",
+      method: "tools/call",
+      params: { name: "rateloop_verify_connection", arguments: {} },
+    }),
   );
   assert.deepEqual((await repeatedVerification.json()).result.structuredContent, firstVerification);
   const entityCounts = await dbClient.execute({
@@ -500,7 +544,7 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
     args: [claim.connection.integrationId],
   });
   assert.equal(Number(connectedEvents.rows[0]?.total ?? 0), 1);
-  const after = await POST(request({ id: 15, jsonrpc: "2.0", method: "tools/list", params: {} }, tokens.access_token));
+  const after = await POST(oauthRequest({ id: 15, jsonrpc: "2.0", method: "tools/list", params: {} }));
   assert.deepEqual(
     (await after.json()).result.tools.map((tool: { name: string }) => tool.name),
     names,
@@ -537,15 +581,12 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
     body: { publishingPolicyId: publishing.policyId, allowedWorkflowKeys: ["general-assistance"] },
   });
   const upgradedContextResponse = await POST(
-    request(
-      {
-        id: 151,
-        jsonrpc: "2.0",
-        method: "tools/call",
-        params: { name: "rateloop_get_agent_context", arguments: {} },
-      },
-      tokens.access_token,
-    ),
+    oauthRequest({
+      id: 151,
+      jsonrpc: "2.0",
+      method: "tools/call",
+      params: { name: "rateloop_get_agent_context", arguments: {} },
+    }),
   );
   const upgradedContext = (await upgradedContextResponse.json()).result.structuredContent;
   assert.equal(upgradedContext.agentVersionId, stepUp.integration.agentVersionId);
@@ -591,7 +632,9 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
         contentBoundary: "public_or_test",
         privateSensitivity: null,
         privateGroupId: null,
+        requiredExpertiseKeys: ["code-review:security"],
         responseWindowSeconds: 3_600,
+        expectedEffortSeconds: 600,
         panelSize: 5,
         compensationMode: "usdc",
         bountyPerSeatAtomic: "1000000",
@@ -607,15 +650,12 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
   });
   assert.equal(configured.configuration.authority, "ask_automatically");
   const configuredContextResponse = await POST(
-    request(
-      {
-        id: 1511,
-        jsonrpc: "2.0",
-        method: "tools/call",
-        params: { name: "rateloop_get_agent_context", arguments: {} },
-      },
-      tokens.access_token,
-    ),
+    oauthRequest({
+      id: 1511,
+      jsonrpc: "2.0",
+      method: "tools/call",
+      params: { name: "rateloop_get_agent_context", arguments: {} },
+    }),
   );
   const configuredContext = (await configuredContextResponse.json()).result.structuredContent;
   assert.equal(configuredContext.humanReview.binding.bindingId, configured.configuration.bindingId);
@@ -645,6 +685,45 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
   assert.ok(configuredContext.publishingGrant.grantedScopes.includes("payment:submit"));
   assert.equal(configuredContext.safeAccess.canSpend, true);
   assert.equal(configuredContext.safeAccess.canPublish, true);
+  const approvalConfigured = await putHumanReviewConfigurationForOwner({
+    accountAddress: principalId,
+    workspaceId,
+    agentId: claim.connection.agentId,
+    body: {
+      expectedBindingVersion: configured.configuration.version,
+      selection: {
+        mode: "fixed",
+        enforcementMode: "advisory",
+        agreementThresholdBps: 7_500,
+        productionFloorBps: 0,
+        fixedRateBps: 10_000,
+        maximumUnreviewedGap: 1,
+        requiredRiskTiers: ["high"],
+        criticalRiskTiers: ["critical"],
+        minimumConfidenceBps: 7_000,
+        maximumLatencyMs: 120_000,
+      },
+      requestProfile: {
+        criterion: "Is this output correct and safe to use?",
+        positiveLabel: "Approve",
+        negativeLabel: "Reject",
+        rationaleMode: "optional",
+        audience: "public_network",
+        contentBoundary: "public_or_test",
+        privateSensitivity: null,
+        privateGroupId: null,
+        requiredExpertiseKeys: ["code-review:security"],
+        responseWindowSeconds: 3_600,
+        expectedEffortSeconds: 600,
+        panelSize: 5,
+        compensationMode: "usdc",
+        bountyPerSeatAtomic: "1000000",
+      },
+      authority: "prepare_for_approval",
+      publishingGrant: null,
+    },
+  });
+  assert.equal(approvalConfigured.configuration.authority, "prepare_for_approval");
   const upgradedInitialization = await POST(
     request(
       {
@@ -663,6 +742,218 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
   const upgradedInitializationBody = await upgradedInitialization.json();
   assert.match(upgradedInitializationBody.result.instructions, /publishing-policy reference alone never grants/i);
   assert.match(upgradedInitializationBody.result.instructions, /safeAccess and the exact publishingGrant/i);
+  const mismatchedProtocol = await POST(
+    request(
+      { id: 153, jsonrpc: "2.0", method: "tools/list", params: {} },
+      tokens.access_token,
+      sessionId!,
+      "2025-06-18",
+    ),
+  );
+  assert.equal(mismatchedProtocol.status, 404);
+  assert.equal((await mismatchedProtocol.json()).error.data.code, "mcp_session_not_found");
+
+  const stableInitialization = await POST(
+    request(
+      {
+        id: 154,
+        jsonrpc: "2.0",
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-06-18",
+          capabilities: { elicitation: {} },
+          clientInfo: { name: "Stable MCP client", version: "1.0.0" },
+        },
+      },
+      tokens.access_token,
+      undefined,
+      "2025-06-18",
+    ),
+  );
+  const stableSessionId = stableInitialization.headers.get("mcp-session-id");
+  assert.match(stableSessionId ?? "", /^mcps_[A-Za-z0-9_-]{32,128}$/u);
+  const stableSession = await dbClient.execute({
+    sql: `SELECT protocol_version,elicitation_mode FROM tokenless_mcp_sessions
+          WHERE session_hash=?`,
+    args: [`sha256:${createHash("sha256").update(stableSessionId!).digest("hex")}`],
+  });
+  assert.deepEqual(stableSession.rows[0], {
+    protocol_version: "2025-06-18",
+    elicitation_mode: "form",
+  });
+  const stableTools = await POST(
+    request(
+      { id: 155, jsonrpc: "2.0", method: "tools/list", params: {} },
+      tokens.access_token,
+      stableSessionId!,
+      "2025-06-18",
+    ),
+  );
+  assert.ok((await stableTools.json()).result.tools);
+  const stableContextResponse = await POST(
+    request(
+      {
+        id: 156,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: "rateloop_get_agent_context", arguments: {} },
+      },
+      tokens.access_token,
+      stableSessionId!,
+      "2025-06-18",
+    ),
+  );
+  const stableContext = (await stableContextResponse.json()).result.structuredContent;
+  assert.equal(stableContext.humanReview.authority, "prepare_for_approval");
+  const sourcePayload = JSON.stringify({ source: "public fixture", revision: 1 });
+  const suggestionPayload = JSON.stringify({ answer: "candidate" });
+  const evaluated = await POST(
+    request(
+      {
+        id: 157,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: {
+          name: "rateloop_evaluate_review_requirement",
+          arguments: {
+            externalOpportunityId: "mcp-elicitation-opportunity-0001",
+            workflowKey: "general-assistance",
+            riskTier: "high",
+            audiencePolicyHash: stableContext.reviewPolicy.audiencePolicyHash,
+            suggestionCommitment: `sha256:${createHash("sha256").update(suggestionPayload).digest("hex")}`,
+            sourceEvidence: {
+              reference: "case/mcp-elicitation-opportunity-0001/revision-1",
+              hash: `sha256:${createHash("sha256").update(sourcePayload).digest("hex")}`,
+            },
+            declaredConfidenceBps: 8_000,
+            criticalRisk: false,
+            metadataComplete: true,
+            execution: {
+              externalExecutionId: "execution-mcp-elicitation-0001",
+              status: "completed",
+              primarySpanId: "generation-primary",
+              generationSpans: [
+                {
+                  spanId: "generation-primary",
+                  role: "primary",
+                  provider: "OpenAI",
+                  requestedModel: "gpt-test",
+                  resolvedModel: "gpt-test-2026-07-01",
+                  reasoningEffort: "low",
+                  serviceTier: "default",
+                  inputTokens: 120,
+                  outputTokens: 30,
+                  reasoningOutputTokens: 8,
+                },
+              ],
+            },
+          },
+        },
+      },
+      tokens.access_token,
+      stableSessionId!,
+      "2025-06-18",
+    ),
+  );
+  const evaluation = (await evaluated.json()).result.structuredContent;
+  assert.equal(evaluation.decision, "required");
+  const prepared = await POST(
+    request(
+      {
+        id: 158,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: {
+          name: "rateloop_request_review",
+          arguments: {
+            opportunityId: evaluation.opportunityId,
+            sourcePayload,
+            suggestionPayload,
+            material: {
+              kind: "public",
+              publication: {
+                visibility: "public",
+                dataClassification: "synthetic",
+                confirmedNoSensitiveData: true,
+              },
+            },
+          },
+        },
+      },
+      tokens.access_token,
+      stableSessionId!,
+      "2025-06-18",
+    ),
+  );
+  const preparedResult = (await prepared.json()).result.structuredContent;
+  assert.equal(preparedResult.action, "owner_approval_required", JSON.stringify(preparedResult));
+  const queued = await dbClient.execute({
+    sql: `SELECT request_id,state FROM tokenless_mcp_elicitation_requests
+          WHERE session_hash=? AND approval_id=?`,
+    args: [`sha256:${createHash("sha256").update(stableSessionId!).digest("hex")}`, preparedResult.approval.approvalId],
+  });
+  assert.equal(queued.rows[0]?.state, "queued");
+
+  const elicitationStream = await GET(streamRequest(tokens.access_token, stableSessionId!, "2025-06-18"));
+  assert.equal(elicitationStream.status, 200);
+  const eventBody = await elicitationStream.text();
+  const eventData = /^data: (.+)$/mu.exec(eventBody)?.[1];
+  assert.ok(eventData);
+  const elicitationRequest = JSON.parse(eventData);
+  assert.equal(elicitationRequest.method, "elicitation/create");
+  assert.equal(elicitationRequest.id, queued.rows[0]?.request_id);
+  assert.match(elicitationRequest.params.message, /Question: Is this output correct and safe to use\?/u);
+  assert.match(elicitationRequest.params.message, /required expertise: code-review:security/u);
+  assert.match(elicitationRequest.params.message, /expected active review time: 600s/u);
+  assert.doesNotMatch(eventBody, /public fixture|candidate/u);
+
+  const acceptedResponse = {
+    jsonrpc: "2.0",
+    id: elicitationRequest.id,
+    result: { action: "accept", content: { approve: true } },
+  };
+  const accepted = await POST(request(acceptedResponse, tokens.access_token, stableSessionId!, "2025-06-18"));
+  assert.equal(accepted.status, 202, await accepted.text());
+  const responded = await dbClient.execute({
+    sql: `SELECT e.state,a.status,a.owner_decision
+          FROM tokenless_mcp_elicitation_requests e
+          JOIN tokenless_agent_review_approval_requests a ON a.approval_id=e.approval_id
+          WHERE e.request_id=?`,
+    args: [elicitationRequest.id],
+  });
+  assert.deepEqual(responded.rows[0], {
+    state: "responded",
+    status: "approved",
+    owner_decision: "approved",
+  });
+  const replayed = await POST(request(acceptedResponse, tokens.access_token, stableSessionId!, "2025-06-18"));
+  assert.equal(replayed.status, 202);
+  const conflicting = await POST(
+    request(
+      {
+        ...acceptedResponse,
+        result: { action: "accept", content: { approve: false } },
+      },
+      tokens.access_token,
+      stableSessionId!,
+      "2025-06-18",
+    ),
+  );
+  assert.equal(conflicting.status, 409);
+  assert.equal((await conflicting.json()).error.data.code, "elicitation_replay_conflict");
+
+  assert.equal(
+    await deliverWorkspaceMcpElicitation({
+      sessionId: stableSessionId!,
+      principal: connectedPrincipal,
+      protocolVersion: "2025-06-18",
+    }),
+    null,
+  );
+  const emptyStream = await GET(streamRequest(tokens.access_token, stableSessionId!, "2025-06-18"));
+  assert.equal(emptyStream.status, 200);
+  assert.match(emptyStream.headers.get("content-type") ?? "", /^text\/event-stream/u);
+  assert.equal(await emptyStream.text(), ": keep-alive\n\n");
   await assert.rejects(
     () =>
       rotateAgentIntegration({
@@ -679,9 +970,7 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
     confirmationName: "One-message OAuth",
     identityAssurance: "better_auth:passkey",
   });
-  const revoked = await POST(
-    request({ id: 16, jsonrpc: "2.0", method: "tools/list", params: {} }, tokens.access_token),
-  );
+  const revoked = await POST(oauthRequest({ id: 16, jsonrpc: "2.0", method: "tools/list", params: {} }));
   assert.equal(revoked.status, 401);
   assert.match(revoked.headers.get("www-authenticate") ?? "", /oauth-protected-resource/);
   const revokedFamily = await dbClient.execute({

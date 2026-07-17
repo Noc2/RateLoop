@@ -13,6 +13,7 @@ import {
   prepareHumanReviewRequest,
 } from "~~/lib/tokenless/humanReviewRequestPreparation";
 import { hashReviewRequestProfile } from "~~/lib/tokenless/reviewRequestProfiles";
+import { normalizeReviewerExpertiseKeys } from "~~/lib/tokenless/reviewerExpertiseVocabulary";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
@@ -162,7 +163,11 @@ function profileFromRow(row: Row): BoundHumanReviewRequestProfile {
         ? null
         : oneOf(row, "private_sensitivity", ["internal", "confidential", "restricted", "regulated"] as const),
     privateGroupId: text(row, "private_group_id"),
+    requiredExpertiseKeys: normalizeReviewerExpertiseKeys(
+      stringArray(row.required_expertise_keys_json, "required expertise keys"),
+    ),
     responseWindowSeconds: integer(row, "response_window_seconds", 1_200, 86_400),
+    expectedEffortSeconds: optionalInteger(row, "expected_effort_seconds"),
     panelSize: integer(row, "panel_size", 1, 100),
     compensationMode: oneOf(row, "compensation_mode", ["unpaid", "usdc"] as const),
     bountyPerSeatAtomic: text(row, "bounty_per_seat_atomic"),
@@ -247,7 +252,8 @@ async function loadAndVerifyOpportunity(
             rrp.criterion, rrp.positive_label, rrp.negative_label, rrp.rationale_mode,
             rrp.audience, rrp.content_boundary, rrp.private_sensitivity, rrp.private_group_id,
             rrp.private_group_policy_version, rrp.private_group_policy_hash,
-            rrp.response_window_seconds, rrp.panel_size, rrp.compensation_mode,
+            rrp.required_expertise_keys_json, rrp.response_window_seconds, rrp.expected_effort_seconds,
+            rrp.panel_size, rrp.compensation_mode,
             rrp.bounty_per_seat_atomic, rrp.feedback_bonus_enabled, rrp.feedback_bonus_pool_atomic,
             rrp.feedback_bonus_awarder_kind, rrp.feedback_bonus_awarder_account,
             rrp.feedback_bonus_award_window_seconds, rrp.configuration_status,
@@ -299,7 +305,9 @@ async function loadAndVerifyOpportunity(
     privateGroupId: profile.privateGroupId,
     privateGroupPolicyVersion: optionalInteger(row, "private_group_policy_version"),
     privateGroupPolicyHash: text(row, "private_group_policy_hash"),
+    requiredExpertiseKeys: profile.requiredExpertiseKeys,
     responseWindowSeconds: profile.responseWindowSeconds,
+    expectedEffortSeconds: profile.expectedEffortSeconds,
     panelSize: profile.panelSize,
     compensationMode: profile.compensationMode,
     bountyPerSeatAtomic: profile.bountyPerSeatAtomic,

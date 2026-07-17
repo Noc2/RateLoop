@@ -631,6 +631,13 @@
       "when": 1784264400000,
       "tag": "0090_mechanism_health",
       "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1784268000000,
+      "tag": "0091_mcp_elicitation_sessions",
+      "breakpoints": true
     }
   ]
 }

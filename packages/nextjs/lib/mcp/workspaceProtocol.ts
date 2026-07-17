@@ -1,5 +1,11 @@
 import "server-only";
 import { TOKENLESS_MCP_PROTOCOL_VERSION, TOKENLESS_MCP_PROTOCOL_VERSIONS } from "~~/lib/mcp/protocol";
+import {
+  createWorkspaceMcpSession,
+  enqueueOwnerApprovalElicitation,
+  handleWorkspaceMcpElicitationResponse,
+  requireWorkspaceMcpSession,
+} from "~~/lib/mcp/workspaceElicitation";
 import { getAdaptiveHumanReviewResult, waitForAdaptiveHumanReview } from "~~/lib/tokenless/adaptiveReviewOrchestration";
 import {
   type AdaptiveReviewDecisionRequest,
@@ -534,7 +540,7 @@ async function callOAuthTool(
   principal: Extract<AgentMcpPrincipal, { kind: "oauth" }>,
   name: string,
   args: unknown,
-  context: { origin: string; signal?: AbortSignal },
+  context: { origin: string; protocolVersion?: string; sessionId?: string; signal?: AbortSignal },
 ) {
   try {
     if (name === "rateloop_claim_connection_intent") {
@@ -573,7 +579,21 @@ async function callOAuthTool(
     if (principal.connectionStatus !== "connected") {
       return connectionNotReady("Load agent context and verify this connection before using review tools.");
     }
-    return callIntegrationTool(integrationPrincipal, name, args, context);
+    const result = await callIntegrationTool(integrationPrincipal, name, args, context);
+    if (
+      name === "rateloop_request_review" &&
+      context.sessionId &&
+      context.protocolVersion &&
+      result?.structuredContent
+    ) {
+      await enqueueOwnerApprovalElicitation({
+        sessionId: context.sessionId,
+        principal,
+        protocolVersion: context.protocolVersion,
+        result: result.structuredContent as never,
+      });
+    }
+    return result;
   } catch (error) {
     if (error instanceof TokenlessServiceError) return toolError(error);
     throw error;
@@ -583,10 +603,32 @@ async function callOAuthTool(
 export async function dispatchWorkspaceMcp(
   value: unknown,
   principal: AgentMcpPrincipal,
-  context: { origin?: string; signal?: AbortSignal } = {},
+  context: {
+    initializeSessionId?: string;
+    origin?: string;
+    protocolVersion?: string;
+    sessionId?: string;
+    signal?: AbortSignal;
+  } = {},
 ) {
   const request = object(value);
-  if (!request || request.jsonrpc !== "2.0" || typeof request.method !== "string") {
+  if (!request || request.jsonrpc !== "2.0") {
+    return errorResponse(null, -32600, "Invalid Request");
+  }
+  if (typeof request.method !== "string") {
+    if (
+      context.sessionId &&
+      ("result" in request || "error" in request) &&
+      (typeof request.id === "string" || typeof request.id === "number")
+    ) {
+      await handleWorkspaceMcpElicitationResponse({
+        sessionId: context.sessionId,
+        principal,
+        protocolVersion: context.protocolVersion ?? "",
+        response: request,
+      });
+      return null;
+    }
     return errorResponse(null, -32600, "Invalid Request");
   }
   const notification = !("id" in request);
@@ -596,12 +638,22 @@ export async function dispatchWorkspaceMcp(
       ? request.id
       : null;
   if (!notification && id === null && request.id !== null) return errorResponse(null, -32600, "Invalid Request");
+  if (request.method !== "initialize" && context.sessionId && principal.kind === "oauth" && principal.integration) {
+    await requireWorkspaceMcpSession({
+      sessionId: context.sessionId,
+      principal,
+      protocolVersion: context.protocolVersion ?? "",
+    });
+  }
   if (notification) return null;
   if (request.method === "initialize") {
     const params = object(request.params);
     if (!params || typeof params.protocolVersion !== "string") {
       return errorResponse(id, -32602, "Missing MCP protocol version.");
     }
+    const negotiatedVersion = TOKENLESS_MCP_PROTOCOL_VERSIONS.includes(params.protocolVersion as never)
+      ? params.protocolVersion
+      : TOKENLESS_MCP_PROTOCOL_VERSION;
     if (principal.kind === "pairing" || principal.kind === "oauth") {
       const clientInfo = object(params.clientInfo);
       const capabilities = object(params.capabilities);
@@ -621,6 +673,15 @@ export async function dispatchWorkspaceMcp(
         };
         if (principal.kind === "pairing") await recordPairingClientMetadata(principal, metadata);
         else await recordOAuthMcpClientMetadata(principal, metadata);
+        if (context.initializeSessionId) {
+          await createWorkspaceMcpSession({
+            sessionId: context.initializeSessionId,
+            principal,
+            clientInfo,
+            capabilities,
+            protocolVersion: negotiatedVersion,
+          });
+        }
       } catch (error) {
         if (error instanceof TokenlessServiceError) {
           return errorResponse(id, -32000, error.message, { code: error.code, retryable: error.retryable });
@@ -628,9 +689,6 @@ export async function dispatchWorkspaceMcp(
         throw error;
       }
     }
-    const negotiatedVersion = TOKENLESS_MCP_PROTOCOL_VERSIONS.includes(params.protocolVersion as never)
-      ? params.protocolVersion
-      : TOKENLESS_MCP_PROTOCOL_VERSION;
     return response(id, {
       capabilities: { tools: {} },
       instructions:
@@ -661,6 +719,8 @@ export async function dispatchWorkspaceMcp(
     if (!params || typeof params.name !== "string") return errorResponse(id, -32602, "Invalid tool call parameters.");
     const toolContext = {
       origin: context.origin ?? "http://localhost",
+      ...(context.sessionId ? { sessionId: context.sessionId } : {}),
+      ...(context.protocolVersion ? { protocolVersion: context.protocolVersion } : {}),
       ...(context.signal ? { signal: context.signal } : {}),
     };
     const result =

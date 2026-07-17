@@ -32,6 +32,10 @@ import {
   requestPublicPaidHumanReview,
 } from "~~/lib/tokenless/publicPaidHumanReviewAdapter";
 import type { HumanReviewAuthorityLevel, HumanReviewLane } from "~~/lib/tokenless/reviewCapabilities";
+import {
+  type ReviewerExpertiseKey,
+  qualificationProvenanceSatisfiesExpertise,
+} from "~~/lib/tokenless/reviewerExpertise";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
@@ -89,7 +93,9 @@ export type FrozenHumanReviewRoutingContext = {
     contentBoundary: "private_workspace" | "public_or_test";
     privateSensitivity: "internal" | "confidential" | "restricted" | "regulated" | null;
     privateGroup: { id: string; policyVersion: number; policyHash: `sha256:${string}` } | null;
+    requiredExpertiseKeys?: ReviewerExpertiseKey[];
     responseWindowSeconds: number;
+    expectedEffortSeconds?: number | null;
     panelSize: number;
     compensationMode: "unpaid" | "usdc";
     bountyPerSeatAtomic: string | null;
@@ -475,7 +481,9 @@ async function loadFrozenContext(
             policyHash: privateGroup.policyHash as `sha256:${string}`,
           }
         : null,
+      requiredExpertiseKeys: profile.audience.requiredExpertiseKeys,
       responseWindowSeconds: profile.responseWindowSeconds!,
+      expectedEffortSeconds: profile.expectedEffortSeconds,
       panelSize: profile.panelSize!,
       compensationMode: profile.compensation.mode,
       bountyPerSeatAtomic: profile.compensation.bountyPerSeatAtomic,
@@ -536,9 +544,10 @@ async function resolveExactPrivateBinding(
     return null;
   }
   const responseDeadline = new Date(now.getTime() + profile.responseWindowSeconds * 1_000);
+  const requiredExpertise = profile.requiredExpertiseKeys ?? [];
   const result = await dbClient.execute({
     sql: `SELECT p.project_id,p.retention_days,c.cohort_id,c.capacity,c.active_reservations,
-                 cr.reviewer_account_address,m.allowed_project_ids_json
+                 cr.reviewer_account_address,cr.qualification_provenance_json,m.allowed_project_ids_json
           FROM tokenless_assurance_projects p
           JOIN tokenless_assurance_cohorts c
             ON c.project_id=p.project_id AND c.private_group_id=?
@@ -588,6 +597,11 @@ async function resolveExactPrivateBinding(
     const cohortId = text(row, "cohort_id");
     const reviewer = text(row, "reviewer_account_address");
     if (!projectId || !cohortId || !reviewer) continue;
+    if (
+      !qualificationProvenanceSatisfiesExpertise(row.qualification_provenance_json, requiredExpertise, responseDeadline)
+    ) {
+      continue;
+    }
     const allowedProjects = parseAllowedProjects(row.allowed_project_ids_json);
     if (allowedProjects.length > 0 && !allowedProjects.includes(projectId)) continue;
     const key = `${projectId}\0${cohortId}`;
@@ -729,7 +743,9 @@ function prepareFrozenRoutingRequest(
       contentBoundary: profile.contentBoundary,
       privateSensitivity: profile.privateSensitivity,
       privateGroupId: profile.privateGroup?.id ?? null,
+      requiredExpertiseKeys: profile.requiredExpertiseKeys,
       responseWindowSeconds: profile.responseWindowSeconds,
+      expectedEffortSeconds: profile.expectedEffortSeconds,
       panelSize: profile.panelSize,
       compensationMode: profile.compensationMode,
       bountyPerSeatAtomic: profile.bountyPerSeatAtomic,

@@ -1,6 +1,12 @@
 import { NextRequest } from "next/server";
+import { randomBytes } from "node:crypto";
 import { TOKENLESS_MCP_COMPAT_PROTOCOL_VERSION, TOKENLESS_MCP_PROTOCOL_VERSIONS } from "~~/lib/mcp/protocol";
 import { consumeMcpRateLimit } from "~~/lib/mcp/rateLimit";
+import {
+  deliverWorkspaceMcpElicitation,
+  isSuccessfulWorkspaceMcpInitializeResponse,
+  revokeWorkspaceMcpSession,
+} from "~~/lib/mcp/workspaceElicitation";
 import { dispatchWorkspaceMcp } from "~~/lib/mcp/workspaceProtocol";
 import { authenticateAgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import { AGENT_OAUTH_SAFE_SCOPES } from "~~/lib/tokenless/agentOAuth";
@@ -16,7 +22,7 @@ function json(value: unknown, status = 200, extra: HeadersInit = {}) {
   headers.set("Cache-Control", "private, no-store, max-age=0");
   headers.set("Content-Type", "application/json; charset=utf-8");
   headers.set("X-Content-Type-Options", "nosniff");
-  headers.set("Vary", "Origin, Accept, Authorization, MCP-Protocol-Version");
+  headers.set("Vary", "Origin, Accept, Authorization, MCP-Protocol-Version, MCP-Session-Id");
   return new Response(JSON.stringify(value), { headers, status });
 }
 
@@ -65,10 +71,15 @@ function validateHeaders(request: NextRequest) {
       "invalid_accept_header",
     );
   }
+  return validateProtocolVersion(request);
+}
+
+function validateProtocolVersion(request: NextRequest) {
   const version = request.headers.get("mcp-protocol-version")?.trim() || TOKENLESS_MCP_COMPAT_PROTOCOL_VERSION;
   if (!TOKENLESS_MCP_PROTOCOL_VERSIONS.includes(version as never)) {
     throw new TokenlessServiceError("Unsupported MCP protocol version.", 400, "unsupported_protocol_version");
   }
+  return version;
 }
 
 async function readBody(request: NextRequest) {
@@ -94,7 +105,7 @@ export async function POST(request: NextRequest) {
   let cors = new Headers();
   try {
     cors = corsHeaders(request);
-    validateHeaders(request);
+    const requestProtocolVersion = validateHeaders(request);
     const rateLimit = await consumeMcpRateLimit(request.headers);
     if (!rateLimit.allowed) {
       const response = rpcError(429, "MCP rate limit exceeded.", "rate_limit_exceeded");
@@ -103,16 +114,43 @@ export async function POST(request: NextRequest) {
       return response;
     }
     const principal = await authenticateAgentMcpPrincipal(request.headers.get("authorization"));
-    const result = await dispatchWorkspaceMcp(await readBody(request), principal, {
+    const body = await readBody(request);
+    const method = body && typeof body === "object" && !Array.isArray(body) && "method" in body ? body.method : null;
+    const initializeSessionId =
+      method === "initialize" &&
+      principal.kind === "oauth" &&
+      principal.integration &&
+      principal.connectionStatus === "connected"
+        ? `mcps_${randomBytes(32).toString("base64url")}`
+        : undefined;
+    const sessionId = request.headers.get("mcp-session-id")?.trim() || undefined;
+    if (
+      principal.kind === "oauth" &&
+      principal.integration &&
+      principal.connectionStatus === "connected" &&
+      method !== "initialize" &&
+      !sessionId
+    ) {
+      throw new TokenlessServiceError("MCP-Session-Id is required.", 400, "mcp_session_required");
+    }
+    const result = await dispatchWorkspaceMcp(body, principal, {
+      ...(initializeSessionId ? { initializeSessionId } : {}),
       origin: request.nextUrl.origin,
+      protocolVersion: requestProtocolVersion,
+      ...(sessionId ? { sessionId } : {}),
       signal: request.signal,
     });
     if (result === null) {
       const headers = new Headers(cors);
       headers.set("Cache-Control", "no-store");
+      if (sessionId) headers.set("MCP-Session-Id", sessionId);
       return new Response(null, { headers, status: 202 });
     }
-    return json(result, 200, cors);
+    const response = json(result, 200, cors);
+    if (initializeSessionId && isSuccessfulWorkspaceMcpInitializeResponse(result)) {
+      response.headers.set("MCP-Session-Id", initializeSessionId);
+    } else if (sessionId) response.headers.set("MCP-Session-Id", sessionId);
+    return response;
   } catch (error) {
     if (error instanceof TokenlessServiceError) {
       const response = rpcError(
@@ -133,8 +171,11 @@ export async function POST(request: NextRequest) {
 export async function OPTIONS(request: NextRequest) {
   try {
     const headers = corsHeaders(request);
-    headers.set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, MCP-Protocol-Version");
-    headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+    headers.set(
+      "Access-Control-Allow-Headers",
+      "Accept, Authorization, Content-Type, MCP-Protocol-Version, MCP-Session-Id",
+    );
+    headers.set("Access-Control-Allow-Methods", "DELETE, GET, POST, OPTIONS");
     headers.set("Cache-Control", "no-store");
     headers.set("X-Content-Type-Options", "nosniff");
     return new Response(null, { headers, status: 204 });
@@ -144,8 +185,85 @@ export async function OPTIONS(request: NextRequest) {
   }
 }
 
-export async function GET() {
-  const response = rpcError(405, "Use POST for Streamable HTTP.", "method_not_allowed", -32600);
-  response.headers.set("Allow", "POST, OPTIONS");
-  return response;
+export async function GET(request: NextRequest) {
+  let cors = new Headers();
+  try {
+    cors = corsHeaders(request);
+    const protocolVersion = validateProtocolVersion(request);
+    const accepts = (request.headers.get("accept") ?? "")
+      .split(",")
+      .map(value => value.split(";", 1)[0].trim().toLowerCase());
+    if (!accepts.includes("text/event-stream")) {
+      throw new TokenlessServiceError("Accept must include text/event-stream.", 406, "invalid_accept_header");
+    }
+    const sessionId = request.headers.get("mcp-session-id")?.trim();
+    if (!sessionId) {
+      throw new TokenlessServiceError("MCP-Session-Id is required.", 400, "mcp_session_required");
+    }
+    const rateLimit = await consumeMcpRateLimit(request.headers);
+    if (!rateLimit.allowed) {
+      const response = rpcError(429, "MCP rate limit exceeded.", "rate_limit_exceeded");
+      response.headers.set("Retry-After", String(rateLimit.retryAfterSeconds));
+      for (const [key, value] of cors) response.headers.set(key, value);
+      return response;
+    }
+    const principal = await authenticateAgentMcpPrincipal(request.headers.get("authorization"));
+    const elicitation = await deliverWorkspaceMcpElicitation({
+      sessionId,
+      principal,
+      protocolVersion,
+      lastEventId: request.headers.get("last-event-id"),
+    });
+    const payload = elicitation
+      ? `event: message\nid: ${elicitation.eventId}\ndata: ${JSON.stringify(elicitation.request)}\n\n`
+      : ": keep-alive\n\n";
+    const headers = new Headers(cors);
+    headers.set("Cache-Control", "private, no-store, max-age=0");
+    headers.set("Content-Type", "text/event-stream; charset=utf-8");
+    headers.set("MCP-Session-Id", sessionId);
+    headers.set("X-Content-Type-Options", "nosniff");
+    return new Response(payload, { headers });
+  } catch (error) {
+    if (error instanceof TokenlessServiceError) {
+      const response = rpcError(error.status, error.message, error.code);
+      for (const [key, value] of cors) response.headers.set(key, value);
+      return error.status === 401 ? applyOAuthChallenge(response, request) : response;
+    }
+    const response = rpcError(500, "RateLoop workspace MCP stream failed.", "internal_error", -32603);
+    for (const [key, value] of cors) response.headers.set(key, value);
+    return response;
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  let cors = new Headers();
+  try {
+    cors = corsHeaders(request);
+    const protocolVersion = validateProtocolVersion(request);
+    const sessionId = request.headers.get("mcp-session-id")?.trim();
+    if (!sessionId) {
+      throw new TokenlessServiceError("MCP-Session-Id is required.", 400, "mcp_session_required");
+    }
+    const rateLimit = await consumeMcpRateLimit(request.headers);
+    if (!rateLimit.allowed) {
+      const response = rpcError(429, "MCP rate limit exceeded.", "rate_limit_exceeded");
+      response.headers.set("Retry-After", String(rateLimit.retryAfterSeconds));
+      for (const [key, value] of cors) response.headers.set(key, value);
+      return response;
+    }
+    const principal = await authenticateAgentMcpPrincipal(request.headers.get("authorization"));
+    await revokeWorkspaceMcpSession({ sessionId, principal, protocolVersion });
+    const headers = new Headers(cors);
+    headers.set("Cache-Control", "no-store");
+    return new Response(null, { headers, status: 204 });
+  } catch (error) {
+    if (error instanceof TokenlessServiceError) {
+      const response = rpcError(error.status, error.message, error.code);
+      for (const [key, value] of cors) response.headers.set(key, value);
+      return error.status === 401 ? applyOAuthChallenge(response, request) : response;
+    }
+    const response = rpcError(500, "RateLoop workspace MCP session termination failed.", "internal_error", -32603);
+    for (const [key, value] of cors) response.headers.set(key, value);
+    return response;
+  }
 }

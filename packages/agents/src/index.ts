@@ -72,3 +72,47 @@ export type {
   LangfuseHumanLabelExportOptions,
   LangfuseScoreSubject,
 } from "./langfuseHumanLabels";
+export {
+  beginRateLoopFrameworkApproval,
+  RATELOOP_FRAMEWORK_PENDING_SCHEMA_VERSION,
+  RATELOOP_REVIEW_NONTERMINAL_STATES,
+  RATELOOP_REVIEW_TERMINAL_STATES,
+  refreshRateLoopFrameworkApproval,
+} from "./integrations/approvalCore";
+export type {
+  RateLoopFrameworkApprovalDriver,
+  RateLoopFrameworkGateResult,
+  RateLoopFrameworkPending,
+  RateLoopReviewCheckpoint,
+  RateLoopReviewNonterminalState,
+  RateLoopReviewState,
+  RateLoopReviewTerminalState,
+} from "./integrations/approvalCore";
+export {
+  interruptForRateLoopApproval,
+  RATELOOP_LANGGRAPH_INTERRUPT_SCHEMA_VERSION,
+} from "./integrations/langGraph";
+export type {
+  RateLoopLangGraphInterrupt,
+  RateLoopLangGraphResume,
+} from "./integrations/langGraph";
+export {
+  createOpenAiAgentsApprovalAdapter,
+  pendingFromOpenAiAgentsState,
+  RATELOOP_OPENAI_AGENTS_STATE_SCHEMA_VERSION,
+  toOpenAiAgentsApproval,
+} from "./integrations/openAiAgents";
+export type {
+  RateLoopOpenAiAgentsApprovalState,
+  RateLoopOpenAiAgentsStateStore,
+} from "./integrations/openAiAgents";
+export {
+  createRateLoopMcpElicitation,
+  MCP_FORM_ELICITATION_PROTOCOL_VERSION,
+  parseRateLoopMcpElicitation,
+} from "./integrations/mcpElicitation";
+export type {
+  McpClientCapabilities,
+  McpElicitationResult,
+  RateLoopMcpElicitationRequest,
+} from "./integrations/mcpElicitation";
