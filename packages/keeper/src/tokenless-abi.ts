@@ -41,3 +41,8 @@ export const TokenlessFeedbackBonusAbi = parseAbi([
   "function claimAward(uint256 poolId,address voteKey,address payoutAddress,bytes32 payoutSalt) returns (uint256 amount)",
   "function refundRemainder(uint256 poolId) returns (uint256 amount)",
 ]);
+
+export const TokenlessX402PanelSubmitterAbi = parseAbi([
+  "function usdc() view returns (address)",
+  "function panel() view returns (address)",
+]);

@@ -160,6 +160,10 @@ function clients(params: {
     awardDeadline: bigint;
     refunded: boolean;
   };
+  adapter?: {
+    panel?: Address;
+    usdc?: Address;
+  };
 }): TokenlessKeeperClients {
   const writes = params.writes ?? [];
   const currentRound = { ...params.currentRound };
@@ -191,7 +195,8 @@ function clients(params: {
       async getBytecode({ address }: { address: Address }) {
         return address === PANEL ||
           address === ISSUER ||
-          address === FEEDBACK_BONUS
+          address === FEEDBACK_BONUS ||
+          (address === ADAPTER && params.adapter)
           ? "0x6000"
           : undefined;
       },
@@ -218,7 +223,15 @@ function clients(params: {
         switch (args.functionName) {
           case "credentialIssuer":
             return ISSUER;
+          case "panel":
+            if (args.address === ADAPTER) {
+              return params.adapter?.panel ?? PANEL;
+            }
+            throw new Error("unexpected panel read");
           case "usdc":
+            if (args.address === ADAPTER) {
+              return params.adapter?.usdc ?? USDC;
+            }
             return USDC;
           case "SCORING_VERSION":
             return 2;
@@ -455,6 +468,37 @@ describe("tokenless keeper orchestration", () => {
         },
       }),
     ).rejects.toThrow(/X402_PANEL_SUBMITTER_ADDRESS has no deployed bytecode/);
+  });
+
+  it("fails closed when a configured x402 adapter is wired to another panel", async () => {
+    const instance = clients({
+      currentRound: round(),
+      adapter: {
+        panel: "0x00000000000000000000000000000000000000ff",
+      },
+    });
+    await expect(
+      validateTokenlessKeeperDeployment(instance, {
+        ...config,
+        deployment: {
+          ...config.deployment,
+          x402PanelSubmitter: ADAPTER,
+        },
+      }),
+    ).rejects.toThrow(/X402PanelSubmitter wiring does not match/);
+  });
+
+  it("accepts a configured x402 adapter wired to the panel and USDC", async () => {
+    const instance = clients({ currentRound: round(), adapter: {} });
+    await expect(
+      validateTokenlessKeeperDeployment(instance, {
+        ...config,
+        deployment: {
+          ...config.deployment,
+          x402PanelSubmitter: ADAPTER,
+        },
+      }),
+    ).resolves.toBeUndefined();
   });
 
   it("returns an expired unawarded feedback bonus remainder permissionlessly", async () => {

@@ -20,10 +20,27 @@ import {
   tokenlessDeploymentHealth,
 } from "../protocol-deployment";
 import { keeperAction, publicRoundStatus, verdictStatus } from "../status";
+import { validateRuntimeTokenlessDeployment } from "../runtime-deployment-health";
 
 const deployment = resolveTokenlessDeployment();
 const app = new Hono();
 const MAX_LIMIT = 500;
+type PonderIndexingStatus = Record<
+  string,
+  {
+    block: { number: number; timestamp: number } | null;
+    ready: boolean;
+  }
+>;
+
+function ponderIndexingStatus() {
+  const runtime = globalThis as typeof globalThis & {
+    PONDER_DATABASE: {
+      getStatus(): Promise<PonderIndexingStatus | null>;
+    };
+  };
+  return runtime.PONDER_DATABASE.getStatus();
+}
 
 function jsonSafe<T>(value: T) {
   return replaceBigInts(value, (item) => item.toString());
@@ -72,20 +89,59 @@ app.onError((error, c) => {
 app.get("/deployment", (c) => c.json(deployment));
 
 app.get("/health/tokenless", async (c) => {
-  await db
-    .select({ id: tokenlessRound.id })
-    .from(tokenlessRound)
-    .where(eq(tokenlessRound.deploymentKey, deployment.deploymentKey))
-    .limit(1);
-  await db
-    .select({ id: tokenlessFeedbackBonusPool.id })
-    .from(tokenlessFeedbackBonusPool)
-    .where(
-      eq(tokenlessFeedbackBonusPool.deploymentKey, deployment.deploymentKey),
-    )
-    .limit(1);
   c.header("cache-control", "no-store");
-  return c.json(tokenlessDeploymentHealth(deployment));
+  const [chain, initialIssuerEpoch, indexingStatus] = await Promise.all([
+    validateRuntimeTokenlessDeployment(),
+    db.query.tokenlessIssuerEpoch.findFirst({
+      where: and(
+        eq(tokenlessIssuerEpoch.deploymentKey, deployment.deploymentKey),
+        eq(tokenlessIssuerEpoch.epoch, 1n),
+      ),
+    }),
+    ponderIndexingStatus(),
+  ]);
+  const index = indexingStatus?.[deployment.network];
+  const indexBlock = index?.block?.number ?? null;
+  const indexTimestamp = index?.block?.timestamp ?? null;
+  const indexReady = index?.ready === true;
+  const deploymentEventIndexed = Boolean(initialIssuerEpoch);
+  if (
+    !deploymentEventIndexed ||
+    indexBlock === null ||
+    indexBlock < deployment.startBlock ||
+    !indexReady
+  ) {
+    return c.json(
+      {
+        ...tokenlessDeploymentHealth(deployment),
+        status: "syncing",
+        error: !deploymentEventIndexed
+          ? "Initial credential-issuer epoch has not been indexed."
+          : "Historical indexing has not reached readiness.",
+        chainHead: chain.chainHead.toString(),
+        indexBlock,
+        indexTimestamp,
+        indexReady,
+        blocksIndexedFromStart:
+          indexBlock === null
+            ? null
+            : Math.max(0, indexBlock - deployment.startBlock),
+        initialEpochIndexed: deploymentEventIndexed,
+      },
+      503,
+    );
+  }
+  return c.json({
+    ...tokenlessDeploymentHealth(deployment),
+    chainHead: chain.chainHead.toString(),
+    indexBlock,
+    indexTimestamp,
+    indexReady,
+    blocksIndexedFromStart: indexBlock - deployment.startBlock,
+    usdcAddress: chain.usdcAddress,
+    adapterConfigured: chain.adapterConfigured,
+    initialEpochIndexed: true,
+  });
 });
 
 app.get("/status/tokenless", async (c) => {

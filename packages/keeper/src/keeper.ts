@@ -19,6 +19,7 @@ import {
 import {
   TokenlessFeedbackBonusAbi,
   TokenlessPanelAbi,
+  TokenlessX402PanelSubmitterAbi,
 } from "./tokenless-abi.js";
 import {
   TokenlessRoundState,
@@ -798,6 +799,29 @@ export async function validateTokenlessKeeperDeployment(
     if (!adapterCode || adapterCode === "0x") {
       throw new Error(
         "TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS has no deployed bytecode.",
+      );
+    }
+    const [adapterPanel, adapterUsdc] = await Promise.all([
+      clients.publicClient.readContract({
+        address: config.deployment.x402PanelSubmitter,
+        abi: TokenlessX402PanelSubmitterAbi,
+        functionName: "panel",
+      }),
+      clients.publicClient.readContract({
+        address: config.deployment.x402PanelSubmitter,
+        abi: TokenlessX402PanelSubmitterAbi,
+        functionName: "usdc",
+      }),
+    ]);
+    if (
+      typeof adapterPanel !== "string" ||
+      !isAddressEqual(adapterPanel as Address, config.deployment.panel) ||
+      typeof adapterUsdc !== "string" ||
+      typeof panelUsdc !== "string" ||
+      !isAddressEqual(adapterUsdc as Address, panelUsdc as Address)
+    ) {
+      throw new Error(
+        "X402PanelSubmitter wiring does not match the tokenless panel and USDC.",
       );
     }
   }
