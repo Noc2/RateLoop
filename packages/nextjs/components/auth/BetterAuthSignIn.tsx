@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { normalizeSignInReturnPath } from "./signInReturnPath";
 import { betterAuthClient, exchangeBetterAuthSession, readBrowserAuthConfiguration } from "~~/lib/auth/client";
 
 function GoogleIcon() {
@@ -36,7 +37,7 @@ function AppleIcon() {
 
 function safeReturnPath() {
   const value = new URL(window.location.href).searchParams.get("returnTo");
-  return value?.startsWith("/") && !value.startsWith("//") ? value : "/agents";
+  return normalizeSignInReturnPath(value, window.location.origin);
 }
 
 export function BetterAuthSignIn() {
