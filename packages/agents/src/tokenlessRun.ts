@@ -1,6 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import type {
   TokenlessAskRequest,
+  TokenlessDeploymentIdentity,
   TokenlessQuoteRequest,
   TokenlessRateLoopClient,
 } from "@rateloop/sdk";
@@ -16,6 +17,9 @@ import { waitUntilTokenlessReady } from "./tokenless";
 export type TokenlessAutonomousRunInput = {
   quote: TokenlessQuoteRequest;
   idempotencyKey: string;
+  deployment: TokenlessDeploymentIdentity;
+  /** Hard local ceiling in atomic USDC units. The server cannot raise it. */
+  maxTotalFundedAtomic: string;
 };
 
 export type TokenlessResumeReceipt = {
@@ -33,6 +37,13 @@ function assertIdempotencyKey(value: string) {
   if (!value.trim() || value.length > 200) throw new Error("idempotencyKey must be 1-200 characters.");
 }
 
+function atomicAmount(value: string, name: string) {
+  if (!/^(0|[1-9]\d*)$/.test(value)) {
+    throw new Error(`${name} must be an unsigned atomic USDC amount.`);
+  }
+  return BigInt(value);
+}
+
 export async function runTokenlessAutonomous(input: {
   client: TokenlessRateLoopClient;
   apiBaseUrl: string;
@@ -43,6 +54,11 @@ export async function runTokenlessAutonomous(input: {
 }) {
   assertIdempotencyKey(input.request.idempotencyKey);
   const quote = await input.client.quote(input.request.quote);
+  const quoteTotal = atomicAmount(quote.economics.totalFundedAtomic, "quote.economics.totalFundedAtomic");
+  const localCeiling = atomicAmount(input.request.maxTotalFundedAtomic, "maxTotalFundedAtomic");
+  if (quoteTotal > localCeiling) {
+    throw new Error("The accepted quote exceeds the local autonomous spend ceiling.");
+  }
   const ask = await input.client.ask({
     idempotencyKey: input.request.idempotencyKey,
     payment: { mode: "x402", payerAddress: input.account.address },
@@ -52,7 +68,14 @@ export async function runTokenlessAutonomous(input: {
   if (instructions.funderAddress.toLowerCase() !== input.account.address.toLowerCase()) {
     throw new Error("The payment instructions are not bound to the local agent wallet.");
   }
-  const typed = buildTokenlessX402Authorization(instructions);
+  const instructionTotal = atomicAmount(instructions.totalFundedAtomic, "paymentInstructions.totalFundedAtomic");
+  if (instructionTotal !== quoteTotal) {
+    throw new Error("The payment instructions do not match the accepted quote total.");
+  }
+  if (instructionTotal > localCeiling) {
+    throw new Error("The payment instructions exceed the local autonomous spend ceiling.");
+  }
+  const typed = buildTokenlessX402Authorization(instructions, undefined, input.request.deployment);
   const eip3009Signature = await input.account.signTypedData({
     domain: typed.eip3009.domain,
     types: typed.eip3009.types,

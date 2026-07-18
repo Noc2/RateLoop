@@ -289,8 +289,9 @@ export function validateTokenlessPaymentInstructions(
 
 export function buildTokenlessRoundTermsMessage(
   instructions: TokenlessPaymentInstructions,
+  deployment?: TokenlessDeploymentIdentity,
 ): TokenlessRoundTermsMessage {
-  assertInstructions(instructions);
+  assertInstructions(instructions, deployment);
   const terms = instructions.roundTerms;
   return {
     contentId: bytes32(terms.contentId, "roundTerms.contentId"),
@@ -314,18 +315,20 @@ export function buildTokenlessRoundTermsMessage(
 
 export function buildTokenlessRoundTermsTypedData(
   instructions: TokenlessPaymentInstructions,
+  deployment?: TokenlessDeploymentIdentity,
 ): TokenlessRoundTermsTypedData {
   return {
     types: TOKENLESS_ROUND_TERMS_TYPES,
     primaryType: "RoundTerms",
-    message: buildTokenlessRoundTermsMessage(instructions),
+    message: buildTokenlessRoundTermsMessage(instructions, deployment),
   };
 }
 
 export function hashTokenlessRoundTerms(
   instructions: TokenlessPaymentInstructions,
+  deployment?: TokenlessDeploymentIdentity,
 ): Hex {
-  const typedData = buildTokenlessRoundTermsTypedData(instructions);
+  const typedData = buildTokenlessRoundTermsTypedData(instructions, deployment);
   return hashStruct({
     data: typedData.message,
     primaryType: typedData.primaryType,
@@ -336,7 +339,9 @@ export function hashTokenlessRoundTerms(
 export function buildTokenlessEip3009TypedData(
   instructions: TokenlessPaymentInstructions,
   input?: TokenlessAuthorizationWindow,
+  deployment?: TokenlessDeploymentIdentity,
 ): TokenlessEip3009TypedData {
+  assertInstructions(instructions, deployment);
   const spec = requireSpec(instructions);
   const window = resolveWindow(instructions, input);
   return {
@@ -357,7 +362,9 @@ export function buildTokenlessEip3009TypedData(
 export function buildTokenlessRoundAuthorizationTypedData(
   instructions: TokenlessPaymentInstructions,
   input?: TokenlessAuthorizationWindow,
+  deployment?: TokenlessDeploymentIdentity,
 ): TokenlessRoundAuthorizationTypedData {
+  assertInstructions(instructions, deployment);
   const spec = requireSpec(instructions);
   const window = resolveWindow(instructions, input);
   return {
@@ -367,7 +374,7 @@ export function buildTokenlessRoundAuthorizationTypedData(
     message: {
       funder: address(instructions.funderAddress, "funderAddress"),
       panel: address(instructions.panelAddress, "panelAddress"),
-      roundTermsDigest: hashTokenlessRoundTerms(instructions),
+      roundTermsDigest: hashTokenlessRoundTerms(instructions, deployment),
       validAfter: BigInt(window.validAfter),
       validBefore: BigInt(window.validBefore),
       nonce: bytes32(window.nonce, "nonce"),
@@ -378,21 +385,24 @@ export function buildTokenlessRoundAuthorizationTypedData(
 export function hashTokenlessRoundAuthorization(
   instructions: TokenlessPaymentInstructions,
   input?: TokenlessAuthorizationWindow,
+  deployment?: TokenlessDeploymentIdentity,
 ): Hex {
-  const typedData = buildTokenlessRoundAuthorizationTypedData(instructions, input);
+  const typedData = buildTokenlessRoundAuthorizationTypedData(instructions, input, deployment);
   return hashTypedData(typedData);
 }
 
 export function buildTokenlessX402Authorization(
   instructions: TokenlessPaymentInstructions,
   input?: TokenlessAuthorizationWindow,
+  deployment?: TokenlessDeploymentIdentity,
 ): TokenlessX402AuthorizationBuild {
-  const roundTerms = buildTokenlessRoundTermsTypedData(instructions);
-  const roundTermsDigest = hashTokenlessRoundTerms(instructions);
+  assertInstructions(instructions, deployment);
+  const roundTerms = buildTokenlessRoundTermsTypedData(instructions, deployment);
+  const roundTermsDigest = hashTokenlessRoundTerms(instructions, deployment);
   return {
-    eip3009: buildTokenlessEip3009TypedData(instructions, input),
+    eip3009: buildTokenlessEip3009TypedData(instructions, input, deployment),
     roundTerms,
-    roundAuthorization: buildTokenlessRoundAuthorizationTypedData(instructions, input),
+    roundAuthorization: buildTokenlessRoundAuthorizationTypedData(instructions, input, deployment),
     roundTermsDigest,
   };
 }

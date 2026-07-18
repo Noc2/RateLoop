@@ -1,5 +1,13 @@
 {
   "idempotencyKey": "replace-with-a-unique-key",
+  "deployment": {
+    "deploymentKey": "rateloop-tokenless-deployment-v4:replace-with-live-key",
+    "chainId": 84532,
+    "panelAddress": "0x0000000000000000000000000000000000000000",
+    "x402SubmitterAddress": "0x0000000000000000000000000000000000000000",
+    "usdcAddress": "0x0000000000000000000000000000000000000000"
+  },
+  "maxTotalFundedAtomic": "5750000",
   "quote": {
     "audience": {
       "admissionPolicyHash": "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",

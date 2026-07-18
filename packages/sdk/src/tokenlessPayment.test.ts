@@ -116,6 +116,17 @@ test("fails closed on stale deployment facts and mismatched payment totals", () 
   );
   assert.throws(
     () =>
+      buildTokenlessX402Authorization(payment, undefined, {
+        deploymentKey: payment.deploymentKey,
+        chainId: payment.chainId,
+        panelAddress: "0x9999999999999999999999999999999999999999",
+        x402SubmitterAddress: payment.x402SubmitterAddress,
+        usdcAddress: payment.usdcAddress,
+      }),
+    /panelAddress does not match/,
+  );
+  assert.throws(
+    () =>
       buildTokenlessEip3009TypedData({
         ...payment,
         totalFundedAtomic: "1",
@@ -175,4 +186,3 @@ test("serializes only the exact server-side x402 evidence shape", () => {
     /v must be 27 or 28/,
   );
 });
-
