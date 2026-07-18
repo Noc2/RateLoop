@@ -1,6 +1,14 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { and, asc, desc, eq, replaceBigInts, sum } from "ponder";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  replaceBigInts,
+  sum,
+} from "ponder";
 import { db } from "ponder:api";
 import {
   tokenlessClaim,
@@ -21,10 +29,15 @@ import {
 } from "../protocol-deployment";
 import { keeperAction, publicRoundStatus, verdictStatus } from "../status";
 import { validateRuntimeTokenlessDeployment } from "../runtime-deployment-health";
+import { tokenlessStatusSummary } from "../status-summary";
 
 const deployment = resolveTokenlessDeployment();
 const app = new Hono();
 const MAX_LIMIT = 500;
+const STATUS_CACHE_TTL_MS = 15_000;
+let statusCache:
+  | { expiresAt: number; value: Record<string, unknown> }
+  | undefined;
 type PonderIndexingStatus = Record<
   string,
   {
@@ -145,55 +158,62 @@ app.get("/health/tokenless", async (c) => {
 });
 
 app.get("/status/tokenless", async (c) => {
+  if (statusCache && statusCache.expiresAt > Date.now()) {
+    c.header("cache-control", "public, max-age=5, s-maxage=15");
+    return c.json(statusCache.value);
+  }
   const [
-    rows,
-    creditBalances,
-    creditEvents,
-    feedbackBonusPools,
-    feedbackBonusEvents,
+    roundStates,
+    [creditSummary],
+    [creditEventSummary],
+    [feedbackBonusPoolSummary],
+    [feedbackBonusEventSummary],
   ] = await Promise.all([
     db
-      .select({ state: tokenlessRound.state })
+      .select({ state: tokenlessRound.state, total: count() })
       .from(tokenlessRound)
-      .where(eq(tokenlessRound.deploymentKey, deployment.deploymentKey)),
+      .where(eq(tokenlessRound.deploymentKey, deployment.deploymentKey))
+      .groupBy(tokenlessRound.state),
     db
-      .select({ remainingCredit: tokenlessCreditBalance.remainingCredit })
+      .select({
+        owners: count(),
+        totalRemainingCredit: sum(tokenlessCreditBalance.remainingCredit),
+      })
       .from(tokenlessCreditBalance)
       .where(
         eq(tokenlessCreditBalance.deploymentKey, deployment.deploymentKey),
       ),
     db
-      .select({ id: tokenlessCreditEvent.id })
+      .select({ total: count() })
       .from(tokenlessCreditEvent)
       .where(eq(tokenlessCreditEvent.deploymentKey, deployment.deploymentKey)),
     db
-      .select({ id: tokenlessFeedbackBonusPool.id })
+      .select({ total: count() })
       .from(tokenlessFeedbackBonusPool)
       .where(
         eq(tokenlessFeedbackBonusPool.deploymentKey, deployment.deploymentKey),
       ),
     db
-      .select({ id: tokenlessFeedbackBonusEvent.id })
+      .select({ total: count() })
       .from(tokenlessFeedbackBonusEvent)
       .where(
         eq(tokenlessFeedbackBonusEvent.deploymentKey, deployment.deploymentKey),
       ),
   ]);
-  const byState: Record<string, number> = {};
-  for (const row of rows)
-    byState[String(row.state)] = (byState[String(row.state)] ?? 0) + 1;
-  return c.json({
+  const value = {
     ...tokenlessDeploymentHealth(deployment),
-    rounds: rows.length,
-    byState,
-    creditOwners: creditBalances.length,
-    creditEvents: creditEvents.length,
-    feedbackBonusPools: feedbackBonusPools.length,
-    feedbackBonusEvents: feedbackBonusEvents.length,
-    totalRemainingCredit: creditBalances
-      .reduce((total, row) => total + row.remainingCredit, 0n)
-      .toString(),
-  });
+    ...tokenlessStatusSummary({
+      roundStates,
+      creditOwners: creditSummary?.owners,
+      creditEvents: creditEventSummary?.total,
+      feedbackBonusPools: feedbackBonusPoolSummary?.total,
+      feedbackBonusEvents: feedbackBonusEventSummary?.total,
+      totalRemainingCredit: creditSummary?.totalRemainingCredit,
+    }),
+  };
+  statusCache = { expiresAt: Date.now() + STATUS_CACHE_TTL_MS, value };
+  c.header("cache-control", "public, max-age=5, s-maxage=15");
+  return c.json(value);
 });
 
 app.get("/stats", async (c) => {
