@@ -814,7 +814,7 @@ export async function deliverPendingAssuranceEvents(
   const now = input.now ?? new Date();
   const workspaceFilter = input.workspaceId ? "AND o.workspace_id = ?" : "";
   const due = await dbClient.execute({
-    sql: `SELECT d.delivery_id,d.idempotency_key,d.attempt_count,e.url,e.secret_ciphertext,
+    sql: `SELECT d.delivery_id,d.idempotency_key,d.attempt_count,d.lease_generation,e.url,e.secret_ciphertext,
                  o.event_id,o.cloud_event_json
           FROM tokenless_assurance_event_deliveries d
           JOIN tokenless_assurance_event_outbox o ON o.event_id=d.event_id
@@ -831,13 +831,16 @@ export async function deliverPendingAssuranceEvents(
     const row = value as Row;
     const deliveryId = text(row, "delivery_id")!;
     const leaseExpiresAt = new Date(now.getTime() + DELIVERY_LEASE_MS);
+    const previousLeaseGeneration = Number(row.lease_generation);
+    if (!Number.isSafeInteger(previousLeaseGeneration) || previousLeaseGeneration >= 2_147_483_647) continue;
+    const leaseGeneration = previousLeaseGeneration + 1;
     const claimed = await dbClient.execute({
       sql: `UPDATE tokenless_assurance_event_deliveries
-            SET state='delivering',lease_expires_at=?,updated_at=?
+            SET state='delivering',lease_expires_at=?,lease_generation=?,updated_at=?
             WHERE delivery_id=? AND (
               state IN ('pending','retry') OR (state='delivering' AND lease_expires_at <= ?)
-            )`,
-      args: [leaseExpiresAt, now, deliveryId, now],
+            ) AND lease_generation=?`,
+      args: [leaseExpiresAt, leaseGeneration, now, deliveryId, now, previousLeaseGeneration],
     });
     if (claimed.rowCount !== 1) continue;
     const payload = text(row, "cloud_event_json")!;
@@ -867,22 +870,22 @@ export async function deliverPendingAssuranceEvents(
         pinnedAddress,
       });
       if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status}`), { responseStatus: response.status });
-      await dbClient.execute({
+      const completed = await dbClient.execute({
         sql: `UPDATE tokenless_assurance_event_deliveries
               SET state='delivered',attempt_count=?,response_status=?,last_error=NULL,
                   delivered_at=?,lease_expires_at=NULL,updated_at=?
-              WHERE delivery_id=? AND state='delivering'`,
-        args: [attempt, response.status, now, now, deliveryId],
+              WHERE delivery_id=? AND state='delivering' AND lease_generation=?`,
+        args: [attempt, response.status, now, now, deliveryId, leaseGeneration],
       });
-      outcomes.push({ deliveryId, state: "delivered" });
+      if (completed.rowCount === 1) outcomes.push({ deliveryId, state: "delivered" });
     } catch (error) {
       const dead = attempt >= MAX_DELIVERY_ATTEMPTS;
       const delayMs = Math.min(30_000 * 2 ** (attempt - 1), 3_600_000);
-      await dbClient.execute({
+      const completed = await dbClient.execute({
         sql: `UPDATE tokenless_assurance_event_deliveries
               SET state=?,attempt_count=?,response_status=?,last_error=?,next_attempt_at=?,
                   lease_expires_at=NULL,updated_at=?
-              WHERE delivery_id=? AND state='delivering'`,
+              WHERE delivery_id=? AND state='delivering' AND lease_generation=?`,
         args: [
           dead ? "dead" : "retry",
           attempt,
@@ -891,9 +894,10 @@ export async function deliverPendingAssuranceEvents(
           new Date(now.getTime() + delayMs),
           now,
           deliveryId,
+          leaseGeneration,
         ],
       });
-      outcomes.push({ deliveryId, state: dead ? "dead" : "retry" });
+      if (completed.rowCount === 1) outcomes.push({ deliveryId, state: dead ? "dead" : "retry" });
     }
   }
   return outcomes;

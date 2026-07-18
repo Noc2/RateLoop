@@ -722,3 +722,64 @@ test("deliveries retry with a stable payload and signature, recover expired leas
   assert.equal(ssrfState.rows[0].state, "retry");
   assert.match(String(ssrfState.rows[0].last_error), /private or local/u);
 });
+
+test("an expired assurance-event worker cannot overwrite its successor's delivery", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Fenced stream", ownerAddress: OWNER });
+  await createAssuranceEventStream({
+    accountAddress: OWNER,
+    workspaceId,
+    url: "https://siem.example.test/events",
+    eventTypes: ["ai.rateloop.review.completed"],
+    encryptionKey: ENCRYPTION_KEY,
+    resolveHostname: resolvePublic,
+  });
+  const enqueued = await enqueueAssuranceEvent({
+    workspaceId,
+    sourceEventId: "review:completed:run_fenced",
+    eventType: "ai.rateloop.review.completed",
+    evidenceReference: PACKET_REFERENCE,
+    evidenceChain: CHAIN_REFERENCE,
+    occurredAt: NOW,
+    now: NOW,
+  });
+
+  let releaseExpiredWorker!: () => void;
+  let markExpiredWorkerStarted!: () => void;
+  const expiredWorkerStarted = new Promise<void>(resolve => {
+    markExpiredWorkerStarted = resolve;
+  });
+  const expiredWorkerCanReturn = new Promise<void>(resolve => {
+    releaseExpiredWorker = resolve;
+  });
+  const expiredWorker = deliverPendingAssuranceEvents({
+    now: NOW,
+    encryptionKey: ENCRYPTION_KEY,
+    resolveHostname: resolvePublic,
+    fetchImpl: async () => {
+      markExpiredWorkerStarted();
+      await expiredWorkerCanReturn;
+      return new Response(null, { status: 503 });
+    },
+  });
+  await expiredWorkerStarted;
+
+  const currentWorker = await deliverPendingAssuranceEvents({
+    now: new Date(NOW.getTime() + 60_001),
+    encryptionKey: ENCRYPTION_KEY,
+    resolveHostname: resolvePublic,
+    fetchImpl: async () => new Response(null, { status: 202 }),
+  });
+  assert.equal(currentWorker[0]?.state, "delivered");
+
+  releaseExpiredWorker();
+  assert.deepEqual(await expiredWorker, []);
+  const durable = await dbClient.execute({
+    sql: `SELECT state,lease_generation,response_status,last_error
+          FROM tokenless_assurance_event_deliveries WHERE event_id=?`,
+    args: [enqueued.eventId],
+  });
+  assert.equal(durable.rows[0]?.state, "delivered");
+  assert.equal(Number(durable.rows[0]?.lease_generation), 2);
+  assert.equal(Number(durable.rows[0]?.response_status), 202);
+  assert.equal(durable.rows[0]?.last_error, null);
+});
