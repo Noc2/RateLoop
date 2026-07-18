@@ -459,6 +459,7 @@ function ipv6ToBigInt(value: string): bigint | null {
 const NON_GLOBAL_IPV6_CIDRS: ReadonlyArray<readonly [bigint, number]> = [
   [ipv6ToBigInt("::")!, 128], // unspecified
   [ipv6ToBigInt("::1")!, 128], // loopback
+  [ipv6ToBigInt("64:ff9b:1::")!, 48], // local-use IPv4/IPv6 translation (RFC 8215)
   [ipv6ToBigInt("100::")!, 64], // discard-only
   [ipv6ToBigInt("2001:db8::")!, 32], // documentation
   [ipv6ToBigInt("3fff::")!, 20], // documentation (RFC 9637)

@@ -607,6 +607,8 @@ test("webhook URL classifier rejects every non-globally-routable address range",
     "https://[2001:db8::1]/hook", // documentation
     "https://[3fff::1]/hook", // documentation (RFC 9637)
     "https://[64:ff9b::0a00:0001]/hook", // NAT64 embedding 10.0.0.1
+    "https://[64:ff9b:1::a9fe:a9fe]/hook", // local-use NAT64 embedding 169.254.169.254
+    "https://[64:ff9b:1::0808:0808]/hook", // local-use NAT64 is non-global regardless of embedded IPv4
     "https://[::ffff:192.168.0.1]/hook", // IPv4-mapped IPv6 private
     "https://[::ffff:127.0.0.1]/hook", // IPv4-mapped IPv6 loopback
   ];
