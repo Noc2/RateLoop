@@ -82,6 +82,36 @@ function evidenceBundle(): GrcEvidenceBundle {
   });
 }
 
+function reconciliationSourceData() {
+  return {
+    coverage: [{ scopeId: "scope-support", opportunityCount: 5, reviewedCount: 2 }],
+    packets: [
+      {
+        packetId: "packet-concurrency",
+        scopeId: "scope-support",
+        packetDigest: PACKET_DIGEST,
+        signatureAlgorithm: "Ed25519",
+        signingKeyId: "evidence-2026-07",
+        generatedAt: new Date("2026-07-14T08:00:00.000Z"),
+        signedPacket: {
+          payload: { schemaVersion: "rateloop.assurance-evidence.v3", packetId: "packet-concurrency" },
+          signing: { algorithm: "Ed25519", keyId: "evidence-2026-07", publicKey: "public-key-pin" },
+          packetDigest: PACKET_DIGEST,
+          signature: "signature-value",
+        },
+      },
+    ],
+  };
+}
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>(completed => {
+    resolve = completed;
+  });
+  return { promise, resolve };
+}
+
 test("normalized GRC evidence is deterministic, control-mapped, and omits raw tenant and review content", () => {
   const bundle = evidenceBundle();
   const repeated = evidenceBundle();
@@ -365,4 +395,246 @@ test("nightly reconciliation retries safely and persists one digest-bound receip
     [["succeeded", 2]],
   );
   assert.doesNotMatch(JSON.stringify(jobs.rows), /runtime-only-token/u);
+});
+
+test("pausing a connector fences a worker before credential resolution or provider delivery", async () => {
+  const workspace = await createWorkspace({ name: "Paused GRC worker", ownerAddress: OWNER_A });
+  const created = await createWorkspaceGrcConnector({
+    accountAddress: OWNER_A,
+    workspaceId: workspace.workspaceId,
+    body: connectorBody(),
+    now: new Date("2026-07-14T11:00:00.000Z"),
+  });
+  const dueAt = new Date("2026-07-15T00:00:00.000Z");
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_grc_connectors SET next_reconcile_at = ? WHERE connector_id = ?",
+    args: [dueAt, created.connectorId],
+  });
+  const sourceStarted = deferred();
+  const releaseSource = deferred();
+  let credentialResolutions = 0;
+  let deliveries = 0;
+  const processing = processDueGrcReconciliations({
+    now: new Date("2026-07-15T00:05:00.000Z"),
+    source: async () => {
+      sourceStarted.resolve();
+      await releaseSource.promise;
+      return reconciliationSourceData();
+    },
+    credentialResolver: async () => {
+      credentialResolutions += 1;
+      return "retired-runtime-token";
+    },
+    adapters: {
+      vanta: {
+        provider: "vanta",
+        async deliver() {
+          deliveries += 1;
+          return { externalReference: "must-not-deliver", recordCount: 2 };
+        },
+      },
+    },
+  });
+  await sourceStarted.promise;
+  await pauseWorkspaceGrcConnector({
+    accountAddress: OWNER_A,
+    workspaceId: workspace.workspaceId,
+    connectorId: created.connectorId,
+    now: new Date("2026-07-15T00:05:01.000Z"),
+  });
+  releaseSource.resolve();
+  assert.deepEqual(await processing, { enqueued: 1, claimed: 1, succeeded: 0, retry: 0, failed: 0 });
+  assert.equal(credentialResolutions, 0);
+  assert.equal(deliveries, 0);
+  const connector = await dbClient.execute({
+    sql: `SELECT status, version, last_delivery_status, last_error_code
+          FROM tokenless_assurance_grc_connectors WHERE connector_id = ?`,
+    args: [created.connectorId],
+  });
+  assert.deepEqual(
+    [
+      connector.rows[0]?.status,
+      connector.rows[0]?.version,
+      connector.rows[0]?.last_delivery_status,
+      connector.rows[0]?.last_error_code,
+    ],
+    ["paused", 2, null, null],
+  );
+  const jobs = await dbClient.execute({
+    sql: `SELECT state, attempt_count, lease_generation, lease_expires_at
+          FROM tokenless_assurance_grc_reconciliation_jobs WHERE connector_id = ?`,
+    args: [created.connectorId],
+  });
+  assert.deepEqual(
+    jobs.rows.map(row => [row.state, row.attempt_count, row.lease_generation, row.lease_expires_at]),
+    [["superseded", 1, 1, null]],
+  );
+  const receipts = await dbClient.execute({
+    sql: "SELECT receipt_id FROM tokenless_assurance_grc_delivery_receipts WHERE connector_id = ?",
+    args: [created.connectorId],
+  });
+  assert.equal(receipts.rows.length, 0);
+});
+
+test("updating a connector fences the old version before credential resolution or provider delivery", async () => {
+  const workspace = await createWorkspace({ name: "Rotated GRC worker", ownerAddress: OWNER_A });
+  const created = await createWorkspaceGrcConnector({
+    accountAddress: OWNER_A,
+    workspaceId: workspace.workspaceId,
+    body: connectorBody(),
+    now: new Date("2026-07-14T11:00:00.000Z"),
+  });
+  const dueAt = new Date("2026-07-15T00:00:00.000Z");
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_grc_connectors SET next_reconcile_at = ? WHERE connector_id = ?",
+    args: [dueAt, created.connectorId],
+  });
+  const sourceStarted = deferred();
+  const releaseSource = deferred();
+  let credentialResolutions = 0;
+  let deliveries = 0;
+  const processing = processDueGrcReconciliations({
+    now: new Date("2026-07-15T00:05:00.000Z"),
+    source: async () => {
+      sourceStarted.resolve();
+      await releaseSource.promise;
+      return reconciliationSourceData();
+    },
+    credentialResolver: async () => {
+      credentialResolutions += 1;
+      return "retired-runtime-token";
+    },
+    adapters: {
+      vanta: {
+        provider: "vanta",
+        async deliver() {
+          deliveries += 1;
+          return { externalReference: "must-not-deliver", recordCount: 2 };
+        },
+      },
+    },
+  });
+  await sourceStarted.promise;
+  const rotatedReference = "vault://rateloop/grc/workspace-a/vanta-rotated";
+  await updateWorkspaceGrcConnector({
+    accountAddress: OWNER_A,
+    workspaceId: workspace.workspaceId,
+    connectorId: created.connectorId,
+    body: { ...connectorBody(), credentialReference: rotatedReference, displayName: "Rotated Vanta evidence" },
+    now: new Date("2026-07-15T00:05:01.000Z"),
+  });
+  releaseSource.resolve();
+  assert.deepEqual(await processing, { enqueued: 1, claimed: 1, succeeded: 0, retry: 0, failed: 0 });
+  assert.equal(credentialResolutions, 0);
+  assert.equal(deliveries, 0);
+  const connector = await dbClient.execute({
+    sql: `SELECT status, version, credential_reference, last_delivery_status, last_error_code
+          FROM tokenless_assurance_grc_connectors WHERE connector_id = ?`,
+    args: [created.connectorId],
+  });
+  assert.deepEqual(
+    [
+      connector.rows[0]?.status,
+      connector.rows[0]?.version,
+      connector.rows[0]?.credential_reference,
+      connector.rows[0]?.last_delivery_status,
+      connector.rows[0]?.last_error_code,
+    ],
+    ["enabled", 2, rotatedReference, null, null],
+  );
+  const jobs = await dbClient.execute({
+    sql: "SELECT state, attempt_count, lease_generation FROM tokenless_assurance_grc_reconciliation_jobs WHERE connector_id = ?",
+    args: [created.connectorId],
+  });
+  assert.deepEqual(
+    jobs.rows.map(row => [row.state, row.attempt_count, row.lease_generation]),
+    [["superseded", 1, 1]],
+  );
+});
+
+test("an expired GRC lease is reclaimed with a new generation that fences the stale worker", async () => {
+  const workspace = await createWorkspace({ name: "Reclaimed GRC worker", ownerAddress: OWNER_A });
+  const created = await createWorkspaceGrcConnector({
+    accountAddress: OWNER_A,
+    workspaceId: workspace.workspaceId,
+    body: connectorBody(),
+    now: new Date("2026-07-14T11:00:00.000Z"),
+  });
+  const dueAt = new Date("2026-07-15T00:00:00.000Z");
+  const firstNow = new Date("2026-07-15T00:05:00.000Z");
+  const reclaimNow = new Date("2026-07-15T00:21:00.000Z");
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_grc_connectors SET next_reconcile_at = ? WHERE connector_id = ?",
+    args: [dueAt, created.connectorId],
+  });
+  const staleSourceStarted = deferred();
+  const releaseStaleSource = deferred();
+  let staleCredentialResolutions = 0;
+  let staleDeliveries = 0;
+  const staleWorker = processDueGrcReconciliations({
+    now: firstNow,
+    source: async () => {
+      staleSourceStarted.resolve();
+      await releaseStaleSource.promise;
+      return reconciliationSourceData();
+    },
+    credentialResolver: async () => {
+      staleCredentialResolutions += 1;
+      return "stale-runtime-token";
+    },
+    adapters: {
+      vanta: {
+        provider: "vanta",
+        async deliver() {
+          staleDeliveries += 1;
+          return { externalReference: "stale-delivery", recordCount: 2 };
+        },
+      },
+    },
+  });
+  await staleSourceStarted.promise;
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_grc_reconciliation_jobs SET lease_expires_at = ? WHERE connector_id = ?",
+    args: [new Date(reclaimNow.getTime() - 1), created.connectorId],
+  });
+  let reclaimDeliveries = 0;
+  const reclaimed = await processDueGrcReconciliations({
+    now: reclaimNow,
+    source: async () => reconciliationSourceData(),
+    credentialResolver: async () => "current-runtime-token",
+    adapters: {
+      vanta: {
+        provider: "vanta",
+        async deliver() {
+          reclaimDeliveries += 1;
+          return { externalReference: "reclaimed-delivery", recordCount: 2 };
+        },
+      },
+    },
+  });
+  assert.deepEqual(reclaimed, { enqueued: 0, claimed: 1, succeeded: 1, retry: 0, failed: 0 });
+  releaseStaleSource.resolve();
+  assert.deepEqual(await staleWorker, { enqueued: 1, claimed: 1, succeeded: 0, retry: 0, failed: 0 });
+  assert.equal(staleCredentialResolutions, 0);
+  assert.equal(staleDeliveries, 0);
+  assert.equal(reclaimDeliveries, 1);
+  const jobs = await dbClient.execute({
+    sql: `SELECT state, attempt_count, lease_generation, bundle_digest, last_error_code
+          FROM tokenless_assurance_grc_reconciliation_jobs WHERE connector_id = ?`,
+    args: [created.connectorId],
+  });
+  assert.deepEqual(
+    jobs.rows.map(row => [row.state, row.attempt_count, row.lease_generation, row.last_error_code]),
+    [["succeeded", 2, 2, null]],
+  );
+  assert.match(String(jobs.rows[0]?.bundle_digest), /^sha256:[0-9a-f]{64}$/u);
+  const receipts = await dbClient.execute({
+    sql: `SELECT state, external_reference FROM tokenless_assurance_grc_delivery_receipts
+          WHERE connector_id = ?`,
+    args: [created.connectorId],
+  });
+  assert.deepEqual(
+    receipts.rows.map(row => [row.state, row.external_reference]),
+    [["delivered", "reclaimed-delivery"]],
+  );
 });

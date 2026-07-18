@@ -750,6 +750,13 @@
       "when": 1784325600000,
       "tag": "0107_chain_signed_transaction_recovery",
       "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "7",
+      "when": 1784329200000,
+      "tag": "0108_grc_reconciliation_lease_fencing",
+      "breakpoints": true
     }
   ]
 }

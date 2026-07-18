@@ -388,7 +388,7 @@ export async function updateWorkspaceGrcConnector(input: {
     const reference = settings.credentialReference ?? requiredText(current.rows[0], "credential_reference");
     referenceDigest = grcSha256(reference);
     const version = integer(current.rows[0], "version") + 1;
-    await client.query(
+    const updated = await client.query(
       `UPDATE tokenless_assurance_grc_connectors
        SET version = $1, provider = $2, display_name = $3, credential_reference = $4,
            credential_reference_digest = $5, provider_config_json = $6, control_mappings_json = $7,
@@ -410,11 +410,15 @@ export async function updateWorkspaceGrcConnector(input: {
         input.connectorId,
       ],
     );
+    if (updated.rowCount !== 1) {
+      throw new TokenlessServiceError("GRC connector not found.", 404, "grc_connector_not_found");
+    }
     await client.query(
       `UPDATE tokenless_assurance_grc_reconciliation_jobs
        SET state = 'superseded', lease_expires_at = NULL, completed_at = $1, updated_at = $1
-       WHERE workspace_id = $2 AND connector_id = $3 AND state IN ('pending', 'retry')`,
-      [now, input.workspaceId, input.connectorId],
+       WHERE workspace_id = $2 AND connector_id = $3 AND connector_version < $4
+         AND state IN ('pending', 'processing', 'retry')`,
+      [now, input.workspaceId, input.connectorId, version],
     );
     await client.query("COMMIT");
   } catch (error) {
@@ -453,8 +457,9 @@ export async function pauseWorkspaceGrcConnector(input: {
     actor = await requireWorkspaceManager(client, input.accountAddress, input.workspaceId);
     const updated = await client.query(
       `UPDATE tokenless_assurance_grc_connectors
-       SET status = 'paused', version = version + 1, updated_at = $1
-       WHERE workspace_id = $2 AND connector_id = $3 RETURNING connector_id`,
+       SET status = 'paused', version = version + 1, last_delivery_status = NULL,
+           last_error_code = NULL, updated_at = $1
+       WHERE workspace_id = $2 AND connector_id = $3 RETURNING connector_id, version`,
       [now, input.workspaceId, input.connectorId],
     );
     if (updated.rows.length !== 1) {
@@ -463,8 +468,9 @@ export async function pauseWorkspaceGrcConnector(input: {
     await client.query(
       `UPDATE tokenless_assurance_grc_reconciliation_jobs
        SET state = 'superseded', lease_expires_at = NULL, completed_at = $1, updated_at = $1
-       WHERE workspace_id = $2 AND connector_id = $3 AND state IN ('pending', 'retry')`,
-      [now, input.workspaceId, input.connectorId],
+       WHERE workspace_id = $2 AND connector_id = $3 AND connector_version < $4
+         AND state IN ('pending', 'processing', 'retry')`,
+      [now, input.workspaceId, input.connectorId, integer(updated.rows[0], "version")],
     );
     await client.query("COMMIT");
   } catch (error) {
@@ -743,12 +749,23 @@ async function enqueueDueReconciliations(now: Date, limit: number) {
        ORDER BY next_reconcile_at ASC, connector_id ASC LIMIT $2`,
       [now, limit],
     );
+    await client.query("BEGIN");
     for (const row of due.rows) {
       const windowEnd = new Date(iso(row, "next_reconcile_at"));
       const windowStart = new Date(windowEnd.getTime() - DAY_MS);
       const connectorId = requiredText(row, "connector_id");
       const workspaceId = requiredText(row, "workspace_id");
       const version = integer(row, "version");
+      const current = await client.query(
+        `SELECT provider, credential_reference, credential_reference_digest,
+                provider_config_json, control_mappings_json
+         FROM tokenless_assurance_grc_connectors
+         WHERE workspace_id = $1 AND connector_id = $2 AND version = $3
+           AND status = 'enabled' AND next_reconcile_at = $4
+         FOR UPDATE`,
+        [workspaceId, connectorId, version, windowEnd],
+      );
+      if (!current.rows[0]) continue;
       const idempotencyKey = `grc-nightly:${connectorId}:v${version}:${windowStart.toISOString()}:${windowEnd.toISOString()}`;
       const jobId = deterministicId("grcj", idempotencyKey);
       const result = await client.query(
@@ -764,11 +781,11 @@ async function enqueueDueReconciliations(now: Date, limit: number) {
           workspaceId,
           connectorId,
           version,
-          requiredText(row, "provider"),
-          requiredText(row, "credential_reference"),
-          requiredText(row, "credential_reference_digest"),
-          requiredText(row, "provider_config_json"),
-          requiredText(row, "control_mappings_json"),
+          requiredText(current.rows[0], "provider"),
+          requiredText(current.rows[0], "credential_reference"),
+          requiredText(current.rows[0], "credential_reference_digest"),
+          requiredText(current.rows[0], "provider_config_json"),
+          requiredText(current.rows[0], "control_mappings_json"),
           windowStart,
           windowEnd,
           idempotencyKey,
@@ -776,13 +793,20 @@ async function enqueueDueReconciliations(now: Date, limit: number) {
         ],
       );
       enqueued += result.rows.length;
-      await client.query(
+      const advanced = await client.query(
         `UPDATE tokenless_assurance_grc_connectors
          SET next_reconcile_at = $1, updated_at = $2
-         WHERE workspace_id = $3 AND connector_id = $4 AND next_reconcile_at = $5`,
-        [new Date(windowEnd.getTime() + DAY_MS), now, workspaceId, connectorId, windowEnd],
+         WHERE workspace_id = $3 AND connector_id = $4 AND next_reconcile_at = $5
+           AND version = $6 AND status = 'enabled'
+         RETURNING connector_id`,
+        [new Date(windowEnd.getTime() + DAY_MS), now, workspaceId, connectorId, windowEnd, version],
       );
+      if (advanced.rows.length !== 1) throw new GrcReconciliationFenceLostError();
     }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
   } finally {
     client.release();
   }
@@ -800,9 +824,13 @@ async function claimReconciliations(now: Date, limit: number) {
       [now],
     );
     const due = await client.query(
-      `SELECT * FROM tokenless_assurance_grc_reconciliation_jobs
-       WHERE state IN ('pending', 'retry') AND next_attempt_at <= $1
-       ORDER BY next_attempt_at ASC, created_at ASC LIMIT $2`,
+      `SELECT jobs.* FROM tokenless_assurance_grc_reconciliation_jobs AS jobs
+       JOIN tokenless_assurance_grc_connectors AS connectors
+         ON connectors.workspace_id = jobs.workspace_id AND connectors.connector_id = jobs.connector_id
+       WHERE jobs.state IN ('pending', 'retry') AND jobs.next_attempt_at <= $1
+         AND jobs.lease_generation < 2147483647
+         AND connectors.status = 'enabled' AND connectors.version = jobs.connector_version
+       ORDER BY jobs.next_attempt_at ASC, jobs.created_at ASC LIMIT $2`,
       [now, limit],
     );
     const claimed: Row[] = [];
@@ -810,14 +838,18 @@ async function claimReconciliations(now: Date, limit: number) {
       const result = await client.query(
         `UPDATE tokenless_assurance_grc_reconciliation_jobs
          SET state = 'processing', attempt_count = attempt_count + 1,
-             lease_expires_at = $1, updated_at = $2
+             lease_expires_at = $1, lease_generation = lease_generation + 1, updated_at = $2
          WHERE job_id = $3 AND workspace_id = $4 AND state IN ('pending', 'retry')
+           AND connector_id = $5 AND connector_version = $6
+           AND next_attempt_at <= $2 AND lease_generation < 2147483647
          RETURNING *`,
         [
           new Date(now.getTime() + RECONCILIATION_LEASE_MS),
           now,
           requiredText(row, "job_id"),
           requiredText(row, "workspace_id"),
+          requiredText(row, "connector_id"),
+          integer(row, "connector_version"),
         ],
       );
       if (result.rows[0]) claimed.push(result.rows[0]);
@@ -833,25 +865,129 @@ function retryAt(now: Date, attempt: number) {
   return new Date(now.getTime() + delay);
 }
 
+class GrcReconciliationFenceLostError extends Error {
+  constructor() {
+    super("The GRC reconciliation claim is no longer active.");
+    this.name = "GrcReconciliationFenceLostError";
+  }
+}
+
+async function lockActiveJobFence(client: Queryable, row: Row) {
+  const workspaceId = requiredText(row, "workspace_id");
+  const connectorId = requiredText(row, "connector_id");
+  const connectorVersion = integer(row, "connector_version");
+  const connector = await client.query(
+    `SELECT connector_id FROM tokenless_assurance_grc_connectors
+     WHERE workspace_id = $1 AND connector_id = $2 AND version = $3 AND status = 'enabled'
+     FOR UPDATE`,
+    [workspaceId, connectorId, connectorVersion],
+  );
+  if (connector.rows.length !== 1) throw new GrcReconciliationFenceLostError();
+  const job = await client.query(
+    `SELECT job_id FROM tokenless_assurance_grc_reconciliation_jobs
+     WHERE workspace_id = $1 AND connector_id = $2 AND job_id = $3
+       AND connector_version = $4 AND state = 'processing' AND lease_generation = $5
+     FOR UPDATE`,
+    [workspaceId, connectorId, requiredText(row, "job_id"), connectorVersion, integer(row, "lease_generation")],
+  );
+  if (job.rows.length !== 1) throw new GrcReconciliationFenceLostError();
+}
+
 async function prepareJobReceipt(row: Row, bundleDigest: string, now: Date) {
   const jobId = requiredText(row, "job_id");
   const workspaceId = requiredText(row, "workspace_id");
   const connectorId = requiredText(row, "connector_id");
   const receiptId = deterministicId("grcr", `${jobId}:assurance_evidence_bundle`);
-  const result = await dbPool.query(
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    await lockActiveJobFence(client, row);
+    const result = await client.query(
+      `INSERT INTO tokenless_assurance_grc_delivery_receipts
+       (receipt_id, workspace_id, connector_id, job_id, artifact_kind, artifact_key,
+        request_digest, idempotency_key, state, record_count, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, 'assurance_evidence_bundle', $4, $5, $6, 'preparing', 0, $7, $7)
+       ON CONFLICT (job_id, artifact_kind, artifact_key) DO UPDATE
+       SET updated_at = EXCLUDED.updated_at
+       WHERE tokenless_assurance_grc_delivery_receipts.request_digest = EXCLUDED.request_digest
+       RETURNING request_digest`,
+      [receiptId, workspaceId, connectorId, jobId, bundleDigest, requiredText(row, "idempotency_key"), now],
+    );
+    if (result.rows.length !== 1 || requiredText(result.rows[0], "request_digest") !== bundleDigest) {
+      throw new TokenlessServiceError("Stored GRC receipt digest does not match the job.", 500, "grc_receipt_mismatch");
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function persistJobSuccess(
+  client: Queryable,
+  input: {
+    row: Row;
+    now: Date;
+    bundleDigest: string;
+    externalReference: string;
+    recordCount: number;
+  },
+) {
+  const jobId = requiredText(input.row, "job_id");
+  const workspaceId = requiredText(input.row, "workspace_id");
+  const connectorId = requiredText(input.row, "connector_id");
+  const connectorVersion = integer(input.row, "connector_version");
+  const leaseGeneration = integer(input.row, "lease_generation");
+  const idempotencyKey = requiredText(input.row, "idempotency_key");
+  const receiptId = deterministicId("grcr", `${jobId}:assurance_evidence_bundle`);
+  const receipt = await client.query(
     `INSERT INTO tokenless_assurance_grc_delivery_receipts
      (receipt_id, workspace_id, connector_id, job_id, artifact_kind, artifact_key,
-      request_digest, idempotency_key, state, record_count, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, 'assurance_evidence_bundle', $4, $5, $6, 'preparing', 0, $7, $7)
+      request_digest, idempotency_key, state, external_reference, record_count,
+      created_at, updated_at, delivered_at)
+     VALUES ($1, $2, $3, $4, 'assurance_evidence_bundle', $4, $5, $6, 'delivered', $7, $8, $9, $9, $9)
      ON CONFLICT (job_id, artifact_kind, artifact_key) DO UPDATE
-     SET updated_at = EXCLUDED.updated_at
+     SET state = 'delivered', external_reference = EXCLUDED.external_reference,
+         record_count = EXCLUDED.record_count, delivered_at = EXCLUDED.delivered_at,
+         updated_at = EXCLUDED.updated_at
      WHERE tokenless_assurance_grc_delivery_receipts.request_digest = EXCLUDED.request_digest
      RETURNING request_digest`,
-    [receiptId, workspaceId, connectorId, jobId, bundleDigest, requiredText(row, "idempotency_key"), now],
+    [
+      receiptId,
+      workspaceId,
+      connectorId,
+      jobId,
+      input.bundleDigest,
+      idempotencyKey,
+      input.externalReference.slice(0, 500),
+      input.recordCount,
+      input.now,
+    ],
   );
-  if (result.rows.length !== 1 || requiredText(result.rows[0], "request_digest") !== bundleDigest) {
+  if (receipt.rows.length !== 1 || requiredText(receipt.rows[0], "request_digest") !== input.bundleDigest) {
     throw new TokenlessServiceError("Stored GRC receipt digest does not match the job.", 500, "grc_receipt_mismatch");
   }
+  const job = await client.query(
+    `UPDATE tokenless_assurance_grc_reconciliation_jobs
+     SET state = 'succeeded', lease_expires_at = NULL, bundle_digest = $1,
+         last_error_code = NULL, completed_at = $2, updated_at = $2
+     WHERE job_id = $3 AND workspace_id = $4 AND connector_id = $5
+       AND connector_version = $6 AND state = 'processing' AND lease_generation = $7
+     RETURNING job_id`,
+    [input.bundleDigest, input.now, jobId, workspaceId, connectorId, connectorVersion, leaseGeneration],
+  );
+  if (job.rows.length !== 1) throw new GrcReconciliationFenceLostError();
+  const connector = await client.query(
+    `UPDATE tokenless_assurance_grc_connectors
+     SET last_reconciled_at = $1, last_delivery_status = 'succeeded',
+         last_error_code = NULL, updated_at = $1
+     WHERE workspace_id = $2 AND connector_id = $3 AND version = $4 AND status = 'enabled'
+     RETURNING connector_id`,
+    [input.now, workspaceId, connectorId, connectorVersion],
+  );
+  if (connector.rows.length !== 1) throw new GrcReconciliationFenceLostError();
 }
 
 async function markJobSucceeded(input: {
@@ -864,52 +1000,8 @@ async function markJobSucceeded(input: {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
-    const jobId = requiredText(input.row, "job_id");
-    const workspaceId = requiredText(input.row, "workspace_id");
-    const connectorId = requiredText(input.row, "connector_id");
-    const idempotencyKey = requiredText(input.row, "idempotency_key");
-    const receiptId = deterministicId("grcr", `${jobId}:assurance_evidence_bundle`);
-    const receipt = await client.query(
-      `INSERT INTO tokenless_assurance_grc_delivery_receipts
-       (receipt_id, workspace_id, connector_id, job_id, artifact_kind, artifact_key,
-        request_digest, idempotency_key, state, external_reference, record_count,
-        created_at, updated_at, delivered_at)
-       VALUES ($1, $2, $3, $4, 'assurance_evidence_bundle', $4, $5, $6, 'delivered', $7, $8, $9, $9, $9)
-       ON CONFLICT (job_id, artifact_kind, artifact_key) DO UPDATE
-       SET state = 'delivered', external_reference = EXCLUDED.external_reference,
-           record_count = EXCLUDED.record_count, delivered_at = EXCLUDED.delivered_at,
-           updated_at = EXCLUDED.updated_at
-       WHERE tokenless_assurance_grc_delivery_receipts.request_digest = EXCLUDED.request_digest
-       RETURNING request_digest`,
-      [
-        receiptId,
-        workspaceId,
-        connectorId,
-        jobId,
-        input.bundleDigest,
-        idempotencyKey,
-        input.externalReference.slice(0, 500),
-        input.recordCount,
-        input.now,
-      ],
-    );
-    if (receipt.rows.length !== 1 || requiredText(receipt.rows[0], "request_digest") !== input.bundleDigest) {
-      throw new TokenlessServiceError("Stored GRC receipt digest does not match the job.", 500, "grc_receipt_mismatch");
-    }
-    await client.query(
-      `UPDATE tokenless_assurance_grc_reconciliation_jobs
-       SET state = 'succeeded', lease_expires_at = NULL, bundle_digest = $1,
-           last_error_code = NULL, completed_at = $2, updated_at = $2
-       WHERE job_id = $3 AND workspace_id = $4 AND state = 'processing'`,
-      [input.bundleDigest, input.now, jobId, workspaceId],
-    );
-    await client.query(
-      `UPDATE tokenless_assurance_grc_connectors
-       SET last_reconciled_at = $1, last_delivery_status = 'succeeded',
-           last_error_code = NULL, updated_at = $1
-       WHERE workspace_id = $2 AND connector_id = $3`,
-      [input.now, workspaceId, connectorId],
-    );
+    await lockActiveJobFence(client, input.row);
+    await persistJobSuccess(client, input);
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
@@ -919,7 +1011,71 @@ async function markJobSucceeded(input: {
   }
 }
 
-async function markJobFailed(row: Row, error: unknown, now: Date) {
+async function deliverAndMarkJobSucceeded(input: {
+  row: Row;
+  now: Date;
+  bundle: GrcEvidenceBundle;
+  provider: GrcProvider;
+  credentialReference: string;
+  credentialReferenceDigest: string;
+  credentialResolver: GrcCredentialResolver;
+  providerConfig: DrataProviderConfig | VantaProviderConfig;
+  adapter: GrcProviderAdapter;
+}) {
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    // Keep both fences locked through secret resolution and provider I/O. A
+    // pause or rotation can therefore return only before this claim starts the
+    // delivery or after its idempotent success has been recorded.
+    await lockActiveJobFence(client, input.row);
+    const credential = await input.credentialResolver({
+      workspaceId: requiredText(input.row, "workspace_id"),
+      connectorId: requiredText(input.row, "connector_id"),
+      provider: input.provider,
+      credentialReference: input.credentialReference,
+      credentialReferenceDigest: input.credentialReferenceDigest,
+    });
+    if (!credential.trim()) {
+      throw new TokenlessServiceError(
+        "The GRC credential resolver returned no credential.",
+        503,
+        "grc_credential_unavailable",
+        true,
+      );
+    }
+    const delivery = await input.adapter.deliver({
+      bundle: input.bundle,
+      credential,
+      idempotencyKey: requiredText(input.row, "idempotency_key"),
+      providerConfig: input.providerConfig,
+    });
+    const expectedRecordCount = input.bundle.coverageTests.length + input.bundle.documentEvidence.length;
+    if (
+      typeof delivery.externalReference !== "string" ||
+      delivery.externalReference.trim().length < 1 ||
+      delivery.externalReference.length > 500 ||
+      delivery.recordCount !== expectedRecordCount
+    ) {
+      throw new TokenlessServiceError("The GRC provider returned an invalid receipt.", 502, "grc_receipt_invalid");
+    }
+    await persistJobSuccess(client, {
+      row: input.row,
+      now: input.now,
+      bundleDigest: input.bundle.bundleDigest,
+      externalReference: delivery.externalReference,
+      recordCount: delivery.recordCount,
+    });
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function markJobFailed(row: Row, error: unknown, now: Date): Promise<"retry" | "failed" | null> {
   const serviceError = error instanceof TokenlessServiceError ? error : null;
   const attempt = integer(row, "attempt_count");
   const retry = Boolean(serviceError?.retryable) && attempt < MAX_RECONCILIATION_ATTEMPTS;
@@ -928,11 +1084,27 @@ async function markJobFailed(row: Row, error: unknown, now: Date) {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
-    await client.query(
+    const workspaceId = requiredText(row, "workspace_id");
+    const connectorId = requiredText(row, "connector_id");
+    const connectorVersion = integer(row, "connector_version");
+    const leaseGeneration = integer(row, "lease_generation");
+    const connectorFence = await client.query(
+      `SELECT connector_id FROM tokenless_assurance_grc_connectors
+       WHERE workspace_id = $1 AND connector_id = $2 AND version = $3 AND status = 'enabled'
+       FOR UPDATE`,
+      [workspaceId, connectorId, connectorVersion],
+    );
+    if (connectorFence.rows.length !== 1) {
+      await client.query("COMMIT");
+      return null;
+    }
+    const job = await client.query(
       `UPDATE tokenless_assurance_grc_reconciliation_jobs
        SET state = $1, lease_expires_at = NULL, next_attempt_at = $2,
            last_error_code = $3, completed_at = $4, updated_at = $5
-       WHERE job_id = $6 AND workspace_id = $7 AND state = 'processing'`,
+       WHERE job_id = $6 AND workspace_id = $7 AND connector_id = $8
+         AND connector_version = $9 AND state = 'processing' AND lease_generation = $10
+       RETURNING job_id`,
       [
         state,
         retry ? retryAt(now, attempt) : now,
@@ -940,15 +1112,24 @@ async function markJobFailed(row: Row, error: unknown, now: Date) {
         retry ? null : now,
         now,
         requiredText(row, "job_id"),
-        requiredText(row, "workspace_id"),
+        workspaceId,
+        connectorId,
+        connectorVersion,
+        leaseGeneration,
       ],
     );
-    await client.query(
+    if (job.rows.length !== 1) {
+      await client.query("COMMIT");
+      return null;
+    }
+    const connector = await client.query(
       `UPDATE tokenless_assurance_grc_connectors
        SET last_delivery_status = $1, last_error_code = $2, updated_at = $3
-       WHERE workspace_id = $4 AND connector_id = $5`,
-      [retry ? "retry" : "failed", code, now, requiredText(row, "workspace_id"), requiredText(row, "connector_id")],
+       WHERE workspace_id = $4 AND connector_id = $5 AND version = $6 AND status = 'enabled'
+       RETURNING connector_id`,
+      [retry ? "retry" : "failed", code, now, workspaceId, connectorId, connectorVersion],
     );
+    if (connector.rows.length !== 1) throw new GrcReconciliationFenceLostError();
     await client.query("COMMIT");
   } catch (updateError) {
     await client.query("ROLLBACK");
@@ -1032,21 +1213,6 @@ export async function processDueGrcReconciliations(input: {
         continue;
       }
       await prepareJobReceipt(row, bundle.bundleDigest, now);
-      const credential = await credentialResolver({
-        workspaceId,
-        connectorId,
-        provider: parsedProvider,
-        credentialReference: reference,
-        credentialReferenceDigest: referenceDigest,
-      });
-      if (!credential.trim()) {
-        throw new TokenlessServiceError(
-          "The GRC credential resolver returned no credential.",
-          503,
-          "grc_credential_unavailable",
-          true,
-        );
-      }
       const adapter = adapters[parsedProvider];
       if (!adapter || adapter.provider !== parsedProvider) {
         throw new TokenlessServiceError(
@@ -1056,32 +1222,21 @@ export async function processDueGrcReconciliations(input: {
           true,
         );
       }
-      const delivery = await adapter.deliver({
-        bundle,
-        credential,
-        idempotencyKey: requiredText(row, "idempotency_key"),
-        providerConfig,
-      });
-      const expectedRecordCount = bundle.coverageTests.length + bundle.documentEvidence.length;
-      if (
-        typeof delivery.externalReference !== "string" ||
-        delivery.externalReference.trim().length < 1 ||
-        delivery.externalReference.length > 500 ||
-        delivery.recordCount !== expectedRecordCount
-      ) {
-        throw new TokenlessServiceError("The GRC provider returned an invalid receipt.", 502, "grc_receipt_invalid");
-      }
-      await markJobSucceeded({
+      await deliverAndMarkJobSucceeded({
         row,
         now,
-        bundleDigest: bundle.bundleDigest,
-        externalReference: delivery.externalReference,
-        recordCount: delivery.recordCount,
+        bundle,
+        provider: parsedProvider,
+        credentialReference: reference,
+        credentialReferenceDigest: referenceDigest,
+        credentialResolver,
+        providerConfig,
+        adapter,
       });
       summary.succeeded += 1;
     } catch (error) {
       const state = await markJobFailed(row, error, now);
-      summary[state] += 1;
+      if (state !== null) summary[state] += 1;
     }
   }
   return summary;
