@@ -11,6 +11,10 @@ import test from "node:test";
 
 const address = index => `0x${index.toString(16).padStart(40, "0")}`;
 const encodedKey = index => Buffer.alloc(32, index).toString("base64url");
+const tokenlessGoldKeyring = (index = 16) => ({
+  TOKENLESS_GOLD_INJECTION_KEY_VERSION: "v1",
+  TOKENLESS_GOLD_INJECTION_KEYS: JSON.stringify({ v1: encodedKey(index) }),
+});
 
 function validFixture() {
   const panel = address(1);
@@ -171,6 +175,7 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
     TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
+    ...tokenlessGoldKeyring(),
   };
   assert.deepEqual(validateTokenlessProductionReadiness({ env, activeRegistry: {} }), []);
   const cliDeploymentEnv = { ...env };
@@ -208,6 +213,7 @@ test("the tokenless test deployment still rejects browser-exposed secrets", () =
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
     TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
+    ...tokenlessGoldKeyring(),
     NEXT_PUBLIC_TOKENLESS_PIPELINE_TOKEN: "must-not-ship",
     NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEY_VERSION: "must-not-ship-version",
     NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEYS: "must-not-ship-keys",
@@ -229,6 +235,7 @@ test("the tokenless test deployment requires a dedicated server-only media previ
     APP_URL: "https://rateloop-tokenless.vercel.app",
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
+    ...tokenlessGoldKeyring(),
   };
   assert.match(
     validateTokenlessProductionReadiness({ env: base, activeRegistry: {} }).join("\n"),
@@ -281,6 +288,49 @@ test("the tokenless test deployment requires a dedicated server-only media previ
   assert.doesNotMatch(exposed, /do-not-print-preview-secret/u);
 });
 
+test("the tokenless test deployment validates the active gold-injection keyring and role separation", () => {
+  const base = {
+    VERCEL: "1",
+    VERCEL_ENV: "production",
+    VERCEL_PROJECT_ID: "prj_H6C2pfWKEAupFroHbLfzhquaNCLm",
+    VERCEL_PROJECT_NAME: "rateloop-tokenless",
+    VERCEL_GIT_COMMIT_REF: "tokenless",
+    APP_URL: "https://rateloop-tokenless.vercel.app",
+    NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
+    TOKENLESS_NETWORK_PANELS_ENABLED: "false",
+    TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
+  };
+  const missing = validateTokenlessProductionReadiness({ env: base, activeRegistry: {} }).join("\n");
+  assert.match(missing, /TOKENLESS_GOLD_INJECTION_KEY_VERSION is required/u);
+  assert.match(missing, /TOKENLESS_GOLD_INJECTION_KEYS is required/u);
+
+  assert.deepEqual(
+    validateTokenlessProductionReadiness({ env: { ...base, ...tokenlessGoldKeyring() }, activeRegistry: {} }),
+    [],
+  );
+  assert.match(
+    validateTokenlessProductionReadiness({
+      env: {
+        ...base,
+        TOKENLESS_GOLD_INJECTION_KEY_VERSION: "v2",
+        TOKENLESS_GOLD_INJECTION_KEYS: JSON.stringify({ v1: encodedKey(16) }),
+      },
+      activeRegistry: {},
+    }).join("\n"),
+    /must contain the configured 32-byte current key/u,
+  );
+  assert.match(
+    validateTokenlessProductionReadiness({
+      env: {
+        ...base,
+        ...tokenlessGoldKeyring(18),
+      },
+      activeRegistry: {},
+    }).join("\n"),
+    /Tokenless test key roles must be distinct: TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET, TOKENLESS_GOLD_INJECTION/u,
+  );
+});
+
 test("test and production deployments refuse server-held Feedback Bonus award authority", () => {
   const testEnv = {
     VERCEL: "1",
@@ -291,6 +341,7 @@ test("test and production deployments refuse server-held Feedback Bonus award au
     APP_URL: "https://rateloop-tokenless.vercel.app",
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
+    ...tokenlessGoldKeyring(),
     TOKENLESS_FEEDBACK_BONUS_AWARDER_PRIVATE_KEY: "server-must-not-custody-human-awarder",
     NEXT_PUBLIC_TOKENLESS_FEEDBACK_BONUS_AWARD_WORKER_PRIVATE_KEY: "browser-must-not-see-worker-secret",
   };

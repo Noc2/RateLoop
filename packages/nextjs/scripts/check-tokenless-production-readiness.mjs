@@ -292,8 +292,18 @@ function validateTokenlessTestDeployment(env) {
   } else if (!previewSecret) {
     errors.push("TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET must encode exactly 32 bytes.");
   }
-  const previewRoles = new Map();
-  addSecretRole(previewRoles, "TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET", previewSecret);
+  const testSecretRoles = new Map();
+  addSecretRole(testSecretRoles, "TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET", previewSecret);
+  const goldVersion = value(env, "TOKENLESS_GOLD_INJECTION_KEY_VERSION");
+  const goldKeys = value(env, "TOKENLESS_GOLD_INJECTION_KEYS");
+  if (!goldVersion) {
+    errors.push("TOKENLESS_GOLD_INJECTION_KEY_VERSION is required for the tokenless test deployment.");
+  }
+  if (!goldKeys) {
+    errors.push("TOKENLESS_GOLD_INJECTION_KEYS is required for the tokenless test deployment.");
+  }
+  const goldKey = goldVersion && goldKeys ? currentKey(env, "TOKENLESS_GOLD_INJECTION", "base64url", errors) : null;
+  addSecretRole(testSecretRoles, "TOKENLESS_GOLD_INJECTION", goldKey);
   for (const name of [
     "TOKENLESS_MCP_RATE_LIMIT_SECRET",
     "TOKENLESS_PIPELINE_TOKEN",
@@ -301,7 +311,7 @@ function validateTokenlessTestDeployment(env) {
     "TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET",
     "BETTER_AUTH_SECRET",
   ]) {
-    if (value(env, name)) addSecretRole(previewRoles, name, Buffer.from(value(env, name), "utf8"));
+    if (value(env, name)) addSecretRole(testSecretRoles, name, Buffer.from(value(env, name), "utf8"));
   }
   for (const name of [
     "TOKENLESS_PSEUDONYM_KEY",
@@ -310,7 +320,7 @@ function validateTokenlessTestDeployment(env) {
     "TOKENLESS_WEBHOOK_ENCRYPTION_KEY",
     "TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY",
   ]) {
-    addSecretRole(previewRoles, name, decode32(value(env, name), "base64url"));
+    addSecretRole(testSecretRoles, name, decode32(value(env, name), "base64url"));
   }
   for (const name of [
     "TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY",
@@ -320,9 +330,9 @@ function validateTokenlessTestDeployment(env) {
     "WORLD_ID_RP_SIGNING_KEY",
   ]) {
     const raw = value(env, name).replace(/^0x/u, "");
-    if (/^[0-9a-fA-F]{64}$/u.test(raw)) addSecretRole(previewRoles, name, Buffer.from(raw, "hex"));
+    if (/^[0-9a-fA-F]{64}$/u.test(raw)) addSecretRole(testSecretRoles, name, Buffer.from(raw, "hex"));
   }
-  for (const names of previewRoles.values()) {
+  for (const names of testSecretRoles.values()) {
     if (names.length > 1) errors.push(`Tokenless test key roles must be distinct: ${names.join(", ")}.`);
   }
   return errors;
