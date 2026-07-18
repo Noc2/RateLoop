@@ -12,10 +12,11 @@ The worker scans the immutable `TokenlessPanel` directly and performs only:
 - permissionless payout/compensation claims when the public ciphertext yields the committed destination material;
 - stale unclaimed-share return after the claim deadline.
 
-Round scans start at the newest on-chain ID after a restart and rotate backward through history. Never-seen new IDs
-use the leading scan capacity they need; the remaining capacity continues the non-overlapping historical sweep.
-Terminal rounds outside their claim window do not trigger historical commit-log reads. This keeps deadline-sensitive
-work discoverable without starving older IDs as immutable history grows.
+Round scans start at the newest on-chain ID after a restart and rotate backward through history. New arrivals can use
+at most half of a multi-round tick; the rest continues the non-overlapping historical sweep. A one-round tick
+alternates tip and history when both lanes have work. Terminal rounds outside their claim window do not trigger
+historical commit-log reads. This keeps deadline-sensitive work discoverable without letting sustained round creation
+starve older IDs.
 
 There are no frontend-fee, governance, oracle, correlation-root, reward-pool, feedback-bonus, advisory-vote, content-dormancy, or registry jobs.
 

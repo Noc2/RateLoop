@@ -10,6 +10,7 @@ import type { config as runtimeConfig } from "./config.js";
 import { resolveTlockClientForDrandChain } from "./drand.js";
 import { isExpectedPanelRaceError } from "./expected-panel-race.js";
 import type { Logger } from "./logger.js";
+import { resetRoundScanStateForTests, scanRoundIds } from "./round-scan.js";
 import {
   decodeTokenlessRevealPayload,
   tokenlessPayoutCommitment,
@@ -66,8 +67,6 @@ export type RevealDecryptor = (params: {
 
 const revealMaterialCache = new Map<string, TokenlessRevealMaterial>();
 const permanentlyInvalidRevealCommits = new Set<string>();
-let nextHistoricalRoundId = 0n;
-let highestNewRoundIdProcessed = 0n;
 let nextScanFeedbackBonusPoolId = 1n;
 
 class InvalidRevealMaterialError extends Error {
@@ -80,8 +79,7 @@ class InvalidRevealMaterialError extends Error {
 export function resetTokenlessKeeperStateForTests() {
   revealMaterialCache.clear();
   permanentlyInvalidRevealCommits.clear();
-  nextHistoricalRoundId = 0n;
-  highestNewRoundIdProcessed = 0n;
+  resetRoundScanStateForTests();
   nextScanFeedbackBonusPoolId = 1n;
 }
 
@@ -608,45 +606,6 @@ async function advanceRound(params: {
     );
     if (returned) params.result.staleReturnsExecuted += 1;
   }
-}
-
-function scanRoundIds(nextRoundId: bigint, maxRounds: number) {
-  const total = nextRoundId - 1n;
-  if (total <= 0n) return [];
-  const count = Math.min(maxRounds, Number(total));
-  const ids: bigint[] = [];
-  const selected = new Set<bigint>();
-
-  // On restart, inspect the tip immediately, then continue backward through older history.
-  // Thereafter, reserve only the capacity needed for never-seen new IDs; the remaining budget
-  // advances the historical cursor without resetting or overlapping the prior sweep.
-  if (highestNewRoundIdProcessed === 0n) {
-    ids.push(total);
-    selected.add(total);
-    highestNewRoundIdProcessed = total;
-    nextHistoricalRoundId = total === 1n ? 1n : total - 1n;
-  } else {
-    while (highestNewRoundIdProcessed < total && ids.length < count) {
-      highestNewRoundIdProcessed += 1n;
-      ids.push(highestNewRoundIdProcessed);
-      selected.add(highestNewRoundIdProcessed);
-    }
-  }
-
-  if (nextHistoricalRoundId === 0n || nextHistoricalRoundId > total) {
-    nextHistoricalRoundId = total;
-  }
-  let historicalCandidatesChecked = 0n;
-  while (ids.length < count && historicalCandidatesChecked < total) {
-    const candidate = nextHistoricalRoundId;
-    nextHistoricalRoundId = candidate === 1n ? total : candidate - 1n;
-    historicalCandidatesChecked += 1n;
-    if (!selected.has(candidate)) {
-      ids.push(candidate);
-      selected.add(candidate);
-    }
-  }
-  return ids;
 }
 
 function scanFeedbackBonusPoolIds(nextPoolId: bigint, maxPools: number) {
