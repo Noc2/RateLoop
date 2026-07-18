@@ -4,6 +4,12 @@ import { parseAbi } from "viem";
 // @rateloop/contracts/tokenless. Keep this limited to permissionless keeper calls.
 // The getRound tuple must remain byte-for-byte aligned with TokenlessPanel.Round.
 export const TokenlessPanelAbi = parseAbi([
+  "error AlreadyClaimed()",
+  "error ClaimWindowOpen()",
+  "error CursorMismatch()",
+  "error InvalidDeadline()",
+  "error InvalidState()",
+  "error NotClaimable()",
   "event CommitAccepted(uint256 indexed roundId,bytes32 indexed commitKey,bytes32 indexed nullifier,bytes sealedPayload)",
   "function nextRoundId() view returns (uint256)",
   "function usdc() view returns (address)",

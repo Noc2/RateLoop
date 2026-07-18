@@ -8,6 +8,7 @@ import {
 } from "viem";
 import type { config as runtimeConfig } from "./config.js";
 import { resolveTlockClientForDrandChain } from "./drand.js";
+import { isExpectedPanelRaceError } from "./expected-panel-race.js";
 import type { Logger } from "./logger.js";
 import {
   decodeTokenlessRevealPayload,
@@ -226,13 +227,6 @@ async function writeAndConfirm(
   });
 }
 
-function isExpectedRace(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error);
-  return /InvalidState|InvalidDeadline|CursorMismatch|AlreadyClaimed|NotClaimable|ClaimWindowOpen/iu.test(
-    message,
-  );
-}
-
 async function permissionlessWrite(
   clients: TokenlessKeeperClients,
   panel: Address,
@@ -244,7 +238,7 @@ async function permissionlessWrite(
     await writeAndConfirm(clients, panel, functionName, args);
     return true;
   } catch (error) {
-    if (isExpectedRace(error)) {
+    if (isExpectedPanelRaceError(error)) {
       logger.debug("Permissionless keeper call lost an on-chain race", {
         functionName,
         error: error instanceof Error ? error.message : String(error),
