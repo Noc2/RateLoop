@@ -1,8 +1,51 @@
 import React from "react";
+import type { AssignmentTask } from "./HumanAssuranceRaterClient";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
+
+const PRINCIPAL_A = "rlp_private_reviewer_a";
+const PRINCIPAL_B = "rlp_private_reviewer_b";
+
+const privateTask: AssignmentTask = {
+  assignmentId: "haas_private_session_guard",
+  runId: "har_private_session_guard",
+  source: "customer_invited",
+  runManifestHash: `sha256:${"1".repeat(64)}`,
+  policyHash: `sha256:${"2".repeat(64)}`,
+  qualificationProvenance: [],
+  rubric: {
+    prompt: "Which answer is safer?",
+    failureTags: [{ key: "unsafe", label: "Unsafe" }],
+    rationale: { mode: "required", minLength: 10, maxLength: 2_000 },
+  },
+  cases: [
+    {
+      caseId: "hacase_private_session_guard",
+      position: 0,
+      title: "Private session guard content",
+      instructions: "Compare the private artifacts.",
+      options: [
+        { key: "A", artifactId: "haa_private_a", leaseId: "lease_private_a", expiresAt: "2030-01-01T00:00:00.000Z" },
+        { key: "B", artifactId: "haa_private_b", leaseId: "lease_private_b", expiresAt: "2030-01-01T00:00:00.000Z" },
+      ],
+      context: [],
+      objectiveReference: null,
+    },
+  ],
+};
+
+function authenticatedSession(principalId: string) {
+  return {
+    authenticated: true,
+    principalId,
+    authProvider: "email_otp",
+    displayName: null,
+    expiresAt: "2030-01-01T00:00:00.000Z",
+    wallets: { funding: null, payout: null, recovery: null },
+  };
+}
 
 test("private-review credentials stay behind a manual fallback", async () => {
   const restoreDom = installTestDom();
@@ -30,4 +73,147 @@ test("private-review links carry both invitation credentials", () => {
   assert.match(page, /initialTermsHash=\{params\.terms\}/);
   assert.match(card, /assignment=\$\{encodeURIComponent\(assignment\.assignmentId\)\}/);
   assert.match(card, /terms=\$\{encodeURIComponent\(assignment\.confidentialityTermsHash \?\? ""\)\}/);
+});
+
+test("an initially signed-out visitor without loaded private content is not treated as a session loss", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
+  const previousFetch = globalThis.fetch;
+  let sessionReads = 0;
+  globalThis.fetch = async input => {
+    assert.equal(String(input), "/api/auth/session");
+    sessionReads += 1;
+    return Response.json({ authenticated: false });
+  };
+
+  try {
+    const view = render(<HumanAssuranceRaterClient />);
+    await waitFor(() => assert.equal(sessionReads, 1));
+    assert.ok(view.getByRole("heading", { name: "Open your assigned review" }));
+    assert.equal(view.queryByRole("alert"), null);
+  } finally {
+    cleanup();
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
+test("a principal switch clears rendered private review content and requires reopening", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, render, waitFor } = await import("@testing-library/react");
+  const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
+  const previousFetch = globalThis.fetch;
+  let sessionPrincipal = PRINCIPAL_A;
+  let sessionReads = 0;
+  globalThis.fetch = async input => {
+    assert.equal(String(input), "/api/auth/session");
+    sessionReads += 1;
+    return Response.json(authenticatedSession(sessionPrincipal));
+  };
+
+  try {
+    const view = render(<HumanAssuranceRaterClient principalId={PRINCIPAL_A} initialTask={privateTask} />);
+    assert.ok(view.getByText("Private session guard content"));
+    await waitFor(() => assert.equal(sessionReads, 1));
+
+    sessionPrincipal = PRINCIPAL_B;
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+
+    await waitFor(() => assert.equal(view.queryByText("Private session guard content"), null));
+    assert.ok(view.getByRole("heading", { name: "Open your assigned review" }));
+    assert.ok(view.getByRole("alert").textContent?.includes("session changed"));
+  } finally {
+    cleanup();
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
+test("sign-out clears rendered private review content and acceptance state", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, render, waitFor } = await import("@testing-library/react");
+  const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
+  const previousFetch = globalThis.fetch;
+  let signedIn = true;
+  let sessionReads = 0;
+  globalThis.fetch = async input => {
+    assert.equal(String(input), "/api/auth/session");
+    sessionReads += 1;
+    return Response.json(signedIn ? authenticatedSession(PRINCIPAL_A) : { authenticated: false });
+  };
+
+  try {
+    const view = render(
+      <HumanAssuranceRaterClient
+        principalId={PRINCIPAL_A}
+        initialTask={privateTask}
+        initialServerAcceptance={{
+          accepted: true,
+          replay: false,
+          responseCount: 1,
+          compensation: "unpaid",
+          settlementStatus: "not_applicable",
+        }}
+      />,
+    );
+    await waitFor(() => assert.equal(sessionReads, 1));
+    assert.ok(view.getByText("Private session guard content"));
+    assert.ok(view.getByRole("status").textContent?.includes("server accepted"));
+
+    signedIn = false;
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+
+    await waitFor(() => assert.ok(view.getByRole("alert").textContent?.includes("signed out")));
+    assert.equal((view.getByRole("checkbox") as HTMLInputElement).checked, false);
+    assert.equal(view.queryByText("Private session guard content"), null);
+    assert.equal(view.queryByRole("status"), null);
+  } finally {
+    cleanup();
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
+test("a transient session read failure retains private content and in-memory drafts", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, render, waitFor } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
+  const previousFetch = globalThis.fetch;
+  let sessionReadFails = false;
+  let sessionReads = 0;
+  globalThis.fetch = async input => {
+    assert.equal(String(input), "/api/auth/session");
+    sessionReads += 1;
+    if (sessionReadFails) throw new Error("temporary network failure");
+    return Response.json(authenticatedSession(PRINCIPAL_A));
+  };
+
+  try {
+    const view = render(<HumanAssuranceRaterClient principalId={PRINCIPAL_A} initialTask={privateTask} />);
+    await waitFor(() => assert.equal(sessionReads, 1));
+    const user = userEvent.setup({ document });
+    await user.click(view.getByRole("radio", { name: /Candidate A/u }));
+    const rationale = view.getByRole("textbox", { name: "Decision rationale" });
+    await user.type(rationale, "Retain this private draft.");
+
+    sessionReadFails = true;
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+
+    await waitFor(() => assert.ok(view.getByRole("alert").textContent?.includes("Refocus this tab to retry")));
+    assert.ok(view.getByText("Private session guard content"));
+    assert.equal((view.getByRole("radio", { name: /Candidate A/u }) as HTMLInputElement).checked, true);
+    assert.equal((rationale as HTMLTextAreaElement).value, "Retain this private draft.");
+  } finally {
+    cleanup();
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
 });

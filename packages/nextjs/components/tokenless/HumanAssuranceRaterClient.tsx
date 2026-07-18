@@ -154,13 +154,58 @@ export function HumanAssuranceRaterClient({
   const [activeCaseIndex, setActiveCaseIndex] = useState(0);
   const [restoredDraftKey, setRestoredDraftKey] = useState<string | null>(null);
   const [activePrincipalId, setActivePrincipalId] = useState(principalId);
+  const [sessionCheckError, setSessionCheckError] = useState<string | null>(null);
   const rationaleRef = useRef<HTMLTextAreaElement>(null);
+  const activePrincipalRef = useRef(principalId);
+  const taskRef = useRef(task);
+  const privateStateEpochRef = useRef(0);
+
+  useEffect(() => {
+    taskRef.current = task;
+  }, [task]);
 
   useEffect(() => {
     let active = true;
+    let sessionReadSequence = 0;
     const refreshPrincipal = async () => {
-      const session = await readBrowserSession().catch(() => null);
-      if (active) setActivePrincipalId(session?.principalId ?? null);
+      const currentRead = ++sessionReadSequence;
+      try {
+        const session = await readBrowserSession();
+        if (!active || currentRead !== sessionReadSequence) return;
+        const previousPrincipalId = activePrincipalRef.current;
+        const nextPrincipalId = session?.principalId ?? null;
+        const principalChanged = previousPrincipalId !== null && previousPrincipalId !== nextPrincipalId;
+        const privateStateMustClose = principalChanged || (nextPrincipalId === null && taskRef.current !== null);
+        activePrincipalRef.current = nextPrincipalId;
+        setActivePrincipalId(nextPrincipalId);
+        setSessionCheckError(null);
+        if (privateStateMustClose) {
+          const loadedTask = taskRef.current;
+          if (loadedTask && previousPrincipalId) {
+            clearReviewDraft("private", loadedTask.assignmentId, { principalId: previousPrincipalId });
+          }
+          privateStateEpochRef.current += 1;
+          taskRef.current = null;
+          setTask(null);
+          setDrafts({});
+          setRestoredDraftKey(null);
+          setActiveCaseIndex(0);
+          setServerAcceptance(null);
+          setCanRecover(false);
+          setBusyAction(null);
+          setConfidentialityAccepted(false);
+          setError(null);
+          setSessionCheckError(
+            nextPrincipalId === null
+              ? "You signed out. Sign in and reopen this assignment."
+              : "Your session changed. Reopen this assignment to continue.",
+          );
+        }
+      } catch {
+        if (active && currentRead === sessionReadSequence) {
+          setSessionCheckError("Could not verify your session. Refocus this tab to retry.");
+        }
+      }
     };
     void refreshPrincipal();
     window.addEventListener("focus", refreshPrincipal);
@@ -222,6 +267,7 @@ export function HumanAssuranceRaterClient({
   }, [drafts, privateDraftKey, privateDraftStorage, restoredDraftKey, serverAcceptance, task]);
 
   async function loadAssignment(id: string) {
+    const privateStateEpoch = privateStateEpochRef.current;
     const body = await readJson(
       await fetch(`/api/account/assurance/assignments/${encodeURIComponent(id)}/task`, {
         cache: "no-store",
@@ -229,7 +275,9 @@ export function HumanAssuranceRaterClient({
       }),
       PRIVATE_REVIEW_JSON_OPTIONS,
     );
+    if (privateStateEpoch !== privateStateEpochRef.current) return;
     const nextTask = body as AssignmentTask;
+    taskRef.current = nextTask;
     setTask(nextTask);
     setDrafts(emptyDrafts(nextTask.cases));
     setActiveCaseIndex(0);
@@ -240,6 +288,7 @@ export function HumanAssuranceRaterClient({
   async function openAssignment(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     const id = assignmentId.trim();
+    const privateStateEpoch = privateStateEpochRef.current;
     setBusyAction("assignment");
     setError(null);
     setCanRecover(false);
@@ -253,8 +302,10 @@ export function HumanAssuranceRaterClient({
         }),
         PRIVATE_REVIEW_JSON_OPTIONS,
       );
+      if (privateStateEpoch !== privateStateEpochRef.current) return;
       await loadAssignment(id);
     } catch (cause) {
+      if (privateStateEpoch !== privateStateEpochRef.current) return;
       const recoverable =
         cause instanceof HttpJsonError &&
         (cause.code === "assignment_expired" || cause.code === "artifact_lease_expired" || cause.status === 410);
@@ -262,12 +313,13 @@ export function HumanAssuranceRaterClient({
       setCanRecover(recoverable);
       setError(cause instanceof Error ? cause.message : "Unable to open this assignment.");
     } finally {
-      setBusyAction(null);
+      if (privateStateEpoch === privateStateEpochRef.current) setBusyAction(null);
     }
   }
 
   async function recoverAssignment() {
     const id = assignmentId.trim();
+    const privateStateEpoch = privateStateEpochRef.current;
     setBusyAction("recovery");
     setError(null);
     try {
@@ -280,16 +332,18 @@ export function HumanAssuranceRaterClient({
         }),
         PRIVATE_REVIEW_JSON_OPTIONS,
       );
+      if (privateStateEpoch !== privateStateEpochRef.current) return;
       setCanRecover(false);
       await openAssignment();
     } catch (cause) {
+      if (privateStateEpoch !== privateStateEpochRef.current) return;
       setError(
         cause instanceof Error
           ? cause.message
           : "This assignment can no longer be recovered. Ask the customer for a new private assignment.",
       );
     } finally {
-      setBusyAction(null);
+      if (privateStateEpoch === privateStateEpochRef.current) setBusyAction(null);
     }
   }
 
@@ -309,6 +363,7 @@ export function HumanAssuranceRaterClient({
 
   async function submitResponses() {
     if (!task || !completeDraft || serverAcceptance) return;
+    const privateStateEpoch = privateStateEpochRef.current;
     setBusyAction("response");
     setError(null);
     try {
@@ -335,6 +390,7 @@ export function HumanAssuranceRaterClient({
         }),
         PRIVATE_REVIEW_JSON_OPTIONS,
       );
+      if (privateStateEpoch !== privateStateEpochRef.current) return;
       if (
         body.accepted !== true ||
         typeof body.replay !== "boolean" ||
@@ -348,9 +404,10 @@ export function HumanAssuranceRaterClient({
       setServerAcceptance(body as AssuranceServerAcceptance);
       clearReviewDraft("private", task.assignmentId, privateDraftStorage);
     } catch (cause) {
+      if (privateStateEpoch !== privateStateEpochRef.current) return;
       setError(cause instanceof Error ? cause.message : "The server did not accept this response batch.");
     } finally {
-      setBusyAction(null);
+      if (privateStateEpoch === privateStateEpochRef.current) setBusyAction(null);
     }
   }
 
@@ -697,6 +754,11 @@ export function HumanAssuranceRaterClient({
           {error ? (
             <p role="alert" className="rounded-lg bg-red-400/10 p-4 text-sm leading-6 text-red-100">
               {error}
+            </p>
+          ) : null}
+          {sessionCheckError ? (
+            <p role="alert" className="rounded-lg bg-red-400/10 p-4 text-sm leading-6 text-red-100">
+              {sessionCheckError}
             </p>
           ) : null}
         </div>
