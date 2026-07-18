@@ -1,5 +1,10 @@
 import { TOKENLESS_QUICKNET_T_CHAIN_HASH, type TokenlessChainConfig, loadTokenlessChainConfig } from "./config";
-import { type TokenlessChainRuntime, assertLiveTokenlessDeployment, getTokenlessChainRuntime } from "./runtime";
+import {
+  type TokenlessChainRuntime,
+  type TokenlessWalletClient,
+  assertLiveTokenlessDeployment,
+  getTokenlessChainRuntime,
+} from "./runtime";
 import { TokenlessPanelAbi, X402PanelSubmitterAbi } from "@rateloop/contracts/tokenless";
 import {
   TOKENLESS_PAYMENT_AUTHORIZATION_SCHEMA_VERSION,
@@ -8,7 +13,20 @@ import {
 } from "@rateloop/sdk";
 import { randomBytes, randomUUID } from "node:crypto";
 import "server-only";
-import { type Address, type Hash, type Hex, decodeEventLog, encodeFunctionData, getAddress, isHash } from "viem";
+import {
+  type Account,
+  type Address,
+  type Hash,
+  type Hex,
+  type TransactionSerializable,
+  decodeEventLog,
+  encodeFunctionData,
+  getAddress,
+  isHash,
+  keccak256,
+  parseTransaction,
+  recoverTransactionAddress,
+} from "viem";
 import { baseSepolia } from "viem/chains";
 import { dbClient, dbPool } from "~~/lib/db";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
@@ -382,9 +400,10 @@ export async function prepareChainPayment(
           (execution_id, operation_key, payment_mode, payment_reference, deployment_key, chain_id,
            deployment_block, panel_address, issuer_address, x402_submitter_address, usdc_address,
            funder_address, content_id, terms_hash, round_terms_json, total_funded_atomic, state,
+           transaction_recovery_version,
            authorization_valid_after, authorization_valid_before, authorization_nonce,
            authorization_eip712_name, authorization_eip712_version, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                   ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT (operation_key) DO NOTHING`,
     args: [
@@ -409,6 +428,7 @@ export async function prepareChainPayment(
         : paymentMode === "x402" && rowString(source, "payment_state") === "pending_chain_authorization"
           ? "awaiting_authorization"
           : "prepared",
+      1,
       paymentMode === "x402" ? authorizationValidAfter : null,
       paymentMode === "x402" ? authorizationValidBefore : null,
       paymentMode === "x402" ? authorizationNonce : null,
@@ -800,20 +820,189 @@ async function allocateNonce(input: {
   }
 }
 
-async function storeTransactionHash(
-  executionId: string,
-  column: "approval_transaction_hash" | "submission_transaction_hash",
-  hash: Hash,
-  fencingToken: number,
-) {
-  const result = await dbClient.execute({
-    sql: `UPDATE tokenless_chain_executions SET ${column} = ?, state = 'broadcast', updated_at = ?
-          WHERE execution_id = ? AND claim_fencing_token = ?`,
-    args: [hash, new Date(), executionId, fencingToken],
-  });
-  if (result.rowCount !== 1) {
+type PersistedTransactionKind = "approval" | "submission";
+
+const persistedTransactionColumns = {
+  approval: {
+    hash: "approval_transaction_hash",
+    signed: "approval_signed_transaction",
+  },
+  submission: {
+    hash: "submission_transaction_hash",
+    signed: "submission_signed_transaction",
+  },
+} as const;
+
+async function assertSignedTransactionIntent(input: {
+  account: Account;
+  data: Hex;
+  nonce: number;
+  signedTransaction: Hex;
+  to: Address;
+}) {
+  try {
+    const transaction = parseTransaction(input.signedTransaction);
+    const signer = await recoverTransactionAddress({
+      serializedTransaction: input.signedTransaction as Parameters<
+        typeof recoverTransactionAddress
+      >[0]["serializedTransaction"],
+    });
+    if (
+      transaction.chainId !== baseSepolia.id ||
+      getAddress(signer) !== getAddress(input.account.address) ||
+      transaction.nonce !== input.nonce ||
+      !transaction.to ||
+      getAddress(transaction.to) !== getAddress(input.to) ||
+      (transaction.data ?? "0x").toLowerCase() !== input.data.toLowerCase() ||
+      (transaction.value ?? 0n) !== 0n
+    ) {
+      throw new Error("intent mismatch");
+    }
+  } catch {
     throw new TokenlessServiceError(
-      "The chain execution claim was superseded before the transaction hash could be fenced.",
+      "The persisted signed transaction does not match the intended chain operation.",
+      409,
+      "signed_transaction_mismatch",
+    );
+  }
+}
+
+async function preparePersistedTransaction(input: {
+  executionId: string;
+  kind: PersistedTransactionKind;
+  account: Account;
+  wallet: TokenlessWalletClient;
+  to: Address;
+  data: Hex;
+  nonce: number;
+  fencingToken: number;
+}) {
+  const columns = persistedTransactionColumns[input.kind];
+  const existing = await dbClient.execute({
+    sql: `SELECT ${columns.hash}, ${columns.signed}, transaction_recovery_version
+          FROM tokenless_chain_executions WHERE execution_id = ? LIMIT 1`,
+    args: [input.executionId],
+  });
+  const row = existing.rows[0] as QueryRow | undefined;
+  const persistedHash = rowString(row, columns.hash) as Hash | null;
+  const persistedSigned = rowString(row, columns.signed) as Hex | null;
+  if (persistedSigned) {
+    const derivedHash = keccak256(persistedSigned);
+    if (!persistedHash || !isHash(persistedHash) || derivedHash.toLowerCase() !== persistedHash.toLowerCase()) {
+      throw new TokenlessServiceError(
+        "The persisted signed transaction does not match its transaction hash.",
+        409,
+        "signed_transaction_mismatch",
+      );
+    }
+    await assertSignedTransactionIntent({ ...input, signedTransaction: persistedSigned });
+    return { hash: derivedHash, signedTransaction: persistedSigned };
+  }
+  // Compatibility for a transaction hash stored before migration 0107. There
+  // are no signed bytes to replay, so recovery can only reconcile that hash.
+  if (persistedHash) {
+    if (!isHash(persistedHash)) {
+      throw new TokenlessServiceError("The persisted transaction hash is invalid.", 409, "signed_transaction_mismatch");
+    }
+    return { hash: persistedHash, signedTransaction: null };
+  }
+  if (Number(row?.transaction_recovery_version ?? 0) !== 1) {
+    throw new TokenlessServiceError(
+      "This legacy chain execution has no durable signed transaction and requires explicit reconciliation.",
+      409,
+      "chain_transaction_reconciliation_required",
+    );
+  }
+  if (input.account.type !== "local") {
+    throw new TokenlessServiceError(
+      "Server-funded transactions require a local signing account for durable recovery.",
+      503,
+      "local_chain_signer_required",
+    );
+  }
+  const request = await input.wallet.prepareTransactionRequest({
+    account: input.account,
+    chain: baseSepolia,
+    to: input.to,
+    data: input.data,
+    nonce: input.nonce,
+    value: 0n,
+  });
+  const signableRequest = Object.fromEntries(
+    Object.entries(request).filter(([key]) => key !== "account" && key !== "chain" && key !== "from"),
+  ) as TransactionSerializable;
+  const signedTransaction = await input.account.signTransaction(signableRequest);
+  const hash = keccak256(signedTransaction);
+  await assertSignedTransactionIntent({ ...input, signedTransaction });
+  const stored = await dbClient.execute({
+    sql: `UPDATE tokenless_chain_executions
+          SET ${columns.signed} = ?, ${columns.hash} = ?, state = 'signed', updated_at = ?
+          WHERE execution_id = ? AND claim_fencing_token = ?
+            AND ${columns.signed} IS NULL AND ${columns.hash} IS NULL`,
+    args: [signedTransaction, hash, new Date(), input.executionId, input.fencingToken],
+  });
+  if (stored.rowCount !== 1) {
+    throw new TokenlessServiceError(
+      "The chain execution claim was superseded before the signed transaction could be fenced.",
+      409,
+      "execution_claim_superseded",
+      true,
+    );
+  }
+  return { hash, signedTransaction };
+}
+
+async function broadcastPersistedTransaction(
+  wallet: TokenlessWalletClient,
+  publicClient: TokenlessChainRuntime["publicClient"],
+  transaction: { hash: Hash; signedTransaction: Hex | null },
+) {
+  if (!transaction.signedTransaction) return;
+  let broadcastHash: Hash;
+  try {
+    broadcastHash = await wallet.sendRawTransaction({ serializedTransaction: transaction.signedTransaction });
+  } catch {
+    // Disconnect, already-known, and nonce-too-low responses are ambiguous. Only
+    // evidence for this exact derived hash permits the worker to continue.
+    try {
+      const persisted = await publicClient.getTransaction({ hash: transaction.hash });
+      if (persisted.hash.toLowerCase() === transaction.hash.toLowerCase()) return;
+    } catch {
+      // The exact hash was not observable. Leave the durable signed bytes in the
+      // signed state so a later fenced worker can replay them byte-for-byte.
+    }
+    throw new TokenlessServiceError(
+      "The RPC did not confirm acceptance of the persisted signed transaction.",
+      502,
+      "chain_broadcast_unconfirmed",
+      true,
+    );
+  }
+  if (broadcastHash.toLowerCase() !== transaction.hash.toLowerCase()) {
+    throw new TokenlessServiceError(
+      "The RPC returned a different hash for the persisted signed transaction.",
+      409,
+      "signed_transaction_mismatch",
+    );
+  }
+}
+
+async function markPersistedTransactionBroadcast(input: {
+  executionId: string;
+  fencingToken: number;
+  hash: Hash;
+  kind: PersistedTransactionKind;
+}) {
+  const columns = persistedTransactionColumns[input.kind];
+  const updated = await dbClient.execute({
+    sql: `UPDATE tokenless_chain_executions
+          SET state = 'broadcast', updated_at = ?
+          WHERE execution_id = ? AND claim_fencing_token = ? AND ${columns.hash} = ?`,
+    args: [new Date(), input.executionId, input.fencingToken, input.hash],
+  });
+  if (updated.rowCount !== 1) {
+    throw new TokenlessServiceError(
+      "The chain execution claim was superseded before broadcast could be recorded.",
       409,
       "execution_claim_superseded",
       true,
@@ -942,7 +1131,8 @@ export async function executeServerChainPayment(
       );
     }
     let approvalHash = rowString(row, "approval_transaction_hash") as Hash | null;
-    if (!approvalHash) {
+    const approvalSigned = rowString(row, "approval_signed_transaction") as Hex | null;
+    if (!approvalHash || approvalSigned) {
       const nonce = await allocateNonce({
         executionId,
         column: "approval_nonce",
@@ -951,9 +1141,11 @@ export async function executeServerChainPayment(
         runtime,
         fencingToken,
       });
-      approvalHash = await runtime.prepaidWallet.sendTransaction({
+      const transaction = await preparePersistedTransaction({
+        executionId,
+        kind: "approval",
         account: runtime.prepaidAccount,
-        chain: baseSepolia,
+        wallet: runtime.prepaidWallet,
         to: config.usdcAddress,
         data: encodeFunctionData({
           abi: APPROVE_ABI,
@@ -961,22 +1153,32 @@ export async function executeServerChainPayment(
           args: [config.panelAddress, BigInt(expected.totalFundedAtomic)],
         }),
         nonce,
-        value: 0n,
+        fencingToken,
       });
-      await storeTransactionHash(executionId, "approval_transaction_hash", approvalHash, fencingToken);
+      approvalHash = transaction.hash;
+      await broadcastPersistedTransaction(runtime.prepaidWallet, runtime.publicClient, transaction);
+      await markPersistedTransactionBroadcast({
+        executionId,
+        fencingToken,
+        hash: transaction.hash,
+        kind: "approval",
+      });
     }
     const approvalReceipt = await runtime.publicClient.waitForTransactionReceipt({ hash: approvalHash });
     if (approvalReceipt.status !== "success") {
       throw new TokenlessServiceError("The prepaid USDC approval failed.", 502, "prepaid_approval_failed", true);
     }
-    if (!submissionHash) {
-      await runtime.publicClient.simulateContract({
-        account: runtime.prepaidAccount,
-        abi: TokenlessPanelAbi,
-        address: config.panelAddress,
-        functionName: "createRound",
-        args: [terms],
-      });
+    const submissionSigned = rowString(row, "submission_signed_transaction") as Hex | null;
+    if (!submissionHash || submissionSigned) {
+      if (!submissionHash) {
+        await runtime.publicClient.simulateContract({
+          account: runtime.prepaidAccount,
+          abi: TokenlessPanelAbi,
+          address: config.panelAddress,
+          functionName: "createRound",
+          args: [terms],
+        });
+      }
       const nonce = await allocateNonce({
         executionId,
         column: "submission_nonce",
@@ -985,15 +1187,24 @@ export async function executeServerChainPayment(
         runtime,
         fencingToken,
       });
-      submissionHash = await runtime.prepaidWallet.sendTransaction({
+      const transaction = await preparePersistedTransaction({
+        executionId,
+        kind: "submission",
         account: runtime.prepaidAccount,
-        chain: baseSepolia,
+        wallet: runtime.prepaidWallet,
         to: config.panelAddress,
         data: encodeFunctionData({ abi: TokenlessPanelAbi, functionName: "createRound", args: [terms] }),
         nonce,
-        value: 0n,
+        fencingToken,
       });
-      await storeTransactionHash(executionId, "submission_transaction_hash", submissionHash, fencingToken);
+      submissionHash = transaction.hash;
+      await broadcastPersistedTransaction(runtime.prepaidWallet, runtime.publicClient, transaction);
+      await markPersistedTransactionBroadcast({
+        executionId,
+        fencingToken,
+        hash: transaction.hash,
+        kind: "submission",
+      });
     }
   } else {
     if (!runtime.relayerAccount || !runtime.relayerWallet) {
@@ -1004,7 +1215,8 @@ export async function executeServerChainPayment(
         true,
       );
     }
-    if (!submissionHash) {
+    const submissionSigned = rowString(row, "submission_signed_transaction") as Hex | null;
+    if (!submissionHash || submissionSigned) {
       const source = await operationSource(operationKey);
       const payload = JSON.parse(rowString(source, "payload_json") ?? "null") as {
         authorization?: Record<string, unknown>;
@@ -1020,13 +1232,15 @@ export async function executeServerChainPayment(
         r: String(authorization.r) as Hex,
         s: String(authorization.s) as Hex,
       };
-      await runtime.publicClient.simulateContract({
-        account: runtime.relayerAccount,
-        abi: X402PanelSubmitterAbi,
-        address: config.x402SubmitterAddress,
-        functionName: "createRoundWithAuthorization",
-        args: [expected.funderAddress, terms, adapterAuthorization, roundAuthorizationSignature],
-      });
+      if (!submissionHash) {
+        await runtime.publicClient.simulateContract({
+          account: runtime.relayerAccount,
+          abi: X402PanelSubmitterAbi,
+          address: config.x402SubmitterAddress,
+          functionName: "createRoundWithAuthorization",
+          args: [expected.funderAddress, terms, adapterAuthorization, roundAuthorizationSignature],
+        });
+      }
       const nonce = await allocateNonce({
         executionId,
         column: "submission_nonce",
@@ -1035,9 +1249,11 @@ export async function executeServerChainPayment(
         runtime,
         fencingToken,
       });
-      submissionHash = await runtime.relayerWallet.sendTransaction({
+      const transaction = await preparePersistedTransaction({
+        executionId,
+        kind: "submission",
         account: runtime.relayerAccount,
-        chain: baseSepolia,
+        wallet: runtime.relayerWallet,
         to: config.x402SubmitterAddress,
         data: encodeFunctionData({
           abi: X402PanelSubmitterAbi,
@@ -1045,9 +1261,16 @@ export async function executeServerChainPayment(
           args: [expected.funderAddress, terms, adapterAuthorization, roundAuthorizationSignature],
         }),
         nonce,
-        value: 0n,
+        fencingToken,
       });
-      await storeTransactionHash(executionId, "submission_transaction_hash", submissionHash, fencingToken);
+      submissionHash = transaction.hash;
+      await broadcastPersistedTransaction(runtime.relayerWallet, runtime.publicClient, transaction);
+      await markPersistedTransactionBroadcast({
+        executionId,
+        fencingToken,
+        hash: transaction.hash,
+        kind: "submission",
+      });
     }
   }
 

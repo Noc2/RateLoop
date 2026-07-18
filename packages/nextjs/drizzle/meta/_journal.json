@@ -743,6 +743,13 @@
       "when": 1784322000000,
       "tag": "0106_surprise_bounty_reservation_expiry",
       "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1784325600000,
+      "tag": "0107_chain_signed_transaction_recovery",
+      "breakpoints": true
     }
   ]
 }

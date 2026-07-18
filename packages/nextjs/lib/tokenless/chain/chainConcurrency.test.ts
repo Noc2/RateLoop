@@ -6,7 +6,16 @@ import { HUMAN_ASSURANCE_SCHEMA_VERSION } from "@rateloop/sdk";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
-import { type Address, type Hash, type Hex, encodeAbiParameters, encodeEventTopics, getAddress } from "viem";
+import {
+  type Address,
+  type Hash,
+  type Hex,
+  encodeAbiParameters,
+  encodeEventTopics,
+  getAddress,
+  keccak256,
+  parseTransaction,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
@@ -208,22 +217,31 @@ function roundCreatedLog(expected: Prepared, roundId: bigint) {
 }
 
 // A prepaid runtime that records every broadcast and lets a test hook pause or
-// fail inside sendTransaction / waitForTransactionReceipt to drive an exact
+// fail inside sendRawTransaction / waitForTransactionReceipt to drive an exact
 // concurrency or crash schedule. A single round id is minted for the one and
 // only createRound so both broadcasts (if the bug regressed) would collide.
 function prepaidRuntime(input: {
   expected: () => Prepared;
   broadcasts: Broadcast[];
+  serializedBroadcasts?: Hex[];
+  onAcceptedBroadcast?: (kind: Broadcast["kind"], hash: Hash) => Promise<void>;
   onBroadcast?: (kind: Broadcast["kind"]) => Promise<void>;
   onSubmissionReceipt?: () => Promise<void>;
+  onTransactionLookup?: (hash: Hash) => Promise<void>;
 }): TokenlessChainRuntime {
   let nonce = 0;
+  const acceptedHashes = new Set<Hash>();
   const hashRounds = new Map<Hash, bigint>();
   const publicClient = {
     getChainId: async () => 84_532,
     getBlockNumber: async () => 500n,
     getBytecode: async () => "0x6000" as Hex,
     getTransactionCount: async () => nonce++,
+    getTransaction: async ({ hash }: { hash: Hash }) => {
+      if (input.onTransactionLookup) await input.onTransactionLookup(hash);
+      if (!acceptedHashes.has(hash)) throw new Error("transaction_not_found");
+      return { hash };
+    },
     simulateContract: async () => ({ request: {} }),
     readContract: async ({ address, functionName }: { address: Address; functionName: string }) => {
       if (address === PANEL && functionName === "usdc") return USDC;
@@ -271,15 +289,35 @@ function prepaidRuntime(input: {
       return { blockHash: `0x${"bb".repeat(32)}` as Hash, blockNumber: 200n, logs, status: "success" as const };
     },
   };
-  const send = async (tx: { to: Address }) => {
-    const kind: Broadcast["kind"] = tx.to === PANEL ? "createRound" : "approval";
-    input.broadcasts.push({ to: tx.to, kind });
+  const sendRaw = async ({ serializedTransaction }: { serializedTransaction: Hex }) => {
+    const transaction = parseTransaction(serializedTransaction);
+    const to = getAddress(transaction.to!);
+    const kind: Broadcast["kind"] = to === PANEL ? "createRound" : "approval";
+    input.broadcasts.push({ to, kind });
+    input.serializedBroadcasts?.push(serializedTransaction);
     if (input.onBroadcast) await input.onBroadcast(kind);
-    const hash = `0x${(input.broadcasts.length + 16).toString(16).padStart(2, "0").repeat(32)}` as Hash;
+    const hash = keccak256(serializedTransaction);
+    acceptedHashes.add(hash);
     if (kind === "createRound") hashRounds.set(hash, 7n);
+    if (input.onAcceptedBroadcast) await input.onAcceptedBroadcast(kind, hash);
     return hash;
   };
-  const wallet = { sendTransaction: send };
+  const wallet = {
+    prepareTransactionRequest: async (transaction: Record<string, unknown>) => {
+      const request = Object.fromEntries(
+        Object.entries(transaction).filter(([key]) => key !== "account" && key !== "chain" && key !== "from"),
+      );
+      return {
+        ...request,
+        chainId: 84_532,
+        gas: 1_000_000n,
+        maxFeePerGas: 2n,
+        maxPriorityFeePerGas: 1n,
+        type: "eip1559" as const,
+      };
+    },
+    sendRawTransaction: sendRaw,
+  };
   return {
     publicClient: publicClient as unknown as TokenlessChainRuntime["publicClient"],
     prepaidAccount: PREPAID_ACCOUNT,
@@ -315,6 +353,14 @@ test("two concurrent prepaid executions produce exactly one approval and one cre
     onBroadcast: async kind => {
       if (kind === "approval") {
         approvalArrivals += 1;
+        const persisted = await dbClient.execute({
+          sql: `SELECT approval_signed_transaction,approval_transaction_hash
+                FROM tokenless_chain_executions WHERE operation_key=?`,
+          args: [operationKey],
+        });
+        const signed = String(persisted.rows[0]?.approval_signed_transaction ?? "") as Hex;
+        assert.match(signed, /^0x[0-9a-f]+$/u, "signed bytes must exist before the RPC broadcast");
+        assert.equal(persisted.rows[0]?.approval_transaction_hash, keccak256(signed));
         firstApprovalEntered();
         // The winning worker parks mid-broadcast so the second request must make
         // its claim decision while the first is still in flight.
@@ -355,14 +401,16 @@ test("two concurrent prepaid executions produce exactly one approval and one cre
   assert.equal(String(reservation.rows[0]?.status), "consumed");
 });
 
-test("a crashed execution resumes from its persisted hashes without re-broadcasting", async () => {
+test("a crashed execution rebroadcasts only its exact persisted signed transactions", async () => {
   const { operationKey, workspaceId } = await prepaidAsk();
   const holder: { current?: Prepared } = {};
   const broadcasts: Broadcast[] = [];
+  const serializedBroadcasts: Hex[] = [];
   let crashOnSubmissionReceipt = true;
   const runtime = prepaidRuntime({
     expected: () => holder.current!,
     broadcasts,
+    serializedBroadcasts,
     onSubmissionReceipt: async () => {
       // Simulate a crash after both transactions were broadcast and their hashes
       // persisted, but before the round could be confirmed.
@@ -378,14 +426,21 @@ test("a crashed execution resumes from its persisted hashes without re-broadcast
     () => executeServerChainPayment(operationKey, { config: config(), runtime }),
     /simulated_worker_crash/,
   );
-  const afterCrash = { ...broadcasts };
+  const afterCrash = [...serializedBroadcasts];
   assert.equal(broadcasts.filter(b => b.kind === "approval").length, 1);
   assert.equal(broadcasts.filter(b => b.kind === "createRound").length, 1);
   const persisted = await dbClient.execute({
-    sql: "SELECT approval_transaction_hash, submission_transaction_hash, state FROM tokenless_chain_executions WHERE operation_key = ?",
+    sql: `SELECT approval_transaction_hash,approval_signed_transaction,
+                 submission_transaction_hash,submission_signed_transaction,state
+          FROM tokenless_chain_executions WHERE operation_key = ?`,
     args: [operationKey],
   });
   assert.ok(persisted.rows[0]?.submission_transaction_hash, "the submission hash must be persisted before the crash");
+  assert.ok(persisted.rows[0]?.approval_signed_transaction, "the signed approval must be persisted before broadcast");
+  assert.ok(
+    persisted.rows[0]?.submission_signed_transaction,
+    "the signed submission must be persisted before broadcast",
+  );
   assert.equal(String(persisted.rows[0]?.state), "broadcast");
 
   // The crashed worker's lease must lapse before another worker can resume it.
@@ -397,12 +452,173 @@ test("a crashed execution resumes from its persisted hashes without re-broadcast
   const resumed = await executeServerChainPayment(operationKey, { config: config(), runtime });
   assert.equal(resumed.paymentState, "confirmed");
   assert.equal(resumed.roundId, "7");
-  // No new broadcasts on resume: the persisted approval + submission hashes are reused.
-  assert.equal(broadcasts.filter(b => b.kind === "approval").length, 1, "no second approval broadcast on resume");
-  assert.equal(broadcasts.filter(b => b.kind === "createRound").length, 1, "no second createRound broadcast on resume");
-  assert.deepEqual(Object.keys(afterCrash).length, broadcasts.length);
+  // Recovery may safely rebroadcast, but never reconstructs or replaces either transaction.
+  assert.equal(broadcasts.filter(b => b.kind === "approval").length, 2, "approval is safely rebroadcast on resume");
+  assert.equal(
+    broadcasts.filter(b => b.kind === "createRound").length,
+    2,
+    "submission is safely rebroadcast on resume",
+  );
+  assert.equal(serializedBroadcasts[2], afterCrash[0], "approval replay uses the exact signed bytes");
+  assert.equal(serializedBroadcasts[3], afterCrash[1], "submission replay uses the exact signed bytes");
 
   const debits = await prepaidDebitEntries(workspaceId);
   assert.equal(debits.length, 1, "the reservation is debited exactly once across crash and resume");
   assert.equal(String(debits[0]?.delta_atomic), `-${resumed.totalFundedAtomic}`);
+});
+
+test("a crash before RPC acceptance leaves signed state and replays the exact bytes", async () => {
+  const { operationKey } = await prepaidAsk();
+  const holder: { current?: Prepared } = {};
+  const broadcasts: Broadcast[] = [];
+  const serializedBroadcasts: Hex[] = [];
+  let crashBeforeAcceptance = true;
+  const runtime = prepaidRuntime({
+    expected: () => holder.current!,
+    broadcasts,
+    serializedBroadcasts,
+    onBroadcast: async kind => {
+      if (kind === "approval" && crashBeforeAcceptance) {
+        crashBeforeAcceptance = false;
+        throw new Error("simulated_pre_acceptance_disconnect");
+      }
+    },
+  });
+  holder.current = await prepareChainPayment(operationKey, { config: config(), runtime });
+
+  await assert.rejects(
+    () => executeServerChainPayment(operationKey, { config: config(), runtime }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "chain_broadcast_unconfirmed",
+  );
+  const persisted = await dbClient.execute({
+    sql: `SELECT approval_signed_transaction,state FROM tokenless_chain_executions WHERE operation_key = ?`,
+    args: [operationKey],
+  });
+  assert.equal(String(persisted.rows[0]?.state), "signed");
+  assert.equal(String(persisted.rows[0]?.approval_signed_transaction), serializedBroadcasts[0]);
+  await dbClient.execute({
+    sql: "UPDATE tokenless_chain_executions SET claim_expires_at = ? WHERE operation_key = ?",
+    args: [new Date(Date.now() - 60_000), operationKey],
+  });
+
+  const resumed = await executeServerChainPayment(operationKey, { config: config(), runtime });
+  assert.equal(resumed.paymentState, "confirmed");
+  assert.equal(serializedBroadcasts[1], serializedBroadcasts[0], "retry uses the exact pre-crash approval bytes");
+});
+
+test("accept-then-throw ambiguity replays the exact accepted transaction after reconciliation is unavailable", async () => {
+  const { operationKey } = await prepaidAsk();
+  const holder: { current?: Prepared } = {};
+  const broadcasts: Broadcast[] = [];
+  const serializedBroadcasts: Hex[] = [];
+  let throwAfterAcceptance = true;
+  let failExactHashLookup = true;
+  const runtime = prepaidRuntime({
+    expected: () => holder.current!,
+    broadcasts,
+    serializedBroadcasts,
+    onAcceptedBroadcast: async kind => {
+      if (kind === "createRound" && throwAfterAcceptance) {
+        throwAfterAcceptance = false;
+        throw new Error("simulated_accept_then_disconnect");
+      }
+    },
+    onTransactionLookup: async hash => {
+      if (failExactHashLookup && keccak256(serializedBroadcasts[1]!) === hash) {
+        failExactHashLookup = false;
+        throw new Error("simulated_reconciliation_transport_failure");
+      }
+    },
+  });
+  holder.current = await prepareChainPayment(operationKey, { config: config(), runtime });
+
+  await assert.rejects(
+    () => executeServerChainPayment(operationKey, { config: config(), runtime }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "chain_broadcast_unconfirmed",
+  );
+  await dbClient.execute({
+    sql: "UPDATE tokenless_chain_executions SET claim_expires_at = ? WHERE operation_key = ?",
+    args: [new Date(Date.now() - 60_000), operationKey],
+  });
+
+  const resumed = await executeServerChainPayment(operationKey, { config: config(), runtime });
+  assert.equal(resumed.paymentState, "confirmed");
+  assert.equal(serializedBroadcasts[2], serializedBroadcasts[0], "approval replay remains byte-identical");
+  assert.equal(serializedBroadcasts[3], serializedBroadcasts[1], "accepted submission replay remains byte-identical");
+});
+
+test("accept-then-throw advances only after the exact derived hash is observable", async () => {
+  const { operationKey } = await prepaidAsk();
+  const holder: { current?: Prepared } = {};
+  const broadcasts: Broadcast[] = [];
+  let throwAfterAcceptance = true;
+  const runtime = prepaidRuntime({
+    expected: () => holder.current!,
+    broadcasts,
+    onAcceptedBroadcast: async kind => {
+      if (kind === "approval" && throwAfterAcceptance) {
+        throwAfterAcceptance = false;
+        throw new Error("simulated_accept_then_disconnect");
+      }
+    },
+  });
+  holder.current = await prepareChainPayment(operationKey, { config: config(), runtime });
+
+  const confirmed = await executeServerChainPayment(operationKey, { config: config(), runtime });
+  assert.equal(confirmed.paymentState, "confirmed");
+  assert.equal(broadcasts.filter(broadcast => broadcast.kind === "approval").length, 1);
+  assert.equal(broadcasts.filter(broadcast => broadcast.kind === "createRound").length, 1);
+});
+
+test("legacy nonce-only executions fail closed instead of signing a possibly duplicated transaction", async () => {
+  const { operationKey } = await prepaidAsk();
+  const holder: { current?: Prepared } = {};
+  const broadcasts: Broadcast[] = [];
+  const runtime = prepaidRuntime({ expected: () => holder.current!, broadcasts });
+  holder.current = await prepareChainPayment(operationKey, { config: config(), runtime });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_chain_executions
+          SET transaction_recovery_version = 0, approval_nonce = 0
+          WHERE operation_key = ?`,
+    args: [operationKey],
+  });
+
+  await assert.rejects(
+    () => executeServerChainPayment(operationKey, { config: config(), runtime }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "chain_transaction_reconciliation_required",
+  );
+  assert.equal(broadcasts.length, 0);
+});
+
+test("persisted signed transactions are rejected when their decoded intent changes", async () => {
+  const { operationKey } = await prepaidAsk();
+  const holder: { current?: Prepared } = {};
+  const broadcasts: Broadcast[] = [];
+  let crashOnSubmissionReceipt = true;
+  const runtime = prepaidRuntime({
+    expected: () => holder.current!,
+    broadcasts,
+    onSubmissionReceipt: async () => {
+      if (crashOnSubmissionReceipt) {
+        crashOnSubmissionReceipt = false;
+        throw new Error("simulated_worker_crash");
+      }
+    },
+  });
+  holder.current = await prepareChainPayment(operationKey, { config: config(), runtime });
+  await assert.rejects(() => executeServerChainPayment(operationKey, { config: config(), runtime }));
+  await dbClient.execute({
+    sql: `UPDATE tokenless_chain_executions
+          SET approval_signed_transaction = submission_signed_transaction,
+              approval_transaction_hash = submission_transaction_hash,
+              claim_expires_at = ?
+          WHERE operation_key = ?`,
+    args: [new Date(Date.now() - 60_000), operationKey],
+  });
+
+  await assert.rejects(
+    () => executeServerChainPayment(operationKey, { config: config(), runtime }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "signed_transaction_mismatch",
+  );
 });
