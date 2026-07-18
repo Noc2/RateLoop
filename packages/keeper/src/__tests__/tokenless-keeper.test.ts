@@ -12,9 +12,15 @@ import {
   renderMetrics,
 } from "../metrics.js";
 import type { Logger } from "../logger.js";
+import {
+  tokenlessPayoutCommitment,
+  tokenlessRevealCommitment,
+} from "../sealed-payload.js";
 import { TokenlessPanelAbi } from "../tokenless-abi.js";
 import {
   TokenlessRoundState,
+  type TokenlessCommit,
+  type TokenlessRevealMaterial,
   type TokenlessRound,
 } from "../tokenless-types.js";
 
@@ -31,6 +37,16 @@ const RESPONSE_HASH = `0x${"66".repeat(32)}` as Hex;
 const SALT = `0x${"77".repeat(32)}` as Hex;
 const ADMISSION_POLICY_HASH = `0x${"99".repeat(32)}` as Hex;
 const ZERO_HASH = `0x${"00".repeat(32)}` as Hex;
+
+const REVEAL_MATERIAL: TokenlessRevealMaterial = {
+  roundId: 1n,
+  voteKey: VOTE_KEY,
+  vote: 1,
+  predictedUpBps: 7000,
+  responseHash: RESPONSE_HASH,
+  payoutAddress: PAYOUT,
+  salt: SALT,
+};
 
 const logger: Logger = {
   debug() {},
@@ -99,6 +115,34 @@ function round(overrides: Partial<TokenlessRound> = {}): TokenlessRound {
   };
 }
 
+function commit(
+  material: TokenlessRevealMaterial = REVEAL_MATERIAL,
+  overrides: Partial<TokenlessCommit> = {},
+): TokenlessCommit {
+  return {
+    roundId: material.roundId,
+    voteKey: material.voteKey,
+    sealedCommitment: tokenlessRevealCommitment(material),
+    sealedPayloadHash: `0x${"22".repeat(32)}`,
+    payoutCommitment: tokenlessPayoutCommitment(
+      material.payoutAddress,
+      material.salt,
+    ),
+    responseHash: material.responseHash,
+    referenceCommitKey: ZERO_HASH,
+    peerCommitKey: ZERO_HASH,
+    finalizedPayout: 0n,
+    predictedUpBps: material.predictedUpBps,
+    informationScoreBps: 0,
+    predictionScoreBps: 0,
+    rbtsScoreBps: 0,
+    vote: material.vote,
+    revealed: false,
+    claimed: false,
+    ...overrides,
+  };
+}
+
 function clients(params: {
   currentRound: TokenlessRound;
   now?: bigint;
@@ -107,6 +151,7 @@ function clients(params: {
   readRoundIds?: bigint[];
   commitLogQueries?: unknown[];
   commitClaimed?: boolean;
+  commitOverrides?: Partial<TokenlessCommit>;
   currentBlock?: bigint;
   receiptStatus?: "success" | "reverted";
   feedbackBonusPool?: {
@@ -196,24 +241,11 @@ function clients(params: {
             );
             return currentRound;
           case "getCommit":
-            return {
-              roundId: 1n,
-              voteKey: VOTE_KEY,
-              sealedCommitment: `0x${"11".repeat(32)}`,
-              sealedPayloadHash: `0x${"22".repeat(32)}`,
-              payoutCommitment: `0x${"33".repeat(32)}`,
-              responseHash: RESPONSE_HASH,
-              referenceCommitKey: ZERO_HASH,
-              peerCommitKey: ZERO_HASH,
-              finalizedPayout: 0n,
-              predictedUpBps: 7000,
-              informationScoreBps: 0,
-              predictionScoreBps: 0,
-              rbtsScoreBps: 0,
-              vote: 1,
+            return commit(REVEAL_MATERIAL, {
               revealed: currentRound.revealCount > 0,
               claimed: params.commitClaimed ?? false,
-            };
+              ...params.commitOverrides,
+            });
           default:
             throw new Error(`unexpected read ${String(args.functionName)}`);
         }
@@ -222,15 +254,7 @@ function clients(params: {
   } as TokenlessKeeperClients;
 }
 
-const decrypt = async () => ({
-  roundId: 1n,
-  voteKey: VOTE_KEY,
-  vote: 1 as const,
-  predictedUpBps: 7000 as const,
-  responseHash: RESPONSE_HASH,
-  payoutAddress: PAYOUT,
-  salt: SALT,
-});
+const decrypt = async () => REVEAL_MATERIAL;
 
 beforeEach(() => resetTokenlessKeeperStateForTests());
 
@@ -532,6 +556,149 @@ describe("tokenless keeper orchestration", () => {
     );
     expect(writes).toEqual(["openReveal", "reveal"]);
     expect(result.votesRevealed).toBe(1);
+  });
+
+  it.each([
+    ["payout", { payoutCommitment: ZERO_HASH }],
+    ["full reveal", { sealedCommitment: ZERO_HASH }],
+  ] as const)(
+    "rejects a decrypted payload that mismatches the on-chain %s commitment before writing",
+    async (_label, commitOverrides) => {
+      const writes: string[] = [];
+      const result = await runTokenlessKeeper(
+        clients({
+          currentRound: round({ state: TokenlessRoundState.Revealable }),
+          writes,
+          now: 150n,
+          commitOverrides,
+        }),
+        config,
+        logger,
+        decrypt,
+      );
+
+      expect(writes).toEqual([]);
+      expect(result.votesRevealed).toBe(0);
+      expect(result.selfRevealFallbacksPending).toBe(1);
+    },
+  );
+
+  it("rejects a zero payout address before caching or writing", async () => {
+    const writes: string[] = [];
+    let decryptions = 0;
+    const zeroPayoutMaterial: TokenlessRevealMaterial = {
+      ...REVEAL_MATERIAL,
+      payoutAddress: "0x0000000000000000000000000000000000000000",
+    };
+    const instance = clients({
+      currentRound: round({ state: TokenlessRoundState.Revealable }),
+      writes,
+      now: 150n,
+      commitOverrides: {
+        payoutCommitment: tokenlessPayoutCommitment(
+          zeroPayoutMaterial.payoutAddress,
+          zeroPayoutMaterial.salt,
+        ),
+        sealedCommitment: tokenlessRevealCommitment(zeroPayoutMaterial),
+      },
+    });
+
+    const result = await runTokenlessKeeper(
+      instance,
+      config,
+      logger,
+      async () => {
+        decryptions += 1;
+        return zeroPayoutMaterial;
+      },
+    );
+
+    expect(writes).toEqual([]);
+    expect(result.selfRevealFallbacksPending).toBe(1);
+    expect(decryptions).toBe(1);
+
+    await runTokenlessKeeper(instance, config, logger, async () => {
+      decryptions += 1;
+      return zeroPayoutMaterial;
+    });
+    expect(decryptions).toBe(1);
+  });
+
+  it("continues from a malformed newest commit to honest older work", async () => {
+    const tipCommitKey = `0x${"aa".repeat(32)}` as Hex;
+    const olderCommitKey = `0x${"bb".repeat(32)}` as Hex;
+    const tipPayload = "0xaabb" as Hex;
+    const olderPayload = "0xbbcc" as Hex;
+    const tipMaterial: TokenlessRevealMaterial = {
+      ...REVEAL_MATERIAL,
+      roundId: 2n,
+    };
+    const committedTipMaterial: TokenlessRevealMaterial = {
+      ...tipMaterial,
+      responseHash: `0x${"cc".repeat(32)}`,
+    };
+    const rounds = new Map([
+      [2n, round({ state: TokenlessRoundState.Revealable })],
+      [1n, round({ state: TokenlessRoundState.Revealable })],
+    ]);
+    const commits = new Map<string, TokenlessCommit>([
+      [tipCommitKey, commit(committedTipMaterial)],
+      [olderCommitKey, commit(REVEAL_MATERIAL)],
+    ]);
+    const instance = clients({
+      currentRound: rounds.get(1n)!,
+      nextRoundId: 3n,
+      now: 150n,
+    });
+    const originalReadContract = instance.publicClient.readContract.bind(
+      instance.publicClient,
+    );
+    instance.publicClient.readContract = async (args) => {
+      if (args.functionName === "getRound") {
+        return rounds.get(BigInt((args.args as readonly bigint[])[0]!));
+      }
+      if (args.functionName === "getCommit") {
+        return commits.get(
+          String((args.args as readonly Hex[])[0]!).toLowerCase(),
+        );
+      }
+      return originalReadContract(args);
+    };
+    instance.publicClient.getLogs = async (args) => {
+      const roundId = (args.args as { roundId: bigint }).roundId;
+      return [
+        {
+          args: {
+            roundId,
+            commitKey: roundId === 2n ? tipCommitKey : olderCommitKey,
+            sealedPayload: roundId === 2n ? tipPayload : olderPayload,
+          },
+        },
+      ];
+    };
+    const writes: Array<{ functionName: string; roundId: bigint }> = [];
+    instance.walletClient.writeContract = async (args) => {
+      const functionName = String(args.functionName);
+      const roundId = BigInt((args.args as readonly bigint[])[0]!);
+      writes.push({ functionName, roundId });
+      if (functionName === "reveal") {
+        rounds.get(roundId)!.revealCount += 1;
+      }
+      return `0x${"88".repeat(32)}`;
+    };
+
+    const result = await runTokenlessKeeper(
+      instance,
+      config,
+      logger,
+      async ({ sealedPayload }) =>
+        sealedPayload === tipPayload ? tipMaterial : REVEAL_MATERIAL,
+    );
+
+    expect(writes).toEqual([{ functionName: "reveal", roundId: 1n }]);
+    expect(result.roundsScanned).toBe(2);
+    expect(result.votesRevealed).toBe(1);
+    expect(result.selfRevealFallbacksPending).toBe(1);
   });
 
   it("keeps automatic and self-reveal fallback live through the beacon deadline", async () => {

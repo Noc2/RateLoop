@@ -9,7 +9,11 @@ import {
 import type { config as runtimeConfig } from "./config.js";
 import { resolveTlockClientForDrandChain } from "./drand.js";
 import type { Logger } from "./logger.js";
-import { decodeTokenlessRevealPayload } from "./sealed-payload.js";
+import {
+  decodeTokenlessRevealPayload,
+  tokenlessPayoutCommitment,
+  tokenlessRevealCommitment,
+} from "./sealed-payload.js";
 import {
   TokenlessFeedbackBonusAbi,
   TokenlessPanelAbi,
@@ -60,12 +64,21 @@ export type RevealDecryptor = (params: {
 }) => Promise<TokenlessRevealMaterial>;
 
 const revealMaterialCache = new Map<string, TokenlessRevealMaterial>();
+const permanentlyInvalidRevealCommits = new Set<string>();
 let nextHistoricalRoundId = 0n;
 let highestNewRoundIdProcessed = 0n;
 let nextScanFeedbackBonusPoolId = 1n;
 
+class InvalidRevealMaterialError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidRevealMaterialError";
+  }
+}
+
 export function resetTokenlessKeeperStateForTests() {
   revealMaterialCache.clear();
+  permanentlyInvalidRevealCommits.clear();
   nextHistoricalRoundId = 0n;
   highestNewRoundIdProcessed = 0n;
   nextScanFeedbackBonusPoolId = 1n;
@@ -264,13 +277,34 @@ function validateRevealMaterial(
   roundId: bigint,
 ) {
   if (material.roundId !== roundId || commit.roundId !== roundId) {
-    throw new Error(
+    throw new InvalidRevealMaterialError(
       "Decrypted tokenless reveal material is bound to another round.",
     );
   }
   if (!isAddressEqual(material.voteKey, commit.voteKey)) {
-    throw new Error(
+    throw new InvalidRevealMaterialError(
       "Decrypted tokenless reveal material is bound to another vote key.",
+    );
+  }
+  if (isAddressEqual(material.payoutAddress, zeroAddress)) {
+    throw new InvalidRevealMaterialError(
+      "Decrypted tokenless reveal material has a zero payout address.",
+    );
+  }
+  if (
+    tokenlessPayoutCommitment(material.payoutAddress, material.salt) !==
+    commit.payoutCommitment.toLowerCase()
+  ) {
+    throw new InvalidRevealMaterialError(
+      "Decrypted tokenless reveal material does not match the payout commitment.",
+    );
+  }
+  if (
+    tokenlessRevealCommitment(material) !==
+    commit.sealedCommitment.toLowerCase()
+  ) {
+    throw new InvalidRevealMaterialError(
+      "Decrypted tokenless reveal material does not match the reveal commitment.",
     );
   }
 }
@@ -284,15 +318,31 @@ async function materialForCommit(params: {
   sealedPayload: Hex;
   commit: TokenlessCommit;
 }) {
-  const cached = revealMaterialCache.get(params.commitKey.toLowerCase());
-  if (cached) return cached;
+  const normalizedCommitKey = params.commitKey.toLowerCase();
+  if (permanentlyInvalidRevealCommits.has(normalizedCommitKey)) {
+    throw new InvalidRevealMaterialError(
+      "Tokenless reveal material for this commit was permanently rejected.",
+    );
+  }
+  const cached = revealMaterialCache.get(normalizedCommitKey);
+  if (cached) {
+    validateRevealMaterial(cached, params.commit, params.roundId);
+    return cached;
+  }
   const material = await params.decrypt({
     sealedPayload: params.sealedPayload,
     beaconNetworkHash: params.round.beaconNetworkHash,
     maxCiphertextBytes: params.config.maxCiphertextBytes,
   });
-  validateRevealMaterial(material, params.commit, params.roundId);
-  revealMaterialCache.set(params.commitKey.toLowerCase(), material);
+  try {
+    validateRevealMaterial(material, params.commit, params.roundId);
+  } catch (error) {
+    if (error instanceof InvalidRevealMaterialError) {
+      permanentlyInvalidRevealCommits.add(normalizedCommitKey);
+    }
+    throw error;
+  }
+  revealMaterialCache.set(normalizedCommitKey, material);
   return material;
 }
 
@@ -337,11 +387,22 @@ async function revealAndClaimRound(params: {
       if (!commit.revealed && acceptsReveals(params.round, params.now)) {
         params.result.selfRevealFallbacksPending += 1;
       }
-      params.logger.debug("Tokenless commit is not auto-decryptable yet", {
+      const context = {
         roundId: params.roundId.toString(),
         commitKey,
         error: error instanceof Error ? error.message : String(error),
-      });
+      };
+      if (error instanceof InvalidRevealMaterialError) {
+        params.logger.warn(
+          "Tokenless commit contains permanently invalid reveal material",
+          context,
+        );
+      } else {
+        params.logger.debug(
+          "Tokenless commit is not auto-decryptable yet",
+          context,
+        );
+      }
       continue;
     }
 
