@@ -4,6 +4,11 @@
 [18 July re-audit](tokenless-repository-security-reaudit-2026-07-18.md) were independently rechecked, remained valid,
 and were fixed on the `tokenless` branch. This is an internal engineering record, not customer-facing product copy.
 
+**Post-remediation audit:** A fresh review found additional defects and reopened the keeper scalability conclusion for
+`REAUD-13`. See the
+[18 July post-remediation audit](tokenless-post-remediation-security-audit-2026-07-18.md). This record remains the
+point-in-time account of the original remediation commits, not a current release approval.
+
 ## Decision and implementation record
 
 Each remediation is isolated in its own commit. No finding was closed by documentation alone.
