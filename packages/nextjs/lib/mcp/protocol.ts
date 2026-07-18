@@ -174,6 +174,23 @@ export const tokenlessMcpTools = [
         },
         dataClassification: { enum: ["public", "synthetic", "redacted"], type: "string" },
         redactionSummary: { maxLength: 1_000, minLength: 10, type: "string" },
+        mediaPreviews: {
+          description:
+            "Exact short-lived preview grants returned by authenticated image staging. Required once for every image in request.question.media.",
+          items: {
+            additionalProperties: false,
+            properties: {
+              assetId: { pattern: "^pqm_[A-Za-z0-9_-]{24,80}$", type: "string" },
+              digest: { pattern: "^sha256:[0-9a-f]{64}$", type: "string" },
+              previewCapability: { pattern: "^pqp1_[0-9a-z]{6,12}_[A-Za-z0-9_-]{43}$", type: "string" },
+            },
+            required: ["assetId", "digest", "previewCapability"],
+            type: "object",
+          },
+          maxItems: 4,
+          minItems: 1,
+          type: "array",
+        },
         request: {
           additionalProperties: false,
           properties: {

@@ -4,6 +4,7 @@ import {
   type TokenlessAskRequest,
   type TokenlessAskResponse,
   type TokenlessEconomics,
+  type TokenlessQuestionImagePreviewGrant,
   type TokenlessQuoteRequest,
   type TokenlessQuoteResponse,
   type TokenlessResult,
@@ -26,6 +27,9 @@ const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,160}$/;
 const ATOMIC_AMOUNT_PATTERN = /^(0|[1-9]\d*)$/;
 const EVM_ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/;
 const BYTES32_PATTERN = /^0x[0-9a-fA-F]{64}$/;
+const PUBLIC_MEDIA_ASSET_ID_PATTERN = /^pqm_[A-Za-z0-9_-]{24,80}$/;
+const PUBLIC_MEDIA_DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
+const PUBLIC_MEDIA_PREVIEW_CAPABILITY_PATTERN = /^pqp1_[0-9a-z]{6,12}_[A-Za-z0-9_-]{43}$/;
 const AUDIENCE_LABELS = {
   customer_invited: "Customer-invited reviewers",
   rateloop_network: "RateLoop-network reviewers",
@@ -232,7 +236,73 @@ export function parseTokenlessAskRequest(value: unknown, idempotencyHeader: stri
     );
   }
   assertPayment(request.payment);
-  return request as TokenlessAskRequest;
+  return {
+    idempotencyKey: request.idempotencyKey,
+    payment: request.payment,
+    quoteId: request.quoteId,
+  };
+}
+
+export function parseTokenlessAskMediaPreviewGrants(value: unknown): TokenlessQuestionImagePreviewGrant[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const raw = (value as Record<string, unknown>).mediaPreviews;
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw) || raw.length < 1 || raw.length > 4) {
+    throw new TokenlessServiceError(
+      "mediaPreviews must contain one exact grant per staged image.",
+      400,
+      "invalid_media_preview_capability",
+    );
+  }
+  const seen = new Set<string>();
+  return raw.map(item => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new TokenlessServiceError(
+        "Each media preview grant must be an object.",
+        400,
+        "invalid_media_preview_capability",
+      );
+    }
+    const grant = item as Record<string, unknown>;
+    if (
+      Object.keys(grant).some(key => !["assetId", "digest", "previewCapability"].includes(key)) ||
+      typeof grant.assetId !== "string" ||
+      !PUBLIC_MEDIA_ASSET_ID_PATTERN.test(grant.assetId) ||
+      seen.has(grant.assetId) ||
+      typeof grant.digest !== "string" ||
+      !PUBLIC_MEDIA_DIGEST_PATTERN.test(grant.digest) ||
+      typeof grant.previewCapability !== "string" ||
+      !PUBLIC_MEDIA_PREVIEW_CAPABILITY_PATTERN.test(grant.previewCapability)
+    ) {
+      throw new TokenlessServiceError(
+        "A media preview grant is malformed or duplicated.",
+        400,
+        "invalid_media_preview_capability",
+      );
+    }
+    seen.add(grant.assetId);
+    return {
+      assetId: grant.assetId,
+      digest: grant.digest as `sha256:${string}`,
+      previewCapability: grant.previewCapability,
+    };
+  });
+}
+
+export async function preflightTokenlessAskIdempotency(
+  value: unknown,
+  idempotencyHeader: string | null,
+): Promise<TokenlessAskRequest> {
+  const request = parseTokenlessAskRequest(value, idempotencyHeader);
+  const existing = await readAskByIdempotency(request.idempotencyKey);
+  if (existing && existing.requestHash !== hash(request)) {
+    throw new TokenlessServiceError(
+      "This idempotency key was already used with a different ask.",
+      409,
+      "idempotency_conflict",
+    );
+  }
+  return request;
 }
 
 function buildEconomics(request: TokenlessQuoteRequest): TokenlessEconomics {

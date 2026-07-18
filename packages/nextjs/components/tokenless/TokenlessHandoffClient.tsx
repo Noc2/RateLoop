@@ -13,7 +13,11 @@ import {
   parseTokenlessQuoteResponse,
   parseTokenlessResult,
 } from "@rateloop/sdk";
-import { QuestionMedia, type QuestionMediaReviewState } from "~~/components/tokenless/answer/QuestionMedia";
+import {
+  QuestionMedia,
+  type QuestionMediaPreviewCapability,
+  type QuestionMediaReviewState,
+} from "~~/components/tokenless/answer/QuestionMedia";
 
 const HANDOFF_VERSION = "rateloop.handoff.v1" as const;
 const MAX_FRAGMENT_LENGTH = 16 * 1024;
@@ -21,6 +25,7 @@ const MAX_PROMPT_LENGTH = 4_000;
 const HANDOFF_ID_PATTERN = /^rhl_[A-Za-z0-9_-]{32}$/;
 const IDEMPOTENCY_PATTERN = /^mcp:[A-Za-z0-9_-]{43}$/;
 const TOKEN_PATTERN = /^rht_[A-Za-z0-9_-]{43}_([0-9a-z]{6,12})$/;
+const MEDIA_PREVIEW_CAPABILITY_PATTERN = /^pqp1_[0-9a-z]{6,12}_[A-Za-z0-9_-]{43}$/;
 const BYTES32_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 const ATOMIC_PATTERN = /^(0|[1-9]\d*)$/;
 const REVIEWER_SOURCES = new Set(["customer_invited", "rateloop_network", "hybrid"]);
@@ -34,6 +39,7 @@ export type TokenlessHandoffPayload = {
   idempotencyKey: string;
   expiresAt: string;
   dataClassification: "public" | "synthetic" | "redacted";
+  mediaPreviews: QuestionMediaPreviewCapability[];
   redactionSummary: string;
   request: TokenlessQuoteRequest;
 };
@@ -89,6 +95,34 @@ function atomic(value: unknown, path: string) {
 
 function validateQuestion(value: unknown): TokenlessQuestion {
   return normalizeTokenlessQuestion(value);
+}
+
+function validateMediaPreviews(value: unknown, request: TokenlessQuoteRequest) {
+  const imageItems = request.question.media?.kind === "images" ? request.question.media.items : [];
+  if (imageItems.length === 0) {
+    if (value === undefined || (Array.isArray(value) && value.length === 0)) return [];
+    throw new Error("mediaPreviews are supported only for image handoffs.");
+  }
+  if (!Array.isArray(value) || value.length !== imageItems.length) {
+    throw new Error("Every handoff image requires one exact preview capability.");
+  }
+  const expected = new Map(imageItems.map(item => [item.assetId, item.digest]));
+  const seen = new Set<string>();
+  return value.map((raw, index) => {
+    const item = record(raw, `mediaPreviews[${index}]`);
+    const assetId = string(item.assetId, `mediaPreviews[${index}].assetId`, 100);
+    const digest = string(item.digest, `mediaPreviews[${index}].digest`, 80);
+    const previewCapability = string(item.previewCapability, `mediaPreviews[${index}].previewCapability`, 160);
+    if (
+      expected.get(assetId) !== digest ||
+      seen.has(assetId) ||
+      !MEDIA_PREVIEW_CAPABILITY_PATTERN.test(previewCapability)
+    ) {
+      throw new Error("A media preview capability does not match the exact handoff asset and digest.");
+    }
+    seen.add(assetId);
+    return { assetId, digest: digest as `sha256:${string}`, previewCapability };
+  });
 }
 
 export function validateTokenlessQuoteRequest(value: unknown): TokenlessQuoteRequest {
@@ -170,6 +204,7 @@ export function decodeTokenlessHandoffFragment(fragment: string, now = new Date(
   if (!Number.isFinite(expiresAtMs)) throw new Error("expiresAt must be an ISO-8601 timestamp.");
   const dataClassification = string(payload.dataClassification, "dataClassification", 20);
   if (!CLASSIFICATIONS.has(dataClassification)) throw new Error("dataClassification is unsupported.");
+  const request = validateTokenlessQuoteRequest(payload.request);
   const result = {
     version: HANDOFF_VERSION,
     handoffId,
@@ -177,8 +212,9 @@ export function decodeTokenlessHandoffFragment(fragment: string, now = new Date(
     idempotencyKey,
     expiresAt,
     dataClassification: dataClassification as TokenlessHandoffPayload["dataClassification"],
+    mediaPreviews: validateMediaPreviews(payload.mediaPreviews, request),
     redactionSummary: string(payload.redactionSummary, "redactionSummary", 1_000, true),
-    request: validateTokenlessQuoteRequest(payload.request),
+    request,
   } satisfies TokenlessHandoffPayload;
   // The outer handoff privacy envelope and the embedded request must describe the same data boundary.
   // A mismatch means the fragment was tampered with or built inconsistently; reject rather than silently
@@ -548,7 +584,7 @@ export function TokenlessHandoffClient() {
     setError(null);
     try {
       const active = ensureActiveHandoff();
-      if (!request || !quote) throw new Error("Request a current quote before submitting.");
+      if (!request || !quote || !payload) throw new Error("Request a current quote before submitting.");
       if (!mediaReady) throw new Error("Review every attached image or video before submitting.");
       if (!privacyConfirmed) throw new Error("Confirm the non-sensitive data statement before submitting.");
       if (Date.parse(quote.expiresAt) <= Date.now()) {
@@ -560,6 +596,7 @@ export function TokenlessHandoffClient() {
       if (insufficientPrepaid) throw new Error("The selected workspace does not have enough available prepaid USDC.");
       const body = {
         idempotencyKey: active.idempotencyKey,
+        mediaPreviews: payload.mediaPreviews,
         quoteId: quote.quoteId,
         payment: { mode: "prepaid" as const, workspaceId: selectedWorkspace.workspaceId },
       };
@@ -736,7 +773,11 @@ export function TokenlessHandoffClient() {
               <p className="mt-1 text-sm leading-6 text-base-content/55">
                 Review all attached context before confirming it is safe to share.
               </p>
-              <QuestionMedia media={request.question.media} onReviewStateChange={handleMediaReview} />
+              <QuestionMedia
+                media={request.question.media}
+                onReviewStateChange={handleMediaReview}
+                previewCapabilities={payload.mediaPreviews}
+              />
               {mediaReview.status === "pending" ? (
                 <p className="mt-3 text-sm text-base-content/55" role="status">
                   {request.question.media.kind === "youtube"

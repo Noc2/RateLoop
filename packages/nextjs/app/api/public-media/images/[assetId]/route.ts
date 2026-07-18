@@ -12,7 +12,12 @@ export async function GET(request: NextRequest, context: Context) {
   try {
     const { assetId } = await context.params;
     const session = await findAuthSession(request.cookies.get(AUTH_SESSION_COOKIE)?.value);
-    const image = await readPublicQuestionImage({ accountAddress: session?.principalId, assetId });
+    const image = await readPublicQuestionImage({
+      accountAddress: session?.principalId,
+      assetId,
+      previewCapability: request.nextUrl.searchParams.get("preview"),
+      previewDigest: request.nextUrl.searchParams.get("digest"),
+    });
     return new NextResponse(Buffer.from(image.bytes), {
       headers: {
         "Cache-Control": image.public ? "public, max-age=86400, stale-while-revalidate=604800" : "private, no-store",
@@ -20,6 +25,7 @@ export async function GET(request: NextRequest, context: Context) {
         "Content-Security-Policy": "default-src 'none'; sandbox",
         "Content-Type": image.contentType,
         ETag: `"${image.digest.replace(/^sha256:/, "")}"`,
+        "Referrer-Policy": "no-referrer",
         "X-Content-Type-Options": "nosniff",
       },
     });

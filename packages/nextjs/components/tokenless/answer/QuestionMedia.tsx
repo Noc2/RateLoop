@@ -11,12 +11,33 @@ export type QuestionMediaReviewState =
   | { status: "ready" }
   | { status: "error"; message: string };
 
+export type QuestionMediaPreviewCapability = {
+  assetId: string;
+  digest: `sha256:${string}`;
+  previewCapability: string;
+};
+
+export function questionMediaImageSource(
+  image: { assetId: string; digest: `sha256:${string}` },
+  previewCapabilities: QuestionMediaPreviewCapability[] | undefined,
+) {
+  const base = `/api/public-media/images/${encodeURIComponent(image.assetId)}`;
+  const preview = previewCapabilities?.find(
+    candidate => candidate.assetId === image.assetId && candidate.digest === image.digest,
+  );
+  if (!preview) return base;
+  const query = new URLSearchParams({ digest: image.digest, preview: preview.previewCapability });
+  return `${base}?${query}`;
+}
+
 export function QuestionMedia({
   media,
   onReviewStateChange,
+  previewCapabilities,
 }: {
   media: PublicQuestionMedia;
   onReviewStateChange?: (state: QuestionMediaReviewState) => void;
+  previewCapabilities?: QuestionMediaPreviewCapability[];
 }) {
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
   const [playVideo, setPlayVideo] = useState(false);
@@ -112,7 +133,7 @@ export function QuestionMedia({
             aria-label={`Open image ${index + 1}: ${image.alt}`}
           >
             <img
-              src={`/api/public-media/images/${encodeURIComponent(image.assetId)}`}
+              src={questionMediaImageSource(image, previewCapabilities)}
               alt={image.alt}
               className="aspect-video h-full max-h-80 w-full object-contain"
               loading="lazy"
@@ -157,7 +178,7 @@ export function QuestionMedia({
               Close
             </button>
             <img
-              src={`/api/public-media/images/${encodeURIComponent(media.items[selectedImage]!.assetId)}`}
+              src={questionMediaImageSource(media.items[selectedImage]!, previewCapabilities)}
               alt={media.items[selectedImage]!.alt}
               className="max-h-[88vh] max-w-full rounded-xl object-contain"
             />

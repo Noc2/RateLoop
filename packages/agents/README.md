@@ -158,15 +158,15 @@ Results itemize bounty, fee, attempt reserve, refunds, and compensation. A termi
 
 ## Environment
 
-| Variable                           | Purpose                                                                                                         |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `RATELOOP_API_BASE_URL`            | Required isolated tokenless deployment origin. HTTPS is required except on loopback.                            |
-| `RATELOOP_AGENT_API_KEY`           | Workspace key required by CLI quotes, assurance commands, and paid operations.                                 |
-| `RATELOOP_AGENT_API_PATH`          | Optional API prefix. Defaults to `/api/agent/v1`.                                                               |
-| `RATELOOP_REQUEST_TIMEOUT_MS`      | Optional positive timeout for non-wait requests.                                                                |
-| `RATELOOP_AGENT_KEYSTORE_PATH`     | Encrypted agent wallet path used by `run` and `wallet-address`.                                                 |
-| `RATELOOP_AGENT_KEYSTORE_PASSWORD` | Password for the encrypted agent wallet; keep it in a secret manager.                                           |
-| `RATELOOP_AGENT_RESUME_PATH`       | Optional mode-0600 path for a non-secret autonomous-run receipt.                                                |
+| Variable                           | Purpose                                                                              |
+| ---------------------------------- | ------------------------------------------------------------------------------------ |
+| `RATELOOP_API_BASE_URL`            | Required isolated tokenless deployment origin. HTTPS is required except on loopback. |
+| `RATELOOP_AGENT_API_KEY`           | Workspace key required by CLI quotes, assurance commands, and paid operations.       |
+| `RATELOOP_AGENT_API_PATH`          | Optional API prefix. Defaults to `/api/agent/v1`.                                    |
+| `RATELOOP_REQUEST_TIMEOUT_MS`      | Optional positive timeout for non-wait requests.                                     |
+| `RATELOOP_AGENT_KEYSTORE_PATH`     | Encrypted agent wallet path used by `run` and `wallet-address`.                      |
+| `RATELOOP_AGENT_KEYSTORE_PASSWORD` | Password for the encrypted agent wallet; keep it in a secret manager.                |
+| `RATELOOP_AGENT_RESUME_PATH`       | Optional mode-0600 path for a non-secret autonomous-run receipt.                     |
 
 The CLI intentionally has no implicit production origin, MCP transport, local signer, contract-address override, or legacy chain configuration. A scoped API key is attached to quotes, paid operations, and assurance project/run requests sent to the configured tokenless origin.
 
@@ -179,8 +179,11 @@ payloads. See the machine-readable
 [`framework-integrations.md`](../nextjs/public/docs/framework-integrations.md) quickstarts and trust boundaries.
 
 `media-upload` accepts JPG, PNG, or WEBP input up to 10 MB. It sends file bytes as multipart data directly from disk,
-requires `RATELOOP_AGENT_API_KEY`, and prints only the staged descriptor. The public MCP surface remains four tools and
-does not accept raw image bytes.
+requires `RATELOOP_AGENT_API_KEY`, and prints the private staged descriptor. For a browser handoff, copy its exact
+`assetId`, `digest`, and short-lived `previewCapability` into the handoff tool's top-level `mediaPreviews` entry while
+placing only `assetId`, `digest`, and meaningful alternative text in `question.media.items`. Treat the preview grant as
+a bearer secret: keep it in the handoff fragment, do not log or persist it, and request a fresh upload descriptor after
+it expires. The public MCP surface remains four tools and does not accept raw image bytes.
 
 ## Assurance integration commands
 

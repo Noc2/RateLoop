@@ -1,11 +1,13 @@
 import {
   type TokenlessAskRequest,
   type TokenlessAskResponse,
+  type TokenlessQuestionImagePreviewGrant,
   type TokenlessQuoteRequest,
   type TokenlessQuoteResponse,
   buildTokenlessQuoteIntent,
 } from "@rateloop/sdk";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import type { PoolClient } from "pg";
 import "server-only";
 import { getAddress } from "viem";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
@@ -119,8 +121,11 @@ export type PreparedProductAsk = {
   policyVersion: number | null;
   policyReservationId: string | null;
   createdPolicyReservation: boolean;
+  mediaPreviews?: TokenlessQuestionImagePreviewGrant[];
   quoteId: string;
   requestHash: string;
+  quoteRequest: Record<string, unknown>;
+  quote: TokenlessQuoteResponse;
   questionId: string;
   workspaceId: string;
 };
@@ -1078,15 +1083,16 @@ async function releaseAgentPolicyBudget(reservationId: string | null) {
   });
 }
 
-async function createQuestionRecords(input: {
-  apiKeyId: string | null;
-  ownerAccountAddress: string | null;
-  workspaceId: string;
-  quoteId: string;
-  idempotencyKey: string;
-  quoteRequest: Record<string, unknown>;
-  quote: TokenlessQuoteResponse;
-}) {
+async function createQuestionRecords(
+  client: PoolClient,
+  input: {
+    workspaceId: string;
+    quoteId: string;
+    idempotencyKey: string;
+    quoteRequest: Record<string, unknown>;
+    quote: TokenlessQuoteResponse;
+  },
+) {
   const intent = buildTokenlessQuoteIntent(input.quoteRequest as unknown as TokenlessQuoteRequest, input.quote);
   const content = intent.normalizedRequest.question;
   const contentJson = stableJson(content);
@@ -1110,66 +1116,66 @@ async function createQuestionRecords(input: {
   if (`0x${termsHash}` !== intent.termsHash) throw new Error("Canonical tokenless terms commitment drifted.");
   const questionId = `qst_${digest(`${input.workspaceId}:${input.idempotencyKey}`).slice(0, 32)}`;
   const now = new Date();
-  const client = await dbPool.connect();
-  try {
-    await client.query("BEGIN");
-    await client.query(
-      `INSERT INTO tokenless_content_records
+  await client.query(
+    `INSERT INTO tokenless_content_records
        (content_id, workspace_id, content_hash, content_json, home_region, data_classification,
         data_use_policy_version, moderation_status, created_at, updated_at)
        VALUES ($1, $2, $3, $4, 'eu', $5, 'data-use-v1', 'pending', $6, $6)
        ON CONFLICT (content_id) DO NOTHING`,
-      [
-        contentId,
-        input.workspaceId,
-        contentHash,
-        contentJson,
-        input.quoteRequest.dataClassification ?? "internal",
-        now,
-      ],
-    );
-    await client.query(
-      `INSERT INTO tokenless_question_records
+    [contentId, input.workspaceId, contentHash, contentJson, input.quoteRequest.dataClassification ?? "internal", now],
+  );
+  await client.query(
+    `INSERT INTO tokenless_question_records
        (question_id, workspace_id, content_id, quote_id, terms_hash, terms_json, visibility,
         data_classification, home_region, data_use_policy_version, redaction_summary,
         confirmed_no_sensitive_data, moderation_status, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'eu', 'data-use-v1', $9, $10, 'pending', $11, $11)
        ON CONFLICT (question_id) DO NOTHING`,
-      [
-        questionId,
-        input.workspaceId,
-        contentId,
-        input.quoteId,
-        termsHash,
-        termsJson,
-        input.quoteRequest.visibility ?? "private",
-        input.quoteRequest.dataClassification ?? "internal",
-        input.quoteRequest.redactionSummary ?? null,
-        input.quoteRequest.confirmedNoSensitiveData === true,
-        now,
-      ],
+    [
+      questionId,
+      input.workspaceId,
+      contentId,
+      input.quoteId,
+      termsHash,
+      termsJson,
+      input.quoteRequest.visibility ?? "private",
+      input.quoteRequest.dataClassification ?? "internal",
+      input.quoteRequest.redactionSummary ?? null,
+      input.quoteRequest.confirmedNoSensitiveData === true,
+      now,
+    ],
+  );
+  const frozenQuestion = await client.query(
+    `SELECT q.workspace_id, q.content_id, q.quote_id, q.terms_hash, q.terms_json,
+              q.visibility, q.data_classification, q.redaction_summary, q.confirmed_no_sensitive_data,
+              c.content_hash, c.content_json
+       FROM tokenless_question_records q
+       JOIN tokenless_content_records c ON c.content_id = q.content_id
+       WHERE q.question_id = $1
+       LIMIT 1 FOR UPDATE`,
+    [questionId],
+  );
+  const frozen = frozenQuestion.rows[0] as QueryRow | undefined;
+  if (
+    rowString(frozen, "workspace_id") !== input.workspaceId ||
+    rowString(frozen, "content_id") !== contentId ||
+    rowString(frozen, "quote_id") !== input.quoteId ||
+    rowString(frozen, "terms_hash") !== termsHash ||
+    rowString(frozen, "terms_json") !== termsJson ||
+    rowString(frozen, "visibility") !== (input.quoteRequest.visibility ?? "private") ||
+    rowString(frozen, "data_classification") !== (input.quoteRequest.dataClassification ?? "internal") ||
+    (rowString(frozen, "redaction_summary") ?? null) !== (input.quoteRequest.redactionSummary ?? null) ||
+    frozen?.confirmed_no_sensitive_data !== (input.quoteRequest.confirmedNoSensitiveData === true) ||
+    rowString(frozen, "content_hash") !== contentHash ||
+    rowString(frozen, "content_json") !== contentJson
+  ) {
+    throw new TokenlessServiceError(
+      "This idempotency key is already bound to a different question.",
+      409,
+      "idempotency_conflict",
     );
-    const question = input.quoteRequest.question as {
-      media?: { kind?: unknown; items?: Array<{ assetId: string; digest: string }> };
-    };
-    if (question.media?.kind === "images" && Array.isArray(question.media.items)) {
-      await bindPublicQuestionMediaToQuestion(client, {
-        accountAddress: input.ownerAccountAddress,
-        items: question.media.items,
-        now,
-        ownerReference: input.apiKeyId ? `api_key:${input.apiKeyId}` : input.ownerAccountAddress,
-        questionId,
-        workspaceId: input.workspaceId,
-      });
-    }
-    await client.query("COMMIT");
-    return questionId;
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
   }
+  return questionId;
 }
 
 async function reservePrepaid(input: {
@@ -1339,6 +1345,7 @@ async function persistPaymentIntent(input: {
 }
 
 export async function prepareProductAsk(input: {
+  mediaPreviews?: TokenlessQuestionImagePreviewGrant[];
   principal: ProductPrincipal;
   request: TokenlessAskRequest;
 }): Promise<PreparedProductAsk> {
@@ -1373,15 +1380,7 @@ export async function prepareProductAsk(input: {
         paymentMode: input.request.payment.mode as TokenlessAgentPaymentMode,
       });
     }
-    const questionId = await createQuestionRecords({
-      apiKeyId: input.principal.kind === "api_key" ? input.principal.apiKeyId : null,
-      ownerAccountAddress: input.principal.kind === "session" ? input.principal.accountAddress.toLowerCase() : null,
-      workspaceId,
-      quoteId: input.request.quoteId,
-      idempotencyKey: input.request.idempotencyKey,
-      quoteRequest,
-      quote,
-    });
+    const questionId = `qst_${digest(`${workspaceId}:${input.request.idempotencyKey}`).slice(0, 32)}`;
     const paymentMode = input.request.payment.mode;
     const payment =
       paymentMode === "prepaid"
@@ -1409,7 +1408,10 @@ export async function prepareProductAsk(input: {
       policyVersion: policyReservation?.policyVersion ?? policy?.version ?? null,
       policyReservationId: policyReservation?.reservationId ?? null,
       createdPolicyReservation: policyReservation?.created ?? false,
+      mediaPreviews: input.mediaPreviews,
       quoteId: input.request.quoteId,
+      quote,
+      quoteRequest,
       requestHash: hashJson(input.request),
       questionId,
       workspaceId,
@@ -1426,12 +1428,45 @@ export async function attachProductAsk(prepared: PreparedProductAsk, ask: Tokenl
   try {
     await client.query("BEGIN");
     const askResult = await client.query(
-      `SELECT operation_key FROM tokenless_agent_asks WHERE operation_key = $1 LIMIT 1 FOR UPDATE`,
+      `SELECT operation_key, idempotency_key, quote_id, request_hash
+       FROM tokenless_agent_asks WHERE operation_key = $1 LIMIT 1 FOR UPDATE`,
       [ask.operationKey],
     );
     const storedAsk = askResult.rows[0] as QueryRow | undefined;
-    if (!storedAsk) {
+    if (
+      !storedAsk ||
+      rowString(storedAsk, "idempotency_key") !== prepared.idempotencyKey ||
+      rowString(storedAsk, "quote_id") !== prepared.quoteId ||
+      rowString(storedAsk, "request_hash") !== prepared.requestHash
+    ) {
       throw new TokenlessServiceError("Ask ownership conflicts with this request.", 409, "ask_ownership_conflict");
+    }
+    const paymentTable =
+      prepared.paymentMode === "prepaid" ? "tokenless_prepaid_reservations" : "tokenless_payment_intents";
+    const paymentIdColumn = prepared.paymentMode === "prepaid" ? "reservation_id" : "payment_intent_id";
+    const lockedPayment = await client.query(
+      `SELECT operation_key, ${prepared.paymentMode === "prepaid" ? "status" : "state"} AS state
+       FROM ${paymentTable} WHERE ${paymentIdColumn} = $1 LIMIT 1 FOR UPDATE`,
+      [prepared.paymentReference],
+    );
+    const lockedPaymentRow = lockedPayment.rows[0] as QueryRow | undefined;
+    const lockedOperation = rowString(lockedPaymentRow, "operation_key");
+    if (
+      !lockedPaymentRow ||
+      rowString(lockedPaymentRow, "state") !== prepared.paymentState ||
+      (lockedOperation && lockedOperation !== ask.operationKey)
+    ) {
+      throw new TokenlessServiceError("Ask payment conflicts with this request.", 409, "payment_conflict");
+    }
+    const questionId = await createQuestionRecords(client, {
+      idempotencyKey: prepared.idempotencyKey,
+      quote: prepared.quote,
+      quoteId: prepared.quoteId,
+      quoteRequest: prepared.quoteRequest,
+      workspaceId: prepared.workspaceId,
+    });
+    if (questionId !== prepared.questionId) {
+      throw new TokenlessServiceError("Ask question conflicts with this request.", 409, "ask_ownership_conflict");
     }
     await client.query(
       `INSERT INTO tokenless_ask_ownership
@@ -1510,11 +1545,9 @@ export async function attachProductAsk(prepared: PreparedProductAsk, ask: Tokenl
       );
     }
 
-    const table = prepared.paymentMode === "prepaid" ? "tokenless_prepaid_reservations" : "tokenless_payment_intents";
-    const idColumn = prepared.paymentMode === "prepaid" ? "reservation_id" : "payment_intent_id";
     await client.query(
-      `UPDATE ${table} SET operation_key = $1, updated_at = $2
-       WHERE ${idColumn} = $3 AND (operation_key IS NULL OR operation_key = $1)`,
+      `UPDATE ${paymentTable} SET operation_key = $1, updated_at = $2
+       WHERE ${paymentIdColumn} = $3 AND (operation_key IS NULL OR operation_key = $1)`,
       [ask.operationKey, now, prepared.paymentReference],
     );
 
@@ -1531,6 +1564,20 @@ export async function attachProductAsk(prepared: PreparedProductAsk, ask: Tokenl
     const payment = paymentResult.rows[0] as QueryRow | undefined;
     if (rowString(payment, "operation_key") !== ask.operationKey) {
       throw new TokenlessServiceError("Ask payment conflicts with this request.", 409, "payment_conflict");
+    }
+    const preparedQuestion = prepared.quoteRequest.question as {
+      media?: { kind?: unknown; items?: Array<{ assetId: string; digest: string }> };
+    };
+    if (preparedQuestion.media?.kind === "images" && Array.isArray(preparedQuestion.media.items)) {
+      await bindPublicQuestionMediaToQuestion(client, {
+        accountAddress: prepared.ownerAccountAddress,
+        items: preparedQuestion.media.items,
+        now,
+        ownerReference: prepared.apiKeyId ? `api_key:${prepared.apiKeyId}` : prepared.ownerAccountAddress,
+        previewGrants: prepared.mediaPreviews,
+        questionId,
+        workspaceId: prepared.workspaceId,
+      });
     }
     await client.query("COMMIT");
   } catch (error) {

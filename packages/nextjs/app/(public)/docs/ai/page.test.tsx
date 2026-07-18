@@ -54,6 +54,7 @@ test("agent docs describe the approval-bound four-tool MCP surface and decision 
   assert.match(html, /does not issue an automatic production/i);
   assert.match(html, /media-upload/);
   assert.match(html, /Image bytes never belong in MCP arguments or a handoff URL/i);
+  assert.match(html, /mediaPreviews/);
   assert.match(html, /workspace and authorized client\/project boundary/i);
   assert.match(html, /rateloop_get_agent_context/);
   assert.match(html, /rateloop_evaluate_review_requirement/);

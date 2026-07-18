@@ -221,8 +221,10 @@ yarn workspace @rateloop/agents media-upload \\
   --file ./candidate.png \\
   --client-request-id release-candidate-01`}</CodeBlock>
       <p>
-        Staging accepts JPG, PNG, and WEBP files up to 10 MB. The private upload endpoint is not an MCP tool, and an
-        API-key-staged image cannot be silently claimed by a different browser principal.
+        Staging accepts JPG, PNG, and WEBP files up to 10 MB. For a browser handoff, copy each descriptor&apos;s exact
+        asset ID, digest, and short-lived preview capability into the tool&apos;s top-level <code>mediaPreviews</code>.
+        The bearer grant stays in the handoff fragment, works only for a signed-in active workspace member, expires with
+        staging, and is consumed only while atomically binding the accepted ask. Do not log or persist it.
       </p>
 
       <h2 id="approval-and-privacy-boundary">Approval and privacy boundary</h2>

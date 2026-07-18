@@ -201,7 +201,8 @@ test("browser handoff reveals price and submission progressively while retaining
 });
 
 test("browser handoff renders and verifies media before privacy approval or network mutation", () => {
-  assert.match(handoffSource, /<QuestionMedia media=\{request\.question\.media\}/);
+  assert.match(handoffSource, /<QuestionMedia[\s\S]{0,160}media=\{request\.question\.media\}/);
+  assert.match(handoffSource, /previewCapabilities=\{payload\.mediaPreviews\}/);
   assert.match(handoffSource, /Review all attached context before confirming it is safe to share/);
   assert.match(handoffSource, /disabled=\{formDisabled \|\| !mediaReady\}/);
   assert.match(handoffSource, /if \(!mediaReady\)[\s\S]{0,120}before requesting a quote/);

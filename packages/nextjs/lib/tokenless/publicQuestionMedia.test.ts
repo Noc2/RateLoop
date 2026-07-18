@@ -4,10 +4,12 @@ import sharp from "sharp";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import {
+  attachProductAsk,
   createWorkspace,
   createWorkspaceApiKey,
   prepareProductAsk,
   recordPrepaidLedgerEntry,
+  releasePreparedProductAsk,
 } from "~~/lib/tokenless/productCore";
 import {
   PUBLIC_QUESTION_IMAGE_MAX_BYTES,
@@ -18,7 +20,8 @@ import {
   stagePublicQuestionImage,
   sweepExpiredPublicQuestionMedia,
 } from "~~/lib/tokenless/publicQuestionMedia";
-import { TokenlessServiceError, createTokenlessQuote } from "~~/lib/tokenless/server";
+import { __setPublicQuestionMediaPreviewKeyForTests } from "~~/lib/tokenless/publicQuestionMediaPreview";
+import { TokenlessServiceError, createTokenlessAsk, createTokenlessQuote } from "~~/lib/tokenless/server";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const OUTSIDER = "0x2222222222222222222222222222222222222222";
@@ -51,6 +54,7 @@ beforeEach(async () => {
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
   store = new MemoryMediaStore();
   __setPublicQuestionMediaRuntimeForTests({ randomAssetId: () => ASSET_ID, store });
+  __setPublicQuestionMediaPreviewKeyForTests(new Uint8Array(32).fill(42));
   workspaceId = (await createWorkspace({ name: "Media workspace", ownerAddress: OWNER })).workspaceId;
   const now = new Date();
   await dbClient.execute({
@@ -63,6 +67,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  __setPublicQuestionMediaPreviewKeyForTests(null);
   __setPublicQuestionMediaRuntimeForTests(null);
   __setDatabaseResourcesForTests(null);
 });
@@ -102,7 +107,9 @@ test("staged images are byte-verified, normalized, private, and idempotent", asy
   assert.equal(first.contentType, "image/webp");
   assert.equal(first.width, 48);
   assert.equal(first.height, 32);
-  assert.match(first.previewUrl, new RegExp(`${ASSET_ID}$`));
+  assert.match(first.previewCapability, /^pqp1_[0-9a-z]{6,12}_[A-Za-z0-9_-]{43}$/);
+  assert.equal(first.previewExpiresAt, "2026-07-15T10:00:00.000Z");
+  assert.match(first.previewUrl, new RegExp(`${ASSET_ID}\\?`));
   assert.equal(store.objects.size, 1);
   const stored = [...store.objects.values()][0];
   assert.ok(stored);
@@ -222,6 +229,66 @@ test("expired unbound previews fail closed and the bounded sweep deletes their p
   assert.equal(rows.rows[0]?.technical_status, "deleted");
 });
 
+test("expired upload idempotency never returns a dead grant before or after bounded sweeping", async () => {
+  const stagedAt = new Date("2026-07-14T12:00:00.000Z");
+  const staged = await stagePublicQuestionImage({
+    accountAddress: OWNER,
+    bytes: await png(),
+    clientRequestId: "upload:test:expired-replay",
+    filename: "expired-replay.png",
+    now: stagedAt,
+    workspaceId,
+  });
+  const targetExpiry = new Date(staged.previewExpiresAt);
+  for (let index = 0; index < 21; index += 1) {
+    const assetId = `pqm_${String(index).padStart(32, "B")}`;
+    const createdAt = new Date(stagedAt.getTime() - (index + 1) * 60_000);
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_public_question_media
+            (asset_id, workspace_id, owner_account_address, client_request_id, digest, storage_ref,
+             content_type, original_filename, size_bytes, width, height, technical_status,
+             moderation_status, expires_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, 'image/webp', 'old.webp', 10, 1, 1, 'ready', 'pending', ?, ?, ?)`,
+      args: [
+        assetId,
+        workspaceId,
+        OWNER,
+        `upload:test:old:${index}`,
+        `sha256:${index.toString(16).padStart(64, "0")}`,
+        `memory://old/${index}`,
+        new Date(targetExpiry.getTime() - (index + 1) * 60_000),
+        createdAt,
+        createdAt,
+      ],
+    });
+  }
+  const retryAt = new Date(targetExpiry.getTime() + 1_000);
+  assert.equal((await sweepExpiredPublicQuestionMedia({ limit: 20, now: retryAt })).deleted, 20);
+  const stillReady = await dbClient.execute({
+    sql: "SELECT technical_status FROM tokenless_public_question_media WHERE asset_id = ?",
+    args: [staged.assetId],
+  });
+  assert.equal(stillReady.rows[0]?.technical_status, "ready");
+  const retry = () =>
+    stagePublicQuestionImage({
+      accountAddress: OWNER,
+      bytes: new Uint8Array([1]),
+      clientRequestId: "upload:test:expired-replay",
+      filename: "expired-replay.png",
+      now: retryAt,
+      workspaceId,
+    });
+  await assert.rejects(
+    retry,
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "public_media_idempotency_expired",
+  );
+  await sweepExpiredPublicQuestionMedia({ limit: 100, now: retryAt });
+  await assert.rejects(
+    retry,
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "public_media_idempotency_expired",
+  );
+});
+
 test("ask preparation binds exact owner assets and public reads stay closed until moderation approval", async () => {
   const now = new Date();
   const staged = await stagePublicQuestionImage({
@@ -255,14 +322,17 @@ test("ask preparation binds exact owner assets and public reads stay closed unti
     source: "media-test",
     workspaceId,
   });
+  const request = {
+    idempotencyKey: "media:test:binding",
+    payment: { mode: "prepaid" as const, workspaceId },
+    quoteId: quote.quoteId,
+  };
   const prepared = await prepareProductAsk({
     principal: { accountAddress: OWNER, kind: "session" },
-    request: {
-      idempotencyKey: "media:test:binding",
-      payment: { mode: "prepaid", workspaceId },
-      quoteId: quote.quoteId,
-    },
+    request,
   });
+  const ask = await createTokenlessAsk(request, request.idempotencyKey, "https://tokenless.example");
+  await attachProductAsk(prepared, ask);
 
   const bound = await dbClient.execute({
     sql: "SELECT question_id FROM tokenless_public_question_media WHERE asset_id = ?",
@@ -303,13 +373,50 @@ test("ask preparation binds exact owner assets and public reads stay closed unti
 
 test("workspace API keys stage and bind the same canonical descriptor without public upload tools", async () => {
   const key = await createWorkspaceApiKey({ name: "Media agent", workspaceId });
+  const now = new Date();
   const staged = await stagePublicQuestionImage({
     apiKeyId: key.apiKeyId,
     bytes: await png(),
     clientRequestId: "upload:agent:binding",
     filename: "agent.png",
+    now,
     workspaceId,
   });
+  await assert.rejects(
+    () => readPublicQuestionImage({ accountAddress: OWNER, assetId: staged.assetId, now }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "public_media_not_found",
+  );
+  const crossPrincipalPreview = await readPublicQuestionImage({
+    accountAddress: OWNER,
+    assetId: staged.assetId,
+    now,
+    previewCapability: staged.previewCapability,
+    previewDigest: staged.digest,
+  });
+  assert.equal(crossPrincipalPreview.public, false);
+  assert.equal(crossPrincipalPreview.digest, staged.digest);
+  await assert.rejects(
+    () =>
+      readPublicQuestionImage({
+        accountAddress: OWNER,
+        assetId: staged.assetId,
+        now,
+        previewCapability: staged.previewCapability,
+        previewDigest: `sha256:${"ff".repeat(32)}`,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "public_media_not_found",
+  );
+  await assert.rejects(
+    () =>
+      readPublicQuestionImage({
+        accountAddress: OWNER,
+        assetId: staged.assetId,
+        now: new Date(staged.previewExpiresAt),
+        previewCapability: staged.previewCapability,
+        previewDigest: staged.digest,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "public_media_not_found",
+  );
   const quote = await createTokenlessQuote({
     audience: { admissionPolicyHash: `0x${"ab".repeat(32)}`, source: "customer_invited" },
     budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
@@ -330,14 +437,17 @@ test("workspace API keys stage and bind the same canonical descriptor without pu
     source: "agent-media-test",
     workspaceId,
   });
+  const request = {
+    idempotencyKey: "media:agent:binding",
+    payment: { mode: "prepaid" as const, workspaceId },
+    quoteId: quote.quoteId,
+  };
   const prepared = await prepareProductAsk({
     principal: { apiKeyId: key.apiKeyId, kind: "api_key", role: "member", workspaceId },
-    request: {
-      idempotencyKey: "media:agent:binding",
-      payment: { mode: "prepaid", workspaceId },
-      quoteId: quote.quoteId,
-    },
+    request,
   });
+  const ask = await createTokenlessAsk(request, request.idempotencyKey, "https://tokenless.example");
+  await attachProductAsk(prepared, ask);
   const bound = await dbClient.execute({
     sql: "SELECT owner_account_address, question_id FROM tokenless_public_question_media WHERE asset_id = ?",
     args: [staged.assetId],
@@ -345,4 +455,90 @@ test("workspace API keys stage and bind the same canonical descriptor without pu
   assert.deepEqual(bound.rows, [
     { owner_account_address: `api_key:${key.apiKeyId}`, question_id: prepared.questionId },
   ]);
+});
+
+test("a downstream attach failure rolls back the capability bridge and permits an exact safe retry", async () => {
+  const key = await createWorkspaceApiKey({ name: "Rollback media agent", workspaceId });
+  const staged = await stagePublicQuestionImage({
+    apiKeyId: key.apiKeyId,
+    bytes: await png(),
+    clientRequestId: "upload:agent:rollback",
+    filename: "rollback.png",
+    now: new Date(),
+    workspaceId,
+  });
+  const quote = await createTokenlessQuote({
+    audience: { admissionPolicyHash: `0x${"ab".repeat(32)}`, source: "customer_invited" },
+    budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
+    confirmedNoSensitiveData: true,
+    dataClassification: "synthetic",
+    question: {
+      kind: "binary",
+      media: {
+        kind: "images",
+        items: [{ alt: "Rollback candidate", assetId: staged.assetId, digest: staged.digest }],
+      },
+      prompt: "Should the rollback candidate ship?",
+      rationale: { mode: "optional" },
+    },
+    requestedPanelSize: 15,
+    responseWindowSeconds: 1_200,
+    visibility: "public",
+  });
+  await recordPrepaidLedgerEntry({
+    amountAtomic: quote.economics.totalFundedAtomic,
+    source: "media-rollback-test",
+    workspaceId,
+  });
+  const request = {
+    idempotencyKey: "media:agent:rollback",
+    payment: { mode: "prepaid" as const, workspaceId },
+    quoteId: quote.quoteId,
+  };
+  const mediaPreviews = [
+    { assetId: staged.assetId, digest: staged.digest, previewCapability: staged.previewCapability },
+  ];
+  const prepared = await prepareProductAsk({
+    mediaPreviews,
+    principal: { accountAddress: OWNER, kind: "session" },
+    request,
+  });
+  const ask = await createTokenlessAsk(request, request.idempotencyKey, "https://tokenless.example");
+  await dbClient.execute({
+    sql: "DELETE FROM tokenless_prepaid_reservations WHERE reservation_id = ?",
+    args: [prepared.paymentReference],
+  });
+  await assert.rejects(
+    () => attachProductAsk(prepared, ask),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "payment_conflict",
+  );
+  const rolledBack = await dbClient.execute({
+    sql: "SELECT owner_account_address, question_id FROM tokenless_public_question_media WHERE asset_id = ?",
+    args: [staged.assetId],
+  });
+  assert.deepEqual(rolledBack.rows, [{ owner_account_address: `api_key:${key.apiKeyId}`, question_id: null }]);
+  assert.equal(
+    Number(
+      (
+        await dbClient.execute({
+          sql: "SELECT COUNT(*) AS count FROM tokenless_question_records WHERE question_id = ?",
+          args: [prepared.questionId],
+        })
+      ).rows[0]?.count,
+    ),
+    0,
+  );
+  await releasePreparedProductAsk(prepared);
+
+  const retry = await prepareProductAsk({
+    mediaPreviews,
+    principal: { accountAddress: OWNER, kind: "session" },
+    request,
+  });
+  await attachProductAsk(retry, ask);
+  const bound = await dbClient.execute({
+    sql: "SELECT owner_account_address, question_id FROM tokenless_public_question_media WHERE asset_id = ?",
+    args: [staged.assetId],
+  });
+  assert.deepEqual(bound.rows, [{ owner_account_address: OWNER, question_id: retry.questionId }]);
 });

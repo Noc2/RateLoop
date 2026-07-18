@@ -2,6 +2,7 @@ import { RateLoopSdkError, type TokenlessQuoteRequest, normalizeTokenlessQuestio
 import { createHash, randomBytes } from "node:crypto";
 import "server-only";
 import { TokenlessMcpToolError } from "~~/lib/mcp/errors";
+import { validatePublicQuestionMediaPreviewCapability } from "~~/lib/tokenless/publicQuestionMediaPreview";
 import { getTokenlessAskByIdempotencyKey } from "~~/lib/tokenless/server";
 
 export const TOKENLESS_HANDOFF_VERSION = "rateloop.handoff.v1" as const;
@@ -17,6 +18,11 @@ const DATA_CLASSIFICATIONS = ["public", "synthetic", "redacted"] as const;
 
 type JsonRecord = Record<string, unknown>;
 export type TokenlessHandoffAccess = { handoffId: string; handoffToken: string };
+export type TokenlessHandoffMediaPreview = {
+  assetId: string;
+  digest: `sha256:${string}`;
+  previewCapability: string;
+};
 export type TokenlessHandoffPayload = {
   version: typeof TOKENLESS_HANDOFF_VERSION;
   handoffId: string;
@@ -24,6 +30,7 @@ export type TokenlessHandoffPayload = {
   idempotencyKey: string;
   expiresAt: string;
   dataClassification: (typeof DATA_CLASSIFICATIONS)[number];
+  mediaPreviews: TokenlessHandoffMediaPreview[];
   redactionSummary: string;
   request: TokenlessQuoteRequest;
 };
@@ -113,6 +120,55 @@ export function parseMcpQuoteRequest(value: unknown): TokenlessQuoteRequest {
   };
 }
 
+function parseMediaPreviews(value: unknown, request: TokenlessQuoteRequest, now: Date) {
+  const imageItems = request.question.media?.kind === "images" ? request.question.media.items : [];
+  if (imageItems.length === 0) {
+    if (value !== undefined && (!Array.isArray(value) || value.length > 0)) {
+      toolError("mediaPreviews are supported only for image handoffs.", "invalid_media_preview_capability");
+    }
+    return { expiresAt: null, mediaPreviews: [] as TokenlessHandoffMediaPreview[] };
+  }
+  if (!Array.isArray(value) || value.length !== imageItems.length) {
+    toolError(
+      "Every staged handoff image requires exactly one preview capability.",
+      "media_preview_capability_required",
+    );
+  }
+  const expected = new Map(imageItems.map(item => [item.assetId, item.digest]));
+  const seen = new Set<string>();
+  const expiryTimes: number[] = [];
+  const mediaPreviews = value.map((raw, index) => {
+    const item = record(raw, `mediaPreviews[${index}]`);
+    exact(item, ["assetId", "digest", "previewCapability"], `mediaPreviews[${index}]`);
+    const assetId = string(item.assetId, `mediaPreviews[${index}].assetId`, 1, 100);
+    const digest = string(item.digest, `mediaPreviews[${index}].digest`, 1, 80);
+    const previewCapability = string(item.previewCapability, `mediaPreviews[${index}].previewCapability`, 1, 160);
+    if (expected.get(assetId) !== digest || seen.has(assetId)) {
+      toolError(
+        "Media preview capabilities must match each exact handoff asset and digest once.",
+        "invalid_media_preview_capability",
+      );
+    }
+    const validated = validatePublicQuestionMediaPreviewCapability({
+      assetId,
+      capability: previewCapability,
+      digest,
+      now,
+    });
+    if (!validated) {
+      toolError("A media preview capability is invalid or expired.", "invalid_media_preview_capability");
+    }
+    seen.add(assetId);
+    expiryTimes.push(validated.expiresAt.getTime());
+    return {
+      assetId,
+      digest: digest as `sha256:${string}`,
+      previewCapability,
+    };
+  });
+  return { expiresAt: new Date(Math.min(...expiryTimes)), mediaPreviews };
+}
+
 export function deriveMcpHandoffIdempotencyKey(input: TokenlessHandoffAccess) {
   if (!HANDOFF_ID_PATTERN.test(input.handoffId) || !HANDOFF_TOKEN_PATTERN.test(input.handoffToken)) {
     toolError("The handoff bearer capability is invalid.", "invalid_handoff_capability");
@@ -146,7 +202,11 @@ export function createMcpHandoff(
   options: { now?: Date; random?: (size: number) => Buffer } = {},
 ) {
   const input = record(value, "arguments");
-  exact(input, ["request", "dataClassification", "redactionSummary", "confirmedNoSensitiveData"], "arguments");
+  exact(
+    input,
+    ["request", "dataClassification", "redactionSummary", "confirmedNoSensitiveData", "mediaPreviews"],
+    "arguments",
+  );
   if (input.confirmedNoSensitiveData !== true) {
     toolError(
       "confirmedNoSensitiveData must be true before creating a browser handoff.",
@@ -165,8 +225,10 @@ export function createMcpHandoff(
     confirmedNoSensitiveData: true as const,
   };
   const now = options.now ?? new Date();
+  const preview = parseMediaPreviews(input.mediaPreviews, request, now);
   const random = options.random ?? randomBytes;
-  const expiresAt = new Date(Math.floor((now.getTime() + HANDOFF_TTL_MS) / 1_000) * 1_000);
+  const defaultExpiry = Math.floor((now.getTime() + HANDOFF_TTL_MS) / 1_000) * 1_000;
+  const expiresAt = new Date(Math.min(defaultExpiry, preview.expiresAt?.getTime() ?? defaultExpiry));
   const handoffId = `rhl_${random(24).toString("base64url")}`;
   const handoffToken = `rht_${random(32).toString("base64url")}_${Math.floor(expiresAt.getTime() / 1_000).toString(36)}`;
   const idempotencyKey = deriveMcpHandoffIdempotencyKey({ handoffId, handoffToken });
@@ -177,6 +239,7 @@ export function createMcpHandoff(
     idempotencyKey,
     expiresAt: expiresAt.toISOString(),
     dataClassification: input.dataClassification as TokenlessHandoffPayload["dataClassification"],
+    mediaPreviews: preview.mediaPreviews,
     redactionSummary,
     request,
   };

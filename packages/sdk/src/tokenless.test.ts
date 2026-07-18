@@ -323,7 +323,9 @@ test("authenticated SDK image staging uses multipart bytes and returns a canonic
         contentType: "image/webp",
         digest: `sha256:${"ab".repeat(32)}`,
         height: 720,
-        previewUrl: `/api/public-media/images/pqm_${"A".repeat(24)}`,
+        previewCapability: `pqp1_abcdef_${"p".repeat(43)}`,
+        previewExpiresAt: "2026-07-19T12:00:00.000Z",
+        previewUrl: `/api/public-media/images/pqm_${"A".repeat(24)}?preview=capability`,
         sizeBytes: 1234,
         width: 1280,
       });

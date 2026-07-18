@@ -6,7 +6,12 @@ import {
   prepareProductAsk,
   releasePreparedProductAsk,
 } from "~~/lib/tokenless/productCore";
-import { createTokenlessAsk, parseTokenlessAskRequest, tokenlessErrorResponse } from "~~/lib/tokenless/server";
+import {
+  createTokenlessAsk,
+  parseTokenlessAskMediaPreviewGrants,
+  preflightTokenlessAskIdempotency,
+  tokenlessErrorResponse,
+} from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -19,8 +24,10 @@ export async function POST(request: NextRequest) {
       authorization: request.headers.get("authorization"),
       sessionToken: getProductSessionToken(request),
     });
-    const body = parseTokenlessAskRequest(await request.json(), request.headers.get("idempotency-key"));
-    prepared = await prepareProductAsk({ principal, request: body });
+    const rawBody = await request.json();
+    const body = await preflightTokenlessAskIdempotency(rawBody, request.headers.get("idempotency-key"));
+    const mediaPreviews = parseTokenlessAskMediaPreviewGrants(rawBody);
+    prepared = await prepareProductAsk({ mediaPreviews, principal, request: body });
     const response = await createTokenlessAsk(body, request.headers.get("idempotency-key"), request.nextUrl.origin);
     await attachProductAsk(prepared, response);
     attached = true;

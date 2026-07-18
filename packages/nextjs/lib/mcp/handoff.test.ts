@@ -10,10 +10,15 @@ import {
   getMcpHandoffResult,
   getMcpHandoffStatus,
 } from "~~/lib/mcp/handoff";
+import {
+  __setPublicQuestionMediaPreviewKeyForTests,
+  issuePublicQuestionMediaPreviewCapability,
+} from "~~/lib/tokenless/publicQuestionMediaPreview";
 import { createTokenlessAsk, createTokenlessQuote } from "~~/lib/tokenless/server";
 
 const imageAssetId = `pqm_${"A".repeat(24)}`;
 const imageDigest = `sha256:${"a1".repeat(32)}`;
+const previewKey = new Uint8Array(32).fill(41);
 
 function quoteRequest() {
   return {
@@ -46,9 +51,11 @@ function decodePayload(handoffUrl: string) {
 
 beforeEach(() => {
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
+  __setPublicQuestionMediaPreviewKeyForTests(previewKey);
 });
 
 afterEach(() => {
+  __setPublicQuestionMediaPreviewKeyForTests(null);
   __setDatabaseResourcesForTests(null);
 });
 
@@ -76,12 +83,14 @@ test("creates a 24-hour fragment-only bearer handoff without persisting raw capa
     "idempotencyKey",
     "expiresAt",
     "dataClassification",
+    "mediaPreviews",
     "redactionSummary",
     "request",
   ]);
   assert.equal(payload.version, "rateloop.handoff.v1");
   assert.equal(payload.handoffId, handoff.handoffId);
   assert.equal(payload.handoffToken, handoff.handoffToken);
+  assert.deepEqual(payload.mediaPreviews, []);
   assert.equal(
     payload.idempotencyKey,
     deriveMcpHandoffIdempotencyKey({ handoffId: handoff.handoffId, handoffToken: handoff.handoffToken }),
@@ -101,8 +110,15 @@ test("creates a 24-hour fragment-only bearer handoff without persisting raw capa
 });
 
 test("preserves canonical question media in the browser handoff", () => {
+  const now = new Date("2026-07-13T12:00:00.000Z");
+  const previewCapability = issuePublicQuestionMediaPreviewCapability({
+    assetId: imageAssetId,
+    digest: imageDigest,
+    expiresAt: new Date("2026-07-13T13:00:00.000Z"),
+  });
   const argumentsWithMedia = {
     ...handoffArguments(),
+    mediaPreviews: [{ assetId: imageAssetId, digest: imageDigest, previewCapability }],
     request: {
       ...quoteRequest(),
       question: {
@@ -115,12 +131,66 @@ test("preserves canonical question media in the browser handoff", () => {
     },
   };
 
-  const handoff = createMcpHandoff(argumentsWithMedia, "https://rateloop-tokenless.vercel.app");
+  const handoff = createMcpHandoff(argumentsWithMedia, "https://rateloop-tokenless.vercel.app", { now });
   const payload = decodePayload(handoff.handoffUrl);
+  assert.equal(handoff.expiresAt, "2026-07-13T13:00:00.000Z");
   assert.deepEqual(payload.request.question.media, {
     kind: "images",
     items: [{ alt: "Candidate landing page", assetId: imageAssetId, digest: imageDigest }],
   });
+  assert.deepEqual(payload.mediaPreviews, [{ assetId: imageAssetId, digest: imageDigest, previewCapability }]);
+  assert.equal(JSON.stringify(payload.request).includes(previewCapability), false);
+});
+
+test("image handoffs reject missing, cross-asset, and expired preview grants", () => {
+  const now = new Date("2026-07-13T12:00:00.000Z");
+  const request = {
+    ...quoteRequest(),
+    question: {
+      ...quoteRequest().question,
+      media: {
+        kind: "images" as const,
+        items: [{ alt: "Candidate", assetId: imageAssetId, digest: imageDigest }],
+      },
+    },
+  };
+  const capability = issuePublicQuestionMediaPreviewCapability({
+    assetId: imageAssetId,
+    digest: imageDigest,
+    expiresAt: new Date("2026-07-13T13:00:00.000Z"),
+  });
+  assert.throws(
+    () => createMcpHandoff({ ...handoffArguments(), request }, "https://rateloop-tokenless.vercel.app", { now }),
+    (error: unknown) => error instanceof TokenlessMcpToolError && error.code === "media_preview_capability_required",
+  );
+  assert.throws(
+    () =>
+      createMcpHandoff(
+        {
+          ...handoffArguments(),
+          mediaPreviews: [
+            { assetId: imageAssetId, digest: `sha256:${"b2".repeat(32)}`, previewCapability: capability },
+          ],
+          request,
+        },
+        "https://rateloop-tokenless.vercel.app",
+        { now },
+      ),
+    (error: unknown) => error instanceof TokenlessMcpToolError && error.code === "invalid_media_preview_capability",
+  );
+  assert.throws(
+    () =>
+      createMcpHandoff(
+        {
+          ...handoffArguments(),
+          mediaPreviews: [{ assetId: imageAssetId, digest: imageDigest, previewCapability: capability }],
+          request,
+        },
+        "https://rateloop-tokenless.vercel.app",
+        { now: new Date("2026-07-13T13:00:01.000Z") },
+      ),
+    (error: unknown) => error instanceof TokenlessMcpToolError && error.code === "invalid_media_preview_capability",
+  );
 });
 
 test("enforces content confirmation, privacy limits, and quote limits", () => {

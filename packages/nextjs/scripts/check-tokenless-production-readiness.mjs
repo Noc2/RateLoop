@@ -57,6 +57,7 @@ export const REQUIRED_TOKENLESS_PRODUCTION_VARIABLES = [
   "TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY",
   "TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION",
   "TOKENLESS_MCP_RATE_LIMIT_SECRET",
+  "TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET",
   "TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY",
   "TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION",
   "TOKENLESS_GOLD_INJECTION_KEY_VERSION",
@@ -133,6 +134,7 @@ const FORBIDDEN_PUBLIC_SECRETS = [
   "NEXT_PUBLIC_TOKENLESS_EVIDENCE_TENANT_COMMITMENT_KEY",
   "NEXT_PUBLIC_TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY",
   "NEXT_PUBLIC_TOKENLESS_MCP_RATE_LIMIT_SECRET",
+  "NEXT_PUBLIC_TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET",
   "NEXT_PUBLIC_TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY",
   "NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEY_VERSION",
   "NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEYS",
@@ -207,6 +209,15 @@ function decode32(raw, encoding = "base64url") {
   }
 }
 
+function decodePublicMediaPreviewSecret(raw) {
+  if (/^[0-9a-fA-F]{64}$/u.test(raw)) return Buffer.from(raw, "hex");
+  if (/^[A-Za-z0-9_-]{43}$/u.test(raw)) {
+    const decoded = Buffer.from(raw, "base64url");
+    return decoded.byteLength === 32 ? decoded : null;
+  }
+  return null;
+}
+
 function currentKey(env, prefix, encoding, errors) {
   const versionName = `${prefix}_KEY_VERSION`;
   const keysName = `${prefix}_KEYS`;
@@ -274,6 +285,45 @@ function validateTokenlessTestDeployment(env) {
     if (value(env, name)) {
       errors.push(`${name} is forbidden because Feedback Bonus award authority must remain with the configured human.`);
     }
+  }
+  const previewSecret = decodePublicMediaPreviewSecret(value(env, "TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET"));
+  if (!value(env, "TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET")) {
+    errors.push("TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET is required for the tokenless test deployment.");
+  } else if (!previewSecret) {
+    errors.push("TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET must encode exactly 32 bytes.");
+  }
+  const previewRoles = new Map();
+  addSecretRole(previewRoles, "TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET", previewSecret);
+  for (const name of [
+    "TOKENLESS_MCP_RATE_LIMIT_SECRET",
+    "TOKENLESS_PIPELINE_TOKEN",
+    "CRON_SECRET",
+    "TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET",
+    "BETTER_AUTH_SECRET",
+  ]) {
+    if (value(env, name)) addSecretRole(previewRoles, name, Buffer.from(value(env, name), "utf8"));
+  }
+  for (const name of [
+    "TOKENLESS_PSEUDONYM_KEY",
+    "TOKENLESS_EVIDENCE_TENANT_COMMITMENT_KEY",
+    "TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY",
+    "TOKENLESS_WEBHOOK_ENCRYPTION_KEY",
+    "TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY",
+  ]) {
+    addSecretRole(previewRoles, name, decode32(value(env, name), "base64url"));
+  }
+  for (const name of [
+    "TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY",
+    "TOKENLESS_X402_RELAYER_PRIVATE_KEY",
+    "TOKENLESS_PREPAID_FUNDER_PRIVATE_KEY",
+    "TOKENLESS_SURPRISE_BONUS_FUNDER_PRIVATE_KEY",
+    "WORLD_ID_RP_SIGNING_KEY",
+  ]) {
+    const raw = value(env, name).replace(/^0x/u, "");
+    if (/^[0-9a-fA-F]{64}$/u.test(raw)) addSecretRole(previewRoles, name, Buffer.from(raw, "hex"));
+  }
+  for (const names of previewRoles.values()) {
+    if (names.length > 1) errors.push(`Tokenless test key roles must be distinct: ${names.join(", ")}.`);
   }
   return errors;
 }
@@ -542,6 +592,11 @@ export function validateTokenlessProductionReadiness({
   const pseudonymKey = decode32(value(env, "TOKENLESS_PSEUDONYM_KEY"), "base64url");
   if (!pseudonymKey) errors.push("TOKENLESS_PSEUDONYM_KEY must encode exactly 32 bytes.");
   addSecretRole(secretRoles, "TOKENLESS_PSEUDONYM_KEY", pseudonymKey);
+  const publicMediaPreviewSecret = decodePublicMediaPreviewSecret(value(env, "TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET"));
+  if (!publicMediaPreviewSecret) {
+    errors.push("TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET must encode exactly 32 bytes.");
+  }
+  addSecretRole(secretRoles, "TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET", publicMediaPreviewSecret);
   for (const [name, encoding] of [
     ["TOKENLESS_EVIDENCE_TENANT_COMMITMENT_KEY", "base64url"],
     ["TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY", "base64url"],

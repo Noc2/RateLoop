@@ -125,10 +125,18 @@ export type TokenlessQuestionImageUploadResponse = {
   contentType: "image/webp";
   digest: `sha256:${string}`;
   height: number;
+  previewCapability: string;
+  previewExpiresAt: string;
   previewUrl: string;
   sizeBytes: number;
   width: number;
 };
+
+/** Short-lived bearer used only to bridge an authenticated staged image into a browser handoff. */
+export type TokenlessQuestionImagePreviewGrant = Pick<
+  TokenlessQuestionImageUploadResponse,
+  "assetId" | "digest" | "previewCapability"
+>;
 
 export type TokenlessQuestion =
   | {

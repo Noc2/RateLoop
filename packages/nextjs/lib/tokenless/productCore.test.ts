@@ -619,14 +619,17 @@ test("a public browser handoff persists a discoverable public ask end to end", a
   const principal = { kind: "api_key" as const, apiKeyId, workspaceId, role: "member" as const };
 
   const quote = await createTokenlessQuote(browserRequest);
-  await prepareProductAsk({
+  const request = {
+    idempotencyKey: decoded.idempotencyKey,
+    payment: { mode: "prepaid" as const, workspaceId },
+    quoteId: quote.quoteId,
+  };
+  const prepared = await prepareProductAsk({
     principal,
-    request: {
-      idempotencyKey: decoded.idempotencyKey,
-      payment: { mode: "prepaid" as const, workspaceId },
-      quoteId: quote.quoteId,
-    },
+    request,
   });
+  const ask = await createTokenlessAsk(request, request.idempotencyKey, "https://tokenless.example");
+  await attachProductAsk(prepared, ask);
 
   // The persisted question and content must satisfy the exact predicate the public rater queue applies.
   const discoverable = await dbClient.execute({

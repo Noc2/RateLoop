@@ -74,6 +74,8 @@ Next.js:
   `TOKENLESS_WEBHOOK_ENCRYPTION_KEY`; use a distinct server-only secret of at least 32 random characters for signed
   email unsubscribe links
 - `TOKENLESS_MCP_RATE_LIMIT_SECRET` with at least 32 random characters and no public variant
+- dedicated `TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET` (32-byte base64url or hex), distinct from every signing,
+  encryption, rate-limit, and session key, server-only, with no `NEXT_PUBLIC_` variant
 - explicit `TOKENLESS_SUBSCRIPTIONS_ENABLED`; when true, server-only `STRIPE_SECRET_KEY`,
   `STRIPE_WEBHOOK_SECRET`, and `STRIPE_EARLY_ACCESS_MONTHLY_PRICE_ID`
 - dedicated `TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY` (32-byte base64url or hex) and

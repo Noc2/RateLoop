@@ -1,8 +1,14 @@
+import type { TokenlessQuestionImagePreviewGrant } from "@rateloop/sdk";
 import { createHash, randomBytes } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
 import sharp from "sharp";
 import { dbClient, dbPool } from "~~/lib/db";
+import {
+  PUBLIC_QUESTION_MEDIA_PREVIEW_MAX_TTL_MS,
+  issuePublicQuestionMediaPreviewCapability,
+  validatePublicQuestionMediaPreviewCapability,
+} from "~~/lib/tokenless/publicQuestionMediaPreview";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export const PUBLIC_QUESTION_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
@@ -10,7 +16,7 @@ export const PUBLIC_QUESTION_IMAGE_MAX_PIXELS = 28_000_000;
 export const PUBLIC_QUESTION_IMAGE_MAX_DIMENSION = 2_560;
 export const PUBLIC_QUESTION_MEDIA_DAILY_UPLOADS = 20;
 export const PUBLIC_QUESTION_MEDIA_DAILY_BYTES = 100 * 1024 * 1024;
-export const PUBLIC_QUESTION_MEDIA_STAGING_TTL_MS = 24 * 60 * 60 * 1_000;
+export const PUBLIC_QUESTION_MEDIA_STAGING_TTL_MS = PUBLIC_QUESTION_MEDIA_PREVIEW_MAX_TTL_MS;
 
 const CLIENT_REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{8,160}$/;
 const ASSET_ID_PATTERN = /^pqm_[A-Za-z0-9_-]{24,80}$/;
@@ -90,15 +96,20 @@ function responseFromRow(row: Row) {
   const width = rowNumber(row, "width");
   const height = rowNumber(row, "height");
   const sizeBytes = rowNumber(row, "size_bytes");
-  if (!assetId || !digest || !width || !height || !sizeBytes) {
+  const expiresAt = new Date(String(row.expires_at));
+  if (!assetId || !digest || !width || !height || !sizeBytes || !Number.isFinite(expiresAt.getTime())) {
     throw new TokenlessServiceError("Stored image metadata is invalid.", 500, "invalid_public_media_state");
   }
+  const previewCapability = issuePublicQuestionMediaPreviewCapability({ assetId, digest, expiresAt });
+  const query = new URLSearchParams({ digest, preview: previewCapability });
   return {
     assetId,
     contentType: "image/webp" as const,
     digest: digest as `sha256:${string}`,
     height,
-    previewUrl: `/api/public-media/images/${encodeURIComponent(assetId)}`,
+    previewCapability,
+    previewExpiresAt: expiresAt.toISOString(),
+    previewUrl: `/api/public-media/images/${encodeURIComponent(assetId)}?${query}`,
     sizeBytes,
     width,
   };
@@ -135,16 +146,32 @@ export async function authorizePublicQuestionMediaOwner(input: {
   if (result.rowCount !== 1) throw new TokenlessServiceError("Workspace not found.", 404, "workspace_not_found");
 }
 
-async function findIdempotentUpload(input: { clientRequestId: string; ownerReference: string; workspaceId: string }) {
+async function findIdempotentUpload(input: {
+  clientRequestId: string;
+  now: Date;
+  ownerReference: string;
+  workspaceId: string;
+}) {
   const result = await dbClient.execute({
-    sql: `SELECT asset_id, digest, width, height, size_bytes
+    sql: `SELECT asset_id, digest, width, height, size_bytes, expires_at, technical_status
           FROM tokenless_public_question_media
           WHERE workspace_id = ? AND owner_account_address = ? AND client_request_id = ?
-            AND technical_status = 'ready'
           LIMIT 1`,
     args: [input.workspaceId, input.ownerReference, input.clientRequestId],
   });
-  return result.rows[0] as Row | undefined;
+  const row = result.rows[0] as Row | undefined;
+  if (
+    row &&
+    (rowString(row, "technical_status") !== "ready" ||
+      new Date(String(row.expires_at)).getTime() <= input.now.getTime())
+  ) {
+    throw new TokenlessServiceError(
+      "This upload idempotency key expired; stage the file with a new clientRequestId.",
+      409,
+      "public_media_idempotency_expired",
+    );
+  }
+  return row;
 }
 
 async function normalizeImage(bytes: Uint8Array) {
@@ -216,12 +243,12 @@ export async function stagePublicQuestionImage(input: {
     throw new TokenlessServiceError("Image uploads must contain 1 byte to 10 MB.", 400, "invalid_public_media_size");
   }
   const ownerReference = input.apiKeyId ? `api_key:${input.apiKeyId}` : input.accountAddress!.toLowerCase();
-  const idempotent = await findIdempotentUpload({ ...input, ownerReference });
+  const now = input.now ?? new Date();
+  const idempotent = await findIdempotentUpload({ ...input, now, ownerReference });
   if (idempotent) return responseFromRow(idempotent);
 
   const normalized = await normalizeImage(input.bytes);
   const digest = `sha256:${createHash("sha256").update(normalized.bytes).digest("hex")}`;
-  const now = input.now ?? new Date();
   const expiresAt = new Date(now.getTime() + PUBLIC_QUESTION_MEDIA_STAGING_TTL_MS);
   const assetId = runtime().randomAssetId();
   if (!ASSET_ID_PATTERN.test(assetId)) {
@@ -320,6 +347,7 @@ export async function stagePublicQuestionImage(input: {
     return responseFromRow({
       asset_id: assetId,
       digest,
+      expires_at: expiresAt,
       height: normalized.height,
       size_bytes: normalized.bytes.byteLength,
       width: normalized.width,
@@ -449,6 +477,7 @@ export async function bindPublicQuestionMediaToQuestion(
     items: Array<{ assetId: string; digest: string }>;
     now: Date;
     ownerReference?: string | null;
+    previewGrants?: TokenlessQuestionImagePreviewGrant[];
     questionId: string;
     workspaceId: string;
   },
@@ -461,20 +490,82 @@ export async function bindPublicQuestionMediaToQuestion(
       "public_media_owner_required",
     );
   }
+  const previewGrants = input.previewGrants ?? [];
+  const expected = new Map(input.items.map(item => [item.assetId, item.digest]));
+  const grants = new Map<string, TokenlessQuestionImagePreviewGrant>();
+  if (previewGrants.length > 0) {
+    if (previewGrants.length !== input.items.length) {
+      throw new TokenlessServiceError(
+        "Media preview grants must match every exact image once.",
+        409,
+        "invalid_media_preview_capability",
+      );
+    }
+    for (const grant of previewGrants) {
+      if (expected.get(grant.assetId) !== grant.digest || grants.has(grant.assetId)) {
+        throw new TokenlessServiceError(
+          "Media preview grants must match every exact image once.",
+          409,
+          "invalid_media_preview_capability",
+        );
+      }
+      grants.set(grant.assetId, grant);
+    }
+    if (!input.accountAddress) {
+      throw new TokenlessServiceError(
+        "Media preview grants are accepted only from a signed-in browser principal.",
+        403,
+        "media_preview_principal_required",
+      );
+    }
+    const membership = await client.query(
+      `SELECT wm.workspace_id
+       FROM tokenless_workspace_members wm
+       JOIN tokenless_workspaces w ON w.workspace_id = wm.workspace_id
+       WHERE wm.workspace_id = $1 AND wm.account_address = $2
+         AND wm.role IN ('owner', 'admin', 'member') AND w.status = 'active'
+       FOR UPDATE`,
+      [input.workspaceId, input.accountAddress.toLowerCase()],
+    );
+    if (membership.rowCount !== 1) {
+      throw new TokenlessServiceError(
+        "The signed-in account cannot claim staged media for this workspace.",
+        403,
+        "workspace_forbidden",
+      );
+    }
+  }
   for (const item of input.items) {
     const locked = await client.query(
-      `SELECT asset_id, digest, question_id, expires_at
+      `SELECT asset_id, digest, owner_account_address, question_id, expires_at
        FROM tokenless_public_question_media
-       WHERE asset_id = $1 AND workspace_id = $2 AND owner_account_address = $3
-         AND technical_status = 'ready'
+       WHERE asset_id = $1 AND workspace_id = $2 AND technical_status = 'ready'
        FOR UPDATE`,
-      [item.assetId, input.workspaceId, ownerReference],
+      [item.assetId, input.workspaceId],
     );
     const row = locked.rows[0] as Row | undefined;
     const existingQuestionId = rowString(row, "question_id");
+    const currentOwner = rowString(row, "owner_account_address");
+    const exactOwner = currentOwner === ownerReference;
+    const grant = grants.get(item.assetId);
+    const validBridge =
+      !exactOwner &&
+      !existingQuestionId &&
+      Boolean(input.accountAddress) &&
+      currentOwner?.startsWith("api_key:") === true &&
+      Boolean(
+        grant &&
+          validatePublicQuestionMediaPreviewCapability({
+            assetId: item.assetId,
+            capability: grant.previewCapability,
+            digest: item.digest,
+            now: input.now,
+          }),
+      );
     if (
       rowString(row, "asset_id") !== item.assetId ||
       rowString(row, "digest") !== item.digest ||
+      (!exactOwner && !validBridge) ||
       (existingQuestionId && existingQuestionId !== input.questionId) ||
       (!existingQuestionId && new Date(String(row?.expires_at)).getTime() <= input.now.getTime())
     ) {
@@ -484,16 +575,39 @@ export async function bindPublicQuestionMediaToQuestion(
         "public_media_asset_unavailable",
       );
     }
-    await client.query(
+    if (existingQuestionId === input.questionId) continue;
+    const updated = await client.query(
       `UPDATE tokenless_public_question_media
-       SET question_id = $1, bound_at = COALESCE(bound_at, $2), updated_at = $2
-       WHERE asset_id = $3 AND (question_id IS NULL OR question_id = $1)`,
-      [input.questionId, input.now, item.assetId],
+       SET owner_account_address = $1, question_id = $2, bound_at = COALESCE(bound_at, $3), updated_at = $3
+       WHERE asset_id = $4 AND workspace_id = $5 AND digest = $6 AND owner_account_address = $7
+         AND technical_status = 'ready' AND (question_id IS NULL OR question_id = $2)`,
+      [
+        validBridge ? input.accountAddress!.toLowerCase() : ownerReference,
+        input.questionId,
+        input.now,
+        item.assetId,
+        input.workspaceId,
+        item.digest,
+        currentOwner,
+      ],
     );
+    if (updated.rowCount !== 1) {
+      throw new TokenlessServiceError(
+        "One or more staged images are unavailable, expired, or changed.",
+        409,
+        "public_media_asset_unavailable",
+      );
+    }
   }
 }
 
-export async function readPublicQuestionImage(input: { accountAddress?: string | null; assetId: string; now?: Date }) {
+export async function readPublicQuestionImage(input: {
+  accountAddress?: string | null;
+  assetId: string;
+  now?: Date;
+  previewCapability?: string | null;
+  previewDigest?: string | null;
+}) {
   if (!ASSET_ID_PATTERN.test(input.assetId)) {
     throw new TokenlessServiceError("Image asset not found.", 404, "public_media_not_found");
   }
@@ -501,12 +615,17 @@ export async function readPublicQuestionImage(input: { accountAddress?: string |
     sql: `SELECT m.storage_ref, m.content_type, m.owner_account_address, m.digest, m.question_id, m.expires_at,
                  m.technical_status, m.moderation_status AS media_moderation_status,
                  q.visibility, q.moderation_status AS question_moderation_status,
-                 c.moderation_status AS content_moderation_status
+                 c.moderation_status AS content_moderation_status,
+                 (pwm.role IN ('owner', 'admin', 'member') AND pw.workspace_id IS NOT NULL)
+                   AS preview_workspace_member
           FROM tokenless_public_question_media m
           LEFT JOIN tokenless_question_records q ON q.question_id = m.question_id
           LEFT JOIN tokenless_content_records c ON c.content_id = q.content_id
+          LEFT JOIN tokenless_workspace_members pwm
+            ON pwm.workspace_id = m.workspace_id AND pwm.account_address = ?
+          LEFT JOIN tokenless_workspaces pw ON pw.workspace_id = m.workspace_id AND pw.status = 'active'
           WHERE m.asset_id = ? LIMIT 1`,
-    args: [input.assetId],
+    args: [input.accountAddress?.toLowerCase() ?? "", input.assetId],
   });
   const row = result.rows[0] as Row | undefined;
   const isOwner =
@@ -519,8 +638,26 @@ export async function readPublicQuestionImage(input: { accountAddress?: string |
     rowString(row, "media_moderation_status") === "approved" &&
     rowString(row, "question_moderation_status") === "approved" &&
     rowString(row, "content_moderation_status") === "approved";
+  const capability =
+    !rowString(row, "question_id") && input.previewCapability && input.previewDigest
+      ? validatePublicQuestionMediaPreviewCapability({
+          assetId: input.assetId,
+          capability: input.previewCapability,
+          digest: input.previewDigest,
+          now: input.now,
+        })
+      : null;
+  const isCapabilityPreview =
+    Boolean(capability) &&
+    row?.preview_workspace_member === true &&
+    rowString(row, "digest") === input.previewDigest &&
+    new Date(String(row?.expires_at)).getTime() > (input.now ?? new Date()).getTime();
   const storageRef = rowString(row, "storage_ref");
-  if (rowString(row, "technical_status") !== "ready" || !storageRef || (!isOwner && !isPublic)) {
+  if (
+    rowString(row, "technical_status") !== "ready" ||
+    !storageRef ||
+    (!isOwner && !isPublic && !isCapabilityPreview)
+  ) {
     throw new TokenlessServiceError("Image asset not found.", 404, "public_media_not_found");
   }
   return {

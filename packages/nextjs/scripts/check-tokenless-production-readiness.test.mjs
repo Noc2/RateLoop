@@ -92,6 +92,7 @@ function validFixture() {
       .slice(0, 24)}`,
     TOKENLESS_ELIGIBILITY_PROVIDER_PUBLIC_KEY: provider.publicKey.export({ format: "pem", type: "spki" }),
     TOKENLESS_MCP_RATE_LIMIT_SECRET: "m".repeat(32),
+    TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
     TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY: encodedKey(13),
     TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION: "sampler-v1",
     TOKENLESS_PIPELINE_TOKEN: "p".repeat(32),
@@ -169,6 +170,7 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
     APP_URL: "https://rateloop-tokenless.vercel.app",
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
+    TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
   };
   assert.deepEqual(validateTokenlessProductionReadiness({ env, activeRegistry: {} }), []);
   const cliDeploymentEnv = { ...env };
@@ -205,6 +207,7 @@ test("the tokenless test deployment still rejects browser-exposed secrets", () =
     APP_URL: "https://rateloop-tokenless.vercel.app",
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
+    TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
     NEXT_PUBLIC_TOKENLESS_PIPELINE_TOKEN: "must-not-ship",
     NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEY_VERSION: "must-not-ship-version",
     NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEYS: "must-not-ship-keys",
@@ -214,6 +217,68 @@ test("the tokenless test deployment still rejects browser-exposed secrets", () =
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEY_VERSION is forbidden/);
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEYS is forbidden/);
   assert.doesNotMatch(output, /must-not-ship(?:-version|-keys)?/);
+});
+
+test("the tokenless test deployment requires a dedicated server-only media preview key", () => {
+  const base = {
+    VERCEL: "1",
+    VERCEL_ENV: "production",
+    VERCEL_PROJECT_ID: "prj_H6C2pfWKEAupFroHbLfzhquaNCLm",
+    VERCEL_PROJECT_NAME: "rateloop-tokenless",
+    VERCEL_GIT_COMMIT_REF: "tokenless",
+    APP_URL: "https://rateloop-tokenless.vercel.app",
+    NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
+    TOKENLESS_NETWORK_PANELS_ENABLED: "false",
+  };
+  assert.match(
+    validateTokenlessProductionReadiness({ env: base, activeRegistry: {} }).join("\n"),
+    /TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET is required/u,
+  );
+  assert.match(
+    validateTokenlessProductionReadiness({
+      env: { ...base, TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: "too-short" },
+      activeRegistry: {},
+    }).join("\n"),
+    /must encode exactly 32 bytes/u,
+  );
+  assert.match(
+    validateTokenlessProductionReadiness({
+      env: { ...base, TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: `${encodedKey(18)}=` },
+      activeRegistry: {},
+    }).join("\n"),
+    /must encode exactly 32 bytes/u,
+  );
+  for (const secret of [encodedKey(18), "12".repeat(32)]) {
+    assert.deepEqual(
+      validateTokenlessProductionReadiness({
+        env: { ...base, TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: secret },
+        activeRegistry: {},
+      }),
+      [],
+    );
+  }
+  const reused = Buffer.from("r".repeat(32), "utf8");
+  assert.match(
+    validateTokenlessProductionReadiness({
+      env: {
+        ...base,
+        TOKENLESS_MCP_RATE_LIMIT_SECRET: reused.toString("utf8"),
+        TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: reused.toString("base64url"),
+      },
+      activeRegistry: {},
+    }).join("\n"),
+    /Tokenless test key roles must be distinct/u,
+  );
+  const exposed = validateTokenlessProductionReadiness({
+    env: {
+      ...base,
+      NEXT_PUBLIC_TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: "do-not-print-preview-secret",
+      TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
+    },
+    activeRegistry: {},
+  }).join("\n");
+  assert.match(exposed, /NEXT_PUBLIC_TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET is forbidden/u);
+  assert.doesNotMatch(exposed, /do-not-print-preview-secret/u);
 });
 
 test("test and production deployments refuse server-held Feedback Bonus award authority", () => {
@@ -253,6 +318,8 @@ test("the production preflight runs before hosted migrations", () => {
 
 test("hosted release accepts only a complete matching v4 bundle", () => {
   const fixture = validFixture();
+  assert.deepEqual(validateTokenlessProductionReadiness(fixture), []);
+  fixture.env.TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET = "12".repeat(32);
   assert.deepEqual(validateTokenlessProductionReadiness(fixture), []);
 });
 

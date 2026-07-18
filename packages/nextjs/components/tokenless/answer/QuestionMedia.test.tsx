@@ -1,5 +1,5 @@
 import React from "react";
-import { QuestionMedia } from "./QuestionMedia";
+import { QuestionMedia, questionMediaImageSource } from "./QuestionMedia";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import test from "node:test";
@@ -37,4 +37,25 @@ test("YouTube context is click-to-load and starts without a third-party request"
 
   assert.match(html, /Load YouTube video/);
   assert.doesNotMatch(html, /iframe|youtube-nocookie/);
+});
+
+test("browser handoff images use only an exact asset-and-digest preview grant", () => {
+  const image = { assetId: `pqm_${"A".repeat(24)}`, digest: `sha256:${"ab".repeat(32)}` as const };
+  const exact = questionMediaImageSource(image, [
+    { assetId: image.assetId, digest: image.digest, previewCapability: "pqp1_abcdef_test-capability" },
+  ]);
+  const parsed = new URL(exact, "https://tokenless.example");
+  assert.equal(parsed.pathname, `/api/public-media/images/${image.assetId}`);
+  assert.equal(parsed.searchParams.get("digest"), image.digest);
+  assert.equal(parsed.searchParams.get("preview"), "pqp1_abcdef_test-capability");
+  assert.equal(
+    questionMediaImageSource(image, [
+      {
+        assetId: image.assetId,
+        digest: `sha256:${"cd".repeat(32)}`,
+        previewCapability: "pqp1_abcdef_cross-digest",
+      },
+    ]),
+    `/api/public-media/images/${image.assetId}`,
+  );
 });

@@ -539,8 +539,16 @@ function parseQuestionImageUpload(
     Number(response.height) <= 0 ||
     !Number.isSafeInteger(response.sizeBytes) ||
     Number(response.sizeBytes) <= 0 ||
+    typeof response.previewCapability !== "string" ||
+    !/^pqp1_[0-9a-z]{6,12}_[A-Za-z0-9_-]{43}$/.test(
+      response.previewCapability,
+    ) ||
+    typeof response.previewExpiresAt !== "string" ||
+    !Number.isFinite(Date.parse(response.previewExpiresAt)) ||
     typeof response.previewUrl !== "string" ||
-    !response.previewUrl.startsWith("/api/public-media/images/")
+    !response.previewUrl.startsWith(
+      `/api/public-media/images/${encodeURIComponent(response.assetId)}?`,
+    )
   ) {
     throw new RateLoopSdkError("Question image upload response is invalid.");
   }
