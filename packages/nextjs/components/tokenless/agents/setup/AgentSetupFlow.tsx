@@ -9,7 +9,6 @@ import { AgentSetupProgress } from "./AgentSetupProgress";
 import { SetupActionBar } from "./SetupActionBar";
 import { SetupChoiceGroup, SetupRadioChoice } from "./SetupChoiceGroup";
 import { SetupStageHeader } from "./SetupStageHeader";
-import { saveReviewConfigurationAndAdvance } from "./reviewConfigurationSave";
 import {
   type ReviewAudienceFormValues,
   buildReviewAudienceRequestProfile,
@@ -22,6 +21,7 @@ import {
   buildReviewCompensationConfiguration,
   reviewCompensationFormValues,
 } from "./reviewCompensation";
+import { saveReviewConfigurationAndAdvance } from "./reviewConfigurationSave";
 import {
   REVIEW_ANSWER_LABEL_MAX_LENGTH,
   REVIEW_CRITERION_MAX_LENGTH,
@@ -807,9 +807,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
           // Update only the binding version so in-progress form edits are preserved (the shared
           // requestProfile/selection references stay identical, so the sync effects do not re-run).
           setSetup(current =>
-            current.reviewDraft
-              ? { ...current, reviewDraft: { ...current.reviewDraft, bindingRevision } }
-              : current,
+            current.reviewDraft ? { ...current, reviewDraft: { ...current.reviewDraft, bindingRevision } } : current,
           );
         },
       });

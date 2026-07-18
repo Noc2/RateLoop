@@ -198,10 +198,7 @@ test("review save and wizard advance run as one retry-safe operation", () => {
   assert.match(flowSource, /adoptAuthoritativeSetup: authoritative =>/);
   assert.match(flowSource, /adoptBindingRevision: bindingRevision =>/);
   // Adopt must preserve in-progress edits by touching only bindingRevision.
-  assert.match(
-    flowSource,
-    /reviewDraft: \{ \.\.\.current\.reviewDraft, bindingRevision \}/,
-  );
+  assert.match(flowSource, /reviewDraft: \{ \.\.\.current\.reviewDraft, bindingRevision \}/);
 });
 
 test("review setup saves directly and confirms only spending or automatic sending", () => {
