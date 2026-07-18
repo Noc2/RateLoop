@@ -64,6 +64,34 @@ test("uses a separate minute window and fails closed without identity or secret"
   );
 });
 
+test("uses Vercel's authoritative client IP instead of caller-controlled proxy headers", async () => {
+  const now = new Date("2026-07-13T12:34:12.000Z");
+  const first = await consumeMcpRateLimit(
+    new Headers({
+      "cf-connecting-ip": "198.51.100.1",
+      "x-forwarded-for": "198.51.100.2",
+      "x-real-ip": "198.51.100.3",
+      "x-vercel-forwarded-for": "203.0.113.9",
+    }),
+    now,
+  );
+  const second = await consumeMcpRateLimit(
+    new Headers({
+      "cf-connecting-ip": "192.0.2.1",
+      "x-forwarded-for": "192.0.2.2",
+      "x-real-ip": "192.0.2.3",
+      "x-vercel-forwarded-for": "203.0.113.9",
+    }),
+    now,
+  );
+
+  assert.equal(first.requestCount, 1);
+  assert.equal(second.requestCount, 2);
+  const stored = await dbClient.execute("SELECT client_hash, request_count FROM tokenless_mcp_rate_limits");
+  assert.equal(stored.rows.length, 1);
+  assert.equal(Number(stored.rows[0]?.request_count), 2);
+});
+
 test("fails closed when the atomic database counter is unavailable", async () => {
   const resources = createMemoryDatabaseResources();
   resources.client.execute = async () => {

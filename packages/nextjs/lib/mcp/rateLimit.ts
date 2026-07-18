@@ -15,7 +15,19 @@ function rateLimitSecret() {
 }
 
 function clientIdentity(headers: Headers) {
-  const directIp = headers.get("cf-connecting-ip")?.trim() || headers.get("x-real-ip")?.trim();
+  // Vercel overwrites its forwarding headers at the platform boundary. Prefer
+  // the Vercel-specific copy because it remains authoritative when a verified
+  // proxy is placed in front of the deployment. Provider headers such as
+  // CF-Connecting-IP are intentionally ignored here: they are meaningful only
+  // after the platform has verified that proxy, not as application-level input.
+  const vercelIp = headers
+    .get("x-vercel-forwarded-for")
+    ?.split(",")
+    .map(value => value.trim())
+    .find(Boolean);
+  if (vercelIp) return `ip:${vercelIp}`;
+
+  const directIp = headers.get("x-real-ip")?.trim();
   if (directIp) return `ip:${directIp}`;
 
   const forwardedFor = headers.get("x-forwarded-for");
@@ -23,7 +35,7 @@ function clientIdentity(headers: Headers) {
     ?.split(",")
     .map(value => value.trim())
     .filter(Boolean)
-    .at(-1);
+    .at(0);
   if (proxyIp) return `ip:${proxyIp}`;
 
   const authorization = headers.get("authorization")?.trim();
