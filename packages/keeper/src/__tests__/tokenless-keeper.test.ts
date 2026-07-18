@@ -6,7 +6,11 @@ import {
   validateTokenlessKeeperDeployment,
   type TokenlessKeeperClients,
 } from "../keeper.js";
-import { getConsecutiveErrors, recordError, renderMetrics } from "../metrics.js";
+import {
+  getConsecutiveErrors,
+  recordError,
+  renderMetrics,
+} from "../metrics.js";
 import type { Logger } from "../logger.js";
 import { TokenlessPanelAbi } from "../tokenless-abi.js";
 import {
@@ -99,6 +103,9 @@ function clients(params: {
   currentRound: TokenlessRound;
   now?: bigint;
   writes?: string[];
+  nextRoundId?: bigint;
+  readRoundIds?: bigint[];
+  commitLogQueries?: unknown[];
   commitClaimed?: boolean;
   currentBlock?: bigint;
   receiptStatus?: "success" | "reverted";
@@ -149,7 +156,8 @@ function clients(params: {
       async waitForTransactionReceipt() {
         return { status: params.receiptStatus ?? "success" };
       },
-      async getLogs() {
+      async getLogs(args) {
+        params.commitLogQueries?.push(args);
         if (currentRound.commitCount === 0) return [];
         return [
           {
@@ -174,13 +182,18 @@ function clients(params: {
           case "MAXIMUM_COMMITS":
             return 500;
           case "nextRoundId":
-            return 2n;
+            return params.nextRoundId ?? 2n;
           case "nextPoolId":
             return params.feedbackBonusPool ? 2n : 1n;
           case "getPool":
             if (params.feedbackBonusPool) return params.feedbackBonusPool;
             throw new Error("unexpected feedback bonus pool read");
           case "getRound":
+            params.readRoundIds?.push(
+              BigInt(
+                (args.args as readonly unknown[] | undefined)?.[0] as bigint,
+              ),
+            );
             return currentRound;
           case "getCommit":
             return {
@@ -227,7 +240,10 @@ describe("tokenless keeper orchestration", () => {
       (entry) => entry.type === "function" && entry.name === "getRound",
     );
     expect(
-      getRound?.outputs[0]?.components.map(({ name, type }) => ({ name, type })),
+      getRound?.outputs[0]?.components.map(({ name, type }) => ({
+        name,
+        type,
+      })),
     ).toEqual([
       { name: "funder", type: "address" },
       { name: "contentId", type: "bytes32" },
@@ -278,6 +294,109 @@ describe("tokenless keeper orchestration", () => {
         (component) => String(component.name) === "requiredTier",
       ),
     ).toBe(false);
+  });
+
+  it("prioritizes newest rounds after restart and skips terminal log history", async () => {
+    const terminalRound = round({
+      state: TokenlessRoundState.Finalized,
+      claimDeadline: 200n,
+      staleReturned: true,
+    });
+    const readRoundIds: bigint[] = [];
+    const commitLogQueries: unknown[] = [];
+    const boundedConfig = { ...config, maxRoundsPerTick: 2 };
+
+    await runTokenlessKeeper(
+      clients({
+        currentRound: terminalRound,
+        now: 300n,
+        nextRoundId: 10_001n,
+        readRoundIds,
+        commitLogQueries,
+      }),
+      boundedConfig,
+      logger,
+      decrypt,
+    );
+    expect(readRoundIds).toEqual([10_000n, 9_999n]);
+    expect(commitLogQueries).toEqual([]);
+
+    readRoundIds.length = 0;
+    await runTokenlessKeeper(
+      clients({
+        currentRound: terminalRound,
+        now: 300n,
+        nextRoundId: 10_001n,
+        readRoundIds,
+        commitLogQueries,
+      }),
+      boundedConfig,
+      logger,
+      decrypt,
+    );
+    expect(readRoundIds).toEqual([9_998n, 9_997n]);
+
+    readRoundIds.length = 0;
+    await runTokenlessKeeper(
+      clients({
+        currentRound: terminalRound,
+        now: 300n,
+        nextRoundId: 10_002n,
+        readRoundIds,
+        commitLogQueries,
+      }),
+      boundedConfig,
+      logger,
+      decrypt,
+    );
+    expect(readRoundIds).toEqual([10_001n, 9_996n]);
+
+    resetTokenlessKeeperStateForTests();
+    readRoundIds.length = 0;
+    await runTokenlessKeeper(
+      clients({
+        currentRound: terminalRound,
+        now: 300n,
+        nextRoundId: 10_001n,
+        readRoundIds,
+        commitLogQueries,
+      }),
+      boundedConfig,
+      logger,
+      decrypt,
+    );
+    expect(readRoundIds).toEqual([10_000n, 9_999n]);
+  });
+
+  it("continues the historical sweep while one new round arrives per tick", async () => {
+    const terminalRound = round({
+      state: TokenlessRoundState.Finalized,
+      claimDeadline: 200n,
+      staleReturned: true,
+    });
+    const readRoundIds: bigint[] = [];
+    const boundedConfig = { ...config, maxRoundsPerTick: 3 };
+
+    for (const [nextRoundId, expected] of [
+      [101n, [100n, 99n, 98n]],
+      [102n, [101n, 97n, 96n]],
+      [103n, [102n, 95n, 94n]],
+      [104n, [103n, 93n, 92n]],
+    ] as const) {
+      readRoundIds.length = 0;
+      await runTokenlessKeeper(
+        clients({
+          currentRound: terminalRound,
+          now: 300n,
+          nextRoundId,
+          readRoundIds,
+        }),
+        boundedConfig,
+        logger,
+        decrypt,
+      );
+      expect(readRoundIds).toEqual(expected);
+    }
   });
 
   it("fails closed when panel issuer wiring differs", async () => {
@@ -342,7 +461,9 @@ describe("tokenless keeper orchestration", () => {
 
   it("treats a reverted receipt as failed work with zero success counters and degraded health", async () => {
     const counter = (name: string) =>
-      Number(renderMetrics().match(new RegExp(`^${name} (\\d+)$`, "mu"))?.[1] ?? 0);
+      Number(
+        renderMetrics().match(new RegExp(`^${name} (\\d+)$`, "mu"))?.[1] ?? 0,
+      );
     const writes: string[] = [];
     await expect(
       runTokenlessKeeper(

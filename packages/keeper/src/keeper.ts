@@ -60,12 +60,14 @@ export type RevealDecryptor = (params: {
 }) => Promise<TokenlessRevealMaterial>;
 
 const revealMaterialCache = new Map<string, TokenlessRevealMaterial>();
-let nextScanRoundId = 1n;
+let nextHistoricalRoundId = 0n;
+let highestNewRoundIdProcessed = 0n;
 let nextScanFeedbackBonusPoolId = 1n;
 
 export function resetTokenlessKeeperStateForTests() {
   revealMaterialCache.clear();
-  nextScanRoundId = 1n;
+  nextHistoricalRoundId = 0n;
+  highestNewRoundIdProcessed = 0n;
   nextScanFeedbackBonusPoolId = 1n;
 }
 
@@ -95,8 +97,7 @@ function acceptsReveals(round: TokenlessRound, now: bigint) {
       round.state === TokenlessRoundState.Revealable) &&
     now > round.commitDeadline &&
     now <= round.beaconFailureDeadline &&
-    (now <= round.revealDeadline ||
-      round.revealCount < round.minimumReveals)
+    (now <= round.revealDeadline || round.revealCount < round.minimumReveals)
   );
 }
 
@@ -429,7 +430,17 @@ async function advanceRound(params: {
     round = { ...round, state: TokenlessRoundState.Revealable };
   }
 
-  const revealedAny = await revealAndClaimRound({ ...params, round });
+  const terminalClaimWindowOpen =
+    (round.state === TokenlessRoundState.Finalized ||
+      round.state === TokenlessRoundState.UnderQuorumCompensation ||
+      round.state === TokenlessRoundState.BeaconFailureCompensation) &&
+    round.claimDeadline > 0n &&
+    params.now <= round.claimDeadline;
+  const shouldInspectCommits =
+    acceptsReveals(round, params.now) || terminalClaimWindowOpen;
+  const revealedAny = shouldInspectCommits
+    ? await revealAndClaimRound({ ...params, round })
+    : false;
   if (revealedAny) {
     round = await readRound(
       params.clients.publicClient,
@@ -547,12 +558,38 @@ async function advanceRound(params: {
 function scanRoundIds(nextRoundId: bigint, maxRounds: number) {
   const total = nextRoundId - 1n;
   if (total <= 0n) return [];
-  if (nextScanRoundId > total) nextScanRoundId = 1n;
   const count = Math.min(maxRounds, Number(total));
   const ids: bigint[] = [];
-  for (let index = 0; index < count; index += 1) {
-    ids.push(nextScanRoundId);
-    nextScanRoundId = nextScanRoundId === total ? 1n : nextScanRoundId + 1n;
+  const selected = new Set<bigint>();
+
+  // On restart, inspect the tip immediately, then continue backward through older history.
+  // Thereafter, reserve only the capacity needed for never-seen new IDs; the remaining budget
+  // advances the historical cursor without resetting or overlapping the prior sweep.
+  if (highestNewRoundIdProcessed === 0n) {
+    ids.push(total);
+    selected.add(total);
+    highestNewRoundIdProcessed = total;
+    nextHistoricalRoundId = total === 1n ? 1n : total - 1n;
+  } else {
+    while (highestNewRoundIdProcessed < total && ids.length < count) {
+      highestNewRoundIdProcessed += 1n;
+      ids.push(highestNewRoundIdProcessed);
+      selected.add(highestNewRoundIdProcessed);
+    }
+  }
+
+  if (nextHistoricalRoundId === 0n || nextHistoricalRoundId > total) {
+    nextHistoricalRoundId = total;
+  }
+  let historicalCandidatesChecked = 0n;
+  while (ids.length < count && historicalCandidatesChecked < total) {
+    const candidate = nextHistoricalRoundId;
+    nextHistoricalRoundId = candidate === 1n ? total : candidate - 1n;
+    historicalCandidatesChecked += 1n;
+    if (!selected.has(candidate)) {
+      ids.push(candidate);
+      selected.add(candidate);
+    }
   }
   return ids;
 }
