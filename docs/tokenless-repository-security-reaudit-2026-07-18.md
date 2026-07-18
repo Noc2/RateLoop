@@ -6,6 +6,11 @@ customer-facing product copy. It supplements the
 [immutable implementation plan](tokenless-immutable-implementation-plan-2026-07.md), and the
 [production-readiness register](tokenless-production-readiness-2026-07.md).
 
+**Remediation update:** All 15 findings were reproduced or otherwise revalidated and fixed on 18 July 2026. The
+[remediation record](tokenless-security-reaudit-remediation-2026-07-18.md) records the decisions, isolated commits,
+verification, and remaining release requirements. The findings below remain the point-in-time evidence for the audited
+revision.
+
 ## Executive summary
 
 This pass found **15 actionable defects**: 5 high, 9 medium, and 1 low. No critical issue was confirmed. The highest
