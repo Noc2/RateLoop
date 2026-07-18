@@ -20,30 +20,44 @@ const DIGEST = `sha256:${"12".repeat(32)}`;
 beforeEach(() => __setDatabaseResourcesForTests(createMemoryDatabaseResources()));
 afterEach(() => __setDatabaseResourcesForTests(null));
 
-function processor() {
+function processor(
+  options: { keyId?: string; rekorEntryUuid?: string; rekorLogIndex?: string; timestampByte?: number } = {},
+) {
   const keys = generateKeyPairSync("ed25519");
   const calls = { rekor: 0, tsa: 0 };
   return {
     calls,
     signer: {
       custody: "managed" as const,
-      keyId: "kms:rateloop:evidence:1",
+      keyId: options.keyId ?? "kms:rateloop:evidence:1",
       publicKeyDer: keys.publicKey.export({ format: "der", type: "spki" }),
       sign: async (payload: Buffer) => sign(null, payload, keys.privateKey),
     },
     rekor: {
       publish: async () => {
         calls.rekor += 1;
-        return { entryUuid: "rekor-entry-1", logIndex: "42", inclusionBundle: { verified: true } };
+        return {
+          entryUuid: options.rekorEntryUuid ?? "rekor-entry-1",
+          logIndex: options.rekorLogIndex ?? "42",
+          inclusionBundle: { verified: true },
+        };
       },
     },
     tsa: {
       timestamp: async () => {
         calls.tsa += 1;
-        return { token: Buffer.alloc(64, 7) };
+        return { token: Buffer.alloc(64, options.timestampByte ?? 7) };
       },
     },
   };
+}
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>(completed => {
+    resolve = completed;
+  });
+  return { promise, resolve };
 }
 
 test("digest-only export jobs are idempotent and require Rekor plus RFC 3161 receipts", async () => {
@@ -157,4 +171,70 @@ test("external failures retain a bounded retry record and unmanaged signers fail
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "managed_attestation_signer_required",
   );
+});
+
+test("a reclaimed attestation lease fences the stale signer before external publication and state writes", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Fenced attestation reclaim", ownerAddress: OWNER });
+  const enqueued = await enqueueAssuranceAttestation({
+    workspaceId,
+    kind: "audit_export_head",
+    artifactDigest: DIGEST,
+    artifactSchemaVersion: "rateloop-audit-v1",
+    boundaryAt: NOW,
+    now: NOW,
+  });
+  const stale = processor({
+    keyId: "kms:rateloop:evidence:old",
+    rekorEntryUuid: "rekor-old",
+    rekorLogIndex: "40",
+    timestampByte: 4,
+  });
+  const signerStarted = deferred();
+  const releaseSigner = deferred();
+  const staleSign = stale.signer.sign;
+  stale.signer.sign = async payload => {
+    signerStarted.resolve();
+    await releaseSigner.promise;
+    return staleSign(payload);
+  };
+  const staleWorker = processAssuranceAttestationJobs({ ...stale, now: NOW, workspaceId });
+  await signerStarted.promise;
+
+  const current = processor({
+    keyId: "kms:rateloop:evidence:current",
+    rekorEntryUuid: "rekor-current",
+    rekorLogIndex: "41",
+    timestampByte: 5,
+  });
+  const reclaimed = await processAssuranceAttestationJobs({
+    ...current,
+    now: new Date(NOW.getTime() + 61_000),
+    workspaceId,
+  });
+  assert.deepEqual(reclaimed, [{ jobId: enqueued.jobId, state: "completed" }]);
+
+  releaseSigner.resolve();
+  assert.deepEqual(await staleWorker, []);
+  assert.deepEqual(stale.calls, { rekor: 0, tsa: 0 });
+  assert.deepEqual(current.calls, { rekor: 1, tsa: 1 });
+  const stored = await dbClient.execute({
+    sql: `SELECT state,attempt_count,lease_generation,claim_signer_key_id,signer_key_id,
+                 rekor_entry_uuid,rekor_log_index,tsa_token_base64,last_error
+          FROM tokenless_assurance_attestation_jobs WHERE job_id=?`,
+    args: [enqueued.jobId],
+  });
+  assert.deepEqual(
+    [
+      stored.rows[0]?.state,
+      stored.rows[0]?.attempt_count,
+      stored.rows[0]?.lease_generation,
+      stored.rows[0]?.claim_signer_key_id,
+      stored.rows[0]?.signer_key_id,
+      stored.rows[0]?.rekor_entry_uuid,
+      stored.rows[0]?.rekor_log_index,
+      stored.rows[0]?.last_error,
+    ],
+    ["completed", 2, 2, null, "kms:rateloop:evidence:current", "rekor-current", "41", null],
+  );
+  assert.equal(stored.rows[0]?.tsa_token_base64, Buffer.alloc(64, 5).toString("base64"));
 });

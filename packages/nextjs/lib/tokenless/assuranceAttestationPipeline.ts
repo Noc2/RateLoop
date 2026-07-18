@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
-import { dbClient } from "~~/lib/db";
+import { dbClient, dbPool } from "~~/lib/db";
 import {
   type AssuranceAttestationKind,
   type AssuranceAttestationStatement,
@@ -48,6 +48,18 @@ export type Rfc3161TimestampAuthority = {
 function text(row: Row | undefined, key: string) {
   const value = row?.[key];
   return value === null || value === undefined ? null : String(value);
+}
+
+function storedInteger(row: Row | undefined, key: string) {
+  const value = Number(row?.[key]);
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new TokenlessServiceError(
+      "Stored attestation claim is invalid.",
+      500,
+      "stored_assurance_attestation_invalid",
+    );
+  }
+  return value;
 }
 
 function deterministicJobId(input: { workspaceId: string; kind: string; digest: string }) {
@@ -321,6 +333,98 @@ function validateRekorReceipt(receipt: {
   };
 }
 
+async function publishClaimedAttestation(input: {
+  row: Row;
+  signerKeyId: string;
+  envelope: DsseEnvelope;
+  statement: AssuranceAttestationStatement;
+  rekor: RekorPublisher;
+  tsa: Rfc3161TimestampAuthority;
+  now: Date;
+}) {
+  const jobId = text(input.row, "job_id")!;
+  const leaseGeneration = storedInteger(input.row, "lease_generation");
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const fence = await client.query(
+      `SELECT job_id FROM tokenless_assurance_attestation_jobs
+       WHERE job_id=$1 AND state='processing' AND lease_generation=$2 AND claim_signer_key_id=$3
+       FOR UPDATE`,
+      [jobId, leaseGeneration, input.signerKeyId],
+    );
+    if (fence.rows.length !== 1) {
+      await client.query("COMMIT");
+      return false;
+    }
+    // Keep the exact job generation locked through public witness calls. An
+    // expired worker can finish signing, but it cannot publish after a newer
+    // generation has reclaimed the job.
+    const rekor = validateRekorReceipt(
+      await input.rekor.publish({ envelope: input.envelope, statement: input.statement }),
+    );
+    const isExport = text(input.row, "artifact_kind") !== "decision_packet";
+    const timestamp = isExport
+      ? await input.tsa.timestamp({
+          artifactDigest: text(input.row, "artifact_digest")!,
+          boundaryAt: new Date(String(input.row.boundary_at)).toISOString(),
+        })
+      : null;
+    if (timestamp && (!Buffer.isBuffer(timestamp.token) || timestamp.token.byteLength < 32)) {
+      throw new TokenlessServiceError("RFC 3161 token is invalid.", 502, "invalid_external_attestation_receipt");
+    }
+    const updated = await client.query(
+      `UPDATE tokenless_assurance_attestation_jobs
+       SET state='completed',signer_key_id=$1,dsse_envelope_json=$2,rekor_entry_uuid=$3,
+           rekor_log_index=$4,rekor_bundle_json=$5,tsa_token_base64=$6,
+           last_error=NULL,lease_expires_at=NULL,claim_signer_key_id=NULL,completed_at=$7,updated_at=$7
+       WHERE job_id=$8 AND state='processing' AND lease_generation=$9 AND claim_signer_key_id=$1
+       RETURNING job_id`,
+      [
+        input.signerKeyId,
+        canonicalAttestationJson(input.envelope),
+        rekor.entryUuid,
+        rekor.logIndex,
+        canonicalAttestationJson(rekor.inclusionBundle),
+        timestamp?.token.toString("base64") ?? null,
+        input.now,
+        jobId,
+        leaseGeneration,
+      ],
+    );
+    if (updated.rows.length !== 1) throw new Error("Attestation job lease was lost.");
+    await client.query("COMMIT");
+    return true;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function markAttestationClaimFailed(input: { row: Row; signerKeyId: string; error: unknown; now: Date }) {
+  const attempt = storedInteger(input.row, "attempt_count");
+  const dead = attempt >= MAX_ATTEMPTS;
+  const failed = await dbClient.execute({
+    sql: `UPDATE tokenless_assurance_attestation_jobs
+          SET state=?,next_attempt_at=?,lease_expires_at=NULL,claim_signer_key_id=NULL,
+              last_error=?,updated_at=?
+          WHERE job_id=? AND state='processing' AND lease_generation=? AND claim_signer_key_id=?
+          RETURNING job_id`,
+    args: [
+      dead ? "dead" : "retry",
+      new Date(input.now.getTime() + Math.min(30_000 * 2 ** (attempt - 1), 3_600_000)),
+      input.error instanceof Error ? input.error.message.slice(0, 500) : "Attestation failed",
+      input.now,
+      text(input.row, "job_id")!,
+      storedInteger(input.row, "lease_generation"),
+      input.signerKeyId,
+    ],
+  });
+  return failed.rows.length === 1 ? (dead ? "dead" : "retry") : null;
+}
+
 export async function processAssuranceAttestationJobs(input: {
   signer: ManagedAttestationSigner;
   rekor: RekorPublisher;
@@ -333,28 +437,37 @@ export async function processAssuranceAttestationJobs(input: {
   const now = validDate(input.now ?? new Date(), "Attestation processing time");
   const workspaceFilter = input.workspaceId ? "AND workspace_id=?" : "";
   const due = await dbClient.execute({
-    sql: `SELECT job_id,workspace_id,artifact_kind,artifact_schema_version,artifact_digest,boundary_at,
-                 statement_json,attempt_count
+    sql: `SELECT job_id
           FROM tokenless_assurance_attestation_jobs
           WHERE ((state IN ('pending','retry') AND next_attempt_at<=?)
                  OR (state='processing' AND lease_expires_at<=?))
+            AND attempt_count<? AND lease_generation<2147483647
           ${workspaceFilter}
           ORDER BY next_attempt_at ASC,job_id ASC LIMIT ?`,
-    args: [now, now, ...(input.workspaceId ? [input.workspaceId] : []), Math.min(Math.max(input.limit ?? 25, 1), 100)],
+    args: [
+      now,
+      now,
+      MAX_ATTEMPTS,
+      ...(input.workspaceId ? [input.workspaceId] : []),
+      Math.min(Math.max(input.limit ?? 25, 1), 100),
+    ],
   });
   const outcomes: Array<{ jobId: string; state: "completed" | "retry" | "dead" }> = [];
   for (const value of due.rows) {
-    const row = value as Row;
-    const jobId = text(row, "job_id")!;
-    const attempt = Number(row.attempt_count) + 1;
+    const jobId = text(value as Row, "job_id")!;
     const claimed = await dbClient.execute({
       sql: `UPDATE tokenless_assurance_attestation_jobs
-            SET state='processing',lease_expires_at=?,updated_at=?
+            SET state='processing',lease_expires_at=?,lease_generation=lease_generation+1,
+                claim_signer_key_id=?,attempt_count=attempt_count+1,updated_at=?
             WHERE job_id=? AND ((state IN ('pending','retry') AND next_attempt_at<=?)
-              OR (state='processing' AND lease_expires_at<=?))`,
-      args: [new Date(now.getTime() + LEASE_MS), now, jobId, now, now],
+              OR (state='processing' AND lease_expires_at<=?))
+              AND attempt_count<? AND lease_generation<2147483647
+            RETURNING job_id,workspace_id,artifact_kind,artifact_schema_version,artifact_digest,
+                      boundary_at,statement_json,attempt_count,lease_generation,claim_signer_key_id`,
+      args: [new Date(now.getTime() + LEASE_MS), input.signer.keyId, now, jobId, now, now, MAX_ATTEMPTS],
     });
-    if (claimed.rowCount !== 1) continue;
+    const row = claimed.rows[0] as Row | undefined;
+    if (!row) continue;
     try {
       const statement = parseStatement(row.statement_json);
       const envelope = await createAssuranceDsseEnvelope({ statement, signer: input.signer });
@@ -369,54 +482,24 @@ export async function processAssuranceAttestationJobs(input: {
       if (!verification.valid) {
         throw new TokenlessServiceError("Managed signer produced invalid DSSE.", 502, "invalid_managed_signature");
       }
-      const rekor = validateRekorReceipt(await input.rekor.publish({ envelope, statement }));
-      const isExport = text(row, "artifact_kind") !== "decision_packet";
-      const timestamp = isExport
-        ? await input.tsa.timestamp({
-            artifactDigest: text(row, "artifact_digest")!,
-            boundaryAt: new Date(String(row.boundary_at)).toISOString(),
-          })
-        : null;
-      if (timestamp && (!Buffer.isBuffer(timestamp.token) || timestamp.token.byteLength < 32)) {
-        throw new TokenlessServiceError("RFC 3161 token is invalid.", 502, "invalid_external_attestation_receipt");
-      }
-      const updated = await dbClient.execute({
-        sql: `UPDATE tokenless_assurance_attestation_jobs
-              SET state='completed',signer_key_id=?,dsse_envelope_json=?,rekor_entry_uuid=?,
-                  rekor_log_index=?,rekor_bundle_json=?,tsa_token_base64=?,attempt_count=?,
-                  last_error=NULL,lease_expires_at=NULL,completed_at=?,updated_at=?
-              WHERE job_id=? AND state='processing'`,
-        args: [
-          input.signer.keyId,
-          canonicalAttestationJson(envelope),
-          rekor.entryUuid,
-          rekor.logIndex,
-          canonicalAttestationJson(rekor.inclusionBundle),
-          timestamp?.token.toString("base64") ?? null,
-          attempt,
-          now,
-          now,
-          jobId,
-        ],
+      const completed = await publishClaimedAttestation({
+        row,
+        signerKeyId: input.signer.keyId,
+        envelope,
+        statement,
+        rekor: input.rekor,
+        tsa: input.tsa,
+        now,
       });
-      if (updated.rowCount !== 1) throw new Error("Attestation job lease was lost.");
-      outcomes.push({ jobId, state: "completed" });
+      if (completed) outcomes.push({ jobId, state: "completed" });
     } catch (error) {
-      const dead = attempt >= MAX_ATTEMPTS;
-      await dbClient.execute({
-        sql: `UPDATE tokenless_assurance_attestation_jobs
-              SET state=?,attempt_count=?,next_attempt_at=?,lease_expires_at=NULL,last_error=?,updated_at=?
-              WHERE job_id=? AND state='processing'`,
-        args: [
-          dead ? "dead" : "retry",
-          attempt,
-          new Date(now.getTime() + Math.min(30_000 * 2 ** (attempt - 1), 3_600_000)),
-          error instanceof Error ? error.message.slice(0, 500) : "Attestation failed",
-          now,
-          jobId,
-        ],
+      const failed = await markAttestationClaimFailed({
+        row,
+        signerKeyId: input.signer.keyId,
+        error,
+        now,
       });
-      outcomes.push({ jobId, state: dead ? "dead" : "retry" });
+      if (failed) outcomes.push({ jobId, state: failed });
     }
   }
   return outcomes;

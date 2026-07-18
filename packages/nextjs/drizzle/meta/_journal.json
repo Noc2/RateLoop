@@ -757,6 +757,13 @@
       "when": 1784329200000,
       "tag": "0108_grc_reconciliation_lease_fencing",
       "breakpoints": true
+    },
+    {
+      "idx": 109,
+      "version": "7",
+      "when": 1784332800000,
+      "tag": "0109_attestation_job_lease_fencing",
+      "breakpoints": true
     }
   ]
 }
