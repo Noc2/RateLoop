@@ -10,14 +10,18 @@
  * one. The caller supplies the concrete network operations, which keeps this logic pure and
  * directly testable.
  */
+import type { WorkspaceAgentSetupView } from "~~/lib/tokenless/workspaceAgentSetup";
+
 export type ReviewConfigurationSaveDeps = {
   /** PUT the human-review configuration; resolves with the newly saved (advanced) binding version. */
   putHumanReviewConfiguration: () => Promise<{ bindingRevision: number }>;
   /** Advance the setup wizard past the review step using the saved binding version. */
   advanceSetup: (bindingRevision: number) => Promise<void>;
-  /** Re-read the authoritative current binding version from the server. */
-  reloadAuthoritativeBindingRevision: () => Promise<number | null>;
-  /** Adopt a binding version into local state so the next Retry uses it as expectedBindingVersion. */
+  /** Re-read the full setup state after any ambiguous save or advance failure. */
+  reloadAuthoritativeSetup: () => Promise<WorkspaceAgentSetupView>;
+  /** Adopt the server state, including its step, setup revision, and binding revision. */
+  adoptAuthoritativeSetup: (setup: WorkspaceAgentSetupView) => void;
+  /** Adopt a confirmed binding revision immediately, before the setup advance. */
   adoptBindingRevision: (bindingRevision: number) => void;
 };
 
@@ -34,11 +38,14 @@ export async function saveReviewConfigurationAndAdvance(deps: ReviewConfiguratio
     deps.adoptBindingRevision(savedBindingRevision);
     await deps.advanceSetup(savedBindingRevision);
   } catch (cause) {
-    if (savedBindingRevision === null) {
-      // The PUT itself failed or its response was lost, so the server may or may not have advanced
-      // the binding. Reload the authoritative version so Retry cannot get stuck on a stale one.
-      const authoritative = await deps.reloadAuthoritativeBindingRevision().catch(() => null);
-      if (authoritative !== null) deps.adoptBindingRevision(authoritative);
+    // Either request may have committed before its response was lost. Reload the complete setup so
+    // both the binding revision and wizard revision/step come from one authoritative snapshot.
+    const authoritative = await deps.reloadAuthoritativeSetup().catch(() => null);
+    if (authoritative) {
+      deps.adoptAuthoritativeSetup(authoritative);
+      // A lost configure-reviews response is already a successful operation when the server has
+      // moved to people (or completed setup). Treat it as success instead of offering a stale Retry.
+      if (authoritative.resumeStep === "people" || authoritative.resumeStep === "complete") return;
     }
     throw cause;
   }

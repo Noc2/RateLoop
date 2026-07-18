@@ -793,14 +793,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             ),
           );
         },
-        reloadAuthoritativeBindingRevision: async () => {
+        reloadAuthoritativeSetup: async () => {
           const response = await fetch(
             `/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/agent-setup?step=reviews`,
             { cache: "no-store", credentials: "same-origin" },
           );
-          const next = (await readJson(response)) as unknown as SetupResponse;
-          const authoritative = next.reviewDraft?.bindingRevision;
-          return typeof authoritative === "number" ? authoritative : null;
+          return (await readJson(response)) as unknown as SetupResponse;
+        },
+        adoptAuthoritativeSetup: authoritative => {
+          setSetup(authoritative);
         },
         adoptBindingRevision: bindingRevision => {
           // Update only the binding version so in-progress form edits are preserved (the shared

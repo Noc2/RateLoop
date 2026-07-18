@@ -11,9 +11,15 @@ import test from "node:test";
 function harness(options: {
   startVersion: number;
   putBehavior: () => "ok" | "advance_lost" | "advance_and_response_lost";
-  advanceBehavior: () => "ok" | "fail";
+  advanceBehavior: () => "ok" | "fail" | "commit_and_response_lost";
 }) {
-  const state = { serverBindingVersion: options.startVersion, adoptedVersion: options.startVersion };
+  const state = {
+    serverBindingVersion: options.startVersion,
+    adoptedVersion: options.startVersion,
+    serverSetupRevision: 12,
+    adoptedSetupRevision: 12,
+    resumeStep: "reviews" as "reviews" | "people",
+  };
   const sentExpectedVersions: number[] = [];
   const advancedWithVersions: number[] = [];
 
@@ -32,9 +38,26 @@ function harness(options: {
     },
     advanceSetup: async bindingRevision => {
       advancedWithVersions.push(bindingRevision);
-      if (options.advanceBehavior() === "fail") throw new Error("configure-reviews failed");
+      const behavior = options.advanceBehavior();
+      if (behavior === "fail") throw new Error("configure-reviews failed");
+      state.serverSetupRevision += 1;
+      state.resumeStep = "people";
+      if (behavior === "commit_and_response_lost") throw new Error("configure-reviews response lost");
     },
-    reloadAuthoritativeBindingRevision: async () => state.serverBindingVersion,
+    reloadAuthoritativeSetup: async () =>
+      ({
+        currentStep: state.resumeStep,
+        resumeStep: state.resumeStep,
+        revision: state.serverSetupRevision,
+        reviewDraft: { bindingRevision: state.serverBindingVersion },
+      }) as Awaited<ReturnType<ReviewConfigurationSaveDeps["reloadAuthoritativeSetup"]>>,
+    adoptAuthoritativeSetup: authoritative => {
+      state.adoptedSetupRevision = authoritative.revision;
+      state.resumeStep = authoritative.resumeStep as "reviews" | "people";
+      if (typeof authoritative.reviewDraft?.bindingRevision === "number") {
+        state.adoptedVersion = authoritative.reviewDraft.bindingRevision;
+      }
+    },
     adoptBindingRevision: bindingRevision => {
       state.adoptedVersion = bindingRevision;
     },
@@ -62,6 +85,7 @@ test("a failed advance is retryable without a reload: retry uses the adopted bin
   // First attempt: PUT commits (server -> 4) and is adopted, but the wizard advance fails.
   await assert.rejects(saveReviewConfigurationAndAdvance(h.deps), /configure-reviews failed/);
   assert.equal(h.state.adoptedVersion, 4);
+  assert.equal(h.state.adoptedSetupRevision, 12);
 
   // Retry: it must send the adopted version 4 (not the stale 3) so the server does not 409.
   await saveReviewConfigurationAndAdvance(h.deps);
@@ -88,6 +112,20 @@ test("a lost save response is retryable: the catch reloads the authoritative bin
   assert.equal(h.state.adoptedVersion, 9);
 });
 
+test("a committed advance with a lost response adopts the people step instead of offering a stale retry", async () => {
+  const h = harness({
+    startVersion: 3,
+    putBehavior: () => "ok",
+    advanceBehavior: () => "commit_and_response_lost",
+  });
+
+  await saveReviewConfigurationAndAdvance(h.deps);
+  assert.deepEqual(h.sentExpectedVersions, [3]);
+  assert.deepEqual(h.advancedWithVersions, [4]);
+  assert.equal(h.state.resumeStep, "people");
+  assert.equal(h.state.adoptedSetupRevision, 13);
+});
+
 test("resending the original stale binding version would 409 without the adoption fix", async () => {
   // Guards the regression directly: if the client kept the stale version, the retry PUT conflicts.
   const h = harness({ startVersion: 2, putBehavior: () => "ok", advanceBehavior: () => "fail" });
@@ -102,7 +140,18 @@ test("an invalid saved binding version is treated as a failure and reloads the a
   const deps: ReviewConfigurationSaveDeps = {
     putHumanReviewConfiguration: async () => ({ bindingRevision: Number.NaN }),
     advanceSetup: async () => undefined,
-    reloadAuthoritativeBindingRevision: async () => 6,
+    reloadAuthoritativeSetup: async () =>
+      ({
+        currentStep: "reviews",
+        resumeStep: "reviews",
+        revision: 6,
+        reviewDraft: { bindingRevision: 6 },
+      }) as Awaited<ReturnType<ReviewConfigurationSaveDeps["reloadAuthoritativeSetup"]>>,
+    adoptAuthoritativeSetup: authoritative => {
+      if (typeof authoritative.reviewDraft?.bindingRevision === "number") {
+        state.adopted = authoritative.reviewDraft.bindingRevision;
+      }
+    },
     adoptBindingRevision: bindingRevision => {
       state.adopted = bindingRevision;
     },

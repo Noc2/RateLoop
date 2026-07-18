@@ -194,7 +194,8 @@ test("review save and wizard advance run as one retry-safe operation", () => {
   assert.match(flowSource, /saveReviewConfigurationAndAdvance\(\{/);
   assert.match(flowSource, /putHumanReviewConfiguration: async \(\) =>/);
   assert.match(flowSource, /advanceSetup: async bindingRevision =>/);
-  assert.match(flowSource, /reloadAuthoritativeBindingRevision: async \(\) =>/);
+  assert.match(flowSource, /reloadAuthoritativeSetup: async \(\) =>/);
+  assert.match(flowSource, /adoptAuthoritativeSetup: authoritative =>/);
   assert.match(flowSource, /adoptBindingRevision: bindingRevision =>/);
   // Adopt must preserve in-progress edits by touching only bindingRevision.
   assert.match(
