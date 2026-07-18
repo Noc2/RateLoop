@@ -82,7 +82,7 @@ test("reviewer answers a public task and restores the draft", async ({ page }) =
     .getByRole("textbox", { name: "Feedback" })
     .fill("The conclusion follows from the supplied public evidence.");
   await page.getByRole("button", { name: "70%" }).click();
-  await expect(page.getByRole("button", { name: "Submit rating" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Create recovery backup" })).toBeEnabled();
   await page.reload();
   await expect(page.getByRole("button", { name: "Approve" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: "70%" })).toHaveAttribute("aria-pressed", "true");
