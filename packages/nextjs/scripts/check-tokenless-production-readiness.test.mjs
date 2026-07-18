@@ -117,6 +117,7 @@ function validFixture() {
     ["TOKENLESS_VOTE_MAPPING_VAULT", 6, "base64"],
     ["TOKENLESS_PROVIDER_SUBJECT_HMAC", 7, "base64url"],
     ["TOKENLESS_WORLD_ID_EVIDENCE", 8, "base64url"],
+    ["TOKENLESS_GOLD_INJECTION", 16, "base64url"],
   ];
   for (const [prefix, fill, encoding] of keyrings) {
     env[`${prefix}_KEY_VERSION`] = "v1";
@@ -205,10 +206,14 @@ test("the tokenless test deployment still rejects browser-exposed secrets", () =
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
     NEXT_PUBLIC_TOKENLESS_PIPELINE_TOKEN: "must-not-ship",
+    NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEY_VERSION: "must-not-ship-version",
+    NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEYS: "must-not-ship-keys",
   };
   const output = validateTokenlessProductionReadiness({ env, activeRegistry: {} }).join("\n");
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_PIPELINE_TOKEN is forbidden/);
-  assert.doesNotMatch(output, /must-not-ship/);
+  assert.match(output, /NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEY_VERSION is forbidden/);
+  assert.match(output, /NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEYS is forbidden/);
+  assert.doesNotMatch(output, /must-not-ship(?:-version|-keys)?/);
 });
 
 test("test and production deployments refuse server-held Feedback Bonus award authority", () => {
@@ -249,6 +254,39 @@ test("the production preflight runs before hosted migrations", () => {
 test("hosted release accepts only a complete matching v4 bundle", () => {
   const fixture = validFixture();
   assert.deepEqual(validateTokenlessProductionReadiness(fixture), []);
+});
+
+test("hosted release validates a dedicated server-only gold-injection keyring", () => {
+  assert.ok(REQUIRED_TOKENLESS_PRODUCTION_VARIABLES.includes("TOKENLESS_GOLD_INJECTION_KEY_VERSION"));
+  assert.ok(REQUIRED_TOKENLESS_PRODUCTION_VARIABLES.includes("TOKENLESS_GOLD_INJECTION_KEYS"));
+
+  const missing = validFixture();
+  delete missing.env.TOKENLESS_GOLD_INJECTION_KEY_VERSION;
+  delete missing.env.TOKENLESS_GOLD_INJECTION_KEYS;
+  const missingOutput = validateTokenlessProductionReadiness(missing).join("\n");
+  assert.match(missingOutput, /TOKENLESS_GOLD_INJECTION_KEY_VERSION is required/);
+  assert.match(missingOutput, /TOKENLESS_GOLD_INJECTION_KEYS is required/);
+
+  const malformed = validFixture();
+  malformed.env.TOKENLESS_GOLD_INJECTION_KEYS = JSON.stringify({ v1: encodedKey(16).slice(1) });
+  assert.match(
+    validateTokenlessProductionReadiness(malformed).join("\n"),
+    /TOKENLESS_GOLD_INJECTION_KEYS must contain the configured 32-byte current key/,
+  );
+
+  const exposed = validFixture();
+  exposed.env.NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEY_VERSION = "private-version";
+  exposed.env.NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEYS = "private-keyring";
+  const exposedOutput = validateTokenlessProductionReadiness(exposed).join("\n");
+  assert.match(exposedOutput, /NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEY_VERSION is forbidden/);
+  assert.match(exposedOutput, /NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEYS is forbidden/);
+  assert.doesNotMatch(exposedOutput, /private-version|private-keyring/);
+
+  const reused = validFixture();
+  reused.env.TOKENLESS_GOLD_INJECTION_KEYS = JSON.stringify({
+    v1: reused.env.TOKENLESS_PSEUDONYM_KEY,
+  });
+  assert.match(validateTokenlessProductionReadiness(reused).join("\n"), /Production key roles must be distinct/);
 });
 
 test("hosted release remains blocked while required product capabilities are incomplete", () => {
