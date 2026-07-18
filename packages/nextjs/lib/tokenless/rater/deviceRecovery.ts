@@ -52,7 +52,7 @@ export function isDeviceRecoveryRecord(value: unknown): value is DeviceRecoveryR
     record.schemaVersion === "rateloop.device-recovery.v2" &&
     isPrincipalId(record.principalId) &&
     typeof record.roundId === "string" &&
-    /^0x[0-9a-f]{40}$/u.test(record.voteKey ?? "") &&
+    /^0x[0-9a-f]{40}$/iu.test(record.voteKey ?? "") &&
     typeof record.recoveryPackage === "string" &&
     typeof record.createdAt === "string"
   );

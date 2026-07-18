@@ -33,9 +33,18 @@ test("an already reserved voucher retries the prepared device queue and waits fo
   assert.match(source, /generateDeviceRecoverySecret\(\)/);
   assert.match(source, /readBrowserSession\(\)/);
   assert.match(source, /principalId: browserSession\.principalId/);
-  assert.match(source, /storeDeviceRecovery\(recoveryRecord, browserSession\.principalId\)/);
+  assert.match(
+    source,
+    /storeDeviceRecovery\(\s*activePreparedSubmission\.recoveryRecord,\s*browserSession\.principalId/,
+  );
   assert.match(source, /serializeDeviceRecoveryBackup\(recoveryRecord, recoverySecret\)/);
-  assert.match(source, /Download backup/);
+  assert.match(source, /Create recovery backup/);
+  assert.match(source, /Download recovery backup/);
+  assert.match(source, /I saved the recovery backup/);
+  assert.match(source, /No voucher or commit is requested until you confirm the backup/);
+  assert.match(source, /async function prepareRecoveryBackup/);
+  assert.match(source, /async function confirmRecoveryBackup/);
+  assert.match(source, /async function submitPreparedResponse/);
   assert.match(source, /Submitting…/);
   assert.match(source, /Recorded/);
   assert.match(source, /Technical details/);

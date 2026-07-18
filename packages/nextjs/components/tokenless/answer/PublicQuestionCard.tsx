@@ -10,6 +10,7 @@ import { Card } from "~~/components/tokenless/ui/Card";
 import { readBrowserSession } from "~~/lib/auth/client";
 import { readJson } from "~~/lib/tokenless/http";
 import {
+  type TokenlessRaterRoundSecrets,
   createIndexedDbTokenlessCommitQueue,
   createTokenlessRaterRoundSecrets,
   enqueueTokenlessCommit,
@@ -18,6 +19,7 @@ import {
   signTokenlessCommit,
 } from "~~/lib/tokenless/rater";
 import {
+  type DeviceRecoveryRecord,
   createDeviceRecoveryRecord,
   generateDeviceRecoverySecret,
   serializeDeviceRecoveryBackup,
@@ -105,6 +107,34 @@ type PublicReviewDraft = {
   sourceUrl: string;
 };
 
+type PreparedPublicSubmission = {
+  binding: string;
+  principalId: string;
+  recoveryBackup: string;
+  recoveryRecord: DeviceRecoveryRecord;
+  response: ReturnType<typeof createPublicRaterResponse>;
+  secrets: TokenlessRaterRoundSecrets;
+};
+
+function publicSubmissionBinding(
+  task: PublicAnswerTask,
+  draft: Pick<PublicReviewDraft, "answer" | "prediction" | "feedbackCategory" | "feedbackBody" | "sourceUrl">,
+) {
+  return JSON.stringify({
+    operationKey: task.operationKey,
+    chainId: task.chainId,
+    panelAddress: task.panelAddress,
+    roundId: task.roundId,
+    contentId: task.contentId,
+    reviewerSource: task.reviewerSource,
+    voucherDeadline: task.voucherDeadline,
+    alreadyVouchered: task.alreadyVouchered,
+    beacon: task.beacon,
+    rationale: task.question.rationale,
+    ...draft,
+  });
+}
+
 function isPublicReviewDraft(value: unknown): value is PublicReviewDraft {
   if (!value || typeof value !== "object") return false;
   const draft = value as Partial<PublicReviewDraft>;
@@ -130,10 +160,13 @@ export function PublicQuestionCard({
   const [answer, setAnswer] = useState<"yes" | "no" | null>(null);
   const [prediction, setPrediction] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+  const [busyLabel, setBusyLabel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [technicalStatus, setTechnicalStatus] = useState<string | null>(null);
-  const [recoveryBackup, setRecoveryBackup] = useState<string | null>(null);
+  const [preparedSubmission, setPreparedSubmission] = useState<PreparedPublicSubmission | null>(null);
+  const [recoveryDownloaded, setRecoveryDownloaded] = useState(false);
+  const [recoveryConfirmed, setRecoveryConfirmed] = useState(false);
   const [recoveryUrl, setRecoveryUrl] = useState<string | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(task.question.rationale?.mode === "required");
   const [feedbackCategory, setFeedbackCategory] = useState<PublicRaterResponseCategory>("opinion");
@@ -143,6 +176,14 @@ export function PublicQuestionCard({
   const [draftRestored, setDraftRestored] = useState(false);
   const rationaleRef = useRef<HTMLTextAreaElement>(null);
   const feedbackEnabled = task.question.rationale?.mode !== "off";
+  const preparationBinding = publicSubmissionBinding(task, {
+    answer,
+    prediction,
+    feedbackCategory,
+    feedbackBody,
+    sourceUrl,
+  });
+  const activePreparedSubmission = preparedSubmission?.binding === preparationBinding ? preparedSubmission : null;
 
   useEffect(() => {
     const draft = loadReviewDraft("public", task.roundId, isPublicReviewDraft);
@@ -163,14 +204,23 @@ export function PublicQuestionCard({
   }, [answer, draftRestored, feedbackBody, feedbackCategory, prediction, sourceUrl, task.roundId]);
 
   useEffect(() => {
-    if (!recoveryBackup) {
+    if (!preparedSubmission || preparedSubmission.binding === preparationBinding) return;
+    setPreparedSubmission(null);
+    setRecoveryDownloaded(false);
+    setRecoveryConfirmed(false);
+    setStatus(null);
+    setTechnicalStatus("Your rating changed. Create a new recovery backup before submitting.");
+  }, [preparationBinding, preparedSubmission]);
+
+  useEffect(() => {
+    if (!activePreparedSubmission) {
       setRecoveryUrl(null);
       return;
     }
-    const url = URL.createObjectURL(new Blob([recoveryBackup], { type: "application/json" }));
+    const url = URL.createObjectURL(new Blob([activePreparedSubmission.recoveryBackup], { type: "application/json" }));
     setRecoveryUrl(url);
     return () => URL.revokeObjectURL(url);
-  }, [recoveryBackup]);
+  }, [activePreparedSubmission]);
 
   useEffect(() => {
     if (!task.alreadyVouchered) return;
@@ -196,6 +246,7 @@ export function PublicQuestionCard({
   async function retrySavedCommit() {
     if (!savedCommit) return;
     setBusy(true);
+    setBusyLabel("Retrying…");
     setError(null);
     setStatus("Submitting…");
     setTechnicalStatus("Sending the saved transaction and checking confirmation.");
@@ -237,15 +288,16 @@ export function PublicQuestionCard({
       setStatus("Ready to retry");
     } finally {
       setBusy(false);
+      setBusyLabel(null);
     }
   }
 
-  async function submitResponse() {
+  async function prepareRecoveryBackup() {
     if (paidAccess.state !== "ready" || !answer || prediction === null || task.alreadyVouchered) return;
-    let preparedForRetry = false;
     setBusy(true);
+    setBusyLabel("Creating backup…");
     setError(null);
-    setStatus("Submitting…");
+    setStatus("Creating backup…");
     setTechnicalStatus("Creating one-time answer and payout keys on this device.");
     try {
       const browserSession = await readBrowserSession();
@@ -278,12 +330,83 @@ export function PublicQuestionCard({
         voteKey: secrets.reveal.voteKey,
         recoveryPackage: exported,
       });
-      const recoveryStored = storeDeviceRecovery(recoveryRecord, browserSession.principalId);
-      setRecoveryBackup(serializeDeviceRecoveryBackup(recoveryRecord, recoverySecret));
+      setPreparedSubmission({
+        binding: preparationBinding,
+        principalId: browserSession.principalId,
+        recoveryBackup: serializeDeviceRecoveryBackup(recoveryRecord, recoverySecret),
+        recoveryRecord,
+        response,
+        secrets,
+      });
+      setRecoveryDownloaded(false);
+      setRecoveryConfirmed(false);
+      setStatus("Backup ready");
+      setTechnicalStatus("No voucher or commit has been requested. The recovery secret exists only in the download.");
+    } catch (cause) {
+      setPreparedSubmission(null);
+      setRecoveryDownloaded(false);
+      setRecoveryConfirmed(false);
+      setError("We couldn’t create your recovery backup. Try again.");
+      setStatus(null);
+      setTechnicalStatus(cause instanceof Error ? cause.message : "Unable to prepare recovery material.");
+    } finally {
+      setBusy(false);
+      setBusyLabel(null);
+    }
+  }
+
+  async function confirmRecoveryBackup() {
+    if (!activePreparedSubmission || !recoveryDownloaded || recoveryConfirmed || busy) return;
+    setBusy(true);
+    setBusyLabel("Checking account…");
+    setError(null);
+    try {
+      const browserSession = await readBrowserSession();
+      if (!browserSession || browserSession.principalId !== activePreparedSubmission.principalId) {
+        setPreparedSubmission(null);
+        setRecoveryDownloaded(false);
+        setRecoveryConfirmed(false);
+        setStatus(null);
+        setTechnicalStatus("The signed-in account changed. Create a new backup for this account.");
+        setError("Your account changed. Create a new recovery backup before submitting.");
+        return;
+      }
+      setRecoveryConfirmed(true);
+      setStatus("Backup confirmed");
+      setTechnicalStatus("The recovery secret is not in browser storage. No voucher or commit has been requested.");
+    } catch (cause) {
+      setError("We couldn’t confirm the recovery backup. Try again.");
+      setTechnicalStatus(cause instanceof Error ? cause.message : "Unable to confirm recovery material.");
+    } finally {
+      setBusy(false);
+      setBusyLabel(null);
+    }
+  }
+
+  async function submitPreparedResponse() {
+    if (paidAccess.state !== "ready" || !activePreparedSubmission || !recoveryConfirmed || task.alreadyVouchered) {
+      return;
+    }
+    let preparedForRetry = false;
+    setBusy(true);
+    setBusyLabel("Submitting…");
+    setError(null);
+    setStatus("Submitting…");
+    setTechnicalStatus("Checking the account before reserving a voucher.");
+    try {
+      const browserSession = await readBrowserSession();
+      if (!browserSession || browserSession.principalId !== activePreparedSubmission.principalId) {
+        setPreparedSubmission(null);
+        setRecoveryDownloaded(false);
+        setRecoveryConfirmed(false);
+        throw new Error("The signed-in account changed. Create a new recovery backup for this account.");
+      }
+      const { response, secrets } = activePreparedSubmission;
+      const recoveryStored = storeDeviceRecovery(activePreparedSubmission.recoveryRecord, browserSession.principalId);
       setTechnicalStatus(
         recoveryStored
-          ? "The encrypted record is saved for this account, but its recovery secret is not in browser storage. Download the backup before leaving."
-          : "Device storage is unavailable. Download the backup before leaving this page.",
+          ? "The encrypted recovery record is saved for this account. Reserving a voucher now."
+          : "Device storage is unavailable. Keep the downloaded backup. Reserving a voucher now.",
       );
       const sealed = await sealTokenlessReveal({
         material: secrets.reveal,
@@ -332,6 +455,9 @@ export function PublicQuestionCard({
       });
       setSavedCommit(queuedCommit);
       preparedForRetry = true;
+      setPreparedSubmission(null);
+      setRecoveryDownloaded(false);
+      setRecoveryConfirmed(false);
       setTechnicalStatus("Sending the sponsored transaction.");
       const committed = await readAnswerJson(
         await fetch("/api/rater/commits", {
@@ -380,6 +506,7 @@ export function PublicQuestionCard({
       );
     } finally {
       setBusy(false);
+      setBusyLabel(null);
     }
   }
 
@@ -399,7 +526,11 @@ export function PublicQuestionCard({
       advanceDisabled={
         paidAccess.state !== "ready" ||
         busy ||
-        (!savedCommit && (!answer || prediction === null || task.alreadyVouchered))
+        (!savedCommit &&
+          (!answer ||
+            prediction === null ||
+            task.alreadyVouchered ||
+            (Boolean(activePreparedSubmission) && !recoveryConfirmed)))
       }
       advanceLabel={
         paidAccess.state !== "ready"
@@ -408,9 +539,15 @@ export function PublicQuestionCard({
             ? "Retry submission"
             : task.alreadyVouchered
               ? "No saved submission"
-              : "Submit rating"
+              : activePreparedSubmission
+                ? recoveryConfirmed
+                  ? "Submit rating"
+                  : recoveryDownloaded
+                    ? "Confirm backup above"
+                    : "Download backup above"
+                : "Create recovery backup"
       }
-      busyLabel={busy ? "Submitting…" : null}
+      busyLabel={busy ? (busyLabel ?? "Working…") : null}
       caseIndex={0}
       laneHeader={
         <>
@@ -419,7 +556,13 @@ export function PublicQuestionCard({
           <DeadlineChip deadline={task.voucherDeadline} label="Submit" />
         </>
       }
-      onAdvance={() => void (savedCommit ? retrySavedCommit() : submitResponse())}
+      onAdvance={() =>
+        void (savedCommit
+          ? retrySavedCommit()
+          : activePreparedSubmission && recoveryConfirmed
+            ? submitPreparedResponse()
+            : prepareRecoveryBackup())
+      }
       onSelectFirst={() => paidAccess.state === "ready" && setAnswer("yes")}
       onSelectSecond={() => paidAccess.state === "ready" && setAnswer("no")}
       rationaleRef={rationaleRef}
@@ -538,14 +681,42 @@ export function PublicQuestionCard({
                   </button>
                 ))}
               </div>
-              {recoveryUrl ? (
-                <a
-                  href={recoveryUrl}
-                  download={`rateloop-review-${task.roundId}-backup.json`}
-                  className="mt-3 block text-center text-xs underline underline-offset-4"
-                >
-                  Download backup
-                </a>
+              {recoveryUrl && activePreparedSubmission ? (
+                <div className="mt-5 rounded-lg border border-white/10 p-3">
+                  <p className="font-mono text-[11px] uppercase tracking-widest text-[var(--rateloop-blue)]">
+                    Step 1 of 2 · Save backup
+                  </p>
+                  <p className="mt-2 text-xs leading-5 text-base-content/60">
+                    Save this file. It contains the only recovery secret for this rating.
+                  </p>
+                  <a
+                    href={recoveryUrl}
+                    download={`rateloop-review-${task.roundId}-backup.json`}
+                    className="mt-3 block text-center text-xs font-medium underline underline-offset-4"
+                    onClick={() => setRecoveryDownloaded(true)}
+                  >
+                    Download recovery backup
+                  </a>
+                  <label className="mt-3 flex items-start gap-2 text-xs leading-5">
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-xs mt-0.5"
+                      checked={recoveryConfirmed}
+                      disabled={!recoveryDownloaded || recoveryConfirmed || busy}
+                      onChange={event => event.target.checked && void confirmRecoveryBackup()}
+                    />
+                    <span>I saved the recovery backup</span>
+                  </label>
+                  {recoveryConfirmed ? (
+                    <p className="mt-3 border-t border-white/10 pt-3 font-mono text-[11px] uppercase tracking-widest text-[var(--rateloop-green)]">
+                      Step 2 of 2 · Submit rating
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-[11px] leading-4 text-base-content/45">
+                      No voucher or commit is requested until you confirm the backup.
+                    </p>
+                  )}
+                </div>
               ) : null}
               {status ? (
                 <p role="status" className="mt-3 text-xs leading-5 text-emerald-100">

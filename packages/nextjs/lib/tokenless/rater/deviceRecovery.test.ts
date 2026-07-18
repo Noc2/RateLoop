@@ -40,7 +40,7 @@ test("device recovery keeps the unwrap secret out of principal-scoped browser st
   const record = createDeviceRecoveryRecord({
     principalId: PRINCIPAL_A,
     roundId: "42",
-    voteKey: `0x${"a".repeat(40)}`,
+    voteKey: `0x${"A".repeat(40)}`,
     recoveryPackage: "encrypted-package",
   });
   assert.equal(storeDeviceRecovery(record, PRINCIPAL_A, storage), true);
