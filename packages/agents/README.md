@@ -89,6 +89,8 @@ single purpose. This browser wallet flow is separate from the agent keystore des
 The bundled examples contain a quote and a prepaid ask request:
 
 ```bash
+export RATELOOP_AGENT_API_KEY='rlk_...'
+
 yarn workspace @rateloop/agents quote \
   --file packages/agents/examples/quote.json
 
@@ -159,14 +161,14 @@ Results itemize bounty, fee, attempt reserve, refunds, and compensation. A termi
 | Variable                           | Purpose                                                                                                         |
 | ---------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `RATELOOP_API_BASE_URL`            | Required isolated tokenless deployment origin. HTTPS is required except on loopback.                            |
-| `RATELOOP_AGENT_API_KEY`           | Workspace key required by assurance commands and authenticated paid operations. It is omitted from free quotes. |
+| `RATELOOP_AGENT_API_KEY`           | Workspace key required by CLI quotes, assurance commands, and paid operations.                                 |
 | `RATELOOP_AGENT_API_PATH`          | Optional API prefix. Defaults to `/api/agent/v1`.                                                               |
 | `RATELOOP_REQUEST_TIMEOUT_MS`      | Optional positive timeout for non-wait requests.                                                                |
 | `RATELOOP_AGENT_KEYSTORE_PATH`     | Encrypted agent wallet path used by `run` and `wallet-address`.                                                 |
 | `RATELOOP_AGENT_KEYSTORE_PASSWORD` | Password for the encrypted agent wallet; keep it in a secret manager.                                           |
 | `RATELOOP_AGENT_RESUME_PATH`       | Optional mode-0600 path for a non-secret autonomous-run receipt.                                                |
 
-The CLI intentionally has no implicit production origin, MCP transport, local signer, contract-address override, or legacy chain configuration. A scoped API key is attached only to authenticated paid operations and assurance project/run requests sent to the configured tokenless origin.
+The CLI intentionally has no implicit production origin, MCP transport, local signer, contract-address override, or legacy chain configuration. A scoped API key is attached to quotes, paid operations, and assurance project/run requests sent to the configured tokenless origin.
 
 ## Framework approval adapters
 

@@ -117,7 +117,7 @@ Usage:
 
 Environment:
   RATELOOP_API_BASE_URL       Required isolated tokenless deployment URL
-  RATELOOP_AGENT_API_KEY      Workspace key; required for assurance commands and prepaid operations
+  RATELOOP_AGENT_API_KEY      Workspace key; required for quotes, assurance commands, and paid operations
   RATELOOP_AGENT_API_PATH     Optional API prefix; defaults to /api/agent/v1
   RATELOOP_REQUEST_TIMEOUT_MS Optional positive HTTP timeout
   RATELOOP_AGENT_KEYSTORE_PATH Agent wallet keystore for autonomous runs
@@ -159,6 +159,11 @@ export async function runCli(args: string[]) {
   if (command.startsWith("assurance-") && !config.apiKey) {
     throw new Error(
       "RATELOOP_AGENT_API_KEY is required for assurance project and run commands.",
+    );
+  }
+  if (command === "quote" && !config.apiKey) {
+    throw new Error(
+      "RATELOOP_AGENT_API_KEY is required for CLI quotes.",
     );
   }
   const client = createTokenlessAgentsClient({

@@ -50,6 +50,7 @@ workflow for those steps. The lower-level paid primitive remains `quote -> ask -
 import { createTokenlessRateLoopClient } from "@rateloop/sdk";
 
 const client = createTokenlessRateLoopClient({
+  apiKey: process.env.RATELOOP_AGENT_API_KEY!,
   apiBaseUrl: "https://your-tokenless-app.vercel.app",
 });
 

@@ -71,4 +71,14 @@ describe("tokenless CLI keystore requirements", () => {
       /RATELOOP_AGENT_API_KEY/,
     );
   });
+
+  it("refuses CLI quotes before reading input or making a request when the API key is missing", async () => {
+    loadTokenlessAgentsRuntimeConfig.mockReturnValue({ ...baseConfig, apiKey: "" });
+
+    await expect(runCli(["quote", "--file", "missing.json"])).rejects.toThrow(
+      /RATELOOP_AGENT_API_KEY/,
+    );
+
+    expect(createTokenlessAgentsClient).not.toHaveBeenCalled();
+  });
 });
