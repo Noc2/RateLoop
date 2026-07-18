@@ -5,6 +5,10 @@ branch. This is not customer-facing product copy. It follows the
 [18 July re-audit](tokenless-repository-security-reaudit-2026-07-18.md) and its
 [remediation record](tokenless-security-reaudit-remediation-2026-07-18.md).
 
+**Remediation:** All findings were revalidated and fixed after this point-in-time audit. See the
+[post-audit remediation record](tokenless-post-audit-remediation-2026-07-18.md). This document retains the original
+evidence and severity decisions and is not a statement about the later source state.
+
 ## Executive summary
 
 This fresh pass confirmed **16 actionable defects**: 3 high, 12 medium, and 1 low. No critical issue was confirmed.
