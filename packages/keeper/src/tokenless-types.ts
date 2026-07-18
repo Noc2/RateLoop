@@ -49,6 +49,7 @@ export interface TokenlessRound {
   admissionPolicyHash: Hex;
   commitCount: number;
   revealCount: number;
+  compensatedRevealCount: number;
   frozenRevealCount: number;
   aggregateCursor: number;
   scoreCursor: number;

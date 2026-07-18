@@ -83,6 +83,7 @@ function round(overrides: Partial<TokenlessRound> = {}): TokenlessRound {
     admissionPolicyHash: ADMISSION_POLICY_HASH,
     commitCount: 1,
     revealCount: 0,
+    compensatedRevealCount: 0,
     frozenRevealCount: 0,
     aggregateCursor: 0,
     scoreCursor: 0,
@@ -225,18 +226,48 @@ describe("tokenless keeper orchestration", () => {
     const getRound = TokenlessPanelAbi.find(
       (entry) => entry.type === "function" && entry.name === "getRound",
     );
-    expect(getRound?.outputs[0]?.components).toContainEqual(
-      expect.objectContaining({
-        name: "admissionPolicyHash",
-        type: "bytes32",
-      }),
-    );
-    expect(getRound?.outputs[0]?.components).toContainEqual(
-      expect.objectContaining({ name: "claimDeadline", type: "uint256" }),
-    );
-    expect(getRound?.outputs[0]?.components).toContainEqual(
-      expect.objectContaining({ name: "scoringSeed", type: "bytes32" }),
-    );
+    expect(
+      getRound?.outputs[0]?.components.map(({ name, type }) => ({ name, type })),
+    ).toEqual([
+      { name: "funder", type: "address" },
+      { name: "contentId", type: "bytes32" },
+      { name: "termsHash", type: "bytes32" },
+      { name: "beaconNetworkHash", type: "bytes32" },
+      { name: "feeRecipient", type: "address" },
+      { name: "bountyAmount", type: "uint256" },
+      { name: "feeAmount", type: "uint256" },
+      { name: "attemptReserve", type: "uint256" },
+      { name: "attemptCompensation", type: "uint256" },
+      { name: "fixedBasePay", type: "uint256" },
+      { name: "maximumBonus", type: "uint256" },
+      { name: "compensationPerRecipient", type: "uint256" },
+      { name: "totalRbtsScoreBps", type: "uint256" },
+      { name: "totalFinalizedLiability", type: "uint256" },
+      { name: "totalPaid", type: "uint256" },
+      { name: "entropyBlock", type: "uint256" },
+      { name: "revealSetXor", type: "bytes32" },
+      { name: "revealSetSum", type: "uint256" },
+      { name: "scoringSeed", type: "bytes32" },
+      { name: "commitDeadline", type: "uint64" },
+      { name: "revealDeadline", type: "uint64" },
+      { name: "beaconFailureDeadline", type: "uint64" },
+      { name: "beaconRound", type: "uint64" },
+      { name: "claimGracePeriod", type: "uint64" },
+      { name: "claimDeadline", type: "uint256" },
+      { name: "minimumReveals", type: "uint32" },
+      { name: "maximumCommits", type: "uint32" },
+      { name: "admissionPolicyHash", type: "bytes32" },
+      { name: "commitCount", type: "uint32" },
+      { name: "revealCount", type: "uint32" },
+      { name: "compensatedRevealCount", type: "uint32" },
+      { name: "frozenRevealCount", type: "uint32" },
+      { name: "aggregateCursor", type: "uint32" },
+      { name: "scoreCursor", type: "uint32" },
+      { name: "upVotes", type: "uint32" },
+      { name: "state", type: "uint8" },
+      { name: "scoringMode", type: "uint8" },
+      { name: "staleReturned", type: "bool" },
+    ]);
     expect(
       getRound?.outputs[0]?.components.some(
         (component) => String(component.name) === "totalAccuracyScore",

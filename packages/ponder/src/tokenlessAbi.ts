@@ -31,6 +31,7 @@ const roundComponents = [
   { name: "admissionPolicyHash", type: "bytes32" },
   { name: "commitCount", type: "uint32" },
   { name: "revealCount", type: "uint32" },
+  { name: "compensatedRevealCount", type: "uint32" },
   { name: "frozenRevealCount", type: "uint32" },
   { name: "aggregateCursor", type: "uint32" },
   { name: "scoreCursor", type: "uint32" },
