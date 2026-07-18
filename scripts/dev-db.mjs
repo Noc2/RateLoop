@@ -451,6 +451,28 @@ async function waitForDatabaseReady(config) {
   throw new Error(`Local Postgres did not become ready at ${formatDatabaseTarget(config)} within 30 seconds.`);
 }
 
+export function ensureComposeDatabaseExists(config, composeRunner = runCompose) {
+  const connectionArgs = [
+    "exec", "-T", postgresServiceName, "psql", "-v", "ON_ERROR_STOP=1",
+    "-U", config.user, "-d", config.databaseName, "-c", "select 1",
+  ];
+  const connectionOptions = { env: getComposeEnv(config), stdio: "ignore" };
+  if (composeRunner(connectionArgs, connectionOptions).status === 0) return;
+
+  console.log(`[dev-db] Creating local database ${config.databaseName} in the Docker-managed Postgres...`);
+  const createResult = composeRunner(
+    ["exec", "-T", postgresServiceName, "createdb", "-U", config.user, "--", config.databaseName],
+    { env: getComposeEnv(config), stdio: "pipe", encoding: "utf8" },
+  );
+  const createOutput = getSpawnOutput(createResult);
+  if (createResult.status !== 0 && !/already exists/i.test(createOutput)) {
+    throw new Error(`Failed to create local database ${config.databaseName}. ${createOutput.trim()}`);
+  }
+  if (composeRunner(connectionArgs, connectionOptions).status !== 0) {
+    throw new Error(`Local Postgres accepted connections but database ${config.databaseName} is unavailable.`);
+  }
+}
+
 export async function ensureLocalDatabase(config = resolveNextDatabaseConfig()) {
   if (config.isMemory) {
     return {
@@ -508,6 +530,7 @@ export async function ensureLocalDatabase(config = resolveNextDatabaseConfig()) 
 
   replaySpawnOutput(upResult);
   await waitForDatabaseReady(config);
+  ensureComposeDatabaseExists(config);
   console.log(`[dev-db] Local Postgres is ready at ${formatDatabaseTarget(config)}.`);
 
   return {

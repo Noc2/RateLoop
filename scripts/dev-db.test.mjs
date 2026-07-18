@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildLocalDatabasePortConflictMessage,
   composeOutputHasPortConflict,
+  ensureComposeDatabaseExists,
   resolveComposeBindHost,
   selectLocalDatabaseLogSource,
 } from "./dev-db.mjs";
@@ -72,4 +73,30 @@ test("uses Homebrew fallback logs only while the fallback database is running", 
     }),
     "compose",
   );
+});
+
+test("creates and verifies a requested database after a retained Compose volume starts", () => {
+  const calls = [];
+  const statuses = [1, 0, 0];
+  ensureComposeDatabaseExists(localDatabaseConfig, (args, options) => {
+    calls.push({ args, options });
+    return { status: statuses.shift(), stdout: "", stderr: "" };
+  });
+
+  assert.equal(calls.length, 3);
+  assert.deepEqual(calls[0].args.slice(3), [
+    "psql", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "rateloop_app", "-c", "select 1",
+  ]);
+  assert.deepEqual(calls[1].args.slice(3), ["createdb", "-U", "postgres", "--", "rateloop_app"]);
+  assert.deepEqual(calls[2].args, calls[0].args);
+});
+
+test("does not recreate a Compose database that accepts a real SQL connection", () => {
+  const calls = [];
+  ensureComposeDatabaseExists(localDatabaseConfig, (args, options) => {
+    calls.push({ args, options });
+    return { status: 0, stdout: "", stderr: "" };
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].args[3], "psql");
 });
