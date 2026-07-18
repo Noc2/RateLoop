@@ -383,6 +383,12 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         }
         if (round.state != RoundState.Revealable) revert InvalidState();
         if (block.timestamp > round.beaconFailureDeadline) revert InvalidDeadline();
+        // Once the disclosed scoring window has closed with quorum, settlement can proceed
+        // immediately and there is no incomplete-panel path left to compensate. Reject any
+        // later opening instead of accepting work that healthy settlement would not pay.
+        if (block.timestamp > round.revealDeadline && round.revealCount >= round.minimumReveals) {
+            revert InvalidState();
+        }
         if (vote > 1 || !TokenlessRbts.isValidUserPrediction(predictedUpBps)) revert InvalidPrediction();
         if (payoutAddress == address(0)) revert InvalidAddress();
 
@@ -400,10 +406,10 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         record.predictedUpBps = predictedUpBps;
         record.responseHash = responseHash;
         record.revealed = true;
-        // Every valid opening through the beacon-failure deadline earns fixed accepted-work
-        // compensation, but only reveals at or before the disclosed reveal deadline enter the
-        // frozen scoring set (quorum, majority verdict, peer assignment, and RBTS). A late
-        // opening therefore cannot change the scored set after the public window has closed.
+        // Every accepted opening earns fixed accepted-work compensation, but only reveals at or
+        // before the disclosed reveal deadline enter the frozen scoring set (quorum, majority
+        // verdict, peer assignment, and RBTS). Late openings remain available only while the
+        // timely scoring set is under quorum and therefore cannot change scored evidence.
         round.compensatedRevealCount += 1;
         if (block.timestamp <= round.revealDeadline) {
             round.revealCount += 1;

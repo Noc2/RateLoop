@@ -94,7 +94,9 @@ function acceptsReveals(round: TokenlessRound, now: bigint) {
     (round.state === TokenlessRoundState.Open ||
       round.state === TokenlessRoundState.Revealable) &&
     now > round.commitDeadline &&
-    now <= round.beaconFailureDeadline
+    now <= round.beaconFailureDeadline &&
+    (now <= round.revealDeadline ||
+      round.revealCount < round.minimumReveals)
   );
 }
 

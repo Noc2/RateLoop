@@ -441,6 +441,28 @@ describe("tokenless keeper orchestration", () => {
     expect(unavailable.roundsAwaitingBeaconFailure).toBe(1);
   });
 
+  it("does not submit a late reveal after timely quorum is already fixed", async () => {
+    const writes: string[] = [];
+    const result = await runTokenlessKeeper(
+      clients({
+        currentRound: round({
+          minimumReveals: 1,
+          revealCount: 1,
+          compensatedRevealCount: 1,
+        }),
+        writes,
+        now: 220n,
+      }),
+      config,
+      logger,
+      decrypt,
+    );
+
+    expect(writes).toEqual(["openReveal", "beginSettlement"]);
+    expect(result.votesRevealed).toBe(0);
+    expect(result.settlementsBegun).toBe(1);
+  });
+
   it("waits on under-quorum rounds until the beacon failure deadline", async () => {
     const waitingWrites: string[] = [];
     const waiting = await runTokenlessKeeper(

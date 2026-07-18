@@ -250,6 +250,40 @@ contract TokenlessPanelTest is Test {
         assertEq(usdc.balanceOf(address(panel)), 0);
     }
 
+    function test_QuorateRoundRejectsLateRevealInsteadOfAcceptingUnpaidWork() public {
+        uint256 roundId = _createRound(3, 4);
+        Rater memory alice = _rater(0x331, 1, 7_000, "alice-quorate", roundId);
+        Rater memory bob = _rater(0x332, 0, 3_000, "bob-quorate", roundId);
+        Rater memory carol = _rater(0x333, 1, 5_000, "carol-quorate", roundId);
+        Rater memory dave = _rater(0x334, 0, 5_000, "dave-late", roundId);
+        _commit(roundId, alice);
+        _commit(roundId, bob);
+        _commit(roundId, carol);
+        _commit(roundId, dave);
+
+        vm.warp(_round(roundId).commitDeadline + 1);
+        _reveal(roundId, alice);
+        _reveal(roundId, bob);
+        _reveal(roundId, carol);
+        assertEq(_round(roundId).revealCount, 3);
+        assertEq(_round(roundId).compensatedRevealCount, 3);
+
+        vm.warp(_round(roundId).revealDeadline + 1);
+        vm.expectRevert(TokenlessPanel.InvalidState.selector);
+        _reveal(roundId, dave);
+        assertFalse(panel.getCommit(dave.commitKey).revealed);
+        assertEq(_round(roundId).compensatedRevealCount, 3);
+
+        panel.beginSettlement(roundId);
+        panel.processAggregate(roundId, 0, 3);
+        _finalizeSeed(roundId, ENTROPY);
+        panel.processScores(roundId, 0, 3);
+        panel.finalizeSettlement(roundId);
+
+        vm.expectRevert(TokenlessPanel.NotClaimable.selector);
+        panel.claim(dave.commitKey, dave.payout, dave.salt);
+    }
+
     function test_ZeroCommitRoundFullyRefundsAndFirstCommitDisablesCancellation() public {
         uint256 emptyRound = _createRound(3, 3);
         vm.prank(funder);
