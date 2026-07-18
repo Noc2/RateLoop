@@ -6,11 +6,35 @@ export type PublicQuestionMedia =
   | { kind: "images"; items: Array<{ alt: string; assetId: string; digest: `sha256:${string}` }> }
   | { kind: "youtube"; videoId: string };
 
-export function QuestionMedia({ media }: { media: PublicQuestionMedia }) {
+export type QuestionMediaReviewState =
+  | { status: "pending" }
+  | { status: "ready" }
+  | { status: "error"; message: string };
+
+export function QuestionMedia({
+  media,
+  onReviewStateChange,
+}: {
+  media: PublicQuestionMedia;
+  onReviewStateChange?: (state: QuestionMediaReviewState) => void;
+}) {
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
   const [playVideo, setPlayVideo] = useState(false);
+  const [loadedImages, setLoadedImages] = useState<Set<string>>(() => new Set());
   const imageButtonsRef = useRef<Array<HTMLButtonElement | null>>([]);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    setLoadedImages(new Set());
+    setPlayVideo(false);
+    onReviewStateChange?.({ status: "pending" });
+  }, [media, onReviewStateChange]);
+
+  useEffect(() => {
+    if (media.kind === "images" && loadedImages.size === media.items.length) {
+      onReviewStateChange?.({ status: "ready" });
+    }
+  }, [loadedImages, media, onReviewStateChange]);
 
   const closePreview = useCallback(() => {
     const previousIndex = selectedImage;
@@ -42,6 +66,13 @@ export function QuestionMedia({ media }: { media: PublicQuestionMedia }) {
             allowFullScreen
             referrerPolicy="strict-origin-when-cross-origin"
             sandbox="allow-scripts allow-same-origin allow-presentation"
+            onLoad={() => onReviewStateChange?.({ status: "ready" })}
+            onError={() =>
+              onReviewStateChange?.({
+                status: "error",
+                message: "The YouTube context could not be loaded. Check it before sharing this ask.",
+              })
+            }
           />
         ) : (
           <button
@@ -57,6 +88,7 @@ export function QuestionMedia({ media }: { media: PublicQuestionMedia }) {
             <span className="mt-1 text-xs text-white/50">
               The privacy-enhanced player loads only after you choose play.
             </span>
+            <span className="mt-2 font-mono text-[11px] text-white/40">Video {media.videoId}</span>
           </button>
         )}
       </div>
@@ -84,6 +116,19 @@ export function QuestionMedia({ media }: { media: PublicQuestionMedia }) {
               alt={image.alt}
               className="aspect-video h-full max-h-80 w-full object-contain"
               loading="lazy"
+              onLoad={() =>
+                setLoadedImages(current => {
+                  const next = new Set(current);
+                  next.add(image.assetId);
+                  return next;
+                })
+              }
+              onError={() =>
+                onReviewStateChange?.({
+                  status: "error",
+                  message: `Image ${index + 1} could not be loaded. Check it before sharing this ask.`,
+                })
+              }
             />
           </button>
         ))}

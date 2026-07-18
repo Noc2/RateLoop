@@ -200,6 +200,14 @@ test("browser handoff reveals price and submission progressively while retaining
   assert.doesNotMatch(handoffSource, /Draft summary|Lock the exact economics|01 · Review|02 · Quote|03 · Submit/);
 });
 
+test("browser handoff renders and verifies media before privacy approval or network mutation", () => {
+  assert.match(handoffSource, /<QuestionMedia media=\{request\.question\.media\}/);
+  assert.match(handoffSource, /Review all attached context before confirming it is safe to share/);
+  assert.match(handoffSource, /disabled=\{formDisabled \|\| !mediaReady\}/);
+  assert.match(handoffSource, /if \(!mediaReady\)[\s\S]{0,120}before requesting a quote/);
+  assert.match(handoffSource, /if \(!mediaReady\)[\s\S]{0,120}before submitting/);
+});
+
 test("expired browser handoffs stop at one recovery action", () => {
   assert.match(handoffSource, /if \(handoff\.status === "expired"\)/);
   assert.match(handoffSource, /Ask the agent for a new link\./);
@@ -234,7 +242,10 @@ test("browser quote validation rejects a stripped or downgraded public-data cont
     return next;
   };
   assert.throws(() => validateTokenlessQuoteRequest(strip("visibility")), /request\.visibility must be/i);
-  assert.throws(() => validateTokenlessQuoteRequest(strip("dataClassification")), /request\.dataClassification must be/i);
+  assert.throws(
+    () => validateTokenlessQuoteRequest(strip("dataClassification")),
+    /request\.dataClassification must be/i,
+  );
   assert.throws(
     () => validateTokenlessQuoteRequest(strip("confirmedNoSensitiveData")),
     /confirmedNoSensitiveData must be true/i,
@@ -259,4 +270,3 @@ test("handoff decoding rejects a privacy envelope that disagrees with the embedd
     /redaction summary does not match the embedded request/i,
   );
 });
-

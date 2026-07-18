@@ -13,6 +13,7 @@ import {
   parseTokenlessQuoteResponse,
   parseTokenlessResult,
 } from "@rateloop/sdk";
+import { QuestionMedia, type QuestionMediaReviewState } from "~~/components/tokenless/answer/QuestionMedia";
 
 const HANDOFF_VERSION = "rateloop.handoff.v1" as const;
 const MAX_FRAGMENT_LENGTH = 16 * 1024;
@@ -305,6 +306,7 @@ export function TokenlessHandoffClient() {
   const [workspaceLoading, setWorkspaceLoading] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [privacyConfirmed, setPrivacyConfirmed] = useState(false);
+  const [mediaReview, setMediaReview] = useState<QuestionMediaReviewState>({ status: "ready" });
   const [quote, setQuote] = useState<TokenlessQuoteResponse | null>(null);
   const [ask, setAsk] = useState<TokenlessAskResponse | null>(null);
   const [result, setResult] = useState<TokenlessResult | null>(null);
@@ -321,6 +323,7 @@ export function TokenlessHandoffClient() {
         if (cancelled) return;
         setHandoff({ status: "ready", payload });
         setRequest(payload.request);
+        setMediaReview(payload.request.question.media ? { status: "pending" } : { status: "ready" });
       } catch (cause) {
         const failure = cause as Error & { payload?: TokenlessHandoffPayload };
         if (failure.payload) {
@@ -329,6 +332,7 @@ export function TokenlessHandoffClient() {
             if (cancelled) return;
             setHandoff({ status: "expired", payload: failure.payload });
             setRequest(failure.payload.request);
+            setMediaReview(failure.payload.request.question.media ? { status: "pending" } : { status: "ready" });
             return;
           } catch (bindingCause) {
             cause = bindingCause;
@@ -349,9 +353,7 @@ export function TokenlessHandoffClient() {
   const loadSession = useCallback(async (signal: AbortSignal) => {
     try {
       const sessionBody = record(
-        await readApiJson(
-          await fetch("/api/auth/session", { cache: "no-store", credentials: "same-origin", signal }),
-        ),
+        await readApiJson(await fetch("/api/auth/session", { cache: "no-store", credentials: "same-origin", signal })),
         "session",
       );
       if (sessionBody.authenticated !== true || typeof sessionBody.principalId !== "string") {
@@ -435,6 +437,12 @@ export function TokenlessHandoffClient() {
     BigInt(selectedWorkspace.prepaid.availableAtomic) < BigInt(quote.economics.totalFundedAtomic);
   const submitted = ask !== null;
   const formDisabled = busy !== null || submitted || handoff.status !== "ready";
+  const mediaReady = !request?.question.media || mediaReview.status === "ready";
+
+  const handleMediaReview = useCallback((state: QuestionMediaReviewState) => {
+    setMediaReview(state);
+    if (state.status !== "ready") setPrivacyConfirmed(false);
+  }, []);
 
   function changeRequest(next: TokenlessQuoteRequest) {
     setRequest(next);
@@ -488,6 +496,7 @@ export function TokenlessHandoffClient() {
     setError(null);
     try {
       const active = ensureActiveHandoff();
+      if (!mediaReady) throw new Error("Review every attached image or video before requesting a quote.");
       if (!privacyConfirmed) throw new Error("Confirm the non-sensitive data statement before requesting a quote.");
       const validated = validateTokenlessQuoteRequest(request);
       setBusy("quote");
@@ -540,6 +549,7 @@ export function TokenlessHandoffClient() {
     try {
       const active = ensureActiveHandoff();
       if (!request || !quote) throw new Error("Request a current quote before submitting.");
+      if (!mediaReady) throw new Error("Review every attached image or video before submitting.");
       if (!privacyConfirmed) throw new Error("Confirm the non-sensitive data statement before submitting.");
       if (Date.parse(quote.expiresAt) <= Date.now()) {
         setQuote(null);
@@ -718,6 +728,30 @@ export function TokenlessHandoffClient() {
             </fieldset>
           )}
 
+          {request.question.media ? (
+            <div className="mt-7 border-t border-white/10 pt-6" aria-labelledby="handoff-media-heading">
+              <h3 id="handoff-media-heading" className="text-sm font-medium">
+                Attached context
+              </h3>
+              <p className="mt-1 text-sm leading-6 text-base-content/55">
+                Review all attached context before confirming it is safe to share.
+              </p>
+              <QuestionMedia media={request.question.media} onReviewStateChange={handleMediaReview} />
+              {mediaReview.status === "pending" ? (
+                <p className="mt-3 text-sm text-base-content/55" role="status">
+                  {request.question.media.kind === "youtube"
+                    ? "Load the video to continue."
+                    : "Loading attached images…"}
+                </p>
+              ) : null}
+              {mediaReview.status === "error" ? (
+                <p className="mt-3 text-sm text-error" role="alert">
+                  {mediaReview.message}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="mt-7 border-t border-white/10 pt-6">
             <p className="mb-5 text-sm leading-6 text-base-content/65">
               {sourceLabel(request.audience.source)} · {request.requestedPanelSize} reviewers
@@ -727,7 +761,7 @@ export function TokenlessHandoffClient() {
                 type="checkbox"
                 className="checkbox checkbox-sm mt-1 border-white/30"
                 checked={privacyConfirmed}
-                disabled={formDisabled}
+                disabled={formDisabled || !mediaReady}
                 onChange={event => setPrivacyConfirmed(event.target.checked)}
               />
               <span>
@@ -766,7 +800,7 @@ export function TokenlessHandoffClient() {
           <button
             type="button"
             className="rateloop-gradient-action min-h-11 shrink-0 px-5 disabled:cursor-not-allowed disabled:opacity-40"
-            disabled={busy !== null || submitted || handoff.status !== "ready" || !privacyConfirmed}
+            disabled={busy !== null || submitted || handoff.status !== "ready" || !mediaReady || !privacyConfirmed}
             onClick={() => void createQuote()}
           >
             {busy === "quote" ? "Getting price…" : quote ? "Refresh price" : "Get price"}
