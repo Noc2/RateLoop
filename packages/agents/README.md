@@ -125,9 +125,11 @@ yarn workspace @rateloop/agents run \
 
 `run` signs only the canonical EIP-3009 and round-authorization payloads
 returned by the isolated deployment. The local run file must pin the complete
-deployment identity and a maximum total in atomic USDC units; the CLI refuses
-to sign if the server changes an address, deployment key, chain, quote total,
-or spend ceiling. `resume` can poll a persisted operation
+deployment identity, immutable round policy, and a maximum total in atomic
+USDC units. Before signing, the CLI locally reconstructs the question and
+review-term commitments and refuses changes to content, audience, allocations,
+deadlines, beacon policy, fee recipient, addresses, deployment identity, or
+spend ceiling. `resume` can poll a persisted operation
 after a process restart. The server enforces the key's scopes, wallet binding,
 audience, payment mode, panel limits, and daily/monthly budget; it does not
 accept an accountless public x402 payment.

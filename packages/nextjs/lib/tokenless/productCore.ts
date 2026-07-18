@@ -1,4 +1,10 @@
-import type { TokenlessAskRequest, TokenlessAskResponse, TokenlessQuoteResponse } from "@rateloop/sdk";
+import {
+  type TokenlessAskRequest,
+  type TokenlessAskResponse,
+  type TokenlessQuoteRequest,
+  type TokenlessQuoteResponse,
+  buildTokenlessQuoteIntent,
+} from "@rateloop/sdk";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import "server-only";
 import { getAddress } from "viem";
@@ -1081,9 +1087,11 @@ async function createQuestionRecords(input: {
   quoteRequest: Record<string, unknown>;
   quote: TokenlessQuoteResponse;
 }) {
-  const content = input.quoteRequest.question;
+  const intent = buildTokenlessQuoteIntent(input.quoteRequest as unknown as TokenlessQuoteRequest, input.quote);
+  const content = intent.normalizedRequest.question;
   const contentJson = stableJson(content);
   const contentHash = digest(contentJson);
+  if (`0x${contentHash}` !== intent.contentId) throw new Error("Canonical tokenless content commitment drifted.");
   const contentId = `cnt_${digest(`${input.workspaceId}:${contentHash}`).slice(0, 32)}`;
   const terms = {
     audience: input.quote.audience,
@@ -1099,6 +1107,7 @@ async function createQuestionRecords(input: {
   };
   const termsJson = stableJson(terms);
   const termsHash = digest(termsJson);
+  if (`0x${termsHash}` !== intent.termsHash) throw new Error("Canonical tokenless terms commitment drifted.");
   const questionId = `qst_${digest(`${input.workspaceId}:${input.idempotencyKey}`).slice(0, 32)}`;
   const now = new Date();
   const client = await dbPool.connect();

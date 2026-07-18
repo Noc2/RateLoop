@@ -4,6 +4,10 @@ import type {
   TokenlessQuoteRequest,
   TokenlessRateLoopClient,
 } from "@rateloop/sdk";
+import {
+  buildTokenlessQuoteIntent,
+  TOKENLESS_SCHEMA_VERSION,
+} from "@rateloop/sdk";
 import { describe, expect, it, vi } from "vitest";
 import type { PrivateKeyAccount } from "viem/accounts";
 import { runTokenlessAutonomous } from "../tokenlessRun";
@@ -23,7 +27,7 @@ const quoteRequest = {
     source: "customer_invited",
   },
   budget: {
-    attemptReserveAtomic: "100",
+    attemptReserveAtomic: "636",
     bountyAtomic: "800",
     feeBps: 1_250,
   },
@@ -36,34 +40,99 @@ const quoteRequest = {
   responseWindowSeconds: 3_600,
 } satisfies TokenlessQuoteRequest;
 
+const quoteResponse = {
+  schemaVersion: TOKENLESS_SCHEMA_VERSION,
+  quoteId: "quote_test",
+  expiresAt: "2099-01-01T00:00:00.000Z",
+  economics: {
+    asset: "USDC" as const,
+    decimals: 6 as const,
+    bounty: { fundedAtomic: "800", paidAtomic: "0", refundedAtomic: "0" },
+    fee: {
+      bps: 1_250,
+      fundedAtomic: "100",
+      paidAtomic: "0",
+      refundedAtomic: "0",
+    },
+    attemptReserve: {
+      compensatedAtomic: "0",
+      fundedAtomic: "636",
+      refundedAtomic: "0",
+    },
+    refund: {
+      attemptReserveAtomic: "0",
+      bountyAtomic: "0",
+      feeAtomic: "0",
+      totalAtomic: "0",
+    },
+    compensation: {
+      perAcceptedRevealCapAtomic: "212",
+      recipientCount: 0,
+      totalAtomic: "0",
+    },
+    totalFundedAtomic: "1536",
+  },
+  audience: {
+    admissionPolicyHash: quoteRequest.audience.admissionPolicyHash,
+    label: "Customer-invited reviewers",
+    source: "customer_invited" as const,
+  },
+  panel: { minimumReveals: 3, requestedSize: 3 },
+  responseWindowSeconds: 3_600,
+  requestProfile: null,
+  reviewEconomics: null,
+  slo: { estimatedSeconds: 1_800 },
+};
+
+const roundPolicy = {
+  beaconNetworkHash: `0x${"33".repeat(32)}` as const,
+  beaconGenesisSeconds: 1_689_232_296,
+  beaconPeriodSeconds: 3,
+  revealWindowSeconds: 120,
+  beaconFailureGraceSeconds: 300,
+  claimGracePeriodSeconds: 604_800,
+  feeRecipient: "0x5555555555555555555555555555555555555555" as const,
+};
+
 function paymentInstructions(
   overrides: Partial<TokenlessPaymentInstructions> = {},
 ): TokenlessPaymentInstructions {
   const now = Math.floor(Date.now() / 1_000);
+  const commitDeadline = now + quoteRequest.responseWindowSeconds;
+  const intent = buildTokenlessQuoteIntent(quoteRequest, quoteResponse);
   return {
     operationKey: "op_test",
     paymentMode: "x402",
     paymentState: "awaiting_authorization",
     ...deployment,
     funderAddress: walletAddress,
-    totalFundedAtomic: "1000",
+    totalFundedAtomic: "1536",
     roundTerms: {
-      contentId: `0x${"11".repeat(32)}`,
-      termsHash: `0x${"22".repeat(32)}`,
-      beaconNetworkHash: `0x${"33".repeat(32)}`,
+      contentId: intent.contentId,
+      termsHash: intent.termsHash,
+      beaconNetworkHash: roundPolicy.beaconNetworkHash,
       bountyAmount: "800",
       feeAmount: "100",
-      attemptReserve: "100",
-      attemptCompensation: "25",
-      minimumReveals: 2,
+      attemptReserve: "636",
+      attemptCompensation: "212",
+      minimumReveals: 3,
       maximumCommits: 3,
       admissionPolicyHash: `0x${"44".repeat(32)}`,
-      commitDeadline: String(now + 300),
-      revealDeadline: String(now + 600),
-      beaconFailureDeadline: String(now + 900),
-      beaconRound: "1000",
+      commitDeadline: String(commitDeadline),
+      revealDeadline: String(commitDeadline + roundPolicy.revealWindowSeconds),
+      beaconFailureDeadline: String(
+        commitDeadline +
+          roundPolicy.revealWindowSeconds +
+          roundPolicy.beaconFailureGraceSeconds,
+      ),
+      beaconRound: String(
+        Math.floor(
+          (commitDeadline - roundPolicy.beaconGenesisSeconds) /
+            roundPolicy.beaconPeriodSeconds,
+        ) + 1,
+      ),
       claimGracePeriod: "604800",
-      feeRecipient: "0x5555555555555555555555555555555555555555",
+      feeRecipient: roundPolicy.feeRecipient,
     },
     roundId: null,
     transactionHash: null,
@@ -93,8 +162,7 @@ function harness(instructions = paymentInstructions()) {
   const signTypedData = vi.fn();
   const client = {
     quote: vi.fn().mockResolvedValue({
-      quoteId: "quote_test",
-      economics: { totalFundedAtomic: "1000" },
+      ...quoteResponse,
     }),
     ask: vi.fn().mockResolvedValue({ operationKey: "op_test" }),
     paymentInstructions: vi.fn().mockResolvedValue(instructions),
@@ -121,8 +189,9 @@ function run(
     request: {
       deployment,
       idempotencyKey: "run:test",
-      maxTotalFundedAtomic: "1000",
+      maxTotalFundedAtomic: "1536",
       quote: quoteRequest,
+      roundPolicy,
       ...requestOverrides,
     },
   });
@@ -144,7 +213,7 @@ describe("autonomous x402 custody guard", () => {
   it("refuses a quote above the local ceiling before creating an ask", async () => {
     const h = harness();
 
-    await expect(run(h, { maxTotalFundedAtomic: "999" })).rejects.toThrow(
+    await expect(run(h, { maxTotalFundedAtomic: "1535" })).rejects.toThrow(
       /exceeds the local autonomous spend ceiling/,
     );
     expect(h.mocks.ask).not.toHaveBeenCalled();
@@ -158,6 +227,8 @@ describe("autonomous x402 custody guard", () => {
         roundTerms: {
           ...paymentInstructions().roundTerms,
           bountyAmount: "801",
+          feeAmount: "100",
+          attemptReserve: "636",
         },
       }),
     );
@@ -165,6 +236,55 @@ describe("autonomous x402 custody guard", () => {
     await expect(run(h, { maxTotalFundedAtomic: "2000" })).rejects.toThrow(
       /do not match the accepted quote total/,
     );
+    expect(h.mocks.signTypedData).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["question content", { contentId: `0x${"91".repeat(32)}` }],
+    ["review terms", { termsHash: `0x${"92".repeat(32)}` }],
+    ["audience", { admissionPolicyHash: `0x${"93".repeat(32)}` }],
+    [
+      "fee recipient",
+      { feeRecipient: "0x9999999999999999999999999999999999999999" },
+    ],
+    ["approved beacon network", { beaconNetworkHash: `0x${"94".repeat(32)}` }],
+    ["bounty allocation", { bountyAmount: "799", feeAmount: "101" }],
+    [
+      "approved reveal window",
+      { revealDeadline: paymentInstructions().roundTerms.commitDeadline },
+    ],
+  ])(
+    "refuses same-total signed terms that change the %s",
+    async (_name, termOverrides) => {
+      const baseline = paymentInstructions();
+      const h = harness(
+        paymentInstructions({
+          roundTerms: { ...baseline.roundTerms, ...termOverrides },
+        }),
+      );
+
+      await expect(run(h)).rejects.toThrow(/changed/);
+      expect(h.mocks.signTypedData).not.toHaveBeenCalled();
+      expect(h.mocks.submitPayment).not.toHaveBeenCalled();
+    },
+  );
+
+  it("refuses a server-shifted deadline even when all relative windows remain valid", async () => {
+    const baseline = paymentInstructions();
+    const commitDeadline = BigInt(baseline.roundTerms.commitDeadline) + 1_800n;
+    const h = harness(
+      paymentInstructions({
+        roundTerms: {
+          ...baseline.roundTerms,
+          commitDeadline: commitDeadline.toString(),
+          revealDeadline: (commitDeadline + 120n).toString(),
+          beaconFailureDeadline: (commitDeadline + 420n).toString(),
+          beaconRound: ((commitDeadline - 1_689_232_296n) / 3n + 1n).toString(),
+        },
+      }),
+    );
+
+    await expect(run(h)).rejects.toThrow(/response deadline/);
     expect(h.mocks.signTypedData).not.toHaveBeenCalled();
   });
 });

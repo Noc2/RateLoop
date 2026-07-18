@@ -37,8 +37,12 @@ import type {
   TokenlessWaitResponse,
   TokenlessSubmitPaymentRequest,
 } from "./tokenlessTypes";
-import { TOKENLESS_REVIEWER_SOURCES } from "./tokenlessTypes";
+import {
+  TOKENLESS_REVIEWER_SOURCES,
+  TOKENLESS_SCHEMA_VERSION,
+} from "./tokenlessTypes";
 import { normalizeTokenlessQuestion } from "./tokenlessMedia";
+import { sha256, stringToHex } from "viem";
 
 const DEFAULT_API_PATH = "/api/agent/v1";
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -169,7 +173,7 @@ function assertIdempotencyKey(value: string) {
   }
 }
 
-function normalizeQuoteRequest(
+export function normalizeTokenlessQuoteRequest(
   request: TokenlessQuoteRequest,
 ): TokenlessQuoteRequest {
   if (!BYTES32_PATTERN.test(request.audience.admissionPolicyHash)) {
@@ -201,11 +205,11 @@ function normalizeQuoteRequest(
   }
   if (
     !Number.isSafeInteger(request.requestedPanelSize) ||
-    request.requestedPanelSize <= 0 ||
+    request.requestedPanelSize < 3 ||
     request.requestedPanelSize > 500
   ) {
     throw new RateLoopSdkError(
-      "requestedPanelSize must be a safe integer between 1 and 500.",
+      "requestedPanelSize must be a safe integer between 3 and 500.",
     );
   }
   if (
@@ -292,10 +296,143 @@ function normalizeQuoteRequest(
   }
   return {
     ...request,
+    visibility: request.visibility ?? "private",
+    dataClassification: request.dataClassification ?? "internal",
     question: normalizeTokenlessQuestion(request.question),
+    ...(request.redactionSummary === undefined
+      ? {}
+      : { redactionSummary: request.redactionSummary.trim() }),
     ...(requestProfile && reviewEconomics
       ? { requestProfile, reviewEconomics }
       : {}),
+  };
+}
+
+const quoteAudienceLabels = {
+  customer_invited: "Customer-invited reviewers",
+  rateloop_network: "RateLoop-network reviewers",
+  hybrid: "Separate invited and RateLoop-network subpanels",
+} as const;
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .filter(([, entry]) => entry !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableJson(entry)}`)
+      .join(",")}}`;
+  }
+  const encoded = JSON.stringify(value);
+  if (encoded === undefined)
+    throw new RateLoopSdkError("Tokenless intent is not JSON serializable.");
+  return encoded;
+}
+
+function intentDigest(value: unknown) {
+  return sha256(stringToHex(stableJson(value)));
+}
+
+function assertIntentField(name: string, actual: unknown, expected: unknown) {
+  if (stableJson(actual) !== stableJson(expected)) {
+    throw new RateLoopSdkError(
+      `The accepted quote changed the locally requested ${name}.`,
+    );
+  }
+}
+
+/**
+ * Reconstructs the exact content and product-term commitments that the server
+ * freezes before payment. Autonomous callers must compare these commitments
+ * with the signed round terms instead of trusting same-total server output.
+ */
+export function buildTokenlessQuoteIntent(
+  requestBody: TokenlessQuoteRequest,
+  quote: TokenlessQuoteResponse,
+) {
+  const request = normalizeTokenlessQuoteRequest(requestBody);
+  const bounty = BigInt(request.budget.bountyAtomic);
+  const reserve = BigInt(request.budget.attemptReserveAtomic);
+  const fee = (bounty * BigInt(request.budget.feeBps)) / 10_000n;
+  const economics = {
+    asset: "USDC" as const,
+    decimals: 6 as const,
+    bounty: {
+      fundedAtomic: bounty.toString(),
+      paidAtomic: "0",
+      refundedAtomic: "0",
+    },
+    fee: {
+      bps: request.budget.feeBps,
+      fundedAtomic: fee.toString(),
+      paidAtomic: "0",
+      refundedAtomic: "0",
+    },
+    attemptReserve: {
+      compensatedAtomic: "0",
+      fundedAtomic: reserve.toString(),
+      refundedAtomic: "0",
+    },
+    refund: {
+      attemptReserveAtomic: "0",
+      bountyAtomic: "0",
+      feeAtomic: "0",
+      totalAtomic: "0",
+    },
+    compensation: {
+      perAcceptedRevealCapAtomic: (
+        reserve / BigInt(request.requestedPanelSize)
+      ).toString(),
+      recipientCount: 0,
+      totalAtomic: "0",
+    },
+    totalFundedAtomic: (bounty + fee + reserve).toString(),
+  };
+  const audience = {
+    admissionPolicyHash: request.audience.admissionPolicyHash,
+    label: quoteAudienceLabels[request.audience.source],
+    source: request.audience.source,
+  };
+  const panel = {
+    minimumReveals: Math.max(3, Math.ceil(request.requestedPanelSize * 0.8)),
+    requestedSize: request.requestedPanelSize,
+  };
+  assertIntentField("economics", quote.economics, economics);
+  assertIntentField("audience", quote.audience, audience);
+  assertIntentField("panel", quote.panel, panel);
+  assertIntentField(
+    "response window",
+    quote.responseWindowSeconds,
+    request.responseWindowSeconds,
+  );
+  assertIntentField(
+    "request profile",
+    quote.requestProfile,
+    request.requestProfile ?? null,
+  );
+  assertIntentField(
+    "review economics",
+    quote.reviewEconomics,
+    request.reviewEconomics ?? null,
+  );
+
+  const contentHash = intentDigest(request.question).slice(2);
+  const terms = {
+    audience,
+    visibility: request.visibility,
+    dataClassification: request.dataClassification,
+    redactionSummary: request.redactionSummary ?? null,
+    confirmedNoSensitiveData: request.confirmedNoSensitiveData === true,
+    economics,
+    panel,
+    questionHash: contentHash,
+    responseWindowSeconds: request.responseWindowSeconds,
+    schemaVersion: TOKENLESS_SCHEMA_VERSION,
+  };
+  return {
+    contentId: `0x${contentHash}` as const,
+    normalizedRequest: request,
+    termsHash: intentDigest(terms),
   };
 }
 
@@ -556,7 +693,7 @@ export function createTokenlessRateLoopClient(
     },
 
     quote(requestBody: TokenlessQuoteRequest): Promise<TokenlessQuoteResponse> {
-      const normalized = normalizeQuoteRequest(requestBody);
+      const normalized = normalizeTokenlessQuoteRequest(requestBody);
       return post(
         config,
         "/quote",

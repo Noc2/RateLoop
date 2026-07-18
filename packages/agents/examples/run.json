@@ -7,14 +7,23 @@
     "x402SubmitterAddress": "0x0000000000000000000000000000000000000000",
     "usdcAddress": "0x0000000000000000000000000000000000000000"
   },
-  "maxTotalFundedAtomic": "5750000",
+  "maxTotalFundedAtomic": "9250000",
+  "roundPolicy": {
+    "beaconNetworkHash": "0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5",
+    "beaconGenesisSeconds": 1689232296,
+    "beaconPeriodSeconds": 3,
+    "revealWindowSeconds": 120,
+    "beaconFailureGraceSeconds": 300,
+    "claimGracePeriodSeconds": 604800,
+    "feeRecipient": "0x0000000000000000000000000000000000000000"
+  },
   "quote": {
     "audience": {
       "admissionPolicyHash": "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "source": "customer_invited"
     },
     "budget": {
-      "attemptReserveAtomic": "500000",
+      "attemptReserveAtomic": "4000000",
       "bountyAtomic": "5000000",
       "feeBps": 500
     },

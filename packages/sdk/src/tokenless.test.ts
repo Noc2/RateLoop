@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { RateLoopApiError } from "./errors";
-import { createTokenlessRateLoopClient } from "./tokenless";
+import {
+  buildTokenlessQuoteIntent,
+  createTokenlessRateLoopClient,
+} from "./tokenless";
 import {
   normalizeTokenlessQuestion,
   parseTokenlessYouTubeUrl,
@@ -72,6 +75,7 @@ test("package root exposes only the tokenless client, schema, types, and generic
       "TOKENLESS_VISIBILITIES",
       "TOKENLESS_X402_DOMAIN",
       "buildTokenlessEip3009TypedData",
+      "buildTokenlessQuoteIntent",
       "buildTokenlessRoundAuthorizationTypedData",
       "buildTokenlessRoundTermsMessage",
       "buildTokenlessRoundTermsTypedData",
@@ -104,10 +108,92 @@ test("package root exposes only the tokenless client, schema, types, and generic
       "parseTokenlessWaitResponse",
       "normalizeTokenlessQuestion",
       "normalizeTokenlessQuestionMedia",
+      "normalizeTokenlessQuoteRequest",
       "parseTokenlessYouTubeUrl",
       "serializeTokenlessX402Authorization",
       "validateTokenlessPaymentInstructions",
     ].sort(),
+  );
+});
+
+test("canonical quote intent binds the exact question and frozen product terms", () => {
+  const request = {
+    audience: {
+      admissionPolicyHash: `0x${"44".repeat(32)}` as const,
+      source: "customer_invited" as const,
+    },
+    budget: { attemptReserveAtomic: "636", bountyAtomic: "800", feeBps: 1_250 },
+    question: {
+      kind: "binary" as const,
+      prompt: "Is this safe?",
+      rationale: { mode: "off" as const },
+    },
+    requestedPanelSize: 3,
+    responseWindowSeconds: 3_600,
+  };
+  const quote = {
+    schemaVersion: TOKENLESS_SCHEMA_VERSION,
+    quoteId: "quote_test",
+    expiresAt: "2099-01-01T00:00:00.000Z",
+    economics: {
+      asset: "USDC" as const,
+      decimals: 6 as const,
+      bounty: { fundedAtomic: "800", paidAtomic: "0", refundedAtomic: "0" },
+      fee: {
+        bps: 1_250,
+        fundedAtomic: "100",
+        paidAtomic: "0",
+        refundedAtomic: "0",
+      },
+      attemptReserve: {
+        compensatedAtomic: "0",
+        fundedAtomic: "636",
+        refundedAtomic: "0",
+      },
+      refund: {
+        attemptReserveAtomic: "0",
+        bountyAtomic: "0",
+        feeAtomic: "0",
+        totalAtomic: "0",
+      },
+      compensation: {
+        perAcceptedRevealCapAtomic: "212",
+        recipientCount: 0,
+        totalAtomic: "0",
+      },
+      totalFundedAtomic: "1536",
+    },
+    audience: {
+      admissionPolicyHash: request.audience.admissionPolicyHash,
+      label: "Customer-invited reviewers",
+      source: "customer_invited" as const,
+    },
+    panel: { minimumReveals: 3, requestedSize: 3 },
+    responseWindowSeconds: 3_600,
+    requestProfile: null,
+    reviewEconomics: null,
+    slo: { estimatedSeconds: 1_800 },
+  };
+  const intent = buildTokenlessQuoteIntent(request, quote);
+  assert.equal(
+    intent.contentId,
+    "0x066023d48279e5c58dcd0e5088485d0965461ddc76fd7751a43517de48bd8705",
+  );
+  assert.equal(
+    intent.termsHash,
+    "0xf2c059751d1713f571f7f22de0235269badacb09f3e02a10bb1cf250ab104565",
+  );
+  assert.throws(
+    () =>
+      buildTokenlessQuoteIntent(request, {
+        ...quote,
+        economics: {
+          ...quote.economics,
+          bounty: { ...quote.economics.bounty, fundedAtomic: "801" },
+          fee: { ...quote.economics.fee, fundedAtomic: "99" },
+        },
+      }),
+    /changed the locally requested economics/,
   );
 });
 

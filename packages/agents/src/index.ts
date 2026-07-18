@@ -14,6 +14,7 @@ export {
 export { runTokenlessAutonomous } from "./tokenlessRun";
 export type {
   TokenlessAutonomousRunInput,
+  TokenlessAutonomousRoundPolicy,
   TokenlessResumeReceipt,
 } from "./tokenlessRun";
 export type {
