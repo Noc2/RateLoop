@@ -16,6 +16,7 @@ import {
 } from "~~/lib/tokenless/assuranceEventStreaming";
 import { processDueGrcReconciliations } from "~~/lib/tokenless/assuranceGrcConnectors";
 import { processDueAssuranceWormExports } from "~~/lib/tokenless/assuranceWormExports";
+import { reconcileChainPayment } from "~~/lib/tokenless/chain/payments";
 import { processDueEvidenceRetentionEnforcement } from "~~/lib/tokenless/evidenceRetentionEnforcement";
 import { refreshCompletedAssuranceMechanismHealth } from "~~/lib/tokenless/mechanismHealth";
 import { processPublicQuestionMediaDeletionByAssetId } from "~~/lib/tokenless/publicQuestionMedia";
@@ -28,7 +29,7 @@ import {
 } from "~~/lib/tokenless/transparency";
 
 type Row = Record<string, unknown>;
-type WorkKind = "publish_finalized_round" | "delete_artifact" | "delete_public_media";
+type WorkKind = "publish_finalized_round" | "recover_chain_execution" | "delete_artifact" | "delete_public_media";
 
 const RUN_BUCKET_MS = 5 * 60_000;
 const STALE_CLAIM_MS = 10 * 60_000;
@@ -39,6 +40,7 @@ const DEFAULT_NOTIFICATION_LIMIT = 20;
 const NON_COUNTING_DEFER_CODES = new Set([
   "indexed_evidence_pending",
   "evidence_pending",
+  "execution_in_progress",
   "deletion_blocked_by_hold",
   "deletion_not_due",
 ]);
@@ -79,7 +81,7 @@ async function insertWorkItem(kind: WorkKind, subjectKey: string, now: Date) {
 
 export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 100) {
   const limit = bounded(scanLimit, 100, 200);
-  const [settlements, deletions, publicMediaDeletions] = await Promise.all([
+  const [settlements, chainRecoveries, deletions, publicMediaDeletions] = await Promise.all([
     dbClient.execute({
       sql: `SELECT e.operation_key
             FROM tokenless_chain_executions e
@@ -88,6 +90,18 @@ export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 1
             WHERE e.state = 'confirmed' AND e.round_id IS NOT NULL AND t.event_id IS NULL
             ORDER BY e.updated_at ASC LIMIT ?`,
       args: [limit],
+    }),
+    dbClient.execute({
+      sql: `SELECT operation_key
+            FROM tokenless_chain_executions
+            WHERE payment_mode IN ('prepaid', 'x402')
+              AND (
+                (state IN ('signed', 'broadcast')
+                  AND (claim_owner IS NULL OR claim_expires_at IS NULL OR claim_expires_at <= ?))
+                OR (state = 'prepared' AND claim_owner IS NOT NULL AND claim_expires_at <= ?)
+              )
+            ORDER BY updated_at ASC, operation_key ASC LIMIT ?`,
+      args: [now, now, limit],
     }),
     dbClient.execute({
       sql: `SELECT object_id FROM tokenless_assurance_artifact_objects
@@ -104,6 +118,9 @@ export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 1
   for (const row of settlements.rows) {
     await insertWorkItem("publish_finalized_round", rowString(row as Row, "operation_key")!, now);
   }
+  for (const row of chainRecoveries.rows) {
+    await insertWorkItem("recover_chain_execution", rowString(row as Row, "operation_key")!, now);
+  }
   for (const row of deletions.rows) {
     await insertWorkItem("delete_artifact", rowString(row as Row, "object_id")!, now);
   }
@@ -111,6 +128,7 @@ export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 1
     await insertWorkItem("delete_public_media", rowString(row as Row, "asset_id")!, now);
   }
   return {
+    chainRecoveries: chainRecoveries.rows.length,
     deletions: deletions.rows.length,
     publicMediaDeletions: publicMediaDeletions.rows.length,
     settlements: settlements.rows.length,
@@ -121,6 +139,7 @@ type MaintenanceProcessors = {
   deleteArtifact: typeof processArtifactDeletionByObjectId;
   deletePublicMedia: typeof processPublicQuestionMediaDeletionByAssetId;
   publishFinalizedRound: (input: { operationKey: string; appOrigin: string; now: Date }) => Promise<void>;
+  recoverChainExecution: (input: { operationKey: string }) => Promise<{ paymentState: string } | null>;
   deliverWebhooks: typeof deliverPendingWebhooks;
   processNotifications: typeof runTokenlessNotificationCycle;
   processSurpriseBounties: typeof processSurpriseBountyPayments;
@@ -146,6 +165,9 @@ const defaultProcessors: MaintenanceProcessors = {
   async publishFinalizedRound({ operationKey, appOrigin, now }) {
     await appendFinalizedRoundEvidence({ operationKey });
     await reviewAndPublishResult({ operationKey, appOrigin, now });
+  },
+  async recoverChainExecution({ operationKey }) {
+    return reconcileChainPayment(operationKey);
   },
   deliverWebhooks: deliverPendingWebhooks,
   processNotifications: runTokenlessNotificationCycle,
@@ -174,9 +196,9 @@ async function claimDueWork(now: Date, limit: number) {
     args: [now, now, new Date(now.getTime() - STALE_CLAIM_MS)],
   });
   const due = await dbClient.execute({
-    sql: `SELECT item_id, kind, subject_key, attempt_count
+    sql: `SELECT item_id, claim_generation
           FROM tokenless_scheduled_work_items
-          WHERE state IN ('pending', 'retry') AND next_attempt_at <= ?
+          WHERE state IN ('pending', 'retry') AND next_attempt_at <= ? AND claim_generation < 2147483647
           ORDER BY next_attempt_at ASC, created_at ASC LIMIT ?`,
     args: [now, limit],
   });
@@ -184,11 +206,14 @@ async function claimDueWork(now: Date, limit: number) {
   for (const value of due.rows) {
     const row = value as Row;
     const result = await dbClient.execute({
-      sql: `UPDATE tokenless_scheduled_work_items SET state = 'processing', updated_at = ?
-            WHERE item_id = ? AND state IN ('pending', 'retry')`,
-      args: [now, rowString(row, "item_id")],
+      sql: `UPDATE tokenless_scheduled_work_items
+            SET state = 'processing', claim_generation = claim_generation + 1, updated_at = ?
+            WHERE item_id = ? AND state IN ('pending', 'retry') AND next_attempt_at <= ?
+              AND claim_generation = ? AND claim_generation < 2147483647
+            RETURNING item_id, kind, subject_key, attempt_count, claim_generation`,
+      args: [now, rowString(row, "item_id"), now, Number(row.claim_generation)],
     });
-    if (result.rowCount === 1) claimed.push(row);
+    if (result.rows[0]) claimed.push(result.rows[0] as Row);
   }
   return claimed;
 }
@@ -205,6 +230,7 @@ async function processClaimedWork(input: {
     const kind = rowString(row, "kind") as WorkKind;
     const subjectKey = rowString(row, "subject_key")!;
     const attempt = Number(row.attempt_count) + 1;
+    const claimGeneration = Number(row.claim_generation);
     try {
       if (kind === "publish_finalized_round") {
         await input.processors.publishFinalizedRound({
@@ -212,6 +238,16 @@ async function processClaimedWork(input: {
           appOrigin: input.appOrigin,
           now: input.now,
         });
+      } else if (kind === "recover_chain_execution") {
+        const recovered = await input.processors.recoverChainExecution({ operationKey: subjectKey });
+        if (recovered?.paymentState !== "confirmed") {
+          throw new TokenlessServiceError(
+            "Chain execution recovery is still pending.",
+            409,
+            "chain_recovery_pending",
+            true,
+          );
+        }
       } else if (kind === "delete_artifact") {
         const deleted = await input.processors.deleteArtifact(subjectKey, input.now);
         if (!deleted) {
@@ -225,22 +261,24 @@ async function processClaimedWork(input: {
       } else {
         throw new Error(`Unsupported scheduled work kind: ${String(kind)}`);
       }
-      await dbClient.execute({
+      const completed = await dbClient.execute({
         sql: `UPDATE tokenless_scheduled_work_items
               SET state = 'completed', attempt_count = ?, last_error = NULL, completed_at = ?, updated_at = ?
-              WHERE item_id = ? AND state = 'processing'`,
-        args: [attempt, input.now, input.now, itemId],
+              WHERE item_id = ? AND state = 'processing' AND claim_generation = ?
+              RETURNING item_id`,
+        args: [attempt, input.now, input.now, itemId, claimGeneration],
       });
-      summary.completed += 1;
+      if (completed.rows.length === 1) summary.completed += 1;
     } catch (error) {
       const deferred = error instanceof TokenlessServiceError && NON_COUNTING_DEFER_CODES.has(error.code);
       const recordedAttempt = deferred ? Number(row.attempt_count) : attempt;
       const dead = !deferred && recordedAttempt >= MAX_ATTEMPTS;
       const message = error instanceof Error ? error.message.slice(0, 500) : "Scheduled work failed";
-      await dbClient.execute({
+      const failed = await dbClient.execute({
         sql: `UPDATE tokenless_scheduled_work_items
               SET state = ?, attempt_count = ?, next_attempt_at = ?, last_error = ?, dead_at = ?, updated_at = ?
-              WHERE item_id = ? AND state = 'processing'`,
+              WHERE item_id = ? AND state = 'processing' AND claim_generation = ?
+              RETURNING item_id`,
         args: [
           dead ? "dead" : "retry",
           recordedAttempt,
@@ -249,9 +287,10 @@ async function processClaimedWork(input: {
           dead ? input.now : null,
           input.now,
           itemId,
+          claimGeneration,
         ],
       });
-      summary[dead ? "dead" : deferred ? "deferred" : "retry"] += 1;
+      if (failed.rows.length === 1) summary[dead ? "dead" : deferred ? "deferred" : "retry"] += 1;
     }
   }
   return summary;
@@ -302,6 +341,13 @@ export async function runTokenlessScheduledMaintenance(input: {
       now,
       processors,
     });
+    const deadWorkResult = await dbClient.execute({
+      sql: "SELECT COUNT(*) AS count FROM tokenless_scheduled_work_items WHERE state = 'dead'",
+    });
+    const deadWorkItems = Number((deadWorkResult.rows[0] as Row | undefined)?.count ?? 0);
+    if (!Number.isSafeInteger(deadWorkItems) || deadWorkItems < 0) {
+      throw new Error("Database returned an invalid scheduled dead-letter count.");
+    }
     const deletionJobs = await processors.reconcileDeletionJobs(now, workLimit);
     const deletedAuthGuards = await processors.expireDeletedAuthGuards(now, workLimit);
     const surpriseBounties = await processors.processSurpriseBounties({
@@ -356,6 +402,7 @@ export async function runTokenlessScheduledMaintenance(input: {
       limit: notificationLimit,
     });
     const status =
+      deadWorkItems > 0 ||
       work.dead > 0 ||
       work.retry > 0 ||
       webhooks.dead > 0 ||
@@ -385,6 +432,7 @@ export async function runTokenlessScheduledMaintenance(input: {
     const summary = {
       seeded,
       work,
+      deadWorkItems,
       webhooks,
       notifications,
       deletionJobs,

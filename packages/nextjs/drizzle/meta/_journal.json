@@ -764,6 +764,13 @@
       "when": 1784332800000,
       "tag": "0109_attestation_job_lease_fencing",
       "breakpoints": true
+    },
+    {
+      "idx": 110,
+      "version": "7",
+      "when": 1784336400000,
+      "tag": "0110_scheduled_chain_recovery",
+      "breakpoints": true
     }
   ]
 }

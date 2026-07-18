@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
@@ -44,6 +45,56 @@ async function seedConfirmedExecution(operationKey: string) {
                   '{}', 1, 'confirmed', 42, ?, ?, ?)`,
     args: [`exec:${operationKey}`, operationKey, `payment:${operationKey}`, NOW, NOW, NOW],
   });
+}
+
+async function seedRecoverableExecution(
+  operationKey: string,
+  input: { claimExpiresAt: Date; state?: "prepared" | "signed" | "broadcast" },
+) {
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_asks
+          (operation_key, idempotency_key, request_hash, quote_id, request_json, economics_json,
+           status, created_at, updated_at)
+          VALUES (?, ?, 'request-hash', 'quote-test', '{}', '{}', 'open', ?, ?)`,
+    args: [operationKey, `idem:${operationKey}`, NOW, NOW],
+  });
+  const state = input.state ?? "signed";
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_chain_executions
+          (execution_id, operation_key, payment_mode, payment_reference, deployment_key, chain_id,
+           deployment_block, panel_address, issuer_address, x402_submitter_address, usdc_address,
+           funder_address, content_id, terms_hash, round_terms_json, total_funded_atomic, state,
+           submission_transaction_hash, submission_signed_transaction, transaction_recovery_version,
+           claim_owner, claim_token, claim_expires_at, claim_fencing_token, created_at, updated_at)
+          VALUES (?, ?, 'prepaid', ?, 'tokenless-v3:test', 84532, 1,
+                  '0x1111111111111111111111111111111111111111',
+                  '0x2222222222222222222222222222222222222222',
+                  '0x3333333333333333333333333333333333333333',
+                  '0x4444444444444444444444444444444444444444',
+                  '0x5555555555555555555555555555555555555555',
+                  '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                  '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+                  '{}', 1, ?, ?, ?, 1, 'crashed-worker', 'chl_crashed', ?, 1, ?, ?)`,
+    args: [
+      `exec:${operationKey}`,
+      operationKey,
+      `payment:${operationKey}`,
+      state,
+      state === "prepared" ? null : `0x${createHash("sha256").update(operationKey).digest("hex")}`,
+      state === "prepared" ? null : "0x01",
+      input.claimExpiresAt,
+      NOW,
+      NOW,
+    ],
+  });
+}
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>(completed => {
+    resolve = completed;
+  });
+  return { promise, resolve };
 }
 
 function processors(
@@ -123,6 +174,146 @@ test("scheduled maintenance publishes each due round once and deduplicates a cro
   });
   assert.equal(duplicate.status, "duplicate");
   assert.deepEqual(published, ["operation_due_1"]);
+});
+
+test("scheduled work seeds only server-funded executions whose recovery claim is due", async () => {
+  await seedRecoverableExecution("operation_recovery_due", {
+    claimExpiresAt: new Date(NOW.getTime() - 1),
+    state: "prepared",
+  });
+  await seedRecoverableExecution("operation_recovery_active", {
+    claimExpiresAt: new Date(NOW.getTime() + 60_000),
+    state: "signed",
+  });
+  const seeded = await seedTokenlessScheduledWork(NOW);
+  assert.equal(seeded.chainRecoveries, 1);
+  const items = await dbClient.execute({
+    sql: `SELECT kind, subject_key, state FROM tokenless_scheduled_work_items
+          WHERE kind = 'recover_chain_execution' ORDER BY subject_key`,
+  });
+  assert.deepEqual(items.rows, [
+    { kind: "recover_chain_execution", state: "pending", subject_key: "operation_recovery_due" },
+  ]);
+});
+
+test("scheduled maintenance recovers an initiated chain execution without another client request", async () => {
+  await seedRecoverableExecution("operation_recovery_automatic", {
+    claimExpiresAt: new Date(NOW.getTime() - 1),
+    state: "signed",
+  });
+  const recovered: string[] = [];
+  const result = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    processors: {
+      ...processors(async () => undefined),
+      async recoverChainExecution({ operationKey }) {
+        recovered.push(operationKey);
+        return { paymentState: "confirmed" };
+      },
+    },
+  });
+  if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.equal(result.status, "healthy");
+  assert.deepEqual(recovered, ["operation_recovery_automatic"]);
+  assert.deepEqual(result.summary.work, { completed: 1, dead: 0, deferred: 0, retry: 0 });
+  const item = await dbClient.execute({
+    sql: `SELECT state, attempt_count, claim_generation, last_error
+          FROM tokenless_scheduled_work_items
+          WHERE kind = 'recover_chain_execution' AND subject_key = 'operation_recovery_automatic'`,
+  });
+  assert.deepEqual(item.rows[0], { attempt_count: 1, claim_generation: 1, last_error: null, state: "completed" });
+});
+
+test("persistent chain recovery failures become dead-letter health evidence", async () => {
+  await seedRecoverableExecution("operation_recovery_dead", {
+    claimExpiresAt: new Date(NOW.getTime() - 1),
+    state: "signed",
+  });
+  await seedTokenlessScheduledWork(NOW);
+  await dbClient.execute({
+    sql: `UPDATE tokenless_scheduled_work_items SET attempt_count = 19
+          WHERE kind = 'recover_chain_execution' AND subject_key = 'operation_recovery_dead'`,
+  });
+  const result = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    processors: {
+      ...processors(async () => undefined),
+      async recoverChainExecution() {
+        throw new Error("persistent chain RPC failure");
+      },
+    },
+  });
+  if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.equal(result.status, "degraded");
+  assert.deepEqual(result.summary.work, { completed: 0, dead: 1, deferred: 0, retry: 0 });
+  assert.equal(result.summary.deadWorkItems, 1);
+  const item = await dbClient.execute({
+    sql: `SELECT state, attempt_count, claim_generation, last_error, dead_at
+          FROM tokenless_scheduled_work_items
+          WHERE kind = 'recover_chain_execution' AND subject_key = 'operation_recovery_dead'`,
+  });
+  assert.equal(item.rows[0]?.state, "dead");
+  assert.equal(item.rows[0]?.attempt_count, 20);
+  assert.equal(item.rows[0]?.claim_generation, 1);
+  assert.match(String(item.rows[0]?.last_error), /persistent chain RPC failure/u);
+  assert.ok(item.rows[0]?.dead_at);
+  const later = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: new Date(NOW.getTime() + 5 * 60_000),
+    processors: processors(async () => undefined),
+  });
+  if (later.status === "duplicate") assert.fail("the later cron bucket must run");
+  assert.equal(later.status, "degraded");
+  assert.equal(later.summary.deadWorkItems, 1);
+});
+
+test("a reclaimed scheduled recovery claim fences the stale worker's completion", async () => {
+  await seedRecoverableExecution("operation_recovery_fenced", {
+    claimExpiresAt: new Date(NOW.getTime() - 1),
+    state: "broadcast",
+  });
+  const staleStarted = deferred();
+  const releaseStale = deferred();
+  const staleRun = runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    processors: {
+      ...processors(async () => undefined),
+      async recoverChainExecution() {
+        staleStarted.resolve();
+        await releaseStale.promise;
+        return { paymentState: "confirmed" };
+      },
+    },
+  });
+  await staleStarted.promise;
+  const reclaimNow = new Date(NOW.getTime() + 11 * 60_000);
+  const reclaimed = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: reclaimNow,
+    processors: {
+      ...processors(async () => undefined),
+      async recoverChainExecution() {
+        return { paymentState: "confirmed" };
+      },
+    },
+  });
+  if (reclaimed.status === "duplicate") assert.fail("the later cron bucket must run");
+  assert.ok(reclaimed.summary);
+  assert.deepEqual(reclaimed.summary.work, { completed: 1, dead: 0, deferred: 0, retry: 0 });
+  releaseStale.resolve();
+  const stale = await staleRun;
+  if (stale.status === "duplicate") assert.fail("the original cron bucket must run");
+  assert.ok(stale.summary);
+  assert.deepEqual(stale.summary.work, { completed: 0, dead: 0, deferred: 0, retry: 0 });
+  const item = await dbClient.execute({
+    sql: `SELECT state, attempt_count, claim_generation, last_error
+          FROM tokenless_scheduled_work_items
+          WHERE kind = 'recover_chain_execution' AND subject_key = 'operation_recovery_fenced'`,
+  });
+  assert.deepEqual(item.rows[0], { attempt_count: 1, claim_generation: 2, last_error: null, state: "completed" });
 });
 
 test("a confirmed but not-finalized round is deferred without consuming its retry budget", async () => {

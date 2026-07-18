@@ -896,7 +896,7 @@ async function preparePersistedTransaction(input: {
       );
     }
     await assertSignedTransactionIntent({ ...input, signedTransaction: persistedSigned });
-    return { hash: derivedHash, signedTransaction: persistedSigned };
+    return { hash: derivedHash, signedTransaction: persistedSigned, recovered: true };
   }
   // Compatibility for a transaction hash stored before migration 0107. There
   // are no signed bytes to replay, so recovery can only reconcile that hash.
@@ -904,7 +904,7 @@ async function preparePersistedTransaction(input: {
     if (!isHash(persistedHash)) {
       throw new TokenlessServiceError("The persisted transaction hash is invalid.", 409, "signed_transaction_mismatch");
     }
-    return { hash: persistedHash, signedTransaction: null };
+    return { hash: persistedHash, signedTransaction: null, recovered: true };
   }
   if (Number(row?.transaction_recovery_version ?? 0) !== 1) {
     throw new TokenlessServiceError(
@@ -949,15 +949,35 @@ async function preparePersistedTransaction(input: {
       true,
     );
   }
-  return { hash, signedTransaction };
+  return { hash, signedTransaction, recovered: false };
 }
 
 async function broadcastPersistedTransaction(
   wallet: TokenlessWalletClient,
   publicClient: TokenlessChainRuntime["publicClient"],
-  transaction: { hash: Hash; signedTransaction: Hex | null },
+  transaction: { hash: Hash; signedTransaction: Hex | null; recovered: boolean },
 ) {
   if (!transaction.signedTransaction) return;
+  if (transaction.recovered) {
+    let observedHash: string | null = null;
+    try {
+      const persisted = await publicClient.getTransaction({ hash: transaction.hash });
+      observedHash = persisted.hash;
+    } catch {
+      // The exact transaction is not currently observable. Replaying the
+      // already-persisted bytes is the only mutation a recovery worker may try.
+    }
+    if (observedHash !== null) {
+      if (observedHash.toLowerCase() !== transaction.hash.toLowerCase()) {
+        throw new TokenlessServiceError(
+          "The RPC returned a different hash for the persisted signed transaction.",
+          409,
+          "signed_transaction_mismatch",
+        );
+      }
+      return;
+    }
+  }
   let broadcastHash: Hash;
   try {
     broadcastHash = await wallet.sendRawTransaction({ serializedTransaction: transaction.signedTransaction });

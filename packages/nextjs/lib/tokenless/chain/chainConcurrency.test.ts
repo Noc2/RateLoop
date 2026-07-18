@@ -401,7 +401,7 @@ test("two concurrent prepaid executions produce exactly one approval and one cre
   assert.equal(String(reservation.rows[0]?.status), "consumed");
 });
 
-test("a crashed execution rebroadcasts only its exact persisted signed transactions", async () => {
+test("a crashed execution reconciles exact persisted transactions before replay", async () => {
   const { operationKey, workspaceId } = await prepaidAsk();
   const holder: { current?: Prepared } = {};
   const broadcasts: Broadcast[] = [];
@@ -452,15 +452,11 @@ test("a crashed execution rebroadcasts only its exact persisted signed transacti
   const resumed = await executeServerChainPayment(operationKey, { config: config(), runtime });
   assert.equal(resumed.paymentState, "confirmed");
   assert.equal(resumed.roundId, "7");
-  // Recovery may safely rebroadcast, but never reconstructs or replaces either transaction.
-  assert.equal(broadcasts.filter(b => b.kind === "approval").length, 2, "approval is safely rebroadcast on resume");
-  assert.equal(
-    broadcasts.filter(b => b.kind === "createRound").length,
-    2,
-    "submission is safely rebroadcast on resume",
-  );
-  assert.equal(serializedBroadcasts[2], afterCrash[0], "approval replay uses the exact signed bytes");
-  assert.equal(serializedBroadcasts[3], afterCrash[1], "submission replay uses the exact signed bytes");
+  // Recovery reconciles the exact hashes before deciding whether a byte-identical
+  // replay is necessary. Both transactions are already observable here.
+  assert.equal(broadcasts.filter(b => b.kind === "approval").length, 1, "accepted approval is not rebroadcast");
+  assert.equal(broadcasts.filter(b => b.kind === "createRound").length, 1, "accepted submission is not rebroadcast");
+  assert.deepEqual(serializedBroadcasts, afterCrash, "reconciliation does not create replacement bytes");
 
   const debits = await prepaidDebitEntries(workspaceId);
   assert.equal(debits.length, 1, "the reservation is debited exactly once across crash and resume");
@@ -506,7 +502,7 @@ test("a crash before RPC acceptance leaves signed state and replays the exact by
   assert.equal(serializedBroadcasts[1], serializedBroadcasts[0], "retry uses the exact pre-crash approval bytes");
 });
 
-test("accept-then-throw ambiguity replays the exact accepted transaction after reconciliation is unavailable", async () => {
+test("accept-then-throw ambiguity reconciles the accepted transaction before recovery replay", async () => {
   const { operationKey } = await prepaidAsk();
   const holder: { current?: Prepared } = {};
   const broadcasts: Broadcast[] = [];
@@ -543,8 +539,9 @@ test("accept-then-throw ambiguity replays the exact accepted transaction after r
 
   const resumed = await executeServerChainPayment(operationKey, { config: config(), runtime });
   assert.equal(resumed.paymentState, "confirmed");
-  assert.equal(serializedBroadcasts[2], serializedBroadcasts[0], "approval replay remains byte-identical");
-  assert.equal(serializedBroadcasts[3], serializedBroadcasts[1], "accepted submission replay remains byte-identical");
+  assert.equal(serializedBroadcasts.length, 2, "observable accepted transactions are reconciled before replay");
+  assert.equal(broadcasts.filter(broadcast => broadcast.kind === "approval").length, 1);
+  assert.equal(broadcasts.filter(broadcast => broadcast.kind === "createRound").length, 1);
 });
 
 test("accept-then-throw advances only after the exact derived hash is observable", async () => {
