@@ -6,7 +6,7 @@ import {
 } from "../tokenless";
 
 describe("tokenless agents client", () => {
-  it("uses the isolated v2 quote route", async () => {
+  it("authenticates tenant-scoped quotes on the isolated v2 route", async () => {
     const apiKey = `rlk_${"a".repeat(16)}_${"b".repeat(32)}`;
     const fetchImpl = vi.fn(
       async () =>
@@ -90,8 +90,8 @@ describe("tokenless agents client", () => {
       "https://tokenless-preview.vercel.app/api/agent/v1/quote",
     );
     expect(
-      new Headers(fetchImpl.mock.calls[0]?.[1]?.headers).has("authorization"),
-    ).toBe(false);
+      new Headers(fetchImpl.mock.calls[0]?.[1]?.headers).get("authorization"),
+    ).toBe(`Bearer ${apiKey}`);
   });
 
   it("attaches a scoped API key to a prepaid ask", async () => {
