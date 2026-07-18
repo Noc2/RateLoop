@@ -29,11 +29,13 @@ test("workspace owner configures human review", async ({ page }) => {
   await page.getByText("Manage", { exact: true }).click();
   await page.getByRole("button", { name: "Human review" }).click();
   await expect(page.getByRole("heading", { name: "Human review" })).toBeVisible();
-  await page.getByLabel("Frequency").selectOption("always");
-  await page.getByRole("button", { name: "Review changes" }).click();
-  await page.getByLabel("I confirm this exact human-review configuration.").check();
+  const frequency = page.getByRole("combobox", { name: "When should RateLoop require human review?" });
+  await expect(frequency).toBeVisible();
+  await frequency.selectOption({ label: "Every output" });
+  page.once("dialog", dialog => dialog.accept());
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByRole("status")).toContainText("configuration saved");
+  await expect(frequency).toHaveValue("always");
   await expectNoAxeViolations(page);
 });
 
