@@ -151,6 +151,7 @@ ponder.on("TokenlessPanel:RevealAccepted", async ({ event, context }) => {
     vote,
     predictedUpBps,
     responseHash,
+    scoringEligible,
   } = event.args;
   await context.db
     .update(tokenlessCommit, {
@@ -161,12 +162,13 @@ ponder.on("TokenlessPanel:RevealAccepted", async ({ event, context }) => {
       predictedUpBps,
       responseHash,
       revealed: true,
+      scoringEligible,
       revealedAt: event.block.timestamp,
     });
   await context.db
     .update(tokenlessRound, { id: roundKey(deployment.deploymentKey, roundId) })
     .set((row) => ({
-      ...revealTalliesAfterVote(row, vote),
+      ...revealTalliesAfterVote(row, vote, scoringEligible),
       updatedAt: event.block.timestamp,
     }));
 });

@@ -123,17 +123,18 @@ describe("tokenless public and keeper state", () => {
     );
   });
 
-  it("counts accepted reveals and their revealed up-votes", () => {
-    expect(revealTalliesAfterVote({ revealCount: 2, upVotes: 1 }, 1)).toEqual({
-      revealCount: 3,
-      upVotes: 2,
-    });
-    expect(revealTalliesAfterVote({ revealCount: 3, upVotes: 2 }, 0)).toEqual({
-      revealCount: 4,
-      upVotes: 2,
-    });
+  it("counts only scoring-eligible reveals and their revealed up-votes", () => {
+    expect(
+      revealTalliesAfterVote({ revealCount: 2, upVotes: 1 }, 1, true),
+    ).toEqual({ revealCount: 3, upVotes: 2 });
+    expect(
+      revealTalliesAfterVote({ revealCount: 3, upVotes: 2 }, 0, true),
+    ).toEqual({ revealCount: 4, upVotes: 2 });
+    expect(
+      revealTalliesAfterVote({ revealCount: 3, upVotes: 2 }, 1, false),
+    ).toEqual({ revealCount: 3, upVotes: 2 });
     expect(() =>
-      revealTalliesAfterVote({ revealCount: 0, upVotes: 0 }, 2),
+      revealTalliesAfterVote({ revealCount: 0, upVotes: 0 }, 2, false),
     ).toThrow("vote must be 0 or 1");
   });
 });

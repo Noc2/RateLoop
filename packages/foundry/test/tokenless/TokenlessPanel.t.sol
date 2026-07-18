@@ -18,6 +18,15 @@ contract TokenlessPanelTest is Test {
     bytes32 internal constant ADMISSION_POLICY_HASH = keccak256("invited-reviewers-policy-v1");
     bytes32 internal constant ENTROPY = keccak256("post-closure-entropy");
 
+    event RevealAccepted(
+        uint256 indexed roundId,
+        bytes32 indexed commitKey,
+        uint8 vote,
+        uint16 predictedUpBps,
+        bytes32 responseHash,
+        bool scoringEligible
+    );
+
     address internal funder = makeAddr("funder");
     address internal feeRecipient = makeAddr("feeRecipient");
     address internal rotationAuthority = makeAddr("rotationAuthority");
@@ -191,6 +200,8 @@ contract TokenlessPanelTest is Test {
         Rater memory alice = _rater(0x311, 1, 7_000, "alice", roundId);
         _commit(roundId, alice);
         vm.warp(_round(roundId).revealDeadline + 1);
+        vm.expectEmit(true, true, false, true, address(panel));
+        emit RevealAccepted(roundId, alice.commitKey, alice.vote, alice.prediction, alice.responseHash, false);
         _reveal(roundId, alice);
 
         // A reveal after the disclosed reveal deadline is compensation-only: it must never join

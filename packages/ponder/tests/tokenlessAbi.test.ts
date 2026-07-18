@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  tokenlessCommit,
   tokenlessFeedbackBonusPool,
   tokenlessFeedbackRecord,
   tokenlessRound,
@@ -141,6 +142,7 @@ describe("tokenless panel indexing ABI", () => {
     expect(tokenlessRound.totalFinalizedLiability.columnType).toBe(
       "PgEvmBigint",
     );
+    expect(tokenlessCommit.scoringEligible.columnType).toBe("PgBoolean");
     expect("totalAccuracyScore" in tokenlessRound).toBe(false);
     expect("weightCursor" in tokenlessRound).toBe(false);
     expect("requiredTier" in tokenlessRound).toBe(false);
@@ -154,6 +156,17 @@ describe("tokenless panel indexing ABI", () => {
     );
     expect(eventNames).toContain("ScoringSeedFinalized");
     expect(eventNames).toContain("RevealScored");
+    const revealAccepted = tokenlessPanelAbi.find(
+      (entry) => entry.type === "event" && entry.name === "RevealAccepted",
+    );
+    expect(revealAccepted?.inputs.map((input) => input.name)).toEqual([
+      "roundId",
+      "commitKey",
+      "vote",
+      "predictedUpBps",
+      "responseHash",
+      "scoringEligible",
+    ]);
     const finalized = tokenlessPanelAbi.find(
       (entry) => entry.type === "event" && entry.name === "RoundFinalized",
     );

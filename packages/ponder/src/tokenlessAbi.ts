@@ -97,6 +97,7 @@ export const tokenlessPanelAbi = [
       { name: "vote", type: "uint8", indexed: false },
       { name: "predictedUpBps", type: "uint16", indexed: false },
       { name: "responseHash", type: "bytes32", indexed: false },
+      { name: "scoringEligible", type: "bool", indexed: false },
     ],
   },
   {

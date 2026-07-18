@@ -179,7 +179,12 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         uint256 indexed roundId, bytes32 indexed commitKey, bytes32 indexed nullifier, bytes sealedPayload
     );
     event RevealAccepted(
-        uint256 indexed roundId, bytes32 indexed commitKey, uint8 vote, uint16 predictedUpBps, bytes32 responseHash
+        uint256 indexed roundId,
+        bytes32 indexed commitKey,
+        uint8 vote,
+        uint16 predictedUpBps,
+        bytes32 responseHash,
+        bool scoringEligible
     );
     event SettlementBegun(uint256 indexed roundId, uint32 frozenRevealCount, uint256 entropyBlock);
     event SettlementProgressed(uint256 indexed roundId, RoundState indexed state, uint32 cursor);
@@ -383,10 +388,11 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         }
         if (round.state != RoundState.Revealable) revert InvalidState();
         if (block.timestamp > round.beaconFailureDeadline) revert InvalidDeadline();
+        bool scoringEligible = block.timestamp <= round.revealDeadline;
         // Once the disclosed scoring window has closed with quorum, settlement can proceed
         // immediately and there is no incomplete-panel path left to compensate. Reject any
         // later opening instead of accepting work that healthy settlement would not pay.
-        if (block.timestamp > round.revealDeadline && round.revealCount >= round.minimumReveals) {
+        if (!scoringEligible && round.revealCount >= round.minimumReveals) {
             revert InvalidState();
         }
         if (vote > 1 || !TokenlessRbts.isValidUserPrediction(predictedUpBps)) revert InvalidPrediction();
@@ -411,12 +417,12 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         // verdict, peer assignment, and RBTS). Late openings remain available only while the
         // timely scoring set is under quorum and therefore cannot change scored evidence.
         round.compensatedRevealCount += 1;
-        if (block.timestamp <= round.revealDeadline) {
+        if (scoringEligible) {
             round.revealCount += 1;
             _roundRevealKeys[roundId].push(commitKey);
         }
 
-        emit RevealAccepted(roundId, commitKey, vote, predictedUpBps, responseHash);
+        emit RevealAccepted(roundId, commitKey, vote, predictedUpBps, responseHash, scoringEligible);
     }
 
     /// @notice Freeze the reveal set or enter a deterministic refund/compensation terminal path.

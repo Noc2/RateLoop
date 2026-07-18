@@ -228,6 +228,25 @@ test("round and commit evidence use RBTS liabilities instead of accuracy weights
   assert.equal(commitFields.has("accuracyScore"), false);
 });
 
+test("reveal evidence distinguishes scored votes from compensation-only openings", () => {
+  const revealAccepted = findEntry(
+    TokenlessPanelAbi,
+    "event",
+    "RevealAccepted",
+  );
+  assert.deepEqual(
+    revealAccepted.inputs?.map(({ name, type }) => ({ name, type })),
+    [
+      { name: "roundId", type: "uint256" },
+      { name: "commitKey", type: "bytes32" },
+      { name: "vote", type: "uint8" },
+      { name: "predictedUpBps", type: "uint16" },
+      { name: "responseHash", type: "bytes32" },
+      { name: "scoringEligible", type: "bool" },
+    ],
+  );
+});
+
 test("panel and adapter ABIs bind admission to an exact policy hash", () => {
   const voucherFields = tupleComponentNames(
     findEntry(TokenlessPanelAbi, "function", "commit"),

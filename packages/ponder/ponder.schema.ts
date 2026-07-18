@@ -92,6 +92,7 @@ export const tokenlessCommit = onchainTable(
     predictionScoreBps: t.integer().notNull().default(0),
     rbtsScoreBps: t.integer().notNull().default(0),
     revealed: t.boolean().notNull().default(false),
+    scoringEligible: t.boolean().notNull().default(false),
     claimed: t.boolean().notNull().default(false),
     committedAt: t.bigint().notNull(),
     revealedAt: t.bigint(),
