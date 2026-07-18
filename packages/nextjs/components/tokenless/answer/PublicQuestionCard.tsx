@@ -7,6 +7,7 @@ import { type PublicQuestionMedia, QuestionMedia } from "~~/components/tokenless
 import { DeadlineChip } from "~~/components/tokenless/review/DeadlineChip";
 import { ReviewerShell } from "~~/components/tokenless/review/ReviewerShell";
 import { Card } from "~~/components/tokenless/ui/Card";
+import { readBrowserSession } from "~~/lib/auth/client";
 import { readJson } from "~~/lib/tokenless/http";
 import {
   createIndexedDbTokenlessCommitQueue,
@@ -247,6 +248,8 @@ export function PublicQuestionCard({
     setStatus("Submitting…");
     setTechnicalStatus("Creating one-time answer and payout keys on this device.");
     try {
+      const browserSession = await readBrowserSession();
+      if (!browserSession) throw new Error("Sign in again before creating recovery material.");
       const response = createPublicRaterResponse(
         {
           operationKey: task.operationKey,
@@ -270,16 +273,16 @@ export function PublicQuestionCard({
       const recoverySecret = generateDeviceRecoverySecret();
       const exported = await exportTokenlessRecoveryPackage(secrets, recoverySecret);
       const recoveryRecord = createDeviceRecoveryRecord({
+        principalId: browserSession.principalId,
         roundId: task.roundId,
         voteKey: secrets.reveal.voteKey,
-        recoverySecret,
         recoveryPackage: exported,
       });
-      const recoveryStored = storeDeviceRecovery(recoveryRecord);
-      setRecoveryBackup(serializeDeviceRecoveryBackup(recoveryRecord));
+      const recoveryStored = storeDeviceRecovery(recoveryRecord, browserSession.principalId);
+      setRecoveryBackup(serializeDeviceRecoveryBackup(recoveryRecord, recoverySecret));
       setTechnicalStatus(
         recoveryStored
-          ? "The device recovery record is saved. Sealing the answer for the public beacon."
+          ? "The encrypted record is saved for this account, but its recovery secret is not in browser storage. Download the backup before leaving."
           : "Device storage is unavailable. Download the backup before leaving this page.",
       );
       const sealed = await sealTokenlessReveal({

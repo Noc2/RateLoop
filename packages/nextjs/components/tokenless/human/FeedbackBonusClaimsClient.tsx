@@ -4,13 +4,10 @@ import { useEffect, useState } from "react";
 import { eth_getTransactionByHash, getRpcClient, prepareTransaction, sendTransaction, waitForReceipt } from "thirdweb";
 import { baseSepolia } from "thirdweb/chains";
 import { ConnectButton, ThirdwebProvider, useActiveAccount } from "thirdweb/react";
+import { readBrowserSession } from "~~/lib/auth/client";
 import { rateLoopThirdwebWallets, thirdwebBrowserClient } from "~~/lib/thirdweb/client";
 import type { PublicFeedbackBonusEntitlement } from "~~/lib/tokenless/feedbackBonusRecipientClaims";
-import {
-  LEGACY_RECOVERY_PREFIX,
-  listDeviceRecoveries,
-  parseDeviceRecoveryBackup,
-} from "~~/lib/tokenless/rater/deviceRecovery";
+import { listDeviceRecoveries, parseDeviceRecoveryBackup } from "~~/lib/tokenless/rater/deviceRecovery";
 import {
   assertFeedbackBonusEntitlementForRecovery,
   buildFeedbackBonusClaimAuthorization,
@@ -48,6 +45,7 @@ function FeedbackBonusClaimsControls() {
   const [selectedSource, setSelectedSource] = useState("");
   const [uploadedSource, setUploadedSource] = useState<RecoverySource | null>(null);
   const [recoverySecret, setRecoverySecret] = useState("");
+  const [principalId, setPrincipalId] = useState<string | null>(null);
   const [secrets, setSecrets] = useState<TokenlessRaterRoundSecrets | null>(null);
   const [items, setItems] = useState<PublicFeedbackBonusEntitlement[]>([]);
   const [busy, setBusy] = useState(false);
@@ -56,32 +54,47 @@ function FeedbackBonusClaimsControls() {
   const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    const found: RecoverySource[] = listDeviceRecoveries().map(record => ({
-      id: `device:${record.voteKey.toLowerCase()}`,
-      label: `Round ${record.roundId} · this device`,
-      recoveryPackage: record.recoveryPackage,
-      recoverySecret: record.recoverySecret,
-    }));
-    try {
-      for (let index = 0; index < localStorage.length; index += 1) {
-        const key = localStorage.key(index);
-        if (!key?.startsWith(LEGACY_RECOVERY_PREFIX)) continue;
-        const serialized = localStorage.getItem(key);
-        if (!serialized) continue;
-        const roundId = key.slice(LEGACY_RECOVERY_PREFIX.length);
-        found.push({
-          id: key,
-          label: `Round ${roundId} · legacy package`,
-          recoveryPackage: serialized,
-          recoverySecret: null,
-        });
+    let active = true;
+    async function refreshPrincipalRecoveries() {
+      try {
+        const session = await readBrowserSession();
+        if (!active) return;
+        const nextPrincipalId = session?.principalId ?? null;
+        const found: RecoverySource[] = nextPrincipalId
+          ? listDeviceRecoveries(nextPrincipalId).map(record => ({
+              id: `device:${record.voteKey.toLowerCase()}`,
+              label: `Round ${record.roundId} · this device`,
+              recoveryPackage: record.recoveryPackage,
+              recoverySecret: null,
+            }))
+          : [];
+        found.sort((left, right) => right.id.localeCompare(left.id));
+        setPrincipalId(nextPrincipalId);
+        setSources(found);
+        setSelectedSource(found[0]?.id ?? "");
+        setUploadedSource(null);
+        setRecoverySecret("");
+        setSecrets(null);
+        setItems([]);
+        setError(null);
+        setStatus(null);
+      } catch {
+        if (!active) return;
+        setPrincipalId(null);
+        setSources([]);
+        setSelectedSource("");
+        setSecrets(null);
+        setItems([]);
+        setStatus(null);
+        setError("Sign in again to load recovery material for this account.");
       }
-    } catch {
-      // File import remains available when browser storage is blocked.
     }
-    found.sort((left, right) => right.id.localeCompare(left.id));
-    setSources(found);
-    setSelectedSource(current => current || found[0]?.id || "");
+    void refreshPrincipalRecoveries();
+    window.addEventListener("focus", refreshPrincipalRecoveries);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", refreshPrincipalRecoveries);
+    };
   }, []);
 
   function resetEvidence() {
@@ -95,18 +108,25 @@ function FeedbackBonusClaimsControls() {
     if (!file) return;
     resetEvidence();
     try {
+      const session = await readBrowserSession();
+      if (!session || session.principalId !== principalId) {
+        throw new Error("The active account changed. Reload recovery material for this account.");
+      }
       const serialized = await file.text();
       const backup = parseDeviceRecoveryBackup(serialized);
+      if (backup && backup.record.principalId !== session.principalId) {
+        throw new Error("This recovery backup belongs to another RateLoop account.");
+      }
       const source: RecoverySource = {
         id: "uploaded",
         label: file.name,
-        recoveryPackage: backup?.recoveryPackage ?? serialized,
+        recoveryPackage: backup?.record.recoveryPackage ?? serialized,
         recoverySecret: backup?.recoverySecret ?? null,
       };
       setUploadedSource(source);
       setSelectedSource(source.id);
-    } catch {
-      setError("The recovery package could not be read.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The recovery package could not be read.");
     }
   }
 
@@ -119,13 +139,17 @@ function FeedbackBonusClaimsControls() {
     }
     const secret = source.recoverySecret ?? recoverySecret;
     if (secret.length < 12) {
-      setError("Enter the secret for this legacy package.");
+      setError("Enter the recovery secret for this saved review.");
       return;
     }
     setBusy(true);
     setError(null);
     setStatus("Opening the saved review on this device…");
     try {
+      const session = await readBrowserSession();
+      if (!session || session.principalId !== principalId) {
+        throw new Error("The active account changed. Reload recovery material for this account.");
+      }
       const recovered = await importTokenlessRecoveryPackage(source.recoveryPackage, secret);
       const response = await readJson(
         await fetch(
@@ -163,6 +187,10 @@ function FeedbackBonusClaimsControls() {
     setError(null);
     setStatus("Waiting for the connected wallet to relay the claim…");
     try {
+      const session = await readBrowserSession();
+      if (!session || session.principalId !== principalId) {
+        throw new Error("The active account changed. Reload recovery material for this account.");
+      }
       const authorization = buildFeedbackBonusClaimAuthorization({
         entitlement,
         secrets,
@@ -209,7 +237,7 @@ function FeedbackBonusClaimsControls() {
 
   const allSources = uploadedSource ? [...sources, uploadedSource] : sources;
   const activeSource = allSources.find(source => source.id === selectedSource);
-  const needsLegacySecret = Boolean(activeSource && !activeSource.recoverySecret);
+  const needsRecoverySecret = Boolean(activeSource && !activeSource.recoverySecret);
   const claimable = items.some(item => item.awarded && !item.claimed);
 
   return (
@@ -241,11 +269,11 @@ function FeedbackBonusClaimsControls() {
           </select>
         </label>
       </div>
-      {needsLegacySecret ? (
+      {needsRecoverySecret ? (
         <details className="mt-3 rounded-lg border border-white/10 p-3 text-sm text-base-content/60">
-          <summary className="cursor-pointer font-medium">Legacy recovery</summary>
+          <summary className="cursor-pointer font-medium">Recovery secret</summary>
           <label className="mt-3 block text-xs">
-            Legacy recovery secret
+            Recovery secret
             <input
               className="input input-sm mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
               type="password"
@@ -274,7 +302,7 @@ function FeedbackBonusClaimsControls() {
         <button
           type="button"
           className="rateloop-gradient-action px-4 text-sm"
-          disabled={busy || !selectedSource || (needsLegacySecret && recoverySecret.length < 12)}
+          disabled={busy || !selectedSource || (needsRecoverySecret && recoverySecret.length < 12)}
           onClick={() => void checkEntitlements()}
         >
           {busy ? "Checking…" : "Check bonus"}

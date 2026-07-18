@@ -31,7 +31,10 @@ test("an already reserved voucher retries the prepared device queue and waits fo
   assert.match(source, /saveReviewDraft\("public"/);
   assert.match(source, /clearReviewDraft\("public"/);
   assert.match(source, /generateDeviceRecoverySecret\(\)/);
-  assert.match(source, /storeDeviceRecovery\(recoveryRecord\)/);
+  assert.match(source, /readBrowserSession\(\)/);
+  assert.match(source, /principalId: browserSession\.principalId/);
+  assert.match(source, /storeDeviceRecovery\(recoveryRecord, browserSession\.principalId\)/);
+  assert.match(source, /serializeDeviceRecoveryBackup\(recoveryRecord, recoverySecret\)/);
   assert.match(source, /Download backup/);
   assert.match(source, /Submitting…/);
   assert.match(source, /Recorded/);
