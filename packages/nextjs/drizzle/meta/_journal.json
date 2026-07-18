@@ -736,6 +736,13 @@
       "when": 1784318400000,
       "tag": "0105_assurance_event_delivery_lease_fencing",
       "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1784322000000,
+      "tag": "0106_surprise_bounty_reservation_expiry",
+      "breakpoints": true
     }
   ]
 }

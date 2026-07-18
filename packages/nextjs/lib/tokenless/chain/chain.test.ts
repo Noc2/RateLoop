@@ -440,10 +440,11 @@ function roundCreatedLog(expected: Awaited<ReturnType<typeof prepareChainPayment
 test("wallet confirmation accepts only the exact quoted RoundCreated evidence and reconciles the operation", async () => {
   const operationKey = await walletAsk();
   const runtime = mockRuntime();
+  const preparedAt = new Date();
   const expected = await prepareChainPayment(operationKey, {
     config: config(),
     runtime,
-    now: new Date("2026-07-12T20:00:00Z"),
+    now: preparedAt,
   });
   assert.equal(expected.paymentMode, "wallet");
   assert.equal(expected.totalFundedAtomic, "46875000");
@@ -465,6 +466,11 @@ test("wallet confirmation accepts only the exact quoted RoundCreated evidence an
   });
   assert.equal(confirmed.roundId, "7");
   assert.equal(confirmed.paymentState, "confirmed");
+  const bonusReservation = await dbClient.execute({
+    sql: "SELECT state,reservation_expires_at FROM tokenless_surprise_bounty_rounds WHERE operation_key = ?",
+    args: [operationKey],
+  });
+  assert.deepEqual(bonusReservation.rows[0], { state: "funded", reservation_expires_at: null });
   const ask = await dbClient.execute({
     sql: "SELECT status, round_id FROM tokenless_agent_asks WHERE operation_key = ?",
     args: [operationKey],

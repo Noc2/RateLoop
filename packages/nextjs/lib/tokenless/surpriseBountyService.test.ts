@@ -108,6 +108,7 @@ test("central surprise bounties reserve capacity, freeze evidence, and pay only 
     config: config(),
     runtime: runtime(),
     now: NOW,
+    expiresAt: new Date(NOW.getTime() + 600_000),
   });
   assert.equal(reservation.maximumLiabilityAtomic, "1250000");
   assert.deepEqual(
@@ -118,6 +119,7 @@ test("central surprise bounties reserve capacity, freeze evidence, and pay only 
       config: config(),
       runtime: runtime(),
       now: NOW,
+      expiresAt: new Date(NOW.getTime() + 600_000),
     }),
     reservation,
   );
@@ -205,7 +207,61 @@ test("reservation fails before a paid round when the dedicated funder is under-c
       config: config(),
       runtime: runtime(1_249_999n),
       now: NOW,
+      expiresAt: new Date(NOW.getTime() + 600_000),
     }),
     /does not cover existing reservations/,
+  );
+});
+
+test("expired abandoned reservations release deployment capacity for another operation", async () => {
+  await seedAsk("operation-surprise-abandoned");
+  await seedAsk("operation-surprise-successor");
+  const expiresAt = new Date(NOW.getTime() + 600_000);
+  await reserveSurpriseBountyCapacity({
+    operationKey: "operation-surprise-abandoned",
+    guaranteedBasePerReportAtomic: 1_000_000n,
+    maximumReports: 10,
+    config: config(),
+    runtime: runtime(1_250_000n),
+    now: NOW,
+    expiresAt,
+  });
+  await assert.rejects(
+    reserveSurpriseBountyCapacity({
+      operationKey: "operation-surprise-successor",
+      guaranteedBasePerReportAtomic: 1_000_000n,
+      maximumReports: 10,
+      config: config(),
+      runtime: runtime(1_250_000n),
+      now: new Date(NOW.getTime() + 599_999),
+      expiresAt: new Date(NOW.getTime() + 1_200_000),
+    }),
+    /does not cover existing reservations/u,
+  );
+
+  await reserveSurpriseBountyCapacity({
+    operationKey: "operation-surprise-successor",
+    guaranteedBasePerReportAtomic: 1_000_000n,
+    maximumReports: 10,
+    config: config(),
+    runtime: runtime(1_250_000n),
+    now: new Date(NOW.getTime() + 600_001),
+    expiresAt: new Date(NOW.getTime() + 1_200_000),
+  });
+  const states = await dbClient.execute({
+    sql: `SELECT operation_key,state,reservation_expires_at
+          FROM tokenless_surprise_bounty_rounds ORDER BY operation_key`,
+    args: [],
+  });
+  assert.deepEqual(
+    states.rows.map(row => ({
+      operationKey: row.operation_key,
+      state: row.state,
+      expires: row.reservation_expires_at instanceof Date,
+    })),
+    [
+      { operationKey: "operation-surprise-abandoned", state: "expired", expires: false },
+      { operationKey: "operation-surprise-successor", state: "reserved", expires: true },
+    ],
   );
 });

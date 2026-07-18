@@ -124,6 +124,7 @@ export async function reserveSurpriseBountyCapacity(input: {
   config?: TokenlessChainConfig;
   runtime?: TokenlessChainRuntime;
   now?: Date;
+  expiresAt: Date;
 }) {
   if (!Number.isSafeInteger(input.maximumReports) || input.maximumReports < 1 || input.maximumReports > 500) {
     throw new Error("Surprise-bounty report capacity must be between 1 and 500.");
@@ -142,14 +143,28 @@ export async function reserveSurpriseBountyCapacity(input: {
   }
   const maximumLiabilityAtomic = maximumBonusPerReportAtomic * BigInt(input.maximumReports);
   const now = input.now ?? new Date();
+  if (!Number.isFinite(input.expiresAt.getTime()) || input.expiresAt <= now) {
+    throw new TokenlessServiceError(
+      "The payment instructions can no longer reserve surprise-bounty capacity.",
+      409,
+      "surprise_bonus_reservation_expired",
+    );
+  }
   const client = await dbPool.connect();
   try {
     await client.query("SELECT pg_advisory_lock(hashtext($1))", [`surprise-bounty:${config.deploymentKey}`]);
+    await client.query(
+      `UPDATE tokenless_surprise_bounty_rounds
+       SET state = 'expired', reservation_expires_at = NULL, updated_at = $1
+       WHERE deployment_key = $2 AND state = 'reserved' AND reservation_expires_at <= $1`,
+      [now, config.deploymentKey],
+    );
     const existing = await client.query(
       `SELECT * FROM tokenless_surprise_bounty_rounds WHERE operation_key = $1 LIMIT 1`,
       [input.operationKey],
     );
     let existingBountyRoundId: string | null = null;
+    let renewExpiredReservation = false;
     if (existing.rows[0]) {
       const row = existing.rows[0] as Row;
       if (
@@ -164,6 +179,7 @@ export async function reserveSurpriseBountyCapacity(input: {
         );
       }
       existingBountyRoundId = rowString(row, "bounty_round_id")!;
+      renewExpiredReservation = rowString(row, "state") === "expired";
     }
     await assertLiveTokenlessDeployment(config, runtime);
     const onchainBalance = await runtime.publicClient.readContract({
@@ -174,7 +190,7 @@ export async function reserveSurpriseBountyCapacity(input: {
     });
     const outstanding = await client.query(
       `SELECT COALESCE(SUM(
-         CASE WHEN state = 'reserved' THEN maximum_liability_atomic
+         CASE WHEN state IN ('reserved', 'funded') THEN maximum_liability_atomic
               WHEN state IN ('allocated', 'complete') THEN COALESCE(total_bonus_atomic, 0) - paid_bonus_atomic
               ELSE 0 END
        ), 0) AS amount
@@ -183,7 +199,8 @@ export async function reserveSurpriseBountyCapacity(input: {
       [config.deploymentKey],
     );
     const outstandingAtomic = BigInt(String(outstanding.rows[0]?.amount ?? "0"));
-    const requiredCoverageAtomic = outstandingAtomic + (existingBountyRoundId ? 0n : maximumLiabilityAtomic);
+    const requiredCoverageAtomic =
+      outstandingAtomic + (!existingBountyRoundId || renewExpiredReservation ? maximumLiabilityAtomic : 0n);
     if (BigInt(onchainBalance) < requiredCoverageAtomic) {
       throw new TokenlessServiceError(
         "The dedicated surprise-bonus funder does not cover existing reservations plus this round's maximum liability.",
@@ -192,7 +209,16 @@ export async function reserveSurpriseBountyCapacity(input: {
         true,
       );
     }
+    if (existingBountyRoundId && !renewExpiredReservation) {
+      return { bountyRoundId: existingBountyRoundId, maximumLiabilityAtomic: maximumLiabilityAtomic.toString() };
+    }
     if (existingBountyRoundId) {
+      await client.query(
+        `UPDATE tokenless_surprise_bounty_rounds
+         SET state = 'reserved', reservation_expires_at = $1, updated_at = $2
+         WHERE bounty_round_id = $3 AND state = 'expired'`,
+        [input.expiresAt, now, existingBountyRoundId],
+      );
       return { bountyRoundId: existingBountyRoundId, maximumLiabilityAtomic: maximumLiabilityAtomic.toString() };
     }
     const bountyRoundId = `sbr_${digest(input.operationKey).slice(0, 40)}`;
@@ -200,8 +226,8 @@ export async function reserveSurpriseBountyCapacity(input: {
       `INSERT INTO tokenless_surprise_bounty_rounds
        (bounty_round_id, operation_key, deployment_key, version, state, policy_json,
         guaranteed_base_per_report_atomic, maximum_bonus_per_report_atomic, reserved_report_capacity,
-        maximum_liability_atomic, paid_bonus_atomic, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, 'reserved', $5, $6, $7, $8, $9, 0, $10, $10)`,
+        maximum_liability_atomic, paid_bonus_atomic, reservation_expires_at, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, 'reserved', $5, $6, $7, $8, $9, 0, $10, $11, $11)`,
       [
         bountyRoundId,
         input.operationKey,
@@ -212,6 +238,7 @@ export async function reserveSurpriseBountyCapacity(input: {
         maximumBonusPerReportAtomic.toString(),
         input.maximumReports,
         maximumLiabilityAtomic.toString(),
+        input.expiresAt,
         now,
       ],
     );
@@ -312,7 +339,7 @@ export async function finalizeSurpriseBountyRound(input: {
          SET round_id = $1, state = $2, sample_size = $3, actual_up_bps = $4,
              mean_predicted_up_bps = $5, surprisingly_popular_outcome = $6,
              allocation_hash = $7, evidence_hash = $8, total_bonus_atomic = $9,
-             finalized_at = $10, completed_at = $11, updated_at = $10
+             finalized_at = $10, completed_at = $11, reservation_expires_at = NULL, updated_at = $10
          WHERE bounty_round_id = $12`,
         [
           input.roundId,

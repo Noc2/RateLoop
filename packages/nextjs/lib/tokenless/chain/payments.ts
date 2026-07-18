@@ -344,6 +344,7 @@ export async function prepareChainPayment(
       config,
       runtime,
       now: options.now,
+      expiresAt: new Date(Number(existingInstructions.roundTerms.beaconFailureDeadline) * 1_000),
     });
     return existingInstructions;
   }
@@ -430,6 +431,7 @@ export async function prepareChainPayment(
     config,
     runtime,
     now: options.now,
+    expiresAt: new Date(Number(persistedInstructions.roundTerms.beaconFailureDeadline) * 1_000),
   });
   return persistedInstructions;
 }
@@ -593,6 +595,29 @@ async function persistConfirmation(input: {
       "UPDATE tokenless_ask_ownership SET payment_state = 'confirmed', updated_at = $1 WHERE operation_key = $2",
       [now, input.expected.operationKey],
     );
+    const bonusReservation = await client.query(
+      `UPDATE tokenless_surprise_bounty_rounds
+       SET state = 'funded', reservation_expires_at = NULL, updated_at = $1
+       WHERE operation_key = $2 AND state = 'reserved' AND reservation_expires_at > $1`,
+      [now, input.expected.operationKey],
+    );
+    if (bonusReservation.rowCount !== 1) {
+      const existingBonus = await client.query(
+        "SELECT state FROM tokenless_surprise_bounty_rounds WHERE operation_key = $1 LIMIT 1",
+        [input.expected.operationKey],
+      );
+      if (
+        !["funded", "allocated", "complete", "insufficient_sample", "no_qualifying_outcome"].includes(
+          String(existingBonus.rows[0]?.state ?? ""),
+        )
+      ) {
+        throw new TokenlessServiceError(
+          "The surprise-bounty reservation expired before the round was confirmed.",
+          409,
+          "surprise_bonus_reservation_expired",
+        );
+      }
+    }
     if (input.expected.paymentMode === "prepaid") {
       await client.query(
         "UPDATE tokenless_prepaid_reservations SET status = 'consumed', updated_at = $1 WHERE reservation_id = $2",
