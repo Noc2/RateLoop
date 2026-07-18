@@ -19,7 +19,7 @@ import { processDueAssuranceWormExports } from "~~/lib/tokenless/assuranceWormEx
 import { processDueEvidenceRetentionEnforcement } from "~~/lib/tokenless/evidenceRetentionEnforcement";
 import { refreshCompletedAssuranceMechanismHealth } from "~~/lib/tokenless/mechanismHealth";
 import { processPublicQuestionMediaDeletionByAssetId } from "~~/lib/tokenless/publicQuestionMedia";
-import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import { TokenlessServiceError, sweepExpiredTokenlessQuotes } from "~~/lib/tokenless/server";
 import { processSurpriseBountyPayments } from "~~/lib/tokenless/surpriseBountyService";
 import {
   appendFinalizedRoundEvidence,
@@ -137,6 +137,7 @@ type MaintenanceProcessors = {
   drainEnterpriseIdentityAudit: typeof drainEnterpriseIdentityAuditOutbox;
   reconcileEnterpriseIdentityAudit: typeof reconcileEnterpriseIdentityAuditReservations;
   refreshMechanismHealth: typeof refreshCompletedAssuranceMechanismHealth;
+  sweepExpiredQuotes: typeof sweepExpiredTokenlessQuotes;
 };
 
 const defaultProcessors: MaintenanceProcessors = {
@@ -162,6 +163,7 @@ const defaultProcessors: MaintenanceProcessors = {
   drainEnterpriseIdentityAudit: drainEnterpriseIdentityAuditOutbox,
   reconcileEnterpriseIdentityAudit: reconcileEnterpriseIdentityAuditReservations,
   refreshMechanismHealth: refreshCompletedAssuranceMechanismHealth,
+  sweepExpiredQuotes: sweepExpiredTokenlessQuotes,
 };
 
 async function claimDueWork(now: Date, limit: number) {
@@ -286,6 +288,7 @@ export async function runTokenlessScheduledMaintenance(input: {
 
   try {
     const processors: MaintenanceProcessors = { ...defaultProcessors, ...input.processors };
+    const expiredQuotes = await processors.sweepExpiredQuotes({ now, limit: workLimit });
     const evidenceRetention = await processors.processEvidenceRetention({
       now,
       limit: workLimit,
@@ -395,6 +398,7 @@ export async function runTokenlessScheduledMaintenance(input: {
       prepaidTopups: { reconciliation: prepaidTopups, audit: prepaidTopupAudit },
       enterpriseIdentityAudit: { reservations: enterpriseIdentityAuditReservations, delivery: enterpriseIdentityAudit },
       mechanismHealth,
+      expiredQuotes,
       adaptiveRollups: "not_scheduled_until_a_persisted_rollup_processor_exists",
     };
     await dbClient.execute({

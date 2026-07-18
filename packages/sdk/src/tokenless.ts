@@ -564,7 +564,7 @@ export function createTokenlessRateLoopClient(
         parseTokenlessQuoteResponse,
         undefined,
         {
-          omitAuthorization: true,
+          omitAuthorization: normalized.visibility === "public",
         },
       );
     },

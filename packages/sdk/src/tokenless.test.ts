@@ -575,7 +575,7 @@ test("tokenless client performs quote and ask with a required idempotency header
     requests[0]?.url,
     "https://tokenless.example/api/agent/v1/quote",
   );
-  assert.equal(requests[0]?.headers.get("authorization"), null);
+  assert.equal(requests[0]?.headers.get("authorization"), `Bearer ${apiKey}`);
   assert.equal(requests[1]?.url, "https://tokenless.example/api/agent/v1/asks");
   assert.equal(requests[1]?.headers.get("authorization"), `Bearer ${apiKey}`);
   assert.equal(
@@ -587,6 +587,29 @@ test("tokenless client performs quote and ask with a required idempotency header
     "ask:test:12345678",
   );
   assert.equal(ask.operationKey, "op_12345678");
+
+  await client.quote({
+    audience: {
+      admissionPolicyHash: `0x${"cd".repeat(32)}`,
+      source: "customer_invited",
+    },
+    budget: {
+      attemptReserveAtomic: "5000000",
+      bountyAtomic: "25000000",
+      feeBps: 750,
+    },
+    confirmedNoSensitiveData: true,
+    dataClassification: "public",
+    question: {
+      kind: "binary",
+      prompt: "Public question?",
+      rationale: { mode: "optional" },
+    },
+    requestedPanelSize: 15,
+    responseWindowSeconds: 3_600,
+    visibility: "public",
+  });
+  assert.equal(requests[2]?.headers.get("authorization"), null);
 
   assert.throws(
     () =>
@@ -676,7 +699,7 @@ test("tokenless client performs quote and ask with a required idempotency header
     /payment\.payerAddress must be an EVM address/,
   );
 
-  assert.equal(requests.length, 2);
+  assert.equal(requests.length, 3);
 });
 
 test("tokenless quote validation rejects ambiguous mechanisms before HTTP", () => {

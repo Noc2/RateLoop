@@ -7,6 +7,7 @@ import {
   createTokenlessAsk,
   createTokenlessQuote,
   getTokenlessResult,
+  sweepExpiredTokenlessQuotes,
   waitForTokenlessAsk,
 } from "~~/lib/tokenless/server";
 
@@ -44,6 +45,36 @@ test("tokenless quote itemizes bounty, fee, reserve, refund, and compensation", 
   assert.equal(quote.responseWindowSeconds, 3_600);
   assert.equal(quote.requestProfile, null);
   assert.equal(quote.reviewEconomics, null);
+});
+
+test("expired quote retention removes only quotes that were never used by an ask", async () => {
+  const unused = await createTokenlessQuote({
+    ...quoteRequest(),
+    question: { ...quoteRequest().question, prompt: "Unused expired quote?" },
+  });
+  const used = await createTokenlessQuote({
+    ...quoteRequest(),
+    question: { ...quoteRequest().question, prompt: "Used expired quote?" },
+  });
+  const idempotencyKey = "test:expired:used-quote";
+  await createTokenlessAsk(
+    { idempotencyKey, payment: { mode: "prepaid", workspaceId: "workspace" }, quoteId: used.quoteId },
+    idempotencyKey,
+    "https://tokenless.example",
+  );
+  const now = new Date("2026-07-18T12:00:00.000Z");
+  await dbClient.execute({
+    sql: "UPDATE tokenless_agent_quotes SET expires_at = ? WHERE quote_id IN (?, ?)",
+    args: [new Date(now.getTime() - 1), unused.quoteId, used.quoteId],
+  });
+  assert.deepEqual(await sweepExpiredTokenlessQuotes({ now, limit: 10 }), { deleted: 1, scanned: 1 });
+  const remaining = await dbClient.execute({
+    sql: "SELECT quote_id FROM tokenless_agent_quotes ORDER BY quote_id ASC",
+  });
+  assert.deepEqual(
+    remaining.rows.map(row => row.quote_id),
+    [used.quoteId],
+  );
 });
 
 test("quotes freeze explicit review timing, profile provenance, and economics", async () => {

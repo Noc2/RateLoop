@@ -92,7 +92,7 @@ function parseAtomic(value: unknown, path: string) {
   return BigInt(value);
 }
 
-function assertQuoteRequest(value: unknown): TokenlessQuoteRequest {
+export function parseTokenlessQuoteRequest(value: unknown): TokenlessQuoteRequest {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new TokenlessServiceError("Quote body must be an object.", 400, "invalid_quote");
   }
@@ -293,7 +293,7 @@ async function persistAsk(row: StoredAsk) {
 }
 
 export async function createTokenlessQuote(value: unknown): Promise<TokenlessQuoteResponse> {
-  const request = assertQuoteRequest(value);
+  const request = parseTokenlessQuoteRequest(value);
   const createdAt = new Date();
   const expiresAt = new Date(createdAt.getTime() + QUOTE_TTL_MS);
   const requestHash = hash(request);
@@ -329,6 +329,39 @@ export async function createTokenlessQuote(value: unknown): Promise<TokenlessQuo
     createdAt,
   });
   return response;
+}
+
+export async function sweepExpiredTokenlessQuotes(input: { now?: Date; limit?: number } = {}) {
+  const now = input.now ?? new Date();
+  const limit = input.limit ?? 100;
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500) {
+    throw new Error("Expired quote sweep limit must be an integer from 1 to 500.");
+  }
+  const expired = await dbClient.execute({
+    sql: `SELECT DISTINCT q.quote_id, q.expires_at
+          FROM tokenless_agent_quotes q
+          LEFT JOIN tokenless_agent_asks a ON a.quote_id = q.quote_id
+          WHERE q.expires_at <= ?
+            AND a.quote_id IS NULL
+          ORDER BY q.expires_at ASC
+          LIMIT ?`,
+    args: [now, limit],
+  });
+  let deleted = 0;
+  for (const row of expired.rows) {
+    const quoteId = typeof row.quote_id === "string" ? row.quote_id : null;
+    if (!quoteId) continue;
+    const result = await dbClient.execute({
+      sql: `DELETE FROM tokenless_agent_quotes
+            WHERE quote_id = ? AND expires_at <= ?
+              AND quote_id NOT IN (
+                SELECT quote_id FROM tokenless_agent_asks WHERE quote_id = ?
+              )`,
+      args: [quoteId, now, quoteId],
+    });
+    deleted += result.rowCount ?? 0;
+  }
+  return { deleted, scanned: expired.rows.length };
 }
 
 function continuation(operationKey: string, appOrigin: string, updatedAt: Date) {
