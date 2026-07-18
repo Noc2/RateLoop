@@ -5,7 +5,12 @@ import {
   executeServerChainPayment,
   prepareChainPayment,
 } from "~~/lib/tokenless/chain/payments";
-import { authenticateProductPrincipal, authorizeAskAccess, getProductSessionToken } from "~~/lib/tokenless/productCore";
+import {
+  authenticateProductPrincipal,
+  authorizeAskAccess,
+  authorizeAskPaymentMutation,
+  getProductSessionToken,
+} from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +26,16 @@ async function authorizedOperation(request: NextRequest, context: { params: Prom
   return operationKey;
 }
 
+async function authorizedPaymentMutation(request: NextRequest, context: { params: Promise<{ operationKey: string }> }) {
+  const principal = await authenticateProductPrincipal({
+    authorization: request.headers.get("authorization"),
+    sessionToken: getProductSessionToken(request),
+  });
+  const { operationKey } = await context.params;
+  await authorizeAskPaymentMutation(principal, operationKey);
+  return operationKey;
+}
+
 export async function GET(request: NextRequest, context: { params: Promise<{ operationKey: string }> }) {
   try {
     const operationKey = await authorizedOperation(request, context);
@@ -33,7 +48,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ ope
 
 export async function POST(request: NextRequest, context: { params: Promise<{ operationKey: string }> }) {
   try {
-    const operationKey = await authorizedOperation(request, context);
+    const operationKey = await authorizedPaymentMutation(request, context);
     const prepared = await prepareChainPayment(operationKey);
     if (prepared.paymentMode === "wallet") {
       const body = (await request.json()) as { transactionHash?: unknown };

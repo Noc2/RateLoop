@@ -1580,6 +1580,33 @@ export async function authorizeAskAccess(principal: ProductPrincipal, operationK
   }
 }
 
+export async function authorizeAskPaymentMutation(principal: ProductPrincipal, operationKey: string) {
+  const result = await dbClient.execute({
+    sql: `SELECT o.workspace_id, o.owner_account_address, o.api_key_id, m.role
+          FROM tokenless_ask_ownership o
+          LEFT JOIN tokenless_workspace_members m
+            ON m.workspace_id = o.workspace_id AND m.account_address = ?
+          WHERE o.operation_key = ? LIMIT 1`,
+    args: [principal.kind === "session" ? principal.accountAddress.toLowerCase() : null, operationKey],
+  });
+  const row = result.rows[0] as QueryRow | undefined;
+  const workspaceId = rowString(row, "workspace_id");
+  if (!workspaceId) throw new TokenlessServiceError("Ask not found.", 404, "ask_not_found");
+  if (principal.kind === "api_key") {
+    if (workspaceId !== principal.workspaceId || rowString(row, "api_key_id") !== principal.apiKeyId) {
+      throw new TokenlessServiceError("Ask not found.", 404, "ask_not_found");
+    }
+    assertScope(principal, "payment:submit");
+    assertAskRole(principal.role);
+    return;
+  }
+  const owner = rowString(row, "owner_account_address");
+  const role = rowString(row, "role") as TokenlessWorkspaceRole | null;
+  if (owner !== principal.accountAddress.toLowerCase() && (!role || !ASK_ROLES.has(role))) {
+    throw new TokenlessServiceError("Ask not found.", 404, "ask_not_found");
+  }
+}
+
 export function __productCoreTestUtils() {
   return { digest, hashJson };
 }

@@ -1,12 +1,18 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
+import {
+  decodeTokenlessHandoffFragment,
+  validateTokenlessQuoteRequest,
+} from "~~/components/tokenless/TokenlessHandoffClient";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { createMcpHandoff } from "~~/lib/mcp/handoff";
 import {
   __productCoreTestUtils,
   attachProductAsk,
   authenticateProductPrincipal,
   authorizeAskAccess,
+  authorizeAskPaymentMutation,
   createAgentPublishingPolicy,
   createWorkspace,
   createWorkspaceApiKey,
@@ -17,11 +23,6 @@ import {
   revokeAgentPublishingPolicy,
 } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError, createTokenlessAsk, createTokenlessQuote } from "~~/lib/tokenless/server";
-import {
-  decodeTokenlessHandoffFragment,
-  validateTokenlessQuoteRequest,
-} from "~~/components/tokenless/TokenlessHandoffClient";
-import { createMcpHandoff } from "~~/lib/mcp/handoff";
 
 const ADDRESS_A: `0x${string}` = "0x1111111111111111111111111111111111111111";
 const ADDRESS_B: `0x${string}` = "0x2222222222222222222222222222222222222222";
@@ -212,6 +213,51 @@ test("ask ownership is bound to its workspace for wait and result authorization"
       ),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "ask_not_found",
   );
+});
+
+test("payment mutation requires the submitting scope and the creating API key", async () => {
+  const workspace = await workspaceWithKey(ADDRESS_A);
+  const resultsOnly = await createWorkspaceApiKey({
+    workspaceId: workspace.workspaceId,
+    name: "Results reader",
+    scopes: ["result:read"],
+  });
+  const unrelatedSubmitter = await createWorkspaceApiKey({
+    workspaceId: workspace.workspaceId,
+    name: "Unrelated payment submitter",
+    scopes: ["payment:submit", "result:read"],
+  });
+  await recordPrepaidLedgerEntry({
+    workspaceId: workspace.workspaceId,
+    amountAtomic: "100000000",
+    source: "invoice",
+  });
+  const { request } = await quoteAndRequest(workspace.workspaceId, "payment:authorization:12345678");
+  const creator = await authenticateProductPrincipal({
+    authorization: `Bearer ${workspace.token}`,
+    sessionToken: undefined,
+  });
+  if (creator.kind !== "api_key") assert.fail("expected an API-key principal");
+  const prepared = await prepareProductAsk({ principal: creator, request });
+  const ask = await createTokenlessAsk(request, request.idempotencyKey, "https://tokenless.example");
+  await attachProductAsk(prepared, ask);
+
+  for (const key of [resultsOnly, unrelatedSubmitter]) {
+    const principal = await authenticateProductPrincipal({
+      authorization: `Bearer ${key.token}`,
+      sessionToken: undefined,
+    });
+    await assert.rejects(
+      () => authorizeAskPaymentMutation(principal, ask.operationKey),
+      (error: unknown) => error instanceof TokenlessServiceError && error.code === "ask_not_found",
+    );
+  }
+
+  await assert.rejects(
+    () => authorizeAskPaymentMutation({ ...creator, scopes: ["result:read"] }, ask.operationKey),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "insufficient_scope",
+  );
+  await authorizeAskPaymentMutation(creator, ask.operationKey);
 });
 
 test("production prepaid asks keep reservations payment-gated and attach idempotently", async () => {
