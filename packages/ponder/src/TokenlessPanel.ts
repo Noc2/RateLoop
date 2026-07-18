@@ -169,6 +169,7 @@ ponder.on("TokenlessPanel:RevealAccepted", async ({ event, context }) => {
     .update(tokenlessRound, { id: roundKey(deployment.deploymentKey, roundId) })
     .set((row) => ({
       ...revealTalliesAfterVote(row, vote, scoringEligible),
+      state: ROUND_STATE.REVEALABLE,
       updatedAt: event.block.timestamp,
     }));
 });

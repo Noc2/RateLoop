@@ -6,7 +6,12 @@ import {
   count,
   desc,
   eq,
+  gt,
+  inArray,
+  lt,
+  or,
   replaceBigInts,
+  sql,
   sum,
 } from "ponder";
 import { db } from "ponder:api";
@@ -27,8 +32,13 @@ import {
   roundKey,
   tokenlessDeploymentHealth,
 } from "../protocol-deployment";
-import { keeperAction, publicRoundStatus, verdictStatus } from "../status";
 import { validateRuntimeTokenlessDeployment } from "../runtime-deployment-health";
+import {
+  keeperAction,
+  publicRoundStatus,
+  ROUND_STATE,
+  verdictStatus,
+} from "../status";
 import { tokenlessStatusSummary } from "../status-summary";
 
 const deployment = resolveTokenlessDeployment();
@@ -75,6 +85,40 @@ function parseTimestamp(value: string | undefined) {
 
 function parseAddress(value: string) {
   return isAddress(value) ? (value.toLowerCase() as `0x${string}`) : null;
+}
+
+function keeperWorkPredicate(now: bigint) {
+  const openOrRevealable = inArray(tokenlessRound.state, [
+    ROUND_STATE.OPEN,
+    ROUND_STATE.REVEALABLE,
+  ]);
+  const terminal = inArray(tokenlessRound.state, [
+    ROUND_STATE.FINALIZED,
+    ROUND_STATE.UNDER_QUORUM_COMPENSATION,
+    ROUND_STATE.BEACON_FAILURE_COMPENSATION,
+  ]);
+  return or(
+    and(
+      openOrRevealable,
+      lt(tokenlessRound.revealDeadline, now),
+      or(
+        eq(tokenlessRound.commitCount, 0),
+        sql<boolean>`${tokenlessRound.revealCount} >= ${tokenlessRound.minimumReveals}`,
+        lt(tokenlessRound.beaconFailureDeadline, now),
+      ),
+    ),
+    inArray(tokenlessRound.state, [
+      ROUND_STATE.AGGREGATING,
+      ROUND_STATE.AWAITING_SEED,
+      ROUND_STATE.SCORING,
+    ]),
+    and(
+      terminal,
+      eq(tokenlessRound.staleReturned, false),
+      gt(tokenlessRound.claimDeadline, 0n),
+      lt(tokenlessRound.claimDeadline, now),
+    ),
+  );
 }
 
 function keeperAuthorization(header: string | undefined) {
@@ -453,14 +497,38 @@ app.get("/keeper/work", async (c) => {
   const now = parseTimestamp(c.req.query("now"));
   if (now === null)
     return c.json({ error: "now must be an unsigned integer timestamp" }, 400);
+  const direction = c.req.query("direction") === "asc" ? "asc" : "desc";
+  const rawCursor = c.req.query("cursor");
+  const cursor = rawCursor === undefined ? null : parseRoundId(rawCursor);
+  if (rawCursor !== undefined && cursor === null) {
+    return c.json({ error: "cursor must be an unsigned round ID" }, 400);
+  }
+  const pageLimit = limit(c.req.query("limit"), 100);
+  const cursorPredicate =
+    cursor === null
+      ? undefined
+      : direction === "asc"
+        ? gt(tokenlessRound.roundId, cursor)
+        : lt(tokenlessRound.roundId, cursor);
 
   const rows = await db
     .select()
     .from(tokenlessRound)
-    .where(eq(tokenlessRound.deploymentKey, deployment.deploymentKey))
-    .orderBy(asc(tokenlessRound.roundId))
-    .limit(MAX_LIMIT);
-  const work = rows.flatMap((row) => {
+    .where(
+      and(
+        eq(tokenlessRound.deploymentKey, deployment.deploymentKey),
+        keeperWorkPredicate(now),
+        cursorPredicate,
+      ),
+    )
+    .orderBy(
+      direction === "asc"
+        ? asc(tokenlessRound.roundId)
+        : desc(tokenlessRound.roundId),
+    )
+    .limit(pageLimit + 1);
+  const page = rows.slice(0, pageLimit);
+  const work = page.flatMap((row) => {
     const action = keeperAction(row, now);
     if (!action) return [];
     return [
@@ -481,6 +549,11 @@ app.get("/keeper/work", async (c) => {
     chainId: deployment.chainId,
     panelAddress: deployment.panelAddress,
     now: now.toString(),
+    direction,
+    nextCursor:
+      rows.length > pageLimit && page.length > 0
+        ? page[page.length - 1]?.roundId.toString()
+        : null,
     work,
   });
 });

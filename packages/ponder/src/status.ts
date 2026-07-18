@@ -92,14 +92,11 @@ export function creditBalanceAfterEvent(
 }
 
 export function keeperAction(round: KeeperRound, now: bigint) {
-  if (
-    round.state === ROUND_STATE.OPEN &&
-    now > round.commitDeadline &&
-    now <= round.beaconFailureDeadline &&
-    (now <= round.revealDeadline || round.revealCount < round.minimumReveals)
-  ) {
-    return "open_reveal";
-  }
+  // The event-derived index cannot distinguish an on-chain Open round from one
+  // whose permissionless openReveal call already moved it to Revealable, because
+  // that transition has no event. Neither reveal nor settlement requires an
+  // explicit openReveal call, so the indexed work feed deliberately omits it
+  // instead of emitting stale, reverting work.
   if (
     (round.state === ROUND_STATE.OPEN ||
       round.state === ROUND_STATE.REVEALABLE) &&

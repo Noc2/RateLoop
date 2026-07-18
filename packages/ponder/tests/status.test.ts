@@ -32,14 +32,14 @@ describe("tokenless public and keeper state", () => {
   it("derives revealable status despite openReveal having no event", () => {
     expect(publicRoundStatus(round(), 101n)).toBe("revealable");
     expect(publicRoundStatus(round(), 250n)).toBe("revealable");
-    expect(keeperAction(round(), 101n)).toBe("open_reveal");
+    expect(keeperAction(round(), 101n)).toBeNull();
   });
 
   it("waits for the beacon failure deadline when no reveal exists", () => {
     const value = round({ state: ROUND_STATE.REVEALABLE, commitCount: 2 });
     expect(keeperAction(value, 201n)).toBeNull();
     expect(keeperAction(value, 301n)).toBe("begin_settlement");
-    expect(keeperAction(round({ commitCount: 2 }), 201n)).toBe("open_reveal");
+    expect(keeperAction(round({ commitCount: 2 }), 201n)).toBeNull();
     expect(
       keeperAction(
         round({
@@ -56,7 +56,7 @@ describe("tokenless public and keeper state", () => {
         round({ commitCount: 3, revealCount: 1, minimumReveals: 2 }),
         201n,
       ),
-    ).toBe("open_reveal");
+    ).toBeNull();
     expect(
       keeperAction(
         round({ commitCount: 3, revealCount: 2, minimumReveals: 2 }),
