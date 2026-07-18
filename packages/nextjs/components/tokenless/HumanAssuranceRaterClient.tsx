@@ -6,6 +6,7 @@ import { ReviewerShell } from "~~/components/tokenless/review/ReviewerShell";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { Chip } from "~~/components/tokenless/ui/Chip";
+import { readBrowserSession } from "~~/lib/auth/client";
 import { HttpJsonError, readJson } from "~~/lib/tokenless/http";
 import { clearReviewDraft, loadReviewDraft, saveReviewDraft } from "~~/lib/tokenless/reviewDrafts";
 import { REVIEWER_EXPERTISE } from "~~/lib/tokenless/reviewerExpertiseOptions";
@@ -122,11 +123,13 @@ function isPrivateDrafts(value: unknown): value is Record<string, ReviewDraft> {
 }
 
 export function HumanAssuranceRaterClient({
+  principalId = null,
   initialAssignmentId = "",
   initialServerAcceptance = null,
   initialTask = null,
   initialTermsHash = "",
 }: {
+  principalId?: string | null;
   initialAssignmentId?: string | string[];
   initialServerAcceptance?: AssuranceServerAcceptance | null;
   initialTask?: AssignmentTask | null;
@@ -150,7 +153,22 @@ export function HumanAssuranceRaterClient({
   const [serverAcceptance, setServerAcceptance] = useState<AssuranceServerAcceptance | null>(initialServerAcceptance);
   const [activeCaseIndex, setActiveCaseIndex] = useState(0);
   const [restoredDraftKey, setRestoredDraftKey] = useState<string | null>(null);
+  const [activePrincipalId, setActivePrincipalId] = useState(principalId);
   const rationaleRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    let active = true;
+    const refreshPrincipal = async () => {
+      const session = await readBrowserSession().catch(() => null);
+      if (active) setActivePrincipalId(session?.principalId ?? null);
+    };
+    void refreshPrincipal();
+    window.addEventListener("focus", refreshPrincipal);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", refreshPrincipal);
+    };
+  }, []);
 
   const leaseDeadline = useMemo(() => {
     const values = task?.cases.flatMap(reviewCase => [
@@ -160,6 +178,11 @@ export function HumanAssuranceRaterClient({
     if (!values?.length) return null;
     return values.sort((left, right) => new Date(left).getTime() - new Date(right).getTime())[0] ?? null;
   }, [task]);
+  const privateDraftStorage = useMemo(
+    () => ({ principalId: activePrincipalId, expiresAt: leaseDeadline }),
+    [activePrincipalId, leaseDeadline],
+  );
+  const privateDraftKey = activePrincipalId && task ? `${activePrincipalId}:${task.assignmentId}` : null;
 
   const completeDraft = Boolean(
     task?.cases.length &&
@@ -182,21 +205,21 @@ export function HumanAssuranceRaterClient({
 
   useEffect(() => {
     if (!task || serverAcceptance) return;
-    const restored = loadReviewDraft("private", task.assignmentId, isPrivateDrafts);
+    const restored = loadReviewDraft("private", task.assignmentId, isPrivateDrafts, privateDraftStorage);
+    const next = emptyDrafts(task.cases);
     if (restored) {
-      const next = emptyDrafts(task.cases);
       for (const reviewCase of task.cases) {
         if (restored[reviewCase.caseId]) next[reviewCase.caseId] = restored[reviewCase.caseId];
       }
-      setDrafts(next);
     }
-    setRestoredDraftKey(task.assignmentId);
-  }, [serverAcceptance, task]);
+    setDrafts(next);
+    setRestoredDraftKey(privateDraftKey);
+  }, [privateDraftKey, privateDraftStorage, serverAcceptance, task]);
 
   useEffect(() => {
-    if (!task || serverAcceptance || restoredDraftKey !== task.assignmentId) return;
-    saveReviewDraft("private", task.assignmentId, drafts);
-  }, [drafts, restoredDraftKey, serverAcceptance, task]);
+    if (!task || serverAcceptance || !privateDraftKey || restoredDraftKey !== privateDraftKey) return;
+    saveReviewDraft("private", task.assignmentId, drafts, privateDraftStorage);
+  }, [drafts, privateDraftKey, privateDraftStorage, restoredDraftKey, serverAcceptance, task]);
 
   async function loadAssignment(id: string) {
     const body = await readJson(
@@ -235,6 +258,7 @@ export function HumanAssuranceRaterClient({
       const recoverable =
         cause instanceof HttpJsonError &&
         (cause.code === "assignment_expired" || cause.code === "artifact_lease_expired" || cause.status === 410);
+      if (recoverable) clearReviewDraft("private", id, privateDraftStorage);
       setCanRecover(recoverable);
       setError(cause instanceof Error ? cause.message : "Unable to open this assignment.");
     } finally {
@@ -322,7 +346,7 @@ export function HumanAssuranceRaterClient({
         throw new Error("The response acceptance was incomplete.");
       }
       setServerAcceptance(body as AssuranceServerAcceptance);
-      clearReviewDraft("private", task.assignmentId);
+      clearReviewDraft("private", task.assignmentId, privateDraftStorage);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The server did not accept this response batch.");
     } finally {

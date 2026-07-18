@@ -29,10 +29,15 @@ export default async function HumanPage({
   const assignmentId = Array.isArray(params.assignment) ? params.assignment[0] : params.assignment;
 
   if (assignmentId) {
+    const assignmentSession = await findAuthSession((await cookies()).get(AUTH_SESSION_COOKIE)?.value);
     return (
       <AppPageShell outerClassName="pb-8" contentClassName="space-y-5">
         <HumanTabs active="discover" />
-        <HumanAssuranceRaterClient initialAssignmentId={params.assignment} initialTermsHash={params.terms} />
+        <HumanAssuranceRaterClient
+          principalId={assignmentSession?.principalId ?? null}
+          initialAssignmentId={params.assignment}
+          initialTermsHash={params.terms}
+        />
       </AppPageShell>
     );
   }
