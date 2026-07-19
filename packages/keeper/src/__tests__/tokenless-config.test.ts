@@ -31,6 +31,7 @@ function productionEnv(): NodeJS.ProcessEnv {
     TOKENLESS_KEEPER_SERVICE_ID: "svc-tokenless-keeper-eu",
     CHAIN_ID: "84532",
     RPC_URL: "https://sepolia.base.org",
+    RPC_FALLBACK_URLS: "https://base-sepolia-fallback.example",
     TOKENLESS_PANEL_ADDRESS: PANEL,
     TOKENLESS_CREDENTIAL_ISSUER_ADDRESS: ISSUER,
     TOKENLESS_FEEDBACK_BONUS_ADDRESS: FEEDBACK_BONUS,
@@ -61,6 +62,9 @@ describe("tokenless keeper config", () => {
     expect(config.chainId).toBe(84532);
     expect(config.deployment.blockNumber).toBe(123n);
     expect(config.deployment.panel).toBe(PANEL);
+    expect(config.rpcFallbackUrls).toEqual([
+      "https://base-sepolia-fallback.example/",
+    ]);
   });
 
   it("requires a nonzero deployment block in production", () => {

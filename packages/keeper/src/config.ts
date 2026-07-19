@@ -9,6 +9,7 @@ const LOCAL_CHAIN_ID = 31337;
 const TOKENLESS_EU_RAILWAY_REGION = "europe-west4-drams3a";
 export const TOKENLESS_DEPLOYMENT_VERSION = "tokenless-v4";
 const PRIVATE_KEY_PATTERN = /^0x[0-9a-fA-F]{64}$/u;
+const MAXIMUM_RPC_FALLBACKS = 3;
 
 function readEnv(env: NodeJS.ProcessEnv, name: string): string | undefined {
   const value = env[name]?.trim();
@@ -80,6 +81,56 @@ function optionalAddress(
   return value;
 }
 
+function rpcUrls(
+  env: NodeJS.ProcessEnv,
+  production: boolean,
+  errors: string[],
+) {
+  const primary = required(env, "RPC_URL", errors);
+  const fallbacks = (readEnv(env, "RPC_FALLBACK_URLS") ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (production && fallbacks.length === 0) {
+    errors.push(
+      "RPC_FALLBACK_URLS must contain at least one independent HTTPS RPC in production",
+    );
+  }
+  if (fallbacks.length > MAXIMUM_RPC_FALLBACKS) {
+    errors.push(
+      `RPC_FALLBACK_URLS must contain at most ${MAXIMUM_RPC_FALLBACKS} URLs`,
+    );
+  }
+  const normalized = [primary, ...fallbacks].map((value, index) => {
+    const name = index === 0 ? "RPC_URL" : "RPC_FALLBACK_URLS";
+    try {
+      const parsed = new URL(value);
+      if (
+        !["http:", "https:"].includes(parsed.protocol) ||
+        parsed.username ||
+        parsed.password ||
+        parsed.hash
+      ) {
+        throw new Error("invalid");
+      }
+      if (production && parsed.protocol !== "https:") {
+        errors.push(`${name} must use HTTPS in production`);
+      }
+      return parsed.toString();
+    } catch {
+      errors.push(`${name} must contain valid HTTP URLs`);
+      return value;
+    }
+  });
+  if (new Set(normalized).size !== normalized.length) {
+    errors.push("RPC_URL and RPC_FALLBACK_URLS must be distinct");
+  }
+  return {
+    rpcUrl: normalized[0] ?? primary,
+    rpcFallbackUrls: normalized.slice(1),
+  };
+}
+
 function validateEuRuntime(
   env: NodeJS.ProcessEnv,
   production: boolean,
@@ -146,15 +197,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     );
   }
 
-  const rpcUrl = required(env, "RPC_URL", errors);
-  try {
-    const parsed = new URL(rpcUrl);
-    if (production && parsed.protocol !== "https:") {
-      errors.push("RPC_URL must use HTTPS in production");
-    }
-  } catch {
-    errors.push("RPC_URL must be a valid URL");
-  }
+  const { rpcUrl, rpcFallbackUrls } = rpcUrls(env, production, errors);
   const ponderUrl = readEnv(env, "TOKENLESS_PONDER_URL");
   const ponderKeeperWorkToken = readEnv(env, "PONDER_KEEPER_WORK_TOKEN");
   if (production && !ponderUrl)
@@ -299,6 +342,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   return {
     chainId,
     chainName: chainId === BASE_SEPOLIA_CHAIN_ID ? "Base Sepolia" : "Anvil",
+    rpcFallbackUrls,
     rpcUrl,
     deployment: {
       key: deploymentKey,
