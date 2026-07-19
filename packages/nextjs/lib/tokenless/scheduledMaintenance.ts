@@ -43,6 +43,7 @@ const MAX_ATTEMPTS = 20;
 const DEFAULT_WORK_LIMIT = 20;
 const DEFAULT_WEBHOOK_LIMIT = 50;
 const DEFAULT_NOTIFICATION_LIMIT = 20;
+const EVIDENCE_PENDING_ALERT_SECONDS = 15 * 60;
 const NON_COUNTING_DEFER_CODES = new Set([
   "indexed_evidence_pending",
   "evidence_pending",
@@ -55,6 +56,14 @@ const NON_COUNTING_DEFER_CODES = new Set([
 function rowString(row: Row | undefined, key: string) {
   const value = row?.[key];
   return value === null || value === undefined ? null : String(value);
+}
+
+function rowDate(row: Row | undefined, key: string) {
+  const raw = row?.[key];
+  if (raw === null || raw === undefined) return null;
+  const value = raw instanceof Date ? raw : new Date(String(raw));
+  if (!Number.isFinite(value.getTime())) throw new Error(`Database returned an invalid ${key}.`);
+  return value;
 }
 
 function digest(value: string) {
@@ -336,6 +345,30 @@ async function processClaimedWork(input: {
   return summary;
 }
 
+async function evidencePendingOperationalHealth(now: Date) {
+  const result = await dbClient.execute(
+    `SELECT COUNT(*) AS pending_count, MIN(created_at) AS oldest_created_at
+     FROM tokenless_scheduled_work_items
+     WHERE kind = 'publish_finalized_round' AND state IN ('pending','retry','processing')`,
+  );
+  const row = result.rows[0] as Row | undefined;
+  const pendingCount = Number(row?.pending_count ?? 0);
+  if (!Number.isSafeInteger(pendingCount) || pendingCount < 0) {
+    throw new Error("Database returned an invalid evidence-pending count.");
+  }
+  const oldestCreatedAt = rowDate(row, "oldest_created_at");
+  const oldestAgeSeconds = oldestCreatedAt
+    ? Math.max(0, Math.floor((now.getTime() - oldestCreatedAt.getTime()) / 1_000))
+    : null;
+  return {
+    pendingCount,
+    oldestCreatedAt: oldestCreatedAt?.toISOString() ?? null,
+    oldestAgeSeconds,
+    alertAfterSeconds: EVIDENCE_PENDING_ALERT_SECONDS,
+    alert: pendingCount > 0 && oldestAgeSeconds !== null && oldestAgeSeconds > EVIDENCE_PENDING_ALERT_SECONDS,
+  };
+}
+
 export async function runTokenlessScheduledMaintenance(input: {
   appOrigin: string;
   now?: Date;
@@ -381,6 +414,7 @@ export async function runTokenlessScheduledMaintenance(input: {
       now,
       processors,
     });
+    const evidencePending = await evidencePendingOperationalHealth(now);
     const deadWorkResult = await dbClient.execute({
       sql: "SELECT COUNT(*) AS count FROM tokenless_scheduled_work_items WHERE state = 'dead'",
     });
@@ -461,6 +495,7 @@ export async function runTokenlessScheduledMaintenance(input: {
       evidenceRetention.retry > 0 ||
       evidenceRetention.dead > 0 ||
       evidenceRetention.backlog > 0 ||
+      evidencePending.alert ||
       assuranceEvents.projection.retry > 0 ||
       assuranceEvents.delivery.retry > 0 ||
       assuranceEvents.delivery.dead > 0 ||
@@ -482,6 +517,7 @@ export async function runTokenlessScheduledMaintenance(input: {
       wormExports,
       attestations,
       evidenceRetention,
+      evidencePending,
       assuranceEvents,
       prepaidTopups: { reconciliation: prepaidTopups, audit: prepaidTopupAudit },
       enterpriseIdentityAudit: { reservations: enterpriseIdentityAuditReservations, delivery: enterpriseIdentityAudit },
@@ -518,4 +554,8 @@ export function authorizeTokenlessCron(authorization: string | null, cronSecret 
   }
 }
 
-export const __scheduledMaintenanceTestUtils = { retryAt, workItemId };
+export const __scheduledMaintenanceTestUtils = {
+  evidencePendingOperationalHealth,
+  retryAt,
+  workItemId,
+};

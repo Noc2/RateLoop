@@ -460,6 +460,28 @@ test("a confirmed but not-finalized round is deferred without consuming its retr
   assert.match(String(item.rows[0]?.last_error), /not completely finalized/);
 });
 
+test("old evidence-pending work degrades maintenance health instead of remaining silently green", async () => {
+  await seedConfirmedExecution("operation_evidence_stale");
+  await seedTokenlessScheduledWork(NOW);
+  const result = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: new Date(NOW.getTime() + 901_000),
+    processors: processors(async () => {
+      throw new TokenlessServiceError("Finalized round evidence is not indexed.", 409, "evidence_pending", true);
+    }),
+  });
+  if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.equal(result.status, "degraded");
+  assert.deepEqual(result.summary.evidencePending, {
+    pendingCount: 1,
+    oldestCreatedAt: NOW.toISOString(),
+    oldestAgeSeconds: 901,
+    alertAfterSeconds: 900,
+    alert: true,
+  });
+  assert.deepEqual(result.summary.work, { completed: 0, dead: 0, deferred: 1, retry: 0 });
+});
+
 test("a deletion processor that has not removed its object stays retryable instead of completing falsely", async () => {
   await dbClient.execute({
     sql: `INSERT INTO tokenless_scheduled_work_items
