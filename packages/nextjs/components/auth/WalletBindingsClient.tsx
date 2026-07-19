@@ -14,6 +14,78 @@ type Binding = {
   walletAddress: string;
 };
 
+type SelectableWalletPurpose = Extract<WalletBindingPurpose, "funding" | "payout">;
+
+const PURPOSES: Array<{
+  purpose: SelectableWalletPurpose;
+  title: string;
+  description: string;
+  action: string;
+  confirmation: string;
+  saved: string;
+}> = [
+  {
+    purpose: "funding",
+    title: "Pay for public asks",
+    description: "Use USDC from this wallet only when you approve a public ask.",
+    action: "Set up funding",
+    confirmation: "Use for public asks",
+    saved: "Wallet saved for public asks.",
+  },
+  {
+    purpose: "payout",
+    title: "Receive reviewer payouts",
+    description: "Send future paid-review earnings to this wallet.",
+    action: "Set up payouts",
+    confirmation: "Use for payouts",
+    saved: "Payout wallet saved.",
+  },
+];
+
+function purposeTitle(purpose: WalletBindingPurpose) {
+  return PURPOSES.find(option => option.purpose === purpose)?.title ?? "Wallet connection";
+}
+
+function purposeDetails(purpose: SelectableWalletPurpose) {
+  return PURPOSES.find(option => option.purpose === purpose) ?? PURPOSES[1]!;
+}
+
+export function WalletPurposeChooser({
+  purpose,
+  onSelect,
+}: {
+  purpose: SelectableWalletPurpose;
+  onSelect: (purpose: SelectableWalletPurpose) => void;
+}) {
+  return (
+    <fieldset>
+      <legend className="text-xl font-semibold">What do you need this wallet for?</legend>
+      <p className="mt-2 text-sm leading-6 text-base-content/60">
+        A wallet never grants access to your RateLoop account. Each connection is limited to the action you choose.
+      </p>
+      <div className="mt-5 grid gap-3 md:grid-cols-2">
+        {PURPOSES.map(option => (
+          <button
+            key={option.purpose}
+            type="button"
+            aria-pressed={purpose === option.purpose}
+            className={`rounded-xl border p-4 text-left transition ${
+              purpose === option.purpose
+                ? "border-[var(--rateloop-blue)] bg-[var(--rateloop-blue)]/10"
+                : "border-base-content/10 hover:border-base-content/25"
+            }`}
+            onClick={() => onSelect(option.purpose)}
+          >
+            <span className="block font-semibold">{option.title}</span>
+            <span className="mt-2 block text-sm leading-5 text-base-content/60">{option.description}</span>
+            <span className="mt-3 block text-sm font-semibold text-[var(--rateloop-blue)]">{option.action}</span>
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
 async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { credentials: "same-origin", cache: "no-store", ...init });
   const body = (await response.json()) as T & { error?: unknown };
@@ -25,14 +97,21 @@ function shortAddress(address: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
-function WalletBindingControls({ managedWalletEnabled }: { managedWalletEnabled: boolean }) {
+function WalletBindingControls({
+  initialPurpose,
+  managedWalletEnabled,
+}: {
+  initialPurpose: SelectableWalletPurpose;
+  managedWalletEnabled: boolean;
+}) {
   const account = useActiveAccount();
   const { connect, isConnecting } = useConnect();
-  const [purpose, setPurpose] = useState<WalletBindingPurpose>("payout");
+  const [purpose, setPurpose] = useState<SelectableWalletPurpose>(initialPurpose);
   const [thirdwebJti, setThirdwebJti] = useState<string | null>(null);
   const [bindings, setBindings] = useState<Binding[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const principalRef = useRef<string | null>(null);
   const principalEpochRef = useRef(0);
   const sessionReadRef = useRef(0);
@@ -57,6 +136,7 @@ function WalletBindingControls({ managedWalletEnabled }: { managedWalletEnabled:
           setThirdwebJti(null);
           setBusy(false);
           setError(null);
+          setNotice(null);
         }
         if (nextPrincipal) await refresh();
       } catch (cause) {
@@ -75,6 +155,7 @@ function WalletBindingControls({ managedWalletEnabled }: { managedWalletEnabled:
     const epoch = principalEpochRef.current;
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
       const issued = await jsonRequest<{ jwt: string; jti: string }>("/api/account/wallets/thirdweb-token", {
         method: "POST",
@@ -124,6 +205,7 @@ function WalletBindingControls({ managedWalletEnabled }: { managedWalletEnabled:
       if (epoch !== principalEpochRef.current) return;
       setThirdwebJti(null);
       await refresh();
+      setNotice(purposeDetails(purpose).saved);
     } catch (cause) {
       if (epoch === principalEpochRef.current) {
         setError(cause instanceof Error ? cause.message : "Unable to bind this wallet.");
@@ -137,10 +219,12 @@ function WalletBindingControls({ managedWalletEnabled }: { managedWalletEnabled:
     const epoch = principalEpochRef.current;
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
       await jsonRequest(`/api/account/wallets/${encodeURIComponent(bindingId)}`, { method: "DELETE" });
       if (epoch !== principalEpochRef.current) return;
       await refresh();
+      setNotice("Wallet connection removed.");
     } catch (cause) {
       if (epoch === principalEpochRef.current) {
         setError(cause instanceof Error ? cause.message : "Unable to revoke this wallet binding.");
@@ -153,26 +237,10 @@ function WalletBindingControls({ managedWalletEnabled }: { managedWalletEnabled:
   return (
     <div className="space-y-8">
       <section className="rounded-xl border border-base-content/10 bg-base-content/[0.03] p-5">
-        <h2 className="text-xl font-semibold">Choose the purpose first</h2>
-        <p className="mt-2 text-sm leading-6 text-base-content/60">
-          A wallet never grants access to your RateLoop account. Each proof is limited to one revocable purpose.
-        </p>
-        <label className="mt-5 block text-sm font-medium" htmlFor="wallet-purpose">
-          Wallet purpose
-        </label>
-        <select
-          id="wallet-purpose"
-          className="select select-bordered mt-2 w-full"
-          value={purpose}
-          onChange={event => setPurpose(event.target.value as WalletBindingPurpose)}
-        >
-          <option value="funding">Funding public USDC asks</option>
-          <option value="payout">Receiving public USDC payouts</option>
-          <option value="recovery">Account recovery proof</option>
-        </select>
+        <WalletPurposeChooser purpose={purpose} onSelect={setPurpose} />
       </section>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className={`grid gap-4 ${managedWalletEnabled ? "md:grid-cols-2" : "max-w-xl"}`}>
         <section className="rounded-xl border border-base-content/10 p-5">
           <h2 className="font-semibold">Use your existing wallet</h2>
           <p className="mb-4 mt-2 text-sm leading-6 text-base-content/60">
@@ -189,9 +257,10 @@ function WalletBindingControls({ managedWalletEnabled }: { managedWalletEnabled:
         </section>
         {managedWalletEnabled ? (
           <section className="rounded-xl border border-base-content/10 p-5">
-            <h2 className="font-semibold">Create an app-scoped wallet</h2>
+            <h2 className="font-semibold">Create an app wallet</h2>
             <p className="mb-4 mt-2 text-sm leading-6 text-base-content/60">
-              Only after you click below, RateLoop issues a five-minute, one-time, PII-free JWT for thirdweb.
+              thirdweb creates the wallet only after you continue. Back it up from the wallet menu before relying on it;
+              disconnecting is not a backup.
             </p>
             <button
               className="btn btn-outline w-full"
@@ -201,14 +270,7 @@ function WalletBindingControls({ managedWalletEnabled }: { managedWalletEnabled:
               Create wallet with thirdweb
             </button>
           </section>
-        ) : (
-          <section className="rounded-xl border border-base-content/10 p-5">
-            <h2 className="font-semibold">App-scoped wallet creation is off</h2>
-            <p className="mt-2 text-sm leading-6 text-base-content/60">
-              This deployment accepts existing wallets but does not send account tokens to thirdweb.
-            </p>
-          </section>
-        )}
+        ) : null}
       </div>
 
       {account ? (
@@ -219,13 +281,13 @@ function WalletBindingControls({ managedWalletEnabled }: { managedWalletEnabled:
             disabled={busy}
             onClick={() => void bindActiveWallet()}
           >
-            Sign and bind for {purpose}
+            {purposeDetails(purpose).confirmation}
           </button>
         </section>
       ) : null}
 
       <section>
-        <h2 className="text-xl font-semibold">Active wallet bindings</h2>
+        <h2 className="text-xl font-semibold">Your wallets</h2>
         {bindings.length ? (
           <ul className="mt-4 space-y-3">
             {bindings.map(binding => (
@@ -234,10 +296,10 @@ function WalletBindingControls({ managedWalletEnabled }: { managedWalletEnabled:
                 className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-base-content/10 p-4"
               >
                 <div>
-                  <p className="font-medium capitalize">{binding.purpose}</p>
+                  <p className="font-medium">{purposeTitle(binding.purpose)}</p>
                   <p className="font-mono text-xs text-base-content/50">
                     {shortAddress(binding.walletAddress)} ·{" "}
-                    {binding.source === "thirdweb" ? "thirdweb" : "self-custodial"}
+                    {binding.source === "thirdweb" ? "app wallet" : "your wallet"}
                   </p>
                 </div>
                 <button
@@ -245,7 +307,7 @@ function WalletBindingControls({ managedWalletEnabled }: { managedWalletEnabled:
                   disabled={busy}
                   onClick={() => void revoke(binding.bindingId)}
                 >
-                  Revoke
+                  Remove
                 </button>
               </li>
             ))}
@@ -256,9 +318,13 @@ function WalletBindingControls({ managedWalletEnabled }: { managedWalletEnabled:
       </section>
 
       <p className="text-xs leading-5 text-base-content/45">
-        Funding and payout addresses are public on Base. Reusing an address can link paid activity across rounds. A
-        thirdweb wallet remains subject to thirdweb recovery and export capabilities; review those terms before use.
+        Funding and payout addresses are public on Base. Reusing an address can link paid activity across rounds.
       </p>
+      {notice ? (
+        <p className="text-sm text-success" role="status">
+          {notice}
+        </p>
+      ) : null}
       {error ? (
         <p className="text-sm text-error" role="alert">
           {error}
@@ -268,7 +334,13 @@ function WalletBindingControls({ managedWalletEnabled }: { managedWalletEnabled:
   );
 }
 
-export function WalletBindingsClient({ managedWalletEnabled }: { managedWalletEnabled: boolean }) {
+export function WalletBindingsClient({
+  initialPurpose = "payout",
+  managedWalletEnabled,
+}: {
+  initialPurpose?: SelectableWalletPurpose;
+  managedWalletEnabled: boolean;
+}) {
   if (!thirdwebBrowserClient) {
     return (
       <p className="rounded-xl border border-warning/30 bg-warning/10 p-4 text-sm leading-6 text-base-content/70">
@@ -278,7 +350,7 @@ export function WalletBindingsClient({ managedWalletEnabled }: { managedWalletEn
   }
   return (
     <ThirdwebProvider>
-      <WalletBindingControls managedWalletEnabled={managedWalletEnabled} />
+      <WalletBindingControls initialPurpose={initialPurpose} managedWalletEnabled={managedWalletEnabled} />
     </ThirdwebProvider>
   );
 }

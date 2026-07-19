@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import "server-only";
 import { dbClient, dbPool } from "~~/lib/db";
+import { erasePaidAssignmentSeatIdentities } from "~~/lib/privacy/paidAssignmentSeatIdentityErasure";
 
 type Row = Record<string, unknown>;
 
@@ -12,6 +13,18 @@ function rowString(row: Row | undefined, key: string) {
 function rowNumber(row: Row | undefined, key: string) {
   const value = Number(row?.[key] ?? 0);
   return Number.isFinite(value) ? value : 0;
+}
+
+function rowJsonObject(row: Row | undefined, key: string): Row {
+  const value = row?.[key];
+  if (value && typeof value === "object" && !Array.isArray(value)) return value as Row;
+  if (typeof value !== "string") return {};
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Row) : {};
+  } catch {
+    return {};
+  }
 }
 
 function digest(value: string) {
@@ -26,10 +39,11 @@ function boundedLimit(value: number) {
 export async function reconcileWorkspaceDeletionJobs(now = new Date(), requestedLimit = 25) {
   const limit = boundedLimit(requestedLimit);
   const jobs = await dbClient.execute({
-    sql: `SELECT job_id, scope_id, subject_request_id, status
-          FROM tokenless_deletion_jobs
-          WHERE scope_kind = 'workspace' AND status IN ('running','blocked')
-          ORDER BY requested_at ASC LIMIT ?`,
+    sql: `SELECT jobs.job_id, jobs.scope_id, jobs.subject_request_id, jobs.status, requests.scope_json
+          FROM tokenless_deletion_jobs jobs
+          JOIN tokenless_subject_requests requests ON requests.request_id = jobs.subject_request_id
+          WHERE jobs.scope_kind = 'workspace' AND jobs.status IN ('running','blocked')
+          ORDER BY jobs.requested_at ASC LIMIT ?`,
     args: [limit],
   });
   const summary = { blocked: 0, completed: 0, pending: 0 };
@@ -38,6 +52,7 @@ export async function reconcileWorkspaceDeletionJobs(now = new Date(), requested
     const jobId = rowString(job, "job_id")!;
     const workspaceId = rowString(job, "scope_id")!;
     const requestId = rowString(job, "subject_request_id")!;
+    const privateQuotes = rowJsonObject(rowJsonObject(job, "scope_json"), "privateQuotes");
     const client = await dbPool.connect();
     try {
       await client.query("BEGIN");
@@ -165,14 +180,15 @@ export async function reconcileWorkspaceDeletionJobs(now = new Date(), requested
         [
           `dsrc_${randomUUID().replaceAll("-", "")}`,
           requestId,
-          JSON.stringify(["workspace_access", "private_objects"]),
+          JSON.stringify(["workspace_access", "private_objects", "private_quote_plaintext_payloads"]),
           JSON.stringify(["workspace_identity"]),
           JSON.stringify([
             { basis: "statutory_record", category: "billing_records" },
             { basis: "settlement_and_audit", category: "settlement_audit" },
+            { basis: "settlement_and_audit", category: "referenced_private_quote_commitments" },
           ]),
           JSON.stringify(["public_chain_records"]),
-          JSON.stringify({ jobId, receiptDigest }),
+          JSON.stringify({ jobId, privateQuotes, receiptDigest }),
           now,
         ],
       );
@@ -186,6 +202,52 @@ export async function reconcileWorkspaceDeletionJobs(now = new Date(), requested
     }
   }
   return summary;
+}
+
+export async function reconcileDeletedAccountPaidAssignmentSeats(now = new Date(), requestedLimit = 100) {
+  const limit = boundedLimit(requestedLimit);
+  const due = await dbClient.execute({
+    sql: `SELECT DISTINCT jobs.job_id,jobs.scope_id,jobs.receipt_digest
+          FROM tokenless_deletion_jobs jobs
+          JOIN tokenless_paid_assignment_seats seats ON seats.reviewer_principal_id=jobs.scope_id
+          WHERE jobs.scope_kind='account' AND jobs.status='completed' AND jobs.receipt_digest IS NOT NULL
+          ORDER BY jobs.job_id ASC LIMIT ?`,
+    args: [limit],
+  });
+  let accounts = 0;
+  let erasedSeats = 0;
+  for (const value of due.rows) {
+    const row = value as Row;
+    const jobId = rowString(row, "job_id")!;
+    const principalId = rowString(row, "scope_id")!;
+    const client = await dbPool.connect();
+    try {
+      await client.query("BEGIN");
+      const locked = await client.query(
+        `SELECT receipt_digest FROM tokenless_deletion_jobs
+         WHERE job_id=$1 AND scope_kind='account' AND scope_id=$2 AND status='completed'
+         FOR UPDATE`,
+        [jobId, principalId],
+      );
+      const receiptDigest = rowString(locked.rows[0] as Row | undefined, "receipt_digest");
+      if (!receiptDigest) {
+        await client.query("ROLLBACK");
+        continue;
+      }
+      const evidence = await erasePaidAssignmentSeatIdentities(client, { now, principalId, receiptDigest });
+      await client.query("COMMIT");
+      if (evidence.erasedSeats > 0) {
+        accounts += 1;
+        erasedSeats += evidence.erasedSeats;
+      }
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+  return { accounts, erasedSeats };
 }
 
 export async function expireDeletedAuthSubjectGuards(now = new Date(), requestedLimit = 100) {

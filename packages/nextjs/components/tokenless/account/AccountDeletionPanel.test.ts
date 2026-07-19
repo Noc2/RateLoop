@@ -17,7 +17,8 @@ test("account deletion exposes its action and requires the server preview", () =
 
 test("account deletion requires a literal confirmation and clears client authentication", () => {
   assert.match(panelSource, /confirmation !== "DELETE"/);
-  assert.match(panelSource, /body: JSON\.stringify\(\{ confirmation: "DELETE" \}\)/);
+  assert.match(panelSource, /issueAccountDeletionProof\(\)/);
+  assert.match(panelSource, /body: JSON\.stringify\(\{ confirmation: "DELETE", recentAuthProof \}\)/);
   assert.match(panelSource, /betterAuthClient\.signOut\(\)/);
   assert.match(panelSource, /window\.location\.assign\("\/"\)/);
   assert.match(panelSource, /same email address, creates a new/);

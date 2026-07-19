@@ -1,6 +1,5 @@
 import { TOKENLESS_VERCEL_PROJECT, validateIdentityDeployment } from "./check-identity-deployment.mjs";
 import assert from "node:assert/strict";
-import { generateKeyPairSync } from "node:crypto";
 import test from "node:test";
 
 function validEnv() {
@@ -9,6 +8,7 @@ function validEnv() {
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     BETTER_AUTH_SECRET: "b".repeat(48),
     BETTER_AUTH_PASSKEY_RP_ID: "rateloop-tokenless.vercel.app",
+    NEXT_PUBLIC_THIRDWEB_CLIENT_ID: "public-client-id",
     TOKENLESS_THIRDWEB_WALLET_ENABLED: "false",
   };
 }
@@ -62,6 +62,7 @@ test("hosted builds cannot bypass required identity configuration", () => {
   });
   assert.match(errors.join("\n"), /BETTER_AUTH_SECRET must contain at least 32 characters/i);
   assert.match(errors.join("\n"), /BETTER_AUTH_PASSKEY_RP_ID is required/i);
+  assert.match(errors.join("\n"), /NEXT_PUBLIC_THIRDWEB_CLIENT_ID is required.*self-custodial funding and payout/i);
   assert.match(errors.join("\n"), /TOKENLESS_THIRDWEB_WALLET_ENABLED must be explicitly true or false/i);
   assert.match(errors.join("\n"), /Google sign-in requires both/i);
   assert.match(errors.join("\n"), /NEXT_PUBLIC_BETTER_AUTH_SECRET is forbidden/i);
@@ -81,7 +82,7 @@ test("hosted identity still requires the exact immutable project ID", () => {
   assert.match(legacyProjectId.join("\n"), /unexpected vercel project/i);
 });
 
-test("optional thirdweb wallet creation is disabled by default and requires an isolated signer when enabled", () => {
+test("hosted thirdweb wallet creation remains disabled until export recovery is verifiable", () => {
   const disabled = validateIdentityDeployment({
     env: validEnv(),
     projectLinks: [TOKENLESS_VERCEL_PROJECT],
@@ -94,39 +95,13 @@ test("optional thirdweb wallet creation is disabled by default and requires an i
     projectLinks: [TOKENLESS_VERCEL_PROJECT],
     hosted: true,
   });
-  assert.match(missing.join("\n"), /NEXT_PUBLIC_THIRDWEB_CLIENT_ID is required/i);
-  assert.match(missing.join("\n"), /wallet signing key source is required/i);
+  assert.match(missing.join("\n"), /must remain false.*externally verifiable wallet export and recovery/i);
+});
 
-  const { privateKey } = generateKeyPairSync("ed25519");
-  const enabled = validateIdentityDeployment({
-    env: {
-      ...validEnv(),
-      TOKENLESS_THIRDWEB_WALLET_ENABLED: "true",
-      NEXT_PUBLIC_THIRDWEB_CLIENT_ID: "public-client-id",
-      TOKENLESS_THIRDWEB_WALLET_AUDIENCE: "thirdweb-project-audience",
-      TOKENLESS_THIRDWEB_WALLET_KEY_ID: "rateloop-wallet-v1",
-      TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK: JSON.stringify(privateKey.export({ format: "jwk" })),
-    },
-    projectLinks: [TOKENLESS_VERCEL_PROJECT],
-    hosted: true,
-  });
-  assert.deepEqual(enabled, []);
-
-  const main = validateIdentityDeployment({
-    env: {
-      ...validEnv(),
-      VERCEL_GIT_COMMIT_REF: "main",
-      TOKENLESS_THIRDWEB_WALLET_ENABLED: "true",
-      NEXT_PUBLIC_THIRDWEB_CLIENT_ID: "public-client-id",
-      TOKENLESS_THIRDWEB_WALLET_AUDIENCE: "thirdweb-project-audience",
-      TOKENLESS_THIRDWEB_WALLET_KEY_ID: `ed25519:${"ab".repeat(12)}`,
-      TOKENLESS_THIRDWEB_WALLET_KMS_KEY_RESOURCE:
-        "arn:aws:kms:eu-central-1:123456789012:key/66666666-6666-6666-6666-666666666666",
-      TOKENLESS_THIRDWEB_WALLET_KMS_REGION: "eu-central-1",
-      TOKENLESS_THIRDWEB_WALLET_KMS_ROLE_ARN: "arn:aws:iam::123456789012:role/rateloop-wallet-jwt",
-    },
-    projectLinks: [TOKENLESS_VERCEL_PROJECT],
-    hosted: true,
-  });
-  assert.deepEqual(main, []);
+test("hosted identity requires thirdweb client configuration even when managed issuance is disabled", () => {
+  const env = validEnv();
+  delete env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID;
+  const errors = validateIdentityDeployment({ env, projectLinks: [TOKENLESS_VERCEL_PROJECT], hosted: true });
+  assert.match(errors.join("\n"), /NEXT_PUBLIC_THIRDWEB_CLIENT_ID is required.*self-custodial funding and payout/i);
+  assert.doesNotMatch(errors.join("\n"), /must remain false.*export and recovery/i);
 });

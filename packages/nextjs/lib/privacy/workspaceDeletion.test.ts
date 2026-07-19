@@ -70,7 +70,7 @@ test("workspace deletion blocks nonzero funds, active subscriptions, and reserva
   await dbClient.execute({
     sql: `INSERT INTO tokenless_agent_quotes
           (quote_id, request_hash, request_json, response_json, expires_at, created_at)
-          VALUES ('quote_workspace_delete', 'quote-hash', '{}', '{}', ?, ?)`,
+          VALUES ('quote_workspace_delete', 'quote-hash', '{"visibility":"public"}', '{}', ?, ?)`,
     args: [new Date(NOW.getTime() + 60_000), NOW],
   });
   await dbClient.execute({
@@ -285,7 +285,7 @@ test("workspace deletion requires the exact current name and completes an empty 
         deleted.jobId,
       ])
     ).count,
-    5,
+    7,
   );
   assert.equal(
     (
@@ -302,6 +302,84 @@ test("workspace deletion requires the exact current name and completes an empty 
     ),
     /^[0-9a-f]{64}$/,
   );
+});
+
+test("workspace deletion deletes unused private quotes and anonymizes referenced quote ownership", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Quote workspace", ownerAddress: OWNER });
+  const { apiKeyId } = await createWorkspaceApiKey({ name: "Quote owner", workspaceId });
+  for (const [quoteId, prompt] of [
+    ["quote_workspace_unused", "Unused private prompt"],
+    ["quote_workspace_retained", "Retained private prompt"],
+  ] as const) {
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_agent_quotes
+            (quote_id, request_hash, request_json, response_json, owner_workspace_id, owner_api_key_id,
+             expires_at, created_at)
+            VALUES (?, ?, ?, '{}', ?, ?, ?, ?)`,
+      args: [
+        quoteId,
+        `hash-${quoteId}`,
+        JSON.stringify({ question: { prompt }, visibility: "private" }),
+        workspaceId,
+        apiKeyId,
+        new Date(NOW.getTime() + 60_000),
+        NOW,
+      ],
+    });
+  }
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_asks
+          (operation_key, idempotency_key, request_hash, quote_id, request_json, economics_json,
+           status, created_at, updated_at)
+          VALUES ('operation_workspace_retained', 'workspace-retained', 'request-hash',
+                  'quote_workspace_retained', '{}', '{}', 'completed', ?, ?)`,
+    args: [NOW, NOW],
+  });
+
+  const preview = await getWorkspaceDeletionPreview({ accountAddress: OWNER, workspaceId });
+  assert.equal(preview.immediate, true);
+  assert.equal(preview.impact.privateObjects, 1);
+  assert.equal(preview.impact.retainedPrivateQuotes, 1);
+  assert.match(preview.warnings.join(" "), /anonymized and retained/iu);
+
+  const deleted = await requestWorkspaceDeletion({
+    accountAddress: OWNER,
+    confirmationName: "Quote workspace",
+    identityAssurance: "better_auth:passkey",
+    now: NOW,
+    workspaceId,
+  });
+  assert.equal(deleted.immediate, true);
+  const quotes = await dbClient.execute({
+    sql: `SELECT quote_id, request_json, owner_principal_id, owner_workspace_id, owner_api_key_id
+          FROM tokenless_agent_quotes
+          WHERE quote_id IN ('quote_workspace_unused', 'quote_workspace_retained')
+          ORDER BY quote_id`,
+  });
+  assert.equal(quotes.rowCount, 1);
+  assert.equal(quotes.rows[0]?.quote_id, "quote_workspace_retained");
+  assert.doesNotMatch(String(quotes.rows[0]?.request_json), /Retained private prompt/u);
+  assert.match(String(quotes.rows[0]?.request_json), /rateloop\.erased-private-quote\.v1/u);
+  assert.match(String(quotes.rows[0]?.owner_principal_id), /^deleted-workspace-quote:[0-9a-f]{64}$/u);
+  assert.equal(quotes.rows[0]?.owner_workspace_id, null);
+  assert.equal(quotes.rows[0]?.owner_api_key_id, null);
+
+  const receipt = await dbClient.execute({
+    sql: `SELECT requests.scope_json, completions.evidence_json
+          FROM tokenless_subject_requests requests
+          JOIN tokenless_subject_request_completions completions ON completions.request_id = requests.request_id
+          WHERE requests.request_id = ?`,
+    args: [deleted.requestId],
+  });
+  const scope = JSON.parse(String(receipt.rows[0]?.scope_json)) as Record<string, unknown>;
+  const evidence = JSON.parse(String(receipt.rows[0]?.evidence_json)) as Record<string, unknown>;
+  assert.deepEqual(scope.privateQuotes, evidence.privateQuotes);
+  assert.deepEqual(scope.privateQuotes, {
+    deletedUnreferenced: 1,
+    erasedReferencedContent: 0,
+    ownerTombstone: quotes.rows[0]?.owner_principal_id,
+    retainedReferencedCommitmentOnly: 1,
+  });
 });
 
 test("workspace deletion marks private media for worker reconciliation and keeps the DSR in progress", async () => {

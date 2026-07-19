@@ -1,7 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
+import { consumeLockedAccountDeletionProof, lockAccountDeletionProof } from "~~/lib/auth/recentAccountActionProof";
 import { dbPool } from "~~/lib/db";
+import {
+  type PaidAssignmentSeatIdentityErasureEvidence,
+  erasePaidAssignmentSeatIdentities,
+} from "~~/lib/privacy/paidAssignmentSeatIdentityErasure";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const DELETION_DUE_MS = 30 * 86_400_000;
@@ -32,6 +37,14 @@ type RaterErasureEvidence = {
   retainedPaidVouchers: number;
   tombstoneWritten: boolean;
   tombstoneReceiptHash: string | null;
+};
+
+type PrivateQuoteErasureEvidence = {
+  deletedUnreferenced: number;
+  erasedReferencedContent: number;
+  ownerTombstone: string;
+  remainingDirectOwnerLinks: number;
+  retainedReferencedCommitmentOnly: number;
 };
 
 export type AccountDeletionPreview = {
@@ -96,6 +109,10 @@ async function loadPreview(client: PoolClient, principalId: string, lock = false
             SELECT rater_id FROM tokenless_rater_profiles WHERE principal_id = $1
           )
         )) AS accepted_assignments,
+       (SELECT COUNT(*) FROM tokenless_private_unpaid_review_assignments assignments
+        JOIN tokenless_paid_assignment_seats seats ON seats.assignment_id=assignments.assignment_id
+        WHERE assignments.status='accepted' AND seats.reviewer_principal_id=$1)
+         AS accepted_paid_assignments,
        (SELECT COUNT(*) FROM tokenless_wallet_bindings
         WHERE principal_id = $1 AND wallet_source = 'thirdweb' AND revoked_at IS NULL) AS managed_wallets,
        (SELECT COUNT(*) FROM tokenless_assurance_assignments
@@ -104,19 +121,42 @@ async function loadPreview(client: PoolClient, principalId: string, lock = false
             SELECT rater_id FROM tokenless_rater_profiles WHERE principal_id = $1
           )
         )) AS completed_assignments,
+       (SELECT COUNT(*) FROM tokenless_private_unpaid_review_assignments assignments
+        JOIN tokenless_paid_assignment_seats seats ON seats.assignment_id=assignments.assignment_id
+        WHERE assignments.status='completed' AND seats.reviewer_principal_id=$1)
+         AS completed_paid_assignments,
        (SELECT COUNT(*) FROM tokenless_paid_vouchers v
         JOIN tokenless_rater_profiles r ON r.rater_id = v.rater_id
-        WHERE r.principal_id = $1) AS paid_vouchers`,
+        WHERE r.principal_id = $1) AS paid_vouchers,
+       (SELECT COUNT(*) FROM tokenless_agent_quotes quote
+        WHERE quote.owner_principal_id = $1
+          AND quote.quote_id IN (
+            SELECT quote_id FROM tokenless_agent_asks
+            UNION
+            SELECT quote_id FROM tokenless_paid_assignment_operations WHERE quote_id IS NOT NULL
+          )) AS retained_private_quotes,
+       (SELECT COUNT(*) FROM tokenless_paid_assignment_seats
+        WHERE reviewer_principal_id = $1) AS paid_assignment_seats`,
     [principalId],
   );
   const row = result.rows[0] as Row | undefined;
   const ownedWorkspaces = rowNumber(row, "owned_workspaces");
   const sharedWorkspaces = rowNumber(row, "shared_workspaces");
-  const acceptedAssignments = rowNumber(row, "accepted_assignments");
+  const acceptedAssignments = rowNumber(row, "accepted_assignments") + rowNumber(row, "accepted_paid_assignments");
   const managedWallets = rowNumber(row, "managed_wallets");
   const retainedRecords: string[] = [];
-  if (rowNumber(row, "completed_assignments") > 0 || rowNumber(row, "paid_vouchers") > 0) {
+  if (
+    rowNumber(row, "completed_assignments") > 0 ||
+    rowNumber(row, "completed_paid_assignments") > 0 ||
+    rowNumber(row, "paid_vouchers") > 0
+  ) {
     retainedRecords.push("Completed paid-work and settlement evidence for the applicable legal retention period");
+  }
+  if (rowNumber(row, "retained_private_quotes") > 0) {
+    retainedRecords.push("Referenced private quote commitments with plaintext removed and the owner link anonymized");
+  }
+  if (rowNumber(row, "paid_assignment_seats") > 0) {
+    retainedRecords.push("Paid-assignment settlement commitments with direct reviewer identity removed");
   }
   retainedRecords.push("Security and deletion receipts without your email address or reusable credentials");
   const blockers: DeletionBlocker[] = [];
@@ -239,6 +279,14 @@ async function insertDeletionEvidence(
     ["shared_workspace_access", "erase", "completed", null, null],
     ["eligibility_handoffs", "erase", "completed", null, null],
     ["world_id_and_rater_linkage", "erase", "completed", null, null],
+    ["private_quote_plaintext_payloads", "erase", "completed", null, null],
+    [
+      "referenced_private_quote_commitments",
+      "retain",
+      "retained",
+      "legal_settlement_security",
+      new Date(input.requestedAt.getTime() + LEGAL_RECORD_RETENTION_MS),
+    ],
     [
       "deleted_auth_subject_guard",
       "retain",
@@ -306,10 +354,12 @@ async function insertDeletionEvidence(
         "shared_workspace_access",
         "eligibility_handoffs",
         "world_id_and_rater_linkage",
+        "private_quote_plaintext_payloads",
       ]),
       JSON.stringify([
         { category: "deleted_auth_subject_guard", basis: "account_resurrection_prevention" },
         { category: "settlement_legal_security", basis: "legal_settlement_security" },
+        { category: "referenced_private_quote_commitments", basis: "legal_settlement_security" },
       ]),
       JSON.stringify([
         {
@@ -435,12 +485,76 @@ async function eraseRaterIdentity(
   };
 }
 
+async function erasePrivateQuoteOwnership(
+  client: PoolClient,
+  principalId: string,
+  receiptDigest: string,
+): Promise<PrivateQuoteErasureEvidence> {
+  const ownerTombstone = `deleted-quote:${digest(`account-quote-owner:${receiptDigest}`)}`;
+  const deleted = await client.query(
+    `DELETE FROM tokenless_agent_quotes
+     WHERE owner_principal_id = $1
+       AND quote_id NOT IN (
+         SELECT quote_id FROM tokenless_agent_asks
+         UNION
+         SELECT quote_id FROM tokenless_paid_assignment_operations WHERE quote_id IS NOT NULL
+       )`,
+    [principalId],
+  );
+  const erasedReferencedContent = await client.query(
+    `UPDATE tokenless_content_records
+     SET content_json=jsonb_build_object(
+           'schemaVersion','rateloop.erased-private-content.v1',
+           'contentCommitment',content_hash
+         )::text,
+         updated_at=CURRENT_TIMESTAMP
+     WHERE content_id IN (
+       SELECT qr.content_id
+       FROM tokenless_agent_quotes q
+       JOIN tokenless_agent_asks a ON a.quote_id=q.quote_id
+       JOIN tokenless_ask_ownership ao ON ao.operation_key=a.operation_key
+       JOIN tokenless_question_records qr ON qr.question_id=ao.question_id
+       WHERE q.owner_principal_id=$1
+     )`,
+    [principalId],
+  );
+  const retained = await client.query(
+    `UPDATE tokenless_agent_quotes
+     SET owner_principal_id = $2, owner_workspace_id = NULL, owner_api_key_id = NULL,
+         request_json=jsonb_build_object(
+           'schemaVersion','rateloop.erased-private-quote.v1',
+           'visibility','private',
+           'requestCommitment',request_hash
+         )::text
+     WHERE owner_principal_id = $1
+       AND quote_id IN (
+         SELECT quote_id FROM tokenless_agent_asks
+         UNION
+         SELECT quote_id FROM tokenless_paid_assignment_operations WHERE quote_id IS NOT NULL
+       )`,
+    [principalId, ownerTombstone],
+  );
+  const remaining = await client.query(
+    `SELECT COUNT(*) AS count FROM tokenless_agent_quotes WHERE owner_principal_id = $1`,
+    [principalId],
+  );
+  return {
+    deletedUnreferenced: deleted.rowCount ?? 0,
+    erasedReferencedContent: erasedReferencedContent.rowCount ?? 0,
+    ownerTombstone,
+    remainingDirectOwnerLinks: rowNumber(remaining.rows[0] as Row | undefined, "count"),
+    retainedReferencedCommitmentOnly: retained.rowCount ?? 0,
+  };
+}
+
 async function collectDeletionCategoryEvidence(
   client: PoolClient,
   input: {
     betterAuthUserId: string;
     email: string;
     principalId: string;
+    privateQuoteErasure: PrivateQuoteErasureEvidence;
+    paidAssignmentSeatErasure: PaidAssignmentSeatIdentityErasureEvidence;
     raterErasure: RaterErasureEvidence;
     releasedReservations: number;
   },
@@ -479,8 +593,14 @@ async function collectDeletionCategoryEvidence(
        (SELECT COUNT(*) FROM tokenless_wallet_binding_challenges WHERE principal_id = $1)
          AS wallet_challenges,
        (SELECT COUNT(*) FROM tokenless_thirdweb_wallet_jtis WHERE principal_id = $1) AS managed_wallet_jtis,
+       (SELECT COUNT(*) FROM tokenless_recent_account_action_proofs WHERE principal_id = $1)
+         AS recent_account_action_proofs,
+       (SELECT COUNT(*) FROM tokenless_passkey_action_proofs WHERE principal_id = $1)
+         AS passkey_action_proofs,
        (SELECT COUNT(*) FROM tokenless_wallet_bindings WHERE principal_id = $1) AS wallet_bindings,
-       (SELECT COUNT(*) FROM tokenless_payout_wallet_ownership WHERE principal_id = $1) AS payout_wallet_ownership`,
+       (SELECT COUNT(*) FROM tokenless_payout_wallet_ownership WHERE principal_id = $1) AS payout_wallet_ownership,
+       (SELECT COUNT(*) FROM tokenless_paid_assignment_seats WHERE reviewer_principal_id = $1)
+         AS paid_assignment_seat_direct_identities`,
     [input.principalId, input.betterAuthUserId],
   );
   const row = postconditions.rows[0] as Row | undefined;
@@ -520,20 +640,42 @@ async function collectDeletionCategoryEvidence(
       eligibilityHandoffs: rowNumber(row, "eligibility_handoffs"),
       managedWalletJtis: rowNumber(row, "managed_wallet_jtis"),
       payoutWalletOwnership: rowNumber(row, "payout_wallet_ownership"),
+      passkeyActionProofs: rowNumber(row, "passkey_action_proofs"),
+      recentAccountActionProofs: rowNumber(row, "recent_account_action_proofs"),
       walletBindings: rowNumber(row, "wallet_bindings"),
       walletChallenges: rowNumber(row, "wallet_challenges"),
     },
     world_id_and_rater_linkage: {
       deletedRows: input.raterErasure.deletedRows,
+      paidAssignmentSeatDirectIdentitiesErased: input.paidAssignmentSeatErasure.erasedSeats,
       profileFound: input.raterErasure.profileFound,
+      remainingPaidAssignmentSeatDirectIdentities: input.paidAssignmentSeatErasure.remainingDirectIdentities,
       remainingRows: input.raterErasure.remainingRows,
       tombstoneWritten: input.raterErasure.tombstoneWritten,
+    },
+    private_quote_plaintext_payloads: {
+      deletedUnreferenced: input.privateQuoteErasure.deletedUnreferenced,
+      erasedReferencedContent: input.privateQuoteErasure.erasedReferencedContent,
+    },
+    referenced_private_quote_commitments: {
+      retainedReferencedCommitmentOnly: input.privateQuoteErasure.retainedReferencedCommitmentOnly,
+      ownerTombstone:
+        input.privateQuoteErasure.retainedReferencedCommitmentOnly > 0
+          ? input.privateQuoteErasure.ownerTombstone
+          : null,
     },
     deleted_auth_subject_guard: {
       deletedPrincipalTombstones: rowNumber(row, "deleted_principals"),
       revokedIdentityBindings: rowNumber(row, "revoked_identity_bindings"),
     },
     settlement_legal_security: {
+      privateQuoteOwnerTombstone:
+        input.privateQuoteErasure.retainedReferencedCommitmentOnly > 0
+          ? input.privateQuoteErasure.ownerTombstone
+          : null,
+      paidAssignmentSeatErasureReceiptHashes: input.paidAssignmentSeatErasure.receiptHashes,
+      paidAssignmentSeatIdentityCommitmentsRetained: input.paidAssignmentSeatErasure.retainedIdentityCommitments,
+      retainedPrivateQuoteCommitments: input.privateQuoteErasure.retainedReferencedCommitmentOnly,
       retainedPaidVouchers: input.raterErasure.retainedPaidVouchers,
       raterTombstoneRetained: input.raterErasure.tombstoneWritten,
       tombstoneReceiptHash: input.raterErasure.tombstoneReceiptHash,
@@ -558,6 +700,10 @@ async function collectDeletionCategoryEvidence(
     eligibilityHandoffs: rowNumber(row, "eligibility_handoffs"),
     managedWalletJtis: rowNumber(row, "managed_wallet_jtis"),
     payoutWalletOwnership: rowNumber(row, "payout_wallet_ownership"),
+    paidAssignmentSeatDirectIdentities: rowNumber(row, "paid_assignment_seat_direct_identities"),
+    passkeyActionProofs: rowNumber(row, "passkey_action_proofs"),
+    recentAccountActionProofs: rowNumber(row, "recent_account_action_proofs"),
+    privateQuoteOwnerLinks: input.privateQuoteErasure.remainingDirectOwnerLinks,
     walletBindings: rowNumber(row, "wallet_bindings"),
     walletChallenges: rowNumber(row, "wallet_challenges"),
     workspaceClients: rowNumber(row, "workspace_clients"),
@@ -579,9 +725,9 @@ async function collectDeletionCategoryEvidence(
 }
 
 export async function deleteAccount(input: {
-  betterAuthUserId: string;
   confirmation: string;
   principalId: string;
+  recentAuthProof: unknown;
   now?: Date;
 }) {
   if (input.confirmation !== "DELETE") {
@@ -598,13 +744,17 @@ export async function deleteAccount(input: {
     if (preview.blockers.length > 0) {
       throw new TokenlessServiceError(preview.blockers[0].message, 409, preview.blockers[0].code);
     }
+    const actionProof = await lockAccountDeletionProof(
+      { now, principalId: input.principalId, proof: input.recentAuthProof },
+      client,
+    );
     const binding = await client.query(
       `SELECT b.binding_id, u.email
        FROM tokenless_identity_bindings b
        JOIN tokenless_better_auth_users u ON u.id = b.provider_subject
        WHERE b.principal_id = $1 AND b.provider = 'better_auth' AND b.provider_subject = $2
          AND b.status = 'active' FOR UPDATE`,
-      [input.principalId, input.betterAuthUserId],
+      [input.principalId, actionProof.betterAuthUserId],
     );
     if (binding.rowCount !== 1) {
       throw new TokenlessServiceError(
@@ -613,6 +763,7 @@ export async function deleteAccount(input: {
         "recent_authentication_required",
       );
     }
+    await consumeLockedAccountDeletionProof({ ...actionProof, now, principalId: input.principalId }, client);
     const email = String(binding.rows[0]?.email ?? "")
       .trim()
       .toLowerCase();
@@ -624,6 +775,12 @@ export async function deleteAccount(input: {
        WHERE principal_id = $2 AND status = 'active'`,
       [now, input.principalId],
     );
+    const privateQuoteErasure = await erasePrivateQuoteOwnership(client, input.principalId, receiptDigest);
+    const paidAssignmentSeatErasure = await erasePaidAssignmentSeatIdentities(client, {
+      now,
+      principalId: input.principalId,
+      receiptDigest,
+    });
     await client.query(
       `UPDATE tokenless_identity_bindings
        SET status = 'revoked', revoked_at = $1, last_used_at = $1
@@ -733,6 +890,10 @@ export async function deleteAccount(input: {
     await client.query(`DELETE FROM tokenless_thirdweb_wallet_jtis WHERE principal_id = $1`, [input.principalId]);
     await client.query(`DELETE FROM tokenless_payout_wallet_ownership WHERE principal_id = $1`, [input.principalId]);
     await client.query(`DELETE FROM tokenless_wallet_bindings WHERE principal_id = $1`, [input.principalId]);
+    await client.query(`DELETE FROM tokenless_recent_account_action_proofs WHERE principal_id = $1`, [
+      input.principalId,
+    ]);
+    await client.query(`DELETE FROM tokenless_passkey_action_proofs WHERE principal_id = $1`, [input.principalId]);
     await client.query(`DELETE FROM tokenless_browser_identities WHERE principal_address = $1`, [input.principalId]);
     if (email) {
       await client.query(
@@ -741,12 +902,14 @@ export async function deleteAccount(input: {
         [["email-verification", "sign-in", "forget-password", "change-email"].map(type => `${type}-otp-${email}`)],
       );
     }
-    await client.query(`DELETE FROM tokenless_better_auth_users WHERE id = $1`, [input.betterAuthUserId]);
+    await client.query(`DELETE FROM tokenless_better_auth_users WHERE id = $1`, [actionProof.betterAuthUserId]);
 
     const categoryEvidence = await collectDeletionCategoryEvidence(client, {
-      betterAuthUserId: input.betterAuthUserId,
+      betterAuthUserId: actionProof.betterAuthUserId,
       email,
       principalId: input.principalId,
+      paidAssignmentSeatErasure,
+      privateQuoteErasure,
       raterErasure,
       releasedReservations,
     });

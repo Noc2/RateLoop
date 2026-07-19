@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
-import { expireDeletedAuthSubjectGuards, reconcileWorkspaceDeletionJobs } from "~~/lib/privacy/deletionReconciliation";
+import {
+  expireDeletedAuthSubjectGuards,
+  reconcileDeletedAccountPaidAssignmentSeats,
+  reconcileWorkspaceDeletionJobs,
+} from "~~/lib/privacy/deletionReconciliation";
 import { requestWorkspaceDeletion } from "~~/lib/privacy/workspaceDeletion";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import {
@@ -147,4 +151,8 @@ test("the short anti-resurrection binding expires after its documented guard per
     ),
     { basis_code: null, disposition: "erase", retention_deadline: null, status: "completed" },
   );
+});
+
+test("paid-assignment identity reconciliation is a no-op without resurrected direct identities", async () => {
+  assert.deepEqual(await reconcileDeletedAccountPaidAssignmentSeats(NOW), { accounts: 0, erasedSeats: 0 });
 });

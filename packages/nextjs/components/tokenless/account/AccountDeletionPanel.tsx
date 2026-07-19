@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { betterAuthClient } from "~~/lib/auth/client";
+import { type FormEvent, useState } from "react";
+import { betterAuthClient, issueAccountDeletionProof, readBrowserAuthConfiguration } from "~~/lib/auth/client";
 
 type DeletionBlocker = {
   code: string;
@@ -21,9 +21,15 @@ type DeletionPreview = {
 };
 
 async function readJson<T>(response: Response): Promise<T> {
-  const body = (await response.json().catch(() => ({}))) as T & { error?: unknown };
+  const body = (await response.json().catch(() => ({}))) as T & { error?: unknown; message?: unknown };
   if (!response.ok) {
-    throw new Error(typeof body.error === "string" ? body.error : "Unable to process account deletion.");
+    throw new Error(
+      typeof body.message === "string"
+        ? body.message
+        : typeof body.error === "string"
+          ? body.error
+          : "Unable to process account deletion.",
+    );
   }
   return body;
 }
@@ -38,6 +44,14 @@ export function AccountDeletionPanel() {
   const [confirmation, setConfirmation] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [reauthenticating, setReauthenticating] = useState(false);
+  const [reauthVisible, setReauthVisible] = useState(false);
+  const [reauthConfiguration, setReauthConfiguration] = useState<Awaited<
+    ReturnType<typeof readBrowserAuthConfiguration>
+  > | null>(null);
+  const [reauthEmail, setReauthEmail] = useState("");
+  const [reauthOtp, setReauthOtp] = useState("");
+  const [reauthOtpSent, setReauthOtpSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function loadPreview() {
@@ -63,28 +77,79 @@ export function AccountDeletionPanel() {
   function cancelDeletionReview() {
     setReviewing(false);
     setConfirmation("");
+    setReauthVisible(false);
+    setReauthEmail("");
+    setReauthOtp("");
+    setReauthOtpSent(false);
     setError(null);
   }
 
-  async function deleteAccount() {
-    if (!preview || preview.blockers.length > 0 || confirmation !== "DELETE") return;
+  async function deleteAccount(recentAuthProof: string) {
     setSubmitting(true);
+    await readJson<{ deleted: true }>(
+      await fetch("/api/account/deletion", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation: "DELETE", recentAuthProof }),
+      }),
+    );
+    window.location.assign("/");
+  }
+
+  async function finishRecentAuthentication() {
+    const issued = await issueAccountDeletionProof();
+    await betterAuthClient.signOut().catch(() => undefined);
+    await deleteAccount(issued.proof);
+  }
+
+  async function runRecentAuthentication(action: () => Promise<void>, fallback: string) {
+    setReauthenticating(true);
     setError(null);
     try {
-      await readJson<{ deleted: true }>(
-        await fetch("/api/account/deletion", {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ confirmation: "DELETE" }),
-        }),
-      );
-      await betterAuthClient.signOut().catch(() => undefined);
-      window.location.assign("/");
+      await action();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to delete this account.");
+      await betterAuthClient.signOut().catch(() => undefined);
+      setError(cause instanceof Error ? cause.message : fallback);
       setSubmitting(false);
+    } finally {
+      setReauthenticating(false);
     }
+  }
+
+  async function beginRecentAuthentication() {
+    if (!preview || preview.blockers.length > 0 || confirmation !== "DELETE") return;
+    setReauthVisible(true);
+    await runRecentAuthentication(async () => {
+      await betterAuthClient.signOut().catch(() => undefined);
+      setReauthConfiguration(await readBrowserAuthConfiguration());
+    }, "Unable to load sign-in options.");
+  }
+
+  async function sendReauthCode(event: FormEvent) {
+    event.preventDefault();
+    await runRecentAuthentication(async () => {
+      const response = await betterAuthClient.emailOtp.sendVerificationOtp({ email: reauthEmail, type: "sign-in" });
+      if (response.error) throw new Error(response.error.message || "Unable to send the sign-in code.");
+      setReauthOtpSent(true);
+    }, "Unable to send the sign-in code.");
+  }
+
+  async function verifyReauthCode(event: FormEvent) {
+    event.preventDefault();
+    await runRecentAuthentication(async () => {
+      const response = await betterAuthClient.signIn.emailOtp({ email: reauthEmail, otp: reauthOtp });
+      if (response.error) throw new Error(response.error.message || "The sign-in code is invalid or expired.");
+      await finishRecentAuthentication();
+    }, "Unable to verify the sign-in code.");
+  }
+
+  async function verifyWithPasskey() {
+    await runRecentAuthentication(async () => {
+      const response = await betterAuthClient.signIn.passkey();
+      if (response.error) throw new Error(response.error.message || "Passkey verification failed.");
+      await finishRecentAuthentication();
+    }, "Passkey verification failed.");
   }
 
   const blocked = !preview || preview.blockers.length > 0;
@@ -180,23 +245,94 @@ export function AccountDeletionPanel() {
               )}
 
               <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="btn btn-error btn-sm"
-                  disabled={blocked || confirmation !== "DELETE" || submitting}
-                  onClick={() => void deleteAccount()}
-                >
-                  {submitting ? "Deleting…" : "Delete account permanently"}
-                </button>
+                {!reauthVisible ? (
+                  <button
+                    type="button"
+                    className="btn btn-error btn-sm"
+                    disabled={blocked || confirmation !== "DELETE" || submitting || reauthenticating}
+                    onClick={() => void beginRecentAuthentication()}
+                  >
+                    Verify and delete
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="btn rateloop-secondary-action btn-sm"
-                  disabled={submitting}
+                  disabled={submitting || reauthenticating}
                   onClick={cancelDeletionReview}
                 >
                   Cancel
                 </button>
               </div>
+
+              {reauthVisible ? (
+                <div className="max-w-sm rounded-xl border border-error/25 bg-error/5 p-4">
+                  <h3 className="text-sm font-semibold">Sign in again to delete</h3>
+                  <p className="mt-1 text-sm leading-6 text-base-content/60">
+                    This verification is valid only for this deletion.
+                  </p>
+                  {!reauthConfiguration ? (
+                    <p className="mt-4 text-sm text-base-content/50" role="status">
+                      Loading sign-in options…
+                    </p>
+                  ) : reauthOtpSent ? (
+                    <form className="mt-4 space-y-3" onSubmit={verifyReauthCode}>
+                      <label className="block text-sm font-medium" htmlFor="account-deletion-otp">
+                        Six-digit code
+                      </label>
+                      <input
+                        id="account-deletion-otp"
+                        className="input input-bordered w-full font-mono tracking-[0.25em]"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        maxLength={6}
+                        required
+                        value={reauthOtp}
+                        onChange={event => setReauthOtp(event.target.value.replace(/\D/g, ""))}
+                      />
+                      <button
+                        className="btn btn-error min-h-11 w-full"
+                        disabled={reauthenticating || submitting || reauthOtp.length !== 6}
+                      >
+                        {submitting ? "Deleting…" : "Verify code and delete"}
+                      </button>
+                    </form>
+                  ) : (
+                    <>
+                      <form className="mt-4 space-y-3" onSubmit={sendReauthCode}>
+                        <label className="block text-sm font-medium" htmlFor="account-deletion-email">
+                          Account email
+                        </label>
+                        <input
+                          id="account-deletion-email"
+                          className="input input-bordered w-full"
+                          type="email"
+                          autoComplete="email"
+                          required
+                          value={reauthEmail}
+                          onChange={event => setReauthEmail(event.target.value)}
+                        />
+                        <button
+                          className="btn btn-error min-h-11 w-full"
+                          disabled={reauthenticating || !reauthConfiguration.methods.emailOtp}
+                        >
+                          Email a code
+                        </button>
+                      </form>
+                      {reauthConfiguration.methods.passkey ? (
+                        <button
+                          type="button"
+                          className="btn rateloop-secondary-action mt-3 min-h-11 w-full"
+                          disabled={reauthenticating}
+                          onClick={() => void verifyWithPasskey()}
+                        >
+                          Verify with a passkey
+                        </button>
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              ) : null}
             </div>
           ) : null}
 

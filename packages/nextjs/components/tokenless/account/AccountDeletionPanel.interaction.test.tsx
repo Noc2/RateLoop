@@ -1,5 +1,6 @@
 import React from "react";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { installTestDom } from "~~/components/tokenless/testing/dom";
 
@@ -45,4 +46,15 @@ test("account deletion starts from a visible action and loads its review on dema
     globalThis.fetch = previousFetch;
     restoreDom();
   }
+});
+
+test("account deletion requires fresh OTP or passkey proof kept only in memory", () => {
+  const source = readFileSync(new URL("./AccountDeletionPanel.tsx", import.meta.url), "utf8");
+  assert.match(source, /Verify and delete/);
+  assert.match(source, /betterAuthClient\.emailOtp\.sendVerificationOtp/);
+  assert.match(source, /betterAuthClient\.signIn\.passkey/);
+  assert.match(source, /issueAccountDeletionProof\(\)/);
+  assert.match(source, /JSON\.stringify\(\{ confirmation: "DELETE", recentAuthProof \}\)/);
+  assert.match(source, /betterAuthClient\.signOut/);
+  assert.doesNotMatch(source, /localStorage|sessionStorage/);
 });

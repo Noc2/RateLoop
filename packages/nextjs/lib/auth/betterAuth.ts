@@ -14,6 +14,7 @@ import {
   provisionEnterpriseSsoUser,
   ssoProviderLimitForUser,
 } from "~~/lib/auth/enterpriseIdentityPolicy";
+import { passkeySafetyPlugin } from "~~/lib/auth/passkeys";
 import { getAuthOrigin } from "~~/lib/auth/session";
 import { db } from "~~/lib/db";
 import { account, passkey, scimProvider, session, ssoProvider, user, verification } from "~~/lib/db/schema";
@@ -169,6 +170,7 @@ function createRateLoopAuth() {
         rpID: configuration.rpID,
         rpName: "RateLoop",
       }),
+      passkeySafetyPlugin(),
       ...enterpriseIdentityPlugins(),
     ],
   });

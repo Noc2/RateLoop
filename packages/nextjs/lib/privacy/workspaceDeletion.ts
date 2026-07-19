@@ -13,6 +13,14 @@ const TERMINAL_SUBSCRIPTION_STATUSES = new Set(["free", "canceled", "incomplete_
 
 type Row = Record<string, unknown>;
 
+type PrivateQuoteErasureEvidence = {
+  deletedUnreferenced: number;
+  erasedReferencedContent: number;
+  ownerTombstone: string;
+  remainingWorkspaceOwnerLinks: number;
+  retainedReferencedCommitmentOnly: number;
+};
+
 export type WorkspaceDeletionBlocker = { code: string; message: string };
 
 export type WorkspaceDeletionPreview = {
@@ -24,6 +32,7 @@ export type WorkspaceDeletionPreview = {
     agents: number;
     activeWork: number;
     privateObjects: number;
+    retainedPrivateQuotes: number;
     publicRecords: number;
     legalHolds: number;
     settledAtomic: string;
@@ -109,6 +118,20 @@ async function loadPreviewRow(
         WHERE workspace_id = $1 AND status = 'active') AS active_artifacts,
        (SELECT COUNT(*)::integer FROM tokenless_public_question_media
         WHERE workspace_id = $1 AND technical_status = 'ready') AS active_media,
+       (SELECT COUNT(*)::integer FROM tokenless_agent_quotes quote
+        WHERE quote.owner_workspace_id = $1
+          AND quote.quote_id NOT IN (
+            SELECT quote_id FROM tokenless_agent_asks
+            UNION
+            SELECT quote_id FROM tokenless_paid_assignment_operations WHERE quote_id IS NOT NULL
+          )) AS unreferenced_private_quotes,
+       (SELECT COUNT(*)::integer FROM tokenless_agent_quotes quote
+        WHERE quote.owner_workspace_id = $1
+          AND quote.quote_id IN (
+            SELECT quote_id FROM tokenless_agent_asks
+            UNION
+            SELECT quote_id FROM tokenless_paid_assignment_operations WHERE quote_id IS NOT NULL
+          )) AS retained_private_quotes,
        (SELECT COUNT(*)::integer FROM tokenless_chain_executions executions
         JOIN tokenless_ask_ownership ownership ON ownership.operation_key = executions.operation_key
         WHERE ownership.workspace_id = $1
@@ -149,7 +172,10 @@ function previewFromRow(row: Row): WorkspaceDeletionPreview {
     integer(row, "active_policy_reservations") +
     integer(row, "active_usage_reservations") +
     integer(row, "unsettled_ledger_entries");
-  const privateObjects = integer(row, "active_artifacts") + integer(row, "active_media");
+  const pendingPrivateObjects = integer(row, "active_artifacts") + integer(row, "active_media");
+  const unreferencedPrivateQuotes = integer(row, "unreferenced_private_quotes");
+  const retainedPrivateQuotes = integer(row, "retained_private_quotes");
+  const privateObjects = pendingPrivateObjects + unreferencedPrivateQuotes;
   const publicRecords = integer(row, "public_records");
   const legalHolds = integer(row, "active_legal_holds");
   const blockers: WorkspaceDeletionBlocker[] = [];
@@ -191,19 +217,23 @@ function previewFromRow(row: Row): WorkspaceDeletionPreview {
   if (otherMembers > 0)
     warnings.push(`${otherMembers} other workspace member${otherMembers === 1 ? "" : "s"} will lose access.`);
   if (agents > 0) warnings.push(`${agents} connected agent${agents === 1 ? "" : "s"} will be disconnected.`);
-  if (privateObjects > 0) warnings.push("Private stored objects will be deleted asynchronously.");
+  if (pendingPrivateObjects > 0) warnings.push("Private stored files will be deleted asynchronously.");
+  if (unreferencedPrivateQuotes > 0) warnings.push("Unreferenced private quote records will be deleted.");
+  if (retainedPrivateQuotes > 0)
+    warnings.push("Referenced private quotes will be anonymized and retained as restricted settlement evidence.");
   if (publicRecords > 0) warnings.push("Public-chain settlement records cannot be erased by RateLoop.");
   if (legalHolds > 0) warnings.push("Records covered by an active legal hold remain restricted until the hold ends.");
 
   return {
     workspace: { workspaceId, name },
-    immediate: blockers.length === 0 && privateObjects === 0,
+    immediate: blockers.length === 0 && pendingPrivateObjects === 0,
     blockers,
     impact: {
       otherMembers,
       agents,
       activeWork: activeAssignments + openAsks,
       privateObjects,
+      retainedPrivateQuotes,
       publicRecords,
       legalHolds,
       settledAtomic,
@@ -260,6 +290,68 @@ async function insertCategory(
   );
 }
 
+async function eraseWorkspacePrivateQuoteOwnership(
+  client: PoolClient,
+  workspaceId: string,
+  jobId: string,
+): Promise<PrivateQuoteErasureEvidence> {
+  const ownerTombstone = `deleted-workspace-quote:${evidenceDigest(jobId, "quote_owner", "anonymized")}`;
+  const deleted = await client.query(
+    `DELETE FROM tokenless_agent_quotes
+     WHERE owner_workspace_id = $1
+       AND quote_id NOT IN (
+         SELECT quote_id FROM tokenless_agent_asks
+         UNION
+         SELECT quote_id FROM tokenless_paid_assignment_operations WHERE quote_id IS NOT NULL
+       )`,
+    [workspaceId],
+  );
+  const erasedReferencedContent = await client.query(
+    `UPDATE tokenless_content_records
+     SET content_json=jsonb_build_object(
+           'schemaVersion','rateloop.erased-private-content.v1',
+           'contentCommitment',content_hash
+         )::text,
+         updated_at=CURRENT_TIMESTAMP
+     WHERE content_id IN (
+       SELECT qr.content_id
+       FROM tokenless_agent_quotes q
+       JOIN tokenless_agent_asks a ON a.quote_id=q.quote_id
+       JOIN tokenless_ask_ownership ao ON ao.operation_key=a.operation_key
+       JOIN tokenless_question_records qr ON qr.question_id=ao.question_id
+       WHERE q.owner_workspace_id=$1
+     )`,
+    [workspaceId],
+  );
+  const retained = await client.query(
+    `UPDATE tokenless_agent_quotes
+     SET owner_principal_id = $2, owner_workspace_id = NULL, owner_api_key_id = NULL,
+         request_json=jsonb_build_object(
+           'schemaVersion','rateloop.erased-private-quote.v1',
+           'visibility','private',
+           'requestCommitment',request_hash
+         )::text
+     WHERE owner_workspace_id = $1
+       AND quote_id IN (
+         SELECT quote_id FROM tokenless_agent_asks
+         UNION
+         SELECT quote_id FROM tokenless_paid_assignment_operations WHERE quote_id IS NOT NULL
+       )`,
+    [workspaceId, ownerTombstone],
+  );
+  const remaining = await client.query(
+    `SELECT COUNT(*) AS count FROM tokenless_agent_quotes WHERE owner_workspace_id = $1`,
+    [workspaceId],
+  );
+  return {
+    deletedUnreferenced: deleted.rowCount ?? 0,
+    erasedReferencedContent: erasedReferencedContent.rowCount ?? 0,
+    ownerTombstone,
+    remainingWorkspaceOwnerLinks: integer(remaining.rows[0] as Row | undefined, "count"),
+    retainedReferencedCommitmentOnly: retained.rowCount ?? 0,
+  };
+}
+
 export async function requestWorkspaceDeletion(input: {
   accountAddress: string;
   confirmationName: string;
@@ -276,9 +368,12 @@ export async function requestWorkspaceDeletion(input: {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
-    const preview = previewFromRow(
-      await loadPreviewRow(client, { accountAddress: requester, workspaceId: input.workspaceId, lock: true }),
-    );
+    const previewRow = await loadPreviewRow(client, {
+      accountAddress: requester,
+      workspaceId: input.workspaceId,
+      lock: true,
+    });
+    const preview = previewFromRow(previewRow);
     if (input.confirmationName !== preview.workspace.name) {
       throw new TokenlessServiceError(
         "Workspace name confirmation does not match.",
@@ -293,8 +388,12 @@ export async function requestWorkspaceDeletion(input: {
 
     const requestId = `dsr_${randomUUID().replaceAll("-", "")}`;
     const jobId = `del_${randomUUID().replaceAll("-", "")}`;
-    const hasPendingObjects = preview.impact.privateObjects > 0;
+    const hasPendingObjects = integer(previewRow, "active_artifacts") + integer(previewRow, "active_media") > 0;
     const receiptDigest = hasPendingObjects ? null : evidenceDigest(jobId, "receipt", "completed");
+    const privateQuoteErasure = await eraseWorkspacePrivateQuoteOwnership(client, input.workspaceId, jobId);
+    if (privateQuoteErasure.remainingWorkspaceOwnerLinks !== 0) {
+      throw new Error("Workspace deletion postcondition failed: privateQuoteOwnerLinks.");
+    }
 
     await client.query(
       `INSERT INTO tokenless_subject_requests
@@ -306,7 +405,17 @@ export async function requestWorkspaceDeletion(input: {
         requester,
         input.workspaceId,
         hasPendingObjects ? "in_progress" : "completed",
-        JSON.stringify({ workspaceDeletion: true, workspaceId: input.workspaceId }),
+        JSON.stringify({
+          privateQuotes: {
+            deletedUnreferenced: privateQuoteErasure.deletedUnreferenced,
+            erasedReferencedContent: privateQuoteErasure.erasedReferencedContent,
+            ownerTombstone:
+              privateQuoteErasure.retainedReferencedCommitmentOnly > 0 ? privateQuoteErasure.ownerTombstone : null,
+            retainedReferencedCommitmentOnly: privateQuoteErasure.retainedReferencedCommitmentOnly,
+          },
+          workspaceDeletion: true,
+          workspaceId: input.workspaceId,
+        }),
         input.identityAssurance,
         now,
         dueAt,
@@ -517,6 +626,22 @@ export async function requestWorkspaceDeletion(input: {
       pending: hasPendingObjects,
     });
     await insertCategory(client, {
+      category: "private_quote_plaintext_payloads",
+      disposition: "erase",
+      jobId,
+      now,
+      outcome: `deleted_unreferenced:${privateQuoteErasure.deletedUnreferenced}:erased_referenced_content:${privateQuoteErasure.erasedReferencedContent}`,
+    });
+    await insertCategory(client, {
+      basisCode: "settlement_and_audit",
+      category: "referenced_private_quote_commitments",
+      disposition: "retain",
+      jobId,
+      now,
+      outcome: `retained_commitment_only:${privateQuoteErasure.retainedReferencedCommitmentOnly}`,
+      retentionDeadline: new Date(now.getTime() + AUDIT_RETENTION_MS),
+    });
+    await insertCategory(client, {
       basisCode: "statutory_record",
       category: "billing_records",
       disposition: "retain",
@@ -531,7 +656,7 @@ export async function requestWorkspaceDeletion(input: {
       disposition: "retain",
       jobId,
       now,
-      outcome: "retained_restricted",
+      outcome: `retained_restricted:private_quote_commitments:${privateQuoteErasure.retainedReferencedCommitmentOnly}`,
       retentionDeadline: new Date(now.getTime() + AUDIT_RETENTION_MS),
     });
     if (preview.impact.publicRecords > 0) {
@@ -571,15 +696,25 @@ export async function requestWorkspaceDeletion(input: {
         [
           `dsrc_${randomUUID().replaceAll("-", "")}`,
           requestId,
-          JSON.stringify(["workspace_access", "private_objects"]),
+          JSON.stringify(["workspace_access", "private_objects", "private_quote_plaintext_payloads"]),
           JSON.stringify(["workspace_identity"]),
           JSON.stringify([
             { basis: "statutory_record", category: "billing_records" },
             { basis: "settlement_and_audit", category: "settlement_audit" },
+            { basis: "settlement_and_audit", category: "referenced_private_quote_commitments" },
             ...(preview.impact.legalHolds > 0 ? [{ basis: "active_legal_hold", category: "legal_hold_records" }] : []),
           ]),
           JSON.stringify(preview.impact.publicRecords > 0 ? ["public_chain_records"] : []),
-          JSON.stringify({ receiptDigest }),
+          JSON.stringify({
+            privateQuotes: {
+              deletedUnreferenced: privateQuoteErasure.deletedUnreferenced,
+              ownerTombstone:
+                privateQuoteErasure.retainedReferencedCommitmentOnly > 0 ? privateQuoteErasure.ownerTombstone : null,
+              erasedReferencedContent: privateQuoteErasure.erasedReferencedContent,
+              retainedReferencedCommitmentOnly: privateQuoteErasure.retainedReferencedCommitmentOnly,
+            },
+            receiptDigest,
+          }),
           now,
         ],
       );

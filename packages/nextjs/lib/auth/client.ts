@@ -76,6 +76,14 @@ export async function exchangeBetterAuthSession() {
   return session;
 }
 
+export async function issueAccountDeletionProof() {
+  return jsonRequest<{ expiresAt: string; proof: string }>("/api/account/deletion/recent-auth", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+}
+
 export async function logoutBrowserSession() {
   await jsonRequest<{ ok: true }>("/api/auth/logout", {
     method: "POST",

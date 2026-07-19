@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import type { PoolClient } from "pg";
 import "server-only";
 import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
@@ -285,7 +286,7 @@ export async function appendAuditEvent(input: AuditEventInput) {
  * workspace exists. Separate tables preserve the workspace foreign-key and
  * tenant-export boundary instead of inventing a synthetic workspace.
  */
-export async function appendSecurityAuditEvent(input: SecurityAuditEventInput) {
+export async function appendSecurityAuditEvent(input: SecurityAuditEventInput, transactionClient?: PoolClient) {
   const occurredAt = input.occurredAt ?? new Date();
   const eventId = `saudit_${randomUUID().replaceAll("-", "")}`;
   const scope = securityScope(input);
@@ -307,9 +308,10 @@ export async function appendSecurityAuditEvent(input: SecurityAuditEventInput) {
     targetKind: required(input.targetKind, "Audit target kind", 120),
   } as const;
   const metadataJson = auditMetadataJson(normalized.metadata);
-  const client = await dbPool.connect();
+  const client = transactionClient ?? (await dbPool.connect());
+  const ownsTransaction = transactionClient === undefined;
   try {
-    await client.query("BEGIN");
+    if (ownsTransaction) await client.query("BEGIN");
     await client.query(
       `INSERT INTO tokenless_security_audit_heads
        (scope_kind, scope_id, last_sequence, last_digest, updated_at)
@@ -358,13 +360,13 @@ export async function appendSecurityAuditEvent(input: SecurityAuditEventInput) {
        WHERE scope_kind = $4 AND scope_id = $5`,
       [sequence, eventDigest, occurredAt, normalized.scopeKind, normalized.scopeId],
     );
-    await client.query("COMMIT");
+    if (ownsTransaction) await client.query("COMMIT");
     return { eventDigest, eventId, previousDigest, sequence };
   } catch (error) {
-    await client.query("ROLLBACK");
+    if (ownsTransaction) await client.query("ROLLBACK");
     throw error;
   } finally {
-    client.release();
+    if (ownsTransaction) client.release();
   }
 }
 

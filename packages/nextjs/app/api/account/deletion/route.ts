@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getBetterAuth } from "~~/lib/auth/betterAuth";
 import { BETTER_AUTH_SESSION_COOKIE_NAMES } from "~~/lib/auth/betterAuthCookies";
 import { requireBrowserSession } from "~~/lib/auth/request";
 import { AUTH_SESSION_COOKIE } from "~~/lib/auth/session";
@@ -24,14 +23,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await requireBrowserSession(request, { mutation: true });
-    const betterSession = await getBetterAuth().api.getSession({ headers: request.headers });
-    if (!betterSession?.user?.id) {
-      throw new TokenlessServiceError(
-        "Sign in again before deleting this account.",
-        401,
-        "recent_authentication_required",
-      );
-    }
     let body: unknown;
     try {
       body = await request.json();
@@ -41,10 +32,14 @@ export async function POST(request: NextRequest) {
     if (!body || typeof body !== "object" || Array.isArray(body)) {
       throw new TokenlessServiceError("Account deletion body must be an object.", 400, "invalid_account_deletion");
     }
+    const confirmation = String((body as Record<string, unknown>).confirmation ?? "");
+    if (confirmation !== "DELETE") {
+      throw new TokenlessServiceError("Type DELETE to confirm account deletion.", 400, "account_deletion_unconfirmed");
+    }
     const result = await deleteAccount({
-      betterAuthUserId: betterSession.user.id,
-      confirmation: String((body as Record<string, unknown>).confirmation ?? ""),
+      confirmation,
       principalId: session.principalId,
+      recentAuthProof: (body as Record<string, unknown>).recentAuthProof,
     });
     const response = NextResponse.json(result, { headers: NO_STORE });
     response.cookies.delete(AUTH_SESSION_COOKIE);

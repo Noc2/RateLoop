@@ -5,7 +5,9 @@ import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { BETTER_AUTH_SESSION_COOKIE_NAMES } from "~~/lib/auth/betterAuthCookies";
 import { resolveBetterAuthPrincipal } from "~~/lib/auth/principal";
+import { issueAccountDeletionProof } from "~~/lib/auth/recentAccountActionProof";
 import { createAuthSession, findAuthSession } from "~~/lib/auth/session";
+import { revokeWalletBinding } from "~~/lib/auth/walletBindings";
 import { __setDatabaseResourcesForTests, dbClient, dbPool } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { deleteAccount, getAccountDeletionPreview } from "~~/lib/privacy/accountDeletion";
@@ -39,6 +41,18 @@ async function seedBetterAuthUser(id: string, email = "delete@example.test") {
           VALUES (?, 'Delete me', ?, true, ?, ?)`,
     args: [id, email, now, now],
   });
+}
+
+async function deletionProof(betterAuthUserId: string, principalId: string, now: Date) {
+  return (
+    await issueAccountDeletionProof({
+      authenticatedAt: now,
+      authenticationMethod: "passkey",
+      betterAuthUserId,
+      now,
+      principalId,
+    })
+  ).proof;
 }
 
 test("account deletion revokes authentication, removes shared access, and permits a genuinely fresh signup", async () => {
@@ -77,9 +91,9 @@ test("account deletion revokes authentication, removes shared access, and permit
   assert.deepEqual(preview.blockers, []);
 
   const deleted = await deleteAccount({
-    betterAuthUserId: "better-old",
     confirmation: "DELETE",
     principalId: oldIdentity.principalId,
+    recentAuthProof: await deletionProof("better-old", oldIdentity.principalId, now),
     now,
   });
   assert.match(deleted.receiptDigest, /^[0-9a-f]{64}$/);
@@ -115,7 +129,7 @@ test("account deletion revokes authentication, removes shared access, and permit
     browser_identities: 0,
     memberships: 0,
     wallet_bindings: 0,
-    categories: 8,
+    categories: 10,
   });
 
   await assert.rejects(
@@ -131,6 +145,83 @@ test("account deletion revokes authentication, removes shared access, and permit
   const freshIdentity = await resolveBetterAuthPrincipal({ betterAuthUserId: "better-new" });
   assert.notEqual(freshIdentity.principalId, oldIdentity.principalId);
   assert.equal((await getAccountDeletionPreview(freshIdentity.principalId)).impact.ownedWorkspaces, 0);
+});
+
+test("account deletion deletes unused private quotes and anonymizes retained quote ownership", async () => {
+  const now = new Date("2026-07-16T08:30:00.000Z");
+  await seedBetterAuthUser("better-private-quotes", "private-quotes@example.test");
+  const identity = await resolveBetterAuthPrincipal({ betterAuthUserId: "better-private-quotes" });
+  for (const [quoteId, prompt] of [
+    ["quote_account_unused", "Unused account-private prompt"],
+    ["quote_account_retained", "Retained account-private prompt"],
+  ] as const) {
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_agent_quotes
+            (quote_id, request_hash, request_json, response_json, owner_principal_id, expires_at, created_at)
+            VALUES (?, ?, ?, '{}', ?, ?, ?)`,
+      args: [
+        quoteId,
+        `hash-${quoteId}`,
+        JSON.stringify({ question: { prompt }, visibility: "private" }),
+        identity.principalId,
+        new Date(now.getTime() + 60_000),
+        now,
+      ],
+    });
+  }
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_asks
+          (operation_key, idempotency_key, request_hash, quote_id, request_json, economics_json,
+           status, created_at, updated_at)
+          VALUES ('operation_account_retained', 'account-retained', 'request-hash',
+                  'quote_account_retained', '{}', '{}', 'completed', ?, ?)`,
+    args: [now, now],
+  });
+  assert.match(
+    (await getAccountDeletionPreview(identity.principalId)).impact.retainedRecords.join(" "),
+    /owner link anonymized/iu,
+  );
+
+  const deleted = await deleteAccount({
+    confirmation: "DELETE",
+    principalId: identity.principalId,
+    recentAuthProof: await deletionProof("better-private-quotes", identity.principalId, now),
+    now,
+  });
+  const quotes = await dbClient.execute({
+    sql: `SELECT quote_id, request_json, owner_principal_id, owner_workspace_id, owner_api_key_id
+          FROM tokenless_agent_quotes
+          WHERE quote_id IN ('quote_account_unused', 'quote_account_retained')
+          ORDER BY quote_id`,
+  });
+  assert.equal(quotes.rowCount, 1);
+  assert.equal(quotes.rows[0]?.quote_id, "quote_account_retained");
+  assert.doesNotMatch(String(quotes.rows[0]?.request_json), /Retained account-private prompt/u);
+  assert.match(String(quotes.rows[0]?.request_json), /rateloop\.erased-private-quote\.v1/u);
+  assert.match(String(quotes.rows[0]?.owner_principal_id), /^deleted-quote:[0-9a-f]{64}$/u);
+  assert.equal(quotes.rows[0]?.owner_workspace_id, null);
+  assert.equal(quotes.rows[0]?.owner_api_key_id, null);
+
+  const completion = await dbClient.execute({
+    sql: `SELECT evidence_json FROM tokenless_subject_request_completions WHERE request_id = ?`,
+    args: [deleted.requestId],
+  });
+  const evidence = JSON.parse(String(completion.rows[0]?.evidence_json)) as {
+    categoryEvidence: Record<string, Record<string, unknown>>;
+  };
+  assert.deepEqual(evidence.categoryEvidence.private_quote_plaintext_payloads, {
+    deletedUnreferenced: 1,
+    erasedReferencedContent: 0,
+  });
+  assert.deepEqual(evidence.categoryEvidence.referenced_private_quote_commitments, {
+    ownerTombstone: quotes.rows[0]?.owner_principal_id,
+    retainedReferencedCommitmentOnly: 1,
+  });
+  assert.equal(evidence.categoryEvidence.settlement_legal_security?.retainedPrivateQuoteCommitments, 1);
+  assert.equal(
+    evidence.categoryEvidence.settlement_legal_security?.privateQuoteOwnerTombstone,
+    quotes.rows[0]?.owner_principal_id,
+  );
 });
 
 test("account deletion receipts the rater identity, erases World ID state, and permits fresh enrollment", async () => {
@@ -234,9 +325,9 @@ test("account deletion receipts the rater identity, erases World ID state, and p
   });
 
   const deleted = await deleteAccount({
-    betterAuthUserId: "better-rater",
     confirmation: "DELETE",
     principalId: oldIdentity.principalId,
+    recentAuthProof: await deletionProof("better-rater", oldIdentity.principalId, now),
     now,
   });
   const receiptAccount = `0x${createHash("sha256")
@@ -323,7 +414,9 @@ test("account deletion receipts the rater identity, erases World ID state, and p
       worldIdContextLimits: 1,
       worldIdRequests: 1,
     },
+    paidAssignmentSeatDirectIdentitiesErased: 0,
     profileFound: true,
+    remainingPaidAssignmentSeatDirectIdentities: 0,
     remainingRows: {
       assuranceAssertions: 0,
       payoutEligibility: 0,
@@ -335,7 +428,11 @@ test("account deletion receipts the rater identity, erases World ID state, and p
     tombstoneWritten: true,
   });
   assert.deepEqual(completionEvidence.categoryEvidence.settlement_legal_security, {
+    paidAssignmentSeatErasureReceiptHashes: [],
+    paidAssignmentSeatIdentityCommitmentsRetained: 0,
+    privateQuoteOwnerTombstone: null,
     raterTombstoneRetained: true,
+    retainedPrivateQuoteCommitments: 0,
     retainedPaidVouchers: 1,
     tombstoneReceiptHash: `sha256:${deleted.receiptDigest}`,
   });
@@ -414,11 +511,10 @@ test("account deletion receipts the rater identity, erases World ID state, and p
   assert.deepEqual(rebound.rows, [{ rater_id: freshRaterId }]);
 });
 
-test("account deletion blocks sole workspace owners and active managed wallets", async () => {
+test("account deletion blocks active managed wallets until they are disconnected", async () => {
   const now = new Date("2026-07-16T08:04:45.000Z");
   await seedBetterAuthUser("better-blocked", "blocked@example.test");
   const identity = await resolveBetterAuthPrincipal({ betterAuthUserId: "better-blocked" });
-  await createWorkspace({ name: "Owned", ownerAddress: identity.principalId });
   await dbClient.execute({
     sql: `INSERT INTO tokenless_wallet_bindings
           (binding_id, principal_id, purpose, wallet_address, wallet_source, chain_id,
@@ -430,24 +526,31 @@ test("account deletion blocks sole workspace owners and active managed wallets",
   const preview = await getAccountDeletionPreview(identity.principalId);
   assert.deepEqual(
     preview.blockers.map(blocker => blocker.code),
-    ["owned_workspaces_require_resolution", "managed_wallet_recovery_required"],
+    ["managed_wallet_recovery_required"],
   );
+  assert.equal(preview.impact.managedWallets, 1);
+  const recentAuthProof = await deletionProof("better-blocked", identity.principalId, now);
   await assert.rejects(
     () =>
       deleteAccount({
-        betterAuthUserId: "better-blocked",
         confirmation: "DELETE",
         principalId: identity.principalId,
+        recentAuthProof,
         now,
       }),
-    (error: unknown) => error instanceof TokenlessServiceError && error.code === "owned_workspaces_require_resolution",
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "managed_wallet_recovery_required",
   );
+  await revokeWalletBinding({ bindingId: "wb_managed", principalId: identity.principalId, now });
+  const disconnectedPreview = await getAccountDeletionPreview(identity.principalId);
+  assert.deepEqual(disconnectedPreview.blockers, []);
+  assert.equal(disconnectedPreview.impact.managedWallets, 0);
 });
 
 test("account deletion fails closed before receipting an incomplete erasure", async () => {
   const now = new Date("2026-07-16T10:00:00.000Z");
   await seedBetterAuthUser("better-incomplete", "incomplete@example.test");
   const identity = await resolveBetterAuthPrincipal({ betterAuthUserId: "better-incomplete" });
+  const recentAuthProof = await deletionProof("better-incomplete", identity.principalId, now);
   const originalConnect = databaseResources.pool.connect.bind(databaseResources.pool);
   databaseResources.pool.connect = (async () => {
     const client = await originalConnect();
@@ -465,9 +568,9 @@ test("account deletion fails closed before receipting an incomplete erasure", as
   await assert.rejects(
     () =>
       deleteAccount({
-        betterAuthUserId: "better-incomplete",
         confirmation: "DELETE",
         principalId: identity.principalId,
+        recentAuthProof,
         now,
       }),
     /Account deletion postcondition failed: browserIdentities/,
@@ -481,13 +584,52 @@ test("account deletion fails closed before receipting an incomplete erasure", as
   assert.equal(Number(Array.isArray(receiptCount) ? receiptCount[0] : receiptCount), 0);
 });
 
-test("the account deletion route requires the product session, same-origin mutation, and recent Better Auth", () => {
+test("account deletion rolls back proof consumption and its audit when the bound identity changed", async () => {
+  const now = new Date("2026-07-16T10:05:00.000Z");
+  await seedBetterAuthUser("better-proof-rollback", "proof-rollback@example.test");
+  const identity = await resolveBetterAuthPrincipal({ betterAuthUserId: "better-proof-rollback" });
+  const recentAuthProof = await deletionProof("better-proof-rollback", identity.principalId, now);
+  await dbClient.execute({
+    sql: `UPDATE tokenless_identity_bindings SET status = 'revoked', revoked_at = ?
+          WHERE principal_id = ? AND provider = 'better_auth'`,
+    args: [now, identity.principalId],
+  });
+
+  await assert.rejects(
+    () =>
+      deleteAccount({
+        confirmation: "DELETE",
+        principalId: identity.principalId,
+        recentAuthProof,
+        now,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "recent_authentication_required",
+  );
+  const proofState = await dbClient.execute({
+    sql: `SELECT consumed_at FROM tokenless_recent_account_action_proofs WHERE principal_id = ?`,
+    args: [identity.principalId],
+  });
+  assert.deepEqual(proofState.rows, [{ consumed_at: null }]);
+  const auditActions = await dbClient.execute({
+    sql: `SELECT action FROM tokenless_security_audit_events
+          WHERE scope_kind = 'identity' AND scope_id = ? ORDER BY sequence`,
+    args: [identity.principalId],
+  });
+  assert.equal(
+    auditActions.rows.some(row => row.action === "account.deletion_recent_auth_consumed"),
+    false,
+  );
+});
+
+test("the account deletion route requires the product session and a one-use recent-auth proof", () => {
   const source = readFileSync(join(process.cwd(), "app/api/account/deletion/route.ts"), "utf8");
   assert.match(source, /requireBrowserSession\(request\)/);
   assert.match(source, /requireBrowserSession\(request, \{ mutation: true \}\)/);
-  assert.match(source, /getBetterAuth\(\)\.api\.getSession\(\{ headers: request\.headers \}\)/);
-  assert.match(source, /recent_authentication_required/);
-  assert.match(source, /betterAuthUserId: betterSession\.user\.id/);
+  assert.match(source, /recentAuthProof/);
+  assert.doesNotMatch(source, /consumeAccountDeletionProof/);
+  const service = readFileSync(join(process.cwd(), "lib/privacy/accountDeletion.ts"), "utf8");
+  assert.match(service, /lockAccountDeletionProof[\s\S]+client/);
+  assert.match(service, /consumeLockedAccountDeletionProof[\s\S]+client/);
   assert.match(source, /response\.cookies\.delete\(AUTH_SESSION_COOKIE\)/);
   assert.match(source, /BETTER_AUTH_SESSION_COOKIE_NAMES/);
   assert.deepEqual(BETTER_AUTH_SESSION_COOKIE_NAMES, [

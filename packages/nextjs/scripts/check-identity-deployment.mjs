@@ -1,4 +1,3 @@
-import { createPrivateKey } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -43,34 +42,9 @@ function validateThirdwebWalletIssuer(env, errors) {
     return;
   }
   if (enabled === "false") return;
-  for (const name of ["NEXT_PUBLIC_THIRDWEB_CLIENT_ID", "TOKENLESS_THIRDWEB_WALLET_AUDIENCE", "TOKENLESS_THIRDWEB_WALLET_KEY_ID"]) {
-    if (!has(env[name])) errors.push(`${name} is required when optional thirdweb wallet creation is enabled.`);
-  }
-  const localKey = has(env.TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK);
-  const managedKey = has(env.TOKENLESS_THIRDWEB_WALLET_KMS_KEY_RESOURCE);
-  if (localKey && managedKey) errors.push("Configure exactly one thirdweb wallet signing key source.");
-  if (env.VERCEL_GIT_COMMIT_REF === "main") {
-    if (localKey) errors.push("TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK is forbidden on main; use managed KMS signing.");
-    for (const name of [
-      "TOKENLESS_THIRDWEB_WALLET_KMS_KEY_RESOURCE",
-      "TOKENLESS_THIRDWEB_WALLET_KMS_REGION",
-      "TOKENLESS_THIRDWEB_WALLET_KMS_ROLE_ARN",
-    ]) {
-      if (!has(env[name])) errors.push(`${name} is required when optional thirdweb wallet creation is enabled.`);
-    }
-  } else if (!localKey && !managedKey) {
-    errors.push("A thirdweb wallet signing key source is required when optional wallet creation is enabled.");
-  }
-  if (!localKey) return;
-  try {
-    const jwk = JSON.parse(env.TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK);
-    const key = createPrivateKey({ key: jwk, format: "jwk" });
-    if (key.asymmetricKeyType !== "ed25519" || jwk.kty !== "OKP" || jwk.crv !== "Ed25519" || !jwk.d || !jwk.x) {
-      throw new Error("invalid key");
-    }
-  } catch {
-    errors.push("TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK must be a private Ed25519 JWK.");
-  }
+  errors.push(
+    "TOKENLESS_THIRDWEB_WALLET_ENABLED must remain false for hosted releases until externally verifiable wallet export and recovery are implemented.",
+  );
 }
 
 export function validateIdentityDeployment({ env, projectLinks = [], hosted = false }) {
@@ -90,6 +64,9 @@ export function validateIdentityDeployment({ env, projectLinks = [], hosted = fa
   }
   if (originHost === "rateloop.ai" || originHost === "www.rateloop.ai") {
     errors.push("Tokenless authentication must never target rateloop.ai.");
+  }
+  if (!has(env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID)) {
+    errors.push("NEXT_PUBLIC_THIRDWEB_CLIENT_ID is required for self-custodial funding and payout wallet connections.");
   }
   validateOptionalProviderPair(
     env,

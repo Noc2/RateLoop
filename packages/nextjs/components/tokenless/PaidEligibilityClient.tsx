@@ -328,7 +328,7 @@ export function PaidEligibilityClient() {
                 : "Verify identity, age, and residence with the configured provider. Tax details and sanctions consent are collected only after that handoff succeeds."}
             </p>
             {state && !accountAddress ? (
-              <Link href="/settings/wallets" className="rateloop-gradient-action mt-5 inline-flex px-6">
+              <Link href="/settings/wallets?use=payout" className="rateloop-gradient-action mt-5 inline-flex px-6">
                 Add payout wallet
               </Link>
             ) : (

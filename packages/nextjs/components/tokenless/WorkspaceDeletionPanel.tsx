@@ -11,6 +11,7 @@ type WorkspaceDeletionPreview = {
     agents: number;
     activeWork: number;
     privateObjects: number;
+    retainedPrivateQuotes: number;
     publicRecords: number;
     legalHolds: number;
     settledAtomic: string;
@@ -74,6 +75,13 @@ function impactRows(preview: WorkspaceDeletionPreview) {
     impact.activeWork ? countLabel(impact.activeWork, "active task must finish", "active tasks must finish") : null,
     impact.privateObjects
       ? countLabel(impact.privateObjects, "private object will be deleted", "private objects will be deleted")
+      : null,
+    impact.retainedPrivateQuotes
+      ? countLabel(
+          impact.retainedPrivateQuotes,
+          "referenced private quote will remain restricted",
+          "referenced private quotes will remain restricted",
+        )
       : null,
     impact.publicRecords
       ? countLabel(impact.publicRecords, "public record will remain", "public records will remain")

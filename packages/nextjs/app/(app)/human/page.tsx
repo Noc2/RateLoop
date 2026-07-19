@@ -3,6 +3,7 @@ import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { HumanAssuranceRaterClient } from "~~/components/tokenless/HumanAssuranceRaterClient";
 import { AccountDeletionPanel } from "~~/components/tokenless/account/AccountDeletionPanel";
 import { NotificationSettingsPanel } from "~~/components/tokenless/account/NotificationSettingsPanel";
+import { PasskeyManagementPanel } from "~~/components/tokenless/account/PasskeyManagementPanel";
 import { AnswerPageClient } from "~~/components/tokenless/answer/AnswerPageClient";
 import { HumanAccountSignInPrompt } from "~~/components/tokenless/human/HumanAccountSignInPrompt";
 import { HumanProfileContent } from "~~/components/tokenless/human/HumanProfileContent";
@@ -71,6 +72,7 @@ export default async function HumanPage({
         <HumanProfileContent worldIdEnabled={isWorldIdAssuranceEnabled()} />
       ) : (
         <>
+          <PasskeyManagementPanel />
           <NotificationSettingsPanel />
           <AccountDeletionPanel />
         </>

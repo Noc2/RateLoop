@@ -37,6 +37,12 @@ function configuredJwk(): JsonWebKey {
 
 export function getThirdwebWalletJwtConfiguration(): WalletJwtConfiguration {
   if (configurationOverride) return { ...configurationOverride, kind: "local-test" };
+  if (process.env.NODE_ENV === "production") {
+    throw new AuthError(
+      "Managed thirdweb wallet creation is disabled until verified wallet export and recovery are available.",
+      503,
+    );
+  }
   if (process.env.TOKENLESS_THIRDWEB_WALLET_ENABLED !== "true") {
     throw new AuthError("Optional thirdweb wallet creation is disabled.", 503);
   }
