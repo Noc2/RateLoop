@@ -46,5 +46,5 @@ test("privacy copy separates account identity, thirdweb processing, and public-c
   assert.match(privacy, /self-hosted Better Auth service/);
   assert.match(privacy, /do not create or require a wallet/);
   assert.match(privacy, /five-minute, audience-bound JWT/);
-  assert.match(privacy, /Reusing a funding or payout address can link paid\s+activity/);
+  assert.match(privacy, /Reusing\s+a\s+funding\s+or\s+payout\s+address\s+can\s+link\s+paid\s+activity/);
 });
