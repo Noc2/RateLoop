@@ -162,13 +162,14 @@ export function AnswerPageClient({
             ))
           : null}
         {!loading && !signedOut && principalId && scope !== "private"
-          ? tasks.map(task => (
+          ? tasks.map((task, index) => (
               <PublicQuestionCard
                 key={task.roundId}
                 task={task}
                 paidAccess={paidAccess}
                 principalId={principalId}
                 onSubmitted={() => void load()}
+                shortcutsEnabled={index === 0}
               />
             ))
           : null}

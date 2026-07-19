@@ -4,13 +4,12 @@ import { type ReactNode, type RefObject, useEffect } from "react";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 
-function isTypingTarget(target: EventTarget | null) {
-  return (
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLTextAreaElement ||
-    target instanceof HTMLSelectElement ||
-    target instanceof HTMLButtonElement ||
-    (target instanceof HTMLElement && target.isContentEditable)
+function isInteractiveTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  return Boolean(
+    target.closest(
+      'a, button, input, textarea, select, [contenteditable="true"], [role="button"], [role="link"], [role="checkbox"], [role="radio"], [role="menuitem"], [role="option"], [role="switch"], [role="tab"]',
+    ),
   );
 }
 
@@ -25,6 +24,7 @@ export function ReviewerShell({
   onSelectFirst,
   onSelectSecond,
   rationaleRef,
+  shortcutsEnabled = true,
   totalCases,
 }: {
   advanceDisabled: boolean;
@@ -37,11 +37,14 @@ export function ReviewerShell({
   onSelectFirst: () => void;
   onSelectSecond: () => void;
   rationaleRef?: RefObject<HTMLTextAreaElement | null>;
+  shortcutsEnabled?: boolean;
   totalCases: number;
 }) {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.metaKey || event.ctrlKey || event.altKey || isTypingTarget(event.target)) return;
+      if (!shortcutsEnabled || event.metaKey || event.ctrlKey || event.altKey || isInteractiveTarget(event.target)) {
+        return;
+      }
       if (event.key === "1") onSelectFirst();
       else if (event.key === "2") onSelectSecond();
       else if (event.key.toLowerCase() === "r" && rationaleRef?.current) rationaleRef.current.focus();
@@ -51,7 +54,7 @@ export function ReviewerShell({
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [advanceDisabled, onAdvance, onSelectFirst, onSelectSecond, rationaleRef]);
+  }, [advanceDisabled, onAdvance, onSelectFirst, onSelectSecond, rationaleRef, shortcutsEnabled]);
 
   return (
     <section className="space-y-4" aria-label="Reviewer workspace">
@@ -83,9 +86,11 @@ export function ReviewerShell({
         <Button type="button" className="w-full px-6" disabled={advanceDisabled} onClick={onAdvance}>
           {busyLabel ?? advanceLabel}
         </Button>
-        <p className="mt-3 text-center text-xs text-base-content/55">
-          Keyboard: 1 or 2 selects · R opens rationale · Enter advances
-        </p>
+        {shortcutsEnabled ? (
+          <p className="mt-3 text-center text-xs text-base-content/55">
+            Keyboard: 1 or 2 selects · R opens rationale · Enter advances
+          </p>
+        ) : null}
       </Card>
     </section>
   );

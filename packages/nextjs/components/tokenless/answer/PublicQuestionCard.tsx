@@ -155,11 +155,13 @@ export function PublicQuestionCard({
   paidAccess,
   onSubmitted,
   principalId,
+  shortcutsEnabled = true,
 }: {
   task: PublicAnswerTask;
   paidAccess: PaidTaskAccess;
   onSubmitted: () => void;
   principalId: string;
+  shortcutsEnabled?: boolean;
 }) {
   const [answer, setAnswer] = useState<"yes" | "no" | null>(null);
   const [prediction, setPrediction] = useState<number | null>(null);
@@ -659,6 +661,7 @@ export function PublicQuestionCard({
       onSelectFirst={() => paidAccess.state === "ready" && setAnswer("yes")}
       onSelectSecond={() => paidAccess.state === "ready" && setAnswer("no")}
       rationaleRef={rationaleRef}
+      shortcutsEnabled={shortcutsEnabled}
       totalCases={1}
     >
       <article className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_17.25rem] xl:items-start">
