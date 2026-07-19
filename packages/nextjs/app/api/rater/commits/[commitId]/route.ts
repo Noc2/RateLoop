@@ -10,7 +10,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ com
   try {
     const session = await requireRaterSession(request, false);
     const { commitId } = await context.params;
-    return NextResponse.json(await getPaidRaterCommit({ accountAddress: session.payoutAddress, commitId }));
+    return NextResponse.json(await getPaidRaterCommit({ principalId: session.principalId, commitId }));
   } catch (error) {
     const response = tokenlessErrorResponse(error);
     return NextResponse.json(response.body, { status: response.status });

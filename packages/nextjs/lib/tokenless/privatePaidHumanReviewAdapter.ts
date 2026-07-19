@@ -1,11 +1,16 @@
 import { createHash } from "node:crypto";
 import "server-only";
+import { getAddress } from "viem";
+import { isRateLoopPrincipalId } from "~~/lib/auth/accountSubject";
 import { dbPool } from "~~/lib/db";
 import type {
   HumanReviewDerivedEconomics,
   HumanReviewPreparedRequest,
 } from "~~/lib/tokenless/humanReviewRequestPreparation";
-import type { PaidReviewEligibilityPreflight } from "~~/lib/tokenless/paidReviewEligibilityPreflight";
+import type {
+  PaidReviewEligibilityPreflight,
+  PaidReviewerBinding,
+} from "~~/lib/tokenless/paidReviewEligibilityPreflight";
 import { requirePaidReviewEligibility } from "~~/lib/tokenless/paidReviewEligibilityPreflight";
 import {
   type PaidReviewVoucherLifecycle,
@@ -35,7 +40,7 @@ export type PrivatePaidHumanReviewRequest = {
   projectId: string;
   cohortId: string;
   privateGroup: { id: string; policyVersion: number; policyHash: Hash };
-  reviewerAccountAddresses: readonly string[];
+  reviewers: readonly PaidReviewerBinding[];
   audiencePolicyHash: Hash;
   publishingPolicy: { id: string; version: number };
   preparedRequest: HumanReviewPreparedRequest;
@@ -73,7 +78,7 @@ export type PrivatePaidHumanReviewDelivery = {
 };
 
 export type PrivatePaidAdapterDependencies = {
-  requireEligibility: (reviewerAccountAddress: string, now: Date) => Promise<PaidReviewEligibilityPreflight>;
+  requireEligibility: (principalId: string, now: Date) => Promise<PaidReviewEligibilityPreflight>;
   reserveFunding: (input: PrivatePaidHumanReviewRequest, now: Date) => Promise<PrivatePaidFundingReservation>;
   assignEncrypted: typeof requestPrivatePaidReviewAssignments;
   bindFunding: (input: {
@@ -130,6 +135,40 @@ function exactAtomic(value: unknown, field: string) {
   return BigInt(value);
 }
 
+function normalizePaidReviewers(reviewers: readonly PaidReviewerBinding[]) {
+  const normalized = reviewers.map(reviewer => {
+    let payoutAccount: string;
+    try {
+      payoutAccount = getAddress(reviewer.payoutAccount).toLowerCase();
+    } catch {
+      throw new TokenlessServiceError(
+        "A paid reviewer payout account is invalid.",
+        409,
+        "private_paid_review_binding_conflict",
+      );
+    }
+    if (!isRateLoopPrincipalId(reviewer.principalId)) {
+      throw new TokenlessServiceError(
+        "A paid reviewer principal is invalid.",
+        409,
+        "private_paid_review_binding_conflict",
+      );
+    }
+    return { principalId: reviewer.principalId, payoutAccount };
+  });
+  if (
+    new Set(normalized.map(value => value.principalId)).size !== normalized.length ||
+    new Set(normalized.map(value => value.payoutAccount)).size !== normalized.length
+  ) {
+    throw new TokenlessServiceError(
+      "Paid reviewers must have unique principals and payout accounts.",
+      409,
+      "private_paid_review_binding_conflict",
+    );
+  }
+  return normalized.sort((left, right) => left.payoutAccount.localeCompare(right.payoutAccount));
+}
+
 function assertExactRequest(input: PrivatePaidHumanReviewRequest, now: Date) {
   if (
     !Number.isFinite(now.getTime()) ||
@@ -142,10 +181,8 @@ function assertExactRequest(input: PrivatePaidHumanReviewRequest, now: Date) {
     input.preparedRequest.audience.privateGroupId !== input.privateGroup.id ||
     input.economics.schemaVersion !== "rateloop.human-review-derived-economics.v1" ||
     input.economics.compensationMode !== "usdc" ||
-    input.economics.panelSize !== input.reviewerAccountAddresses.length ||
-    input.reviewerAccountAddresses.length === 0 ||
-    new Set(input.reviewerAccountAddresses.map(value => value.toLowerCase())).size !==
-      input.reviewerAccountAddresses.length ||
+    input.economics.panelSize !== input.reviewers.length ||
+    input.reviewers.length === 0 ||
     !HASH_PATTERN.test(input.preparedRequestHash) ||
     !HASH_PATTERN.test(input.economicsHash) ||
     !HASH_PATTERN.test(input.audiencePolicyHash) ||
@@ -183,7 +220,7 @@ function fundingKey(input: PrivatePaidHumanReviewRequest) {
     projectId: input.projectId,
     cohortId: input.cohortId,
     privateGroup: input.privateGroup,
-    reviewers: [...input.reviewerAccountAddresses].map(value => value.toLowerCase()).sort(),
+    reviewers: normalizePaidReviewers(input.reviewers),
     preparedRequestHash: input.preparedRequestHash,
     economicsHash: input.economicsHash,
     audiencePolicyHash: input.audiencePolicyHash,
@@ -441,21 +478,24 @@ export function createPrivatePaidHumanReviewAdapter(
   ): Promise<PrivatePaidHumanReviewDelivery> {
     const now = input.now ?? new Date();
     assertExactRequest(input, now);
-    const reviewers = [...input.reviewerAccountAddresses].map(value => value.toLowerCase()).sort();
+    const reviewers = normalizePaidReviewers(input.reviewers);
 
     // Eligibility is the first external operation. Nothing may reserve funds,
     // prepare a voucher, or assign private material until every named human passes.
     const preflights = new Map<string, PaidReviewEligibilityPreflight>();
     for (const reviewer of reviewers) {
-      const preflight = await dependencies.requireEligibility(reviewer, now);
-      if (preflight.accountAddress.toLowerCase() !== reviewer || preflight.payoutAccount.toLowerCase() !== reviewer) {
+      const preflight = await dependencies.requireEligibility(reviewer.principalId, now);
+      if (
+        preflight.principalId !== reviewer.principalId ||
+        preflight.payoutAccount.toLowerCase() !== reviewer.payoutAccount
+      ) {
         throw new TokenlessServiceError(
           "Paid eligibility does not belong to the exact invited reviewer.",
           409,
           "private_paid_eligibility_binding_conflict",
         );
       }
-      preflights.set(reviewer, preflight);
+      preflights.set(reviewer.payoutAccount, preflight);
     }
 
     const funding = await dependencies.reserveFunding(input, now);
@@ -463,14 +503,14 @@ export function createPrivatePaidHumanReviewAdapter(
       principal: input.principal,
       opportunityId: input.opportunityId,
       privateReviewId: input.privateReviewId,
-      reviewerAccountAddresses: reviewers,
+      reviewerAccountAddresses: reviewers.map(value => value.payoutAccount),
       now,
     });
     if (
       encryptedDelivery.schemaVersion !== "rateloop.private-paid-review-delivery.v1" ||
       encryptedDelivery.assignments.length !== reviewers.length ||
       encryptedDelivery.assignments.some(
-        (assignment, index) => assignment.reviewerAccountAddress.toLowerCase() !== reviewers[index],
+        (assignment, index) => assignment.reviewerAccountAddress.toLowerCase() !== reviewers[index]?.payoutAccount,
       )
     ) {
       throw new TokenlessServiceError(
@@ -498,7 +538,7 @@ export function createPrivatePaidHumanReviewAdapter(
         projectId: input.projectId,
         cohortId: input.cohortId,
         privateGroup: input.privateGroup,
-        reviewer,
+        reviewer: { principalId: preflight.principalId, payoutAccount: reviewer },
         membershipSnapshotHash: encryptedDelivery.membershipSnapshotHash,
         requestProfile: input.preparedRequest.requestProfile,
         preparedRequestHash: input.preparedRequestHash,
@@ -552,13 +592,17 @@ export const requestPrivatePaidHumanReview = createPrivatePaidHumanReviewAdapter
 export async function acceptPrivatePaidReviewAssignment(input: {
   assignmentId: string;
   issuanceId: string;
-  reviewerAccountAddress: string;
+  principalId: string;
+  payoutAccount: string;
   now?: Date;
 }) {
   const now = input.now ?? new Date();
-  const preflight = await requirePaidReviewEligibility(input.reviewerAccountAddress, now);
+  const payoutAccount = getAddress(input.payoutAccount).toLowerCase();
+  const preflight = await requirePaidReviewEligibility(input.principalId, now);
   const issuance = await getPaidReviewVoucherLifecycle(input.issuanceId);
   if (
+    preflight.principalId !== input.principalId ||
+    preflight.payoutAccount.toLowerCase() !== payoutAccount ||
     issuance.raterId !== preflight.raterId ||
     issuance.snapshot.audienceBinding.profileAudience !== "private_invited" ||
     issuance.snapshot.audienceBinding.reviewerSource !== "customer_invited" ||
@@ -580,7 +624,7 @@ export async function acceptPrivatePaidReviewAssignment(input: {
      JOIN tokenless_prepaid_reservations pr ON pr.operation_key=('private-paid:' || d.delivery_id)
      JOIN tokenless_agent_policy_budget_reservations abr ON abr.operation_key=pr.operation_key
      WHERE a.assignment_id=$1 AND a.reviewer_account_address=$2 LIMIT 1`,
-    [input.assignmentId, input.reviewerAccountAddress.toLowerCase()],
+    [input.assignmentId, payoutAccount],
   );
   const row = funding.rows[0] as Row | undefined;
   if (
@@ -597,7 +641,7 @@ export async function acceptPrivatePaidReviewAssignment(input: {
   }
   const accepted = await acceptPrivateUnpaidReviewAssignment({
     assignmentId: input.assignmentId,
-    reviewerAccountAddress: input.reviewerAccountAddress,
+    reviewerAccountAddress: payoutAccount,
     now,
   });
   return {

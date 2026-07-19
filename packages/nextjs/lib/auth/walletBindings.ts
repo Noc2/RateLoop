@@ -169,6 +169,17 @@ export async function completeWalletBinding(input: {
       [now, input.challengeId, input.principalId],
     );
     if (consumed.rowCount !== 1) throw new AuthError("The wallet binding challenge was already used.", 409);
+    if (purpose === "payout") {
+      const ownership = await client.query(
+        `SELECT principal_id FROM tokenless_payout_wallet_ownership
+         WHERE wallet_address = $1 FOR UPDATE`,
+        [address.toLowerCase()],
+      );
+      const owner = ownership.rows[0] as { principal_id?: unknown } | undefined;
+      if (owner && String(owner.principal_id) !== input.principalId) {
+        throw new AuthError("This payout wallet belongs to another RateLoop account.", 409);
+      }
+    }
     await client.query(
       `UPDATE tokenless_wallet_bindings SET revoked_at = $1
        WHERE principal_id = $2 AND purpose = $3 AND revoked_at IS NULL`,
@@ -190,6 +201,40 @@ export async function completeWalletBinding(input: {
         now,
       ],
     );
+    if (purpose === "payout") {
+      await client.query(
+        `INSERT INTO tokenless_payout_wallet_ownership
+         (wallet_address, principal_id, first_binding_id, first_bound_at)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (wallet_address) DO NOTHING`,
+        [address.toLowerCase(), input.principalId, bindingId, now],
+      );
+      const ownership = await client.query(
+        `SELECT principal_id FROM tokenless_payout_wallet_ownership
+         WHERE wallet_address = $1`,
+        [address.toLowerCase()],
+      );
+      if (String((ownership.rows[0] as { principal_id?: unknown } | undefined)?.principal_id) !== input.principalId) {
+        throw new AuthError("This payout wallet belongs to another RateLoop account.", 409);
+      }
+      // principal_id remains the rater identity. These columns only mirror the
+      // newly proved destination for future work; issued vouchers and accepted
+      // assignments retain their own payout snapshots.
+      await client.query(
+        `UPDATE tokenless_rater_profiles SET account_address = $1, updated_at = $2
+         WHERE principal_id = $3`,
+        [address.toLowerCase(), now, input.principalId],
+      );
+      await client.query(
+        `UPDATE tokenless_payout_eligibility
+         SET payout_account = $1, payout_ownership_method = 'siwe_base_account_session',
+             payout_verified_at = $2, payout_expires_at = NULL,
+             eligibility_status = 'ready', blocked_reason = NULL, updated_at = $2
+         FROM tokenless_rater_profiles profile
+         WHERE profile.rater_id = tokenless_payout_eligibility.rater_id AND profile.principal_id = $3`,
+        [address.toLowerCase(), now, input.principalId],
+      );
+    }
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");

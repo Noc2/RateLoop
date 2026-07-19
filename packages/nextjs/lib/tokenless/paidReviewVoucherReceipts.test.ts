@@ -180,11 +180,37 @@ async function fixture(suffix: string) {
     args: [workspaceId, opportunityId, now, now, now],
   });
   await dbClient.execute({
-    sql: `INSERT INTO tokenless_rater_profiles
-          (rater_id,account_address,nullifier_seed_ciphertext,nullifier_key_version,nullifier_key_domain,
+    sql: `INSERT INTO tokenless_principals (principal_id,status,created_at,updated_at)
+          VALUES (?,'active',?,?);
+          INSERT INTO tokenless_wallet_bindings
+          (binding_id,principal_id,purpose,wallet_address,wallet_source,chain_id,proof_message_hash,created_at,last_used_at)
+          VALUES (?,?, 'payout',?,'self_custodial',84532,'fixture',?,?);
+          INSERT INTO tokenless_payout_wallet_ownership
+          (wallet_address,principal_id,first_binding_id,first_bound_at)
+          VALUES (?,?,?,?);
+          INSERT INTO tokenless_rater_profiles
+          (rater_id,principal_id,account_address,nullifier_seed_ciphertext,nullifier_key_version,nullifier_key_domain,
            created_at,updated_at)
-          VALUES (? ,?,'fixture','test-v1','vote_mapping',?,?)`,
-    args: [`rater_${suffix}`, RATER, now, now],
+          VALUES (?,?,?,'fixture','test-v1','vote_mapping',?,?)`,
+    args: [
+      `rlp_paid_${suffix}`,
+      now,
+      now,
+      `binding_paid_${suffix}`,
+      `rlp_paid_${suffix}`,
+      RATER,
+      now,
+      now,
+      RATER,
+      `rlp_paid_${suffix}`,
+      `binding_paid_${suffix}`,
+      now,
+      `rater_${suffix}`,
+      `rlp_paid_${suffix}`,
+      RATER,
+      now,
+      now,
+    ],
   });
 
   const preparedRequest: HumanReviewPreparedRequest = {
@@ -265,8 +291,9 @@ async function seedVoucher(voucherId: string, raterId: string, now: Date) {
     sql: `INSERT INTO tokenless_paid_vouchers
           (voucher_id,rater_id,request_idempotency_key,request_hash,chain_id,panel_address,
            issuer_address,issuer_epoch,signer_address,round_id,content_id,vote_key,nullifier,
-           admission_policy_hash,assurance_snapshot_hash,expires_at,voucher_json,voucher_signature,status,issued_at)
-          VALUES (?,?,?, ?,84532,?,?,1,?,1,?,?,?,?,?,?,?,?,'issued',?)`,
+           admission_policy_hash,assurance_snapshot_hash,expires_at,payout_account_snapshot,
+           voucher_json,voucher_signature,status,issued_at)
+          VALUES (?,?,?, ?,84532,?,?,1,?,1,?,?,?,?,?,?,?,?,?,'issued',?)`,
     args: [
       voucherId,
       raterId,
@@ -281,6 +308,7 @@ async function seedVoucher(voucherId: string, raterId: string, now: Date) {
       `0x${"77".repeat(32)}`,
       hash(`assurance-${voucherId}`),
       new Date("2026-07-16T09:00:00.000Z"),
+      RATER,
       JSON.stringify({ roundId: "1", voucherId }),
       `0x${"99".repeat(65)}`,
       now,

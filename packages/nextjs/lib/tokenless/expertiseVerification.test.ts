@@ -26,11 +26,22 @@ beforeEach(async () => {
     args: [REVIEWER, "expertise-verification-reviewer", now, now, now],
   });
   await dbClient.execute({
+    sql: `INSERT INTO tokenless_principals (principal_id,status,created_at,updated_at)
+          VALUES (?,'active',?,?);
+          INSERT INTO tokenless_wallet_bindings
+          (binding_id,principal_id,purpose,wallet_address,wallet_source,chain_id,proof_message_hash,created_at,last_used_at)
+          VALUES ('binding_expertise_verification',?,'payout',?,'self_custodial',84532,'fixture',?,?);
+          INSERT INTO tokenless_payout_wallet_ownership
+          (wallet_address,principal_id,first_binding_id,first_bound_at)
+          VALUES (?,?,'binding_expertise_verification',?)`,
+    args: [REVIEWER, now, now, REVIEWER, REVIEWER, now, now, REVIEWER, REVIEWER, now],
+  });
+  await dbClient.execute({
     sql: `INSERT INTO tokenless_rater_profiles
-          (rater_id,account_address,nullifier_seed_ciphertext,nullifier_key_version,nullifier_key_domain,
+          (rater_id,principal_id,account_address,nullifier_seed_ciphertext,nullifier_key_version,nullifier_key_domain,
            created_at,updated_at)
-          VALUES ('rater_expertise_verification',?,'ciphertext','v1','vote_mapping',?,?)`,
-    args: [REVIEWER, now, now],
+          VALUES ('rater_expertise_verification',?,?,'ciphertext','v1','vote_mapping',?,?)`,
+    args: [REVIEWER, REVIEWER, now, now],
   });
 });
 
@@ -45,7 +56,7 @@ afterEach(() => {
 test("network verification materializes and revokes legacy and exact specialist credentials together", async () => {
   const now = new Date();
   const submitted = await submitExpertiseVerificationRequest({
-    accountAddress: REVIEWER,
+    principalId: REVIEWER,
     expertiseKeys: ["code-review:typescript"],
     evidenceReferenceHash: `sha256:${"a".repeat(64)}`,
     now,

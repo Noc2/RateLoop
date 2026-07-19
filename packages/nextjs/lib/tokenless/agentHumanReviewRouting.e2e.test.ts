@@ -16,6 +16,10 @@ type IntegrationPrincipal = Extract<AgentMcpPrincipal, { kind: "integration" }>;
 const NOW = new Date("2026-07-16T12:00:00.000Z");
 const HASH = `sha256:${"58".repeat(32)}` as const;
 const REVIEWERS = ["0x1111111111111111111111111111111111111111", "0x2222222222222222222222222222222222222222"];
+const PAID_REVIEWERS = REVIEWERS.map(payoutAccount => ({
+  principalId: `rlp_${payoutAccount.slice(2, 26)}`,
+  payoutAccount,
+}));
 
 const principal: IntegrationPrincipal = {
   kind: "integration",
@@ -113,11 +117,11 @@ function hybridSplit(opportunityId: string): FrozenHybridReviewSplit {
     economics: { asset: "USDC", invitedMaximumChargeAtomic: "1000000", networkMaximumChargeAtomic: "1000000" },
     invited: {
       requestedCount: 1,
-      candidates: [{ accountAddress: REVIEWERS[0]!, assignmentReference: "invited/1", assignmentHash: HASH }],
+      candidates: [{ ...PAID_REVIEWERS[0]!, assignmentReference: "invited/1", assignmentHash: HASH }],
     },
     network: {
       requestedCount: 1,
-      candidates: [{ accountAddress: REVIEWERS[1]!, assignmentReference: "network/1", assignmentHash: HASH }],
+      candidates: [{ ...PAID_REVIEWERS[1]!, assignmentReference: "network/1", assignmentHash: HASH }],
     },
   };
 }
@@ -182,6 +186,7 @@ function routeFixture(frozen: FrozenHumanReviewRoutingContext) {
         projectId: "project_agent_flow_e2e",
         cohortId: "cohort_agent_flow_e2e",
         reviewerAccountAddresses: REVIEWERS,
+        paidReviewers: PAID_REVIEWERS,
       };
     },
     preparePrivateFoundation: async () => {

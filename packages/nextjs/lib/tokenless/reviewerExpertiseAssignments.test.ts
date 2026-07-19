@@ -427,11 +427,22 @@ test("network exact expertise counts only credentials valid through the response
   const expiresAt = new Date(now.getTime() + 10 * 86_400_000);
   const typescript = await definition("code-review:typescript");
   await dbClient.execute({
+    sql: `INSERT INTO tokenless_principals (principal_id,status,created_at,updated_at)
+          VALUES (?,'active',?,?);
+          INSERT INTO tokenless_wallet_bindings
+          (binding_id,principal_id,purpose,wallet_address,wallet_source,chain_id,proof_message_hash,created_at,last_used_at)
+          VALUES ('binding_exact_network',?,'payout',?,'self_custodial',84532,'fixture',?,?);
+          INSERT INTO tokenless_payout_wallet_ownership
+          (wallet_address,principal_id,first_binding_id,first_bound_at)
+          VALUES (?,?,'binding_exact_network',?)`,
+    args: [REVIEWER, now, now, REVIEWER, REVIEWER, now, now, REVIEWER, REVIEWER, now],
+  });
+  await dbClient.execute({
     sql: `INSERT INTO tokenless_rater_profiles
-          (rater_id,account_address,nullifier_seed_ciphertext,nullifier_key_version,nullifier_key_domain,
+          (rater_id,principal_id,account_address,nullifier_seed_ciphertext,nullifier_key_version,nullifier_key_domain,
            created_at,updated_at)
-          VALUES ('rater_exact_network',?,'ciphertext','v1','vote_mapping',?,?)`,
-    args: [REVIEWER, now, now],
+          VALUES ('rater_exact_network',?,?,'ciphertext','v1','vote_mapping',?,?)`,
+    args: [REVIEWER, REVIEWER, now, now],
   });
   await dbClient.execute({
     sql: `INSERT INTO tokenless_reviewer_qualifications

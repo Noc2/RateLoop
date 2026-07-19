@@ -881,7 +881,20 @@ export async function prepareRunAudience(input: {
 }
 
 async function paidEligibility(client: PoolClient, accountAddress: string, now: Date) {
-  const preflight = await requirePaidReviewEligibilityInTransaction(client, accountAddress, now);
+  const profile = await client.query(
+    `SELECT principal_id FROM tokenless_rater_profiles
+     WHERE lower(account_address) = lower($1) LIMIT 1`,
+    [accountAddress],
+  );
+  const principalId = rowString(profile.rows[0] as QueryRow | undefined, "principal_id");
+  if (!principalId) {
+    throw new TokenlessServiceError(
+      "Paid-task identity, tax, sanctions, and payout eligibility must be complete before paid work is offered.",
+      403,
+      "paid_eligibility_required",
+    );
+  }
+  const preflight = await requirePaidReviewEligibilityInTransaction(client, principalId, now);
   const raterId = preflight.raterId;
   const assertions = await client.query(
     `SELECT a.assertion_id, a.binding_id, a.provider_id, a.provider_namespace,
@@ -1302,6 +1315,8 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
     const rules = [...cohortRules, ...validateQualificationRules(policy.requiredQualifications)];
     const candidates: Array<{
       reviewerAccountAddress: string;
+      raterId: string;
+      payoutAccountSnapshot: string;
       reviewerLookup: string;
       clusterPseudonym: string;
       riskBand: "low" | "medium" | "high";
@@ -1370,6 +1385,8 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
       if (!providerSubjectHashes.length) continue;
       candidates.push({
         reviewerAccountAddress: address,
+        raterId: eligibility.raterId,
+        payoutAccountSnapshot: eligibility.preflight.payoutAccount,
         reviewerLookup,
         clusterPseudonym: rowString(member, "cluster_pseudonym")!,
         riskBand,
@@ -1420,12 +1437,13 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
           reviewer_account_address, source, selection, status, confidentiality_terms_hash,
           qualification_provenance_json, assurance_snapshot_json, assurance_snapshot_hash,
           blinding_json, paid_assignment, paid_eligibility_checked_at, voucher_marker,
+          rater_id, payout_account_snapshot,
           reservation_expires_at, lease_issuer_account_address, lease_state, recovery_count,
           integrity_epoch_id, integrity_manifest_hash, integrity_reviewer_lookup,
           integrity_cluster_pseudonym, integrity_risk_band, provider_subject_hashes_json,
           integrity_provenance_json, integrity_provenance_hash, selection_batch_id, created_at, updated_at)
          VALUES ($1,$2,$3,$4,$5,$6,$7,'rateloop_network','randomized','reserved',$8,$9,$10,$11,
-                 $12,true,$13,NULL,$14,$15,'pending',0,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$25)`,
+                 $12,true,$13,NULL,$14,$15,$16,$17,'pending',0,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$27)`,
         [
           assignmentId,
           input.workspaceId,
@@ -1440,6 +1458,8 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
           `sha256:${hashToken(assuranceJson)}`,
           JSON.stringify({ swap: randomInt(2) === 1 }),
           now,
+          chosen.raterId,
+          chosen.payoutAccountSnapshot,
           reservationExpiresAt,
           manager,
           policy.integrity.epochId,
@@ -1723,10 +1743,10 @@ export async function reserveAudienceAssignment(input: {
         qualification_provenance_json, assurance_snapshot_json, assurance_snapshot_hash,
         blinding_json, paid_assignment, private_group_id, private_group_policy_version,
         private_group_policy_hash, private_group_membership_joined_at,
-        paid_eligibility_checked_at, voucher_marker, reservation_expires_at,
+        paid_eligibility_checked_at, voucher_marker, rater_id, payout_account_snapshot, reservation_expires_at,
         lease_issuer_account_address, lease_state, recovery_count, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'reserved', $10, $11, $12, $13, $14,
-               $15, $16, $17, $18, $19, $20, NULL, $21, $22, 'pending', 0, $23, $23)`,
+               $15, $16, $17, $18, $19, $20, NULL, $21, $22, $23, $24, 'pending', 0, $25, $25)`,
       [
         assignmentId,
         input.workspaceId,
@@ -1748,6 +1768,8 @@ export async function reserveAudienceAssignment(input: {
         rowString(subpanel, "private_group_policy_hash"),
         privateGroupCandidates?.get(reviewerAccountAddress)?.joinedAt ?? null,
         isPaid ? now : null,
+        chosen.paidEligibility?.raterId ?? null,
+        chosen.paidEligibility?.preflight.payoutAccount ?? null,
         reservationExpiresAt,
         manager,
         now,
@@ -1789,13 +1811,19 @@ export async function recoverExpiredAudienceAssignment(input: {
   reservationTtlMs?: number;
   now?: Date;
 }) {
-  const reviewer = normalizeAddress(input.baseAccountAddress, "baseAccountAddress");
+  const principalId = input.baseAccountAddress.trim();
+  if (!principalId) throw new TokenlessServiceError("Account is invalid.", 400, "invalid_account");
   const now = input.now ?? new Date();
   await expireAudienceAssignments(now);
   const accepted = await dbClient.execute({
-    sql: `SELECT assignment_id FROM tokenless_assurance_assignments
-          WHERE assignment_id = ? AND reviewer_account_address = ? AND status = 'accepted' LIMIT 1`,
-    args: [input.assignmentId, reviewer],
+    sql: `SELECT a.assignment_id, a.reviewer_account_address
+          FROM tokenless_assurance_assignments a
+          LEFT JOIN tokenless_rater_profiles owner_profile ON owner_profile.rater_id = a.rater_id
+          WHERE a.assignment_id = ? AND a.status = 'accepted'
+            AND ((a.rater_id IS NOT NULL AND owner_profile.principal_id = ?)
+              OR (a.rater_id IS NULL AND a.reviewer_account_address = ?))
+          LIMIT 1`,
+    args: [input.assignmentId, principalId, principalId],
   });
   if (accepted.rowCount) {
     if (!input.confidentialityTermsHash || !HASH_PATTERN.test(input.confidentialityTermsHash)) {
@@ -1808,7 +1836,12 @@ export async function recoverExpiredAudienceAssignment(input: {
     return {
       assignmentId: input.assignmentId,
       accepted: true as const,
-      leases: await issueAssignmentArtifactLeases(input.assignmentId, now, reviewer, input.confidentialityTermsHash),
+      leases: await issueAssignmentArtifactLeases(
+        input.assignmentId,
+        now,
+        rowString(accepted.rows[0] as QueryRow, "reviewer_account_address")!,
+        input.confidentialityTermsHash,
+      ),
     };
   }
   const ttl = integer(
@@ -1820,6 +1853,10 @@ export async function recoverExpiredAudienceAssignment(input: {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    await client.query(
+      "SELECT assignment_id FROM tokenless_assurance_assignments WHERE assignment_id = $1 FOR UPDATE",
+      [input.assignmentId],
+    );
     const result = await client.query(
       `SELECT a.*, sp.target_count, sp.active_reservations AS subpanel_reservations,
               sp.run_manifest_hash, sp.policy_hash,
@@ -1837,11 +1874,14 @@ export async function recoverExpiredAudienceAssignment(input: {
          ON cr.project_id = a.project_id AND cr.cohort_id = a.cohort_id
         AND cr.reviewer_account_address = a.reviewer_account_address
        JOIN tokenless_assurance_runs r ON r.run_id = a.run_id
+       LEFT JOIN tokenless_rater_profiles owner_profile ON owner_profile.rater_id = a.rater_id
        JOIN tokenless_assurance_audience_policies ap
          ON ap.policy_id = r.audience_policy_id AND ap.version = r.audience_policy_version
-       WHERE a.assignment_id = $1 AND a.reviewer_account_address = $2 AND a.status = 'expired'
-       LIMIT 1 FOR UPDATE`,
-      [input.assignmentId, reviewer],
+       WHERE a.assignment_id = $1 AND a.status = 'expired'
+         AND ((a.rater_id IS NOT NULL AND owner_profile.principal_id = $2)
+           OR (a.rater_id IS NULL AND a.reviewer_account_address = $2))
+       LIMIT 1`,
+      [input.assignmentId, principalId],
     );
     const row = result.rows[0] as QueryRow | undefined;
     if (
@@ -1853,6 +1893,7 @@ export async function recoverExpiredAudienceAssignment(input: {
     ) {
       throw new TokenlessServiceError("Assignment cannot be recovered.", 409, "assignment_recovery_unavailable");
     }
+    const reviewer = rowString(row, "reviewer_account_address")!;
     assertAssuranceAssignmentSettlementAvailable({
       paidAssignment: row.paid_assignment === true,
       policy: parseJson<HumanAssuranceAudiencePolicy>(row.policy_json, "audience policy"),
@@ -2032,7 +2073,8 @@ export async function acceptAudienceAssignment(input: {
   confidentialityTermsHash: string;
   now?: Date;
 }) {
-  const reviewer = normalizeAddress(input.baseAccountAddress, "baseAccountAddress");
+  const principalId = input.baseAccountAddress.trim();
+  if (!principalId) throw new TokenlessServiceError("Account is invalid.", 400, "invalid_account");
   const now = input.now ?? new Date();
   if (!HASH_PATTERN.test(input.confidentialityTermsHash)) {
     throw new TokenlessServiceError("Confidentiality terms hash is invalid.", 400, "invalid_confidentiality_terms");
@@ -2041,6 +2083,10 @@ export async function acceptAudienceAssignment(input: {
   let replay = false;
   try {
     await client.query("BEGIN");
+    await client.query(
+      "SELECT assignment_id FROM tokenless_assurance_assignments WHERE assignment_id = $1 FOR UPDATE",
+      [input.assignmentId],
+    );
     const result = await client.query(
       `SELECT a.*, r.status AS run_status, r.manifest_hash AS current_run_manifest_hash,
               r.policy_hash AS current_policy_hash, sp.run_manifest_hash, sp.policy_hash,
@@ -2051,10 +2097,14 @@ export async function acceptAudienceAssignment(input: {
        FROM tokenless_assurance_assignments a
        JOIN tokenless_assurance_runs r ON r.run_id = a.run_id AND r.project_id = a.project_id
        JOIN tokenless_assurance_run_subpanels sp ON sp.subpanel_id = a.subpanel_id
+       LEFT JOIN tokenless_rater_profiles owner_profile ON owner_profile.rater_id = a.rater_id
        JOIN tokenless_assurance_audience_policies ap
          ON ap.policy_id = r.audience_policy_id AND ap.version = r.audience_policy_version
-       WHERE a.assignment_id = $1 AND a.reviewer_account_address = $2 LIMIT 1 FOR UPDATE`,
-      [input.assignmentId, reviewer],
+       WHERE a.assignment_id = $1
+         AND ((a.rater_id IS NOT NULL AND owner_profile.principal_id = $2)
+           OR (a.rater_id IS NULL AND a.reviewer_account_address = $2))
+       LIMIT 1`,
+      [input.assignmentId, principalId],
     );
     const row = result.rows[0] as QueryRow | undefined;
     if (
@@ -2065,6 +2115,7 @@ export async function acceptAudienceAssignment(input: {
     ) {
       throw new TokenlessServiceError("Assignment not found.", 404, "assignment_not_found");
     }
+    const reviewer = rowString(row, "reviewer_account_address")!;
     assertAssuranceAssignmentSettlementAvailable({
       paidAssignment: row.paid_assignment === true,
       policy: parseJson<HumanAssuranceAudiencePolicy>(row.policy_json, "audience policy"),
@@ -2104,12 +2155,20 @@ export async function acceptAudienceAssignment(input: {
   } finally {
     client.release();
   }
+  const assignmentOwner = await dbClient.execute({
+    sql: `SELECT reviewer_account_address FROM tokenless_assurance_assignments
+          WHERE assignment_id = ? LIMIT 1`,
+    args: [input.assignmentId],
+  });
+  const reviewer = rowString(assignmentOwner.rows[0] as QueryRow | undefined, "reviewer_account_address");
+  if (!reviewer) throw new TokenlessServiceError("Assignment not found.", 404, "assignment_not_found");
   const leases = await issueAssignmentArtifactLeases(input.assignmentId, now, reviewer, input.confidentialityTermsHash);
   return { assignmentId: input.assignmentId, accepted: true, replay, leases };
 }
 
 export async function getAssignmentOnlyTask(input: { baseAccountAddress: string; assignmentId: string; now?: Date }) {
-  const reviewer = normalizeAddress(input.baseAccountAddress, "baseAccountAddress");
+  const principalId = input.baseAccountAddress.trim();
+  if (!principalId) throw new TokenlessServiceError("Account is invalid.", 400, "invalid_account");
   const now = input.now ?? new Date();
   const assignmentResult = await dbClient.execute({
     sql: `SELECT a.*, r.suite_id, r.suite_version, r.manifest_hash AS current_run_manifest_hash,
@@ -2121,13 +2180,17 @@ export async function getAssignmentOnlyTask(input: { baseAccountAddress: string;
           FROM tokenless_assurance_assignments a
           JOIN tokenless_assurance_runs r ON r.run_id = a.run_id AND r.project_id = a.project_id
           JOIN tokenless_assurance_run_subpanels sp ON sp.subpanel_id = a.subpanel_id
+          LEFT JOIN tokenless_rater_profiles owner_profile ON owner_profile.rater_id = a.rater_id
           JOIN tokenless_assurance_suites s ON s.suite_id = r.suite_id AND s.version = r.suite_version
           JOIN tokenless_assurance_audience_policies ap
             ON ap.policy_id = r.audience_policy_id AND ap.version = r.audience_policy_version
-          WHERE a.assignment_id = ? AND a.reviewer_account_address = ? AND a.status = 'accepted'
+          WHERE a.assignment_id = ?
+            AND ((a.rater_id IS NOT NULL AND owner_profile.principal_id = ?)
+              OR (a.rater_id IS NULL AND a.reviewer_account_address = ?))
+            AND a.status = 'accepted'
             AND a.confidentiality_accepted_at IS NOT NULL AND a.assignment_expires_at > ?
             AND a.lease_state = 'issued' LIMIT 1`,
-    args: [input.assignmentId, reviewer, now],
+    args: [input.assignmentId, principalId, principalId, now],
   });
   const assignment = assignmentResult.rows[0] as QueryRow | undefined;
   if (
@@ -2137,6 +2200,7 @@ export async function getAssignmentOnlyTask(input: { baseAccountAddress: string;
   ) {
     throw new TokenlessServiceError("Assignment not found.", 404, "assignment_not_found");
   }
+  const reviewer = rowString(assignment, "reviewer_account_address")!;
   assertAssuranceAssignmentSettlementAvailable({
     paidAssignment: assignment.paid_assignment === true,
     policy: parseJson<HumanAssuranceAudiencePolicy>(assignment.policy_json, "audience policy"),

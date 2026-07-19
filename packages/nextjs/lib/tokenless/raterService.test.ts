@@ -12,6 +12,8 @@ import { __raterServiceTestUtils, listPaidRaterTasks } from "~~/lib/tokenless/ra
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const ACCOUNT = "0x1111111111111111111111111111111111111111";
+const PRINCIPAL = `rlp_${"1".repeat(24)}`;
+const RECOVERY_PRINCIPAL = `rlp_${"2".repeat(24)}`;
 const NOW = new Date("2026-07-12T20:00:00.000Z");
 
 function paidAdmissionPolicy() {
@@ -59,7 +61,14 @@ function paidAdmissionPolicy() {
   };
 }
 
-beforeEach(() => __setDatabaseResourcesForTests(createMemoryDatabaseResources()));
+beforeEach(async () => {
+  __setDatabaseResourcesForTests(createMemoryDatabaseResources());
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_principals (principal_id,status,created_at,updated_at)
+          VALUES (?, 'active', ?, ?), (?, 'active', ?, ?)`,
+    args: [PRINCIPAL, NOW, NOW, RECOVERY_PRINCIPAL, NOW, NOW],
+  });
+});
 afterEach(() => __setDatabaseResourcesForTests(null));
 
 async function seedRaterCommitState(input: {
@@ -70,22 +79,22 @@ async function seedRaterCommitState(input: {
   const transactionHash = input.transactionHash ?? (`0x${"88".repeat(32)}` as Hash);
   await dbClient.execute({
     sql: `INSERT INTO tokenless_rater_profiles
-          (rater_id, account_address, nullifier_seed_ciphertext, nullifier_key_version,
+          (rater_id, principal_id, account_address, nullifier_seed_ciphertext, nullifier_key_version,
            nullifier_key_domain, created_at, updated_at)
-          VALUES ('rater_receipt', ?, 'ciphertext', 'v1', 'vote_mapping', ?, ?)`,
-    args: [ACCOUNT, NOW, NOW],
+          VALUES ('rater_receipt', ?, ?, 'ciphertext', 'v1', 'vote_mapping', ?, ?)`,
+    args: [PRINCIPAL, ACCOUNT, NOW, NOW],
   });
   await dbClient.execute({
     sql: `INSERT INTO tokenless_paid_vouchers
           (voucher_id, rater_id, request_idempotency_key, request_hash, chain_id,
            panel_address, issuer_address, issuer_epoch, signer_address, round_id, content_id, vote_key,
-           nullifier, admission_policy_hash, assurance_snapshot_hash, expires_at, voucher_json,
+           nullifier, admission_policy_hash, assurance_snapshot_hash, expires_at, payout_account_snapshot, voucher_json,
            voucher_signature, status, issued_at)
           VALUES ('voucher_receipt', 'rater_receipt', 'voucher:receipt:1', 'request-hash', 84532,
                   '0x2222222222222222222222222222222222222222',
                   '0x3333333333333333333333333333333333333333', 1,
                   '0x3333333333333333333333333333333333333333', 42,
-                  ?, ?, ?, ?, ?, ?, '{}', '0x12', 'issued', ?)`,
+                  ?, ?, ?, ?, ?, ?, ?, '{}', '0x12', 'issued', ?)`,
     args: [
       `0x${"11".repeat(32)}`,
       ACCOUNT,
@@ -93,6 +102,7 @@ async function seedRaterCommitState(input: {
       `0x${"33".repeat(32)}`,
       `sha256:${"44".repeat(32)}`,
       new Date(NOW.getTime() + 60_000),
+      ACCOUNT,
       NOW,
     ],
   });
@@ -189,20 +199,20 @@ test("a signed rater transaction is durable before broadcast and replays exactly
   const data = "0x1234" as Hex;
   await dbClient.execute({
     sql: `INSERT INTO tokenless_rater_profiles
-          (rater_id, account_address, nullifier_seed_ciphertext, nullifier_key_version,
+          (rater_id, principal_id, account_address, nullifier_seed_ciphertext, nullifier_key_version,
            nullifier_key_domain, created_at, updated_at)
-          VALUES ('rater_recovery', ?, 'ciphertext', 'v1', 'vote_mapping', ?, ?)`,
-    args: [account.address.toLowerCase(), NOW, NOW],
+          VALUES ('rater_recovery', ?, ?, 'ciphertext', 'v1', 'vote_mapping', ?, ?)`,
+    args: [RECOVERY_PRINCIPAL, account.address.toLowerCase(), NOW, NOW],
   });
   await dbClient.execute({
     sql: `INSERT INTO tokenless_paid_vouchers
           (voucher_id, rater_id, request_idempotency_key, request_hash, chain_id,
            panel_address, issuer_address, issuer_epoch, signer_address, round_id, content_id, vote_key,
-           nullifier, admission_policy_hash, assurance_snapshot_hash, expires_at, voucher_json,
+           nullifier, admission_policy_hash, assurance_snapshot_hash, expires_at, payout_account_snapshot, voucher_json,
            voucher_signature, status, issued_at)
           VALUES ('voucher_recovery', 'rater_recovery', 'voucher:recovery:1', 'request-hash', 84532,
                   ?, '0x3333333333333333333333333333333333333333', 1,
-                  '0x3333333333333333333333333333333333333333', 42, ?, ?, ?, ?, ?, ?, '{}',
+                  '0x3333333333333333333333333333333333333333', 42, ?, ?, ?, ?, ?, ?, ?, '{}',
                   '0x12', 'issued', ?)`,
     args: [
       panel,
@@ -212,6 +222,7 @@ test("a signed rater transaction is durable before broadcast and replays exactly
       `0x${"33".repeat(32)}`,
       `sha256:${"44".repeat(32)}`,
       new Date(NOW.getTime() + 60_000),
+      account.address.toLowerCase(),
       NOW,
     ],
   });
@@ -437,12 +448,12 @@ async function seedTask(executionState: "confirmed" | "submitted" = "confirmed")
 
 test("task discovery fails closed until the real chain execution is confirmed", async () => {
   await seedTask("submitted");
-  assert.deepEqual(await listPaidRaterTasks(ACCOUNT, NOW), []);
+  assert.deepEqual(await listPaidRaterTasks(PRINCIPAL, NOW), []);
 });
 
 test("task discovery exposes exact compensation for confirmed public work", async () => {
   const frozenPolicy = await seedTask();
-  const tasks = await listPaidRaterTasks(ACCOUNT, NOW);
+  const tasks = await listPaidRaterTasks(PRINCIPAL, NOW);
   assert.equal(tasks[0]?.question.prompt, "Ship it?");
   assert.deepEqual(tasks[0]?.question.media, { kind: "youtube", videoId: "dQw4w9WgXcQ" });
   assert.equal(tasks[0]?.admissionPolicyHash, frozenPolicy.admissionPolicyHash);
@@ -482,7 +493,7 @@ test("task discovery fails closed when the persisted reviewer source no longer m
     sql: "UPDATE tokenless_voucher_rounds SET admission_policy_json = ? WHERE round_id = 42",
     args: [JSON.stringify(mismatched)],
   });
-  assert.deepEqual(await listPaidRaterTasks(ACCOUNT, NOW), []);
+  assert.deepEqual(await listPaidRaterTasks(PRINCIPAL, NOW), []);
 });
 
 test("public task browsing does not require a payout wallet", async () => {

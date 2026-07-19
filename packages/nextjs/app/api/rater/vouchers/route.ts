@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
       throw new TokenlessServiceError("Voucher request fields are incomplete.", 400, "invalid_voucher_request");
     }
     const result = await issuePaidVoucher({
-      accountAddress: session.payoutAddress,
+      principalId: session.principalId,
       request: {
         idempotencyKey,
         roundId: body.roundId,

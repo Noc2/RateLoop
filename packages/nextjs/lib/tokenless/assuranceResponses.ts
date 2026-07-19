@@ -2,7 +2,6 @@ import { type HumanAssuranceAudiencePolicy, parseHumanAssuranceRubric } from "@r
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
-import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbPool } from "~~/lib/db";
 import {
   type CohortSource,
@@ -432,18 +431,18 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
   if (!IDEMPOTENCY_PATTERN.test(input.idempotencyKey)) {
     serviceError("idempotencyKey is invalid.", "invalid_assurance_response");
   }
-  let accountAddress: string;
-  try {
-    accountAddress = normalizeAccountSubject(input.baseAccountAddress);
-  } catch {
-    serviceError("A valid signed-in account is required.", "invalid_account", 401);
-  }
+  const principalId = input.baseAccountAddress.trim();
+  if (!principalId) serviceError("A valid signed-in account is required.", "invalid_account", 401);
   const responses = validateResponseBatch(input.responses);
   const now = input.now ?? new Date();
   const keyrings = getKeyrings();
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    await client.query(
+      "SELECT assignment_id FROM tokenless_assurance_assignments WHERE assignment_id = $1 FOR UPDATE",
+      [assignmentId],
+    );
     const assignmentResult = await client.query(
       `SELECT a.*, r.status AS run_status, r.policy_hash, r.manifest_hash, r.manifest_json,
               s.manifest_hash AS suite_manifest_hash, s.manifest_json AS suite_manifest_json,
@@ -456,13 +455,19 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
        JOIN tokenless_assurance_runs r ON r.run_id = a.run_id AND r.project_id = a.project_id
        JOIN tokenless_assurance_suites s ON s.suite_id = r.suite_id AND s.version = r.suite_version
        JOIN tokenless_assurance_run_subpanels sp ON sp.subpanel_id = a.subpanel_id
+       LEFT JOIN tokenless_rater_profiles owner_profile ON owner_profile.rater_id = a.rater_id
        JOIN tokenless_assurance_audience_policies ap
          ON ap.policy_id = r.audience_policy_id AND ap.version = r.audience_policy_version
-       WHERE a.assignment_id = $1 AND a.reviewer_account_address = $2 LIMIT 1 FOR UPDATE`,
-      [assignmentId, accountAddress],
+       WHERE a.assignment_id = $1
+         AND ((a.rater_id IS NOT NULL AND owner_profile.principal_id = $2)
+           OR (a.rater_id IS NULL AND a.reviewer_account_address = $2))
+       LIMIT 1`,
+      [assignmentId, principalId],
     );
     const assignment = assignmentResult.rows[0] as QueryRow | undefined;
     if (!assignment) serviceError("Assignment not found.", "assignment_not_found", 404);
+    const accountAddress = rowString(assignment, "reviewer_account_address")!;
+    const identityReference = rowString(assignment, "rater_id") ?? principalId;
     assertAssuranceAssignmentSettlementAvailable({
       paidAssignment: rowBoolean(assignment, "paid_assignment"),
       policy: parseJson<HumanAssuranceAudiencePolicy>(assignment.frozen_policy_json, "audience policy"),
@@ -508,7 +513,11 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
     }
     const { assuranceCapabilities, qualificationKeys } = loadCapabilitySnapshot(assignment);
     const pseudonymCandidates = [...keyrings.reviewerMapping.keys.keys()].map(version =>
-      reviewerKey({ accountAddress, runId: rowString(assignment, "run_id")! }, keyrings.reviewerMapping, version),
+      reviewerKey(
+        { accountAddress: identityReference, runId: rowString(assignment, "run_id")! },
+        keyrings.reviewerMapping,
+        version,
+      ),
     );
     const existingReviewer = await client.query(
       `SELECT reviewer_key FROM tokenless_assurance_responses
@@ -517,7 +526,10 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
     );
     const pseudonym =
       rowString(existingReviewer.rows[0] as QueryRow | undefined, "reviewer_key") ??
-      reviewerKey({ accountAddress, runId: rowString(assignment, "run_id")! }, keyrings.reviewerMapping);
+      reviewerKey(
+        { accountAddress: identityReference, runId: rowString(assignment, "run_id")! },
+        keyrings.reviewerMapping,
+      );
     const records = runCases.map(caseRow => {
       const response = inputByCase.get(rowString(caseRow, "case_id")!)!;
       if (response.rationale.length < minimumRationaleLength || response.rationale.length > maximumRationaleLength) {
@@ -592,7 +604,7 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
     await recordGoldOutcomesForResponseBatch(client, {
       runId: rowString(assignment, "run_id")!,
       reviewerKey: pseudonym,
-      reviewerAccountAddress: accountAddress,
+      reviewerPrincipalId: principalId,
       assignmentId,
       workspaceId: rowString(assignment, "workspace_id")!,
       projectId: rowString(assignment, "project_id")!,

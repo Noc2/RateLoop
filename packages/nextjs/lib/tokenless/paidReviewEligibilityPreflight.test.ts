@@ -8,12 +8,15 @@ import {
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const ACCOUNT = "0x1111111111111111111111111111111111111111";
+const PRINCIPAL = `rlp_${"1".repeat(24)}`;
 const NOW = new Date("2026-07-16T12:00:00.000Z");
 
 function eligibleRow(overrides: Record<string, unknown> = {}) {
   return {
     rater_id: "rater_preflight_01",
+    principal_id: PRINCIPAL,
     account_address: ACCOUNT,
+    active_payout_account: ACCOUNT,
     nullifier_seed_ciphertext: "v1.seed",
     nullifier_key_version: "vote-v1",
     nullifier_key_domain: "vote_mapping",
@@ -86,22 +89,23 @@ async function rejectsEligibility(
   identities: Record<string, unknown>[] = [identityRow()],
 ) {
   await assert.rejects(
-    () => requirePaidReviewEligibilityInTransaction(client(main, identities), ACCOUNT, NOW),
+    () => requirePaidReviewEligibilityInTransaction(client(main, identities), PRINCIPAL, NOW),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "paid_eligibility_required",
   );
 }
 
 test("paid-review preflight freezes current identity, legal, sanctions, tax, and payout evidence", async () => {
-  const first = await requirePaidReviewEligibilityInTransaction(client(eligibleRow(), [identityRow()]), ACCOUNT, NOW);
+  const first = await requirePaidReviewEligibilityInTransaction(client(eligibleRow(), [identityRow()]), PRINCIPAL, NOW);
   const later = await requirePaidReviewEligibilityInTransaction(
     client(eligibleRow(), [identityRow()]),
-    ACCOUNT,
+    PRINCIPAL,
     new Date(NOW.getTime() + 1_000),
   );
   assert.deepEqual(first, {
     schemaVersion: "rateloop.paid-review-eligibility-preflight.v1",
     preflightId: first.preflightId,
     raterId: "rater_preflight_01",
+    principalId: PRINCIPAL,
     accountAddress: ACCOUNT,
     identityAssertions: [
       {
@@ -142,7 +146,7 @@ test("paid-review preflight composes account control and minimum age from indepe
   });
   const preflight = await requirePaidReviewEligibilityInTransaction(
     client(eligibleRow(), [accountControl, minimumAge]),
-    ACCOUNT,
+    PRINCIPAL,
     NOW,
   );
   assert.deepEqual(
@@ -172,12 +176,12 @@ test("paid-review preflight chooses the minimal assertion set with deterministic
   });
   const first = await requirePaidReviewEligibilityInTransaction(
     client(eligibleRow(), [competing, accountOnly, preferred, ageOnly]),
-    ACCOUNT,
+    PRINCIPAL,
     NOW,
   );
   const reordered = await requirePaidReviewEligibilityInTransaction(
     client(eligibleRow(), [ageOnly, preferred, accountOnly, competing]),
-    ACCOUNT,
+    PRINCIPAL,
     NOW,
   );
   assert.deepEqual(
@@ -211,10 +215,10 @@ test("paid-review preflight fails closed when current assertions do not cover th
 });
 
 test("paid-review preflight commitment changes when decision-bearing evidence changes", async () => {
-  const first = await requirePaidReviewEligibilityInTransaction(client(eligibleRow(), [identityRow()]), ACCOUNT, NOW);
+  const first = await requirePaidReviewEligibilityInTransaction(client(eligibleRow(), [identityRow()]), PRINCIPAL, NOW);
   const changed = await requirePaidReviewEligibilityInTransaction(
     client(eligibleRow({ sanctions_reference_hash: "b".repeat(64) }), [identityRow()]),
-    ACCOUNT,
+    PRINCIPAL,
     NOW,
   );
   assert.notEqual(changed.preflightId, first.preflightId);
@@ -282,7 +286,7 @@ test("durable identity enrollment still requires current age, sanctions, and pay
     assurance_validity_model: "durable_enrollment",
     evidence_expires_at: new Date(NOW.getTime() - 1),
   });
-  const ready = await requirePaidReviewEligibilityInTransaction(client(eligibleRow(), [durable]), ACCOUNT, NOW);
+  const ready = await requirePaidReviewEligibilityInTransaction(client(eligibleRow(), [durable]), PRINCIPAL, NOW);
   assert.deepEqual(
     ready.identityAssertions.map(value => value.assertionId),
     ["assertion_preflight_01"],

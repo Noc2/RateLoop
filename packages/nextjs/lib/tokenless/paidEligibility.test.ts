@@ -20,6 +20,8 @@ import {
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const NOW = new Date("2026-07-12T12:00:00.000Z");
+const PRINCIPAL = `rlp_${"1".repeat(24)}`;
+const OTHER_PRINCIPAL = `rlp_${"2".repeat(24)}`;
 const ACCOUNT = "0x1111111111111111111111111111111111111111";
 const OTHER_ACCOUNT = "0x2222222222222222222222222222222222222222";
 const PANEL = "0x3333333333333333333333333333333333333333";
@@ -129,9 +131,26 @@ function installOverrides(
   });
 }
 
-beforeEach(() => {
+async function bindPayout(principalId: string, payoutAccount: string, suffix: string) {
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_principals (principal_id, status, created_at, updated_at)
+          VALUES (?, 'active', ?, ?)`,
+    args: [principalId, NOW, NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_wallet_bindings
+          (binding_id, principal_id, purpose, wallet_address, wallet_source, chain_id,
+           proof_message_hash, created_at, last_used_at)
+          VALUES (?, ?, 'payout', ?, 'self_custodial', 84532, ?, ?, ?)`,
+    args: [`wallet_paid_${suffix}`, principalId, payoutAccount.toLowerCase(), `sha256:${suffix.repeat(64)}`, NOW, NOW],
+  });
+}
+
+beforeEach(async () => {
   process.env.APP_URL = "https://tokenless.example";
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
+  await bindPayout(PRINCIPAL, ACCOUNT, "1");
+  await bindPayout(OTHER_PRINCIPAL, OTHER_ACCOUNT, "2");
   installOverrides();
 });
 
@@ -147,7 +166,12 @@ afterEach(() => {
 });
 
 async function unlockPaidTasks() {
-  return submitPaidEligibility({ accountAddress: ACCOUNT, submission: submission(), now: NOW });
+  return submitPaidEligibility({
+    principalId: PRINCIPAL,
+    payoutAccount: ACCOUNT,
+    submission: submission(),
+    now: NOW,
+  });
 }
 
 async function openRound() {
@@ -206,7 +230,7 @@ test("paid-task unlock persists every gate while vaulting DAC7 and nullifier mat
     blockedReason: null,
     capabilities: ["account_control", "document_holder", "live_human", "minimum_age", "unique_human"],
   });
-  const publicState = await getPaidEligibility(ACCOUNT, NOW);
+  const publicState = await getPaidEligibility(PRINCIPAL, NOW);
   assert.equal(publicState.status, "eligible");
   assert.equal(publicState.dac7Status, "complete");
   assert.equal(publicState.payoutAccount, ACCOUNT);
@@ -243,7 +267,7 @@ test("paid-task unlock persists every gate while vaulting DAC7 and nullifier mat
           WHERE provider_id = 'world:poh'`,
     args: [new Date(NOW.getTime() - 1)],
   });
-  const durableEnrollment = await getPaidEligibility(ACCOUNT, NOW);
+  const durableEnrollment = await getPaidEligibility(PRINCIPAL, NOW);
   assert.ok(durableEnrollment.capabilities?.includes("unique_human"));
   assert.deepEqual(durableEnrollment.assuranceProviders, ["world:poh"]);
 });
@@ -304,7 +328,7 @@ test("document and nationality countries remain distinct from residence and tax 
   );
   const result = await unlockPaidTasks();
   assert.equal(result.status, "eligible");
-  const state = await getPaidEligibility(ACCOUNT, NOW);
+  const state = await getPaidEligibility(PRINCIPAL, NOW);
   assert.equal(state.documentIssuingCountry, "FR");
   assert.equal(state.nationalityCountry, "IT");
   assert.equal(state.verifiedResidenceCountry, "DE");
@@ -314,13 +338,14 @@ test("document and nationality countries remain distinct from residence and tax 
 
 test("declared and tax residence mismatch is persisted distinctly and blocks paid vouchers", async () => {
   const result = await submitPaidEligibility({
-    accountAddress: ACCOUNT,
+    principalId: PRINCIPAL,
+    payoutAccount: ACCOUNT,
     submission: { ...submission(), taxResidenceCountry: "FR" },
     now: NOW,
   });
   assert.equal(result.status, "review");
   assert.equal(result.blockedReason, "residence_tax_review");
-  const state = await getPaidEligibility(ACCOUNT, NOW);
+  const state = await getPaidEligibility(PRINCIPAL, NOW);
   assert.equal(state.declaredResidenceCountry, "DE");
   assert.equal(state.taxResidenceCountry, "FR");
   assert.equal(state.residenceTaxStatus, "review");
@@ -328,7 +353,7 @@ test("declared and tax residence mismatch is persisted distinctly and blocks pai
   await assert.rejects(
     () =>
       issuePaidVoucher({
-        accountAddress: ACCOUNT,
+        principalId: PRINCIPAL,
         request: {
           idempotencyKey: "voucher:test:residence",
           roundId: "42",
@@ -344,7 +369,13 @@ test("declared and tax residence mismatch is persisted distinctly and blocks pai
 
 test("unlock rejects a payout address that the browser session did not prove", async () => {
   await assert.rejects(
-    () => submitPaidEligibility({ accountAddress: ACCOUNT, submission: submission(OTHER_ACCOUNT), now: NOW }),
+    () =>
+      submitPaidEligibility({
+        principalId: PRINCIPAL,
+        payoutAccount: ACCOUNT,
+        submission: submission(OTHER_ACCOUNT),
+        now: NOW,
+      }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "payout_ownership_mismatch",
   );
 });
@@ -392,7 +423,7 @@ test("production provider results require an Ed25519 signature bound to the sign
     }),
   ).toString("base64url");
   const signature = sign(null, Buffer.from(payload, "base64url"), keys.privateKey).toString("base64url");
-  const handoff = await createEligibilityProviderHandoff(ACCOUNT, NOW);
+  const handoff = await createEligibilityProviderHandoff({ principalId: PRINCIPAL, payoutAccount: ACCOUNT }, NOW);
   assert.equal(
     new URL(handoff.startUrl).searchParams.get("callback_url"),
     "https://tokenless.example/api/rater/eligibility/provider/callback",
@@ -403,13 +434,17 @@ test("production provider results require an Ed25519 signature bound to the sign
     now: NOW,
   });
   const result = await submitPaidEligibility({
-    accountAddress: ACCOUNT,
+    principalId: PRINCIPAL,
+    payoutAccount: ACCOUNT,
     now: NOW,
     submission: { ...submission(), providerResult: undefined, providerState: handoff.state },
   });
   assert.equal(result.status, "eligible");
 
-  const invalidHandoff = await createEligibilityProviderHandoff(ACCOUNT, NOW);
+  const invalidHandoff = await createEligibilityProviderHandoff(
+    { principalId: PRINCIPAL, payoutAccount: ACCOUNT },
+    NOW,
+  );
   await assert.rejects(
     () =>
       completeEligibilityProviderHandoff({
@@ -436,7 +471,8 @@ test("a provider assertion id cannot be replayed onto another immutable identity
   await assert.rejects(
     () =>
       submitPaidEligibility({
-        accountAddress: OTHER_ACCOUNT,
+        principalId: OTHER_PRINCIPAL,
+        payoutAccount: OTHER_ACCOUNT,
         submission: submission(OTHER_ACCOUNT),
         now: NOW,
       }),
@@ -457,12 +493,12 @@ test("sanctions review is persisted but remains fail-closed for paid vouchers", 
   const result = await unlockPaidTasks();
   assert.equal(result.status, "review");
   assert.equal(result.blockedReason, "legal_eligibility_review");
-  assert.equal((await getPaidEligibility(ACCOUNT, NOW)).screeningStatus, "review_required");
+  assert.equal((await getPaidEligibility(PRINCIPAL, NOW)).screeningStatus, "review_required");
   await openRound();
   await assert.rejects(
     () =>
       issuePaidVoucher({
-        accountAddress: ACCOUNT,
+        principalId: PRINCIPAL,
         request: {
           idempotencyKey: "voucher:test:review",
           roundId: "42",
@@ -486,13 +522,13 @@ test("voucher issuance fails before eligibility and for missing required capabil
     reviewerSource: "rateloop_network",
   } as const;
   await assert.rejects(
-    () => issuePaidVoucher({ accountAddress: ACCOUNT, request, now: NOW }),
+    () => issuePaidVoucher({ principalId: PRINCIPAL, request, now: NOW }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "paid_eligibility_required",
   );
   installOverrides(provider({ capabilities: ["minimum_age"], minimumAgeVerified: 18 }));
   await unlockPaidTasks();
   await assert.rejects(
-    () => issuePaidVoucher({ accountAddress: ACCOUNT, request, now: NOW }),
+    () => issuePaidVoucher({ principalId: PRINCIPAL, request, now: NOW }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "admission_policy_not_satisfied",
   );
 });
@@ -508,7 +544,7 @@ test("network voucher admission cannot omit assignment integrity provenance", as
   await assert.rejects(
     () =>
       issuePaidVoucher({
-        accountAddress: ACCOUNT,
+        principalId: PRINCIPAL,
         request: {
           idempotencyKey: "voucher:test:missing-integrity",
           roundId: "42",
@@ -539,7 +575,7 @@ test("voucher issuance rejects policy JSON that no longer matches its frozen has
   await assert.rejects(
     () =>
       issuePaidVoucher({
-        accountAddress: ACCOUNT,
+        principalId: PRINCIPAL,
         request: {
           idempotencyKey: "voucher:test:tamper",
           roundId: "42",
@@ -566,7 +602,7 @@ test("voucher issuance rejects invalid or caller-mismatched reviewer sources", a
   await assert.rejects(
     () =>
       issuePaidVoucher({
-        accountAddress: ACCOUNT,
+        principalId: PRINCIPAL,
         request: { ...request, reviewerSource: "invented_source" } as unknown as typeof request,
         now: NOW,
       }),
@@ -575,7 +611,7 @@ test("voucher issuance rejects invalid or caller-mismatched reviewer sources", a
   await assert.rejects(
     () =>
       issuePaidVoucher({
-        accountAddress: ACCOUNT,
+        principalId: PRINCIPAL,
         request: { ...request, reviewerSource: "customer_invited" },
         now: NOW,
       }),
@@ -672,7 +708,7 @@ test("voucher admission composes independent provider assertions and snapshots t
     voucherDeadline: new Date(NOW.getTime() + 20 * 60_000),
   });
   const issued = await issuePaidVoucher({
-    accountAddress: ACCOUNT,
+    principalId: PRINCIPAL,
     request: {
       idempotencyKey: "voucher:test:composed",
       roundId: "42",
@@ -717,7 +753,7 @@ test("voucher is domain-bound, exact, idempotent, and one-per-rater-per-round", 
     voteKey: VOTE_KEY,
     reviewerSource: "rateloop_network",
   } as const;
-  const first = await issuePaidVoucher({ accountAddress: ACCOUNT, request, now: NOW });
+  const first = await issuePaidVoucher({ principalId: PRINCIPAL, request, now: NOW });
   const snapshotBefore = await dbClient.execute({
     sql: `SELECT snapshot_json, snapshot_hash
           FROM tokenless_voucher_assurance_snapshots WHERE voucher_id = ?`,
@@ -741,7 +777,7 @@ test("voucher is domain-bound, exact, idempotent, and one-per-rater-per-round", 
   await dbClient.execute(
     "UPDATE tokenless_assurance_assertions SET capabilities_json = '[]', status = 'revoked' WHERE rater_id IS NOT NULL",
   );
-  const replay = await issuePaidVoucher({ accountAddress: ACCOUNT, request, now: NOW });
+  const replay = await issuePaidVoucher({ principalId: PRINCIPAL, request, now: NOW });
   assert.equal(replay.voucherId, first.voucherId);
   assert.equal(replay.voucherSignature, first.voucherSignature);
   assert.equal(issuerChecks, 1, "idempotent replay does not sign again or recheck the chain");
@@ -787,13 +823,13 @@ test("voucher is domain-bound, exact, idempotent, and one-per-rater-per-round", 
   assert.equal(recovered, SIGNER.address);
 
   await assert.rejects(
-    () => issuePaidVoucher({ accountAddress: ACCOUNT, request: { ...request, voteKey: OTHER_ACCOUNT }, now: NOW }),
+    () => issuePaidVoucher({ principalId: PRINCIPAL, request: { ...request, voteKey: OTHER_ACCOUNT }, now: NOW }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "voucher_conflict",
   );
   await assert.rejects(
     () =>
       issuePaidVoucher({
-        accountAddress: ACCOUNT,
+        principalId: PRINCIPAL,
         request: { ...request, idempotencyKey: "voucher:test:second" },
         now: NOW,
       }),
@@ -810,7 +846,7 @@ test("issuer acceptance is checked before any voucher record is created", async 
   await assert.rejects(
     () =>
       issuePaidVoucher({
-        accountAddress: ACCOUNT,
+        principalId: PRINCIPAL,
         request: {
           idempotencyKey: "voucher:test:epoch",
           roundId: "42",

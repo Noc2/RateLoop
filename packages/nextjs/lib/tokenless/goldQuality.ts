@@ -374,7 +374,7 @@ export async function recordGoldOutcomesForResponseBatch(
   input: {
     runId: string;
     reviewerKey: string;
-    reviewerAccountAddress: string;
+    reviewerPrincipalId: string;
     assignmentId: string;
     workspaceId: string;
     projectId: string;
@@ -392,8 +392,8 @@ export async function recordGoldOutcomesForResponseBatch(
     [input.runId],
   );
   if (!gold.rowCount) return { scored: 0 };
-  const rater = await client.query("SELECT rater_id FROM tokenless_rater_profiles WHERE account_address=$1 LIMIT 1", [
-    input.reviewerAccountAddress,
+  const rater = await client.query("SELECT rater_id FROM tokenless_rater_profiles WHERE principal_id=$1 LIMIT 1", [
+    input.reviewerPrincipalId,
   ]);
   const raterId = text(rater.rows[0] as Row | undefined, "rater_id");
   const answers = new Map(input.responses.map(value => [value.caseId, value.canonicalChoice] as const));

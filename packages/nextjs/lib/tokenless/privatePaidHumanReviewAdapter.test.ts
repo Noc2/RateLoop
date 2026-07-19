@@ -10,6 +10,10 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 const NOW = new Date("2026-07-16T12:00:00.000Z");
 const HASH = `sha256:${"ab".repeat(32)}` as const;
 const REVIEWERS = ["0x1111111111111111111111111111111111111111", "0x2222222222222222222222222222222222222222"] as const;
+const REVIEWER_BINDINGS = REVIEWERS.map(payoutAccount => ({
+  principalId: `rlp_${payoutAccount.slice(2, 26)}`,
+  payoutAccount,
+}));
 
 function request(): PrivatePaidHumanReviewRequest {
   const preparedRequest = {
@@ -65,7 +69,7 @@ function request(): PrivatePaidHumanReviewRequest {
     projectId: "project_private_paid",
     cohortId: "cohort_private_paid",
     privateGroup: { id: "group_private_paid", policyVersion: 3, policyHash: HASH },
-    reviewerAccountAddresses: REVIEWERS,
+    reviewers: REVIEWER_BINDINGS,
     audiencePolicyHash: HASH,
     publishingPolicy: { id: "policy_publish_private_paid", version: 6 },
     preparedRequest,
@@ -80,21 +84,23 @@ function dependencies(options?: { failReviewer?: string }) {
   const order: string[] = [];
   const voucherInputs: unknown[] = [];
   const adapter = createPrivatePaidHumanReviewAdapter({
-    requireEligibility: async reviewer => {
-      order.push(`eligibility:${reviewer}`);
-      if (reviewer === options?.failReviewer) {
+    requireEligibility: async principalId => {
+      const reviewer = REVIEWER_BINDINGS.find(value => value.principalId === principalId)!;
+      order.push(`eligibility:${principalId}`);
+      if (principalId === options?.failReviewer) {
         throw new TokenlessServiceError("not eligible", 403, "paid_eligibility_required");
       }
       return {
         schemaVersion: "rateloop.paid-review-eligibility-preflight.v1",
-        preflightId: `pef_${reviewer.slice(2, 18)}`,
-        raterId: `rater_${reviewer.slice(2, 18)}`,
-        accountAddress: reviewer,
-        payoutAccount: reviewer,
+        preflightId: `pef_${reviewer.payoutAccount.slice(2, 18)}`,
+        raterId: `rater_${reviewer.payoutAccount.slice(2, 18)}`,
+        principalId,
+        accountAddress: reviewer.payoutAccount,
+        payoutAccount: reviewer.payoutAccount,
         identityAssertions: [
           {
-            assertionId: `assertion_${reviewer.slice(2, 10)}`,
-            bindingId: `binding_${reviewer.slice(2, 10)}`,
+            assertionId: `assertion_${reviewer.payoutAccount.slice(2, 10)}`,
+            bindingId: `binding_${reviewer.payoutAccount.slice(2, 10)}`,
             providerId: "provider",
             providerNamespace: "provider.test",
             capabilities: ["account_control", "minimum_age"],
@@ -160,8 +166,8 @@ test("preflights every named human before funding, assignment, or voucher prepar
   const { adapter, order, voucherInputs } = dependencies();
   const result = await adapter(request());
   assert.deepEqual(order, [
-    `eligibility:${REVIEWERS[0]}`,
-    `eligibility:${REVIEWERS[1]}`,
+    `eligibility:${REVIEWER_BINDINGS[0]!.principalId}`,
+    `eligibility:${REVIEWER_BINDINGS[1]!.principalId}`,
     "funding",
     "assign_encrypted",
     "bind_funding",
@@ -192,12 +198,15 @@ test("preflights every named human before funding, assignment, or voucher prepar
 });
 
 test("one ineligible invited human fails closed before any paid or private side effect", async () => {
-  const { adapter, order } = dependencies({ failReviewer: REVIEWERS[1] });
+  const { adapter, order } = dependencies({ failReviewer: REVIEWER_BINDINGS[1]!.principalId });
   await assert.rejects(
     adapter(request()),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "paid_eligibility_required",
   );
-  assert.deepEqual(order, [`eligibility:${REVIEWERS[0]}`, `eligibility:${REVIEWERS[1]}`]);
+  assert.deepEqual(order, [
+    `eligibility:${REVIEWER_BINDINGS[0]!.principalId}`,
+    `eligibility:${REVIEWER_BINDINGS[1]!.principalId}`,
+  ]);
 });
 
 test("the adapter rejects unpaid economics instead of falling back to the private unpaid lane", async () => {
@@ -225,14 +234,16 @@ test("a partial voucher-preparation interruption returns no success and an idemp
   let interrupted = false;
   let voucherCalls = 0;
   const retrying = createPrivatePaidHumanReviewAdapter({
-    requireEligibility: async reviewer => {
-      const raterId = `rater_${reviewer.slice(2, 18)}`;
+    requireEligibility: async principalId => {
+      const reviewer = REVIEWER_BINDINGS.find(value => value.principalId === principalId)!;
+      const raterId = `rater_${reviewer.payoutAccount.slice(2, 18)}`;
       return {
         schemaVersion: "rateloop.paid-review-eligibility-preflight.v1",
-        preflightId: `pef_${reviewer.slice(2, 18)}`,
+        preflightId: `pef_${reviewer.payoutAccount.slice(2, 18)}`,
         raterId,
-        accountAddress: reviewer,
-        payoutAccount: reviewer,
+        principalId,
+        accountAddress: reviewer.payoutAccount,
+        payoutAccount: reviewer.payoutAccount,
         identityAssertions: [],
         checkedAt: NOW.toISOString(),
         validUntil: "2026-07-16T13:00:00.000Z",

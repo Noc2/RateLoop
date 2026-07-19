@@ -52,7 +52,7 @@ test("gold outcome persistence binds every identity and score column without shi
     projectId: "project_1",
     assignmentId: "assignment_1",
     reviewerKey: `hmac-sha256:v1:${"a".repeat(64)}`,
-    reviewerAccountAddress: "0x1111111111111111111111111111111111111111",
+    reviewerPrincipalId: "principal_reviewer_1",
     reviewerSource: "customer_invited",
     responses: [{ caseId: "case_gold", canonicalChoice: "candidate" }],
     now,

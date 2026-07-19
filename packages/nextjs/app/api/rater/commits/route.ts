@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json(
       await relayPaidRaterCommit({
-        accountAddress: session.payoutAddress,
+        principalId: session.principalId,
         request: {
           idempotencyKey,
           voucherId: body.voucherId,

@@ -146,14 +146,14 @@ async function appendVerificationEvent(
 }
 
 export async function submitExpertiseVerificationRequest(input: {
-  accountAddress: string;
+  principalId: string;
   expertiseKeys: unknown;
   evidenceReferenceHash: unknown;
   now?: Date;
 }) {
   let actor: string;
   try {
-    actor = normalizeAccountSubject(input.accountAddress);
+    actor = normalizeAccountSubject(input.principalId);
   } catch {
     throw new TokenlessServiceError("Account address is invalid.", 400, "invalid_account");
   }
@@ -163,7 +163,7 @@ export async function submitExpertiseVerificationRequest(input: {
   }
   const evidenceReferenceHash = requireEvidenceHash(input.evidenceReferenceHash);
   const rater = await dbClient.execute({
-    sql: "SELECT rater_id FROM tokenless_rater_profiles WHERE account_address=? LIMIT 1",
+    sql: "SELECT rater_id FROM tokenless_rater_profiles WHERE principal_id=? LIMIT 1",
     args: [actor],
   });
   const raterId = text(rater.rows[0] as Row | undefined, "rater_id");

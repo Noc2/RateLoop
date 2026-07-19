@@ -271,14 +271,14 @@ async function freezeActionAndKeys(client: PoolClient, config: WorldIdConfig, no
   }
 }
 
-export async function createWorldIdAssuranceContext(input: { accountAddress: string; now?: Date }) {
+export async function createWorldIdAssuranceContext(input: { principalId: string; payoutAccount: string; now?: Date }) {
   const now = input.now ?? new Date();
-  const accountAddress = getAddress(input.accountAddress).toLowerCase();
+  const payoutAccount = getAddress(input.payoutAccount).toLowerCase();
   const config = loadConfig();
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
-    const raterId = await ensureAssuranceRaterProfile(client, accountAddress, now);
+    const raterId = await ensureAssuranceRaterProfile(client, { principalId: input.principalId, payoutAccount }, now);
     await freezeActionAndKeys(client, config, now);
     await client.query(`DELETE FROM tokenless_world_id_requests WHERE expires_at < $1`, [
       new Date(now.getTime() - REQUEST_RETENTION_MS),
@@ -349,14 +349,15 @@ export async function createWorldIdAssuranceContext(input: { accountAddress: str
     );
     await client.query(
       `INSERT INTO tokenless_world_id_requests
-       (request_id, rater_id, account_address, provider_id, rp_id, app_id, action_version,
+       (request_id, rater_id, principal_id, account_address, provider_id, rp_id, app_id, action_version,
         action, environment, mode, assurance_effect, nonce, credential_expires_at_min,
         status, created_at, expires_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'pending',$14,$15)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'pending',$15,$16)`,
       [
         requestId,
         raterId,
-        accountAddress,
+        input.principalId,
+        payoutAccount,
         PROVIDER_ID,
         config.rpId,
         config.appId,
@@ -631,9 +632,8 @@ async function persistInitial(
   };
 }
 
-export async function verifyWorldIdAssurance(input: { accountAddress: string; rawBody: string; now?: Date }) {
+export async function verifyWorldIdAssurance(input: { principalId: string; rawBody: string; now?: Date }) {
   const now = input.now ?? new Date();
-  const accountAddress = getAddress(input.accountAddress).toLowerCase();
   const config = loadConfig();
   let untrusted: Record<string, unknown>;
   try {
@@ -645,7 +645,7 @@ export async function verifyWorldIdAssurance(input: { accountAddress: string; ra
     throw new TokenlessServiceError("World ID result nonce is missing.", 400, "invalid_world_id_result");
   }
   const requestResult = await dbClient.execute({
-    sql: `SELECT request_id, rater_id, account_address, provider_id, rp_id, app_id,
+    sql: `SELECT request_id, rater_id, principal_id, account_address, provider_id, rp_id, app_id,
                  action_version, action, environment, mode, assurance_effect, nonce, credential_expires_at_min,
                  status, verify_attempt_count, created_at, expires_at
           FROM tokenless_world_id_requests WHERE rp_id = ? AND nonce = ? LIMIT 1`,
@@ -654,7 +654,7 @@ export async function verifyWorldIdAssurance(input: { accountAddress: string; ra
   const request = requestResult.rows[0] as QueryRow | undefined;
   if (
     !request ||
-    stringValue(request, "account_address") !== accountAddress ||
+    stringValue(request, "principal_id") !== input.principalId ||
     stringValue(request, "provider_id") !== PROVIDER_ID ||
     stringValue(request, "rp_id") !== config.rpId ||
     stringValue(request, "app_id") !== config.appId ||
@@ -687,14 +687,14 @@ export async function verifyWorldIdAssurance(input: { accountAddress: string; ra
     await client.query("BEGIN");
     await freezeActionAndKeys(client, config, now);
     const lockedResult = await client.query(
-      `SELECT request_id, rater_id, account_address, status, expires_at, mode
+      `SELECT request_id, rater_id, principal_id, account_address, status, expires_at, mode
        FROM tokenless_world_id_requests WHERE request_id = $1 LIMIT 1 FOR UPDATE`,
       [stringValue(request, "request_id")],
     );
     const locked = lockedResult.rows[0] as QueryRow | undefined;
     if (
       !locked ||
-      stringValue(locked, "account_address") !== accountAddress ||
+      stringValue(locked, "principal_id") !== input.principalId ||
       stringValue(locked, "status") !== "pending" ||
       new Date(String(locked.expires_at)) <= now
     ) {
@@ -706,8 +706,8 @@ export async function verifyWorldIdAssurance(input: { accountAddress: string; ra
     }
     const profileResult = await client.query(
       `SELECT rater_id FROM tokenless_rater_profiles
-       WHERE rater_id = $1 AND account_address = $2 LIMIT 1 FOR UPDATE`,
-      [stringValue(locked, "rater_id"), accountAddress],
+       WHERE rater_id = $1 AND principal_id = $2 LIMIT 1 FOR UPDATE`,
+      [stringValue(locked, "rater_id"), input.principalId],
     );
     if (profileResult.rowCount !== 1) {
       throw new TokenlessServiceError(
@@ -748,16 +748,16 @@ export async function verifyWorldIdAssurance(input: { accountAddress: string; ra
   }
 }
 
-export async function getWorldIdAssuranceStatus(accountAddress: string) {
+export async function getWorldIdAssuranceStatus(principalId: string) {
   const result = await dbClient.execute({
     sql: `SELECT a.evidence_verified_at, a.assurance_validity_model
           FROM tokenless_rater_profiles p
           JOIN tokenless_provider_subject_bindings b ON b.rater_id = p.rater_id
           JOIN tokenless_assurance_assertions a ON a.binding_id = b.binding_id
-          WHERE p.account_address = ? AND b.provider_id = ? AND b.status = 'active'
+          WHERE p.principal_id = ? AND b.provider_id = ? AND b.status = 'active'
             AND a.status = 'active' AND a.capabilities_json LIKE '%"unique_human"%'
           ORDER BY a.evidence_verified_at DESC LIMIT 1`,
-    args: [getAddress(accountAddress).toLowerCase(), PROVIDER_ID],
+    args: [principalId, PROVIDER_ID],
   });
   const row = result.rows[0] as QueryRow | undefined;
   return {

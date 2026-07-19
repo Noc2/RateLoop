@@ -406,36 +406,67 @@ function encryptVaultValue(domain: VaultDomain, value: unknown) {
 
 export async function ensureAssuranceRaterProfile(
   client: Pick<PoolClient, "query">,
-  accountAddress: string,
+  input: { principalId: string; payoutAccount: string },
   now = new Date(),
 ) {
-  const normalizedAddress = getAddress(accountAddress).toLowerCase();
-  const existing = await client.query(
-    `SELECT rater_id FROM tokenless_rater_profiles
-     WHERE account_address = $1 LIMIT 1 FOR UPDATE`,
-    [normalizedAddress],
+  const normalizedAddress = getAddress(input.payoutAccount).toLowerCase();
+  const wallet = await client.query(
+    `SELECT binding_id FROM tokenless_wallet_bindings
+     WHERE principal_id = $1 AND purpose = 'payout' AND lower(wallet_address) = $2
+       AND revoked_at IS NULL LIMIT 1 FOR UPDATE`,
+    [input.principalId, normalizedAddress],
   );
-  const existingId = stringValue(existing.rows[0] as QueryRow | undefined, "rater_id");
-  if (existingId) return existingId;
+  if (wallet.rowCount !== 1) {
+    throw new TokenlessServiceError(
+      "The active payout wallet changed. Retry with the current wallet.",
+      409,
+      "payout_wallet_changed",
+    );
+  }
+  const existing = await client.query(
+    `SELECT rater_id, account_address FROM tokenless_rater_profiles
+     WHERE principal_id = $1 LIMIT 1 FOR UPDATE`,
+    [input.principalId],
+  );
+  const existingRow = existing.rows[0] as QueryRow | undefined;
+  const existingId = stringValue(existingRow, "rater_id");
+  if (existingId) {
+    if (stringValue(existingRow, "account_address") !== normalizedAddress) {
+      throw new TokenlessServiceError(
+        "The rater payout mirror does not match its active wallet.",
+        409,
+        "payout_wallet_changed",
+      );
+    }
+    return existingId;
+  }
 
   const raterId = `rtr_${randomUUID().replaceAll("-", "")}`;
   const seedVault = encryptVaultValue("vote_mapping", { seed: `0x${randomBytes(32).toString("hex")}` });
   const inserted = await client.query(
     `INSERT INTO tokenless_rater_profiles
-     (rater_id, account_address, nullifier_seed_ciphertext,
+     (rater_id, principal_id, account_address, nullifier_seed_ciphertext,
       nullifier_key_version, nullifier_key_domain, created_at, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$6)
-     ON CONFLICT (account_address) DO NOTHING
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$7)
+     ON CONFLICT (principal_id) DO NOTHING
      RETURNING rater_id`,
-    [raterId, normalizedAddress, seedVault.ciphertext, seedVault.keyVersion, seedVault.keyDomain, now],
+    [
+      raterId,
+      input.principalId,
+      normalizedAddress,
+      seedVault.ciphertext,
+      seedVault.keyVersion,
+      seedVault.keyDomain,
+      now,
+    ],
   );
   const insertedId = stringValue(inserted.rows[0] as QueryRow | undefined, "rater_id");
   if (insertedId) return insertedId;
 
   const raced = await client.query(
     `SELECT rater_id FROM tokenless_rater_profiles
-     WHERE account_address = $1 LIMIT 1 FOR UPDATE`,
-    [normalizedAddress],
+     WHERE principal_id = $1 LIMIT 1 FOR UPDATE`,
+    [input.principalId],
   );
   const racedId = stringValue(raced.rows[0] as QueryRow | undefined, "rater_id");
   if (!racedId) throw new Error("Unable to create the minimal RateLoop human identity record.");
@@ -485,7 +516,10 @@ function validateHandoffState(state: string, secret: Buffer) {
   return supplied.length === expected.length && timingSafeEqual(supplied, expected);
 }
 
-export async function createEligibilityProviderHandoff(accountAddress: string, now = new Date()) {
+export async function createEligibilityProviderHandoff(
+  input: { principalId: string; payoutAccount: string },
+  now = new Date(),
+) {
   const config = getHandoffConfig();
   const providerId =
     process.env.TOKENLESS_ELIGIBILITY_PROVIDER_ID?.trim() ||
@@ -499,9 +533,9 @@ export async function createEligibilityProviderHandoff(accountAddress: string, n
   const callbackUrl = `${getAuthOrigin()}/api/rater/eligibility/provider/callback`;
   await dbClient.execute({
     sql: `INSERT INTO tokenless_eligibility_provider_handoffs
-          (state_hash, account_address, provider_id, status, expires_at, created_at)
-          VALUES (?, ?, ?, 'pending', ?, ?)`,
-    args: [hash(state), getAddress(accountAddress).toLowerCase(), providerId, expiresAt, now],
+          (state_hash, principal_id, account_address, provider_id, status, expires_at, created_at)
+          VALUES (?, ?, ?, ?, 'pending', ?, ?)`,
+    args: [hash(state), input.principalId, getAddress(input.payoutAccount).toLowerCase(), providerId, expiresAt, now],
   });
   const startUrl = new URL(config.startUrl);
   startUrl.searchParams.set("state", state);
@@ -567,12 +601,17 @@ export async function completeEligibilityProviderHandoff(input: {
   return { status: "verified" as const, state: input.state, expiresAt: resultExpiresAt };
 }
 
-async function resolveEligibilityAssertion(input: EligibilitySubmission, accountAddress: Address, now: Date) {
+async function resolveEligibilityAssertion(
+  input: EligibilitySubmission,
+  principalId: string,
+  payoutAccount: Address,
+  now: Date,
+) {
   if (input.providerState) {
     const result = await dbClient.execute({
       sql: `SELECT provider_result_ciphertext, provider_result_key_version, provider_result_key_domain,
                    provider_result_expires_at, status,
-                   account_address
+                   principal_id, account_address
             FROM tokenless_eligibility_provider_handoffs WHERE state_hash = ? LIMIT 1`,
       args: [hash(input.providerState)],
     });
@@ -580,7 +619,8 @@ async function resolveEligibilityAssertion(input: EligibilitySubmission, account
     if (
       !row ||
       stringValue(row, "status") !== "verified" ||
-      stringValue(row, "account_address") !== accountAddress.toLowerCase() ||
+      stringValue(row, "principal_id") !== principalId ||
+      stringValue(row, "account_address") !== payoutAccount.toLowerCase() ||
       new Date(String(row.provider_result_expires_at)) <= now ||
       !stringValue(row, "provider_result_ciphertext") ||
       !stringValue(row, "provider_result_key_version") ||
@@ -708,12 +748,13 @@ function publicBlockedReason(reason: string | null) {
 }
 
 export async function submitPaidEligibility(input: {
-  accountAddress: string;
+  principalId: string;
+  payoutAccount: string;
   submission: EligibilitySubmission;
   now?: Date;
 }) {
   const now = input.now ?? new Date();
-  const accountAddress = getAddress(input.accountAddress);
+  const payoutAddress = getAddress(input.payoutAccount);
   if (input.submission.sanctionsConsent !== true) {
     throw new TokenlessServiceError(
       "Sanctions screening consent is required for paid tasks.",
@@ -722,7 +763,7 @@ export async function submitPaidEligibility(input: {
     );
   }
   const payoutAccount = getAddress(input.submission.payoutAccount);
-  if (payoutAccount !== accountAddress) {
+  if (payoutAccount !== payoutAddress) {
     throw new TokenlessServiceError(
       "The payout wallet must be the signed-in account.",
       403,
@@ -734,9 +775,9 @@ export async function submitPaidEligibility(input: {
   if (!COUNTRY.test(taxCountry) || !COUNTRY.test(declaredResidenceCountry)) {
     throw new TokenlessServiceError("Residence and tax countries are invalid.", 400, "tax_profile_invalid");
   }
-  const resolvedAssertion = await resolveEligibilityAssertion(input.submission, accountAddress, now);
+  const resolvedAssertion = await resolveEligibilityAssertion(input.submission, input.principalId, payoutAddress, now);
   const assertion = resolvedAssertion.assertion;
-  if (assertion.accountAddress !== accountAddress) {
+  if (assertion.accountAddress !== payoutAddress) {
     throw new TokenlessServiceError(
       "The provider result belongs to another account.",
       403,
@@ -791,12 +832,32 @@ export async function submitPaidEligibility(input: {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    const activePayout = await client.query(
+      `SELECT binding_id FROM tokenless_wallet_bindings
+       WHERE principal_id = $1 AND purpose = 'payout' AND lower(wallet_address) = $2
+         AND revoked_at IS NULL LIMIT 1 FOR UPDATE`,
+      [input.principalId, payoutAddress.toLowerCase()],
+    );
+    if (activePayout.rowCount !== 1) {
+      throw new TokenlessServiceError(
+        "The payout wallet changed while eligibility was prepared. Retry with the current wallet.",
+        409,
+        "payout_wallet_changed",
+      );
+    }
     const existing = await client.query(
-      `SELECT rater_id, nullifier_key_domain
-       FROM tokenless_rater_profiles WHERE account_address = $1 FOR UPDATE`,
-      [accountAddress.toLowerCase()],
+      `SELECT rater_id, account_address, nullifier_key_domain
+       FROM tokenless_rater_profiles WHERE principal_id = $1 FOR UPDATE`,
+      [input.principalId],
     );
     const existingRow = existing.rows[0] as QueryRow | undefined;
+    if (existingRow && stringValue(existingRow, "account_address") !== payoutAddress.toLowerCase()) {
+      throw new TokenlessServiceError(
+        "The rater payout mirror does not match its active wallet.",
+        409,
+        "payout_wallet_changed",
+      );
+    }
     const raterId = stringValue(existingRow, "rater_id") ?? `rtr_${randomUUID().replaceAll("-", "")}`;
     const subjectHashes = subjectReferences.map(reference => reference.hash);
     const bindingResult = await client.query(
@@ -823,10 +884,18 @@ export async function submitPaidEligibility(input: {
     if (!existingRow) {
       await client.query(
         `INSERT INTO tokenless_rater_profiles
-         (rater_id, account_address, nullifier_seed_ciphertext,
+         (rater_id, principal_id, account_address, nullifier_seed_ciphertext,
           nullifier_key_version, nullifier_key_domain, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $6)`,
-        [raterId, accountAddress.toLowerCase(), seedVault.ciphertext, seedVault.keyVersion, seedVault.keyDomain, now],
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $7)`,
+        [
+          raterId,
+          input.principalId,
+          payoutAddress.toLowerCase(),
+          seedVault.ciphertext,
+          seedVault.keyVersion,
+          seedVault.keyDomain,
+          now,
+        ],
       );
     } else if (stringValue(existingRow, "nullifier_key_domain") !== "vote_mapping") {
       await client.query(
@@ -1013,7 +1082,7 @@ export async function submitPaidEligibility(input: {
         payout_ownership_method = EXCLUDED.payout_ownership_method,
         payout_verified_at = EXCLUDED.payout_verified_at, payout_expires_at = NULL,
         eligibility_status = 'ready', blocked_reason = NULL, updated_at = EXCLUDED.updated_at`,
-      [raterId, accountAddress.toLowerCase(), now],
+      [raterId, payoutAddress.toLowerCase(), now],
     );
     await client.query(
       `INSERT INTO tokenless_reviewer_qualifications
@@ -1055,7 +1124,7 @@ export async function submitPaidEligibility(input: {
   }
 }
 
-export async function getPaidEligibility(accountAddress: string, now = new Date()) {
+export async function getPaidEligibility(principalId: string, now = new Date()) {
   const result = await dbClient.execute({
     sql: `SELECT p.rater_id, l.minimum_age_verified, l.age_evidence_expires_at,
                  l.verified_residence_country, l.declared_residence_country,
@@ -1063,12 +1132,15 @@ export async function getPaidEligibility(accountAddress: string, now = new Date(
                  l.dac7_status, l.sanctions_status, l.sanctions_expires_at,
                  l.eligibility_status, l.blocked_reason, l.updated_at,
                  pe.payout_account, pe.payout_ownership_method, pe.payout_expires_at,
-                 pe.eligibility_status AS payout_eligibility_status
+                 pe.eligibility_status AS payout_eligibility_status,
+                 wb.wallet_address AS active_payout_account
           FROM tokenless_rater_profiles p
           JOIN tokenless_legal_eligibility l ON l.rater_id = p.rater_id
           JOIN tokenless_payout_eligibility pe ON pe.rater_id = p.rater_id
-          WHERE p.account_address = ? LIMIT 1`,
-    args: [getAddress(accountAddress).toLowerCase()],
+          LEFT JOIN tokenless_wallet_bindings wb ON wb.principal_id = p.principal_id
+            AND wb.purpose = 'payout' AND wb.revoked_at IS NULL
+          WHERE p.principal_id = ? LIMIT 1`,
+    args: [principalId],
   });
   const row = result.rows[0] as QueryRow | undefined;
   if (!row) return { status: "not_started" };
@@ -1105,7 +1177,8 @@ export async function getPaidEligibility(accountAddress: string, now = new Date(
     (evidenceExpiresAt <= now ||
       sanctionsExpiresAt <= now ||
       (row.payout_expires_at !== null && new Date(String(row.payout_expires_at)) <= now) ||
-      stringValue(row, "payout_eligibility_status") !== "ready")
+      stringValue(row, "payout_eligibility_status") !== "ready" ||
+      stringValue(row, "active_payout_account") !== stringValue(row, "payout_account"))
       ? "expired"
       : persisted;
   return {
@@ -1188,15 +1261,15 @@ const verifyLiveIssuerState: IssuerStateVerifier = async config => {
 };
 
 async function loadVoucherEligibility(
-  accountAddress: Address,
+  principalId: string,
   reviewerSource: VoucherRequest["reviewerSource"],
   now: Date,
 ) {
-  const preflight = await requirePaidReviewEligibility(accountAddress, now);
+  const preflight = await requirePaidReviewEligibility(principalId, now);
   const result = await dbClient.execute({
     sql: `SELECT rater_id, nullifier_seed_ciphertext, nullifier_key_version, nullifier_key_domain
-          FROM tokenless_rater_profiles WHERE rater_id = ? AND account_address = ? LIMIT 1`,
-    args: [preflight.raterId, accountAddress.toLowerCase()],
+          FROM tokenless_rater_profiles WHERE rater_id = ? AND principal_id = ? LIMIT 1`,
+    args: [preflight.raterId, principalId],
   });
   const row = result.rows[0] as QueryRow | undefined;
   if (!row || stringValue(row, "nullifier_key_domain") !== "vote_mapping") {
@@ -1401,13 +1474,13 @@ function voucherResponse(row: QueryRow) {
     voucher: JSON.parse(String(row.voucher_json)) as Record<string, string | number>,
     voucherSignature: stringValue(row, "voucher_signature"),
     assuranceSnapshotHash: stringValue(row, "assurance_snapshot_hash"),
+    payoutAccountSnapshot: getAddress(String(row.payout_account_snapshot)),
     issuedAt: new Date(String(row.issued_at)),
   };
 }
 
-export async function issuePaidVoucher(input: { accountAddress: string; request: VoucherRequest; now?: Date }) {
+export async function issuePaidVoucher(input: { principalId: string; request: VoucherRequest; now?: Date }) {
   const now = input.now ?? new Date();
-  const accountAddress = getAddress(input.accountAddress);
   if (
     !IDEMPOTENCY_KEY.test(input.request.idempotencyKey) ||
     !/^\d+$/.test(input.request.roundId) ||
@@ -1464,8 +1537,8 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
   const previous = await dbClient.execute({
     sql: `SELECT v.* FROM tokenless_paid_vouchers v
           JOIN tokenless_rater_profiles p ON p.rater_id = v.rater_id
-          WHERE p.account_address = ? AND v.request_idempotency_key = ? LIMIT 1`,
-    args: [accountAddress.toLowerCase(), input.request.idempotencyKey],
+          WHERE p.principal_id = ? AND v.request_idempotency_key = ? LIMIT 1`,
+    args: [input.principalId, input.request.idempotencyKey],
   });
   const priorRow = previous.rows[0] as QueryRow | undefined;
   if (priorRow) {
@@ -1478,7 +1551,7 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
     }
     return voucherResponse(priorRow);
   }
-  const eligibility = await loadVoucherEligibility(accountAddress, input.request.reviewerSource, now);
+  const eligibility = await loadVoucherEligibility(input.principalId, input.request.reviewerSource, now);
   const raterId = stringValue(eligibility.row, "rater_id")!;
   if (
     stringValue(round, "status") !== "open" ||
@@ -1497,7 +1570,7 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
       integrity:
         eligibility.reviewerSource === "rateloop_network"
           ? ((await loadVoucherIntegrityEvidence({
-              accountAddress,
+              accountAddress: getAddress(eligibility.preflight.payoutAccount),
               contentId: input.request.contentId,
               policy: frozenPolicy.policy,
               now,
@@ -1605,7 +1678,7 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
   const insertClient = await dbPool.connect();
   try {
     await insertClient.query("BEGIN");
-    const finalPreflight = await requirePaidReviewEligibilityInTransaction(insertClient, accountAddress, now);
+    const finalPreflight = await requirePaidReviewEligibilityInTransaction(insertClient, input.principalId, now);
     if (
       finalPreflight.raterId !== raterId ||
       finalPreflight.eligibilityCommitment !== eligibility.preflight.eligibilityCommitment
@@ -1621,8 +1694,8 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
             (voucher_id, rater_id, request_idempotency_key, request_hash, chain_id,
              panel_address, issuer_address, issuer_epoch, signer_address, round_id, content_id, vote_key,
              nullifier, admission_policy_hash, assurance_snapshot_hash, expires_at,
-             voucher_json, voucher_signature, status, issued_at)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,'issued',$19)`,
+             payout_account_snapshot, voucher_json, voucher_signature, status, issued_at)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'issued',$20)`,
       [
         voucherId,
         raterId,
@@ -1640,6 +1713,7 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
         frozenPolicy.admissionPolicyHash,
         assuranceSnapshotHash,
         expiresAt,
+        finalPreflight.payoutAccount.toLowerCase(),
         voucherJson,
         voucherSignature,
         now,

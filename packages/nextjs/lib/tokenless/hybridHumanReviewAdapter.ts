@@ -1,12 +1,15 @@
 import { createHash } from "node:crypto";
 import "server-only";
+import { getAddress } from "viem";
+import { isRateLoopPrincipalId } from "~~/lib/auth/accountSubject";
 import type { PaidReviewEligibilityPreflight } from "~~/lib/tokenless/paidReviewEligibilityPreflight";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Hash = `sha256:${string}`;
 
 export type HybridReviewCandidate = {
-  accountAddress: string;
+  principalId: string;
+  payoutAccount: string;
   assignmentReference: string;
   assignmentHash: Hash;
 };
@@ -49,7 +52,7 @@ export type HybridHumanReviewResult = {
 };
 
 export type HybridHumanReviewDependencies = {
-  requireEligibility(accountAddress: string): Promise<PaidReviewEligibilityPreflight>;
+  requireEligibility(principalId: string): Promise<PaidReviewEligibilityPreflight>;
   prepareInvited(input: {
     split: FrozenHybridReviewSplit;
     candidates: readonly HybridReviewCandidate[];
@@ -63,7 +66,6 @@ export type HybridHumanReviewDependencies = {
 };
 
 const HASH = /^sha256:[0-9a-f]{64}$/u;
-const ADDRESS = /^0x[0-9a-f]{40}$/u;
 const ATOMIC = /^(0|[1-9][0-9]*)$/u;
 
 function stableJson(value: unknown): string {
@@ -84,12 +86,18 @@ function sha256(value: unknown): Hash {
 }
 
 function candidate(value: HybridReviewCandidate, field: string): HybridReviewCandidate {
-  const accountAddress = value.accountAddress.toLowerCase();
-  if (!ADDRESS.test(accountAddress) || !value.assignmentReference || !HASH.test(value.assignmentHash)) {
+  let payoutAccount: string;
+  try {
+    payoutAccount = getAddress(value.payoutAccount).toLowerCase();
+  } catch {
+    throw new TokenlessServiceError(`${field} is invalid.`, 409, "hybrid_review_binding_invalid");
+  }
+  if (!isRateLoopPrincipalId(value.principalId) || !value.assignmentReference || !HASH.test(value.assignmentHash)) {
     throw new TokenlessServiceError(`${field} is invalid.`, 409, "hybrid_review_binding_invalid");
   }
   return {
-    accountAddress,
+    principalId: value.principalId,
+    payoutAccount,
     assignmentReference: value.assignmentReference,
     assignmentHash: value.assignmentHash,
   };
@@ -168,9 +176,9 @@ export function createHybridHumanReviewAdapter(dependencies: HybridHumanReviewDe
     validate(split);
     const frozenSplit = canonicalSplit(split);
     const invited = frozenSplit.invited.candidates;
-    const invitedAccounts = new Set(invited.map(value => value.accountAddress));
+    const invitedPrincipals = new Set(invited.map(value => value.principalId));
     const normalizedNetwork = frozenSplit.network.candidates;
-    const network = normalizedNetwork.filter(value => !invitedAccounts.has(value.accountAddress));
+    const network = normalizedNetwork.filter(value => !invitedPrincipals.has(value.principalId));
     const duplicateCount = normalizedNetwork.length - network.length;
     if (network.length !== split.network.requestedCount) {
       throw new TokenlessServiceError(
@@ -180,21 +188,35 @@ export function createHybridHumanReviewAdapter(dependencies: HybridHumanReviewDe
       );
     }
     const finalCandidates = [...invited, ...network];
-    const accountSet = new Set(finalCandidates.map(value => value.accountAddress));
-    if (accountSet.size !== finalCandidates.length) {
+    const principalSet = new Set(finalCandidates.map(value => value.principalId));
+    const payoutSet = new Set(finalCandidates.map(value => value.payoutAccount));
+    if (principalSet.size !== finalCandidates.length || payoutSet.size !== finalCandidates.length) {
       throw new TokenlessServiceError("Hybrid reviewers must be unique.", 409, "hybrid_review_duplicate_reviewer");
     }
     const preflightEntries = await Promise.all(
-      [...accountSet]
-        .sort()
-        .map(async accountAddress => [accountAddress, await dependencies.requireEligibility(accountAddress)] as const),
+      finalCandidates
+        .toSorted((left, right) => left.principalId.localeCompare(right.principalId))
+        .map(async reviewer => {
+          const preflight = await dependencies.requireEligibility(reviewer.principalId);
+          if (
+            preflight.principalId !== reviewer.principalId ||
+            preflight.payoutAccount.toLowerCase() !== reviewer.payoutAccount
+          ) {
+            throw new TokenlessServiceError(
+              "Paid eligibility does not match the frozen hybrid reviewer.",
+              409,
+              "hybrid_review_binding_invalid",
+            );
+          }
+          return [reviewer.principalId, preflight] as const;
+        }),
     );
-    const preflightByAccount = new Map(preflightEntries);
+    const preflightByPrincipal = new Map(preflightEntries);
     const invitedPreparation = exactPreparation(
       await dependencies.prepareInvited({
         split: frozenSplit,
         candidates: invited,
-        preflights: invited.map(value => preflightByAccount.get(value.accountAddress)!),
+        preflights: invited.map(value => preflightByPrincipal.get(value.principalId)!),
       }),
       "Invited subpanel",
     );
@@ -202,7 +224,7 @@ export function createHybridHumanReviewAdapter(dependencies: HybridHumanReviewDe
       await dependencies.prepareNetwork({
         split: frozenSplit,
         candidates: network,
-        preflights: network.map(value => preflightByAccount.get(value.accountAddress)!),
+        preflights: network.map(value => preflightByPrincipal.get(value.principalId)!),
       }),
       "Network subpanel",
     );
@@ -211,8 +233,9 @@ export function createHybridHumanReviewAdapter(dependencies: HybridHumanReviewDe
       deduplicationRule: "invited_wins",
       invited: { candidates: invited, preparation: invitedPreparation },
       network: { candidates: network, preparation: networkPreparation, removedDuplicateCount: duplicateCount },
-      eligibility: preflightEntries.map(([accountAddress, value]) => ({
-        accountAddress,
+      eligibility: preflightEntries.map(([principalId, value]) => ({
+        principalId,
+        payoutAccount: value.payoutAccount,
         preflightId: value.preflightId,
         commitment: value.eligibilityCommitment,
       })),

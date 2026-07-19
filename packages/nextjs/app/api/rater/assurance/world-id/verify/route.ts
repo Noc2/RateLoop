@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     // Preserve the exact IDKit result bytes. The verifier library parses a
     // separate in-memory view but forwards this string to World unchanged.
     const rawBody = await request.text();
-    const result = await verifyWorldIdAssurance({ accountAddress: session.payoutAddress, rawBody });
+    const result = await verifyWorldIdAssurance({ principalId: session.principalId, rawBody });
     return NextResponse.json(result, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const response = tokenlessErrorResponse(error);

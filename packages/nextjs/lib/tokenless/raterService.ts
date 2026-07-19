@@ -99,11 +99,10 @@ function boundTaskReviewerSource(row: Row): "customer_invited" | "rateloop_netwo
 }
 
 export async function listPaidRaterTasks(
-  accountAddress: string | null,
+  principalId: string | null,
   optionsOrNow: { query?: string; scope?: "all" | "public" } | Date = {},
   now = new Date(),
 ) {
-  const address = accountAddress ? getAddress(accountAddress).toLowerCase() : null;
   const options = optionsOrNow instanceof Date ? {} : optionsOrNow;
   now = optionsOrNow instanceof Date ? optionsOrNow : now;
   const query = options.query?.trim() ?? "";
@@ -125,14 +124,14 @@ export async function listPaidRaterTasks(
           JOIN tokenless_ask_ownership o ON o.operation_key = e.operation_key
           JOIN tokenless_question_records q ON q.question_id = o.question_id
           JOIN tokenless_content_records c ON c.content_id = q.content_id
-          LEFT JOIN tokenless_rater_profiles p ON p.account_address = ?
+          LEFT JOIN tokenless_rater_profiles p ON p.principal_id = ?
           LEFT JOIN tokenless_paid_vouchers v ON v.rater_id = p.rater_id AND v.round_id = vr.round_id
              AND v.panel_address = vr.panel_address
           WHERE vr.status = 'open' AND vr.voucher_deadline > ? AND c.moderation_status = 'approved'
             AND q.visibility = 'public' AND q.data_classification IN ('public', 'synthetic', 'redacted')
             AND (? = '' OR c.content_json ILIKE ?)
           ORDER BY vr.voucher_deadline ASC LIMIT 50`,
-    args: [address, now, query, `%${query}%`],
+    args: [principalId, now, query, `%${query}%`],
   });
   return result.rows.flatMap(value => {
     const row = value as Row;
@@ -533,7 +532,7 @@ function assertIsolatedCommitRelayer(runtime: TokenlessChainRuntime) {
   }
 }
 
-export async function relayPaidRaterCommit(input: { accountAddress: string; request: RaterCommitRequest }) {
+export async function relayPaidRaterCommit(input: { principalId: string; request: RaterCommitRequest }) {
   if (!IDEMPOTENCY.test(input.request.idempotencyKey)) {
     throw new TokenlessServiceError("Commit idempotency key is invalid.", 400, "invalid_idempotency_key");
   }
@@ -546,7 +545,7 @@ export async function relayPaidRaterCommit(input: { accountAddress: string; requ
   assertIsolatedCommitRelayer(runtime);
   await assertLiveTokenlessDeployment(config, runtime);
   const voucherResult = await dbClient.execute({
-    sql: `SELECT v.*, p.account_address, vr.voucher_deadline,
+    sql: `SELECT v.*, p.principal_id, vr.voucher_deadline,
                  vr.admission_policy_hash AS round_admission_policy_hash, e.round_terms_json,
                  e.operation_key, o.question_id, c.content_json
           FROM tokenless_paid_vouchers v
@@ -560,7 +559,7 @@ export async function relayPaidRaterCommit(input: { accountAddress: string; requ
     args: [input.request.voucherId],
   });
   const voucherRow = voucherResult.rows[0] as Row | undefined;
-  if (!voucherRow || rowString(voucherRow, "account_address") !== getAddress(input.accountAddress).toLowerCase()) {
+  if (!voucherRow || rowString(voucherRow, "principal_id") !== input.principalId) {
     throw new TokenlessServiceError("Voucher not found.", 404, "voucher_not_found");
   }
   const voucher = JSON.parse(rowString(voucherRow, "voucher_json")!) as Record<string, string | number>;
@@ -829,15 +828,15 @@ export async function reconcilePaidRaterCommit(commitId: string) {
   return publicCommit(stored.rows[0] as Row);
 }
 
-export async function getPaidRaterCommit(input: { accountAddress: string; commitId: string }) {
+export async function getPaidRaterCommit(input: { principalId: string; commitId: string }) {
   const result = await dbClient.execute({
-    sql: `SELECT c.*, p.account_address FROM tokenless_rater_commits c
+    sql: `SELECT c.*, p.principal_id FROM tokenless_rater_commits c
           JOIN tokenless_paid_vouchers v ON v.voucher_id = c.voucher_id
           JOIN tokenless_rater_profiles p ON p.rater_id = v.rater_id WHERE c.commit_id = ? LIMIT 1`,
     args: [input.commitId],
   });
   const row = result.rows[0] as Row | undefined;
-  if (!row || rowString(row, "account_address") !== getAddress(input.accountAddress).toLowerCase()) {
+  if (!row || rowString(row, "principal_id") !== input.principalId) {
     throw new TokenlessServiceError("Commit not found.", 404, "commit_not_found");
   }
   if (rowString(row, "state") === "submitted") {

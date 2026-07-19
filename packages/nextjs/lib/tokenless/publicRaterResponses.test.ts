@@ -44,17 +44,29 @@ beforeEach(async () => {
     args: [NOW, NOW],
   });
   await dbClient.execute({
-    sql: "INSERT INTO tokenless_rater_profiles (rater_id, account_address, nullifier_seed_ciphertext, nullifier_key_version, nullifier_key_domain, created_at, updated_at) VALUES ('rater_response', ?, 'ciphertext', 'v1', 'vote_mapping', ?, ?)",
-    args: [VOTE_KEY, NOW, NOW],
+    sql: `INSERT INTO tokenless_principals (principal_id,status,created_at,updated_at)
+          VALUES ('rlp_public_response','active',?,?);
+          INSERT INTO tokenless_wallet_bindings
+          (binding_id,principal_id,purpose,wallet_address,wallet_source,chain_id,proof_message_hash,created_at,last_used_at)
+          VALUES ('binding_public_response','rlp_public_response','payout',?,'self_custodial',84532,'fixture',?,?);
+          INSERT INTO tokenless_payout_wallet_ownership
+          (wallet_address,principal_id,first_binding_id,first_bound_at)
+          VALUES (?,'rlp_public_response','binding_public_response',?);
+          INSERT INTO tokenless_rater_profiles
+          (rater_id,principal_id,account_address,nullifier_seed_ciphertext,nullifier_key_version,
+           nullifier_key_domain,created_at,updated_at)
+          VALUES ('rater_response','rlp_public_response',?,'ciphertext','v1','vote_mapping',?,?)`,
+    args: [NOW, NOW, VOTE_KEY, NOW, NOW, VOTE_KEY, NOW, VOTE_KEY, NOW, NOW],
   });
   await dbClient.execute({
     sql: `INSERT INTO tokenless_paid_vouchers
           (voucher_id, rater_id, request_idempotency_key, request_hash, chain_id,
            panel_address, issuer_address, issuer_epoch, signer_address, round_id, content_id, vote_key, nullifier,
-           admission_policy_hash, assurance_snapshot_hash, expires_at, voucher_json, voucher_signature, status, issued_at)
+           admission_policy_hash, assurance_snapshot_hash, expires_at, payout_account_snapshot,
+           voucher_json, voucher_signature, status, issued_at)
           VALUES ('voucher_response', 'rater_response', 'voucher:test:1', 'hash', 84532,
                   '0x2222222222222222222222222222222222222222', '0x3333333333333333333333333333333333333333',
-                  1, '0x4444444444444444444444444444444444444444', 42, ?, ?, ?, ?, ?, ?, '{}', '0x12', 'issued', ?)`,
+                  1, '0x4444444444444444444444444444444444444444', 42, ?, ?, ?, ?, ?, ?, ?, '{}', '0x12', 'issued', ?)`,
     args: [
       CONTENT_ID,
       VOTE_KEY,
@@ -62,6 +74,7 @@ beforeEach(async () => {
       `0x${"44".repeat(32)}`,
       `sha256:${"55".repeat(32)}`,
       new Date(NOW.getTime() + 60_000),
+      VOTE_KEY,
       NOW,
     ],
   });

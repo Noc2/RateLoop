@@ -648,7 +648,7 @@ test("owner gold injection is manifest-bound, verdict-isolated, and promotes onl
           projectId,
           assignmentId: `${run.runId}_assignment_0`,
           reviewerKey: `hmac-sha256:test-v1:${"a".repeat(64)}`,
-          reviewerAccountAddress: reviewer,
+          reviewerPrincipalId: reviewer,
           reviewerSource: "customer_invited",
           responses: goldAnswers,
           now,

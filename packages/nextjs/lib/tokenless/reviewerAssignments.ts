@@ -1,17 +1,8 @@
 import "server-only";
-import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient } from "~~/lib/db";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
-
-function normalizeAddress(value: string) {
-  try {
-    return normalizeAccountSubject(value);
-  } catch {
-    throw new TokenlessServiceError("Account address is invalid.", 400, "invalid_account");
-  }
-}
 
 function stringValue(row: Row, key: string) {
   const value = row[key];
@@ -31,7 +22,8 @@ export async function listReviewerAssignments(input: {
   state?: string;
   limit?: number;
 }) {
-  const reviewer = normalizeAddress(input.accountAddress);
+  const principalId = input.accountAddress.trim();
+  if (!principalId) throw new TokenlessServiceError("Account is invalid.", 400, "invalid_account");
   const query = input.query?.trim() ?? "";
   const state = input.state?.trim() ?? "";
   const limit = Math.min(Math.max(input.limit ?? 50, 1), 50);
@@ -49,13 +41,15 @@ export async function listReviewerAssignments(input: {
                  COUNT(c.case_id) AS case_count
           FROM tokenless_assurance_assignments a
           JOIN tokenless_assurance_projects p ON p.project_id = a.project_id
+          LEFT JOIN tokenless_rater_profiles owner_profile ON owner_profile.rater_id = a.rater_id
           LEFT JOIN tokenless_assurance_cases c ON c.project_id = a.project_id AND c.status = 'ready'
           LEFT JOIN tokenless_private_group_memberships gm
             ON gm.group_id = a.private_group_id AND gm.principal_address = a.reviewer_account_address
            AND gm.status = 'active'
            AND (gm.membership_expires_at IS NULL OR gm.membership_expires_at > ?)
           LEFT JOIN tokenless_private_groups g ON g.group_id = gm.group_id AND g.status = 'active'
-          WHERE a.reviewer_account_address = ?
+          WHERE ((a.rater_id IS NOT NULL AND owner_profile.principal_id = ?)
+                 OR (a.rater_id IS NULL AND a.reviewer_account_address = ?))
             AND (a.private_group_id IS NULL OR a.status IN ('accepted', 'completed') OR g.group_id IS NOT NULL)
             AND (? = '' OR a.status = ?)
             AND (? = '' OR a.assignment_id ILIKE ? OR p.name ILIKE ?)
@@ -64,7 +58,7 @@ export async function listReviewerAssignments(input: {
                    a.assignment_expires_at, a.created_at, a.private_group_id,
                    a.private_group_policy_version, a.private_group_policy_hash
           ORDER BY a.created_at DESC, a.assignment_id DESC LIMIT ?`,
-    args: [new Date(), reviewer, state, state, query, `%${query}%`, `%${query}%`, limit],
+    args: [new Date(), principalId, principalId, state, state, query, `%${query}%`, `%${query}%`, limit],
   });
   return result.rows.map(row => {
     const value = row as Row;

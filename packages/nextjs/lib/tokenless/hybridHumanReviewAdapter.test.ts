@@ -13,7 +13,12 @@ const B = "0x2222222222222222222222222222222222222222";
 const C = "0x3333333333333333333333333333333333333333";
 
 function candidate(accountAddress: string) {
-  return { accountAddress, assignmentReference: `assignment:${accountAddress}`, assignmentHash: HASH };
+  return {
+    principalId: `rlp_${accountAddress.slice(2, 26)}`,
+    payoutAccount: accountAddress,
+    assignmentReference: `assignment:${accountAddress}`,
+    assignmentHash: HASH,
+  };
 }
 
 function split(): FrozenHybridReviewSplit {
@@ -32,14 +37,16 @@ function split(): FrozenHybridReviewSplit {
 
 function dependencies(events: string[]): HybridHumanReviewDependencies {
   return {
-    requireEligibility: async accountAddress => {
-      events.push(`preflight:${accountAddress}`);
+    requireEligibility: async principalId => {
+      const payoutAccount = [A, B, C].find(account => candidate(account).principalId === principalId)!;
+      events.push(`preflight:${principalId}`);
       return {
         schemaVersion: "rateloop.paid-review-eligibility-preflight.v1",
-        preflightId: `pef_${accountAddress.slice(2)}`,
-        raterId: `rater_${accountAddress.slice(2)}`,
-        accountAddress,
-        payoutAccount: accountAddress,
+        preflightId: `pef_${payoutAccount.slice(2)}`,
+        raterId: `rater_${payoutAccount.slice(2)}`,
+        principalId,
+        accountAddress: payoutAccount,
+        payoutAccount,
         identityAssertions: [],
         checkedAt: "2026-07-16T12:00:00.000Z",
         validUntil: "2026-07-16T13:00:00.000Z",
@@ -47,11 +54,11 @@ function dependencies(events: string[]): HybridHumanReviewDependencies {
       };
     },
     prepareInvited: async input => {
-      events.push(`invited:${input.candidates.map(value => value.accountAddress).join(",")}`);
+      events.push(`invited:${input.candidates.map(value => value.payoutAccount).join(",")}`);
       return { subpanelReference: "hybrid:invited", bindingHash: HASH, status: "ready", replayed: false };
     },
     prepareNetwork: async input => {
-      events.push(`network:${input.candidates.map(value => value.accountAddress).join(",")}`);
+      events.push(`network:${input.candidates.map(value => value.payoutAccount).join(",")}`);
       return { subpanelReference: "hybrid:network", bindingHash: HASH, status: "ready", replayed: false };
     },
   };
@@ -73,7 +80,12 @@ test("preflights the final deterministic reviewer set before preparing either su
   const events: string[] = [];
   const adapter = createHybridHumanReviewAdapter(dependencies(events));
   const result = await adapter(split());
-  assert.deepEqual(events, [`preflight:${A}`, `preflight:${B}`, `invited:${A}`, `network:${B}`]);
+  assert.deepEqual(events, [
+    `preflight:${candidate(A).principalId}`,
+    `preflight:${candidate(B).principalId}`,
+    `invited:${A}`,
+    `network:${B}`,
+  ]);
   assert.equal(result.invited.reviewerCount, 1);
   assert.equal(result.network.reviewerCount, 1);
   assert.match(result.splitBindingHash, /^sha256:[0-9a-f]{64}$/u);

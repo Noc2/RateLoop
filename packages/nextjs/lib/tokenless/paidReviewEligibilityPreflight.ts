@@ -15,6 +15,8 @@ export type PaidReviewEligibilityPreflight = {
   schemaVersion: "rateloop.paid-review-eligibility-preflight.v1";
   preflightId: `pef_${string}`;
   raterId: string;
+  principalId: string;
+  /** @deprecated Payout snapshot retained for v1 adapter compatibility; principalId is authoritative. */
   accountAddress: string;
   identityAssertions: Array<{
     assertionId: string;
@@ -27,6 +29,11 @@ export type PaidReviewEligibilityPreflight = {
   checkedAt: string;
   validUntil: string;
   eligibilityCommitment: `sha256:${string}`;
+};
+
+export type PaidReviewerBinding = {
+  principalId: string;
+  payoutAccount: string;
 };
 
 export type PaidReviewEligibilityRequirement = {
@@ -206,11 +213,13 @@ function selectCurrentIdentityAssertions(rows: Row[], now: Date) {
   return [accountControl, minimumAge].sort(compareIdentityRows);
 }
 
-function snapshot(input: { row: Row; identities: Row[]; accountAddress: string; checkedAt: Date; validUntil: Date }) {
+function snapshot(input: { row: Row; identities: Row[]; principalId: string; checkedAt: Date; validUntil: Date }) {
+  const payoutAccount = normalizeAddress(text(input.row, "active_payout_account"))!;
   return {
     schemaVersion: "rateloop.paid-review-eligibility-preflight.v1" as const,
     raterId: text(input.row, "rater_id")!,
-    accountAddress: input.accountAddress,
+    principalId: input.principalId,
+    accountAddress: payoutAccount,
     identityAssertions: input.identities.map(identity => ({
       assertionId: text(identity, "assertion_id")!,
       bindingId: text(identity, "binding_id")!,
@@ -220,7 +229,7 @@ function snapshot(input: { row: Row; identities: Row[]; accountAddress: string; 
         left === right ? 0 : left < right ? -1 : 1,
       ),
     })),
-    payoutAccount: normalizeAddress(text(input.row, "payout_account"))!,
+    payoutAccount,
     checkedAt: input.checkedAt.toISOString(),
     validUntil: input.validUntil.toISOString(),
   };
@@ -228,13 +237,13 @@ function snapshot(input: { row: Row; identities: Row[]; accountAddress: string; 
 
 export async function requirePaidReviewEligibilityInTransaction(
   client: Pick<PoolClient, "query">,
-  accountAddressInput: string,
+  principalId: string,
   now = new Date(),
 ): Promise<PaidReviewEligibilityPreflight> {
-  const accountAddress = normalizeAddress(accountAddressInput);
-  if (!accountAddress) rejectEligibility();
+  if (!principalId) rejectEligibility();
   const result = await client.query(
-    `SELECT p.rater_id, p.account_address, p.nullifier_seed_ciphertext,
+    `SELECT p.rater_id, p.principal_id, p.account_address, wb.wallet_address AS active_payout_account,
+            p.nullifier_seed_ciphertext,
             p.nullifier_key_version, p.nullifier_key_domain, p.updated_at AS profile_updated_at,
             l.minimum_age_verified, l.age_evidence_verified_at, l.age_evidence_expires_at,
             l.verified_residence_country, l.declared_residence_country, l.tax_residence_country,
@@ -249,18 +258,23 @@ export async function requirePaidReviewEligibilityInTransaction(
      FROM tokenless_rater_profiles p
      JOIN tokenless_legal_eligibility l ON l.rater_id = p.rater_id
      JOIN tokenless_payout_eligibility pe ON pe.rater_id = p.rater_id
-     WHERE p.account_address = $1 LIMIT 1 FOR UPDATE`,
-    [accountAddress],
+     JOIN tokenless_wallet_bindings wb ON wb.principal_id = p.principal_id
+       AND wb.purpose = 'payout' AND wb.revoked_at IS NULL
+     WHERE p.principal_id = $1 LIMIT 1 FOR UPDATE`,
+    [principalId],
   );
   const row = result.rows[0] as Row | undefined;
+  const payoutAccount = normalizeAddress(text(row, "active_payout_account"));
   if (
     !row ||
-    normalizeAddress(text(row, "account_address")) !== accountAddress ||
+    text(row, "principal_id") !== principalId ||
+    !payoutAccount ||
+    normalizeAddress(text(row, "account_address")) !== payoutAccount ||
     text(row, "nullifier_key_domain") !== "vote_mapping" ||
     !text(row, "nullifier_seed_ciphertext") ||
     !text(row, "nullifier_key_version") ||
     !isLegalEligibilityCurrent(row, now) ||
-    !isOwnerProofCurrent(row, accountAddress, now)
+    !isOwnerProofCurrent(row, payoutAccount, now)
   ) {
     rejectEligibility();
   }
@@ -290,10 +304,11 @@ export async function requirePaidReviewEligibilityInTransaction(
   }
   const validUntil = new Date(Math.min(...expiries.map(value => value.getTime())));
   if (validUntil <= now) rejectEligibility();
-  const value = snapshot({ row, identities: selectedIdentities, accountAddress, checkedAt: now, validUntil });
+  const value = snapshot({ row, identities: selectedIdentities, principalId, checkedAt: now, validUntil });
   const commitmentProjection = {
     schemaVersion: value.schemaVersion,
     raterId: value.raterId,
+    principalId: value.principalId,
     accountAddress: value.accountAddress,
     identityAssertions: value.identityAssertions,
     payoutAccount: value.payoutAccount,
@@ -364,13 +379,13 @@ export async function requirePaidReviewEligibilityInTransaction(
 }
 
 export async function requirePaidReviewEligibility(
-  accountAddress: string,
+  principalId: string,
   now = new Date(),
 ): Promise<PaidReviewEligibilityPreflight> {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
-    const result = await requirePaidReviewEligibilityInTransaction(client, accountAddress, now);
+    const result = await requirePaidReviewEligibilityInTransaction(client, principalId, now);
     await client.query("COMMIT");
     return result;
   } catch (error) {

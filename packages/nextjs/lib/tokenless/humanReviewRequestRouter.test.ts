@@ -152,6 +152,10 @@ const privateBinding: ExactPrivateReviewBinding = {
     "0x1111111111111111111111111111111111111111",
     "0x2222222222222222222222222222222222222222",
   ],
+  paidReviewers: [
+    { principalId: `rlp_${"1".repeat(24)}`, payoutAccount: "0x1111111111111111111111111111111111111111" },
+    { principalId: `rlp_${"2".repeat(24)}`, payoutAccount: "0x2222222222222222222222222222222222222222" },
+  ],
 };
 
 const foundation = {
@@ -295,10 +299,14 @@ function dependencies(
         replayed: false,
       } as const;
     },
-    requireFeedbackBonusEligibility: async (accountAddress: string) => {
+    requireFeedbackBonusEligibility: async (principalId: string) => {
+      const reviewer = privateBinding.paidReviewers!.find(value => value.principalId === principalId)!;
       calls.feedbackBonusEligibility += 1;
-      calls.order.push(`eligibility:${accountAddress.toLowerCase()}`);
-      return {} as never;
+      calls.order.push(`eligibility:${principalId}`);
+      return {
+        principalId,
+        payoutAccount: reviewer.payoutAccount,
+      } as never;
     },
   } as unknown as Parameters<typeof createHumanReviewRequestRouter>[0];
   return { calls, router: createHumanReviewRequestRouter(deps) };
@@ -543,8 +551,8 @@ test("private unpaid plus optional bonus preflights every invited human before p
   assert.equal(calls.feedbackBonusEligibility, 2);
   assert.deepEqual(calls.order, [
     "resolve_private",
-    `eligibility:${privateBinding.reviewerAccountAddresses[0]}`,
-    `eligibility:${privateBinding.reviewerAccountAddresses[1]}`,
+    `eligibility:${privateBinding.paidReviewers![0]!.principalId}`,
+    `eligibility:${privateBinding.paidReviewers![1]!.principalId}`,
     "feedback_bonus",
     "activate",
     "foundation",
@@ -574,7 +582,7 @@ test("private paid automatic routing uses the distinct paid adapter with frozen 
   const paid = calls.paidAssignmentInput as {
     projectId: string;
     cohortId: string;
-    reviewerAccountAddresses: string[];
+    reviewers: Array<{ principalId: string; payoutAccount: string }>;
     economics: { compensationMode: string; bountyPerSeatAtomic: string; panelSize: number };
     preparedRequest: {
       audience: { kind: string; contentBoundary: string; requiredExpertiseKeys?: string[] };
@@ -582,7 +590,7 @@ test("private paid automatic routing uses the distinct paid adapter with frozen 
   };
   assert.equal(paid.projectId, privateBinding.projectId);
   assert.equal(paid.cohortId, privateBinding.cohortId);
-  assert.deepEqual(paid.reviewerAccountAddresses, privateBinding.reviewerAccountAddresses);
+  assert.deepEqual(paid.reviewers, privateBinding.paidReviewers);
   assert.deepEqual(paid.economics, {
     ...paid.economics,
     compensationMode: "usdc",
@@ -635,7 +643,8 @@ test("hybrid routing activates only with an exact frozen split and the dedicated
           requestedCount: 1,
           candidates: [
             {
-              accountAddress: "0x1111111111111111111111111111111111111111",
+              principalId: `rlp_${"1".repeat(24)}`,
+              payoutAccount: "0x1111111111111111111111111111111111111111",
               assignmentReference: "assignment:invited",
               assignmentHash: HASH,
             },
@@ -645,7 +654,8 @@ test("hybrid routing activates only with an exact frozen split and the dedicated
           requestedCount: 1,
           candidates: [
             {
-              accountAddress: "0x2222222222222222222222222222222222222222",
+              principalId: `rlp_${"2".repeat(24)}`,
+              payoutAccount: "0x2222222222222222222222222222222222222222",
               assignmentReference: "assignment:network",
               assignmentHash: HASH,
             },

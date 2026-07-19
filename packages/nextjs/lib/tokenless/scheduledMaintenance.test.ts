@@ -91,18 +91,30 @@ async function seedRecoverableExecution(
 
 async function seedRecoverableRaterCommit(commitId: string, state: "signed" | "submitted" = "signed") {
   await dbClient.execute({
-    sql: `INSERT INTO tokenless_rater_profiles
-          (rater_id, account_address, nullifier_seed_ciphertext, nullifier_key_version,
+    sql: `INSERT INTO tokenless_principals (principal_id,status,created_at,updated_at)
+          VALUES ('rlp_scheduled_recovery','active',?,?);
+          INSERT INTO tokenless_wallet_bindings
+          (binding_id,principal_id,purpose,wallet_address,wallet_source,chain_id,proof_message_hash,created_at,last_used_at)
+          VALUES ('binding_scheduled_recovery','rlp_scheduled_recovery','payout',
+                  '0x1111111111111111111111111111111111111111','self_custodial',84532,'fixture',?,?);
+          INSERT INTO tokenless_payout_wallet_ownership
+          (wallet_address,principal_id,first_binding_id,first_bound_at)
+          VALUES ('0x1111111111111111111111111111111111111111','rlp_scheduled_recovery',
+                  'binding_scheduled_recovery',?);
+          INSERT INTO tokenless_rater_profiles
+          (rater_id, principal_id, account_address, nullifier_seed_ciphertext, nullifier_key_version,
            nullifier_key_domain, created_at, updated_at)
-          VALUES ('rater_scheduled_recovery', '0x1111111111111111111111111111111111111111',
+          VALUES ('rater_scheduled_recovery', 'rlp_scheduled_recovery',
+                  '0x1111111111111111111111111111111111111111',
                   'ciphertext', 'v1', 'vote_mapping', ?, ?)`,
-    args: [NOW, NOW],
+    args: [NOW, NOW, NOW, NOW, NOW, NOW, NOW],
   });
   await dbClient.execute({
     sql: `INSERT INTO tokenless_paid_vouchers
           (voucher_id, rater_id, request_idempotency_key, request_hash, chain_id, panel_address,
            issuer_address, issuer_epoch, signer_address, round_id, content_id, vote_key, nullifier,
-           admission_policy_hash, assurance_snapshot_hash, expires_at, voucher_json, voucher_signature,
+           admission_policy_hash, assurance_snapshot_hash, expires_at, payout_account_snapshot,
+           voucher_json, voucher_signature,
            status, issued_at)
           VALUES ('voucher_scheduled_recovery', 'rater_scheduled_recovery', 'voucher:scheduled:1',
                   'request-hash', 84532, '0x2222222222222222222222222222222222222222',
@@ -113,7 +125,7 @@ async function seedRecoverableRaterCommit(commitId: string, state: "signed" | "s
                   '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
                   '0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
                   'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
-                  ?, '{}', '0x12', 'issued', ?)`,
+                  ?, '0x1111111111111111111111111111111111111111', '{}', '0x12', 'issued', ?)`,
     args: [new Date(NOW.getTime() + 60_000), NOW],
   });
   await dbClient.execute({

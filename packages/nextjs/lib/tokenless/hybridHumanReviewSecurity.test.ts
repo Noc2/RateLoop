@@ -11,6 +11,15 @@ const HASH = `sha256:${"7".repeat(64)}` as const;
 const INVITED = "0x1111111111111111111111111111111111111111";
 const NETWORK = "0x2222222222222222222222222222222222222222";
 
+function candidate(payoutAccount: string, assignmentReference: string) {
+  return {
+    principalId: `rlp_${payoutAccount.slice(2, 26)}`,
+    payoutAccount,
+    assignmentReference,
+    assignmentHash: HASH,
+  };
+}
+
 function split(): FrozenHybridReviewSplit {
   return {
     schemaVersion: "rateloop.hybrid-review-split.v1",
@@ -22,20 +31,22 @@ function split(): FrozenHybridReviewSplit {
     economics: { asset: "USDC", invitedMaximumChargeAtomic: "1000000", networkMaximumChargeAtomic: "1000000" },
     invited: {
       requestedCount: 1,
-      candidates: [{ accountAddress: INVITED, assignmentReference: "assignment:invited", assignmentHash: HASH }],
+      candidates: [candidate(INVITED, "assignment:invited")],
     },
     network: {
       requestedCount: 1,
-      candidates: [{ accountAddress: NETWORK, assignmentReference: "assignment:network", assignmentHash: HASH }],
+      candidates: [candidate(NETWORK, "assignment:network")],
     },
   };
 }
 
-function preflight(accountAddress: string) {
+function preflight(principalId: string) {
+  const accountAddress = [INVITED, NETWORK].find(account => candidate(account, "unused").principalId === principalId)!;
   return {
     schemaVersion: "rateloop.paid-review-eligibility-preflight.v1" as const,
     preflightId: `pef_${accountAddress.slice(2)}` as `pef_${string}`,
     raterId: `rater_${accountAddress.slice(2)}` as `rater_${string}`,
+    principalId,
     accountAddress,
     payoutAccount: accountAddress,
     identityAssertions: [],
@@ -59,7 +70,7 @@ test("hybrid callbacks receive only the canonical public-safe split and candidat
 
   const callbackInputs: unknown[] = [];
   const dependencies: HybridHumanReviewDependencies = {
-    requireEligibility: async accountAddress => preflight(accountAddress),
+    requireEligibility: async principalId => preflight(principalId),
     prepareInvited: async value => {
       callbackInputs.push(value);
       return { subpanelReference: "hybrid:invited", bindingHash: HASH, status: "ready", replayed: false };
@@ -87,9 +98,10 @@ test("hybrid callbacks receive only the canonical public-safe split and candidat
       "schemaVersion",
     ]);
     assert.deepEqual(Object.keys(callback.candidates[0]).sort(), [
-      "accountAddress",
       "assignmentHash",
       "assignmentReference",
+      "payoutAccount",
+      "principalId",
     ]);
   }
 });
@@ -97,9 +109,9 @@ test("hybrid callbacks receive only the canonical public-safe split and candidat
 test("hybrid publication still fails closed for a private declaration before any callback", async () => {
   let sideEffects = 0;
   const dependencies: HybridHumanReviewDependencies = {
-    requireEligibility: async accountAddress => {
+    requireEligibility: async principalId => {
       sideEffects += 1;
-      return preflight(accountAddress);
+      return preflight(principalId);
     },
     prepareInvited: async () => {
       sideEffects += 1;

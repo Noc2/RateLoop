@@ -14,6 +14,8 @@ import {
 } from "~~/lib/tokenless/worldIdAssurance";
 
 const NOW = new Date("2026-07-13T12:00:00.000Z");
+const PRINCIPAL = `rlp_${"3".repeat(24)}`;
+const PRINCIPAL_TWO = `rlp_${"4".repeat(24)}`;
 const ACCOUNT = "0x1111111111111111111111111111111111111111";
 const ACCOUNT_TWO = "0x2222222222222222222222222222222222222222";
 const APP_ID = "app_ratelooptest1" as const;
@@ -45,13 +47,28 @@ function worldConfig(overrides: Record<string, unknown> = {}) {
   };
 }
 
-async function insertRater(accountAddress = ACCOUNT, raterId = "rater_world_1") {
+async function insertRater(principalId = PRINCIPAL, payoutAccount = ACCOUNT, raterId = "rater_world_1") {
   await dbClient.execute({
     sql: `INSERT INTO tokenless_rater_profiles
-          (rater_id, account_address, nullifier_seed_ciphertext,
+          (rater_id, principal_id, account_address, nullifier_seed_ciphertext,
            nullifier_key_version, nullifier_key_domain, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    args: [raterId, accountAddress.toLowerCase(), "encrypted-seed", "v1", "vote_mapping", NOW, NOW],
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [raterId, principalId, payoutAccount.toLowerCase(), "encrypted-seed", "v1", "vote_mapping", NOW, NOW],
+  });
+}
+
+async function bindPayout(principalId: string, payoutAccount: string, suffix: string) {
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_principals (principal_id, status, created_at, updated_at)
+          VALUES (?, 'active', ?, ?)`,
+    args: [principalId, NOW, NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_wallet_bindings
+          (binding_id, principal_id, purpose, wallet_address, wallet_source, chain_id,
+           proof_message_hash, created_at, last_used_at)
+          VALUES (?, ?, 'payout', ?, 'self_custodial', 84532, ?, ?, ?)`,
+    args: [`wallet_world_${suffix}`, principalId, payoutAccount.toLowerCase(), `sha256:${suffix.repeat(64)}`, NOW, NOW],
   });
 }
 
@@ -111,15 +128,21 @@ function upstream() {
 }
 
 async function completeInitial() {
-  const context = await createWorldIdAssuranceContext({ accountAddress: ACCOUNT, now: NOW });
+  const context = await createWorldIdAssuranceContext({
+    principalId: PRINCIPAL,
+    payoutAccount: ACCOUNT,
+    now: NOW,
+  });
   __setWorldIdAssuranceOverridesForTests({ fetch: (async () => upstream()) as typeof fetch });
-  const result = await verifyWorldIdAssurance({ accountAddress: ACCOUNT, rawBody: initialBody(context), now: NOW });
+  const result = await verifyWorldIdAssurance({ principalId: PRINCIPAL, rawBody: initialBody(context), now: NOW });
   return { context, result };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   nonceCounter = 0;
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
+  await bindPayout(PRINCIPAL, ACCOUNT, "3");
+  await bindPayout(PRINCIPAL_TWO, ACCOUNT_TWO, "4");
   install();
   __setPaidEligibilityOverridesForTests({
     vault: {
@@ -138,8 +161,8 @@ afterEach(() => {
 
 test("creates a bounded v4-only uniqueness context and supersedes the previous pending context", async () => {
   await insertRater();
-  const first = await createWorldIdAssuranceContext({ accountAddress: ACCOUNT, now: NOW });
-  const second = await createWorldIdAssuranceContext({ accountAddress: ACCOUNT, now: NOW });
+  const first = await createWorldIdAssuranceContext({ principalId: PRINCIPAL, payoutAccount: ACCOUNT, now: NOW });
+  const second = await createWorldIdAssuranceContext({ principalId: PRINCIPAL, payoutAccount: ACCOUNT, now: NOW });
 
   assert.equal(first.mode, "initial_unique");
   assert.equal(first.signal, first.requestId);
@@ -151,7 +174,7 @@ test("creates a bounded v4-only uniqueness context and supersedes the previous p
 
 test("creates only the minimal rater identity and rate-limits normal context creation", async () => {
   for (let index = 0; index < 5; index += 1) {
-    await createWorldIdAssuranceContext({ accountAddress: ACCOUNT, now: NOW });
+    await createWorldIdAssuranceContext({ principalId: PRINCIPAL, payoutAccount: ACCOUNT, now: NOW });
   }
   const profile = await dbClient.execute({
     sql: `SELECT nullifier_key_domain FROM tokenless_rater_profiles WHERE account_address = ?`,
@@ -164,14 +187,14 @@ test("creates only the minimal rater identity and rate-limits normal context cre
   const count = await dbClient.execute(`SELECT COUNT(*) AS count FROM tokenless_world_id_requests`);
   assert.equal(Number(count.rows[0]?.count), 5);
   await assert.rejects(
-    createWorldIdAssuranceContext({ accountAddress: ACCOUNT, now: NOW }),
+    createWorldIdAssuranceContext({ principalId: PRINCIPAL, payoutAccount: ACCOUNT, now: NOW }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "world_id_rate_limited",
   );
 });
 
 test("canonicalizes mixed-case nullifiers before upstream comparison and HMAC persistence", async () => {
   await insertRater();
-  const context = await createWorldIdAssuranceContext({ accountAddress: ACCOUNT, now: NOW });
+  const context = await createWorldIdAssuranceContext({ principalId: PRINCIPAL, payoutAccount: ACCOUNT, now: NOW });
   const rawBody = initialBody(context);
   let forwarded: BodyInit | null | undefined;
   __setWorldIdAssuranceOverridesForTests({
@@ -180,7 +203,7 @@ test("canonicalizes mixed-case nullifiers before upstream comparison and HMAC pe
       return upstream();
     }) as typeof fetch,
   });
-  const result = await verifyWorldIdAssurance({ accountAddress: ACCOUNT, rawBody, now: NOW });
+  const result = await verifyWorldIdAssurance({ principalId: PRINCIPAL, rawBody, now: NOW });
 
   assert.equal(forwarded, rawBody);
   assert.equal(result.mode, "initial_unique");
@@ -203,7 +226,7 @@ test("canonicalizes mixed-case nullifiers before upstream comparison and HMAC pe
 
 test("binds expires_at_min into the request and rejects a weaker credential before upstream verification", async () => {
   await insertRater();
-  const context = await createWorldIdAssuranceContext({ accountAddress: ACCOUNT, now: NOW });
+  const context = await createWorldIdAssuranceContext({ principalId: PRINCIPAL, payoutAccount: ACCOUNT, now: NOW });
   let called = false;
   __setWorldIdAssuranceOverridesForTests({
     fetch: (async () => {
@@ -213,7 +236,7 @@ test("binds expires_at_min into the request and rejects a weaker credential befo
   });
   await assert.rejects(
     verifyWorldIdAssurance({
-      accountAddress: ACCOUNT,
+      principalId: PRINCIPAL,
       rawBody: initialBody(context, context.credentialExpiresAtMin - 1),
       now: NOW,
     }),
@@ -234,14 +257,14 @@ test("keeps one-time enrollment durable after the presented credential expires",
   assert.ok(new Date(String(assertion.rows[0]?.evidence_expires_at)) < afterExpiry);
   assert.equal(completed.result.assuranceRefreshed, false);
   await assert.rejects(
-    createWorldIdAssuranceContext({ accountAddress: ACCOUNT, now: afterExpiry }),
+    createWorldIdAssuranceContext({ principalId: PRINCIPAL, payoutAccount: ACCOUNT, now: afterExpiry }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "world_id_already_enrolled",
   );
 });
 
 test("freezes the action and requires every registered HMAC version to remain unchanged", async () => {
   await insertRater();
-  await insertRater(ACCOUNT_TWO, "rater_world_2");
+  await insertRater(PRINCIPAL_TWO, ACCOUNT_TWO, "rater_world_2");
   await completeInitial();
   install(
     worldConfig({
@@ -252,17 +275,17 @@ test("freezes the action and requires every registered HMAC version to remain un
       ]),
     }),
   );
-  await createWorldIdAssuranceContext({ accountAddress: ACCOUNT_TWO, now: NOW });
+  await createWorldIdAssuranceContext({ principalId: PRINCIPAL_TWO, payoutAccount: ACCOUNT_TWO, now: NOW });
 
   install(worldConfig({ subjectHmacKeyVersion: "hmac-v2", subjectHmacKeys: new Map([["hmac-v2", SUBJECT_KEY_V2]]) }));
   await assert.rejects(
-    createWorldIdAssuranceContext({ accountAddress: ACCOUNT_TWO, now: NOW }),
+    createWorldIdAssuranceContext({ principalId: PRINCIPAL_TWO, payoutAccount: ACCOUNT_TWO, now: NOW }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "world_id_hmac_key_missing",
   );
 
   install(worldConfig({ action: "rotated-action" }));
   await assert.rejects(
-    createWorldIdAssuranceContext({ accountAddress: ACCOUNT_TWO, now: NOW }),
+    createWorldIdAssuranceContext({ principalId: PRINCIPAL_TWO, payoutAccount: ACCOUNT_TWO, now: NOW }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "world_id_action_mismatch",
   );
 });

@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     const session = await requireBrowserSession(request, { mutation: true });
     const body = (await request.json()) as Record<string, unknown>;
     const result = await submitExpertiseVerificationRequest({
-      accountAddress: session.principalId,
+      principalId: session.principalId,
       expertiseKeys: body.expertiseKeys,
       evidenceReferenceHash: body.evidenceReferenceHash,
     });

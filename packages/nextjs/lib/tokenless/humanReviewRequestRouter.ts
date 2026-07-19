@@ -6,6 +6,7 @@ import type {
 import { HUMAN_ASSURANCE_SCHEMA_VERSION } from "@rateloop/sdk";
 import { createHash } from "node:crypto";
 import "server-only";
+import { isRateLoopPrincipalId } from "~~/lib/auth/accountSubject";
 import { dbClient } from "~~/lib/db";
 import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import { getEffectiveAgentReviewContext } from "~~/lib/tokenless/effectiveAgentReviewContext";
@@ -25,7 +26,10 @@ import {
 import { hashFrozenBinaryReviewQuestion, resolveHumanReviewQuestion } from "~~/lib/tokenless/humanReviewQuestions";
 import { prepareHumanReviewRequest } from "~~/lib/tokenless/humanReviewRequestPreparation";
 import type { FrozenHybridReviewSplit, HybridHumanReviewResult } from "~~/lib/tokenless/hybridHumanReviewAdapter";
-import { requirePaidReviewEligibility } from "~~/lib/tokenless/paidReviewEligibilityPreflight";
+import {
+  type PaidReviewerBinding,
+  requirePaidReviewEligibility,
+} from "~~/lib/tokenless/paidReviewEligibilityPreflight";
 import {
   type PrivatePaidHumanReviewDelivery,
   requestPrivatePaidHumanReview,
@@ -142,6 +146,7 @@ export type ExactPrivateReviewBinding = {
   projectId: string;
   cohortId: string;
   reviewerAccountAddresses: string[];
+  paidReviewers: PaidReviewerBinding[] | null;
 };
 
 export type HumanReviewRoutingResult =
@@ -304,6 +309,7 @@ function deterministicPrivateIdempotencyKey(
     projectId: binding.projectId,
     cohortId: binding.cohortId,
     reviewers: [...binding.reviewerAccountAddresses].sort(),
+    paidReviewers: binding.paidReviewers,
     questionHash,
   });
   return `private-route-${sha256(canonical)}`;
@@ -571,10 +577,12 @@ async function resolveExactPrivateBinding(
   const responseDeadline = new Date(now.getTime() + profile.responseWindowSeconds * 1_000);
   const requiredExpertise = profile.requiredExpertiseKeys ?? [];
   const exactExpertiseRequirements = profile.expertiseRequirements ?? [];
+  const paidIdentityRequired = profile.lane === "private_invited_paid" || profile.feedbackBonusEnabled;
   const result = await dbClient.execute({
     sql: `SELECT p.project_id,p.retention_days,c.cohort_id,c.capacity,c.active_reservations,
                  cr.reviewer_account_address,cr.qualification_provenance_json,m.allowed_project_ids_json,
-                 q.expertise_definition_id,q.expertise_definition_version,q.expertise_definition_hash
+                 q.expertise_definition_id,q.expertise_definition_version,q.expertise_definition_hash,
+                 wb.principal_id AS reviewer_principal_id,wb.wallet_address AS reviewer_payout_account
           FROM tokenless_assurance_projects p
           JOIN tokenless_assurance_cohorts c
             ON c.project_id=p.project_id AND c.private_group_id=?
@@ -596,6 +604,9 @@ async function resolveExactPrivateBinding(
             ON q.workspace_id=p.workspace_id AND q.reviewer_account_address=cr.reviewer_account_address
            AND q.reviewer_source='customer_invited' AND q.qualification_kind='expertise'
            AND q.expertise_record_schema_version=2 AND q.status='active' AND q.expires_at>=?
+          LEFT JOIN tokenless_wallet_bindings wb
+            ON lower(wb.wallet_address)=lower(cr.reviewer_account_address)
+           AND wb.purpose='payout' AND wb.revoked_at IS NULL
           WHERE p.workspace_id=? AND p.status='active' AND p.visibility='private'
             AND p.data_classification=? AND p.private_sensitivity=?
           ORDER BY p.project_id,c.cohort_id,cr.reviewer_account_address`,
@@ -620,7 +631,7 @@ async function resolveExactPrivateBinding(
       retentionDays: number;
       capacity: number;
       reservations: number;
-      reviewers: Map<string, Set<string>>;
+      reviewers: Map<string, { expertiseKeys: Set<string>; paidReviewer: PaidReviewerBinding | null }>;
     }
   >();
   for (const value of result.rows) {
@@ -629,6 +640,15 @@ async function resolveExactPrivateBinding(
     const cohortId = text(row, "cohort_id");
     const reviewer = text(row, "reviewer_account_address");
     if (!projectId || !cohortId || !reviewer) continue;
+    const reviewerPrincipalId = text(row, "reviewer_principal_id");
+    const reviewerPayoutAccount = text(row, "reviewer_payout_account")?.toLowerCase() ?? null;
+    const paidReviewer =
+      reviewerPrincipalId &&
+      isRateLoopPrincipalId(reviewerPrincipalId) &&
+      reviewerPayoutAccount === reviewer.toLowerCase()
+        ? { principalId: reviewerPrincipalId, payoutAccount: reviewerPayoutAccount }
+        : null;
+    if (paidIdentityRequired && !paidReviewer) continue;
     if (
       !qualificationProvenanceSatisfiesExpertise(row.qualification_provenance_json, requiredExpertise, responseDeadline)
     ) {
@@ -643,10 +663,10 @@ async function resolveExactPrivateBinding(
       retentionDays: positiveInteger(row, "retention_days"),
       capacity: positiveInteger(row, "capacity"),
       reservations: Number(row.active_reservations),
-      reviewers: new Map<string, Set<string>>(),
+      reviewers: new Map(),
     };
     if (!Number.isSafeInteger(candidate.reservations) || candidate.reservations < 0) continue;
-    const reviewerExpertise = candidate.reviewers.get(reviewer) ?? new Set<string>();
+    const reviewerEntry = candidate.reviewers.get(reviewer) ?? { expertiseKeys: new Set<string>(), paidReviewer };
     const definitionId = text(row, "expertise_definition_id");
     const definitionVersion = Number(row.expertise_definition_version);
     const definitionHash = text(row, "expertise_definition_hash");
@@ -657,7 +677,7 @@ async function resolveExactPrivateBinding(
       definitionHash &&
       HASH_PATTERN.test(definitionHash)
     ) {
-      reviewerExpertise.add(
+      reviewerEntry.expertiseKeys.add(
         exactReviewerExpertiseDefinitionKey({
           definitionId,
           definitionVersion,
@@ -665,7 +685,7 @@ async function resolveExactPrivateBinding(
         }),
       );
     }
-    candidate.reviewers.set(reviewer, reviewerExpertise);
+    candidate.reviewers.set(reviewer, reviewerEntry);
     candidates.set(key, candidate);
   }
   const exact = [...candidates.values()].flatMap(candidate => {
@@ -681,7 +701,10 @@ async function resolveExactPrivateBinding(
     }
     const reviewerAccountAddresses = exactExpertiseRequirements.length
       ? chooseExpertiseCoveredPanel(
-          [...candidate.reviewers.entries()].map(([id, expertiseKeys]) => ({ id, expertiseKeys: [...expertiseKeys] })),
+          [...candidate.reviewers.entries()].map(([id, reviewer]) => ({
+            id,
+            expertiseKeys: [...reviewer.expertiseKeys],
+          })),
           profile.panelSize,
           exactExpertiseRequirements.map(requirement => ({
             key: exactReviewerExpertiseDefinitionKey(requirement),
@@ -691,13 +714,17 @@ async function resolveExactPrivateBinding(
       : candidate.reviewers.size === profile.panelSize
         ? [...candidate.reviewers.keys()].sort()
         : null;
-    return reviewerAccountAddresses ? [{ ...candidate, reviewerAccountAddresses }] : [];
+    const paidReviewers = reviewerAccountAddresses?.map(address => candidate.reviewers.get(address)?.paidReviewer);
+    return reviewerAccountAddresses && (!paidIdentityRequired || paidReviewers?.every(Boolean))
+      ? [{ ...candidate, reviewerAccountAddresses, paidReviewers }]
+      : [];
   });
   if (exact.length !== 1) return null;
   return {
     projectId: exact[0]!.projectId,
     cohortId: exact[0]!.cohortId,
     reviewerAccountAddresses: exact[0]!.reviewerAccountAddresses,
+    paidReviewers: paidIdentityRequired ? (exact[0]!.paidReviewers as PaidReviewerBinding[]) : null,
   };
 }
 
@@ -886,7 +913,7 @@ async function ensureRoutingFeedbackBonus(
   input: HumanReviewRoutingRequest,
   frozenQuestion: FrozenHumanReviewOpportunityQuestion,
   now: Date,
-  reviewerAccounts: readonly string[] = [],
+  reviewers: readonly PaidReviewerBinding[] = [],
 ): Promise<FeedbackBonusPoolBinding | null> {
   if (!context.requestProfile.feedbackBonusEnabled) return null;
   if (!dependencies.ensureFeedbackBonus) {
@@ -897,7 +924,7 @@ async function ensureRoutingFeedbackBonus(
       true,
     );
   }
-  if (reviewerAccounts.length > 0) {
+  if (reviewers.length > 0) {
     if (!dependencies.requireFeedbackBonusEligibility) {
       throw new TokenlessServiceError(
         "Feedback Bonus delivery requires paid eligibility before funding.",
@@ -906,8 +933,28 @@ async function ensureRoutingFeedbackBonus(
         true,
       );
     }
-    for (const account of [...new Set(reviewerAccounts.map(value => value.toLowerCase()))].sort()) {
-      await dependencies.requireFeedbackBonusEligibility(account, now);
+    const uniqueReviewers = new Map(reviewers.map(reviewer => [reviewer.principalId, reviewer]));
+    if (uniqueReviewers.size !== reviewers.length) {
+      throw new TokenlessServiceError(
+        "Feedback Bonus reviewers must have unique RateLoop principals.",
+        409,
+        "feedback_bonus_eligibility_conflict",
+      );
+    }
+    for (const reviewer of [...uniqueReviewers.values()].sort((left, right) =>
+      left.principalId.localeCompare(right.principalId),
+    )) {
+      const preflight = await dependencies.requireFeedbackBonusEligibility(reviewer.principalId, now);
+      if (
+        preflight.principalId !== reviewer.principalId ||
+        preflight.payoutAccount.toLowerCase() !== reviewer.payoutAccount.toLowerCase()
+      ) {
+        throw new TokenlessServiceError(
+          "Feedback Bonus eligibility does not match the selected reviewer.",
+          409,
+          "feedback_bonus_eligibility_conflict",
+        );
+      }
     }
   }
   const preparation = prepareFrozenRoutingRequest(context, input, frozenQuestion, now);
@@ -1040,7 +1087,10 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
         input,
         frozenQuestion,
         now,
-        [...split.invited.candidates, ...split.network.candidates].map(candidate => candidate.accountAddress),
+        [...split.invited.candidates, ...split.network.candidates].map(candidate => ({
+          principalId: candidate.principalId,
+          payoutAccount: candidate.payoutAccount,
+        })),
       );
       await dependencies.activateAutonomousLane(context, null, frozenQuestion, now);
       return {
@@ -1088,13 +1138,25 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
         sideEffects: NO_SIDE_EFFECTS,
       };
     }
+    if (
+      (context.requestProfile.lane === "private_invited_paid" || context.requestProfile.feedbackBonusEnabled) &&
+      privateBinding.paidReviewers === null
+    ) {
+      return {
+        ...common,
+        action: "blocked",
+        code: "private_routing_configuration_required",
+        retryable: true,
+        sideEffects: NO_SIDE_EFFECTS,
+      };
+    }
     await ensureRoutingFeedbackBonus(
       dependencies,
       context,
       input,
       frozenQuestion,
       now,
-      privateBinding.reviewerAccountAddresses,
+      privateBinding.paidReviewers ?? [],
     );
     await dependencies.activateAutonomousLane(context, privateBinding, frozenQuestion, now);
     const request: HumanAssurancePrivateReviewCreateRequest = {
@@ -1143,7 +1205,7 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
         projectId: privateBinding.projectId,
         cohortId: privateBinding.cohortId,
         privateGroup: context.requestProfile.privateGroup!,
-        reviewerAccountAddresses: privateBinding.reviewerAccountAddresses,
+        reviewers: privateBinding.paidReviewers!,
         audiencePolicyHash: context.selectionPolicy.audiencePolicyHash,
         publishingPolicy: context.grant.configuredPolicy!,
         preparedRequest: prepared.preparedRequest,
