@@ -4,6 +4,7 @@ import {
   tokenlessDeploymentSchema,
 } from "../../contracts/src/tokenless/deployedContracts.ts";
 import { TOKENLESS_VERCEL_PROJECT } from "./check-identity-deployment.mjs";
+import { validateHostedDatabaseIdentity } from "./migrate-hosted-database.mjs";
 import { createHash, createPrivateKey, createPublicKey } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -35,6 +36,7 @@ export const REQUIRED_TOKENLESS_PRODUCTION_VARIABLES = [
   "APP_URL",
   "NEXT_PUBLIC_APP_URL",
   "DATABASE_URL",
+  "TOKENLESS_DATABASE_IDENTITY",
   "RESEND_API_KEY",
   "RESEND_FROM_EMAIL",
   "BETTER_AUTH_SECRET",
@@ -260,6 +262,7 @@ function addSecretRole(roles, name, secret) {
 
 function validateTokenlessTestDeployment(env) {
   const errors = [];
+  errors.push(...validateHostedDatabaseIdentity(env));
   if (env.VERCEL_ENV !== "production") {
     errors.push("The tokenless test deployment may run only as the isolated project's production target.");
   }

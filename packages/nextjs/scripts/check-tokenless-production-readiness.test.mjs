@@ -4,6 +4,7 @@ import {
   REQUIRED_TOKENLESS_PRODUCTION_VARIABLES,
   validateTokenlessProductionReadiness,
 } from "./check-tokenless-production-readiness.mjs";
+import { deriveHostedDatabaseIdentity } from "./migrate-hosted-database.mjs";
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -15,6 +16,10 @@ const tokenlessGoldKeyring = (index = 16) => ({
   TOKENLESS_GOLD_INJECTION_KEY_VERSION: "v1",
   TOKENLESS_GOLD_INJECTION_KEYS: JSON.stringify({ v1: encodedKey(index) }),
 });
+const tokenlessTestDatabase = () => {
+  const DATABASE_URL = "postgresql://rateloop:secret@tokenless-db.example/tokenless?sslmode=require";
+  return { DATABASE_URL, TOKENLESS_DATABASE_IDENTITY: deriveHostedDatabaseIdentity(DATABASE_URL) };
+};
 
 function validFixture() {
   const panel = address(1);
@@ -47,6 +52,9 @@ function validFixture() {
     BETTER_AUTH_SECRET: "b".repeat(48),
     BETTER_AUTH_PASSKEY_RP_ID: "rateloop-tokenless.vercel.app",
     DATABASE_URL: "postgresql://rateloop:secret@eu-postgres.example/tokenless?sslmode=require",
+    TOKENLESS_DATABASE_IDENTITY: deriveHostedDatabaseIdentity(
+      "postgresql://rateloop:secret@eu-postgres.example/tokenless?sslmode=require",
+    ),
     TOKENLESS_THIRDWEB_WALLET_ENABLED: "false",
     BASE_SEPOLIA_RPC_URL: "https://sepolia.base.org",
     NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL: "https://sepolia.base.org",
@@ -174,6 +182,7 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
     APP_URL: "https://rateloop-tokenless.vercel.app",
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
+    ...tokenlessTestDatabase(),
     TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
     ...tokenlessGoldKeyring(),
   };
@@ -212,6 +221,7 @@ test("the tokenless test deployment still rejects browser-exposed secrets", () =
     APP_URL: "https://rateloop-tokenless.vercel.app",
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
+    ...tokenlessTestDatabase(),
     TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
     ...tokenlessGoldKeyring(),
     NEXT_PUBLIC_TOKENLESS_PIPELINE_TOKEN: "must-not-ship",
@@ -239,6 +249,7 @@ test("the tokenless test deployment requires a dedicated server-only media previ
     APP_URL: "https://rateloop-tokenless.vercel.app",
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
+    ...tokenlessTestDatabase(),
     ...tokenlessGoldKeyring(),
   };
   assert.match(
@@ -302,6 +313,7 @@ test("the tokenless test deployment validates the active gold-injection keyring 
     APP_URL: "https://rateloop-tokenless.vercel.app",
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
+    ...tokenlessTestDatabase(),
     TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
   };
   const missing = validateTokenlessProductionReadiness({ env: base, activeRegistry: {} }).join("\n");
@@ -345,6 +357,7 @@ test("test and production deployments refuse server-held Feedback Bonus award au
     APP_URL: "https://rateloop-tokenless.vercel.app",
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
+    ...tokenlessTestDatabase(),
     ...tokenlessGoldKeyring(),
     TOKENLESS_FEEDBACK_BONUS_AWARDER_PRIVATE_KEY: "server-must-not-custody-human-awarder",
     NEXT_PUBLIC_TOKENLESS_FEEDBACK_BONUS_AWARD_WORKER_PRIVATE_KEY: "browser-must-not-see-worker-secret",

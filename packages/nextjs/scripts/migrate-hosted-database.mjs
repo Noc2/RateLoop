@@ -1,4 +1,5 @@
 import { TOKENLESS_VERCEL_PROJECT } from "./check-identity-deployment.mjs";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -6,6 +7,43 @@ const MIGRATION_LOCK = "rateloop-tokenless-drizzle-migrations-v1";
 
 export function hostedMigrationEnabled(env) {
   return env.VERCEL_ENV === "production";
+}
+
+export function deriveHostedDatabaseIdentity(databaseUrl) {
+  let parsed;
+  let databaseName;
+  try {
+    parsed = new URL(databaseUrl);
+    databaseName = decodeURIComponent(parsed.pathname.slice(1));
+  } catch {
+    return null;
+  }
+  if (
+    (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") ||
+    !parsed.hostname ||
+    !databaseName
+  ) {
+    return null;
+  }
+  const canonicalEndpoint = [
+    parsed.hostname.toLowerCase(),
+    parsed.port || "5432",
+    databaseName,
+  ].join("\0");
+  return `sha256:${createHash("sha256").update(canonicalEndpoint).digest("hex")}`;
+}
+
+export function validateHostedDatabaseIdentity(env) {
+  const configured = env.TOKENLESS_DATABASE_IDENTITY?.trim() || "";
+  const derived = deriveHostedDatabaseIdentity(env.DATABASE_URL?.trim() || "");
+  if (!derived) return ["DATABASE_URL must identify a Postgres database endpoint."];
+  if (!/^sha256:[0-9a-f]{64}$/u.test(configured)) {
+    return ["TOKENLESS_DATABASE_IDENTITY must be the immutable SHA-256 identity of the database endpoint."];
+  }
+  if (configured !== derived) {
+    return ["TOKENLESS_DATABASE_IDENTITY does not match the configured database endpoint."];
+  }
+  return [];
 }
 
 export function validateHostedMigrationEnvironment(env) {
@@ -23,6 +61,7 @@ export function validateHostedMigrationEnvironment(env) {
     );
   }
   if (!env.DATABASE_URL?.trim()) errors.push("DATABASE_URL is required for hosted tokenless migrations.");
+  else errors.push(...validateHostedDatabaseIdentity(env));
   return errors;
 }
 
@@ -98,6 +137,10 @@ async function main() {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
   try {
     await pool.query("select pg_advisory_lock(hashtext($1)::bigint)", [MIGRATION_LOCK]);
+    const identityErrors = validateHostedDatabaseIdentity(process.env);
+    if (identityErrors.length > 0) {
+      throw new Error(`Hosted database migration refused:\n- ${identityErrors.join("\n- ")}`);
+    }
     const before = await readDatabaseState(pool);
     const stateErrors = validateMigrationState({ ...before, migrations });
     if (stateErrors.length > 0) {

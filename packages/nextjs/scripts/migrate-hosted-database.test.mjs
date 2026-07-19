@@ -1,17 +1,21 @@
 import { TOKENLESS_VERCEL_PROJECT } from "./check-identity-deployment.mjs";
 import {
+  deriveHostedDatabaseIdentity,
   hostedMigrationEnabled,
+  validateHostedDatabaseIdentity,
   validateHostedMigrationEnvironment,
   validateMigrationState,
 } from "./migrate-hosted-database.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 
+const databaseUrl = "postgresql://example.invalid/tokenless";
 const hostedEnv = {
   VERCEL_ENV: "production",
   VERCEL_PROJECT_ID: TOKENLESS_VERCEL_PROJECT.projectId,
   VERCEL_PROJECT_NAME: TOKENLESS_VERCEL_PROJECT.projectName,
-  DATABASE_URL: "postgresql://example.invalid/tokenless",
+  DATABASE_URL: databaseUrl,
+  TOKENLESS_DATABASE_IDENTITY: deriveHostedDatabaseIdentity(databaseUrl),
 };
 
 test("hosted migrations run only for the isolated production deployment", () => {
@@ -29,6 +33,29 @@ test("hosted migrations reject a legacy project or missing database", () => {
   assert.match(errors.join("\n"), /unexpected vercel project id/i);
   assert.match(errors.join("\n"), /unexpected vercel project name/i);
   assert.match(errors.join("\n"), /database_url is required/i);
+});
+
+test("hosted migrations bind the checked-in environment to one credential-independent database endpoint", () => {
+  assert.equal(
+    deriveHostedDatabaseIdentity("postgresql://rotated:other-secret@example.invalid/tokenless?sslmode=require"),
+    hostedEnv.TOKENLESS_DATABASE_IDENTITY,
+  );
+  assert.deepEqual(validateHostedDatabaseIdentity(hostedEnv), []);
+  assert.match(
+    validateHostedDatabaseIdentity({
+      ...hostedEnv,
+      DATABASE_URL: "postgresql://example.invalid/tokenless-clone",
+    }).join("\n"),
+    /does not match/i,
+  );
+  assert.match(
+    validateHostedDatabaseIdentity({ ...hostedEnv, TOKENLESS_DATABASE_IDENTITY: "sha256:wrong" }).join("\n"),
+    /immutable SHA-256 identity/i,
+  );
+  assert.deepEqual(
+    validateHostedDatabaseIdentity({ ...hostedEnv, DATABASE_URL: "postgresql://example.invalid/bad%zz" }),
+    ["DATABASE_URL must identify a Postgres database endpoint."],
+  );
 });
 
 test("migration state rejects unjournaled and divergent databases", () => {
