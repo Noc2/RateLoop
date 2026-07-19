@@ -211,7 +211,6 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   const [confirmedReviewerCount, setConfirmedReviewerCount] = useState<number | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const connectionMessageRef = useRef<HTMLTextAreaElement>(null);
-  const reviewDetailsRef = useRef<HTMLDetailsElement>(null);
   const invitationExpertiseInitialized = useRef(false);
   const focusOnNavigation = useRef(false);
   const finalizationKeyRef = useRef<string | null>(null);
@@ -1155,13 +1154,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         ) : null}
 
         {currentStep === "reviews" ? (
-          <form
-            onSubmit={configureReviews}
-            onInvalid={event => {
-              if (reviewDetailsRef.current?.contains(event.target as Node)) reviewDetailsRef.current.open = true;
-            }}
-            aria-busy={busy}
-          >
+          <form onSubmit={configureReviews} aria-busy={busy}>
             <SetupStageHeader
               headingRef={headingRef}
               step="reviews"
@@ -1369,19 +1362,14 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 </p>
               </div>
             ) : null}
-            <details ref={reviewDetailsRef} className="group mt-7 border-y border-white/10 py-5">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 [&::-webkit-details-marker]:hidden">
-                <span className="min-w-0">
-                  <span className="block text-lg font-semibold">Reviewers, timing and payment</span>
-                  <span className="mt-1 block text-sm leading-6 text-base-content/55">{reviewerDetailsSummary}</span>
-                </span>
-                <span
-                  aria-hidden="true"
-                  className="shrink-0 text-xl text-base-content/55 transition-transform group-open:rotate-45"
-                >
-                  +
-                </span>
-              </summary>
+            <section
+              className="mt-7 border-y border-white/10 py-5"
+              aria-labelledby="agent-setup-reviewer-details-heading"
+            >
+              <h2 id="agent-setup-reviewer-details-heading" className="text-lg font-semibold">
+                Reviewers, timing and payment
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-base-content/55">{reviewerDetailsSummary}</p>
               <div className="pb-1 pt-6">
                 <fieldset>
                   <legend className="text-lg font-semibold">Who should review?</legend>
@@ -1826,7 +1814,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   ) : null}
                 </fieldset>
               </div>
-            </details>
+            </section>
             <SetupActionBar>
               {backButton}
               <Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={busy}>

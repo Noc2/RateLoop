@@ -270,12 +270,12 @@ test("setup uses one responsive action pattern and exposes busy forms", () => {
   assert.doesNotMatch(startSource, /<button className="rateloop-gradient-action/);
 });
 
-test("review validation reveals invalid fields inside the disclosure", () => {
-  assert.match(flowSource, /const reviewDetailsRef = useRef<HTMLDetailsElement>\(null\)/);
-  assert.match(flowSource, /onInvalid=\{event =>/);
-  assert.match(flowSource, /reviewDetailsRef\.current\?\.contains\(event\.target as Node\)/);
-  assert.match(flowSource, /reviewDetailsRef\.current\.open = true/);
-  assert.match(flowSource, /<details ref=\{reviewDetailsRef\}/);
+test("reviewer audience, timing, and payment stay visible in the review step", () => {
+  assert.match(flowSource, /aria-labelledby="agent-setup-reviewer-details-heading"/);
+  assert.match(flowSource, /id="agent-setup-reviewer-details-heading"/);
+  assert.match(flowSource, /Reviewers, timing and payment/);
+  assert.match(flowSource, /\{reviewerDetailsSummary\}/);
+  assert.doesNotMatch(flowSource, /reviewDetailsRef|<details ref=\{reviewDetailsRef\}/);
 });
 
 test("connection polling cleans up timers and preserves explicit-navigation focus", () => {
