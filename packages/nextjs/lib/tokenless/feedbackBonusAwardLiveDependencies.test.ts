@@ -1,4 +1,8 @@
-import { type FeedbackBonusBodyReaders, createFeedbackBonusBodyReader } from "./feedbackBonusAwardLiveDependencies";
+import {
+  type FeedbackBonusBodyReaders,
+  createFeedbackBonusBodyReader,
+  getLiveFeedbackBonusAwardDependencies,
+} from "./feedbackBonusAwardLiveDependencies";
 import { TokenlessServiceError } from "./server";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -7,6 +11,7 @@ import test from "node:test";
 const RESPONSE_HASH = `0x${"ab".repeat(32)}`;
 const PUBLIC_REFERENCE = "rateloop.feedback-body.v1:public_rater_response:rrs_feedback_a";
 const PRIVATE_REFERENCE = "rateloop.feedback-body.v1:assurance_response:hares_feedback_b";
+const TRANSACTION_HASH = `0x${"cd".repeat(32)}`;
 
 function harness(input?: { projected?: boolean; malformed?: boolean }) {
   const events: string[] = [];
@@ -109,6 +114,50 @@ test("missing or malformed projection state fails closed before body decryption"
     );
     assert.deepEqual(value.events, ["projection"]);
   }
+});
+
+test("read-only inbox dependencies do not load chain configuration before an award action", async () => {
+  let initializations = 0;
+  const dependencies = getLiveFeedbackBonusAwardDependencies({
+    createHumanWalletExecution: () => {
+      initializations += 1;
+      return {
+        async prepareHumanAward() {
+          return {
+            chainId: 84_532,
+            contractAddress: "0x3333333333333333333333333333333333333333",
+            awarderAddress: "0x4444444444444444444444444444444444444444",
+            transactionData: "0x1234",
+          };
+        },
+        async confirmHumanAward() {
+          return { transactionHash: TRANSACTION_HASH, confirmedAt: new Date("2026-07-19T07:00:00.000Z") };
+        },
+      };
+    },
+  });
+  const prepared = {
+    intentId: "fbai_lazy",
+    workspaceId: "workspace_a",
+    opportunityId: "opportunity_a",
+    feedbackId: "feedback_a",
+    responseHash: RESPONSE_HASH,
+    voteKey: "0x2222222222222222222222222222222222222222",
+    payoutCommitment: `0x${"ef".repeat(32)}`,
+    awarderWallet: "0x4444444444444444444444444444444444444444",
+    amountAtomic: "1000000",
+    pool: {
+      chainId: "84532",
+      contractAddress: "0x3333333333333333333333333333333333333333",
+      poolId: "1",
+    },
+    confirmedReceipt: null,
+  };
+
+  assert.equal(initializations, 0);
+  await dependencies.prepareHumanAward(prepared);
+  await dependencies.confirmHumanAward({ award: prepared, transactionHash: TRANSACTION_HASH });
+  assert.equal(initializations, 1);
 });
 
 test("the authorization query selects no vote key, payout commitment, or payout preimage", () => {

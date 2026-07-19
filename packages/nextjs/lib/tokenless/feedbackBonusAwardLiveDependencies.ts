@@ -25,6 +25,8 @@ export type FeedbackBonusBodyReaders = {
   assuranceResponse(input: { responseId: string; workspaceId: string; opportunityId: string }): Promise<string>;
 };
 
+type FeedbackBonusHumanWalletExecution = ReturnType<typeof createLiveFeedbackBonusHumanWalletExecution>;
+
 function unavailable(): never {
   throw new TokenlessServiceError(
     "The selected Feedback Bonus body is unavailable.",
@@ -103,9 +105,17 @@ export function createFeedbackBonusBodyReader(input?: { queryable?: Queryable; r
 }
 
 /** Lazy, build-safe production dependencies for the award service. */
-export function getLiveFeedbackBonusAwardDependencies(): Omit<FeedbackBonusAwardDependencies, "repository"> {
+export function getLiveFeedbackBonusAwardDependencies(input?: {
+  createHumanWalletExecution?: () => FeedbackBonusHumanWalletExecution;
+}): Omit<FeedbackBonusAwardDependencies, "repository"> {
+  let humanWalletExecution: FeedbackBonusHumanWalletExecution | null = null;
+  const getHumanWalletExecution = () => {
+    humanWalletExecution ??= input?.createHumanWalletExecution?.() ?? createLiveFeedbackBonusHumanWalletExecution();
+    return humanWalletExecution;
+  };
   return {
-    ...createLiveFeedbackBonusHumanWalletExecution(),
+    prepareHumanAward: prepared => getHumanWalletExecution().prepareHumanAward(prepared),
+    confirmHumanAward: prepared => getHumanWalletExecution().confirmHumanAward(prepared),
     readFeedbackBody: createFeedbackBonusBodyReader(),
   };
 }
