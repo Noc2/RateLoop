@@ -8,36 +8,38 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
   renderToStaticMarkup: (element: React.ReactElement) => string;
 };
 
-test("use cases turn concrete problems into bounded human-assurance decisions", async () => {
+test("use cases show three worked examples with bounded human-assurance decisions", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const { default: UseCasesPage } = await import("./page");
   const html = renderToStaticMarkup(<UseCasesPage />).replace(/\s+/g, " ");
 
   assert.match(html, /Use.*rateloop-text-gradient.*Cases/i);
-  assert.doesNotMatch(html, /examples describe workflows, not customer results or outcome claims/i);
-  assert.doesNotMatch(html, /Choose a decision people can actually make/i);
-  assert.doesNotMatch(html, /one bounded artifact, one concrete criterion, an authorized reviewer audience/i);
-  assert.equal(html.match(/data-use-case=/g)?.length, 5);
+  assert.equal(html.match(/data-use-case=/g)?.length, 3);
+  assert.equal(html.match(/Illustrative example/g)?.length, 3);
 
   for (const [id, title, criterion] of [
     ["customer-replies", "Customer replies", "Would you send this response to the customer as written?"],
     ["research-deliverables", "Research and client work", "Is this conclusion supported by the supplied sources?"],
     ["product-experiences", "Product experiences", "Is the intended next action clear from this screen?"],
-    ["version-calibration", "Agent-version calibration", "should this agent suggestion be accepted?"],
-    [
-      "extraction-triage",
-      "Extraction and triage exceptions",
-      "Does the suggested classification or extracted record match the supplied source?",
-    ],
   ]) {
     assert.match(html, new RegExp(`id="${id}"`));
     assert.match(html, new RegExp(title, "i"));
     assert.match(html, new RegExp(criterion.replace(/[?]/g, "\\?"), "i"));
   }
 
-  assert.match(html, /Trigger.*Human check.*Reviewer qualifications.*Permitted material.*Decision and evidence/i);
-  assert.match(html, /Invite support experts.*network or hybrid panel.*public, synthetic, or safely redacted/i);
-  assert.match(html, /Invite domain experts.*General readers can judge clarity or source credibility/i);
+  // Removed use cases stay removed; their concerns are covered elsewhere.
+  assert.doesNotMatch(html, /version-calibration|extraction-triage/);
+  assert.match(html, /review starts again at full coverage/i);
+  assert.match(html, /classification and extraction exceptions/i);
+
+  // Each worked example pairs an artifact with a panel result and an owner outcome.
+  assert.match(html, /When to check.*Who reviews.*What you get back/i);
+  assert.match(html, /There is nothing further we can do/i);
+  assert.match(html, /No — 4 of 5 reviewers/i);
+  assert.match(html, /Churn fell 18%/i);
+  assert.match(html, /Not supported — 3 of 5 reviewers/i);
+  assert.match(html, /Version B — 4 of 5 reviewers/i);
+
   assert.match(html, /Proof of Human.*uniqueness signal.*does not prove professional expertise/i);
   assert.match(html, /unit tests, schema validation, deterministic policy checks, tracing, and automated evaluators/i);
   assert.match(html, /sole medical, legal, financial, security, or safety approval/i);

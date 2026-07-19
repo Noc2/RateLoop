@@ -318,3 +318,14 @@ metadata, and related-story cards. Do not build an empty case-study management s
 - [Anthropic: Demystifying evals for AI agents](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents)
 - [Braintrust: Coursera](https://www.braintrust.dev/customers/coursera)
 - [NIST AI RMF Core](https://airc.nist.gov/airmf-resources/airmf/5-sec-core/)
+
+## Revision — 2026-07-18
+
+The five-scenario catalog was reduced to three worked examples (`customer-replies`, `research-deliverables`,
+`product-experiences`) matching the landing cards 1:1. Each example now pairs an icon and a plain-language scenario
+with an illustrative mock review card (artifact excerpt, the human-check question, a panel verdict with reasons, and
+the owner's action) plus three plain-label details (When to check / Who reviews / What you get back). The repeated
+permitted-material boilerplate collapsed into the shared "Choose reviewers and material separately" section.
+`version-calibration` content lives in `/docs/how-it-works` (adaptive review); extraction/triage exceptions became a
+sentence in "Automate what is objective". The search index and the agent-readable `public/docs/use-cases.md` mirror
+were updated to match.

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { HumanAssuranceLoop } from "~~/components/assurance/HumanAssuranceLoop";
+import { UseCaseIcon } from "~~/components/docs/UseCaseVisuals";
 import { SupportedAgentsSection } from "~~/components/home/SupportedAgentsSection";
 import { TokenlessOrb } from "~~/components/home/TokenlessOrb";
 import { WorkspacePlanCards } from "~~/components/pricing/WorkspacePlanCards";
@@ -57,18 +58,21 @@ const useCases = [
     body: "A grounded reply can still frustrate. Would you send it?",
     href: "/docs/use-cases#customer-replies",
     color: "var(--rateloop-blue)",
+    icon: "reply",
   },
   {
     title: "Research and client work",
     body: "Citations can still support weak conclusions. Are the claims supported?",
     href: "/docs/use-cases#research-deliverables",
     color: "var(--rateloop-green)",
+    icon: "research",
   },
   {
     title: "Product experiences",
     body: "Tests can pass while users stay confused. Is the next action clear?",
     href: "/docs/use-cases#product-experiences",
     color: "var(--rateloop-pink)",
+    icon: "experience",
   },
 ] as const;
 
@@ -191,11 +195,14 @@ export function TokenlessLandingPage({
                 className="rateloop-surface-card rounded-2xl border-l-2 p-5 sm:p-6"
                 style={{ borderColor: useCase.color }}
               >
-                <h3 className="text-xl font-bold leading-tight">
-                  <Link href={useCase.href} className="transition-colors hover:text-base-content/70">
-                    {useCase.title}
-                  </Link>
-                </h3>
+                <div className="flex items-center gap-3">
+                  <UseCaseIcon kind={useCase.icon} color={useCase.color} />
+                  <h3 className="text-xl font-bold leading-tight">
+                    <Link href={useCase.href} className="transition-colors hover:text-base-content/70">
+                      {useCase.title}
+                    </Link>
+                  </h3>
+                </div>
                 <p className="mt-3 text-base leading-7 text-base-content/65">{useCase.body}</p>
               </article>
             ))}

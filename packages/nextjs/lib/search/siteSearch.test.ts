@@ -17,8 +17,8 @@ test("site search finds documentation by title and topic", () => {
   assert.equal(searchSite("customer support")[0]?.href, "/docs/use-cases#customer-replies");
   assert.equal(searchSite("research deliverable")[0]?.href, "/docs/use-cases#research-deliverables");
   assert.equal(searchSite("UI clarity")[0]?.href, "/docs/use-cases#product-experiences");
-  assert.equal(searchSite("low confidence extraction")[0]?.href, "/docs/use-cases#extraction-triage");
-  assert.ok(searchSite("adaptive review").some(result => result.href === "/docs/use-cases#version-calibration"));
+  assert.equal(searchSite("low confidence extraction")[0]?.href, "/docs/use-cases");
+  assert.ok(searchSite("adaptive review").some(result => result.href === "/docs/how-it-works#adaptive-review"));
   assert.ok(searchSite("refund compensation").some(result => result.href === "/docs/how-it-works#settlement-paths"));
   assert.equal(searchSite("Evidence & Compliance Mapping")[0]?.href, "/docs/evidence");
   assert.equal(searchSite("OSCAL")[0]?.href, "/docs/evidence");

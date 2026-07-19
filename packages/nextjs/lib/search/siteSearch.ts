@@ -69,7 +69,17 @@ export const SITE_SEARCH_INDEX: readonly SiteSearchEntry[] = [
     area: "Docs",
     description:
       "Match concrete AI workflow problems to bounded human checks, reviewer audiences, and owner decisions.",
-    keywords: ["human judgment", "examples", "customer support", "research", "UI", "adaptive review"],
+    keywords: [
+      "human judgment",
+      "examples",
+      "customer support",
+      "research",
+      "UI",
+      "extraction",
+      "triage",
+      "low confidence",
+      "classification",
+    ],
   },
   {
     title: "Customer replies",
@@ -91,20 +101,6 @@ export const SITE_SEARCH_INDEX: readonly SiteSearchEntry[] = [
     area: "Docs",
     description: "Check UI clarity and public-safe screenshots, images, video, or campaign material before release.",
     keywords: ["UI clarity", "UX", "screenshot", "marketing", "public content"],
-  },
-  {
-    title: "Agent-version calibration",
-    href: "/docs/use-cases#version-calibration",
-    area: "Docs",
-    description: "Start a changed agent scope at full review and reduce coverage only from comparable human evidence.",
-    keywords: ["adaptive review", "model change", "prompt change", "workflow version", "agreement"],
-  },
-  {
-    title: "Extraction and triage exceptions",
-    href: "/docs/use-cases#extraction-triage",
-    area: "Docs",
-    description: "Check ambiguous classifications or extracted records against their supplied source.",
-    keywords: ["triage", "extraction", "classification", "risk rules", "low confidence", "missing context"],
   },
   {
     title: "How It Works",
