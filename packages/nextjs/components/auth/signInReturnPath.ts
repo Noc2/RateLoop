@@ -1,5 +1,5 @@
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/;
-export const DEFAULT_SIGN_IN_RETURN_PATH = "/";
+export const DEFAULT_SIGN_IN_RETURN_PATH = "/welcome";
 
 export function normalizeSignInReturnPath(value: string | null, applicationOrigin: string) {
   if (
