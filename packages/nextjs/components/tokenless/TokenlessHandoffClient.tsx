@@ -825,6 +825,13 @@ export function TokenlessHandoffClient() {
             <p className="mb-5 text-sm leading-6 text-base-content/65">
               {sourceLabel(request.audience.source)} · {request.requestedPanelSize} reviewers
             </p>
+            <dl className="mb-5 grid gap-4 rounded-xl border border-white/10 bg-black/15 p-4 sm:grid-cols-2">
+              <SummaryItem label="Classification" value={classificationLabel(payload.dataClassification)} />
+              <SummaryItem
+                label="Redaction summary"
+                value={payload.redactionSummary.trim() || "No redaction applied"}
+              />
+            </dl>
             <label className="flex items-start gap-3 text-sm leading-6 text-base-content/80">
               <input
                 type="checkbox"
@@ -841,13 +848,8 @@ export function TokenlessHandoffClient() {
           </div>
 
           <details className="mt-6 rounded-xl border border-white/10 bg-black/15 p-4 text-sm">
-            <summary className="cursor-pointer font-medium">Request details</summary>
+            <summary className="cursor-pointer font-medium">Technical request details</summary>
             <dl className="mt-5 grid gap-5 sm:grid-cols-2">
-              <SummaryItem label="Classification" value={classificationLabel(payload.dataClassification)} />
-              <SummaryItem
-                label="Redaction summary"
-                value={payload.redactionSummary.trim() || "No redaction summary supplied"}
-              />
               <SummaryItem label="Admission policy" value={request.audience.admissionPolicyHash} mono />
               <SummaryItem label="Handoff ID" value={payload.handoffId} mono />
             </dl>
@@ -893,9 +895,9 @@ export function TokenlessHandoffClient() {
                 {quote.panel.requestedSize} reviewers · expires {formatDate(quote.expiresAt)}
               </p>
             </div>
-            <details className="mt-5 border-t border-white/10 pt-4 text-sm">
-              <summary className="cursor-pointer font-medium">Price details</summary>
-              <dl className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div className="mt-5 border-t border-white/10 pt-4 text-sm">
+              <h3 className="font-medium">Price breakdown</h3>
+              <dl className="mt-4 grid gap-4 sm:grid-cols-2">
                 <SummaryItem label="Reviewer bounty" value={formatUsdcAtomic(quote.economics.bounty.fundedAtomic)} />
                 <SummaryItem
                   label={`Platform fee · ${formatBpsPercent(quote.economics.fee.bps)}`}
@@ -911,9 +913,14 @@ export function TokenlessHandoffClient() {
                 />
                 <SummaryItem label="Audience" value={quote.audience.label} />
                 <SummaryItem label="Estimated time" value={`${quote.slo.estimatedSeconds} seconds`} />
-                <SummaryItem label="Quote ID" value={quote.quoteId} mono />
               </dl>
-            </details>
+              <details className="mt-4">
+                <summary className="cursor-pointer text-base-content/65">Technical quote details</summary>
+                <dl className="mt-4">
+                  <SummaryItem label="Quote ID" value={quote.quoteId} mono />
+                </dl>
+              </details>
+            </div>
           </div>
         ) : null}
       </section>

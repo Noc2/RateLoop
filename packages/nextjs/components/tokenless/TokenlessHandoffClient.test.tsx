@@ -188,13 +188,19 @@ test("handoff client renders a fragment-local loading state without server paylo
   assert.doesNotMatch(html, /api\/agent\/v1\/quote|handoffToken/);
 });
 
-test("browser handoff reveals price and submission progressively while retaining technical detail", () => {
+test("browser handoff keeps essential privacy and price facts visible while technical IDs stay optional", () => {
   assert.match(handoffSource, /Review this ask\./);
-  assert.match(handoffSource, /Request details/);
-  assert.match(handoffSource, /Price details/);
+  assert.match(handoffSource, /Technical request details/);
+  assert.match(handoffSource, /Price breakdown/);
   assert.match(handoffSource, /sourceLabel\(request\.audience\.source\)[\s\S]{0,100}request\.requestedPanelSize/);
   assert.match(handoffSource, /accepted-work reserve/);
   assert.match(handoffSource, /\{quote \? \([\s\S]*aria-labelledby="submit-heading"/);
+  assert.ok(handoffSource.indexOf('label="Classification"') < handoffSource.indexOf("checked={privacyConfirmed}"));
+  assert.ok(handoffSource.indexOf('label="Redaction summary"') < handoffSource.indexOf("checked={privacyConfirmed}"));
+  assert.ok(handoffSource.indexOf("Price breakdown") < handoffSource.indexOf('aria-labelledby="submit-heading"'));
+  assert.ok(handoffSource.indexOf('label="Reviewer bounty"') < handoffSource.indexOf("Technical quote details"));
+  assert.ok(handoffSource.indexOf("Platform fee") < handoffSource.indexOf("Technical quote details"));
+  assert.ok(handoffSource.indexOf('label="Accepted-work reserve"') < handoffSource.indexOf("Technical quote details"));
   assert.match(handoffSource, /Admission policy/);
   assert.match(handoffSource, /Quote ID/);
   assert.doesNotMatch(handoffSource, /Draft summary|Lock the exact economics|01 · Review|02 · Quote|03 · Submit/);
