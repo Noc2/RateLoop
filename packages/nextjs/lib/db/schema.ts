@@ -110,6 +110,7 @@ export const tokenlessPrincipals = pgTable(
   {
     principalId: text("principal_id").primaryKey(),
     status: text("status").notNull().default("active"),
+    welcomeCompletedAt: timestamp("welcome_completed_at", { mode: "date", withTimezone: true }),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
     updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
     disabledAt: timestamp("disabled_at", { mode: "date", withTimezone: true }),

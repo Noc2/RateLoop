@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import "server-only";
-import type { AuthProvider, BrowserIdentity } from "~~/lib/auth/session";
-import { dbPool } from "~~/lib/db";
+import { AuthError, type AuthProvider, type BrowserIdentity } from "~~/lib/auth/session";
+import { dbClient, dbPool } from "~~/lib/db";
 
 const BETTER_AUTH_PROVIDER = "better_auth";
 
@@ -97,4 +97,40 @@ export async function resolveBetterAuthPrincipal(input: {
   } finally {
     client.release();
   }
+}
+
+function welcomeCompletedAt(row: Record<string, unknown> | undefined) {
+  const value = row?.welcome_completed_at;
+  if (value === null || value === undefined) return null;
+  const completedAt = value instanceof Date ? value : new Date(String(value));
+  if (!Number.isFinite(completedAt.getTime())) throw new Error("Principal welcome state is invalid.");
+  return completedAt;
+}
+
+export async function getPrincipalWelcomeState(principalId: string) {
+  const result = await dbClient.execute({
+    sql: `SELECT welcome_completed_at
+          FROM tokenless_principals
+          WHERE principal_id = ? AND status = 'active'
+          LIMIT 1`,
+    args: [principalId],
+  });
+  if (result.rowCount !== 1) throw new AuthError("The RateLoop principal is not active.", 403);
+  const completedAt = welcomeCompletedAt(result.rows[0] as Record<string, unknown> | undefined);
+  return { completedAt, required: completedAt === null };
+}
+
+export async function completePrincipalWelcome(principalId: string, now = new Date()) {
+  const result = await dbClient.execute({
+    sql: `UPDATE tokenless_principals
+          SET welcome_completed_at = COALESCE(welcome_completed_at, ?),
+              updated_at = CASE WHEN welcome_completed_at IS NULL THEN ? ELSE updated_at END
+          WHERE principal_id = ? AND status = 'active'
+          RETURNING welcome_completed_at`,
+    args: [now, now, principalId],
+  });
+  if (result.rowCount !== 1) throw new AuthError("The RateLoop principal is not active.", 403);
+  const completedAt = welcomeCompletedAt(result.rows[0] as Record<string, unknown> | undefined);
+  if (!completedAt) throw new Error("Principal welcome completion was not recorded.");
+  return { completedAt, required: false as const };
 }

@@ -792,6 +792,13 @@
       "when": 1784347200000,
       "tag": "0113_rater_signed_transaction_recovery",
       "breakpoints": true
+    },
+    {
+      "idx": 114,
+      "version": "7",
+      "when": 1784350800000,
+      "tag": "0114_principal_welcome_completion",
+      "breakpoints": true
     }
   ]
 }
