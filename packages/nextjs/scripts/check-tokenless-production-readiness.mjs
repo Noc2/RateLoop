@@ -45,6 +45,7 @@ const HOSTED_RELEASE_CAPABILITY_LABELS = Object.freeze({
 export const REQUIRED_TOKENLESS_PRODUCTION_VARIABLES = [
   "APP_URL",
   "NEXT_PUBLIC_APP_URL",
+  "NEXT_PUBLIC_THIRDWEB_CLIENT_ID",
   "DATABASE_URL",
   "TOKENLESS_DATABASE_IDENTITY",
   "RESEND_API_KEY",
@@ -443,7 +444,11 @@ export function validateTokenlessProductionReadiness({
   let missingConfiguration = false;
   for (const name of REQUIRED_TOKENLESS_PRODUCTION_VARIABLES) {
     if (!value(env, name)) {
-      errors.push(`${name} is required for a hosted release.`);
+      errors.push(
+        name === "NEXT_PUBLIC_THIRDWEB_CLIENT_ID"
+          ? "NEXT_PUBLIC_THIRDWEB_CLIENT_ID is required for self-custodial funding and payout wallet connections."
+          : `${name} is required for a hosted release.`,
+      );
       missingConfiguration = true;
     }
   }
@@ -567,16 +572,9 @@ export function validateTokenlessProductionReadiness({
     errors.push("TOKENLESS_THIRDWEB_WALLET_ENABLED must be explicitly true or false in production.");
   }
   if (thirdwebWalletEnabled === "true") {
-    for (const name of [
-      "NEXT_PUBLIC_THIRDWEB_CLIENT_ID",
-      "TOKENLESS_THIRDWEB_WALLET_AUDIENCE",
-      "TOKENLESS_THIRDWEB_WALLET_KEY_ID",
-      "TOKENLESS_THIRDWEB_WALLET_KMS_KEY_RESOURCE",
-      "TOKENLESS_THIRDWEB_WALLET_KMS_REGION",
-      "TOKENLESS_THIRDWEB_WALLET_KMS_ROLE_ARN",
-    ]) {
-      if (!value(env, name)) errors.push(`${name} is required when optional thirdweb wallet creation is enabled.`);
-    }
+    errors.push(
+      "TOKENLESS_THIRDWEB_WALLET_ENABLED must remain false for hosted releases until externally verifiable wallet export and recovery are implemented.",
+    );
   }
   if (missingConfiguration) return errors;
 
@@ -827,29 +825,6 @@ export function validateTokenlessProductionReadiness({
   }
   if (value(env, "TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION").length > 80) {
     errors.push("TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION must not exceed 80 characters.");
-  }
-  if (thirdwebWalletEnabled === "true") {
-    if (value(env, "TOKENLESS_THIRDWEB_WALLET_KEY_ID").length > 128) {
-      errors.push("TOKENLESS_THIRDWEB_WALLET_KEY_ID must not exceed 128 characters.");
-    }
-    if (value(env, "TOKENLESS_THIRDWEB_WALLET_AUDIENCE").length > 256) {
-      errors.push("TOKENLESS_THIRDWEB_WALLET_AUDIENCE must not exceed 256 characters.");
-    }
-    if (value(env, "TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK")) {
-      errors.push("TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK is forbidden; hosted wallet JWTs must use managed KMS.");
-    }
-    if (!/^ed25519:[0-9a-f]{24}$/u.test(value(env, "TOKENLESS_THIRDWEB_WALLET_KEY_ID"))) {
-      errors.push("TOKENLESS_THIRDWEB_WALLET_KEY_ID must be the managed Ed25519 public-key fingerprint.");
-    }
-    if (!/^arn:aws:kms:eu-[a-z]+-\d+:\d{12}:(?:key\/[0-9a-f-]{36}|alias\/[A-Za-z0-9/_+=,.@-]+)$/u.test(value(env, "TOKENLESS_THIRDWEB_WALLET_KMS_KEY_RESOURCE"))) {
-      errors.push("TOKENLESS_THIRDWEB_WALLET_KMS_KEY_RESOURCE must identify a dedicated EU AWS KMS key.");
-    }
-    if (!/^eu-[a-z]+-\d+$/u.test(value(env, "TOKENLESS_THIRDWEB_WALLET_KMS_REGION"))) {
-      errors.push("TOKENLESS_THIRDWEB_WALLET_KMS_REGION must be a concrete EU AWS region.");
-    }
-    if (!/^arn:aws:iam::\d{12}:role\/[A-Za-z0-9+=,.@_\/-]{1,512}$/u.test(value(env, "TOKENLESS_THIRDWEB_WALLET_KMS_ROLE_ARN"))) {
-      errors.push("TOKENLESS_THIRDWEB_WALLET_KMS_ROLE_ARN must identify the wallet workload-identity signer role.");
-    }
   }
   for (const names of secretRoles.values()) {
     const message = `Production key roles must be distinct: ${names.join(", ")}.`;

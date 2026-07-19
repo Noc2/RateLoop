@@ -38,15 +38,48 @@ import {
 } from "@rateloop/agents/tokenless";
 
 const client = createTokenlessAgentsClient({
+  apiKey: process.env.RATELOOP_AGENT_API_KEY!,
   apiBaseUrl: process.env.RATELOOP_API_BASE_URL!,
 });
+
+const audiencePolicy = {
+  schemaVersion: "rateloop.human-assurance.v2" as const,
+  policyId: "aud_public_release_customer_invited_v1",
+  version: 1,
+  reviewerSource: "customer_invited" as const,
+  compensation: "paid" as const,
+  cohorts: [
+    { cohortId: "customer_named", minimumReviewers: 3, maximumReviewers: 500 },
+  ],
+  selection: "customer_named" as const,
+  fallbacks: { allowed: false, sources: [] },
+  requiredQualifications: [],
+  assurance: {
+    requirements: [
+      {
+        capability: "account_control" as const,
+        reviewerSources: ["customer_invited" as const],
+        allowedProviders: [],
+      },
+    ],
+  },
+  buyerPrivacy: {
+    visibleFields: [],
+    minimumAggregationSize: 3,
+    suppressSmallCells: true,
+  },
+  legalEligibilityRequired: true,
+};
 
 const quote = await client.quote({
   audience: {
     admissionPolicyHash:
-      "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "0x8681aba447f1c2d918b038b1109b4f4112877b0acaa3f132da97e98a3d8cf09c",
     source: "customer_invited",
   },
+  audiencePolicy,
+  confirmedNoSensitiveData: true,
+  dataClassification: "synthetic",
   budget: {
     attemptReserveAtomic: "500000",
     bountyAtomic: "5000000",
@@ -59,6 +92,7 @@ const quote = await client.quote({
   },
   requestedPanelSize: 5,
   responseWindowSeconds: 3600,
+  visibility: "public",
 });
 
 const ask = await client.ask({
@@ -80,9 +114,9 @@ const result =
 
 Wallet and x402 callers pass the corresponding `TokenlessPayment` variant to `ask`. The SDK does not hold private keys, execute contract calls, or possess a universal rater decryption key.
 
-Human browser accounts use Better Auth first and can work without a wallet. If a person later needs a funding, payout,
-or recovery destination, they explicitly bind either a self-custodial wallet or an optional thirdweb app wallet for that
-single purpose. This browser wallet flow is separate from the agent keystore described below.
+Human browser accounts use Better Auth first and can work without a wallet. Hosted users may explicitly bind a
+self-custodial wallet for funding or payout. Managed thirdweb wallet creation remains disabled until verifiable export
+and recovery exist. This browser wallet flow is separate from the agent keystore described below.
 
 ## CLI
 

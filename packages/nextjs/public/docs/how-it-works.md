@@ -75,9 +75,10 @@ project assignment, and reviewer lease rather than wallet ownership.
 
 ## Evidence boundary
 
-Private artifacts are encrypted and access-controlled. Each artifact has its own random data-encryption key, but customer
-artifact keys currently wrap to an operator-controlled server/KMS authority shared across tenants within a key domain;
-authorized RateLoop systems can decrypt those artifacts, and per-tenant or per-project wrapping keys are not yet
-implemented. Paid settlement inputs and outputs are independently recomputable on Base. A paid commit schedules public
+Private artifacts are encrypted and access-controlled. Each artifact has its own random data-encryption key. Hosted
+releases require workspace/project-scoped AWS KMS aliases and authenticated encryption context; authorized RateLoop
+workload roles permitted on those tenant keys can still decrypt the tenant's artifacts to provide the service. Provider
+key provisioning, inventory, rotation, and access exercises are release gates. Paid settlement inputs and outputs are
+independently recomputable on Base. A paid commit schedules public
 decryptability of its vote-key-to-payout link at the configured drand round after the commit deadline, independent of a
 later reveal or claim, while the customer's private artifacts and decision record remain outside the public chain.

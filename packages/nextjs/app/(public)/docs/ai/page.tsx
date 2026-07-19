@@ -27,8 +27,36 @@ const createHandoffRequest = `{
       "confirmedNoSensitiveData": true,
       "request": {
         "audience": {
-          "source": "rateloop_network",
-          "admissionPolicyHash": "0x1212121212121212121212121212121212121212121212121212121212121212"
+          "source": "customer_invited",
+          "admissionPolicyHash": "0x8681aba447f1c2d918b038b1109b4f4112877b0acaa3f132da97e98a3d8cf09c"
+        },
+        "audiencePolicy": {
+          "schemaVersion": "rateloop.human-assurance.v2",
+          "policyId": "aud_public_release_customer_invited_v1",
+          "version": 1,
+          "reviewerSource": "customer_invited",
+          "compensation": "paid",
+          "cohorts": [
+            { "cohortId": "customer_named", "minimumReviewers": 3, "maximumReviewers": 500 }
+          ],
+          "selection": "customer_named",
+          "fallbacks": { "allowed": false, "sources": [] },
+          "requiredQualifications": [],
+          "assurance": {
+            "requirements": [
+              {
+                "capability": "account_control",
+                "reviewerSources": ["customer_invited"],
+                "allowedProviders": []
+              }
+            ]
+          },
+          "buyerPrivacy": {
+            "visibleFields": [],
+            "minimumAggregationSize": 3,
+            "suppressSmallCells": true
+          },
+          "legalEligibilityRequired": true
         },
         "budget": {
           "attemptReserveAtomic": "500000",

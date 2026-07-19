@@ -16,8 +16,11 @@ Every live tokenless component is isolated from the legacy RateLoop deployment.
 - Current v4 release status: `unreleased`
 - Current v4 Base Sepolia deployment key and addresses: none
 
-The checked-in v4 registry is intentionally empty until TokenlessPanel, CredentialIssuer, the optional x402 adapter,
-and TokenlessFeedbackBonus are freshly deployed and verified as one bundle. Historical v1-v3 artifacts, including the
+The checked-in v4 registry is intentionally empty until a separately reviewed, non-mock verifier with deployed bytecode,
+TokenlessPanel, CredentialIssuer, the optional x402 adapter, and TokenlessFeedbackBonus are freshly deployed and verified
+as one bundle. The deployment script consumes the verifier as `TOKENLESS_BEACON_VERIFIER`; hosted app, Ponder, and keeper
+configuration consume the pinned address as `TOKENLESS_BEACON_VERIFIER_ADDRESS` or their package-prefixed equivalent.
+Historical v1-v3 artifacts, including the
 v3 test bundle deployed at block `44132668`, must not be relabelled or used by a v4 app, Ponder, or keeper process. There
 is no canonical current v4 address to copy into a hosted environment.
 
@@ -34,8 +37,9 @@ Services must fail closed if their chain, addresses, start block, or deployment 
 - Web project: `rateloop-tokenless` on a Vercel-provided domain; never alias this branch to `rateloop.ai`.
 - Service project: `rateloop-tokenless` on Railway, with its own Postgres, Ponder, and keeper services.
 - Ponder database schema is derived from the complete tokenless deployment identity.
-- The keeper uses a dedicated gas-only Base Sepolia key.
-- The credential issuer uses a separate server-only signer key. Never expose it through a `NEXT_PUBLIC_` variable.
+- The keeper uses a dedicated gas-only workload-identity AWS KMS role and secp256k1 key.
+- The credential issuer uses a different workload-identity AWS KMS role, key, and expected account. Never expose signer
+  configuration through a `NEXT_PUBLIC_` variable.
 
 ## EU-first deployment contract
 
@@ -55,25 +59,25 @@ Next.js:
 - `APP_URL`, `NEXT_PUBLIC_APP_URL`
 - the complete signed EU manifest variables from `packages/nextjs/.env.example`; hosted releases have no simulation
   bypass
-- server-only `BETTER_AUTH_SECRET`; email OTP additionally requires `RESEND_API_KEY` and `RESEND_FROM_EMAIL`
+- server-only `BETTER_AUTH_SECRET`; the hosted target also requires `RESEND_API_KEY` and `RESEND_FROM_EMAIL` for email OTP
 - `TOKENLESS_EMAIL_DELIVERY_REGION=eu-west-1` plus approved processor/transfer evidence; Resend's account metadata and
   logs remain in the US even when mail is dispatched from Ireland
 - optional Better Auth Google/Apple credential pairs and `BETTER_AUTH_PASSKEY_RP_ID`
-- only when optional wallet creation is enabled: `NEXT_PUBLIC_THIRDWEB_CLIENT_ID`,
-  `TOKENLESS_THIRDWEB_WALLET_AUDIENCE`, `TOKENLESS_THIRDWEB_WALLET_KEY_ID`, and the server-only Ed25519
-  `TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK`
+- `NEXT_PUBLIC_THIRDWEB_CLIENT_ID` for self-custodial funding and payout connections, independently of managed issuance;
+  `TOKENLESS_THIRDWEB_WALLET_ENABLED=false` is mandatory until verifiable export and recovery are implemented
 - `DATABASE_URL`
 - `NEXT_PUBLIC_TARGET_NETWORKS=84532`
 - server-side `BASE_SEPOLIA_RPC_URL` plus one to three ordered, independent HTTPS URLs in
   `BASE_SEPOLIA_RPC_FALLBACK_URLS`; the public browser RPC remains separate
-- `TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY`
+- the distinct `TOKENLESS_CREDENTIAL_ISSUER_KMS_KEY_RESOURCE`, `_EXPECTED_ADDRESS`, `_REGION`, `_ROLE_ARN`, and
+  `_OIDC_AUDIENCE` values
 - `TOKENLESS_DEPLOYMENT_SCHEMA`, `TOKENLESS_CHAIN_ID`, `TOKENLESS_DEPLOYMENT_KEY`, `TOKENLESS_DEPLOYMENT_BLOCK`
 - `TOKENLESS_PANEL_ADDRESS`, `TOKENLESS_CREDENTIAL_ISSUER_ADDRESS`, `TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS`,
   `TOKENLESS_BEACON_VERIFIER_ADDRESS`,
   `TOKENLESS_FEEDBACK_BONUS_ADDRESS`, `TOKENLESS_USDC_ADDRESS`
 - `TOKENLESS_FEE_RECIPIENT`, round timing variables, and optional `NEXT_PUBLIC_BASE_PAYMASTER_URL`
-- distinct `TOKENLESS_X402_RELAYER_PRIVATE_KEY`, `TOKENLESS_PREPAID_FUNDER_PRIVATE_KEY`, and
-  `TOKENLESS_SURPRISE_BONUS_FUNDER_PRIVATE_KEY`
+- distinct `TOKENLESS_X402_RELAYER_KMS_*`, `TOKENLESS_PREPAID_FUNDER_KMS_*`, and
+  `TOKENLESS_SURPRISE_BONUS_FUNDER_KMS_*` resource, expected-address, region, role, and OIDC bundles
 - eligibility provider ID/public key/start URL/handoff secret, versioned vault keys, and DAC7 policy
 - `TOKENLESS_PIPELINE_TOKEN`, `CRON_SECRET`, `TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET`,
   `TOKENLESS_WEBHOOK_ENCRYPTION_KEY`; use a distinct server-only secret of at least 32 random characters for signed
@@ -87,12 +91,11 @@ Next.js:
   `TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION`, with no public key variant
 
 Better Auth callback and passkey origins must allow only local development and `rateloop-tokenless.vercel.app`; never
-add `rateloop.ai`. If optional thirdweb wallet creation is enabled, configure its custom-JWT audience and the exact
-tokenless JWKS URL, and restrict its browser origins to the same isolated hosts.
+add `rateloop.ai`. Managed thirdweb wallet creation is fail-closed in hosted environments.
 
 Apply every migration recorded in `packages/nextjs/drizzle/meta/_journal.json` in order before smoke testing the
 human-assurance APIs or enabling a hosted release. At this revision the journal head is
-`0117_principal_bound_rater_identity`; `_journal.json`, rather than a copied range in this document, remains
+`0121_paid_assignment_operations`; `_journal.json`, rather than a copied range in this document, remains
 authoritative.
 Isolated Vercel production builds apply and verify pending journal entries
 before compiling; preview and local builds never mutate a database. The app must fail closed when moderation,
@@ -114,6 +117,7 @@ Keeper:
 - `TOKENLESS_PANEL_ADDRESS`, `TOKENLESS_CREDENTIAL_ISSUER_ADDRESS`, `TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS`,
   `TOKENLESS_FEEDBACK_BONUS_ADDRESS`, `TOKENLESS_BEACON_VERIFIER_ADDRESS`
 - `TOKENLESS_DEPLOYMENT_KEY`, `TOKENLESS_DEPLOYMENT_BLOCK`
-- `KEEPER_PRIVATE_KEY` or a hosted keystore, plus `METRICS_AUTH_TOKEN`
+- `TOKENLESS_KEEPER_KMS_KEY_RESOURCE`, `_EXPECTED_ADDRESS`, `_REGION`, and `_ROLE_ARN`, plus
+  `AWS_WEB_IDENTITY_TOKEN_FILE` and `METRICS_AUTH_TOKEN`; raw keys and keystores are local-test only
 
 The package-local `.env.example` files remain the executable source for exact names and validation rules.

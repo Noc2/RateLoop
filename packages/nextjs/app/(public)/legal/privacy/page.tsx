@@ -20,10 +20,10 @@ export default function PrivacyPage() {
         cross-site profiling.
       </p>
       <p>
-        Each customer artifact has its own random data-encryption key, but those keys currently wrap to an
-        operator-controlled server or KMS authority shared by tenant artifacts within a key domain. Authorized RateLoop
-        systems can therefore decrypt customer artifacts in that domain to provide the service. Per-tenant or
-        per-project wrapping keys are not yet implemented.
+        Each customer artifact has its own random data-encryption key. Hosted releases require workspace/project-scoped
+        AWS KMS aliases and authenticated encryption context. Authorized RateLoop workload roles permitted on those
+        tenant keys can still decrypt that tenant&apos;s artifacts to provide the service. Provider key provisioning,
+        inventory, rotation, and access exercises remain release gates.
       </p>
       <h2>Agent and browser handoffs</h2>
       <p>

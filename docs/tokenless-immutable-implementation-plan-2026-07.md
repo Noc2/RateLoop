@@ -129,7 +129,10 @@ review. The assurance workflow uses
 `evaluate_review_requirement -> skip or request_review -> wait_for_review -> get_review_result -> get_assurance_state`.
 Generic MCP is advisory; a host-enforced integration is required when the host must prove that output remained blocked.
 
-The authenticated API and SDK use `quote -> ask -> wait -> result`. Scoped workspace credentials support prepaid
+The authenticated API and SDK use `quote -> ask -> wait -> result`. The external quote endpoint accepts only explicitly
+safe-public requests. Private quote creation is a narrow internal paid-review step after the exact encrypted-artifact
+commitments and audience policy are frozen. Its opaque random identifier is additionally bound to the creating workspace
+API-key subject, and ask preparation returns not found across that boundary. Scoped workspace credentials support prepaid
 automation. A self-funded agent may use short-lived x402/EIP-3009 USDC authorizations from a local encrypted signer;
 the gas-only relayer never receives the spend key. The public MCP remains a separate, approval-bound browser handoff and
 cannot silently turn draft content into a funded ask.
@@ -167,9 +170,11 @@ Better Auth is the primary browser authentication layer. Email OTP and passkeys 
 when complete credential pairs exist. Authentication resolves to a RateLoop-owned opaque principal and a hashed,
 HttpOnly session. A client-reported profile, provider token, email domain, or wallet is never authorization.
 
-Wallets are optional, purpose-bound adapters for funding, payout, or recovery. Existing self-custodial wallets and an
-optional thirdweb-created wallet use the same explicit proof boundary. Browser identity, workspace role, project
-assignment, reviewer qualification, assurance evidence, paid eligibility, and wallet authority remain separate.
+Wallets are optional, purpose-bound adapters. Hosted users may bind self-custodial funding or payout wallets only after
+authentication and an explicit proof. Managed thirdweb wallet creation remains disabled until externally verifiable
+export and recovery exist; a historical active managed-wallet binding blocks account deletion so it cannot be stranded.
+Browser identity, workspace role, project assignment, reviewer qualification, assurance evidence, paid eligibility, and
+wallet authority remain separate.
 
 Audience policies are versioned and distinguish customer-invited, RateLoop-network, and hybrid reviewers. The exact
 policy hash is bound into paid round terms and vouchers. World ID Proof of Human may supply provider-scoped uniqueness
@@ -179,10 +184,10 @@ finish before the first paid voucher. Browsing and advisory calibration require 
 
 Private artifacts are encrypted before storage and released only through workspace membership, project assignment, and
 short reviewer leases. Public, private, and sensitive-material decisions are separate policy dimensions. Each customer
-artifact has a random data-encryption key, but those keys currently wrap to an operator-controlled server/KMS wrapping
-authority shared by tenant artifacts within a key domain. Authorized operator systems can therefore decrypt customer
-artifacts in that domain. Per-tenant or per-project wrapping keys remain a privacy-hardening and real-customer release
-gate, not a deployed property.
+artifact has a random data-encryption key; hosted wrapping requires workspace/project-scoped AWS KMS alias templates and
+authenticated encryption context for every artifact DEK. Authorized RateLoop workload roles permitted on those keys can
+still decrypt that tenant's artifacts. Provider inventory, key provisioning, rotation/rewrap, and live exercises remain
+release gates.
 
 On-chain data contains commitments and settlement evidence, never private customer payloads or plaintext URLs. A paid
 commit publishes tlock ciphertext containing the vote, prediction, response hash, payout address, and salt. Committing
@@ -196,8 +201,9 @@ Account and workspace deletion is a first-class authenticated lifecycle, not a s
 a deletion, RateLoop shows the exact blockers and consequences. A workspace cannot be deleted while it owns available
 or reserved funds, accepted paid work, an unsettled round, or another obligation that would strand assets or prevent an
 earned terminal payment. A principal cannot delete its account while it is the sole owner of a workspace, has accepted
-paid work, or has a managed wallet that still requires recovery. Final account deletion requires a recent primary-auth
-session in addition to the active RateLoop session.
+paid work, or has a managed wallet that still requires recovery. Final deletion atomically consumes a short-lived,
+one-use proof bound to the exact Better Auth user and RateLoop principal; signing out before the final request cannot
+turn that proof into a reusable capability.
 
 Deletion immediately revokes product and agent access, removes reusable authentication and contact data, and makes the
 workspace or account inaccessible. A later sign-up with the same email creates a new Better Auth user and a new opaque
@@ -253,8 +259,9 @@ Operational instructions are intentionally separate from product design:
 
 ## Remaining release phases
 
-1. **Hosted staging:** managed signing, complete paid assignment-to-settlement wiring, signed EU resource evidence,
-   migration verification through the head recorded in `_journal.json`, and deployment-pinned end-to-end exercises.
+1. **Hosted staging:** managed-signer provisioning, identity, rotation and failure evidence; complete paid
+   assignment-to-settlement wiring; signed EU resource evidence; migration verification through the head recorded in
+   `_journal.json`; and deployment-pinned end-to-end exercises.
 2. **Real users and money:** external contract/privacy review, paid eligibility and DAC7 operations, sanctions and B2B
    controls, reviewer appeals/recovery, operational drills, security testing, and evidence-packet verification.
 3. **Hardening at traction:** audit the small immutable core, run a public bounty and soak period, deploy the final

@@ -13,8 +13,8 @@ records the concrete work that must pass once `tokenless` is integrated into `ma
 | Generated consumers | `@rateloop/contracts`, Ponder, and keeper identify the historical complete v3 bundle; runtime configuration now requires a five-slot `tokenless-v4` identity, but no v4 deployment exists                                               | Any fund-core change invalidates the artifact and every hosted address until an atomic redeployment                                                         |
 | Application data    | Ordered Drizzle journal from `0000` through the current head, whose authoritative value is the final entry of `packages/nextjs/drizzle/meta/_journal.json`                                                                                | Every migration must be applied and verified before hosted smoke testing                                                                                    |
 | Hosted isolation    | Dedicated Vercel project `rateloop-tokenless`; dedicated Railway project with Postgres, Ponder, and keeper; no `rateloop.ai` alias                                                                                                      | The currently served preview is not a release candidate and must not be promoted as production-ready                                                        |
-| Identity            | Better Auth supplies browser authentication and opaque RateLoop principals; wallets are purpose-bound adapters                                                                                                                          | Hosted OTP/passkey verification, optional provider allowlists, managed wallet configuration when enabled, and account-recovery testing remain release gates |
-| Release preflight   | Deployment identity, region, secret-role separation, and schema checks fail closed                                                                                                                                                      | `managedSigning` and `paidAssignmentSettlement` remain explicitly unavailable in the production readiness check                                             |
+| Identity            | Better Auth supplies browser authentication and opaque RateLoop principals; wallets are purpose-bound adapters                                                                                                                          | Hosted OTP/passkey verification, optional provider allowlists, self-custodial wallet client verification, and account-recovery testing remain release gates |
+| Release preflight   | Deployment identity, region, secret-role separation, schema checks, and managed-signing code paths fail closed                                                                                                                         | `managedSigning` is implemented but still requires provisioned resource evidence; `paidAssignmentSettlement` remains explicitly unavailable                 |
 
 ## Hosted-environment invariant
 
@@ -38,7 +38,7 @@ and no public secret exposure. They must never authorize `rate-loop-nextjs`, `ra
 
 Once this work is merged into `main`, hosted builds automatically activate the complete production preflight and must
 satisfy every release gate in this register before integration with `rateloop.ai`. A successful isolated tokenless test
-deployment is not evidence that managed signing, paid assignment settlement, EU infrastructure, migration verification,
+deployment is not evidence that managed-signer provisioning and exercises, paid assignment settlement, EU infrastructure, migration verification,
 or end-to-end paid-path testing is complete.
 
 ## Completed in this branch
@@ -49,6 +49,13 @@ or end-to-end paid-path testing is complete.
   and production deployments now require the same persisted workflow and complete resource evidence.
 - Removed the public limitations page and registry. Customer-facing copy now explains the product mechanisms and links
   technical terms to their detailed documentation; engineering blockers remain in this internal register.
+- Replaced hosted raw signer material with workload-identity AWS KMS signing for every enabled application and keeper
+  role, and tenant-scoped KMS wrapping for private artifacts. Optional managed app-wallet creation remains disabled
+  until externally verifiable export and recovery exist.
+- Made private quote identifiers opaque and owner-bound, with migration-time invalidation of legacy unbound private
+  capabilities and retention-aware deletion handling.
+- Kept private-paid, public-network, and hybrid review lanes unavailable while their complete settlement and
+  source-derived integrity-epoch requirements remain open.
 
 ## Design-review remediation — 19 July 2026
 
@@ -91,11 +98,12 @@ release must use the signed managed-KMS inventory below; no placeholder resource
 
 ## Gates before the next hosted staging release
 
-1. **Complete managed signing.** Replace hosted hot-key assumptions with reviewed managed signing for credential
-   issuance and every chain transaction role. Keep credential issuer, gas-only relayer, prepaid funder, surprise-bonus
-   funder, evidence signer, and wallet-JWT signer distinct.
+1. **Provision and exercise managed signing.** The source now requires workload-identity AWS KMS signing for the
+   credential issuer, gas-only relayer, prepaid funder, surprise-bonus funder, and evidence signer, with distinct roles
+   and keys. Provision the exact EU resources, validate their public identities, and run
+   rotation/failure exercises; source implementation alone is not provider evidence.
 2. **Connect paid assignment to settlement.** A paid run must reserve assignments against the exact policy snapshot,
-   issue the bound voucher, commit and settle on the configured v3 deployment, produce terminal receipts, and publish a
+   issue the bound voucher, commit and settle on a fresh complete v4 deployment, produce terminal receipts, and publish a
    source-derived result. Network and hybrid work must remain unavailable until this path passes.
 3. **Provision the signed EU bundle.** Supply matching EU Postgres, private Blob, managed KMS, log, backup, auth,
    support-access, Ponder, keeper, and external-processor evidence. Validate actual provider IDs and runtime regions;
@@ -133,8 +141,8 @@ release must use the signed managed-KMS inventory below; no placeholder resource
   circuit-breaker operations, rate limiting, reconciliation, monitoring, and security testing.
 - Complete B2B trader/VAT handling, sanctions and geographic controls, invoices and reconciliation, notice-and-action,
   DAC7 operations, retention/deletion, processor agreements, and German legal review.
-- Redeploy the complete stack atomically after any later fund-core change. No old address continuity or mixed v2/v3
-  compatibility is required.
+- Redeploy the complete stack atomically after any later fund-core change. No historical-address continuity or
+  mixed-version bundle compatibility is required.
 
 ## Release and documentation policy
 

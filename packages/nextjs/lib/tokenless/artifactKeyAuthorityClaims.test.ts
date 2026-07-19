@@ -17,14 +17,14 @@ function normalized(disclosure: string) {
   return disclosure.replace(/\s+/gu, " ");
 }
 
-test("artifact-key docs disclose the shared operator wrapping authority", () => {
+test("artifact-key docs disclose tenant-scoped managed wrapping and workload authority", () => {
   for (const disclosure of [design, legalReference, artifactBoundary, publicHowItWorks].map(normalized)) {
     assert.match(disclosure, /Each (?:customer )?artifact (?:has|gets) (?:its own|a) random/iu);
-    assert.match(disclosure, /shared (?:by|across) tenant artifacts|shared across tenants/iu);
-    assert.match(disclosure, /operator/iu);
-    assert.match(disclosure, /decrypt every customer artifact|decrypt customer artifacts|decrypt those artifacts/iu);
-    assert.match(disclosure, /per-tenant or per-project|per-project or per-tenant/iu);
-    assert.match(disclosure, /not (?:yet )?(?:implemented|a deployed property)/iu);
+    assert.match(disclosure, /workspace\/project-scoped|tenant-scoped/iu);
+    assert.match(disclosure, /workload role/iu);
+    assert.match(disclosure, /decrypt (?:that tenant's|the tenant's|that tenant’s) (?:customer )?artifacts/iu);
+    assert.match(disclosure, /provision|inventory/iu);
+    assert.match(disclosure, /release gate/iu);
   }
 });
 
@@ -34,7 +34,7 @@ test("artifact-key claims do not generalize the tlock reveal-key property to cus
   assert.match(design, /statement does not apply to the customer-artifact vault authority/iu);
   assert.match(legalReference, /statement does not describe the customer-artifact vault/iu);
   assert.match(
-    artifactBoundary,
-    /Moving the same shared wrapping authority into KMS.*does not create tenant key separation/isu,
+    normalized(artifactBoundary),
+    /hosted operation must use the configured managed-KMS adapter and tenant-scoped alias template/isu,
   );
 });

@@ -26,7 +26,7 @@ test("privacy notice explains subscription processor data and retention", async 
   assert.match(html, /configured drand beacon after the commit deadline/i);
   assert.match(html, /whether or not the reviewer or keeper submits a reveal or claim/i);
   assert.match(html, /there is no post-commit abort/i);
-  assert.match(html, /operator-controlled server or KMS authority shared by tenant artifacts within a key domain/i);
-  assert.match(html, /Authorized RateLoop systems can therefore decrypt customer artifacts/i);
-  assert.match(html, /Per-tenant or per-project wrapping keys are not yet implemented/i);
+  assert.match(html, /workspace\/project-scoped AWS KMS aliases/i);
+  assert.match(html, /Authorized RateLoop workload roles permitted on those tenant keys/i);
+  assert.match(html, /Provider key provisioning, inventory, rotation, and access exercises remain release gates/i);
 });

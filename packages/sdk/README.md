@@ -54,12 +54,44 @@ const client = createTokenlessRateLoopClient({
   apiBaseUrl: "https://your-tokenless-app.vercel.app",
 });
 
+const audiencePolicy = {
+  schemaVersion: "rateloop.human-assurance.v2" as const,
+  policyId: "aud_public_release_customer_invited_v1",
+  version: 1,
+  reviewerSource: "customer_invited" as const,
+  compensation: "paid" as const,
+  cohorts: [
+    { cohortId: "customer_named", minimumReviewers: 3, maximumReviewers: 500 },
+  ],
+  selection: "customer_named" as const,
+  fallbacks: { allowed: false, sources: [] },
+  requiredQualifications: [],
+  assurance: {
+    requirements: [
+      {
+        capability: "account_control" as const,
+        reviewerSources: ["customer_invited" as const],
+        allowedProviders: [],
+      },
+    ],
+  },
+  buyerPrivacy: {
+    visibleFields: [],
+    minimumAggregationSize: 3,
+    suppressSmallCells: true,
+  },
+  legalEligibilityRequired: true,
+};
+
 const quote = await client.quote({
   audience: {
     admissionPolicyHash:
-      "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "0x8681aba447f1c2d918b038b1109b4f4112877b0acaa3f132da97e98a3d8cf09c",
     source: "customer_invited",
   },
+  audiencePolicy,
+  confirmedNoSensitiveData: true,
+  dataClassification: "synthetic",
   budget: {
     attemptReserveAtomic: "5000000",
     bountyAtomic: "25000000",
@@ -72,6 +104,7 @@ const quote = await client.quote({
   },
   requestedPanelSize: 15,
   responseWindowSeconds: 3600,
+  visibility: "public",
 });
 
 const ask = await client.ask({

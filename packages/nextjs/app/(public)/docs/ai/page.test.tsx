@@ -46,7 +46,7 @@ test("agent docs describe the approval-bound four-tool MCP surface and decision 
   assert.match(html, /rateloop_get_result/);
   assert.match(html, /tools\/list/);
   assert.match(html, /confirmedNoSensitiveData/);
-  assert.match(html, /0x(?:12){32}/);
+  assert.match(html, /0x8681aba447f1c2d918b038b1109b4f4112877b0acaa3f132da97e98a3d8cf09c/);
   assert.match(html, /requestedPanelSize/);
   assert.match(html, /explicit approval before calling the handoff tool/i);
   assert.match(html, /Creating a handoff is not submission/i);

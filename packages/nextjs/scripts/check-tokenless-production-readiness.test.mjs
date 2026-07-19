@@ -693,12 +693,12 @@ test("hosted release requires a dedicated pseudonym key at the managed-vault bou
   assert.match(validateTokenlessProductionReadiness(fixture).join("\n"), /PSEUDONYM_KEY must encode exactly 32 bytes/);
 });
 
-test("optional thirdweb wallet issuance is gated separately from Better Auth", () => {
+test("hosted thirdweb wallet issuance is refused until export recovery is verifiable", () => {
   const missing = validFixture();
   missing.env.TOKENLESS_THIRDWEB_WALLET_ENABLED = "true";
   assert.match(
     validateTokenlessProductionReadiness(missing).join("\n"),
-    /TOKENLESS_THIRDWEB_WALLET_KMS_KEY_RESOURCE is required/i,
+    /must remain false.*externally verifiable wallet export and recovery/i,
   );
 
   const enabled = validFixture();
@@ -712,7 +712,18 @@ test("optional thirdweb wallet issuance is gated separately from Better Auth", (
     TOKENLESS_THIRDWEB_WALLET_KMS_REGION: "eu-central-1",
     TOKENLESS_THIRDWEB_WALLET_KMS_ROLE_ARN: "arn:aws:iam::123456789012:role/rateloop-wallet-jwt",
   });
-  assert.deepEqual(validateTokenlessProductionReadiness(enabled), []);
+  assert.match(
+    validateTokenlessProductionReadiness(enabled).join("\n"),
+    /must remain false.*externally verifiable wallet export and recovery/i,
+  );
+});
+
+test("hosted release requires a thirdweb client ID while managed wallet issuance remains disabled", () => {
+  const fixture = validFixture();
+  fixture.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID = "";
+  const output = validateTokenlessProductionReadiness(fixture).join("\n");
+  assert.match(output, /NEXT_PUBLIC_THIRDWEB_CLIENT_ID is required.*self-custodial funding and payout/i);
+  assert.doesNotMatch(output, /must remain false.*export and recovery/i);
 });
 
 test("hosted release requires valid server-only Stripe configuration only when subscriptions are enabled", () => {
