@@ -140,6 +140,14 @@ export function AgentWorkspacePanels({
             onConnectionStateChange={handleConnectionState}
           />
         ) : null}
+        {hasConnectedAgent && resolvedTab === "connect" ? (
+          <AgentRegistryPanel
+            view="connection"
+            workspaceId={workspaceId}
+            agentRevision={agentRevision}
+            onAgentsChanged={refreshAgents}
+          />
+        ) : null}
         {hasConnectedAgent && resolvedTab === "inbox" && canManage ? (
           <HumanReviewApprovalInbox workspaceId={workspaceId} />
         ) : null}
@@ -148,6 +156,7 @@ export function AgentWorkspacePanels({
         ) : null}
         {hasConnectedAgent && resolvedTab === "registry" && !reviewAgentId ? (
           <AgentRegistryPanel
+            view="reviews"
             workspaceId={workspaceId}
             agentRevision={agentRevision}
             activeReviewAgentId={reviewAgentId}

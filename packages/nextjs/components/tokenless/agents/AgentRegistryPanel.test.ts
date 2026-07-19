@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-test("agent registry keeps the default row compact and reveals management on demand", () => {
+test("agent details and review information render in task-focused views", () => {
   const source = readFileSync(new URL("./AgentRegistryPanel.tsx", import.meta.url), "utf8");
   const form = readFileSync(new URL("./AgentVersionForm.tsx", import.meta.url), "utf8");
   assert.match(source, />Manage</);
+  assert.match(source, /view === "connection"/);
+  assert.match(source, /view === "reviews"/);
   assert.match(source, /Change workflow version/);
-  assert.match(source, /Human review/);
+  assert.match(source, /Edit reviews/);
   assert.match(source, /aria-controls="agent-human-review-editor"/);
   assert.match(source, /activeReviewAgentId === agent\.agentId/);
   assert.match(source, /onReviewAgentChange/);

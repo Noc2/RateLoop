@@ -579,12 +579,14 @@ function AgentAssuranceSummary({ agent }: { agent: WorkspaceAgent }) {
 }
 
 export function AgentRegistryPanel({
+  view,
   workspaceId,
   agentRevision = 0,
   activeReviewAgentId = null,
   onAgentsChanged,
   onReviewAgentChange,
 }: {
+  view: "connection" | "reviews";
   workspaceId: string;
   agentRevision?: number;
   activeReviewAgentId?: string | null;
@@ -623,7 +625,7 @@ export function AgentRegistryPanel({
         await loadRegistry(workspaceId, controller.signal);
       } catch (cause) {
         if (!controller.signal.aborted) {
-          setError(cause instanceof Error ? cause.message : "Unable to load the agent registry.");
+          setError(cause instanceof Error ? cause.message : "Unable to load the connected agents.");
         }
       } finally {
         if (!controller.signal.aborted) setLoading(false);
@@ -686,7 +688,8 @@ export function AgentRegistryPanel({
 
   const agents = registry?.agents ?? [];
   const archivedAgentCount = agents.filter(agent => agent.status === "inactive").length;
-  const visibleAgents = showArchived ? agents : agents.filter(agent => agent.status === "active");
+  const visibleAgents =
+    view === "connection" && showArchived ? agents : agents.filter(agent => agent.status === "active");
 
   return (
     <div className="space-y-5">
@@ -705,133 +708,142 @@ export function AgentRegistryPanel({
                 </div>
                 <p className="mt-1 text-sm text-base-content/55">Workflow v{agent.currentVersion.versionNumber}</p>
               </div>
+              {view === "reviews" && registry?.canManage && agent.status === "active" ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  aria-expanded={activeReviewAgentId === agent.agentId}
+                  aria-controls="agent-human-review-editor"
+                  disabled={busy}
+                  onClick={() => onReviewAgentChange?.(activeReviewAgentId === agent.agentId ? null : agent.agentId)}
+                >
+                  Edit reviews
+                </Button>
+              ) : null}
             </div>
-            <AgentCapabilityCard
-              agent={agent}
-              canManage={Boolean(registry?.canManage) && agent.status === "active"}
-              workspaceId={workspaceId}
-              onSaved={() => loadRegistry(workspaceId)}
-            />
-            <AgentHumanReviewConfigurationSummary agent={agent} />
-            <AgentAssuranceSummary agent={agent} />
-            <details className="mt-3 border-t border-white/10 pt-3">
-              <summary className="cursor-pointer text-sm font-semibold text-base-content/70">Manage</summary>
-              <div className="mt-4 space-y-4">
-                {registry?.canManage && agent.status === "active" ? (
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      disabled={busy}
-                      onClick={() => setEditingAgent(current => (current?.agentId === agent.agentId ? null : agent))}
-                    >
-                      Change workflow version
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      aria-expanded={activeReviewAgentId === agent.agentId}
-                      aria-controls="agent-human-review-editor"
-                      disabled={busy}
-                      onClick={() =>
-                        onReviewAgentChange?.(activeReviewAgentId === agent.agentId ? null : agent.agentId)
-                      }
-                    >
-                      Human review
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="text-error"
-                      disabled={busy}
-                      onClick={() => void deactivate(agent)}
-                    >
-                      Deactivate
-                    </Button>
-                  </div>
-                ) : null}
-
-                {editingAgent?.agentId === agent.agentId && registry?.canManage ? (
-                  <section
-                    className="surface-card-nested rounded-xl p-4"
-                    aria-labelledby={`new-version-${agent.agentId}`}
-                  >
-                    <h3 id={`new-version-${agent.agentId}`} className="font-semibold">
-                      Change workflow version
-                    </h3>
-                    <div className="mt-4">
-                      <AgentVersionForm
-                        key={editingAgent.currentVersion.versionId}
-                        current={editingAgent.currentVersion}
-                        busy={busy}
-                        submitLabel="Save workflow version"
-                        onSubmit={createVersion}
-                      />
-                    </div>
-                  </section>
-                ) : null}
-
-                {!registry?.canManage ? (
-                  <p className="text-sm text-base-content/55">Only workspace owners and admins can make changes.</p>
-                ) : null}
-
-                <details>
-                  <summary className="cursor-pointer text-sm font-medium text-base-content/65">
-                    Technical details
-                  </summary>
-                  <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                    <div>
-                      <dt className="text-xs text-base-content/45">External ID</dt>
-                      <dd className="mt-1 break-all font-mono text-xs">{agent.externalId}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-base-content/45">Environment</dt>
-                      <dd className="mt-1 capitalize">{agent.currentVersion.environment}</dd>
-                    </div>
-                    {agent.ownerAccountAddress ? (
-                      <div>
-                        <dt className="text-xs text-base-content/45">Owner</dt>
-                        <dd className="mt-1 font-mono text-xs" title={agent.ownerAccountAddress}>
-                          {shortAddress(agent.ownerAccountAddress)}
-                        </dd>
+            {view === "connection" ? (
+              <>
+                <AgentCapabilityCard
+                  agent={agent}
+                  canManage={Boolean(registry?.canManage) && agent.status === "active"}
+                  workspaceId={workspaceId}
+                  onSaved={() => loadRegistry(workspaceId)}
+                />
+                <details className="mt-3 border-t border-white/10 pt-3">
+                  <summary className="cursor-pointer text-sm font-semibold text-base-content/70">Manage</summary>
+                  <div className="mt-4 space-y-4">
+                    {registry?.canManage && agent.status === "active" ? (
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          disabled={busy}
+                          onClick={() =>
+                            setEditingAgent(current => (current?.agentId === agent.agentId ? null : agent))
+                          }
+                        >
+                          Change workflow version
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="text-error"
+                          disabled={busy}
+                          onClick={() => void deactivate(agent)}
+                        >
+                          Deactivate
+                        </Button>
                       </div>
                     ) : null}
-                  </dl>
-                </details>
 
-                <details>
-                  <summary className="cursor-pointer text-sm font-medium text-base-content/65">
-                    Audit history ({agent.versions.length})
-                  </summary>
-                  <ol className="mt-3 space-y-3">
-                    {agent.versions.map(version => (
-                      <li key={version.versionId} className="surface-card-nested rounded-lg p-4 text-sm">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <strong>Workflow version {version.versionNumber}</strong>
-                          <time dateTime={version.createdAt} className="text-xs text-base-content/45">
-                            {new Date(version.createdAt).toLocaleString()}
-                          </time>
+                    {editingAgent?.agentId === agent.agentId && registry?.canManage ? (
+                      <section
+                        className="surface-card-nested rounded-xl p-4"
+                        aria-labelledby={`new-version-${agent.agentId}`}
+                      >
+                        <h3 id={`new-version-${agent.agentId}`} className="font-semibold">
+                          Change workflow version
+                        </h3>
+                        <div className="mt-4">
+                          <AgentVersionForm
+                            key={editingAgent.currentVersion.versionId}
+                            current={editingAgent.currentVersion}
+                            busy={busy}
+                            submitLabel="Save workflow version"
+                            onSubmit={createVersion}
+                          />
                         </div>
-                        <p className="mt-2 text-base-content/60">
-                          {version.displayName} · <span className="capitalize">{version.environment}</span>
-                        </p>
-                        <code className="mt-2 block break-all text-[11px] text-base-content/40">
-                          sha256:{version.configurationCommitment}
-                        </code>
-                      </li>
-                    ))}
-                  </ol>
+                      </section>
+                    ) : null}
+
+                    {!registry?.canManage ? (
+                      <p className="text-sm text-base-content/55">Only workspace owners and admins can make changes.</p>
+                    ) : null}
+
+                    <details>
+                      <summary className="cursor-pointer text-sm font-medium text-base-content/65">
+                        Technical details
+                      </summary>
+                      <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                        <div>
+                          <dt className="text-xs text-base-content/45">External ID</dt>
+                          <dd className="mt-1 break-all font-mono text-xs">{agent.externalId}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs text-base-content/45">Environment</dt>
+                          <dd className="mt-1 capitalize">{agent.currentVersion.environment}</dd>
+                        </div>
+                        {agent.ownerAccountAddress ? (
+                          <div>
+                            <dt className="text-xs text-base-content/45">Owner</dt>
+                            <dd className="mt-1 font-mono text-xs" title={agent.ownerAccountAddress}>
+                              {shortAddress(agent.ownerAccountAddress)}
+                            </dd>
+                          </div>
+                        ) : null}
+                      </dl>
+                    </details>
+
+                    <details>
+                      <summary className="cursor-pointer text-sm font-medium text-base-content/65">
+                        Audit history ({agent.versions.length})
+                      </summary>
+                      <ol className="mt-3 space-y-3">
+                        {agent.versions.map(version => (
+                          <li key={version.versionId} className="surface-card-nested rounded-lg p-4 text-sm">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <strong>Workflow version {version.versionNumber}</strong>
+                              <time dateTime={version.createdAt} className="text-xs text-base-content/45">
+                                {new Date(version.createdAt).toLocaleString()}
+                              </time>
+                            </div>
+                            <p className="mt-2 text-base-content/60">
+                              {version.displayName} · <span className="capitalize">{version.environment}</span>
+                            </p>
+                            <code className="mt-2 block break-all text-[11px] text-base-content/40">
+                              sha256:{version.configurationCommitment}
+                            </code>
+                          </li>
+                        ))}
+                      </ol>
+                    </details>
+                  </div>
                 </details>
-              </div>
-            </details>
+              </>
+            ) : (
+              <>
+                <AgentHumanReviewConfigurationSummary agent={agent} />
+                <AgentAssuranceSummary agent={agent} />
+              </>
+            )}
           </Card>
         ))}
       </div>
 
-      {!loading && archivedAgentCount > 0 ? (
+      {!loading && view === "connection" && archivedAgentCount > 0 ? (
         <div className="flex justify-end">
           <Button
             type="button"

@@ -8,9 +8,9 @@ export type AgentTab = "overview" | "connect" | "inbox" | "registry" | "evaluati
 
 const tabs: Array<{ value: AgentTab; label: string }> = [
   { value: "overview", label: "Overview" },
-  { value: "connect", label: "Connect" },
+  { value: "connect", label: "Connection" },
   { value: "inbox", label: "Inbox" },
-  { value: "registry", label: "Registry" },
+  { value: "registry", label: "Reviews" },
   { value: "evaluations", label: "Evaluations" },
   { value: "evidence", label: "Evidence" },
 ];

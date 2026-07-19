@@ -380,7 +380,7 @@ export function AgentHumanReviewEditor({
       <Card as="section" id="agent-human-review-editor" className="rounded-2xl p-6">
         {onClose ? (
           <Button type="button" size="sm" variant="ghost" onClick={onClose}>
-            ← Back to registry
+            ← Back to reviews
           </Button>
         ) : null}
         <p className="text-sm text-base-content/60">{error ?? "Loading human-review configuration…"}</p>
@@ -395,7 +395,7 @@ export function AgentHumanReviewEditor({
     <Card as="section" id="agent-human-review-editor" className="rounded-2xl p-6">
       {onClose ? (
         <Button type="button" size="sm" variant="ghost" onClick={onClose} disabled={busy}>
-          ← Back to registry
+          ← Back to reviews
         </Button>
       ) : null}
       <div className="mt-4 flex flex-wrap items-start justify-between gap-3">

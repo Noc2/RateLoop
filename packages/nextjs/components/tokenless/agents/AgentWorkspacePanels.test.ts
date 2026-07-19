@@ -45,12 +45,20 @@ test("only active, connected, unexpired integrations complete onboarding", () =>
 
 test("connected navigation splits the owner stack into URL-backed task tabs", () => {
   assert.deepEqual(connectedAgentTabs(), ["overview", "connect", "inbox", "registry", "evaluations", "evidence"]);
-  assert.deepEqual(connectedAgentTabs({ canManage: false }), ["overview", "registry", "evaluations", "evidence"]);
-  assert.equal(resolveAvailableAgentTab("connect", connectedAgentTabs({ canManage: false })), "overview");
+  assert.deepEqual(connectedAgentTabs({ canManage: false }), [
+    "overview",
+    "connect",
+    "registry",
+    "evaluations",
+    "evidence",
+  ]);
+  assert.equal(resolveAvailableAgentTab("connect", connectedAgentTabs({ canManage: false })), "connect");
   assert.equal(resolveAgentTabParam("agents"), "connect");
   assert.equal(resolveAgentTabParam("groups"), "registry");
   assert.equal(resolveAgentTabParam("unknown"), "overview");
   assert.equal(agentTabHref("inbox", "workspace one"), "/agents?tab=inbox&workspace=workspace+one");
+  assert.match(tabsSource, /value: "connect", label: "Connection"/);
+  assert.match(tabsSource, /value: "registry", label: "Reviews"/);
 });
 
 test("agent tabs use roving focus and arrow, Home, and End navigation", () => {
@@ -82,6 +90,8 @@ test("the server resolves onboarding before the client renders downstream panels
   assert.match(panelsSource, /hasConnectedAgent && resolvedTab === "connect"/);
   assert.match(panelsSource, /hasConnectedAgent && resolvedTab === "inbox"/);
   assert.match(panelsSource, /hasConnectedAgent && resolvedTab === "registry"/);
+  assert.match(panelsSource, /view="connection"/);
+  assert.match(panelsSource, /view="reviews"/);
   assert.match(panelsSource, /resolvedTab === "evaluations"/);
   assert.match(panelsSource, /resolvedTab === "evidence"/);
 });
@@ -116,7 +126,7 @@ test("one canonical human-review editor renders only for the selected agent", ()
   assert.match(panelsSource, /key=\{reviewAgentId\}/);
   assert.match(panelsSource, /agentId=\{reviewAgentId\}/);
   assert.doesNotMatch(panelsSource, /AgentReviewPolicyPanel|AgentPublishingPolicyPanel/);
-  assert.match(editorSource, /Back to registry/);
+  assert.match(editorSource, /Back to reviews/);
   assert.doesNotMatch(editorSource, />\s*Close\s*</);
 });
 

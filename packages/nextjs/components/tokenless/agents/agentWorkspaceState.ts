@@ -26,7 +26,7 @@ export function connectedAgentTabs({
 } = {}): AgentTab[] {
   return canManage
     ? ["overview", "connect", "inbox", "registry", "evaluations", "evidence"]
-    : ["overview", "registry", "evaluations", "evidence"];
+    : ["overview", "connect", "registry", "evaluations", "evidence"];
 }
 
 export function resolveAvailableAgentTab(requested: AgentTab, available: AgentTab[]): AgentTab {
