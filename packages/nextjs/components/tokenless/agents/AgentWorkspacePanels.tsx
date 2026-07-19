@@ -2,9 +2,9 @@
 
 import { useCallback, useReducer, useState } from "react";
 import { useRouter } from "next/navigation";
-import { WorkspaceDeletionPanel } from "../WorkspaceDeletionPanel";
+import { WorkspaceDangerZone } from "../WorkspaceDangerZone";
 import { WorkspaceSettingsClient } from "../WorkspaceSettingsClient";
-import { WorkspaceStopBanner, WorkspaceStopPanel } from "../WorkspaceStopControl";
+import { WorkspaceStopBanner } from "../WorkspaceStopControl";
 import { AgentConnectionPanel } from "./AgentConnectionPanel";
 import { AgentHumanReviewEditor } from "./AgentHumanReviewEditor";
 import { AgentRegistryPanel } from "./AgentRegistryPanel";
@@ -119,17 +119,18 @@ export function AgentWorkspacePanels({
         tabIndex={0}
         className="space-y-5 outline-none focus-visible:ring-2 focus-visible:ring-[var(--rateloop-blue)]"
       >
+        {hasConnectedAgent && resolvedTab === "overview" ? (
+          <WorkspaceEvidenceSummaryStrip workspaceId={workspaceId} canManage={canManage} />
+        ) : null}
         {hasConnectedAgent && resolvedTab === "overview" && canManage ? (
-          <WorkspaceStopPanel workspaceId={workspaceId} />
+          <WorkspaceDangerZone
+            canDelete={workspace.role === "owner"}
+            workspaceId={workspaceId}
+            workspaceName={workspace.name}
+          />
         ) : null}
         {hasConnectedAgent && resolvedTab === "overview" ? (
           <WorkspaceSettingsClient initialWorkspaceId={workspaceId} />
-        ) : null}
-        {hasConnectedAgent && resolvedTab === "overview" && workspace.role === "owner" ? (
-          <WorkspaceDeletionPanel workspaceId={workspace.workspaceId} workspaceName={workspace.name} />
-        ) : null}
-        {hasConnectedAgent && resolvedTab === "overview" ? (
-          <WorkspaceEvidenceSummaryStrip workspaceId={workspaceId} canManage={canManage} />
         ) : null}
         {hasConnectedAgent && resolvedTab === "connect" && canManage ? (
           <AgentConnectionPanel

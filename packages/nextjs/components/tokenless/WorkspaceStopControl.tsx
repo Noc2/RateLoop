@@ -118,20 +118,27 @@ export function WorkspaceStopPanel({ workspaceId }: { workspaceId: string }) {
 
   const engaged = stop?.status === "engaged";
   return (
-    <section
-      className="rounded-2xl border border-red-400/40 bg-red-400/[0.04] p-6"
-      aria-labelledby="workspace-stop-heading"
-    >
-      <p className="font-mono text-xs uppercase tracking-widest text-red-200">Emergency control</p>
-      <h2 id="workspace-stop-heading" className="mt-2 text-xl font-semibold">
-        Stop all agent activity
-      </h2>
-      <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/65">
-        One audited action: revokes every automatic publishing grant and active continuation, and blocks every new
-        output evaluation and review-triggered release with reason <code>workspace_stopped</code>. Outputs behind the
-        gate stay in their safe state — held undelivered. Releasing the stop resumes nothing automatically: each agent
-        stays halted until you grant it a fresh publishing grant.
-      </p>
+    <section className="p-5 sm:p-6" aria-labelledby="workspace-stop-heading">
+      <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 id="workspace-stop-heading" className="font-semibold">
+            Stop all agent activity
+          </h3>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-base-content/65">
+            Blocks new outputs and holds gated work undelivered. Agents do not restart when the stop is released; each
+            needs a fresh publishing grant.
+          </p>
+        </div>
+        {!engaged && !confirming ? (
+          <button
+            type="button"
+            className="btn btn-sm shrink-0 border-red-400/40 bg-base-content/[0.06] text-red-200 hover:border-red-400/60 hover:bg-red-400/10"
+            onClick={() => setConfirming(true)}
+          >
+            Stop all agent activity
+          </button>
+        ) : null}
+      </div>
 
       {engaged && stop ? (
         <div className="mt-4 rounded-xl bg-red-400/10 p-4 text-sm leading-6 text-red-100" role="status">
@@ -144,7 +151,7 @@ export function WorkspaceStopPanel({ workspaceId }: { workspaceId: string }) {
       ) : confirming ? (
         <form className="mt-4 max-w-xl" onSubmit={engage}>
           <label className="text-sm text-base-content/65" htmlFor="workspace-stop-reason">
-            Why are you stopping all agent activity? This reason is recorded in the audit chain.
+            Give a reason. It will be recorded in the audit chain.
           </label>
           <textarea
             id="workspace-stop-reason"
@@ -172,11 +179,7 @@ export function WorkspaceStopPanel({ workspaceId }: { workspaceId: string }) {
             </button>
           </div>
         </form>
-      ) : (
-        <button type="button" className="btn btn-error btn-sm mt-4" onClick={() => setConfirming(true)}>
-          Stop all agent activity…
-        </button>
-      )}
+      ) : null}
 
       {error ? (
         <p className="mt-3 rounded-lg bg-red-400/10 p-3 text-sm text-red-100" role="alert">

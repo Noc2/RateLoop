@@ -138,22 +138,33 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
   const confirmed = preview ? confirmationName === preview.workspace.name : false;
 
   return (
-    <details
-      className="surface-card rounded-2xl p-5"
-      onToggle={event => {
-        if (event.currentTarget.open) void loadPreview();
-      }}
-    >
-      <summary className="cursor-pointer text-sm font-semibold text-base-content/65">Delete workspace</summary>
-      <div className="mt-5 border-t border-white/10 pt-5">
-        <h2 className="text-lg font-semibold">Delete {preview?.workspace.name ?? workspaceName}</h2>
-        {loading ? (
-          <p className="mt-3 text-sm text-base-content/55" role="status">
-            <span className="loading loading-spinner loading-xs mr-2" /> Checking workspace…
+    <section className="p-5 sm:p-6" aria-labelledby="workspace-deletion-heading">
+      <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 id="workspace-deletion-heading" className="font-semibold">
+            Delete workspace
+          </h3>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-base-content/65">
+            Permanently closes {workspaceName} and removes its private data. Records that must be retained stay
+            restricted.
           </p>
+        </div>
+        {!preview ? (
+          <button
+            type="button"
+            className="btn btn-sm shrink-0 border-red-400/40 bg-base-content/[0.06] text-red-200 hover:border-red-400/60 hover:bg-red-400/10"
+            onClick={() => void loadPreview()}
+            disabled={loading}
+          >
+            {loading ? "Checking…" : "Delete workspace"}
+          </button>
         ) : null}
+      </div>
 
-        {preview ? (
+      {preview ? (
+        <div className="mt-5 border-t border-red-400/20 pt-5">
+          <h4 className="font-semibold">Delete {preview.workspace.name}</h4>
+
           <form className="mt-3" onSubmit={requestDeletion}>
             <p className="text-sm leading-6 text-base-content/65">
               {preview.blockers.length > 0
@@ -192,7 +203,7 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
             ) : null}
 
             {preview.blockers.length === 0 ? (
-              <>
+              <div>
                 <label className="mt-5 block text-sm text-base-content/65">
                   Type <span className="font-semibold text-base-content">{preview.workspace.name}</span> to confirm
                   <input
@@ -203,20 +214,37 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
                     spellCheck={false}
                   />
                 </label>
-                <button type="submit" className="btn btn-error mt-4 min-h-10 px-4" disabled={submitting || !confirmed}>
+              </div>
+            ) : null}
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              {preview.blockers.length === 0 ? (
+                <button type="submit" className="btn btn-error min-h-10 px-4" disabled={submitting || !confirmed}>
                   {submitting ? "Deleting…" : "Delete workspace"}
                 </button>
-              </>
-            ) : null}
+              ) : null}
+              <button
+                type="button"
+                className="btn btn-ghost min-h-10 px-4"
+                disabled={submitting}
+                onClick={() => {
+                  setPreview(null);
+                  setConfirmationName("");
+                  setError(null);
+                }}
+              >
+                Cancel
+              </button>
+            </div>
           </form>
-        ) : null}
+        </div>
+      ) : null}
 
-        {error ? (
-          <p className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100" role="alert">
-            {error}
-          </p>
-        ) : null}
-      </div>
-    </details>
+      {error ? (
+        <p className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </section>
   );
 }
