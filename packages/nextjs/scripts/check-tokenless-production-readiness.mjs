@@ -1,4 +1,7 @@
-import { validateTokenlessEuDeployment } from "../../../scripts/validate-tokenless-eu-deployment.mjs";
+import {
+  tokenlessEuDeploymentManifest,
+  validateTokenlessEuDeployment,
+} from "../../../scripts/validate-tokenless-eu-deployment.mjs";
 import {
   tokenlessDeployedContracts,
   tokenlessDeploymentSchema,
@@ -280,9 +283,23 @@ function addSecretRole(roles, name, secret) {
   else roles.set(fingerprint, [name]);
 }
 
+function validateManagedKmsInventory(env, errors) {
+  const kms = tokenlessEuDeploymentManifest.resources.kms;
+  if (!value(env, kms.resourceIdEnv)) {
+    errors.push(`${kms.resourceIdEnv} is required for a hosted deployment.`);
+  }
+  if (!kms.allowedProviders.includes(value(env, kms.providerEnv))) {
+    errors.push(`${kms.providerEnv} must select an approved managed provider.`);
+  }
+  if (value(env, kms.regionEnv) !== kms.region) {
+    errors.push(`${kms.regionEnv} must be ${kms.region}.`);
+  }
+}
+
 function validateTokenlessTestDeployment(env) {
   const errors = [];
   errors.push(...validateHostedDatabaseIdentity(env));
+  validateManagedKmsInventory(env, errors);
   if (env.VERCEL_ENV !== "production") {
     errors.push("The tokenless test deployment may run only as the isolated project's production target.");
   }

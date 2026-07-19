@@ -1,5 +1,8 @@
+import tokenlessEuDeploymentManifest from "../../../../../config/tokenless-eu-deployment.json";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+
+const MANAGED_KMS_INVENTORY = tokenlessEuDeploymentManifest.resources.kms;
 
 export type VaultContext = Readonly<{
   tenantId: string;
@@ -175,8 +178,8 @@ export function validateVaultEnvironment(env: NodeJS.ProcessEnv = process.env) {
       "local_production_vault_forbidden",
     );
   }
-  const provider = env.TOKENLESS_KMS_PROVIDER?.trim();
-  const keyResource = env.TOKENLESS_KMS_KEY_RESOURCE?.trim();
+  const provider = env[MANAGED_KMS_INVENTORY.providerEnv]?.trim();
+  const keyResource = env[MANAGED_KMS_INVENTORY.resourceIdEnv]?.trim();
   if (!provider || !keyResource) {
     throw new TokenlessServiceError(
       "Hosted runtime requires a managed KMS provider and key resource.",
@@ -184,9 +187,16 @@ export function validateVaultEnvironment(env: NodeJS.ProcessEnv = process.env) {
       "managed_kms_required",
     );
   }
-  if (!keyResource.toLowerCase().includes("eu")) {
+  if (!MANAGED_KMS_INVENTORY.allowedProviders.includes(provider)) {
     throw new TokenlessServiceError(
-      "The managed KMS key resource must identify an EU resource.",
+      "Hosted runtime requires an approved managed KMS provider.",
+      503,
+      "invalid_managed_kms",
+    );
+  }
+  if (env[MANAGED_KMS_INVENTORY.regionEnv]?.trim() !== MANAGED_KMS_INVENTORY.region) {
+    throw new TokenlessServiceError(
+      "The managed KMS region must match the signed EU deployment manifest.",
       503,
       "kms_region_mismatch",
     );

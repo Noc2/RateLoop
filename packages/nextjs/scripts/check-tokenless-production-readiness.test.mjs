@@ -24,6 +24,14 @@ const tokenlessTestRpc = () => ({
   BASE_SEPOLIA_RPC_URL: "https://sepolia.base.org",
   BASE_SEPOLIA_RPC_FALLBACK_URLS: "https://base-sepolia-fallback.example",
 });
+const tokenlessTestKms = () => {
+  const kms = tokenlessEuDeploymentManifest.resources.kms;
+  return {
+    [kms.providerEnv]: kms.allowedProviders[0],
+    [kms.regionEnv]: kms.region,
+    [kms.resourceIdEnv]: "projects/rateloop-tokenless/locations/europe-west4/keyRings/tokenless",
+  };
+};
 
 function validFixture() {
   const panel = address(1);
@@ -218,6 +226,7 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
     ...tokenlessTestRpc(),
+    ...tokenlessTestKms(),
     ...tokenlessTestDatabase(),
     TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
     ...tokenlessGoldKeyring(),
@@ -247,6 +256,49 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
   assert.match(mainErrors, /APP_URL is required for a hosted release|TOKENLESS_DATA_PLANE_MODE/u);
 });
 
+test("the tokenless hosted gate pins KMS inventory to the signed EU manifest", () => {
+  const kms = tokenlessEuDeploymentManifest.resources.kms;
+  const env = {
+    VERCEL: "1",
+    VERCEL_ENV: "production",
+    VERCEL_PROJECT_ID: "prj_H6C2pfWKEAupFroHbLfzhquaNCLm",
+    VERCEL_PROJECT_NAME: "rateloop-tokenless",
+    VERCEL_GIT_COMMIT_REF: "tokenless",
+    APP_URL: "https://rateloop-tokenless.vercel.app",
+    NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
+    TOKENLESS_NETWORK_PANELS_ENABLED: "false",
+    ...tokenlessTestRpc(),
+    ...tokenlessTestKms(),
+    ...tokenlessTestDatabase(),
+    TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
+    ...tokenlessGoldKeyring(),
+  };
+  const missingResource = { ...env };
+  delete missingResource[kms.resourceIdEnv];
+  assert.match(
+    validateTokenlessProductionReadiness({ env: missingResource, activeRegistry: {} }).join("\n"),
+    new RegExp(`${kms.resourceIdEnv} is required`),
+  );
+  assert.match(
+    validateTokenlessProductionReadiness({
+      env: { ...env, [kms.providerEnv]: "local" },
+      activeRegistry: {},
+    }).join("\n"),
+    new RegExp(`${kms.providerEnv} must select an approved managed provider`),
+  );
+  assert.match(
+    validateTokenlessProductionReadiness({
+      env: {
+        ...env,
+        [kms.regionEnv]: "us",
+        [kms.resourceIdEnv]: "projects/eu-tenant/locations/us/keyRings/tokenless",
+      },
+      activeRegistry: {},
+    }).join("\n"),
+    new RegExp(`${kms.regionEnv} must be ${kms.region}`),
+  );
+});
+
 test("the tokenless test deployment still rejects browser-exposed secrets", () => {
   const env = {
     VERCEL: "1",
@@ -258,6 +310,7 @@ test("the tokenless test deployment still rejects browser-exposed secrets", () =
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
     ...tokenlessTestRpc(),
+    ...tokenlessTestKms(),
     ...tokenlessTestDatabase(),
     TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
     ...tokenlessGoldKeyring(),
@@ -287,6 +340,7 @@ test("the tokenless test deployment requires a dedicated server-only media previ
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
     ...tokenlessTestRpc(),
+    ...tokenlessTestKms(),
     ...tokenlessTestDatabase(),
     ...tokenlessGoldKeyring(),
   };
@@ -352,6 +406,7 @@ test("the tokenless test deployment validates the active gold-injection keyring 
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
     ...tokenlessTestRpc(),
+    ...tokenlessTestKms(),
     ...tokenlessTestDatabase(),
     TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
   };
@@ -397,6 +452,7 @@ test("test and production deployments refuse server-held Feedback Bonus award au
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
     ...tokenlessTestRpc(),
+    ...tokenlessTestKms(),
     ...tokenlessTestDatabase(),
     ...tokenlessGoldKeyring(),
     TOKENLESS_FEEDBACK_BONUS_AWARDER_PRIVATE_KEY: "server-must-not-custody-human-awarder",

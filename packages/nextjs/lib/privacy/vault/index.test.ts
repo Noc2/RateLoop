@@ -1,3 +1,4 @@
+import tokenlessEuDeploymentManifest from "../../../../../config/tokenless-eu-deployment.json";
 import { EnvelopeVault, createLocalKeyWrappingProvider, validateVaultEnvironment } from "./index";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -58,16 +59,28 @@ test("vault environment rejects public keys, local production keys, missing KMS,
     () =>
       validateVaultEnvironment({
         NODE_ENV: "production",
-        TOKENLESS_KMS_KEY_RESOURCE: "projects/example/locations/us/keyRings/one",
+        TOKENLESS_KMS_KEY_RESOURCE: "projects/eu-tenant/locations/us/keyRings/one",
         TOKENLESS_KMS_PROVIDER: "gcp-kms",
+        TOKENLESS_KMS_REGION: "us",
       } as NodeJS.ProcessEnv),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "kms_region_mismatch",
+  );
+  assert.throws(
+    () =>
+      validateVaultEnvironment({
+        NODE_ENV: "production",
+        TOKENLESS_KMS_KEY_RESOURCE: "projects/example/locations/europe-west4/keyRings/one",
+        TOKENLESS_KMS_PROVIDER: "local",
+        TOKENLESS_KMS_REGION: "eu",
+      } as NodeJS.ProcessEnv),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_managed_kms",
   );
   assert.deepEqual(
     validateVaultEnvironment({
       NODE_ENV: "production",
       TOKENLESS_KMS_KEY_RESOURCE: "projects/example/locations/europe-west4/keyRings/one",
       TOKENLESS_KMS_PROVIDER: "gcp-kms",
+      TOKENLESS_KMS_REGION: "eu",
     } as NodeJS.ProcessEnv),
     {
       keyResource: "projects/example/locations/europe-west4/keyRings/one",
@@ -76,4 +89,30 @@ test("vault environment rejects public keys, local production keys, missing KMS,
     },
   );
   assert.deepEqual(validateVaultEnvironment({ NODE_ENV: "test" } as NodeJS.ProcessEnv), { mode: "test" });
+});
+
+test("vault provider and region checks match the signed EU manifest inventory", () => {
+  const kms = tokenlessEuDeploymentManifest.resources.kms;
+  const keyResource = "projects/rateloop-tokenless/locations/europe-west4/keyRings/tokenless";
+  for (const provider of kms.allowedProviders) {
+    assert.deepEqual(
+      validateVaultEnvironment({
+        NODE_ENV: "production",
+        [kms.providerEnv]: provider,
+        [kms.regionEnv]: kms.region,
+        [kms.resourceIdEnv]: keyResource,
+      } as NodeJS.ProcessEnv),
+      { keyResource, mode: "managed", provider },
+    );
+  }
+  assert.throws(
+    () =>
+      validateVaultEnvironment({
+        NODE_ENV: "production",
+        [kms.providerEnv]: kms.allowedProviders[0],
+        [kms.regionEnv]: "us",
+        [kms.resourceIdEnv]: "projects/eu-tenant/locations/us/keyRings/tokenless",
+      } as NodeJS.ProcessEnv),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "kms_region_mismatch",
+  );
 });
