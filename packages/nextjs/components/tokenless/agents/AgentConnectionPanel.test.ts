@@ -63,9 +63,14 @@ test("intent deadlines end pending state client-side", () => {
 });
 
 test("legacy pairings remain manageable but cannot be issued from the default path", () => {
-  assert.match(source, /Legacy pairing requests/);
+  assert.match(source, /Legacy connection needs attention/);
+  assert.match(source, /action needed/);
   assert.match(source, /retired bearer-pairing flow/);
   assert.match(source, /PairingApprovalCard/);
+  assert.match(source, /Review legacy approval/);
+  assert.match(source, /Cancel review/);
+  assert.match(source, /Cancel legacy request/);
+  assert.match(source, /expandedLegacyPairingId === pairing\.pairingId/);
   assert.match(source, /\/agent-pairings\//);
   assert.match(source, /\/approve/);
   assert.match(source, /\/reject/);
@@ -92,8 +97,12 @@ test("the default adaptive policy explains its reachable calibration evidence", 
   assert.match(source, /10% monitoring floor/);
 });
 
-test("connected agent management keeps disconnect and technical state behind Manage", () => {
-  assert.match(source, />Manage</);
+test("connected agent management opens from a direct action while technical state stays optional", () => {
+  assert.match(source, /Manage connected agents/);
+  assert.match(source, /aria-controls="connected-agent-management"/);
+  assert.match(source, /aria-expanded=\{showConnectionManagement\}/);
+  assert.match(source, /showConnectionManagement \? \(/);
+  assert.match(source, /\? "Done" : "Manage connected agents"/);
   assert.match(source, /Connection details/);
   assert.match(source, /Connection history/);
   assert.match(source, />\s*Disconnect\s*</);

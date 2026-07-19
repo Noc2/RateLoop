@@ -592,6 +592,8 @@ export function AgentConnectionPanel({
   const [status, setStatus] = useState<string | null>(null);
   const [connectionClock, setConnectionClock] = useState(() => Date.now());
   const [manualConnectionMessage, setManualConnectionMessage] = useState<string | null>(null);
+  const [expandedLegacyPairingId, setExpandedLegacyPairingId] = useState<string | null>(null);
+  const [showConnectionManagement, setShowConnectionManagement] = useState(false);
   const manualMessageRef = useRef<HTMLTextAreaElement>(null);
 
   const loadConnectionState = useCallback(
@@ -1119,10 +1121,16 @@ export function AgentConnectionPanel({
       ) : null}
 
       {!loading && workspaceId && activePairings.length > 0 ? (
-        <details className="surface-card rounded-2xl p-6">
-          <summary className="cursor-pointer text-sm font-semibold">
-            Legacy pairing requests ({activePairings.length})
-          </summary>
+        <section
+          className="surface-card rounded-2xl border border-warning/25 p-6"
+          aria-labelledby="legacy-pairing-actions-heading"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 id="legacy-pairing-actions-heading" className="text-xl font-semibold">
+              Legacy connection needs attention
+            </h2>
+            <Badge variant="warning">{activePairings.length} action needed</Badge>
+          </div>
           <p className="mt-3 text-sm leading-6 text-base-content/55">
             These requests were created by the retired bearer-pairing flow. Finish or reject them here; new connections
             use the one-message OAuth flow above.
@@ -1130,14 +1138,50 @@ export function AgentConnectionPanel({
           <div className="mt-5 space-y-4">
             {activePairings.map(pairing =>
               pairing.status === "claimed" ? (
-                <PairingApprovalCard
-                  key={pairing.pairingId}
-                  pairing={pairing}
-                  policies={publishingPolicies}
-                  busy={busyAction === `approve:${pairing.pairingId}` || busyAction === `reject:${pairing.pairingId}`}
-                  onApprove={payload => approvePairing(pairing.pairingId, payload)}
-                  onReject={() => rejectPairing(pairing.pairingId)}
-                />
+                expandedLegacyPairingId === pairing.pairingId ? (
+                  <div key={pairing.pairingId}>
+                    <div className="mb-3 flex justify-end">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setExpandedLegacyPairingId(null)}
+                      >
+                        Cancel review
+                      </Button>
+                    </div>
+                    <PairingApprovalCard
+                      pairing={pairing}
+                      policies={publishingPolicies}
+                      busy={
+                        busyAction === `approve:${pairing.pairingId}` || busyAction === `reject:${pairing.pairingId}`
+                      }
+                      onApprove={payload => approvePairing(pairing.pairingId, payload)}
+                      onReject={() => rejectPairing(pairing.pairingId)}
+                    />
+                  </div>
+                ) : (
+                  <article key={pairing.pairingId} className="surface-card-nested rounded-xl p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h3 className="font-semibold">
+                          {pairing.displayName || pairing.clientName || "Agent"} is waiting for approval
+                        </h3>
+                        <p className="mt-1 text-sm text-base-content/55">
+                          Verify its identity, workflows, and publishing policy before activation.
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setExpandedLegacyPairingId(pairing.pairingId)}
+                      >
+                        Review legacy approval
+                      </Button>
+                    </div>
+                  </article>
+                )
               ) : (
                 <article key={pairing.pairingId} className="surface-card-nested rounded-xl p-4">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1158,22 +1202,35 @@ export function AgentConnectionPanel({
               ),
             )}
           </div>
-        </details>
+        </section>
       ) : null}
 
       {!loading && workspaceId && activeIntegrations.length > 0 ? (
         <section className="surface-card rounded-2xl p-6" aria-labelledby="connected-agents-heading">
-          <h2 id="connected-agents-heading" className="text-xl font-semibold">
-            {activeIntegrations.length === 1
-              ? `${activeIntegrations[0].agentDisplayName || "Agent"} connected`
-              : `${activeIntegrations.length} agents connected`}
-          </h2>
-          <p className="mt-2 text-sm leading-6 text-base-content/55">
-            Safe access · No spending or private workspace content
-          </p>
-          <details className="mt-5">
-            <summary className="cursor-pointer text-sm font-semibold">Manage</summary>
-            <div className="mt-4 space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 id="connected-agents-heading" className="text-xl font-semibold">
+                {activeIntegrations.length === 1
+                  ? `${activeIntegrations[0].agentDisplayName || "Agent"} connected`
+                  : `${activeIntegrations.length} agents connected`}
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-base-content/55">
+                Safe access · No spending or private workspace content
+              </p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              aria-controls="connected-agent-management"
+              aria-expanded={showConnectionManagement}
+              onClick={() => setShowConnectionManagement(current => !current)}
+            >
+              {showConnectionManagement ? "Done" : "Manage connected agents"}
+            </Button>
+          </div>
+          {showConnectionManagement ? (
+            <div id="connected-agent-management" className="mt-5 space-y-4">
               {activeIntegrations.map(integration => {
                 const active = integration.status === "active";
                 const legacyCredential = Boolean(integration.apiKeyId);
@@ -1322,7 +1379,7 @@ export function AgentConnectionPanel({
                 </details>
               ) : null}
             </div>
-          </details>
+          ) : null}
         </section>
       ) : null}
     </div>
