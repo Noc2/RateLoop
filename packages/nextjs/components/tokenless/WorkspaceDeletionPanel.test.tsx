@@ -5,6 +5,7 @@ import test from "node:test";
 const source = readFileSync(new URL("./WorkspaceDeletionPanel.tsx", import.meta.url), "utf8");
 const dangerSource = readFileSync(new URL("./WorkspaceDangerZone.tsx", import.meta.url), "utf8");
 const panelsSource = readFileSync(new URL("./agents/AgentWorkspacePanels.tsx", import.meta.url), "utf8");
+const settingsSource = readFileSync(new URL("./WorkspaceSettingsClient.tsx", import.meta.url), "utf8");
 
 test("the visible workspace deletion action loads a preview before accepting an exact-name confirmation", () => {
   assert.match(source, /onClick=\{\(\) => void loadPreview\(\)\}/);
@@ -35,10 +36,9 @@ test("workspace deletion stays out of setup and appears only for owners in the c
   const setupBranch = panelsSource.slice(setupStart, setupEnd);
   assert.ok(setupStart >= 0 && setupEnd > setupStart);
   assert.doesNotMatch(setupBranch, /WorkspaceDangerZone/);
-  assert.match(
-    panelsSource,
-    /resolvedTab === "overview" && canManage[\s\S]*?<WorkspaceDangerZone[\s\S]*?canDelete=\{workspace\.role === "owner"\}/,
-  );
+  assert.doesNotMatch(panelsSource, /<WorkspaceDangerZone/);
+  assert.match(settingsSource, /selected && canManageWorkspace/);
+  assert.match(settingsSource, /canDelete=\{selected\.role === "owner"\}/);
   assert.match(dangerSource, /canDelete \? <WorkspaceDeletionPanel/);
   assert.equal(dangerSource.match(/<WorkspaceDeletionPanel/g)?.length, 1);
 });

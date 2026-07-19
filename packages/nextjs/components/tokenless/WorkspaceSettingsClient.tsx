@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { InfoPopover } from "~~/components/tokenless/InfoPopover";
+import { WorkspaceDangerZone } from "~~/components/tokenless/WorkspaceDangerZone";
 import { WorkspaceRequestScope } from "~~/lib/tokenless/workspaceRequestScope";
 
 type Workspace = {
@@ -179,6 +180,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
   const selected = workspaces.find(workspace => workspace.workspaceId === selectedId);
   const canManageTopups = selected?.role === "owner" || selected?.role === "billing";
   const canManageIdentity = selected?.role === "owner" || selected?.role === "admin";
+  const canManageWorkspace = selected?.role === "owner" || selected?.role === "admin";
   const hasInvoiceFundingAddress = Boolean(
     billingProfile.billingCountryCode ||
       billingProfile.billingAddressLine1 ||
@@ -1550,6 +1552,14 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
               </section>
             ) : null}
           </>
+        ) : null}
+
+        {selected && canManageWorkspace ? (
+          <WorkspaceDangerZone
+            canDelete={selected.role === "owner"}
+            workspaceId={selected.workspaceId}
+            workspaceName={selected.name}
+          />
         ) : null}
       </section>
 

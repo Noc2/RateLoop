@@ -2,7 +2,6 @@
 
 import { useCallback, useReducer, useState } from "react";
 import { useRouter } from "next/navigation";
-import { WorkspaceDangerZone } from "../WorkspaceDangerZone";
 import { WorkspaceSettingsClient } from "../WorkspaceSettingsClient";
 import { WorkspaceStopBanner } from "../WorkspaceStopControl";
 import { AgentConnectionPanel } from "./AgentConnectionPanel";
@@ -121,13 +120,6 @@ export function AgentWorkspacePanels({
       >
         {hasConnectedAgent && resolvedTab === "overview" ? (
           <WorkspaceEvidenceSummaryStrip workspaceId={workspaceId} canManage={canManage} />
-        ) : null}
-        {hasConnectedAgent && resolvedTab === "overview" && canManage ? (
-          <WorkspaceDangerZone
-            canDelete={workspace.role === "owner"}
-            workspaceId={workspaceId}
-            workspaceName={workspace.name}
-          />
         ) : null}
         {hasConnectedAgent && resolvedTab === "overview" ? (
           <WorkspaceSettingsClient initialWorkspaceId={workspaceId} />
