@@ -730,108 +730,99 @@ export function AgentRegistryPanel({
                   workspaceId={workspaceId}
                   onSaved={() => loadRegistry(workspaceId)}
                 />
-                <details className="mt-3 border-t border-white/10 pt-3">
-                  <summary className="cursor-pointer text-sm font-semibold text-base-content/70">Manage</summary>
-                  <div className="mt-4 space-y-4">
-                    {registry?.canManage && agent.status === "active" ? (
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="secondary"
-                          disabled={busy}
-                          onClick={() =>
-                            setEditingAgent(current => (current?.agentId === agent.agentId ? null : agent))
-                          }
-                        >
-                          Change workflow version
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          className="text-error"
-                          disabled={busy}
-                          onClick={() => void deactivate(agent)}
-                        >
-                          Deactivate
-                        </Button>
-                      </div>
-                    ) : null}
-
-                    {editingAgent?.agentId === agent.agentId && registry?.canManage ? (
-                      <section
-                        className="surface-card-nested rounded-xl p-4"
-                        aria-labelledby={`new-version-${agent.agentId}`}
+                <div className="mt-3 space-y-4 border-t border-white/10 pt-3">
+                  {registry?.canManage && agent.status === "active" ? (
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        disabled={busy}
+                        onClick={() => setEditingAgent(current => (current?.agentId === agent.agentId ? null : agent))}
                       >
-                        <h3 id={`new-version-${agent.agentId}`} className="font-semibold">
-                          Change workflow version
-                        </h3>
-                        <div className="mt-4">
-                          <AgentVersionForm
-                            key={editingAgent.currentVersion.versionId}
-                            current={editingAgent.currentVersion}
-                            busy={busy}
-                            submitLabel="Save workflow version"
-                            onSubmit={createVersion}
-                          />
-                        </div>
-                      </section>
-                    ) : null}
+                        Change workflow version
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="text-error"
+                        disabled={busy}
+                        onClick={() => void deactivate(agent)}
+                      >
+                        Deactivate
+                      </Button>
+                    </div>
+                  ) : null}
 
-                    {!registry?.canManage ? (
-                      <p className="text-sm text-base-content/55">Only workspace owners and admins can make changes.</p>
-                    ) : null}
+                  {editingAgent?.agentId === agent.agentId && registry?.canManage ? (
+                    <section
+                      className="surface-card-nested rounded-xl p-4"
+                      aria-labelledby={`new-version-${agent.agentId}`}
+                    >
+                      <h3 id={`new-version-${agent.agentId}`} className="font-semibold">
+                        Change workflow version
+                      </h3>
+                      <div className="mt-4">
+                        <AgentVersionForm
+                          key={editingAgent.currentVersion.versionId}
+                          current={editingAgent.currentVersion}
+                          busy={busy}
+                          submitLabel="Save workflow version"
+                          onSubmit={createVersion}
+                        />
+                      </div>
+                    </section>
+                  ) : null}
 
-                    <details>
-                      <summary className="cursor-pointer text-sm font-medium text-base-content/65">
-                        Technical details
-                      </summary>
-                      <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                  <details>
+                    <summary className="cursor-pointer text-sm font-medium text-base-content/65">
+                      Technical details
+                    </summary>
+                    <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                      <div>
+                        <dt className="text-xs text-base-content/45">External ID</dt>
+                        <dd className="mt-1 break-all font-mono text-xs">{agent.externalId}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-base-content/45">Environment</dt>
+                        <dd className="mt-1 capitalize">{agent.currentVersion.environment}</dd>
+                      </div>
+                      {agent.ownerAccountAddress ? (
                         <div>
-                          <dt className="text-xs text-base-content/45">External ID</dt>
-                          <dd className="mt-1 break-all font-mono text-xs">{agent.externalId}</dd>
+                          <dt className="text-xs text-base-content/45">Owner</dt>
+                          <dd className="mt-1 font-mono text-xs" title={agent.ownerAccountAddress}>
+                            {shortAddress(agent.ownerAccountAddress)}
+                          </dd>
                         </div>
-                        <div>
-                          <dt className="text-xs text-base-content/45">Environment</dt>
-                          <dd className="mt-1 capitalize">{agent.currentVersion.environment}</dd>
-                        </div>
-                        {agent.ownerAccountAddress ? (
-                          <div>
-                            <dt className="text-xs text-base-content/45">Owner</dt>
-                            <dd className="mt-1 font-mono text-xs" title={agent.ownerAccountAddress}>
-                              {shortAddress(agent.ownerAccountAddress)}
-                            </dd>
+                      ) : null}
+                    </dl>
+                  </details>
+
+                  <details>
+                    <summary className="cursor-pointer text-sm font-medium text-base-content/65">
+                      Audit history ({agent.versions.length})
+                    </summary>
+                    <ol className="mt-3 space-y-3">
+                      {agent.versions.map(version => (
+                        <li key={version.versionId} className="surface-card-nested rounded-lg p-4 text-sm">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <strong>Workflow version {version.versionNumber}</strong>
+                            <time dateTime={version.createdAt} className="text-xs text-base-content/45">
+                              {new Date(version.createdAt).toLocaleString()}
+                            </time>
                           </div>
-                        ) : null}
-                      </dl>
-                    </details>
-
-                    <details>
-                      <summary className="cursor-pointer text-sm font-medium text-base-content/65">
-                        Audit history ({agent.versions.length})
-                      </summary>
-                      <ol className="mt-3 space-y-3">
-                        {agent.versions.map(version => (
-                          <li key={version.versionId} className="surface-card-nested rounded-lg p-4 text-sm">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <strong>Workflow version {version.versionNumber}</strong>
-                              <time dateTime={version.createdAt} className="text-xs text-base-content/45">
-                                {new Date(version.createdAt).toLocaleString()}
-                              </time>
-                            </div>
-                            <p className="mt-2 text-base-content/60">
-                              {version.displayName} · <span className="capitalize">{version.environment}</span>
-                            </p>
-                            <code className="mt-2 block break-all text-[11px] text-base-content/40">
-                              sha256:{version.configurationCommitment}
-                            </code>
-                          </li>
-                        ))}
-                      </ol>
-                    </details>
-                  </div>
-                </details>
+                          <p className="mt-2 text-base-content/60">
+                            {version.displayName} · <span className="capitalize">{version.environment}</span>
+                          </p>
+                          <code className="mt-2 block break-all text-[11px] text-base-content/40">
+                            sha256:{version.configurationCommitment}
+                          </code>
+                        </li>
+                      ))}
+                    </ol>
+                  </details>
+                </div>
               </>
             ) : (
               <>

@@ -5,7 +5,6 @@ import test from "node:test";
 test("agent details and review information render in task-focused views", () => {
   const source = readFileSync(new URL("./AgentRegistryPanel.tsx", import.meta.url), "utf8");
   const form = readFileSync(new URL("./AgentVersionForm.tsx", import.meta.url), "utf8");
-  assert.match(source, />Manage</);
   assert.match(source, /view === "connection"/);
   assert.match(source, /view === "reviews"/);
   assert.match(source, /Change workflow version/);
@@ -17,7 +16,6 @@ test("agent details and review information render in task-focused views", () => 
   assert.doesNotMatch(source, />Autonomous requests</);
   assert.match(source, /Technical details/);
   assert.match(source, /Audit history/);
-  assert.match(source, /Only workspace owners and admins can make changes/);
   assert.match(source, /agentRevision = 0/);
   assert.match(source, /onAgentsChanged\?\.\(\)/);
   assert.match(form, /Workflow name/);
@@ -90,6 +88,15 @@ test("agent details and review information render in task-focused views", () => 
   assert.doesNotMatch(source, /Register agent|Register a durable agent|createAgent/);
   assert.doesNotMatch(source, /method: "POST"[\s\S]{0,200}\/agents/);
   assert.doesNotMatch(source, /verified model|model accuracy|truth score/i);
+});
+
+test("agent management actions stay visible while technical records remain optional", () => {
+  const source = readFileSync(new URL("./AgentRegistryPanel.tsx", import.meta.url), "utf8");
+  assert.match(source, />\s*Change workflow version\s*</);
+  assert.match(source, />\s*Deactivate\s*</);
+  assert.doesNotMatch(source, /<summary[^>]*>Manage<\/summary>/);
+  assert.match(source, /<summary[^>]*>\s*Technical details/);
+  assert.match(source, /Audit history \(\{agent\.versions\.length\}\)/);
 });
 
 test("the capability card combines owner-stated limits with labeled host-reported metadata", () => {
