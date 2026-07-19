@@ -217,12 +217,16 @@ test("the tokenless test deployment still rejects browser-exposed secrets", () =
     NEXT_PUBLIC_TOKENLESS_PIPELINE_TOKEN: "must-not-ship",
     NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEY_VERSION: "must-not-ship-version",
     NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEYS: "must-not-ship-keys",
+    NEXT_PUBLIC_TOKENLESS_KMS_KEY_RESOURCE: "must-not-ship-kms-resource",
+    NEXT_PUBLIC_TOKENLESS_EXPERTISE_OPERATOR_ACCOUNTS: "must-not-ship-expertise-accounts",
   };
   const output = validateTokenlessProductionReadiness({ env, activeRegistry: {} }).join("\n");
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_PIPELINE_TOKEN is forbidden/);
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEY_VERSION is forbidden/);
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEYS is forbidden/);
-  assert.doesNotMatch(output, /must-not-ship(?:-version|-keys)?/);
+  assert.match(output, /NEXT_PUBLIC_TOKENLESS_KMS_KEY_RESOURCE is forbidden/);
+  assert.match(output, /NEXT_PUBLIC_TOKENLESS_EXPERTISE_OPERATOR_ACCOUNTS is forbidden/);
+  assert.doesNotMatch(output, /must-not-ship(?:-version|-keys|-kms-resource|-expertise-accounts)?/);
 });
 
 test("the tokenless test deployment requires a dedicated server-only media preview key", () => {
@@ -474,6 +478,8 @@ test("hosted release rejects public secrets, reused roles, and mixed deployment 
   fixture.env.NEXT_PUBLIC_CRON_SECRET = "also-do-not-print-this";
   fixture.env.NEXT_PUBLIC_TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET = "unsubscribe-do-not-print-this";
   fixture.env.NEXT_PUBLIC_TOKENLESS_PSEUDONYM_KEY = "pseudonym-do-not-print-this";
+  fixture.env.NEXT_PUBLIC_TOKENLESS_KMS_KEY_RESOURCE = "kms-resource-do-not-print-this";
+  fixture.env.NEXT_PUBLIC_TOKENLESS_EXPERTISE_OPERATOR_ACCOUNTS = "expertise-accounts-do-not-print-this";
   fixture.env.NEXT_PUBLIC_TOKENLESS_WORM_S3_CREDENTIALS_JSON = "worm-do-not-print-this";
   fixture.env.NEXT_PUBLIC_TOKENLESS_GRC_CREDENTIALS_JSON = "grc-do-not-print-this";
   fixture.env.NEXT_PUBLIC_TOKENLESS_ATTESTATION_AWS_CREDENTIALS_JSON = "attestation-do-not-print-this";
@@ -486,6 +492,8 @@ test("hosted release rejects public secrets, reused roles, and mixed deployment 
   assert.match(output, /NEXT_PUBLIC_CRON_SECRET is forbidden/);
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET is forbidden/);
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_PSEUDONYM_KEY is forbidden/);
+  assert.match(output, /NEXT_PUBLIC_TOKENLESS_KMS_KEY_RESOURCE is forbidden/);
+  assert.match(output, /NEXT_PUBLIC_TOKENLESS_EXPERTISE_OPERATOR_ACCOUNTS is forbidden/);
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_WORM_S3_CREDENTIALS_JSON is forbidden/);
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_GRC_CREDENTIALS_JSON is forbidden/);
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_ATTESTATION_AWS_CREDENTIALS_JSON is forbidden/);
@@ -496,6 +504,8 @@ test("hosted release rejects public secrets, reused roles, and mixed deployment 
   assert.doesNotMatch(output, /also-do-not-print-this/);
   assert.doesNotMatch(output, /unsubscribe-do-not-print-this/);
   assert.doesNotMatch(output, /pseudonym-do-not-print-this/);
+  assert.doesNotMatch(output, /kms-resource-do-not-print-this/);
+  assert.doesNotMatch(output, /expertise-accounts-do-not-print-this/);
   assert.doesNotMatch(output, /worm-do-not-print-this/);
   assert.doesNotMatch(output, /grc-do-not-print-this/);
   assert.doesNotMatch(output, /whsec_do-not-print-this/);
