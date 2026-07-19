@@ -5,8 +5,12 @@ import test from "node:test";
 const panelSource = readFileSync(new URL("./AccountDeletionPanel.tsx", import.meta.url), "utf8");
 const settingsPageSource = readFileSync(new URL("../../../app/(app)/human/page.tsx", import.meta.url), "utf8");
 
-test("account deletion stays collapsed until requested and requires the server preview", () => {
-  assert.match(panelSource, /<details[^>]+onToggle=\{handleToggle\}/);
+test("account deletion exposes its action and requires the server preview", () => {
+  assert.match(panelSource, /<section[^>]+aria-labelledby="account-deletion-heading"/);
+  assert.match(panelSource, /Review account deletion/);
+  assert.match(panelSource, /onClick=\{startDeletionReview\}/);
+  assert.match(panelSource, /\{reviewing \? \(/);
+  assert.doesNotMatch(panelSource, /<details/);
   assert.match(panelSource, /fetch\("\/api\/account\/deletion", \{ credentials: "same-origin", cache: "no-store" \}\)/);
   assert.match(panelSource, /preview\.blockers\.length > 0/);
 });
