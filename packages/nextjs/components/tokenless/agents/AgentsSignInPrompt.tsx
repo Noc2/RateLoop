@@ -8,6 +8,7 @@ export function AgentsSignInPrompt() {
     <SignedOutGate
       description="Sign in to connect an agent, configure human review, manage private groups, and evaluate performance."
       preview={<AgentWorkspaceExample />}
+      returnTo="/agents"
       secondaryAction={
         <Button
           as={Link}

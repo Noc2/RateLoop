@@ -179,6 +179,7 @@ export function AnswerPageClient({
             headingLevel={2}
             layout="embedded"
             preview={<HumanReviewExample />}
+            returnTo={`${pathname}?q=${encodeURIComponent(query)}&scope=${scope}`}
             title="Sign in to discover review work"
             titleId="human-discover-sign-in-title"
           />

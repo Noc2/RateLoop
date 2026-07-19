@@ -62,6 +62,11 @@ test("the signed-out control links to provider-neutral sign-in", () => {
   assert.doesNotMatch(html, /Google|Apple|email OTP/);
 });
 
+test("signed-out review controls preserve a normalized local destination", () => {
+  const html = renderToStaticMarkup(<RateLoopSignInAction returnTo="/human?q=safety&scope=public" />);
+  assert.match(html, /href="\/sign-in\?returnTo=%2Fhuman%3Fq%3Dsafety%26scope%3Dpublic"/);
+});
+
 test("the compatibility entry point keeps the original compact RateLoop sign-in treatment", () => {
   assert.equal(RATELOOP_SIGN_IN_LABEL, "Sign In");
   assert.match(RATELOOP_SIGN_IN_ACTION_CLASS, /rateloop-sign-in-action/);

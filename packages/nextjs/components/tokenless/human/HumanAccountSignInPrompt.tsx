@@ -6,6 +6,7 @@ export function HumanAccountSignInPrompt({ tab }: { tab: "profile" | "settings" 
   return (
     <SignedOutGate
       description={`Sign in to view and update your ${tab}.`}
+      returnTo={`/human?tab=${tab}`}
       title={title}
       titleId="human-account-sign-in-title"
     />

@@ -14,9 +14,10 @@ export const RATELOOP_THIRDWEB_AUTO_CONNECT = false;
 export const RATELOOP_SIGN_IN_ACTION_CLASS =
   "rateloop-gradient-action rateloop-sign-in-action px-[0.9rem] text-base font-bold leading-none whitespace-nowrap";
 
-export function RateLoopSignInAction({ fill = false }: { fill?: boolean }) {
+export function RateLoopSignInAction({ fill = false, returnTo }: { fill?: boolean; returnTo?: string }) {
+  const href = returnTo ? `/sign-in?returnTo=${encodeURIComponent(returnTo)}` : "/sign-in";
   return (
-    <Link href="/sign-in" className={`${RATELOOP_SIGN_IN_ACTION_CLASS} ${fill ? "w-full" : "w-auto min-w-max"}`}>
+    <Link href={href} className={`${RATELOOP_SIGN_IN_ACTION_CLASS} ${fill ? "w-full" : "w-auto min-w-max"}`}>
       {RATELOOP_SIGN_IN_LABEL}
     </Link>
   );
@@ -99,9 +100,11 @@ export function AuthenticatedSessionControl({
 export function ThirdwebSessionButton({
   compact = false,
   onSessionChange,
+  returnTo,
 }: {
   compact?: boolean;
   onSessionChange?: (authenticated: boolean) => void;
+  returnTo?: string;
 }) {
   const [session, setSession] = useState<BrowserSessionResponse | null>(null);
   const sessionGenerationRef = useRef(0);
@@ -137,5 +140,5 @@ export function ThirdwebSessionButton({
     return <AuthenticatedSessionControl compact={compact} session={session} onSignOut={signOutRateLoopSession} />;
   }
 
-  return <RateLoopSignInAction fill={!compact} />;
+  return <RateLoopSignInAction fill={!compact} returnTo={returnTo} />;
 }

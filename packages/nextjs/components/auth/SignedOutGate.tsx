@@ -16,6 +16,7 @@ export function SignedOutGate({
   layout = "centered",
   preview,
   secondaryAction,
+  returnTo,
   title,
   titleId,
 }: {
@@ -24,6 +25,7 @@ export function SignedOutGate({
   layout?: SignInSurfaceLayout;
   preview?: ReactNode;
   secondaryAction?: ReactNode;
+  returnTo?: string;
   title: string;
   titleId: string;
 }) {
@@ -42,6 +44,7 @@ export function SignedOutGate({
         <div className="inline-flex">
           <ThirdwebSessionButton
             compact
+            returnTo={returnTo}
             onSessionChange={authenticated => {
               if (authenticated) router.refresh();
             }}
