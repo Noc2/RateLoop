@@ -13,10 +13,12 @@ const authorizeRoute = readFileSync(
   "utf8",
 );
 
-test("OAuth consent leads with the decision while retaining exact scopes as optional detail", () => {
+test("OAuth consent shows exact scopes before the decision", () => {
   assert.match(authorizePage, /Allow \$\{authorization\.clientName\}/);
-  assert.match(authorizePage, /Connection details/);
+  assert.match(authorizePage, /This agent can/);
   assert.match(authorizePage, /authorization\.scopes\.map/);
+  assert.ok(authorizePage.indexOf("authorization.scopes.map") < authorizePage.indexOf("<AgentOAuthConsentForm"));
+  assert.doesNotMatch(authorizePage, /<details/);
   assert.doesNotMatch(authorizePage, /Allowed actions|Access and refresh tokens/);
   assert.match(consentForm, /name="decision" value="approve"/);
   assert.match(consentForm, /name="decision" value="deny"/);
@@ -39,11 +41,16 @@ test("loopback OAuth completion stays branded while preserving a no-JavaScript r
   assert.match(authorizeRoute, /NextResponse\.redirect\(destination, 303\)/);
 });
 
-test("device consent uses the same concise grant and keeps code and scopes available", () => {
+test("device consent shows its code and scopes before the decision", () => {
   assert.match(devicePage, /Allow \$\{approval\.clientName\}/);
-  assert.match(devicePage, /Connection details/);
-  assert.match(devicePage, /Code \{approval\.userCode\}/);
+  assert.match(devicePage, /Verification code/);
+  assert.match(devicePage, /\{approval\.userCode\}/);
+  assert.match(devicePage, /This agent can/);
   assert.match(devicePage, /approval\.scopes\.map/);
+  assert.ok(
+    devicePage.indexOf("approval.scopes.map") < devicePage.indexOf('action="/api/agent/oauth/device/authorize"'),
+  );
+  assert.doesNotMatch(devicePage, /<details/);
   assert.doesNotMatch(devicePage, /Allowed actions|Access and refresh tokens/);
   assert.match(devicePage, /Authorization approved/);
   assert.match(devicePage, /Authentication complete/);

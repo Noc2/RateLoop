@@ -82,16 +82,19 @@ export default async function AgentOAuthAuthorizePage({ searchParams }: { search
             ? "No action is needed unless the connection does not continue automatically."
             : "It can check when work needs human review and read resulting decisions. It cannot publish, spend, manage the workspace, or read private files."}
         </p>
-        {!authorization.autoAuthorize ? (
-          <details className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4 text-sm">
-            <summary className="cursor-pointer font-medium">Connection details</summary>
-            <ul className="mt-3 space-y-2 text-base-content/65">
-              {authorization.scopes.map(scope => (
-                <li key={scope}>{scopeLabels[scope] ?? scope.replaceAll(":", " ")}</li>
-              ))}
-            </ul>
-          </details>
-        ) : null}
+        <section
+          className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4 text-sm"
+          aria-labelledby="scope-title"
+        >
+          <h2 id="scope-title" className="font-medium">
+            This agent can
+          </h2>
+          <ul className="mt-3 space-y-2 text-base-content/65">
+            {authorization.scopes.map(scope => (
+              <li key={scope}>{scopeLabels[scope] ?? scope.replaceAll(":", " ")}</li>
+            ))}
+          </ul>
+        </section>
         <AgentOAuthConsentForm autoAuthorize={authorization.autoAuthorize} values={values} />
       </section>
     </main>

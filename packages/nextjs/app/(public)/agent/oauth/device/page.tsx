@@ -131,15 +131,21 @@ export default async function AgentOAuthDevicePage({ searchParams }: { searchPar
               It can check when work needs human review and read resulting decisions. It cannot publish, spend, manage
               the workspace, or read private files.
             </p>
-            <details className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4 text-sm">
-              <summary className="cursor-pointer font-medium">Connection details</summary>
-              <p className="mt-3 font-mono text-base-content/65">Code {approval.userCode}</p>
+            <section
+              className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4 text-sm"
+              aria-labelledby="device-scope-title"
+            >
+              <p className="text-xs uppercase tracking-wider text-base-content/45">Verification code</p>
+              <p className="mt-1 font-mono text-base-content">{approval.userCode}</p>
+              <h2 id="device-scope-title" className="mt-4 font-medium">
+                This agent can
+              </h2>
               <ul className="mt-3 space-y-2 text-base-content/65">
                 {approval.scopes.map(scope => (
                   <li key={scope}>{scopeLabels[scope] ?? scope.replaceAll(":", " ")}</li>
                 ))}
               </ul>
-            </details>
+            </section>
             <form
               action="/api/agent/oauth/device/authorize"
               method="post"
