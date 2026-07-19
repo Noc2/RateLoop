@@ -144,6 +144,8 @@ async function seedCompletedPaidPanel(input: {
   });
   for (const index of [0, 1]) {
     const reviewer = `0x${String(index + 2).repeat(40)}`;
+    const principalId = `${input.runId}_principal_${index}`;
+    const raterId = `${input.runId}_rater_${index}`;
     await dbClient.execute({
       sql: `INSERT INTO tokenless_assurance_cohort_reviewers
             (project_id, cohort_id, reviewer_account_address, qualification_provenance_json,
@@ -152,15 +154,29 @@ async function seedCompletedPaidPanel(input: {
       args: [input.projectId, cohortId, reviewer, OWNER, now, now],
     });
     await dbClient.execute({
+      sql: `INSERT INTO tokenless_principals (principal_id, status, created_at, updated_at)
+            VALUES (?, 'active', ?, ?);
+            INSERT INTO tokenless_rater_profiles
+            (rater_id, principal_id, account_address, nullifier_seed_ciphertext,
+             nullifier_key_version, nullifier_key_domain, created_at, updated_at)
+            VALUES (?, ?, ?, 'fixture', 'test-v1', 'vote_mapping', ?, ?);
+            INSERT INTO tokenless_payout_eligibility
+            (rater_id, payout_account, payout_ownership_method, payout_verified_at,
+             payout_expires_at, eligibility_status, blocked_reason, created_at, updated_at)
+            VALUES (?, ?, 'fixture', ?, NULL, 'ready', NULL, ?, ?)`,
+      args: [principalId, now, now, raterId, principalId, reviewer, now, now, raterId, reviewer, now, now, now],
+    });
+    await dbClient.execute({
       sql: `INSERT INTO tokenless_assurance_assignments
             (assignment_id, workspace_id, project_id, run_id, subpanel_id, cohort_id,
-             reviewer_account_address, source, selection, status, confidentiality_terms_hash,
+             reviewer_account_address, rater_id, payout_account_snapshot,
+             source, selection, status, confidentiality_terms_hash,
              confidentiality_accepted_at, qualification_provenance_json,
              assurance_snapshot_json, assurance_snapshot_hash, blinding_json,
              paid_assignment, paid_eligibility_checked_at, reservation_expires_at,
              assignment_expires_at, lease_issuer_account_address, lease_state,
              created_at, accepted_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'customer_invited', 'customer_named', 'completed', ?, ?,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'customer_invited', 'customer_named', 'completed', ?, ?,
                     '[]', '{"assertions":[],"qualifications":[]}',
                     'sha256:0000000000000000000000000000000000000000000000000000000000000000',
                     '{}', true, ?, ?, ?, ?, 'expired', ?, ?, ?)`,
@@ -171,6 +187,8 @@ async function seedCompletedPaidPanel(input: {
         input.runId,
         subpanelId,
         cohortId,
+        reviewer,
+        raterId,
         reviewer,
         `sha256:${"c".repeat(64)}`,
         now,

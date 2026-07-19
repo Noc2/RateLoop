@@ -323,6 +323,8 @@ async function seedEvidenceFixture(input: {
     );
     for (let index = 0; index < source.targetCount; index += 1) {
       const reviewer = address(++reviewerIndex);
+      const principalId = paidSource ? `principal_${sourceIndex}_${index}` : null;
+      const raterId = paidSource ? `rater_${sourceIndex}_${index}` : null;
       await insert(
         `INSERT INTO tokenless_assurance_cohort_reviewers
          (project_id, cohort_id, reviewer_account_address, qualification_provenance_json,
@@ -330,16 +332,32 @@ async function seedEvidenceFixture(input: {
          VALUES (?, ?, ?, '[]', 1, 0, 'active', ?, ?, ?)`,
         [projectId, cohortId, reviewer, OWNER, NOW, NOW],
       );
+      if (principalId && raterId) {
+        await insert(
+          `INSERT INTO tokenless_principals (principal_id, status, created_at, updated_at)
+           VALUES (?, 'active', ?, ?);
+           INSERT INTO tokenless_rater_profiles
+           (rater_id, principal_id, account_address, nullifier_seed_ciphertext,
+            nullifier_key_version, nullifier_key_domain, created_at, updated_at)
+           VALUES (?, ?, ?, 'fixture', 'test-v1', 'vote_mapping', ?, ?);
+           INSERT INTO tokenless_payout_eligibility
+           (rater_id, payout_account, payout_ownership_method, payout_verified_at,
+            payout_expires_at, eligibility_status, blocked_reason, created_at, updated_at)
+           VALUES (?, ?, 'fixture', ?, NULL, 'ready', NULL, ?, ?)`,
+          [principalId, NOW, NOW, raterId, principalId, reviewer, NOW, NOW, raterId, reviewer, NOW, NOW, NOW],
+        );
+      }
       await insert(
         `INSERT INTO tokenless_assurance_assignments
          (assignment_id, workspace_id, project_id, run_id, subpanel_id, cohort_id,
-          reviewer_account_address, source, selection, status, confidentiality_terms_hash,
+          reviewer_account_address, rater_id, payout_account_snapshot,
+          source, selection, status, confidentiality_terms_hash,
           confidentiality_accepted_at, qualification_provenance_json,
           assurance_snapshot_json, assurance_snapshot_hash, blinding_json,
           paid_assignment, paid_eligibility_checked_at, reservation_expires_at,
           assignment_expires_at, lease_issuer_account_address, lease_state,
           created_at, accepted_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'customer_named', 'completed', ?, ?, '[]',
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'customer_named', 'completed', ?, ?, '[]',
                  '{"assertions":[],"qualifications":[]}',
                  'sha256:0000000000000000000000000000000000000000000000000000000000000000',
                  '{"swap":false}',
@@ -352,6 +370,8 @@ async function seedEvidenceFixture(input: {
           subpanelId,
           cohortId,
           reviewer,
+          raterId,
+          paidSource ? reviewer : null,
           source.source,
           hashHumanAssuranceDocument({ confidentiality: true }),
           NOW,
