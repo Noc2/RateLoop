@@ -26,6 +26,7 @@ test("billing plan definitions freeze the launch limits and price versions", () 
     priceVersion: EARLY_ACCESS_PRICE_VERSION,
     displayName: "Early Access",
     monthlyPriceCents: 2_900,
+    listPriceCents: 9_900,
     decisionsPerPeriod: 250,
     activeAgents: 3,
     activePrivateGroups: 5,

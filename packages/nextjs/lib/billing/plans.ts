@@ -13,6 +13,8 @@ export type TokenlessBillingPlan = {
   priceVersion: TokenlessBillingPriceVersion;
   displayName: string;
   monthlyPriceCents: number;
+  /** Displayed list price this plan's promotional monthly price is anchored against. */
+  listPriceCents?: number;
   decisionsPerPeriod: number;
   activeAgents: number;
   activePrivateGroups: number;
@@ -35,6 +37,7 @@ export const TOKENLESS_BILLING_PLANS = {
     priceVersion: EARLY_ACCESS_PRICE_VERSION,
     displayName: "Early Access",
     monthlyPriceCents: 2_900,
+    listPriceCents: 9_900,
     decisionsPerPeriod: 250,
     activeAgents: 3,
     activePrivateGroups: 5,

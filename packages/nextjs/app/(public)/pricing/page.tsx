@@ -43,8 +43,8 @@ export default function PricingPage() {
           <article>
             <h2 className="text-2xl font-semibold">What counts as a decision?</h2>
             <p className="mt-3 text-base leading-7 text-base-content/60">
-              One case that reaches an authorized terminal human result. Drafts and failed or cancelled cases do not
-              count, and there are no automatic overage charges.
+              One piece of work that receives a final human verdict. Drafts and failed or cancelled cases do not count,
+              and there are no automatic overage charges.
             </p>
           </article>
           <article>
@@ -52,12 +52,16 @@ export default function PricingPage() {
               <h2 className="text-2xl font-semibold">Paid panels</h2>
               <InfoPopover label="Explain paid panel costs">
                 The bounty pays accepted reviewer work. The attempt reserve covers valid assigned attempts, including
-                rounds that do not reach quorum. RateLoop&apos;s execution fee is capped at 7.5%.
+                rounds that do not reach quorum. RateLoop&apos;s execution fee is capped at 10%.
               </InfoPopover>
             </div>
             <p className="mt-3 text-base leading-7 text-base-content/60">
-              Bounty, attempt reserve, and execution fee are itemized before funding and are not included in the{" "}
-              {earlyAccessPrice} subscription.
+              Paying reviewers costs extra and is not included in the {earlyAccessPrice} subscription. Every cost is
+              itemized before funding — nothing is charged without your confirmation.
+            </p>
+            <p className="mt-3 text-base leading-7 text-base-content/60">
+              Reviewers keep 90% of every bounty. RateLoop&apos;s execution fee is capped at 10%, and stablecoin
+              settlement that costs cents — not card fees — is what keeps it that low.
             </p>
           </article>
         </section>
