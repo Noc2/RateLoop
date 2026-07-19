@@ -17,6 +17,7 @@ export default async function HumanPage({
 }: {
   searchParams: Promise<{
     assignment?: string | string[];
+    invite?: string | string[];
     terms?: string | string[];
     q?: string | string[];
     scope?: string | string[];
@@ -43,6 +44,7 @@ export default async function HumanPage({
   }
 
   if (tab === "discover") {
+    const invitation = Array.isArray(params.invite) ? params.invite[0] : params.invite;
     const query = Array.isArray(params.q) ? params.q[0] : params.q;
     const requestedScope = Array.isArray(params.scope) ? params.scope[0] : params.scope;
     const scope = ["all", "public", "private"].includes(requestedScope ?? "")
@@ -53,7 +55,7 @@ export default async function HumanPage({
         <AppPageShell contentClassName="mb-4">
           <HumanTabs active={tab} />
         </AppPageShell>
-        <AnswerPageClient initialQuery={query} initialScope={scope} />
+        <AnswerPageClient initialInvitationOpen={invitation === "1"} initialQuery={query} initialScope={scope} />
       </>
     );
   }
@@ -63,6 +65,7 @@ export default async function HumanPage({
 
   return (
     <AppPageShell outerClassName="pb-8" contentClassName="space-y-5">
+      <h1 className="sr-only">{tab === "profile" ? "Your profile" : "Your settings"}</h1>
       <HumanTabs active={tab} />
       {tab === "profile" ? (
         <HumanProfileContent worldIdEnabled={isWorldIdAssuranceEnabled()} />

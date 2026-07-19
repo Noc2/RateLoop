@@ -14,7 +14,11 @@ export function HumanProfileContent({ worldIdEnabled }: { worldIdEnabled: boolea
   return (
     <>
       <ProfileClient />
-      <InvitationRouterPanel onPrivateGroupAccepted={() => setMembershipsRevision(current => current + 1)} />
+      <InvitationRouterPanel
+        onAccepted={kind => {
+          if (kind === "private_group") setMembershipsRevision(current => current + 1);
+        }}
+      />
       <PrivateGroupMembershipsPanel refreshKey={membershipsRevision} />
       {worldIdEnabled ? <WorldIdProfilePanel /> : null}
       <section id="paid-work" className="scroll-mt-24">

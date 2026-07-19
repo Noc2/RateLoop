@@ -12,6 +12,8 @@ type PrivateInvitationPreview = {
   membershipExpiresAt: string | null;
 };
 
+export type InvitationKind = "private_group" | "reviewer";
+
 function formatDate(value: string | null) {
   return value ? new Date(value).toLocaleString() : "No expiry";
 }
@@ -26,7 +28,7 @@ async function readJson(response: Response) {
   return body;
 }
 
-export function InvitationRouterPanel({ onPrivateGroupAccepted }: { onPrivateGroupAccepted?: () => void }) {
+export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: InvitationKind) => void }) {
   const [token, setToken] = useState("");
   const [preview, setPreview] = useState<PrivateInvitationPreview | null>(null);
   const [busy, setBusy] = useState(false);
@@ -52,6 +54,7 @@ export function InvitationRouterPanel({ onPrivateGroupAccepted }: { onPrivateGro
         );
         setToken("");
         setStatus("Invitation accepted.");
+        onAccepted?.("reviewer");
         return;
       }
       if (normalized.startsWith("rlgi_")) {
@@ -66,7 +69,7 @@ export function InvitationRouterPanel({ onPrivateGroupAccepted }: { onPrivateGro
         setPreview(body.invitation as PrivateInvitationPreview);
         return;
       }
-      throw new Error("Enter a valid RateLoop invitation token.");
+      throw new Error("Enter a valid RateLoop invitation code.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to check the invitation.");
     } finally {
@@ -90,8 +93,8 @@ export function InvitationRouterPanel({ onPrivateGroupAccepted }: { onPrivateGro
       );
       setPreview(null);
       setToken("");
-      setStatus("Group invitation accepted. Access is listed below.");
-      onPrivateGroupAccepted?.();
+      setStatus("Group invitation accepted.");
+      onAccepted?.("private_group");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to accept the invitation.");
     } finally {
@@ -101,11 +104,11 @@ export function InvitationRouterPanel({ onPrivateGroupAccepted }: { onPrivateGro
 
   return (
     <section className="surface-card rounded-2xl p-6">
-      <h1 className="text-2xl font-semibold">Add invitation</h1>
+      <h2 className="text-2xl font-semibold">Add invitation</h2>
       <form className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={checkInvitation}>
         <div className="grow">
           <input
-            aria-label="Invitation token"
+            aria-label="Invitation code"
             type="password"
             autoComplete="off"
             value={token}
@@ -116,7 +119,7 @@ export function InvitationRouterPanel({ onPrivateGroupAccepted }: { onPrivateGro
               setError(null);
             }}
             className="input w-full border-white/10 bg-[var(--rateloop-field)] font-mono text-sm"
-            placeholder="Paste invitation token"
+            placeholder="Paste invitation code"
             required
           />
         </div>
@@ -128,7 +131,7 @@ export function InvitationRouterPanel({ onPrivateGroupAccepted }: { onPrivateGro
       {preview ? (
         <div className="surface-card-nested mt-5 rounded-xl p-5">
           <p className="text-sm text-base-content/55">{preview.workspaceName}</p>
-          <h2 className="mt-1 text-lg font-semibold">{preview.groupName}</h2>
+          <h3 className="mt-1 text-lg font-semibold">{preview.groupName}</h3>
           {preview.groupPurpose ? <p className="mt-2 text-sm text-base-content/60">{preview.groupPurpose}</p> : null}
           <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
             <div>

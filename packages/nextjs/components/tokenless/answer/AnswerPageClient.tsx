@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { SignedOutGate } from "~~/components/auth/SignedOutGate";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { HumanReviewExample } from "~~/components/tokenless/SignedOutExamples";
+import { InvitationRouterPanel } from "~~/components/tokenless/account/InvitationRouterPanel";
 import {
   type PrivateAnswerAssignment,
   PrivateAssignmentCard,
@@ -35,15 +36,18 @@ function paidTaskAccess(value: unknown): PaidTaskAccess {
 }
 
 export function AnswerPageClient({
+  initialInvitationOpen = false,
   initialQuery = "",
   initialScope = "all",
 }: {
+  initialInvitationOpen?: boolean;
   initialQuery?: string;
   initialScope?: VisibleScope;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const query = initialQuery;
+  const [invitationOpen, setInvitationOpen] = useState(initialInvitationOpen);
   const [scope, setScope] = useState<VisibleScope>(initialScope);
   const [tasks, setTasks] = useState<PublicAnswerTask[]>([]);
   const [assignments, setAssignments] = useState<PrivateAnswerAssignment[]>([]);
@@ -118,7 +122,7 @@ export function AnswerPageClient({
 
   function changeScope(nextScope: VisibleScope) {
     setScope(nextScope);
-    router.push(`${pathname}?q=${encodeURIComponent(query)}&scope=${nextScope}`);
+    router.push(discoverHref(pathname, query, nextScope, invitationOpen));
   }
 
   const showScopeControls = !loading && tasks.length > 0 && assignments.length > 0;
@@ -150,7 +154,24 @@ export function AnswerPageClient({
             Results for <strong className="font-medium text-base-content">&quot;{query}&quot;</strong>
           </span>
         ) : null}
+        {principalId ? (
+          <button
+            type="button"
+            className="btn btn-sm rateloop-secondary-action ml-auto"
+            aria-controls="discover-invitation-panel"
+            aria-expanded={invitationOpen}
+            onClick={() => setInvitationOpen(current => !current)}
+          >
+            {invitationOpen ? "Hide invitation" : "Have an invitation?"}
+          </button>
+        ) : null}
       </div>
+
+      {principalId ? (
+        <div id="discover-invitation-panel" hidden={!invitationOpen}>
+          <InvitationRouterPanel onAccepted={() => void load()} />
+        </div>
+      ) : null}
 
       <div className="space-y-4">
         <AsyncSection loading={loading} loadingLabel="Loading review work">
@@ -179,7 +200,7 @@ export function AnswerPageClient({
             headingLevel={2}
             layout="embedded"
             preview={<HumanReviewExample />}
-            returnTo={`${pathname}?q=${encodeURIComponent(query)}&scope=${scope}`}
+            returnTo={discoverHref(pathname, query, scope, initialInvitationOpen)}
             title="Sign in to discover review work"
             titleId="human-discover-sign-in-title"
           />
@@ -200,4 +221,10 @@ export function AnswerPageClient({
       </div>
     </AppPageShell>
   );
+}
+
+function discoverHref(pathname: string, query: string, scope: VisibleScope, invitationOpen: boolean) {
+  const params = new URLSearchParams({ q: query, scope });
+  if (invitationOpen) params.set("invite", "1");
+  return `${pathname}?${params.toString()}`;
 }
