@@ -149,6 +149,68 @@ function assertExactFoundation(input: {
       ...requiredRules,
     ],
   });
+  const sourceArtifactCommitment = assertHash(text(row, "source_digest"), "private source artifact commitment");
+  const suggestionArtifactCommitment = assertHash(
+    text(row, "suggestion_digest"),
+    "private suggestion artifact commitment",
+  );
+  const storedExternalSourceEvidenceHash = text(row, "external_source_evidence_hash");
+  const storedExternalSuggestionCommitment = text(row, "external_suggestion_commitment");
+  const legacyExternalCommitments =
+    storedExternalSourceEvidenceHash === null && storedExternalSuggestionCommitment === null;
+  const exactExternalCommitments =
+    legacyExternalCommitments ||
+    (storedExternalSourceEvidenceHash !== null &&
+      storedExternalSuggestionCommitment !== null &&
+      HASH_PATTERN.test(storedExternalSourceEvidenceHash) &&
+      HASH_PATTERN.test(storedExternalSuggestionCommitment));
+  const externalSourceEvidenceHash = legacyExternalCommitments
+    ? sourceArtifactCommitment
+    : storedExternalSourceEvidenceHash;
+  const externalSuggestionCommitment = legacyExternalCommitments
+    ? suggestionArtifactCommitment
+    : storedExternalSuggestionCommitment;
+  const taskCommitment = sha256({
+    kind: "binary_review",
+    criterion: text(row, "criterion"),
+    positiveLabel: text(row, "positive_label"),
+    negativeLabel: text(row, "negative_label"),
+    rationaleMode: text(row, "rationale_mode"),
+    sourceCommitment: sourceArtifactCommitment,
+    suggestionCommitment: suggestionArtifactCommitment,
+  });
+  const foundationBindingHash = sha256({
+    callerCredentialId: text(row, "caller_credential_id"),
+    callerCredentialKind: text(row, "caller_credential_kind"),
+    integrationId: text(row, "integration_id"),
+    lane: "private",
+    taskKind: "binary_review",
+    taskCommitment,
+    project: { id: text(row, "project_id"), hash: projectBindingHash },
+    requestProfile: {
+      id: text(row, "request_profile_id"),
+      version: integer(row, "request_profile_version", 1),
+      hash: text(row, "request_profile_hash"),
+    },
+    privateGroup: {
+      id: text(row, "private_group_id"),
+      policyVersion: integer(row, "private_group_policy_version", 1),
+      policyHash: text(row, "private_group_policy_hash"),
+      allowlistHash: text(row, "group_allowlist_hash"),
+      allowlistStatus: text(row, "group_allowlist_status"),
+    },
+    cohort: { id: text(row, "cohort_id"), hash: cohortBindingHash },
+    ...(legacyExternalCommitments
+      ? {}
+      : {
+          externalContentCommitments: {
+            sourceEvidenceHash: externalSourceEvidenceHash,
+            suggestionCommitment: externalSuggestionCommitment,
+          },
+        }),
+    responseWindowSeconds: integer(row, "response_window_seconds", 1),
+    responseDeadline: responseDeadline.toISOString(),
+  });
   if (
     text(row, "private_review_id") !== input.privateReviewId ||
     text(row, "opportunity_id") !== input.opportunityId ||
@@ -160,6 +222,9 @@ function assertExactFoundation(input: {
     text(row, "project_data_classification") !== text(row, "private_sensitivity") ||
     text(row, "project_private_sensitivity") !== text(row, "private_sensitivity") ||
     projectBindingHash !== text(row, "project_binding_hash") ||
+    !exactExternalCommitments ||
+    taskCommitment !== text(row, "task_commitment") ||
+    foundationBindingHash !== text(row, "binding_hash") ||
     text(row, "foundation_status") !== "ready_for_assignment" ||
     text(row, "group_allowlist_status") !== "allowed" ||
     text(row, "lane") !== "private" ||
@@ -183,8 +248,8 @@ function assertExactFoundation(input: {
     text(row, "opportunity_agent_version_id") !== text(row, "integration_agent_version_id") ||
     text(row, "profile_agent_id") !== text(row, "integration_agent_id") ||
     text(row, "profile_agent_version_id") !== text(row, "integration_agent_version_id") ||
-    text(row, "source_evidence_hash") !== text(row, "source_digest") ||
-    text(row, "suggestion_commitment") !== text(row, "suggestion_digest") ||
+    text(row, "source_evidence_hash") !== externalSourceEvidenceHash ||
+    text(row, "suggestion_commitment") !== externalSuggestionCommitment ||
     text(row, "private_group_id") !== text(row, "profile_private_group_id") ||
     text(row, "private_group_id") !== text(row, "cohort_private_group_id") ||
     cohortBindingHash !== text(row, "cohort_binding_hash") ||
@@ -229,6 +294,7 @@ async function loadFrozenFoundation(
             p.profile_id, p.version AS profile_version, p.profile_hash,
             p.agent_id AS profile_agent_id, p.agent_version_id AS profile_agent_version_id,
             p.audience AS profile_audience, p.content_boundary, p.compensation_mode, p.panel_size,
+            p.criterion,p.positive_label,p.negative_label,p.rationale_mode,
             p.required_expertise_keys_json,p.expertise_requirements_json,
             p.private_group_id AS profile_private_group_id,
             o.opportunity_id, o.agent_id AS opportunity_agent_id,

@@ -1120,6 +1120,10 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
     const foundation = await dependencies.preparePrivateFoundation({
       principal: input.principal.principal,
       request,
+      externalContentCommitments: {
+        sourceEvidenceHash: context.contentCommitments.source,
+        suggestionCommitment: context.contentCommitments.suggestion,
+      },
       now,
     });
     if (foundation.schemaVersion !== HUMAN_ASSURANCE_SCHEMA_VERSION || foundation.status !== "ready_for_assignment") {

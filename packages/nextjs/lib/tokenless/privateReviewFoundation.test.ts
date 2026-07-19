@@ -289,6 +289,41 @@ test("private foundation encrypts separate artifacts and exact replay is idempot
   assert.equal(persisted.includes("private suggestion"), false);
 });
 
+test("private foundation freezes caller-verifiable commitments separately from vault commitments", async () => {
+  const setup = await fixture();
+  memoryArtifactRuntime();
+  const externalContentCommitments = {
+    sourceEvidenceHash: `sha256:${"a".repeat(64)}` as const,
+    suggestionCommitment: `sha256:${"b".repeat(64)}` as const,
+  };
+  const first = await preparePrivateReviewFoundation({ ...setup, externalContentCommitments });
+  const replay = await preparePrivateReviewFoundation({ ...setup, externalContentCommitments });
+  assert.equal(replay.privateReviewId, first.privateReviewId);
+  const stored = await dbClient.execute({
+    sql: `SELECT r.external_source_evidence_hash,r.external_suggestion_commitment,
+                 source.digest AS source_digest,suggestion.digest AS suggestion_digest
+          FROM tokenless_private_review_requests r
+          JOIN tokenless_assurance_artifacts source ON source.artifact_id=r.source_artifact_id
+          JOIN tokenless_assurance_artifacts suggestion ON suggestion.artifact_id=r.suggestion_artifact_id
+          WHERE r.private_review_id=?`,
+    args: [first.privateReviewId],
+  });
+  assert.equal(stored.rows[0]?.external_source_evidence_hash, externalContentCommitments.sourceEvidenceHash);
+  assert.equal(stored.rows[0]?.external_suggestion_commitment, externalContentCommitments.suggestionCommitment);
+  assert.notEqual(stored.rows[0]?.source_digest, externalContentCommitments.sourceEvidenceHash);
+  assert.notEqual(stored.rows[0]?.suggestion_digest, externalContentCommitments.suggestionCommitment);
+  await assert.rejects(
+    preparePrivateReviewFoundation({
+      ...setup,
+      externalContentCommitments: {
+        ...externalContentCommitments,
+        suggestionCommitment: `sha256:${"c".repeat(64)}`,
+      },
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "private_review_idempotency_conflict",
+  );
+});
+
 test("failed preparation is durably recoverable without duplicate artifacts", async () => {
   const setup = await fixture();
   const objects = memoryArtifactRuntime({ failFirstPut: true });

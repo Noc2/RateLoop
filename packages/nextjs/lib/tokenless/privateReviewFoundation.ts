@@ -18,9 +18,14 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 type QueryRow = Record<string, unknown>;
 type PrivateReviewPrincipal = Extract<ProductPrincipal, { kind: "api_key" }>;
 type CallerCredentialKind = "api_key" | "oauth_token_family";
+type ExternalPrivateReviewContentCommitments = {
+  sourceEvidenceHash: `sha256:${string}`;
+  suggestionCommitment: `sha256:${string}`;
+};
 
 const PRIVATE_SENSITIVITIES = ["internal", "confidential", "restricted", "regulated"] as const;
 const PREPARATION_LEASE_MS = 60_000;
+const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 
 function rowString(row: QueryRow | undefined, key: string) {
   const value = row?.[key];
@@ -84,6 +89,18 @@ function decodeArtifact(value: string, field: string) {
     throw new TokenlessServiceError(`${field} must contain canonical base64.`, 400, "invalid_private_review");
   }
   return new Uint8Array(bytes);
+}
+
+function externalContentCommitments(value: ExternalPrivateReviewContentCommitments | undefined) {
+  if (value === undefined) return null;
+  if (!HASH_PATTERN.test(value.sourceEvidenceHash) || !HASH_PATTERN.test(value.suggestionCommitment)) {
+    throw new TokenlessServiceError(
+      "External private review content commitments are invalid.",
+      400,
+      "invalid_private_review",
+    );
+  }
+  return value;
 }
 
 function resolveCallerCredential(row: QueryRow, presentedCredentialId: string) {
@@ -447,9 +464,11 @@ function safePreparationErrorCode(error: unknown) {
 export async function preparePrivateReviewFoundation(input: {
   principal: PrivateReviewPrincipal;
   request: HumanAssurancePrivateReviewCreateRequest;
+  externalContentCommitments?: ExternalPrivateReviewContentCommitments;
   now?: Date;
 }) {
   const now = input.now ?? new Date();
+  const externalCommitments = externalContentCommitments(input.externalContentCommitments);
   const caller = await loadCallerAuthorization({
     classification: input.request.dataClassification,
     integrationId: input.request.integrationId,
@@ -490,6 +509,7 @@ export async function preparePrivateReviewFoundation(input: {
     requestProfile: input.request.requestProfile,
     source: { contentType: input.request.source.contentType, commitment: sourceCommitment },
     suggestion: { contentType: input.request.suggestion.contentType, commitment: suggestionCommitment },
+    ...(externalCommitments ? { externalContentCommitments: externalCommitments } : {}),
   });
 
   const binding = await loadBinding({
@@ -559,6 +579,7 @@ export async function preparePrivateReviewFoundation(input: {
       allowlistStatus,
     },
     cohort: { id: input.request.cohortId, hash: cohortBindingHash },
+    ...(externalCommitments ? { externalContentCommitments: externalCommitments } : {}),
     responseWindowSeconds,
     responseDeadline: responseDeadline.toISOString(),
   });
@@ -577,6 +598,7 @@ export async function preparePrivateReviewFoundation(input: {
       sql: `INSERT INTO tokenless_private_review_requests
             (private_review_id, workspace_id, project_id, integration_id,
              caller_credential_kind, caller_credential_id, idempotency_key, request_hash,
+             external_source_evidence_hash, external_suggestion_commitment,
              request_profile_id, request_profile_version, request_profile_hash,
              private_group_id, private_group_policy_version, private_group_policy_hash,
              group_allowlist_hash, group_allowlist_status, cohort_id, cohort_binding_hash,
@@ -587,7 +609,7 @@ export async function preparePrivateReviewFoundation(input: {
              binding_hash, foundation_status, preparation_lease_id, preparation_lease_expires_at,
              preparation_attempt_count, preparation_upload_ids_json, last_preparation_error_code,
              created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'private', 'binary_review',
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'private', 'binary_review',
                     ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, 'preparing', ?, ?, 1, ?, NULL, ?, ?)`,
       args: [
         privateReviewId,
@@ -598,6 +620,8 @@ export async function preparePrivateReviewFoundation(input: {
         caller.callerCredentialId,
         input.request.idempotencyKey,
         requestHash,
+        externalCommitments?.sourceEvidenceHash ?? null,
+        externalCommitments?.suggestionCommitment ?? null,
         input.request.requestProfile.id,
         input.request.requestProfile.version,
         input.request.requestProfile.hash,

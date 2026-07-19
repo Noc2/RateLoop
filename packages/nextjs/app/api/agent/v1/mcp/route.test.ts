@@ -26,15 +26,30 @@ import {
   registerAgentOAuthClient,
   validateAgentOAuthAuthorizationRequest,
 } from "~~/lib/tokenless/agentOAuth";
+import { __setArtifactPrivacyRuntimeForTests } from "~~/lib/tokenless/artifactPrivacy";
 import { putHumanReviewConfigurationForOwner } from "~~/lib/tokenless/humanReviewConfiguration";
+import {
+  createPrivateGroup,
+  createPrivateGroupInvitation,
+  redeemPrivateGroupInvitation,
+} from "~~/lib/tokenless/privateGroups";
 import { createAgentPublishingPolicy, createWorkspace } from "~~/lib/tokenless/productCore";
 import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
+import {
+  configureWorkspaceSetupReviews,
+  confirmWorkspaceSetupAgent,
+  createWorkspaceAgentSetupConnection,
+  finalizeWorkspaceAgentSetup,
+  getWorkspaceAgentSetup,
+} from "~~/lib/tokenless/workspaceAgentSetup";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const originalSamplerKey = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY;
 const originalSamplerVersion = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION;
 const originalRateLimitSecret = process.env.TOKENLESS_MCP_RATE_LIMIT_SECRET;
 const originalAppUrl = process.env.APP_URL;
+const PRIVATE_REVIEWER_A = "0x2222222222222222222222222222222222222222";
+const PRIVATE_REVIEWER_B = "0x3333333333333333333333333333333333333333";
 
 beforeEach(() => {
   process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = "99".repeat(32);
@@ -45,6 +60,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  __setArtifactPrivacyRuntimeForTests(null);
   __setDatabaseResourcesForTests(null);
   if (originalSamplerKey === undefined) delete process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY;
   else process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = originalSamplerKey;
@@ -208,6 +224,32 @@ async function setupOAuthConnectionIntent() {
   return { intent, principalId, tokens, workspaceId };
 }
 
+async function addRedeemedPrivateReviewer(input: {
+  accountAddress: string;
+  email: string;
+  groupId: string;
+  ownerAddress: string;
+  workspaceId: string;
+}) {
+  const now = new Date();
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_browser_identities
+          (principal_address,thirdweb_user_id,auth_provider,primary_email,email_verified,email_domain,
+           display_name,created_at,updated_at,last_login_at)
+          VALUES (?,?,'email',?,true,'example.test',NULL,?,?,?)`,
+    args: [input.accountAddress, `thirdweb-${input.accountAddress}`, input.email, now, now, now],
+  });
+  const invitation = await createPrivateGroupInvitation({
+    accountAddress: input.ownerAddress,
+    workspaceId: input.workspaceId,
+    groupId: input.groupId,
+    intendedAccountAddress: input.accountAddress,
+    membershipExpiresAt: new Date(now.getTime() + 30 * 86_400_000),
+    now,
+  });
+  await redeemPrivateGroupInvitation({ accountAddress: input.accountAddress, token: invitation.token, now });
+}
+
 test("pairing initialization tells the agent to register immediately and returns the next automatic action", async () => {
   const { workspaceId } = await createWorkspace({ name: "Automatic pairing", ownerAddress: OWNER });
   const issued = await createAgentPairing({
@@ -345,6 +387,237 @@ test("one preferred OAuth tool connects a fresh workspace without reflecting the
   assert.equal(Number(state.rows[0]?.agents ?? 0), 1);
   assert.equal(Number(state.rows[0]?.integrations ?? 0), 1);
   assert.equal(Number(state.rows[0]?.connected_events ?? 0), 1);
+});
+
+test("finished automatic private setup lets the connected agent assign an eligible review without manual routing", async () => {
+  const privateObjects = new Map<string, Uint8Array>();
+  __setArtifactPrivacyRuntimeForTests({
+    keyVersion: "mcp-setup-acceptance-v1",
+    masterKey: Buffer.alloc(32, 7),
+    store: {
+      async delete(reference) {
+        privateObjects.delete(reference);
+      },
+      async get(reference) {
+        const value = privateObjects.get(reference);
+        if (!value) throw new Error("Private test object is unavailable.");
+        return new Uint8Array(value);
+      },
+      async put(pathname, body) {
+        const reference = `memory://${pathname}`;
+        privateObjects.set(reference, new Uint8Array(body));
+        return reference;
+      },
+    },
+  });
+  const { principalId, tokens, workspaceId } = await setupOAuthConnectionIntent();
+  const setupIntent = await createWorkspaceAgentSetupConnection({
+    accountAddress: principalId,
+    workspaceId,
+    origin: "https://rateloop-tokenless.vercel.app",
+    revision: 1,
+  });
+  const initialized = await POST(
+    request(
+      {
+        id: 1,
+        jsonrpc: "2.0",
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-11-25",
+          capabilities: { tools: { listChanged: true } },
+          clientInfo: { name: "Setup acceptance client", version: "1.0.0" },
+        },
+      },
+      tokens.access_token,
+    ),
+  );
+  const sessionId = initialized.headers.get("mcp-session-id");
+  assert.ok(sessionId);
+  async function call(id: number, name: string, args: Record<string, unknown>) {
+    const response = await POST(
+      request(
+        { id, jsonrpc: "2.0", method: "tools/call", params: { name, arguments: args } },
+        tokens.access_token,
+        sessionId!,
+      ),
+    );
+    const body = await response.json();
+    assert.ok(body.result?.structuredContent, JSON.stringify(body));
+    assert.notEqual(body.result.isError, true, JSON.stringify(body));
+    return body.result.structuredContent;
+  }
+
+  const connected = await call(2, "rateloop_connect_workspace", { connectionUrl: setupIntent.connectionUrl });
+  assert.equal(connected.connected, true);
+  const setup = await getWorkspaceAgentSetup({ accountAddress: principalId, workspaceId });
+  assert.ok(setup.agent);
+  const confirmed = await confirmWorkspaceSetupAgent({
+    accountAddress: principalId,
+    workspaceId,
+    revision: setup.revision,
+    agent: {
+      displayName: setup.agent.displayName,
+      description: setup.agent.description,
+      provider: setup.agent.provider,
+      model: setup.agent.model,
+      modelVersion: setup.agent.modelVersion,
+      environment: "production",
+    },
+  });
+  const group = await createPrivateGroup({
+    accountAddress: principalId,
+    workspaceId,
+    name: "Setup acceptance reviewers",
+    purpose: "Review private output from the connected setup acceptance agent.",
+    policy: { defaultCompensation: "unpaid", dataClassifications: ["confidential"] },
+  });
+  await addRedeemedPrivateReviewer({
+    accountAddress: PRIVATE_REVIEWER_A,
+    email: "setup-reviewer-a@example.test",
+    groupId: group.groupId,
+    ownerAddress: principalId,
+    workspaceId,
+  });
+  await addRedeemedPrivateReviewer({
+    accountAddress: PRIVATE_REVIEWER_B,
+    email: "setup-reviewer-b@example.test",
+    groupId: group.groupId,
+    ownerAddress: principalId,
+    workspaceId,
+  });
+  const saved = await putHumanReviewConfigurationForOwner({
+    accountAddress: principalId,
+    workspaceId,
+    agentId: setup.agent.agentId,
+    body: {
+      expectedBindingVersion: null,
+      selection: {
+        mode: "always",
+        enforcementMode: "advisory",
+        agreementThresholdBps: 8_000,
+        productionFloorBps: 0,
+        fixedRateBps: null,
+        maximumUnreviewedGap: 20,
+        requiredRiskTiers: ["high"],
+        criticalRiskTiers: ["critical"],
+        minimumConfidenceBps: 7_000,
+        maximumLatencyMs: 120_000,
+      },
+      requestProfile: {
+        questionAuthority: "owner_fixed",
+        criterion: "Is this response safe and correct?",
+        positiveLabel: "Approve",
+        negativeLabel: "Reject",
+        rationaleMode: "required",
+        audience: "private_invited",
+        contentBoundary: "private_workspace",
+        privateSensitivity: "confidential",
+        privateGroupId: group.groupId,
+        responseWindowSeconds: 3_600,
+        panelSize: 2,
+        compensationMode: "unpaid",
+        bountyPerSeatAtomic: null,
+        feedbackBonusEnabled: false,
+      },
+      authority: "ask_automatically",
+      publishingGrant: {
+        integrationId: setup.connection.integrationId!,
+        provision: "private_invited_unpaid",
+        allowedWorkflowKeys: ["general-assistance"],
+      },
+    },
+  });
+  const reviews = await configureWorkspaceSetupReviews({
+    accountAddress: principalId,
+    workspaceId,
+    revision: confirmed.revision,
+    bindingRevision: saved.configuration.version,
+  });
+  const finalized = await finalizeWorkspaceAgentSetup({
+    accountAddress: principalId,
+    workspaceId,
+    revision: reviews.revision,
+    idempotencyKey: "d5742714-44c4-41b9-a18d-cdf0c58f9692",
+    decision: "later",
+    groupId: group.groupId,
+    createInvitation: false,
+  });
+  assert.equal(finalized.postcondition.privateRouting?.ready, true);
+  assert.equal(finalized.postcondition.reviewerRoutingStatus, "ready");
+  assert.equal(finalized.postcondition.canSend, true);
+  const managedRouting = finalized.postcondition.privateRouting!;
+
+  const context = await call(3, "rateloop_get_agent_context", {});
+  assert.equal(context.humanReview.authority, "ask_automatically");
+  assert.equal(context.capabilities.effectiveLane.lane, "private_invited_unpaid");
+  assert.equal(context.publishingGrant.active, true);
+  assert.equal(context.safeAccess.canPublish, true);
+  assert.ok(context.publishingGrant.grantedScopes.includes("panel:publish"));
+  assert.ok(!context.publishingGrant.grantedScopes.includes("payment:submit"));
+
+  const sourcePayload = JSON.stringify({ case: "private support request", revision: 1 });
+  const suggestionPayload = JSON.stringify({ answer: "A safe candidate response." });
+  const textHash = (value: string) => `sha256:${createHash("sha256").update(value).digest("hex")}`;
+  const evaluation = await call(4, "rateloop_evaluate_review_requirement", {
+    externalOpportunityId: "setup-private-review-opportunity-0001",
+    workflowKey: "general-assistance",
+    riskTier: "high",
+    audiencePolicyHash: context.reviewPolicy.audiencePolicyHash,
+    suggestionCommitment: textHash(suggestionPayload),
+    sourceEvidence: {
+      reference: "case/setup-private-review-opportunity-0001/revision-1",
+      hash: textHash(sourcePayload),
+    },
+    declaredConfidenceBps: 8_500,
+    criticalRisk: false,
+    metadataComplete: true,
+    execution: {
+      externalExecutionId: "execution-setup-private-review-0001",
+      status: "completed",
+      primarySpanId: "generation-primary",
+      generationSpans: [
+        {
+          spanId: "generation-primary",
+          role: "primary",
+          provider: "OpenAI",
+          requestedModel: "gpt-test",
+          resolvedModel: "gpt-test-2026-07-19",
+          reasoningEffort: "low",
+          serviceTier: "default",
+          inputTokens: 120,
+          outputTokens: 40,
+          reasoningOutputTokens: 10,
+        },
+      ],
+    },
+  });
+  assert.equal(evaluation.decision, "required");
+
+  const routed = await call(5, "rateloop_request_review", {
+    opportunityId: evaluation.opportunityId,
+    sourcePayload,
+    suggestionPayload,
+    material: {
+      kind: "private",
+      sourceContentType: "application/json",
+      suggestionContentType: "application/json",
+    },
+  });
+  assert.equal(routed.action, "private_review_assigned");
+  assert.equal(routed.foundation.bindings.project.projectId, managedRouting.projectId);
+  assert.equal(routed.foundation.bindings.cohort.cohortId, managedRouting.cohortId);
+  assert.deepEqual(
+    routed.delivery.assignments.map(
+      (assignment: { reviewerAccountAddress: string }) => assignment.reviewerAccountAddress,
+    ),
+    [PRIVATE_REVIEWER_A, PRIVATE_REVIEWER_B],
+  );
+  const stored = await dbClient.execute({
+    sql: `SELECT project_id,cohort_id FROM tokenless_private_review_requests WHERE private_review_id=?`,
+    args: [routed.foundation.privateReviewId],
+  });
+  assert.deepEqual(stored.rows, [{ project_id: managedRouting.projectId, cohort_id: managedRouting.cohortId }]);
 });
 
 test("OAuth keeps one stable tool list while one message claims, loads, and verifies the connection", async () => {

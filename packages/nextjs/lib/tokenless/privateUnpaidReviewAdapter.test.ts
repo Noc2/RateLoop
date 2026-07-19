@@ -23,12 +23,13 @@ import { createReviewRequestProfile } from "~~/lib/tokenless/reviewRequestProfil
 import { attestInvitedReviewerExpertise } from "~~/lib/tokenless/reviewerExpertise";
 import { replacePrivateGroupMemberExpertise } from "~~/lib/tokenless/reviewerExpertiseAssignments";
 import { createWorkspaceReviewerExpertiseDefinition } from "~~/lib/tokenless/reviewerExpertiseDefinitions";
+import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const REVIEWER_A = "0x2222222222222222222222222222222222222222";
 const REVIEWER_B = "0x3333333333333333333333333333333333333333";
 
-function hash(value: string) {
+function hash(value: string): `sha256:${string}` {
   return `sha256:${createHash("sha256").update(value).digest("hex")}`;
 }
 
@@ -69,6 +70,7 @@ async function identity(address: string, email: string, now: Date) {
 async function fixture(
   requiredExpertiseKeys: Array<"code-review:typescript"> = [],
   exactMinimumSeats: number | null = null,
+  commitmentMode: "external" | "legacy" = "external",
 ) {
   const foundationNow = new Date("2026-07-16T09:00:00.000Z");
   await identity(REVIEWER_A, "reviewer-a@example.com", foundationNow);
@@ -271,8 +273,13 @@ async function fixture(
       args: [project.projectId, cohortId, reviewer, OWNER, foundationNow, foundationNow],
     });
   }
+  const externalContentCommitments = {
+    sourceEvidenceHash: hash("private-source-evidence"),
+    suggestionCommitment: hash("private-suggestion-evidence"),
+  } as const;
   const prepared = await preparePrivateReviewFoundation({
     principal: integrated.principal,
+    ...(commitmentMode === "external" ? { externalContentCommitments } : {}),
     request: {
       idempotencyKey: "private-unpaid-foundation-0001",
       integrationId: approved.integration.integrationId,
@@ -300,6 +307,15 @@ async function fixture(
           WHERE r.private_review_id=?`,
     args: [prepared.privateReviewId],
   });
+  assert.notEqual(artifacts.rows[0]?.source_digest, externalContentCommitments.sourceEvidenceHash);
+  assert.notEqual(artifacts.rows[0]?.suggestion_digest, externalContentCommitments.suggestionCommitment);
+  const opportunityCommitments =
+    commitmentMode === "external"
+      ? externalContentCommitments
+      : {
+          sourceEvidenceHash: String(artifacts.rows[0]?.source_digest),
+          suggestionCommitment: String(artifacts.rows[0]?.suggestion_digest),
+        };
   const scopeId = "aesc_private_unpaid_adapter";
   await dbClient.execute({
     sql: `INSERT INTO tokenless_agent_evaluation_scopes
@@ -346,10 +362,10 @@ async function fixture(
       approved.agent.versionId,
       scopeId,
       approved.integration.reviewPolicyId,
-      String(artifacts.rows[0]?.suggestion_digest),
+      opportunityCommitments.suggestionCommitment,
       hash("private-metadata"),
       hash("private-sampler"),
-      String(artifacts.rows[0]?.source_digest),
+      opportunityCommitments.sourceEvidenceHash,
       bindingId,
       profile.profileId,
       profile.profileHash,
@@ -372,6 +388,7 @@ async function fixture(
     projectId: project.projectId,
     cohortId,
     groupId: group.groupId,
+    externalContentCommitments: opportunityCommitments,
     expertiseDefinition,
   };
 }
@@ -436,6 +453,78 @@ test("reserves exact named private members idempotently without public or paid s
   assert.equal(new Date(String(snapshots.rows[0]?.cutoff)).toISOString(), now.toISOString());
   assert.equal(new Date(String(snapshots.rows[0]?.reservation_deadline)).toISOString(), "2026-07-16T09:35:00.000Z");
   assert.equal(new Date(String(snapshots.rows[0]?.response_deadline)).toISOString(), first.responseDeadline);
+});
+
+test("external evidence and vault artifact commitments fail closed independently", async () => {
+  const setup = await fixture();
+  const now = new Date("2026-07-16T09:20:00.000Z");
+  const assign = () =>
+    requestPrivateUnpaidHumanReview({
+      principal: setup.principal,
+      opportunityId: setup.opportunityId,
+      privateReviewId: setup.prepared.privateReviewId,
+      reviewerAccountAddresses: [REVIEWER_A, REVIEWER_B],
+      now,
+    });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_private_review_requests SET external_suggestion_commitment=NULL
+          WHERE private_review_id=?`,
+    args: [setup.prepared.privateReviewId],
+  });
+  await assert.rejects(
+    assign,
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "private_unpaid_review_binding_conflict",
+  );
+  await dbClient.execute({
+    sql: `UPDATE tokenless_private_review_requests SET external_suggestion_commitment=?
+          WHERE private_review_id=?`,
+    args: [setup.externalContentCommitments.suggestionCommitment, setup.prepared.privateReviewId],
+  });
+  await dbClient.execute({
+    sql: "UPDATE tokenless_agent_review_opportunities SET source_evidence_hash=? WHERE opportunity_id=?",
+    args: [hash("different-external-source"), setup.opportunityId],
+  });
+  await assert.rejects(
+    assign,
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "private_unpaid_review_binding_conflict",
+  );
+  await dbClient.execute({
+    sql: "UPDATE tokenless_agent_review_opportunities SET source_evidence_hash=? WHERE opportunity_id=?",
+    args: [setup.externalContentCommitments.sourceEvidenceHash, setup.opportunityId],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_assurance_artifacts SET digest=?
+          WHERE artifact_id=(SELECT source_artifact_id FROM tokenless_private_review_requests WHERE private_review_id=?)`,
+    args: [hash("different-vault-source"), setup.prepared.privateReviewId],
+  });
+  await assert.rejects(
+    assign,
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "private_unpaid_review_binding_conflict",
+  );
+});
+
+test("pre-0116 foundations retain their exact artifact-equals-opportunity assignment path", async () => {
+  const setup = await fixture([], null, "legacy");
+  const stored = await dbClient.execute({
+    sql: `SELECT external_source_evidence_hash,external_suggestion_commitment
+          FROM tokenless_private_review_requests WHERE private_review_id=?`,
+    args: [setup.prepared.privateReviewId],
+  });
+  assert.deepEqual(stored.rows[0], {
+    external_source_evidence_hash: null,
+    external_suggestion_commitment: null,
+  });
+  const assigned = await requestPrivateUnpaidHumanReview({
+    principal: setup.principal,
+    opportunityId: setup.opportunityId,
+    privateReviewId: setup.prepared.privateReviewId,
+    reviewerAccountAddresses: [REVIEWER_A, REVIEWER_B],
+    now: new Date("2026-07-16T09:20:00.000Z"),
+  });
+  assert.equal(assigned.assignments.length, 2);
 });
 
 test("profile expertise requirements fail closed through private assignment until every named seat qualifies", async () => {
