@@ -3,17 +3,26 @@ import {
   __chainPaymentTestUtils,
   attachX402Authorization,
   confirmWalletChainPayment,
+  executeServerChainPayment,
   getChainPaymentInstructions,
   prepareChainPayment,
   reconcileChainPayment,
 } from "./payments";
 import { type TokenlessChainRuntime, assertLiveTokenlessDeployment } from "./runtime";
-import { TokenlessPanelAbi } from "@rateloop/contracts/tokenless";
+import { TokenlessPanelAbi, X402PanelSubmitterAbi } from "@rateloop/contracts/tokenless";
 import { HUMAN_ASSURANCE_SCHEMA_VERSION } from "@rateloop/sdk";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
-import { type Address, type Hash, type Hex, encodeAbiParameters, encodeEventTopics, getAddress } from "viem";
+import {
+  type Address,
+  type Hash,
+  type Hex,
+  encodeAbiParameters,
+  encodeEventTopics,
+  encodeFunctionData,
+  getAddress,
+} from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
@@ -64,6 +73,7 @@ function config(overrides: Partial<TokenlessChainConfig> = {}): TokenlessChainCo
 function mockRuntime(
   overrides: Record<string, unknown> = {},
   expectedRound?: Awaited<ReturnType<typeof prepareChainPayment>>,
+  authorizationUsed = false,
 ): TokenlessChainRuntime {
   const publicClient = {
     getChainId: async () => 84_532,
@@ -80,6 +90,7 @@ function mockRuntime(
       if (address === FEEDBACK_BONUS && functionName === "usdc") return USDC;
       if (address === FEEDBACK_BONUS && functionName === "credentialIssuer") return ISSUER;
       if (address === USDC && functionName === "balanceOf") return 1_000_000_000n;
+      if (address === USDC && functionName === "authorizationState") return authorizationUsed;
       if (address === PANEL && functionName === "getRound" && expectedRound) {
         const terms = __chainPaymentTestUtils.toOnchainTerms(expectedRound.roundTerms);
         return {
@@ -629,7 +640,7 @@ test("round reconciliation reads back and rejects altered non-event terms", asyn
   );
 });
 
-test("x402 authorization attaches after exact terms without breaking ask idempotency", async () => {
+test("x402 used authorizations reconcile exact receipts or stop as possibly paid without retry", async () => {
   const { workspaceId } = await createWorkspace({ name: "x402 team", ownerAddress: FUNDER });
   const now = new Date();
   await dbClient.execute({
@@ -673,17 +684,143 @@ test("x402 authorization attaches after exact terms without breaking ask idempot
     (await reconcileChainPayment(ask.operationKey, { config: config(), runtime }))?.paymentState,
     "awaiting_authorization",
   );
-  await attachX402Authorization(ask.operationKey, {
-    validAfter: String(Math.floor(Date.now() / 1_000) - 30),
-    validBefore: String(Math.floor(Date.now() / 1_000) + 600),
-    nonce: `0x${"44".repeat(32)}`,
+  assert.ok(prepared.authorizationSpec);
+  const authorization = {
+    validAfter: prepared.authorizationSpec.validAfter,
+    validBefore: prepared.authorizationSpec.validBefore,
+    nonce: prepared.authorizationSpec.nonce,
     v: 27,
     r: `0x${"55".repeat(32)}`,
     s: `0x${"66".repeat(32)}`,
     roundAuthorizationSignature: `0x${"77".repeat(65)}`,
-  });
+  } as const;
+  await assert.rejects(
+    () => attachX402Authorization(ask.operationKey, { ...authorization, nonce: `0x${"44".repeat(32)}` }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "payment_conflict",
+  );
+  await attachX402Authorization(ask.operationKey, authorization);
   assert.equal((await getChainPaymentInstructions(ask.operationKey)).paymentState, "prepared");
   const replay = await prepareProductAsk({ principal, request });
   assert.equal(replay.paymentReference, product.paymentReference);
   assert.equal(replay.createdPayment, false);
+
+  const transactionHash = `0x${"99".repeat(32)}` as Hash;
+  const adapterInput = encodeFunctionData({
+    abi: X402PanelSubmitterAbi,
+    functionName: "createRoundWithAuthorization",
+    args: [
+      prepared.funderAddress,
+      __chainPaymentTestUtils.toOnchainTerms(prepared.roundTerms),
+      {
+        validAfter: BigInt(authorization.validAfter),
+        validBefore: BigInt(authorization.validBefore),
+        nonce: authorization.nonce,
+        v: authorization.v,
+        r: authorization.r,
+        s: authorization.s,
+      },
+      authorization.roundAuthorizationSignature,
+    ],
+  });
+  const reconciledRuntime = mockRuntime(
+    {
+      getLogs: async ({ address }: { address: Address }) => (address === USDC ? [] : [{ transactionHash }]),
+      getTransaction: async () => ({ input: adapterInput, to: ADAPTER }),
+      getTransactionReceipt: async () => ({
+        blockHash: BLOCK_HASH,
+        blockNumber: 200n,
+        logs: [roundCreatedLog(prepared)],
+        status: "success" as const,
+      }),
+    },
+    prepared,
+    true,
+  );
+  const usage = await __chainPaymentTestUtils.inspectX402AuthorizationUsage({
+    authorization: __chainPaymentTestUtils.persistedX402Authorization(authorization, prepared),
+    config: config(),
+    expected: prepared,
+    runtime: reconciledRuntime,
+  });
+  assert.deepEqual(usage, {
+    status: "reconciled",
+    transactionHash,
+    roundId: 7n,
+    blockNumber: 200n,
+    blockHash: BLOCK_HASH,
+  });
+
+  const wrongNonceInput = encodeFunctionData({
+    abi: X402PanelSubmitterAbi,
+    functionName: "createRoundWithAuthorization",
+    args: [
+      prepared.funderAddress,
+      __chainPaymentTestUtils.toOnchainTerms(prepared.roundTerms),
+      {
+        validAfter: BigInt(authorization.validAfter),
+        validBefore: BigInt(authorization.validBefore),
+        nonce: `0x${"44".repeat(32)}`,
+        v: authorization.v,
+        r: authorization.r,
+        s: authorization.s,
+      },
+      authorization.roundAuthorizationSignature,
+    ],
+  });
+  const unresolvedRuntime = mockRuntime(
+    {
+      getLogs: async ({ address }: { address: Address }) => (address === USDC ? [] : [{ transactionHash }]),
+      getTransaction: async () => ({ input: wrongNonceInput, to: ADAPTER }),
+      getTransactionReceipt: async () => ({
+        blockHash: BLOCK_HASH,
+        blockNumber: 200n,
+        logs: [roundCreatedLog(prepared)],
+        status: "success" as const,
+      }),
+    },
+    prepared,
+    true,
+  );
+  await assert.rejects(
+    () => executeServerChainPayment(ask.operationKey, { config: config(), runtime: unresolvedRuntime }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError &&
+      error.code === "x402_authorization_used_reconciliation_required" &&
+      error.retryable === false,
+  );
+  const stopped = await dbClient.execute({
+    sql: `SELECT e.state, e.failure_code, e.claim_owner, e.claim_fencing_token,
+                 p.state AS intent_state, o.payment_state
+          FROM tokenless_chain_executions e
+          JOIN tokenless_payment_intents p ON p.payment_intent_id = e.payment_reference
+          JOIN tokenless_ask_ownership o ON o.operation_key = e.operation_key
+          WHERE e.operation_key = ?`,
+    args: [ask.operationKey],
+  });
+  assert.deepEqual(stopped.rows[0], {
+    state: "authorization_reconciliation_required",
+    failure_code: "x402_authorization_used_reconciliation_required",
+    claim_owner: null,
+    claim_fencing_token: 1,
+    intent_state: "possibly_paid",
+    payment_state: "possibly_paid",
+  });
+  await assert.rejects(
+    () => executeServerChainPayment(ask.operationKey, { config: config(), runtime: unresolvedRuntime }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "x402_authorization_used_reconciliation_required",
+  );
+  await assert.rejects(
+    () => attachX402Authorization(ask.operationKey, authorization),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "x402_authorization_used_reconciliation_required",
+  );
+  const stillStopped = await dbClient.execute({
+    sql: "SELECT state, claim_fencing_token FROM tokenless_chain_executions WHERE operation_key = ?",
+    args: [ask.operationKey],
+  });
+  assert.deepEqual(stillStopped.rows[0], {
+    state: "authorization_reconciliation_required",
+    claim_fencing_token: 1,
+  });
 });

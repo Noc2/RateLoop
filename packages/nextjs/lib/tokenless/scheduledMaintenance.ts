@@ -52,6 +52,7 @@ const NON_COUNTING_DEFER_CODES = new Set([
   "deletion_blocked_by_hold",
   "deletion_not_due",
 ]);
+const IMMEDIATE_DEAD_LETTER_CODES = new Set(["x402_authorization_used_reconciliation_required"]);
 
 function rowString(row: Row | undefined, key: string) {
   const value = row?.[key];
@@ -321,7 +322,8 @@ async function processClaimedWork(input: {
     } catch (error) {
       const deferred = error instanceof TokenlessServiceError && NON_COUNTING_DEFER_CODES.has(error.code);
       const recordedAttempt = deferred ? Number(row.attempt_count) : attempt;
-      const dead = !deferred && recordedAttempt >= MAX_ATTEMPTS;
+      const immediatelyDead = error instanceof TokenlessServiceError && IMMEDIATE_DEAD_LETTER_CODES.has(error.code);
+      const dead = !deferred && (immediatelyDead || recordedAttempt >= MAX_ATTEMPTS);
       const message = error instanceof Error ? error.message.slice(0, 500) : "Scheduled work failed";
       const failed = await dbClient.execute({
         sql: `UPDATE tokenless_scheduled_work_items

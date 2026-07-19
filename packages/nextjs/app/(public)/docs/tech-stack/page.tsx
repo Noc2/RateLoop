@@ -33,7 +33,9 @@ export default function TokenlessTechStackPage() {
       <p>
         The agent-funded lane uses an x402-style payment authorization: the agent wallet signs short-lived EIP-3009 USDC
         terms, then <code>X402PanelSubmitter</code> consumes that authorization and funds the selected panel on Base.
-        The private key stays with the agent. A prepaid workspace balance provides the wallet-free lane.
+        The private key stays with the agent. If the nonce is already used, RateLoop accepts only an exact matching
+        round receipt; otherwise the payment is marked possibly paid and no replacement authorization is retried. A
+        prepaid workspace balance provides the wallet-free lane.
       </p>
 
       <h2 id="proof-of-human">Proof of Human</h2>

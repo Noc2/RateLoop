@@ -388,6 +388,41 @@ test("persistent chain recovery failures become dead-letter health evidence", as
   assert.equal(later.summary.deadWorkItems, 1);
 });
 
+test("a used x402 authorization dead-letters immediately instead of retrying a possibly paid operation", async () => {
+  await seedRecoverableExecution("operation_x402_possibly_paid", {
+    claimExpiresAt: new Date(NOW.getTime() - 1),
+    state: "signed",
+  });
+  await seedTokenlessScheduledWork(NOW);
+  const result = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    processors: {
+      ...processors(async () => undefined),
+      async recoverChainExecution() {
+        throw new TokenlessServiceError(
+          "Authorization used; exact receipt reconciliation is required.",
+          409,
+          "x402_authorization_used_reconciliation_required",
+        );
+      },
+    },
+  });
+  if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.equal(result.status, "degraded");
+  assert.deepEqual(result.summary.work, { completed: 0, dead: 1, deferred: 0, retry: 0 });
+  const item = await dbClient.execute({
+    sql: `SELECT state, attempt_count, last_error
+          FROM tokenless_scheduled_work_items
+          WHERE kind = 'recover_chain_execution' AND subject_key = 'operation_x402_possibly_paid'`,
+  });
+  assert.deepEqual(item.rows[0], {
+    state: "dead",
+    attempt_count: 1,
+    last_error: "Authorization used; exact receipt reconciliation is required.",
+  });
+});
+
 test("a reclaimed scheduled recovery claim fences the stale worker's completion", async () => {
   await seedRecoverableExecution("operation_recovery_fenced", {
     claimExpiresAt: new Date(NOW.getTime() - 1),

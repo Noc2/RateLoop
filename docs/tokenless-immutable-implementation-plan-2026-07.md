@@ -134,6 +134,11 @@ automation. A self-funded agent may use short-lived x402/EIP-3009 USDC authoriza
 the gas-only relayer never receives the spend key. The public MCP remains a separate, approval-bound browser handoff and
 cannot silently turn draft content into a funded ask.
 
+An EIP-3009 nonce observed as used is never treated as permission to request, sign, or relay a replacement payment.
+The server first reconciles the standard `AuthorizationUsed` event and exact matching `RoundCreated` receipt, including
+a complete round-state read. If that proof is unavailable, the operation becomes `possibly_paid`, chain mutation stops,
+and the recovery item is dead-lettered for manual reconciliation rather than retried.
+
 ## Execution provenance and evaluation
 
 A connection identity such as Codex identifies the client or host. It is not the identity of every model the host may

@@ -5,7 +5,7 @@ import {
   assertLiveTokenlessDeployment,
   getTokenlessChainRuntime,
 } from "./runtime";
-import { TokenlessPanelAbi, X402PanelSubmitterAbi } from "@rateloop/contracts/tokenless";
+import { TokenlessPanelAbi, TokenlessTestUSDCAbi, X402PanelSubmitterAbi } from "@rateloop/contracts/tokenless";
 import {
   TOKENLESS_PAYMENT_AUTHORIZATION_SCHEMA_VERSION,
   type TokenlessPaymentInstructions,
@@ -20,10 +20,12 @@ import {
   type Hex,
   type TransactionSerializable,
   decodeEventLog,
+  decodeFunctionData,
   encodeFunctionData,
   getAddress,
   isHash,
   keccak256,
+  parseAbiItem,
   parseTransaction,
   recoverTransactionAddress,
 } from "viem";
@@ -64,8 +66,28 @@ const ERC20_BALANCE_ABI = [
     outputs: [{ name: "", type: "uint256" }],
   },
 ] as const;
+const AUTHORIZATION_USED_EVENT = parseAbiItem(
+  "event AuthorizationUsed(address indexed authorizer, bytes32 indexed nonce)",
+);
+const ROUND_CREATED_EVENT = parseAbiItem(
+  "event RoundCreated(uint256 indexed roundId, address indexed funder, bytes32 indexed contentId, bytes32 termsHash, bytes32 admissionPolicyHash, uint256 bountyAmount, uint256 feeAmount, uint256 attemptReserve, uint256 fixedBasePay, uint256 maximumBonus, uint8 scoringVersion)",
+);
+const X402_AUTHORIZATION_RECONCILIATION_STATE = "authorization_reconciliation_required";
+const X402_AUTHORIZATION_RECONCILIATION_CODE = "x402_authorization_used_reconciliation_required";
+const BYTES32_PATTERN = /^0x[0-9a-fA-F]{64}$/u;
+const SIGNATURE_PATTERN = /^0x[0-9a-fA-F]{130}$/u;
 
 type QueryRow = Record<string, unknown>;
+
+type PersistedX402Authorization = {
+  nonce: Hex;
+  r: Hex;
+  roundAuthorizationSignature: Hex;
+  s: Hex;
+  v: 27 | 28;
+  validAfter: bigint;
+  validBefore: bigint;
+};
 
 export type PersistedRoundTerms = {
   contentId: Hex;
@@ -118,6 +140,52 @@ function stableJson(value: unknown): string {
       .join(",")}}`;
   }
   return JSON.stringify(value);
+}
+
+function x402ReconciliationError() {
+  return new TokenlessServiceError(
+    "The EIP-3009 authorization is already used and the exact round receipt has not been reconciled. It may already be paid; do not sign or submit a replacement authorization.",
+    409,
+    X402_AUTHORIZATION_RECONCILIATION_CODE,
+  );
+}
+
+function persistedX402Authorization(value: unknown, expected: ChainPaymentInstructions): PersistedX402Authorization {
+  if (!value || typeof value !== "object" || Array.isArray(value) || !expected.authorizationSpec) {
+    throw new TokenlessServiceError("x402 authorization is missing.", 409, "invalid_payment");
+  }
+  const authorization = value as Record<string, unknown>;
+  const validAfter = String(authorization.validAfter ?? "");
+  const validBefore = String(authorization.validBefore ?? "");
+  const nonce = String(authorization.nonce ?? "");
+  const r = String(authorization.r ?? "");
+  const s = String(authorization.s ?? "");
+  const roundAuthorizationSignature = String(authorization.roundAuthorizationSignature ?? "");
+  if (
+    validAfter !== expected.authorizationSpec.validAfter ||
+    validBefore !== expected.authorizationSpec.validBefore ||
+    nonce.toLowerCase() !== expected.authorizationSpec.nonce.toLowerCase() ||
+    !BYTES32_PATTERN.test(nonce) ||
+    !BYTES32_PATTERN.test(r) ||
+    !BYTES32_PATTERN.test(s) ||
+    !SIGNATURE_PATTERN.test(roundAuthorizationSignature) ||
+    (authorization.v !== 27 && authorization.v !== 28)
+  ) {
+    throw new TokenlessServiceError(
+      "The x402 authorization does not match the nonce and validity window issued for this operation.",
+      409,
+      "payment_conflict",
+    );
+  }
+  return {
+    validAfter: BigInt(validAfter),
+    validBefore: BigInt(validBefore),
+    nonce: nonce as Hex,
+    v: authorization.v,
+    r: r as Hex,
+    s: s as Hex,
+    roundAuthorizationSignature: roundAuthorizationSignature as Hex,
+  };
 }
 
 function bytes32(value: string | null, name: string): Hex {
@@ -556,6 +624,118 @@ async function assertCompleteRoundMatches(input: {
   }
 }
 
+type X402AuthorizationUsage =
+  | { status: "unused" }
+  | {
+      status: "reconciled";
+      blockHash: Hash;
+      blockNumber: bigint;
+      roundId: bigint;
+      transactionHash: Hash;
+    }
+  | { status: "used_unresolved" };
+
+async function inspectX402AuthorizationUsage(input: {
+  authorization: PersistedX402Authorization;
+  config: TokenlessChainConfig;
+  expected: ChainPaymentInstructions;
+  preferredTransactionHash?: Hash | null;
+  runtime: TokenlessChainRuntime;
+}): Promise<X402AuthorizationUsage> {
+  const used = await input.runtime.publicClient.readContract({
+    abi: TokenlessTestUSDCAbi,
+    address: input.expected.usdcAddress,
+    functionName: "authorizationState",
+    args: [input.expected.funderAddress, input.authorization.nonce],
+  });
+  if (!used) return { status: "unused" };
+
+  const candidateHashes = new Map<Hash, { authorizationEvent: boolean }>();
+  if (input.preferredTransactionHash && isHash(input.preferredTransactionHash)) {
+    candidateHashes.set(input.preferredTransactionHash, { authorizationEvent: false });
+  }
+  try {
+    const authorizationLogs = await input.runtime.publicClient.getLogs({
+      address: input.expected.usdcAddress,
+      event: AUTHORIZATION_USED_EVENT,
+      args: {
+        authorizer: input.expected.funderAddress,
+        nonce: input.authorization.nonce,
+      },
+      fromBlock: input.config.deploymentBlock,
+      toBlock: "latest",
+    });
+    for (const log of authorizationLogs) {
+      if (log.transactionHash && isHash(log.transactionHash)) {
+        candidateHashes.set(log.transactionHash, { authorizationEvent: true });
+      }
+    }
+  } catch {
+    // `authorizationState` is authoritative. Some test tokens omit the standard
+    // event, and an RPC log query may be temporarily unavailable, so continue
+    // with exact adapter/panel receipt discovery before failing safe.
+  }
+  try {
+    const roundLogs = await input.runtime.publicClient.getLogs({
+      address: input.expected.panelAddress,
+      event: ROUND_CREATED_EVENT,
+      args: {
+        funder: input.expected.funderAddress,
+        contentId: input.expected.roundTerms.contentId,
+      },
+      fromBlock: input.config.deploymentBlock,
+      toBlock: "latest",
+    });
+    for (const log of roundLogs.slice(0, 32)) {
+      if (log.transactionHash && isHash(log.transactionHash) && !candidateHashes.has(log.transactionHash)) {
+        candidateHashes.set(log.transactionHash, { authorizationEvent: false });
+      }
+    }
+  } catch {
+    // A missing secondary log search must never turn a used nonce back into a
+    // retryable authorization. Unresolved usage is persisted below.
+  }
+
+  for (const [transactionHash, evidence] of candidateHashes) {
+    try {
+      const receipt = await input.runtime.publicClient.getTransactionReceipt({ hash: transactionHash });
+      if (receipt.status !== "success" || receipt.blockNumber < input.config.deploymentBlock) continue;
+      if (!evidence.authorizationEvent) {
+        const transaction = await input.runtime.publicClient.getTransaction({ hash: transactionHash });
+        if (transaction.to?.toLowerCase() !== input.expected.x402SubmitterAddress.toLowerCase()) continue;
+        const decoded = decodeFunctionData({ abi: X402PanelSubmitterAbi, data: transaction.input });
+        if (decoded.functionName !== "createRoundWithAuthorization") continue;
+        const [funder, , authorization, roundAuthorizationSignature] = decoded.args;
+        if (
+          getAddress(funder) !== getAddress(input.expected.funderAddress) ||
+          authorization.validAfter !== input.authorization.validAfter ||
+          authorization.validBefore !== input.authorization.validBefore ||
+          authorization.nonce.toLowerCase() !== input.authorization.nonce.toLowerCase() ||
+          authorization.v !== input.authorization.v ||
+          authorization.r.toLowerCase() !== input.authorization.r.toLowerCase() ||
+          authorization.s.toLowerCase() !== input.authorization.s.toLowerCase() ||
+          roundAuthorizationSignature.toLowerCase() !== input.authorization.roundAuthorizationSignature.toLowerCase()
+        ) {
+          continue;
+        }
+      }
+      const match = exactRoundCreated({ logs: receipt.logs, expected: input.expected });
+      await assertCompleteRoundMatches({ expected: input.expected, roundId: match.roundId, runtime: input.runtime });
+      return {
+        status: "reconciled",
+        transactionHash,
+        roundId: match.roundId,
+        blockNumber: receipt.blockNumber,
+        blockHash: receipt.blockHash,
+      };
+    } catch {
+      // Only one exact successful RoundCreated receipt plus a complete on-chain
+      // round read can settle the operation. Ignore unrelated candidate logs.
+    }
+  }
+  return { status: "used_unresolved" };
+}
+
 async function persistConfirmation(input: {
   expected: ChainPaymentInstructions;
   transactionHash: Hash;
@@ -602,6 +782,10 @@ async function persistConfirmation(input: {
     await client.query(
       `UPDATE tokenless_chain_executions
        SET state = 'confirmed', submission_transaction_hash = $1, round_id = $2,
+           submission_signed_transaction = CASE
+             WHEN LOWER(submission_transaction_hash) = LOWER($1) THEN submission_signed_transaction
+             ELSE NULL
+           END,
            receipt_block_number = $3, receipt_block_hash = $4, failure_code = NULL,
            claim_owner = NULL, claim_expires_at = NULL,
            confirmed_at = $5, updated_at = $5
@@ -725,6 +909,91 @@ async function persistConfirmation(input: {
   } finally {
     client.release();
   }
+}
+
+async function persistX402AuthorizationReconciliationRequired(input: {
+  expected: ChainPaymentInstructions;
+  fencingToken: number;
+}) {
+  const client = await dbPool.connect();
+  const now = new Date();
+  try {
+    await client.query("BEGIN");
+    const locked = await client.query(
+      `SELECT state, payment_reference, claim_fencing_token
+       FROM tokenless_chain_executions WHERE operation_key = $1 FOR UPDATE`,
+      [input.expected.operationKey],
+    );
+    const row = locked.rows[0] as QueryRow | undefined;
+    if (!row) throw new TokenlessServiceError("Chain execution not found.", 404, "chain_execution_not_found");
+    if (rowString(row, "state") === "confirmed") {
+      await client.query("COMMIT");
+      return;
+    }
+    if (Number(row.claim_fencing_token ?? 0) !== input.fencingToken) {
+      throw new TokenlessServiceError(
+        "The chain execution claim was superseded before authorization reconciliation.",
+        409,
+        "execution_claim_superseded",
+        true,
+      );
+    }
+    await client.query(
+      `UPDATE tokenless_chain_executions
+       SET state = $1, failure_code = $2, claim_owner = NULL, claim_token = NULL,
+           claim_expires_at = NULL, updated_at = $3
+       WHERE operation_key = $4 AND claim_fencing_token = $5`,
+      [
+        X402_AUTHORIZATION_RECONCILIATION_STATE,
+        X402_AUTHORIZATION_RECONCILIATION_CODE,
+        now,
+        input.expected.operationKey,
+        input.fencingToken,
+      ],
+    );
+    await client.query(
+      "UPDATE tokenless_payment_intents SET state = 'possibly_paid', updated_at = $1 WHERE payment_intent_id = $2",
+      [now, rowString(row, "payment_reference")],
+    );
+    await client.query(
+      "UPDATE tokenless_ask_ownership SET payment_state = 'possibly_paid', updated_at = $1 WHERE operation_key = $2",
+      [now, input.expected.operationKey],
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function reconcileUsedX402Authorization(input: {
+  authorization: PersistedX402Authorization;
+  config: TokenlessChainConfig;
+  expected: ChainPaymentInstructions;
+  fencingToken: number;
+  preferredTransactionHash?: Hash | null;
+  runtime: TokenlessChainRuntime;
+}) {
+  const usage = await inspectX402AuthorizationUsage(input);
+  if (usage.status === "unused") return null;
+  if (usage.status === "reconciled") {
+    await persistConfirmation({
+      expected: input.expected,
+      transactionHash: usage.transactionHash,
+      roundId: usage.roundId,
+      blockNumber: usage.blockNumber,
+      blockHash: usage.blockHash,
+      fencingToken: input.fencingToken,
+    });
+    return { ...(await getChainPaymentInstructions(input.expected.operationKey)), paymentState: "confirmed" };
+  }
+  await persistX402AuthorizationReconciliationRequired({
+    expected: input.expected,
+    fencingToken: input.fencingToken,
+  });
+  throw x402ReconciliationError();
 }
 
 export async function confirmWalletChainPayment(
@@ -1108,6 +1377,14 @@ async function claimChainExecution(
   }
 }
 
+async function x402AuthorizationForOperation(expected: ChainPaymentInstructions) {
+  const source = await operationSource(expected.operationKey);
+  const payload = JSON.parse(rowString(source, "payload_json") ?? "null") as {
+    authorization?: unknown;
+  } | null;
+  return persistedX402Authorization(payload?.authorization, expected);
+}
+
 export async function executeServerChainPayment(
   operationKey: string,
   options: { config?: TokenlessChainConfig; runtime?: TokenlessChainRuntime } = {},
@@ -1116,6 +1393,13 @@ export async function executeServerChainPayment(
   const runtime = options.runtime ?? getTokenlessChainRuntime(config);
   const expected = await prepareChainPayment(operationKey, { config, runtime });
   if (expected.paymentMode === "wallet") return expected;
+  if (expected.paymentMode === "x402" && expected.paymentState === X402_AUTHORIZATION_RECONCILIATION_STATE) {
+    throw x402ReconciliationError();
+  }
+  if (expected.paymentMode === "x402" && expected.paymentState === "awaiting_authorization") {
+    throw new TokenlessServiceError("x402 authorization is missing.", 409, "invalid_payment");
+  }
+  const x402Authorization = expected.paymentMode === "x402" ? await x402AuthorizationForOperation(expected) : null;
 
   // Take the exclusive claim before reading any nonce or broadcasting. A second
   // concurrent request cannot claim and must not broadcast: it either observes
@@ -1237,6 +1521,15 @@ export async function executeServerChainPayment(
       });
     }
   } else {
+    const reconciledBeforeMutation = await reconcileUsedX402Authorization({
+      authorization: x402Authorization!,
+      config,
+      expected,
+      fencingToken,
+      preferredTransactionHash: submissionHash,
+      runtime,
+    });
+    if (reconciledBeforeMutation) return reconciledBeforeMutation;
     if (!runtime.relayerAccount || !runtime.relayerWallet) {
       throw new TokenlessServiceError(
         "The x402 gas-only relayer is unavailable.",
@@ -1247,29 +1540,35 @@ export async function executeServerChainPayment(
     }
     const submissionSigned = rowString(row, "submission_signed_transaction") as Hex | null;
     if (!submissionHash || submissionSigned) {
-      const source = await operationSource(operationKey);
-      const payload = JSON.parse(rowString(source, "payload_json") ?? "null") as {
-        authorization?: Record<string, unknown>;
-      } | null;
-      const authorization = payload?.authorization;
-      if (!authorization) throw new TokenlessServiceError("x402 authorization is missing.", 409, "invalid_payment");
-      const roundAuthorizationSignature = String(authorization.roundAuthorizationSignature ?? "") as Hex;
       const adapterAuthorization = {
-        validAfter: BigInt(String(authorization.validAfter)),
-        validBefore: BigInt(String(authorization.validBefore)),
-        nonce: String(authorization.nonce) as Hex,
-        v: Number(authorization.v),
-        r: String(authorization.r) as Hex,
-        s: String(authorization.s) as Hex,
+        validAfter: x402Authorization!.validAfter,
+        validBefore: x402Authorization!.validBefore,
+        nonce: x402Authorization!.nonce,
+        v: x402Authorization!.v,
+        r: x402Authorization!.r,
+        s: x402Authorization!.s,
       };
       if (!submissionHash) {
-        await runtime.publicClient.simulateContract({
-          account: runtime.relayerAccount,
-          abi: X402PanelSubmitterAbi,
-          address: config.x402SubmitterAddress,
-          functionName: "createRoundWithAuthorization",
-          args: [expected.funderAddress, terms, adapterAuthorization, roundAuthorizationSignature],
-        });
+        try {
+          await runtime.publicClient.simulateContract({
+            account: runtime.relayerAccount,
+            abi: X402PanelSubmitterAbi,
+            address: config.x402SubmitterAddress,
+            functionName: "createRoundWithAuthorization",
+            args: [expected.funderAddress, terms, adapterAuthorization, x402Authorization!.roundAuthorizationSignature],
+          });
+        } catch (error) {
+          const reconciledAfterSimulation = await reconcileUsedX402Authorization({
+            authorization: x402Authorization!,
+            config,
+            expected,
+            fencingToken,
+            preferredTransactionHash: submissionHash,
+            runtime,
+          });
+          if (reconciledAfterSimulation) return reconciledAfterSimulation;
+          throw error;
+        }
       }
       const nonce = await allocateNonce({
         executionId,
@@ -1288,13 +1587,26 @@ export async function executeServerChainPayment(
         data: encodeFunctionData({
           abi: X402PanelSubmitterAbi,
           functionName: "createRoundWithAuthorization",
-          args: [expected.funderAddress, terms, adapterAuthorization, roundAuthorizationSignature],
+          args: [expected.funderAddress, terms, adapterAuthorization, x402Authorization!.roundAuthorizationSignature],
         }),
         nonce,
         fencingToken,
       });
       submissionHash = transaction.hash;
-      await broadcastPersistedTransaction(runtime.relayerWallet, runtime.publicClient, transaction);
+      try {
+        await broadcastPersistedTransaction(runtime.relayerWallet, runtime.publicClient, transaction);
+      } catch (error) {
+        const reconciledAfterBroadcast = await reconcileUsedX402Authorization({
+          authorization: x402Authorization!,
+          config,
+          expected,
+          fencingToken,
+          preferredTransactionHash: transaction.hash,
+          runtime,
+        });
+        if (reconciledAfterBroadcast) return reconciledAfterBroadcast;
+        throw error;
+      }
       await markPersistedTransactionBroadcast({
         executionId,
         fencingToken,
@@ -1304,8 +1616,35 @@ export async function executeServerChainPayment(
     }
   }
 
-  const receipt = await runtime.publicClient.waitForTransactionReceipt({ hash: submissionHash });
+  let receipt: Awaited<ReturnType<TokenlessChainRuntime["publicClient"]["waitForTransactionReceipt"]>>;
+  try {
+    receipt = await runtime.publicClient.waitForTransactionReceipt({ hash: submissionHash });
+  } catch (error) {
+    if (x402Authorization) {
+      const reconciledAfterReceiptFailure = await reconcileUsedX402Authorization({
+        authorization: x402Authorization,
+        config,
+        expected,
+        fencingToken,
+        preferredTransactionHash: submissionHash,
+        runtime,
+      });
+      if (reconciledAfterReceiptFailure) return reconciledAfterReceiptFailure;
+    }
+    throw error;
+  }
   if (receipt.status !== "success" || receipt.blockNumber < config.deploymentBlock) {
+    if (x402Authorization) {
+      const reconciledAfterRevert = await reconcileUsedX402Authorization({
+        authorization: x402Authorization,
+        config,
+        expected,
+        fencingToken,
+        preferredTransactionHash: submissionHash,
+        runtime,
+      });
+      if (reconciledAfterRevert) return reconciledAfterRevert;
+    }
     throw new TokenlessServiceError("Round submission failed on-chain.", 502, "round_submission_failed", true);
   }
   const match = exactRoundCreated({ logs: receipt.logs, expected });
@@ -1332,41 +1671,67 @@ export async function attachX402Authorization(operationKey: string, value: unkno
     throw new TokenlessServiceError("authorization must be an object.", 400, "invalid_payment");
   }
   const normalized = normalizedX402Authorization(value as Record<string, unknown>);
-  const result = await dbClient.execute({
-    sql: `SELECT e.payment_mode, e.payment_reference, p.payload_json
-          FROM tokenless_chain_executions e
-          JOIN tokenless_payment_intents p ON p.payment_intent_id = e.payment_reference
-          WHERE e.operation_key = ? LIMIT 1`,
-    args: [operationKey],
-  });
-  const row = result.rows[0] as QueryRow | undefined;
-  if (!row || rowString(row, "payment_mode") !== "x402") {
-    throw new TokenlessServiceError("The operation is not an x402 payment.", 409, "payment_mode_mismatch");
-  }
-  const payload = JSON.parse(rowString(row, "payload_json") ?? "null") as Record<string, unknown> | null;
-  if (!payload) throw new TokenlessServiceError("x402 payment intent is missing.", 409, "invalid_payment");
-  if (payload.authorization && stableJson(payload.authorization) !== stableJson(normalized)) {
-    throw new TokenlessServiceError(
-      "The x402 authorization conflicts with the one already attached.",
-      409,
-      "payment_conflict",
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query(
+      `SELECT e.payment_mode, e.payment_reference, e.state, e.authorization_valid_after,
+              e.authorization_valid_before, e.authorization_nonce, p.payload_json
+       FROM tokenless_chain_executions e
+       JOIN tokenless_payment_intents p ON p.payment_intent_id = e.payment_reference
+       WHERE e.operation_key = $1 FOR UPDATE`,
+      [operationKey],
     );
+    const row = result.rows[0] as QueryRow | undefined;
+    if (!row || rowString(row, "payment_mode") !== "x402") {
+      throw new TokenlessServiceError("The operation is not an x402 payment.", 409, "payment_mode_mismatch");
+    }
+    if (rowString(row, "state") === X402_AUTHORIZATION_RECONCILIATION_STATE) {
+      throw x402ReconciliationError();
+    }
+    if (
+      normalized.validAfter !== rowString(row, "authorization_valid_after") ||
+      normalized.validBefore !== rowString(row, "authorization_valid_before") ||
+      normalized.nonce.toLowerCase() !== rowString(row, "authorization_nonce")?.toLowerCase()
+    ) {
+      throw new TokenlessServiceError(
+        "The x402 authorization does not match the nonce and validity window issued for this operation.",
+        409,
+        "payment_conflict",
+      );
+    }
+    const payload = JSON.parse(rowString(row, "payload_json") ?? "null") as Record<string, unknown> | null;
+    if (!payload) throw new TokenlessServiceError("x402 payment intent is missing.", 409, "invalid_payment");
+    if (payload.authorization && stableJson(payload.authorization) !== stableJson(normalized)) {
+      throw new TokenlessServiceError(
+        "The x402 authorization conflicts with the one already attached.",
+        409,
+        "payment_conflict",
+      );
+    }
+    const payloadJson = stableJson({ ...payload, authorization: normalized });
+    const now = new Date();
+    await client.query(
+      `UPDATE tokenless_payment_intents
+       SET payload_json = $1, state = 'pending_chain_execution', updated_at = $2
+       WHERE payment_intent_id = $3`,
+      [payloadJson, now, rowString(row, "payment_reference")],
+    );
+    await client.query(
+      "UPDATE tokenless_ask_ownership SET payment_state = 'pending_chain_execution', updated_at = $1 WHERE operation_key = $2",
+      [now, operationKey],
+    );
+    await client.query(
+      "UPDATE tokenless_chain_executions SET state = 'prepared', failure_code = NULL, updated_at = $1 WHERE operation_key = $2",
+      [now, operationKey],
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
-  const payloadJson = stableJson({ ...payload, authorization: normalized });
-  await dbClient.execute({
-    sql: `UPDATE tokenless_payment_intents
-          SET payload_json = ?, state = 'pending_chain_execution', updated_at = ?
-          WHERE payment_intent_id = ?`,
-    args: [payloadJson, new Date(), rowString(row, "payment_reference")],
-  });
-  await dbClient.execute({
-    sql: "UPDATE tokenless_ask_ownership SET payment_state = 'pending_chain_execution', updated_at = ? WHERE operation_key = ?",
-    args: [new Date(), operationKey],
-  });
-  await dbClient.execute({
-    sql: "UPDATE tokenless_chain_executions SET state = 'prepared', updated_at = ? WHERE operation_key = ?",
-    args: [new Date(), operationKey],
-  });
 }
 
 export async function reconcileChainPayment(
@@ -1386,5 +1751,7 @@ export const __chainPaymentTestUtils = {
   assertCompleteRoundMatches,
   buildRoundTerms,
   exactRoundCreated,
+  inspectX402AuthorizationUsage,
+  persistedX402Authorization,
   toOnchainTerms,
 };

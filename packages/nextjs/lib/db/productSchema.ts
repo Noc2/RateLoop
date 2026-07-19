@@ -8,6 +8,7 @@ export const TOKENLESS_PAYMENT_STATES = [
   "reserved",
   "pending_user_signature",
   "pending_chain_execution",
+  "possibly_paid",
   "submitted",
   "settled",
   "failed",
