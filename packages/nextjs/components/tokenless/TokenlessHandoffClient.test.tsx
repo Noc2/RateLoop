@@ -221,8 +221,10 @@ test("signed-out handoffs open a fragment-safe sign-in in a separate tab and ref
   assert.match(handoffSource, /Sign in in a new tab/);
   // The session is re-checked when the user returns to this tab after signing in elsewhere.
   assert.match(handoffSource, /const loadSession = useCallback/);
-  assert.match(handoffSource, /window\.addEventListener\("focus", refresh\)/);
-  assert.match(handoffSource, /document\.addEventListener\("visibilitychange", refresh\)/);
+  assert.match(handoffSource, /subscribeToBrowserAuthSessionChanges\(refresh\)/);
+  assert.match(handoffSource, /sessionControllerRef\.current\?\.abort\(\)/);
+  assert.match(handoffSource, /sessionPrincipalRef\.current !== sessionBody\.principalId/);
+  assert.match(handoffSource, /clearPrincipalState\(\)/);
   // The bearer capability must never be encoded into a query string / server-visible URL.
   assert.doesNotMatch(handoffSource, /sign-in\?[^"'`\n]*(payload|handoffToken|returnTo|hash)/i);
   assert.doesNotMatch(handoffSource, /[?&](returnTo|payload)=[^"'`\n]*(location\.hash|payload)/i);

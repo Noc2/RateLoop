@@ -67,11 +67,13 @@ export async function readBrowserAuthConfiguration() {
 }
 
 export async function exchangeBetterAuthSession() {
-  return jsonRequest<BrowserSessionResponse>("/api/auth/exchange", {
+  const session = await jsonRequest<BrowserSessionResponse>("/api/auth/exchange", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: "{}",
   });
+  notifyBrowserAuthSessionChanged();
+  return session;
 }
 
 export async function logoutBrowserSession() {
@@ -80,9 +82,12 @@ export async function logoutBrowserSession() {
     headers: { "Content-Type": "application/json" },
   });
   await betterAuthClient.signOut().catch(() => undefined);
+  notifyBrowserAuthSessionChanged();
 }
 
-export async function readBrowserSession(): Promise<BrowserSessionResponse | null> {
-  const response = await jsonRequest<BrowserSessionResponse | { authenticated: false }>("/api/auth/session");
+export async function readBrowserSession(signal?: AbortSignal): Promise<BrowserSessionResponse | null> {
+  const response = await jsonRequest<BrowserSessionResponse | { authenticated: false }>("/api/auth/session", {
+    signal,
+  });
   return response.authenticated ? response : null;
 }

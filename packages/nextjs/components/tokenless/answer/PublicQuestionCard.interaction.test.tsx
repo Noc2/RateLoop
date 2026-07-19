@@ -71,7 +71,14 @@ test("a public reviewer can choose a rating, prediction, and optional feedback",
   const { PublicQuestionCard } = await import("./PublicQuestionCard");
 
   try {
-    render(<PublicQuestionCard task={task} paidAccess={{ state: "ready" }} onSubmitted={() => undefined} />);
+    render(
+      <PublicQuestionCard
+        task={task}
+        paidAccess={{ state: "ready" }}
+        onSubmitted={() => undefined}
+        principalId="rlp_public_reviewer"
+      />,
+    );
     const screen = within(document.body);
     const prepare = screen.getByRole("button", { name: "Create recovery backup" }) as HTMLButtonElement;
     assert.equal(prepare.disabled, true);
@@ -119,7 +126,14 @@ test("voucher and commit APIs stay unreachable until the downloaded recovery bac
   };
 
   try {
-    render(<PublicQuestionCard task={submittableTask} paidAccess={{ state: "ready" }} onSubmitted={() => undefined} />);
+    render(
+      <PublicQuestionCard
+        task={submittableTask}
+        paidAccess={{ state: "ready" }}
+        onSubmitted={() => undefined}
+        principalId="rlp_public_reviewer"
+      />,
+    );
     const screen = within(document.body);
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Supported" }));
@@ -191,7 +205,14 @@ test("a reload before backup confirmation discards private preparation and safel
   };
 
   try {
-    render(<PublicQuestionCard task={task} paidAccess={{ state: "ready" }} onSubmitted={() => undefined} />);
+    render(
+      <PublicQuestionCard
+        task={task}
+        paidAccess={{ state: "ready" }}
+        onSubmitted={() => undefined}
+        principalId="rlp_public_reviewer"
+      />,
+    );
     const screen = within(document.body);
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Supported" }));
@@ -200,7 +221,14 @@ test("a reload before backup confirmation discards private preparation and safel
     await screen.findByRole("link", { name: "Download recovery backup" }, { timeout: 20_000 });
 
     cleanup();
-    render(<PublicQuestionCard task={task} paidAccess={{ state: "ready" }} onSubmitted={() => undefined} />);
+    render(
+      <PublicQuestionCard
+        task={task}
+        paidAccess={{ state: "ready" }}
+        onSubmitted={() => undefined}
+        principalId="rlp_public_reviewer"
+      />,
+    );
     await waitFor(() =>
       assert.equal(screen.getByRole<HTMLButtonElement>("button", { name: "Create recovery backup" }).disabled, false),
     );
@@ -229,7 +257,14 @@ test("backup confirmation fails closed when the browser principal changes", asyn
   };
 
   try {
-    render(<PublicQuestionCard task={task} paidAccess={{ state: "ready" }} onSubmitted={() => undefined} />);
+    render(
+      <PublicQuestionCard
+        task={task}
+        paidAccess={{ state: "ready" }}
+        onSubmitted={() => undefined}
+        principalId="rlp_public_reviewer"
+      />,
+    );
     const screen = within(document.body);
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Supported" }));

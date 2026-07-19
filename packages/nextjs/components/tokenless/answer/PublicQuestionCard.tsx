@@ -156,6 +156,7 @@ export function PublicQuestionCard({
   task: PublicAnswerTask;
   paidAccess: PaidTaskAccess;
   onSubmitted: () => void;
+  principalId: string;
 }) {
   const [answer, setAnswer] = useState<"yes" | "no" | null>(null);
   const [prediction, setPrediction] = useState<number | null>(null);

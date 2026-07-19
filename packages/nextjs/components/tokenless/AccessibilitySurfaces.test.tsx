@@ -87,6 +87,11 @@ test("five primary tokenless surfaces pass rendered DOM axe checks", async () =>
   await assertNoSemanticViolations("Private reviewer", <HumanAssuranceRaterClient />);
   await assertNoSemanticViolations(
     "Public reviewer",
-    <PublicQuestionCard task={publicTask} paidAccess={{ state: "ready" }} onSubmitted={() => undefined} />,
+    <PublicQuestionCard
+      task={publicTask}
+      paidAccess={{ state: "ready" }}
+      onSubmitted={() => undefined}
+      principalId="rlp_accessibility_reviewer"
+    />,
   );
 });

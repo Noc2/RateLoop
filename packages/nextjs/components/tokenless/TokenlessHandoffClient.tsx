@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   type TokenlessAskResponse,
@@ -18,6 +18,7 @@ import {
   type QuestionMediaPreviewCapability,
   type QuestionMediaReviewState,
 } from "~~/components/tokenless/answer/QuestionMedia";
+import { subscribeToBrowserAuthSessionChanges } from "~~/lib/auth/client";
 
 const HANDOFF_VERSION = "rateloop.handoff.v1" as const;
 const MAX_FRAGMENT_LENGTH = 16 * 1024;
@@ -349,6 +350,23 @@ export function TokenlessHandoffClient() {
   const [resultPending, setResultPending] = useState(false);
   const [busy, setBusy] = useState<"quote" | "submit" | "result" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const sessionPrincipalRef = useRef<string | null | undefined>(undefined);
+  const sessionControllerRef = useRef<AbortController | null>(null);
+  const principalGenerationRef = useRef(0);
+
+  const clearPrincipalState = useCallback(() => {
+    principalGenerationRef.current += 1;
+    setWorkspaces([]);
+    setSelectedWorkspaceId("");
+    setWorkspaceError(null);
+    setPrivacyConfirmed(false);
+    setQuote(null);
+    setAsk(null);
+    setResult(null);
+    setResultPending(false);
+    setBusy(null);
+    setError(null);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -386,84 +404,86 @@ export function TokenlessHandoffClient() {
     };
   }, []);
 
-  const loadSession = useCallback(async (signal: AbortSignal) => {
-    try {
-      const sessionBody = record(
-        await readApiJson(await fetch("/api/auth/session", { cache: "no-store", credentials: "same-origin", signal })),
-        "session",
-      );
-      if (sessionBody.authenticated !== true || typeof sessionBody.principalId !== "string") {
-        setSession({ status: "anonymous" });
-        return;
-      }
-      if (typeof sessionBody.expiresAt !== "string") {
-        throw new Error("RateLoop returned an invalid signed-in session.");
-      }
-      setSession({
-        status: "authenticated",
-        principalId: sessionBody.principalId,
-        expiresAt: sessionBody.expiresAt,
-      });
-      setWorkspaceLoading(true);
+  const loadSession = useCallback(
+    async (signal: AbortSignal) => {
       try {
-        const workspaceBody = record(
+        const sessionBody = record(
           await readApiJson(
-            await fetch("/api/account/workspaces", { cache: "no-store", credentials: "same-origin", signal }),
+            await fetch("/api/auth/session", { cache: "no-store", credentials: "same-origin", signal }),
           ),
-          "workspaces response",
+          "session",
         );
-        const nextWorkspaces = Array.isArray(workspaceBody.workspaces)
-          ? (workspaceBody.workspaces as Workspace[]).filter(
-              workspace =>
-                typeof workspace?.workspaceId === "string" &&
-                typeof workspace?.name === "string" &&
-                typeof workspace?.prepaid?.availableAtomic === "string" &&
-                ATOMIC_PATTERN.test(workspace.prepaid.availableAtomic),
-            )
-          : [];
-        setWorkspaces(nextWorkspaces);
-        setSelectedWorkspaceId(current =>
-          current && nextWorkspaces.some(workspace => workspace.workspaceId === current)
-            ? current
-            : (nextWorkspaces[0]?.workspaceId ?? ""),
-        );
+        if (sessionBody.authenticated !== true || typeof sessionBody.principalId !== "string") {
+          if (sessionPrincipalRef.current !== undefined && sessionPrincipalRef.current !== null) clearPrincipalState();
+          sessionPrincipalRef.current = null;
+          setSession({ status: "anonymous" });
+          return;
+        }
+        if (typeof sessionBody.expiresAt !== "string") {
+          throw new Error("RateLoop returned an invalid signed-in session.");
+        }
+        if (sessionPrincipalRef.current !== undefined && sessionPrincipalRef.current !== sessionBody.principalId) {
+          clearPrincipalState();
+        }
+        sessionPrincipalRef.current = sessionBody.principalId;
+        setSession({
+          status: "authenticated",
+          principalId: sessionBody.principalId,
+          expiresAt: sessionBody.expiresAt,
+        });
+        setWorkspaceLoading(true);
+        try {
+          const workspaceBody = record(
+            await readApiJson(
+              await fetch("/api/account/workspaces", { cache: "no-store", credentials: "same-origin", signal }),
+            ),
+            "workspaces response",
+          );
+          const nextWorkspaces = Array.isArray(workspaceBody.workspaces)
+            ? (workspaceBody.workspaces as Workspace[]).filter(
+                workspace =>
+                  typeof workspace?.workspaceId === "string" &&
+                  typeof workspace?.name === "string" &&
+                  typeof workspace?.prepaid?.availableAtomic === "string" &&
+                  ATOMIC_PATTERN.test(workspace.prepaid.availableAtomic),
+              )
+            : [];
+          setWorkspaces(nextWorkspaces);
+          setSelectedWorkspaceId(current =>
+            current && nextWorkspaces.some(workspace => workspace.workspaceId === current)
+              ? current
+              : (nextWorkspaces[0]?.workspaceId ?? ""),
+          );
+        } catch (cause) {
+          if (!signal.aborted) {
+            setWorkspaceError(cause instanceof Error ? cause.message : "Unable to load prepaid workspaces.");
+          }
+        }
       } catch (cause) {
         if (!signal.aborted) {
-          setWorkspaceError(cause instanceof Error ? cause.message : "Unable to load prepaid workspaces.");
+          setSession({ status: "error", message: cause instanceof Error ? cause.message : "Unable to load sign-in." });
         }
+      } finally {
+        if (!signal.aborted) setWorkspaceLoading(false);
       }
-    } catch (cause) {
-      if (!signal.aborted) {
-        setSession({ status: "error", message: cause instanceof Error ? cause.message : "Unable to load sign-in." });
-      }
-    } finally {
-      if (!signal.aborted) setWorkspaceLoading(false);
-    }
-  }, []);
+    },
+    [clearPrincipalState],
+  );
 
   useEffect(() => {
-    const controller = new AbortController();
-    void loadSession(controller.signal);
-    return () => controller.abort();
-  }, [loadSession]);
-
-  // When the user signs in through the separate tab and returns here, refresh the session so this
-  // tab picks it up. The private handoff fragment stays in this tab and is never navigated away, so
-  // the bearer capability is never exposed to the server or placed in a query string.
-  useEffect(() => {
-    if (session.status === "authenticated" || session.status === "loading") return;
-    const controller = new AbortController();
     const refresh = () => {
-      if (document.visibilityState === "visible") void loadSession(controller.signal);
+      sessionControllerRef.current?.abort();
+      const controller = new AbortController();
+      sessionControllerRef.current = controller;
+      void loadSession(controller.signal);
     };
-    window.addEventListener("focus", refresh);
-    document.addEventListener("visibilitychange", refresh);
+    refresh();
+    const unsubscribe = subscribeToBrowserAuthSessionChanges(refresh);
     return () => {
-      controller.abort();
-      window.removeEventListener("focus", refresh);
-      document.removeEventListener("visibilitychange", refresh);
+      sessionControllerRef.current?.abort();
+      unsubscribe();
     };
-  }, [loadSession, session.status]);
+  }, [loadSession]);
 
   const payload = handoff.status === "ready" || handoff.status === "expired" ? handoff.payload : null;
   const selectedWorkspace = workspaces.find(workspace => workspace.workspaceId === selectedWorkspaceId) ?? null;
@@ -529,6 +549,7 @@ export function TokenlessHandoffClient() {
   }
 
   async function createQuote() {
+    const principalGeneration = principalGenerationRef.current;
     setError(null);
     try {
       const active = ensureActiveHandoff();
@@ -546,16 +567,19 @@ export function TokenlessHandoffClient() {
           }),
         ),
       );
+      if (principalGeneration !== principalGenerationRef.current) return;
       if (Date.parse(active.expiresAt) <= Date.now()) throw new Error("This handoff link expired while quoting.");
       setQuote(parsed);
     } catch (cause) {
+      if (principalGeneration !== principalGenerationRef.current) return;
       setError(cause instanceof Error ? cause.message : "Unable to create the quote.");
     } finally {
-      setBusy(null);
+      if (principalGeneration === principalGenerationRef.current) setBusy(null);
     }
   }
 
   async function fetchResult(operationKey: string) {
+    const principalGeneration = principalGenerationRef.current;
     setBusy("result");
     setResultPending(false);
     try {
@@ -567,8 +591,9 @@ export function TokenlessHandoffClient() {
           }),
         ),
       );
-      setResult(parsed);
+      if (principalGeneration === principalGenerationRef.current) setResult(parsed);
     } catch (cause) {
+      if (principalGeneration !== principalGenerationRef.current) return;
       const failure = cause as ApiFailure;
       if (failure.code === "result_not_ready") {
         setResultPending(true);
@@ -576,11 +601,12 @@ export function TokenlessHandoffClient() {
         setError(failure instanceof Error ? failure.message : "Unable to load the result.");
       }
     } finally {
-      setBusy(null);
+      if (principalGeneration === principalGenerationRef.current) setBusy(null);
     }
   }
 
   async function submitAsk() {
+    const principalGeneration = principalGenerationRef.current;
     setError(null);
     try {
       const active = ensureActiveHandoff();
@@ -614,10 +640,12 @@ export function TokenlessHandoffClient() {
       if (parsed.idempotencyKey !== active.idempotencyKey) {
         throw new Error("RateLoop returned a mismatched idempotency key.");
       }
+      if (principalGeneration !== principalGenerationRef.current) return;
       setAsk(parsed);
       window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
       await fetchResult(parsed.operationKey);
     } catch (cause) {
+      if (principalGeneration !== principalGenerationRef.current) return;
       setError(cause instanceof Error ? cause.message : "Unable to submit the ask.");
       setBusy(null);
     }

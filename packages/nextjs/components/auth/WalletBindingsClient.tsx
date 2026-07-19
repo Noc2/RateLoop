@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { baseSepolia } from "thirdweb/chains";
 import { ConnectButton, ThirdwebProvider, useActiveAccount, useConnect } from "thirdweb/react";
+import { readBrowserSession, subscribeToBrowserAuthSessionChanges } from "~~/lib/auth/client";
 import type { WalletBindingPurpose } from "~~/lib/auth/walletBindings";
 import { rateLoopThirdwebManagedWallet, rateLoopThirdwebWallets, thirdwebBrowserClient } from "~~/lib/thirdweb/client";
 
@@ -32,19 +33,46 @@ function WalletBindingControls({ managedWalletEnabled }: { managedWalletEnabled:
   const [bindings, setBindings] = useState<Binding[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const principalRef = useRef<string | null>(null);
+  const principalEpochRef = useRef(0);
+  const sessionReadRef = useRef(0);
 
   const refresh = useCallback(async () => {
+    const epoch = principalEpochRef.current;
     const result = await jsonRequest<{ bindings: Binding[] }>("/api/account/wallets");
-    setBindings(result.bindings);
+    if (epoch === principalEpochRef.current) setBindings(result.bindings);
   }, []);
 
   useEffect(() => {
-    void refresh().catch(cause => setError(cause instanceof Error ? cause.message : "Unable to load wallet bindings."));
+    const refreshSession = async () => {
+      const sessionRead = ++sessionReadRef.current;
+      try {
+        const session = await readBrowserSession();
+        if (sessionRead !== sessionReadRef.current) return;
+        const nextPrincipal = session?.principalId ?? null;
+        if (principalRef.current !== nextPrincipal) {
+          principalRef.current = nextPrincipal;
+          principalEpochRef.current += 1;
+          setBindings([]);
+          setThirdwebJti(null);
+          setBusy(false);
+          setError(null);
+        }
+        if (nextPrincipal) await refresh();
+      } catch (cause) {
+        if (sessionRead === sessionReadRef.current) {
+          setError(cause instanceof Error ? cause.message : "Unable to load wallet bindings.");
+        }
+      }
+    };
+    void refreshSession();
+    return subscribeToBrowserAuthSessionChanges(() => void refreshSession());
   }, [refresh]);
 
   async function createThirdwebWallet() {
     const client = thirdwebBrowserClient;
     if (!client) return;
+    const epoch = principalEpochRef.current;
     setBusy(true);
     setError(null);
     try {
@@ -53,20 +81,24 @@ function WalletBindingControls({ managedWalletEnabled }: { managedWalletEnabled:
         headers: { "Content-Type": "application/json" },
         body: "{}",
       });
+      if (epoch !== principalEpochRef.current) return;
       await connect(async () => {
         await rateLoopThirdwebManagedWallet.connect({ client, strategy: "jwt", jwt: issued.jwt });
         return rateLoopThirdwebManagedWallet;
       });
-      setThirdwebJti(issued.jti);
+      if (epoch === principalEpochRef.current) setThirdwebJti(issued.jti);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to create the optional thirdweb wallet.");
+      if (epoch === principalEpochRef.current) {
+        setError(cause instanceof Error ? cause.message : "Unable to create the optional thirdweb wallet.");
+      }
     } finally {
-      setBusy(false);
+      if (epoch === principalEpochRef.current) setBusy(false);
     }
   }
 
   async function bindActiveWallet() {
     if (!account) return;
+    const epoch = principalEpochRef.current;
     setBusy(true);
     setError(null);
     try {
@@ -81,31 +113,40 @@ function WalletBindingControls({ managedWalletEnabled }: { managedWalletEnabled:
           ...(thirdwebJti ? { thirdwebJti } : {}),
         }),
       });
+      if (epoch !== principalEpochRef.current) return;
       const signature = await account.signMessage({ message: challenge.message });
+      if (epoch !== principalEpochRef.current) return;
       await jsonRequest("/api/account/wallets/bind", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...challenge, signature }),
       });
+      if (epoch !== principalEpochRef.current) return;
       setThirdwebJti(null);
       await refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to bind this wallet.");
+      if (epoch === principalEpochRef.current) {
+        setError(cause instanceof Error ? cause.message : "Unable to bind this wallet.");
+      }
     } finally {
-      setBusy(false);
+      if (epoch === principalEpochRef.current) setBusy(false);
     }
   }
 
   async function revoke(bindingId: string) {
+    const epoch = principalEpochRef.current;
     setBusy(true);
     setError(null);
     try {
       await jsonRequest(`/api/account/wallets/${encodeURIComponent(bindingId)}`, { method: "DELETE" });
+      if (epoch !== principalEpochRef.current) return;
       await refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to revoke this wallet binding.");
+      if (epoch === principalEpochRef.current) {
+        setError(cause instanceof Error ? cause.message : "Unable to revoke this wallet binding.");
+      }
     } finally {
-      setBusy(false);
+      if (epoch === principalEpochRef.current) setBusy(false);
     }
   }
 

@@ -6,7 +6,7 @@ import { ReviewerShell } from "~~/components/tokenless/review/ReviewerShell";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { Chip } from "~~/components/tokenless/ui/Chip";
-import { readBrowserSession } from "~~/lib/auth/client";
+import { readBrowserSession, subscribeToBrowserAuthSessionChanges } from "~~/lib/auth/client";
 import { HttpJsonError, readJson } from "~~/lib/tokenless/http";
 import { clearReviewDraft, loadReviewDraft, saveReviewDraft } from "~~/lib/tokenless/reviewDrafts";
 import { REVIEWER_EXPERTISE } from "~~/lib/tokenless/reviewerExpertiseOptions";
@@ -208,10 +208,10 @@ export function HumanAssuranceRaterClient({
       }
     };
     void refreshPrincipal();
-    window.addEventListener("focus", refreshPrincipal);
+    const unsubscribe = subscribeToBrowserAuthSessionChanges(refreshPrincipal);
     return () => {
       active = false;
-      window.removeEventListener("focus", refreshPrincipal);
+      unsubscribe();
     };
   }, []);
 
