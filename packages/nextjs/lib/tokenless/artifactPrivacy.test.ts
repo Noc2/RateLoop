@@ -582,6 +582,7 @@ test("artifact vault refuses browser-exposed keys and malformed master keys", ()
         NODE_ENV: "production",
         TOKENLESS_KMS_KEY_RESOURCE: "projects/example/locations/europe-west4/keyRings/rateloop",
         TOKENLESS_KMS_PROVIDER: "gcp-kms",
+        TOKENLESS_KMS_REGION: "eu",
         TOKENLESS_PSEUDONYM_KEY: Buffer.alloc(32, 9).toString("base64url"),
       } as unknown as NodeJS.ProcessEnv),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "artifact_kms_adapter_unavailable",
