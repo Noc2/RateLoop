@@ -33,6 +33,10 @@ import {
   tokenlessDeploymentHealth,
 } from "../protocol-deployment";
 import { createOriginTtlCache } from "../origin-cache";
+import {
+  evaluateTokenlessIndexerHealth,
+  tokenlessIndexerFreshnessThresholds,
+} from "../indexer-health";
 import { validateRuntimeTokenlessDeployment } from "../runtime-deployment-health";
 import {
   keeperAction,
@@ -46,6 +50,7 @@ const deployment = resolveTokenlessDeployment();
 const app = new Hono();
 const MAX_LIMIT = 500;
 const STATUS_CACHE_TTL_MS = 15_000;
+const INDEXER_FRESHNESS_THRESHOLDS = tokenlessIndexerFreshnessThresholds();
 const statsCache = createOriginTtlCache<{ totalClaimedAtomic: string }>({
   ttlMs: 60_000,
 });
@@ -166,23 +171,33 @@ app.get("/health/tokenless", async (c) => {
   const indexTimestamp = index?.block?.timestamp ?? null;
   const indexReady = index?.ready === true;
   const deploymentEventIndexed = Boolean(initialIssuerEpoch);
-  if (
-    !deploymentEventIndexed ||
-    indexBlock === null ||
-    indexBlock < deployment.startBlock ||
-    !indexReady
-  ) {
+  const freshness = evaluateTokenlessIndexerHealth({
+    chainHead: chain.chainHead,
+    startBlock: deployment.startBlock,
+    indexBlock,
+    indexTimestamp,
+    indexReady,
+    initialEpochIndexed: deploymentEventIndexed,
+    enforceWallClockFreshness: deployment.network !== "hardhat",
+    thresholds: INDEXER_FRESHNESS_THRESHOLDS,
+  });
+  if (freshness.status !== "ok") {
     return c.json(
       {
         ...tokenlessDeploymentHealth(deployment),
-        status: "syncing",
-        error: !deploymentEventIndexed
-          ? "Initial credential-issuer epoch has not been indexed."
-          : "Historical indexing has not reached readiness.",
+        status: freshness.status,
+        error:
+          freshness.status === "syncing"
+            ? "Historical indexing has not reached readiness."
+            : "Indexer freshness exceeded its operational bound.",
+        healthReasons: freshness.reasons,
         chainHead: chain.chainHead.toString(),
         indexBlock,
         indexTimestamp,
         indexReady,
+        indexBlockLag: freshness.blockLag,
+        indexAgeSeconds: freshness.indexAgeSeconds,
+        freshnessThresholds: freshness.thresholds,
         blocksIndexedFromStart:
           indexBlock === null
             ? null
@@ -198,7 +213,10 @@ app.get("/health/tokenless", async (c) => {
     indexBlock,
     indexTimestamp,
     indexReady,
-    blocksIndexedFromStart: indexBlock - deployment.startBlock,
+    indexBlockLag: freshness.blockLag,
+    indexAgeSeconds: freshness.indexAgeSeconds,
+    freshnessThresholds: freshness.thresholds,
+    blocksIndexedFromStart: indexBlock! - deployment.startBlock,
     usdcAddress: chain.usdcAddress,
     adapterConfigured: chain.adapterConfigured,
     initialEpochIndexed: true,
