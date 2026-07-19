@@ -771,6 +771,13 @@
       "when": 1784336400000,
       "tag": "0110_scheduled_chain_recovery",
       "breakpoints": true
+    },
+    {
+      "idx": 111,
+      "version": "7",
+      "when": 1784340000000,
+      "tag": "0111_scoped_request_idempotency",
+      "breakpoints": true
     }
   ]
 }

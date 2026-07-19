@@ -9,6 +9,7 @@ import {
 import {
   createTokenlessAsk,
   parseTokenlessAskMediaPreviewGrants,
+  parseTokenlessAskRequest,
   preflightTokenlessAskIdempotency,
   tokenlessErrorResponse,
 } from "~~/lib/tokenless/server";
@@ -25,10 +26,16 @@ export async function POST(request: NextRequest) {
       sessionToken: getProductSessionToken(request),
     });
     const rawBody = await request.json();
-    const body = await preflightTokenlessAskIdempotency(rawBody, request.headers.get("idempotency-key"));
+    const body = parseTokenlessAskRequest(rawBody, request.headers.get("idempotency-key"));
     const mediaPreviews = parseTokenlessAskMediaPreviewGrants(rawBody);
     prepared = await prepareProductAsk({ mediaPreviews, principal, request: body });
-    const response = await createTokenlessAsk(body, request.headers.get("idempotency-key"), request.nextUrl.origin);
+    await preflightTokenlessAskIdempotency(body, request.headers.get("idempotency-key"), prepared.idempotencyScope);
+    const response = await createTokenlessAsk(
+      body,
+      request.headers.get("idempotency-key"),
+      request.nextUrl.origin,
+      prepared.idempotencyScope,
+    );
     await attachProductAsk(prepared, response);
     attached = true;
     return NextResponse.json(response);

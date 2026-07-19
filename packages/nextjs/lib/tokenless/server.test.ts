@@ -6,6 +6,7 @@ import {
   TokenlessServiceError,
   createTokenlessAsk,
   createTokenlessQuote,
+  getTokenlessAskByIdempotencyKey,
   getTokenlessResult,
   sweepExpiredTokenlessQuotes,
   waitForTokenlessAsk,
@@ -208,13 +209,14 @@ test("asks are durable and idempotent, remain pending payment, and never synthes
   );
 });
 
-test("idempotency conflicts fail closed", async () => {
+test("idempotency conflicts fail closed within a caller scope but cannot be preclaimed across scopes", async () => {
   const quote = await createTokenlessQuote(quoteRequest());
   const idempotencyKey = "test:ask:conflict1";
-  await createTokenlessAsk(
+  const first = await createTokenlessAsk(
     { idempotencyKey, payment: { mode: "prepaid", workspaceId: "one" }, quoteId: quote.quoteId },
     idempotencyKey,
     "https://tokenless.example",
+    "workspace:one:api_key:key_a",
   );
   await assert.rejects(
     () =>
@@ -222,8 +224,20 @@ test("idempotency conflicts fail closed", async () => {
         { idempotencyKey, payment: { mode: "prepaid", workspaceId: "two" }, quoteId: quote.quoteId },
         idempotencyKey,
         "https://tokenless.example",
+        "workspace:one:api_key:key_a",
       ),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "idempotency_conflict",
+  );
+  const second = await createTokenlessAsk(
+    { idempotencyKey, payment: { mode: "prepaid", workspaceId: "two" }, quoteId: quote.quoteId },
+    idempotencyKey,
+    "https://tokenless.example",
+    "workspace:two:api_key:key_b",
+  );
+  assert.notEqual(second.operationKey, first.operationKey);
+  await assert.rejects(
+    () => getTokenlessAskByIdempotencyKey(idempotencyKey),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "ambiguous_idempotency_key",
   );
 });
 

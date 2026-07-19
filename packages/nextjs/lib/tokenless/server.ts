@@ -13,7 +13,7 @@ import {
   parseTokenlessQuoteResponse,
   parseTokenlessResult,
 } from "@rateloop/sdk";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 import { db, dbClient } from "~~/lib/db";
 import { tokenlessAgentAsks, tokenlessAgentQuotes } from "~~/lib/db/schema";
@@ -47,6 +47,7 @@ type StoredQuote = {
 
 type StoredAsk = {
   operationKey: string;
+  idempotencyScope: string;
   idempotencyKey: string;
   requestHash: string;
   quoteId: string;
@@ -292,9 +293,10 @@ export function parseTokenlessAskMediaPreviewGrants(value: unknown): TokenlessQu
 export async function preflightTokenlessAskIdempotency(
   value: unknown,
   idempotencyHeader: string | null,
+  idempotencyScope = "legacy:global",
 ): Promise<TokenlessAskRequest> {
   const request = parseTokenlessAskRequest(value, idempotencyHeader);
-  const existing = await readAskByIdempotency(request.idempotencyKey);
+  const existing = await readAskByIdempotency(idempotencyScope, request.idempotencyKey);
   if (existing && existing.requestHash !== hash(request)) {
     throw new TokenlessServiceError(
       "This idempotency key was already used with a different ask.",
@@ -349,17 +351,25 @@ async function readAskByOperation(operationKey: string): Promise<StoredAsk | nul
   return row ?? null;
 }
 
-async function readAskByIdempotency(idempotencyKey: string): Promise<StoredAsk | null> {
+async function readAskByIdempotency(idempotencyScope: string, idempotencyKey: string): Promise<StoredAsk | null> {
   const [row] = await db
     .select()
     .from(tokenlessAgentAsks)
-    .where(eq(tokenlessAgentAsks.idempotencyKey, idempotencyKey))
+    .where(
+      and(
+        eq(tokenlessAgentAsks.idempotencyScope, idempotencyScope),
+        eq(tokenlessAgentAsks.idempotencyKey, idempotencyKey),
+      ),
+    )
     .limit(1);
   return row ?? null;
 }
 
 async function persistAsk(row: StoredAsk) {
-  await db.insert(tokenlessAgentAsks).values(row).onConflictDoNothing({ target: tokenlessAgentAsks.idempotencyKey });
+  await db
+    .insert(tokenlessAgentAsks)
+    .values(row)
+    .onConflictDoNothing({ target: [tokenlessAgentAsks.idempotencyScope, tokenlessAgentAsks.idempotencyKey] });
 }
 
 export async function createTokenlessQuote(value: unknown): Promise<TokenlessQuoteResponse> {
@@ -488,11 +498,12 @@ export async function createTokenlessAsk(
   value: unknown,
   idempotencyHeader: string | null,
   appOrigin: string,
+  idempotencyScope = "legacy:global",
 ): Promise<TokenlessAskResponse> {
   const request = parseTokenlessAskRequest(value, idempotencyHeader);
 
   const requestHash = hash(request);
-  const existing = await readAskByIdempotency(request.idempotencyKey);
+  const existing = await readAskByIdempotency(idempotencyScope, request.idempotencyKey);
   if (existing) {
     if (existing.requestHash !== requestHash) {
       throw new TokenlessServiceError(
@@ -515,6 +526,7 @@ export async function createTokenlessAsk(
   const operationKey = `op_${randomUUID().replaceAll("-", "")}`;
   const baseRow = {
     operationKey,
+    idempotencyScope,
     idempotencyKey: request.idempotencyKey,
     requestHash,
     quoteId: request.quoteId,
@@ -528,7 +540,7 @@ export async function createTokenlessAsk(
     updatedAt: now,
   } satisfies StoredAsk;
   await persistAsk(baseRow);
-  const persisted = await readAskByIdempotency(request.idempotencyKey);
+  const persisted = await readAskByIdempotency(idempotencyScope, request.idempotencyKey);
   if (!persisted) {
     throw new TokenlessServiceError("Ask could not be stored.", 500, "ask_persistence_failed");
   }
@@ -624,7 +636,15 @@ export async function getTokenlessAskByIdempotencyKey(idempotencyKey: string) {
   if (!IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey)) {
     throw new TokenlessServiceError("A valid idempotencyKey is required.", 400, "invalid_idempotency_key");
   }
-  const ask = await readAskByIdempotency(idempotencyKey);
+  const asks = await db
+    .select()
+    .from(tokenlessAgentAsks)
+    .where(eq(tokenlessAgentAsks.idempotencyKey, idempotencyKey))
+    .limit(2);
+  if (asks.length > 1) {
+    throw new TokenlessServiceError("Ask lookup is ambiguous.", 409, "ambiguous_idempotency_key");
+  }
+  const [ask] = asks;
   if (!ask) return null;
   return {
     operationKey: ask.operationKey,

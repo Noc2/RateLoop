@@ -214,6 +214,10 @@ function publicCommit(row: Row) {
   };
 }
 
+async function lockCommitForVoucher(client: Pick<import("pg").PoolClient, "query">, voucherId: string) {
+  return client.query("SELECT * FROM tokenless_rater_commits WHERE voucher_id = $1 LIMIT 1 FOR UPDATE", [voucherId]);
+}
+
 export async function relayPaidRaterCommit(input: { accountAddress: string; request: RaterCommitRequest }) {
   if (!IDEMPOTENCY.test(input.request.idempotencyKey)) {
     throw new TokenlessServiceError("Commit idempotency key is invalid.", 400, "invalid_idempotency_key");
@@ -288,10 +292,7 @@ export async function relayPaidRaterCommit(input: { accountAddress: string; requ
   const preparationClient = await dbPool.connect();
   try {
     await preparationClient.query("BEGIN");
-    const previous = await preparationClient.query(
-      "SELECT * FROM tokenless_rater_commits WHERE voucher_id = $1 OR request_idempotency_key = $2 LIMIT 1 FOR UPDATE",
-      [input.request.voucherId, input.request.idempotencyKey],
-    );
+    const previous = await lockCommitForVoucher(preparationClient, input.request.voucherId);
     const previousRow = previous.rows[0] as Row | undefined;
     const now = new Date();
     if (previousRow) {
@@ -465,4 +466,4 @@ export async function getPaidRaterCommit(input: { accountAddress: string; commit
   return publicCommit(row);
 }
 
-export const __raterServiceTestUtils = { validateAuthorization };
+export const __raterServiceTestUtils = { lockCommitForVoucher, validateAuthorization };

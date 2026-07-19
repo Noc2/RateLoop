@@ -112,6 +112,7 @@ export type PreparedProductAsk = {
   amountAtomic: string;
   createdPayment: boolean;
   idempotencyKey: string;
+  idempotencyScope: string;
   ownerAccountAddress: string | null;
   apiKeyId: string | null;
   paymentMode: TokenlessAskRequest["payment"]["mode"];
@@ -1399,6 +1400,10 @@ export async function prepareProductAsk(input: {
       amountAtomic: amountAtomic.toString(),
       createdPayment: payment.created,
       idempotencyKey: input.request.idempotencyKey,
+      idempotencyScope:
+        input.principal.kind === "api_key"
+          ? `workspace:${workspaceId}:api_key:${input.principal.apiKeyId}`
+          : `workspace:${workspaceId}:account:${input.principal.accountAddress.toLowerCase()}`,
       ownerAccountAddress: input.principal.kind === "session" ? input.principal.accountAddress.toLowerCase() : null,
       apiKeyId: input.principal.kind === "api_key" ? input.principal.apiKeyId : null,
       paymentMode,

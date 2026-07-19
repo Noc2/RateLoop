@@ -79,6 +79,21 @@ test("commit authorization rejects a sealed payload whose signed hash differs", 
   );
 });
 
+test("rater commit replay lookup is voucher-scoped and cannot be preclaimed by another voucher", async () => {
+  const calls: Array<{ sql: string; values?: unknown[] }> = [];
+  const client = {
+    async query(sql: string, values?: unknown[]) {
+      calls.push({ sql, values });
+      return { rows: [] };
+    },
+  };
+  await __raterServiceTestUtils.lockCommitForVoucher(client as never, "voucher-b");
+  assert.equal(calls.length, 1);
+  assert.match(calls[0]!.sql, /WHERE voucher_id = \$1 LIMIT 1 FOR UPDATE/u);
+  assert.doesNotMatch(calls[0]!.sql, /request_idempotency_key/u);
+  assert.deepEqual(calls[0]!.values, ["voucher-b"]);
+});
+
 async function seedTask(executionState: "confirmed" | "submitted" = "confirmed") {
   const frozenPolicy = freezeAdmissionPolicy(paidAdmissionPolicy());
   await dbClient.execute({

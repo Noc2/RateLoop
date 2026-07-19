@@ -37,6 +37,7 @@ export const tokenlessAgentAsks = pgTable(
   "tokenless_agent_asks",
   {
     operationKey: text("operation_key").primaryKey(),
+    idempotencyScope: text("idempotency_scope").notNull().default("legacy:global"),
     idempotencyKey: text("idempotency_key").notNull(),
     requestHash: text("request_hash").notNull(),
     quoteId: text("quote_id").notNull(),
@@ -50,7 +51,11 @@ export const tokenlessAgentAsks = pgTable(
     updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
   },
   table => ({
-    idempotencyKeyUnique: uniqueIndex("tokenless_agent_asks_idempotency_key_unique").on(table.idempotencyKey),
+    idempotencyScopeUnique: uniqueIndex("tokenless_agent_asks_scope_idempotency_unique").on(
+      table.idempotencyScope,
+      table.idempotencyKey,
+    ),
+    idempotencyKeyIdx: index("tokenless_agent_asks_idempotency_key_idx").on(table.idempotencyKey),
     statusUpdatedIdx: index("tokenless_agent_asks_status_updated_idx").on(table.status, table.updatedAt),
   }),
 );

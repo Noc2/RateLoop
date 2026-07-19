@@ -1024,7 +1024,7 @@ export async function requestPublicPaidHumanReview(
   let opportunityBound = false;
   try {
     prepared = await prepareProductAsk({ principal: input.principal.principal, request: askRequest });
-    const ask = await createTokenlessAsk(askRequest, idempotencyKey, input.appOrigin);
+    const ask = await createTokenlessAsk(askRequest, idempotencyKey, input.appOrigin, prepared.idempotencyScope);
     askCreated = true;
     await finalizePublicPaidAsk({
       principal: input.principal,
