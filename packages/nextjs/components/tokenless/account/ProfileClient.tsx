@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { notifyBrowserAuthSessionChanged } from "~~/lib/auth/client";
 
 type Profile = {
   principalAddress: string;
@@ -57,6 +58,7 @@ export function ProfileClient() {
       const nextProfile = body as unknown as Profile;
       setProfile(nextProfile);
       setDisplayName(nextProfile.profileDisplayName ?? "");
+      notifyBrowserAuthSessionChanged();
       setSaved(true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to save your profile.");

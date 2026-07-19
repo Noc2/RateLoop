@@ -1,8 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { type BrowserSessionResponse, logoutBrowserSession, readBrowserSession } from "~~/lib/auth/client";
+import {
+  type BrowserSessionResponse,
+  logoutBrowserSession,
+  readBrowserSession,
+  subscribeToBrowserAuthSessionChanges,
+} from "~~/lib/auth/client";
 
 export const RATELOOP_SIGN_IN_LABEL = "Sign In";
 export const RATELOOP_THIRDWEB_AUTO_CONNECT = false;
@@ -99,24 +104,27 @@ export function ThirdwebSessionButton({
   onSessionChange?: (authenticated: boolean) => void;
 }) {
   const [session, setSession] = useState<BrowserSessionResponse | null>(null);
+  const sessionGenerationRef = useRef(0);
 
-  useEffect(() => {
-    let active = true;
+  const refreshSession = useCallback(() => {
+    const generation = ++sessionGenerationRef.current;
     void readBrowserSession()
       .then(value => {
-        if (!active) return;
+        if (generation !== sessionGenerationRef.current) return;
         setSession(value);
         onSessionChange?.(value !== null);
       })
       .catch(() => {
-        if (!active) return;
+        if (generation !== sessionGenerationRef.current) return;
         setSession(null);
         onSessionChange?.(false);
       });
-    return () => {
-      active = false;
-    };
   }, [onSessionChange]);
+
+  useEffect(() => {
+    refreshSession();
+    return subscribeToBrowserAuthSessionChanges(refreshSession);
+  }, [refreshSession]);
 
   async function signOutRateLoopSession() {
     await logoutBrowserSession();

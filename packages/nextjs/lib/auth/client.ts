@@ -10,6 +10,37 @@ export const betterAuthClient = createAuthClient({
   plugins: [emailOTPClient(), passkeyClient(), ssoClient({ domainVerification: { enabled: true } })],
 });
 
+const AUTH_SESSION_EVENT = "rateloop:auth-session-changed";
+const AUTH_SESSION_CHANNEL = "rateloop-auth-session-v1";
+
+export function notifyBrowserAuthSessionChanged() {
+  window.dispatchEvent(new Event(AUTH_SESSION_EVENT));
+  if (typeof BroadcastChannel !== "undefined") {
+    const channel = new BroadcastChannel(AUTH_SESSION_CHANNEL);
+    channel.postMessage({ type: "changed" });
+    channel.close();
+  }
+}
+
+export function subscribeToBrowserAuthSessionChanges(listener: () => void) {
+  const onVisibilityChange = () => {
+    if (document.visibilityState === "visible") listener();
+  };
+  const channel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(AUTH_SESSION_CHANNEL);
+  const onChannelMessage = () => listener();
+  window.addEventListener("focus", listener);
+  window.addEventListener(AUTH_SESSION_EVENT, listener);
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  channel?.addEventListener("message", onChannelMessage);
+  return () => {
+    window.removeEventListener("focus", listener);
+    window.removeEventListener(AUTH_SESSION_EVENT, listener);
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    channel?.removeEventListener("message", onChannelMessage);
+    channel?.close();
+  };
+}
+
 async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { credentials: "same-origin", cache: "no-store", ...init });
   const body = (await response.json()) as T & { error?: unknown };
