@@ -1,35 +1,16 @@
-import { createPublicClient, http } from "viem";
+import { createPublicClient } from "viem";
 import {
   validateTokenlessDeploymentOnChain,
   type ValidatedTokenlessDeploymentHealth,
 } from "./deployment-health";
-import {
-  resolveTokenlessDeployment,
-  type TokenlessDeployment,
-} from "./protocol-deployment";
+import { resolveTokenlessDeployment } from "./protocol-deployment";
+import { createPonderRpcTransport, resolvePonderRpcUrls } from "./rpc";
 
 const VALIDATION_TTL_MS = 30_000;
 
-function rpcUrlForDeployment(
-  deployment: TokenlessDeployment,
-  env: NodeJS.ProcessEnv = process.env,
-) {
-  const key = `PONDER_RPC_URL_${deployment.chainId}`;
-  const value = env[key]?.trim();
-  if (value) {
-    const parsed = new URL(value);
-    if (deployment.network !== "hardhat" && parsed.protocol !== "https:") {
-      throw new Error(`${key} must use HTTPS.`);
-    }
-    return value;
-  }
-  if (deployment.network === "hardhat") return "http://127.0.0.1:8545";
-  throw new Error(`${key} is required.`);
-}
-
 const deployment = resolveTokenlessDeployment();
 const client = createPublicClient({
-  transport: http(rpcUrlForDeployment(deployment)),
+  transport: createPonderRpcTransport(resolvePonderRpcUrls(deployment)),
 });
 let cached:
   | {

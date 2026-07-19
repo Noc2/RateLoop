@@ -23,6 +23,7 @@ Copy `.env.example` to `.env.local` and set:
 - `PONDER_X402_PANEL_SUBMITTER_ADDRESS` or the zero address
 - `PONDER_TOKENLESS_START_BLOCK`
 - `PONDER_RPC_URL_<chainId>`
+- `PONDER_RPC_FALLBACK_URLS_<chainId>` (one to three ordered, independent HTTPS fallbacks on live networks)
 - `CORS_ORIGIN`, and in production `PONDER_KEEPER_WORK_TOKEN`
 
 Run `yarn codegen`, `yarn check-types`, and `yarn test` from this package. Production runs through `node scripts/start.mjs`, which derives a database schema from the stable deployment identity.

@@ -27,6 +27,7 @@ describe("tokenless Ponder config", () => {
       ...hostedRuntime,
       PONDER_NETWORK: "baseSepolia",
       PONDER_RPC_URL_84532: "https://sepolia.base.org",
+      PONDER_RPC_FALLBACK_URLS_84532: "https://base-sepolia-fallback.example",
       PONDER_TOKENLESS_PANEL_ADDRESS: panel,
       PONDER_CREDENTIAL_ISSUER_ADDRESS: issuer,
       PONDER_FEEDBACK_BONUS_ADDRESS: feedbackBonus,
@@ -50,6 +51,7 @@ describe("tokenless Ponder config", () => {
       ...hostedRuntime,
       PONDER_NETWORK: "baseSepolia",
       PONDER_RPC_URL_84532: "http://rpc.example.test",
+      PONDER_RPC_FALLBACK_URLS_84532: "https://base-sepolia-fallback.example",
       PONDER_TOKENLESS_PANEL_ADDRESS: panel,
       PONDER_CREDENTIAL_ISSUER_ADDRESS: issuer,
       PONDER_FEEDBACK_BONUS_ADDRESS: feedbackBonus,
@@ -57,5 +59,22 @@ describe("tokenless Ponder config", () => {
       RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: deploymentKey,
     };
     await expect(import("./ponder.config")).rejects.toThrow("must use HTTPS");
+  });
+
+  it("rejects a missing live RPC fallback", async () => {
+    process.env = {
+      ...originalEnv,
+      ...hostedRuntime,
+      PONDER_NETWORK: "baseSepolia",
+      PONDER_RPC_URL_84532: "https://sepolia.base.org",
+      PONDER_TOKENLESS_PANEL_ADDRESS: panel,
+      PONDER_CREDENTIAL_ISSUER_ADDRESS: issuer,
+      PONDER_FEEDBACK_BONUS_ADDRESS: feedbackBonus,
+      PONDER_TOKENLESS_START_BLOCK: "1",
+      RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: deploymentKey,
+    };
+    await expect(import("./ponder.config")).rejects.toThrow(
+      /must contain at least one independent HTTPS RPC/i,
+    );
   });
 });
