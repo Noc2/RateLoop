@@ -32,6 +32,7 @@ import {
   roundKey,
   tokenlessDeploymentHealth,
 } from "../protocol-deployment";
+import { createOriginTtlCache } from "../origin-cache";
 import { validateRuntimeTokenlessDeployment } from "../runtime-deployment-health";
 import {
   keeperAction,
@@ -45,6 +46,9 @@ const deployment = resolveTokenlessDeployment();
 const app = new Hono();
 const MAX_LIMIT = 500;
 const STATUS_CACHE_TTL_MS = 15_000;
+const statsCache = createOriginTtlCache<{ totalClaimedAtomic: string }>({
+  ttlMs: 60_000,
+});
 let statusCache:
   | { expiresAt: number; value: Record<string, unknown> }
   | undefined;
@@ -261,14 +265,17 @@ app.get("/status/tokenless", async (c) => {
 });
 
 app.get("/stats", async (c) => {
-  const [totals] = await db
-    .select({ totalClaimedAtomic: sum(tokenlessClaim.amount) })
-    .from(tokenlessClaim)
-    .where(eq(tokenlessClaim.deploymentKey, deployment.deploymentKey));
-  c.header("cache-control", "public, max-age=60, s-maxage=300");
-  return c.json({
-    totalClaimedAtomic: String(totals?.totalClaimedAtomic ?? 0),
+  const value = await statsCache.get(async () => {
+    const [totals] = await db
+      .select({ totalClaimedAtomic: sum(tokenlessClaim.amount) })
+      .from(tokenlessClaim)
+      .where(eq(tokenlessClaim.deploymentKey, deployment.deploymentKey));
+    return {
+      totalClaimedAtomic: String(totals?.totalClaimedAtomic ?? 0),
+    };
   });
+  c.header("cache-control", "public, max-age=60, s-maxage=300");
+  return c.json(value);
 });
 
 app.get("/rounds", async (c) => {
