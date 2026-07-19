@@ -332,6 +332,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   } catch {
     errors.push("MIN_GAS_BALANCE_WEI must be a non-negative integer");
   }
+  if (production && minGasBalanceWei === 0n) {
+    errors.push("MIN_GAS_BALANCE_WEI must be positive in production");
+  }
 
   if (errors.length > 0) {
     throw new Error(

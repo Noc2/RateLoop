@@ -22,7 +22,10 @@ const gauges: Record<string, number> = {
   keeper_is_running: 0,
   keeper_last_run_duration_seconds: 0,
   keeper_last_successful_run_timestamp: 0,
+  keeper_last_progress_timestamp: 0,
+  keeper_last_work_observed_timestamp: 0,
   keeper_wallet_balance_wei: 0,
+  keeper_minimum_wallet_balance_wei: 0,
   keeper_rounds_scanned: 0,
   keeper_self_reveal_fallbacks_pending: 0,
   keeper_rounds_awaiting_beacon_failure: 0,
@@ -31,7 +34,10 @@ const gauges: Record<string, number> = {
 
 let consecutiveErrors = 0;
 let lastRunAt: Date | null = null;
+let lastProgressAt: Date | null = null;
+let lastWorkObservedAt: Date | null = null;
 let walletBalanceWei: bigint | null = null;
+let minimumWalletBalanceWei = 0n;
 let healthThresholdMs = 45_000;
 
 export function incrementCounter(name: string, amount = 1) {
@@ -45,6 +51,13 @@ export function setGauge(name: string, value: number) {
 export function setWalletBalanceWei(value: bigint) {
   walletBalanceWei = value;
   gauges.keeper_wallet_balance_wei = Number(value);
+}
+
+export function setMinimumWalletBalanceWei(value: bigint) {
+  if (value < 0n)
+    throw new Error("Minimum keeper wallet balance cannot be negative.");
+  minimumWalletBalanceWei = value;
+  gauges.keeper_minimum_wallet_balance_wei = Number(value);
 }
 
 export function setHealthThreshold(intervalMs: number) {
@@ -76,8 +89,9 @@ export function recordRun(result: TokenlessKeeperResult, durationMs: number) {
   counters.keeper_stale_returns_executed_total += result.staleReturnsExecuted;
   counters.keeper_feedback_bonus_refunds_executed_total +=
     result.feedbackBonusRefundsExecuted;
+  const completedAt = new Date();
   gauges.keeper_last_run_duration_seconds = durationMs / 1000;
-  gauges.keeper_last_successful_run_timestamp = Date.now() / 1000;
+  gauges.keeper_last_successful_run_timestamp = completedAt.getTime() / 1000;
   gauges.keeper_rounds_scanned = result.roundsScanned;
   gauges.keeper_self_reveal_fallbacks_pending =
     result.selfRevealFallbacksPending;
@@ -85,8 +99,56 @@ export function recordRun(result: TokenlessKeeperResult, durationMs: number) {
     result.roundsAwaitingBeaconFailure;
   gauges.keeper_rounds_awaiting_scoring_entropy =
     result.roundsAwaitingScoringEntropy;
+  const progressCount =
+    result.revealWindowsOpened +
+    result.votesRevealed +
+    result.settlementsBegun +
+    result.aggregateBatchesProcessed +
+    result.scoringSeedsFinalized +
+    result.scoreBatchesProcessed +
+    result.roundsFinalized +
+    result.terminalRoundsAdvanced +
+    result.claimsExecuted +
+    result.staleReturnsExecuted +
+    result.feedbackBonusRefundsExecuted;
+  if (progressCount > 0) {
+    lastProgressAt = completedAt;
+    gauges.keeper_last_progress_timestamp = completedAt.getTime() / 1000;
+  }
+  if (result.roundsScanned > 0) {
+    lastWorkObservedAt = completedAt;
+    gauges.keeper_last_work_observed_timestamp = completedAt.getTime() / 1000;
+  }
   consecutiveErrors = 0;
-  lastRunAt = new Date();
+  lastRunAt = completedAt;
+}
+
+export function operationalHealthSnapshot(now = new Date()) {
+  const reasons: string[] = [];
+  const runAgeMs = lastRunAt ? now.getTime() - lastRunAt.getTime() : null;
+  if (runAgeMs === null || runAgeMs > healthThresholdMs)
+    reasons.push("keeper_run_stale");
+  if (consecutiveErrors >= 3) reasons.push("consecutive_errors");
+  if (minimumWalletBalanceWei > 0n && walletBalanceWei === null)
+    reasons.push("wallet_balance_unknown");
+  if (walletBalanceWei !== null && walletBalanceWei < minimumWalletBalanceWei) {
+    reasons.push("gas_balance_low");
+  }
+  return {
+    status: reasons.length === 0 ? ("ok" as const) : ("degraded" as const),
+    protocol: "tokenless-v4" as const,
+    reasons,
+    consecutiveErrors,
+    lastRunAt: lastRunAt?.toISOString() ?? null,
+    lastProgressAt: lastProgressAt?.toISOString() ?? null,
+    lastWorkObservedAt: lastWorkObservedAt?.toISOString() ?? null,
+    runAgeSeconds: runAgeMs === null ? null : Math.max(0, runAgeMs / 1_000),
+    walletBalanceWei: walletBalanceWei?.toString() ?? null,
+    minimumWalletBalanceWei: minimumWalletBalanceWei.toString(),
+    selfRevealFallbacksPending: gauges.keeper_self_reveal_fallbacks_pending,
+    roundsAwaitingBeaconFailure: gauges.keeper_rounds_awaiting_beacon_failure,
+    roundsAwaitingScoringEntropy: gauges.keeper_rounds_awaiting_scoring_entropy,
+  };
 }
 
 export function renderMetrics() {
@@ -117,6 +179,20 @@ export function startMetricsServer(
       );
       return;
     }
+    if (request.url === "/ready") {
+      const health = operationalHealthSnapshot();
+      response.writeHead(health.status === "ok" ? 200 : 503, {
+        "content-type": "application/json",
+      });
+      response.end(
+        JSON.stringify({
+          status: health.status,
+          protocol: health.protocol,
+          reasons: health.reasons,
+        }),
+      );
+      return;
+    }
     if (!authorized(request.headers.authorization, authToken)) {
       response.writeHead(401, { "content-type": "application/json" });
       response.end(JSON.stringify({ error: "Unauthorized" }));
@@ -128,25 +204,11 @@ export function startMetricsServer(
       return;
     }
     if (request.url === "/health") {
-      const stale =
-        !lastRunAt || Date.now() - lastRunAt.getTime() > healthThresholdMs;
-      const healthy = !stale && consecutiveErrors < 3;
-      response.writeHead(healthy ? 200 : 503, {
+      const health = operationalHealthSnapshot();
+      response.writeHead(health.status === "ok" ? 200 : 503, {
         "content-type": "application/json",
       });
-      response.end(
-        JSON.stringify({
-          status: healthy ? "ok" : "degraded",
-          protocol: "tokenless-v4",
-          consecutiveErrors,
-          lastRunAt: lastRunAt?.toISOString() ?? null,
-          walletBalanceWei: walletBalanceWei?.toString() ?? null,
-          selfRevealFallbacksPending:
-            gauges.keeper_self_reveal_fallbacks_pending,
-          roundsAwaitingBeaconFailure:
-            gauges.keeper_rounds_awaiting_beacon_failure,
-        }),
-      );
+      response.end(JSON.stringify(health));
       return;
     }
     response.writeHead(404);
@@ -154,4 +216,16 @@ export function startMetricsServer(
   });
   server.listen(port, bindAddress);
   return server;
+}
+
+export function __resetMetricsForTests() {
+  for (const key of Object.keys(counters)) counters[key] = 0;
+  for (const key of Object.keys(gauges)) gauges[key] = 0;
+  consecutiveErrors = 0;
+  lastRunAt = null;
+  lastProgressAt = null;
+  lastWorkObservedAt = null;
+  walletBalanceWei = null;
+  minimumWalletBalanceWei = 0n;
+  healthThresholdMs = 45_000;
 }

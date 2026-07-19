@@ -18,6 +18,7 @@ import {
   recordRun,
   setGauge,
   setHealthThreshold,
+  setMinimumWalletBalanceWei,
   setWalletBalanceWei,
   startMetricsServer,
 } from "./metrics.js";
@@ -33,6 +34,7 @@ async function main() {
   } as unknown as TokenlessKeeperClients;
 
   setHealthThreshold(config.intervalMs);
+  setMinimumWalletBalanceWei(config.minGasBalanceWei);
   const metricsServer = startMetricsServer(
     config.metricsPort,
     config.metricsBindAddress,

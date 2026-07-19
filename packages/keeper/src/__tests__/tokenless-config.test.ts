@@ -104,6 +104,30 @@ describe("tokenless keeper config", () => {
     ).toThrow(/RPC_URL must use HTTPS/);
   });
 
+  it("requires an independent HTTPS RPC fallback in production", () => {
+    expect(() =>
+      loadConfig({ ...productionEnv(), RPC_FALLBACK_URLS: undefined }),
+    ).toThrow(/must contain at least one independent HTTPS RPC/);
+    expect(() =>
+      loadConfig({
+        ...productionEnv(),
+        RPC_FALLBACK_URLS: "http://fallback.example",
+      }),
+    ).toThrow(/RPC_FALLBACK_URLS must use HTTPS/);
+    expect(() =>
+      loadConfig({
+        ...productionEnv(),
+        RPC_FALLBACK_URLS: "https://sepolia.base.org",
+      }),
+    ).toThrow(/must be distinct/);
+  });
+
+  it("does not allow hosted gas-balance alerting to be disabled", () => {
+    expect(() =>
+      loadConfig({ ...productionEnv(), MIN_GAS_BALANCE_WEI: "0" }),
+    ).toThrow(/MIN_GAS_BALANCE_WEI must be positive in production/);
+  });
+
   it("requires the exact EU Railway runtime identity", () => {
     const verifiedEu = productionEnv();
     expect(loadConfig(verifiedEu).chainId).toBe(84532);
