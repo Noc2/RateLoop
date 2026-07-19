@@ -12,6 +12,12 @@ type GroupPolicy = {
   exportAllowed?: boolean;
   notificationDefaults?: { assignmentAvailable?: boolean };
 };
+type GroupPolicyDraft = {
+  compensation: "unpaid" | "paid";
+  worldIdRequired: boolean;
+  exportAllowed: boolean;
+  assignmentNotifications: boolean;
+};
 type PrivateGroup = {
   groupId: string;
   name: string;
@@ -131,6 +137,7 @@ export function PrivateGroupsPanel({
   const [expertiseDefinitions, setExpertiseDefinitions] = useState<ReviewerExpertiseDefinition[]>([]);
   const [expertiseDefinitionsError, setExpertiseDefinitionsError] = useState<string | null>(null);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [policyEditorSnapshot, setPolicyEditorSnapshot] = useState<GroupPolicyDraft | null>(null);
   const [showIssueInvitation, setShowIssueInvitation] = useState(false);
   const [issuedInvitation, setIssuedInvitation] = useState<IssuedInvitation | null>(null);
   const [loading, setLoading] = useState(true);
@@ -322,6 +329,7 @@ export function PrivateGroupsPanel({
       const created = body.group as PrivateGroup;
       setName("");
       setPurpose("");
+      setPolicyEditorSnapshot(null);
       setShowCreateGroup(false);
       await loadGroups(workspaceId, created.groupId);
       setStatus("Group created.");
@@ -569,52 +577,96 @@ export function PrivateGroupsPanel({
                 maxLength={500}
               />
             </label>
-            <details className="rounded-lg border border-white/10 p-4">
-              <summary className="cursor-pointer text-sm font-semibold text-base-content/75">Customize policy</summary>
-              <div className="mt-4 space-y-4">
-                <label className="block text-sm text-base-content/60">
-                  Default compensation
-                  <select
-                    className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                    value={compensation}
-                    onChange={event => setCompensation(event.target.value as "unpaid" | "paid")}
+            {!policyEditorSnapshot ? (
+              <button
+                type="button"
+                className="btn rateloop-secondary-action justify-self-start"
+                aria-controls="private-group-policy-editor"
+                aria-expanded={false}
+                onClick={() =>
+                  setPolicyEditorSnapshot({
+                    compensation,
+                    worldIdRequired,
+                    assignmentNotifications,
+                    exportAllowed,
+                  })
+                }
+              >
+                Customize policy
+              </button>
+            ) : (
+              <fieldset
+                id="private-group-policy-editor"
+                className="rounded-lg border border-white/10 p-4"
+                aria-label="Group policy"
+              >
+                <div className="space-y-4">
+                  <label className="block text-sm text-base-content/60">
+                    Default compensation
+                    <select
+                      className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                      value={compensation}
+                      onChange={event => setCompensation(event.target.value as "unpaid" | "paid")}
+                    >
+                      <option value="unpaid">Unpaid internal review</option>
+                      <option value="paid">Paid private review</option>
+                    </select>
+                  </label>
+                  <fieldset className="space-y-3 text-sm text-base-content/65">
+                    <legend className="sr-only">Policy defaults</legend>
+                    <label className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        className="checkbox checkbox-sm"
+                        checked={worldIdRequired}
+                        onChange={event => setWorldIdRequired(event.target.checked)}
+                      />
+                      Require World ID assurance
+                    </label>
+                    <label className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        className="checkbox checkbox-sm"
+                        checked={assignmentNotifications}
+                        onChange={event => setAssignmentNotifications(event.target.checked)}
+                      />
+                      Notify members about assignments
+                    </label>
+                    <label className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        className="checkbox checkbox-sm"
+                        checked={exportAllowed}
+                        onChange={event => setExportAllowed(event.target.checked)}
+                      />
+                      Allow workspace exports
+                    </label>
+                  </fieldset>
+                </div>
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    className="btn rateloop-secondary-action"
+                    onClick={() => {
+                      setCompensation(policyEditorSnapshot.compensation);
+                      setWorldIdRequired(policyEditorSnapshot.worldIdRequired);
+                      setAssignmentNotifications(policyEditorSnapshot.assignmentNotifications);
+                      setExportAllowed(policyEditorSnapshot.exportAllowed);
+                      setPolicyEditorSnapshot(null);
+                    }}
                   >
-                    <option value="unpaid">Unpaid internal review</option>
-                    <option value="paid">Paid private review</option>
-                  </select>
-                </label>
-                <fieldset className="space-y-3 text-sm text-base-content/65">
-                  <legend className="sr-only">Policy defaults</legend>
-                  <label className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      className="checkbox checkbox-sm"
-                      checked={worldIdRequired}
-                      onChange={event => setWorldIdRequired(event.target.checked)}
-                    />
-                    Require World ID assurance
-                  </label>
-                  <label className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      className="checkbox checkbox-sm"
-                      checked={assignmentNotifications}
-                      onChange={event => setAssignmentNotifications(event.target.checked)}
-                    />
-                    Notify members about assignments
-                  </label>
-                  <label className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      className="checkbox checkbox-sm"
-                      checked={exportAllowed}
-                      onChange={event => setExportAllowed(event.target.checked)}
-                    />
-                    Allow workspace exports
-                  </label>
-                </fieldset>
-              </div>
-            </details>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn rateloop-secondary-action"
+                    onClick={() => setPolicyEditorSnapshot(null)}
+                  >
+                    Done
+                  </button>
+                </div>
+              </fieldset>
+            )}
             <button type="submit" className="rateloop-gradient-action justify-self-start px-5" disabled={busy}>
               {busy ? "Creating…" : "Create group"}
             </button>
@@ -668,23 +720,37 @@ export function PrivateGroupsPanel({
                 {group.name}
               </h2>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-base-content/60">{group.purpose}</p>
-              <details className="mt-4 rounded-lg border border-white/10 p-4">
-                <summary className="cursor-pointer text-sm font-semibold text-base-content/70">Policy details</summary>
-                <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-3">
+              <dl className="mt-4 grid gap-4 rounded-lg border border-white/10 p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <dt className="text-xs text-base-content/45">Compensation</dt>
+                  <dd className="mt-1">
+                    {group.policy.defaultCompensation === "paid" ? "Paid private review" : "Unpaid internal review"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-base-content/45">Identity assurance</dt>
+                  <dd className="mt-1">{group.policy.worldIdRequired ? "World ID required" : "World ID optional"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-base-content/45">Assignment notifications</dt>
+                  <dd className="mt-1">
+                    {group.policy.notificationDefaults?.assignmentAvailable === false ? "Off" : "On"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-base-content/45">Workspace exports</dt>
+                  <dd className="mt-1">{group.policy.exportAllowed ? "Allowed" : "Blocked"}</dd>
+                </div>
+              </dl>
+              <details className="mt-3 text-xs text-base-content/45">
+                <summary className="cursor-pointer">Policy record</summary>
+                <dl className="mt-3">
                   <div>
-                    <dt className="text-xs text-base-content/45">Compensation</dt>
-                    <dd className="mt-1 capitalize">{group.policy.defaultCompensation ?? "unpaid"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-base-content/45">World ID</dt>
-                    <dd className="mt-1">{group.policy.worldIdRequired ? "Required" : "Optional"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-base-content/45">Policy version</dt>
+                    <dt>Version</dt>
                     <dd className="mt-1 font-mono">v{group.currentPolicyVersion}</dd>
                   </div>
                 </dl>
-                <code className="mt-4 block break-all text-[11px] text-base-content/35">{group.policyHash}</code>
+                <code className="mt-3 block break-all text-[11px] text-base-content/35">{group.policyHash}</code>
               </details>
             </div>
           ) : null}
@@ -882,6 +948,7 @@ export function PrivateGroupsPanel({
                     {member.status === "active" && member.sourceInvitationId ? (
                       <details
                         className="mt-3 border-t border-white/10 pt-3"
+                        data-disclosure-purpose="specialist-attestation"
                         open={expertiseMemberAddress === member.principalAddress}
                         onToggle={event => {
                           if (event.currentTarget.open) {

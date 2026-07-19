@@ -11,8 +11,14 @@ test("workspace managers can issue secret-once invitations and revoke access", (
 
   assert.match(panel, /Purpose \(optional\)/);
   assert.match(panel, /purpose\.trim\(\) \|\| `Private reviews for \$\{name\.trim\(\)\}\.`/);
-  assert.match(panel, /<summary[^>]*>Customize policy<\/summary>/);
+  assert.match(
+    panel,
+    /<button[\s\S]*?aria-controls="private-group-policy-editor"[\s\S]*?Customize policy[\s\S]*?<\/button>/,
+  );
   assert.ok(panel.indexOf("Customize policy") < panel.indexOf("Default compensation"));
+  assert.match(panel, /id="private-group-policy-editor"/);
+  assert.match(panel, />\s*Cancel\s*<\/button>/);
+  assert.match(panel, />\s*Done\s*<\/button>/);
   assert.match(panel, /Recipient email \(optional\)/);
   assert.match(panel, /Leave blank to create a one-use invitation code\./);
   assert.match(panel, /Invitation restrictions/);
@@ -26,6 +32,18 @@ test("workspace managers can issue secret-once invitations and revoke access", (
   assert.match(panel, /intendedAccountAddress/);
   assert.match(panel, /intendedEmailDomain/);
   assert.match(panel, /Require World ID assurance/);
+  assert.match(panel, /Identity assurance/);
+  assert.match(panel, /Assignment notifications/);
+  assert.match(panel, /Workspace exports/);
+  const selectedPolicyStart = panel.indexOf('<h2 id="selected-private-group-heading"');
+  const selectedPolicy = panel.slice(selectedPolicyStart, panel.indexOf("</dl>", selectedPolicyStart) + 5);
+  assert.match(selectedPolicy, /<dl/);
+  assert.match(selectedPolicy, /Compensation/);
+  assert.match(selectedPolicy, /Identity assurance/);
+  assert.match(selectedPolicy, /Assignment notifications/);
+  assert.match(selectedPolicy, /Workspace exports/);
+  assert.doesNotMatch(selectedPolicy, /<details/);
+  assert.doesNotMatch(panel, />Policy details<\/summary>/);
   assert.doesNotMatch(panel, /localStorage|sessionStorage/);
 });
 
@@ -45,6 +63,7 @@ test("workspace managers intend and confirm exact specialist definitions", () =>
   assert.match(panel, /pending owner confirmation/);
 
   assert.match(panel, /Confirm specialist knowledge/);
+  assert.match(panel, /data-disclosure-purpose="specialist-attestation"/);
   assert.match(panel, /RateLoop has not independently verified/);
   assert.match(panel, /Saving replaces any current specialist confirmation/);
   assert.match(panel, /method: "PUT"/);
