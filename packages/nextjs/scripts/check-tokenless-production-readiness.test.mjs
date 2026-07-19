@@ -94,6 +94,7 @@ function validFixture() {
     TOKENLESS_SUBSCRIPTIONS_ENABLED: "false",
     TOKENLESS_PREPAID_TOPUP_ENABLED: "false",
     TOKENLESS_ENTERPRISE_IDENTITY_ENABLED: "false",
+    TOKENLESS_EVIDENCE_FINALITY_BLOCK_TAG: "safe",
     TOKENLESS_DAC7_POLICY: "eu",
     TOKENLESS_EVIDENCE_TENANT_COMMITMENT_KEY: encodedKey(9),
     TOKENLESS_PSEUDONYM_KEY: encodedKey(14),
@@ -163,6 +164,35 @@ function validFixture() {
     },
   };
 }
+
+test("production chain execution requires distinct HTTPS RPC fallbacks", () => {
+  const missing = validFixture();
+  delete missing.env.BASE_SEPOLIA_RPC_FALLBACK_URLS;
+  assert.match(validateTokenlessProductionReadiness(missing).join("\n"), /is required for a hosted release/i);
+
+  const duplicate = validFixture();
+  duplicate.env.BASE_SEPOLIA_RPC_FALLBACK_URLS = duplicate.env.BASE_SEPOLIA_RPC_URL;
+  assert.match(validateTokenlessProductionReadiness(duplicate).join("\n"), /must be distinct/i);
+
+  const plaintext = validFixture();
+  plaintext.env.BASE_SEPOLIA_RPC_FALLBACK_URLS = "http://fallback.example";
+  assert.match(validateTokenlessProductionReadiness(plaintext).join("\n"), /must contain HTTPS URLs/i);
+});
+
+test("production evidence publication requires exactly one conservative finality policy", () => {
+  const missing = validFixture();
+  delete missing.env.TOKENLESS_EVIDENCE_FINALITY_BLOCK_TAG;
+  assert.match(validateTokenlessProductionReadiness(missing).join("\n"), /configure exactly one/i);
+
+  const shallow = validFixture();
+  delete shallow.env.TOKENLESS_EVIDENCE_FINALITY_BLOCK_TAG;
+  shallow.env.TOKENLESS_EVIDENCE_CONFIRMATION_DEPTH = "63";
+  assert.match(validateTokenlessProductionReadiness(shallow).join("\n"), /at least 64/i);
+
+  const conflicting = validFixture();
+  conflicting.env.TOKENLESS_EVIDENCE_CONFIRMATION_DEPTH = "64";
+  assert.match(validateTokenlessProductionReadiness(conflicting).join("\n"), /configure exactly one/i);
+});
 
 test("main hosted builds fail closed while local builds skip the release gate", () => {
   for (const env of [

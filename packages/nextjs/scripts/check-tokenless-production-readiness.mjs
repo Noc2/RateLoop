@@ -587,6 +587,20 @@ export function validateTokenlessProductionReadiness({
   if (claimGrace > 30 * 86_400) {
     errors.push("TOKENLESS_CLAIM_GRACE_PERIOD_SECONDS must not exceed 30 days.");
   }
+  const evidenceFinalityBlockTag = value(env, "TOKENLESS_EVIDENCE_FINALITY_BLOCK_TAG").toLowerCase();
+  const evidenceConfirmationDepth = value(env, "TOKENLESS_EVIDENCE_CONFIRMATION_DEPTH");
+  if (Boolean(evidenceFinalityBlockTag) === Boolean(evidenceConfirmationDepth)) {
+    errors.push(
+      "Configure exactly one of TOKENLESS_EVIDENCE_FINALITY_BLOCK_TAG or TOKENLESS_EVIDENCE_CONFIRMATION_DEPTH.",
+    );
+  } else if (evidenceFinalityBlockTag && !["safe", "finalized"].includes(evidenceFinalityBlockTag)) {
+    errors.push('TOKENLESS_EVIDENCE_FINALITY_BLOCK_TAG must be "safe" or "finalized".');
+  } else if (
+    evidenceConfirmationDepth &&
+    (!positiveInteger(evidenceConfirmationDepth) || Number(evidenceConfirmationDepth) < 64)
+  ) {
+    errors.push("TOKENLESS_EVIDENCE_CONFIRMATION_DEPTH must be an integer of at least 64.");
+  }
   if (
     value(env, "TOKENLESS_USDC_EIP712_NAME") !== "RateLoop Tokenless Test USDC" ||
     value(env, "TOKENLESS_USDC_EIP712_VERSION") !== "2"
