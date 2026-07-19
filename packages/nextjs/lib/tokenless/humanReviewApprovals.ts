@@ -49,6 +49,21 @@ export type HumanReviewPreparedRequest = {
     selectionPolicyId: string;
     selectionPolicyVersion: number;
   };
+  publicationApproval?: {
+    schemaVersion: "rateloop.redacted-publication-approval.v1";
+    visibility: "public";
+    dataClassification: "redacted";
+    confirmedNoSensitiveData: true;
+    redactionSummary: string;
+    humanReviewBinding: {
+      id: string;
+      version: number;
+      hash: string;
+      authority: "ask_automatically" | "prepare_for_approval";
+    };
+    selectionPolicy: { id: string; version: number };
+    publishingPolicy: { id: string; version: number };
+  };
   feedbackBonus?: HumanReviewFeedbackBonusEconomics;
 };
 
@@ -185,6 +200,7 @@ function preparedRequest(value: unknown): HumanReviewPreparedRequest {
     "contentCommitments",
     "provenance",
   ];
+  if (root.publicationApproval !== undefined) preparedKeys.push("publicationApproval");
   if (root.feedbackBonus !== undefined) preparedKeys.push("feedbackBonus");
   exactKeys(root, "prepared request", preparedKeys);
   if (root.schemaVersion !== "rateloop.human-review-prepared-request.v1") {
@@ -197,6 +213,8 @@ function preparedRequest(value: unknown): HumanReviewPreparedRequest {
   const panel = object(root.panel, "panel");
   const contentCommitments = object(root.contentCommitments, "content commitments");
   const provenance = object(root.provenance, "provenance");
+  const publication =
+    root.publicationApproval === undefined ? null : object(root.publicationApproval, "redacted-publication approval");
   const bonus =
     root.feedbackBonus === undefined
       ? ({
@@ -225,6 +243,62 @@ function preparedRequest(value: unknown): HumanReviewPreparedRequest {
   exactKeys(panel, "panel", ["size"]);
   exactKeys(contentCommitments, "content commitments", ["source", "suggestion"]);
   exactKeys(provenance, "provenance", ["agentId", "agentVersionId", "selectionPolicyId", "selectionPolicyVersion"]);
+  let exactPublication: HumanReviewPreparedRequest["publicationApproval"];
+  if (publication) {
+    exactKeys(publication, "redacted-publication approval", [
+      "schemaVersion",
+      "visibility",
+      "dataClassification",
+      "confirmedNoSensitiveData",
+      "redactionSummary",
+      "humanReviewBinding",
+      "selectionPolicy",
+      "publishingPolicy",
+    ]);
+    const binding = object(publication.humanReviewBinding, "redacted-publication human-review binding");
+    const selection = object(publication.selectionPolicy, "redacted-publication selection policy");
+    const publishing = object(publication.publishingPolicy, "redacted-publication publishing policy");
+    exactKeys(binding, "redacted-publication human-review binding", ["id", "version", "hash", "authority"]);
+    exactKeys(selection, "redacted-publication selection policy", ["id", "version"]);
+    exactKeys(publishing, "redacted-publication publishing policy", ["id", "version"]);
+    const redactionSummary = requiredString(publication.redactionSummary, "redaction summary");
+    const selectionPolicyId = requiredString(selection.id, "redacted-publication selection policy ID");
+    const selectionPolicyVersion = integer(selection.version, "redacted-publication selection policy version");
+    if (
+      publication.schemaVersion !== "rateloop.redacted-publication-approval.v1" ||
+      publication.visibility !== "public" ||
+      publication.dataClassification !== "redacted" ||
+      publication.confirmedNoSensitiveData !== true ||
+      redactionSummary !== redactionSummary.trim() ||
+      redactionSummary.length < 10 ||
+      redactionSummary.length > 1_000 ||
+      selectionPolicyId !== requiredString(provenance.selectionPolicyId, "selection policy ID") ||
+      selectionPolicyVersion !== integer(provenance.selectionPolicyVersion, "selection policy version")
+    ) {
+      throw new Error("Stored redacted-publication approval is internally inconsistent.");
+    }
+    exactPublication = {
+      schemaVersion: "rateloop.redacted-publication-approval.v1",
+      visibility: "public",
+      dataClassification: "redacted",
+      confirmedNoSensitiveData: true,
+      redactionSummary,
+      humanReviewBinding: {
+        id: requiredString(binding.id, "human-review binding ID"),
+        version: integer(binding.version, "human-review binding version"),
+        hash: hash(binding.hash, "human-review binding hash"),
+        authority: oneOf(binding.authority, "human-review binding authority", [
+          "ask_automatically",
+          "prepare_for_approval",
+        ] as const),
+      },
+      selectionPolicy: { id: selectionPolicyId, version: selectionPolicyVersion },
+      publishingPolicy: {
+        id: requiredString(publishing.id, "publishing policy ID"),
+        version: integer(publishing.version, "publishing policy version"),
+      },
+    };
+  }
   const rationaleMode = oneOf(question.rationaleMode, "rationale mode", ["off", "optional", "required"] as const);
   const questionBinding = hasQuestionBinding
     ? {
@@ -337,6 +411,7 @@ function preparedRequest(value: unknown): HumanReviewPreparedRequest {
       selectionPolicyId: requiredString(provenance.selectionPolicyId, "selection policy ID"),
       selectionPolicyVersion: integer(provenance.selectionPolicyVersion, "selection policy version"),
     },
+    ...(exactPublication ? { publicationApproval: exactPublication } : {}),
     feedbackBonus: bonus,
   };
 }

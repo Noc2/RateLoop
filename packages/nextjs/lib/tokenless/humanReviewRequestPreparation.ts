@@ -79,6 +79,22 @@ export type HumanReviewDerivedEconomics = {
   maximumChargeAtomic: string;
 };
 
+export type HumanReviewPublicationApproval = {
+  schemaVersion: "rateloop.redacted-publication-approval.v1";
+  visibility: "public";
+  dataClassification: "redacted";
+  confirmedNoSensitiveData: true;
+  redactionSummary: string;
+  humanReviewBinding: {
+    id: string;
+    version: number;
+    hash: `sha256:${string}`;
+    authority: "ask_automatically" | "prepare_for_approval";
+  };
+  selectionPolicy: { id: string; version: number };
+  publishingPolicy: { id: string; version: number };
+};
+
 export type HumanReviewPreparedRequest = {
   schemaVersion: "rateloop.human-review-prepared-request.v1";
   opportunityId: string;
@@ -110,6 +126,7 @@ export type HumanReviewPreparedRequest = {
     selectionPolicyId: string;
     selectionPolicyVersion: number;
   };
+  publicationApproval?: HumanReviewPublicationApproval;
   feedbackBonus?: HumanReviewFeedbackBonusEconomics;
 };
 
@@ -434,6 +451,7 @@ export function prepareHumanReviewRequest(input: {
   suggestionPayload: string;
   effectiveQuestion?: FrozenBinaryReviewQuestion;
   effectiveQuestionHash?: `sha256:${string}`;
+  publicationApproval?: HumanReviewPublicationApproval;
 }): PreparedHumanReviewRequest {
   const profile = exactProfile(input.requestProfile);
   const { question, questionHash } = exactEffectiveQuestion({
@@ -488,6 +506,41 @@ export function prepareHumanReviewRequest(input: {
     BigInt(derivedEconomics.maximumChargeAtomic) + BigInt(feedbackBonusEconomics.poolAtomic),
     "maximum payment consent",
   ).toString();
+  const publicationApproval = input.publicationApproval;
+  if (publicationApproval) {
+    const binding = publicationApproval.humanReviewBinding;
+    const selectionPolicy = publicationApproval.selectionPolicy;
+    const publishingPolicy = publicationApproval.publishingPolicy;
+    if (
+      publicationApproval.schemaVersion !== "rateloop.redacted-publication-approval.v1" ||
+      publicationApproval.visibility !== "public" ||
+      publicationApproval.dataClassification !== "redacted" ||
+      publicationApproval.confirmedNoSensitiveData !== true ||
+      typeof publicationApproval.redactionSummary !== "string" ||
+      publicationApproval.redactionSummary.trim().length < 10 ||
+      publicationApproval.redactionSummary.length > 1_000 ||
+      typeof binding.id !== "string" ||
+      !binding.id.trim() ||
+      !HASH_PATTERN.test(binding.hash) ||
+      !["ask_automatically", "prepare_for_approval"].includes(binding.authority) ||
+      !Number.isSafeInteger(binding.version) ||
+      binding.version < 1 ||
+      typeof selectionPolicy.id !== "string" ||
+      !selectionPolicy.id.trim() ||
+      !Number.isSafeInteger(selectionPolicy.version) ||
+      selectionPolicy.version < 1 ||
+      selectionPolicy.id !== input.selectionPolicy.id ||
+      selectionPolicy.version !== input.selectionPolicy.version ||
+      typeof publishingPolicy.id !== "string" ||
+      !publishingPolicy.id.trim() ||
+      !Number.isSafeInteger(publishingPolicy.version) ||
+      publishingPolicy.version < 1 ||
+      !["public_network", "hybrid"].includes(profile.audience) ||
+      profile.contentBoundary !== "public_or_test"
+    ) {
+      configurationError("Stored redacted-publication approval terms are invalid.");
+    }
+  }
   const preparedRequest = immutable<HumanReviewPreparedRequest>({
     schemaVersion: "rateloop.human-review-prepared-request.v1",
     opportunityId: requiredText(input.opportunityId, "opportunity ID", 160),
@@ -527,6 +580,20 @@ export function prepareHumanReviewRequest(input: {
         2_147_483_647,
       ),
     },
+    ...(publicationApproval
+      ? {
+          publicationApproval: {
+            schemaVersion: "rateloop.redacted-publication-approval.v1",
+            visibility: "public",
+            dataClassification: "redacted",
+            confirmedNoSensitiveData: true,
+            redactionSummary: publicationApproval.redactionSummary.trim(),
+            humanReviewBinding: { ...publicationApproval.humanReviewBinding },
+            selectionPolicy: { ...publicationApproval.selectionPolicy },
+            publishingPolicy: { ...publicationApproval.publishingPolicy },
+          },
+        }
+      : {}),
     feedbackBonus: feedbackBonusEconomics,
   });
   const reviewEconomics =

@@ -109,6 +109,45 @@ test("prepares and hashes owner-bound question, audience, timing, panel, economi
   assert.equal(Object.isFrozen(prepared.quoteTerms.budget), true);
 });
 
+test("binds an owner-approved redaction summary and every frozen publication policy into the request hash", () => {
+  const base = {
+    opportunityId: "aop_exact",
+    workflowKey: "refund-review",
+    requestProfile: profile(),
+    selectionPolicy: { id: "rpol_exact", version: 3 },
+    contentCommitments: {
+      source: hashPreparedPayload("source"),
+      suggestion: hashPreparedPayload("suggestion"),
+    },
+    preparedAt: NOW,
+    expiresAt: new Date(NOW.getTime() + 3_600_000),
+    sourcePayload: "source",
+    suggestionPayload: "suggestion",
+  };
+  const publicationApproval = {
+    schemaVersion: "rateloop.redacted-publication-approval.v1" as const,
+    visibility: "public" as const,
+    dataClassification: "redacted" as const,
+    confirmedNoSensitiveData: true as const,
+    redactionSummary: "Customer names and account identifiers were removed.",
+    humanReviewBinding: {
+      id: "hrb_exact",
+      version: 4,
+      hash: HASH("d"),
+      authority: "ask_automatically" as const,
+    },
+    selectionPolicy: { id: "rpol_exact", version: 3 },
+    publishingPolicy: { id: "apol_exact", version: 7 },
+  };
+  const approved = prepareHumanReviewRequest({ ...base, publicationApproval });
+  const changedSummary = prepareHumanReviewRequest({
+    ...base,
+    publicationApproval: { ...publicationApproval, redactionSummary: "Email addresses were removed instead." },
+  });
+  assert.deepEqual(approved.preparedRequest.publicationApproval, publicationApproval);
+  assert.notEqual(approved.preparedRequestHash, changedSummary.preparedRequestHash);
+});
+
 test("freezes exact specialist requirements into the prepared request", () => {
   const expertiseRequirements = [
     {

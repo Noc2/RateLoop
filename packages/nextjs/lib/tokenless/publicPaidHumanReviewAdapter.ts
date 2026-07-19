@@ -5,6 +5,10 @@ import { dbClient, dbPool } from "~~/lib/db";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import { ensureFeedbackBonusPoolForDelivery } from "~~/lib/tokenless/feedbackBonusPoolProjection";
+import {
+  type RedactedPublicationApprovalDeclaration,
+  prepareHumanReviewForOwnerApproval,
+} from "~~/lib/tokenless/humanReviewApprovalPreparation";
 import { hashHumanReviewConfiguration } from "~~/lib/tokenless/humanReviewConfiguration";
 import { transitionHumanReviewOpportunityLifecycleInTransaction } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
 import {
@@ -85,6 +89,7 @@ type FrozenOpportunity = {
     version: number;
     canonicalHash: string;
     authority: "check_only" | "prepare_for_approval" | "ask_automatically";
+    publishingPolicy: { id: string; version: number };
   };
   requestProfile: BoundHumanReviewRequestProfile;
   selectionPolicy: { id: string; version: number };
@@ -198,6 +203,7 @@ export function normalizePublicPaidReviewPublication(value: unknown): PublicPaid
     !["public", "synthetic", "redacted"].includes(String(classification)) ||
     declaration.confirmedNoSensitiveData !== true ||
     (redactionSummary !== undefined && typeof redactionSummary !== "string") ||
+    (typeof redactionSummary === "string" && redactionSummary.length > 1_000) ||
     (classification === "redacted" && (typeof redactionSummary !== "string" || redactionSummary.trim().length < 10))
   ) {
     throw new TokenlessServiceError(
@@ -523,6 +529,10 @@ async function loadFrozenOpportunity(
       version: integer(row, "human_review_binding_version"),
       canonicalHash: bindingCanonicalHash,
       authority,
+      publishingPolicy: {
+        id: integration.publishingPolicyId!,
+        version: integration.publishingPolicyVersion!,
+      },
     },
     requestProfile: profile,
     selectionPolicy: { id: text(row, "policy_id")!, version: integer(row, "policy_version") },
@@ -678,9 +688,13 @@ function prepareExactRequest(input: {
   approval: FrozenApproval | null;
   sourcePayload: string;
   suggestionPayload: string;
+  publication: PublicPaidHumanReviewPublication;
 }) {
   const { opportunity, approval } = input;
-  if (opportunity.binding.authority !== "ask_automatically" && !approval) {
+  if (
+    (opportunity.binding.authority !== "ask_automatically" || input.publication.dataClassification === "redacted") &&
+    !approval
+  ) {
     throw new TokenlessServiceError(
       "Owner approval is required before publishing this review.",
       409,
@@ -711,6 +725,26 @@ function prepareExactRequest(input: {
     suggestionPayload: input.suggestionPayload,
     effectiveQuestion: opportunity.effectiveQuestion,
     effectiveQuestionHash: opportunity.effectiveQuestionHash,
+    ...(input.publication.dataClassification === "redacted"
+      ? {
+          publicationApproval: {
+            schemaVersion: "rateloop.redacted-publication-approval.v1",
+            visibility: "public",
+            dataClassification: "redacted",
+            confirmedNoSensitiveData: true,
+            redactionSummary: input.publication.redactionSummary!,
+            humanReviewBinding: {
+              id: opportunity.binding.id,
+              version: opportunity.binding.version,
+              hash: opportunity.binding.canonicalHash as `sha256:${string}`,
+              authority:
+                opportunity.binding.authority === "ask_automatically" ? "ask_automatically" : "prepare_for_approval",
+            },
+            selectionPolicy: { ...opportunity.selectionPolicy },
+            publishingPolicy: { ...opportunity.binding.publishingPolicy },
+          },
+        }
+      : {}),
   });
   if (approval) {
     const tupleMatches =
@@ -970,7 +1004,38 @@ export async function requestPublicPaidHumanReview(
     );
   }
   const approval = await loadFrozenApproval(input.principal.integration.workspaceId, opportunity.opportunityId);
-  const preparation = prepareExactRequest({ opportunity, approval, sourcePayload, suggestionPayload });
+  if (
+    publication.dataClassification === "redacted" &&
+    opportunity.binding.authority === "ask_automatically" &&
+    !approval
+  ) {
+    await prepareHumanReviewForOwnerApproval({
+      principal: input.principal,
+      opportunityId: opportunity.opportunityId,
+      sourcePayload,
+      suggestionPayload,
+      effectiveQuestion: opportunity.effectiveQuestion,
+      effectiveQuestionHash: opportunity.effectiveQuestionHash,
+      publicationApproval: {
+        visibility: "public",
+        dataClassification: "redacted",
+        confirmedNoSensitiveData: true,
+        redactionSummary: publication.redactionSummary!,
+      } satisfies RedactedPublicationApprovalDeclaration,
+    });
+    throw new TokenlessServiceError(
+      "Owner approval is required before publishing redacted review material.",
+      409,
+      "approval_required",
+    );
+  }
+  const preparation = prepareExactRequest({
+    opportunity,
+    approval,
+    sourcePayload,
+    suggestionPayload,
+    publication,
+  });
   if (requiresExpertise) {
     const expertisePool = opportunity.requestProfile.expertiseRequirements?.length
       ? await countEligibleNetworkExactExpertisePool({

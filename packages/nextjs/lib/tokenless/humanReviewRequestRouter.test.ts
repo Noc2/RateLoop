@@ -166,10 +166,15 @@ const foundation = {
 
 function dependencies(
   frozen: FrozenHumanReviewRoutingContext,
-  options: { privateBinding?: ExactPrivateReviewBinding | null; workspaceStopped?: boolean } = {},
+  options: {
+    privateBinding?: ExactPrivateReviewBinding | null;
+    workspaceStopped?: boolean;
+    approvalStatus?: "pending" | "approved" | "consumed";
+  } = {},
 ) {
   const calls = {
     prepare: 0,
+    consumeApproval: 0,
     activate: 0,
     public: 0,
     resolvePrivate: 0,
@@ -212,7 +217,12 @@ function dependencies(
     prepareApproval: async () => {
       calls.prepare += 1;
       calls.order.push("prepare");
-      return approval;
+      return { ...approval, status: options.approvalStatus ?? "approved" };
+    },
+    consumePublicationApproval: async () => {
+      calls.consumeApproval += 1;
+      calls.order.push("consume_approval");
+      return { approvalId: approval.approvalId, status: "consumed", replayed: false };
     },
     activateAutonomousLane: async () => {
       calls.activate += 1;
@@ -319,6 +329,16 @@ const publicMaterial = {
     visibility: "public" as const,
     dataClassification: "public" as const,
     confirmedNoSensitiveData: true as const,
+  },
+};
+
+const redactedPublicMaterial = {
+  ...publicMaterial,
+  publication: {
+    visibility: "public" as const,
+    dataClassification: "redacted" as const,
+    confirmedNoSensitiveData: true as const,
+    redactionSummary: "Customer identifiers were removed from the public review copy.",
   },
 };
 
@@ -442,6 +462,42 @@ test("public paid automatic routing activates the exact frozen opportunity befor
   assert.equal(result.action, "public_review_requested");
   assert.equal(result.action === "public_review_requested" ? result.ask.operationKey : null, "operation_router");
   assert.deepEqual(calls.order, ["activate", "public"]);
+});
+
+test("redacted automatic publication stops at exact owner approval before activation or publication", async () => {
+  const { calls, router } = dependencies(context({ lifecycleState: "approval_required" }), {
+    approvalStatus: "pending",
+  });
+  const result = await router({
+    principal,
+    opportunityId: "opportunity_router",
+    sourcePayload: "source",
+    suggestionPayload: "suggestion",
+    material: redactedPublicMaterial,
+    now: NOW,
+  });
+  assert.equal(result.action, "owner_approval_required");
+  assert.equal(result.authority, "ask_automatically");
+  assert.deepEqual(calls.order, ["prepare"]);
+  assert.equal(calls.public, 0);
+  assert.equal(calls.activate, 0);
+});
+
+test("the exact approved redacted replay reaches the public adapter once", async () => {
+  const { calls, router } = dependencies(context({ lifecycleState: "request_ready" }), {
+    approvalStatus: "approved",
+  });
+  const result = await router({
+    principal,
+    opportunityId: "opportunity_router",
+    sourcePayload: "source",
+    suggestionPayload: "suggestion",
+    material: redactedPublicMaterial,
+    now: NOW,
+  });
+  assert.equal(result.action, "public_review_requested");
+  assert.deepEqual(calls.order, ["prepare", "activate", "public"]);
+  assert.equal(calls.public, 1);
 });
 
 test("a bonus-enabled route binds the exact pool before reporting public delivery", async () => {
@@ -619,7 +675,8 @@ test("unsupported hybrid routing remains blocked without falling back to either 
 });
 
 test("hybrid routing activates only with an exact frozen split and the dedicated adapter", async () => {
-  const { calls, router } = dependencies(context({ lane: "hybrid_public_safe" }));
+  const hybridContext = context({ lane: "hybrid_public_safe" });
+  const { calls, router } = dependencies(hybridContext);
   const result = await router({
     principal,
     opportunityId: "opportunity_router",
@@ -630,9 +687,9 @@ test("hybrid routing activates only with an exact frozen split and the dedicated
       hybridSplit: {
         schemaVersion: "rateloop.hybrid-review-split.v1",
         opportunityId: "opportunity_router",
-        audiencePolicyHash: HASH,
-        requestProfileHash: HASH,
-        contentCommitments: { source: HASH, suggestion: HASH },
+        audiencePolicyHash: hybridContext.selectionPolicy.audiencePolicyHash,
+        requestProfileHash: hybridContext.requestProfile.hash,
+        contentCommitments: hybridContext.contentCommitments,
         publication: publicMaterial.publication,
         economics: {
           asset: "USDC",

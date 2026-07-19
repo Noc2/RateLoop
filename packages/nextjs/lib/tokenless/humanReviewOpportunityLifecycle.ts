@@ -8,7 +8,7 @@ export const HUMAN_REVIEW_OPPORTUNITY_TRANSITIONS = {
   evaluating: ["skipped", "approval_required", "request_ready", "blocked"],
   skipped: [],
   approval_required: ["request_ready", "blocked", "cancelled_before_commit"],
-  request_ready: ["pending", "blocked", "cancelled_before_commit"],
+  request_ready: ["approval_required", "pending", "blocked", "cancelled_before_commit"],
   pending: ["blocked", "completed", "inconclusive", "failed_terminal"],
   blocked: [
     "approval_required",

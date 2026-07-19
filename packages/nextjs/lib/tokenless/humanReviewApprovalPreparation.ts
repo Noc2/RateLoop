@@ -4,11 +4,13 @@ import "server-only";
 import { dbPool } from "~~/lib/db";
 import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import { hashHumanReviewConfiguration } from "~~/lib/tokenless/humanReviewConfiguration";
+import { transitionHumanReviewOpportunityLifecycleInTransaction } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
 import type { FrozenBinaryReviewQuestion } from "~~/lib/tokenless/humanReviewQuestions";
 import {
   type BoundHumanReviewRequestProfile,
   type HumanReviewDerivedEconomics,
   type HumanReviewPreparedRequest,
+  type HumanReviewPublicationApproval,
   type PreparedHumanReviewRequest,
   hashPreparedHumanReviewValue,
   prepareHumanReviewRequest,
@@ -55,10 +57,22 @@ type FrozenApprovalOpportunity = {
   sourceEvidenceHash: string;
   suggestionCommitment: string;
   selectionPolicy: { id: string; version: number };
+  binding: {
+    id: string;
+    version: number;
+    hash: `sha256:${string}`;
+    authority: "ask_automatically" | "prepare_for_approval";
+    publishingPolicy: { id: string; version: number };
+  };
   requestProfile: BoundHumanReviewRequestProfile;
   integrationId: string;
-  lifecycle: { state: string; terminal: boolean };
+  lifecycle: { state: string; revision: number; terminal: boolean };
 };
+
+export type RedactedPublicationApprovalDeclaration = Pick<
+  HumanReviewPublicationApproval,
+  "visibility" | "dataClassification" | "confirmedNoSensitiveData" | "redactionSummary"
+>;
 
 function text(row: Row | undefined, key: string) {
   const value = row?.[key];
@@ -232,6 +246,9 @@ async function loadAndVerifyOpportunity(
   client: PoolClient,
   principal: IntegrationPrincipal,
   opportunityId: string,
+  publicationApproval: RedactedPublicationApprovalDeclaration | undefined,
+  expectedAuthority: "ask_automatically" | "prepare_for_approval",
+  now: Date,
 ): Promise<FrozenApprovalOpportunity> {
   assertPrincipal(principal);
   const integration = principal.integration;
@@ -243,7 +260,8 @@ async function loadAndVerifyOpportunity(
             o.request_profile_id AS opportunity_profile_id,
             o.request_profile_version AS opportunity_profile_version,
             o.request_profile_hash AS opportunity_profile_hash,
-            l.state AS lifecycle_state, l.terminal_at AS lifecycle_terminal_at,
+            l.state AS lifecycle_state, l.state_revision AS lifecycle_state_revision,
+            l.terminal_at AS lifecycle_terminal_at,
             s.workflow_key,
             i.integration_id, i.status AS integration_status, i.agent_id AS integration_agent_id,
             i.agent_version_id AS integration_agent_version_id,
@@ -265,6 +283,8 @@ async function loadAndVerifyOpportunity(
             b.publishing_policy_version AS binding_publishing_policy_version,
             b.authority AS binding_authority, b.enabled AS binding_enabled,
             b.canonical_hash AS binding_canonical_hash, b.superseded_at AS binding_superseded_at,
+            pp.enabled AS publishing_policy_enabled, pp.revoked_at AS publishing_policy_revoked_at,
+            pp.effective_at AS publishing_policy_effective_at, pp.expires_at AS publishing_policy_expires_at,
             rrp.profile_id, rrp.version AS profile_version, rrp.profile_hash,
             rrp.agent_id AS profile_agent_id, rrp.agent_version_id AS profile_agent_version_id,
             rrp.question_authority, rrp.result_semantics,
@@ -294,6 +314,9 @@ async function loadAndVerifyOpportunity(
       AND rrp.profile_id = o.request_profile_id
       AND rrp.version = o.request_profile_version
       AND rrp.profile_hash = o.request_profile_hash
+     LEFT JOIN tokenless_agent_publishing_policies pp
+       ON pp.workspace_id = b.workspace_id
+      AND pp.policy_id = b.publishing_policy_id AND pp.version = b.publishing_policy_version
      WHERE o.workspace_id = $1 AND o.opportunity_id = $3
        AND o.agent_id = $4 AND o.agent_version_id = $5
        AND o.policy_id = $6 AND o.policy_version = $7
@@ -349,7 +372,7 @@ async function loadAndVerifyOpportunity(
       bindingPublishingPolicyId === null || bindingPublishingPolicyVersion === null
         ? null
         : { id: bindingPublishingPolicyId, version: bindingPublishingPolicyVersion },
-    authority: "prepare_for_approval",
+    authority: expectedAuthority,
   });
   const callerCredential = text(row, "integration_token_family_id") ?? text(row, "integration_api_key_id");
   const workflows = stringArray(row.allowed_workflow_keys_json, "integration workflows");
@@ -366,6 +389,15 @@ async function loadAndVerifyOpportunity(
     optionalInteger(row, "integration_publishing_policy_version") !== bindingPublishingPolicyVersion ||
     integration.publishingPolicyId !== bindingPublishingPolicyId ||
     integration.publishingPolicyVersion !== bindingPublishingPolicyVersion ||
+    (publicationApproval !== undefined &&
+      (bindingPublishingPolicyId === null ||
+        bindingPublishingPolicyVersion === null ||
+        !boolean(row, "publishing_policy_enabled") ||
+        row.publishing_policy_revoked_at !== null ||
+        date(row, "publishing_policy_effective_at").getTime() > now.getTime() ||
+        (row.publishing_policy_expires_at !== null &&
+          row.publishing_policy_expires_at !== undefined &&
+          date(row, "publishing_policy_expires_at").getTime() <= now.getTime()))) ||
     !workflows.includes(text(row, "workflow_key") ?? "") ||
     !integration.allowedWorkflowKeys.includes(text(row, "workflow_key") ?? "") ||
     text(row, "decision") !== "required" ||
@@ -377,7 +409,7 @@ async function loadAndVerifyOpportunity(
     row.review_policy_superseded_at !== null ||
     !boolean(row, "binding_enabled") ||
     row.binding_superseded_at !== null ||
-    text(row, "binding_authority") !== "prepare_for_approval" ||
+    text(row, "binding_authority") !== expectedAuthority ||
     text(row, "binding_agent_id") !== integration.agentId ||
     text(row, "binding_agent_version_id") !== integration.agentVersionId ||
     text(row, "selection_policy_id") !== text(row, "policy_id") ||
@@ -410,10 +442,21 @@ async function loadAndVerifyOpportunity(
     sourceEvidenceHash: text(row, "source_evidence_hash")!,
     suggestionCommitment: text(row, "suggestion_commitment")!,
     selectionPolicy: { id: text(row, "policy_id")!, version: integer(row, "policy_version") },
+    binding: {
+      id: text(row, "binding_id")!,
+      version: integer(row, "binding_version"),
+      hash: text(row, "binding_canonical_hash")! as `sha256:${string}`,
+      authority: expectedAuthority,
+      publishingPolicy: {
+        id: bindingPublishingPolicyId!,
+        version: bindingPublishingPolicyVersion!,
+      },
+    },
     requestProfile: profile,
     integrationId: integration.integrationId,
     lifecycle: {
       state: text(row, "lifecycle_state")!,
+      revision: integer(row, "lifecycle_state_revision"),
       terminal: row.lifecycle_terminal_at !== null,
     },
   };
@@ -428,6 +471,7 @@ function prepareExact(
     expiresAt: Date;
     effectiveQuestion?: FrozenBinaryReviewQuestion;
     effectiveQuestionHash?: `sha256:${string}`;
+    publicationApproval?: RedactedPublicationApprovalDeclaration;
   },
 ) {
   return prepareHumanReviewRequest({
@@ -445,6 +489,22 @@ function prepareExact(
     suggestionPayload: input.suggestionPayload,
     effectiveQuestion: input.effectiveQuestion,
     effectiveQuestionHash: input.effectiveQuestionHash,
+    ...(input.publicationApproval
+      ? {
+          publicationApproval: {
+            ...input.publicationApproval,
+            schemaVersion: "rateloop.redacted-publication-approval.v1",
+            humanReviewBinding: {
+              id: opportunity.binding.id,
+              version: opportunity.binding.version,
+              hash: opportunity.binding.hash,
+              authority: opportunity.binding.authority,
+            },
+            selectionPolicy: { ...opportunity.selectionPolicy },
+            publishingPolicy: { ...opportunity.binding.publishingPolicy },
+          } satisfies HumanReviewPublicationApproval,
+        }
+      : {}),
   });
 }
 
@@ -514,6 +574,8 @@ export async function prepareHumanReviewForOwnerApproval(input: {
   suggestionPayload: string;
   effectiveQuestion?: FrozenBinaryReviewQuestion;
   effectiveQuestionHash?: `sha256:${string}`;
+  publicationApproval?: RedactedPublicationApprovalDeclaration;
+  approvalAuthority?: "ask_automatically" | "prepare_for_approval";
   now?: Date;
 }): Promise<PreparedOwnerApproval> {
   const now = input.now ?? new Date();
@@ -523,7 +585,16 @@ export async function prepareHumanReviewForOwnerApproval(input: {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
-    const opportunity = await loadAndVerifyOpportunity(client, input.principal, input.opportunityId);
+    const approvalAuthority =
+      input.approvalAuthority ?? (input.publicationApproval ? "ask_automatically" : "prepare_for_approval");
+    const opportunity = await loadAndVerifyOpportunity(
+      client,
+      input.principal,
+      input.opportunityId,
+      input.publicationApproval,
+      approvalAuthority,
+      now,
+    );
     if (sha256Text(input.sourcePayload) !== opportunity.sourceEvidenceHash) {
       throw new TokenlessServiceError(
         "sourcePayload does not match the committed source evidence.",
@@ -553,13 +624,18 @@ export async function prepareHumanReviewForOwnerApproval(input: {
         expiresAt: date(existing, "expires_at"),
         effectiveQuestion: input.effectiveQuestion,
         effectiveQuestionHash: input.effectiveQuestionHash,
+        publicationApproval: input.publicationApproval,
       });
       assertExactStoredApproval(existing, preparation, opportunity);
       await client.query("COMMIT");
       return projection({ row: existing, preparation });
     }
 
-    if (opportunity.lifecycle.state !== "approval_required" || opportunity.lifecycle.terminal) {
+    const actionableLifecycle =
+      input.publicationApproval && approvalAuthority === "ask_automatically"
+        ? ["approval_required", "request_ready"]
+        : ["approval_required"];
+    if (!actionableLifecycle.includes(opportunity.lifecycle.state) || opportunity.lifecycle.terminal) {
       throw new TokenlessServiceError(
         "This review opportunity is no longer waiting for an approval request.",
         409,
@@ -575,6 +651,7 @@ export async function prepareHumanReviewForOwnerApproval(input: {
       expiresAt,
       effectiveQuestion: input.effectiveQuestion,
       effectiveQuestionHash: input.effectiveQuestionHash,
+      publicationApproval: input.publicationApproval,
     });
     const approvalId = deterministicApprovalId({
       workspaceId: opportunity.workspaceId,
@@ -614,8 +691,142 @@ export async function prepareHumanReviewForOwnerApproval(input: {
         expiresAt,
       ],
     );
+    if (
+      input.publicationApproval &&
+      approvalAuthority === "ask_automatically" &&
+      opportunity.lifecycle.state === "request_ready"
+    ) {
+      await transitionHumanReviewOpportunityLifecycleInTransaction(client, {
+        workspaceId: opportunity.workspaceId,
+        opportunityId: opportunity.opportunityId,
+        transitionKey: `redacted-publication:${approvalId}`,
+        expectedState: "request_ready",
+        expectedRevision: opportunity.lifecycle.revision,
+        toState: "approval_required",
+        reasonCodes: ["redacted_publication_owner_approval_required"],
+        actor: { kind: "agent", reference: opportunity.integrationId },
+        details: {
+          approvalId,
+          preparedRequestHash: preparation.preparedRequestHash,
+          bindingId: opportunity.binding.id,
+          bindingVersion: opportunity.binding.version,
+          bindingHash: opportunity.binding.hash,
+        },
+        occurredAt: now,
+      });
+    }
     await client.query("COMMIT");
     return projection({ row: inserted.rows[0] as Row, preparation });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function consumeRedactedPublicationApproval(input: {
+  principal: IntegrationPrincipal;
+  opportunityId: string;
+  sourcePayload: string;
+  suggestionPayload: string;
+  publicationApproval: RedactedPublicationApprovalDeclaration;
+  consumptionReference: string;
+  effectiveQuestion?: FrozenBinaryReviewQuestion;
+  effectiveQuestionHash?: `sha256:${string}`;
+  now?: Date;
+}): Promise<{ approvalId: string; status: "consumed"; replayed: boolean }> {
+  const now = input.now ?? new Date();
+  if (
+    !Number.isFinite(now.getTime()) ||
+    typeof input.consumptionReference !== "string" ||
+    !input.consumptionReference.trim() ||
+    input.consumptionReference.length > 240
+  ) {
+    throw new TokenlessServiceError("Approval consumption reference is invalid.", 400, "invalid_human_review_approval");
+  }
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const opportunity = await loadAndVerifyOpportunity(
+      client,
+      input.principal,
+      input.opportunityId,
+      input.publicationApproval,
+      "ask_automatically",
+      now,
+    );
+    const result = await client.query(
+      `SELECT * FROM tokenless_agent_review_approval_requests
+       WHERE workspace_id = $1 AND opportunity_id = $2
+       ORDER BY revision DESC LIMIT 1 FOR UPDATE`,
+      [opportunity.workspaceId, opportunity.opportunityId],
+    );
+    const approval = result.rows[0] as Row | undefined;
+    if (!approval) {
+      throw new TokenlessServiceError(
+        "Owner approval is required before publishing redacted review material.",
+        409,
+        "approval_required",
+      );
+    }
+    const preparation = prepareExact(opportunity, {
+      sourcePayload: input.sourcePayload,
+      suggestionPayload: input.suggestionPayload,
+      preparedAt: date(approval, "created_at"),
+      expiresAt: date(approval, "expires_at"),
+      effectiveQuestion: input.effectiveQuestion,
+      effectiveQuestionHash: input.effectiveQuestionHash,
+      publicationApproval: input.publicationApproval,
+    });
+    assertExactStoredApproval(approval, preparation, opportunity);
+    const status = oneOf(approval, "status", APPROVAL_STATUSES);
+    if (status === "consumed") {
+      if (
+        text(approval, "consumption_reference") !== input.consumptionReference ||
+        approval.consumed_at === null ||
+        approval.consumed_at === undefined
+      ) {
+        throw new TokenlessServiceError(
+          "Owner approval was consumed by a different publication.",
+          409,
+          "human_review_approval_conflict",
+        );
+      }
+      await client.query("COMMIT");
+      return { approvalId: text(approval, "approval_id")!, status: "consumed", replayed: true };
+    }
+    if (status !== "approved") {
+      throw new TokenlessServiceError("Owner approval is not actionable.", 409, "human_review_approval_not_actionable");
+    }
+    if (date(approval, "expires_at").getTime() <= now.getTime()) {
+      throw new TokenlessServiceError(
+        "Owner approval expired before publication.",
+        409,
+        "human_review_approval_expired",
+      );
+    }
+    const consumed = await client.query(
+      `UPDATE tokenless_agent_review_approval_requests
+       SET status = 'consumed', consumed_at = $1, consumption_reference = $2
+       WHERE workspace_id = $3 AND opportunity_id = $4 AND approval_id = $5
+         AND status = 'approved' AND consumed_at IS NULL AND consumption_reference IS NULL
+         AND prepared_request_hash = $6 AND derived_economics_hash = $7 AND expires_at > $1`,
+      [
+        now,
+        input.consumptionReference,
+        opportunity.workspaceId,
+        opportunity.opportunityId,
+        text(approval, "approval_id"),
+        preparation.preparedRequestHash,
+        preparation.derivedEconomicsHash,
+      ],
+    );
+    if (consumed.rowCount !== 1) {
+      throw new TokenlessServiceError("Owner approval could not be consumed.", 409, "human_review_approval_conflict");
+    }
+    await client.query("COMMIT");
+    return { approvalId: text(approval, "approval_id")!, status: "consumed", replayed: false };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;

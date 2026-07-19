@@ -12,6 +12,7 @@ import {
 } from "~~/lib/tokenless/agentIntegrations";
 import {
   __humanReviewApprovalPreparationTestUtils,
+  consumeRedactedPublicationApproval,
   prepareHumanReviewForOwnerApproval,
 } from "~~/lib/tokenless/humanReviewApprovalPreparation";
 import {
@@ -53,7 +54,10 @@ async function count(table: string) {
   return Number(result.rows[0]?.count);
 }
 
-async function fixture(lane: "public_paid" | "private_unpaid") {
+async function fixture(
+  lane: "public_paid" | "private_unpaid",
+  authority: "prepare_for_approval" | "ask_automatically" = "prepare_for_approval",
+) {
   const { workspaceId } = await createWorkspace({ name: `Approval ${lane}`, ownerAddress: OWNER });
   const publishing = await createAgentPublishingPolicy({
     accountAddress: OWNER,
@@ -70,7 +74,7 @@ async function fixture(lane: "public_paid" | "private_unpaid") {
       maxAttemptReserveAtomic: "10000000",
       allowedReviewerSources: ["rateloop_network", "customer_invited"],
       allowedAdmissionPolicyHashes: [`0x${"11".repeat(32)}`],
-      allowedDataClassifications: ["public", "confidential"],
+      allowedDataClassifications: ["public", "redacted", "confidential"],
       onPolicyMiss: "deny",
     },
   });
@@ -165,7 +169,7 @@ async function fixture(lane: "public_paid" | "private_unpaid") {
     selectionPolicy: { id: approved.integration.reviewPolicyId, version: 1 },
     requestProfile: { id: profileId, version: 1, hash: profileHash },
     publishingPolicy: { id: publishing.policyId, version: publishingVersion },
-    authority: "prepare_for_approval",
+    authority,
   });
   if (lane === "private_unpaid") {
     await dbClient.execute({
@@ -198,13 +202,14 @@ async function fixture(lane: "public_paid" | "private_unpaid") {
       sql: `UPDATE tokenless_agent_human_review_bindings
             SET request_profile_id=?,request_profile_version=1,request_profile_hash=?,
                 publishing_policy_id=?,publishing_policy_version=?,
-                authority='prepare_for_approval',canonical_hash=?
+                authority=?,canonical_hash=?
             WHERE workspace_id=? AND binding_id=? AND version=1`,
       args: [
         profileId,
         profileHash,
         publishing.policyId,
         publishingVersion,
+        authority,
         bindingHash,
         workspaceId,
         binding.bindingId,
@@ -245,7 +250,16 @@ async function fixture(lane: "public_paid" | "private_unpaid") {
     },
   });
   assert.equal(decision.lifecycle.state, "approval_required");
-  return { workspaceId, principal, decision, sourcePayload, suggestionPayload, profileHash };
+  return {
+    workspaceId,
+    principal,
+    decision,
+    sourcePayload,
+    suggestionPayload,
+    profileHash,
+    publishingPolicyId: publishing.policyId,
+    publishingPolicyVersion: publishingVersion,
+  };
 }
 
 const sideEffectTables = [
@@ -256,6 +270,204 @@ const sideEffectTables = [
   "tokenless_private_unpaid_review_deliveries",
   "tokenless_private_unpaid_review_assignments",
 ];
+
+const REDACTED_PUBLICATION = {
+  visibility: "public" as const,
+  dataClassification: "redacted" as const,
+  confirmedNoSensitiveData: true as const,
+  redactionSummary: "Customer names and account identifiers were removed from the review copy.",
+};
+
+async function approve(workspaceId: string, prepared: Awaited<ReturnType<typeof prepareHumanReviewForOwnerApproval>>) {
+  return decideHumanReviewApprovalForOwner({
+    accountAddress: OWNER,
+    workspaceId,
+    approvalId: prepared.approvalId,
+    body: {
+      revision: prepared.revision,
+      preparedRequestHash: prepared.preparedRequestHash,
+      derivedEconomicsHash: prepared.derivedEconomicsHash,
+      decision: "approve",
+      note: null,
+    },
+  });
+}
+
+test("automatic redacted publication blocks for an exact one-time owner approval", async () => {
+  const setup = await fixture("public_paid", "ask_automatically");
+  const approvalNow = new Date();
+  const prepared = await prepareHumanReviewForOwnerApproval({
+    principal: setup.principal,
+    opportunityId: setup.decision.opportunityId,
+    sourcePayload: setup.sourcePayload,
+    suggestionPayload: setup.suggestionPayload,
+    publicationApproval: REDACTED_PUBLICATION,
+    now: approvalNow,
+  });
+  assert.equal(prepared.status, "pending");
+  assert.deepEqual(prepared.preparedRequest.publicationApproval, {
+    schemaVersion: "rateloop.redacted-publication-approval.v1",
+    ...REDACTED_PUBLICATION,
+    humanReviewBinding: {
+      id: prepared.preparedRequest.publicationApproval?.humanReviewBinding.id,
+      version: 1,
+      hash: prepared.preparedRequest.publicationApproval?.humanReviewBinding.hash,
+      authority: "ask_automatically",
+    },
+    selectionPolicy: {
+      id: setup.principal.integration.reviewPolicyId,
+      version: setup.principal.integration.reviewPolicyVersion,
+    },
+    publishingPolicy: { id: setup.publishingPolicyId, version: setup.publishingPolicyVersion },
+  });
+  const lifecycle = await dbClient.execute({
+    sql: `SELECT state FROM tokenless_agent_review_opportunity_lifecycles
+          WHERE workspace_id=? AND opportunity_id=?`,
+    args: [setup.workspaceId, setup.decision.opportunityId],
+  });
+  assert.equal(lifecycle.rows[0]?.state, "approval_required");
+
+  await assert.rejects(
+    () =>
+      decideHumanReviewApprovalForOwner({
+        accountAddress: "0x9999999999999999999999999999999999999999",
+        workspaceId: setup.workspaceId,
+        approvalId: prepared.approvalId,
+        body: {
+          revision: prepared.revision,
+          preparedRequestHash: prepared.preparedRequestHash,
+          derivedEconomicsHash: prepared.derivedEconomicsHash,
+          decision: "approve",
+          note: null,
+        },
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "workspace_not_found",
+  );
+  await approve(setup.workspaceId, prepared);
+  const consumptionNow = new Date();
+
+  await assert.rejects(
+    () =>
+      consumeRedactedPublicationApproval({
+        principal: setup.principal,
+        opportunityId: setup.decision.opportunityId,
+        sourcePayload: setup.sourcePayload,
+        suggestionPayload: setup.suggestionPayload,
+        publicationApproval: { ...REDACTED_PUBLICATION, redactionSummary: "A different redaction was approved." },
+        consumptionReference: "hybrid-redacted:mismatch",
+        now: consumptionNow,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "human_review_approval_conflict",
+  );
+  await assert.rejects(
+    () =>
+      consumeRedactedPublicationApproval({
+        principal: setup.principal,
+        opportunityId: setup.decision.opportunityId,
+        sourcePayload: `${setup.sourcePayload} changed`,
+        suggestionPayload: setup.suggestionPayload,
+        publicationApproval: REDACTED_PUBLICATION,
+        consumptionReference: "hybrid-redacted:bytes-mismatch",
+        now: consumptionNow,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "source_payload_commitment_mismatch",
+  );
+
+  const consumed = await consumeRedactedPublicationApproval({
+    principal: setup.principal,
+    opportunityId: setup.decision.opportunityId,
+    sourcePayload: setup.sourcePayload,
+    suggestionPayload: setup.suggestionPayload,
+    publicationApproval: REDACTED_PUBLICATION,
+    consumptionReference: "hybrid-redacted:exact",
+    now: consumptionNow,
+  });
+  assert.equal(consumed.replayed, false);
+  const replay = await consumeRedactedPublicationApproval({
+    principal: setup.principal,
+    opportunityId: setup.decision.opportunityId,
+    sourcePayload: setup.sourcePayload,
+    suggestionPayload: setup.suggestionPayload,
+    publicationApproval: REDACTED_PUBLICATION,
+    consumptionReference: "hybrid-redacted:exact",
+    now: consumptionNow,
+  });
+  assert.equal(replay.replayed, true);
+  await assert.rejects(
+    () =>
+      consumeRedactedPublicationApproval({
+        principal: setup.principal,
+        opportunityId: setup.decision.opportunityId,
+        sourcePayload: setup.sourcePayload,
+        suggestionPayload: setup.suggestionPayload,
+        publicationApproval: REDACTED_PUBLICATION,
+        consumptionReference: "hybrid-redacted:different",
+        now: consumptionNow,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "human_review_approval_conflict",
+  );
+});
+
+test("redacted approval consumption rejects another tenant, expiry, and publishing-policy revocation", async () => {
+  const setup = await fixture("public_paid", "ask_automatically");
+  const otherTenant = await fixture("public_paid", "ask_automatically");
+  const approvalNow = new Date();
+  const prepared = await prepareHumanReviewForOwnerApproval({
+    principal: setup.principal,
+    opportunityId: setup.decision.opportunityId,
+    sourcePayload: setup.sourcePayload,
+    suggestionPayload: setup.suggestionPayload,
+    publicationApproval: REDACTED_PUBLICATION,
+    now: approvalNow,
+  });
+  await approve(setup.workspaceId, prepared);
+
+  await assert.rejects(
+    () =>
+      consumeRedactedPublicationApproval({
+        principal: otherTenant.principal,
+        opportunityId: setup.decision.opportunityId,
+        sourcePayload: setup.sourcePayload,
+        suggestionPayload: setup.suggestionPayload,
+        publicationApproval: REDACTED_PUBLICATION,
+        consumptionReference: "hybrid-redacted:cross-tenant",
+        now: approvalNow,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "review_opportunity_not_found",
+  );
+  await assert.rejects(
+    () =>
+      consumeRedactedPublicationApproval({
+        principal: setup.principal,
+        opportunityId: setup.decision.opportunityId,
+        sourcePayload: setup.sourcePayload,
+        suggestionPayload: setup.suggestionPayload,
+        publicationApproval: REDACTED_PUBLICATION,
+        consumptionReference: "hybrid-redacted:expired",
+        now: new Date(approvalNow.getTime() + 1_200_001),
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "human_review_approval_expired",
+  );
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_publishing_policies SET revoked_at=?
+          WHERE workspace_id=? AND policy_id=? AND version=?`,
+    args: [approvalNow, setup.workspaceId, setup.publishingPolicyId, setup.publishingPolicyVersion],
+  });
+  await assert.rejects(
+    () =>
+      consumeRedactedPublicationApproval({
+        principal: setup.principal,
+        opportunityId: setup.decision.opportunityId,
+        sourcePayload: setup.sourcePayload,
+        suggestionPayload: setup.suggestionPayload,
+        publicationApproval: REDACTED_PUBLICATION,
+        consumptionReference: "hybrid-redacted:revoked",
+        now: approvalNow,
+      }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "human_review_approval_binding_conflict",
+  );
+});
 
 test("prepares a public paid approval exactly once without publishing, reserving, or spending", async () => {
   const setup = await fixture("public_paid");

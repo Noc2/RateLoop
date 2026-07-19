@@ -24,6 +24,7 @@ export type FrozenHybridReviewSplit = {
     visibility: "public";
     dataClassification: "public" | "synthetic" | "redacted";
     confirmedNoSensitiveData: true;
+    redactionSummary?: string;
   };
   economics: {
     asset: "USDC";
@@ -114,6 +115,11 @@ function validate(split: FrozenHybridReviewSplit) {
     split.publication.visibility !== "public" ||
     split.publication.confirmedNoSensitiveData !== true ||
     !["public", "synthetic", "redacted"].includes(split.publication.dataClassification) ||
+    (split.publication.redactionSummary !== undefined &&
+      (typeof split.publication.redactionSummary !== "string" || split.publication.redactionSummary.length > 1_000)) ||
+    (split.publication.dataClassification === "redacted" &&
+      (typeof split.publication.redactionSummary !== "string" ||
+        split.publication.redactionSummary.trim().length < 10)) ||
     split.economics.asset !== "USDC" ||
     !ATOMIC.test(split.economics.invitedMaximumChargeAtomic) ||
     !ATOMIC.test(split.economics.networkMaximumChargeAtomic) ||
@@ -154,6 +160,9 @@ function canonicalSplit(split: FrozenHybridReviewSplit): FrozenHybridReviewSplit
       visibility: "public",
       dataClassification: split.publication.dataClassification,
       confirmedNoSensitiveData: true,
+      ...(typeof split.publication.redactionSummary === "string"
+        ? { redactionSummary: split.publication.redactionSummary.trim() }
+        : {}),
     },
     economics: {
       asset: "USDC",

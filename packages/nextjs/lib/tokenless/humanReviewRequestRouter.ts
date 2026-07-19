@@ -16,6 +16,7 @@ import {
 } from "~~/lib/tokenless/feedbackBonusPoolProjection";
 import {
   type PreparedOwnerApproval,
+  consumeRedactedPublicationApproval,
   prepareHumanReviewForOwnerApproval,
 } from "~~/lib/tokenless/humanReviewApprovalPreparation";
 import { transitionHumanReviewOpportunityLifecycle } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
@@ -24,7 +25,10 @@ import {
   freezeHumanReviewOpportunityQuestion,
 } from "~~/lib/tokenless/humanReviewOpportunityQuestions";
 import { hashFrozenBinaryReviewQuestion, resolveHumanReviewQuestion } from "~~/lib/tokenless/humanReviewQuestions";
-import { prepareHumanReviewRequest } from "~~/lib/tokenless/humanReviewRequestPreparation";
+import {
+  hashPreparedHumanReviewValue,
+  prepareHumanReviewRequest,
+} from "~~/lib/tokenless/humanReviewRequestPreparation";
 import type { FrozenHybridReviewSplit, HybridHumanReviewResult } from "~~/lib/tokenless/hybridHumanReviewAdapter";
 import {
   type PaidReviewerBinding,
@@ -162,7 +166,7 @@ export type HumanReviewRoutingResult =
       schemaVersion: "rateloop.human-review-route.v1";
       action: "owner_approval_required";
       opportunityId: string;
-      authority: "prepare_for_approval";
+      authority: "prepare_for_approval" | "ask_automatically";
       lane: HumanReviewLane;
       approval: PreparedOwnerApproval;
       sideEffects: { prepared: true; published: false; assigned: false; fundsReserved: false; spent: false };
@@ -225,6 +229,7 @@ type RouterDependencies = {
   ) => Promise<FrozenHumanReviewRoutingContext>;
   freezeQuestion?: typeof freezeHumanReviewOpportunityQuestion;
   prepareApproval: typeof prepareHumanReviewForOwnerApproval;
+  consumePublicationApproval?: typeof consumeRedactedPublicationApproval;
   publishPublicPaid: typeof requestPublicPaidHumanReview;
   resolvePrivateBinding: (
     principal: IntegrationPrincipal,
@@ -790,6 +795,31 @@ function requiredMaterial(context: FrozenHumanReviewRoutingContext, material: Hu
   return material;
 }
 
+function assertExactHybridMaterial(
+  context: FrozenHumanReviewRoutingContext,
+  material: Extract<HumanReviewRoutingMaterial, { kind: "public" }>,
+  split: FrozenHybridReviewSplit,
+) {
+  const publication = material.publication;
+  if (
+    split.opportunityId !== context.opportunityId ||
+    split.audiencePolicyHash !== context.selectionPolicy.audiencePolicyHash ||
+    split.requestProfileHash !== context.requestProfile.hash ||
+    split.contentCommitments.source !== context.contentCommitments.source ||
+    split.contentCommitments.suggestion !== context.contentCommitments.suggestion ||
+    split.publication.visibility !== publication.visibility ||
+    split.publication.dataClassification !== publication.dataClassification ||
+    split.publication.confirmedNoSensitiveData !== publication.confirmedNoSensitiveData ||
+    (split.publication.redactionSummary?.trim() ?? null) !== (publication.redactionSummary?.trim() ?? null)
+  ) {
+    throw new TokenlessServiceError(
+      "The hybrid split does not match the exact frozen review material.",
+      409,
+      "hybrid_review_binding_invalid",
+    );
+  }
+}
+
 function hasExactAutonomousGrant(context: FrozenHumanReviewRoutingContext) {
   if (
     !context.grant.active ||
@@ -974,6 +1004,7 @@ const DEFAULT_DEPENDENCIES: RouterDependencies = {
   loadContext: loadFrozenContext,
   freezeQuestion: freezeHumanReviewOpportunityQuestion,
   prepareApproval: prepareHumanReviewForOwnerApproval,
+  consumePublicationApproval: consumeRedactedPublicationApproval,
   publishPublicPaid: requestPublicPaidHumanReview,
   resolvePrivateBinding: resolveExactPrivateBinding,
   activateAutonomousLane: activateExactAutonomousLane,
@@ -1030,6 +1061,7 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
     }
     if (context.binding.authority === "prepare_for_approval") {
       const frozenQuestion = await freezeRoutingQuestion(dependencies, context, input, now);
+      const publication = input.material?.kind === "public" ? input.material.publication : null;
       const approval = await dependencies.prepareApproval({
         principal: input.principal,
         opportunityId: context.opportunityId,
@@ -1037,6 +1069,17 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
         suggestionPayload: input.suggestionPayload,
         effectiveQuestion: frozenQuestion.question,
         effectiveQuestionHash: frozenQuestion.questionHash,
+        ...(publication?.dataClassification === "redacted"
+          ? {
+              publicationApproval: {
+                visibility: "public" as const,
+                dataClassification: "redacted" as const,
+                confirmedNoSensitiveData: true as const,
+                redactionSummary: publication.redactionSummary!,
+              },
+            }
+          : {}),
+        approvalAuthority: "prepare_for_approval",
         now,
       });
       return {
@@ -1065,7 +1108,8 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
     }
     if (context.requestProfile.lane === "hybrid_public_safe") {
       const material = input.material!;
-      const split = material.kind === "public" ? material.hybridSplit : undefined;
+      if (material.kind !== "public") throw new Error("Hybrid material was checked before routing.");
+      const split = material.hybridSplit;
       if (!dependencies.assignHybrid || !split || split.opportunityId !== context.opportunityId) {
         return {
           ...common,
@@ -1075,12 +1119,79 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
           sideEffects: NO_SIDE_EFFECTS,
         };
       }
+      assertExactHybridMaterial(context, material as Extract<HumanReviewRoutingMaterial, { kind: "public" }>, split);
     }
     const frozenQuestion = await freezeRoutingQuestion(dependencies, context, input, now);
+    const publicMaterial = input.material?.kind === "public" ? input.material : null;
+    if (publicMaterial?.publication.dataClassification === "redacted") {
+      const approval = await dependencies.prepareApproval({
+        principal: input.principal,
+        opportunityId: context.opportunityId,
+        sourcePayload: input.sourcePayload,
+        suggestionPayload: input.suggestionPayload,
+        effectiveQuestion: frozenQuestion.question,
+        effectiveQuestionHash: frozenQuestion.questionHash,
+        publicationApproval: {
+          visibility: "public",
+          dataClassification: "redacted",
+          confirmedNoSensitiveData: true,
+          redactionSummary: publicMaterial.publication.redactionSummary!,
+        },
+        approvalAuthority: "ask_automatically",
+        now,
+      });
+      if (approval.status === "pending") {
+        return {
+          ...common,
+          authority: "ask_automatically",
+          action: "owner_approval_required",
+          approval,
+          sideEffects: {
+            prepared: true,
+            published: false,
+            assigned: false,
+            fundsReserved: false,
+            spent: false,
+          },
+        };
+      }
+    }
     if (context.requestProfile.lane === "hybrid_public_safe") {
-      const material = input.material!;
-      const split = material.kind === "public" ? material.hybridSplit : undefined;
+      const material = input.material;
+      if (material?.kind !== "public") throw new Error("Hybrid material was checked before routing.");
+      const split = material.hybridSplit;
       if (!dependencies.assignHybrid || !split) throw new Error("Hybrid material was checked before routing.");
+      if (material.publication.dataClassification === "redacted") {
+        if (!dependencies.consumePublicationApproval) {
+          throw new TokenlessServiceError(
+            "Redacted hybrid publication approval consumption is unavailable.",
+            503,
+            "human_review_approval_unavailable",
+            true,
+          );
+        }
+        await dependencies.consumePublicationApproval({
+          principal: input.principal,
+          opportunityId: context.opportunityId,
+          sourcePayload: input.sourcePayload,
+          suggestionPayload: input.suggestionPayload,
+          publicationApproval: {
+            visibility: "public",
+            dataClassification: "redacted",
+            confirmedNoSensitiveData: true,
+            redactionSummary: material.publication.redactionSummary!,
+          },
+          consumptionReference: `hybrid-redacted:${hashPreparedHumanReviewValue({
+            schemaVersion: "rateloop.hybrid-redacted-publication.v1",
+            workspaceId: context.workspaceId,
+            opportunityId: context.opportunityId,
+            split,
+          }).slice("sha256:".length)}`,
+          effectiveQuestion: frozenQuestion.question,
+          effectiveQuestionHash: frozenQuestion.questionHash,
+          now,
+        });
+      }
       await ensureRoutingFeedbackBonus(
         dependencies,
         context,

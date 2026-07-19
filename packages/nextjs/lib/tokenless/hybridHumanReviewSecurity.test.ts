@@ -27,7 +27,12 @@ function split(): FrozenHybridReviewSplit {
     audiencePolicyHash: HASH,
     requestProfileHash: HASH,
     contentCommitments: { source: HASH, suggestion: HASH },
-    publication: { visibility: "public", dataClassification: "redacted", confirmedNoSensitiveData: true },
+    publication: {
+      visibility: "public",
+      dataClassification: "redacted",
+      confirmedNoSensitiveData: true,
+      redactionSummary: "Customer identifiers were removed from the public review copy.",
+    },
     economics: { asset: "USDC", invitedMaximumChargeAtomic: "1000000", networkMaximumChargeAtomic: "1000000" },
     invited: {
       requestedCount: 1,
