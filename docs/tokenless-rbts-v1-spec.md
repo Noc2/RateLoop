@@ -71,6 +71,28 @@ report exactly once in each role, and is directly recomputable. Solidity finds t
 frozen set. The path is quadratic in panel size but outer processing remains paginated; deployment limits and gas
 benchmarks must cap the maximum panel size.
 
+### Maximum-panel settlement gas budget
+
+`TokenlessPanelGasBenchmark.t.sol` runs the complete settlement lifecycle with 500 committed and revealed seats. It
+uses 25-seat aggregate and scoring pages, matching the configured keeper page size at the time of measurement. Each
+measured contract call receives a conservative additional 100,000 gas transaction-envelope allowance; L1 data fees
+are priced separately and are not EVM execution gas.
+
+With Solidity 0.8.35, Cancun EVM, `via_ir`, optimizer runs 100, and the checked-in contracts, the benchmark measured:
+
+| Settlement transaction | Count | Maximum execution gas | Asserted gas ceiling including allowance |
+| --- | ---: | ---: | ---: |
+| `beginSettlement` | 1 | 27,992 | 200,000 |
+| `processAggregate` | 20 | 82,819 | 250,000 per page |
+| `finalizeScoringSeed` | 1 | 26,724 | 200,000 |
+| `processScores` | 20 | 30,243,220 | 35,000,000 per page |
+| `finalizeSettlement` | 1 | 99,802 | 250,000 |
+
+The measured lifecycle total is 603,376,152 gas after the 100,000-gas allowance for each of 43 transactions. CI caps
+the total at 650,000,000 gas. These are regression ceilings, not a claim that the current quadratic implementation is
+economically suitable for mainnet; any compiler, page-size, or contract change must rerun and deliberately reapprove
+the benchmark.
+
 ## Score
 
 All operations use integer basis points and floor division.
