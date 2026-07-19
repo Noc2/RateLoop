@@ -40,8 +40,11 @@ test("the contextual editor owns every human-review dimension through one canoni
   assert.match(routingSource, /Manual handoff only/);
   assert.match(source, /publishingGrant: null/);
   assert.match(source, /delegation\.publishingPolicy\.id/);
-  assert.match(source, /delegation\?\.allowedWorkflowKeys/);
-  assert.match(routingSource, /disabled=\{value === "ask_automatically" && !automaticAvailable\}/);
+  assert.match(source, /connection\?\.allowedWorkflowKeys/);
+  assert.match(source, /provision: "private_invited_unpaid"/);
+  assert.match(source, /privateUnpaidBootstrapAvailable/);
+  assert.match(source, /view\.connection\?\.connectionStatus === "connected"/);
+  assert.match(routingSource, /disabled=\{automaticUnavailable\}/);
   assert.match(source, /mode === "manual" \? "check_only"/);
   assert.match(source, /enforcementMode: draft\.mode === "manual" \? "advisory"/);
   assert.match(source, /draft\.mode !== "manual"/);

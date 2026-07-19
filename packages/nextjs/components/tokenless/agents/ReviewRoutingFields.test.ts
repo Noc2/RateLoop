@@ -15,7 +15,8 @@ test("review routing keeps selection and authority together with accessible expl
   assert.match(source, /If review is required, what may the agent do\?/);
   assert.match(source, /Adaptive — Recommended/);
   assert.match(source, /aria-describedby=\{frequencyDescriptionId\}/);
-  assert.match(source, /aria-describedby=\{authorityDescriptionId\}/);
+  assert.match(source, /type="radio"/);
+  assert.match(source, /aria-describedby=\{describedBy\}/);
   assert.match(source, /Decides when an eligible output requires human review/);
   assert.match(source, /does not authorize sending or funding a\s+request/);
   assert.match(source, /Applies only after review is required/);
@@ -39,12 +40,21 @@ test("manual handoff has exact copy and hides the authority field", () => {
 test("automatic request consequences distinguish unpaid private review from funded review", () => {
   assert.equal(
     reviewRoutingAuthorityDescription("ask_automatically", false),
-    "Send requests within the saved limits. Requires a separate owner-approved publishing grant. No funding permission is needed.",
+    "Create and send requests within the saved limits. An owner-approved publishing grant is required; funding permission is not.",
   );
   assert.equal(
     reviewRoutingAuthorityDescription("ask_automatically", true),
-    "Send requests within the saved limits. Requires owner-approved publishing and funding permission.",
+    "Create and send requests within the saved limits. Owner-approved publishing and funding permission are required.",
   );
-  assert.match(source, /disabled=\{value === "ask_automatically" && !automaticAvailable\}/);
-  assert.match(source, /Ask automatically is unavailable/);
+  assert.equal(
+    reviewRoutingAuthorityDescription("prepare_for_approval", false),
+    "Create a draft request, then wait for a workspace owner to approve and send it.",
+  );
+  assert.equal(
+    reviewRoutingAuthorityDescription("check_only", false),
+    "Report that review is required without creating or sending a request.",
+  );
+  assert.match(source, /disabled=\{automaticUnavailable\}/);
+  assert.match(source, /Unavailable: \{automaticUnavailableReason\}/);
+  assert.match(source, /Send automatically/);
 });

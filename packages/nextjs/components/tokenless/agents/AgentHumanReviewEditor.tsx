@@ -28,7 +28,7 @@ type OwnerView = {
     requestProfile: { value: Record<string, unknown> };
     selection: { value: Record<string, unknown> };
   } | null;
-  connection: { allowedWorkflowKeys: string[]; integrationId: string } | null;
+  connection: { allowedWorkflowKeys: string[]; connectionStatus: string | null; integrationId: string } | null;
 };
 
 type PrivateGroup = { groupId: string; name: string; status: string };
@@ -220,16 +220,30 @@ function buildMutation(view: OwnerView, draft: Draft) {
   let publishingGrant: Record<string, unknown> | null = null;
   if (authority === "ask_automatically") {
     const delegation = configuration.delegation;
-    const workflowKeys = delegation?.allowedWorkflowKeys ?? [];
-    if (!delegation?.integrationId || workflowKeys.length === 0) {
-      throw new Error("Automatic requests need an existing exact publishing grant.");
+    const connection = view.connection;
+    const workflowKeys = delegation?.allowedWorkflowKeys.length
+      ? delegation.allowedWorkflowKeys
+      : (connection?.allowedWorkflowKeys ?? []);
+    const integrationId = delegation?.integrationId ?? connection?.integrationId;
+    if (
+      !integrationId ||
+      workflowKeys.length === 0 ||
+      (!delegation?.integrationId && connection?.connectionStatus !== "connected")
+    ) {
+      throw new Error("Automatic requests need an active connected workflow.");
     }
-    publishingGrant = {
-      integrationId: delegation.integrationId,
-      publishingPolicyId: delegation.publishingPolicy.id,
-      publishingPolicyVersion: delegation.publishingPolicy.version,
-      allowedWorkflowKeys: workflowKeys,
-    };
+    publishingGrant = delegation?.integrationId
+      ? {
+          integrationId,
+          publishingPolicyId: delegation.publishingPolicy.id,
+          publishingPolicyVersion: delegation.publishingPolicy.version,
+          allowedWorkflowKeys: workflowKeys,
+        }
+      : {
+          integrationId,
+          provision: "private_invited_unpaid",
+          allowedWorkflowKeys: workflowKeys,
+        };
   }
   const body =
     authority === "ask_automatically"
@@ -387,9 +401,17 @@ export function AgentHumanReviewEditor({
       </Card>
     );
   }
-  const automaticAvailable = Boolean(
+  const exactDelegationAvailable = Boolean(
     view.configuration?.delegation?.integrationId && view.configuration.delegation.allowedWorkflowKeys.length > 0,
   );
+  const privateUnpaidBootstrapAvailable = Boolean(
+    draft.audience === "private_invited" &&
+      draft.compensationMode === "unpaid" &&
+      !draft.feedbackBonusEnabled &&
+      view.connection?.connectionStatus === "connected" &&
+      view.connection.allowedWorkflowKeys.length > 0,
+  );
+  const automaticAvailable = exactDelegationAvailable || privateUnpaidBootstrapAvailable;
 
   return (
     <Card as="section" id="agent-human-review-editor" className="rounded-2xl p-6">
@@ -472,9 +494,9 @@ export function AgentHumanReviewEditor({
             authority={draft.authority}
             automaticAvailable={automaticAvailable}
             automaticUnavailableReason={
-              draft.compensationMode === "usdc" || draft.feedbackBonusEnabled
-                ? "Create an exact owner-approved publishing and funding grant for this workflow first."
-                : "Create an exact owner-approved publishing grant for this workflow first."
+              draft.compensationMode === "usdc" || draft.feedbackBonusEnabled || draft.audience !== "private_invited"
+                ? "This editor can create a first automatic grant only for unpaid invited review without a feedback bonus."
+                : "Reconnect this workflow before granting automatic delivery."
             }
             requiresFundingPermission={draft.compensationMode === "usdc" || draft.feedbackBonusEnabled}
             adaptiveAvailable={draft.questionAuthority !== "agent_per_request"}

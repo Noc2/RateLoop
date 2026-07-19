@@ -720,6 +720,21 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       const compensationConfiguration = buildReviewCompensationConfiguration(timingProfile, reviewCompensation);
       const requestProfile = compensationConfiguration.requestProfile;
       const authority = selection.mode === "manual" ? "check_only" : compensationConfiguration.authority;
+      let publishingGrant: {
+        integrationId: string;
+        provision: "private_invited_unpaid";
+        allowedWorkflowKeys: string[];
+      } | null = null;
+      if (authority === "ask_automatically") {
+        if (!automaticGrantOffer?.available || !automaticGrantOffer.integrationId) {
+          throw new Error(automaticUnavailableReason);
+        }
+        publishingGrant = {
+          integrationId: automaticGrantOffer.integrationId,
+          provision: "private_invited_unpaid",
+          allowedWorkflowKeys: automaticGrantOffer.allowedWorkflowKeys,
+        };
+      }
       const confirmation = humanReviewConfirmationMessage({
         authority,
         bountyPerSeatAtomic: requestProfile.compensationMode === "usdc" ? requestProfile.bountyPerSeatAtomic : null,
@@ -780,14 +795,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   selection,
                   requestProfile: { ...requestProfile, privateGroupId },
                   authority,
-                  publishingGrant:
-                    authority === "ask_automatically"
-                      ? {
-                          integrationId: automaticGrantOffer!.integrationId,
-                          provision: "private_invited_unpaid",
-                          allowedWorkflowKeys: automaticGrantOffer!.allowedWorkflowKeys,
-                        }
-                      : null,
+                  publishingGrant,
                 }),
                 credentials: "same-origin",
                 headers: { "Content-Type": "application/json" },

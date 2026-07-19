@@ -17,7 +17,7 @@ const REVIEW_MODES = [
 const REVIEW_AUTHORITIES = [
   ["check_only", "Check only"],
   ["prepare_for_approval", "Prepare for approval"],
-  ["ask_automatically", "Ask automatically"],
+  ["ask_automatically", "Send automatically"],
 ] as const;
 
 export function reviewRoutingModeDescription(mode: ReviewRoutingMode) {
@@ -32,13 +32,15 @@ export function reviewRoutingAuthorityDescription(
   authority: ReviewRoutingAuthority,
   requiresFundingPermission: boolean,
 ) {
-  if (authority === "prepare_for_approval") return "Prepare a request, then wait for owner approval.";
+  if (authority === "prepare_for_approval") {
+    return "Create a draft request, then wait for a workspace owner to approve and send it.";
+  }
   if (authority === "ask_automatically") {
     return requiresFundingPermission
-      ? "Send requests within the saved limits. Requires owner-approved publishing and funding permission."
-      : "Send requests within the saved limits. Requires a separate owner-approved publishing grant. No funding permission is needed.";
+      ? "Create and send requests within the saved limits. Owner-approved publishing and funding permission are required."
+      : "Create and send requests within the saved limits. An owner-approved publishing grant is required; funding permission is not.";
   }
-  return "Report whether review is required. Do not prepare or send a request.";
+  return "Report that review is required without creating or sending a request.";
 }
 
 export function reviewRoutingStateForMode(
@@ -72,8 +74,7 @@ export function ReviewRoutingFields({
   const id = useId();
   const frequencyLabelId = `${id}-frequency-label`;
   const frequencyDescriptionId = `${id}-frequency-description`;
-  const authorityLabelId = `${id}-authority-label`;
-  const authorityDescriptionId = `${id}-authority-description`;
+  const authorityUnavailableId = `${id}-authority-automatic-unavailable`;
 
   return (
     <fieldset className={`surface-card-nested p-4 sm:p-5 ${className ?? ""}`}>
@@ -104,36 +105,63 @@ export function ReviewRoutingFields({
           </p>
         </div>
         {mode !== "manual" ? (
-          <div>
-            <div className="flex min-h-9 items-center gap-2 text-sm font-medium">
-              <span id={authorityLabelId}>If review is required, what may the agent do?</span>
+          <fieldset>
+            <legend className="text-sm font-medium">If review is required, what may the agent do?</legend>
+            <div className="mt-1 flex items-center gap-2 text-sm text-base-content/65">
+              <span>Choose the furthest step the agent may take.</span>
               <InfoPopover label="About agent authority after review is required">
                 Applies only after review is required. It controls whether the agent checks, prepares, or sends a
                 request.
               </InfoPopover>
             </div>
-            <select
-              className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={authority}
-              aria-labelledby={authorityLabelId}
-              aria-describedby={authorityDescriptionId}
-              onChange={event => onAuthorityChange(event.target.value as ReviewRoutingAuthority)}
-            >
-              {REVIEW_AUTHORITIES.map(([value, label]) => (
-                <option key={value} value={value} disabled={value === "ask_automatically" && !automaticAvailable}>
-                  {label}
-                </option>
-              ))}
-            </select>
-            <p id={authorityDescriptionId} className="mt-2 text-sm leading-6 text-base-content/65">
-              {reviewRoutingAuthorityDescription(authority, requiresFundingPermission)}
-            </p>
-            {!automaticAvailable ? (
-              <p className="mt-2 text-sm leading-6 text-base-content/55">
-                Ask automatically is unavailable. {automaticUnavailableReason}
-              </p>
-            ) : null}
-          </div>
+            <div className="mt-3 grid gap-2">
+              {REVIEW_AUTHORITIES.map(([value, label]) => {
+                const inputId = `${id}-authority-${value}`;
+                const descriptionId = `${id}-authority-${value}-description`;
+                const automaticUnavailable = value === "ask_automatically" && !automaticAvailable;
+                const describedBy = automaticUnavailable ? `${descriptionId} ${authorityUnavailableId}` : descriptionId;
+
+                return (
+                  <div
+                    key={value}
+                    className={`flex gap-3 rounded-box border px-3 py-3 ${
+                      authority === value
+                        ? "border-primary/40 bg-primary/10"
+                        : "border-white/10 bg-[var(--rateloop-field)]"
+                    } ${automaticUnavailable ? "cursor-not-allowed opacity-65" : "cursor-pointer"}`}
+                  >
+                    <input
+                      id={inputId}
+                      className="radio radio-primary radio-sm mt-0.5 shrink-0"
+                      type="radio"
+                      name={`${id}-authority`}
+                      value={value}
+                      checked={authority === value}
+                      disabled={automaticUnavailable}
+                      aria-describedby={describedBy}
+                      onChange={() => onAuthorityChange(value)}
+                    />
+                    <span className="min-w-0">
+                      <label
+                        className={automaticUnavailable ? "cursor-not-allowed" : "cursor-pointer"}
+                        htmlFor={inputId}
+                      >
+                        <span className="block text-sm font-medium text-base-content">{label}</span>
+                      </label>
+                      <span id={descriptionId} className="mt-1 block text-sm leading-5 text-base-content/65">
+                        {reviewRoutingAuthorityDescription(value, requiresFundingPermission)}
+                      </span>
+                      {automaticUnavailable ? (
+                        <span id={authorityUnavailableId} className="mt-1 block text-sm leading-5 text-warning/90">
+                          Unavailable: {automaticUnavailableReason}
+                        </span>
+                      ) : null}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </fieldset>
         ) : null}
       </div>
     </fieldset>

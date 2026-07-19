@@ -40,7 +40,7 @@ test("guided setup renders one stage at a time and keeps implementation details 
   assert.match(flowSource, /\/agents\/\$\{encodeURIComponent\(connectedAgent\.agentId\)\}\/human-review/);
   assert.match(flowSource, /expectedBindingVersion: draft\.bindingRevision/);
   assert.match(flowSource, /bindingRevision: Number\(ownerView\.bindingRevision\)/);
-  assert.match(routingSource, /Do not prepare or send a request/i);
+  assert.match(routingSource, /without creating or sending a request/i);
   assert.doesNotMatch(flowSource, /Audience policy binding|admission policy hash/i);
   assert.doesNotMatch(flowSource, /Deployment name/i);
 });
@@ -170,7 +170,7 @@ test("review setup controls independent base compensation, optional Feedback Bon
     "Human awarder",
     "Check only",
     "Prepare for approval",
-    "Ask automatically",
+    "Send automatically",
   ]) {
     assert.match(`${flowSource}\n${routingSource}`, new RegExp(label));
   }
@@ -182,7 +182,7 @@ test("review setup controls independent base compensation, optional Feedback Bon
   assert.match(flowSource, /const automaticGrantOffer = setup\.capabilities\.automaticGrantOffer/);
   assert.match(flowSource, /automaticAvailable=\{automaticAvailable\}/);
   assert.match(flowSource, /provision: "private_invited_unpaid"/);
-  assert.match(flowSource, /allowedWorkflowKeys: automaticGrantOffer!\.allowedWorkflowKeys/);
+  assert.match(flowSource, /allowedWorkflowKeys: automaticGrantOffer\.allowedWorkflowKeys/);
   assert.doesNotMatch(flowSource, /maxPanelAtomic|maxDailyAtomic|maxMonthlyAtomic|maxFeeBps/);
   assert.match(flowSource, /buildReviewCompensationConfiguration\(timingProfile, reviewCompensation\)/);
   assert.match(flowSource, /requestProfile: \{ \.\.\.requestProfile, privateGroupId \}/);
