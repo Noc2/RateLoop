@@ -1,6 +1,6 @@
 import { HUMAN_ASSURANCE_SCHEMA_VERSION, type HumanAssuranceAudiencePolicy } from "@rateloop/sdk";
 import assert from "node:assert/strict";
-import { generateKeyPairSync, sign } from "node:crypto";
+import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
 import { recoverTypedDataAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -31,6 +31,7 @@ const SIGNER = privateKeyToAccount(SIGNER_PRIVATE_KEY);
 const PROVIDER_EVIDENCE_KEY = Buffer.alloc(32, 7);
 const TAX_RECORDS_KEY = Buffer.alloc(32, 8);
 const VOTE_MAPPING_KEY = Buffer.alloc(32, 9);
+const PROVIDER_REFERENCE_KEY = Buffer.alloc(32, 10);
 const originalProviderId = process.env.TOKENLESS_ELIGIBILITY_PROVIDER_ID;
 const originalProviderKey = process.env.TOKENLESS_ELIGIBILITY_PROVIDER_PUBLIC_KEY;
 const originalAppUrl = process.env.APP_URL;
@@ -99,9 +100,14 @@ function installOverrides(
   integrityEvidence: Parameters<
     typeof __setPaidEligibilityOverridesForTests
   >[0]["integrityEvidence"] = validIntegrityEvidence,
+  providerReferences = {
+    currentVersion: "reference-v1",
+    keys: new Map([["reference-v1", PROVIDER_REFERENCE_KEY]]),
+  },
 ) {
   __setPaidEligibilityOverridesForTests({
     provider: providerValue,
+    providerReferences,
     vault: {
       provider_evidence: { currentVersion: "test-v1", keys: new Map([["test-v1", PROVIDER_EVIDENCE_KEY]]) },
       tax_records: { currentVersion: "test-v1", keys: new Map([["test-v1", TAX_RECORDS_KEY]]) },
@@ -242,6 +248,52 @@ test("paid-task unlock persists every gate while vaulting DAC7 and nullifier mat
   assert.deepEqual(durableEnrollment.assuranceProviders, ["world:poh"]);
 });
 
+test("generic provider identifiers use rotation-aware domain-separated HMAC references", async () => {
+  await unlockPaidTasks();
+  const first = await dbClient.execute(
+    `SELECT b.subject_reference_hash, b.subject_reference_scheme, b.subject_reference_key_version,
+            a.provider_assertion_id_hash, a.provider_assertion_reference_scheme,
+            a.provider_assertion_key_version, l.sanctions_reference_hash
+     FROM tokenless_provider_subject_bindings b
+     JOIN tokenless_assurance_assertions a ON a.binding_id = b.binding_id
+     JOIN tokenless_legal_eligibility l ON l.rater_id = b.rater_id
+     WHERE b.provider_namespace = 'generic:v3'`,
+  );
+  const firstRow = first.rows[0]!;
+  assert.equal(firstRow.subject_reference_scheme, "hmac-sha256-v1");
+  assert.equal(firstRow.provider_assertion_reference_scheme, "hmac-sha256-v1");
+  assert.equal(firstRow.subject_reference_key_version, "reference-v1");
+  assert.equal(firstRow.provider_assertion_key_version, "reference-v1");
+  assert.match(String(firstRow.subject_reference_hash), /^hmac-sha256:reference-v1:[0-9a-f]{64}$/u);
+  assert.match(String(firstRow.provider_assertion_id_hash), /^hmac-sha256:reference-v1:[0-9a-f]{64}$/u);
+  assert.match(String(firstRow.sanctions_reference_hash), /^[0-9a-f]{64}$/u);
+  assert.notEqual(
+    firstRow.subject_reference_hash,
+    createHash("sha256").update("world:poh:provider-subject-123").digest("hex"),
+  );
+
+  installOverrides(provider(), async () => {}, validIntegrityEvidence, {
+    currentVersion: "reference-v2",
+    keys: new Map([
+      ["reference-v1", PROVIDER_REFERENCE_KEY],
+      ["reference-v2", Buffer.alloc(32, 11)],
+    ]),
+  });
+  await unlockPaidTasks();
+  const rotated = await dbClient.execute(
+    `SELECT b.subject_reference_hash, b.subject_reference_key_version,
+            a.provider_assertion_id_hash, a.provider_assertion_key_version
+     FROM tokenless_provider_subject_bindings b
+     JOIN tokenless_assurance_assertions a ON a.binding_id = b.binding_id
+     WHERE b.provider_namespace = 'generic:v3'`,
+  );
+  assert.equal(rotated.rows.length, 1);
+  assert.equal(rotated.rows[0]?.subject_reference_key_version, "reference-v2");
+  assert.equal(rotated.rows[0]?.provider_assertion_key_version, "reference-v2");
+  assert.match(String(rotated.rows[0]?.subject_reference_hash), /^hmac-sha256:reference-v2:/u);
+  assert.match(String(rotated.rows[0]?.provider_assertion_id_hash), /^hmac-sha256:reference-v2:/u);
+});
+
 test("document and nationality countries remain distinct from residence and tax eligibility", async () => {
   installOverrides(
     provider({
@@ -305,6 +357,10 @@ test("production provider results require an Ed25519 signature bound to the sign
     .toString();
   __setPaidEligibilityOverridesForTests({
     provider: null,
+    providerReferences: {
+      currentVersion: "reference-v1",
+      keys: new Map([["reference-v1", PROVIDER_REFERENCE_KEY]]),
+    },
     vault: {
       provider_evidence: { currentVersion: "test-v1", keys: new Map([["test-v1", PROVIDER_EVIDENCE_KEY]]) },
       tax_records: { currentVersion: "test-v1", keys: new Map([["test-v1", TAX_RECORDS_KEY]]) },

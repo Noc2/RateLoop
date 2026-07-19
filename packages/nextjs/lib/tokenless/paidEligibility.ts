@@ -100,6 +100,7 @@ export type VoucherRequest = {
 };
 
 type VaultConfig = { currentVersion: string; keys: Map<string, Buffer> };
+type ProviderReferenceKeyring = { currentVersion: string; keys: Map<string, Buffer> };
 type VaultDomain = "provider_evidence" | "tax_records" | "vote_mapping";
 type VaultDomains = Record<VaultDomain, VaultConfig>;
 type IssuerConfig = {
@@ -117,6 +118,7 @@ type HandoffConfig = { startUrl: string; secret: Buffer };
 
 let providerOverride: EligibilityProvider | null = null;
 let vaultOverride: VaultDomains | null = null;
+let providerReferenceKeyringOverride: ProviderReferenceKeyring | null = null;
 let issuerConfigOverride: IssuerConfig | null = null;
 let issuerStateVerifierOverride: IssuerStateVerifier | null = null;
 let dac7PolicyOverride: ((country: string) => boolean) | null = null;
@@ -333,6 +335,59 @@ function getVaultConfig(domain: VaultDomain): VaultConfig {
   }
   if (!keys.has(currentVersion)) throw new Error("The current eligibility vault key version is missing.");
   return { currentVersion, keys };
+}
+
+function getProviderReferenceKeyring(): ProviderReferenceKeyring {
+  if (providerReferenceKeyringOverride) return providerReferenceKeyringOverride;
+  const prefix = "TOKENLESS_PROVIDER_SUBJECT_HMAC";
+  if (process.env[`NEXT_PUBLIC_${prefix}_KEYS`] || process.env[`NEXT_PUBLIC_${prefix}_KEY_VERSION`]) {
+    throw new Error("Provider reference HMAC keys must never use NEXT_PUBLIC_ environment variables.");
+  }
+  const currentVersion = process.env[`${prefix}_KEY_VERSION`]?.trim();
+  const rawKeys = process.env[`${prefix}_KEYS`]?.trim();
+  if (!currentVersion || !rawKeys) throw new Error("The provider reference HMAC keyring is not configured.");
+  let source: Record<string, unknown>;
+  try {
+    source = JSON.parse(rawKeys) as Record<string, unknown>;
+  } catch {
+    throw new Error(`${prefix}_KEYS must be a JSON object of base64url keys.`);
+  }
+  const keys = new Map<string, Buffer>();
+  for (const [version, encoded] of Object.entries(source)) {
+    if (typeof encoded !== "string") continue;
+    const key = Buffer.from(encoded, "base64url");
+    if (key.length === 32) keys.set(version, key);
+  }
+  if (!keys.has(currentVersion)) throw new Error("The current provider reference HMAC key version is missing.");
+  return { currentVersion, keys };
+}
+
+function keyedProviderReference(
+  keyring: ProviderReferenceKeyring,
+  version: string,
+  providerId: string,
+  domain: "assertion-id" | "sanctions" | "subject",
+  value: string,
+) {
+  return `hmac-sha256:${version}:${createHmac("sha256", keyring.keys.get(version)!)
+    .update(`generic-provider:v3:${providerId}:${domain}:${value}`)
+    .digest("hex")}`;
+}
+
+function allProviderReferences(
+  keyring: ProviderReferenceKeyring,
+  providerId: string,
+  domain: "assertion-id" | "sanctions" | "subject",
+  value: string,
+) {
+  return [...keyring.keys.keys()].sort().map(version => ({
+    hash: keyedProviderReference(keyring, version, providerId, domain, value),
+    version,
+  }));
+}
+
+function sqlPlaceholders(start: number, count: number) {
+  return Array.from({ length: count }, (_, index) => `$${start + index}`).join(",");
 }
 
 function encryptVaultValue(domain: VaultDomain, value: unknown) {
@@ -711,9 +766,26 @@ export async function submitPaidEligibility(input: {
     evidenceVerifiedAt: assertion.evidenceVerifiedAt.toISOString(),
     evidenceExpiresAt: assertion.evidenceExpiresAt.toISOString(),
   });
-  const subjectHash = hash(`${assertion.providerId}:${assertion.subjectId}`);
-  const assertionIdHash = hash(`${assertion.providerId}:${assertion.assertionId}`);
-  const providerNamespace = "legacy:v2";
+  const referenceKeyring = getProviderReferenceKeyring();
+  const subjectReferences = allProviderReferences(
+    referenceKeyring,
+    assertion.providerId,
+    "subject",
+    assertion.subjectId,
+  );
+  const assertionIdReferences = allProviderReferences(
+    referenceKeyring,
+    assertion.providerId,
+    "assertion-id",
+    assertion.assertionId,
+  );
+  const currentSubjectReference = subjectReferences.find(
+    reference => reference.version === referenceKeyring.currentVersion,
+  )!;
+  const currentAssertionIdReference = assertionIdReferences.find(
+    reference => reference.version === referenceKeyring.currentVersion,
+  )!;
+  const providerNamespace = "generic:v3";
   const capabilities = [...new Set<HumanAssuranceCapability>(["account_control", ...assertion.capabilities])].sort();
   const state = eligibilityState(assertion, declaredResidenceCountry, taxCountry);
   const client = await dbPool.connect();
@@ -725,26 +797,29 @@ export async function submitPaidEligibility(input: {
       [accountAddress.toLowerCase()],
     );
     const existingRow = existing.rows[0] as QueryRow | undefined;
-    const existingCapability = existingRow
-      ? await client.query(
-          `SELECT subject_reference_hash FROM tokenless_provider_subject_bindings
-           WHERE rater_id = $1 AND provider_id = $2 AND provider_namespace = $3 AND status = 'active'
-           LIMIT 1 FOR UPDATE`,
-          [stringValue(existingRow, "rater_id"), assertion.providerId, providerNamespace],
-        )
-      : null;
-    const existingSubjectHash = stringValue(
-      existingCapability?.rows[0] as QueryRow | undefined,
-      "subject_reference_hash",
+    const raterId = stringValue(existingRow, "rater_id") ?? `rtr_${randomUUID().replaceAll("-", "")}`;
+    const subjectHashes = subjectReferences.map(reference => reference.hash);
+    const bindingResult = await client.query(
+      `SELECT binding_id, rater_id, subject_reference_hash
+       FROM tokenless_provider_subject_bindings
+       WHERE provider_id = $1 AND provider_namespace = $2 AND status = 'active'
+         AND (rater_id = $3 OR subject_reference_hash IN (${sqlPlaceholders(4, subjectHashes.length)}))
+       FOR UPDATE`,
+      [assertion.providerId, providerNamespace, raterId, ...subjectHashes],
     );
-    if (existingSubjectHash && existingSubjectHash !== subjectHash) {
+    const bindingRows = bindingResult.rows as QueryRow[];
+    const accountBinding = bindingRows.find(row => stringValue(row, "rater_id") === raterId);
+    const subjectOwner = bindingRows.find(row => subjectHashes.includes(stringValue(row, "subject_reference_hash")!));
+    if (
+      (subjectOwner && stringValue(subjectOwner, "rater_id") !== raterId) ||
+      (accountBinding && !subjectHashes.includes(stringValue(accountBinding, "subject_reference_hash")!))
+    ) {
       throw new TokenlessServiceError(
         "This account is already bound to another verified identity.",
         409,
         "identity_binding_conflict",
       );
     }
-    const raterId = stringValue(existingRow, "rater_id") ?? `rtr_${randomUUID().replaceAll("-", "")}`;
     if (!existingRow) {
       await client.query(
         `INSERT INTO tokenless_rater_profiles
@@ -762,33 +837,43 @@ export async function submitPaidEligibility(input: {
         [seedVault.ciphertext, seedVault.keyVersion, seedVault.keyDomain, now, raterId],
       );
     }
-    const proposedBindingId = `bind_${hash(`${assertion.providerId}:${providerNamespace}:${subjectHash}`).slice(0, 48)}`;
-    const bindingResult = await client.query(
-      `INSERT INTO tokenless_provider_subject_bindings
-       (binding_id, rater_id, provider_id, provider_namespace, subject_reference_hash,
-        subject_reference_scheme, status, bound_at, last_verified_at, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,'legacy-sha256-v2','active',$6,$6,$7,$7)
-       ON CONFLICT (rater_id, provider_id, provider_namespace) DO UPDATE SET
-        last_verified_at = EXCLUDED.last_verified_at, updated_at = EXCLUDED.updated_at
-       RETURNING binding_id`,
-      [
-        proposedBindingId,
-        raterId,
-        assertion.providerId,
-        providerNamespace,
-        subjectHash,
-        assertion.evidenceVerifiedAt,
-        now,
-      ],
-    );
-    const bindingId = stringValue(bindingResult.rows[0] as QueryRow | undefined, "binding_id")!;
-    const assuranceAssertionId = `assert_${assertionIdHash.slice(0, 48)}`;
+    const bindingId = stringValue(accountBinding, "binding_id") ?? `bind_${currentSubjectReference.hash.slice(-48)}`;
+    if (accountBinding) {
+      await client.query(
+        `UPDATE tokenless_provider_subject_bindings
+         SET subject_reference_hash = $1, subject_reference_scheme = 'hmac-sha256-v1',
+             subject_reference_key_version = $2, last_verified_at = $3, updated_at = $4
+         WHERE binding_id = $5`,
+        [currentSubjectReference.hash, currentSubjectReference.version, assertion.evidenceVerifiedAt, now, bindingId],
+      );
+    } else {
+      await client.query(
+        `INSERT INTO tokenless_provider_subject_bindings
+         (binding_id, rater_id, provider_id, provider_namespace, subject_reference_hash,
+          subject_reference_scheme, subject_reference_key_version, status, bound_at,
+          last_verified_at, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,'hmac-sha256-v1',$6,'active',$7,$7,$8,$8)`,
+        [
+          bindingId,
+          raterId,
+          assertion.providerId,
+          providerNamespace,
+          currentSubjectReference.hash,
+          currentSubjectReference.version,
+          assertion.evidenceVerifiedAt,
+          now,
+        ],
+      );
+    }
+    const assuranceAssertionId = `assert_${currentAssertionIdReference.hash.slice(-48)}`;
+    const assertionHashes = assertionIdReferences.map(reference => reference.hash);
     const existingAssertionResult = await client.query(
-      `SELECT rater_id, binding_id, provider_assertion_hash
+      `SELECT assertion_id, rater_id, binding_id, provider_assertion_hash
        FROM tokenless_assurance_assertions
-       WHERE provider_id = $1 AND provider_namespace = $2 AND provider_assertion_id_hash = $3
+       WHERE provider_id = $1 AND provider_namespace = $2
+         AND provider_assertion_id_hash IN (${sqlPlaceholders(3, assertionHashes.length)})
        LIMIT 1 FOR UPDATE`,
-      [assertion.providerId, providerNamespace, assertionIdHash],
+      [assertion.providerId, providerNamespace, ...assertionHashes],
     );
     const existingAssertion = existingAssertionResult.rows[0] as QueryRow | undefined;
     if (
@@ -803,52 +888,58 @@ export async function submitPaidEligibility(input: {
         "identity_already_bound",
       );
     }
-    const assertionResult = await client.query(
-      `INSERT INTO tokenless_assurance_assertions
-       (assertion_id, rater_id, binding_id, provider_id, provider_namespace,
-        provider_assertion_hash, provider_assertion_id_hash, provider_assertion_reference_scheme,
-        capabilities_json, provider_evidence_ciphertext, provider_evidence_key_version,
-        provider_evidence_key_domain, evidence_verified_at, evidence_expires_at,
-        minimum_age_verified, document_issuing_country, nationality_country,
-        verified_residence_country, status, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,'legacy-sha256-v2',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'active',$18,$18)
-       ON CONFLICT (provider_id, provider_namespace, provider_assertion_id_hash) DO UPDATE SET
-        capabilities_json = EXCLUDED.capabilities_json,
-        provider_evidence_ciphertext = EXCLUDED.provider_evidence_ciphertext,
-        provider_evidence_key_version = EXCLUDED.provider_evidence_key_version,
-        provider_evidence_key_domain = EXCLUDED.provider_evidence_key_domain,
-        evidence_verified_at = EXCLUDED.evidence_verified_at,
-        evidence_expires_at = EXCLUDED.evidence_expires_at,
-        minimum_age_verified = EXCLUDED.minimum_age_verified,
-        document_issuing_country = EXCLUDED.document_issuing_country,
-        nationality_country = EXCLUDED.nationality_country,
-        verified_residence_country = EXCLUDED.verified_residence_country,
-        status = 'active', revoked_at = NULL, updated_at = EXCLUDED.updated_at
-       WHERE tokenless_assurance_assertions.rater_id = EXCLUDED.rater_id
-         AND tokenless_assurance_assertions.binding_id = EXCLUDED.binding_id
-         AND tokenless_assurance_assertions.provider_assertion_hash = EXCLUDED.provider_assertion_hash
-       RETURNING assertion_id`,
-      [
-        assuranceAssertionId,
-        raterId,
-        bindingId,
-        assertion.providerId,
-        providerNamespace,
-        assertion.assertionHash,
-        assertionIdHash,
-        JSON.stringify(capabilities),
-        providerEvidenceVault.ciphertext,
-        providerEvidenceVault.keyVersion,
-        providerEvidenceVault.keyDomain,
-        assertion.evidenceVerifiedAt,
-        assertion.evidenceExpiresAt,
-        assertion.minimumAgeVerified,
-        assertion.documentIssuingCountry,
-        assertion.nationalityCountry,
-        assertion.verifiedResidenceCountry,
-        now,
-      ],
-    );
+    const assertionValues = [
+      JSON.stringify(capabilities),
+      providerEvidenceVault.ciphertext,
+      providerEvidenceVault.keyVersion,
+      providerEvidenceVault.keyDomain,
+      assertion.evidenceVerifiedAt,
+      assertion.evidenceExpiresAt,
+      assertion.minimumAgeVerified,
+      assertion.documentIssuingCountry,
+      assertion.nationalityCountry,
+      assertion.verifiedResidenceCountry,
+      now,
+    ] as const;
+    const assertionResult = existingAssertion
+      ? await client.query(
+          `UPDATE tokenless_assurance_assertions
+           SET provider_assertion_id_hash = $1, provider_assertion_reference_scheme = 'hmac-sha256-v1',
+               provider_assertion_key_version = $2, capabilities_json = $3,
+               provider_evidence_ciphertext = $4, provider_evidence_key_version = $5,
+               provider_evidence_key_domain = $6, evidence_verified_at = $7, evidence_expires_at = $8,
+               minimum_age_verified = $9, document_issuing_country = $10, nationality_country = $11,
+               verified_residence_country = $12, status = 'active', revoked_at = NULL, updated_at = $13
+           WHERE assertion_id = $14 RETURNING assertion_id`,
+          [
+            currentAssertionIdReference.hash,
+            currentAssertionIdReference.version,
+            ...assertionValues,
+            stringValue(existingAssertion, "assertion_id"),
+          ],
+        )
+      : await client.query(
+          `INSERT INTO tokenless_assurance_assertions
+           (assertion_id, rater_id, binding_id, provider_id, provider_namespace,
+            provider_assertion_hash, provider_assertion_id_hash, provider_assertion_reference_scheme,
+            provider_assertion_key_version, capabilities_json, provider_evidence_ciphertext,
+            provider_evidence_key_version, provider_evidence_key_domain, evidence_verified_at,
+            evidence_expires_at, minimum_age_verified, document_issuing_country, nationality_country,
+            verified_residence_country, status, created_at, updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,'hmac-sha256-v1',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,'active',$19,$19)
+           RETURNING assertion_id`,
+          [
+            assuranceAssertionId,
+            raterId,
+            bindingId,
+            assertion.providerId,
+            providerNamespace,
+            assertion.assertionHash,
+            currentAssertionIdReference.hash,
+            currentAssertionIdReference.version,
+            ...assertionValues,
+          ],
+        );
     if (assertionResult.rowCount !== 1) {
       throw new TokenlessServiceError(
         "This provider assertion is already bound to different immutable evidence.",
@@ -899,7 +990,13 @@ export async function submitPaidEligibility(input: {
         dac7Vault?.keyDomain ?? null,
         now,
         assertion.sanctionsStatus,
-        hash(assertion.sanctionsReference),
+        keyedProviderReference(
+          referenceKeyring,
+          referenceKeyring.currentVersion,
+          assertion.providerId,
+          "sanctions",
+          assertion.sanctionsReference,
+        ).split(":")[2],
         assertion.sanctionsScreenedAt,
         assertion.sanctionsExpiresAt,
         state.status,
@@ -1580,6 +1677,7 @@ export async function issuePaidVoucher(input: { accountAddress: string; request:
 export function __setPaidEligibilityOverridesForTests(input: {
   provider?: EligibilityProvider | null;
   vault?: VaultDomains | null;
+  providerReferences?: ProviderReferenceKeyring | null;
   issuerConfig?: IssuerConfig | null;
   verifyIssuerState?: IssuerStateVerifier | null;
   requiresDac7?: ((country: string) => boolean) | null;
@@ -1595,6 +1693,7 @@ export function __setPaidEligibilityOverridesForTests(input: {
 }) {
   providerOverride = input.provider ?? null;
   vaultOverride = input.vault ?? null;
+  providerReferenceKeyringOverride = input.providerReferences ?? null;
   issuerConfigOverride = input.issuerConfig ?? null;
   issuerStateVerifierOverride = input.verifyIssuerState ?? null;
   dac7PolicyOverride = input.requiresDac7 ?? null;
