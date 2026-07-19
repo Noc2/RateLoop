@@ -1,8 +1,8 @@
 # Claude Workflow Notes
 
 Claude should use [`AGENTS.md`](AGENTS.md) as the source of truth for repository
-workflow, tokenless implementation boundaries, redeploy policy, cleanup order,
-image handoff, and trust-model guidance.
+workflow, product design and UX, tokenless implementation boundaries, redeploy
+policy, cleanup order, image handoff, and trust-model guidance.
 
 ## Non-negotiable tokenless isolation
 
