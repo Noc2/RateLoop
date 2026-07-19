@@ -714,6 +714,7 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
     "rateloop_claim_connection_intent",
     "rateloop_get_agent_context",
     "rateloop_verify_connection",
+    "rateloop_list_open_reviews",
     "rateloop_get_assurance_state",
     "rateloop_evaluate_review_requirement",
     "rateloop_request_review",
@@ -755,6 +756,13 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
     idempotentHint: true,
     openWorldHint: false,
   });
+  assert.deepEqual(tool("rateloop_list_open_reviews")?.annotations, {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  });
+  assert.match(tool("rateloop_list_open_reviews")?.description ?? "", /never returns review content/u);
   assert.deepEqual(tool("rateloop_verify_connection")?.annotations, {
     readOnlyHint: false,
     destructiveHint: false,
@@ -1516,6 +1524,7 @@ test("uses a bound authenticated workspace surface without changing the public f
     listedBody.result.tools.map((tool: { name: string }) => tool.name),
     [
       "rateloop_get_agent_context",
+      "rateloop_list_open_reviews",
       "rateloop_get_assurance_state",
       "rateloop_evaluate_review_requirement",
       "rateloop_request_review",
@@ -1629,4 +1638,188 @@ test("injects bound identity into review decisions and rejects caller spoofing",
   assert.equal(state.reviewRateBps, 10_000);
   assert.equal(state.humanAgreementBps, null);
   assert.equal(state.nextReassessmentAfter, 30);
+});
+
+test("rediscovers only the bound integration's active reviews with safe bounded pagination after restart", async () => {
+  const primary = await setup();
+  const isolated = await setup();
+
+  function opportunityArguments(id: string) {
+    return {
+      externalOpportunityId: `rediscovery-${id}`,
+      workflowKey: "support-reply",
+      riskTier: "low",
+      audiencePolicyHash: primary.audiencePolicyHash,
+      suggestionCommitment: __adaptiveReviewServiceTestUtils.sha256({ answer: id }),
+      sourceEvidence: {
+        reference: `private/source/${id}`,
+        hash: __adaptiveReviewServiceTestUtils.sha256({ privateSource: id }),
+      },
+      declaredConfidenceBps: 8_500,
+      metadataComplete: true,
+      execution: {
+        externalExecutionId: `rediscovery-execution-${id}`,
+        status: "completed",
+        primarySpanId: "primary",
+        generationSpans: [
+          {
+            spanId: "primary",
+            role: "primary",
+            provider: "OpenAI",
+            requestedModel: "gpt-test",
+          },
+        ],
+      },
+    };
+  }
+
+  async function evaluate(token: string, args: ReturnType<typeof opportunityArguments>, id: number) {
+    const response = await POST(
+      request(
+        {
+          id,
+          jsonrpc: "2.0",
+          method: "tools/call",
+          params: { name: "rateloop_evaluate_review_requirement", arguments: args },
+        },
+        token,
+      ),
+    );
+    const body = await response.json();
+    assert.ok(body.result?.structuredContent?.opportunityId, JSON.stringify(body));
+    return body.result.structuredContent.opportunityId as string;
+  }
+
+  async function list(token: string, args: Record<string, unknown>, id: number) {
+    const response = await POST(
+      request(
+        {
+          id,
+          jsonrpc: "2.0",
+          method: "tools/call",
+          params: { name: "rateloop_list_open_reviews", arguments: args },
+        },
+        token,
+      ),
+    );
+    const body = await response.json();
+    assert.ok(body.result?.structuredContent, JSON.stringify(body));
+    return body.result.structuredContent as {
+      schemaVersion: string;
+      items: Array<{
+        opportunityId: string;
+        workflowKey: string;
+        riskTier: string;
+        createdAt: string;
+        lifecycle: { state: string; revision: number; stateEnteredAt: string; updatedAt: string };
+        nextAction: string;
+      }>;
+      nextCursor: string | null;
+    };
+  }
+
+  const approvalRequired = await evaluate(primary.token, opportunityArguments("approval"), 201);
+  const pending = await evaluate(primary.token, opportunityArguments("pending"), 202);
+  const blocked = await evaluate(primary.token, opportunityArguments("blocked"), 203);
+  const requestReady = await evaluate(primary.token, opportunityArguments("request-ready"), 204);
+  const terminal = await evaluate(primary.token, opportunityArguments("terminal-private-payload"), 205);
+  const isolatedOpportunity = await evaluate(
+    isolated.token,
+    { ...opportunityArguments("other-workspace"), audiencePolicyHash: isolated.audiencePolicyHash },
+    206,
+  );
+
+  const transitionedAt = new Date(Date.now() + 1_000);
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_opportunity_lifecycles
+          SET state='pending', state_revision=3, state_entered_at=?, updated_at=?
+          WHERE workspace_id=? AND opportunity_id=?`,
+    args: [transitionedAt, transitionedAt, primary.workspaceId, pending],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_opportunity_lifecycles
+          SET state='blocked', state_revision=3, state_entered_at=?, updated_at=?
+          WHERE workspace_id=? AND opportunity_id=?`,
+    args: [transitionedAt, transitionedAt, primary.workspaceId, blocked],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_opportunity_lifecycles
+          SET state='request_ready', state_revision=3, state_entered_at=?, updated_at=?
+          WHERE workspace_id=? AND opportunity_id=?`,
+    args: [transitionedAt, transitionedAt, primary.workspaceId, requestReady],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_opportunity_lifecycles
+          SET state='completed', state_revision=3, state_entered_at=?, terminal_at=?, updated_at=?
+          WHERE workspace_id=? AND opportunity_id=?`,
+    args: [transitionedAt, transitionedAt, transitionedAt, primary.workspaceId, terminal],
+  });
+
+  const first = await list(primary.token, { limit: 2 }, 207);
+  assert.equal(first.schemaVersion, "rateloop.open-human-reviews.v1");
+  assert.equal(first.items.length, 2);
+  assert.ok(first.nextCursor);
+  const second = await list(primary.token, { cursor: first.nextCursor, limit: 2 }, 208);
+  assert.equal(second.items.length, 2);
+  assert.equal(second.nextCursor, null);
+
+  const items = [...first.items, ...second.items];
+  assert.deepEqual(
+    items.map(item => item.opportunityId).sort(),
+    [approvalRequired, pending, blocked, requestReady].sort(),
+  );
+  assert.equal(
+    items.some(item => item.opportunityId === terminal),
+    false,
+  );
+  assert.equal(
+    items.some(item => item.opportunityId === isolatedOpportunity),
+    false,
+  );
+  assert.deepEqual(Object.fromEntries(items.map(item => [item.lifecycle.state, item.nextAction])), {
+    approval_required: "rateloop_request_review",
+    blocked: "rateloop_get_agent_context",
+    pending: "rateloop_wait_for_review",
+    request_ready: "rateloop_request_review",
+  });
+  for (const item of items) {
+    assert.deepEqual(Object.keys(item).sort(), [
+      "createdAt",
+      "lifecycle",
+      "nextAction",
+      "opportunityId",
+      "riskTier",
+      "workflowKey",
+    ]);
+    assert.deepEqual(Object.keys(item.lifecycle).sort(), ["revision", "state", "stateEnteredAt", "updatedAt"]);
+  }
+  const serialized = JSON.stringify(items);
+  assert.equal(serialized.includes("private/source"), false);
+  assert.equal(serialized.includes("terminal-private-payload"), false);
+  assert.equal(serialized.includes("suggestionCommitment"), false);
+  assert.equal(serialized.includes("sourceEvidence"), false);
+  assert.equal(serialized.includes("operationKey"), false);
+  assert.equal(serialized.includes("executionId"), false);
+
+  // Every call reauthenticates from persisted state, so a fresh un-cursored request models agent restart recovery.
+  const afterRestart = await list(primary.token, { limit: 50 }, 209);
+  assert.deepEqual(
+    afterRestart.items.map(item => item.opportunityId).sort(),
+    [approvalRequired, pending, blocked, requestReady].sort(),
+  );
+
+  const invalidCursor = await POST(
+    request(
+      {
+        id: 210,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: "rateloop_list_open_reviews", arguments: { cursor: "not-a-cursor" } },
+      },
+      primary.token,
+    ),
+  );
+  const invalidCursorBody = await invalidCursor.json();
+  assert.equal(invalidCursorBody.result.isError, true);
+  assert.equal(invalidCursorBody.result.structuredContent.code, "invalid_open_review_query");
 });

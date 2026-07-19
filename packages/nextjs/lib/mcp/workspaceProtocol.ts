@@ -24,6 +24,7 @@ import {
 } from "~~/lib/tokenless/agentIntegrations";
 import { getEffectiveAgentReviewContext } from "~~/lib/tokenless/effectiveAgentReviewContext";
 import { routeHumanReviewRequest } from "~~/lib/tokenless/humanReviewRequestRouter";
+import { listOpenHumanReviewOpportunities } from "~~/lib/tokenless/openHumanReviewOpportunities";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type JsonRecord = Record<string, unknown>;
@@ -174,6 +175,20 @@ export const workspaceMcpTools = [
     description:
       "Read the exact active agent version and effective human-review configuration bound server-side to this credential: selection frequency, request profile, audience and privacy boundary, response window, panel, compensation, authority, publishing grant and scopes, and implemented lane readiness.",
     inputSchema: { additionalProperties: false, properties: {}, type: "object" },
+  },
+  {
+    name: "rateloop_list_open_reviews",
+    annotations: readOnlyClosedAnnotations,
+    description:
+      "Rediscover this exact integration's active human-review opportunities after a restart. Returns only bounded workflow, risk, lifecycle, and next-action metadata; it never returns review content, evidence, payloads, operation identifiers, or results.",
+    inputSchema: {
+      additionalProperties: false,
+      properties: {
+        cursor: { maxLength: 1_024, minLength: 1, type: ["string", "null"] },
+        limit: { maximum: 50, minimum: 1, type: "integer" },
+      },
+      type: "object",
+    },
   },
   {
     name: "rateloop_get_assurance_state",
@@ -449,6 +464,22 @@ async function callIntegrationTool(
     if (name === "rateloop_get_agent_context") {
       requireObjectWithKeys(args, [], "Agent context arguments are invalid.");
       return toolResult(await getEffectiveAgentReviewContext(principal));
+    }
+    if (name === "rateloop_list_open_reviews") {
+      const input = requireObjectWithKeys(args, ["cursor", "limit"], "Open-review query arguments are invalid.");
+      if (input.cursor !== undefined && input.cursor !== null && typeof input.cursor !== "string") {
+        throw new TokenlessServiceError("Open-review cursor is invalid.", 400, "invalid_open_review_query");
+      }
+      if (input.limit !== undefined && typeof input.limit !== "number") {
+        throw new TokenlessServiceError("Open-review limit is invalid.", 400, "invalid_open_review_query");
+      }
+      return toolResult(
+        await listOpenHumanReviewOpportunities({
+          principal,
+          ...(typeof input.cursor === "string" ? { cursor: input.cursor } : {}),
+          ...(typeof input.limit === "number" ? { limit: input.limit } : {}),
+        }),
+      );
     }
     if (name === "rateloop_get_assurance_state") {
       const input = requireObjectWithKeys(args, ["scopeId"], "scopeId is required.");
