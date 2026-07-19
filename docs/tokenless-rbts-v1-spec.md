@@ -10,6 +10,12 @@ This specification freezes deterministic contract behavior. It does not claim th
 fixture demonstrates that unanimous constant-report equilibria can score highly; World ID, hidden assignment, integrity
 epochs, qualification, gold tasks, and verdict gates remain independent controls.
 
+The fixture also separates unilateral from coordinated laziness. In the frozen 2,000-trial, 15-seat diagnostic, one
+constant-up reporter among honest reporters earns a mean score of 6,251 bps versus 7,136 bps for the honest
+population. Honest reporting is therefore the local best response in that seeded model, while the 9,950-bps
+unanimous constant-report equilibrium remains collectively more lucrative than the 7,238-bps honest baseline. This
+diagnostic does not establish incentive compatibility outside its stated signal model.
+
 ## Inputs and minimum panel
 
 Each accepted reveal contains a binary `vote` and integer `predictedUpBps` from 100 through 9,900 inclusive. The
@@ -154,6 +160,9 @@ The normative executable vectors are:
 - `packages/foundry/scripts-js/tokenlessRbts.test.js`;
 - `packages/foundry/scripts-js/fixtures/tokenless-rbts-v1-attack-benchmark.json`; and
 - the Solidity library, panel, invariant, and state-machine tests committed with scoring version 2.
+
+The attack fixture includes a focal unilateral constant reporter and a separate manufactured-surprise diagnostic.
+The latter is not part of RBTS settlement and must not be interpreted as changing the fund core.
 
 Any disagreement between JavaScript and Solidity blocks deployment. The public verifier must use this version and the
 exact on-chain evidence rather than accepting a server-computed score.

@@ -9,6 +9,7 @@ import {
   peerAssignments,
   quadraticScoreBps,
   rbtsScoreBps,
+  simulateManufacturedSurpriseFarming,
   shadowPredictionBps,
   solidityRankHash,
   solidityScoringSeed,
@@ -102,6 +103,25 @@ test("attack benchmark is deterministic and covers the preregistered strategies"
   );
   assert.ok(first.results.every(result => result.meanScoreBps >= 0 && result.meanScoreBps <= 10_000));
   assert.ok(first.results.every(result => result.reportCount > 0));
+  const unilateral = first.results.find(result => result.scenario === "unilateral_constant_up");
+  assert.ok(unilateral.honestResponsePremiumBps > 0);
+  assert.ok(unilateral.focalReporterMeanScoreBps < unilateral.honestPopulationMeanScoreBps);
+  assert.ok(unilateral.focalReporterCorrectVoteBps < unilateral.honestPopulationCorrectVoteBps);
+  assert.equal(first.surpriseBountyDiagnostics.unanimousControl.totalSurpriseBonusAtomic, "0");
+  assert.equal(first.surpriseBountyDiagnostics.unanimousControl.unanimityDisqualified, true);
+  assert.equal(first.surpriseBountyDiagnostics.nearUnanimousAttack.surpriseOutlayWithinRoundFee, true);
+  assert.ok(first.surpriseBountyDiagnostics.nearUnanimousAttack.coalitionNetSeatPayDeltaBps > 0);
+});
+
+test("manufactured-surprise diagnostics distinguish bounded outlay from incentive safety", () => {
+  const result = simulateManufacturedSurpriseFarming({ trials: 200, panelSize: 15, seed: "fixture-seed" });
+  assert.equal(result.maximumRoundLiabilityAtomic, result.roundFeeAtomic);
+  assert.equal(result.unanimousControl.totalSurpriseBonusAtomic, "0");
+  assert.ok(result.unanimousControl.rbtsSeatPayDeltaBps < 0);
+  assert.equal(result.nearUnanimousAttack.totalSurpriseBonusAtomic, "1050000");
+  assert.ok(result.nearUnanimousAttack.coalitionRbtsSeatPayDeltaBps < 0);
+  assert.equal(result.nearUnanimousAttack.coalitionSurpriseSeatPayBps, 750);
+  assert.ok(result.nearUnanimousAttack.coalitionNetSeatPayDeltaBps > 0);
 });
 
 test("published attack benchmark fixture matches the executable simulator", async () => {
@@ -110,7 +130,10 @@ test("published attack benchmark fixture matches the executable simulator", asyn
   );
   const generated = benchmarkAllScenarios({ trials: fixture.trials, panelSize: fixture.panelSize, seed: fixture.seed });
   assert.deepEqual(
-    generated.results.map(({ trials: _trials, panelSize: _panelSize, ...result }) => result),
-    fixture.results,
+    {
+      ...generated,
+      results: generated.results.map(({ trials: _trials, panelSize: _panelSize, ...result }) => result),
+    },
+    fixture,
   );
 });

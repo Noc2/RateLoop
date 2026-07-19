@@ -1,3 +1,4 @@
+import { simulateManufacturedSurpriseFarming } from "../../../foundry/scripts-js/tokenlessRbts.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
@@ -109,6 +110,34 @@ test("unanimous panels cannot farm surprise-bounty allocations", () => {
   assert.equal(result.totalBonusAtomic, "0");
   assert.ok(result.allocations.every(allocation => allocation.bonusAtomic === "0"));
   assert.ok(result.limitationCodes.includes("unanimous_panel_no_bonus"));
+});
+
+test("published manufactured-surprise diagnostics match the frozen allocation", () => {
+  const diagnostic = simulateManufacturedSurpriseFarming({ trials: 200, panelSize: 15, seed: "fixture-seed" });
+  const frozenPolicy = {
+    guaranteedBasePerReportAtomic: 800_000n,
+    maximumBonusPerReportAtomic: 75_000n,
+  };
+  const unanimous = computeSurpriseBountyRound(
+    Array.from({ length: 15 }, (_, index) => ({
+      commitKey: key(index + 200),
+      vote: 1 as const,
+      predictedUpBps: 3_000,
+    })),
+    frozenPolicy,
+  );
+  const nearUnanimous = computeSurpriseBountyRound(
+    Array.from({ length: 15 }, (_, index) => ({
+      commitKey: key(index + 300),
+      vote: index < 14 ? (1 as const) : (0 as const),
+      predictedUpBps: 3_000,
+    })),
+    frozenPolicy,
+  );
+  assert.equal(unanimous.totalBonusAtomic, diagnostic.unanimousControl.totalSurpriseBonusAtomic);
+  assert.equal(nearUnanimous.totalBonusAtomic, diagnostic.nearUnanimousAttack.totalSurpriseBonusAtomic);
+  assert.equal(nearUnanimous.maximumRoundLiabilityAtomic, diagnostic.maximumRoundLiabilityAtomic);
+  assert.equal(diagnostic.maximumRoundLiabilityAtomic, diagnostic.roundFeeAtomic);
 });
 
 test("surprise bounties validate identities, prediction grid, and bounded economics", () => {

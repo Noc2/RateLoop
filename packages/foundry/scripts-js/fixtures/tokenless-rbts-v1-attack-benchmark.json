@@ -8,6 +8,19 @@
     { "scenario": "honest_continuous", "completedTrials": 2000, "reportCount": 30000, "meanScoreBps": 7238, "correctVoteBps": 7236, "upVoteBps": 5013 },
     { "scenario": "honest_nearest_bucket", "completedTrials": 2000, "reportCount": 30000, "meanScoreBps": 7228, "correctVoteBps": 7236, "upVoteBps": 5013 },
     { "scenario": "random_clicks", "completedTrials": 2000, "reportCount": 30000, "meanScoreBps": 6245, "correctVoteBps": 5009, "upVoteBps": 5000 },
+    {
+      "scenario": "unilateral_constant_up",
+      "completedTrials": 2000,
+      "reportCount": 30000,
+      "meanScoreBps": 7077,
+      "correctVoteBps": 7085,
+      "upVoteBps": 5350,
+      "focalReporterMeanScoreBps": 6251,
+      "focalReporterCorrectVoteBps": 4975,
+      "honestPopulationMeanScoreBps": 7136,
+      "honestPopulationCorrectVoteBps": 7236,
+      "honestResponsePremiumBps": 885
+    },
     { "scenario": "constant_up", "completedTrials": 2000, "reportCount": 30000, "meanScoreBps": 9950, "correctVoteBps": 4975, "upVoteBps": 10000 },
     { "scenario": "constant_down", "completedTrials": 2000, "reportCount": 30000, "meanScoreBps": 9950, "correctVoteBps": 5025, "upVoteBps": 0 },
     { "scenario": "coordinated_minority", "completedTrials": 2000, "reportCount": 30000, "meanScoreBps": 6630, "correctVoteBps": 5318, "upVoteBps": 5023 },
@@ -15,5 +28,32 @@
     { "scenario": "selective_reveal", "completedTrials": 1999, "reportCount": 20180, "meanScoreBps": 7727, "correctVoteBps": 7230, "upVoteBps": 7452 },
     { "scenario": "heterogeneous_priors", "completedTrials": 2000, "reportCount": 30000, "meanScoreBps": 7120, "correctVoteBps": 7236, "upVoteBps": 5013 },
     { "scenario": "seeded_correlation_ring", "completedTrials": 2000, "reportCount": 30000, "meanScoreBps": 7843, "correctVoteBps": 8165, "upVoteBps": 5008 }
-  ]
+  ],
+  "surpriseBountyDiagnostics": {
+    "scenario": "manufactured_surprise_sp_farming",
+    "trials": 2000,
+    "panelSize": 15,
+    "coalitionSize": 14,
+    "seatPayAtomic": "1000000",
+    "guaranteedBasePerReportAtomic": "800000",
+    "roundFeeAtomic": "1125000",
+    "maximumBonusPerReportAtomic": "75000",
+    "maximumRoundLiabilityAtomic": "1125000",
+    "baselineCollusiveMeanRbtsScoreBps": 9950,
+    "unanimousControl": {
+      "meanRbtsScoreBps": 6750,
+      "rbtsSeatPayDeltaBps": -640,
+      "totalSurpriseBonusAtomic": "0",
+      "unanimityDisqualified": true
+    },
+    "nearUnanimousAttack": {
+      "coalitionMeanRbtsScoreBps": 6821,
+      "dissenterMeanRbtsScoreBps": 2550,
+      "coalitionRbtsSeatPayDeltaBps": -626,
+      "coalitionSurpriseSeatPayBps": 750,
+      "coalitionNetSeatPayDeltaBps": 124,
+      "totalSurpriseBonusAtomic": "1050000",
+      "surpriseOutlayWithinRoundFee": true
+    }
+  }
 }

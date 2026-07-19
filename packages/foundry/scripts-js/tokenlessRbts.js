@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { encodeAbiParameters, keccak256 } from "viem";
+import { simulateManufacturedSurpriseFarming as simulateSurpriseFarming } from "./tokenlessSurpriseAttack.js";
 
 export const BPS = 10_000;
 export const MIN_USER_PREDICTION_BPS = 100;
@@ -220,6 +221,8 @@ function scenarioReports({ scenario, panelSize, seed, trial, trueVote }) {
           Number(deterministicUint(seed, `${trial}:${rater}:random-prediction`) % 5n)
         ],
       });
+    } else if (scenario === "unilateral_constant_up") {
+      reports.push(rater === 0 ? { vote: 1, predictedUpBps: 9_000 } : honest);
     } else if (scenario === "constant_up") reports.push({ vote: 1, predictedUpBps: 9_000 });
     else if (scenario === "constant_down") reports.push({ vote: 0, predictedUpBps: 1_000 });
     else if (scenario === "coordinated_minority") {
@@ -241,6 +244,7 @@ export const ATTACK_SCENARIOS = [
   "honest_continuous",
   "honest_nearest_bucket",
   "random_clicks",
+  "unilateral_constant_up",
   "constant_up",
   "constant_down",
   "coordinated_minority",
@@ -257,6 +261,10 @@ export function simulateScenario({ scenario, trials = 2_000, panelSize = 15, see
   let correctVotes = 0;
   let upVotes = 0;
   let skippedTrials = 0;
+  let focalScoreTotal = 0;
+  let focalCorrectVotes = 0;
+  let populationScoreTotal = 0;
+  let populationCorrectVotes = 0;
   for (let trial = 0; trial < trials; trial += 1) {
     const trueVote = draw(seed, `${trial}:truth`, 0.5) ? 1 : 0;
     const reports = scenarioReports({ scenario, panelSize, seed, trial, trueVote });
@@ -269,17 +277,43 @@ export function simulateScenario({ scenario, trials = 2_000, panelSize = 15, see
     reportCount += reports.length;
     correctVotes += reports.filter(report => report.vote === trueVote).length;
     upVotes += reports.filter(report => report.vote === 1).length;
+    if (scenario === "unilateral_constant_up") {
+      focalScoreTotal += scores[0].scoreBps;
+      focalCorrectVotes += reports[0].vote === trueVote ? 1 : 0;
+      populationScoreTotal += scores.slice(1).reduce((sum, score) => sum + score.scoreBps, 0);
+      populationCorrectVotes += reports.slice(1).filter(report => report.vote === trueVote).length;
+    }
   }
-  return {
+  const completedTrials = trials - skippedTrials;
+  const result = {
     scenario,
     trials,
     panelSize,
-    completedTrials: trials - skippedTrials,
+    completedTrials,
     reportCount,
     meanScoreBps: reportCount === 0 ? 0 : Math.round(scoreTotal / reportCount),
     correctVoteBps: reportCount === 0 ? 0 : Math.round((correctVotes * BPS) / reportCount),
     upVoteBps: reportCount === 0 ? 0 : Math.round((upVotes * BPS) / reportCount),
   };
+  if (scenario !== "unilateral_constant_up") return result;
+  const populationReportCount = completedTrials * (panelSize - 1);
+  const focalReporterMeanScoreBps = completedTrials === 0 ? 0 : Math.round(focalScoreTotal / completedTrials);
+  const honestPopulationMeanScoreBps =
+    populationReportCount === 0 ? 0 : Math.round(populationScoreTotal / populationReportCount);
+  return {
+    ...result,
+    focalReporterMeanScoreBps,
+    focalReporterCorrectVoteBps:
+      completedTrials === 0 ? 0 : Math.round((focalCorrectVotes * BPS) / completedTrials),
+    honestPopulationMeanScoreBps,
+    honestPopulationCorrectVoteBps:
+      populationReportCount === 0 ? 0 : Math.round((populationCorrectVotes * BPS) / populationReportCount),
+    honestResponsePremiumBps: honestPopulationMeanScoreBps - focalReporterMeanScoreBps,
+  };
+}
+
+export function simulateManufacturedSurpriseFarming(options = {}) {
+  return simulateSurpriseFarming({ ...options, scorePanel });
 }
 
 export function benchmarkAllScenarios(options = {}) {
@@ -290,6 +324,7 @@ export function benchmarkAllScenarios(options = {}) {
     trials: options.trials ?? 2_000,
     panelSize: options.panelSize ?? 15,
     results: ATTACK_SCENARIOS.map(scenario => simulateScenario({ ...options, scenario })),
+    surpriseBountyDiagnostics: simulateManufacturedSurpriseFarming(options),
   };
 }
 

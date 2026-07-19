@@ -72,6 +72,18 @@ failures retry with a bounded backoff; a persisted nonce without a safely record
 Persisted evidence includes the version, frozen policy, sample, actual and predicted shares, selected outcome,
 leave-one-out allocations, total top-up, allocation hash, evidence hash, transfer transaction hash, and paid total.
 
+The executable attack fixture tests both the unanimity exclusion and a near-unanimous bypass under the frozen fee
+cap. With 15 seats, an 80% guaranteed base, a 7.5% round fee, and reports predicting 30% for the coordinated up side:
+
+- a 15-of-15 panel receives no surprise top-up because unanimity is disqualified; and
+- a 14-of-15 coalition receives 750 bps of seat pay per coalition member. Its mean RBTS sacrifice is 626 bps of seat
+  pay relative to the unanimous high-prediction constant-report baseline, leaving a positive 124-bps diagnostic
+  delta. Aggregate surprise outlay is 1,050,000 atomic units against a 1,125,000-atomic round fee.
+
+The fee-backed cap therefore bounds platform outlay and prevents this scenario from exceeding fee revenue; it does
+not make manufactured surprise incentive-safe. The benchmark is diagnostic, depends on its seeded report model, and
+does not close the production economics acceptance gate.
+
 Required limitation codes include centralized platform liability, binary-panel-only, and not-a-truth-oracle. Future
 changes to sample size, thresholds, saturation, cap, funding, or formula require a new mechanism version and cannot
 alter an already reserved or finalized round.
