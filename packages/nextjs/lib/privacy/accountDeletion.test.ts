@@ -1,17 +1,32 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
+import { BETTER_AUTH_SESSION_COOKIE_NAMES } from "~~/lib/auth/betterAuthCookies";
 import { resolveBetterAuthPrincipal } from "~~/lib/auth/principal";
 import { createAuthSession, findAuthSession } from "~~/lib/auth/session";
-import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
+import { __setDatabaseResourcesForTests, dbClient, dbPool } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { deleteAccount, getAccountDeletionPreview } from "~~/lib/privacy/accountDeletion";
+import { __setPaidEligibilityOverridesForTests, ensureAssuranceRaterProfile } from "~~/lib/tokenless/paidEligibility";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
-beforeEach(() => __setDatabaseResourcesForTests(createMemoryDatabaseResources()));
-afterEach(() => __setDatabaseResourcesForTests(null));
+beforeEach(() => {
+  __setDatabaseResourcesForTests(createMemoryDatabaseResources());
+  __setPaidEligibilityOverridesForTests({
+    vault: {
+      provider_evidence: { currentVersion: "test-v1", keys: new Map([["test-v1", Buffer.alloc(32, 11)]]) },
+      tax_records: { currentVersion: "test-v1", keys: new Map([["test-v1", Buffer.alloc(32, 13)]]) },
+      vote_mapping: { currentVersion: "test-v1", keys: new Map([["test-v1", Buffer.alloc(32, 17)]]) },
+    },
+  });
+});
+afterEach(() => {
+  __setPaidEligibilityOverridesForTests({});
+  __setDatabaseResourcesForTests(null);
+});
 
 async function seedBetterAuthUser(id: string, email = "delete@example.test") {
   const now = new Date("2026-07-16T08:00:00.000Z");
@@ -97,7 +112,7 @@ test("account deletion revokes authentication, removes shared access, and permit
     browser_identities: 0,
     memberships: 0,
     wallet_bindings: 0,
-    categories: 7,
+    categories: 8,
   });
 
   await assert.rejects(
@@ -113,6 +128,287 @@ test("account deletion revokes authentication, removes shared access, and permit
   const freshIdentity = await resolveBetterAuthPrincipal({ betterAuthUserId: "better-new" });
   assert.notEqual(freshIdentity.principalId, oldIdentity.principalId);
   assert.equal((await getAccountDeletionPreview(freshIdentity.principalId)).impact.ownedWorkspaces, 0);
+});
+
+test("account deletion receipts the rater identity, erases World ID state, and permits fresh enrollment", async () => {
+  const now = new Date("2026-07-16T09:00:00.000Z");
+  const payoutAccount = "0x2222222222222222222222222222222222222222";
+  await seedBetterAuthUser("better-rater", "rater-delete@example.test");
+  const oldIdentity = await resolveBetterAuthPrincipal({ betterAuthUserId: "better-rater" });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_wallet_bindings
+          (binding_id,principal_id,purpose,wallet_address,wallet_source,chain_id,
+           proof_message_hash,created_at,last_used_at)
+          VALUES ('wb_rater_old',?,'payout',?,'self_custodial',8453,'proof-old',?,?)`,
+    args: [oldIdentity.principalId, payoutAccount, now, now],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_payout_wallet_ownership
+          (wallet_address,principal_id,first_binding_id,first_bound_at)
+          VALUES (?,?,'wb_rater_old',?)`,
+    args: [payoutAccount, oldIdentity.principalId, now],
+  });
+  const oldClient = await dbPool.connect();
+  let oldRaterId: string;
+  try {
+    oldRaterId = await ensureAssuranceRaterProfile(
+      oldClient,
+      { principalId: oldIdentity.principalId, payoutAccount },
+      now,
+    );
+  } finally {
+    oldClient.release();
+  }
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_paid_vouchers
+          (voucher_id,rater_id,request_idempotency_key,request_hash,chain_id,panel_address,
+           issuer_address,issuer_epoch,signer_address,round_id,content_id,vote_key,nullifier,
+           admission_policy_hash,assurance_snapshot_hash,expires_at,payout_account_snapshot,
+           voucher_json,voucher_signature,status,issued_at)
+          VALUES ('voucher_delete',?,'voucher:delete:1','request-delete',84532,
+                  '0x3333333333333333333333333333333333333333',
+                  '0x4444444444444444444444444444444444444444',1,
+                  '0x4444444444444444444444444444444444444444',42,?,?,?,?,'sha256:${"5".repeat(64)}',
+                  ?,?,'{}','0x12','issued',?)`,
+    args: [
+      oldRaterId,
+      `0x${"1".repeat(64)}`,
+      "0x5555555555555555555555555555555555555555",
+      `0x${"2".repeat(64)}`,
+      `0x${"3".repeat(64)}`,
+      new Date(now.getTime() + 3_600_000),
+      payoutAccount,
+      now,
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_world_id_context_limits
+          (rater_id,window_started_at,request_count,updated_at) VALUES (?, ?, 1, ?)`,
+    args: [oldRaterId, now, now],
+  });
+  const worldSubjectReferenceHash = `hmac-sha256:test-v1:${"6".repeat(64)}`;
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_provider_subject_bindings
+          (binding_id,rater_id,provider_id,provider_namespace,subject_reference_hash,
+           subject_reference_scheme,subject_reference_key_version,status,bound_at,last_verified_at,
+           created_at,updated_at)
+          VALUES ('bind_world_delete',?,'world:poh','rp_delete',?,'hmac-sha256-v1','test-v1',
+                  'active',?,?,?,?)`,
+    args: [oldRaterId, worldSubjectReferenceHash, now, now, now, now],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_assertions
+          (assertion_id,rater_id,binding_id,provider_id,provider_namespace,provider_assertion_hash,
+           provider_assertion_id_hash,provider_assertion_reference_scheme,provider_assertion_key_version,
+           capabilities_json,provider_evidence_ciphertext,provider_evidence_key_version,
+           provider_evidence_key_domain,evidence_verified_at,evidence_expires_at,status,created_at,updated_at)
+          VALUES ('assert_world_delete',?,'bind_world_delete','world:poh','rp_delete',?,?,'hmac-sha256-v1',
+                  'test-v1','["unique_human"]','ciphertext','test-v1','provider_evidence',?,?,'active',?,?)`,
+    args: [
+      oldRaterId,
+      `hmac-sha256:test-v1:${"7".repeat(64)}`,
+      `hmac-sha256:test-v1:${"8".repeat(64)}`,
+      now,
+      new Date(now.getTime() + 86_400_000),
+      now,
+      now,
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_world_id_requests
+          (request_id,rater_id,principal_id,account_address,provider_id,rp_id,app_id,action_version,
+           action,environment,mode,assurance_effect,nonce,credential_expires_at_min,status,created_at,expires_at)
+          VALUES ('wrq_delete',?,?,?,'world:poh','rp_delete','app_delete','v1','delete-test','staging',
+                  'initial_unique','bind_durable_unique_human','nonce-delete',?,'pending',?,?)`,
+    args: [
+      oldRaterId,
+      oldIdentity.principalId,
+      payoutAccount,
+      new Date(now.getTime() + 86_400_000),
+      now,
+      new Date(now.getTime() + 300_000),
+    ],
+  });
+
+  const deleted = await deleteAccount({
+    betterAuthUserId: "better-rater",
+    confirmation: "DELETE",
+    principalId: oldIdentity.principalId,
+    now,
+  });
+  const receiptAccount = `0x${createHash("sha256")
+    .update(`deleted-rater-payout:${deleted.receiptDigest}`)
+    .digest("hex")
+    .slice(0, 40)}`;
+  const erased = await dbClient.execute({
+    sql: `SELECT principal_id,account_address,nullifier_seed_ciphertext,deletion_receipt_hash,deleted_at
+          FROM tokenless_rater_profiles WHERE rater_id = ?`,
+    args: [oldRaterId],
+  });
+  assert.equal(erased.rowCount, 1);
+  assert.deepEqual(erased.rows[0], {
+    principal_id: null,
+    account_address: receiptAccount,
+    nullifier_seed_ciphertext: `deleted:${deleted.receiptDigest}`,
+    deletion_receipt_hash: `sha256:${deleted.receiptDigest}`,
+    deleted_at: now,
+  });
+  const erasedState = await dbClient.execute({
+    sql: `SELECT
+            (SELECT COUNT(*) FROM tokenless_world_id_requests WHERE rater_id = ?) AS world_requests,
+            (SELECT COUNT(*) FROM tokenless_world_id_context_limits WHERE rater_id = ?) AS world_limits,
+            (SELECT COUNT(*) FROM tokenless_provider_subject_bindings WHERE rater_id = ?) AS subject_bindings,
+            (SELECT COUNT(*) FROM tokenless_assurance_assertions WHERE rater_id = ?) AS assertions,
+            (SELECT COUNT(*) FROM tokenless_payout_wallet_ownership WHERE principal_id = ?) AS ownership,
+            (SELECT COUNT(*) FROM tokenless_paid_vouchers WHERE rater_id = ?) AS retained_vouchers`,
+    args: [oldRaterId, oldRaterId, oldRaterId, oldRaterId, oldIdentity.principalId, oldRaterId],
+  });
+  assert.deepEqual(
+    Object.fromEntries(
+      Object.entries(erasedState.rows[0] ?? {}).map(([key, value]) => [key, Array.isArray(value) ? value[0] : value]),
+    ),
+    { world_requests: 0, world_limits: 0, subject_bindings: 0, assertions: 0, ownership: 0, retained_vouchers: 1 },
+  );
+
+  const receipt = await dbClient.execute({
+    sql: `SELECT category,disposition,status,basis_code,retention_deadline,evidence_digest,
+                 created_at,completed_at
+          FROM tokenless_deletion_job_categories
+          WHERE job_id = ? AND category = 'world_id_and_rater_linkage'`,
+    args: [deleted.jobId],
+  });
+  assert.equal(receipt.rowCount, 1);
+  assert.equal(receipt.rows[0]?.disposition, "erase");
+  assert.equal(receipt.rows[0]?.status, "completed");
+  assert.equal(receipt.rows[0]?.basis_code, null);
+  assert.equal(receipt.rows[0]?.retention_deadline, null);
+  assert.match(String(receipt.rows[0]?.evidence_digest), /^[0-9a-f]{64}$/);
+  assert.ok(new Date(String(receipt.rows[0]?.completed_at)) >= new Date(String(receipt.rows[0]?.created_at)));
+  const retainedReceipt = await dbClient.execute({
+    sql: `SELECT disposition,status,basis_code,retention_deadline,evidence_digest
+          FROM tokenless_deletion_job_categories
+          WHERE job_id = ? AND category = 'settlement_legal_security'`,
+    args: [deleted.jobId],
+  });
+  assert.deepEqual(
+    {
+      basis: retainedReceipt.rows[0]?.basis_code,
+      disposition: retainedReceipt.rows[0]?.disposition,
+      status: retainedReceipt.rows[0]?.status,
+    },
+    { basis: "legal_settlement_security", disposition: "retain", status: "retained" },
+  );
+  assert.equal(
+    new Date(String(retainedReceipt.rows[0]?.retention_deadline)).toISOString(),
+    new Date(now.getTime() + 3_650 * 86_400_000).toISOString(),
+  );
+  assert.match(String(retainedReceipt.rows[0]?.evidence_digest), /^[0-9a-f]{64}$/);
+  const completion = await dbClient.execute({
+    sql: `SELECT evidence_json FROM tokenless_subject_request_completions WHERE request_id = ?`,
+    args: [deleted.requestId],
+  });
+  const completionEvidence = JSON.parse(String(completion.rows[0]?.evidence_json)) as {
+    categoryDigests: Record<string, string>;
+    categoryEvidence: Record<string, Record<string, unknown>>;
+  };
+  assert.equal(completionEvidence.categoryDigests.world_id_and_rater_linkage, receipt.rows[0]?.evidence_digest);
+  assert.deepEqual(completionEvidence.categoryEvidence.world_id_and_rater_linkage, {
+    deletedRows: {
+      assuranceAssertions: 1,
+      payoutEligibility: 0,
+      providerSubjectBindings: 1,
+      worldIdContextLimits: 1,
+      worldIdRequests: 1,
+    },
+    profileFound: true,
+    remainingRows: {
+      assuranceAssertions: 0,
+      payoutEligibility: 0,
+      principalProfileLinks: 0,
+      providerSubjectBindings: 0,
+      worldIdContextLimits: 0,
+      worldIdRequests: 0,
+    },
+    tombstoneWritten: true,
+  });
+  assert.deepEqual(completionEvidence.categoryEvidence.settlement_legal_security, {
+    raterTombstoneRetained: true,
+    retainedPaidVouchers: 1,
+    tombstoneReceiptHash: `sha256:${deleted.receiptDigest}`,
+  });
+  const events = await dbClient.execute({
+    sql: `SELECT from_status,to_status,actor_reference,reason,created_at
+          FROM tokenless_subject_request_events WHERE request_id = ?`,
+    args: [deleted.requestId],
+  });
+  assert.equal(events.rowCount, 1);
+  assert.deepEqual(
+    {
+      actor: events.rows[0]?.actor_reference,
+      from: events.rows[0]?.from_status,
+      reason: events.rows[0]?.reason,
+      to: events.rows[0]?.to_status,
+    },
+    {
+      actor: "system:account_deletion",
+      from: null,
+      reason: "atomic_account_erasure_completed",
+      to: "completed",
+    },
+  );
+
+  await seedBetterAuthUser("better-rater-fresh", "rater-delete@example.test");
+  const freshIdentity = await resolveBetterAuthPrincipal({ betterAuthUserId: "better-rater-fresh" });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_wallet_bindings
+          (binding_id,principal_id,purpose,wallet_address,wallet_source,chain_id,
+           proof_message_hash,created_at,last_used_at)
+          VALUES ('wb_rater_fresh',?,'payout',?,'self_custodial',8453,'proof-fresh',?,?)`,
+    args: [freshIdentity.principalId, payoutAccount, now, now],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_payout_wallet_ownership
+          (wallet_address,principal_id,first_binding_id,first_bound_at)
+          VALUES (?,?,'wb_rater_fresh',?)`,
+    args: [payoutAccount, freshIdentity.principalId, now],
+  });
+  const freshClient = await dbPool.connect();
+  let freshRaterId: string;
+  try {
+    freshRaterId = await ensureAssuranceRaterProfile(
+      freshClient,
+      { principalId: freshIdentity.principalId, payoutAccount },
+      now,
+    );
+  } finally {
+    freshClient.release();
+  }
+  assert.notEqual(freshRaterId, oldRaterId);
+  const fresh = await dbClient.execute({
+    sql: `SELECT principal_id,account_address,deletion_receipt_hash
+          FROM tokenless_rater_profiles WHERE rater_id = ?`,
+    args: [freshRaterId],
+  });
+  assert.deepEqual(fresh.rows[0], {
+    principal_id: freshIdentity.principalId,
+    account_address: payoutAccount,
+    deletion_receipt_hash: null,
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_provider_subject_bindings
+          (binding_id,rater_id,provider_id,provider_namespace,subject_reference_hash,
+           subject_reference_scheme,subject_reference_key_version,status,bound_at,last_verified_at,
+           created_at,updated_at)
+          VALUES ('bind_world_fresh',?,'world:poh','rp_delete',?,'hmac-sha256-v1','test-v1',
+                  'active',?,?,?,?)`,
+    args: [freshRaterId, worldSubjectReferenceHash, now, now, now, now],
+  });
+  const rebound = await dbClient.execute({
+    sql: `SELECT rater_id FROM tokenless_provider_subject_bindings
+          WHERE subject_reference_hash = ?`,
+    args: [worldSubjectReferenceHash],
+  });
+  assert.deepEqual(rebound.rows, [{ rater_id: freshRaterId }]);
 });
 
 test("account deletion blocks sole workspace owners and active managed wallets", async () => {
@@ -153,4 +449,10 @@ test("the account deletion route requires the product session, same-origin mutat
   assert.match(source, /recent_authentication_required/);
   assert.match(source, /betterAuthUserId: betterSession\.user\.id/);
   assert.match(source, /response\.cookies\.delete\(AUTH_SESSION_COOKIE\)/);
+  assert.match(source, /BETTER_AUTH_SESSION_COOKIE_NAMES/);
+  assert.deepEqual(BETTER_AUTH_SESSION_COOKIE_NAMES, [
+    "rateloop-identity.session_token",
+    "__Secure-rateloop-identity.session_token",
+  ]);
+  assert.doesNotMatch(source, /better-auth\.session_token/);
 });

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBetterAuth } from "~~/lib/auth/betterAuth";
+import { BETTER_AUTH_SESSION_COOKIE_NAMES } from "~~/lib/auth/betterAuthCookies";
 import { requireBrowserSession } from "~~/lib/auth/request";
 import { AUTH_SESSION_COOKIE } from "~~/lib/auth/session";
 import { deleteAccount, getAccountDeletionPreview } from "~~/lib/privacy/accountDeletion";
@@ -47,8 +48,7 @@ export async function POST(request: NextRequest) {
     });
     const response = NextResponse.json(result, { headers: NO_STORE });
     response.cookies.delete(AUTH_SESSION_COOKIE);
-    response.cookies.delete("better-auth.session_token");
-    response.cookies.delete("__Secure-better-auth.session_token");
+    for (const cookieName of BETTER_AUTH_SESSION_COOKIE_NAMES) response.cookies.delete(cookieName);
     return response;
   } catch (error) {
     const response = tokenlessErrorResponse(error);
