@@ -327,6 +327,7 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
       agentVersionId: bound.agentVersionId,
       status: bound.status,
       enforcementMode: bound.enforcementMode,
+      enforcementBoundary: bound.enforcementMode,
       allowedWorkflowKeys,
       reviewPolicy: {
         policyId: selection.policyId,
@@ -596,6 +597,7 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
     agentVersionId: bound.agentVersionId,
     status: bound.status,
     enforcementMode: bound.enforcementMode,
+    enforcementBoundary: bound.enforcementMode,
     allowedWorkflowKeys,
     reviewPolicy: {
       policyId: selection.policyId,

@@ -31,6 +31,12 @@ Frequency applies once per **eligible output**, not on a wall-clock timer. An el
 the workflow bound to this policy; setup messages, tool chatter, health checks, status updates, and delivery of an
 already-recorded result do not count.
 
+The connected agent or its host reports that an eligible output occurred and supplies its risk tier, declared
+confidence, critical-risk flag, and metadata-completeness flag. RateLoop validates and records those inputs, but an
+advisory MCP connection cannot independently detect a missing evaluation call or verify that the reported risk and
+confidence describe output the host never exposed. The maximum-unreviewed-gap counter therefore covers reported
+eligible outputs only. Use **host-enforced** wording only for a separately verified adapter that owns that boundary.
+
 - **Adaptive** starts at 100% and reduces only after the configured evidence windows pass; safety overrides can still
   require review.
 - **Every eligible output** asks every time.

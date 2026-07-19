@@ -875,6 +875,7 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
   assert.deepEqual(atomicRecovery.context, agentContext);
   assert.equal(agentContext.schemaVersion, "rateloop.agent-context.v2");
   assert.equal(agentContext.workspaceId, workspaceId);
+  assert.equal(agentContext.enforcementBoundary, "advisory");
   assert.match(agentContext.reviewPolicy.audiencePolicyHash, /^sha256:[a-f0-9]{64}$/);
   assert.equal(agentContext.publishingPolicy, null);
   assert.equal(agentContext.humanReview.status, "configuration_required");
