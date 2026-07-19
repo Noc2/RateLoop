@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS } from "~~/lib/tokenless/adaptiveReviewDefaults";
 import {
   SAFE_AGENT_CONNECTION_SCOPES,
   claimAgentConnectionIntent,
@@ -1011,6 +1012,7 @@ test("setup resumes a legacy v1 review choice as one unsaved v2 draft", async ()
   assert.ok(resumed.reviewDraft);
   assert.equal(resumed.reviewDraft!.schemaVersion, "rateloop.workspace-agent-setup-review.v2");
   assert.equal(resumed.reviewDraft!.selection.mode, "always");
+  assert.equal(resumed.reviewDraft!.selection.agreementThresholdBps, DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS);
   assert.equal(resumed.reviewDraft!.requestProfile.questionAuthority, "owner_fixed");
   assert.equal(resumed.reviewDraft!.requestProfile.resultSemantics, "assurance");
   assert.equal(resumed.reviewDraft!.bindingRevision, null);

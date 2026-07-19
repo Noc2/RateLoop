@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
+import { DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS } from "~~/lib/tokenless/adaptiveReviewDefaults";
 import { SAFE_AGENT_CONNECTION_SCOPES, createAgentConnectionIntent } from "~~/lib/tokenless/agentConnectionIntents";
 import { AGENT_SETUP_SCREEN_STEPS, type AgentSetupScreenStep } from "~~/lib/tokenless/agentSetupNavigation";
 import { getHumanReviewConfigurationForOwner } from "~~/lib/tokenless/humanReviewConfiguration";
@@ -102,7 +103,7 @@ const DEFAULT_REVIEW_DRAFT: AgentSetupReviewDraft = {
   selection: {
     mode: "adaptive",
     enforcementMode: "advisory",
-    agreementThresholdBps: 8_000,
+    agreementThresholdBps: DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS,
     productionFloorBps: 1_000,
     fixedRateBps: null,
     maximumUnreviewedGap: 20,
