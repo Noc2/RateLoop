@@ -22,6 +22,7 @@ export type TokenlessChainConfig = {
   revealWindowSeconds: number;
   beaconFailureGraceSeconds: number;
   relayerPrivateKey?: `0x${string}`;
+  rpcFallbackUrls: string[];
   rpcUrl: string;
   schemaVersion: typeof TOKENLESS_DEPLOYMENT_SCHEMA;
   usdcAddress: Address;
@@ -29,6 +30,8 @@ export type TokenlessChainConfig = {
   usdcEip712Version: string;
   x402SubmitterAddress: Address;
 };
+
+const MAXIMUM_RPC_FALLBACKS = 3;
 
 function required(env: NodeJS.ProcessEnv, name: string) {
   const value = env[name]?.trim();
@@ -57,6 +60,40 @@ function privateKey(env: NodeJS.ProcessEnv, name: string) {
   if (!value) return undefined;
   if (!PRIVATE_KEY_PATTERN.test(value)) throw new Error(`${name} must be a 32-byte hex private key.`);
   return value as `0x${string}`;
+}
+
+function rpcUrls(env: NodeJS.ProcessEnv) {
+  const primary = required(env, "BASE_SEPOLIA_RPC_URL");
+  const fallbacks = (env.BASE_SEPOLIA_RPC_FALLBACK_URLS ?? "")
+    .split(",")
+    .map(value => value.trim())
+    .filter(Boolean);
+  if (env.NODE_ENV === "production" && fallbacks.length === 0) {
+    throw new Error("BASE_SEPOLIA_RPC_FALLBACK_URLS must contain at least one independent HTTPS RPC in production.");
+  }
+  if (fallbacks.length > MAXIMUM_RPC_FALLBACKS) {
+    throw new Error(`BASE_SEPOLIA_RPC_FALLBACK_URLS must contain at most ${MAXIMUM_RPC_FALLBACKS} URLs.`);
+  }
+  const normalized = [primary, ...fallbacks].map((value, index) => {
+    const name = index === 0 ? "BASE_SEPOLIA_RPC_URL" : "BASE_SEPOLIA_RPC_FALLBACK_URLS";
+    let parsed: URL;
+    try {
+      parsed = new URL(value);
+    } catch {
+      throw new Error(`${name} must contain valid HTTP URLs.`);
+    }
+    if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password || parsed.hash) {
+      throw new Error(`${name} must contain HTTP URLs without embedded credentials or fragments.`);
+    }
+    if (env.NODE_ENV === "production" && parsed.protocol !== "https:") {
+      throw new Error(`${name} must use HTTPS in production.`);
+    }
+    return parsed.toString();
+  });
+  if (new Set(normalized).size !== normalized.length) {
+    throw new Error("BASE_SEPOLIA_RPC_URL and BASE_SEPOLIA_RPC_FALLBACK_URLS must be distinct.");
+  }
+  return { rpcUrl: normalized[0]!, rpcFallbackUrls: normalized.slice(1) };
 }
 
 export function buildTokenlessDeploymentKey(input: {
@@ -109,11 +146,7 @@ export function loadTokenlessChainConfig(env: NodeJS.ProcessEnv = process.env): 
   }
   const deploymentBlock = BigInt(required(env, "TOKENLESS_DEPLOYMENT_BLOCK"));
   if (deploymentBlock <= 0n) throw new Error("TOKENLESS_DEPLOYMENT_BLOCK must be positive.");
-  const rpcUrl = required(env, "BASE_SEPOLIA_RPC_URL");
-  const parsedRpcUrl = new URL(rpcUrl);
-  if (env.NODE_ENV === "production" && parsedRpcUrl.protocol !== "https:") {
-    throw new Error("BASE_SEPOLIA_RPC_URL must use HTTPS in production.");
-  }
+  const { rpcUrl, rpcFallbackUrls } = rpcUrls(env);
   const claimGracePeriodSeconds = positiveInteger(env, "TOKENLESS_CLAIM_GRACE_PERIOD_SECONDS", 7 * 24 * 60 * 60);
   if (claimGracePeriodSeconds > 30 * 24 * 60 * 60) {
     throw new Error("TOKENLESS_CLAIM_GRACE_PERIOD_SECONDS exceeds the contract maximum of 30 days.");
@@ -156,7 +189,8 @@ export function loadTokenlessChainConfig(env: NodeJS.ProcessEnv = process.env): 
     revealWindowSeconds: positiveInteger(env, "TOKENLESS_REVEAL_WINDOW_SECONDS", 120),
     beaconFailureGraceSeconds: positiveInteger(env, "TOKENLESS_BEACON_FAILURE_GRACE_SECONDS", 300),
     relayerPrivateKey,
-    rpcUrl: parsedRpcUrl.toString(),
+    rpcFallbackUrls,
+    rpcUrl,
     schemaVersion: TOKENLESS_DEPLOYMENT_SCHEMA,
     surpriseBonusFunderPrivateKey,
     usdcAddress,

@@ -50,6 +50,7 @@ function config(overrides: Partial<TokenlessChainConfig> = {}): TokenlessChainCo
     panelAddress: PANEL,
     revealWindowSeconds: 120,
     beaconFailureGraceSeconds: 300,
+    rpcFallbackUrls: ["https://base-sepolia-fallback.example/"],
     rpcUrl: "https://sepolia.base.org/",
     schemaVersion: "rateloop-tokenless-deployment-v4",
     usdcAddress: USDC,
@@ -137,6 +138,7 @@ test("deployment config binds the complete bundle and forbids credential key reu
     TOKENLESS_DEPLOYMENT_KEY: config().deploymentKey,
     TOKENLESS_DEPLOYMENT_BLOCK: "100",
     BASE_SEPOLIA_RPC_URL: "https://sepolia.base.org",
+    BASE_SEPOLIA_RPC_FALLBACK_URLS: "https://base-sepolia-fallback.example",
     TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY: key,
     TOKENLESS_X402_RELAYER_PRIVATE_KEY: key,
   } as unknown as NodeJS.ProcessEnv;
@@ -168,6 +170,41 @@ test("deployment config binds the complete bundle and forbids credential key reu
         TOKENLESS_DEPLOYMENT_SCHEMA: "rateloop-tokenless-deployment-v2",
       }),
     /must be rateloop-tokenless-deployment-v4/,
+  );
+});
+
+test("production deployment config requires distinct HTTPS RPC fallbacks", () => {
+  const base = {
+    NODE_ENV: "production",
+    TOKENLESS_DEPLOYMENT_SCHEMA: "rateloop-tokenless-deployment-v4",
+    TOKENLESS_CHAIN_ID: "84532",
+    TOKENLESS_PANEL_ADDRESS: PANEL,
+    TOKENLESS_CREDENTIAL_ISSUER_ADDRESS: ISSUER,
+    TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS: ADAPTER,
+    TOKENLESS_FEEDBACK_BONUS_ADDRESS: FEEDBACK_BONUS,
+    TOKENLESS_USDC_ADDRESS: USDC,
+    TOKENLESS_FEE_RECIPIENT: FEE_RECIPIENT,
+    TOKENLESS_DEPLOYMENT_KEY: config().deploymentKey,
+    TOKENLESS_DEPLOYMENT_BLOCK: "100",
+    BASE_SEPOLIA_RPC_URL: "https://primary.example",
+  } as unknown as NodeJS.ProcessEnv;
+
+  assert.throws(() => loadTokenlessChainConfig(base), /must contain at least one independent HTTPS RPC/i);
+  assert.throws(
+    () =>
+      loadTokenlessChainConfig({
+        ...base,
+        BASE_SEPOLIA_RPC_FALLBACK_URLS: "http://fallback.example",
+      }),
+    /must use HTTPS/i,
+  );
+  assert.throws(
+    () =>
+      loadTokenlessChainConfig({
+        ...base,
+        BASE_SEPOLIA_RPC_FALLBACK_URLS: "https://primary.example",
+      }),
+    /must be distinct/i,
   );
 });
 

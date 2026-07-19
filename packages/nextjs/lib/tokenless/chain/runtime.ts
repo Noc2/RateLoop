@@ -7,20 +7,34 @@ import {
   type BlockTag,
   type Hash,
   type Hex,
+  type Transport,
   createPublicClient,
   createWalletClient,
+  fallback,
   getAddress,
   http,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { baseSepolia } from "viem/chains";
 
-function createBasePublicClient(rpcUrl: string) {
-  return createPublicClient({ chain: baseSepolia, transport: http(rpcUrl) });
+const RPC_TIMEOUT_MS = 8_000;
+
+export function createOrderedRpcFallbackTransport(transports: readonly Transport[]): Transport {
+  if (transports.length === 0) throw new Error("At least one RPC transport is required.");
+  if (transports.length === 1) return transports[0]!;
+  return fallback(transports, { rank: false, retryCount: 0 });
 }
 
-function createBaseWalletClient(account: Account, rpcUrl: string) {
-  return createWalletClient({ account, chain: baseSepolia, transport: http(rpcUrl) });
+function createConfiguredRpcTransport(rpcUrls: readonly string[]) {
+  return createOrderedRpcFallbackTransport(rpcUrls.map(url => http(url, { retryCount: 0, timeout: RPC_TIMEOUT_MS })));
+}
+
+function createBasePublicClient(rpcUrls: readonly string[]) {
+  return createPublicClient({ chain: baseSepolia, transport: createConfiguredRpcTransport(rpcUrls) });
+}
+
+function createBaseWalletClient(account: Account, rpcUrls: readonly string[]) {
+  return createWalletClient({ account, chain: baseSepolia, transport: createConfiguredRpcTransport(rpcUrls) });
 }
 
 export type TokenlessPublicClient = ReturnType<typeof createBasePublicClient>;
@@ -84,34 +98,36 @@ export function loadTokenlessEvidenceFinalityPolicy(
   );
 }
 
-let runtimeCache: { rpcUrl: string; runtime: TokenlessChainRuntime } | null = null;
+let runtimeCache: { rpcKey: string; runtime: TokenlessChainRuntime } | null = null;
 let runtimeOverride: TokenlessChainRuntime | null = null;
 
-function wallet(privateKey: `0x${string}`, rpcUrl: string) {
+function wallet(privateKey: `0x${string}`, rpcUrls: readonly string[]) {
   const account = privateKeyToAccount(privateKey);
   return {
     account,
-    client: createBaseWalletClient(account, rpcUrl),
+    client: createBaseWalletClient(account, rpcUrls),
   };
 }
 
 export function getTokenlessChainRuntime(config: TokenlessChainConfig): TokenlessChainRuntime {
   if (runtimeOverride) return runtimeOverride;
-  if (runtimeCache?.rpcUrl === config.rpcUrl) return runtimeCache.runtime;
-  const prepaid = config.prepaidFunderPrivateKey ? wallet(config.prepaidFunderPrivateKey, config.rpcUrl) : null;
-  const relayer = config.relayerPrivateKey ? wallet(config.relayerPrivateKey, config.rpcUrl) : null;
+  const rpcUrls = [config.rpcUrl, ...config.rpcFallbackUrls];
+  const rpcKey = JSON.stringify(rpcUrls);
+  if (runtimeCache?.rpcKey === rpcKey) return runtimeCache.runtime;
+  const prepaid = config.prepaidFunderPrivateKey ? wallet(config.prepaidFunderPrivateKey, rpcUrls) : null;
+  const relayer = config.relayerPrivateKey ? wallet(config.relayerPrivateKey, rpcUrls) : null;
   const surpriseBonus = config.surpriseBonusFunderPrivateKey
-    ? wallet(config.surpriseBonusFunderPrivateKey, config.rpcUrl)
+    ? wallet(config.surpriseBonusFunderPrivateKey, rpcUrls)
     : null;
   const runtime: TokenlessChainRuntime = {
-    publicClient: createBasePublicClient(config.rpcUrl),
+    publicClient: createBasePublicClient(rpcUrls),
     ...(prepaid ? { prepaidAccount: prepaid.account, prepaidWallet: prepaid.client } : {}),
     ...(relayer ? { relayerAccount: relayer.account, relayerWallet: relayer.client } : {}),
     ...(surpriseBonus
       ? { surpriseBonusAccount: surpriseBonus.account, surpriseBonusWallet: surpriseBonus.client }
       : {}),
   };
-  runtimeCache = { rpcUrl: config.rpcUrl, runtime };
+  runtimeCache = { rpcKey, runtime };
   return runtime;
 }
 

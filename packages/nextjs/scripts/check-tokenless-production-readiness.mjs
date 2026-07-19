@@ -85,6 +85,7 @@ export const REQUIRED_TOKENLESS_PRODUCTION_VARIABLES = [
   "TOKENLESS_BEACON_FAILURE_GRACE_SECONDS",
   "TOKENLESS_CLAIM_GRACE_PERIOD_SECONDS",
   "BASE_SEPOLIA_RPC_URL",
+  "BASE_SEPOLIA_RPC_FALLBACK_URLS",
   "NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL",
   "TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY",
   "TOKENLESS_X402_RELAYER_PRIVATE_KEY",
@@ -189,6 +190,25 @@ function httpsUrl(raw) {
   }
 }
 
+function validateRpcFallbacks(env, errors) {
+  const rpcFallbackUrls = value(env, "BASE_SEPOLIA_RPC_FALLBACK_URLS")
+    .split(",")
+    .map(entry => entry.trim())
+    .filter(Boolean);
+  if (rpcFallbackUrls.length === 0 || rpcFallbackUrls.length > 3) {
+    errors.push("BASE_SEPOLIA_RPC_FALLBACK_URLS must contain between one and three independent HTTPS URLs.");
+  }
+  for (const rpcUrl of rpcFallbackUrls) {
+    if (!httpsUrl(rpcUrl)) {
+      errors.push("BASE_SEPOLIA_RPC_FALLBACK_URLS must contain HTTPS URLs without embedded credentials or fragments.");
+    }
+  }
+  const normalizedRpcUrls = [value(env, "BASE_SEPOLIA_RPC_URL"), ...rpcFallbackUrls];
+  if (new Set(normalizedRpcUrls).size !== normalizedRpcUrls.length) {
+    errors.push("BASE_SEPOLIA_RPC_URL and BASE_SEPOLIA_RPC_FALLBACK_URLS must be distinct.");
+  }
+}
+
 function hostedPostgresUrl(raw) {
   try {
     const parsed = new URL(raw);
@@ -280,6 +300,9 @@ function validateTokenlessTestDeployment(env) {
       errors.push(`${name} must remain ${TOKENLESS_REVIEW_ORIGIN} for a tokenless test deployment.`);
     }
   }
+  if (!httpsUrl(value(env, "BASE_SEPOLIA_RPC_URL"))) {
+    errors.push("BASE_SEPOLIA_RPC_URL must be an HTTPS URL without embedded credentials or fragments.");
+  }
   if (value(env, "TOKENLESS_NETWORK_PANELS_ENABLED") !== "false") {
     errors.push("TOKENLESS_NETWORK_PANELS_ENABLED must remain false for a tokenless test deployment.");
   }
@@ -318,6 +341,7 @@ function validateTokenlessTestDeployment(env) {
   ]) {
     if (value(env, name)) addSecretRole(testSecretRoles, name, Buffer.from(value(env, name), "utf8"));
   }
+  validateRpcFallbacks(env, errors);
   for (const name of [
     "TOKENLESS_PSEUDONYM_KEY",
     "TOKENLESS_EVIDENCE_TENANT_COMMITMENT_KEY",
@@ -487,6 +511,8 @@ export function validateTokenlessProductionReadiness({
     }
   }
   if (missingConfiguration) return errors;
+
+  validateRpcFallbacks(env, errors);
 
   if (deploymentSchema !== DEPLOYMENT_SCHEMA || value(env, "TOKENLESS_DEPLOYMENT_SCHEMA") !== DEPLOYMENT_SCHEMA) {
     errors.push(`TOKENLESS_DEPLOYMENT_SCHEMA must be ${DEPLOYMENT_SCHEMA}.`);
