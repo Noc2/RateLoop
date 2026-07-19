@@ -1,19 +1,23 @@
 import { type JsonWebKey, createHash, createPrivateKey, createPublicKey, randomBytes, sign } from "node:crypto";
 import "server-only";
+import { type ManagedWalletJwtSigner, createConfiguredAwsKmsWalletJwtSigner } from "~~/lib/auth/awsKmsWalletJwtSigner";
 import { AuthError, getAuthOrigin } from "~~/lib/auth/session";
 import { dbClient } from "~~/lib/db";
 import { appendSecurityAuditEvent } from "~~/lib/privacy/audit";
 
 const JWT_TTL_SECONDS = 5 * 60;
 
-type WalletJwtConfiguration = {
+type LocalWalletJwtConfiguration = {
   audience: string;
   issuer: string;
   keyId: string;
   privateJwk: JsonWebKey;
 };
+type WalletJwtConfiguration =
+  | (Omit<LocalWalletJwtConfiguration, "privateJwk"> & { kind: "aws-kms"; signer: ManagedWalletJwtSigner })
+  | (LocalWalletJwtConfiguration & { kind: "local-test" });
 
-let configurationOverride: WalletJwtConfiguration | null = null;
+let configurationOverride: LocalWalletJwtConfiguration | null = null;
 
 function base64url(value: string | Uint8Array) {
   return Buffer.from(value).toString("base64url");
@@ -32,21 +36,37 @@ function configuredJwk(): JsonWebKey {
 }
 
 export function getThirdwebWalletJwtConfiguration(): WalletJwtConfiguration {
-  if (configurationOverride) return configurationOverride;
+  if (configurationOverride) return { ...configurationOverride, kind: "local-test" };
   if (process.env.TOKENLESS_THIRDWEB_WALLET_ENABLED !== "true") {
     throw new AuthError("Optional thirdweb wallet creation is disabled.", 503);
   }
   const audience = process.env.TOKENLESS_THIRDWEB_WALLET_AUDIENCE?.trim();
   const keyId = process.env.TOKENLESS_THIRDWEB_WALLET_KEY_ID?.trim();
   if (!audience || !keyId) throw new AuthError("The thirdweb wallet JWT audience and key ID are required.", 503);
-  return { audience, issuer: getAuthOrigin(), keyId, privateJwk: configuredJwk() };
+  const managedKey = process.env.TOKENLESS_THIRDWEB_WALLET_KMS_KEY_RESOURCE?.trim();
+  const localKey = process.env.TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK?.trim();
+  if (managedKey && localKey) throw new AuthError("The wallet issuer has conflicting key sources.", 503);
+  if (managedKey) {
+    return {
+      audience,
+      issuer: getAuthOrigin(),
+      keyId,
+      kind: "aws-kms",
+      signer: createConfiguredAwsKmsWalletJwtSigner(),
+    };
+  }
+  if (process.env.VERCEL_GIT_COMMIT_REF === "main") {
+    throw new AuthError("Hosted wallet creation requires managed KMS signing.", 503);
+  }
+  return { audience, issuer: getAuthOrigin(), keyId, kind: "local-test", privateJwk: configuredJwk() };
 }
 
-export function thirdwebWalletJwks() {
+export async function thirdwebWalletJwks() {
   const config = getThirdwebWalletJwtConfiguration();
-  const publicJwk = createPublicKey(createPrivateKey({ key: config.privateJwk, format: "jwk" })).export({
-    format: "jwk",
-  });
+  const publicJwk =
+    config.kind === "aws-kms"
+      ? (await config.signer.metadata()).publicJwk
+      : createPublicKey(createPrivateKey({ key: config.privateJwk, format: "jwk" })).export({ format: "jwk" });
   return { keys: [{ ...publicJwk, alg: "EdDSA", kid: config.keyId, use: "sig" }] };
 }
 
@@ -68,7 +88,10 @@ export async function issueThirdwebWalletJwt(principalId: string, now = new Date
     }),
   );
   const signingInput = `${header}.${payload}`;
-  const signature = sign(null, Buffer.from(signingInput), createPrivateKey({ key: config.privateJwk, format: "jwk" }));
+  const signature =
+    config.kind === "aws-kms"
+      ? await config.signer.sign(Buffer.from(signingInput))
+      : sign(null, Buffer.from(signingInput), createPrivateKey({ key: config.privateJwk, format: "jwk" }));
   const jtiHash = createHash("sha256").update(jti).digest("hex");
   await dbClient.execute({
     sql: `INSERT INTO tokenless_thirdweb_wallet_jtis
@@ -102,6 +125,6 @@ export async function consumeThirdwebWalletJti(input: { jti: string; principalId
   return result.rowCount === 1;
 }
 
-export function __setThirdwebWalletJwtConfigurationForTests(value: WalletJwtConfiguration | null) {
+export function __setThirdwebWalletJwtConfigurationForTests(value: LocalWalletJwtConfiguration | null) {
   configurationOverride = value;
 }

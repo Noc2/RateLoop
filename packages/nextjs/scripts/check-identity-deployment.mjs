@@ -43,15 +43,25 @@ function validateThirdwebWalletIssuer(env, errors) {
     return;
   }
   if (enabled === "false") return;
-  for (const name of [
-    "NEXT_PUBLIC_THIRDWEB_CLIENT_ID",
-    "TOKENLESS_THIRDWEB_WALLET_AUDIENCE",
-    "TOKENLESS_THIRDWEB_WALLET_KEY_ID",
-    "TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK",
-  ]) {
+  for (const name of ["NEXT_PUBLIC_THIRDWEB_CLIENT_ID", "TOKENLESS_THIRDWEB_WALLET_AUDIENCE", "TOKENLESS_THIRDWEB_WALLET_KEY_ID"]) {
     if (!has(env[name])) errors.push(`${name} is required when optional thirdweb wallet creation is enabled.`);
   }
-  if (!has(env.TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK)) return;
+  const localKey = has(env.TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK);
+  const managedKey = has(env.TOKENLESS_THIRDWEB_WALLET_KMS_KEY_RESOURCE);
+  if (localKey && managedKey) errors.push("Configure exactly one thirdweb wallet signing key source.");
+  if (env.VERCEL_GIT_COMMIT_REF === "main") {
+    if (localKey) errors.push("TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK is forbidden on main; use managed KMS signing.");
+    for (const name of [
+      "TOKENLESS_THIRDWEB_WALLET_KMS_KEY_RESOURCE",
+      "TOKENLESS_THIRDWEB_WALLET_KMS_REGION",
+      "TOKENLESS_THIRDWEB_WALLET_KMS_ROLE_ARN",
+    ]) {
+      if (!has(env[name])) errors.push(`${name} is required when optional thirdweb wallet creation is enabled.`);
+    }
+  } else if (!localKey && !managedKey) {
+    errors.push("A thirdweb wallet signing key source is required when optional wallet creation is enabled.");
+  }
+  if (!localKey) return;
   try {
     const jwk = JSON.parse(env.TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK);
     const key = createPrivateKey({ key: jwk, format: "jwk" });

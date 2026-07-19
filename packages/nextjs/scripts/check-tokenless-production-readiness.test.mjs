@@ -698,17 +698,19 @@ test("optional thirdweb wallet issuance is gated separately from Better Auth", (
   missing.env.TOKENLESS_THIRDWEB_WALLET_ENABLED = "true";
   assert.match(
     validateTokenlessProductionReadiness(missing).join("\n"),
-    /TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK is required/i,
+    /TOKENLESS_THIRDWEB_WALLET_KMS_KEY_RESOURCE is required/i,
   );
 
-  const { privateKey } = generateKeyPairSync("ed25519");
   const enabled = validFixture();
   Object.assign(enabled.env, {
     TOKENLESS_THIRDWEB_WALLET_ENABLED: "true",
     NEXT_PUBLIC_THIRDWEB_CLIENT_ID: "public-client-id",
     TOKENLESS_THIRDWEB_WALLET_AUDIENCE: "thirdweb-project-audience",
-    TOKENLESS_THIRDWEB_WALLET_KEY_ID: "rateloop-wallet-v1",
-    TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK: JSON.stringify(privateKey.export({ format: "jwk" })),
+    TOKENLESS_THIRDWEB_WALLET_KEY_ID: `ed25519:${"ab".repeat(12)}`,
+    TOKENLESS_THIRDWEB_WALLET_KMS_KEY_RESOURCE:
+      "arn:aws:kms:eu-central-1:123456789012:key/66666666-6666-6666-6666-666666666666",
+    TOKENLESS_THIRDWEB_WALLET_KMS_REGION: "eu-central-1",
+    TOKENLESS_THIRDWEB_WALLET_KMS_ROLE_ARN: "arn:aws:iam::123456789012:role/rateloop-wallet-jwt",
   });
   assert.deepEqual(validateTokenlessProductionReadiness(enabled), []);
 });

@@ -59,7 +59,7 @@ test("thirdweb wallet JWTs are short-lived, audience-bound, PII-free, and publis
   assert.equal("email" in payload, false);
   assert.equal("name" in payload, false);
   assert.deepEqual(
-    thirdwebWalletJwks().keys.map(key => ({ alg: key.alg, kid: key.kid, use: key.use })),
+    (await thirdwebWalletJwks()).keys.map(key => ({ alg: key.alg, kid: key.kid, use: key.use })),
     [{ alg: "EdDSA", kid: "wallet-key-v1", use: "sig" }],
   );
 });
