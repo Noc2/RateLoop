@@ -4,8 +4,15 @@ import { lookup } from "node:dns/promises";
 import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
 import "server-only";
-import { type Address, type Hex, encodeAbiParameters, keccak256 } from "viem";
+import { type Address, type Hash, type Hex, encodeAbiParameters, keccak256 } from "viem";
 import { dbClient } from "~~/lib/db";
+import { loadTokenlessChainConfig } from "~~/lib/tokenless/chain/config";
+import {
+  TokenlessEvidenceFinalityPendingError,
+  assertCanonicalTokenlessEvidenceBlock,
+  getTokenlessChainRuntime,
+  loadTokenlessEvidenceFinalityPolicy,
+} from "~~/lib/tokenless/chain/runtime";
 import {
   type PostRoundIntegrityPolicy,
   type PostRoundIntegrityReport,
@@ -135,6 +142,25 @@ export function stableTransparencyJson(value: unknown): string {
 
 function digest(value: string) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+async function requireCanonicalEvidenceFinality(evidence: IndexedFinalizedEvidence) {
+  try {
+    const config = loadTokenlessChainConfig();
+    await assertCanonicalTokenlessEvidenceBlock({
+      blockHash: evidence.chain.blockHash as Hash,
+      blockNumber: BigInt(evidence.chain.blockNumber),
+      config,
+      deploymentKey: evidence.deploymentKey,
+      policy: loadTokenlessEvidenceFinalityPolicy(),
+      runtime: getTokenlessChainRuntime(config),
+    });
+  } catch (error) {
+    if (error instanceof TokenlessEvidenceFinalityPendingError) {
+      throw new TokenlessServiceError(error.message, 409, "indexed_evidence_pending", true);
+    }
+    throw error;
+  }
 }
 
 type NormativeRbtsReveal = {
@@ -1460,6 +1486,7 @@ export async function appendFinalizedRoundEvidence(input: {
   ponderUrl?: string;
 }) {
   const { evidence, integrityInput, surpriseReports } = await deriveFinalizedRoundEvidenceBundle(input);
+  await requireCanonicalEvidenceFinality(evidence);
   await finalizeSurpriseBountyRound({
     operationKey: input.operationKey,
     deploymentKey: evidence.deploymentKey,
@@ -1770,6 +1797,7 @@ export async function reviewAndPublishResult(input: { operationKey: string; appO
       result: parseTokenlessResult(JSON.parse(rowString(existing, "result_json")!)),
     };
   }
+  await requireCanonicalEvidenceFinality(evidence);
   const publicationId = `pub_${digest(`${input.operationKey}:${root}:${evaluation.evaluationHash}`).slice(0, 32)}`;
   await dbClient.execute({
     sql: `INSERT INTO tokenless_result_publications

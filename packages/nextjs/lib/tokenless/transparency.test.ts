@@ -3,6 +3,8 @@ import { createHash, createHmac } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { type TokenlessChainRuntime, __setTokenlessChainRuntimeForTests } from "~~/lib/tokenless/chain/runtime";
+import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
   appendFinalizedRoundEvidence,
   appendPostRoundIntegrityReviewRecord,
@@ -35,6 +37,66 @@ const DEPLOYMENT = `tokenless-v4:84532:${PANEL}:${ISSUER}:${ADAPTER}:${FEEDBACK_
 const ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64url");
 const NOW = new Date("2026-07-12T18:00:00.000Z");
 const resolvePublic = async () => ["93.184.216.34"];
+const FINALIZED_BLOCK = 44_060_000n;
+const FINALIZED_BLOCK_HASH = `0x${"ab".repeat(32)}` as const;
+let finalityLatestBlock = FINALIZED_BLOCK + 63n;
+let canonicalFinalizedBlockHash: `0x${string}` = FINALIZED_BLOCK_HASH;
+let finalityRpcFailure = false;
+
+const FINALITY_ENV = {
+  TOKENLESS_DEPLOYMENT_SCHEMA: "rateloop-tokenless-deployment-v4",
+  TOKENLESS_CHAIN_ID: "84532",
+  TOKENLESS_PANEL_ADDRESS: PANEL,
+  TOKENLESS_CREDENTIAL_ISSUER_ADDRESS: ISSUER,
+  TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS: ADAPTER,
+  TOKENLESS_FEEDBACK_BONUS_ADDRESS: FEEDBACK_BONUS,
+  TOKENLESS_USDC_ADDRESS: USDC,
+  TOKENLESS_FEE_RECIPIENT: FEE_RECIPIENT,
+  TOKENLESS_DEPLOYMENT_KEY: DEPLOYMENT,
+  TOKENLESS_DEPLOYMENT_BLOCK: "44050000",
+  BASE_SEPOLIA_RPC_URL: "https://base-sepolia.example.test",
+  TOKENLESS_EVIDENCE_CONFIRMATION_DEPTH: "64",
+} as const;
+const originalFinalityEnv = new Map(
+  [...Object.keys(FINALITY_ENV), "TOKENLESS_EVIDENCE_FINALITY_BLOCK_TAG"].map(key => [key, process.env[key]]),
+);
+
+function configureFinalityEnvironment() {
+  for (const [key, value] of Object.entries(FINALITY_ENV)) process.env[key] = value;
+  delete process.env.TOKENLESS_EVIDENCE_FINALITY_BLOCK_TAG;
+}
+
+function restoreFinalityEnvironment() {
+  for (const [key, value] of originalFinalityEnv) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+}
+
+function finalityRuntime(): TokenlessChainRuntime {
+  const failIfConfigured = () => {
+    if (finalityRpcFailure) throw new Error("Base RPC unavailable");
+  };
+  return {
+    publicClient: {
+      getChainId: async () => {
+        failIfConfigured();
+        return 84_532;
+      },
+      getBlockNumber: async () => {
+        failIfConfigured();
+        return finalityLatestBlock;
+      },
+      getBlock: async ({ blockNumber }: { blockNumber?: bigint }) => {
+        failIfConfigured();
+        return {
+          hash: blockNumber === FINALIZED_BLOCK ? canonicalFinalizedBlockHash : `0x${"ef".repeat(32)}`,
+          number: blockNumber ?? finalityLatestBlock,
+        };
+      },
+    } as unknown as TokenlessChainRuntime["publicClient"],
+  };
+}
 
 const roundTerms = {
   contentId: CONTENT_ID,
@@ -141,8 +203,8 @@ function indexedRound(overrides: Record<string, unknown> = {}) {
     state: 5,
     createdBlock: "44050001",
     finalizedAt: String(Math.floor(NOW.getTime() / 1_000)),
-    finalizedBlock: "44060000",
-    finalizedBlockHash: `0x${"ab".repeat(32)}`,
+    finalizedBlock: FINALIZED_BLOCK.toString(),
+    finalizedBlockHash: FINALIZED_BLOCK_HASH,
     finalizedTxHash: `0x${"cd".repeat(32)}`,
     ...overrides,
   };
@@ -327,10 +389,10 @@ async function seedFrozenIntegrityAssignments() {
              blinding_json, paid_assignment, paid_eligibility_checked_at, reservation_expires_at,
              assignment_expires_at, lease_issuer_account_address, lease_state, created_at, updated_at,
              integrity_reviewer_lookup, integrity_cluster_pseudonym, provider_subject_hashes_json,
-             integrity_provenance_json, integrity_provenance_hash)
+             integrity_provenance_json, integrity_provenance_hash, rater_id, payout_account_snapshot)
             VALUES (?, ?, 'project_transparency', 'run_transparency', 'subpanel_transparency',
                     'cohort_transparency', ?, 'rateloop_network', 'randomized', ?, 'sha256:terms',
-                    '[]', '{}', 'sha256:snapshot', '{}', true, ?, ?, ?, ?, 'expired', ?, ?, ?, ?, ?, ?, ?)`,
+                    '[]', '{}', 'sha256:snapshot', '{}', true, ?, ?, ?, ?, 'expired', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         `assignment_transparency_${index}`,
         WORKSPACE,
@@ -347,12 +409,19 @@ async function seedFrozenIntegrityAssignments() {
         stableTransparencyJson(providerSubjectHashes),
         provenanceJson,
         provenanceHash,
+        `rater_transparency_${index}`,
+        accountAddress,
       ],
     });
   }
 }
 
 beforeEach(async () => {
+  configureFinalityEnvironment();
+  finalityLatestBlock = FINALIZED_BLOCK + 63n;
+  canonicalFinalizedBlockHash = FINALIZED_BLOCK_HASH;
+  finalityRpcFailure = false;
+  __setTokenlessChainRuntimeForTests(finalityRuntime());
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
   await dbClient.execute({
     sql: "INSERT INTO tokenless_workspaces (workspace_id, name, status, created_at, updated_at) VALUES (?, 'Transparency', 'active', ?, ?)",
@@ -424,6 +493,7 @@ beforeEach(async () => {
   });
   for (let index = 0; index < 5; index += 1) {
     const raterId = `rater_transparency_${index}`;
+    const principalId = `principal_transparency_${index}`;
     const accountAddress = `0x${String(index + 101).padStart(40, "0")}`;
     const identitySubjectHash = `identity_${index}`;
     const voteKey = `0x${String(index + 1).padStart(40, "0")}`;
@@ -448,20 +518,25 @@ beforeEach(async () => {
     });
     const assuranceSnapshotHash = `sha256:${createHash("sha256").update(assuranceSnapshotJson).digest("hex")}`;
     await dbClient.execute({
+      sql: `INSERT INTO tokenless_principals (principal_id, status, created_at, updated_at)
+            VALUES (?, 'active', ?, ?)`,
+      args: [principalId, NOW, NOW],
+    });
+    await dbClient.execute({
       sql: `INSERT INTO tokenless_rater_profiles
-            (rater_id, account_address, nullifier_seed_ciphertext, nullifier_key_version,
+            (rater_id, principal_id, account_address, nullifier_seed_ciphertext, nullifier_key_version,
              nullifier_key_domain, created_at, updated_at)
-            VALUES (?, ?, 'ciphertext', 'v1', 'vote_mapping', ?, ?)`,
-      args: [raterId, accountAddress, NOW, NOW],
+            VALUES (?, ?, ?, 'ciphertext', 'v1', 'vote_mapping', ?, ?)`,
+      args: [raterId, principalId, accountAddress, NOW, NOW],
     });
     await dbClient.execute({
       sql: `INSERT INTO tokenless_paid_vouchers
             (voucher_id, rater_id, request_idempotency_key, request_hash,
              chain_id, panel_address, issuer_address, issuer_epoch, signer_address, round_id,
              content_id, vote_key, nullifier, admission_policy_hash, assurance_snapshot_hash,
-             expires_at, voucher_json, voucher_signature,
+             expires_at, payout_account_snapshot, voucher_json, voucher_signature,
              status, issued_at)
-            VALUES (?, ?, ?, ?, 84532, ?, ?, 1, ?, 42, ?, ?, ?, ?, ?, ?, '{}', 'signature', 'committed', ?)`,
+            VALUES (?, ?, ?, ?, 84532, ?, ?, 1, ?, 42, ?, ?, ?, ?, ?, ?, ?, '{}', 'signature', 'committed', ?)`,
       args: [
         `voucher_${index}`,
         raterId,
@@ -476,6 +551,7 @@ beforeEach(async () => {
         POLICY_HASH,
         assuranceSnapshotHash,
         new Date("2027-01-01T00:00:00Z"),
+        accountAddress,
         NOW,
       ],
     });
@@ -488,7 +564,11 @@ beforeEach(async () => {
   }
 });
 
-afterEach(() => __setDatabaseResourcesForTests(null));
+afterEach(() => {
+  __setTokenlessChainRuntimeForTests(null);
+  __setDatabaseResourcesForTests(null);
+  restoreFinalityEnvironment();
+});
 
 test("canonical evidence and normative RBTS accounting are deterministic", () => {
   assert.equal(stableTransparencyJson({ z: 1, a: { y: 2, x: 3 } }), '{"a":{"x":3,"y":2},"z":1}');
@@ -564,6 +644,108 @@ test("finalized evidence rejects malformed Ponder provenance and altered frozen 
       }),
     /provenance hash is invalid/,
   );
+});
+
+test("evidence waits for the configured confirmation depth, then publishes idempotently", async () => {
+  await seedFrozenIntegrityAssignments();
+  finalityLatestBlock = FINALIZED_BLOCK + 62n;
+  await assert.rejects(
+    () =>
+      appendFinalizedRoundEvidence({
+        operationKey: OPERATION,
+        fetchImpl: ponderFetch(),
+        ponderUrl: "https://ponder.example.test",
+      }),
+    error => error instanceof TokenlessServiceError && error.code === "indexed_evidence_pending" && error.retryable,
+  );
+  const beforeDepth = await dbClient.execute({
+    sql: "SELECT COUNT(*) AS count FROM tokenless_transparency_events WHERE operation_key = ?",
+    args: [OPERATION],
+  });
+  assert.equal(Number(beforeDepth.rows[0]?.count), 0);
+
+  finalityLatestBlock = FINALIZED_BLOCK + 63n;
+  const appended = await appendFinalizedRoundEvidence({
+    operationKey: OPERATION,
+    fetchImpl: ponderFetch(),
+    ponderUrl: "https://ponder.example.test",
+  });
+  const published = await reviewAndPublishResult({
+    operationKey: OPERATION,
+    appOrigin: "https://app.example.test",
+    now: NOW,
+  });
+  const replay = await reviewAndPublishResult({
+    operationKey: OPERATION,
+    appOrigin: "https://app.example.test",
+    now: new Date(NOW.getTime() + 1_000),
+  });
+  assert.match(appended.eventId, /^tpe_/);
+  assert.match(published.publicationId ?? "", /^pub_/);
+  assert.equal(replay.publicationId, published.publicationId);
+  const counts = await dbClient.execute({
+    sql: `SELECT
+            (SELECT COUNT(*) FROM tokenless_transparency_events WHERE operation_key = ?) AS evidence_count,
+            (SELECT COUNT(*) FROM tokenless_result_publications WHERE operation_key = ?) AS publication_count`,
+    args: [OPERATION, OPERATION],
+  });
+  assert.equal(Number(counts.rows[0]?.evidence_count), 1);
+  assert.equal(Number(counts.rows[0]?.publication_count), 1);
+});
+
+test("publication fails closed on canonical block-hash drift and succeeds on an idempotent retry", async () => {
+  await seedFrozenIntegrityAssignments();
+  await appendFinalizedRoundEvidence({
+    operationKey: OPERATION,
+    fetchImpl: ponderFetch(),
+    ponderUrl: "https://ponder.example.test",
+  });
+  canonicalFinalizedBlockHash = `0x${"bc".repeat(32)}`;
+  await assert.rejects(
+    () =>
+      reviewAndPublishResult({
+        operationKey: OPERATION,
+        appOrigin: "https://app.example.test",
+        now: NOW,
+      }),
+    error => error instanceof TokenlessServiceError && error.code === "indexed_evidence_pending" && error.retryable,
+  );
+  const pending = await dbClient.execute({
+    sql: "SELECT COUNT(*) AS count FROM tokenless_result_publications WHERE operation_key = ?",
+    args: [OPERATION],
+  });
+  assert.equal(Number(pending.rows[0]?.count), 0);
+
+  canonicalFinalizedBlockHash = FINALIZED_BLOCK_HASH;
+  const published = await reviewAndPublishResult({
+    operationKey: OPERATION,
+    appOrigin: "https://app.example.test",
+    now: new Date(NOW.getTime() + 1_000),
+  });
+  const replay = await reviewAndPublishResult({
+    operationKey: OPERATION,
+    appOrigin: "https://app.example.test",
+    now: new Date(NOW.getTime() + 2_000),
+  });
+  assert.equal(replay.publicationId, published.publicationId);
+});
+
+test("evidence persistence fails closed and remains retryable when the Base RPC is unavailable", async () => {
+  finalityRpcFailure = true;
+  await assert.rejects(
+    () =>
+      appendFinalizedRoundEvidence({
+        operationKey: OPERATION,
+        fetchImpl: ponderFetch(),
+        ponderUrl: "https://ponder.example.test",
+      }),
+    error => error instanceof TokenlessServiceError && error.code === "indexed_evidence_pending" && error.retryable,
+  );
+  const persisted = await dbClient.execute({
+    sql: "SELECT COUNT(*) AS count FROM tokenless_transparency_events WHERE operation_key = ?",
+    args: [OPERATION],
+  });
+  assert.equal(Number(persisted.rows[0]?.count), 0);
 });
 
 test("webhook registration rejects SSRF targets and returns its secret only once", async () => {

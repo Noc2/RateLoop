@@ -4,6 +4,7 @@ import "server-only";
 import {
   type Account,
   type Address,
+  type BlockTag,
   type Hash,
   type Hex,
   createPublicClient,
@@ -34,6 +35,54 @@ export type TokenlessChainRuntime = {
   surpriseBonusAccount?: Account;
   surpriseBonusWallet?: TokenlessWalletClient;
 };
+
+export type TokenlessEvidenceFinalityPolicy =
+  | { strategy: "block_tag"; blockTag: Extract<BlockTag, "safe" | "finalized"> }
+  | { strategy: "confirmations"; confirmationDepth: number };
+
+export type TokenlessEvidenceFinalityFailure = "block_pending" | "hash_mismatch" | "rpc_unavailable";
+
+export class TokenlessEvidenceFinalityPendingError extends Error {
+  readonly failure: TokenlessEvidenceFinalityFailure;
+
+  constructor(message: string, failure: TokenlessEvidenceFinalityFailure, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "TokenlessEvidenceFinalityPendingError";
+    this.failure = failure;
+  }
+}
+
+const MINIMUM_EVIDENCE_CONFIRMATION_DEPTH = 64;
+
+export function loadTokenlessEvidenceFinalityPolicy(
+  env: NodeJS.ProcessEnv = process.env,
+): TokenlessEvidenceFinalityPolicy {
+  const blockTag = env.TOKENLESS_EVIDENCE_FINALITY_BLOCK_TAG?.trim().toLowerCase();
+  const depthText = env.TOKENLESS_EVIDENCE_CONFIRMATION_DEPTH?.trim();
+  if (blockTag && depthText) {
+    throw new Error(
+      "Configure exactly one of TOKENLESS_EVIDENCE_FINALITY_BLOCK_TAG or TOKENLESS_EVIDENCE_CONFIRMATION_DEPTH.",
+    );
+  }
+  if (blockTag) {
+    if (blockTag !== "safe" && blockTag !== "finalized") {
+      throw new Error('TOKENLESS_EVIDENCE_FINALITY_BLOCK_TAG must be "safe" or "finalized".');
+    }
+    return { strategy: "block_tag", blockTag };
+  }
+  if (depthText) {
+    const confirmationDepth = Number(depthText);
+    if (!Number.isSafeInteger(confirmationDepth) || confirmationDepth < MINIMUM_EVIDENCE_CONFIRMATION_DEPTH) {
+      throw new Error(
+        `TOKENLESS_EVIDENCE_CONFIRMATION_DEPTH must be an integer of at least ${MINIMUM_EVIDENCE_CONFIRMATION_DEPTH}.`,
+      );
+    }
+    return { strategy: "confirmations", confirmationDepth };
+  }
+  throw new Error(
+    "TOKENLESS_EVIDENCE_FINALITY_BLOCK_TAG or TOKENLESS_EVIDENCE_CONFIRMATION_DEPTH is required for evidence publication.",
+  );
+}
 
 let runtimeCache: { rpcUrl: string; runtime: TokenlessChainRuntime } | null = null;
 let runtimeOverride: TokenlessChainRuntime | null = null;
@@ -68,6 +117,60 @@ export function getTokenlessChainRuntime(config: TokenlessChainConfig): Tokenles
 
 export function __setTokenlessChainRuntimeForTests(runtime: TokenlessChainRuntime | null) {
   runtimeOverride = runtime;
+}
+
+export async function assertCanonicalTokenlessEvidenceBlock(input: {
+  blockHash: Hash;
+  blockNumber: bigint;
+  config: TokenlessChainConfig;
+  deploymentKey: string;
+  policy: TokenlessEvidenceFinalityPolicy;
+  runtime?: TokenlessChainRuntime;
+}) {
+  if (input.deploymentKey.toLowerCase() !== input.config.deploymentKey.toLowerCase()) {
+    throw new Error("Finalized evidence does not belong to the configured tokenless deployment.");
+  }
+  if (input.blockNumber < input.config.deploymentBlock) {
+    throw new Error("Finalized evidence predates the configured tokenless deployment.");
+  }
+  const client = (input.runtime ?? getTokenlessChainRuntime(input.config)).publicClient;
+  try {
+    const chainId = await client.getChainId();
+    if (chainId !== input.config.chainId) {
+      throw new Error(`RPC chain ${chainId} does not match ${input.config.chainId}.`);
+    }
+    let finalityHead: bigint;
+    if (input.policy.strategy === "block_tag") {
+      const block = await client.getBlock({ blockTag: input.policy.blockTag });
+      if (block.number === null) throw new Error(`${input.policy.blockTag} head has no block number.`);
+      finalityHead = block.number;
+    } else {
+      const latestBlock = await client.getBlockNumber();
+      const requiredSuccessors = BigInt(input.policy.confirmationDepth - 1);
+      finalityHead = latestBlock >= requiredSuccessors ? latestBlock - requiredSuccessors : -1n;
+    }
+    if (input.blockNumber > finalityHead) {
+      throw new TokenlessEvidenceFinalityPendingError(
+        "Finalized round block has not reached the configured evidence finality boundary.",
+        "block_pending",
+      );
+    }
+    const canonicalBlock = await client.getBlock({ blockNumber: input.blockNumber });
+    if (!canonicalBlock.hash || canonicalBlock.hash.toLowerCase() !== input.blockHash.toLowerCase()) {
+      throw new TokenlessEvidenceFinalityPendingError(
+        "Finalized round block hash no longer matches the canonical chain.",
+        "hash_mismatch",
+      );
+    }
+    return { canonicalBlockHash: canonicalBlock.hash, finalityHead };
+  } catch (error) {
+    if (error instanceof TokenlessEvidenceFinalityPendingError) throw error;
+    throw new TokenlessEvidenceFinalityPendingError(
+      "Canonical evidence finality could not be verified from the configured Base RPC.",
+      "rpc_unavailable",
+      { cause: error },
+    );
+  }
 }
 
 function sameAddress(actual: unknown, expected: Address) {
