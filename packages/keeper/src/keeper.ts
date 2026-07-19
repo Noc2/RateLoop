@@ -12,6 +12,11 @@ import type { config as runtimeConfig } from "./config.js";
 import { resolveTlockClientForDrandChain } from "./drand.js";
 import { isExpectedPanelRaceError } from "./expected-panel-race.js";
 import type { Logger } from "./logger.js";
+import {
+  createPonderWorkFeed,
+  prioritizedKeeperWorkRoundIds,
+  type KeeperWorkFeed,
+} from "./ponder-work-feed.js";
 import { resetRoundScanStateForTests, scanRoundIds } from "./round-scan.js";
 import {
   decodeTokenlessRevealPayload,
@@ -60,6 +65,7 @@ export interface TokenlessKeeperClients {
   publicClient: TokenlessPublicClient;
   walletClient: TokenlessWalletClient;
   account: { address: Address };
+  keeperWorkFeed?: KeeperWorkFeed;
 }
 
 export type RevealDecryptor = (params: {
@@ -872,7 +878,41 @@ export async function runTokenlessKeeper(
   );
   const nextRoundId = BigInt(nextRoundIdRaw as bigint);
   const result = emptyResult();
-  for (const roundId of scanRoundIds(nextRoundId, config.maxRoundsPerTick)) {
+  let feedRoundIds: bigint[] = [];
+  if (config.ponderWorkFeed) {
+    try {
+      const feed =
+        clients.keeperWorkFeed ??
+        createPonderWorkFeed({
+          baseUrl: config.ponderWorkFeed.baseUrl,
+          token: config.ponderWorkFeed.token,
+        });
+      const response = await feed({ now: block.timestamp, limit: 500 });
+      feedRoundIds = prioritizedKeeperWorkRoundIds(response, {
+        deploymentKey: config.deployment.key,
+        chainId: config.chainId,
+        panelAddress: config.deployment.panel,
+        now: block.timestamp,
+      }).filter((roundId) => roundId < nextRoundId);
+    } catch (error) {
+      logger.warn(
+        "Ponder keeper work feed unavailable; using direct chain scan",
+        {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
+    }
+  }
+  const scanRoundIdCandidates = scanRoundIds(
+    nextRoundId,
+    config.maxRoundsPerTick,
+  );
+  const roundIds = [
+    ...new Set([...feedRoundIds, ...scanRoundIdCandidates]),
+  ].slice(0, config.maxRoundsPerTick);
+  for (const roundId of roundIds) {
+    // Feed entries are only priority hints. advanceRound reads the canonical
+    // on-chain round and derives the permitted action again before any write.
     await advanceRound({
       clients,
       config,

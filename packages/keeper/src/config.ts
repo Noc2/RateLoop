@@ -155,6 +155,38 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   } catch {
     errors.push("RPC_URL must be a valid URL");
   }
+  const ponderUrl = readEnv(env, "TOKENLESS_PONDER_URL");
+  const ponderKeeperWorkToken = readEnv(env, "PONDER_KEEPER_WORK_TOKEN");
+  if (production && !ponderUrl)
+    errors.push("TOKENLESS_PONDER_URL is required in production");
+  if (production && !ponderKeeperWorkToken)
+    errors.push("PONDER_KEEPER_WORK_TOKEN is required in production");
+  if (
+    (ponderUrl && !ponderKeeperWorkToken) ||
+    (!ponderUrl && ponderKeeperWorkToken)
+  ) {
+    errors.push(
+      "TOKENLESS_PONDER_URL and PONDER_KEEPER_WORK_TOKEN must be configured together",
+    );
+  }
+  if (ponderUrl) {
+    try {
+      const parsed = new URL(ponderUrl);
+      if (
+        !["http:", "https:"].includes(parsed.protocol) ||
+        parsed.username ||
+        parsed.password ||
+        parsed.hash
+      ) {
+        throw new Error("invalid");
+      }
+      if (production && parsed.protocol !== "https:") {
+        errors.push("TOKENLESS_PONDER_URL must use HTTPS in production");
+      }
+    } catch {
+      errors.push("TOKENLESS_PONDER_URL must be a valid HTTP URL");
+    }
+  }
 
   const panel = requiredAddress(env, "TOKENLESS_PANEL_ADDRESS", errors);
   const credentialIssuer = requiredAddress(
@@ -288,6 +320,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     metricsAuthToken,
     logFormat: readEnv(env, "LOG_FORMAT") === "text" ? "text" : "json",
     minGasBalanceWei,
+    ponderWorkFeed:
+      ponderUrl && ponderKeeperWorkToken
+        ? { baseUrl: ponderUrl, token: ponderKeeperWorkToken }
+        : null,
   } as const;
 }
 

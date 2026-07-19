@@ -71,6 +71,23 @@ const config = {
   maxFeedbackBonusPoolsPerTick: 100,
 } as any;
 
+function keeperWorkResponse(
+  now: bigint,
+  work: Array<{ action: string; roundId: string; cursor: number | null }>,
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    deploymentKey: config.deployment.key,
+    chainId: config.chainId,
+    panelAddress: config.deployment.panel,
+    now: now.toString(),
+    direction: "desc",
+    nextCursor: null,
+    work,
+    ...overrides,
+  };
+}
+
 function round(overrides: Partial<TokenlessRound> = {}): TokenlessRound {
   return {
     funder: "0x0000000000000000000000000000000000000099",
@@ -433,6 +450,101 @@ describe("tokenless keeper orchestration", () => {
         decrypt,
       );
       expect(readRoundIds).toEqual(expected);
+    }
+  });
+
+  it("prioritizes feed work beyond the rotating history window and puts awaiting-seed rounds first", async () => {
+    const readRoundIds: bigint[] = [];
+    const instance = clients({
+      currentRound: round({
+        state: TokenlessRoundState.AwaitingSeed,
+        entropyBlock: 900n,
+      }),
+      now: 300n,
+      currentBlock: 1_000n,
+      nextRoundId: 10_001n,
+      readRoundIds,
+    });
+    instance.keeperWorkFeed = async () =>
+      keeperWorkResponse(300n, [
+        { action: "process_scores", roundId: "5", cursor: 0 },
+        { action: "finalize_scoring_seed", roundId: "3", cursor: null },
+      ]);
+    await runTokenlessKeeper(
+      instance,
+      {
+        ...config,
+        maxRoundsPerTick: 2,
+        ponderWorkFeed: { baseUrl: "https://ponder.example", token: "secret" },
+      },
+      logger,
+      decrypt,
+    );
+    expect(readRoundIds).toEqual([3n, 5n]);
+  });
+
+  it("revalidates stale feed actions on-chain without executing the indexed action", async () => {
+    const writes: string[] = [];
+    const instance = clients({
+      currentRound: round({
+        state: TokenlessRoundState.Finalized,
+        staleReturned: true,
+      }),
+      now: 300n,
+      nextRoundId: 3n,
+      writes,
+    });
+    instance.keeperWorkFeed = async () =>
+      keeperWorkResponse(300n, [
+        { action: "finalize_scoring_seed", roundId: "2", cursor: null },
+      ]);
+    await runTokenlessKeeper(
+      instance,
+      {
+        ...config,
+        maxRoundsPerTick: 1,
+        ponderWorkFeed: { baseUrl: "https://ponder.example", token: "secret" },
+      },
+      logger,
+      decrypt,
+    );
+    expect(writes).not.toContain("finalizeScoringSeed");
+  });
+
+  it("falls back to the rotating chain scan for wrong-identity feeds and feed outages", async () => {
+    for (const feed of [
+      async () =>
+        keeperWorkResponse(300n, [], { deploymentKey: "wrong-deployment" }),
+      async () => {
+        throw new Error("ponder unavailable");
+      },
+    ]) {
+      resetTokenlessKeeperStateForTests();
+      const readRoundIds: bigint[] = [];
+      const instance = clients({
+        currentRound: round({
+          state: TokenlessRoundState.Finalized,
+          staleReturned: true,
+        }),
+        now: 300n,
+        nextRoundId: 10_001n,
+        readRoundIds,
+      });
+      instance.keeperWorkFeed = feed;
+      await runTokenlessKeeper(
+        instance,
+        {
+          ...config,
+          maxRoundsPerTick: 2,
+          ponderWorkFeed: {
+            baseUrl: "https://ponder.example",
+            token: "secret",
+          },
+        },
+        logger,
+        decrypt,
+      );
+      expect(readRoundIds).toEqual([10_000n, 9_999n]);
     }
   });
 

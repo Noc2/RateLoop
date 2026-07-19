@@ -36,6 +36,8 @@ function productionEnv(): NodeJS.ProcessEnv {
     TOKENLESS_FEEDBACK_BONUS_ADDRESS: FEEDBACK_BONUS,
     TOKENLESS_DEPLOYMENT_KEY: `tokenless-v4:84532:${PANEL}:${ISSUER}:${ZERO}:${FEEDBACK_BONUS}`,
     TOKENLESS_DEPLOYMENT_BLOCK: "123",
+    TOKENLESS_PONDER_URL: "https://tokenless-ponder.example",
+    PONDER_KEEPER_WORK_TOKEN: "keeper-work-secret",
     KEEPER_PRIVATE_KEY: `0x${"22".repeat(32)}`,
     METRICS_BIND_ADDRESS: "0.0.0.0",
     METRICS_AUTH_TOKEN: "0123456789abcdef",
