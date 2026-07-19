@@ -31,7 +31,10 @@ audience cannot silently lower review.
 3. **Select eligible humans.** Customer-invited, RateLoop-network, and hybrid panels remain distinct. Network admission
    can require World ID Proof of Human plus task-specific eligibility; the exact policy hash is bound into the round.
 4. **Collect blind judgments.** Reviewers answer through one-time vote keys. Commit-reveal and drand/tlock sealing keep
-   early answers hidden, while short assignment leases protect private material.
+   early answers hidden, while short assignment leases protect private material. A paid commit publishes tlock
+   ciphertext containing the vote, prediction, response hash, payout address, and salt. The commit irrevocably
+   schedules those details to become publicly decryptable at the configured drand round after the commit deadline,
+   whether or not the reviewer or keeper submits a reveal or claim; there is no post-commit abort.
 5. **Settle deterministically.** A guaranteed USDC bounty rewards accepted work. Robust Bayesian Truth Serum can add a
    bounded response-quality reward, and a separately funded Surprisingly Popular bounty can reward useful minority
    signal. An optional, separately prefunded Feedback Bonus can instead be awarded afterward by the requester or another
@@ -72,6 +75,9 @@ project assignment, and reviewer lease rather than wallet ownership.
 
 ## Evidence boundary
 
-Private artifacts are encrypted and access-controlled. Paid settlement inputs and outputs are independently
-recomputable on Base. A normal claim publicly links its one-time vote key to the chosen payout destination, while the
-customer's private artifacts and decision record remain outside the public chain.
+Private artifacts are encrypted and access-controlled. Each artifact has its own random data-encryption key, but customer
+artifact keys currently wrap to an operator-controlled server/KMS authority shared across tenants within a key domain;
+authorized RateLoop systems can decrypt those artifacts, and per-tenant or per-project wrapping keys are not yet
+implemented. Paid settlement inputs and outputs are independently recomputable on Base. A paid commit schedules public
+decryptability of its vote-key-to-payout link at the configured drand round after the commit deadline, independent of a
+later reveal or claim, while the customer's private artifacts and decision record remain outside the public chain.

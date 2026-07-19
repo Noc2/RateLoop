@@ -25,6 +25,10 @@ test("how-it-works follows the production agent, reviewer, and settlement paths"
   assert.match(html, /Critical risk, missing required context, and the maximum unreviewed gap/i);
   assert.match(html, /quote.*ask.*payment.*wait.*result/i);
   assert.match(html, /eligibility policy.*blinded case.*sealed commit/i);
+  assert.match(html, /paid commit publishes timelock ciphertext.*vote, prediction.*payout address, and salt/i);
+  assert.match(html, /configured drand beacon after the commit deadline/i);
+  assert.match(html, /whether or not the reviewer or keeper submits a reveal or claim/i);
+  assert.match(html, /there is no post-commit abort/i);
   assert.match(html, /zero-commit round refunds/i);
   assert.match(html, /quorum or the reveal beacon fails.*accepted work is compensated/i);
   assert.match(html, /cannot be cancelled after its first accepted commit/i);

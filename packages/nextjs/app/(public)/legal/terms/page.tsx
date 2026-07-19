@@ -59,9 +59,20 @@ export default function TermsPage() {
       </p>
       <h2>Trust and privacy limits</h2>
       <p>
-        The immutable panel core has no operator withdrawal path. A separate issuer can control future admission but
-        cannot redirect escrow or change accepted commits. A normal claim publicly links its vote key to the selected
-        payout destination; RateLoop does not promise cross-round unlinkability.
+        The immutable panel core has no operator withdrawal path. A separate issuer controls new voucher admission. If
+        its signer is compromised, an attacker can fill remaining seats in open rounds, influence their verdicts, and
+        direct the bounties for those attacker-controlled reports until the signer is rotated. The issuer still cannot
+        redirect escrow, redirect another report&apos;s claim, or change an accepted commit.
+      </p>
+      <p>
+        A paid commit publishes a timelock-encrypted vote, prediction, response hash, payout address, and salt. The
+        commit irrevocably schedules those details to become publicly decryptable at the configured drand beacon after
+        the commit deadline, whether or not the reviewer or keeper later reveals or claims; there is no post-commit
+        abort. Reusing a payout destination can link rounds.
+      </p>
+      <p>
+        Circle retains token-layer authority over USDC and can pause or blacklist transfers, including transfers to or
+        from an escrow contract. The panel&apos;s no-operator-withdrawal design does not override those USDC controls.
       </p>
       <h2>Use of results</h2>
       <p>

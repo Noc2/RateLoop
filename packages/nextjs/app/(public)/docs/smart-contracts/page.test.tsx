@@ -18,6 +18,12 @@ test("smart-contract docs name the complete production contract set", async () =
   assert.match(html, /id="credential-issuer".*CredentialIssuer/i);
   assert.match(html, /id="x402-panel-submitter".*X402PanelSubmitter/i);
   assert.match(html, /no operator or administrator path to customer funds/i);
+  assert.match(
+    html,
+    /compromised signer.*fill remaining seats in open rounds.*influence their verdicts.*direct the bounties/i,
+  );
+  assert.match(html, /id="usdc-token-authority".*USDC token authority/i);
+  assert.match(html, /Circle retains token-layer authority over USDC.*pause or blacklist transfers.*escrow contract/i);
   assert.match(html, /one complete key/i);
   assert.match(html, /id="settlement-evidence"/i);
   assert.match(html, /It proves only those recorded chain facts/i);

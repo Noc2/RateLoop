@@ -15,7 +15,7 @@ const CONTRACTS = [
     name: "CredentialIssuer",
     role: "Admission epochs",
     description:
-      "Accepts epoch-scoped signers for new admission vouchers. It holds no funds and cannot alter an accepted commit or redirect a claim.",
+      "Accepts epoch-scoped signers for new admission vouchers. A compromised signer can fill remaining seats in open rounds, influence their verdicts, and direct the bounties for attacker-controlled reports until rotation. It holds no funds and cannot alter an accepted commit or redirect another report's claim.",
     color: "var(--rateloop-green)",
   },
   {
@@ -57,6 +57,13 @@ export default function TokenlessContractsPage() {
           </section>
         ))}
       </div>
+
+      <h2 id="usdc-token-authority">USDC token authority</h2>
+      <p>
+        Circle retains token-layer authority over USDC and can pause or blacklist transfers, including transfers to or
+        from an escrow contract. The fund core&apos;s lack of a RateLoop administrator does not override those token
+        controls.
+      </p>
 
       <h2 id="deployment-key">One deployment key</h2>
       <p>

@@ -19,6 +19,12 @@ export default function PrivacyPage() {
         reviewers receive short-lived leases only for their blinded cases. The site does not use advertising or
         cross-site profiling.
       </p>
+      <p>
+        Each customer artifact has its own random data-encryption key, but those keys currently wrap to an
+        operator-controlled server or KMS authority shared by tenant artifacts within a key domain. Authorized RateLoop
+        systems can therefore decrypt customer artifacts in that domain to provide the service. Per-tenant or
+        per-project wrapping keys are not yet implemented.
+      </p>
       <h2>Agent and browser handoffs</h2>
       <p>
         The public MCP accepts only material that the caller confirms is public, synthetic, or safely redacted. It
@@ -60,10 +66,13 @@ export default function PrivacyPage() {
       </p>
       <h2>On-chain data</h2>
       <p>
-        Public-chain interactions may publish transaction addresses, commitments, round terms, settlement data, and
-        claims. These records are visible to third parties and generally cannot be erased by the interface operator. A
-        normal claim links a vote key to its payout destination. Reusing a funding or payout address can link paid
-        activity across rounds even though the RateLoop account principal itself is opaque.
+        Public-chain interactions publish transaction addresses, commitments, round terms, settlement data, claims, and
+        each paid commit&apos;s timelock ciphertext. That ciphertext contains the vote, prediction, response hash,
+        payout address, and salt. A commit irrevocably schedules those details to become publicly decryptable at the
+        configured drand beacon after the commit deadline, whether or not the reviewer or keeper submits a reveal or
+        claim; there is no post-commit abort. Reveal transactions also publish their plaintext calldata. These records
+        are visible to third parties and generally cannot be erased by the interface operator. Reusing a funding or
+        payout address can link paid activity across rounds even though the RateLoop account principal itself is opaque.
       </p>
       <h2>Paid eligibility</h2>
       <p>

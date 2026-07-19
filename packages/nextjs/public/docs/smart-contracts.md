@@ -16,8 +16,10 @@ shares. It has no administrator or operator path to customer funds.
 
 ## CredentialIssuer
 
-The issuer accepts epoch-scoped admission signers for future vouchers. A signer can affect who may join future work,
-but the contract holds no customer funds and cannot change an accepted commit, settlement input, or payout destination.
+The issuer accepts epoch-scoped admission signers for new vouchers. A compromised signer can fill remaining seats in
+open rounds, influence their verdicts, and direct the bounties for those attacker-controlled reports until rotation.
+The contract still holds no customer funds and cannot change an accepted commit, settlement input, or another report's
+payout destination.
 
 <a id="x402-panel-submitter"></a>
 
@@ -25,6 +27,13 @@ but the contract holds no customer funds and cannot change an accepted commit, s
 
 The stateless adapter verifies the agent's EIP-3009 USDC authorization and bound round authorization, transfers the
 exact approved amount, and calls the panel in one transaction. It cannot retain or redirect the customer's funds.
+
+<a id="usdc-token-authority"></a>
+
+## USDC token authority
+
+Circle retains token-layer authority over USDC and can pause or blacklist transfers, including transfers to or from an
+escrow contract. The fund core's lack of a RateLoop administrator does not override those token controls.
 
 <a id="tokenless-feedback-bonus"></a>
 

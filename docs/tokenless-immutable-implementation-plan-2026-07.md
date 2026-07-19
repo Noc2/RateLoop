@@ -51,9 +51,15 @@ The fund-holding core is immutable and has no owner, proxy, pause, sweep, setter
 to funds. Its only stateful responsibilities are round funding, voucher-bound commits, deterministic settlement,
 compensation, refunds, claims, fee release, and stale-share return.
 
-The separate credential issuer may rotate admission signers by epoch and can admit or censor future work. It cannot
-hold funds, redirect a claim, alter an accepted commit, change settlement, or move customer assets. Issuance authority
-is therefore disclosed separately from the no-funds-admin custody claim.
+The separate credential issuer may rotate admission signers by epoch and can admit or censor new commits. A compromised
+admission signer can fill remaining seats in open rounds, influence their verdicts, and direct the bounties for those
+attacker-controlled reports until the signer is rotated. It still cannot hold funds, redirect another report's claim,
+alter an accepted commit, change settlement, or move customer assets. Issuance authority and its open-round blast radius
+are therefore disclosed separately from the no-funds-admin custody claim.
+
+USDC retains a separate token-layer authority outside the fund core. Circle can pause or blacklist USDC transfers,
+including transfers to or from an escrow contract. The adminless panel removes a RateLoop operator path to funds; it
+does not override the token issuer's controls or guarantee that USDC remains transferable.
 
 The operator controls off-chain identity, eligibility, moderation, assignment, correlation analytics, and publication
 policy. Those controls can stop future admission or distribution but cannot erase accepted work or change earned pay.
@@ -165,10 +171,19 @@ eligibility—including adulthood, residence/tax information where applicable, s
 finish before the first paid voucher. Browsing and advisory calibration require none of those paid-task fields.
 
 Private artifacts are encrypted before storage and released only through workspace membership, project assignment, and
-short reviewer leases. Public, private, and sensitive-material decisions are separate policy dimensions. On-chain data
-contains commitments and settlement evidence, never private payloads or plaintext URLs. A normal claim publicly links
-the one-time vote key to its payout destination; reusing a destination can link rounds. The operator never possesses a
-rater spend key or universal decryption key.
+short reviewer leases. Public, private, and sensitive-material decisions are separate policy dimensions. Each customer
+artifact has a random data-encryption key, but those keys currently wrap to an operator-controlled server/KMS wrapping
+authority shared by tenant artifacts within a key domain. Authorized operator systems can therefore decrypt customer
+artifacts in that domain. Per-tenant or per-project wrapping keys remain a privacy-hardening and real-customer release
+gate, not a deployed property.
+
+On-chain data contains commitments and settlement evidence, never private customer payloads or plaintext URLs. A paid
+commit publishes tlock ciphertext containing the vote, prediction, response hash, payout address, and salt. Committing
+irrevocably schedules that material to become publicly decryptable at the configured drand round after the commit
+deadline, whether or not the reviewer or keeper submits a reveal or claim; there is no post-commit abort. Reusing a
+payout destination can link rounds. The operator never possesses a rater spend key, and the public drand/tlock reveal
+lane needs no operator-held universal reveal key; that statement does not apply to the customer-artifact vault authority
+described above.
 
 Account and workspace deletion is a first-class authenticated lifecycle, not a support-only operation. Before accepting
 a deletion, RateLoop shows the exact blockers and consequences. A workspace cannot be deleted while it owns available

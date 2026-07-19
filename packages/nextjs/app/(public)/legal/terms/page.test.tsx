@@ -20,5 +20,17 @@ test("terms state service limits and accepted-work protection", async () => {
   assert.match(html, /participant bounty, attempt reserve/i);
   assert.match(html, /Stripe processes subscription payment details/i);
   assert.match(html, /not financial, legal, medical, or investment advice/i);
+  assert.match(
+    html,
+    /paid commit publishes a timelock-encrypted vote, prediction, response hash, payout address, and salt/i,
+  );
+  assert.match(html, /configured drand beacon after the commit deadline/i);
+  assert.match(html, /whether or not the reviewer or keeper later reveals or claims/i);
+  assert.match(html, /there is no post-commit abort/i);
+  assert.match(
+    html,
+    /compromised.*fill remaining seats in open rounds.*influence their verdicts.*direct the bounties/i,
+  );
+  assert.match(html, /Circle retains token-layer authority over USDC.*pause or blacklist transfers.*escrow contract/i);
   assert.doesNotMatch(html, /LREP|no token|token governance|test-only|test deployment/i);
 });

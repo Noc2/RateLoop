@@ -45,8 +45,11 @@ export default function HowTokenlessWorksPage() {
       <p>
         Before paid work is offered, each reviewer passes the frozen eligibility policy. RateLoop then assigns a blinded
         case. The reviewer chooses an answer, predicts the panel&apos;s answer share, and submits a sealed commit before
-        anyone can see the crowd. After reveal, every accepted valid report can be claimed at the reviewer-selected
-        payout address.
+        anyone can see the crowd. That paid commit publishes timelock ciphertext containing the vote, prediction,
+        response hash, payout address, and salt. It irrevocably schedules those details to become publicly decryptable
+        at the configured drand beacon after the commit deadline, whether or not the reviewer or keeper submits a reveal
+        or claim; there is no post-commit abort. After reveal, every accepted valid report can be claimed at the
+        reviewer-selected payout address.
       </p>
       <p>
         A network panel uses <Link href="/docs/tech-stack#proof-of-human">Proof of Human</Link> for provider-scoped
