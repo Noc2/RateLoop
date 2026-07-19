@@ -10,10 +10,19 @@ const IGNORED_DIRS = new Set(["node_modules", ".next"]);
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = dirname(scriptDir);
 const preloadModule = join(scriptDir, "register-node-test-env.mjs");
+const configuredTestConcurrency =
+  process.env.RATELOOP_NODE_TEST_CONCURRENCY ?? "4";
+
+if (!/^[1-9][0-9]*$/u.test(configuredTestConcurrency)) {
+  console.error("RATELOOP_NODE_TEST_CONCURRENCY must be a positive integer.");
+  process.exit(1);
+}
 
 function findPackageJson(start) {
   const absoluteStart = resolve(start);
-  let current = statSync(absoluteStart).isDirectory() ? absoluteStart : dirname(absoluteStart);
+  let current = statSync(absoluteStart).isDirectory()
+    ? absoluteStart
+    : dirname(absoluteStart);
   while (current.startsWith(repoRoot)) {
     const candidate = join(current, "package.json");
     try {
@@ -30,7 +39,7 @@ function findPackageJson(start) {
 
 function resolveImportModule(name, files = [], cwd = process.cwd()) {
   const packageJsonCandidates = [
-    ...files.map(file => findPackageJson(file)).filter(Boolean),
+    ...files.map((file) => findPackageJson(file)).filter(Boolean),
     join(cwd, "package.json"),
     join(repoRoot, "package.json"),
   ];
@@ -91,7 +100,9 @@ function groupTestsByCwd(files) {
 
 const roots = process.argv.slice(2);
 if (roots.length === 0) {
-  console.error("Usage: node scripts/run-node-tests.mjs <dir-or-test-file> [dir-or-test-file...]");
+  console.error(
+    "Usage: node scripts/run-node-tests.mjs <dir-or-test-file> [dir-or-test-file...]",
+  );
   process.exit(1);
 }
 
@@ -112,11 +123,15 @@ let exitCode = 0;
 for (const [cwd, groupFiles] of groupTestsByCwd(files)) {
   groupFiles.sort();
 
-  const nodeArgs = ["--import", preloadModule];
-  if (groupFiles.some(file => TS_TEST_FILE_RE.test(file))) {
+  const nodeArgs = [
+    "--import",
+    preloadModule,
+    `--test-concurrency=${configuredTestConcurrency}`,
+  ];
+  if (groupFiles.some((file) => TS_TEST_FILE_RE.test(file))) {
     nodeArgs.push("--import", resolveImportModule("tsx", groupFiles, cwd));
   }
-  nodeArgs.push("--test", ...groupFiles.map(file => relative(cwd, file)));
+  nodeArgs.push("--test", ...groupFiles.map((file) => relative(cwd, file)));
 
   const result = spawnSync(process.execPath, nodeArgs, {
     stdio: "inherit",
