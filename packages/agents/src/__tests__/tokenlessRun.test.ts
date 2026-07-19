@@ -198,6 +198,17 @@ function run(
 }
 
 describe("autonomous x402 custody guard", () => {
+  it.each(["short", "run contains spaces", `run:${"x".repeat(157)}`])(
+    "matches the SDK idempotency-key boundary before making requests: %s",
+    async idempotencyKey => {
+      const h = harness();
+
+      await expect(run(h, { idempotencyKey })).rejects.toThrow(/8-160 characters/);
+      expect(h.mocks.quote).not.toHaveBeenCalled();
+      expect(h.mocks.signTypedData).not.toHaveBeenCalled();
+    },
+  );
+
   it("refuses server-supplied contracts that differ from the local deployment pin", async () => {
     const h = harness(
       paymentInstructions({

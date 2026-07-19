@@ -48,9 +48,14 @@ export type TokenlessResumeReceipt = {
   createdAt: string;
 };
 
+const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,160}$/u;
+
 function assertIdempotencyKey(value: string) {
-  if (!value.trim() || value.length > 200)
-    throw new Error("idempotencyKey must be 1-200 characters.");
+  if (!IDEMPOTENCY_KEY_PATTERN.test(value)) {
+    throw new Error(
+      "idempotencyKey must be 8-160 characters using letters, numbers, dot, underscore, colon, or hyphen.",
+    );
+  }
 }
 
 function atomicAmount(value: string, name: string) {
