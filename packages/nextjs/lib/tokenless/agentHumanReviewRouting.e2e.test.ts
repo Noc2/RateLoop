@@ -202,6 +202,12 @@ function routeFixture(frozen: FrozenHumanReviewRoutingContext) {
       return { deliveryId: "delivery_agent_flow_e2e" } as never;
     },
     assignPrivatePaid: async () => ({ deliveryId: "paid_delivery_agent_flow_e2e" }) as never,
+    laneImplementation: {
+      privateInvitedUnpaid: true,
+      privateInvitedPaid: true,
+      publicPaidNetwork: true,
+      hybridPublicSafe: true,
+    },
     assignHybrid: async () => {
       calls.hybrid += 1;
       return {

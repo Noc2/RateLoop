@@ -86,7 +86,7 @@ test("deployed implementation readiness is shared without overstating hybrid del
   assert.deepEqual(HUMAN_REVIEW_IMPLEMENTATION_READINESS, {
     ownerApproval: true,
     privateInvitedUnpaid: true,
-    privateInvitedPaid: true,
+    privateInvitedPaid: false,
     publicPaidNetwork: true,
     hybridPublicSafe: false,
   });
@@ -100,7 +100,10 @@ test("deployed implementation readiness is shared without overstating hybrid del
 test("configured lane descriptions use the same implementation truth", () => {
   assert.deepEqual(configuredHumanReviewLanes(), {
     privateInvitedUnpaid: { available: true, message: "Implemented on this deployment." },
-    privateInvitedPaid: { available: true, message: "Implemented on this deployment." },
+    privateInvitedPaid: {
+      available: false,
+      message: "Invited-review USDC settlement is not implemented yet.",
+    },
     publicPaidNetwork: { available: true, message: "Implemented on this deployment." },
     hybridPublicSafe: {
       available: false,

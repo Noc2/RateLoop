@@ -26,15 +26,22 @@ export type HumanReviewReadiness = {
   hybridPublicSafe: boolean;
 };
 
-export const HUMAN_REVIEW_LANE_IMPLEMENTATION = {
-  privateInvitedUnpaid: true,
-  privateInvitedPaid: true,
-  publicPaidNetwork: true,
-  hybridPublicSafe: false,
-} as const satisfies Pick<
+export type HumanReviewLaneReadiness = Pick<
   HumanReviewReadiness,
   "privateInvitedUnpaid" | "privateInvitedPaid" | "publicPaidNetwork" | "hybridPublicSafe"
 >;
+
+export const HUMAN_REVIEW_LANE_IMPLEMENTATION = {
+  privateInvitedUnpaid: true,
+  // The private adapter currently freezes eligibility, funding reservations,
+  // encrypted delivery, and voucher-preparation evidence. It does not yet bind
+  // those assignments to an opened TokenlessPanel round, issue/consume the
+  // resulting voucher, or reconcile a terminal settlement receipt. Keep the
+  // lane unavailable until that complete persisted path exists.
+  privateInvitedPaid: false,
+  publicPaidNetwork: true,
+  hybridPublicSafe: false,
+} as const satisfies HumanReviewLaneReadiness;
 
 export const HUMAN_REVIEW_IMPLEMENTATION_READINESS = {
   ownerApproval: true,

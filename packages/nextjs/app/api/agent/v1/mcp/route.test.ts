@@ -1163,7 +1163,7 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
   });
   assert.equal(configuredContext.humanReview.authority, "ask_automatically");
   assert.equal(configuredContext.capabilities.implementedLanes.privateInvitedUnpaid.available, true);
-  assert.equal(configuredContext.capabilities.implementedLanes.privateInvitedPaid.available, true);
+  assert.equal(configuredContext.capabilities.implementedLanes.privateInvitedPaid.available, false);
   assert.equal(configuredContext.capabilities.implementedLanes.publicPaidNetwork.available, true);
   assert.equal(configuredContext.capabilities.implementedLanes.hybridPublicSafe.available, false);
   assert.equal(configuredContext.capabilities.effectiveLane.lane, "public_paid_network");

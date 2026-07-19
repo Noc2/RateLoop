@@ -44,7 +44,12 @@ import {
   type PublicPaidHumanReviewPublication,
   requestPublicPaidHumanReview,
 } from "~~/lib/tokenless/publicPaidHumanReviewAdapter";
-import type { HumanReviewAuthorityLevel, HumanReviewLane } from "~~/lib/tokenless/reviewCapabilities";
+import {
+  HUMAN_REVIEW_LANE_IMPLEMENTATION,
+  type HumanReviewAuthorityLevel,
+  type HumanReviewLane,
+  type HumanReviewLaneReadiness,
+} from "~~/lib/tokenless/reviewCapabilities";
 import {
   type ReviewerExpertiseKey,
   qualificationProvenanceSatisfiesExpertise,
@@ -246,6 +251,12 @@ type RouterDependencies = {
   assignPrivateUnpaid: typeof requestPrivateUnpaidHumanReview;
   assignPrivatePaid: typeof requestPrivatePaidHumanReview;
   assignHybrid?: (split: FrozenHybridReviewSplit) => Promise<HybridHumanReviewResult>;
+  /**
+   * A dependency bundle may explicitly enable a lane only when its adapters
+   * provide the full durable assignment-to-terminal-settlement path. Omission
+   * always falls back to the deployed implementation boundary.
+   */
+  laneImplementation?: HumanReviewLaneReadiness;
   ensureFeedbackBonus?: typeof ensureFeedbackBonusPoolForDelivery;
   requireFeedbackBonusEligibility?: typeof requirePaidReviewEligibility;
 };
@@ -257,6 +268,13 @@ const NO_SIDE_EFFECTS = Object.freeze({
   fundsReserved: false,
   spent: false,
 } as const);
+
+function laneIsImplemented(lane: HumanReviewLane, implementation: HumanReviewLaneReadiness) {
+  if (lane === "private_invited_unpaid") return implementation.privateInvitedUnpaid;
+  if (lane === "private_invited_paid") return implementation.privateInvitedPaid;
+  if (lane === "public_paid_network") return implementation.publicPaidNetwork;
+  return implementation.hybridPublicSafe;
+}
 
 function text(row: Row | undefined, key: string) {
   const value = row?.[key];
@@ -1011,6 +1029,7 @@ const DEFAULT_DEPENDENCIES: RouterDependencies = {
   preparePrivateFoundation: preparePrivateReviewFoundation,
   assignPrivateUnpaid: requestPrivateUnpaidHumanReview,
   assignPrivatePaid: requestPrivatePaidHumanReview,
+  laneImplementation: HUMAN_REVIEW_LANE_IMPLEMENTATION,
   ensureFeedbackBonus: ensureFeedbackBonusPoolForDelivery,
   requireFeedbackBonusEligibility: requirePaidReviewEligibility,
 };
@@ -1050,6 +1069,20 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
       context.requestProfile.lane !== "private_invited_unpaid" &&
       context.requestProfile.lane !== "private_invited_paid" &&
       context.requestProfile.lane !== "hybrid_public_safe"
+    ) {
+      return {
+        ...common,
+        action: "blocked",
+        code: "lane_not_implemented",
+        retryable: false,
+        sideEffects: NO_SIDE_EFFECTS,
+      };
+    }
+    if (
+      !laneIsImplemented(
+        context.requestProfile.lane,
+        dependencies.laneImplementation ?? HUMAN_REVIEW_LANE_IMPLEMENTATION,
+      )
     ) {
       return {
         ...common,

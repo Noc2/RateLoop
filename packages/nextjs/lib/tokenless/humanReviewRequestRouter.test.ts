@@ -10,6 +10,7 @@ import {
   type FrozenHumanReviewRoutingContext,
   createHumanReviewRequestRouter,
 } from "~~/lib/tokenless/humanReviewRequestRouter";
+import type { HumanReviewLaneReadiness } from "~~/lib/tokenless/reviewCapabilities";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type IntegrationPrincipal = Extract<AgentMcpPrincipal, { kind: "integration" }>;
@@ -170,6 +171,7 @@ function dependencies(
     privateBinding?: ExactPrivateReviewBinding | null;
     workspaceStopped?: boolean;
     approvalStatus?: "pending" | "approved" | "consumed";
+    laneImplementation?: HumanReviewLaneReadiness;
   } = {},
 ) {
   const calls = {
@@ -192,6 +194,12 @@ function dependencies(
   };
   const deps = {
     isWorkspaceStopped: async () => options.workspaceStopped ?? false,
+    laneImplementation: options.laneImplementation ?? {
+      privateInvitedUnpaid: true,
+      privateInvitedPaid: true,
+      publicPaidNetwork: true,
+      hybridPublicSafe: true,
+    },
     loadContext: async () => frozen,
     freezeQuestion: async (input: { callerQuestion?: unknown }) => {
       calls.freeze += 1;
@@ -656,6 +664,38 @@ test("private paid automatic routing uses the distinct paid adapter with frozen 
   assert.equal(paid.preparedRequest.audience.kind, "private_invited");
   assert.equal(paid.preparedRequest.audience.contentBoundary, "private_workspace");
   assert.deepEqual(paid.preparedRequest.audience.requiredExpertiseKeys, ["code-review:security"]);
+});
+
+test("the deployed lane gate blocks partial paid and hybrid adapters before any side effect", async () => {
+  const laneImplementation = {
+    privateInvitedUnpaid: true,
+    privateInvitedPaid: false,
+    publicPaidNetwork: true,
+    hybridPublicSafe: false,
+  } satisfies HumanReviewLaneReadiness;
+  for (const entry of [
+    {
+      lane: "private_invited_paid" as const,
+      material: { kind: "private" as const, sourceContentType: "text/plain", suggestionContentType: "text/plain" },
+    },
+    { lane: "hybrid_public_safe" as const, material: publicMaterial },
+  ]) {
+    const { calls, router } = dependencies(context({ lane: entry.lane }), { laneImplementation });
+    const result = await router({
+      principal,
+      opportunityId: "opportunity_router",
+      sourcePayload: "source",
+      suggestionPayload: "suggestion",
+      material: entry.material,
+      now: NOW,
+    });
+    assert.equal(result.action, "blocked");
+    assert.equal(result.action === "blocked" ? result.code : null, "lane_not_implemented");
+    assert.deepEqual(calls.order, []);
+    assert.equal(calls.freeze, 0);
+    assert.equal(calls.assignPaid, 0);
+    assert.equal(calls.hybrid, 0);
+  }
 });
 
 test("unsupported hybrid routing remains blocked without falling back to either implemented lane", async () => {
