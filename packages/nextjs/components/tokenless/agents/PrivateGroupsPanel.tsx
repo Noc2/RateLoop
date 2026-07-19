@@ -327,9 +327,7 @@ export function PrivateGroupsPanel({
         }),
       );
       const created = body.group as PrivateGroup;
-      setName("");
-      setPurpose("");
-      setPolicyEditorSnapshot(null);
+      resetGroupDraft();
       setShowCreateGroup(false);
       await loadGroups(workspaceId, created.groupId);
       setStatus("Group created.");
@@ -338,6 +336,16 @@ export function PrivateGroupsPanel({
     } finally {
       setBusy(false);
     }
+  }
+
+  function resetGroupDraft() {
+    setName("");
+    setPurpose("");
+    setCompensation("unpaid");
+    setWorldIdRequired(false);
+    setExportAllowed(false);
+    setAssignmentNotifications(true);
+    setPolicyEditorSnapshot(null);
   }
 
   async function issueInvitation(event: FormEvent<HTMLFormElement>) {
@@ -545,7 +553,10 @@ export function PrivateGroupsPanel({
           <button
             type="button"
             className={`${showCreateGroup ? "btn rateloop-secondary-action" : "rateloop-gradient-action"} mt-5 px-5`}
-            onClick={() => setShowCreateGroup(current => !current)}
+            onClick={() => {
+              if (showCreateGroup) resetGroupDraft();
+              setShowCreateGroup(current => !current);
+            }}
           >
             {showCreateGroup ? "Cancel" : "Create group"}
           </button>

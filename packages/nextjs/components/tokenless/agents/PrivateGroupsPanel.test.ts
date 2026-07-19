@@ -19,6 +19,9 @@ test("workspace managers can issue secret-once invitations and revoke access", (
   assert.match(panel, /id="private-group-policy-editor"/);
   assert.match(panel, />\s*Cancel\s*<\/button>/);
   assert.match(panel, />\s*Done\s*<\/button>/);
+  assert.match(panel, /if \(showCreateGroup\) resetGroupDraft\(\)/);
+  assert.match(panel, /setCompensation\("unpaid"\)/);
+  assert.match(panel, /setAssignmentNotifications\(true\)/);
   assert.match(panel, /Recipient email \(optional\)/);
   assert.match(panel, /Leave blank to create a one-use invitation code\./);
   assert.match(panel, /Invitation restrictions/);
