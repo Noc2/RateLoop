@@ -6,6 +6,8 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { admin, emailOTP } from "better-auth/plugins";
 import { randomUUID } from "node:crypto";
 import "server-only";
+import { BETTER_AUTH_COOKIE_PREFIX } from "~~/lib/auth/betterAuthCookies";
+import { enterpriseIdentityEnabled } from "~~/lib/auth/enterpriseIdentityConfig";
 import {
   authenticationMethodFromContext,
   canGenerateScimToken,
@@ -76,7 +78,35 @@ export function getBetterAuthTrustedOrigins() {
   return [
     configuration.origin,
     ...(configuration.appleEnabled ? [APPLE_AUTH_ORIGIN] : []),
-    ...getConfiguredSsoIssuerOrigins(),
+    ...(enterpriseIdentityEnabled() ? getConfiguredSsoIssuerOrigins() : []),
+  ];
+}
+
+function enterpriseIdentityPlugins() {
+  if (!enterpriseIdentityEnabled()) return [];
+  return [
+    sso({
+      domainVerification: { enabled: true as const, tokenPrefix: "rateloop-sso" },
+      providersLimit: user => ssoProviderLimitForUser(user.id),
+      provisionUser: provisionEnterpriseSsoUser,
+      provisionUserOnEveryLogin: true,
+      saml: {
+        algorithms: { onDeprecated: "reject" as const },
+        allowIdpInitiated: false,
+        clockSkew: 120_000,
+        enableInResponseToValidation: true,
+        maxMetadataSize: 102_400,
+        maxResponseSize: 262_144,
+        requestTTL: 300_000,
+        requireTimestamps: true,
+      },
+    }),
+    scim({
+      canGenerateToken: ({ providerId, user }) => canGenerateScimToken({ providerId, userId: user.id }),
+      linkExistingUsers: false,
+      providerOwnership: { enabled: true },
+      storeSCIMToken: "hashed",
+    }),
   ];
 }
 
@@ -113,7 +143,7 @@ function createRateLoopAuth() {
       },
     },
     advanced: {
-      cookiePrefix: "rateloop-identity",
+      cookiePrefix: BETTER_AUTH_COOKIE_PREFIX,
       database: { generateId: () => randomUUID() },
       defaultCookieAttributes: {
         httpOnly: true,
@@ -139,28 +169,7 @@ function createRateLoopAuth() {
         rpID: configuration.rpID,
         rpName: "RateLoop",
       }),
-      sso({
-        domainVerification: { enabled: true as const, tokenPrefix: "rateloop-sso" },
-        providersLimit: user => ssoProviderLimitForUser(user.id),
-        provisionUser: provisionEnterpriseSsoUser,
-        provisionUserOnEveryLogin: true,
-        saml: {
-          algorithms: { onDeprecated: "reject" },
-          allowIdpInitiated: false,
-          clockSkew: 120_000,
-          enableInResponseToValidation: true,
-          maxMetadataSize: 102_400,
-          maxResponseSize: 262_144,
-          requestTTL: 300_000,
-          requireTimestamps: true,
-        },
-      }),
-      scim({
-        canGenerateToken: ({ providerId, user }) => canGenerateScimToken({ providerId, userId: user.id }),
-        linkExistingUsers: false,
-        providerOwnership: { enabled: true },
-        storeSCIMToken: "hashed",
-      }),
+      ...enterpriseIdentityPlugins(),
     ],
   });
 }

@@ -4,7 +4,8 @@ import "server-only";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export async function requireBrowserSession(request: NextRequest, options?: { mutation?: boolean }) {
-  if (options?.mutation) {
+  const mutation = options?.mutation ?? !["GET", "HEAD", "OPTIONS"].includes(request.method.toUpperCase());
+  if (mutation) {
     try {
       assertAuthRequestOrigin(request.headers.get("origin"));
     } catch {

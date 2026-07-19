@@ -23,6 +23,8 @@ afterEach(() => {
   delete process.env.BETTER_AUTH_PASSKEY_RP_ID;
   delete process.env.BETTER_AUTH_APPLE_CLIENT_ID;
   delete process.env.BETTER_AUTH_APPLE_CLIENT_SECRET;
+  delete process.env.TOKENLESS_ENTERPRISE_IDENTITY_ENABLED;
+  delete process.env.TOKENLESS_SSO_TRUSTED_ISSUERS;
   __resetBetterAuthForTests();
   __setDatabaseResourcesForTests(null);
 });
@@ -52,6 +54,31 @@ test("Apple OAuth trusts Apple's form-post origin only when its credential pair 
     "https://rateloop-tokenless.vercel.app",
     "https://appleid.apple.com",
   ]);
+});
+
+test("enterprise identity endpoints and issuer origins are absent while the feature is disabled", async () => {
+  process.env.TOKENLESS_SSO_TRUSTED_ISSUERS = "https://identity.example.test";
+  assert.deepEqual(getBetterAuthTrustedOrigins(), ["https://rateloop-tokenless.vercel.app"]);
+
+  const response = await getBetterAuth().handler(
+    new Request("https://rateloop-tokenless.vercel.app/api/auth/better/scim/v2/ServiceProviderConfig"),
+  );
+  assert.equal(response.status, 404);
+});
+
+test("enterprise identity endpoints and configured issuer origins activate together", async () => {
+  process.env.TOKENLESS_ENTERPRISE_IDENTITY_ENABLED = "true";
+  process.env.TOKENLESS_SSO_TRUSTED_ISSUERS = "https://identity.example.test";
+  __resetBetterAuthForTests();
+  assert.deepEqual(getBetterAuthTrustedOrigins(), [
+    "https://rateloop-tokenless.vercel.app",
+    "https://identity.example.test",
+  ]);
+
+  const response = await getBetterAuth().handler(
+    new Request("https://rateloop-tokenless.vercel.app/api/auth/better/scim/v2/ServiceProviderConfig"),
+  );
+  assert.equal(response.status, 200);
 });
 
 test("email OTP writes a generated verification ID before delivery", async () => {

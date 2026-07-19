@@ -12,6 +12,7 @@ import {
   recordEnterpriseIdentityReservationFailure,
   reserveEnterpriseIdentityAudit,
 } from "~~/lib/auth/enterpriseIdentityAudit";
+import { enterpriseIdentityEnabled } from "~~/lib/auth/enterpriseIdentityConfig";
 import { normalizeEnterpriseDomain } from "~~/lib/auth/enterpriseIdentityPolicy";
 import { getAuthOrigin } from "~~/lib/auth/session";
 import { dbClient, dbPool } from "~~/lib/db";
@@ -138,22 +139,13 @@ async function identityTransaction<T>(work: (client: PoolClient) => Promise<T>) 
   }
 }
 
-export function enterpriseIdentityEnabled(env: Record<string, string | undefined> = process.env) {
-  const raw = env.TOKENLESS_ENTERPRISE_IDENTITY_ENABLED?.trim().toLowerCase();
-  if (!raw || raw === "false") return false;
-  if (raw === "true") return true;
-  throw new TokenlessServiceError(
-    "TOKENLESS_ENTERPRISE_IDENTITY_ENABLED must be exactly true or false.",
-    500,
-    "invalid_identity_configuration",
-  );
-}
-
 function requireEnterpriseIdentityEnabled() {
   if (!enterpriseIdentityEnabled()) {
     throw new TokenlessServiceError("Enterprise identity is not enabled yet.", 503, "enterprise_identity_unavailable");
   }
 }
+
+export { enterpriseIdentityEnabled } from "~~/lib/auth/enterpriseIdentityConfig";
 
 async function requireIdentityAdmin(input: { accountAddress: string; headers: Headers; workspaceId: string }) {
   requireEnterpriseIdentityEnabled();
