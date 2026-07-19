@@ -543,6 +543,38 @@ async function collectDeletionCategoryEvidence(
       retentionReason: "externally_immutable",
     },
   };
+  const requiredZeroPostconditions = {
+    activeAgentIntegrations: rowNumber(row, "active_agent_integrations"),
+    activeAuthSessions: rowNumber(row, "active_auth_sessions"),
+    activeIdentityBindings: rowNumber(row, "active_identity_bindings"),
+    activeOauthAccessTokens: rowNumber(row, "active_oauth_access_tokens"),
+    activeOauthAuthorizationCodes: rowNumber(row, "active_oauth_authorization_codes"),
+    activeOauthRefreshTokens: rowNumber(row, "active_oauth_refresh_tokens"),
+    activeOauthTokenFamilies: rowNumber(row, "active_oauth_token_families"),
+    activeProjectAccess: rowNumber(row, "active_project_access"),
+    betterAuthUsers: rowNumber(row, "better_auth_users"),
+    betterAuthVerifications,
+    browserIdentities: rowNumber(row, "browser_identities"),
+    eligibilityHandoffs: rowNumber(row, "eligibility_handoffs"),
+    managedWalletJtis: rowNumber(row, "managed_wallet_jtis"),
+    payoutWalletOwnership: rowNumber(row, "payout_wallet_ownership"),
+    walletBindings: rowNumber(row, "wallet_bindings"),
+    walletChallenges: rowNumber(row, "wallet_challenges"),
+    workspaceClients: rowNumber(row, "workspace_clients"),
+    workspaceGovernance: rowNumber(row, "workspace_governance"),
+    workspaceMemberships: rowNumber(row, "workspace_memberships"),
+    ...input.raterErasure.remainingRows,
+  };
+  const incompletePostcondition = Object.entries(requiredZeroPostconditions).find(([, value]) => value !== 0);
+  if (
+    incompletePostcondition ||
+    rowNumber(row, "deleted_principals") !== 1 ||
+    (input.raterErasure.profileFound && !input.raterErasure.tombstoneWritten)
+  ) {
+    throw new Error(
+      `Account deletion postcondition failed${incompletePostcondition ? `: ${incompletePostcondition[0]}` : ""}.`,
+    );
+  }
   return categoryEvidence;
 }
 
