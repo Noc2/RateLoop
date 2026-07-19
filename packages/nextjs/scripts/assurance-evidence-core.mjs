@@ -21,8 +21,10 @@ export function sha256EvidenceValue(value) {
   return `sha256:${createHash("sha256").update(canonicalizeEvidenceValue(value)).digest("hex")}`;
 }
 
-export function evidenceSigningKeyId(publicKey) {
-  return `ed25519:${createHash("sha256").update(Buffer.from(publicKey, "base64url")).digest("hex").slice(0, 24)}`;
+export function evidenceSigningKeyId(publicKey, algorithm = "Ed25519") {
+  const prefix = algorithm === "Ed25519" ? "ed25519" : algorithm === "ECDSA-SHA256" ? "p256" : null;
+  if (!prefix) throw new Error("Unsupported evidence signature algorithm.");
+  return `${prefix}:${createHash("sha256").update(Buffer.from(publicKey, "base64url")).digest("hex").slice(0, 24)}`;
 }
 
 export function evidenceMerkleRoot(leaves) {
@@ -344,8 +346,10 @@ export function verifyEvidenceExport(packet, trust = {}) {
     if (packet.payload.schemaVersion === EVIDENCE_SCHEMA_VERSION && !validEvidenceReviewContext(packet.payload)) {
       errors.push("review_context_invalid");
     }
-    if (packet.signing.algorithm !== "Ed25519") errors.push("unsupported_signature_algorithm");
-    const derivedKeyId = evidenceSigningKeyId(packet.signing.publicKey);
+    if (packet.signing.algorithm !== "Ed25519" && packet.signing.algorithm !== "ECDSA-SHA256") {
+      errors.push("unsupported_signature_algorithm");
+    }
+    const derivedKeyId = evidenceSigningKeyId(packet.signing.publicKey, packet.signing.algorithm);
     if (!trust.expectedPublicKey && !trust.expectedKeyId) errors.push("missing_trust_anchor");
     if (trust.expectedPublicKey && trust.expectedPublicKey !== packet.signing.publicKey) {
       errors.push("untrusted_signing_key");
@@ -353,7 +357,7 @@ export function verifyEvidenceExport(packet, trust = {}) {
     if (trust.expectedKeyId) {
       if (trust.expectedKeyId !== packet.signing.keyId) errors.push("signing_key_id_mismatch");
       if (
-        !/^ed25519:[0-9a-f]{24}$/.test(trust.expectedKeyId) ||
+        !/^(?:ed25519|p256):[0-9a-f]{24}$/.test(trust.expectedKeyId) ||
         trust.expectedKeyId !== packet.signing.keyId ||
         trust.expectedKeyId !== derivedKeyId
       ) {
@@ -383,7 +387,15 @@ export function verifyEvidenceExport(packet, trust = {}) {
       format: "der",
       type: "spki",
     });
-    if (!verify(null, Buffer.from(canonicalDocument), publicKey, Buffer.from(packet.signature, "base64url"))) {
+    const verificationAlgorithm = packet.signing.algorithm === "ECDSA-SHA256" ? "sha256" : null;
+    if (
+      !verify(
+        verificationAlgorithm,
+        Buffer.from(canonicalDocument),
+        publicKey,
+        Buffer.from(packet.signature, "base64url"),
+      )
+    ) {
       errors.push("signature_invalid");
     }
     return { valid: errors.length === 0, errors, packetDigest };

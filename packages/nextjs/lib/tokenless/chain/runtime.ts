@@ -1,4 +1,6 @@
+import { createAwsKmsEthereumAccount } from "./awsKmsAccount";
 import type { TokenlessChainConfig } from "./config";
+import type { TokenlessSignerConfig } from "./config";
 import { TokenlessFeedbackBonusAbi, TokenlessPanelAbi, X402PanelSubmitterAbi } from "@rateloop/contracts/tokenless";
 import "server-only";
 import {
@@ -101,8 +103,11 @@ export function loadTokenlessEvidenceFinalityPolicy(
 let runtimeCache: { rpcKey: string; runtime: TokenlessChainRuntime } | null = null;
 let runtimeOverride: TokenlessChainRuntime | null = null;
 
-function wallet(privateKey: `0x${string}`, rpcUrls: readonly string[]) {
-  const account = privateKeyToAccount(privateKey);
+function wallet(signer: TokenlessSignerConfig, rpcUrls: readonly string[]) {
+  const account =
+    signer.kind === "aws-kms"
+      ? createAwsKmsEthereumAccount({ configuration: signer.configuration })
+      : privateKeyToAccount(signer.privateKey);
   return {
     account,
     client: createBaseWalletClient(account, rpcUrls),
@@ -114,11 +119,9 @@ export function getTokenlessChainRuntime(config: TokenlessChainConfig): Tokenles
   const rpcUrls = [config.rpcUrl, ...config.rpcFallbackUrls];
   const rpcKey = JSON.stringify(rpcUrls);
   if (runtimeCache?.rpcKey === rpcKey) return runtimeCache.runtime;
-  const prepaid = config.prepaidFunderPrivateKey ? wallet(config.prepaidFunderPrivateKey, rpcUrls) : null;
-  const relayer = config.relayerPrivateKey ? wallet(config.relayerPrivateKey, rpcUrls) : null;
-  const surpriseBonus = config.surpriseBonusFunderPrivateKey
-    ? wallet(config.surpriseBonusFunderPrivateKey, rpcUrls)
-    : null;
+  const prepaid = config.prepaidFunderSigner ? wallet(config.prepaidFunderSigner, rpcUrls) : null;
+  const relayer = config.relayerSigner ? wallet(config.relayerSigner, rpcUrls) : null;
+  const surpriseBonus = config.surpriseBonusFunderSigner ? wallet(config.surpriseBonusFunderSigner, rpcUrls) : null;
   const runtime: TokenlessChainRuntime = {
     publicClient: createBasePublicClient(rpcUrls),
     ...(prepaid ? { prepaidAccount: prepaid.account, prepaidWallet: prepaid.client } : {}),

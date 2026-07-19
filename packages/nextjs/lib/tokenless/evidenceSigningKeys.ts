@@ -1,3 +1,4 @@
+import { createHash, createPublicKey } from "node:crypto";
 import "server-only";
 import { dbClient } from "~~/lib/db";
 import { requireAssuranceAttestationManagement } from "~~/lib/tokenless/assuranceAttestationPipeline";
@@ -25,6 +26,67 @@ function keyIdentity(keyId: string, publicKeySpki: string) {
   return JSON.stringify([keyId, publicKeySpki]);
 }
 
+type DecisionPacketVerificationKey = {
+  algorithm: "ECDSA-SHA256";
+  keyId: string;
+  publicKey: string;
+  publicKeyJwk: JsonWebKey;
+  status: "current" | "retired";
+};
+
+export function parseDecisionPacketVerificationKeys(encoded: string): DecisionPacketVerificationKey[] {
+  let entries: unknown;
+  try {
+    entries = JSON.parse(encoded);
+  } catch {
+    throw new TokenlessServiceError("Decision-packet verification keys are invalid.", 503, "invalid_evidence_keyring");
+  }
+  if (!Array.isArray(entries) || entries.length === 0) {
+    throw new TokenlessServiceError(
+      "Decision-packet verification keys are unavailable.",
+      503,
+      "invalid_evidence_keyring",
+    );
+  }
+  const seen = new Set<string>();
+  let current = 0;
+  const parsed = entries.map(entry => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new Error("invalid key entry");
+    const value = entry as Record<string, unknown>;
+    if (
+      value.algorithm !== "ECDSA-SHA256" ||
+      typeof value.keyId !== "string" ||
+      !/^p256:[0-9a-f]{24}$/u.test(value.keyId) ||
+      typeof value.publicKey !== "string" ||
+      (value.status !== "current" && value.status !== "retired")
+    ) {
+      throw new Error("invalid key entry");
+    }
+    const publicKey = createPublicKey({ key: Buffer.from(value.publicKey, "base64url"), format: "der", type: "spki" });
+    if (publicKey.asymmetricKeyType !== "ec" || publicKey.asymmetricKeyDetails?.namedCurve !== "prime256v1") {
+      throw new Error("invalid key type");
+    }
+    const canonical = publicKey.export({ format: "der", type: "spki" });
+    const derivedKeyId = `p256:${createHash("sha256").update(canonical).digest("hex").slice(0, 24)}`;
+    if (derivedKeyId !== value.keyId || canonical.toString("base64url") !== value.publicKey) {
+      throw new Error("invalid key identity");
+    }
+    const identity = keyIdentity(value.keyId, value.publicKey);
+    if (seen.has(identity)) throw new Error("duplicate key");
+    seen.add(identity);
+    if (value.status === "current") current += 1;
+    return {
+      algorithm: value.algorithm,
+      keyId: value.keyId,
+      publicKey: value.publicKey,
+      publicKeyJwk: publicKey.export({ format: "jwk" }),
+      status: value.status,
+    } as DecisionPacketVerificationKey;
+  });
+  if (current !== 1) throw new Error("exactly one current key is required");
+  return parsed;
+}
+
 export async function listWorkspaceEvidenceSigningKeys(input: { accountAddress: string; workspaceId: string }) {
   await requireAssuranceAttestationManagement(input.accountAddress, input.workspaceId);
   const gateKeyring = projectHumanReviewGateTrustedKeyHistory();
@@ -46,7 +108,7 @@ export async function listWorkspaceEvidenceSigningKeys(input: { accountAddress: 
       return [keyIdentity(text(row, "signing_key_id")!, text(row, "signing_public_key")!), row] as const;
     }),
   );
-  const keys = gateKeyring.keys.map(key => {
+  const gateKeys = gateKeyring.keys.map(key => {
     const publicKeySpki = encodeEd25519SpkiDerBase64url(key.publicKeyJwk);
     const identity = keyIdentity(key.keyId, publicKeySpki);
     const packet = packetByKey.get(identity);
@@ -63,10 +125,33 @@ export async function listWorkspaceEvidenceSigningKeys(input: { accountAddress: 
       packetCount: packet ? Number(packet.packet_count) : 0,
     };
   });
+  let packetKeys: DecisionPacketVerificationKey[];
+  try {
+    packetKeys = parseDecisionPacketVerificationKeys(process.env.TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS ?? "");
+  } catch (error) {
+    if (error instanceof TokenlessServiceError) throw error;
+    throw new TokenlessServiceError("Decision-packet verification keys are invalid.", 503, "invalid_evidence_keyring");
+  }
+  const decisionKeys = packetKeys.map(key => {
+    const identity = keyIdentity(key.keyId, key.publicKey);
+    const packet = packetByKey.get(identity);
+    if (packet) packetByKey.delete(identity);
+    return {
+      keyId: key.keyId,
+      algorithm: key.algorithm,
+      publicKeyJwk: key.publicKeyJwk,
+      publicKeySpki: key.publicKey,
+      status: key.status,
+      uses: ["decision_packet" as const],
+      firstPacketAt: packet ? iso(packet.first_seen_at) : null,
+      lastPacketAt: packet ? iso(packet.last_seen_at) : null,
+      packetCount: packet ? Number(packet.packet_count) : 0,
+    };
+  });
   return {
     schemaVersion: "rateloop.evidence-trusted-key-history.v1" as const,
     workspaceId: input.workspaceId,
-    keys,
+    keys: [...gateKeys, ...decisionKeys],
     untrustedPacketKeyCount: packetByKey.size,
   };
 }

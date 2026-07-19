@@ -11,6 +11,7 @@ import {
   createLocalKeyWrappingProvider,
   validateVaultEnvironment,
 } from "~~/lib/privacy/vault";
+import { createConfiguredAwsKmsKeyWrappingProvider } from "~~/lib/privacy/vault/awsKms";
 import { authorizeProjectAccount, projectAccountReference } from "~~/lib/tokenless/projectAccess";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -122,11 +123,8 @@ function getRuntime(env: NodeJS.ProcessEnv = process.env): ArtifactPrivacyRuntim
   }
   const policy = validateVaultEnvironment(env);
   if (policy.mode === "managed") {
-    if (
-      !managedKeyProvider ||
-      managedKeyProvider.provider !== policy.provider ||
-      managedKeyProvider.keyResource !== policy.keyResource
-    ) {
+    const keyProvider = managedKeyProvider ?? createConfiguredAwsKmsKeyWrappingProvider(env);
+    if (keyProvider.provider !== policy.provider || keyProvider.keyResource !== policy.keyResource) {
       throw new TokenlessServiceError(
         "The configured managed KMS adapter is unavailable.",
         503,
@@ -135,8 +133,8 @@ function getRuntime(env: NodeJS.ProcessEnv = process.env): ArtifactPrivacyRuntim
     }
     return {
       commitmentKey: decodeMasterKey(env.TOKENLESS_PSEUDONYM_KEY),
-      keyProvider: managedKeyProvider,
-      keyVersion: managedKeyProvider.keyVersion,
+      keyProvider,
+      keyVersion: keyProvider.keyVersion,
       store: createVercelBlobStore(),
     };
   }
@@ -190,7 +188,7 @@ function privateReviewArtifactCommitment(input: {
     .digest("hex")}` as const;
 }
 
-function keyDomain(provider: KeyWrappingProvider) {
+function keyDomain(provider: Pick<KeyWrappingProvider | WrappedDataKey, "keyResource" | "provider">) {
   return JSON.stringify({
     domain: ARTIFACT_KEY_DOMAIN,
     keyResource: provider.keyResource,
@@ -343,7 +341,7 @@ export async function storeEncryptedArtifact(input: {
         input.workspaceId,
         input.projectId,
         storageRef,
-        keyDomain(runtime.keyProvider!),
+        keyDomain(wrapped),
         runtime.keyVersion,
         content.nonce.toString("base64url"),
         content.tag.toString("base64url"),
@@ -576,7 +574,7 @@ export async function storeEncryptedPrivateReviewArtifacts(input: {
             input.workspaceId,
             input.projectId,
             artifact.storageRef,
-            keyDomain(runtime.keyProvider!),
+            keyDomain(artifact.key),
             runtime.keyVersion,
             artifact.nonce,
             artifact.authTag,

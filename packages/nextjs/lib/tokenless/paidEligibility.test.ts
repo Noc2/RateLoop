@@ -120,7 +120,7 @@ function installOverrides(
       panelAddress: PANEL,
       issuerAddress: ISSUER,
       issuerEpoch: 7n,
-      signerPrivateKey: SIGNER_PRIVATE_KEY,
+      signerAccount: SIGNER,
       signerAddress: SIGNER.address,
       rpcUrl: "http://unused.invalid",
     },

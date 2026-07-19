@@ -18,7 +18,7 @@ import {
 import type { PoolClient } from "pg";
 import "server-only";
 import { type Address, type Hex, createPublicClient, encodePacked, getAddress, http, keccak256 } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
+import { type LocalAccount, privateKeyToAccount } from "viem/accounts";
 import { baseSepolia } from "viem/chains";
 import { getAuthOrigin } from "~~/lib/auth/session";
 import { dbClient, dbPool } from "~~/lib/db";
@@ -27,6 +27,10 @@ import {
   evaluateFrozenAdmissionPolicy,
   freezeAdmissionPolicy,
 } from "~~/lib/tokenless/admissionPolicy";
+import {
+  createAwsKmsEthereumAccount,
+  loadAwsKmsEthereumAccountConfiguration,
+} from "~~/lib/tokenless/chain/awsKmsAccount";
 import { isOpaqueSubjectReference } from "~~/lib/tokenless/opaqueReferences";
 import {
   requirePaidReviewEligibility,
@@ -108,7 +112,7 @@ type IssuerConfig = {
   panelAddress: Address;
   issuerAddress: Address;
   issuerEpoch: bigint;
-  signerPrivateKey: Hex;
+  signerAccount: LocalAccount;
   signerAddress: Address;
   rpcUrl: string;
 };
@@ -1211,21 +1215,33 @@ function getIssuerConfig(): IssuerConfig {
     throw new Error("The voucher signer secret must never use a NEXT_PUBLIC_ environment variable.");
   }
   const signerPrivateKey = process.env.TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY as Hex | undefined;
+  const managedKeyResource = process.env.TOKENLESS_CREDENTIAL_ISSUER_KMS_KEY_RESOURCE?.trim();
   const epoch = process.env.TOKENLESS_VOUCHER_ISSUER_EPOCH;
   const panel = process.env.TOKENLESS_PANEL_ADDRESS;
   const issuer = process.env.TOKENLESS_CREDENTIAL_ISSUER_ADDRESS;
   const rpcUrl = process.env.BASE_SEPOLIA_RPC_URL?.trim();
-  if (!signerPrivateKey || !/^0x[0-9a-fA-F]{64}$/.test(signerPrivateKey) || !epoch || !panel || !issuer || !rpcUrl) {
+  if (
+    (signerPrivateKey && managedKeyResource) ||
+    (!managedKeyResource && (!signerPrivateKey || !/^0x[0-9a-fA-F]{64}$/.test(signerPrivateKey))) ||
+    !epoch ||
+    !panel ||
+    !issuer ||
+    !rpcUrl
+  ) {
     throw new TokenlessServiceError("Voucher issuer configuration is incomplete.", 503, "issuer_unavailable");
   }
-  const signer = privateKeyToAccount(signerPrivateKey);
+  const signerAccount = managedKeyResource
+    ? createAwsKmsEthereumAccount({
+        configuration: loadAwsKmsEthereumAccountConfiguration({ role: "CREDENTIAL_ISSUER" }),
+      })
+    : privateKeyToAccount(signerPrivateKey!);
   return {
     chainId: baseSepolia.id,
     panelAddress: getAddress(panel),
     issuerAddress: getAddress(issuer),
     issuerEpoch: BigInt(epoch),
-    signerPrivateKey,
-    signerAddress: signer.address,
+    signerAccount,
+    signerAddress: signerAccount.address,
     rpcUrl,
   };
 }
@@ -1651,8 +1667,7 @@ export async function issuePaidVoucher(input: { principalId: string; request: Vo
     issuerEpoch: issuer.issuerEpoch.toString(),
     expiresAt: Math.floor(expiresAt.getTime() / 1000).toString(),
   };
-  const signer = privateKeyToAccount(issuer.signerPrivateKey);
-  const voucherSignature = await signer.signTypedData({
+  const voucherSignature = await issuer.signerAccount.signTypedData({
     domain: {
       name: "RateLoop Tokenless Panel",
       version: "1",

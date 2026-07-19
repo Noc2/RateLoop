@@ -1,3 +1,4 @@
+import { type AwsKmsEthereumAccountConfiguration, loadAwsKmsEthereumAccountConfiguration } from "./awsKmsAccount";
 import "server-only";
 import { type Address, getAddress, isAddress, zeroAddress } from "viem";
 
@@ -17,11 +18,11 @@ export type TokenlessChainConfig = {
   feedbackBonusAddress: Address;
   issuerAddress: Address;
   panelAddress: Address;
-  prepaidFunderPrivateKey?: `0x${string}`;
-  surpriseBonusFunderPrivateKey?: `0x${string}`;
+  prepaidFunderSigner?: TokenlessSignerConfig;
+  surpriseBonusFunderSigner?: TokenlessSignerConfig;
   revealWindowSeconds: number;
   beaconFailureGraceSeconds: number;
-  relayerPrivateKey?: `0x${string}`;
+  relayerSigner?: TokenlessSignerConfig;
   rpcFallbackUrls: string[];
   rpcUrl: string;
   schemaVersion: typeof TOKENLESS_DEPLOYMENT_SCHEMA;
@@ -30,6 +31,10 @@ export type TokenlessChainConfig = {
   usdcEip712Version: string;
   x402SubmitterAddress: Address;
 };
+
+export type TokenlessSignerConfig =
+  | { kind: "aws-kms"; configuration: AwsKmsEthereumAccountConfiguration }
+  | { kind: "local-test"; privateKey: `0x${string}` };
 
 const MAXIMUM_RPC_FALLBACKS = 3;
 
@@ -60,6 +65,33 @@ function privateKey(env: NodeJS.ProcessEnv, name: string) {
   if (!value) return undefined;
   if (!PRIVATE_KEY_PATTERN.test(value)) throw new Error(`${name} must be a 32-byte hex private key.`);
   return value as `0x${string}`;
+}
+
+function signerConfiguration(
+  env: NodeJS.ProcessEnv,
+  input: {
+    localKeyName: string;
+    role: Parameters<typeof loadAwsKmsEthereumAccountConfiguration>[0]["role"];
+  },
+): TokenlessSignerConfig | undefined {
+  const localKey = privateKey(env, input.localKeyName);
+  const kmsKeyResource = env[`TOKENLESS_${input.role}_KMS_KEY_RESOURCE`]?.trim();
+  if (localKey && kmsKeyResource) {
+    throw new Error(`${input.localKeyName} cannot be configured together with its managed KMS signer.`);
+  }
+  if (kmsKeyResource) {
+    return {
+      configuration: loadAwsKmsEthereumAccountConfiguration({ env, role: input.role }),
+      kind: "aws-kms",
+    };
+  }
+  return localKey ? { kind: "local-test", privateKey: localKey } : undefined;
+}
+
+function signerAddress(signer: TokenlessSignerConfig | undefined) {
+  if (!signer) return null;
+  if (signer.kind === "aws-kms") return signer.configuration.expectedAddress.toLowerCase();
+  return null;
 }
 
 function rpcUrls(env: NodeJS.ProcessEnv) {
@@ -151,30 +183,51 @@ export function loadTokenlessChainConfig(env: NodeJS.ProcessEnv = process.env): 
   if (claimGracePeriodSeconds > 30 * 24 * 60 * 60) {
     throw new Error("TOKENLESS_CLAIM_GRACE_PERIOD_SECONDS exceeds the contract maximum of 30 days.");
   }
-  const prepaidFunderPrivateKey = privateKey(env, "TOKENLESS_PREPAID_FUNDER_PRIVATE_KEY");
-  const relayerPrivateKey = privateKey(env, "TOKENLESS_X402_RELAYER_PRIVATE_KEY");
-  const surpriseBonusFunderPrivateKey = privateKey(env, "TOKENLESS_SURPRISE_BONUS_FUNDER_PRIVATE_KEY");
+  const prepaidFunderSigner = signerConfiguration(env, {
+    localKeyName: "TOKENLESS_PREPAID_FUNDER_PRIVATE_KEY",
+    role: "PREPAID_FUNDER",
+  });
+  const relayerSigner = signerConfiguration(env, {
+    localKeyName: "TOKENLESS_X402_RELAYER_PRIVATE_KEY",
+    role: "X402_RELAYER",
+  });
+  const surpriseBonusFunderSigner = signerConfiguration(env, {
+    localKeyName: "TOKENLESS_SURPRISE_BONUS_FUNDER_PRIVATE_KEY",
+    role: "SURPRISE_BONUS_FUNDER",
+  });
   const credentialSignerPrivateKey = privateKey(env, "TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY");
   if (
-    (relayerPrivateKey && relayerPrivateKey.toLowerCase() === credentialSignerPrivateKey?.toLowerCase()) ||
-    (prepaidFunderPrivateKey && prepaidFunderPrivateKey.toLowerCase() === credentialSignerPrivateKey?.toLowerCase())
+    (relayerSigner?.kind === "local-test" &&
+      relayerSigner.privateKey.toLowerCase() === credentialSignerPrivateKey?.toLowerCase()) ||
+    (prepaidFunderSigner?.kind === "local-test" &&
+      prepaidFunderSigner.privateKey.toLowerCase() === credentialSignerPrivateKey?.toLowerCase())
   ) {
     throw new Error("Chain payment and relay keys must never reuse the credential issuer signer.");
   }
-  if (prepaidFunderPrivateKey && prepaidFunderPrivateKey.toLowerCase() === relayerPrivateKey?.toLowerCase()) {
+  if (
+    prepaidFunderSigner?.kind === "local-test" &&
+    relayerSigner?.kind === "local-test" &&
+    prepaidFunderSigner.privateKey.toLowerCase() === relayerSigner.privateKey.toLowerCase()
+  ) {
     throw new Error("The prepaid funder and gas-only relayer must use distinct keys.");
   }
-  const paymentKeys = [prepaidFunderPrivateKey, relayerPrivateKey, surpriseBonusFunderPrivateKey].filter(
-    (value): value is `0x${string}` => Boolean(value),
+  const paymentKeys = [prepaidFunderSigner, relayerSigner, surpriseBonusFunderSigner].flatMap(signer =>
+    signer?.kind === "local-test" ? [signer.privateKey] : [],
   );
   if (new Set(paymentKeys.map(value => value.toLowerCase())).size !== paymentKeys.length) {
     throw new Error("The prepaid funder, gas-only relayer, and surprise-bonus funder must use distinct keys.");
   }
   if (
-    surpriseBonusFunderPrivateKey &&
-    surpriseBonusFunderPrivateKey.toLowerCase() === credentialSignerPrivateKey?.toLowerCase()
+    surpriseBonusFunderSigner?.kind === "local-test" &&
+    surpriseBonusFunderSigner.privateKey.toLowerCase() === credentialSignerPrivateKey?.toLowerCase()
   ) {
     throw new Error("The surprise-bonus funder must never reuse the credential issuer signer.");
+  }
+  const managedAddresses = [prepaidFunderSigner, relayerSigner, surpriseBonusFunderSigner]
+    .map(signerAddress)
+    .filter((value): value is string => Boolean(value));
+  if (new Set(managedAddresses).size !== managedAddresses.length) {
+    throw new Error("Managed prepaid, relay, and surprise-bonus roles must use distinct KMS accounts.");
   }
   return {
     chainId: TOKENLESS_BASE_SEPOLIA_CHAIN_ID,
@@ -185,14 +238,14 @@ export function loadTokenlessChainConfig(env: NodeJS.ProcessEnv = process.env): 
     feedbackBonusAddress,
     issuerAddress,
     panelAddress,
-    prepaidFunderPrivateKey,
+    prepaidFunderSigner,
     revealWindowSeconds: positiveInteger(env, "TOKENLESS_REVEAL_WINDOW_SECONDS", 120),
     beaconFailureGraceSeconds: positiveInteger(env, "TOKENLESS_BEACON_FAILURE_GRACE_SECONDS", 300),
-    relayerPrivateKey,
+    relayerSigner,
     rpcFallbackUrls,
     rpcUrl,
     schemaVersion: TOKENLESS_DEPLOYMENT_SCHEMA,
-    surpriseBonusFunderPrivateKey,
+    surpriseBonusFunderSigner,
     usdcAddress,
     usdcEip712Name,
     usdcEip712Version,
