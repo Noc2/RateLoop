@@ -20,10 +20,13 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.match(source, /BigInt\(value\)/);
   assert.doesNotMatch(source, /rbtsScoreVarianceBps2 \/ 10_000/);
   assert.doesNotMatch(source, /bps²/);
-  assert.match(source, /How results are shown/);
   assert.match(source, /Workspace evaluation details/);
-  assert.match(source, /persisted responses, evidence packets, and client decisions/);
-  assert.match(source, /does not create\s+a global agent ranking/);
+  assert.doesNotMatch(source, /How results are shown/);
+  const populatedDashboard = source.slice(source.indexOf("dashboard && dashboard.runs.length > 0"));
+  const publishingLimits = populatedDashboard.indexOf('aria-labelledby="publishing-limits-heading"');
+  const workspaceDetails = populatedDashboard.indexOf(">Workspace evaluation details</summary>");
+  assert.ok(publishingLimits >= 0 && publishingLimits < workspaceDetails);
+  assert.doesNotMatch(populatedDashboard.slice(workspaceDetails), /Publishing limits/);
   assert.match(source, /Small sample/);
   assert.match(source, /Result hidden until/);
   assert.match(source, /Assurance operations/);

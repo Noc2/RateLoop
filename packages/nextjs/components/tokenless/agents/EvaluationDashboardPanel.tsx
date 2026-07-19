@@ -767,19 +767,49 @@ export function EvaluationDashboardPanel({
             ))}
           </section>
 
-          <details className="surface-card rounded-2xl p-6">
-            <summary className="cursor-pointer text-sm font-semibold">How results are shown</summary>
-            <div className="mt-4 max-w-3xl space-y-2 text-sm leading-6 text-base-content/55">
-              <p>
-                Results use persisted responses, evidence packets, and client decisions. Small samples and confidence
-                intervals stay beside the result they qualify.
-              </p>
-              <p>
-                RateLoop does not create a global agent ranking. Runs without an immutable agent version stay in the
-                audit history but do not enter per-agent comparisons.
-              </p>
-            </div>
-          </details>
+          <section className="surface-card rounded-2xl p-6" aria-labelledby="publishing-limits-heading">
+            <h2 id="publishing-limits-heading" className="text-base font-semibold">
+              Publishing limits
+            </h2>
+            {!dashboard.canViewPublishingPolicies ? (
+              <p className="mt-3 text-sm text-base-content/55">Visible to workspace owners and admins.</p>
+            ) : dashboard.publishingPolicies?.length === 0 ? (
+              <p className="mt-3 text-sm text-base-content/55">No publishing policy configured.</p>
+            ) : (
+              <div className="mt-3 space-y-3">
+                {dashboard.publishingPolicies?.map(policy => (
+                  <article key={policy.policyId} className="surface-card-nested rounded-xl p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <h3 className="font-medium">
+                        {policy.name} · v{policy.version}
+                      </h3>
+                      <span className="rounded-md bg-white/[0.06] px-2 py-1 text-xs">
+                        {policy.enabled && !policy.revokedAt ? "active" : "inactive"}
+                      </span>
+                    </div>
+                    <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                      <div>
+                        <dt className="text-xs text-base-content/45">Per panel</dt>
+                        <dd className="mt-1 font-mono">{usdc(policy.maxPanelAtomic)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-base-content/45">Daily</dt>
+                        <dd className="mt-1 font-mono">{usdc(policy.maxDailyAtomic)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-base-content/45">Monthly</dt>
+                        <dd className="mt-1 font-mono">{usdc(policy.maxMonthlyAtomic)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-base-content/45">Maximum humans</dt>
+                        <dd className="mt-1 font-mono">{policy.maxPanelSize}</dd>
+                      </div>
+                    </dl>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
 
           <details className="surface-card rounded-2xl p-6">
             <summary className="cursor-pointer text-sm font-semibold">Workspace evaluation details</summary>
@@ -820,50 +850,6 @@ export function EvaluationDashboardPanel({
                         <p className="mt-2 text-xs text-base-content/50">
                           {agent.declaredProvider} · {agent.declaredModel}
                         </p>
-                      </article>
-                    ))}
-                  </div>
-                )}
-              </section>
-
-              <section aria-labelledby="publishing-limits-heading">
-                <h2 id="publishing-limits-heading" className="text-base font-semibold">
-                  Publishing limits
-                </h2>
-                {!dashboard.canViewPublishingPolicies ? (
-                  <p className="mt-3 text-sm text-base-content/55">Visible to workspace owners and admins.</p>
-                ) : dashboard.publishingPolicies?.length === 0 ? (
-                  <p className="mt-3 text-sm text-base-content/55">No publishing policy configured.</p>
-                ) : (
-                  <div className="mt-3 space-y-3">
-                    {dashboard.publishingPolicies?.map(policy => (
-                      <article key={policy.policyId} className="surface-card-nested rounded-xl p-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <h3 className="font-medium">
-                            {policy.name} · v{policy.version}
-                          </h3>
-                          <span className="rounded-md bg-white/[0.06] px-2 py-1 text-xs">
-                            {policy.enabled && !policy.revokedAt ? "active" : "inactive"}
-                          </span>
-                        </div>
-                        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                          <div>
-                            <dt className="text-xs text-base-content/45">Per panel</dt>
-                            <dd className="mt-1 font-mono">{usdc(policy.maxPanelAtomic)}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs text-base-content/45">Daily</dt>
-                            <dd className="mt-1 font-mono">{usdc(policy.maxDailyAtomic)}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs text-base-content/45">Monthly</dt>
-                            <dd className="mt-1 font-mono">{usdc(policy.maxMonthlyAtomic)}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-xs text-base-content/45">Maximum humans</dt>
-                            <dd className="mt-1 font-mono">{policy.maxPanelSize}</dd>
-                          </div>
-                        </dl>
                       </article>
                     ))}
                   </div>
