@@ -1,22 +1,32 @@
 import { TOKENLESS_QUICKNET_T_CHAIN_HASH, loadTokenlessChainConfig } from "./chain/config";
-import { getTokenlessChainRuntime, relayTokenlessPanelCall } from "./chain/runtime";
+import {
+  type TokenlessChainRuntime,
+  type TokenlessWalletClient,
+  assertLiveTokenlessDeployment,
+  getTokenlessChainRuntime,
+} from "./chain/runtime";
 import { tokenlessCommitTypedData } from "./rater/signing";
 import { TOKENLESS_MAX_TLOCK_CIPHERTEXT_BYTES } from "./rater/tlock";
 import { TokenlessPanelAbi } from "@rateloop/contracts/tokenless";
 import { createHash, randomUUID } from "node:crypto";
 import "server-only";
 import {
+  type Account,
   type Address,
   type Hash,
   type Hex,
+  type TransactionSerializable,
   encodeFunctionData,
   getAddress,
   isHash,
   isHex,
   keccak256,
+  parseTransaction,
+  recoverTransactionAddress,
   recoverTypedDataAddress,
   size,
 } from "viem";
+import { baseSepolia } from "viem/chains";
 import { dbClient, dbPool } from "~~/lib/db";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { preparePublicRaterResponse } from "~~/lib/tokenless/publicRaterResponses";
@@ -223,6 +233,251 @@ async function lockCommitForVoucher(client: Pick<import("pg").PoolClient, "query
   return client.query("SELECT * FROM tokenless_rater_commits WHERE voucher_id = $1 LIMIT 1 FOR UPDATE", [voucherId]);
 }
 
+function paidCommitData(voucherRow: Row, authorization: RaterCommitRequest["authorization"]) {
+  const voucher = JSON.parse(rowString(voucherRow, "voucher_json")!) as Record<string, string | number>;
+  return encodeFunctionData({
+    abi: TokenlessPanelAbi,
+    functionName: "commit",
+    args: [
+      {
+        voteKey: getAddress(String(voucher.voteKey)),
+        contentId: String(voucher.contentId) as Hex,
+        roundId: BigInt(String(voucher.roundId)),
+        nullifier: String(voucher.nullifier) as Hex,
+        admissionPolicyHash: String(voucher.admissionPolicyHash) as Hex,
+        issuerEpoch: BigInt(String(voucher.issuerEpoch)),
+        expiresAt: BigInt(String(voucher.expiresAt)),
+      },
+      authorization.sealedCommitment,
+      authorization.sealedPayload,
+      authorization.payoutCommitment,
+      rowString(voucherRow, "voucher_signature") as Hex,
+      authorization.voteKeySignature,
+    ],
+  });
+}
+
+async function assertSignedRaterTransactionIntent(input: {
+  account: Account;
+  data: Hex;
+  nonce: number;
+  signedTransaction: Hex;
+  to: Address;
+}) {
+  try {
+    const transaction = parseTransaction(input.signedTransaction);
+    const signer = await recoverTransactionAddress({
+      serializedTransaction: input.signedTransaction as Parameters<
+        typeof recoverTransactionAddress
+      >[0]["serializedTransaction"],
+    });
+    if (
+      transaction.chainId !== baseSepolia.id ||
+      getAddress(signer) !== getAddress(input.account.address) ||
+      transaction.nonce !== input.nonce ||
+      !transaction.to ||
+      getAddress(transaction.to) !== getAddress(input.to) ||
+      (transaction.data ?? "0x").toLowerCase() !== input.data.toLowerCase() ||
+      (transaction.value ?? 0n) !== 0n
+    ) {
+      throw new Error("intent mismatch");
+    }
+  } catch {
+    throw new TokenlessServiceError(
+      "The persisted rater transaction does not match the intended sponsored commit.",
+      409,
+      "rater_signed_transaction_mismatch",
+    );
+  }
+}
+
+type PersistedRaterTransaction = { hash: Hash; signedTransaction: Hex; recovered: boolean };
+
+async function preparePersistedRaterTransaction(input: {
+  account: Account;
+  commitId: string;
+  data: Hex;
+  nonce: number;
+  simulate?: () => Promise<unknown>;
+  to: Address;
+  wallet: TokenlessWalletClient;
+}): Promise<PersistedRaterTransaction> {
+  const existing = await dbClient.execute({
+    sql: `SELECT relay_signed_transaction, transaction_hash, transaction_recovery_version
+          FROM tokenless_rater_commits WHERE commit_id = ? LIMIT 1`,
+    args: [input.commitId],
+  });
+  const row = existing.rows[0] as Row | undefined;
+  const persistedHash = rowString(row, "transaction_hash") as Hash | null;
+  const persistedSigned = rowString(row, "relay_signed_transaction") as Hex | null;
+  if (persistedSigned) {
+    const derivedHash = keccak256(persistedSigned);
+    if (!persistedHash || !isHash(persistedHash) || derivedHash.toLowerCase() !== persistedHash.toLowerCase()) {
+      throw new TokenlessServiceError(
+        "The persisted rater transaction does not match its transaction hash.",
+        409,
+        "rater_signed_transaction_mismatch",
+      );
+    }
+    await assertSignedRaterTransactionIntent({ ...input, signedTransaction: persistedSigned });
+    return { hash: derivedHash, signedTransaction: persistedSigned, recovered: true };
+  }
+  if (persistedHash) {
+    throw new TokenlessServiceError(
+      "This legacy rater transaction has no durable signed bytes and requires explicit reconciliation.",
+      409,
+      "rater_transaction_reconciliation_required",
+    );
+  }
+  if (Number(row?.transaction_recovery_version ?? 0) !== 1) {
+    throw new TokenlessServiceError(
+      "This legacy rater attempt cannot be broadcast without durable transaction recovery.",
+      409,
+      "rater_transaction_reconciliation_required",
+    );
+  }
+  if (input.account.type !== "local") {
+    throw new TokenlessServiceError(
+      "Sponsored commits require a local signing account for durable recovery.",
+      503,
+      "local_commit_relayer_required",
+    );
+  }
+  if (input.simulate) await input.simulate();
+  const request = await input.wallet.prepareTransactionRequest({
+    account: input.account,
+    chain: baseSepolia,
+    data: input.data,
+    nonce: input.nonce,
+    to: input.to,
+    value: 0n,
+  });
+  const signableRequest = Object.fromEntries(
+    Object.entries(request).filter(([key]) => key !== "account" && key !== "chain" && key !== "from"),
+  ) as TransactionSerializable;
+  const signedTransaction = await input.account.signTransaction(signableRequest);
+  const hash = keccak256(signedTransaction);
+  await assertSignedRaterTransactionIntent({ ...input, signedTransaction });
+  const stored = await dbClient.execute({
+    sql: `UPDATE tokenless_rater_commits
+          SET relay_signed_transaction = ?, transaction_hash = ?, state = 'signed', failure_code = NULL, updated_at = ?
+          WHERE commit_id = ? AND relay_nonce = ? AND relay_signed_transaction IS NULL AND transaction_hash IS NULL`,
+    args: [signedTransaction, hash, new Date(), input.commitId, input.nonce],
+  });
+  if (stored.rowCount !== 1) {
+    const winner = await dbClient.execute({
+      sql: `SELECT relay_signed_transaction, transaction_hash
+            FROM tokenless_rater_commits WHERE commit_id = ? LIMIT 1`,
+      args: [input.commitId],
+    });
+    const winnerRow = winner.rows[0] as Row | undefined;
+    const winnerSigned = rowString(winnerRow, "relay_signed_transaction") as Hex | null;
+    const winnerHash = rowString(winnerRow, "transaction_hash") as Hash | null;
+    if (winnerSigned && winnerHash && isHash(winnerHash) && keccak256(winnerSigned) === winnerHash.toLowerCase()) {
+      await assertSignedRaterTransactionIntent({ ...input, signedTransaction: winnerSigned });
+      return { hash: winnerHash, signedTransaction: winnerSigned, recovered: true };
+    }
+    throw new TokenlessServiceError(
+      "The rater transaction state changed before the signed transaction could be stored.",
+      409,
+      "rater_commit_state_superseded",
+      true,
+    );
+  }
+  return { hash, signedTransaction, recovered: false };
+}
+
+async function broadcastPersistedRaterTransaction(
+  wallet: TokenlessWalletClient,
+  publicClient: TokenlessChainRuntime["publicClient"],
+  transaction: PersistedRaterTransaction,
+) {
+  let observedHash: string | null = null;
+  try {
+    const observed = await publicClient.getTransaction({ hash: transaction.hash });
+    observedHash = observed.hash;
+  } catch {
+    // The exact transaction is not currently observable. The persisted bytes
+    // are the only mutation a recovery attempt may replay.
+  }
+  if (observedHash !== null) {
+    if (observedHash.toLowerCase() !== transaction.hash.toLowerCase()) {
+      throw new TokenlessServiceError(
+        "The RPC returned a different hash for the persisted rater transaction.",
+        409,
+        "rater_signed_transaction_mismatch",
+      );
+    }
+    return;
+  }
+  try {
+    const broadcastHash = await wallet.sendRawTransaction({ serializedTransaction: transaction.signedTransaction });
+    if (broadcastHash.toLowerCase() !== transaction.hash.toLowerCase()) {
+      throw new TokenlessServiceError(
+        "The RPC returned a different hash for the persisted rater transaction.",
+        409,
+        "rater_signed_transaction_mismatch",
+      );
+    }
+  } catch (error) {
+    if (error instanceof TokenlessServiceError) throw error;
+    try {
+      const observed = await publicClient.getTransaction({ hash: transaction.hash });
+      if (observed.hash.toLowerCase() === transaction.hash.toLowerCase()) return;
+    } catch {
+      // Acceptance remains ambiguous. Keep the exact signed bytes retryable.
+    }
+    throw new TokenlessServiceError(
+      "The RPC did not confirm acceptance of the persisted rater transaction.",
+      502,
+      "rater_broadcast_unconfirmed",
+      true,
+    );
+  }
+}
+
+async function markRaterTransactionSubmitted(commitId: string, transaction: PersistedRaterTransaction) {
+  const stored = await dbClient.execute({
+    sql: `UPDATE tokenless_rater_commits
+          SET state = 'submitted', failure_code = NULL, updated_at = ?
+          WHERE commit_id = ? AND transaction_hash = ? AND relay_signed_transaction = ?
+            AND state IN ('prepared', 'signed', 'retry')`,
+    args: [new Date(), commitId, transaction.hash, transaction.signedTransaction],
+  });
+  if (stored.rowCount === 1) return;
+  const current = await dbClient.execute({
+    sql: "SELECT state, transaction_hash FROM tokenless_rater_commits WHERE commit_id = ? LIMIT 1",
+    args: [commitId],
+  });
+  const row = current.rows[0] as Row | undefined;
+  if (
+    new Set(["submitted", "confirmed"]).has(rowString(row, "state") ?? "") &&
+    rowString(row, "transaction_hash")?.toLowerCase() === transaction.hash.toLowerCase()
+  ) {
+    return;
+  }
+  throw new TokenlessServiceError(
+    "The rater transaction state changed before submission could be recorded.",
+    409,
+    "rater_commit_state_superseded",
+    true,
+  );
+}
+
+function assertIsolatedCommitRelayer(runtime: TokenlessChainRuntime) {
+  if (
+    runtime.relayerAccount &&
+    runtime.prepaidAccount &&
+    getAddress(runtime.relayerAccount.address) === getAddress(runtime.prepaidAccount.address)
+  ) {
+    throw new TokenlessServiceError(
+      "The sponsored commit relayer must not reuse the prepaid funder account.",
+      503,
+      "commit_relayer_role_conflict",
+    );
+  }
+}
+
 export async function relayPaidRaterCommit(input: { accountAddress: string; request: RaterCommitRequest }) {
   if (!IDEMPOTENCY.test(input.request.idempotencyKey)) {
     throw new TokenlessServiceError("Commit idempotency key is invalid.", 400, "invalid_idempotency_key");
@@ -230,9 +485,11 @@ export async function relayPaidRaterCommit(input: { accountAddress: string; requ
   validateAuthorization(input.request.authorization);
   const config = loadTokenlessChainConfig();
   const runtime = getTokenlessChainRuntime(config);
-  if (!runtime.relayerAccount) {
+  if (!runtime.relayerAccount || !runtime.relayerWallet) {
     throw new TokenlessServiceError("Sponsored commit relay is unavailable.", 503, "commit_relayer_unavailable", true);
   }
+  assertIsolatedCommitRelayer(runtime);
+  await assertLiveTokenlessDeployment(config, runtime);
   const voucherResult = await dbClient.execute({
     sql: `SELECT v.*, p.account_address, vr.voucher_deadline,
                  vr.admission_policy_hash AS round_admission_policy_hash, e.round_terms_json,
@@ -306,7 +563,9 @@ export async function relayPaidRaterCommit(input: { accountAddress: string; requ
       }
       commitId = rowString(previousRow, "commit_id")!;
       persistedNonce = rowString(previousRow, "relay_nonce") === null ? null : Number(previousRow.relay_nonce);
-      if (!new Set(["prepared", "retry"]).has(rowString(previousRow, "state") ?? "")) terminalPrevious = previousRow;
+      if (!new Set(["prepared", "signed", "retry"]).has(rowString(previousRow, "state") ?? "")) {
+        terminalPrevious = previousRow;
+      }
     } else {
       commitId = `cmt_${randomUUID().replaceAll("-", "")}`;
       const relayPayloadJson = stableJson({
@@ -357,57 +616,71 @@ export async function relayPaidRaterCommit(input: { accountAddress: string; requ
     preparationClient.release();
   }
   if (terminalPrevious) return publicCommit(terminalPrevious);
-  const voucherStruct = {
-    voteKey: getAddress(String(voucher.voteKey)),
-    contentId: String(voucher.contentId) as Hex,
-    roundId: BigInt(String(voucher.roundId)),
-    nullifier: String(voucher.nullifier) as Hex,
-    admissionPolicyHash: String(voucher.admissionPolicyHash) as Hex,
-    issuerEpoch: BigInt(String(voucher.issuerEpoch)),
-    expiresAt: BigInt(String(voucher.expiresAt)),
-  };
-  const data = encodeFunctionData({
-    abi: TokenlessPanelAbi,
-    functionName: "commit",
-    args: [
-      voucherStruct,
-      auth.sealedCommitment,
-      auth.sealedPayload,
-      auth.payoutCommitment,
-      rowString(voucherRow, "voucher_signature") as Hex,
-      auth.voteKeySignature,
-    ],
-  });
-  await runtime.publicClient.simulateContract({
-    account: runtime.relayerAccount,
-    abi: TokenlessPanelAbi,
-    address: config.panelAddress,
-    functionName: "commit",
-    args: [
-      voucherStruct,
-      auth.sealedCommitment,
-      auth.sealedPayload,
-      auth.payoutCommitment,
-      rowString(voucherRow, "voucher_signature") as Hex,
-      auth.voteKeySignature,
-    ],
-  });
-  const nonce =
-    persistedNonce ??
-    (await allocateRelayNonce(
+  const data = paidCommitData(voucherRow, auth);
+  const simulateCommit = async () =>
+    runtime.publicClient.simulateContract({
+      account: runtime.relayerAccount,
+      abi: TokenlessPanelAbi,
+      address: config.panelAddress,
+      functionName: "commit",
+      args: [
+        {
+          voteKey: getAddress(String(voucher.voteKey)),
+          contentId: String(voucher.contentId) as Hex,
+          roundId: BigInt(String(voucher.roundId)),
+          nullifier: String(voucher.nullifier) as Hex,
+          admissionPolicyHash: String(voucher.admissionPolicyHash) as Hex,
+          issuerEpoch: BigInt(String(voucher.issuerEpoch)),
+          expiresAt: BigInt(String(voucher.expiresAt)),
+        },
+        auth.sealedCommitment,
+        auth.sealedPayload,
+        auth.payoutCommitment,
+        rowString(voucherRow, "voucher_signature") as Hex,
+        auth.voteKeySignature,
+      ],
+    });
+  let nonce = persistedNonce;
+  if (persistedNonce === null) {
+    await simulateCommit();
+    const candidate = await allocateRelayNonce(
       config.deploymentKey,
       runtime.relayerAccount.address,
       await runtime.publicClient.getTransactionCount({ address: runtime.relayerAccount.address, blockTag: "pending" }),
-    ));
-  if (persistedNonce === null) {
-    await dbClient.execute({
-      sql: "UPDATE tokenless_rater_commits SET relay_nonce = ?, updated_at = ? WHERE commit_id = ?",
-      args: [nonce, new Date(), commitId],
+    );
+    const reserved = await dbClient.execute({
+      sql: `UPDATE tokenless_rater_commits SET relay_nonce = ?, updated_at = ?
+            WHERE commit_id = ? AND relay_nonce IS NULL RETURNING relay_nonce`,
+      args: [candidate, new Date(), commitId],
     });
+    if (reserved.rows[0]) nonce = Number((reserved.rows[0] as Row).relay_nonce);
+    else {
+      const current = await dbClient.execute({
+        sql: "SELECT relay_nonce FROM tokenless_rater_commits WHERE commit_id = ? LIMIT 1",
+        args: [commitId],
+      });
+      nonce = Number((current.rows[0] as Row | undefined)?.relay_nonce);
+    }
   }
-  let transactionHash: Hash;
+  if (nonce === null || !Number.isSafeInteger(nonce) || nonce < 0) {
+    throw new TokenlessServiceError(
+      "The sponsored commit nonce is unavailable.",
+      503,
+      "commit_nonce_unavailable",
+      true,
+    );
+  }
+  const transaction = await preparePersistedRaterTransaction({
+    account: runtime.relayerAccount,
+    commitId,
+    data,
+    nonce,
+    simulate: persistedNonce === null ? undefined : simulateCommit,
+    to: config.panelAddress,
+    wallet: runtime.relayerWallet,
+  });
   try {
-    transactionHash = await relayTokenlessPanelCall({ config, data, nonce, runtime });
+    await broadcastPersistedRaterTransaction(runtime.relayerWallet, runtime.publicClient, transaction);
   } catch (error) {
     await dbClient.execute({
       sql: "UPDATE tokenless_rater_commits SET state = 'retry', failure_code = 'relay_failed', updated_at = ? WHERE commit_id = ?",
@@ -415,12 +688,85 @@ export async function relayPaidRaterCommit(input: { accountAddress: string; requ
     });
     throw error;
   }
-  await dbClient.execute({
-    sql: `UPDATE tokenless_rater_commits SET state = 'submitted', transaction_hash = ?, updated_at = ? WHERE commit_id = ?`,
-    args: [transactionHash, new Date(), commitId],
-  });
+  await markRaterTransactionSubmitted(commitId, transaction);
   const stored = await dbClient.execute({
     sql: "SELECT * FROM tokenless_rater_commits WHERE commit_id = ?",
+    args: [commitId],
+  });
+  return publicCommit(stored.rows[0] as Row);
+}
+
+export async function reconcilePaidRaterCommit(commitId: string) {
+  const result = await dbClient.execute({
+    sql: `SELECT c.*, v.voucher_json, v.voucher_signature
+          FROM tokenless_rater_commits c
+          JOIN tokenless_paid_vouchers v ON v.voucher_id = c.voucher_id
+          WHERE c.commit_id = ? LIMIT 1`,
+    args: [commitId],
+  });
+  const row = result.rows[0] as Row | undefined;
+  if (!row) return null;
+  const state = rowString(row, "state");
+  if (state === "submitted" || state === "confirmed") return publicCommit(row);
+  const signedTransaction = rowString(row, "relay_signed_transaction") as Hex | null;
+  const transactionHash = rowString(row, "transaction_hash") as Hash | null;
+  const nonceValue = rowString(row, "relay_nonce");
+  if (!signedTransaction || !transactionHash || nonceValue === null) {
+    throw new TokenlessServiceError(
+      "The rater commit has no durable signed transaction to recover.",
+      409,
+      "rater_transaction_reconciliation_required",
+    );
+  }
+  const nonce = Number(nonceValue);
+  if (!Number.isSafeInteger(nonce) || nonce < 0) {
+    throw new TokenlessServiceError(
+      "The persisted rater relay nonce is invalid.",
+      409,
+      "rater_signed_transaction_mismatch",
+    );
+  }
+  const payload = JSON.parse(rowString(row, "relay_payload_json") ?? "null") as {
+    authorization?: RaterCommitRequest["authorization"];
+  } | null;
+  if (!payload?.authorization) {
+    throw new TokenlessServiceError(
+      "The persisted rater relay payload is unavailable.",
+      409,
+      "rater_signed_transaction_mismatch",
+    );
+  }
+  validateAuthorization(payload.authorization);
+  const config = loadTokenlessChainConfig();
+  if (
+    rowString(row, "deployment_key") !== config.deploymentKey ||
+    payload.authorization.chainId !== config.chainId ||
+    getAddress(payload.authorization.panelAddress) !== getAddress(config.panelAddress)
+  ) {
+    throw new TokenlessServiceError(
+      "The persisted rater transaction belongs to another deployment.",
+      409,
+      "rater_signed_transaction_mismatch",
+    );
+  }
+  const runtime = getTokenlessChainRuntime(config);
+  if (!runtime.relayerAccount || !runtime.relayerWallet) {
+    throw new TokenlessServiceError("Sponsored commit relay is unavailable.", 503, "commit_relayer_unavailable", true);
+  }
+  assertIsolatedCommitRelayer(runtime);
+  await assertLiveTokenlessDeployment(config, runtime);
+  const transaction = await preparePersistedRaterTransaction({
+    account: runtime.relayerAccount,
+    commitId,
+    data: paidCommitData(row, payload.authorization),
+    nonce,
+    to: config.panelAddress,
+    wallet: runtime.relayerWallet,
+  });
+  await broadcastPersistedRaterTransaction(runtime.relayerWallet, runtime.publicClient, transaction);
+  await markRaterTransactionSubmitted(commitId, transaction);
+  const stored = await dbClient.execute({
+    sql: "SELECT * FROM tokenless_rater_commits WHERE commit_id = ? LIMIT 1",
     args: [commitId],
   });
   return publicCommit(stored.rows[0] as Row);
@@ -471,4 +817,10 @@ export async function getPaidRaterCommit(input: { accountAddress: string; commit
   return publicCommit(row);
 }
 
-export const __raterServiceTestUtils = { lockCommitForVoucher, validateAuthorization };
+export const __raterServiceTestUtils = {
+  assertSignedRaterTransactionIntent,
+  broadcastPersistedRaterTransaction,
+  lockCommitForVoucher,
+  preparePersistedRaterTransaction,
+  validateAuthorization,
+};

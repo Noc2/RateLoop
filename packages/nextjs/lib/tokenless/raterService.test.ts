@@ -1,10 +1,12 @@
 import { HUMAN_ASSURANCE_SCHEMA_VERSION } from "@rateloop/sdk";
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
-import { keccak256, toHex } from "viem";
+import { type Address, type Hash, type Hex, keccak256, toHex } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
+import type { TokenlessChainRuntime } from "~~/lib/tokenless/chain/runtime";
 import { buildPublicVoucherRequest } from "~~/lib/tokenless/rater/publicVoucherRequest";
 import { __raterServiceTestUtils, listPaidRaterTasks } from "~~/lib/tokenless/raterService";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -119,6 +121,109 @@ test("rater commit replay lookup is voucher-scoped and cannot be preclaimed by a
   assert.match(calls[0]!.sql, /WHERE voucher_id = \$1 LIMIT 1 FOR UPDATE/u);
   assert.doesNotMatch(calls[0]!.sql, /request_idempotency_key/u);
   assert.deepEqual(calls[0]!.values, ["voucher-b"]);
+});
+
+test("a signed rater transaction is durable before broadcast and replays exactly after acceptance ambiguity", async () => {
+  const account = privateKeyToAccount(`0x${"77".repeat(32)}`);
+  const panel = "0x2222222222222222222222222222222222222222" as Address;
+  const data = "0x1234" as Hex;
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_rater_profiles
+          (rater_id, account_address, nullifier_seed_ciphertext, nullifier_key_version,
+           nullifier_key_domain, created_at, updated_at)
+          VALUES ('rater_recovery', ?, 'ciphertext', 'v1', 'vote_mapping', ?, ?)`,
+    args: [account.address.toLowerCase(), NOW, NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_paid_vouchers
+          (voucher_id, rater_id, request_idempotency_key, request_hash, chain_id,
+           panel_address, issuer_address, issuer_epoch, signer_address, round_id, content_id, vote_key,
+           nullifier, admission_policy_hash, assurance_snapshot_hash, expires_at, voucher_json,
+           voucher_signature, status, issued_at)
+          VALUES ('voucher_recovery', 'rater_recovery', 'voucher:recovery:1', 'request-hash', 84532,
+                  ?, '0x3333333333333333333333333333333333333333', 1,
+                  '0x3333333333333333333333333333333333333333', 42, ?, ?, ?, ?, ?, ?, '{}',
+                  '0x12', 'issued', ?)`,
+    args: [
+      panel,
+      `0x${"11".repeat(32)}`,
+      account.address,
+      `0x${"22".repeat(32)}`,
+      `0x${"33".repeat(32)}`,
+      `sha256:${"44".repeat(32)}`,
+      new Date(NOW.getTime() + 60_000),
+      NOW,
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_rater_commits
+          (commit_id, voucher_id, request_idempotency_key, request_hash, deployment_key, round_id,
+           vote_key, sealed_commitment, sealed_payload_hash, payout_commitment, relay_payload_json,
+           relay_nonce, state, created_at, updated_at)
+          VALUES ('commit_recovery', 'voucher_recovery', 'commit:recovery:1', 'request-hash',
+                  'deployment-recovery', 42, ?, ?, ?, ?, '{}', 7, 'prepared', ?, ?)`,
+    args: [
+      account.address.toLowerCase(),
+      `0x${"55".repeat(32)}`,
+      `0x${"66".repeat(32)}`,
+      `0x${"77".repeat(32)}`,
+      NOW,
+      NOW,
+    ],
+  });
+  let simulations = 0;
+  const prepared = await __raterServiceTestUtils.preparePersistedRaterTransaction({
+    account: account as never,
+    commitId: "commit_recovery",
+    data,
+    nonce: 7,
+    simulate: async () => {
+      simulations += 1;
+    },
+    to: panel,
+    wallet: {
+      async prepareTransactionRequest(transaction: Record<string, unknown>) {
+        return {
+          ...transaction,
+          chainId: 84532,
+          gas: 100_000n,
+          maxFeePerGas: 2n,
+          maxPriorityFeePerGas: 1n,
+          type: "eip1559" as const,
+        };
+      },
+    } as never,
+  });
+  assert.equal(simulations, 1);
+  const durable = await dbClient.execute({
+    sql: `SELECT state, relay_signed_transaction, transaction_hash
+          FROM tokenless_rater_commits WHERE commit_id = 'commit_recovery'`,
+  });
+  assert.equal(durable.rows[0]?.state, "signed");
+  assert.equal(durable.rows[0]?.relay_signed_transaction, prepared.signedTransaction);
+  assert.equal(durable.rows[0]?.transaction_hash, prepared.hash);
+
+  let accepted = false;
+  const broadcasts: Hex[] = [];
+  const publicClient = {
+    async getTransaction({ hash }: { hash: Hash }) {
+      if (!accepted) throw new Error("transaction_not_found");
+      return { hash };
+    },
+  } as unknown as TokenlessChainRuntime["publicClient"];
+  const wallet = {
+    async sendRawTransaction({ serializedTransaction }: { serializedTransaction: Hex }) {
+      broadcasts.push(serializedTransaction);
+      accepted = true;
+      throw new Error("connection dropped after acceptance");
+    },
+  } as unknown as TokenlessChainRuntime["relayerWallet"];
+  await __raterServiceTestUtils.broadcastPersistedRaterTransaction(wallet!, publicClient, prepared);
+  await __raterServiceTestUtils.broadcastPersistedRaterTransaction(wallet!, publicClient, {
+    ...prepared,
+    recovered: true,
+  });
+  assert.deepEqual(broadcasts, [prepared.signedTransaction]);
 });
 
 async function seedTask(executionState: "confirmed" | "submitted" = "confirmed") {

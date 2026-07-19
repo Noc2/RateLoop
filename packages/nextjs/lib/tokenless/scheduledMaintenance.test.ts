@@ -89,6 +89,48 @@ async function seedRecoverableExecution(
   });
 }
 
+async function seedRecoverableRaterCommit(commitId: string) {
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_rater_profiles
+          (rater_id, account_address, nullifier_seed_ciphertext, nullifier_key_version,
+           nullifier_key_domain, created_at, updated_at)
+          VALUES ('rater_scheduled_recovery', '0x1111111111111111111111111111111111111111',
+                  'ciphertext', 'v1', 'vote_mapping', ?, ?)`,
+    args: [NOW, NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_paid_vouchers
+          (voucher_id, rater_id, request_idempotency_key, request_hash, chain_id, panel_address,
+           issuer_address, issuer_epoch, signer_address, round_id, content_id, vote_key, nullifier,
+           admission_policy_hash, assurance_snapshot_hash, expires_at, voucher_json, voucher_signature,
+           status, issued_at)
+          VALUES ('voucher_scheduled_recovery', 'rater_scheduled_recovery', 'voucher:scheduled:1',
+                  'request-hash', 84532, '0x2222222222222222222222222222222222222222',
+                  '0x3333333333333333333333333333333333333333', 1,
+                  '0x3333333333333333333333333333333333333333', 42,
+                  '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                  '0x1111111111111111111111111111111111111111',
+                  '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+                  '0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+                  'sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+                  ?, '{}', '0x12', 'issued', ?)`,
+    args: [new Date(NOW.getTime() + 60_000), NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_rater_commits
+          (commit_id, voucher_id, request_idempotency_key, request_hash, deployment_key, round_id,
+           vote_key, sealed_commitment, sealed_payload_hash, payout_commitment, relay_payload_json,
+           relay_nonce, relay_signed_transaction, transaction_hash, state, created_at, updated_at)
+          VALUES (?, 'voucher_scheduled_recovery', 'commit:scheduled:1', 'request-hash', 'deployment', 42,
+                  '0x1111111111111111111111111111111111111111',
+                  '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                  '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+                  '0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+                  '{}', 7, '0x01', ?, 'signed', ?, ?)`,
+    args: [commitId, `0x${createHash("sha256").update(commitId).digest("hex")}`, NOW, NOW],
+  });
+}
+
 function deferred() {
   let resolve!: () => void;
   const promise = new Promise<void>(completed => {
@@ -221,6 +263,32 @@ test("scheduled maintenance recovers an initiated chain execution without anothe
     sql: `SELECT state, attempt_count, claim_generation, last_error
           FROM tokenless_scheduled_work_items
           WHERE kind = 'recover_chain_execution' AND subject_key = 'operation_recovery_automatic'`,
+  });
+  assert.deepEqual(item.rows[0], { attempt_count: 1, claim_generation: 1, last_error: null, state: "completed" });
+});
+
+test("scheduled maintenance fences recovery of an accepted rater transaction without another client request", async () => {
+  await seedRecoverableRaterCommit("commit_recovery_automatic");
+  const recovered: string[] = [];
+  const result = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    processors: {
+      ...processors(async () => undefined),
+      async recoverRaterCommit(commitId) {
+        recovered.push(commitId);
+        return { state: "submitted" };
+      },
+    },
+  });
+  if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.equal(result.status, "healthy");
+  assert.deepEqual(recovered, ["commit_recovery_automatic"]);
+  assert.deepEqual(result.summary.work, { completed: 1, dead: 0, deferred: 0, retry: 0 });
+  const item = await dbClient.execute({
+    sql: `SELECT state, attempt_count, claim_generation, last_error
+          FROM tokenless_scheduled_work_items
+          WHERE kind = 'recover_rater_commit' AND subject_key = 'commit_recovery_automatic'`,
   });
   assert.deepEqual(item.rows[0], { attempt_count: 1, claim_generation: 1, last_error: null, state: "completed" });
 });

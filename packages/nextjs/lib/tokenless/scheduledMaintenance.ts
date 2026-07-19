@@ -20,6 +20,7 @@ import { reconcileChainPayment } from "~~/lib/tokenless/chain/payments";
 import { processDueEvidenceRetentionEnforcement } from "~~/lib/tokenless/evidenceRetentionEnforcement";
 import { refreshCompletedAssuranceMechanismHealth } from "~~/lib/tokenless/mechanismHealth";
 import { processPublicQuestionMediaDeletionByAssetId } from "~~/lib/tokenless/publicQuestionMedia";
+import { reconcilePaidRaterCommit } from "~~/lib/tokenless/raterService";
 import { TokenlessServiceError, sweepExpiredTokenlessQuotes } from "~~/lib/tokenless/server";
 import { processSurpriseBountyPayments } from "~~/lib/tokenless/surpriseBountyService";
 import {
@@ -29,7 +30,12 @@ import {
 } from "~~/lib/tokenless/transparency";
 
 type Row = Record<string, unknown>;
-type WorkKind = "publish_finalized_round" | "recover_chain_execution" | "delete_artifact" | "delete_public_media";
+type WorkKind =
+  | "publish_finalized_round"
+  | "recover_chain_execution"
+  | "recover_rater_commit"
+  | "delete_artifact"
+  | "delete_public_media";
 
 const RUN_BUCKET_MS = 5 * 60_000;
 const STALE_CLAIM_MS = 10 * 60_000;
@@ -81,7 +87,7 @@ async function insertWorkItem(kind: WorkKind, subjectKey: string, now: Date) {
 
 export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 100) {
   const limit = bounded(scanLimit, 100, 200);
-  const [settlements, chainRecoveries, deletions, publicMediaDeletions] = await Promise.all([
+  const [settlements, chainRecoveries, raterCommitRecoveries, deletions, publicMediaDeletions] = await Promise.all([
     dbClient.execute({
       sql: `SELECT e.operation_key
             FROM tokenless_chain_executions e
@@ -104,6 +110,14 @@ export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 1
       args: [now, now, limit],
     }),
     dbClient.execute({
+      sql: `SELECT commit_id
+            FROM tokenless_rater_commits
+            WHERE state IN ('signed', 'retry')
+              AND relay_signed_transaction IS NOT NULL AND transaction_hash IS NOT NULL
+            ORDER BY updated_at ASC, commit_id ASC LIMIT ?`,
+      args: [limit],
+    }),
+    dbClient.execute({
       sql: `SELECT object_id FROM tokenless_assurance_artifact_objects
             WHERE status = 'active' AND delete_after <= ? ORDER BY created_at ASC LIMIT ?`,
       args: [now, limit],
@@ -121,6 +135,9 @@ export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 1
   for (const row of chainRecoveries.rows) {
     await insertWorkItem("recover_chain_execution", rowString(row as Row, "operation_key")!, now);
   }
+  for (const row of raterCommitRecoveries.rows) {
+    await insertWorkItem("recover_rater_commit", rowString(row as Row, "commit_id")!, now);
+  }
   for (const row of deletions.rows) {
     await insertWorkItem("delete_artifact", rowString(row as Row, "object_id")!, now);
   }
@@ -131,6 +148,7 @@ export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 1
     chainRecoveries: chainRecoveries.rows.length,
     deletions: deletions.rows.length,
     publicMediaDeletions: publicMediaDeletions.rows.length,
+    raterCommitRecoveries: raterCommitRecoveries.rows.length,
     settlements: settlements.rows.length,
   };
 }
@@ -140,6 +158,7 @@ type MaintenanceProcessors = {
   deletePublicMedia: typeof processPublicQuestionMediaDeletionByAssetId;
   publishFinalizedRound: (input: { operationKey: string; appOrigin: string; now: Date }) => Promise<void>;
   recoverChainExecution: (input: { operationKey: string }) => Promise<{ paymentState: string } | null>;
+  recoverRaterCommit: (commitId: string) => Promise<{ state: string | null } | null>;
   deliverWebhooks: typeof deliverPendingWebhooks;
   processNotifications: typeof runTokenlessNotificationCycle;
   processSurpriseBounties: typeof processSurpriseBountyPayments;
@@ -169,6 +188,7 @@ const defaultProcessors: MaintenanceProcessors = {
   async recoverChainExecution({ operationKey }) {
     return reconcileChainPayment(operationKey);
   },
+  recoverRaterCommit: reconcilePaidRaterCommit,
   deliverWebhooks: deliverPendingWebhooks,
   processNotifications: runTokenlessNotificationCycle,
   processSurpriseBounties: processSurpriseBountyPayments,
@@ -245,6 +265,16 @@ async function processClaimedWork(input: {
             "Chain execution recovery is still pending.",
             409,
             "chain_recovery_pending",
+            true,
+          );
+        }
+      } else if (kind === "recover_rater_commit") {
+        const recovered = await input.processors.recoverRaterCommit(subjectKey);
+        if (!new Set(["submitted", "confirmed"]).has(recovered?.state ?? "")) {
+          throw new TokenlessServiceError(
+            "Rater commit recovery is still pending.",
+            409,
+            "rater_commit_recovery_pending",
             true,
           );
         }
