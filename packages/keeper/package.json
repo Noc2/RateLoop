@@ -16,6 +16,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@aws-sdk/client-kms": "3.1090.0",
+    "@aws-sdk/credential-provider-web-identity": "3.972.65",
     "@rateloop/node-utils": "workspace:*",
     "dotenv": "^16.4.5",
     "tlock-js": "^0.9.0",

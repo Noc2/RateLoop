@@ -5,6 +5,7 @@ import {
   getWalletClient,
   publicClient,
   validateKeeperConnectivity,
+  validateKeeperSigner,
 } from "./client.js";
 import {
   runTokenlessKeeper,
@@ -41,6 +42,7 @@ async function main() {
     config.metricsAuthToken,
   );
 
+  await validateKeeperSigner();
   await validateKeeperConnectivity(publicClient);
   await validateTokenlessKeeperDeployment(clients, config);
   logger.info("Tokenless keeper deployment verified", {

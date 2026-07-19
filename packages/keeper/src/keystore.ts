@@ -22,14 +22,14 @@ export function getKeystoreAccount(): PrivateKeyAccount | null {
     return cachedAccount;
   } catch (err: unknown) {
     // A decryption failure with KEYSTORE_ACCOUNT/KEYSTORE_PASSWORD set is fatal.
-    // Returning null here used to either silently fall back to KEEPER_PRIVATE_KEY
-    // (a wrong keystore password switched the keeper's signing identity!) or surface
+    // Returning null here used to silently fall back to KEEPER_PRIVATE_KEY (a
+    // wrong password switched the keeper's local-test signing identity) or surface
     // as a misleading "No wallet configured" error.
     const message = err instanceof Error ? err.message : String(err);
     throw new Error(
       `Failed to decrypt keystore account "${name}": ${message}. ` +
-        `Check KEYSTORE_ACCOUNT/KEYSTORE_PASSWORD; refusing to fall back to KEEPER_PRIVATE_KEY.`,
-      { cause: err }
+        `Check KEYSTORE_ACCOUNT/KEYSTORE_PASSWORD; refusing local-test fallback to KEEPER_PRIVATE_KEY.`,
+      { cause: err },
     );
   }
 }

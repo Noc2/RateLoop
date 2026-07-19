@@ -1,5 +1,6 @@
 import { createPublicClient, createWalletClient, defineChain } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
+import { privateKeyToAccount, type LocalAccount } from "viem/accounts";
+import { createAwsKmsKeeperAccount } from "./aws-kms-account.js";
 import { config } from "./config.js";
 import { getKeystoreAccount } from "./keystore.js";
 import { createConfiguredRpcTransport } from "./rpc.js";
@@ -15,17 +16,40 @@ export const chain = defineChain({
   },
 });
 
-export function getAccount() {
-  const keystoreAccount = getKeystoreAccount();
-  if (keystoreAccount) return keystoreAccount;
+let cachedAccount: LocalAccount | undefined;
+let validateManagedAccount: (() => Promise<void>) | undefined;
 
-  if (config.privateKey) {
-    return privateKeyToAccount(config.privateKey);
+export function getAccount(): LocalAccount {
+  if (cachedAccount) return cachedAccount;
+
+  if (config.signer.kind === "aws-kms") {
+    const managedAccount = createAwsKmsKeeperAccount({
+      configuration: config.signer,
+    });
+    cachedAccount = managedAccount;
+    validateManagedAccount = managedAccount.validate;
+    return cachedAccount;
+  }
+
+  const keystoreAccount = getKeystoreAccount();
+  if (keystoreAccount) {
+    cachedAccount = keystoreAccount;
+    return cachedAccount;
+  }
+
+  if (config.signer.privateKey) {
+    cachedAccount = privateKeyToAccount(config.signer.privateKey);
+    return cachedAccount;
   }
 
   throw new Error(
-    "No wallet configured. Set KEYSTORE_ACCOUNT+KEYSTORE_PASSWORD or KEEPER_PRIVATE_KEY",
+    "No local-test wallet configured. Set KEYSTORE_ACCOUNT+KEYSTORE_PASSWORD or KEEPER_PRIVATE_KEY",
   );
+}
+
+export async function validateKeeperSigner() {
+  getAccount();
+  await validateManagedAccount?.();
 }
 
 export const publicClient = createPublicClient({

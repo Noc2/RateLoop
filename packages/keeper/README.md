@@ -30,6 +30,22 @@ tokenless-v4:<chainId>:<panel>:<credentialIssuer>:<x402PanelSubmitter-or-zero>:<
 
 The configured addresses must match that key. Startup also verifies bytecode at the panel and issuer, checks the panel's immutable `credentialIssuer`, confirms the RPC chain, and rejects a deployment block ahead of the chain. This prevents a legacy or mixed deployment bundle from looking healthy.
 
+## Signer custody
+
+Production accepts only a dedicated AWS KMS `ECC_SECG_P256K1` gas signer. The
+configured exact key ARN must be in an EU AWS region, its public key must recover
+the configured keeper address, and every signature must come back from that same
+key. The key policy should grant only `kms:GetPublicKey` and `kms:Sign`; the
+permissionless keeper role needs no protocol or fund authority.
+
+AWS credentials come from `AssumeRoleWithWebIdentity`. The Railway deployment
+must mount a continuously refreshed OIDC token at `AWS_WEB_IDENTITY_TOKEN_FILE`
+and scope `TOKENLESS_KEEPER_KMS_ROLE_ARN` to the isolated keeper workload in the
+IAM trust policy. The AWS SDK exchanges that token for short-lived credentials
+and refreshes them from the file. Static AWS access keys, raw keeper private keys,
+and local keystores are rejected in production. A Foundry keystore or raw key is
+available only for explicit non-production development and tests.
+
 ## Sealed reveal payload
 
 The tlock plaintext is ABI encoded as:

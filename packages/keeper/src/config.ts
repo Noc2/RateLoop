@@ -1,4 +1,5 @@
 import { config as loadDotenv } from "dotenv";
+import { isAbsolute } from "node:path";
 import { isAddress, zeroAddress, type Address, type Hex } from "viem";
 
 loadDotenv({ path: ".env.local", override: false });
@@ -9,6 +10,12 @@ const LOCAL_CHAIN_ID = 31337;
 const TOKENLESS_EU_RAILWAY_REGION = "europe-west4-drams3a";
 export const TOKENLESS_DEPLOYMENT_VERSION = "tokenless-v4";
 const PRIVATE_KEY_PATTERN = /^0x[0-9a-fA-F]{64}$/u;
+const KMS_KEY_ARN_PATTERN =
+  /^arn:aws:kms:([a-z0-9-]+):[0-9]{12}:key\/[0-9a-f-]{36}$/u;
+const IAM_ROLE_ARN_PATTERN =
+  /^arn:aws:iam::[0-9]{12}:role\/[A-Za-z0-9+=,.@_\/-]+$/u;
+const EU_AWS_REGION_PATTERN = /^eu-(?:central|north|south|west)-[1-3]$/u;
+const ROLE_SESSION_NAME_PATTERN = /^[\w+=,.@-]{2,64}$/u;
 const MAXIMUM_RPC_FALLBACKS = 3;
 
 function readEnv(env: NodeJS.ProcessEnv, name: string): string | undefined {
@@ -247,6 +254,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     "TOKENLESS_FEEDBACK_BONUS_ADDRESS",
     errors,
   );
+  const beaconVerifier = requiredAddress(
+    env,
+    "TOKENLESS_BEACON_VERIFIER_ADDRESS",
+    errors,
+  );
   const expectedDeploymentKey = buildTokenlessDeploymentKey({
     chainId,
     panel,
@@ -263,13 +275,107 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
 
   const privateKey = readEnv(env, "KEEPER_PRIVATE_KEY");
   const keystoreAccount = readEnv(env, "KEYSTORE_ACCOUNT");
-  if (!privateKey && !keystoreAccount) {
-    errors.push("KEYSTORE_ACCOUNT or KEEPER_PRIVATE_KEY is required");
+  const keystorePassword = readEnv(env, "KEYSTORE_PASSWORD");
+  const kmsKeyResource = readEnv(env, "TOKENLESS_KEEPER_KMS_KEY_RESOURCE");
+  const kmsExpectedAddress = readEnv(
+    env,
+    "TOKENLESS_KEEPER_KMS_EXPECTED_ADDRESS",
+  );
+  const kmsRegion = readEnv(env, "TOKENLESS_KEEPER_KMS_REGION");
+  const kmsRoleArn = readEnv(env, "TOKENLESS_KEEPER_KMS_ROLE_ARN");
+  const webIdentityTokenFile = readEnv(env, "AWS_WEB_IDENTITY_TOKEN_FILE");
+  const kmsRoleSessionName =
+    readEnv(env, "TOKENLESS_KEEPER_KMS_ROLE_SESSION_NAME") ??
+    "rateloop-tokenless-keeper";
+  const kmsValues = [kmsKeyResource, kmsExpectedAddress, kmsRegion, kmsRoleArn];
+  const kmsConfigured = kmsValues.some(Boolean);
+  const localSignerConfigured = Boolean(privateKey || keystoreAccount);
+
+  if (production && !kmsConfigured) {
+    errors.push(
+      "production requires the TOKENLESS_KEEPER_KMS_* signer and AWS_WEB_IDENTITY_TOKEN_FILE",
+    );
+  }
+  if (!production && !kmsConfigured && !localSignerConfigured) {
+    errors.push(
+      "TOKENLESS_KEEPER_KMS_* or a local-test KEYSTORE_ACCOUNT/KEEPER_PRIVATE_KEY is required",
+    );
+  }
+  if (kmsConfigured && localSignerConfigured) {
+    errors.push(
+      "managed KMS signing cannot be combined with KEYSTORE_ACCOUNT or KEEPER_PRIVATE_KEY",
+    );
+  }
+  if (kmsConfigured) {
+    for (const [name, value] of [
+      ["TOKENLESS_KEEPER_KMS_KEY_RESOURCE", kmsKeyResource],
+      ["TOKENLESS_KEEPER_KMS_EXPECTED_ADDRESS", kmsExpectedAddress],
+      ["TOKENLESS_KEEPER_KMS_REGION", kmsRegion],
+      ["TOKENLESS_KEEPER_KMS_ROLE_ARN", kmsRoleArn],
+      ["AWS_WEB_IDENTITY_TOKEN_FILE", webIdentityTokenFile],
+    ] as const) {
+      if (!value) errors.push(`${name} is required for managed signing`);
+    }
+    const keyMatch = kmsKeyResource?.match(KMS_KEY_ARN_PATTERN);
+    if (!keyMatch) {
+      errors.push(
+        "TOKENLESS_KEEPER_KMS_KEY_RESOURCE must be an exact AWS KMS key ARN",
+      );
+    }
+    if (!kmsRegion || !EU_AWS_REGION_PATTERN.test(kmsRegion)) {
+      errors.push("TOKENLESS_KEEPER_KMS_REGION must be an EU AWS region");
+    }
+    if (keyMatch?.[1] !== kmsRegion) {
+      errors.push(
+        "TOKENLESS_KEEPER_KMS_KEY_RESOURCE region must match TOKENLESS_KEEPER_KMS_REGION",
+      );
+    }
+    if (!kmsRoleArn || !IAM_ROLE_ARN_PATTERN.test(kmsRoleArn)) {
+      errors.push("TOKENLESS_KEEPER_KMS_ROLE_ARN must be an AWS IAM role ARN");
+    }
+    const sdkRoleArn = readEnv(env, "AWS_ROLE_ARN");
+    if (sdkRoleArn && sdkRoleArn !== kmsRoleArn) {
+      errors.push(
+        "AWS_ROLE_ARN must match TOKENLESS_KEEPER_KMS_ROLE_ARN when provided",
+      );
+    }
+    if (!webIdentityTokenFile || !isAbsolute(webIdentityTokenFile)) {
+      errors.push("AWS_WEB_IDENTITY_TOKEN_FILE must be an absolute path");
+    }
+    if (!ROLE_SESSION_NAME_PATTERN.test(kmsRoleSessionName)) {
+      errors.push(
+        "TOKENLESS_KEEPER_KMS_ROLE_SESSION_NAME must be a valid AWS role session name",
+      );
+    }
+    if (!kmsExpectedAddress || !isAddress(kmsExpectedAddress)) {
+      errors.push(
+        "TOKENLESS_KEEPER_KMS_EXPECTED_ADDRESS must be an Ethereum address",
+      );
+    } else if (kmsExpectedAddress.toLowerCase() === zeroAddress) {
+      errors.push(
+        "TOKENLESS_KEEPER_KMS_EXPECTED_ADDRESS must be a non-zero address",
+      );
+    }
+  }
+  if (
+    production &&
+    ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"].some(
+      (name) => readEnv(env, name),
+    )
+  ) {
+    errors.push(
+      "production keeper forbids static AWS credential environment variables; use web identity",
+    );
+  }
+  if (production && localSignerConfigured) {
+    errors.push(
+      "production keeper forbids KEYSTORE_ACCOUNT and KEEPER_PRIVATE_KEY",
+    );
   }
   if (privateKey && !PRIVATE_KEY_PATTERN.test(privateKey)) {
     errors.push("KEEPER_PRIVATE_KEY must be a 32-byte hex private key");
   }
-  if (keystoreAccount && !readEnv(env, "KEYSTORE_PASSWORD") && !privateKey) {
+  if (keystoreAccount && !keystorePassword) {
     errors.push("KEYSTORE_PASSWORD is required with KEYSTORE_ACCOUNT");
   }
 
@@ -354,9 +460,23 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
       credentialIssuer,
       x402PanelSubmitter,
       feedbackBonus,
+      beaconVerifier,
     },
-    privateKey: privateKey as Hex | undefined,
-    keystoreAccount,
+    signer: kmsConfigured
+      ? {
+          kind: "aws-kms" as const,
+          expectedAddress: kmsExpectedAddress as Address,
+          keyResource: kmsKeyResource!,
+          region: kmsRegion!,
+          roleArn: kmsRoleArn!,
+          roleSessionName: kmsRoleSessionName,
+          webIdentityTokenFile: webIdentityTokenFile!,
+        }
+      : {
+          kind: "local-test" as const,
+          privateKey: privateKey as Hex | undefined,
+          keystoreAccount,
+        },
     intervalMs,
     maxRoundsPerTick,
     settlementBatchSize,
