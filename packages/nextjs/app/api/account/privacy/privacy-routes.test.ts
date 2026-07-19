@@ -68,7 +68,7 @@ async function seedProject(ownerId: string) {
   return { projectId, workspaceId };
 }
 
-test("subject-request intake binds all supported request types to the authenticated principal", async () => {
+test("subject-request intake fails closed until an operator workflow can fulfill it", async () => {
   const owner = await authenticatedPrincipal("subject_owner");
   const { workspaceId } = await createWorkspace({ name: "Subject requests", ownerAddress: owner.principalId });
 
@@ -81,25 +81,19 @@ test("subject-request intake binds all supported request types to the authentica
         token: owner.token,
       }),
     );
-    assert.equal(response.status, 202);
+    assert.equal(response.status, 503);
     assert.equal(response.headers.get("cache-control"), NO_STORE);
-    assert.match((await response.json()).requestId, /^dsr_/);
+    const body = await response.json();
+    assert.equal(body.code, "privacy_request_intake_unavailable");
+    assert.match(body.message, /privacy notice/i);
   }
 
-  const rows = await dbClient.execute({
-    sql: `SELECT principal_id, request_type, identity_assurance
-          FROM tokenless_subject_requests ORDER BY request_type ASC`,
-  });
-  assert.equal(rows.rowCount, SUBJECT_REQUEST_TYPES.length);
-  assert.deepEqual(new Set(rows.rows.map(row => String(row.request_type))), new Set(SUBJECT_REQUEST_TYPES));
-  assert.ok(rows.rows.every(row => String(row.principal_id) === owner.principalId));
-  assert.ok(rows.rows.every(row => String(row.identity_assurance) === "better_auth:passkey"));
+  const rows = await dbClient.execute({ sql: "SELECT request_id FROM tokenless_subject_requests" });
+  assert.equal(rows.rowCount, 0);
 });
 
-test("subject-request mutations reject cross-origin calls and unauthorized workspace scope", async () => {
+test("subject-request mutations reject cross-origin calls before the closed intake response", async () => {
   const requester = await authenticatedPrincipal("subject_requester");
-  const other = await authenticatedPrincipal("subject_other");
-  const { workspaceId } = await createWorkspace({ name: "Other workspace", ownerAddress: other.principalId });
 
   const crossOrigin = await createSubjectRequest(
     browserRequest("/api/account/privacy/subject-requests", {
@@ -111,17 +105,6 @@ test("subject-request mutations reject cross-origin calls and unauthorized works
   );
   assert.equal(crossOrigin.status, 403);
   assert.equal((await crossOrigin.json()).code, "invalid_origin");
-
-  const foreignWorkspace = await createSubjectRequest(
-    browserRequest("/api/account/privacy/subject-requests", {
-      body: { requestType: "access", workspaceId },
-      method: "POST",
-      origin: APP_ORIGIN,
-      token: requester.token,
-    }),
-  );
-  assert.equal(foreignWorkspace.status, 404);
-  assert.equal((await foreignWorkspace.json()).code, "workspace_not_found");
 });
 
 test("workspace audit export is private, integrity-bearing JSON restricted to owners and admins", async () => {
