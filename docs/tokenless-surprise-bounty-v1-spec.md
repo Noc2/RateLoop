@@ -17,7 +17,9 @@ This is not the legacy cross-question surprise formula and is not a truth oracle
 - Minimum valid reveal sample: 10.
 - Aggregate qualification margin: 500 basis points.
 - Full-score saturation margin: 2,500 basis points.
-- Maximum top-up per report: 12.5% of that round's guaranteed fixed base per report.
+- Formula cap per report: 12.5% of that round's guaranteed fixed base per report.
+- Fee-backed cap per report: the round fee divided by `maximumCommits`, rounded down.
+- Maximum top-up per report: the lower of the formula cap and fee-backed cap.
 - Maximum top-up is positive, no greater than the guaranteed base, and never redistributed from another reviewer.
 
 For each side, subtract mean predicted share from actual share. If the absolute aggregate margin is below 500 basis
@@ -33,18 +35,28 @@ The top-up is:
 
 `floor(maximumTopUpAtomic * scoreBps / 10,000)`
 
+A unanimous panel never earns a top-up, even when its aggregate result exceeds the predicted share. This exclusion
+prevents a panel from manufacturing surprise merely by coordinating every report on the same side.
+
 Canonical commit-key sorting, integer arithmetic, allocation hashing, and evidence hashing make the result independent
 of input order and recomputable from the validated finalized reveal set.
 
 ## Funding and payment
 
-Before preparing the customer-funded chain round, RateLoop freezes the policy and reserves:
+For a round with a positive fee, RateLoop freezes the policy before preparing the customer-funded chain round. The
+per-report cap is:
+
+`min(floor(guaranteedFixedBasePerReport * 1,250 / 10,000), floor(roundFee / maximumCommits))`
+
+RateLoop then reserves:
 
 `maximumTopUpPerReport * maximumCommits`
 
 against the on-chain USDC balance of a dedicated bonus funder. Outstanding reservations are serialized by deployment.
 Insufficient capacity prevents round preparation; a reviewer cannot first earn a top-up and then discover that no pool
-was reserved.
+was reserved. The frozen policy records the exact fee, report capacity, per-report cap, and maximum aggregate
+liability, which can never exceed the fee. A zero-fee round has no centralized surprise-bounty reservation or
+entitlement; it proceeds with the immutable base-round economics unchanged.
 
 After finalization, positive allocations become durable entitlements. The payout worker waits until Ponder indexes the
 reviewer's immutable base claim, verifies the deployment, round, commit key, payout address, amount, and transaction

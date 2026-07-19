@@ -290,7 +290,12 @@ async function setAskFrozenResponseWindow(operationKey: string, responseWindowSe
 }
 
 async function walletAsk(
-  options: { attemptReserveAtomic?: string; includeAdmissionPolicy?: boolean; responseWindowSeconds?: unknown } = {},
+  options: {
+    attemptReserveAtomic?: string;
+    feeBps?: number;
+    includeAdmissionPolicy?: boolean;
+    responseWindowSeconds?: unknown;
+  } = {},
 ) {
   const { workspaceId } = await createWorkspace({ name: "Wallet team", ownerAddress: FUNDER });
   const now = new Date();
@@ -309,7 +314,7 @@ async function walletAsk(
     budget: {
       attemptReserveAtomic: options.attemptReserveAtomic ?? "20000000",
       bountyAtomic: "25000000",
-      feeBps: 750,
+      feeBps: options.feeBps ?? 750,
     },
     question: { kind: "binary" as const, prompt: "Ship this?", rationale: { mode: "optional" as const } },
     requestedPanelSize: 15,
@@ -436,6 +441,45 @@ function roundCreatedLog(expected: Awaited<ReturnType<typeof prepareChainPayment
   );
   return { address: PANEL, data, topics: topics.filter((topic): topic is Hex => topic !== null) };
 }
+
+test("zero-fee rounds skip surprise-bounty reservation and still confirm the base round", async () => {
+  const operationKey = await walletAsk({ feeBps: 0 });
+  const runtime = mockRuntime();
+  delete runtime.surpriseBonusAccount;
+  const prepared = await prepareChainPayment(operationKey, { config: config(), runtime });
+  assert.equal(prepared.roundTerms.feeAmount, "0");
+  assert.equal(prepared.totalFundedAtomic, "45000000");
+
+  const preparedReservation = await dbClient.execute({
+    sql: "SELECT COUNT(*) AS count FROM tokenless_surprise_bounty_rounds WHERE operation_key = ?",
+    args: [operationKey],
+  });
+  assert.equal(Number(preparedReservation.rows[0]?.count), 0);
+
+  const receiptRuntime = mockRuntime(
+    {
+      getTransactionReceipt: async () => ({
+        blockHash: BLOCK_HASH,
+        blockNumber: 200n,
+        logs: [roundCreatedLog(prepared)],
+        status: "success",
+      }),
+    },
+    prepared,
+  );
+  delete receiptRuntime.surpriseBonusAccount;
+  const confirmed = await confirmWalletChainPayment(operationKey, TX_HASH, {
+    config: config(),
+    runtime: receiptRuntime,
+  });
+  assert.equal(confirmed.paymentState, "confirmed");
+
+  const confirmedReservation = await dbClient.execute({
+    sql: "SELECT COUNT(*) AS count FROM tokenless_surprise_bounty_rounds WHERE operation_key = ?",
+    args: [operationKey],
+  });
+  assert.equal(Number(confirmedReservation.rows[0]?.count), 0);
+});
 
 test("wallet confirmation accepts only the exact quoted RoundCreated evidence and reconciles the operation", async () => {
   const operationKey = await walletAsk();

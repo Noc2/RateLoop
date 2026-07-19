@@ -215,6 +215,7 @@ export function computeSurpriseBountyRound(
   const meanPredictedUpBps = Math.floor(predictionSum / reports.length);
   const surpriseMarginUpBps = actualUpBps - meanPredictedUpBps;
   const majorityOutcome = majority(upVotes, reports.length);
+  const unanimousPanel = upVotes === 0 || upVotes === reports.length;
   const surprisinglyPopularOutcome =
     Math.abs(surpriseMarginUpBps) < qualificationThresholdBps
       ? ("tie" as const)
@@ -233,7 +234,9 @@ export function computeSurpriseBountyRound(
     const leaveOneOutSurpriseMarginBps = leaveOneOutActualSideBps - leaveOneOutPredictedSideBps;
     const selectedOutcome = report.vote === 1 ? "up" : "down";
     const qualifies =
-      selectedOutcome === surprisinglyPopularOutcome && leaveOneOutSurpriseMarginBps >= qualificationThresholdBps;
+      !unanimousPanel &&
+      selectedOutcome === surprisinglyPopularOutcome &&
+      leaveOneOutSurpriseMarginBps >= qualificationThresholdBps;
     const surpriseScoreBps = qualifies
       ? Math.min(BPS, Math.floor((leaveOneOutSurpriseMarginBps * BPS) / saturationMarginBps))
       : 0;
@@ -276,7 +279,12 @@ export function computeSurpriseBountyRound(
     differsFromMajority: surprisinglyPopularOutcome === "tie" ? false : majorityOutcome !== surprisinglyPopularOutcome,
     totalBonusAtomic: totalBonusAtomic.toString(),
     allocations,
-    limitationCodes: ["centralized_platform_liability", "binary_panel_only", "not_a_truth_oracle"],
+    limitationCodes: [
+      ...(unanimousPanel ? ["unanimous_panel_no_bonus"] : []),
+      "centralized_platform_liability",
+      "binary_panel_only",
+      "not_a_truth_oracle",
+    ],
     allocationHash,
   };
   return { ...base, evidenceHash: hash(base) };

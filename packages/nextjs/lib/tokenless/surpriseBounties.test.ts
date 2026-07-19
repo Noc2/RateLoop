@@ -94,6 +94,23 @@ test("surprise bounties apply the threshold and per-report cap", () => {
   );
 });
 
+test("unanimous panels cannot farm surprise-bounty allocations", () => {
+  const result = computeSurpriseBountyRound(
+    Array.from({ length: 10 }, (_, index) => ({
+      commitKey: key(index + 100),
+      vote: 1 as const,
+      predictedUpBps: 1_000,
+    })),
+    policy(),
+  );
+  assert.equal(result.majorityOutcome, "up");
+  assert.equal(result.surprisinglyPopularOutcome, "up");
+  assert.equal(result.state, "no_qualifying_outcome");
+  assert.equal(result.totalBonusAtomic, "0");
+  assert.ok(result.allocations.every(allocation => allocation.bonusAtomic === "0"));
+  assert.ok(result.limitationCodes.includes("unanimous_panel_no_bonus"));
+});
+
 test("surprise bounties validate identities, prediction grid, and bounded economics", () => {
   assert.equal(maximumSurpriseBonusForBase(800_000n), 100_000n);
   assert.throws(

@@ -105,6 +105,7 @@ test("central surprise bounties reserve capacity, freeze evidence, and pay only 
     operationKey,
     guaranteedBasePerReportAtomic: 1_000_000n,
     maximumReports: 10,
+    feeAmountAtomic: 1_250_000n,
     config: config(),
     runtime: runtime(),
     now: NOW,
@@ -116,6 +117,7 @@ test("central surprise bounties reserve capacity, freeze evidence, and pay only 
       operationKey,
       guaranteedBasePerReportAtomic: 1_000_000n,
       maximumReports: 10,
+      feeAmountAtomic: 1_250_000n,
       config: config(),
       runtime: runtime(),
       now: NOW,
@@ -204,12 +206,76 @@ test("reservation fails before a paid round when the dedicated funder is under-c
       operationKey: "operation-surprise-underfunded",
       guaranteedBasePerReportAtomic: 1_000_000n,
       maximumReports: 10,
+      feeAmountAtomic: 1_250_000n,
       config: config(),
       runtime: runtime(1_249_999n),
       now: NOW,
       expiresAt: new Date(NOW.getTime() + 600_000),
     }),
     /does not cover existing reservations/,
+  );
+});
+
+test("reservation caps frozen liability at the exact round fee and conflicts when that fee changes", async () => {
+  const operationKey = "operation-surprise-fee-cap";
+  await seedAsk(operationKey);
+  const input = {
+    operationKey,
+    guaranteedBasePerReportAtomic: 1_000_000n,
+    maximumReports: 10,
+    feeAmountAtomic: 500_000n,
+    config: config(),
+    runtime: runtime(),
+    now: NOW,
+    expiresAt: new Date(NOW.getTime() + 600_000),
+  };
+  const reserved = await reserveSurpriseBountyCapacity(input);
+  assert.equal(reserved.maximumLiabilityAtomic, "500000");
+  assert.deepEqual(await reserveSurpriseBountyCapacity(input), reserved);
+
+  const persisted = await dbClient.execute({
+    sql: `SELECT policy_json, maximum_bonus_per_report_atomic, maximum_liability_atomic
+          FROM tokenless_surprise_bounty_rounds WHERE operation_key = ?`,
+    args: [operationKey],
+  });
+  const frozenPolicy = JSON.parse(String(persisted.rows[0]?.policy_json));
+  assert.equal(String(persisted.rows[0]?.maximum_bonus_per_report_atomic), "50000");
+  assert.equal(String(persisted.rows[0]?.maximum_liability_atomic), "500000");
+  assert.equal(frozenPolicy.feeAmountAtomic, "500000");
+  assert.equal(frozenPolicy.maximumLiabilityAtomic, "500000");
+
+  await assert.rejects(
+    reserveSurpriseBountyCapacity({ ...input, feeAmountAtomic: 600_000n }),
+    /different frozen surprise-bounty reservation/u,
+  );
+});
+
+test("finalization cannot exceed the report capacity reserved from the round fee", async () => {
+  const operationKey = "operation-surprise-report-capacity";
+  await seedAsk(operationKey);
+  await reserveSurpriseBountyCapacity({
+    operationKey,
+    guaranteedBasePerReportAtomic: 1_000_000n,
+    maximumReports: 10,
+    feeAmountAtomic: 500_000n,
+    config: config(),
+    runtime: runtime(),
+    now: NOW,
+    expiresAt: new Date(NOW.getTime() + 600_000),
+  });
+
+  await assert.rejects(
+    finalizeSurpriseBountyRound({
+      operationKey,
+      deploymentKey: config().deploymentKey,
+      roundId: "99",
+      reports: Array.from({ length: 11 }, (_, index) => ({
+        commitKey: key(index + 100),
+        vote: index < 5 ? (1 as const) : (0 as const),
+        predictedUpBps: 2_000,
+      })),
+    }),
+    (error: unknown) => error instanceof Error && /exceeds the frozen report capacity/u.test(error.message),
   );
 });
 
@@ -221,6 +287,7 @@ test("expired abandoned reservations release deployment capacity for another ope
     operationKey: "operation-surprise-abandoned",
     guaranteedBasePerReportAtomic: 1_000_000n,
     maximumReports: 10,
+    feeAmountAtomic: 1_250_000n,
     config: config(),
     runtime: runtime(1_250_000n),
     now: NOW,
@@ -231,6 +298,7 @@ test("expired abandoned reservations release deployment capacity for another ope
       operationKey: "operation-surprise-successor",
       guaranteedBasePerReportAtomic: 1_000_000n,
       maximumReports: 10,
+      feeAmountAtomic: 1_250_000n,
       config: config(),
       runtime: runtime(1_250_000n),
       now: new Date(NOW.getTime() + 599_999),
@@ -243,6 +311,7 @@ test("expired abandoned reservations release deployment capacity for another ope
     operationKey: "operation-surprise-successor",
     guaranteedBasePerReportAtomic: 1_000_000n,
     maximumReports: 10,
+    feeAmountAtomic: 1_250_000n,
     config: config(),
     runtime: runtime(1_250_000n),
     now: new Date(NOW.getTime() + 600_001),

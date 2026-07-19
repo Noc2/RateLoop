@@ -92,14 +92,21 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function policy(guaranteedBasePerReportAtomic: bigint) {
+function policy(input: { guaranteedBasePerReportAtomic: bigint; maximumReports: number; feeAmountAtomic: bigint }) {
+  const formulaMaximumBonus = maximumSurpriseBonusForBase(input.guaranteedBasePerReportAtomic);
+  const feeBackedMaximumBonus = input.feeAmountAtomic / BigInt(input.maximumReports);
+  const maximumBonusPerReportAtomic =
+    formulaMaximumBonus < feeBackedMaximumBonus ? formulaMaximumBonus : feeBackedMaximumBonus;
   return {
     version: SURPRISE_BOUNTY_VERSION,
     minimumSampleSize: DEFAULT_SURPRISE_MINIMUM_SAMPLE,
     qualificationThresholdBps: DEFAULT_SURPRISE_THRESHOLD_BPS,
     saturationMarginBps: DEFAULT_SURPRISE_SATURATION_BPS,
-    guaranteedBasePerReportAtomic: guaranteedBasePerReportAtomic.toString(),
-    maximumBonusPerReportAtomic: maximumSurpriseBonusForBase(guaranteedBasePerReportAtomic).toString(),
+    guaranteedBasePerReportAtomic: input.guaranteedBasePerReportAtomic.toString(),
+    maximumBonusPerReportAtomic: maximumBonusPerReportAtomic.toString(),
+    reservedReportCapacity: input.maximumReports,
+    feeAmountAtomic: input.feeAmountAtomic.toString(),
+    maximumLiabilityAtomic: (maximumBonusPerReportAtomic * BigInt(input.maximumReports)).toString(),
     verdictEffect: "none" as const,
     funding: "centralized_platform_usdc" as const,
   };
@@ -121,6 +128,7 @@ export async function reserveSurpriseBountyCapacity(input: {
   operationKey: string;
   guaranteedBasePerReportAtomic: bigint;
   maximumReports: number;
+  feeAmountAtomic: bigint;
   config?: TokenlessChainConfig;
   runtime?: TokenlessChainRuntime;
   now?: Date;
@@ -132,7 +140,14 @@ export async function reserveSurpriseBountyCapacity(input: {
   const config = input.config ?? loadTokenlessChainConfig();
   const runtime = input.runtime ?? getTokenlessChainRuntime(config);
   const account = assertBonusRuntime(runtime);
-  const frozenPolicy = policy(input.guaranteedBasePerReportAtomic);
+  if (input.feeAmountAtomic < 1n) {
+    throw new TokenlessServiceError(
+      "The frozen round fee cannot support surprise-bounty liability.",
+      409,
+      "surprise_bonus_invalid_economics",
+    );
+  }
+  const frozenPolicy = policy(input);
   const maximumBonusPerReportAtomic = BigInt(frozenPolicy.maximumBonusPerReportAtomic);
   if (maximumBonusPerReportAtomic <= 0n) {
     throw new TokenlessServiceError(
@@ -142,6 +157,9 @@ export async function reserveSurpriseBountyCapacity(input: {
     );
   }
   const maximumLiabilityAtomic = maximumBonusPerReportAtomic * BigInt(input.maximumReports);
+  if (maximumLiabilityAtomic > input.feeAmountAtomic) {
+    throw new Error("Surprise-bounty liability exceeds the frozen round fee.");
+  }
   const now = input.now ?? new Date();
   if (!Number.isFinite(input.expiresAt.getTime()) || input.expiresAt <= now) {
     throw new TokenlessServiceError(
@@ -271,6 +289,14 @@ export async function finalizeSurpriseBountyRound(input: {
       "evidence_identity_mismatch",
     );
   }
+  const reservedReportCapacity = Number(rowString(row, "reserved_report_capacity"));
+  if (!Number.isSafeInteger(reservedReportCapacity) || input.reports.length > reservedReportCapacity) {
+    throw new TokenlessServiceError(
+      "Surprise-bounty evidence exceeds the frozen report capacity.",
+      409,
+      "evidence_conflict",
+    );
+  }
   const result = computeSurpriseBountyRound(input.reports, {
     guaranteedBasePerReportAtomic: BigInt(rowString(row, "guaranteed_base_per_report_atomic")!),
     maximumBonusPerReportAtomic: BigInt(rowString(row, "maximum_bonus_per_report_atomic")!),
@@ -278,6 +304,13 @@ export async function finalizeSurpriseBountyRound(input: {
     qualificationThresholdBps: DEFAULT_SURPRISE_THRESHOLD_BPS,
     saturationMarginBps: DEFAULT_SURPRISE_SATURATION_BPS,
   });
+  if (BigInt(result.totalBonusAtomic) > BigInt(rowString(row, "maximum_liability_atomic")!)) {
+    throw new TokenlessServiceError(
+      "Surprise-bounty allocation exceeds the frozen round liability.",
+      409,
+      "evidence_conflict",
+    );
+  }
   const existingHash = rowString(row, "evidence_hash");
   if (existingHash) {
     if (existingHash !== result.evidenceHash || rowString(row, "round_id") !== input.roundId) {
