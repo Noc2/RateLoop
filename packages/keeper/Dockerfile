@@ -50,7 +50,9 @@ WORKDIR /app/packages/keeper
 
 EXPOSE 9090
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
-  CMD node -e "const http=require('node:http');const port=process.env.METRICS_PORT||process.env.PORT||'9090';const req=http.get({host:'127.0.0.1',port,path:'/live'},res=>process.exit(res.statusCode===200?0:1));req.on('error',()=>process.exit(1));req.setTimeout(4000,()=>req.destroy());"
+USER node
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+  CMD node -e "const http=require('node:http');const port=process.env.METRICS_PORT||process.env.PORT||'9090';const req=http.get({host:'127.0.0.1',port,path:'/ready'},res=>process.exit(res.statusCode===200?0:1));req.on('error',()=>process.exit(1));req.setTimeout(4000,()=>req.destroy());"
 
 CMD ["yarn", "start:built-dist"]

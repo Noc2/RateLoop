@@ -47,6 +47,7 @@ If the beacon is late or unavailable, the keeper does not invent or retain a rat
 ## Health
 
 - `GET /live`: public container liveness.
+- `GET /ready`: public operational readiness without secret metrics.
 - `GET /health`: authenticated operational health.
 - `GET /metrics`: authenticated Prometheus metrics.
 

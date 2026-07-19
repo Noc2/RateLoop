@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const staticAnalysis = readFileSync(
@@ -12,6 +12,14 @@ const codeql = readFileSync(
 );
 const dependabot = readFileSync(
   new URL("../.github/dependabot.yml", import.meta.url),
+  "utf8",
+);
+const keeperDockerfile = readFileSync(
+  new URL("../packages/keeper/Dockerfile", import.meta.url),
+  "utf8",
+);
+const keeperRailway = readFileSync(
+  new URL("../packages/keeper/railway.toml", import.meta.url),
   "utf8",
 );
 
@@ -60,4 +68,16 @@ test("dependency updates cover packages, actions, and each Dockerfile", () => {
   );
   assert.match(dependabot, /directory: \/packages\/keeper/);
   assert.match(dependabot, /directory: \/packages\/ponder/);
+});
+
+test("the keeper container runs unprivileged and probes operational readiness", () => {
+  assert.match(keeperDockerfile, /^USER node$/mu);
+  assert.match(keeperDockerfile, /HEALTHCHECK .*--start-period=(?:[6-9]\d|\d{3,})s/u);
+  assert.match(keeperDockerfile, /path:\s*['"]\/ready['"]/u);
+  assert.doesNotMatch(keeperDockerfile, /^ENTRYPOINT\b/mu);
+  assert.equal(
+    existsSync(new URL("../packages/keeper/docker-entrypoint.sh", import.meta.url)),
+    false,
+  );
+  assert.match(keeperRailway, /^healthcheckPath = "\/ready"$/mu);
 });

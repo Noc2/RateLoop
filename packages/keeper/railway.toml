@@ -16,7 +16,7 @@ watchPatterns = [
 
 [deploy]
 startCommand = "yarn start:built-dist"
-healthcheckPath = "/live"
+healthcheckPath = "/ready"
 healthcheckTimeout = 120
 
 [deploy.multiRegionConfig]
