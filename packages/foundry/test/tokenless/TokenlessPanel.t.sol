@@ -374,9 +374,7 @@ contract TokenlessPanelTest is Test {
         bytes memory voucherSignature = _sign(ISSUER_PK, panel.voucherDigest(voucher));
         bytes memory voteSignature = _sign(
             alice.privateKey,
-            panel.commitDigest(
-                roundId, sealedCommitment, keccak256(sealedPayload), payoutCommitment, alice.nullifier
-            )
+            panel.commitDigest(roundId, sealedCommitment, keccak256(sealedPayload), payoutCommitment, alice.nullifier)
         );
 
         vm.prank(relayer);
