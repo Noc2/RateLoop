@@ -29,8 +29,13 @@ const ASSET_ID = `pqm_${"A".repeat(32)}`;
 
 class MemoryMediaStore implements PublicQuestionMediaStore {
   readonly objects = new Map<string, { body: Uint8Array; contentType: string }>();
+  failNextDelete = false;
 
   async delete(reference: string) {
+    if (this.failNextDelete) {
+      this.failNextDelete = false;
+      throw new Error("transient delete failure");
+    }
     this.objects.delete(reference);
   }
 
@@ -227,6 +232,40 @@ test("expired unbound previews fail closed and the bounded sweep deletes their p
   assert.equal(store.objects.size, 0);
   const rows = await dbClient.execute("SELECT technical_status FROM tokenless_public_question_media");
   assert.equal(rows.rows[0]?.technical_status, "deleted");
+});
+
+test("transient blob deletion never tombstones staged media and succeeds on the next sweep", async () => {
+  await stagePublicQuestionImage({
+    accountAddress: OWNER,
+    bytes: await png(),
+    clientRequestId: "upload:test:delete-retry",
+    filename: "delete-retry.png",
+    now: new Date("2026-07-14T12:00:00.000Z"),
+    workspaceId,
+  });
+  store.failNextDelete = true;
+  assert.deepEqual(await sweepExpiredPublicQuestionMedia({ now: new Date("2026-07-15T12:00:01.000Z") }), {
+    deleted: 0,
+    failed: [ASSET_ID],
+  });
+  const retryable = await dbClient.execute({
+    sql: "SELECT technical_status, storage_ref FROM tokenless_public_question_media WHERE asset_id = ?",
+    args: [ASSET_ID],
+  });
+  assert.equal(retryable.rows[0]?.technical_status, "ready");
+  assert.match(String(retryable.rows[0]?.storage_ref), /^memory:\/\//u);
+  assert.equal(store.objects.size, 1);
+
+  assert.deepEqual(await sweepExpiredPublicQuestionMedia({ now: new Date("2026-07-15T12:00:02.000Z") }), {
+    deleted: 1,
+    failed: [],
+  });
+  const terminal = await dbClient.execute({
+    sql: "SELECT technical_status, storage_ref FROM tokenless_public_question_media WHERE asset_id = ?",
+    args: [ASSET_ID],
+  });
+  assert.deepEqual(terminal.rows, [{ storage_ref: `deleted://${ASSET_ID}`, technical_status: "deleted" }]);
+  assert.equal(store.objects.size, 0);
 });
 
 test("expired upload idempotency never returns a dead grant before or after bounded sweeping", async () => {

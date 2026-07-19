@@ -369,44 +369,48 @@ export async function sweepExpiredPublicQuestionMedia(input: { limit?: number; n
     throw new TokenlessServiceError("Media sweep limit is invalid.", 400, "invalid_public_media_sweep");
   }
   const now = input.now ?? new Date();
-  const client = await dbPool.connect();
-  const expired: Array<{ assetId: string; storageRef: string }> = [];
-  try {
-    await client.query("BEGIN");
-    const result = await client.query(
-      `SELECT asset_id, storage_ref FROM tokenless_public_question_media
-       WHERE question_id IS NULL AND technical_status = 'ready' AND expires_at <= $1
-       ORDER BY expires_at ASC LIMIT $2 FOR UPDATE`,
-      [now, limit],
-    );
-    for (const value of result.rows) {
-      const row = value as Row;
-      const assetId = rowString(row, "asset_id");
-      const storageRef = rowString(row, "storage_ref");
-      if (!assetId || !storageRef) continue;
-      await client.query(
-        `UPDATE tokenless_public_question_media SET technical_status = 'deleted', updated_at = $1
-         WHERE asset_id = $2 AND question_id IS NULL AND technical_status = 'ready'`,
-        [now, assetId],
-      );
-      expired.push({ assetId, storageRef });
-    }
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
+  const candidates = await dbClient.execute({
+    sql: `SELECT asset_id FROM tokenless_public_question_media
+          WHERE question_id IS NULL AND technical_status = 'ready' AND expires_at <= ?
+          ORDER BY expires_at ASC LIMIT ?`,
+    args: [now, limit],
+  });
+  let deleted = 0;
   const failed: string[] = [];
-  for (const item of expired) {
+  for (const value of candidates.rows) {
+    const assetId = rowString(value as Row, "asset_id");
+    if (!assetId) continue;
+    const client = await dbPool.connect();
     try {
-      await runtime().store.delete(item.storageRef);
+      await client.query("BEGIN");
+      const locked = await client.query(
+        `SELECT storage_ref FROM tokenless_public_question_media
+         WHERE asset_id = $1 AND question_id IS NULL AND technical_status = 'ready' AND expires_at <= $2
+         LIMIT 1 FOR UPDATE`,
+        [assetId, now],
+      );
+      const storageRef = rowString(locked.rows[0] as Row | undefined, "storage_ref");
+      if (!storageRef) {
+        await client.query("COMMIT");
+        continue;
+      }
+      await runtime().store.delete(storageRef);
+      await client.query(
+        `UPDATE tokenless_public_question_media
+         SET technical_status = 'deleted', storage_ref = $1, original_filename = 'deleted', updated_at = $2
+         WHERE asset_id = $3 AND question_id IS NULL AND technical_status = 'ready'`,
+        [`deleted://${assetId}`, now, assetId],
+      );
+      await client.query("COMMIT");
+      deleted += 1;
     } catch {
-      failed.push(item.assetId);
+      await client.query("ROLLBACK");
+      failed.push(assetId);
+    } finally {
+      client.release();
     }
   }
-  return { deleted: expired.length - failed.length, failed };
+  return { deleted, failed };
 }
 
 export async function processPublicQuestionMediaDeletionByAssetId(assetId: string, now = new Date()) {
@@ -456,18 +460,33 @@ export async function deleteStagedPublicQuestionImage(input: {
   if (!ASSET_ID_PATTERN.test(input.assetId)) {
     throw new TokenlessServiceError("Image asset not found.", 404, "public_media_not_found");
   }
-  const result = await dbClient.execute({
-    sql: `UPDATE tokenless_public_question_media
-          SET technical_status = 'deleted', updated_at = ?
-          WHERE asset_id = ? AND workspace_id = ? AND owner_account_address = ?
-            AND question_id IS NULL AND technical_status = 'ready'
-          RETURNING storage_ref`,
-    args: [new Date(), input.assetId, input.workspaceId, input.accountAddress.toLowerCase()],
-  });
-  const storageRef = rowString(result.rows[0] as Row | undefined, "storage_ref");
-  if (!storageRef) throw new TokenlessServiceError("Image asset not found.", 404, "public_media_not_found");
-  await runtime().store.delete(storageRef);
-  return { deleted: true as const };
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query(
+      `SELECT storage_ref FROM tokenless_public_question_media
+       WHERE asset_id = $1 AND workspace_id = $2 AND owner_account_address = $3
+         AND question_id IS NULL AND technical_status = 'ready'
+       LIMIT 1 FOR UPDATE`,
+      [input.assetId, input.workspaceId, input.accountAddress.toLowerCase()],
+    );
+    const storageRef = rowString(result.rows[0] as Row | undefined, "storage_ref");
+    if (!storageRef) throw new TokenlessServiceError("Image asset not found.", 404, "public_media_not_found");
+    await runtime().store.delete(storageRef);
+    await client.query(
+      `UPDATE tokenless_public_question_media
+       SET technical_status = 'deleted', storage_ref = $1, original_filename = 'deleted', updated_at = $2
+       WHERE asset_id = $3 AND technical_status = 'ready'`,
+      [`deleted://${input.assetId}`, new Date(), input.assetId],
+    );
+    await client.query("COMMIT");
+    return { deleted: true as const };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function bindPublicQuestionMediaToQuestion(
