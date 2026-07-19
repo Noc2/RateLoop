@@ -87,7 +87,7 @@ test("deployed implementation readiness is shared without overstating hybrid del
     ownerApproval: true,
     privateInvitedUnpaid: true,
     privateInvitedPaid: false,
-    publicPaidNetwork: true,
+    publicPaidNetwork: false,
     hybridPublicSafe: false,
   });
   assert.deepEqual(deployedHumanReviewReadiness({ evaluation: true, autonomousPublishing: false }), {
@@ -104,7 +104,10 @@ test("configured lane descriptions use the same implementation truth", () => {
       available: false,
       message: "Invited-review USDC settlement is not implemented yet.",
     },
-    publicPaidNetwork: { available: true, message: "Implemented on this deployment." },
+    publicPaidNetwork: {
+      available: false,
+      message: "Paid RateLoop reviewer network delivery is not implemented yet.",
+    },
     hybridPublicSafe: {
       available: false,
       message: "Hybrid invited and public delivery is not implemented yet.",

@@ -435,7 +435,7 @@ beforeEach(async () => {
           (quote_id, request_hash, request_json, response_json, expires_at, created_at)
           VALUES ('quote_transparency', 'hash', ?, ?, ?, ?)`,
     args: [
-      JSON.stringify({ question: { kind: "binary", prompt: "Ship?" } }),
+      JSON.stringify({ question: { kind: "binary", prompt: "Ship?" }, visibility: "public" }),
       JSON.stringify({
         schemaVersion: "rateloop.tokenless.v2",
         audience: {

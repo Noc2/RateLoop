@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { moderateTokenlessOperation } from "~~/lib/tokenless/moderation";
 import {
   attachProductAsk,
@@ -17,6 +18,23 @@ import {
 } from "~~/lib/tokenless/server";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
+
+function audiencePolicy() {
+  return {
+    schemaVersion: "rateloop.human-assurance.v2" as const,
+    policyId: "policy_moderation_test",
+    version: 1,
+    reviewerSource: "customer_invited" as const,
+    compensation: "paid" as const,
+    cohorts: [{ cohortId: "moderation-test", minimumReviewers: 3, maximumReviewers: 500 }],
+    selection: "customer_named" as const,
+    fallbacks: { allowed: false, sources: [] },
+    requiredQualifications: [],
+    assurance: { requirements: [] },
+    buyerPrivacy: { visibleFields: [], minimumAggregationSize: 3, suppressSmallCells: true },
+    legalEligibilityRequired: true,
+  };
+}
 
 beforeEach(() => {
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
@@ -37,15 +55,20 @@ async function prepaidAsk() {
     args: [new Date(now.getTime() - 60_000), new Date(now.getTime() + 86_400_000), now, workspaceId],
   });
   await recordPrepaidLedgerEntry({ workspaceId, amountAtomic: "100000000", source: "invoice" });
+  const policy = audiencePolicy();
   const quote = await createTokenlessQuote({
     audience: {
-      admissionPolicyHash: `0x${"ab".repeat(32)}`,
+      admissionPolicyHash: freezeAdmissionPolicy(policy).admissionPolicyHash,
       source: "customer_invited",
     },
+    audiencePolicy: policy,
+    confirmedNoSensitiveData: true,
+    dataClassification: "synthetic",
     budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
     question: { kind: "binary" as const, prompt: "Is this safe?", rationale: { mode: "optional" as const } },
     requestedPanelSize: 15,
     responseWindowSeconds: 1_200,
+    visibility: "public",
   });
   const request = {
     idempotencyKey: "moderation:test:12345678",

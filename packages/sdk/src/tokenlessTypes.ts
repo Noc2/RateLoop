@@ -171,6 +171,20 @@ export interface TokenlessQuoteRequest {
     admissionPolicyHash: `0x${string}`;
     source: TokenlessReviewerSource;
   };
+  /** Canonical policy document required before the executable quote is persisted. */
+  audiencePolicy: import("./humanAssuranceTypes").HumanAssuranceAudiencePolicy;
+  /** Exact private-review commitments. Required for a private paid assignment round. */
+  privateReview?: {
+    schemaVersion: "rateloop.tokenless-private-review.v1";
+    artifactCommitments: {
+      privateReviewId: string;
+      source: `sha256:${string}`;
+      suggestion: `sha256:${string}`;
+      preparedRequestHash: `sha256:${string}`;
+      economicsHash: `sha256:${string}`;
+      reviewerSetHash: `sha256:${string}`;
+    };
+  };
   budget: {
     attemptReserveAtomic: TokenlessAtomicAmount;
     bountyAtomic: TokenlessAtomicAmount;

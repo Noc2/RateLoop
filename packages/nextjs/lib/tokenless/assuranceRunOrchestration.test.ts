@@ -211,7 +211,7 @@ async function seedRoundCreationEvidence(input: { contentId: string; runId: stri
   await dbClient.execute({
     sql: `INSERT INTO tokenless_agent_quotes
           (quote_id, request_hash, request_json, response_json, expires_at, created_at)
-          VALUES (?, 'request_hash', '{}', '{}', ?, ?)`,
+          VALUES (?, 'request_hash', '{"visibility":"public"}', '{}', ?, ?)`,
     args: [quoteId, new Date(now.getTime() + 60_000), now],
   });
   await dbClient.execute({

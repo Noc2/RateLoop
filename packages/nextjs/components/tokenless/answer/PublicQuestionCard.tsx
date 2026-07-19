@@ -859,7 +859,7 @@ export function PublicQuestionCard({
               <Link
                 href={
                   paidAccess.state === "payout_wallet_required"
-                    ? "/settings/wallets"
+                    ? "/settings/wallets?use=payout"
                     : "/human?tab=profile&section=paid-work"
                 }
                 className="rateloop-gradient-action mt-5 w-full px-4 text-center text-sm"

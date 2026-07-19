@@ -857,6 +857,12 @@ async function persistConfirmation(input: {
         [now, input.expected.operationKey],
       );
     }
+    await client.query(
+      `UPDATE tokenless_agent_policy_budget_reservations
+       SET status='spent',settled_at=$1,updated_at=$1
+       WHERE operation_key=$2 AND status='reserved'`,
+      [now, input.expected.operationKey],
+    );
     const admissionSource = await client.query(
       `SELECT q.terms_json FROM tokenless_ask_ownership o
        JOIN tokenless_question_records q ON q.question_id = o.question_id

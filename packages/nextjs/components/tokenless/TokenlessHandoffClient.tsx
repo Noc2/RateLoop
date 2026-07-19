@@ -9,9 +9,11 @@ import {
   type TokenlessQuoteResponse,
   type TokenlessResult,
   normalizeTokenlessQuestion,
+  normalizeTokenlessQuoteRequest,
   parseTokenlessAskResponse,
   parseTokenlessQuoteResponse,
   parseTokenlessResult,
+  parseTokenlessWaitResponse,
 } from "@rateloop/sdk";
 import {
   QuestionMedia,
@@ -32,6 +34,10 @@ const ATOMIC_PATTERN = /^(0|[1-9]\d*)$/;
 const REVIEWER_SOURCES = new Set(["customer_invited", "rateloop_network", "hybrid"]);
 const CLASSIFICATIONS = new Set(["public", "synthetic", "redacted"]);
 const VISIBILITIES = new Set(["public", "private"]);
+const RECOVERY_OPERATION_PATTERN = /^op_[0-9a-f]{32}$/;
+export const HANDOFF_AUTO_WAIT_MAX_MS = 5 * 60_000;
+const HANDOFF_WAIT_TRANSPORT_TIMEOUT_MS = 35_000;
+const HANDOFF_RESULT_TRANSPORT_TIMEOUT_MS = 15_000;
 
 export type TokenlessHandoffPayload = {
   version: typeof HANDOFF_VERSION;
@@ -61,6 +67,7 @@ type SessionState =
 type HandoffState =
   | { status: "loading" }
   | { status: "invalid"; message: string }
+  | { status: "recovery"; operationKey: string }
   | { status: "expired"; payload: TokenlessHandoffPayload }
   | { status: "ready"; payload: TokenlessHandoffPayload };
 
@@ -158,11 +165,12 @@ export function validateTokenlessQuoteRequest(value: unknown): TokenlessQuoteReq
   if (dataClassification === "redacted" && redactionSummary.length < 10) {
     throw new Error("Redacted questions require a redaction summary of at least 10 characters.");
   }
-  return {
+  return normalizeTokenlessQuoteRequest({
     audience: {
       admissionPolicyHash: admissionPolicyHash as `0x${string}`,
       source: source as TokenlessQuoteRequest["audience"]["source"],
     },
+    audiencePolicy: request.audiencePolicy as TokenlessQuoteRequest["audiencePolicy"],
     budget: {
       attemptReserveAtomic,
       bountyAtomic,
@@ -175,7 +183,7 @@ export function validateTokenlessQuoteRequest(value: unknown): TokenlessQuoteReq
     requestedPanelSize,
     responseWindowSeconds,
     visibility: visibility as TokenlessQuoteRequest["visibility"],
-  };
+  });
 }
 
 export function decodeTokenlessHandoffFragment(fragment: string, now = new Date()): TokenlessHandoffPayload {
@@ -256,6 +264,88 @@ export async function validateTokenlessHandoffBinding(payload: TokenlessHandoffP
   }
 }
 
+export function parseTokenlessHandoffRecoveryOperation(search: string) {
+  const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  const values = params.getAll("operation");
+  if (values.length === 0) return null;
+  if (values.length !== 1 || !RECOVERY_OPERATION_PATTERN.test(values[0]!)) {
+    throw new Error("This handoff recovery reference is invalid.");
+  }
+  return values[0]!;
+}
+
+function persistTokenlessHandoffRecoveryOperation(operationKey: string) {
+  if (!RECOVERY_OPERATION_PATTERN.test(operationKey)) throw new Error("RateLoop returned an invalid operation key.");
+  const url = new URL(window.location.href);
+  url.hash = "";
+  url.searchParams.delete("payload");
+  url.searchParams.delete("handoffToken");
+  url.searchParams.set("operation", operationKey);
+  window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+}
+
+function retryDelay(milliseconds: number, signal: AbortSignal) {
+  if (signal.aborted) return Promise.reject(new DOMException("The result wait was cancelled.", "AbortError"));
+  return new Promise<void>((resolve, reject) => {
+    const abort = () => {
+      clearTimeout(timer);
+      reject(new DOMException("The result wait was cancelled.", "AbortError"));
+    };
+    const timer = globalThis.setTimeout(
+      () => {
+        signal.removeEventListener("abort", abort);
+        resolve();
+      },
+      Math.min(Math.max(milliseconds, 250), 5_000),
+    );
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) abort();
+  });
+}
+
+export function tokenlessHandoffWaitDeadline(startedAt: number, continuationExpiresAt: string) {
+  const continuationDeadline = Date.parse(continuationExpiresAt);
+  if (!Number.isFinite(startedAt) || !Number.isFinite(continuationDeadline)) {
+    throw new Error("RateLoop returned an invalid result wait deadline.");
+  }
+  return Math.min(startedAt + HANDOFF_AUTO_WAIT_MAX_MS, continuationDeadline);
+}
+
+export function tokenlessHandoffWaitBudgets(remainingMs: number) {
+  if (!Number.isFinite(remainingMs) || remainingMs < 1_500) return null;
+  const transportTimeoutMs = Math.min(HANDOFF_WAIT_TRANSPORT_TIMEOUT_MS, Math.floor(remainingMs));
+  return {
+    serverTimeoutMs: Math.max(1_000, Math.min(30_000, transportTimeoutMs - 500)),
+    transportTimeoutMs,
+  };
+}
+
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  parentSignal: AbortSignal,
+  timeoutMs: number,
+) {
+  const controller = new AbortController();
+  let timedOut = false;
+  const abort = () => controller.abort();
+  parentSignal.addEventListener("abort", abort, { once: true });
+  if (parentSignal.aborted) abort();
+  const timer = globalThis.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (cause) {
+    if (timedOut) throw new Error("The authenticated result check timed out. Try again.");
+    throw cause;
+  } finally {
+    clearTimeout(timer);
+    parentSignal.removeEventListener("abort", abort);
+  }
+}
+
 async function readApiJson(response: Response): Promise<unknown> {
   let body: unknown;
   try {
@@ -307,14 +397,14 @@ function classificationLabel(classification: TokenlessHandoffPayload["dataClassi
   return { public: "Public", synthetic: "Synthetic", redacted: "Redacted" }[classification];
 }
 
-function displaySelected(result: TokenlessResult, question: TokenlessQuestion) {
+function displaySelected(result: TokenlessResult, question?: TokenlessQuestion) {
   const selected = result.verdict?.selected;
   if (!selected) return "No selection";
-  if (question.kind === "head_to_head") {
+  if (question?.kind === "head_to_head") {
     if (selected === question.optionA.key) return question.optionA.label;
     if (selected === question.optionB.key) return question.optionB.label;
   }
-  if (question.kind === "binary") {
+  if (question?.kind === "binary") {
     if (selected === "yes" || selected === "positive") return question.positiveLabel || "Yes";
     if (selected === "no" || selected === "negative") return question.negativeLabel || "No";
   }
@@ -346,16 +436,19 @@ export function TokenlessHandoffClient() {
   const [mediaReview, setMediaReview] = useState<QuestionMediaReviewState>({ status: "ready" });
   const [quote, setQuote] = useState<TokenlessQuoteResponse | null>(null);
   const [ask, setAsk] = useState<TokenlessAskResponse | null>(null);
+  const [recoveryOperationKey, setRecoveryOperationKey] = useState<string | null>(null);
   const [result, setResult] = useState<TokenlessResult | null>(null);
   const [resultPending, setResultPending] = useState(false);
   const [busy, setBusy] = useState<"quote" | "submit" | "result" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const sessionPrincipalRef = useRef<string | null | undefined>(undefined);
   const sessionControllerRef = useRef<AbortController | null>(null);
+  const resultControllerRef = useRef<AbortController | null>(null);
   const principalGenerationRef = useRef(0);
 
   const clearPrincipalState = useCallback(() => {
     principalGenerationRef.current += 1;
+    resultControllerRef.current?.abort();
     setWorkspaces([]);
     setSelectedWorkspaceId("");
     setWorkspaceError(null);
@@ -372,6 +465,15 @@ export function TokenlessHandoffClient() {
     let cancelled = false;
     void (async () => {
       try {
+        const recoveryOperation = window.location.hash
+          ? null
+          : parseTokenlessHandoffRecoveryOperation(window.location.search);
+        if (cancelled) return;
+        setRecoveryOperationKey(recoveryOperation);
+        if (!window.location.hash && recoveryOperation) {
+          setHandoff({ status: "recovery", operationKey: recoveryOperation });
+          return;
+        }
         const payload = decodeTokenlessHandoffFragment(window.location.hash);
         await validateTokenlessHandoffBinding(payload);
         if (cancelled) return;
@@ -491,7 +593,9 @@ export function TokenlessHandoffClient() {
     quote !== null &&
     selectedWorkspace !== null &&
     BigInt(selectedWorkspace.prepaid.availableAtomic) < BigInt(quote.economics.totalFundedAtomic);
-  const submitted = ask !== null;
+  const activeOperationKey = ask?.operationKey ?? recoveryOperationKey;
+  const authenticatedPrincipalId = session.status === "authenticated" ? session.principalId : null;
+  const submitted = activeOperationKey !== null;
   const formDisabled = busy !== null || submitted || handoff.status !== "ready";
   const mediaReady = !request?.question.media || mediaReview.status === "ready";
 
@@ -578,32 +682,76 @@ export function TokenlessHandoffClient() {
     }
   }
 
-  async function fetchResult(operationKey: string) {
+  const waitForResult = useCallback(async (operationKey: string) => {
     const principalGeneration = principalGenerationRef.current;
+    resultControllerRef.current?.abort();
+    const controller = new AbortController();
+    resultControllerRef.current = controller;
+    let cursor: string | undefined;
+    const startedAt = Date.now();
+    let overallDeadline = startedAt + HANDOFF_AUTO_WAIT_MAX_MS;
     setBusy("result");
-    setResultPending(false);
+    setResultPending(true);
+    setError(null);
     try {
-      const parsed = parseTokenlessResult(
-        await readApiJson(
-          await fetch(`/api/agent/v1/results/${encodeURIComponent(operationKey)}`, {
-            cache: "no-store",
-            credentials: "same-origin",
-          }),
-        ),
-      );
-      if (principalGeneration === principalGenerationRef.current) setResult(parsed);
-    } catch (cause) {
-      if (principalGeneration !== principalGenerationRef.current) return;
-      const failure = cause as ApiFailure;
-      if (failure.code === "result_not_ready") {
-        setResultPending(true);
-      } else {
-        setError(failure instanceof Error ? failure.message : "Unable to load the result.");
+      while (!controller.signal.aborted && Date.now() < overallDeadline) {
+        const waitBudgets = tokenlessHandoffWaitBudgets(overallDeadline - Date.now());
+        if (!waitBudgets) break;
+        const search = new URLSearchParams({ timeoutMs: String(waitBudgets.serverTimeoutMs) });
+        if (cursor) search.set("cursor", cursor);
+        const waited = parseTokenlessWaitResponse(
+          await readApiJson(
+            await fetchWithTimeout(
+              `/api/agent/v1/asks/${encodeURIComponent(operationKey)}/wait?${search.toString()}`,
+              { cache: "no-store", credentials: "same-origin" },
+              controller.signal,
+              waitBudgets.transportTimeoutMs,
+            ),
+          ),
+        );
+        if (principalGeneration !== principalGenerationRef.current) return;
+        if (waited.status === "ready") {
+          const resultTimeoutMs = Math.min(HANDOFF_RESULT_TRANSPORT_TIMEOUT_MS, overallDeadline - Date.now());
+          if (resultTimeoutMs <= 0) break;
+          const parsed = parseTokenlessResult(
+            await readApiJson(
+              await fetchWithTimeout(
+                `/api/agent/v1/results/${encodeURIComponent(operationKey)}`,
+                { cache: "no-store", credentials: "same-origin" },
+                controller.signal,
+                resultTimeoutMs,
+              ),
+            ),
+          );
+          if (principalGeneration === principalGenerationRef.current) {
+            setResult(parsed);
+            setResultPending(false);
+          }
+          return;
+        }
+        cursor = waited.continuation.cursor;
+        overallDeadline = Math.min(
+          overallDeadline,
+          tokenlessHandoffWaitDeadline(startedAt, waited.continuation.expiresAt),
+        );
+        const remainingMs = overallDeadline - Date.now();
+        if (remainingMs <= 0) break;
+        await retryDelay(Math.min(waited.continuation.retryAfterMs, remainingMs), controller.signal);
       }
+    } catch (cause) {
+      if (controller.signal.aborted || principalGeneration !== principalGenerationRef.current) return;
+      setError(cause instanceof Error ? cause.message : "Unable to wait for the authenticated result.");
     } finally {
+      if (resultControllerRef.current === controller) resultControllerRef.current = null;
       if (principalGeneration === principalGenerationRef.current) setBusy(null);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    if (!recoveryOperationKey || !authenticatedPrincipalId || result) return;
+    void waitForResult(recoveryOperationKey);
+    return () => resultControllerRef.current?.abort();
+  }, [authenticatedPrincipalId, recoveryOperationKey, result, waitForResult]);
 
   async function submitAsk() {
     const principalGeneration = principalGenerationRef.current;
@@ -641,9 +789,10 @@ export function TokenlessHandoffClient() {
         throw new Error("RateLoop returned a mismatched idempotency key.");
       }
       if (principalGeneration !== principalGenerationRef.current) return;
+      persistTokenlessHandoffRecoveryOperation(parsed.operationKey);
+      setRecoveryOperationKey(parsed.operationKey);
       setAsk(parsed);
-      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
-      await fetchResult(parsed.operationKey);
+      setBusy(null);
     } catch (cause) {
       if (principalGeneration !== principalGenerationRef.current) return;
       setError(cause instanceof Error ? cause.message : "Unable to submit the ask.");
@@ -668,6 +817,81 @@ export function TokenlessHandoffClient() {
           <p className="font-mono text-xs uppercase tracking-widest text-error">Cannot open review</p>
           <h1 className="mt-4 text-3xl font-semibold">Ask the agent for a new link.</h1>
           <p className="mt-4 leading-7 text-base-content/65">{handoff.message}</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (handoff.status === "recovery") {
+    return (
+      <main className="mx-auto w-full max-w-4xl grow px-4 py-16 sm:py-24">
+        <header>
+          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Browser handoff</p>
+          <h1 className="mt-4 text-4xl font-semibold">Track your ask.</h1>
+          <p className="mt-3 text-base leading-7 text-base-content/65">
+            RateLoop saved this non-secret operation reference so the authenticated result survives reloads.
+          </p>
+        </header>
+
+        {error ? (
+          <div className="mt-7 rounded-xl border border-error/30 bg-error/10 px-5 py-4 text-sm" role="alert">
+            {error}
+          </div>
+        ) : null}
+
+        <section className="rateloop-surface-card mt-7 p-5 sm:p-7" aria-live="polite">
+          <h2 className="text-2xl font-semibold">{result ? "Authenticated outcome" : "Ask submitted"}</h2>
+          <p className="mt-2 font-mono text-xs text-base-content/50">Operation {handoff.operationKey}</p>
+
+          {session.status === "loading" ? (
+            <p className="mt-5 text-sm text-base-content/60" role="status">
+              Checking your RateLoop session…
+            </p>
+          ) : session.status === "anonymous" ? (
+            <div className="mt-5 text-sm leading-6 text-base-content/70">
+              <p>Sign in to the account that submitted this ask, then return here.</p>
+              <a
+                href="/sign-in"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 inline-block font-semibold underline underline-offset-4"
+              >
+                Sign in in a new tab
+              </a>
+            </div>
+          ) : session.status === "error" ? (
+            <p className="mt-5 text-sm text-error" role="alert">
+              {session.message}
+            </p>
+          ) : result ? (
+            <dl className="mt-6 grid gap-5 sm:grid-cols-2">
+              <SummaryItem label="Status" value={result.verdictStatus.replaceAll("_", " ")} />
+              <SummaryItem label="Selected" value={displaySelected(result)} />
+              <SummaryItem
+                label="Participants"
+                value={`${result.audience.participantCount} · ${result.audience.label}`}
+              />
+              <SummaryItem label="Round" value={result.roundId} mono />
+            </dl>
+          ) : (
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
+              <p className="text-sm text-base-content/60" role="status">
+                {busy === "result"
+                  ? "Waiting for the authenticated result…"
+                  : resultPending
+                    ? "Result not ready. Check again when you are ready."
+                    : "Result not ready."}
+              </p>
+              <button
+                type="button"
+                className="btn rateloop-secondary-action btn-sm"
+                disabled={busy !== null}
+                onClick={() => void waitForResult(handoff.operationKey)}
+              >
+                Check again
+              </button>
+            </div>
+          )}
         </section>
       </main>
     );
@@ -1043,7 +1267,7 @@ export function TokenlessHandoffClient() {
         </section>
       ) : null}
 
-      {ask ? (
+      {activeOperationKey ? (
         <section
           className="rateloop-surface-card mt-6 max-w-4xl p-5 sm:p-7"
           aria-labelledby="result-heading"
@@ -1055,28 +1279,28 @@ export function TokenlessHandoffClient() {
               <h2 id="result-heading" className="text-2xl font-semibold">
                 {result ? "Authenticated outcome" : "Ask submitted"}
               </h2>
-              <p className="mt-2 font-mono text-xs text-base-content/50">Operation {ask.operationKey}</p>
+              <p className="mt-2 font-mono text-xs text-base-content/50">Operation {activeOperationKey}</p>
             </div>
             {!result ? (
               <button
                 type="button"
                 className="btn rateloop-secondary-action min-h-10 px-4"
                 disabled={busy !== null}
-                onClick={() => void fetchResult(ask.operationKey)}
+                onClick={() => void waitForResult(activeOperationKey)}
               >
-                {busy === "result" ? "Checking…" : "Check authenticated result"}
+                {busy === "result" ? "Waiting…" : "Check authenticated result"}
               </button>
             ) : null}
           </div>
 
           {busy === "result" ? (
             <p className="mt-5 text-sm text-base-content/60" role="status">
-              Fetching the authenticated result…
+              Waiting for the authenticated result…
             </p>
           ) : resultPending ? (
             <div className="mt-5 rounded-xl border border-white/10 bg-black/15 p-4 text-sm leading-6 text-base-content/65">
-              The ask is authenticated, but its terminal result is not ready. This page will not invent an outcome;
-              check again after the panel and settlement finish.
+              The ask is authenticated and still running. Automatic checking stopped; you can check again without
+              resubmitting it.
             </div>
           ) : null}
 

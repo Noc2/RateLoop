@@ -419,7 +419,7 @@ async function seedEvidenceFixture(input: {
     await insert(
       `INSERT INTO tokenless_agent_quotes
        (quote_id, request_hash, request_json, response_json, expires_at, created_at)
-       VALUES ('quote_evidence', 'hash', '{}', '{}', ?, ?)`,
+       VALUES ('quote_evidence', 'hash', '{"visibility":"public"}', '{}', ?, ?)`,
       [new Date(NOW.getTime() + 60_000), NOW],
     );
     await insert(

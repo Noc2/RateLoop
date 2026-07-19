@@ -1,9 +1,56 @@
 import { describe, expect, it, vi } from "vitest";
 import type { TokenlessRateLoopClient } from "@rateloop/sdk";
+import { sha256, stringToHex } from "viem";
 import {
   createTokenlessAgentsClient,
   waitUntilTokenlessReady,
 } from "../tokenless";
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .filter(([, entry]) => entry !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+const audiencePolicy = {
+  schemaVersion: "rateloop.human-assurance.v2" as const,
+  policyId: "aud_test_customer_invited",
+  version: 1,
+  reviewerSource: "customer_invited" as const,
+  compensation: "paid" as const,
+  cohorts: [
+    {
+      cohortId: "customer_named",
+      minimumReviewers: 3,
+      maximumReviewers: 500,
+    },
+  ],
+  selection: "customer_named" as const,
+  fallbacks: { allowed: false, sources: [] },
+  requiredQualifications: [],
+  assurance: {
+    requirements: [
+      {
+        capability: "account_control" as const,
+        reviewerSources: ["customer_invited" as const],
+        allowedProviders: [],
+      },
+    ],
+  },
+  buyerPrivacy: {
+    visibleFields: [],
+    minimumAggregationSize: 3,
+    suppressSmallCells: true,
+  },
+  legalEligibilityRequired: true,
+};
+const admissionPolicyHash = sha256(stringToHex(canonicalJson(audiencePolicy)));
 
 describe("tokenless agents client", () => {
   it("authenticates tenant-scoped quotes on the isolated v2 route", async () => {
@@ -13,7 +60,7 @@ describe("tokenless agents client", () => {
         new Response(
           JSON.stringify({
             audience: {
-              admissionPolicyHash: `0x${"ab".repeat(32)}`,
+              admissionPolicyHash,
               label: "Customer-invited reviewers",
               source: "customer_invited",
             },
@@ -68,9 +115,10 @@ describe("tokenless agents client", () => {
     });
     const quote = await client.quote({
       audience: {
-        admissionPolicyHash: `0x${"ab".repeat(32)}`,
+        admissionPolicyHash,
         source: "customer_invited",
       },
+      audiencePolicy,
       budget: {
         attemptReserveAtomic: "100",
         bountyAtomic: "1000",

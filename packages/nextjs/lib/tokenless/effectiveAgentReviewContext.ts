@@ -255,7 +255,13 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
   }
   const rules = jsonObject(row.rules_json, "review selection rules");
   const audiencePolicy = jsonObject(row.audience_policy_json, "review audience policy");
-  const reviewerSource = audiencePolicy.reviewerSource;
+  const storedReviewerSource = audiencePolicy.reviewerSource;
+  const reviewerSource =
+    storedReviewerSource === "customer_invited"
+      ? "private_invited"
+      : storedReviewerSource === "rateloop_network"
+        ? "public_network"
+        : storedReviewerSource;
   if (typeof reviewerSource !== "string" || !HUMAN_REVIEW_AUDIENCES.includes(reviewerSource as never)) {
     invalidContext("Stored review audience policy is invalid.");
   }

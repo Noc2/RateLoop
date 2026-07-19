@@ -1,4 +1,9 @@
-import { RateLoopSdkError, type TokenlessQuoteRequest, normalizeTokenlessQuestion } from "@rateloop/sdk";
+import {
+  RateLoopSdkError,
+  type TokenlessQuoteRequest,
+  normalizeTokenlessQuestion,
+  normalizeTokenlessQuoteRequest,
+} from "@rateloop/sdk";
 import { createHash, randomBytes } from "node:crypto";
 import "server-only";
 import { TokenlessMcpToolError } from "~~/lib/mcp/errors";
@@ -66,7 +71,7 @@ function atomic(value: unknown, path: string) {
 
 export function parseMcpQuoteRequest(value: unknown): TokenlessQuoteRequest {
   const input = record(value, "request");
-  exact(input, ["audience", "budget", "question", "requestedPanelSize"], "request");
+  exact(input, ["audience", "audiencePolicy", "budget", "question", "requestedPanelSize"], "request");
   const audience = record(input.audience, "request.audience");
   exact(audience, ["admissionPolicyHash", "source"], "request.audience");
   const source = audience.source;
@@ -108,16 +113,22 @@ export function parseMcpQuoteRequest(value: unknown): TokenlessQuoteRequest {
     throw error;
   }
 
-  return {
-    audience: {
-      admissionPolicyHash: audience.admissionPolicyHash as `0x${string}`,
-      source: source as TokenlessQuoteRequest["audience"]["source"],
-    },
-    budget: { attemptReserveAtomic, bountyAtomic, feeBps: Number(budget.feeBps) },
-    question: parsedQuestion,
-    requestedPanelSize,
-    responseWindowSeconds: DEFAULT_RESPONSE_WINDOW_SECONDS,
-  };
+  try {
+    return normalizeTokenlessQuoteRequest({
+      audience: {
+        admissionPolicyHash: audience.admissionPolicyHash as `0x${string}`,
+        source: source as TokenlessQuoteRequest["audience"]["source"],
+      },
+      audiencePolicy: input.audiencePolicy as TokenlessQuoteRequest["audiencePolicy"],
+      budget: { attemptReserveAtomic, bountyAtomic, feeBps: Number(budget.feeBps) },
+      question: parsedQuestion,
+      requestedPanelSize,
+      responseWindowSeconds: DEFAULT_RESPONSE_WINDOW_SECONDS,
+    });
+  } catch (error) {
+    if (error instanceof RateLoopSdkError) toolError(error.message, "invalid_quote");
+    throw error;
+  }
 }
 
 function parseMediaPreviews(value: unknown, request: TokenlessQuoteRequest, now: Date) {

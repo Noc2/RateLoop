@@ -6,7 +6,7 @@ import { GET, POST } from "~~/app/api/agent/v1/mcp/route";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { tokenlessMcpTools } from "~~/lib/mcp/protocol";
-import { deliverWorkspaceMcpElicitation, requireWorkspaceMcpSession } from "~~/lib/mcp/workspaceElicitation";
+import { requireWorkspaceMcpSession } from "~~/lib/mcp/workspaceElicitation";
 import { requestWorkspaceDeletion } from "~~/lib/privacy/workspaceDeletion";
 import { __adaptiveReviewServiceTestUtils } from "~~/lib/tokenless/adaptiveReviewService";
 import { createAgentConnectionIntent } from "~~/lib/tokenless/agentConnectionIntents";
@@ -622,7 +622,7 @@ test("finished automatic private setup lets the connected agent assign an eligib
   assert.deepEqual(stored.rows, [{ project_id: managedRouting.projectId, cohort_id: managedRouting.cohortId }]);
 });
 
-test("OAuth keeps one stable tool list while one message claims, loads, and verifies the connection", async () => {
+test("OAuth keeps one stable tool list and fails closed for unavailable paid-network delivery", async () => {
   const principalId = `rlp_${"b".repeat(24)}`;
   const now = new Date();
   await dbClient.execute({
@@ -1164,14 +1164,14 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
   assert.equal(configuredContext.humanReview.authority, "ask_automatically");
   assert.equal(configuredContext.capabilities.implementedLanes.privateInvitedUnpaid.available, true);
   assert.equal(configuredContext.capabilities.implementedLanes.privateInvitedPaid.available, false);
-  assert.equal(configuredContext.capabilities.implementedLanes.publicPaidNetwork.available, true);
+  assert.equal(configuredContext.capabilities.implementedLanes.publicPaidNetwork.available, false);
   assert.equal(configuredContext.capabilities.implementedLanes.hybridPublicSafe.available, false);
   assert.equal(configuredContext.capabilities.effectiveLane.lane, "public_paid_network");
   assert.equal(configuredContext.publishingGrant.active, true);
   assert.ok(configuredContext.publishingGrant.grantedScopes.includes("panel:publish"));
   assert.ok(configuredContext.publishingGrant.grantedScopes.includes("payment:submit"));
-  assert.equal(configuredContext.safeAccess.canSpend, true);
-  assert.equal(configuredContext.safeAccess.canPublish, true);
+  assert.equal(configuredContext.safeAccess.canSpend, false);
+  assert.equal(configuredContext.safeAccess.canPublish, false);
   const approvalConfigured = await putHumanReviewConfigurationForOwner({
     accountAddress: principalId,
     workspaceId,
@@ -1375,69 +1375,20 @@ test("OAuth keeps one stable tool list while one message claims, loads, and veri
   const preparedPayload = await prepared.json();
   assert.ok(preparedPayload.result, JSON.stringify(preparedPayload));
   const preparedResult = preparedPayload.result.structuredContent;
-  assert.equal(preparedResult.action, "owner_approval_required", JSON.stringify(preparedResult));
+  assert.equal(preparedResult.action, "blocked", JSON.stringify(preparedResult));
+  assert.equal(preparedResult.code, "lane_not_implemented");
+  assert.deepEqual(preparedResult.sideEffects, {
+    prepared: false,
+    published: false,
+    assigned: false,
+    fundsReserved: false,
+    spent: false,
+  });
   const queued = await dbClient.execute({
-    sql: `SELECT request_id,state FROM tokenless_mcp_elicitation_requests
-          WHERE session_hash=? AND approval_id=?`,
-    args: [`sha256:${createHash("sha256").update(stableSessionId!).digest("hex")}`, preparedResult.approval.approvalId],
+    sql: `SELECT request_id,state FROM tokenless_mcp_elicitation_requests WHERE session_hash=?`,
+    args: [`sha256:${createHash("sha256").update(stableSessionId!).digest("hex")}`],
   });
-  assert.equal(queued.rows[0]?.state, "queued");
-
-  const elicitationStream = await GET(streamRequest(tokens.access_token, stableSessionId!, "2025-06-18"));
-  assert.equal(elicitationStream.status, 200);
-  const eventBody = await elicitationStream.text();
-  const eventData = /^data: (.+)$/mu.exec(eventBody)?.[1];
-  assert.ok(eventData);
-  const elicitationRequest = JSON.parse(eventData);
-  assert.equal(elicitationRequest.method, "elicitation/create");
-  assert.equal(elicitationRequest.id, queued.rows[0]?.request_id);
-  assert.match(elicitationRequest.params.message, /Question: Is this output correct and safe to use\?/u);
-  assert.match(elicitationRequest.params.message, /required expertise: code-review:security/u);
-  assert.doesNotMatch(eventBody, /public fixture|candidate/u);
-
-  const acceptedResponse = {
-    jsonrpc: "2.0",
-    id: elicitationRequest.id,
-    result: { action: "accept", content: { approve: true } },
-  };
-  const accepted = await POST(request(acceptedResponse, tokens.access_token, stableSessionId!, "2025-06-18"));
-  assert.equal(accepted.status, 202, await accepted.text());
-  const responded = await dbClient.execute({
-    sql: `SELECT e.state,a.status,a.owner_decision
-          FROM tokenless_mcp_elicitation_requests e
-          JOIN tokenless_agent_review_approval_requests a ON a.approval_id=e.approval_id
-          WHERE e.request_id=?`,
-    args: [elicitationRequest.id],
-  });
-  assert.deepEqual(responded.rows[0], {
-    state: "responded",
-    status: "approved",
-    owner_decision: "approved",
-  });
-  const replayed = await POST(request(acceptedResponse, tokens.access_token, stableSessionId!, "2025-06-18"));
-  assert.equal(replayed.status, 202);
-  const conflicting = await POST(
-    request(
-      {
-        ...acceptedResponse,
-        result: { action: "accept", content: { approve: false } },
-      },
-      tokens.access_token,
-      stableSessionId!,
-      "2025-06-18",
-    ),
-  );
-  assert.equal(conflicting.status, 409);
-  assert.equal((await conflicting.json()).error.data.code, "elicitation_replay_conflict");
-
-  assert.equal(
-    await deliverWorkspaceMcpElicitation({
-      sessionId: stableSessionId!,
-      principal: connectedPrincipal,
-      protocolVersion: "2025-06-18",
-    }),
-    null,
-  );
+  assert.equal(queued.rowCount, 0);
   const emptyStream = await GET(streamRequest(tokens.access_token, stableSessionId!, "2025-06-18"));
   assert.equal(emptyStream.status, 200);
   assert.match(emptyStream.headers.get("content-type") ?? "", /^text\/event-stream/u);

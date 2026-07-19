@@ -7,7 +7,11 @@ import {
 import { drainPrepaidTopupAuditOutbox, reconcilePrepaidTopups } from "~~/lib/billing/prepaidTopups";
 import { dbClient } from "~~/lib/db";
 import { runTokenlessNotificationCycle } from "~~/lib/notifications/delivery";
-import { expireDeletedAuthSubjectGuards, reconcileWorkspaceDeletionJobs } from "~~/lib/privacy/deletionReconciliation";
+import {
+  expireDeletedAuthSubjectGuards,
+  reconcileDeletedAccountPaidAssignmentSeats,
+  reconcileWorkspaceDeletionJobs,
+} from "~~/lib/privacy/deletionReconciliation";
 import { processArtifactDeletionByObjectId } from "~~/lib/tokenless/artifactPrivacy";
 import { processDueAssuranceAttestations } from "~~/lib/tokenless/assuranceAttestationRuntime";
 import {
@@ -189,6 +193,7 @@ type MaintenanceProcessors = {
   processAttestations: typeof processDueAssuranceAttestations;
   processEvidenceRetention: typeof processDueEvidenceRetentionEnforcement;
   reconcileDeletionJobs: typeof reconcileWorkspaceDeletionJobs;
+  reconcileDeletedAccountPaidAssignmentSeats: typeof reconcileDeletedAccountPaidAssignmentSeats;
   expireDeletedAuthGuards: typeof expireDeletedAuthSubjectGuards;
   reconcilePrepaidTopups: typeof reconcilePrepaidTopups;
   drainPrepaidTopupAudit: typeof drainPrepaidTopupAuditOutbox;
@@ -219,6 +224,7 @@ const defaultProcessors: MaintenanceProcessors = {
   processAttestations: processDueAssuranceAttestations,
   processEvidenceRetention: processDueEvidenceRetentionEnforcement,
   reconcileDeletionJobs: reconcileWorkspaceDeletionJobs,
+  reconcileDeletedAccountPaidAssignmentSeats,
   expireDeletedAuthGuards: expireDeletedAuthSubjectGuards,
   reconcilePrepaidTopups,
   drainPrepaidTopupAudit: drainPrepaidTopupAuditOutbox,
@@ -425,6 +431,10 @@ export async function runTokenlessScheduledMaintenance(input: {
       throw new Error("Database returned an invalid scheduled dead-letter count.");
     }
     const deletionJobs = await processors.reconcileDeletionJobs(now, workLimit);
+    const deletedAccountPaidAssignmentSeats = await processors.reconcileDeletedAccountPaidAssignmentSeats(
+      now,
+      workLimit,
+    );
     const deletedAuthGuards = await processors.expireDeletedAuthGuards(now, workLimit);
     const surpriseBounties = await processors.processSurpriseBounties({
       now,
@@ -513,6 +523,7 @@ export async function runTokenlessScheduledMaintenance(input: {
       webhooks,
       notifications,
       deletionJobs,
+      deletedAccountPaidAssignmentSeats,
       deletedAuthGuards,
       surpriseBounties,
       grcReconciliations,

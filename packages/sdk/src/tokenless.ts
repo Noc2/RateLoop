@@ -8,6 +8,7 @@ import {
   parseHumanAssurancePrivateReviewCreateResponse,
   parseHumanAssuranceRunStatusResponse,
 } from "./humanAssuranceApiSchema";
+import { parseHumanAssuranceAudiencePolicy } from "./humanAssuranceSchema";
 import type {
   HumanAssurancePrivateReviewCreateRequest,
   HumanAssuranceProjectCreateRequest,
@@ -173,9 +174,55 @@ function assertIdempotencyKey(value: string) {
   }
 }
 
+function assertExactObjectKeys(value: unknown, allowed: readonly string[], path: string) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new RateLoopSdkError(`${path} must be an object.`);
+  }
+  const unknown = Object.keys(value as Record<string, unknown>).filter(key => !allowed.includes(key));
+  if (unknown.length > 0) {
+    throw new RateLoopSdkError(`${path} contains unsupported field ${unknown.sort()[0]}.`);
+  }
+}
+
+/**
+ * The only question shape persisted for a private paid review. Customer text is
+ * delivered through the encrypted assignment; quotes and chain content receive
+ * only this fixed semantic envelope plus artifact commitments.
+ */
+export function buildTokenlessPrivateReviewCommitmentQuestion(): TokenlessQuoteRequest["question"] {
+  return {
+    kind: "binary",
+    prompt: "Does the encrypted candidate satisfy the committed private review criterion?",
+    positiveLabel: "Accept",
+    negativeLabel: "Needs changes",
+    rationale: { mode: "required", minLength: 10, maxLength: 2_000 },
+  };
+}
+
 export function normalizeTokenlessQuoteRequest(
   request: TokenlessQuoteRequest,
 ): TokenlessQuoteRequest {
+  assertExactObjectKeys(
+    request,
+    [
+      "visibility",
+      "dataClassification",
+      "redactionSummary",
+      "confirmedNoSensitiveData",
+      "audience",
+      "audiencePolicy",
+      "privateReview",
+      "budget",
+      "question",
+      "requestedPanelSize",
+      "responseWindowSeconds",
+      "requestProfile",
+      "reviewEconomics",
+    ],
+    "quote",
+  );
+  assertExactObjectKeys(request.audience, ["admissionPolicyHash", "source"], "audience");
+  assertExactObjectKeys(request.budget, ["attemptReserveAtomic", "bountyAtomic", "feeBps"], "budget");
   if (!BYTES32_PATTERN.test(request.audience.admissionPolicyHash)) {
     throw new RateLoopSdkError(
       "audience.admissionPolicyHash must be a bytes32 hex value.",
@@ -231,7 +278,15 @@ export function normalizeTokenlessQuoteRequest(
   }
   let requestProfile: TokenlessRequestProfileReference | undefined;
   let reviewEconomics: TokenlessFrozenReviewEconomics | undefined;
+  let audiencePolicy: TokenlessQuoteRequest["audiencePolicy"] | undefined;
+  let privateReview: TokenlessQuoteRequest["privateReview"];
   if (request.requestProfile && request.reviewEconomics) {
+    assertExactObjectKeys(request.requestProfile, ["id", "version", "hash"], "requestProfile");
+    assertExactObjectKeys(
+      request.reviewEconomics,
+      ["compensationMode", "bountyPerSeatAtomic", "panelSize"],
+      "reviewEconomics",
+    );
     if (
       !request.requestProfile.id.trim() ||
       !Number.isSafeInteger(request.requestProfile.version) ||
@@ -281,6 +336,55 @@ export function normalizeTokenlessQuoteRequest(
     };
     reviewEconomics = { ...request.reviewEconomics };
   }
+  if (request.audiencePolicy === undefined) {
+    throw new RateLoopSdkError("audiencePolicy is required for an executable quote.");
+  }
+  if (request.audiencePolicy !== undefined) {
+    audiencePolicy = parseHumanAssuranceAudiencePolicy(request.audiencePolicy);
+    if (stableJson(request.audiencePolicy) !== stableJson(audiencePolicy)) {
+      throw new RateLoopSdkError("audiencePolicy contains unsupported or non-canonical fields.");
+    }
+    const policyHash = intentDigest(audiencePolicy);
+    if (policyHash.toLowerCase() !== request.audience.admissionPolicyHash.toLowerCase()) {
+      throw new RateLoopSdkError("audiencePolicy does not match audience.admissionPolicyHash.");
+    }
+  }
+  if (request.privateReview !== undefined) {
+    assertExactObjectKeys(
+      request.privateReview,
+      ["schemaVersion", "artifactCommitments"],
+      "privateReview",
+    );
+    assertExactObjectKeys(
+      request.privateReview.artifactCommitments,
+      ["privateReviewId", "source", "suggestion", "preparedRequestHash", "economicsHash", "reviewerSetHash"],
+      "privateReview.artifactCommitments",
+    );
+    if ((request.visibility ?? "private") !== "private" || request.audience.source !== "customer_invited") {
+      throw new RateLoopSdkError("privateReview requires private customer-invited visibility.");
+    }
+    if (!audiencePolicy) {
+      throw new RateLoopSdkError("privateReview requires an exact audiencePolicy.");
+    }
+    const commitments = request.privateReview.artifactCommitments;
+    if (
+      request.privateReview.schemaVersion !== "rateloop.tokenless-private-review.v1" ||
+      !commitments.privateReviewId.trim() ||
+      ![
+        commitments.source,
+        commitments.suggestion,
+        commitments.preparedRequestHash,
+        commitments.economicsHash,
+        commitments.reviewerSetHash,
+      ].every(value => /^sha256:[0-9a-f]{64}$/.test(value))
+    ) {
+      throw new RateLoopSdkError("privateReview artifact commitments are invalid.");
+    }
+    privateReview = {
+      schemaVersion: "rateloop.tokenless-private-review.v1",
+      artifactCommitments: { ...commitments, privateReviewId: commitments.privateReviewId.trim() },
+    };
+  }
   if (BigInt(request.budget.bountyAtomic) === 0n) {
     throw new RateLoopSdkError(
       "budget.bountyAtomic must be greater than zero.",
@@ -305,6 +409,8 @@ export function normalizeTokenlessQuoteRequest(
     ...(requestProfile && reviewEconomics
       ? { requestProfile, reviewEconomics }
       : {}),
+    ...(audiencePolicy ? { audiencePolicy } : {}),
+    ...(privateReview ? { privateReview } : {}),
   };
 }
 
@@ -416,7 +522,10 @@ export function buildTokenlessQuoteIntent(
     request.reviewEconomics ?? null,
   );
 
-  const contentHash = intentDigest(request.question).slice(2);
+  const content = request.privateReview
+    ? { question: request.question, privateReview: request.privateReview.artifactCommitments }
+    : request.question;
+  const contentHash = intentDigest(content).slice(2);
   const terms = {
     audience,
     visibility: request.visibility,
@@ -428,10 +537,20 @@ export function buildTokenlessQuoteIntent(
     questionHash: contentHash,
     responseWindowSeconds: request.responseWindowSeconds,
     schemaVersion: TOKENLESS_SCHEMA_VERSION,
+    ...(request.audiencePolicy
+      ? {
+          audiencePolicy: request.audiencePolicy,
+          ...(request.privateReview
+            ? { privateReviewBindingHash: intentDigest(request.privateReview.artifactCommitments) }
+            : {}),
+        }
+      : {}),
   };
   return {
     contentId: `0x${contentHash}` as const,
+    content,
     normalizedRequest: request,
+    terms,
     termsHash: intentDigest(terms),
   };
 }

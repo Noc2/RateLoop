@@ -1,15 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { sha256, stringToHex } from "viem";
 import { RateLoopApiError } from "./errors";
 import {
   buildTokenlessQuoteIntent,
   createTokenlessRateLoopClient,
+  normalizeTokenlessQuoteRequest,
 } from "./tokenless";
 import {
   normalizeTokenlessQuestion,
   parseTokenlessYouTubeUrl,
 } from "./tokenlessMedia";
 import {
+  TOKENLESS_QUOTE_REQUEST_JSON_SCHEMA,
   TOKENLESS_RESULT_JSON_SCHEMA,
   parseTokenlessAskResponse,
   parseTokenlessQuoteResponse,
@@ -65,6 +68,7 @@ test("package root exposes only the tokenless client, schema, types, and generic
       "TOKENLESS_MAX_PROMPT_LENGTH",
       "TOKENLESS_MAX_QUESTION_IMAGES",
       "TOKENLESS_PAYMENT_AUTHORIZATION_SCHEMA_VERSION",
+      "TOKENLESS_QUOTE_REQUEST_JSON_SCHEMA",
       "TOKENLESS_RESULT_JSON_SCHEMA",
       "TOKENLESS_REVIEWER_SOURCES",
       "TOKENLESS_ROUND_AUTHORIZATION_TYPES",
@@ -75,6 +79,7 @@ test("package root exposes only the tokenless client, schema, types, and generic
       "TOKENLESS_VISIBILITIES",
       "TOKENLESS_X402_DOMAIN",
       "buildTokenlessEip3009TypedData",
+      "buildTokenlessPrivateReviewCommitmentQuestion",
       "buildTokenlessQuoteIntent",
       "buildTokenlessRoundAuthorizationTypedData",
       "buildTokenlessRoundTermsMessage",
@@ -116,12 +121,113 @@ test("package root exposes only the tokenless client, schema, types, and generic
   );
 });
 
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .filter(([, entry]) => entry !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+const TEST_AUDIENCE_POLICY = {
+  schemaVersion: "rateloop.human-assurance.v2" as const,
+  policyId: "aud_test_customer_invited",
+  version: 1,
+  reviewerSource: "customer_invited" as const,
+  compensation: "paid" as const,
+  cohorts: [{ cohortId: "customer_named", minimumReviewers: 3, maximumReviewers: 500 }],
+  selection: "customer_named" as const,
+  fallbacks: { allowed: false, sources: [] },
+  requiredQualifications: [],
+  assurance: {
+    requirements: [
+      {
+        capability: "account_control" as const,
+        reviewerSources: ["customer_invited" as const],
+        allowedProviders: [],
+      },
+    ],
+  },
+  buyerPrivacy: { visibleFields: [], minimumAggregationSize: 3, suppressSmallCells: true },
+  legalEligibilityRequired: true,
+};
+const TEST_ADMISSION_POLICY_HASH = sha256(stringToHex(canonicalJson(TEST_AUDIENCE_POLICY)));
+
+test("private quote schema and parser bind an exact canonical audience policy and artifacts", () => {
+  const privateReview = {
+    schemaVersion: "rateloop.tokenless-private-review.v1" as const,
+    artifactCommitments: {
+      privateReviewId: "prv_exact",
+      source: `sha256:${"1".repeat(64)}` as const,
+      suggestion: `sha256:${"2".repeat(64)}` as const,
+      preparedRequestHash: `sha256:${"3".repeat(64)}` as const,
+      economicsHash: `sha256:${"4".repeat(64)}` as const,
+      reviewerSetHash: `sha256:${"5".repeat(64)}` as const,
+    },
+  };
+  const normalized = normalizeTokenlessQuoteRequest({
+    visibility: "private",
+    audience: { admissionPolicyHash: TEST_ADMISSION_POLICY_HASH, source: "customer_invited" },
+    audiencePolicy: TEST_AUDIENCE_POLICY,
+    privateReview,
+    budget: { attemptReserveAtomic: "636", bountyAtomic: "800", feeBps: 1_250 },
+    question: { kind: "binary", prompt: "Is this safe?", rationale: { mode: "off" } },
+    requestedPanelSize: 3,
+    responseWindowSeconds: 3_600,
+  });
+  assert.deepEqual(normalized.privateReview, privateReview);
+  assert.equal(TOKENLESS_QUOTE_REQUEST_JSON_SCHEMA.properties.privateReview.additionalProperties, false);
+  assert.deepEqual(
+    TOKENLESS_QUOTE_REQUEST_JSON_SCHEMA.properties.privateReview.properties.artifactCommitments.required,
+    [
+      "privateReviewId",
+      "source",
+      "suggestion",
+      "preparedRequestHash",
+      "economicsHash",
+      "reviewerSetHash",
+    ],
+  );
+  assert.throws(
+    () =>
+      normalizeTokenlessQuoteRequest({
+        ...normalized,
+        privateReview: { ...privateReview, unexpected: true } as typeof privateReview,
+      }),
+    /unsupported field unexpected/,
+  );
+  assert.throws(
+    () =>
+      normalizeTokenlessQuoteRequest({
+        ...normalized,
+        privateReview: {
+          ...privateReview,
+          unexpected: true,
+        } as typeof privateReview,
+      }),
+    /unsupported field unexpected/,
+  );
+  assert.throws(
+    () =>
+      normalizeTokenlessQuoteRequest({
+        ...normalized,
+        audiencePolicy: { ...TEST_AUDIENCE_POLICY, unexpected: true } as typeof TEST_AUDIENCE_POLICY,
+      }),
+    /unsupported or non-canonical fields/,
+  );
+});
+
 test("canonical quote intent binds the exact question and frozen product terms", () => {
   const request = {
     audience: {
-      admissionPolicyHash: `0x${"44".repeat(32)}` as const,
+      admissionPolicyHash: TEST_ADMISSION_POLICY_HASH,
       source: "customer_invited" as const,
     },
+    audiencePolicy: TEST_AUDIENCE_POLICY,
     budget: { attemptReserveAtomic: "636", bountyAtomic: "800", feeBps: 1_250 },
     question: {
       kind: "binary" as const,
@@ -181,7 +287,7 @@ test("canonical quote intent binds the exact question and frozen product terms",
   );
   assert.equal(
     intent.termsHash,
-    "0xf2c059751d1713f571f7f22de0235269badacb09f3e02a10bb1cf250ab104565",
+    "0x0f3e591d6568f2da695d5e13b9b3a6a132bdd7e557aed366bffc1bd8dec958a8",
   );
   assert.throws(
     () =>
@@ -635,9 +741,10 @@ test("tokenless client performs quote and ask with a required idempotency header
 
   const quote = await client.quote({
     audience: {
-      admissionPolicyHash: `0x${"ab".repeat(32)}`,
+      admissionPolicyHash: TEST_ADMISSION_POLICY_HASH,
       source: "customer_invited",
     },
+    audiencePolicy: TEST_AUDIENCE_POLICY,
     budget: {
       attemptReserveAtomic: "5000000",
       bountyAtomic: "25000000",
@@ -678,9 +785,10 @@ test("tokenless client performs quote and ask with a required idempotency header
 
   await client.quote({
     audience: {
-      admissionPolicyHash: `0x${"cd".repeat(32)}`,
+      admissionPolicyHash: TEST_ADMISSION_POLICY_HASH,
       source: "customer_invited",
     },
+    audiencePolicy: TEST_AUDIENCE_POLICY,
     budget: {
       attemptReserveAtomic: "5000000",
       bountyAtomic: "25000000",
@@ -703,9 +811,10 @@ test("tokenless client performs quote and ask with a required idempotency header
     () =>
       client.quote({
         audience: {
-          admissionPolicyHash: `0x${"ab".repeat(32)}`,
+          admissionPolicyHash: TEST_ADMISSION_POLICY_HASH,
           source: "customer_invited",
         },
+        audiencePolicy: TEST_AUDIENCE_POLICY,
         budget: {
           attemptReserveAtomic: "5000000",
           bountyAtomic: "25000000",
@@ -725,9 +834,10 @@ test("tokenless client performs quote and ask with a required idempotency header
     () =>
       client.quote({
         audience: {
-          admissionPolicyHash: `0x${"ab".repeat(32)}`,
+          admissionPolicyHash: TEST_ADMISSION_POLICY_HASH,
           source: "customer_invited",
         },
+        audiencePolicy: TEST_AUDIENCE_POLICY,
         budget: {
           attemptReserveAtomic: "5000000",
           bountyAtomic: "25000000",
@@ -747,9 +857,10 @@ test("tokenless client performs quote and ask with a required idempotency header
     () =>
       client.quote({
         audience: {
-          admissionPolicyHash: `0x${"ab".repeat(32)}`,
+          admissionPolicyHash: TEST_ADMISSION_POLICY_HASH,
           source: "customer_invited",
         },
+        audiencePolicy: TEST_AUDIENCE_POLICY,
         budget: {
           attemptReserveAtomic: "5000000",
           bountyAtomic: "25000000",
@@ -802,9 +913,10 @@ test("tokenless quote validation rejects ambiguous mechanisms before HTTP", () =
     () =>
       client.quote({
         audience: {
-          admissionPolicyHash: `0x${"ab".repeat(32)}`,
+          admissionPolicyHash: TEST_ADMISSION_POLICY_HASH,
           source: "customer_invited",
         },
+        audiencePolicy: TEST_AUDIENCE_POLICY,
         budget: {
           attemptReserveAtomic: "5000000",
           bountyAtomic: "25000000",
@@ -827,9 +939,10 @@ test("tokenless quote validation rejects ambiguous mechanisms before HTTP", () =
     () =>
       client.quote({
         audience: {
-          admissionPolicyHash: `0x${"ab".repeat(32)}`,
+          admissionPolicyHash: TEST_ADMISSION_POLICY_HASH,
           source: "customer_invited",
         },
+        audiencePolicy: TEST_AUDIENCE_POLICY,
         budget: {
           attemptReserveAtomic: "5000000",
           bountyAtomic: "25000000",

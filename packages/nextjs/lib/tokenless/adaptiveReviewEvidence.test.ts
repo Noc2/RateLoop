@@ -14,6 +14,7 @@ import {
   requestAdaptiveHumanReview,
 } from "~~/lib/tokenless/adaptiveReviewOrchestration";
 import { evaluateAdaptiveReviewRequirement } from "~~/lib/tokenless/adaptiveReviewService";
+import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { createWorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
 import { hashHumanReviewConfiguration } from "~~/lib/tokenless/humanReviewConfiguration";
 import { transitionHumanReviewOpportunityLifecycle } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
@@ -28,12 +29,85 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
-const ADMISSION_HASH = `0x${"ab".repeat(32)}` as const;
 const SOURCE_PAYLOAD = "The customer was charged twice for invoice 42.";
 const SUGGESTION_PAYLOAD = "Refund the confirmed duplicate charge.";
 const originalSamplerKey = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY;
 const originalSamplerVersion = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION;
 const originalNetworkPanelsEnabled = process.env.TOKENLESS_NETWORK_PANELS_ENABLED;
+
+function networkAdmissionPolicy() {
+  return {
+    schemaVersion: "rateloop.human-assurance.v2" as const,
+    policyId: "haa_adaptive_review_network",
+    version: 1,
+    reviewerSource: "rateloop_network" as const,
+    integrity: {
+      schemaVersion: "rateloop.integrity-assignment.v1" as const,
+      epochId: "integrity:adaptive-review:test",
+      epochManifestHash: `sha256:${"ab".repeat(32)}` as const,
+      maxClusterShareBps: 3_334,
+      allowedRiskBands: ["low", "medium"] as const,
+      recentCoassignmentWindowSeconds: 2_592_000,
+      maxRecentCoassignments: 1,
+      maxPerCustomer: 3,
+      onePerProviderSubject: true as const,
+    },
+    compensation: "paid" as const,
+    cohorts: [],
+    selection: "randomized" as const,
+    fallbacks: { allowed: false, sources: [] },
+    requiredQualifications: [],
+    assurance: {
+      requirements: [
+        {
+          capability: "unique_human" as const,
+          reviewerSources: ["rateloop_network" as const],
+          allowedProviders: ["world:poh"],
+          freshnessSeconds: 3_600,
+        },
+      ],
+    },
+    buyerPrivacy: {
+      visibleFields: ["reviewer_source" as const],
+      minimumAggregationSize: 3,
+      suppressSmallCells: true,
+    },
+    legalEligibilityRequired: true,
+  };
+}
+
+const FROZEN_ADMISSION_POLICY = freezeAdmissionPolicy(networkAdmissionPolicy());
+const ADMISSION_HASH = FROZEN_ADMISSION_POLICY.admissionPolicyHash;
+
+async function seedNetworkAdmissionPolicy(workspaceId: string) {
+  const now = new Date();
+  const projectId = `hap_adaptive_${workspaceId.slice(-16)}`;
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_projects
+          (project_id,workspace_id,name,data_classification,retention_days,created_by,created_at,updated_at)
+          VALUES (?,?,'Adaptive review network fixture','synthetic',30,?,?,?)`,
+    args: [projectId, workspaceId, OWNER, now, now],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_audience_policies
+          (policy_id,project_id,version,reviewer_source,compensation,cohorts_json,selection,
+           fallbacks_json,required_qualifications_json,assurance_json,buyer_privacy_json,
+           legal_eligibility_required,policy_hash,policy_json,created_at)
+          VALUES (?,?,1,'rateloop_network','paid','[]','randomized',?,?,?,?,?,?,?,?)`,
+    args: [
+      FROZEN_ADMISSION_POLICY.policy.policyId,
+      projectId,
+      JSON.stringify(FROZEN_ADMISSION_POLICY.policy.fallbacks),
+      JSON.stringify(FROZEN_ADMISSION_POLICY.policy.requiredQualifications),
+      JSON.stringify(FROZEN_ADMISSION_POLICY.policy.assurance),
+      JSON.stringify(FROZEN_ADMISSION_POLICY.policy.buyerPrivacy),
+      FROZEN_ADMISSION_POLICY.policy.legalEligibilityRequired,
+      FROZEN_ADMISSION_POLICY.policyHash,
+      FROZEN_ADMISSION_POLICY.policyJson,
+      now,
+    ],
+  });
+}
 
 beforeEach(() => {
   process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = "88".repeat(32);
@@ -54,6 +128,7 @@ afterEach(() => {
 
 async function fixture() {
   const { workspaceId } = await createWorkspace({ name: "Adaptive evidence", ownerAddress: OWNER });
+  await seedNetworkAdmissionPolicy(workspaceId);
   const now = new Date();
   await dbClient.execute({
     sql: `UPDATE tokenless_workspace_subscriptions

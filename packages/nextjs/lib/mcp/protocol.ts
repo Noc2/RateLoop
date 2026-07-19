@@ -1,3 +1,4 @@
+import { TOKENLESS_QUOTE_REQUEST_JSON_SCHEMA } from "@rateloop/sdk";
 import "server-only";
 import { TokenlessMcpToolError } from "~~/lib/mcp/errors";
 import {
@@ -206,6 +207,7 @@ export const tokenlessMcpTools = [
               required: ["admissionPolicyHash", "source"],
               type: "object",
             },
+            audiencePolicy: TOKENLESS_QUOTE_REQUEST_JSON_SCHEMA.properties.audiencePolicy,
             budget: {
               additionalProperties: false,
               properties: {
@@ -219,7 +221,7 @@ export const tokenlessMcpTools = [
             question: questionSchema,
             requestedPanelSize: { maximum: 500, minimum: 3, type: "integer" },
           },
-          required: ["audience", "budget", "question", "requestedPanelSize"],
+          required: ["audience", "audiencePolicy", "budget", "question", "requestedPanelSize"],
           type: "object",
         },
       },

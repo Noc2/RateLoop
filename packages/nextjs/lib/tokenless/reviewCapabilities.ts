@@ -39,7 +39,11 @@ export const HUMAN_REVIEW_LANE_IMPLEMENTATION = {
   // resulting voucher, or reconcile a terminal settlement receipt. Keep the
   // lane unavailable until that complete persisted path exists.
   privateInvitedPaid: false,
-  publicPaidNetwork: true,
+  // The network adapter has a settlement implementation, but production
+  // admission also requires a source-derived, frozen integrity epoch. The
+  // repository does not yet have a non-test epoch producer, so advertising
+  // this lane would strand real requests at assignment time.
+  publicPaidNetwork: false,
   hybridPublicSafe: false,
 } as const satisfies HumanReviewLaneReadiness;
 

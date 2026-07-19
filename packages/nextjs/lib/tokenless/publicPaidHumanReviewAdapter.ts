@@ -42,7 +42,13 @@ import {
   expertiseQualificationRules,
   normalizeReviewerExpertiseKeys,
 } from "~~/lib/tokenless/reviewerExpertiseVocabulary";
-import { TokenlessServiceError, createTokenlessAsk, createTokenlessQuote } from "~~/lib/tokenless/server";
+import {
+  TokenlessServiceError,
+  createTokenlessAsk,
+  createTokenlessQuote,
+  getTokenlessAskReplay,
+  hashTokenlessQuoteRequest,
+} from "~~/lib/tokenless/server";
 import { isWorldIdAssuranceEnabled } from "~~/lib/tokenless/worldIdAssurance";
 
 type Row = Record<string, unknown>;
@@ -643,10 +649,9 @@ function assertRequestable(opportunity: FrozenOpportunity, principal: PublicPaid
   }
 }
 
-async function assertAdmissionPolicyExpertiseBinding(opportunity: FrozenOpportunity) {
+async function loadExactAdmissionPolicy(opportunity: FrozenOpportunity) {
   const required = opportunity.requestProfile.requiredExpertiseKeys ?? [];
   const exactRequirements = opportunity.requestProfile.expertiseRequirements ?? [];
-  if (required.length === 0 && exactRequirements.length === 0) return;
   const policyHash = `sha256:${opportunity.admissionPolicyHash.slice(2)}`;
   const result = await dbClient.execute({
     sql: `SELECT policy_json FROM tokenless_assurance_audience_policies
@@ -661,7 +666,7 @@ async function assertAdmissionPolicyExpertiseBinding(opportunity: FrozenOpportun
       value: true,
     })),
   ];
-  const exact = result.rows.some(value => {
+  const exact = result.rows.find(value => {
     try {
       const frozen = freezeAdmissionPolicy(JSON.parse(text(value as Row, "policy_json") ?? "null"));
       if (frozen.admissionPolicyHash.toLowerCase() !== opportunity.admissionPolicyHash.toLowerCase()) return false;
@@ -681,6 +686,7 @@ async function assertAdmissionPolicyExpertiseBinding(opportunity: FrozenOpportun
       "expertise_admission_policy_mismatch",
     );
   }
+  return freezeAdmissionPolicy(JSON.parse(text(exact as Row, "policy_json") ?? "null")).policy;
 }
 
 function prepareExactRequest(input: {
@@ -983,12 +989,7 @@ export async function requestPublicPaidHumanReview(
     input.effectiveQuestionHash,
   );
   assertRequestable(opportunity, input.principal);
-  const requiresExpertise =
-    (opportunity.requestProfile.requiredExpertiseKeys?.length ?? 0) > 0 ||
-    (opportunity.requestProfile.expertiseRequirements?.length ?? 0) > 0;
-  if (requiresExpertise) {
-    await assertAdmissionPolicyExpertiseBinding(opportunity);
-  }
+  const admissionPolicy = await loadExactAdmissionPolicy(opportunity);
   if (sha256(sourcePayload) !== opportunity.sourceEvidenceHash) {
     throw new TokenlessServiceError(
       "sourcePayload does not match the committed source evidence.",
@@ -1036,6 +1037,9 @@ export async function requestPublicPaidHumanReview(
     suggestionPayload,
     publication,
   });
+  const requiresExpertise =
+    (opportunity.requestProfile.requiredExpertiseKeys?.length ?? 0) > 0 ||
+    (opportunity.requestProfile.expertiseRequirements?.length ?? 0) > 0;
   if (requiresExpertise) {
     const expertisePool = opportunity.requestProfile.expertiseRequirements?.length
       ? await countEligibleNetworkExactExpertisePool({
@@ -1072,18 +1076,37 @@ export async function requestPublicPaidHumanReview(
   }
   const quoteRequest: TokenlessQuoteRequest = {
     audience: { admissionPolicyHash: opportunity.admissionPolicyHash, source: "rateloop_network" },
+    audiencePolicy: admissionPolicy,
     ...preparation.quoteTerms,
     confirmedNoSensitiveData: publication.confirmedNoSensitiveData,
     dataClassification: publication.dataClassification,
     ...(publication.redactionSummary ? { redactionSummary: publication.redactionSummary } : {}),
     visibility: publication.visibility,
   };
-  const quote = await createTokenlessQuote(quoteRequest);
-  const askRequest = {
+  const idempotencyScope = `workspace:${input.principal.integration.workspaceId}:api_key:${input.principal.principal.apiKeyId}`;
+  const replay = await getTokenlessAskReplay(idempotencyScope, idempotencyKey);
+  if (replay && replay.quoteRequestHash !== hashTokenlessQuoteRequest(quoteRequest)) {
+    throw new TokenlessServiceError(
+      "The existing public-review ask uses different frozen terms.",
+      409,
+      "review_binding_conflict",
+    );
+  }
+  const askRequest = replay?.request ?? {
     idempotencyKey,
     payment: { mode: "prepaid" as const, workspaceId: input.principal.integration.workspaceId },
-    quoteId: quote.quoteId,
+    quoteId: (await createTokenlessQuote(quoteRequest)).quoteId,
   };
+  if (
+    askRequest.payment.mode !== "prepaid" ||
+    askRequest.payment.workspaceId !== input.principal.integration.workspaceId
+  ) {
+    throw new TokenlessServiceError(
+      "The existing public-review ask uses a different payment binding.",
+      409,
+      "review_binding_conflict",
+    );
+  }
   let prepared: PreparedProductAsk | null = null;
   let askCreated = false;
   let opportunityBound = false;

@@ -5,6 +5,7 @@ import {
   type TokenlessQuoteRequest,
   type TokenlessQuoteResponse,
   buildTokenlessQuoteIntent,
+  normalizeTokenlessQuoteRequest,
 } from "@rateloop/sdk";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
@@ -773,9 +774,9 @@ function quoteTotal(quote: TokenlessQuoteResponse) {
   return atomic(quote.economics.totalFundedAtomic, "quote.economics.totalFundedAtomic");
 }
 
-async function loadQuote(quoteId: string) {
+async function loadQuote(quoteId: string, principal: ProductPrincipal, workspaceId: string) {
   const result = await dbClient.execute({
-    sql: `SELECT request_json, response_json, expires_at
+    sql: `SELECT request_json, response_json, owner_principal_id, owner_workspace_id, owner_api_key_id, expires_at
           FROM tokenless_agent_quotes WHERE quote_id = ? LIMIT 1`,
     args: [quoteId],
   });
@@ -783,11 +784,23 @@ async function loadQuote(quoteId: string) {
   const requestJson = rowString(row, "request_json");
   const responseJson = rowString(row, "response_json");
   const expiresAtValue = row?.expires_at;
-  if (!requestJson || !responseJson || !expiresAtValue || new Date(String(expiresAtValue)).getTime() <= Date.now()) {
+  if (!requestJson || !responseJson || !expiresAtValue) {
+    throw new TokenlessServiceError("Quote not found.", 404, "quote_not_found");
+  }
+  const quoteRequest = JSON.parse(requestJson) as Record<string, unknown>;
+  if (quoteRequest.visibility !== "public") {
+    const owned =
+      principal.kind === "api_key" &&
+      rowString(row, "owner_workspace_id") === workspaceId &&
+      rowString(row, "owner_api_key_id") === principal.apiKeyId &&
+      rowString(row, "owner_principal_id") === null;
+    if (!owned) throw new TokenlessServiceError("Quote not found.", 404, "quote_not_found");
+  }
+  if (new Date(String(expiresAtValue)).getTime() <= Date.now()) {
     throw new TokenlessServiceError("Quote is missing or expired.", 410, "quote_expired");
   }
   return {
-    quoteRequest: JSON.parse(requestJson) as Record<string, unknown>,
+    quoteRequest,
     quote: JSON.parse(responseJson) as TokenlessQuoteResponse,
   };
 }
@@ -1095,7 +1108,14 @@ async function createQuestionRecords(
   },
 ) {
   const intent = buildTokenlessQuoteIntent(input.quoteRequest as unknown as TokenlessQuoteRequest, input.quote);
-  const content = intent.normalizedRequest.question;
+  const content =
+    intent.content ??
+    (intent.normalizedRequest.privateReview
+      ? {
+          question: intent.normalizedRequest.question,
+          privateReview: intent.normalizedRequest.privateReview.artifactCommitments,
+        }
+      : intent.normalizedRequest.question);
   const contentJson = stableJson(content);
   const contentHash = digest(contentJson);
   if (`0x${contentHash}` !== intent.contentId) throw new Error("Canonical tokenless content commitment drifted.");
@@ -1111,6 +1131,14 @@ async function createQuestionRecords(
     questionHash: contentHash,
     responseWindowSeconds: input.quoteRequest.responseWindowSeconds,
     schemaVersion: input.quote.schemaVersion,
+    ...(intent.normalizedRequest.audiencePolicy
+      ? {
+          audiencePolicy: intent.normalizedRequest.audiencePolicy,
+          ...(intent.normalizedRequest.privateReview
+            ? { privateReviewBindingHash: intent.terms.privateReviewBindingHash }
+            : {}),
+        }
+      : {}),
   };
   const termsJson = stableJson(terms);
   const termsHash = digest(termsJson);
@@ -1353,7 +1381,15 @@ export async function prepareProductAsk(input: {
   const requestedWorkspace = input.request.payment.mode === "prepaid" ? input.request.payment.workspaceId : undefined;
   const workspaceId = await resolveWorkspace(input.principal, requestedWorkspace);
   await requireWorkspacePaidPanels(workspaceId);
-  const { quoteRequest, quote } = await loadQuote(input.request.quoteId);
+  const { quoteRequest, quote } = await loadQuote(input.request.quoteId, input.principal, workspaceId);
+  const normalizedQuoteRequest = normalizeTokenlessQuoteRequest(quoteRequest as unknown as TokenlessQuoteRequest);
+  if (!normalizedQuoteRequest.audiencePolicy) {
+    throw new TokenlessServiceError(
+      "This quote has no canonical audience policy and cannot reserve payment or execute on chain.",
+      409,
+      "capability_policy_required",
+    );
+  }
   const policy = await enforcePublishingPolicy({
     principal: input.principal,
     workspaceId,

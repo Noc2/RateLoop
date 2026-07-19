@@ -3,6 +3,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import sharp from "sharp";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import {
   attachProductAsk,
   createWorkspace,
@@ -26,6 +27,23 @@ import { TokenlessServiceError, createTokenlessAsk, createTokenlessQuote } from 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const OUTSIDER = "0x2222222222222222222222222222222222222222";
 const ASSET_ID = `pqm_${"A".repeat(32)}`;
+
+function audiencePolicy() {
+  return {
+    schemaVersion: "rateloop.human-assurance.v2" as const,
+    policyId: "policy_public_media_test",
+    version: 1,
+    reviewerSource: "customer_invited" as const,
+    compensation: "paid" as const,
+    cohorts: [{ cohortId: "media-test", minimumReviewers: 3, maximumReviewers: 500 }],
+    selection: "customer_named" as const,
+    fallbacks: { allowed: false, sources: [] },
+    requiredQualifications: [],
+    assurance: { requirements: [] },
+    buyerPrivacy: { visibleFields: [], minimumAggregationSize: 3, suppressSmallCells: true },
+    legalEligibilityRequired: true,
+  };
+}
 
 class MemoryMediaStore implements PublicQuestionMediaStore {
   readonly objects = new Map<string, { body: Uint8Array; contentType: string }>();
@@ -330,6 +348,7 @@ test("expired upload idempotency never returns a dead grant before or after boun
 
 test("ask preparation binds exact owner assets and public reads stay closed until moderation approval", async () => {
   const now = new Date();
+  const policy = audiencePolicy();
   const staged = await stagePublicQuestionImage({
     accountAddress: OWNER,
     bytes: await png(),
@@ -339,7 +358,11 @@ test("ask preparation binds exact owner assets and public reads stay closed unti
     workspaceId,
   });
   const quote = await createTokenlessQuote({
-    audience: { admissionPolicyHash: `0x${"ab".repeat(32)}`, source: "customer_invited" },
+    audience: {
+      admissionPolicyHash: freezeAdmissionPolicy(policy).admissionPolicyHash,
+      source: "customer_invited",
+    },
+    audiencePolicy: policy,
     budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
     confirmedNoSensitiveData: true,
     dataClassification: "synthetic",
@@ -456,8 +479,15 @@ test("workspace API keys stage and bind the same canonical descriptor without pu
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "public_media_not_found",
   );
+  const policy = audiencePolicy();
   const quote = await createTokenlessQuote({
-    audience: { admissionPolicyHash: `0x${"ab".repeat(32)}`, source: "customer_invited" },
+    audience: {
+      admissionPolicyHash: freezeAdmissionPolicy(policy).admissionPolicyHash,
+      source: "customer_invited",
+    },
+    audiencePolicy: policy,
+    confirmedNoSensitiveData: true,
+    dataClassification: "synthetic",
     budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
     question: {
       kind: "binary",
@@ -470,6 +500,7 @@ test("workspace API keys stage and bind the same canonical descriptor without pu
     },
     requestedPanelSize: 15,
     responseWindowSeconds: 1_200,
+    visibility: "public",
   });
   await recordPrepaidLedgerEntry({
     amountAtomic: quote.economics.totalFundedAtomic,
@@ -498,6 +529,7 @@ test("workspace API keys stage and bind the same canonical descriptor without pu
 
 test("a downstream attach failure rolls back the capability bridge and permits an exact safe retry", async () => {
   const key = await createWorkspaceApiKey({ name: "Rollback media agent", workspaceId });
+  const policy = audiencePolicy();
   const staged = await stagePublicQuestionImage({
     apiKeyId: key.apiKeyId,
     bytes: await png(),
@@ -507,7 +539,11 @@ test("a downstream attach failure rolls back the capability bridge and permits a
     workspaceId,
   });
   const quote = await createTokenlessQuote({
-    audience: { admissionPolicyHash: `0x${"ab".repeat(32)}`, source: "customer_invited" },
+    audience: {
+      admissionPolicyHash: freezeAdmissionPolicy(policy).admissionPolicyHash,
+      source: "customer_invited",
+    },
+    audiencePolicy: policy,
     budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
     confirmedNoSensitiveData: true,
     dataClassification: "synthetic",

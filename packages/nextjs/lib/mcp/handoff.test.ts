@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
@@ -20,9 +21,50 @@ const imageAssetId = `pqm_${"A".repeat(24)}`;
 const imageDigest = `sha256:${"a1".repeat(32)}`;
 const previewKey = new Uint8Array(32).fill(41);
 
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableJson(entry)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function audiencePolicy() {
+  return {
+    schemaVersion: "rateloop.human-assurance.v2" as const,
+    policyId: "policy_handoff_invited",
+    version: 1,
+    reviewerSource: "customer_invited" as const,
+    compensation: "paid" as const,
+    cohorts: [{ cohortId: "handoff-invited", minimumReviewers: 3, maximumReviewers: 500 }],
+    selection: "customer_named" as const,
+    fallbacks: { allowed: false, sources: [] },
+    requiredQualifications: [],
+    assurance: {
+      requirements: [
+        {
+          capability: "customer_invitation" as const,
+          reviewerSources: ["customer_invited" as const],
+          allowedProviders: ["workspace-invitation"],
+        },
+      ],
+    },
+    buyerPrivacy: { visibleFields: ["reviewer_source" as const], minimumAggregationSize: 3, suppressSmallCells: true },
+    legalEligibilityRequired: true,
+  };
+}
+
+function audiencePolicyHash() {
+  return `0x${createHash("sha256").update(stableJson(audiencePolicy())).digest("hex")}` as const;
+}
+
 function quoteRequest() {
   return {
-    audience: { admissionPolicyHash: `0x${"ab".repeat(32)}`, source: "customer_invited" as const },
+    audience: { admissionPolicyHash: audiencePolicyHash(), source: "customer_invited" as const },
+    audiencePolicy: audiencePolicy(),
     budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
     question: {
       kind: "binary" as const,
@@ -194,6 +236,30 @@ test("image handoffs reject missing, cross-asset, and expired preview grants", (
 });
 
 test("enforces content confirmation, privacy limits, and quote limits", () => {
+  const { audiencePolicy, ...requestWithoutPolicy } = quoteRequest();
+  assert.ok(audiencePolicy);
+  assert.throws(
+    () =>
+      createMcpHandoff(
+        { ...handoffArguments(), request: requestWithoutPolicy },
+        "https://rateloop-tokenless.vercel.app",
+      ),
+    (error: unknown) => error instanceof TokenlessMcpToolError && error.code === "invalid_quote",
+  );
+  assert.throws(
+    () =>
+      createMcpHandoff(
+        {
+          ...handoffArguments(),
+          request: {
+            ...quoteRequest(),
+            audience: { ...quoteRequest().audience, admissionPolicyHash: `0x${"ff".repeat(32)}` },
+          },
+        },
+        "https://rateloop-tokenless.vercel.app",
+      ),
+    (error: unknown) => error instanceof TokenlessMcpToolError && error.code === "invalid_quote",
+  );
   assert.throws(
     () =>
       createMcpHandoff(

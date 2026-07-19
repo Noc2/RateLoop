@@ -1,7 +1,10 @@
 import { RateLoopSdkError } from "./errors";
+import { HUMAN_ASSURANCE_AUDIENCE_POLICY_JSON_SCHEMA } from "./humanAssuranceSchema";
 import {
+  TOKENLESS_DATA_CLASSIFICATIONS,
   TOKENLESS_SCHEMA_VERSION,
   TOKENLESS_REVIEWER_SOURCES,
+  TOKENLESS_VISIBILITIES,
   TOKENLESS_VERDICT_STATUSES,
   type TokenlessAskResponse,
   type TokenlessAttemptReserveAccounting,
@@ -817,6 +820,83 @@ const fundAccountingSchema = {
     refundedAtomic: atomicAmountSchema,
   },
   required: ["fundedAtomic", "paidAtomic", "refundedAtomic"],
+  type: "object",
+} as const;
+
+const privateReviewArtifactCommitmentsSchema = {
+  additionalProperties: false,
+  properties: {
+    privateReviewId: { minLength: 1, type: "string" },
+    source: { pattern: "^sha256:[0-9a-f]{64}$", type: "string" },
+    suggestion: { pattern: "^sha256:[0-9a-f]{64}$", type: "string" },
+    preparedRequestHash: { pattern: "^sha256:[0-9a-f]{64}$", type: "string" },
+    economicsHash: { pattern: "^sha256:[0-9a-f]{64}$", type: "string" },
+    reviewerSetHash: { pattern: "^sha256:[0-9a-f]{64}$", type: "string" },
+  },
+  required: [
+    "privateReviewId",
+    "source",
+    "suggestion",
+    "preparedRequestHash",
+    "economicsHash",
+    "reviewerSetHash",
+  ],
+  type: "object",
+} as const;
+
+/** Public API schema for quote requests, including exact private paid-review commitments. */
+export const TOKENLESS_QUOTE_REQUEST_JSON_SCHEMA = {
+  $id: "urn:rateloop:tokenless:quote-request:v2",
+  additionalProperties: false,
+  properties: {
+    visibility: { enum: TOKENLESS_VISIBILITIES },
+    dataClassification: { enum: TOKENLESS_DATA_CLASSIFICATIONS },
+    redactionSummary: { minLength: 1, type: "string" },
+    confirmedNoSensitiveData: { type: "boolean" },
+    audience: {
+      additionalProperties: false,
+      properties: {
+        admissionPolicyHash: { pattern: "^0x[0-9a-fA-F]{64}$", type: "string" },
+        source: { enum: TOKENLESS_REVIEWER_SOURCES },
+      },
+      required: ["admissionPolicyHash", "source"],
+      type: "object",
+    },
+    audiencePolicy: {
+      ...HUMAN_ASSURANCE_AUDIENCE_POLICY_JSON_SCHEMA,
+      additionalProperties: false,
+    },
+    privateReview: {
+      additionalProperties: false,
+      properties: {
+        schemaVersion: { const: "rateloop.tokenless-private-review.v1" },
+        artifactCommitments: privateReviewArtifactCommitmentsSchema,
+      },
+      required: ["schemaVersion", "artifactCommitments"],
+      type: "object",
+    },
+    budget: {
+      additionalProperties: false,
+      properties: {
+        attemptReserveAtomic: atomicAmountSchema,
+        bountyAtomic: { pattern: "^[1-9]\\d*$", type: "string" },
+        feeBps: { maximum: 2_000, minimum: 0, type: "integer" },
+      },
+      required: ["attemptReserveAtomic", "bountyAtomic", "feeBps"],
+      type: "object",
+    },
+    question: { type: "object" },
+    requestedPanelSize: { maximum: 500, minimum: 3, type: "integer" },
+    responseWindowSeconds: {
+      maximum: MAX_RESPONSE_WINDOW_SECONDS,
+      minimum: MIN_RESPONSE_WINDOW_SECONDS,
+      type: "integer",
+    },
+    requestProfile: requestProfileReferenceSchema.anyOf[1],
+    reviewEconomics: { anyOf: frozenReviewEconomicsSchema.anyOf.slice(1) },
+  },
+  required: ["audience", "audiencePolicy", "budget", "question", "requestedPanelSize", "responseWindowSeconds"],
+  title: "RateLoop tokenless quote request v2",
   type: "object",
 } as const;
 

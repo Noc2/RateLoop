@@ -4,6 +4,7 @@ import "server-only";
 import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
+import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { SAFE_AGENT_CONNECTION_SCOPES } from "~~/lib/tokenless/agentConnectionIntents";
 import {
   type HumanReviewPaymentProfile,
@@ -23,11 +24,14 @@ import {
   hashReviewRequestProfile,
   normalizeReviewRequestProfileInput,
 } from "~~/lib/tokenless/reviewRequestProfiles";
+import { exactReviewerExpertiseDefinitionKey } from "~~/lib/tokenless/reviewerExpertiseAssignments";
 import { validateReviewerExpertiseRequirementsWithClient } from "~~/lib/tokenless/reviewerExpertiseDefinitions";
+import { expertiseQualificationRules } from "~~/lib/tokenless/reviewerExpertiseVocabulary";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
   type WorkspacePrivateReviewRoutingReadiness,
   provisionWorkspacePrivateReviewRouting,
+  workspacePrivateReviewRoutingIds,
 } from "~~/lib/tokenless/workspacePrivateReviewRouting";
 
 type Row = Record<string, unknown>;
@@ -215,6 +219,8 @@ function selectionAudience(value: unknown) {
   try {
     const parsed = JSON.parse(String(value)) as { reviewerSource?: unknown };
     if (typeof parsed.reviewerSource !== "string") throw new Error();
+    if (parsed.reviewerSource === "customer_invited") return "private_invited";
+    if (parsed.reviewerSource === "rateloop_network") return "public_network";
     return parsed.reviewerSource;
   } catch {
     throw new Error("Database returned an invalid selection-policy audience.");
@@ -910,7 +916,13 @@ function nullableIso(value: unknown, field: string) {
 
 function ownerSelectionFromRow(row: Row) {
   const rules = parseJsonObject(row.rules_json, "review rules");
-  const audience = parseJsonObject(row.audience_policy_json, "review audience").reviewerSource;
+  const storedAudience = parseJsonObject(row.audience_policy_json, "review audience").reviewerSource;
+  const audience =
+    storedAudience === "customer_invited"
+      ? "private_invited"
+      : storedAudience === "rateloop_network"
+        ? "public_network"
+        : storedAudience;
   return normalizeManagedReviewPolicyInput({
     agentId: rowString(row, "agent_id"),
     agentVersionId: rowString(row, "agent_version_id"),
@@ -1342,6 +1354,8 @@ async function versionOwnerSelection(
     workspaceId: string;
     actor: string;
     policy: ReturnType<typeof normalizeManagedReviewPolicyInput>;
+    profile: ReturnType<typeof normalizeReviewRequestProfileInput>;
+    requestProfile: HumanReviewVersionReference & { hash: string };
     now: Date;
   },
 ) {
@@ -1353,11 +1367,120 @@ async function versionOwnerSelection(
     [input.workspaceId, input.policy.agentId, input.policy.agentVersionId],
   );
   const currentRow = currentResult.rows[0] as Row | undefined;
-  if (currentRow && stableJson(ownerSelectionFromRow(currentRow)) === stableJson(input.policy)) {
-    return { id: rowString(currentRow, "policy_id")!, version: rowInteger(currentRow, "version") };
-  }
   const policyId = currentRow ? rowString(currentRow, "policy_id")! : `rpol_${randomUUID().replaceAll("-", "")}`;
-  const version = currentRow ? rowInteger(currentRow, "version") + 1 : 1;
+  const currentVersion = currentRow ? rowInteger(currentRow, "version") : null;
+  const admissionPolicyJson = (version: number) => {
+    const profile = input.profile;
+    const reviewerSource =
+      profile.audience === "private_invited"
+        ? ("customer_invited" as const)
+        : profile.audience === "public_network"
+          ? ("rateloop_network" as const)
+          : ("hybrid" as const);
+    const compensation =
+      profile.compensationMode === "usdc"
+        ? ("paid" as const)
+        : profile.feedbackBonusEnabled
+          ? ("mixed" as const)
+          : ("unpaid" as const);
+    const requiredQualifications = [
+      ...expertiseQualificationRules(profile.requiredExpertiseKeys),
+      ...profile.expertiseRequirements.map(requirement => ({
+        key: exactReviewerExpertiseDefinitionKey(requirement),
+        operator: "attested" as const,
+        value: true,
+      })),
+    ];
+    const privateRouting =
+      profile.privateGroupId === null
+        ? null
+        : workspacePrivateReviewRoutingIds({
+            workspaceId: input.workspaceId,
+            profileId: input.requestProfile.id,
+            profileVersion: input.requestProfile.version,
+            profileHash: input.requestProfile.hash,
+            privateGroupId: profile.privateGroupId,
+          });
+    const networkSupply = reviewerSource !== "customer_invited";
+    const disabledIntegrityManifest = sha256(
+      stableJson({
+        schemaVersion: "rateloop.disabled-network-integrity.v1",
+        policyId,
+        version,
+      }),
+    );
+    return freezeAdmissionPolicy({
+      schemaVersion: "rateloop.human-assurance.v2",
+      policyId,
+      version,
+      reviewerSource,
+      compensation,
+      cohorts:
+        privateRouting === null
+          ? []
+          : [
+              {
+                cohortId: privateRouting.cohortId,
+                minimumReviewers: profile.panelSize,
+                maximumReviewers: profile.panelSize,
+              },
+            ],
+      selection: reviewerSource === "customer_invited" ? "customer_named" : "randomized",
+      fallbacks: { allowed: false, sources: [] },
+      requiredQualifications,
+      assurance: {
+        requirements: [
+          ...(reviewerSource === "customer_invited" || reviewerSource === "hybrid"
+            ? [
+                {
+                  capability: "customer_invitation" as const,
+                  reviewerSources: ["customer_invited" as const],
+                  allowedProviders: ["rateloop:invitation"],
+                },
+              ]
+            : []),
+          ...(networkSupply
+            ? [
+                {
+                  capability: "unique_human" as const,
+                  reviewerSources: ["rateloop_network" as const],
+                  allowedProviders: ["world:poh"],
+                },
+              ]
+            : []),
+        ],
+      },
+      ...(networkSupply
+        ? {
+            integrity: {
+              schemaVersion: "rateloop.integrity-assignment.v1",
+              epochId: `unavailable:${policyId}:${version}`,
+              epochManifestHash: disabledIntegrityManifest,
+              maxClusterShareBps: 2_000,
+              allowedRiskBands: ["low"],
+              recentCoassignmentWindowSeconds: 86_400,
+              maxRecentCoassignments: 1,
+              maxPerCustomer: 3,
+              onePerProviderSubject: true,
+            },
+          }
+        : {}),
+      buyerPrivacy: {
+        visibleFields: ["reviewer_source"],
+        minimumAggregationSize: profile.panelSize,
+        suppressSmallCells: true,
+      },
+      legalEligibilityRequired: compensation !== "unpaid",
+    }).policyJson;
+  };
+  if (
+    currentRow &&
+    stableJson(ownerSelectionFromRow(currentRow)) === stableJson(input.policy) &&
+    String(currentRow.audience_policy_json) === admissionPolicyJson(currentVersion!)
+  ) {
+    return { id: policyId, version: currentVersion! };
+  }
+  const version = currentVersion === null ? 1 : currentVersion + 1;
   if (currentRow) {
     const superseded = await client.query(
       `UPDATE tokenless_agent_review_policies SET enabled = false, superseded_at = $1
@@ -1397,7 +1520,7 @@ async function versionOwnerSelection(
         minimumConfidenceBps: input.policy.minimumConfidenceBps,
         maximumLatencyMs: input.policy.maximumLatencyMs,
       }),
-      stableJson({ reviewerSource: input.policy.audience }),
+      admissionPolicyJson(version),
       input.policy.publishingPolicyId,
       input.actor,
       input.now,
@@ -1424,7 +1547,7 @@ async function versionOwnerProfile(
   );
   const currentRow = currentResult.rows[0] as Row | undefined;
   if (currentRow && rowString(currentRow, "profile_hash") === profileHash) {
-    return { id: rowString(currentRow, "profile_id")!, version: rowInteger(currentRow, "version") };
+    return { id: rowString(currentRow, "profile_id")!, version: rowInteger(currentRow, "version"), hash: profileHash };
   }
   const profileId = currentRow ? rowString(currentRow, "profile_id")! : `rrp_${randomUUID().replaceAll("-", "")}`;
   const version = currentRow ? rowInteger(currentRow, "version") + 1 : 1;
@@ -1490,7 +1613,7 @@ async function versionOwnerProfile(
       input.now,
     ],
   );
-  return { id: profileId, version };
+  return { id: profileId, version, hash: profileHash };
 }
 
 export async function putHumanReviewConfigurationForOwner(input: PutHumanReviewConfigurationInput) {
@@ -1628,6 +1751,8 @@ export async function putHumanReviewConfigurationForOwner(input: PutHumanReviewC
       workspaceId: input.workspaceId,
       actor,
       policy: selection,
+      profile,
+      requestProfile,
       now,
     });
     if (body.publishingGrant === null) {
@@ -1673,7 +1798,7 @@ export async function putHumanReviewConfigurationForOwner(input: PutHumanReviewC
         agentVersionId: agent.agentVersionId,
         expectedBindingVersion: body.expectedBindingVersion,
         selectionPolicy,
-        requestProfile,
+        requestProfile: { id: requestProfile.id, version: requestProfile.version },
         publishingPolicy,
         authority: body.authority,
         now,

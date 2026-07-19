@@ -1,9 +1,13 @@
 import React from "react";
 import {
+  HANDOFF_AUTO_WAIT_MAX_MS,
   TokenlessHandoffClient,
   decodeTokenlessHandoffFragment,
   formatBpsPercent,
   formatUsdcAtomic,
+  parseTokenlessHandoffRecoveryOperation,
+  tokenlessHandoffWaitBudgets,
+  tokenlessHandoffWaitDeadline,
   validateTokenlessHandoffBinding,
   validateTokenlessQuoteRequest,
 } from "./TokenlessHandoffClient";
@@ -12,6 +16,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import test from "node:test";
+import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 const require = createRequire(import.meta.url);
 const { renderToStaticMarkup } = require("react-dom/server") as {
@@ -29,9 +34,50 @@ test("insufficient prepaid handoffs link directly to workspace top-up settings",
 
 const REDACTION_SUMMARY = "Names and account identifiers were replaced with synthetic values.";
 
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableJson(entry)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function audiencePolicy() {
+  return {
+    schemaVersion: "rateloop.human-assurance.v2" as const,
+    policyId: "policy_handoff_invited",
+    version: 1,
+    reviewerSource: "customer_invited" as const,
+    compensation: "paid" as const,
+    cohorts: [{ cohortId: "handoff-invited", minimumReviewers: 3, maximumReviewers: 500 }],
+    selection: "customer_named" as const,
+    fallbacks: { allowed: false, sources: [] },
+    requiredQualifications: [],
+    assurance: {
+      requirements: [
+        {
+          capability: "customer_invitation" as const,
+          reviewerSources: ["customer_invited" as const],
+          allowedProviders: ["workspace-invitation"],
+        },
+      ],
+    },
+    buyerPrivacy: { visibleFields: ["reviewer_source" as const], minimumAggregationSize: 3, suppressSmallCells: true },
+    legalEligibilityRequired: true,
+  };
+}
+
+function audiencePolicyHash() {
+  return `0x${createHash("sha256").update(stableJson(audiencePolicy())).digest("hex")}` as const;
+}
+
 function request(kind: "binary" | "head_to_head" = "binary") {
   return {
-    audience: { admissionPolicyHash: `0x${"ab".repeat(32)}`, source: "rateloop_network" },
+    audience: { admissionPolicyHash: audiencePolicyHash(), source: "customer_invited" },
+    audiencePolicy: audiencePolicy(),
     budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
     confirmedNoSensitiveData: true,
     dataClassification: "synthetic",
@@ -98,6 +144,17 @@ test("handoff binding rejects a shaped but tampered idempotency key", async () =
     new Date("2029-01-01T00:00:00.000Z"),
   );
   await assert.rejects(validateTokenlessHandoffBinding(decoded), /idempotency key do not match/i);
+});
+
+test("handoff recovery accepts only one non-secret operation reference", () => {
+  const operationKey = `op_${"a".repeat(32)}`;
+  assert.equal(parseTokenlessHandoffRecoveryOperation(`?operation=${operationKey}`), operationKey);
+  assert.equal(parseTokenlessHandoffRecoveryOperation(""), null);
+  assert.throws(() => parseTokenlessHandoffRecoveryOperation("?operation=bad"), /recovery reference is invalid/i);
+  assert.throws(
+    () => parseTokenlessHandoffRecoveryOperation(`?operation=${operationKey}&operation=${operationKey}`),
+    /recovery reference is invalid/i,
+  );
 });
 
 test("handoff parsing rejects malformed, expired, and economically invalid links before network use", () => {
@@ -236,6 +293,97 @@ test("signed-out handoffs open a fragment-safe sign-in in a separate tab and ref
   assert.doesNotMatch(handoffSource, /[?&](returnTo|payload)=[^"'`\n]*(location\.hash|payload)/i);
 });
 
+test("submitted handoffs persist no bearer secret and follow bounded wait before result", () => {
+  assert.match(handoffSource, /searchParams\.set\("operation", operationKey\)/);
+  assert.match(handoffSource, /url\.hash = ""/);
+  assert.match(handoffSource, /searchParams\.delete\("payload"\)/);
+  assert.match(handoffSource, /searchParams\.delete\("handoffToken"\)/);
+  assert.match(handoffSource, /\/asks\/\$\{encodeURIComponent\(operationKey\)\}\/wait/);
+  assert.match(handoffSource, /parseTokenlessWaitResponse/);
+  assert.match(handoffSource, /timeoutMs: String\(waitBudgets\.serverTimeoutMs\)/);
+  assert.match(handoffSource, /waited\.continuation\.expiresAt/);
+  assert.match(handoffSource, /fetchWithTimeout/);
+  assert.ok(
+    handoffSource.indexOf("persistTokenlessHandoffRecoveryOperation") < handoffSource.indexOf("setAsk(parsed)"),
+  );
+  assert.doesNotMatch(handoffSource, /localStorage|sessionStorage/);
+});
+
+test("automatic handoff polling is capped by both the product limit and continuation expiry", () => {
+  const startedAt = Date.parse("2026-07-19T10:00:00.000Z");
+  assert.equal(
+    tokenlessHandoffWaitDeadline(startedAt, "2026-07-20T10:00:00.000Z"),
+    startedAt + HANDOFF_AUTO_WAIT_MAX_MS,
+  );
+  assert.equal(tokenlessHandoffWaitDeadline(startedAt, "2026-07-19T10:00:30.000Z"), startedAt + 30_000);
+  assert.throws(() => tokenlessHandoffWaitDeadline(startedAt, "not-a-date"), /invalid result wait deadline/);
+});
+
+test("handoff wait transport shrinks to the remaining product deadline", () => {
+  assert.deepEqual(tokenlessHandoffWaitBudgets(60_000), {
+    serverTimeoutMs: 30_000,
+    transportTimeoutMs: 35_000,
+  });
+  assert.deepEqual(tokenlessHandoffWaitBudgets(12_000), {
+    serverTimeoutMs: 11_500,
+    transportTimeoutMs: 12_000,
+  });
+  assert.equal(tokenlessHandoffWaitBudgets(1_499), null);
+});
+
+test("a reloaded authenticated handoff resumes from its operation reference through bounded wait", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const previousFetch = globalThis.fetch;
+  const operationKey = `op_${"b".repeat(32)}`;
+  window.history.replaceState(null, "", `/?operation=${operationKey}`);
+  const calls: string[] = [];
+  globalThis.fetch = async input => {
+    const url = String(input);
+    calls.push(url);
+    if (url === "/api/auth/session") {
+      return Response.json({
+        authenticated: true,
+        expiresAt: "2030-01-01T00:00:00.000Z",
+        principalId: "rlp_handoff_recovery_test",
+      });
+    }
+    if (url === "/api/account/workspaces") return Response.json({ workspaces: [] });
+    if (url.includes(`/asks/${operationKey}/wait?`)) {
+      return Response.json({
+        schemaVersion: "rateloop.tokenless.v2",
+        operationKey,
+        status: "pending",
+        verdictStatus: null,
+        continuation: {
+          cursor: "1",
+          expiresAt: "2030-01-01T00:00:00.000Z",
+          pollUrl: `http://localhost/api/agent/v1/asks/${operationKey}/wait`,
+          retryAfterMs: 10_000,
+        },
+      });
+    }
+    throw new Error(`Unexpected handoff recovery request: ${url}`);
+  };
+
+  try {
+    const view = render(<TokenlessHandoffClient />);
+    await waitFor(() => assert.ok(view.getByRole("heading", { name: "Track your ask." })));
+    await waitFor(() => assert.ok(calls.some(url => url.includes(`/asks/${operationKey}/wait?timeoutMs=30000`))));
+    assert.ok(view.getByText(`Operation ${operationKey}`));
+    assert.equal(
+      calls.some(url => url.includes("/api/agent/v1/quote")),
+      false,
+    );
+    assert.equal(window.location.hash, "");
+  } finally {
+    cleanup();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
 test("browser quote validation preserves the owner-approved public-data contract", () => {
   const validated = validateTokenlessQuoteRequest(request());
   assert.equal(validated.visibility, "public");
@@ -251,6 +399,7 @@ test("browser quote validation rejects a stripped or downgraded public-data cont
     return next;
   };
   assert.throws(() => validateTokenlessQuoteRequest(strip("visibility")), /request\.visibility must be/i);
+  assert.throws(() => validateTokenlessQuoteRequest(strip("audiencePolicy")), /audiencePolicy is required/i);
   assert.throws(
     () => validateTokenlessQuoteRequest(strip("dataClassification")),
     /request\.dataClassification must be/i,

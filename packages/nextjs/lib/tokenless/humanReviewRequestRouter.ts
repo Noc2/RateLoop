@@ -1,4 +1,5 @@
 import type {
+  HumanAssuranceAudiencePolicy,
   HumanAssurancePrivateReviewCreateRequest,
   HumanAssurancePrivateReviewCreateResponse,
   TokenlessAskResponse,
@@ -8,6 +9,7 @@ import { createHash } from "node:crypto";
 import "server-only";
 import { isRateLoopPrincipalId } from "~~/lib/auth/accountSubject";
 import { dbClient } from "~~/lib/db";
+import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import { getEffectiveAgentReviewContext } from "~~/lib/tokenless/effectiveAgentReviewContext";
 import {
@@ -97,7 +99,12 @@ export type FrozenHumanReviewRoutingContext = {
   createdAt: Date;
   workflowKey: string;
   agent: { id: string; versionId: string };
-  selectionPolicy: { id: string; version: number; audiencePolicyHash: `sha256:${string}` };
+  selectionPolicy: {
+    id: string;
+    version: number;
+    audiencePolicyHash: `sha256:${string}`;
+    audiencePolicy: HumanAssuranceAudiencePolicy;
+  };
   contentCommitments: { source: `sha256:${string}`; suggestion: `sha256:${string}` };
   decision: "required" | "recommended" | "skip";
   lifecycle: { state: string; revision: number };
@@ -412,12 +419,15 @@ async function loadFrozenContext(
                  l.state AS lifecycle_state,l.state_revision AS lifecycle_revision,l.terminal_at,
                  s.workflow_key,
                  pp.allowed_project_ids_json,pp.allowed_reviewer_sources_json,
-                 pp.allowed_data_classifications_json,pp.max_retention_days
+                 pp.allowed_data_classifications_json,pp.max_retention_days,
+                 rp.audience_policy_json
           FROM tokenless_agent_review_opportunities o
           JOIN tokenless_agent_review_opportunity_lifecycles l
             ON l.workspace_id=o.workspace_id AND l.opportunity_id=o.opportunity_id
           JOIN tokenless_agent_evaluation_scopes s
             ON s.workspace_id=o.workspace_id AND s.scope_id=o.scope_id
+          JOIN tokenless_agent_review_policies rp
+            ON rp.workspace_id=o.workspace_id AND rp.policy_id=o.policy_id AND rp.version=o.policy_version
           LEFT JOIN tokenless_agent_publishing_policies pp
             ON pp.workspace_id=o.workspace_id AND pp.policy_id=? AND pp.version=?
           WHERE o.workspace_id=? AND o.opportunity_id=?
@@ -493,6 +503,14 @@ async function loadFrozenContext(
         maxRetentionDays: optionalPositiveInteger(row, "max_retention_days"),
       }
     : null;
+  const admissionPolicy = freezeAdmissionPolicy(JSON.parse(String(row.audience_policy_json)));
+  if (admissionPolicy.policyHash !== effective.reviewPolicy.audiencePolicyHash) {
+    throw new TokenlessServiceError(
+      "The stored admission policy does not match the exact review policy hash.",
+      409,
+      "review_routing_configuration_invalid",
+    );
+  }
   return {
     workspaceId: principal.integration.workspaceId,
     integrationId: principal.integration.integrationId,
@@ -504,6 +522,7 @@ async function loadFrozenContext(
       id: effective.reviewPolicy.policyId,
       version: effective.reviewPolicy.version,
       audiencePolicyHash: effective.reviewPolicy.audiencePolicyHash as `sha256:${string}`,
+      audiencePolicy: admissionPolicy.policy,
     },
     contentCommitments: {
       source: text(row, "source_evidence_hash") as `sha256:${string}`,
@@ -1351,6 +1370,7 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
         privateGroup: context.requestProfile.privateGroup!,
         reviewers: privateBinding.paidReviewers!,
         audiencePolicyHash: context.selectionPolicy.audiencePolicyHash,
+        admissionPolicy: context.selectionPolicy.audiencePolicy,
         publishingPolicy: context.grant.configuredPolicy!,
         preparedRequest: prepared.preparedRequest,
         preparedRequestHash: prepared.preparedRequestHash,

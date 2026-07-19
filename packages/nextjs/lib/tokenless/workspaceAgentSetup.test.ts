@@ -327,7 +327,9 @@ test("setup binds one verified connection and completes without publishing or sp
     args: [integration.rows[0]?.review_policy_id, integration.rows[0]?.review_policy_version],
   });
   const audiencePolicy = JSON.parse(String(audience.rows[0]?.audience_policy_json));
-  assert.equal(audiencePolicy.reviewerSource, "private_invited");
+  assert.equal(audiencePolicy.reviewerSource, "customer_invited");
+  assert.equal(audiencePolicy.schemaVersion, "rateloop.human-assurance.v2");
+  assert.equal(audiencePolicy.selection, "customer_named");
   const profile = await dbClient.execute({
     sql: `SELECT private_group_id FROM tokenless_agent_review_request_profiles
           WHERE profile_id=? AND version=?`,

@@ -9,6 +9,7 @@ import {
   TOKENLESS_SCHEMA_VERSION,
 } from "@rateloop/sdk";
 import { describe, expect, it, vi } from "vitest";
+import { sha256, stringToHex } from "viem";
 import type { PrivateKeyAccount } from "viem/accounts";
 import { runTokenlessAutonomous } from "../tokenlessRun";
 
@@ -21,11 +22,58 @@ const deployment = {
   usdcAddress: "0x3333333333333333333333333333333333333333",
 } satisfies TokenlessDeploymentIdentity;
 
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .filter(([, entry]) => entry !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+const audiencePolicy = {
+  schemaVersion: "rateloop.human-assurance.v2" as const,
+  policyId: "aud_test_customer_invited",
+  version: 1,
+  reviewerSource: "customer_invited" as const,
+  compensation: "paid" as const,
+  cohorts: [
+    {
+      cohortId: "customer_named",
+      minimumReviewers: 3,
+      maximumReviewers: 500,
+    },
+  ],
+  selection: "customer_named" as const,
+  fallbacks: { allowed: false, sources: [] },
+  requiredQualifications: [],
+  assurance: {
+    requirements: [
+      {
+        capability: "account_control" as const,
+        reviewerSources: ["customer_invited" as const],
+        allowedProviders: [],
+      },
+    ],
+  },
+  buyerPrivacy: {
+    visibleFields: [],
+    minimumAggregationSize: 3,
+    suppressSmallCells: true,
+  },
+  legalEligibilityRequired: true,
+};
+const admissionPolicyHash = sha256(stringToHex(canonicalJson(audiencePolicy)));
+
 const quoteRequest = {
   audience: {
-    admissionPolicyHash: `0x${"44".repeat(32)}`,
+    admissionPolicyHash,
     source: "customer_invited",
   },
+  audiencePolicy,
   budget: {
     attemptReserveAtomic: "636",
     bountyAtomic: "800",
@@ -117,7 +165,7 @@ function paymentInstructions(
       attemptCompensation: "212",
       minimumReveals: 3,
       maximumCommits: 3,
-      admissionPolicyHash: `0x${"44".repeat(32)}`,
+      admissionPolicyHash,
       commitDeadline: String(commitDeadline),
       revealDeadline: String(commitDeadline + roundPolicy.revealWindowSeconds),
       beaconFailureDeadline: String(

@@ -1,6 +1,7 @@
 import type { HumanAssurancePrivateReviewCreateResponse, TokenlessAskResponse } from "@rateloop/sdk";
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import type { PreparedOwnerApproval } from "~~/lib/tokenless/humanReviewApprovalPreparation";
 import {
@@ -20,6 +21,54 @@ const PAID_REVIEWERS = REVIEWERS.map(payoutAccount => ({
   principalId: `rlp_${payoutAccount.slice(2, 26)}`,
   payoutAccount,
 }));
+
+function audiencePolicy(privateLane: boolean) {
+  return {
+    schemaVersion: "rateloop.human-assurance.v2" as const,
+    policyId: privateLane ? "audience_agent_flow_invited" : "audience_agent_flow_network",
+    version: 1,
+    reviewerSource: privateLane ? ("customer_invited" as const) : ("rateloop_network" as const),
+    compensation: "paid" as const,
+    cohorts: privateLane ? [{ cohortId: "cohort_agent_flow", minimumReviewers: 1, maximumReviewers: 100 }] : [],
+    selection: privateLane ? ("customer_named" as const) : ("randomized" as const),
+    fallbacks: { allowed: false, sources: [] },
+    requiredQualifications: [],
+    assurance: {
+      requirements: privateLane
+        ? [
+            {
+              capability: "customer_invitation" as const,
+              reviewerSources: ["customer_invited" as const],
+              allowedProviders: ["workspace-invitation"],
+            },
+          ]
+        : [
+            {
+              capability: "unique_human" as const,
+              reviewerSources: ["rateloop_network" as const],
+              allowedProviders: ["world:poh"],
+            },
+          ],
+    },
+    ...(privateLane
+      ? {}
+      : {
+          integrity: {
+            schemaVersion: "rateloop.integrity-assignment.v1" as const,
+            epochId: "integrity:agent-flow:1",
+            epochManifestHash: HASH,
+            maxClusterShareBps: 2_000,
+            allowedRiskBands: ["low" as const],
+            recentCoassignmentWindowSeconds: 86_400,
+            maxRecentCoassignments: 1,
+            maxPerCustomer: 3,
+            onePerProviderSubject: true as const,
+          },
+        }),
+    buyerPrivacy: { visibleFields: ["reviewer_source" as const], minimumAggregationSize: 3, suppressSmallCells: true },
+    legalEligibilityRequired: true,
+  };
+}
 
 const principal: IntegrationPrincipal = {
   kind: "integration",
@@ -53,6 +102,7 @@ function context(input: {
   responseWindowSeconds: number;
 }): FrozenHumanReviewRoutingContext {
   const privateLane = input.lane === "private_invited_unpaid" || input.lane === "private_invited_paid";
+  const frozenAudiencePolicy = freezeAdmissionPolicy(audiencePolicy(privateLane));
   return {
     workspaceId: "workspace_agent_flow_e2e",
     integrationId: "integration_agent_flow_e2e",
@@ -60,7 +110,12 @@ function context(input: {
     createdAt: NOW,
     workflowKey: "support-reply",
     agent: { id: "agent_agent_flow_e2e", versionId: "agent_version_agent_flow_e2e" },
-    selectionPolicy: { id: "review_policy_agent_flow_e2e", version: 1, audiencePolicyHash: HASH },
+    selectionPolicy: {
+      id: "review_policy_agent_flow_e2e",
+      version: 1,
+      audiencePolicyHash: frozenAudiencePolicy.policyHash,
+      audiencePolicy: frozenAudiencePolicy.policy,
+    },
     contentCommitments: { source: HASH, suggestion: HASH },
     decision: "required",
     lifecycle: { state: "approval_required", revision: 2 },
@@ -106,13 +161,13 @@ function context(input: {
   };
 }
 
-function hybridSplit(opportunityId: string): FrozenHybridReviewSplit {
+function hybridSplit(context: FrozenHumanReviewRoutingContext): FrozenHybridReviewSplit {
   return {
     schemaVersion: "rateloop.hybrid-review-split.v1",
-    opportunityId,
-    audiencePolicyHash: HASH,
-    requestProfileHash: HASH,
-    contentCommitments: { source: HASH, suggestion: HASH },
+    opportunityId: context.opportunityId,
+    audiencePolicyHash: context.selectionPolicy.audiencePolicyHash,
+    requestProfileHash: context.requestProfile.hash,
+    contentCommitments: context.contentCommitments,
     publication: { visibility: "public", dataClassification: "public", confirmedNoSensitiveData: true },
     economics: { asset: "USDC", invitedMaximumChargeAtomic: "1000000", networkMaximumChargeAtomic: "1000000" },
     invited: {
@@ -139,7 +194,7 @@ function material(frozen: FrozenHumanReviewRoutingContext): HumanReviewRoutingMa
       confirmedNoSensitiveData: true,
       admissionPolicyHash: `0x${"58".repeat(32)}`,
     } as never,
-    ...(frozen.requestProfile.lane === "hybrid_public_safe" ? { hybridSplit: hybridSplit(frozen.opportunityId) } : {}),
+    ...(frozen.requestProfile.lane === "hybrid_public_safe" ? { hybridSplit: hybridSplit(frozen) } : {}),
   };
 }
 

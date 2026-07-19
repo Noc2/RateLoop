@@ -9,6 +9,7 @@ import { resolveBetterAuthPrincipal } from "~~/lib/auth/principal";
 import { AUTH_SESSION_COOKIE, createAuthSession } from "~~/lib/auth/session";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { createWorkspace, createWorkspaceApiKey, recordPrepaidLedgerEntry } from "~~/lib/tokenless/productCore";
 import {
   type PublicQuestionMediaStore,
@@ -23,6 +24,31 @@ import { createTokenlessQuote } from "~~/lib/tokenless/server";
 const ORIGIN = "https://tokenless.example.test";
 const ASSET_ID = `pqm_${"R".repeat(32)}`;
 const SECOND_ASSET_ID = `pqm_${"S".repeat(32)}`;
+
+function audiencePolicy() {
+  return {
+    schemaVersion: "rateloop.human-assurance.v2" as const,
+    policyId: "policy_public_media_route_test",
+    version: 1,
+    reviewerSource: "customer_invited" as const,
+    compensation: "paid" as const,
+    cohorts: [{ cohortId: "media-route-test", minimumReviewers: 3, maximumReviewers: 500 }],
+    selection: "customer_named" as const,
+    fallbacks: { allowed: false, sources: [] },
+    requiredQualifications: [],
+    assurance: {
+      requirements: [
+        {
+          capability: "customer_invitation" as const,
+          reviewerSources: ["customer_invited" as const],
+          allowedProviders: ["workspace-invitation"],
+        },
+      ],
+    },
+    buyerPrivacy: { visibleFields: ["reviewer_source" as const], minimumAggregationSize: 3, suppressSmallCells: true },
+    legalEligibilityRequired: true,
+  };
+}
 
 class MemoryMediaStore implements PublicQuestionMediaStore {
   readonly objects = new Map<string, Uint8Array>();
@@ -181,8 +207,10 @@ test("an API-key upload remains private but its exact grant lets a different bro
           WHERE workspace_id = ?`,
     args: [new Date(now.getTime() - 60_000), new Date(now.getTime() + 86_400_000), now, workspaceId],
   });
+  const policy = audiencePolicy();
   const quoteRequest = {
-    audience: { admissionPolicyHash: `0x${"ab".repeat(32)}`, source: "customer_invited" },
+    audience: { admissionPolicyHash: freezeAdmissionPolicy(policy).admissionPolicyHash, source: "customer_invited" },
+    audiencePolicy: policy,
     budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
     confirmedNoSensitiveData: true,
     dataClassification: "synthetic",

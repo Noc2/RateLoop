@@ -4,7 +4,7 @@ import { type TokenlessChainRuntime } from "./runtime";
 import { TokenlessPanelAbi } from "@rateloop/contracts/tokenless";
 import { HUMAN_ASSURANCE_SCHEMA_VERSION } from "@rateloop/sdk";
 import assert from "node:assert/strict";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
 import {
   type Address,
@@ -109,39 +109,6 @@ function admissionPolicy() {
   };
 }
 
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
-  if (value && typeof value === "object") {
-    return `{${Object.entries(value as Record<string, unknown>)
-      .filter(([, entry]) => entry !== undefined)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, entry]) => `${JSON.stringify(key)}:${stableJson(entry)}`)
-      .join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
-
-async function freezeAskAdmissionPolicy(operationKey: string) {
-  const source = await dbClient.execute({
-    sql: `SELECT q.question_id, q.terms_json FROM tokenless_ask_ownership o
-          JOIN tokenless_question_records q ON q.question_id = o.question_id
-          WHERE o.operation_key = ? LIMIT 1`,
-    args: [operationKey],
-  });
-  const row = source.rows[0];
-  assert.ok(row);
-  const terms = {
-    ...(JSON.parse(String(row.terms_json)) as Record<string, unknown>),
-    audiencePolicy: admissionPolicy(),
-  };
-  const termsJson = stableJson(terms);
-  const termsHash = createHash("sha256").update(termsJson).digest("hex");
-  await dbClient.execute({
-    sql: "UPDATE tokenless_question_records SET terms_json = ?, terms_hash = ?, updated_at = ? WHERE question_id = ?",
-    args: [termsJson, termsHash, new Date(), row.question_id],
-  });
-}
-
 async function prepaidAsk() {
   const { workspaceId } = await createWorkspace({ name: "Prepaid team", ownerAddress: FUNDER });
   const now = new Date();
@@ -163,10 +130,14 @@ async function prepaidAsk() {
       admissionPolicyHash: freezeAdmissionPolicy(admissionPolicy()).admissionPolicyHash,
       source: "rateloop_network",
     },
+    audiencePolicy: admissionPolicy(),
+    confirmedNoSensitiveData: true,
+    dataClassification: "synthetic",
     budget: { attemptReserveAtomic: "20000000", bountyAtomic: "25000000", feeBps: 750 },
     question: { kind: "binary" as const, prompt: "Ship this?", rationale: { mode: "optional" as const } },
     requestedPanelSize: 15,
     responseWindowSeconds: 7_200,
+    visibility: "public",
   });
   const request = {
     idempotencyKey: "chain:prepaid:12345678",
@@ -179,7 +150,6 @@ async function prepaidAsk() {
   });
   const ask = await createTokenlessAsk(request, request.idempotencyKey, "https://tokenless.example");
   await attachProductAsk(prepared, ask);
-  await freezeAskAdmissionPolicy(ask.operationKey);
   await dbClient.execute("UPDATE tokenless_content_records SET moderation_status = 'approved'");
   await dbClient.execute("UPDATE tokenless_question_records SET moderation_status = 'approved'");
   return { operationKey: ask.operationKey, workspaceId };

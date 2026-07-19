@@ -255,7 +255,7 @@ test("API-key ask results fan out only to active workspace owners and admins", a
   await dbClient.execute({
     sql: `INSERT INTO tokenless_agent_quotes
           (quote_id, request_hash, request_json, response_json, expires_at, created_at)
-          VALUES ('quote-api-result', 'hash-api-result', '{}', '{}', ?, ?)`,
+          VALUES ('quote-api-result', 'hash-api-result', '{"visibility":"public"}', '{}', ?, ?)`,
     args: [new Date(NOW.getTime() + 60_000), NOW],
   });
   await dbClient.execute({

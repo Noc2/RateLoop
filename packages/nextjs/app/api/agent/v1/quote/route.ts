@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { TokenlessMcpHttpError } from "~~/lib/mcp/errors";
 import { consumeMcpRateLimit } from "~~/lib/mcp/rateLimit";
 import {
-  authenticateProductPrincipal,
-  getProductSessionToken,
-  requireProductPrincipalScope,
-} from "~~/lib/tokenless/productCore";
-import { createTokenlessQuote, parseTokenlessQuoteRequest, tokenlessErrorResponse } from "~~/lib/tokenless/server";
+  TokenlessServiceError,
+  createTokenlessQuote,
+  parseTokenlessQuoteRequest,
+  tokenlessErrorResponse,
+} from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -53,14 +53,20 @@ export async function POST(request: NextRequest) {
       response.headers.set("Retry-After", String(rateLimit.retryAfterSeconds));
       return response;
     }
-    const body = parseTokenlessQuoteRequest(await readQuoteBody(request));
-    if (body.visibility !== "public") {
-      const principal = await authenticateProductPrincipal({
-        authorization: request.headers.get("authorization"),
-        sessionToken: getProductSessionToken(request),
-      });
-      requireProductPrincipalScope(principal, "quote:read");
+    const rawBody = await readQuoteBody(request);
+    if (
+      !rawBody ||
+      typeof rawBody !== "object" ||
+      Array.isArray(rawBody) ||
+      (rawBody as Record<string, unknown>).visibility !== "public"
+    ) {
+      throw new TokenlessServiceError(
+        "Private quotes are created only by the internal encrypted-review workflow.",
+        409,
+        "private_quote_internal_only",
+      );
     }
+    const body = parseTokenlessQuoteRequest(rawBody);
     return NextResponse.json(await createTokenlessQuote(body), {
       headers: { "Cache-Control": "no-store" },
     });

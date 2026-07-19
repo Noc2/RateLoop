@@ -10,6 +10,7 @@ import {
   waitForAdaptiveHumanReview,
 } from "~~/lib/tokenless/adaptiveReviewOrchestration";
 import { evaluateAdaptiveReviewRequirement } from "~~/lib/tokenless/adaptiveReviewService";
+import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { createWorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
 import { hashHumanReviewConfiguration } from "~~/lib/tokenless/humanReviewConfiguration";
 import { transitionHumanReviewOpportunityLifecycle } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
@@ -26,13 +27,85 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
-const ADMISSION_HASH = `0x${"ab".repeat(32)}` as const;
 const APP_ORIGIN = "https://rateloop-tokenless.example";
 const SOURCE_PAYLOAD = "Customer requested a refund for a duplicated charge.";
 const SUGGESTION_PAYLOAD = "Approve the refund after verifying the duplicate transaction IDs.";
 const originalSamplerKey = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY;
 const originalSamplerVersion = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION;
 const originalNetworkPanelsEnabled = process.env.TOKENLESS_NETWORK_PANELS_ENABLED;
+
+function networkAdmissionPolicy(policyId: string) {
+  return {
+    schemaVersion: "rateloop.human-assurance.v2" as const,
+    policyId,
+    version: 1,
+    reviewerSource: "rateloop_network" as const,
+    integrity: {
+      schemaVersion: "rateloop.integrity-assignment.v1" as const,
+      epochId: "integrity:adaptive-review:test",
+      epochManifestHash: `sha256:${"ab".repeat(32)}` as const,
+      maxClusterShareBps: 3_334,
+      allowedRiskBands: ["low", "medium"] as const,
+      recentCoassignmentWindowSeconds: 2_592_000,
+      maxRecentCoassignments: 1,
+      maxPerCustomer: 3,
+      onePerProviderSubject: true as const,
+    },
+    compensation: "paid" as const,
+    cohorts: [],
+    selection: "randomized" as const,
+    fallbacks: { allowed: false, sources: [] },
+    requiredQualifications: [],
+    assurance: {
+      requirements: [
+        {
+          capability: "unique_human" as const,
+          reviewerSources: ["rateloop_network" as const],
+          allowedProviders: ["world:poh"],
+          freshnessSeconds: 3_600,
+        },
+      ],
+    },
+    buyerPrivacy: {
+      visibleFields: ["reviewer_source" as const],
+      minimumAggregationSize: 3,
+      suppressSmallCells: true,
+    },
+    legalEligibilityRequired: true,
+  };
+}
+
+async function seedNetworkAdmissionPolicy(workspaceId: string) {
+  const now = new Date();
+  const projectId = `hap_adaptive_${workspaceId.slice(-16)}`;
+  const frozenAdmissionPolicy = freezeAdmissionPolicy(networkAdmissionPolicy(`haa_adaptive_${workspaceId.slice(-16)}`));
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_projects
+          (project_id,workspace_id,name,data_classification,retention_days,created_by,created_at,updated_at)
+          VALUES (?,?,'Adaptive review network fixture','synthetic',30,?,?,?)`,
+    args: [projectId, workspaceId, OWNER, now, now],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_audience_policies
+          (policy_id,project_id,version,reviewer_source,compensation,cohorts_json,selection,
+           fallbacks_json,required_qualifications_json,assurance_json,buyer_privacy_json,
+           legal_eligibility_required,policy_hash,policy_json,created_at)
+          VALUES (?,?,1,'rateloop_network','paid','[]','randomized',?,?,?,?,?,?,?,?)`,
+    args: [
+      frozenAdmissionPolicy.policy.policyId,
+      projectId,
+      JSON.stringify(frozenAdmissionPolicy.policy.fallbacks),
+      JSON.stringify(frozenAdmissionPolicy.policy.requiredQualifications),
+      JSON.stringify(frozenAdmissionPolicy.policy.assurance),
+      JSON.stringify(frozenAdmissionPolicy.policy.buyerPrivacy),
+      frozenAdmissionPolicy.policy.legalEligibilityRequired,
+      frozenAdmissionPolicy.policyHash,
+      frozenAdmissionPolicy.policyJson,
+      now,
+    ],
+  });
+  return frozenAdmissionPolicy;
+}
 
 beforeEach(() => {
   process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = "77".repeat(32);
@@ -73,6 +146,7 @@ async function fixture(
 ) {
   const { workspaceId } = await createWorkspace({ name: "Adaptive orchestration", ownerAddress: OWNER });
   await activateEarlyAccess(workspaceId);
+  const admissionPolicy = await seedNetworkAdmissionPolicy(workspaceId);
   const agent = await createWorkspaceAgent({
     accountAddress: OWNER,
     workspaceId,
@@ -105,7 +179,7 @@ async function fixture(
             ? "hybrid"
             : "rateloop_network",
       ],
-      allowedAdmissionPolicyHashes: input.admissionHashes ?? [ADMISSION_HASH],
+      allowedAdmissionPolicyHashes: [admissionPolicy.admissionPolicyHash, ...(input.admissionHashes ?? [])],
       allowedDataClassifications: ["public", "synthetic", "redacted"],
     },
   });
@@ -236,7 +310,14 @@ async function fixture(
   if (input.fund !== false) {
     await recordPrepaidLedgerEntry({ workspaceId, amountAtomic: "100000000", source: "test-funding" });
   }
-  return { workspaceId, publishingPolicy, principal, decision, humanReview };
+  return {
+    workspaceId,
+    publishingPolicy,
+    principal,
+    decision,
+    humanReview,
+    admissionPolicyHash: admissionPolicy.admissionPolicyHash,
+  };
 }
 
 const publication = {
@@ -294,7 +375,10 @@ test("creates one prepaid canonical ask and idempotently binds the required oppo
   const quoteRequest = JSON.parse(String(stored.rows[0]?.request_json)) as Record<string, unknown>;
   assert.equal(stored.rows[0]?.payment_mode, "prepaid");
   assert.equal(stored.rows[0]?.api_key_id, setup.principal.principal.apiKeyId);
-  assert.deepEqual(quoteRequest.audience, { admissionPolicyHash: ADMISSION_HASH, source: "rateloop_network" });
+  assert.deepEqual(quoteRequest.audience, {
+    admissionPolicyHash: setup.admissionPolicyHash,
+    source: "rateloop_network",
+  });
   assert.equal(quoteRequest.visibility, "public");
   assert.equal(quoteRequest.dataClassification, "synthetic");
   assert.equal(quoteRequest.confirmedNoSensitiveData, true);
@@ -698,7 +782,7 @@ test("verifies both exact human-visible payload commitments before spending fund
 });
 
 test("fails closed on ambiguous admission policies and insufficient prepaid funds", async () => {
-  const ambiguous = await fixture({ admissionHashes: [ADMISSION_HASH, `0x${"cd".repeat(32)}`] });
+  const ambiguous = await fixture({ admissionHashes: [`0x${"cd".repeat(32)}`] });
   await assert.rejects(
     () =>
       requestAdaptiveHumanReview({

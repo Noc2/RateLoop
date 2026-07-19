@@ -133,6 +133,20 @@ function managedCohortId(input: { projectId: string; profileHash: string; privat
   ]);
 }
 
+export function workspacePrivateReviewRoutingIds(input: {
+  workspaceId: string;
+  profileId: string;
+  profileVersion: number;
+  profileHash: string;
+  privateGroupId: string;
+}) {
+  const projectId = managedProjectId(input);
+  return {
+    projectId,
+    cohortId: managedCohortId({ projectId, profileHash: input.profileHash, privateGroupId: input.privateGroupId }),
+  };
+}
+
 function normalizeActor(value: string) {
   try {
     return normalizeAccountSubject(value);

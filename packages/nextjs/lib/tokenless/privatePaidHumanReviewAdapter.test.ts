@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import {
   type PrivatePaidHumanReviewRequest,
   __privatePaidHumanReviewAdapterTestUtils,
@@ -14,6 +15,31 @@ const REVIEWER_BINDINGS = REVIEWERS.map(payoutAccount => ({
   principalId: `rlp_${payoutAccount.slice(2, 26)}`,
   payoutAccount,
 }));
+
+function admissionPolicy() {
+  return {
+    schemaVersion: "rateloop.human-assurance.v2" as const,
+    policyId: "policy_review_private_paid",
+    version: 7,
+    reviewerSource: "customer_invited" as const,
+    compensation: "paid" as const,
+    cohorts: [{ cohortId: "cohort_private_paid", minimumReviewers: 2, maximumReviewers: 2 }],
+    selection: "customer_named" as const,
+    fallbacks: { allowed: false, sources: [] },
+    requiredQualifications: [],
+    assurance: {
+      requirements: [
+        {
+          capability: "customer_invitation" as const,
+          reviewerSources: ["customer_invited" as const],
+          allowedProviders: ["workspace-invitation"],
+        },
+      ],
+    },
+    buyerPrivacy: { visibleFields: ["reviewer_source" as const], minimumAggregationSize: 2, suppressSmallCells: true },
+    legalEligibilityRequired: true,
+  };
+}
 
 function request(): PrivatePaidHumanReviewRequest {
   const preparedRequest = {
@@ -54,6 +80,7 @@ function request(): PrivatePaidHumanReviewRequest {
     attemptReserveAtomic: "400000",
     maximumChargeAtomic: "2550000",
   };
+  const frozenPolicy = freezeAdmissionPolicy(admissionPolicy());
   return {
     principal: {
       kind: "api_key",
@@ -63,6 +90,7 @@ function request(): PrivatePaidHumanReviewRequest {
       scopes: ["panel:publish", "payment:submit"],
       policyId: "policy_publish_private_paid",
     },
+    appOrigin: "https://rateloop-tokenless.example",
     integrationId: "integration_private_paid",
     opportunityId: preparedRequest.opportunityId,
     privateReviewId: "private_review_private_paid",
@@ -70,7 +98,8 @@ function request(): PrivatePaidHumanReviewRequest {
     cohortId: "cohort_private_paid",
     privateGroup: { id: "group_private_paid", policyVersion: 3, policyHash: HASH },
     reviewers: REVIEWER_BINDINGS,
-    audiencePolicyHash: HASH,
+    audiencePolicyHash: frozenPolicy.policyHash,
+    admissionPolicy: frozenPolicy.policy,
     publishingPolicy: { id: "policy_publish_private_paid", version: 6 },
     preparedRequest,
     preparedRequestHash: __privatePaidHumanReviewAdapterTestUtils.sha256(preparedRequest),
@@ -80,10 +109,11 @@ function request(): PrivatePaidHumanReviewRequest {
   };
 }
 
-function dependencies(options?: { failReviewer?: string }) {
+function dependencies(options?: { failReviewer?: string; activateOperation?: "pending"; clock?: () => Date }) {
   const order: string[] = [];
   const voucherInputs: unknown[] = [];
   const adapter = createPrivatePaidHumanReviewAdapter({
+    clock: options?.clock ?? (() => NOW),
     requireEligibility: async principalId => {
       const reviewer = REVIEWER_BINDINGS.find(value => value.principalId === principalId)!;
       order.push(`eligibility:${principalId}`);
@@ -111,17 +141,22 @@ function dependencies(options?: { failReviewer?: string }) {
         eligibilityCommitment: HASH,
       };
     },
-    reserveFunding: async () => {
-      order.push("funding");
+    activateOperation: async () => {
+      order.push("activate_operation");
       return {
-        schemaVersion: "rateloop.private-paid-funding-reservation.v1",
-        idempotencyKey: "private-paid:test-funding",
+        operationId: "paid_operation_private_paid",
+        requestIdempotencyKey: "paid-assignment:test-funding",
+        askOperationKey: "ask_private_paid",
         prepaidReservationId: "res_private_paid",
         policyReservationId: "agres_private_paid",
-        amountAtomic: "2550000",
-        status: "reserved",
+        expectedAmountAtomic: "2550000",
+        readyForAssignment: options?.activateOperation !== "pending",
         replayed: false,
-      };
+      } as never;
+    },
+    revalidateOperation: async () => {
+      order.push("revalidate_operation");
+      return {} as never;
     },
     assignEncrypted: async () => {
       order.push("assign_encrypted");
@@ -143,9 +178,8 @@ function dependencies(options?: { failReviewer?: string }) {
         })),
       };
     },
-    bindFunding: async () => {
-      order.push("bind_funding");
-      return "private-paid:delivery_private_paid";
+    bindSeats: async () => {
+      order.push("bind_seats");
     },
     prepareVoucher: async input => {
       order.push(`voucher:${input.raterId}`);
@@ -168,11 +202,15 @@ test("preflights every named human before funding, assignment, or voucher prepar
   assert.deepEqual(order, [
     `eligibility:${REVIEWER_BINDINGS[0]!.principalId}`,
     `eligibility:${REVIEWER_BINDINGS[1]!.principalId}`,
-    "funding",
+    "activate_operation",
+    "revalidate_operation",
     "assign_encrypted",
-    "bind_funding",
+    "revalidate_operation",
     `voucher:rater_${REVIEWERS[0].slice(2, 18)}`,
+    "revalidate_operation",
     `voucher:rater_${REVIEWERS[1].slice(2, 18)}`,
+    "revalidate_operation",
+    "bind_seats",
   ]);
   assert.equal(result.lane, "private_invited_paid");
   assert.equal(result.funding.amountAtomic, "2550000");
@@ -209,6 +247,21 @@ test("one ineligible invited human fails closed before any paid or private side 
   ]);
 });
 
+test("production operation activation waits for an exact round before encrypted delivery", async () => {
+  const { adapter, order } = dependencies({ activateOperation: "pending" });
+  const input = request();
+  input.appOrigin = "https://rateloop-tokenless.example";
+  await assert.rejects(
+    adapter(input),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "private_paid_round_pending",
+  );
+  assert.deepEqual(order, [
+    `eligibility:${REVIEWER_BINDINGS[0]!.principalId}`,
+    `eligibility:${REVIEWER_BINDINGS[1]!.principalId}`,
+    "activate_operation",
+  ]);
+});
+
 test("the adapter rejects unpaid economics instead of falling back to the private unpaid lane", async () => {
   const { adapter, order } = dependencies();
   const input = request();
@@ -219,6 +272,28 @@ test("the adapter rejects unpaid economics instead of falling back to the privat
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "private_paid_review_binding_conflict",
   );
   assert.deepEqual(order, []);
+});
+
+test("fresh time stops expired eligibility before voucher preparation", async () => {
+  let reads = 0;
+  const { adapter, order, voucherInputs } = dependencies({
+    clock: () => {
+      reads += 1;
+      return reads >= 5 ? new Date("2026-07-16T13:00:00.000Z") : NOW;
+    },
+  });
+  await assert.rejects(
+    adapter(request()),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "paid_eligibility_expired",
+  );
+  assert.deepEqual(order, [
+    `eligibility:${REVIEWER_BINDINGS[0]!.principalId}`,
+    `eligibility:${REVIEWER_BINDINGS[1]!.principalId}`,
+    "activate_operation",
+    "revalidate_operation",
+    "assign_encrypted",
+  ]);
+  assert.equal(voucherInputs.length, 0);
 });
 
 test("the prepared voucher binds the exact encrypted assignment and membership snapshot without plaintext", async () => {
@@ -234,6 +309,7 @@ test("a partial voucher-preparation interruption returns no success and an idemp
   let interrupted = false;
   let voucherCalls = 0;
   const retrying = createPrivatePaidHumanReviewAdapter({
+    clock: () => NOW,
     requireEligibility: async principalId => {
       const reviewer = REVIEWER_BINDINGS.find(value => value.principalId === principalId)!;
       const raterId = `rater_${reviewer.payoutAccount.slice(2, 18)}`;
@@ -250,15 +326,18 @@ test("a partial voucher-preparation interruption returns no success and an idemp
         eligibilityCommitment: HASH,
       };
     },
-    reserveFunding: async () => ({
-      schemaVersion: "rateloop.private-paid-funding-reservation.v1",
-      idempotencyKey: "private-paid:retry-funding",
-      prepaidReservationId: "res_retry",
-      policyReservationId: "agres_retry",
-      amountAtomic: "2550000",
-      status: "reserved",
-      replayed: voucherCalls > 0,
-    }),
+    activateOperation: async () =>
+      ({
+        operationId: "paid_operation_retry",
+        requestIdempotencyKey: "paid-assignment:retry-funding",
+        askOperationKey: "ask_retry",
+        prepaidReservationId: "res_retry",
+        policyReservationId: "agres_retry",
+        expectedAmountAtomic: "2550000",
+        readyForAssignment: true,
+        replayed: voucherCalls > 0,
+      }) as never,
+    revalidateOperation: async () => ({}) as never,
     assignEncrypted: async () => ({
       schemaVersion: "rateloop.private-paid-review-delivery.v1",
       deliveryId: "delivery_retry",
@@ -276,7 +355,7 @@ test("a partial voucher-preparation interruption returns no success and an idemp
         status: "reserved" as const,
       })),
     }),
-    bindFunding: async () => "private-paid:delivery_retry",
+    bindSeats: async () => {},
     prepareVoucher: async input => {
       voucherCalls += 1;
       if (!interrupted && input.raterId.endsWith(REVIEWERS[1].slice(2, 18))) {

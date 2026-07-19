@@ -9,7 +9,9 @@ import {
   type TokenlessQuoteResponse,
   type TokenlessResult,
   type TokenlessWaitResponse,
+  buildTokenlessPrivateReviewCommitmentQuestion,
   normalizeTokenlessQuestion,
+  normalizeTokenlessQuoteRequest,
   parseTokenlessQuoteResponse,
   parseTokenlessResult,
 } from "@rateloop/sdk";
@@ -41,9 +43,14 @@ type StoredQuote = {
   requestHash: string;
   requestJson: string;
   responseJson: string;
+  ownerPrincipalId: string | null;
+  ownerWorkspaceId: string | null;
+  ownerApiKeyId: string | null;
   expiresAt: Date;
   createdAt: Date;
 };
+
+export type TokenlessQuoteOwner = { kind: "api_key"; apiKeyId: string; workspaceId: string };
 
 type StoredAsk = {
   operationKey: string;
@@ -88,6 +95,10 @@ function stableJson(value: unknown): string {
 
 function hash(value: unknown) {
   return createHash("sha256").update(stableJson(value)).digest("hex");
+}
+
+export function hashTokenlessQuoteRequest(value: unknown) {
+  return hash(parseTokenlessQuoteRequest(value));
 }
 
 function parseAtomic(value: unknown, path: string) {
@@ -173,13 +184,33 @@ export function parseTokenlessQuoteRequest(value: unknown): TokenlessQuoteReques
   if (!Number.isSafeInteger(request.budget.feeBps) || request.budget.feeBps < 0 || request.budget.feeBps > 2_000) {
     throw new TokenlessServiceError("budget.feeBps must be between 0 and 2000.", 400, "invalid_quote");
   }
-  return {
+  const normalized = {
     ...request,
     question,
     visibility,
     dataClassification,
     ...(request.redactionSummary === undefined ? {} : { redactionSummary: request.redactionSummary.trim() }),
   } as TokenlessQuoteRequest;
+  try {
+    const exact = normalizeTokenlessQuoteRequest(normalized);
+    if (
+      exact.visibility === "private" &&
+      (!exact.privateReview ||
+        stableJson(exact.question) !== stableJson(buildTokenlessPrivateReviewCommitmentQuestion()))
+    ) {
+      throw new TokenlessServiceError(
+        "Private quotes require commitment-only review artifacts; plaintext private questions are not persisted.",
+        409,
+        "private_quote_encrypted_artifacts_required",
+      );
+    }
+    return exact;
+  } catch (error) {
+    if (error instanceof RateLoopSdkError) {
+      throw new TokenlessServiceError(error.message, 400, "invalid_quote");
+    }
+    throw error;
+  }
 }
 
 function assertPayment(value: unknown): asserts value is TokenlessAskRequest["payment"] {
@@ -328,13 +359,7 @@ function buildEconomics(request: TokenlessQuoteRequest): TokenlessEconomics {
 }
 
 async function persistQuote(row: StoredQuote) {
-  await db
-    .insert(tokenlessAgentQuotes)
-    .values(row)
-    .onConflictDoUpdate({
-      target: tokenlessAgentQuotes.quoteId,
-      set: { responseJson: row.responseJson, expiresAt: row.expiresAt },
-    });
+  await db.insert(tokenlessAgentQuotes).values(row);
 }
 
 async function readQuote(quoteId: string): Promise<StoredQuote | null> {
@@ -365,6 +390,20 @@ async function readAskByIdempotency(idempotencyScope: string, idempotencyKey: st
   return row ?? null;
 }
 
+export async function getTokenlessAskReplay(idempotencyScope: string, idempotencyKey: string) {
+  if (!idempotencyScope.trim() || !IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey)) {
+    throw new TokenlessServiceError("A valid scoped idempotency key is required.", 400, "invalid_idempotency_key");
+  }
+  const ask = await readAskByIdempotency(idempotencyScope, idempotencyKey);
+  if (!ask) return null;
+  const quote = await readQuote(ask.quoteId);
+  if (!quote) throw new TokenlessServiceError("Ask quote not found.", 409, "invalid_quote");
+  return {
+    request: parseTokenlessAskRequest(JSON.parse(ask.requestJson), idempotencyKey),
+    quoteRequestHash: quote.requestHash,
+  };
+}
+
 async function persistAsk(row: StoredAsk) {
   await db
     .insert(tokenlessAgentAsks)
@@ -372,12 +411,30 @@ async function persistAsk(row: StoredAsk) {
     .onConflictDoNothing({ target: [tokenlessAgentAsks.idempotencyScope, tokenlessAgentAsks.idempotencyKey] });
 }
 
-export async function createTokenlessQuote(value: unknown): Promise<TokenlessQuoteResponse> {
+async function createQuote(
+  value: unknown,
+  owner: TokenlessQuoteOwner | undefined,
+  allowInternalPrivateReview: boolean,
+): Promise<TokenlessQuoteResponse> {
   const request = parseTokenlessQuoteRequest(value);
+  if (request.visibility === "private" && !allowInternalPrivateReview) {
+    throw new TokenlessServiceError(
+      "Private quotes are created only by the internal encrypted-review workflow.",
+      409,
+      "private_quote_internal_only",
+    );
+  }
+  if (request.visibility === "private" && (!owner || owner.kind !== "api_key")) {
+    throw new TokenlessServiceError(
+      "Internal private-review quotes require an exact workspace API-key owner.",
+      403,
+      "private_quote_owner_required",
+    );
+  }
   const createdAt = new Date();
   const expiresAt = new Date(createdAt.getTime() + QUOTE_TTL_MS);
   const requestHash = hash(request);
-  const quoteId = `qte_${requestHash.slice(0, 32)}`;
+  const quoteId = `qte_${randomUUID().replaceAll("-", "")}`;
   const response = parseTokenlessQuoteResponse({
     schemaVersion: TOKENLESS_SCHEMA_VERSION,
     quoteId,
@@ -405,10 +462,25 @@ export async function createTokenlessQuote(value: unknown): Promise<TokenlessQuo
     requestHash,
     requestJson: stableJson(request),
     responseJson: JSON.stringify(response),
+    ownerPrincipalId: null,
+    ownerWorkspaceId: request.visibility === "private" ? (owner?.workspaceId ?? null) : null,
+    ownerApiKeyId: request.visibility === "private" ? (owner?.apiKeyId ?? null) : null,
     expiresAt,
     createdAt,
   });
   return response;
+}
+
+export async function createTokenlessQuote(value: unknown): Promise<TokenlessQuoteResponse> {
+  return createQuote(value, undefined, false);
+}
+
+/** Narrow internal entry point used only after the paid private-review operation has frozen exact artifacts. */
+export async function createInternalPrivateReviewQuote(
+  value: unknown,
+  owner: TokenlessQuoteOwner,
+): Promise<TokenlessQuoteResponse> {
+  return createQuote(value, owner, true);
 }
 
 export async function sweepExpiredTokenlessQuotes(input: { now?: Date; limit?: number } = {}) {
@@ -421,8 +493,10 @@ export async function sweepExpiredTokenlessQuotes(input: { now?: Date; limit?: n
     sql: `SELECT DISTINCT q.quote_id, q.expires_at
           FROM tokenless_agent_quotes q
           LEFT JOIN tokenless_agent_asks a ON a.quote_id = q.quote_id
+          LEFT JOIN tokenless_paid_assignment_operations paid ON paid.quote_id = q.quote_id
           WHERE q.expires_at <= ?
             AND a.quote_id IS NULL
+            AND paid.quote_id IS NULL
           ORDER BY q.expires_at ASC
           LIMIT ?`,
     args: [now, limit],
@@ -436,21 +510,30 @@ export async function sweepExpiredTokenlessQuotes(input: { now?: Date; limit?: n
             WHERE quote_id = ? AND expires_at <= ?
               AND quote_id NOT IN (
                 SELECT quote_id FROM tokenless_agent_asks WHERE quote_id = ?
+              )
+              AND quote_id NOT IN (
+                SELECT quote_id FROM tokenless_paid_assignment_operations WHERE quote_id = ?
               )`,
-      args: [quoteId, now, quoteId],
+      args: [quoteId, now, quoteId, quoteId],
     });
     deleted += result.rowCount ?? 0;
   }
   return { deleted, scanned: expired.rows.length };
 }
 
+const OPERATION_WAIT_TTL_MS = 24 * 60 * 60_000;
+
 function continuation(operationKey: string, appOrigin: string, updatedAt: Date) {
   return {
     cursor: `${updatedAt.getTime()}`,
-    expiresAt: new Date(updatedAt.getTime() + 24 * 60 * 60_000).toISOString(),
+    expiresAt: new Date(updatedAt.getTime() + OPERATION_WAIT_TTL_MS).toISOString(),
     pollUrl: `${appOrigin}/api/agent/v1/asks/${encodeURIComponent(operationKey)}/wait`,
     retryAfterMs: 1_000,
   };
+}
+
+function operationWaitExpiresAt(updatedAt: Date) {
+  return updatedAt.getTime() + OPERATION_WAIT_TTL_MS;
 }
 
 async function askCommitDeadline(ask: StoredAsk) {
@@ -597,9 +680,12 @@ export async function waitForTokenlessAsk(
         continuation: null,
       };
     }
+    if (Date.now() >= operationWaitExpiresAt(ask.updatedAt)) {
+      throw new TokenlessServiceError("The authenticated result wait window expired.", 410, "operation_wait_expired");
+    }
     if (knownUpdatedAt !== null && ask.updatedAt.getTime() > knownUpdatedAt) break;
 
-    const remainingMs = deadline - Date.now();
+    const remainingMs = Math.min(deadline - Date.now(), operationWaitExpiresAt(ask.updatedAt) - Date.now());
     if (remainingMs <= 0) break;
     if (options.signal?.aborted) {
       throw new TokenlessServiceError("Wait request was cancelled.", 499, "wait_cancelled", true);
@@ -621,6 +707,10 @@ export async function waitForTokenlessAsk(
       options.signal?.addEventListener("abort", abort, { once: true });
       if (options.signal?.aborted) abort();
     });
+  }
+
+  if (Date.now() >= operationWaitExpiresAt(ask.updatedAt)) {
+    throw new TokenlessServiceError("The authenticated result wait window expired.", 410, "operation_wait_expired");
   }
 
   return {

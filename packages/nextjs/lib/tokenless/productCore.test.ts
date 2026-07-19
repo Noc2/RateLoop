@@ -1,3 +1,4 @@
+import { buildTokenlessPrivateReviewCommitmentQuestion } from "@rateloop/sdk";
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import {
@@ -7,6 +8,7 @@ import {
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { createMcpHandoff } from "~~/lib/mcp/handoff";
+import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import {
   __productCoreTestUtils,
   attachProductAsk,
@@ -22,10 +24,16 @@ import {
   recordPrepaidLedgerEntry,
   revokeAgentPublishingPolicy,
 } from "~~/lib/tokenless/productCore";
-import { TokenlessServiceError, createTokenlessAsk, createTokenlessQuote } from "~~/lib/tokenless/server";
+import {
+  TokenlessServiceError,
+  createInternalPrivateReviewQuote,
+  createTokenlessAsk,
+  createTokenlessQuote,
+} from "~~/lib/tokenless/server";
 
 const ADDRESS_A: `0x${string}` = "0x1111111111111111111111111111111111111111";
 const ADDRESS_B: `0x${string}` = "0x2222222222222222222222222222222222222222";
+const COMMITMENT = `sha256:${"ab".repeat(32)}` as const;
 
 beforeEach(() => {
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
@@ -35,16 +43,103 @@ afterEach(() => {
   __setDatabaseResourcesForTests(null);
 });
 
+function audiencePolicy() {
+  return {
+    schemaVersion: "rateloop.human-assurance.v2" as const,
+    policyId: "policy_product_test",
+    version: 1,
+    reviewerSource: "customer_invited" as const,
+    compensation: "paid" as const,
+    cohorts: [{ cohortId: "product-test", minimumReviewers: 3, maximumReviewers: 500 }],
+    selection: "customer_named" as const,
+    fallbacks: { allowed: false, sources: [] },
+    requiredQualifications: [],
+    assurance: {
+      requirements: [
+        {
+          capability: "customer_invitation" as const,
+          reviewerSources: ["customer_invited" as const],
+          allowedProviders: ["workspace-invitation"],
+        },
+      ],
+    },
+    buyerPrivacy: { visibleFields: ["reviewer_source" as const], minimumAggregationSize: 3, suppressSmallCells: true },
+    legalEligibilityRequired: true,
+  };
+}
+
+function networkAudiencePolicy() {
+  return {
+    schemaVersion: "rateloop.human-assurance.v2" as const,
+    policyId: "policy_product_network_test",
+    version: 1,
+    reviewerSource: "rateloop_network" as const,
+    compensation: "paid" as const,
+    cohorts: [],
+    selection: "randomized" as const,
+    fallbacks: { allowed: false, sources: [] },
+    requiredQualifications: [],
+    assurance: {
+      requirements: [
+        {
+          capability: "unique_human" as const,
+          reviewerSources: ["rateloop_network" as const],
+          allowedProviders: ["world:poh"],
+        },
+      ],
+    },
+    integrity: {
+      schemaVersion: "rateloop.integrity-assignment.v1" as const,
+      epochId: "integrity:product-test:1",
+      epochManifestHash: COMMITMENT,
+      maxClusterShareBps: 2_000,
+      allowedRiskBands: ["low" as const],
+      recentCoassignmentWindowSeconds: 86_400,
+      maxRecentCoassignments: 1,
+      maxPerCustomer: 3,
+      onePerProviderSubject: true as const,
+    },
+    buyerPrivacy: { visibleFields: ["reviewer_source" as const], minimumAggregationSize: 10, suppressSmallCells: true },
+    legalEligibilityRequired: true,
+  };
+}
+
 function quoteRequest() {
+  const policy = audiencePolicy();
   return {
     audience: {
-      admissionPolicyHash: `0x${"ab".repeat(32)}`,
+      admissionPolicyHash: freezeAdmissionPolicy(policy).admissionPolicyHash,
       source: "customer_invited",
     },
+    audiencePolicy: policy,
     budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
+    confirmedNoSensitiveData: true,
+    dataClassification: "synthetic" as const,
     question: { kind: "binary" as const, prompt: "Ship this?", rationale: { mode: "optional" as const } },
     requestedPanelSize: 15,
     responseWindowSeconds: 1_200,
+    visibility: "public" as const,
+  };
+}
+
+function privateQuoteRequest() {
+  return {
+    ...quoteRequest(),
+    confirmedNoSensitiveData: undefined,
+    dataClassification: "confidential" as const,
+    privateReview: {
+      schemaVersion: "rateloop.tokenless-private-review.v1" as const,
+      artifactCommitments: {
+        privateReviewId: "private_review_product_test",
+        source: COMMITMENT,
+        suggestion: COMMITMENT,
+        preparedRequestHash: COMMITMENT,
+        economicsHash: COMMITMENT,
+        reviewerSetHash: COMMITMENT,
+      },
+    },
+    question: buildTokenlessPrivateReviewCommitmentQuestion(),
+    visibility: "private" as const,
   };
 }
 
@@ -212,6 +307,91 @@ test("ask ownership is bound to its workspace for wait and result authorization"
         ask.operationKey,
       ),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "ask_not_found",
+  );
+});
+
+test("private quote preparation returns not found across workspaces and API-key subjects", async () => {
+  const owner = await workspaceWithKey(ADDRESS_A);
+  const otherWorkspace = await workspaceWithKey(ADDRESS_B);
+  const otherKeyInOwnerWorkspace = await createWorkspaceApiKey({
+    workspaceId: owner.workspaceId,
+    name: "Different agent",
+  });
+  const quote = await createInternalPrivateReviewQuote(privateQuoteRequest(), {
+    kind: "api_key",
+    apiKeyId: owner.apiKeyId,
+    workspaceId: owner.workspaceId,
+  });
+  const requestFor = (workspaceId: string) => ({
+    idempotencyKey: `private:quote:${workspaceId}`,
+    payment: { mode: "prepaid" as const, workspaceId },
+    quoteId: quote.quoteId,
+  });
+
+  for (const principal of [
+    {
+      kind: "api_key" as const,
+      apiKeyId: otherKeyInOwnerWorkspace.apiKeyId,
+      workspaceId: owner.workspaceId,
+      role: "member" as const,
+    },
+    {
+      kind: "api_key" as const,
+      apiKeyId: otherWorkspace.apiKeyId,
+      workspaceId: otherWorkspace.workspaceId,
+      role: "member" as const,
+    },
+  ]) {
+    await assert.rejects(
+      () => prepareProductAsk({ principal, request: requestFor(principal.workspaceId) }),
+      (error: unknown) =>
+        error instanceof TokenlessServiceError &&
+        error.status === 404 &&
+        error.code === "quote_not_found" &&
+        error.message === "Quote not found.",
+    );
+  }
+
+  await assert.rejects(
+    () =>
+      prepareProductAsk({
+        principal: {
+          kind: "api_key",
+          apiKeyId: owner.apiKeyId,
+          workspaceId: owner.workspaceId,
+          role: "member",
+        },
+        request: { ...requestFor(owner.workspaceId), quoteId: "qte_missing_private_quote" },
+      }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError &&
+      error.status === 404 &&
+      error.code === "quote_not_found" &&
+      error.message === "Quote not found.",
+  );
+
+  await recordPrepaidLedgerEntry({
+    workspaceId: owner.workspaceId,
+    amountAtomic: "100000000",
+    source: "private-quote-owner-test",
+  });
+  const prepared = await prepareProductAsk({
+    principal: {
+      kind: "api_key",
+      apiKeyId: owner.apiKeyId,
+      workspaceId: owner.workspaceId,
+      role: "member",
+    },
+    request: requestFor(owner.workspaceId),
+  });
+  assert.equal(prepared.quoteId, quote.quoteId);
+});
+
+test("external session callers cannot create private quotes", async () => {
+  await assert.rejects(
+    () => createTokenlessQuote(privateQuoteRequest()),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.status === 409 && error.code === "private_quote_internal_only",
   );
 });
 
@@ -422,7 +602,7 @@ test("policy-bound agent keys enforce exact audience and panel caps and reserve 
       maxFeeBps: 1000,
       maxAttemptReserveAtomic: "10000000",
       allowedReviewerSources: ["customer_invited"],
-      allowedAdmissionPolicyHashes: [`0x${"ab".repeat(32)}`],
+      allowedAdmissionPolicyHashes: [freezeAdmissionPolicy(audiencePolicy()).admissionPolicyHash],
     },
   });
   const key = await createWorkspaceApiKey({
@@ -464,7 +644,7 @@ test("publishing policies fail closed on unsupported reviewer sources and data c
     maxBountyAtomic: "30000000",
     maxFeeBps: 1000,
     maxAttemptReserveAtomic: "10000000",
-    allowedAdmissionPolicyHashes: [`0x${"ab".repeat(32)}`],
+    allowedAdmissionPolicyHashes: [freezeAdmissionPolicy(audiencePolicy()).admissionPolicyHash],
   };
   await assert.rejects(
     () =>
@@ -517,7 +697,7 @@ test("policy-bound x402 keys require the configured wallet binding", async () =>
       maxFeeBps: 1000,
       maxAttemptReserveAtomic: "10000000",
       allowedReviewerSources: ["customer_invited"],
-      allowedAdmissionPolicyHashes: [`0x${"ab".repeat(32)}`],
+      allowedAdmissionPolicyHashes: [freezeAdmissionPolicy(audiencePolicy()).admissionPolicyHash],
     },
   });
   const key = await createWorkspaceApiKey({
@@ -562,7 +742,7 @@ test("policy revocation blocks the next delegated ask", async () => {
       maxFeeBps: 1000,
       maxAttemptReserveAtomic: "10000000",
       allowedReviewerSources: ["customer_invited"],
-      allowedAdmissionPolicyHashes: [`0x${"ab".repeat(32)}`],
+      allowedAdmissionPolicyHashes: [freezeAdmissionPolicy(audiencePolicy()).admissionPolicyHash],
     },
   });
   const key = await createWorkspaceApiKey({ workspaceId, name: "Revocable agent", policyId: policy.policyId });
@@ -598,7 +778,11 @@ test("a public browser handoff persists a discoverable public ask end to end", a
       dataClassification: "synthetic",
       redactionSummary,
       request: {
-        audience: { admissionPolicyHash: `0x${"ab".repeat(32)}`, source: "rateloop_network" },
+        audience: {
+          admissionPolicyHash: freezeAdmissionPolicy(networkAudiencePolicy()).admissionPolicyHash,
+          source: "rateloop_network",
+        },
+        audiencePolicy: networkAudiencePolicy(),
         budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
         question: { kind: "binary", prompt: "Ship the synthetic reply?", rationale: { mode: "optional" } },
         requestedPanelSize: 15,

@@ -2,6 +2,7 @@ import type { HumanAssurancePrivateReviewCreateResponse, TokenlessAskResponse } 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
+import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import type { PreparedOwnerApproval } from "~~/lib/tokenless/humanReviewApprovalPreparation";
 import { hashFrozenBinaryReviewQuestion, resolveHumanReviewQuestion } from "~~/lib/tokenless/humanReviewQuestions";
@@ -20,6 +21,54 @@ const HASH = `sha256:${"1a".repeat(32)}` as const;
 const POLICY = { id: "agpol_router", version: 3 };
 const payloadHash = (value: string) =>
   `sha256:${createHash("sha256").update(value).digest("hex")}` as `sha256:${string}`;
+
+function audiencePolicy(privateLane: boolean) {
+  return {
+    schemaVersion: "rateloop.human-assurance.v2" as const,
+    policyId: privateLane ? "audience_router_invited" : "audience_router_network",
+    version: 1,
+    reviewerSource: privateLane ? ("customer_invited" as const) : ("rateloop_network" as const),
+    compensation: "paid" as const,
+    cohorts: privateLane ? [{ cohortId: "cohort-router", minimumReviewers: 1, maximumReviewers: 100 }] : [],
+    selection: privateLane ? ("customer_named" as const) : ("randomized" as const),
+    fallbacks: { allowed: false, sources: [] },
+    requiredQualifications: [],
+    assurance: {
+      requirements: privateLane
+        ? [
+            {
+              capability: "customer_invitation" as const,
+              reviewerSources: ["customer_invited" as const],
+              allowedProviders: ["workspace-invitation"],
+            },
+          ]
+        : [
+            {
+              capability: "unique_human" as const,
+              reviewerSources: ["rateloop_network" as const],
+              allowedProviders: ["world:poh"],
+            },
+          ],
+    },
+    ...(privateLane
+      ? {}
+      : {
+          integrity: {
+            schemaVersion: "rateloop.integrity-assignment.v1" as const,
+            epochId: "integrity:router:1",
+            epochManifestHash: HASH,
+            maxClusterShareBps: 2_000,
+            allowedRiskBands: ["low" as const],
+            recentCoassignmentWindowSeconds: 86_400,
+            maxRecentCoassignments: 1,
+            maxPerCustomer: 3,
+            onePerProviderSubject: true as const,
+          },
+        }),
+    buyerPrivacy: { visibleFields: ["reviewer_source" as const], minimumAggregationSize: 3, suppressSmallCells: true },
+    legalEligibilityRequired: true,
+  };
+}
 
 const principal: IntegrationPrincipal = {
   kind: "integration",
@@ -59,6 +108,7 @@ function context(input?: {
 }): FrozenHumanReviewRoutingContext {
   const lane = input?.lane ?? "public_paid_network";
   const privateLane = lane === "private_invited_unpaid" || lane === "private_invited_paid";
+  const frozenAudiencePolicy = freezeAdmissionPolicy(audiencePolicy(privateLane));
   const grantActive = input?.grantActive ?? true;
   const questionAuthority = input?.questionAuthority ?? "owner_fixed";
   return {
@@ -68,7 +118,12 @@ function context(input?: {
     createdAt: NOW,
     workflowKey: "support-reply",
     agent: { id: "agent_router", versionId: "agent_version_router" },
-    selectionPolicy: { id: "review_policy_router", version: 4, audiencePolicyHash: HASH },
+    selectionPolicy: {
+      id: "review_policy_router",
+      version: 4,
+      audiencePolicyHash: frozenAudiencePolicy.policyHash,
+      audiencePolicy: frozenAudiencePolicy.policy,
+    },
     contentCommitments: { source: payloadHash("private source"), suggestion: payloadHash("private suggestion") },
     decision: input?.decision ?? "required",
     lifecycle: { state: input?.lifecycleState ?? "approval_required", revision: 2 },
