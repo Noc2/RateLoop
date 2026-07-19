@@ -62,6 +62,66 @@ function paidAdmissionPolicy() {
 beforeEach(() => __setDatabaseResourcesForTests(createMemoryDatabaseResources()));
 afterEach(() => __setDatabaseResourcesForTests(null));
 
+async function seedRaterCommitState(input: {
+  commitId: string;
+  state: "signed" | "submitted";
+  transactionHash?: Hash;
+}) {
+  const transactionHash = input.transactionHash ?? (`0x${"88".repeat(32)}` as Hash);
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_rater_profiles
+          (rater_id, account_address, nullifier_seed_ciphertext, nullifier_key_version,
+           nullifier_key_domain, created_at, updated_at)
+          VALUES ('rater_receipt', ?, 'ciphertext', 'v1', 'vote_mapping', ?, ?)`,
+    args: [ACCOUNT, NOW, NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_paid_vouchers
+          (voucher_id, rater_id, request_idempotency_key, request_hash, chain_id,
+           panel_address, issuer_address, issuer_epoch, signer_address, round_id, content_id, vote_key,
+           nullifier, admission_policy_hash, assurance_snapshot_hash, expires_at, voucher_json,
+           voucher_signature, status, issued_at)
+          VALUES ('voucher_receipt', 'rater_receipt', 'voucher:receipt:1', 'request-hash', 84532,
+                  '0x2222222222222222222222222222222222222222',
+                  '0x3333333333333333333333333333333333333333', 1,
+                  '0x3333333333333333333333333333333333333333', 42,
+                  ?, ?, ?, ?, ?, ?, '{}', '0x12', 'issued', ?)`,
+    args: [
+      `0x${"11".repeat(32)}`,
+      ACCOUNT,
+      `0x${"22".repeat(32)}`,
+      `0x${"33".repeat(32)}`,
+      `sha256:${"44".repeat(32)}`,
+      new Date(NOW.getTime() + 60_000),
+      NOW,
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_rater_commits
+          (commit_id, voucher_id, request_idempotency_key, request_hash, deployment_key, round_id,
+           vote_key, sealed_commitment, sealed_payload_hash, payout_commitment, relay_payload_json,
+           relay_nonce, relay_signed_transaction, transaction_hash, state, created_at, updated_at)
+          VALUES (?, 'voucher_receipt', 'commit:receipt:1', 'request-hash', 'deployment-receipt', 42,
+                  ?, ?, ?, ?, '{}', 7, '0x01', ?, ?, ?, ?)`,
+    args: [
+      input.commitId,
+      ACCOUNT,
+      `0x${"55".repeat(32)}`,
+      `0x${"66".repeat(32)}`,
+      `0x${"77".repeat(32)}`,
+      transactionHash,
+      input.state,
+      NOW,
+      NOW,
+    ],
+  });
+  return {
+    hash: transactionHash,
+    signedTransaction: "0x01" as Hex,
+    recovered: true,
+  };
+}
+
 test("commit authorization rejects a sealed payload whose signed hash differs", () => {
   assert.throws(
     () =>
@@ -224,6 +284,77 @@ test("a signed rater transaction is durable before broadcast and replays exactly
     recovered: true,
   });
   assert.deepEqual(broadcasts, [prepared.signedTransaction]);
+});
+
+test("a late broadcast error cannot regress a concurrently submitted rater commit to retry", async () => {
+  const transaction = await seedRaterCommitState({ commitId: "commit_retry_race", state: "signed" });
+  await dbClient.execute({
+    sql: "UPDATE tokenless_rater_commits SET state = 'submitted', failure_code = NULL WHERE commit_id = ?",
+    args: ["commit_retry_race"],
+  });
+
+  await __raterServiceTestUtils.markRaterTransactionRetry("commit_retry_race", transaction);
+
+  const stored = await dbClient.execute({
+    sql: "SELECT state, failure_code FROM tokenless_rater_commits WHERE commit_id = ?",
+    args: ["commit_retry_race"],
+  });
+  assert.deepEqual(stored.rows[0], { failure_code: null, state: "submitted" });
+
+  await dbClient.execute({
+    sql: "UPDATE tokenless_rater_commits SET state = 'confirmed' WHERE commit_id = ?",
+    args: ["commit_retry_race"],
+  });
+  await __raterServiceTestUtils.markRaterTransactionRetry("commit_retry_race", transaction);
+  const confirmed = await dbClient.execute({
+    sql: "SELECT state, failure_code FROM tokenless_rater_commits WHERE commit_id = ?",
+    args: ["commit_retry_race"],
+  });
+  assert.deepEqual(confirmed.rows[0], { failure_code: null, state: "confirmed" });
+});
+
+test("receipt reconciliation confirms a submitted rater commit and commits its voucher", async () => {
+  const transaction = await seedRaterCommitState({ commitId: "commit_receipt_success", state: "submitted" });
+  const stored = await dbClient.execute({
+    sql: "SELECT * FROM tokenless_rater_commits WHERE commit_id = ?",
+    args: ["commit_receipt_success"],
+  });
+  const settled = await __raterServiceTestUtils.reconcileSubmittedRaterCommitReceipt(stored.rows[0]!, {
+    async getTransactionReceipt({ hash }: { hash: Hash }) {
+      assert.equal(hash, transaction.hash);
+      return { status: "success" };
+    },
+  } as unknown as TokenlessChainRuntime["publicClient"]);
+
+  assert.equal(settled.state, "confirmed");
+  assert.equal(settled.failure_code, null);
+  assert.ok(settled.confirmed_at);
+  const voucher = await dbClient.execute({
+    sql: "SELECT status, committed_at FROM tokenless_paid_vouchers WHERE voucher_id = 'voucher_receipt'",
+  });
+  assert.equal(voucher.rows[0]?.status, "committed");
+  assert.ok(voucher.rows[0]?.committed_at);
+});
+
+test("receipt reconciliation records a reverted submitted rater commit as failed", async () => {
+  await seedRaterCommitState({ commitId: "commit_receipt_reverted", state: "submitted" });
+  const stored = await dbClient.execute({
+    sql: "SELECT * FROM tokenless_rater_commits WHERE commit_id = ?",
+    args: ["commit_receipt_reverted"],
+  });
+  const settled = await __raterServiceTestUtils.reconcileSubmittedRaterCommitReceipt(stored.rows[0]!, {
+    async getTransactionReceipt() {
+      return { status: "reverted" };
+    },
+  } as unknown as TokenlessChainRuntime["publicClient"]);
+
+  assert.equal(settled.state, "failed");
+  assert.equal(settled.failure_code, "transaction_reverted");
+  assert.equal(settled.confirmed_at, null);
+  const voucher = await dbClient.execute({
+    sql: "SELECT status, committed_at FROM tokenless_paid_vouchers WHERE voucher_id = 'voucher_receipt'",
+  });
+  assert.deepEqual(voucher.rows[0], { committed_at: null, status: "issued" });
 });
 
 async function seedTask(executionState: "confirmed" | "submitted" = "confirmed") {

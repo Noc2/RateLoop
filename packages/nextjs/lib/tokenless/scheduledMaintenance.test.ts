@@ -89,7 +89,7 @@ async function seedRecoverableExecution(
   });
 }
 
-async function seedRecoverableRaterCommit(commitId: string) {
+async function seedRecoverableRaterCommit(commitId: string, state: "signed" | "submitted" = "signed") {
   await dbClient.execute({
     sql: `INSERT INTO tokenless_rater_profiles
           (rater_id, account_address, nullifier_seed_ciphertext, nullifier_key_version,
@@ -126,8 +126,15 @@ async function seedRecoverableRaterCommit(commitId: string) {
                   '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
                   '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
                   '0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
-                  '{}', 7, '0x01', ?, 'signed', ?, ?)`,
-    args: [commitId, `0x${createHash("sha256").update(commitId).digest("hex")}`, NOW, NOW],
+                  '{}', 7, ?, ?, ?, ?, ?)`,
+    args: [
+      commitId,
+      state === "submitted" ? null : "0x01",
+      `0x${createHash("sha256").update(commitId).digest("hex")}`,
+      state,
+      NOW,
+      NOW,
+    ],
   });
 }
 
@@ -267,10 +274,10 @@ test("scheduled maintenance recovers an initiated chain execution without anothe
   assert.deepEqual(item.rows[0], { attempt_count: 1, claim_generation: 1, last_error: null, state: "completed" });
 });
 
-test("scheduled maintenance fences recovery of an accepted rater transaction without another client request", async () => {
-  await seedRecoverableRaterCommit("commit_recovery_automatic");
+test("scheduled maintenance follows a submitted rater transaction through confirmation without another client request", async () => {
+  await seedRecoverableRaterCommit("commit_recovery_automatic", "submitted");
   const recovered: string[] = [];
-  const result = await runTokenlessScheduledMaintenance({
+  const pending = await runTokenlessScheduledMaintenance({
     appOrigin: "https://tokenless.example.test",
     now: NOW,
     processors: {
@@ -281,16 +288,48 @@ test("scheduled maintenance fences recovery of an accepted rater transaction wit
       },
     },
   });
-  if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
-  assert.equal(result.status, "healthy");
+  if (pending.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.equal(pending.status, "healthy");
   assert.deepEqual(recovered, ["commit_recovery_automatic"]);
-  assert.deepEqual(result.summary.work, { completed: 1, dead: 0, deferred: 0, retry: 0 });
+  assert.deepEqual(pending.summary.work, { completed: 0, dead: 0, deferred: 1, retry: 0 });
+  const confirmed = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: new Date(NOW.getTime() + 5 * 60_000),
+    processors: {
+      ...processors(async () => undefined),
+      async recoverRaterCommit(commitId) {
+        recovered.push(commitId);
+        return { state: "confirmed" };
+      },
+    },
+  });
+  if (confirmed.status === "duplicate") assert.fail("the next cron bucket must run");
+  assert.ok(confirmed.summary);
+  assert.deepEqual(recovered, ["commit_recovery_automatic", "commit_recovery_automatic"]);
+  assert.deepEqual(confirmed.summary.work, { completed: 1, dead: 0, deferred: 0, retry: 0 });
   const item = await dbClient.execute({
     sql: `SELECT state, attempt_count, claim_generation, last_error
           FROM tokenless_scheduled_work_items
           WHERE kind = 'recover_rater_commit' AND subject_key = 'commit_recovery_automatic'`,
   });
-  assert.deepEqual(item.rows[0], { attempt_count: 1, claim_generation: 1, last_error: null, state: "completed" });
+  assert.deepEqual(item.rows[0], { attempt_count: 1, claim_generation: 2, last_error: null, state: "completed" });
+});
+
+test("scheduled maintenance treats a reverted submitted rater transaction as terminal", async () => {
+  await seedRecoverableRaterCommit("commit_recovery_reverted", "submitted");
+  const result = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    processors: {
+      ...processors(async () => undefined),
+      async recoverRaterCommit() {
+        return { state: "failed" };
+      },
+    },
+  });
+  if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.ok(result.summary);
+  assert.deepEqual(result.summary.work, { completed: 1, dead: 0, deferred: 0, retry: 0 });
 });
 
 test("persistent chain recovery failures become dead-letter health evidence", async () => {

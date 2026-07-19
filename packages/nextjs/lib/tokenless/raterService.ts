@@ -464,6 +464,61 @@ async function markRaterTransactionSubmitted(commitId: string, transaction: Pers
   );
 }
 
+async function markRaterTransactionRetry(commitId: string, transaction: PersistedRaterTransaction) {
+  await dbClient.execute({
+    sql: `UPDATE tokenless_rater_commits
+          SET state = 'retry', failure_code = 'relay_failed', updated_at = ?
+          WHERE commit_id = ? AND transaction_hash = ? AND relay_signed_transaction = ?
+            AND state IN ('prepared', 'signed', 'retry')`,
+    args: [new Date(), commitId, transaction.hash, transaction.signedTransaction],
+  });
+}
+
+async function reconcileSubmittedRaterCommitReceipt(row: Row, publicClient: TokenlessChainRuntime["publicClient"]) {
+  const commitId = rowString(row, "commit_id");
+  const hash = rowString(row, "transaction_hash");
+  if (rowString(row, "state") !== "submitted" || !commitId || !hash || !isHash(hash)) return row;
+
+  let receipt: Awaited<ReturnType<TokenlessChainRuntime["publicClient"]["getTransactionReceipt"]>>;
+  try {
+    receipt = await publicClient.getTransactionReceipt({ hash });
+  } catch {
+    // Receipt is not available yet. The scheduled recovery item remains due.
+    return row;
+  }
+
+  const success = receipt.status === "success";
+  const now = new Date();
+  const settled = await dbClient.execute({
+    sql: `UPDATE tokenless_rater_commits
+          SET state = ?, failure_code = ?, confirmed_at = ?, updated_at = ?
+          WHERE commit_id = ? AND transaction_hash = ? AND state = 'submitted'
+          RETURNING *`,
+    args: [
+      success ? "confirmed" : "failed",
+      success ? null : "transaction_reverted",
+      success ? now : null,
+      now,
+      commitId,
+      hash,
+    ],
+  });
+  const settledRow = settled.rows[0] as Row | undefined;
+  if (settledRow && success) {
+    await dbClient.execute({
+      sql: "UPDATE tokenless_paid_vouchers SET status = 'committed', committed_at = ? WHERE voucher_id = ?",
+      args: [now, rowString(settledRow, "voucher_id")],
+    });
+  }
+  if (settledRow) return settledRow;
+
+  const current = await dbClient.execute({
+    sql: "SELECT * FROM tokenless_rater_commits WHERE commit_id = ? LIMIT 1",
+    args: [commitId],
+  });
+  return (current.rows[0] as Row | undefined) ?? row;
+}
+
 function assertIsolatedCommitRelayer(runtime: TokenlessChainRuntime) {
   if (
     runtime.relayerAccount &&
@@ -682,10 +737,7 @@ export async function relayPaidRaterCommit(input: { accountAddress: string; requ
   try {
     await broadcastPersistedRaterTransaction(runtime.relayerWallet, runtime.publicClient, transaction);
   } catch (error) {
-    await dbClient.execute({
-      sql: "UPDATE tokenless_rater_commits SET state = 'retry', failure_code = 'relay_failed', updated_at = ? WHERE commit_id = ?",
-      args: [new Date(), commitId],
-    });
+    await markRaterTransactionRetry(commitId, transaction);
     throw error;
   }
   await markRaterTransactionSubmitted(commitId, transaction);
@@ -707,7 +759,12 @@ export async function reconcilePaidRaterCommit(commitId: string) {
   const row = result.rows[0] as Row | undefined;
   if (!row) return null;
   const state = rowString(row, "state");
-  if (state === "submitted" || state === "confirmed") return publicCommit(row);
+  if (state === "confirmed" || state === "failed") return publicCommit(row);
+  if (state === "submitted") {
+    const config = loadTokenlessChainConfig();
+    const runtime = getTokenlessChainRuntime(config);
+    return publicCommit(await reconcileSubmittedRaterCommitReceipt(row, runtime.publicClient));
+  }
   const signedTransaction = rowString(row, "relay_signed_transaction") as Hex | null;
   const transactionHash = rowString(row, "transaction_hash") as Hash | null;
   const nonceValue = rowString(row, "relay_nonce");
@@ -783,36 +840,10 @@ export async function getPaidRaterCommit(input: { accountAddress: string; commit
   if (!row || rowString(row, "account_address") !== getAddress(input.accountAddress).toLowerCase()) {
     throw new TokenlessServiceError("Commit not found.", 404, "commit_not_found");
   }
-  const hash = rowString(row, "transaction_hash");
-  if (rowString(row, "state") === "submitted" && hash && isHash(hash)) {
+  if (rowString(row, "state") === "submitted") {
     const config = loadTokenlessChainConfig();
     const runtime = getTokenlessChainRuntime(config);
-    try {
-      const receipt = await runtime.publicClient.getTransactionReceipt({ hash });
-      const success = receipt.status === "success";
-      const now = new Date();
-      await dbClient.execute({
-        sql: `UPDATE tokenless_rater_commits SET state = ?, failure_code = ?, confirmed_at = ?, updated_at = ? WHERE commit_id = ?`,
-        args: [
-          success ? "confirmed" : "failed",
-          success ? null : "transaction_reverted",
-          success ? now : null,
-          now,
-          input.commitId,
-        ],
-      });
-      if (success) {
-        await dbClient.execute({
-          sql: "UPDATE tokenless_paid_vouchers SET status = 'committed', committed_at = ? WHERE voucher_id = ?",
-          args: [now, rowString(row, "voucher_id")],
-        });
-      }
-      row.state = success ? "confirmed" : "failed";
-      row.failure_code = success ? null : "transaction_reverted";
-      row.confirmed_at = success ? now : null;
-    } catch {
-      // Receipt not available yet; preserve the submitted state for polling.
-    }
+    return publicCommit(await reconcileSubmittedRaterCommitReceipt(row, runtime.publicClient));
   }
   return publicCommit(row);
 }
@@ -821,6 +852,8 @@ export const __raterServiceTestUtils = {
   assertSignedRaterTransactionIntent,
   broadcastPersistedRaterTransaction,
   lockCommitForVoucher,
+  markRaterTransactionRetry,
   preparePersistedRaterTransaction,
+  reconcileSubmittedRaterCommitReceipt,
   validateAuthorization,
 };

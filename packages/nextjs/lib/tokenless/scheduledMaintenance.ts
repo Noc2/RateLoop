@@ -47,6 +47,7 @@ const NON_COUNTING_DEFER_CODES = new Set([
   "indexed_evidence_pending",
   "evidence_pending",
   "execution_in_progress",
+  "rater_commit_recovery_pending",
   "deletion_blocked_by_hold",
   "deletion_not_due",
 ]);
@@ -112,8 +113,10 @@ export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 1
     dbClient.execute({
       sql: `SELECT commit_id
             FROM tokenless_rater_commits
-            WHERE state IN ('signed', 'retry')
-              AND relay_signed_transaction IS NOT NULL AND transaction_hash IS NOT NULL
+            WHERE (
+                state IN ('signed', 'retry')
+                AND relay_signed_transaction IS NOT NULL AND transaction_hash IS NOT NULL
+              ) OR (state = 'submitted' AND transaction_hash IS NOT NULL)
             ORDER BY updated_at ASC, commit_id ASC LIMIT ?`,
       args: [limit],
     }),
@@ -136,7 +139,14 @@ export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 1
     await insertWorkItem("recover_chain_execution", rowString(row as Row, "operation_key")!, now);
   }
   for (const row of raterCommitRecoveries.rows) {
-    await insertWorkItem("recover_rater_commit", rowString(row as Row, "commit_id")!, now);
+    const commitId = rowString(row as Row, "commit_id")!;
+    await insertWorkItem("recover_rater_commit", commitId, now);
+    await dbClient.execute({
+      sql: `UPDATE tokenless_scheduled_work_items
+            SET state = 'pending', next_attempt_at = ?, completed_at = NULL, updated_at = ?
+            WHERE kind = 'recover_rater_commit' AND subject_key = ? AND state = 'completed'`,
+      args: [now, now, commitId],
+    });
   }
   for (const row of deletions.rows) {
     await insertWorkItem("delete_artifact", rowString(row as Row, "object_id")!, now);
@@ -270,7 +280,7 @@ async function processClaimedWork(input: {
         }
       } else if (kind === "recover_rater_commit") {
         const recovered = await input.processors.recoverRaterCommit(subjectKey);
-        if (!new Set(["submitted", "confirmed"]).has(recovered?.state ?? "")) {
+        if (!new Set(["confirmed", "failed"]).has(recovered?.state ?? "")) {
           throw new TokenlessServiceError(
             "Rater commit recovery is still pending.",
             409,
