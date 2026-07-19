@@ -9,6 +9,12 @@ import {
   getAdaptiveAssuranceState,
 } from "~~/lib/tokenless/adaptiveReviewService";
 import { parseAgentExecutionEvidence } from "~~/lib/tokenless/agentExecutionEvidence";
+import {
+  LEGACY_AGENT_EXECUTION_PROFILE_SCHEMA_VERSION,
+  agentExecutionProfileHash,
+  normalizeAgentExecutionProvenance,
+  projectAgentExecutionProfile,
+} from "~~/lib/tokenless/agentExecutionProvenance";
 import { createWorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
 import { createWorkspace, createWorkspaceApiKey } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -239,12 +245,92 @@ test("persists deterministic calibration decisions and returns frozen idempotent
   assert.equal(state.nextReassessmentAfter, 30);
 });
 
-test("separates assurance scopes when the actual task model or effort changes", async () => {
+test("replays historical v1 execution and scope profiles without rewriting them", async () => {
+  const setup = await fixture();
+  const request = opportunity(setup, "historical-profile-v1");
+  const first = await evaluateAdaptiveReviewRequirement({ principal: setup.principal, request });
+  const normalized = normalizeAgentExecutionProvenance(request.execution);
+  const legacyProfile = projectAgentExecutionProfile(normalized, LEGACY_AGENT_EXECUTION_PROFILE_SCHEMA_VERSION);
+  const legacyHash = agentExecutionProfileHash(legacyProfile);
+
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_executions
+          SET execution_profile_hash=?, execution_profile_json=?
+          WHERE execution_id=?`,
+    args: [legacyHash, JSON.stringify(legacyProfile), first.executionId],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_evaluation_scopes
+          SET execution_profile_hash=?, execution_profile_json=?
+          WHERE workspace_id=? AND scope_id=?`,
+    args: [legacyHash, JSON.stringify(legacyProfile), setup.workspaceId, first.scopeId],
+  });
+
+  const replay = await evaluateAdaptiveReviewRequirement({ principal: setup.principal, request });
+  assert.equal(replay.scopeId, first.scopeId);
+  assert.equal(replay.executionProfileHash, legacyHash);
+  assert.equal(replay.executionProfile?.schemaVersion, "rateloop.execution-profile.v1");
+  assert.equal(replay.executionEvidence.executionProfileHash, legacyHash);
+  assert.equal(replay.executionEvidence.executionProfile.schemaVersion, "rateloop.execution-profile.v1");
+  assert.deepEqual(parseAgentExecutionEvidence(replay.executionEvidence), replay.executionEvidence);
+
+  const persisted = await dbClient.execute({
+    sql: `SELECT execution_profile_hash, execution_profile_json
+          FROM tokenless_agent_evaluation_scopes
+          WHERE workspace_id=? AND scope_id=?`,
+    args: [setup.workspaceId, first.scopeId],
+  });
+  assert.equal(persisted.rows[0]?.execution_profile_hash, legacyHash);
+  assert.equal(
+    JSON.parse(String(persisted.rows[0]?.execution_profile_json)).schemaVersion,
+    "rateloop.execution-profile.v1",
+  );
+});
+
+test("comparable human-agreement evidence requires at least two respondents", () => {
+  assert.equal(
+    __adaptiveReviewServiceTestUtils.humanAgreementGatePassed(
+      [{ responding_human_count: 1, human_human_agreement_bps: 10_000 }],
+      7_000,
+    ),
+    false,
+  );
+  assert.equal(
+    __adaptiveReviewServiceTestUtils.humanAgreementGatePassed(
+      [{ responding_human_count: 2, human_human_agreement_bps: 7_000 }],
+      7_000,
+    ),
+    true,
+  );
+  assert.equal(
+    __adaptiveReviewServiceTestUtils.humanAgreementGatePassed(
+      [{ responding_human_count: 2, human_human_agreement_bps: 6_999 }],
+      7_000,
+    ),
+    false,
+  );
+});
+
+test("partitions assurance scopes by model identity but not reasoning effort or service tier", async () => {
   const setup = await fixture();
   const sol = await evaluateAdaptiveReviewRequirement({
     principal: setup.principal,
     request: opportunity(setup, "profile-sol-0001"),
   });
+  const effortRequest = opportunity(setup, "profile-sol-effort-0001");
+  effortRequest.execution.generationSpans[0] = {
+    ...effortRequest.execution.generationSpans[0]!,
+    reasoningEffort: "low",
+    serviceTier: "priority",
+  };
+  const changedEffort = await evaluateAdaptiveReviewRequirement({ principal: setup.principal, request: effortRequest });
+
+  assert.equal(changedEffort.executionProfileHash, sol.executionProfileHash);
+  assert.equal(changedEffort.scopeId, sol.scopeId);
+  assert.notEqual(changedEffort.executionManifestCommitment, sol.executionManifestCommitment);
+  assert.equal(changedEffort.executionEvidence.manifest.generationSpans[0]?.reasoningEffort, "low");
+  assert.equal(changedEffort.executionEvidence.manifest.generationSpans[0]?.serviceTier, "priority");
+
   const terraRequest = opportunity(setup, "profile-terra-0001");
   terraRequest.execution.generationSpans[0] = {
     ...terraRequest.execution.generationSpans[0]!,

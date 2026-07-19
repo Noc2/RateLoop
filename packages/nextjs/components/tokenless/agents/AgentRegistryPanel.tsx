@@ -381,6 +381,7 @@ function transitionReason(reason: string) {
     two_stable_windows: "Two stable 15-case windows",
     fifty_stable_cases: "50 stable comparable cases",
     one_hundred_stable_cases: "100 stable comparable cases",
+    safety_gates_unavailable: "Safety evidence is not available, so review returned to 100%",
     agreement_below_threshold: "Measured agreement fell below the policy threshold",
     completion_gate_failed: "Completion evidence failed its gate",
     human_agreement_gate_failed: "Human agreement evidence failed its gate",
@@ -543,8 +544,9 @@ function AgentAssuranceSummary({ agent }: { agent: WorkspaceAgent }) {
             Human assurance
           </h3>
           <p className="mt-1 text-xs text-base-content/45">
-            Evidence stays separate by execution profile, workflow version, policy, workflow, risk tier, and reviewer
-            audience. It does not create a global score.
+            Evidence stays separate by model profile, workflow version, policy, workflow, risk tier, and reviewer
+            audience. Effort and service tier remain execution evidence; they do not split current scopes. This does not
+            create a global score.
           </p>
         </div>
         {agent.assuranceScopes.length > 0 ? (

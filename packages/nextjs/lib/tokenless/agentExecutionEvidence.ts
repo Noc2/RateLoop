@@ -2,9 +2,12 @@ import { createHash } from "node:crypto";
 import "server-only";
 import {
   type AgentExecutionProfile,
+  type AgentExecutionProfileSchemaVersion,
   type AgentGenerationSpanInput,
   type NormalizedAgentExecutionProvenance,
+  agentExecutionProfileHash,
   normalizeAgentExecutionProvenance,
+  projectAgentExecutionProfile,
 } from "~~/lib/tokenless/agentExecutionProvenance";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -194,6 +197,12 @@ function normalizeManifest(value: unknown) {
 function assertProfileShape(value: unknown) {
   const profile = record(value, "executionProfile");
   exactKeys(profile, "executionProfile", PROFILE_KEYS);
+  if (
+    profile.schemaVersion !== "rateloop.execution-profile.v1" &&
+    profile.schemaVersion !== "rateloop.execution-profile.v2"
+  ) {
+    invalid("executionProfile.schemaVersion is unsupported.");
+  }
   exactKeys(record(profile.primary, "executionProfile.primary"), "executionProfile.primary", MODEL_PROFILE_KEYS);
   if (!Array.isArray(profile.contributors)) invalid("executionProfile.contributors must be an array.");
   profile.contributors.forEach((contributor, index) => {
@@ -210,13 +219,16 @@ function buildEvidence(input: {
   opportunityId: string;
   metadataCommitment: `sha256:${string}`;
   execution: NormalizedAgentExecutionProvenance;
+  executionProfile?: AgentExecutionProfile;
 }): AgentExecutionEvidence {
   const { execution } = input;
+  const executionProfile = input.executionProfile ?? execution.executionProfile;
   const manifest = manifestFrom(execution);
   if (commitment(manifest) !== execution.manifestCommitment) {
     invalid("Execution manifest does not match its commitment.");
   }
-  if (commitment(execution.executionProfile) !== execution.executionProfileHash) {
+  const executionProfileHash = agentExecutionProfileHash(executionProfile);
+  if (input.executionProfile === undefined && executionProfileHash !== execution.executionProfileHash) {
     invalid("Execution profile does not match its commitment.");
   }
   const evidence = {
@@ -233,8 +245,8 @@ function buildEvidence(input: {
     },
     manifest,
     manifestCommitment: execution.manifestCommitment,
-    executionProfile: execution.executionProfile,
-    executionProfileHash: execution.executionProfileHash,
+    executionProfile,
+    executionProfileHash,
   };
   return { ...evidence, evidenceCommitment: commitment(evidence) };
 }
@@ -248,6 +260,7 @@ export function projectAgentExecutionEvidence(input: {
   opportunityId: string;
   metadataCommitment: string;
   execution: NormalizedAgentExecutionProvenance;
+  profileSchemaVersion?: AgentExecutionProfileSchemaVersion;
 }): AgentExecutionEvidence {
   const id = executionId(input.executionId);
   const opportunityId = executionId(input.opportunityId);
@@ -258,11 +271,15 @@ export function projectAgentExecutionEvidence(input: {
   if (canonicalJson(normalized) !== canonicalJson(input.execution)) {
     invalid("Execution provenance is not in its canonical normalized form.");
   }
+  const executionProfile = input.profileSchemaVersion
+    ? projectAgentExecutionProfile(normalized, input.profileSchemaVersion)
+    : undefined;
   return buildEvidence({
     executionId: id,
     opportunityId,
     metadataCommitment: input.metadataCommitment as `sha256:${string}`,
     execution: normalized,
+    ...(executionProfile ? { executionProfile } : {}),
   });
 }
 
@@ -306,11 +323,17 @@ export function parseAgentExecutionEvidence(value: unknown): AgentExecutionEvide
   }
   assertProfileShape(root.executionProfile);
   const normalized = normalizeManifest(root.manifest);
+  const profileSchemaVersion = (root.executionProfile as AgentExecutionProfile).schemaVersion;
+  const executionProfile = projectAgentExecutionProfile(
+    normalized,
+    profileSchemaVersion as AgentExecutionProfileSchemaVersion,
+  );
   const expected = buildEvidence({
     executionId: executionId(root.executionId),
     opportunityId: executionId(opportunityBinding.opportunityId),
     metadataCommitment: opportunityBinding.metadataCommitment as `sha256:${string}`,
     execution: normalized,
+    executionProfile,
   });
   if (canonicalJson(root) !== canonicalJson(expected)) {
     invalid("Execution evidence is not the exact canonical hash-bound projection.");

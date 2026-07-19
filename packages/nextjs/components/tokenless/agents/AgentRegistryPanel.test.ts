@@ -61,8 +61,9 @@ test("agent details and review information render in task-focused views", () => 
   assert.match(source, /Baseline review coverage/);
   assert.match(source, /Agent-human agreement/);
   assert.match(source, /95% lower bound/);
-  assert.match(source, /Evidence stays separate by execution profile, workflow version, policy, workflow, risk tier/);
-  assert.match(source, /does not create a global score/);
+  assert.match(source, /Evidence stays separate by model profile, workflow version, policy, workflow, risk tier/);
+  assert.match(source, /Effort and service tier remain execution evidence; they do not split current scopes/);
+  assert.match(source, /does not\s+create a global score/);
   assert.match(source, /Execution model unavailable/);
   assert.match(source, /Requested \{scope\.executionProfile\.primary\.requestedModel\}/);
   assert.match(source, /reasoningEffort/);

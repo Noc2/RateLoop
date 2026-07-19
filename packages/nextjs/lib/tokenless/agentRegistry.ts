@@ -266,7 +266,10 @@ function stringArray(value: unknown, field: string) {
   }
 }
 
-function executionModelProfile(value: unknown): AgentExecutionModelProfile | null {
+function executionModelProfile(
+  value: unknown,
+  includeLegacyPartitionSettings: boolean,
+): AgentExecutionModelProfile | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const profile = value as Record<string, unknown>;
   if (typeof profile.provider !== "string" || !profile.provider.trim()) return null;
@@ -280,8 +283,8 @@ function executionModelProfile(value: unknown): AgentExecutionModelProfile | nul
     requestedModel: profile.requestedModel.trim(),
     resolvedModel: optionalString("resolvedModel"),
     modelVersion: optionalString("modelVersion"),
-    reasoningEffort: optionalString("reasoningEffort"),
-    serviceTier: optionalString("serviceTier"),
+    reasoningEffort: includeLegacyPartitionSettings ? optionalString("reasoningEffort") : null,
+    serviceTier: includeLegacyPartitionSettings ? optionalString("serviceTier") : null,
   };
 }
 
@@ -296,19 +299,40 @@ function executionProfile(value: unknown): AgentExecutionProfile {
     const parsed = JSON.parse(String(value ?? "{}")) as unknown;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return unavailable;
     const record = parsed as Record<string, unknown>;
-    if (record.schemaVersion !== "rateloop.execution-profile.v1") return unavailable;
+    if (
+      record.schemaVersion !== "rateloop.execution-profile.v1" &&
+      record.schemaVersion !== "rateloop.execution-profile.v2"
+    ) {
+      return unavailable;
+    }
     if (record.orchestrationMode !== "single_model" && record.orchestrationMode !== "multi_model") {
       return unavailable;
     }
-    const primary = executionModelProfile(record.primary);
+    const includeLegacyPartitionSettings = record.schemaVersion === "rateloop.execution-profile.v1";
+    const primary = executionModelProfile(record.primary, includeLegacyPartitionSettings);
     if (!primary || !Array.isArray(record.contributors)) return unavailable;
-    const contributors = record.contributors.map(executionModelProfile);
+    const contributors = record.contributors.map(value => executionModelProfile(value, includeLegacyPartitionSettings));
     if (contributors.some(item => item === null)) return unavailable;
+    const visibleContributors = includeLegacyPartitionSettings
+      ? (contributors as AgentExecutionModelProfile[])
+      : [
+          ...new Map(
+            (contributors as AgentExecutionModelProfile[]).map(contributor => [
+              JSON.stringify({
+                provider: contributor.provider,
+                requestedModel: contributor.requestedModel,
+                resolvedModel: contributor.resolvedModel,
+                modelVersion: contributor.modelVersion,
+              }),
+              contributor,
+            ]),
+          ).values(),
+        ];
     return {
       available: true,
       orchestrationMode: record.orchestrationMode,
       primary,
-      contributors: contributors as AgentExecutionModelProfile[],
+      contributors: visibleContributors,
     };
   } catch {
     return unavailable;

@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   type AgentExecutionProvenanceInput,
+  LEGACY_AGENT_EXECUTION_PROFILE_SCHEMA_VERSION,
+  agentExecutionProfileHash,
   normalizeAgentExecutionProvenance,
+  projectAgentExecutionProfile,
 } from "~~/lib/tokenless/agentExecutionProvenance";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -75,7 +78,7 @@ test("normalizes a single Sol execution with a medium-effort model profile", () 
     totalTokens: 1_300,
   });
   assert.deepEqual(normalized.executionProfile, {
-    schemaVersion: "rateloop.execution-profile.v1",
+    schemaVersion: "rateloop.execution-profile.v2",
     orchestrationMode: "single_model",
     primary: {
       provider: "openai",
@@ -150,6 +153,50 @@ test("profile cohorts stay stable while measurements change and manifests do not
   assert.deepEqual(changed.executionProfile, original.executionProfile);
   assert.equal(changed.executionProfileHash, original.executionProfileHash);
   assert.notEqual(changed.manifestCommitment, original.manifestCommitment);
+});
+
+test("profile v2 keeps effort and service observations in evidence without partitioning on them", () => {
+  const original = normalizeAgentExecutionProvenance(solExecution());
+  const changedInput = solExecution();
+  changedInput.generationSpans[0]!.reasoningEffort = "high";
+  changedInput.generationSpans[0]!.serviceTier = "priority";
+  const changed = normalizeAgentExecutionProvenance(changedInput);
+
+  assert.equal(original.executionProfile.schemaVersion, "rateloop.execution-profile.v2");
+  assert.equal(changed.executionProfile.primary.reasoningEffort, "high");
+  assert.equal(changed.executionProfile.primary.serviceTier, "priority");
+  assert.equal(changed.executionProfileHash, original.executionProfileHash);
+  assert.notEqual(changed.manifestCommitment, original.manifestCommitment);
+});
+
+test("profile v2 still partitions provider, requested model, resolved model, and model version", () => {
+  const original = normalizeAgentExecutionProvenance(solExecution());
+  for (const change of [
+    { provider: "anthropic" },
+    { requestedModel: "Terra" },
+    { resolvedModel: "gpt-5-codex-next" },
+    { modelVersion: "2026-07-02" },
+  ]) {
+    const changedInput = solExecution();
+    Object.assign(changedInput.generationSpans[0]!, change);
+    const changed = normalizeAgentExecutionProvenance(changedInput);
+    assert.notEqual(changed.executionProfileHash, original.executionProfileHash, JSON.stringify(change));
+  }
+});
+
+test("legacy profile v1 commitments remain reproducible without rewriting historical rows", () => {
+  const normalized = normalizeAgentExecutionProvenance(solExecution());
+  const legacy = projectAgentExecutionProfile(normalized, LEGACY_AGENT_EXECUTION_PROFILE_SCHEMA_VERSION);
+  assert.equal(legacy.schemaVersion, "rateloop.execution-profile.v1");
+  assert.match(agentExecutionProfileHash(legacy), /^sha256:[0-9a-f]{64}$/u);
+
+  const changedInput = solExecution();
+  changedInput.generationSpans[0]!.reasoningEffort = "high";
+  const changedLegacy = projectAgentExecutionProfile(
+    normalizeAgentExecutionProvenance(changedInput),
+    LEGACY_AGENT_EXECUTION_PROFILE_SCHEMA_VERSION,
+  );
+  assert.notEqual(agentExecutionProfileHash(changedLegacy), agentExecutionProfileHash(legacy));
 });
 
 test("does not invent clocks or usage when callers cannot observe them", () => {

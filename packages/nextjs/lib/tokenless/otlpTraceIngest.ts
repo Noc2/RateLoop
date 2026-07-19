@@ -9,6 +9,7 @@ import {
 import {
   type AgentExecutionProvenanceInput,
   type NormalizedAgentExecutionProvenance,
+  legacyAgentExecutionProfileHash,
   normalizeAgentExecutionProvenance,
 } from "~~/lib/tokenless/agentExecutionProvenance";
 import {
@@ -706,12 +707,14 @@ async function persistMappedTrace(
     [workspaceId, mapping.agentId, execution.externalExecutionId],
   );
   const assertExactReplay = (row: QueryRow | undefined) => {
+    const storedProfileHash = rowString(row, "execution_profile_hash");
     if (
       rowString(row, "execution_id") !== executionId ||
       rowString(row, "agent_version_id") !== mapping.agentVersionId ||
       rowString(row, "integration_id") !== null ||
       rowString(row, "manifest_commitment") !== execution.manifestCommitment ||
-      rowString(row, "execution_profile_hash") !== execution.executionProfileHash
+      (storedProfileHash !== execution.executionProfileHash &&
+        storedProfileHash !== legacyAgentExecutionProfileHash(execution))
     ) {
       invalid("OTLP trace ID is already bound to different immutable provenance.", "otlp_execution_conflict", 409);
     }

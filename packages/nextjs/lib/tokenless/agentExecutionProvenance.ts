@@ -3,7 +3,11 @@ import "server-only";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export const AGENT_EXECUTION_MANIFEST_SCHEMA_VERSION = "rateloop.execution-manifest.v1" as const;
-export const AGENT_EXECUTION_PROFILE_SCHEMA_VERSION = "rateloop.execution-profile.v1" as const;
+export const LEGACY_AGENT_EXECUTION_PROFILE_SCHEMA_VERSION = "rateloop.execution-profile.v1" as const;
+export const AGENT_EXECUTION_PROFILE_SCHEMA_VERSION = "rateloop.execution-profile.v2" as const;
+export type AgentExecutionProfileSchemaVersion =
+  | typeof LEGACY_AGENT_EXECUTION_PROFILE_SCHEMA_VERSION
+  | typeof AGENT_EXECUTION_PROFILE_SCHEMA_VERSION;
 
 const MAX_GENERATION_SPANS = 64;
 const MAX_INTEGER = 2_147_483_647;
@@ -87,7 +91,7 @@ export type AgentExecutionModelProfile = {
 };
 
 export type AgentExecutionProfile = {
-  schemaVersion: typeof AGENT_EXECUTION_PROFILE_SCHEMA_VERSION;
+  schemaVersion: AgentExecutionProfileSchemaVersion;
   orchestrationMode: "single_model" | "multi_model";
   primary: AgentExecutionModelProfile;
   contributors: AgentExecutionModelProfile[];
@@ -339,7 +343,11 @@ function nullableSum(values: Array<number | null>): number | null {
   return total;
 }
 
-function profileFor(spans: NormalizedAgentGenerationSpan[], primarySpanId: string): AgentExecutionProfile {
+function profileFor(
+  spans: NormalizedAgentGenerationSpan[],
+  primarySpanId: string,
+  schemaVersion: AgentExecutionProfileSchemaVersion,
+): AgentExecutionProfile {
   const profiles = new Map<string, AgentExecutionModelProfile>();
   const modelIdentities = new Set<string>();
   for (const span of spans) {
@@ -359,11 +367,61 @@ function profileFor(spans: NormalizedAgentGenerationSpan[], primarySpanId: strin
   const primarySpan = spans.find(span => span.spanId === primarySpanId);
   if (!primarySpan) throw new Error("Validated execution provenance is missing its primary span.");
   return {
-    schemaVersion: AGENT_EXECUTION_PROFILE_SCHEMA_VERSION,
+    schemaVersion,
     orchestrationMode: modelIdentities.size === 1 ? "single_model" : "multi_model",
     primary: modelProfile(primarySpan),
     contributors,
   };
+}
+
+function evaluationModelProfile(profile: AgentExecutionModelProfile) {
+  return {
+    provider: profile.provider,
+    requestedModel: profile.requestedModel,
+    resolvedModel: profile.resolvedModel,
+    modelVersion: profile.modelVersion,
+  };
+}
+
+function profileCommitmentPayload(profile: AgentExecutionProfile) {
+  if (profile.schemaVersion === LEGACY_AGENT_EXECUTION_PROFILE_SCHEMA_VERSION) return profile;
+  const contributors = new Map<string, ReturnType<typeof evaluationModelProfile>>();
+  for (const contributor of profile.contributors) {
+    const projected = evaluationModelProfile(contributor);
+    contributors.set(canonicalJson(projected), projected);
+  }
+  return {
+    schemaVersion: profile.schemaVersion,
+    orchestrationMode: profile.orchestrationMode,
+    primary: evaluationModelProfile(profile.primary),
+    contributors: [...contributors.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([, contributor]) => contributor),
+  };
+}
+
+/**
+ * Builds the explicitly versioned profile stored with executions and scopes.
+ * v1 treated effort and service tier as partition dimensions. v2 retains those
+ * observations in the profile/evidence but excludes them from cohort identity.
+ */
+export function projectAgentExecutionProfile(
+  execution: Pick<NormalizedAgentExecutionProvenance, "generationSpans" | "primarySpanId">,
+  schemaVersion: AgentExecutionProfileSchemaVersion = AGENT_EXECUTION_PROFILE_SCHEMA_VERSION,
+) {
+  return profileFor(execution.generationSpans, execution.primarySpanId, schemaVersion);
+}
+
+export function agentExecutionProfileHash(profile: AgentExecutionProfile): `sha256:${string}` {
+  return commitment(profileCommitmentPayload(profile));
+}
+
+export function legacyAgentExecutionProfileHash(
+  execution: Pick<NormalizedAgentExecutionProvenance, "generationSpans" | "primarySpanId">,
+) {
+  return agentExecutionProfileHash(
+    projectAgentExecutionProfile(execution, LEGACY_AGENT_EXECUTION_PROFILE_SCHEMA_VERSION),
+  );
 }
 
 export function normalizeAgentExecutionProvenance(input: unknown): NormalizedAgentExecutionProvenance {
@@ -411,7 +469,7 @@ export function normalizeAgentExecutionProvenance(input: unknown): NormalizedAge
     reasoningOutputTokens: nullableSum(generationSpans.map(span => span.reasoningOutputTokens)),
     totalTokens: inputTokens === null || outputTokens === null ? null : nullableSum([inputTokens, outputTokens]),
   };
-  const executionProfile = profileFor(generationSpans, primarySpanId);
+  const executionProfile = profileFor(generationSpans, primarySpanId, AGENT_EXECUTION_PROFILE_SCHEMA_VERSION);
   const manifest = {
     schemaVersion: AGENT_EXECUTION_MANIFEST_SCHEMA_VERSION,
     externalExecutionId: boundedString(execution.externalExecutionId, "execution.externalExecutionId", 160),
@@ -427,6 +485,6 @@ export function normalizeAgentExecutionProvenance(input: unknown): NormalizedAge
     ...manifest,
     manifestCommitment: commitment(manifest),
     executionProfile,
-    executionProfileHash: commitment(executionProfile),
+    executionProfileHash: agentExecutionProfileHash(executionProfile),
   };
 }

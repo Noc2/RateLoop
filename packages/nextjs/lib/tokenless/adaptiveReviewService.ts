@@ -15,7 +15,9 @@ import {
   AGENT_EXECUTION_PROFILE_SCHEMA_VERSION,
   type AgentExecutionProfile,
   type AgentExecutionProvenanceInput,
+  LEGACY_AGENT_EXECUTION_PROFILE_SCHEMA_VERSION,
   type NormalizedAgentExecutionProvenance,
+  legacyAgentExecutionProfileHash,
   normalizeAgentExecutionProvenance,
 } from "~~/lib/tokenless/agentExecutionProvenance";
 import { decideFixedReview } from "~~/lib/tokenless/fixedReview";
@@ -406,7 +408,12 @@ function policyFromRow(row: QueryRow | undefined): ReviewPolicyRow {
 
 function executionProfileFromRow(row: QueryRow): AgentExecutionProfile | null {
   const value = parseJson(row.execution_profile_json, "execution profile");
-  if (value.schemaVersion !== AGENT_EXECUTION_PROFILE_SCHEMA_VERSION) return null;
+  if (
+    value.schemaVersion !== AGENT_EXECUTION_PROFILE_SCHEMA_VERSION &&
+    value.schemaVersion !== LEGACY_AGENT_EXECUTION_PROFILE_SCHEMA_VERSION
+  ) {
+    return null;
+  }
   const primary = value.primary;
   const contributors = value.contributors;
   const orchestrationMode = value.orchestrationMode;
@@ -1126,12 +1133,14 @@ async function persistExecution(
   );
   const row = existing.rows[0] as QueryRow | undefined;
   if (row) {
+    const storedProfileHash = rowString(row, "execution_profile_hash");
     if (
       rowString(row, "execution_id") !== executionId ||
       rowString(row, "agent_version_id") !== input.agentVersionId ||
       rowString(row, "integration_id") !== input.integrationId ||
       rowString(row, "manifest_commitment") !== input.execution.manifestCommitment ||
-      rowString(row, "execution_profile_hash") !== input.execution.executionProfileHash
+      (storedProfileHash !== input.execution.executionProfileHash &&
+        storedProfileHash !== legacyAgentExecutionProfileHash(input.execution))
     ) {
       throw new TokenlessServiceError(
         "externalExecutionId is already bound to different immutable provenance.",
@@ -1287,7 +1296,7 @@ export async function evaluateAdaptiveReviewRequirement(input: {
       binding,
       apiKeyId: input.principal.apiKeyId,
     });
-    const scopeId = deterministicId("evs", [
+    const currentScopeId = deterministicId("evs", [
       workspaceId,
       request.agentId,
       request.agentVersionId,
@@ -1340,8 +1349,19 @@ export async function evaluateAdaptiveReviewRequirement(input: {
       execution: request.execution,
       createdAt: now,
     });
-    const insertedScope = await client.query(
-      `INSERT INTO tokenless_agent_evaluation_scopes
+    const existing = await client.query(
+      `SELECT * FROM tokenless_agent_review_opportunities
+       WHERE workspace_id = $1 AND agent_id = $2 AND external_opportunity_id = $3
+       FOR UPDATE`,
+      [workspaceId, request.agentId, request.externalOpportunityId],
+    );
+    let opportunity = existing.rows[0] as QueryRow | undefined;
+    const effectiveCriticalRisk = request.criticalRisk || policy.rules.criticalRiskTiers.includes(request.riskTier);
+    const scopeId = opportunity ? rowString(opportunity, "scope_id") : currentScopeId;
+    if (!scopeId) throw new Error("Stored review opportunity is missing its evaluation scope.");
+    if (!opportunity) {
+      const insertedScope = await client.query(
+        `INSERT INTO tokenless_agent_evaluation_scopes
        (scope_id, workspace_id, agent_id, agent_version_id, policy_id, policy_version, workflow_key, risk_tier,
         audience_policy_hash, execution_profile_hash, execution_profile_json,
         human_review_binding_id, human_review_binding_version,
@@ -1351,38 +1371,39 @@ export async function evaluateAdaptiveReviewRequirement(input: {
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
                'calibrating', 0, 0, 0, $18, $18)
        ON CONFLICT (scope_id) DO NOTHING RETURNING scope_id`,
-      [
-        scopeId,
-        workspaceId,
-        request.agentId,
-        request.agentVersionId,
-        request.policyId,
-        request.policyVersion,
-        request.workflowKey,
-        request.riskTier,
-        request.audiencePolicyHash,
-        request.execution.executionProfileHash,
-        JSON.stringify(request.execution.executionProfile),
-        binding.bindingId,
-        binding.bindingVersion,
-        binding.requestProfileId,
-        binding.requestProfileVersion,
-        binding.requestProfileHash,
-        partitionCommitment,
-        now,
-      ],
-    );
-    if (insertedScope.rowCount === 1) {
-      await recordPolicyEvent(client, {
-        workspaceId,
-        scopeId,
-        policy,
-        eventType: "created",
-        toStage: "calibrating",
-        reasonCodes: ["scope_created"],
-        actorReference: input.principal.apiKeyId,
-        createdAt: now,
-      });
+        [
+          scopeId,
+          workspaceId,
+          request.agentId,
+          request.agentVersionId,
+          request.policyId,
+          request.policyVersion,
+          request.workflowKey,
+          request.riskTier,
+          request.audiencePolicyHash,
+          request.execution.executionProfileHash,
+          JSON.stringify(request.execution.executionProfile),
+          binding.bindingId,
+          binding.bindingVersion,
+          binding.requestProfileId,
+          binding.requestProfileVersion,
+          binding.requestProfileHash,
+          partitionCommitment,
+          now,
+        ],
+      );
+      if (insertedScope.rowCount === 1) {
+        await recordPolicyEvent(client, {
+          workspaceId,
+          scopeId,
+          policy,
+          eventType: "created",
+          toStage: "calibrating",
+          reasonCodes: ["scope_created"],
+          actorReference: input.principal.apiKeyId,
+          createdAt: now,
+        });
+      }
     }
     const scopeResult = await client.query(
       `SELECT scope_id, stage, completed_comparable_cases, stable_cases_since_stage,
@@ -1395,20 +1416,6 @@ export async function evaluateAdaptiveReviewRequirement(input: {
     );
     if (scopeResult.rowCount !== 1) throw new Error("Adaptive scope could not be locked.");
     let scope = scopeFromRow(scopeResult.rows[0] as QueryRow);
-    if (policy.mode === "adaptive") {
-      const metadataReset = !request.metadataComplete && scope.stage !== "calibrating" ? "missing_metadata" : null;
-      scope = await refreshScopeState(client, { workspaceId, scope, policy, resetReason: metadataReset });
-    }
-
-    const existing = await client.query(
-      `SELECT * FROM tokenless_agent_review_opportunities
-       WHERE workspace_id = $1 AND agent_id = $2 AND external_opportunity_id = $3
-       FOR UPDATE`,
-      [workspaceId, request.agentId, request.externalOpportunityId],
-    );
-    let opportunity = existing.rows[0] as QueryRow | undefined;
-    let lifecycle: AdaptiveReviewDecision["lifecycle"] | undefined;
-    const effectiveCriticalRisk = request.criticalRisk || policy.rules.criticalRiskTiers.includes(request.riskTier);
     if (
       opportunity &&
       !replayMatches(opportunity, request, scopeId, executionId, metadataCommitment, effectiveCriticalRisk, binding)
@@ -1419,6 +1426,12 @@ export async function evaluateAdaptiveReviewRequirement(input: {
         "review_opportunity_conflict",
       );
     }
+    if (policy.mode === "adaptive") {
+      const metadataReset = !request.metadataComplete && scope.stage !== "calibrating" ? "missing_metadata" : null;
+      scope = await refreshScopeState(client, { workspaceId, scope, policy, resetReason: metadataReset });
+    }
+
+    let lifecycle: AdaptiveReviewDecision["lifecycle"] | undefined;
     if (!opportunity) {
       const stopState = await client.query(
         "SELECT 1 FROM tokenless_workspace_stop_states WHERE workspace_id = $1 AND status = 'engaged' LIMIT 1",
@@ -1607,6 +1620,7 @@ export async function evaluateAdaptiveReviewRequirement(input: {
         opportunityId: rowString(opportunity, "opportunity_id")!,
         metadataCommitment: rowString(opportunity, "metadata_commitment")!,
         execution: request.execution,
+        ...(scope.executionProfile ? { profileSchemaVersion: scope.executionProfile.schemaVersion } : {}),
       }),
       createdAt: new Date(String(opportunity.created_at)).toISOString(),
       lifecycle,

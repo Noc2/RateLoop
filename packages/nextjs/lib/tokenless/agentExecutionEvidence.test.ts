@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import { parseAgentExecutionEvidence, projectAgentExecutionEvidence } from "~~/lib/tokenless/agentExecutionEvidence";
 import {
   type AgentExecutionProvenanceInput,
+  LEGACY_AGENT_EXECUTION_PROFILE_SCHEMA_VERSION,
+  agentExecutionProfileHash,
   normalizeAgentExecutionProvenance,
+  projectAgentExecutionProfile,
 } from "~~/lib/tokenless/agentExecutionProvenance";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -65,6 +69,21 @@ function evidence() {
   });
 }
 
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function commitment(value: unknown): `sha256:${string}` {
+  return `sha256:${createHash("sha256").update(canonicalJson(value)).digest("hex")}`;
+}
+
 function assertInvalid(value: unknown, pattern?: RegExp) {
   assert.throws(
     () => parseAgentExecutionEvidence(value),
@@ -97,11 +116,50 @@ test("projects an exact hash-bound host-reported execution evidence envelope", (
     value.manifest.generationSpans.map(span => span.spanId),
     ["primary", "supporting"],
   );
+  assert.equal(value.manifest.generationSpans[0]?.reasoningEffort, "medium");
+  assert.equal(value.manifest.generationSpans[0]?.serviceTier, "standard");
+  assert.equal(value.executionProfile.schemaVersion, "rateloop.execution-profile.v2");
   assert.equal(value.executionProfile.orchestrationMode, "multi_model");
   assert.match(value.manifestCommitment, /^sha256:[0-9a-f]{64}$/u);
   assert.match(value.executionProfileHash, /^sha256:[0-9a-f]{64}$/u);
   assert.match(value.evidenceCommitment, /^sha256:[0-9a-f]{64}$/u);
   assert.deepEqual(parseAgentExecutionEvidence(value), value);
+});
+
+test("effort and service tier stay evidence-bound without changing the v2 evaluation profile hash", () => {
+  const original = evidence();
+  const changedInput = execution();
+  changedInput.generationSpans.find(span => span.spanId === "primary")!.reasoningEffort = "high";
+  changedInput.generationSpans.find(span => span.spanId === "primary")!.serviceTier = "priority";
+  const changed = projectAgentExecutionEvidence({
+    executionId: original.executionId,
+    ...original.opportunityBinding,
+    execution: normalizeAgentExecutionProvenance(changedInput),
+  });
+
+  assert.equal(changed.executionProfileHash, original.executionProfileHash);
+  assert.notEqual(changed.manifestCommitment, original.manifestCommitment);
+  assert.notEqual(changed.evidenceCommitment, original.evidenceCommitment);
+  assert.equal(changed.manifest.generationSpans[0]?.reasoningEffort, "high");
+  assert.equal(changed.manifest.generationSpans[0]?.serviceTier, "priority");
+  assert.deepEqual(parseAgentExecutionEvidence(changed), changed);
+});
+
+test("parses canonical historical v1 evidence without rewriting its profile semantics", () => {
+  const current = evidence();
+  const executionValue = normalizeAgentExecutionProvenance(execution());
+  const legacyProfile = projectAgentExecutionProfile(executionValue, LEGACY_AGENT_EXECUTION_PROFILE_SCHEMA_VERSION);
+  const { evidenceCommitment: _currentCommitment, ...currentBody } = current;
+  void _currentCommitment;
+  const legacyBody = {
+    ...currentBody,
+    executionProfile: legacyProfile,
+    executionProfileHash: agentExecutionProfileHash(legacyProfile),
+  };
+  const legacy = { ...legacyBody, evidenceCommitment: commitment(legacyBody) };
+
+  assert.equal(legacy.executionProfile.schemaVersion, "rateloop.execution-profile.v1");
+  assert.deepEqual(parseAgentExecutionEvidence(legacy), legacy);
 });
 
 test("keeps evidence stable when callers report equivalent spans in a different order", () => {
