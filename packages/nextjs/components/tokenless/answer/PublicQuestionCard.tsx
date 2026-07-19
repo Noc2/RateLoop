@@ -13,8 +13,10 @@ import {
   type TokenlessRaterRoundSecrets,
   createIndexedDbTokenlessCommitQueue,
   createTokenlessRaterRoundSecrets,
+  dueTokenlessCommits,
   enqueueTokenlessCommit,
   exportTokenlessRecoveryPackage,
+  recordTokenlessCommitRelayFailure,
   sealTokenlessReveal,
   signTokenlessCommit,
 } from "~~/lib/tokenless/rater";
@@ -175,6 +177,7 @@ export function PublicQuestionCard({
   const [feedbackBody, setFeedbackBody] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [savedCommit, setSavedCommit] = useState<TokenlessQueuedCommit | null>(null);
+  const [retryClock, setRetryClock] = useState(() => Date.now());
   const [draftRestored, setDraftRestored] = useState(false);
   const rationaleRef = useRef<HTMLTextAreaElement>(null);
   const feedbackEnabled = task.question.rationale?.mode !== "off";
@@ -187,6 +190,11 @@ export function PublicQuestionCard({
   });
   const activePreparedSubmission = preparedSubmission?.binding === preparationBinding ? preparedSubmission : null;
   const publicDraftStorage = useMemo(() => ({ principalId }), [principalId]);
+  const retryAvailable = Boolean(
+    savedCommit &&
+      Date.parse(savedCommit.commitDeadline) > retryClock &&
+      Date.parse(savedCommit.nextAttemptAt) <= retryClock,
+  );
 
   useEffect(() => {
     const draft = loadReviewDraft("public", task.roundId, isPublicReviewDraft, publicDraftStorage);
@@ -233,23 +241,60 @@ export function PublicQuestionCard({
   useEffect(() => {
     if (!task.alreadyVouchered) return;
     let active = true;
-    void createIndexedDbTokenlessCommitQueue()
-      .list(principalId)
-      .then(records => {
-        if (!active) return;
-        const record = records.find(value => value.roundId === task.roundId) ?? null;
-        setSavedCommit(record);
-        setStatus(record ? "Ready to retry" : "No saved submission");
-        setTechnicalStatus(
-          record
-            ? "A prepared submission is saved on this device. Retry it or check confirmation."
-            : "This voucher was reserved in another session. No prepared submission is available on this device.",
-        );
-      });
+    const queue = createIndexedDbTokenlessCommitQueue();
+    void dueTokenlessCommits(queue, principalId).then(async dueRecords => {
+      if (!active) return;
+      const records = await queue.list(principalId);
+      if (!active) return;
+      const record = records.find(value => value.roundId === task.roundId) ?? null;
+      setSavedCommit(record);
+      const isDue = Boolean(record && dueRecords.some(value => value.queueId === record.queueId));
+      setRetryClock(Date.now());
+      setStatus(
+        record
+          ? isDue
+            ? "Ready to retry"
+            : "Retry scheduled"
+          : Date.parse(task.voucherDeadline) <= Date.now()
+            ? "Submission expired"
+            : "No saved submission",
+      );
+      setTechnicalStatus(
+        record
+          ? isDue
+            ? "A prepared submission for this account is ready to retry."
+            : `The next retry is available after ${new Date(record.nextAttemptAt).toLocaleTimeString()}.`
+          : "This voucher was reserved in another session. No prepared submission is available on this device.",
+      );
+    });
     return () => {
       active = false;
     };
-  }, [principalId, task.alreadyVouchered, task.roundId]);
+  }, [principalId, task.alreadyVouchered, task.roundId, task.voucherDeadline]);
+
+  useEffect(() => {
+    if (!savedCommit || retryAvailable) return;
+    const delay = Math.max(0, Math.min(Date.parse(savedCommit.nextAttemptAt) - Date.now(), 30_000));
+    const timeout = window.setTimeout(() => setRetryClock(Date.now()), delay + 10);
+    return () => window.clearTimeout(timeout);
+  }, [retryAvailable, savedCommit]);
+
+  async function scheduleRetry(record: TokenlessQueuedCommit, errorCode: string) {
+    const queue = createIndexedDbTokenlessCommitQueue();
+    const failure = await recordTokenlessCommitRelayFailure(queue, record.queueId, principalId, errorCode);
+    if (failure.expired) {
+      setSavedCommit(null);
+      setStatus("Submission expired");
+      setTechnicalStatus("The immutable commit deadline passed, so the saved submission was removed.");
+      return;
+    }
+    setSavedCommit(failure.record);
+    setRetryClock(Date.now());
+    setStatus("Retry scheduled");
+    setTechnicalStatus(
+      `The next retry is available after ${new Date(failure.record.nextAttemptAt).toLocaleTimeString()}.`,
+    );
+  }
 
   async function retrySavedCommit() {
     if (!savedCommit) return;
@@ -267,13 +312,27 @@ export function PublicQuestionCard({
         setTechnicalStatus("Saved submissions are available only to the account that created them.");
         return;
       }
-      const idempotencyKey = String(savedCommit.relayPayload.idempotencyKey ?? "");
+      const queue = createIndexedDbTokenlessCommitQueue();
+      const due = await dueTokenlessCommits(queue, principalId);
+      const currentRecord = due.find(record => record.queueId === savedCommit.queueId);
+      if (!currentRecord) {
+        const retained = await queue.get(savedCommit.queueId, principalId);
+        setSavedCommit(retained);
+        setStatus(retained ? "Retry scheduled" : "Submission expired");
+        setTechnicalStatus(
+          retained
+            ? `The next retry is available after ${new Date(retained.nextAttemptAt).toLocaleTimeString()}.`
+            : "The immutable commit deadline passed, so the saved submission was removed.",
+        );
+        return;
+      }
+      const idempotencyKey = String(currentRecord.relayPayload.idempotencyKey ?? "");
       let committed = await readAnswerJson(
         await fetch("/api/rater/commits", {
           method: "POST",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
-          body: JSON.stringify(savedCommit.relayPayload),
+          body: JSON.stringify(currentRecord.relayPayload),
         }),
       );
       if (typeof committed.commitId !== "string") throw new Error("Commit response is incomplete.");
@@ -286,7 +345,7 @@ export function PublicQuestionCard({
         );
       }
       if (committed.state === "confirmed") {
-        await createIndexedDbTokenlessCommitQueue().remove(savedCommit.queueId, principalId);
+        await queue.remove(currentRecord.queueId, principalId);
         setSavedCommit(null);
         clearReviewDraft("public", task.roundId, publicDraftStorage);
         setStatus("Recorded");
@@ -295,13 +354,21 @@ export function PublicQuestionCard({
       } else if (committed.state === "failed") {
         throw new Error("The sponsored transaction failed. The prepared submission remains saved for retry.");
       } else {
-        setStatus("Submitting…");
-        setTechnicalStatus("Confirmation is pending. The prepared submission remains saved on this device.");
+        await scheduleRetry(currentRecord, "confirmation_pending");
       }
     } catch (cause) {
       setError("We couldn’t finish recording your rating. Try again.");
-      setTechnicalStatus(cause instanceof Error ? cause.message : "Unable to retry the saved submission.");
-      setStatus("Ready to retry");
+      if (savedCommit && savedCommit.principalId === principalId) {
+        try {
+          await scheduleRetry(savedCommit, "relay_failed");
+        } catch {
+          setStatus("Retry unavailable");
+          setTechnicalStatus("The saved submission could not be updated. Refocus this tab and try again.");
+        }
+      } else {
+        setStatus(null);
+        setTechnicalStatus(cause instanceof Error ? cause.message : "Unable to retry the saved submission.");
+      }
     } finally {
       setBusy(false);
       setBusyLabel(null);
@@ -512,15 +579,23 @@ export function PublicQuestionCard({
           "The sponsored transaction failed. Your prepared submission is saved on this device for retry.",
         );
       } else {
-        setStatus("Submitting…");
-        setTechnicalStatus("Confirmation is pending. The prepared submission remains saved on this device.");
+        await scheduleRetry(queuedCommit, "confirmation_pending");
       }
     } catch (cause) {
       setError("We couldn’t record your rating. Try again.");
-      setStatus(preparedForRetry ? "Ready to retry" : null);
-      setTechnicalStatus(
-        `${cause instanceof Error ? cause.message : "Unable to submit the sealed answer."}${preparedForRetry ? " The prepared submission remains on this device." : ""}`,
-      );
+      if (preparedForRetry) {
+        try {
+          const queued = await createIndexedDbTokenlessCommitQueue().list(principalId);
+          const record = queued.find(value => value.roundId === task.roundId);
+          if (record) await scheduleRetry(record, "initial_relay_failed");
+        } catch {
+          setStatus("Retry unavailable");
+          setTechnicalStatus("The saved submission could not be updated. Refocus this tab and try again.");
+        }
+      } else {
+        setStatus(null);
+        setTechnicalStatus(cause instanceof Error ? cause.message : "Unable to submit the sealed answer.");
+      }
     } finally {
       setBusy(false);
       setBusyLabel(null);
@@ -543,6 +618,7 @@ export function PublicQuestionCard({
       advanceDisabled={
         paidAccess.state !== "ready" ||
         busy ||
+        (Boolean(savedCommit) && !retryAvailable) ||
         (!savedCommit &&
           (!answer ||
             prediction === null ||
