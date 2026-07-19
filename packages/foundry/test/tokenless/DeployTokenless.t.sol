@@ -38,7 +38,9 @@ contract DeployTokenlessTest is Test {
 
     function testRejectsEoaRotationAuthority() public {
         address authority = makeAddr("rotation-authority-eoa");
-        vm.expectRevert(abi.encodeWithSelector(DeployTokenlessScript.RotationAuthorityMustBeContract.selector, authority));
+        vm.expectRevert(
+            abi.encodeWithSelector(DeployTokenlessScript.RotationAuthorityMustBeContract.selector, authority)
+        );
         harness.assertRotationAuthority(authority);
     }
 
