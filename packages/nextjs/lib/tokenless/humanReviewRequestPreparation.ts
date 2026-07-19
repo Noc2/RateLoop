@@ -17,7 +17,7 @@ import {
 } from "~~/lib/tokenless/reviewerExpertiseVocabulary";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
-export const HUMAN_REVIEW_PLATFORM_FEE_BPS = 750;
+export const HUMAN_REVIEW_PLATFORM_FEE_BPS = 1_000;
 export const HUMAN_REVIEW_FIXED_BASE_BPS = 8_000;
 export const HUMAN_REVIEW_MAXIMUM_PANEL_SIZE = 100;
 export const HUMAN_REVIEW_UINT256_MAX = (1n << 256n) - 1n;

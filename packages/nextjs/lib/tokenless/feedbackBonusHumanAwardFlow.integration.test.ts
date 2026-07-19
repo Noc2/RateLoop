@@ -88,8 +88,8 @@ test("private invited review supports every independent base-bounty and Feedback
   const expectedMaximumConsent = new Map([
     ["false:false", "0"],
     ["false:true", "5000000"],
-    ["true:false", "3750000"],
-    ["true:true", "8750000"],
+    ["true:false", "3800000"],
+    ["true:true", "8800000"],
   ]);
 
   for (const baseBounty of [false, true]) {

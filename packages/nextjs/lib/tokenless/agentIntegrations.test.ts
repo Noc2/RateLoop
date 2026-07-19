@@ -33,7 +33,7 @@ async function fixture() {
       maxMonthlyAtomic: "1000000000",
       maxPanelSize: 15,
       maxBountyAtomic: "20000000",
-      maxFeeBps: 750,
+      maxFeeBps: 1_000,
       maxAttemptReserveAtomic: "5000000",
       allowedReviewerSources: ["customer_invited"],
       allowedAdmissionPolicyHashes: [`0x${"11".repeat(32)}`],

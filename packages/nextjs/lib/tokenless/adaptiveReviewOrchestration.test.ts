@@ -315,7 +315,7 @@ test("creates one prepaid canonical ask and idempotently binds the required oppo
   assert.deepEqual(quoteRequest.budget, {
     bountyAtomic: "3000000",
     attemptReserveAtomic: "2400000",
-    feeBps: 750,
+    feeBps: 1_000,
   });
   assert.deepEqual(quoteRequest.reviewEconomics, {
     compensationMode: "usdc",

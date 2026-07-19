@@ -23,7 +23,7 @@ afterEach(() => {
 function quoteRequest() {
   return {
     audience: { admissionPolicyHash: `0x${"ab".repeat(32)}`, source: "customer_invited" as const },
-    budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
+    budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 1_000 },
     question: { kind: "binary", prompt: "Ship this?", rationale: { mode: "optional" } },
     requestedPanelSize: 15,
     responseWindowSeconds: 3_600,
@@ -38,11 +38,11 @@ test("tokenless quote itemizes bounty, fee, reserve, refund, and compensation", 
 
   assert.equal(quote.schemaVersion, "rateloop.tokenless.v2");
   assert.equal(quote.economics.bounty.fundedAtomic, "25000000");
-  assert.equal(quote.economics.fee.fundedAtomic, "1875000");
+  assert.equal(quote.economics.fee.fundedAtomic, "2500000");
   assert.equal(quote.economics.attemptReserve.fundedAtomic, "5000000");
   assert.equal(quote.economics.refund.totalAtomic, "0");
   assert.equal(quote.economics.compensation.perAcceptedRevealCapAtomic, "333333");
-  assert.equal(quote.economics.totalFundedAtomic, "31875000");
+  assert.equal(quote.economics.totalFundedAtomic, "32500000");
   assert.equal(quote.responseWindowSeconds, 3_600);
   assert.equal(quote.requestProfile, null);
   assert.equal(quote.reviewEconomics, null);

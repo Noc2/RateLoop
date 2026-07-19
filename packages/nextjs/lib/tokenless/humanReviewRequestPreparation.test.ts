@@ -63,7 +63,7 @@ function hashPreparedPayload(value: string) {
 
 test("derives the RateLoop fee and RBTS fixed-base reserve from the exact paid profile", () => {
   const economics = deriveHumanReviewEconomics(profile());
-  assert.equal(HUMAN_REVIEW_PLATFORM_FEE_BPS, 750);
+  assert.equal(HUMAN_REVIEW_PLATFORM_FEE_BPS, 1_000);
   assert.equal(HUMAN_REVIEW_FIXED_BASE_BPS, 8_000);
   assert.deepEqual(economics, {
     schemaVersion: "rateloop.human-review-derived-economics.v1",
@@ -71,10 +71,10 @@ test("derives the RateLoop fee and RBTS fixed-base reserve from the exact paid p
     bountyPerSeatAtomic: "1000000",
     panelSize: 5,
     baseBountyAtomic: "5000000",
-    feeBps: 750,
-    feeAtomic: "375000",
+    feeBps: 1_000,
+    feeAtomic: "500000",
     attemptReserveAtomic: "4000000",
-    maximumChargeAtomic: "9375000",
+    maximumChargeAtomic: "9500000",
   });
   assert.equal(BigInt(economics.attemptReserveAtomic) / 5n, 800000n);
   assert.equal(Object.isFrozen(economics), true);
@@ -90,11 +90,11 @@ test("prepares and hashes owner-bound question, audience, timing, panel, economi
   assert.equal(prepared.preparedRequest.timing.expiresAt, "2026-07-16T13:00:00.000Z");
   assert.equal(prepared.preparedRequest.panel.size, 5);
   assert.equal(prepared.preparedRequest.provenance.selectionPolicyId, "rpol_exact");
-  assert.equal(prepared.maximumChargeAtomic, "9375000");
+  assert.equal(prepared.maximumChargeAtomic, "9500000");
   assert.deepEqual(prepared.quoteTerms.budget, {
     bountyAtomic: "5000000",
     attemptReserveAtomic: "4000000",
-    feeBps: 750,
+    feeBps: 1_000,
   });
   assert.deepEqual(prepared.quoteTerms.requestProfile, { id: "rrp_exact", version: 2, hash: HASH("a") });
   assert.deepEqual(prepared.quoteTerms.reviewEconomics, {

@@ -70,7 +70,7 @@ async function fixture(
       maxMonthlyAtomic: "1000000000",
       maxPanelSize: 15,
       maxBountyAtomic: "20000000",
-      maxFeeBps: 750,
+      maxFeeBps: 1_000,
       maxAttemptReserveAtomic: "10000000",
       allowedReviewerSources: ["rateloop_network", "customer_invited"],
       allowedAdmissionPolicyHashes: [`0x${"11".repeat(32)}`],
@@ -496,7 +496,7 @@ test("prepares a public paid approval exactly once without publishing, reserving
     hash: setup.profileHash,
   });
   assert.equal(prepared.expiresAt, new Date(NOW.getTime() + 1_200_000).toISOString());
-  assert.equal(prepared.maximumChargeAtomic, "5625000");
+  assert.equal(prepared.maximumChargeAtomic, "5700000");
   assert.deepEqual(prepared.sideEffects, { published: false, assigned: false, fundsReserved: false, spent: false });
   assert.equal(Object.isFrozen(prepared.preparedRequest), true);
   assert.equal(await count("tokenless_agent_review_approval_requests"), 1);
