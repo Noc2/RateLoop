@@ -362,6 +362,29 @@ contract TokenlessPanelTest is Test {
         assertFalse(panel.nullifierUsed(alice.nullifier));
     }
 
+    function test_CommitRejectsCiphertextBeyondKeeperBoundary() public {
+        uint256 roundId = _createRound(3, 3);
+        Rater memory alice = _rater(0x582, 1, 5_000, "alice-oversized", roundId);
+        TokenlessPanel.Voucher memory voucher = _voucher(roundId, alice);
+        bytes32 sealedCommitment = panel.revealCommitment(
+            roundId, alice.voteKey, alice.vote, alice.prediction, alice.responseHash, alice.payout, alice.salt
+        );
+        bytes32 payoutCommitment = panel.payoutCommitmentFor(alice.payout, alice.salt);
+        bytes memory sealedPayload = new bytes(16_385);
+        bytes memory voucherSignature = _sign(ISSUER_PK, panel.voucherDigest(voucher));
+        bytes memory voteSignature = _sign(
+            alice.privateKey,
+            panel.commitDigest(
+                roundId, sealedCommitment, keccak256(sealedPayload), payoutCommitment, alice.nullifier
+            )
+        );
+
+        vm.prank(relayer);
+        vm.expectRevert(TokenlessPanel.InvalidVoucher.selector);
+        panel.commit(voucher, sealedCommitment, sealedPayload, payoutCommitment, voucherSignature, voteSignature);
+        assertFalse(panel.nullifierUsed(alice.nullifier));
+    }
+
     function test_ClaimGraceAndFailureDeadlinesRemainBounded() public {
         TokenlessPanel.RoundTerms memory terms = _terms(3, 3);
         terms.claimGracePeriod = panel.MAX_CLAIM_GRACE_PERIOD();

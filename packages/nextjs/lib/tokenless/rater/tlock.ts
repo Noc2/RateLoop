@@ -86,8 +86,12 @@ export async function sealTokenlessRevealWithClient(params: {
     throw new Error("beaconRound must be a positive safe integer.");
   }
   const maxCiphertextBytes = params.maxCiphertextBytes ?? TOKENLESS_MAX_TLOCK_CIPHERTEXT_BYTES;
-  if (!Number.isSafeInteger(maxCiphertextBytes) || maxCiphertextBytes < 512 || maxCiphertextBytes > 65_536) {
-    throw new Error("maxCiphertextBytes must be between 512 and 65536.");
+  if (
+    !Number.isSafeInteger(maxCiphertextBytes) ||
+    maxCiphertextBytes < 512 ||
+    maxCiphertextBytes > TOKENLESS_MAX_TLOCK_CIPHERTEXT_BYTES
+  ) {
+    throw new Error(`maxCiphertextBytes must be between 512 and ${TOKENLESS_MAX_TLOCK_CIPHERTEXT_BYTES}.`);
   }
   const spec = TOKENLESS_DRAND_NETWORKS[params.drandNetwork];
   if (!spec) throw new Error("Unsupported drand network.");

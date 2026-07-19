@@ -1,6 +1,7 @@
 import { TOKENLESS_QUICKNET_T_CHAIN_HASH, loadTokenlessChainConfig } from "./chain/config";
 import { getTokenlessChainRuntime, relayTokenlessPanelCall } from "./chain/runtime";
 import { tokenlessCommitTypedData } from "./rater/signing";
+import { TOKENLESS_MAX_TLOCK_CIPHERTEXT_BYTES } from "./rater/tlock";
 import { TokenlessPanelAbi } from "@rateloop/contracts/tokenless";
 import { createHash, randomUUID } from "node:crypto";
 import "server-only";
@@ -11,8 +12,10 @@ import {
   encodeFunctionData,
   getAddress,
   isHash,
+  isHex,
   keccak256,
   recoverTypedDataAddress,
+  size,
 } from "viem";
 import { dbClient, dbPool } from "~~/lib/db";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
@@ -159,7 +162,9 @@ function validateAuthorization(input: RaterCommitRequest["authorization"]) {
     input.drandNetwork !== "quicknet-t" ||
     !Number.isSafeInteger(input.beaconRound) ||
     input.beaconRound <= 0 ||
-    !/^0x[0-9a-fA-F]+$/.test(input.sealedPayload) ||
+    !isHex(input.sealedPayload, { strict: true }) ||
+    size(input.sealedPayload) < 1 ||
+    size(input.sealedPayload) > TOKENLESS_MAX_TLOCK_CIPHERTEXT_BYTES ||
     !BYTES32.test(input.sealedPayloadHash) ||
     !BYTES32.test(input.sealedCommitment) ||
     !BYTES32.test(input.payoutCommitment) ||

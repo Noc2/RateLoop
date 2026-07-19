@@ -19,6 +19,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
     uint16 public constant MAX_FEE_BPS = 2_000;
     uint16 public constant BASE_PAY_BPS = 8_000;
     uint32 public constant MAXIMUM_COMMITS = 500;
+    uint32 internal constant MAX_SEALED_PAYLOAD_BYTES = 16_384;
     uint64 public constant MAX_CLAIM_GRACE_PERIOD = 365 days;
     uint8 public constant SCORING_VERSION = 2;
 
@@ -322,7 +323,8 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         if (
             voucher.voteKey == address(0) || voucher.contentId != round.contentId || voucher.nullifier == bytes32(0)
                 || voucher.admissionPolicyHash != round.admissionPolicyHash || voucher.expiresAt < block.timestamp
-                || sealedCommitment == bytes32(0) || sealedPayload.length == 0 || payoutCommitment == bytes32(0)
+                || sealedCommitment == bytes32(0) || sealedPayload.length == 0
+                || sealedPayload.length > MAX_SEALED_PAYLOAD_BYTES || payoutCommitment == bytes32(0)
         ) revert InvalidVoucher();
         if (nullifierUsed[voucher.nullifier]) revert NullifierAlreadyUsed();
 

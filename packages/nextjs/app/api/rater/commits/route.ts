@@ -5,11 +5,31 @@ import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const MAX_RATER_COMMIT_BODY_BYTES = 64 * 1_024;
+
+async function readCommitBody(request: NextRequest) {
+  const declaredLength = request.headers.get("content-length");
+  if (declaredLength !== null) {
+    const parsedLength = Number(declaredLength);
+    if (!Number.isSafeInteger(parsedLength) || parsedLength < 0 || parsedLength > MAX_RATER_COMMIT_BODY_BYTES) {
+      throw new TokenlessServiceError("Commit request is too large.", 413, "commit_request_too_large");
+    }
+  }
+  const bytes = new Uint8Array(await request.arrayBuffer());
+  if (bytes.byteLength > MAX_RATER_COMMIT_BODY_BYTES) {
+    throw new TokenlessServiceError("Commit request is too large.", 413, "commit_request_too_large");
+  }
+  try {
+    return JSON.parse(new TextDecoder().decode(bytes)) as Partial<RaterCommitRequest>;
+  } catch {
+    throw new TokenlessServiceError("Commit request must be valid JSON.", 400, "invalid_commit_request");
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
     const session = await requireRaterSession(request, true);
-    const body = (await request.json()) as Partial<RaterCommitRequest>;
+    const body = await readCommitBody(request);
     const idempotencyKey = request.headers.get("idempotency-key") ?? body.idempotencyKey;
     if (!idempotencyKey || !body.voucherId || !body.authorization || !body.response) {
       throw new TokenlessServiceError("Commit request is incomplete.", 400, "invalid_commit_request");

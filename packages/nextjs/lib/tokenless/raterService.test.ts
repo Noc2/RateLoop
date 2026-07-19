@@ -1,11 +1,13 @@
 import { HUMAN_ASSURANCE_SCHEMA_VERSION } from "@rateloop/sdk";
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
+import { keccak256, toHex } from "viem";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { buildPublicVoucherRequest } from "~~/lib/tokenless/rater/publicVoucherRequest";
 import { __raterServiceTestUtils, listPaidRaterTasks } from "~~/lib/tokenless/raterService";
+import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const ACCOUNT = "0x1111111111111111111111111111111111111111";
 const NOW = new Date("2026-07-12T20:00:00.000Z");
@@ -76,6 +78,31 @@ test("commit authorization rejects a sealed payload whose signed hash differs", 
         voteKeySignature: `0x${"55".repeat(65)}`,
       }),
     /Sealed payload hash does not match/,
+  );
+});
+
+test("commit authorization enforces the keeper-compatible 16 KiB ciphertext boundary before database work", () => {
+  const authorization = (byteLength: number) => {
+    const sealedPayload = toHex(new Uint8Array(byteLength));
+    return {
+      roundId: "42",
+      drandNetwork: "quicknet-t" as const,
+      beaconRound: 123,
+      sealedPayload,
+      sealedPayloadHash: keccak256(sealedPayload),
+      sealedCommitment: `0x${"22".repeat(32)}` as const,
+      payoutCommitment: `0x${"33".repeat(32)}` as const,
+      panelAddress: "0x2222222222222222222222222222222222222222" as const,
+      chainId: 84532,
+      nullifier: `0x${"44".repeat(32)}` as const,
+      voteKey: "0x3333333333333333333333333333333333333333" as const,
+      voteKeySignature: `0x${"55".repeat(65)}` as const,
+    };
+  };
+  assert.doesNotThrow(() => __raterServiceTestUtils.validateAuthorization(authorization(16_384)));
+  assert.throws(
+    () => __raterServiceTestUtils.validateAuthorization(authorization(16_385)),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_commit_authorization",
   );
 });
 

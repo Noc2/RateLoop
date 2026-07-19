@@ -239,7 +239,7 @@ test("tlock-encrypts only for an allowlisted, verified drand chain and enforces 
         client: mainnetChainClient(),
         maxCiphertextBytes: 511,
       }),
-    /between 512 and 65536/,
+    /between 512 and 16384/,
   );
   await assert.rejects(
     () =>
