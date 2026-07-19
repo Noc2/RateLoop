@@ -209,6 +209,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     reviewAudience.audience === "private_invited" &&
     reviewCompensation.compensationMode === "unpaid" &&
     reviewCompensation.feedbackBonusEnabled === false;
+  const automaticGrantOffer = setup.capabilities.automaticGrantOffer;
+  const automaticAvailable = Boolean(automaticPrivateUnpaidSelected && automaticGrantOffer?.available);
   const automaticUnavailableReason = !automaticPrivateUnpaidSelected
     ? "Setup can grant automatic delivery only for unpaid invited review without a feedback bonus."
     : (setup.capabilities.unavailableReason ?? "The connected workflow cannot receive a publishing grant.");
@@ -778,7 +780,14 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   selection,
                   requestProfile: { ...requestProfile, privateGroupId },
                   authority,
-                  publishingGrant: authority === "ask_automatically" ? undefined : null,
+                  publishingGrant:
+                    authority === "ask_automatically"
+                      ? {
+                          integrationId: automaticGrantOffer!.integrationId,
+                          provision: "private_invited_unpaid",
+                          allowedWorkflowKeys: automaticGrantOffer!.allowedWorkflowKeys,
+                        }
+                      : null,
                 }),
                 credentials: "same-origin",
                 headers: { "Content-Type": "application/json" },
@@ -1149,7 +1158,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               className="mt-7"
               mode={reviewFrequency.mode}
               authority={reviewCompensation.authority}
-              automaticAvailable={setup.capabilities.autonomousAccess}
+              automaticAvailable={automaticAvailable}
               automaticUnavailableReason={automaticUnavailableReason}
               requiresFundingPermission={
                 reviewCompensation.compensationMode === "usdc" || reviewCompensation.feedbackBonusEnabled === true
