@@ -21,5 +21,20 @@ test("Feedback Bonus claims keep the recovery preimage in the browser", () => {
   assert.match(source, /verifyFeedbackBonusClaimEvidence/u);
   assert.match(source, /sendTransaction/u);
   assert.match(source, /Feedback Bonus evidence matches this saved review/u);
+  assert.match(source, /paid commit(?:&apos;|')s\s+public tlock ciphertext becomes decryptable/u);
+  assert.match(source, /vote, prediction, response hash, payout address, and salt/u);
+  assert.match(source, /even\s+without a reveal or claim/u);
+  assert.match(
+    source,
+    /public tlock ciphertext becomes decryptable after the\s+commit deadline with no post-commit abort/u,
+  );
   assert.doesNotMatch(source, /body:\s*JSON\.stringify/u);
+});
+
+test("recovery and public-chain consequences remain visible before claim", () => {
+  const source = readFileSync(new URL("./FeedbackBonusClaimsClient.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /<details/u);
+  assert.match(source, /needsRecoverySecret \? \([\s\S]*<div[\s\S]*Recovery secret[\s\S]*type="password"/u);
+  assert.match(source, /Claiming later submits\s+the payout address and salt on-chain/u);
+  assert.ok(source.indexOf("public tlock ciphertext becomes decryptable") < source.indexOf('"Claim bonus"'));
 });

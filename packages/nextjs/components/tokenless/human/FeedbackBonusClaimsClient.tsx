@@ -247,7 +247,10 @@ function FeedbackBonusClaimsControls() {
         Claim a Feedback Bonus
       </h2>
       <p className="mt-2 text-sm leading-6 text-base-content/60">
-        RateLoop checks the selected review on this device. Claim details stay behind the technical disclosure.
+        RateLoop checks this review on your device, sending only its public round and vote key. The paid commit&apos;s
+        public tlock ciphertext becomes decryptable after the commit deadline with no post-commit abort, exposing the
+        vote, prediction, response hash, payout address, and salt even without a reveal or claim. Claiming later submits
+        the payout address and salt on-chain; any wallet may relay, but funds still go to that address.
       </p>
       <div className="mt-4">
         <label className="text-sm">
@@ -270,9 +273,8 @@ function FeedbackBonusClaimsControls() {
         </label>
       </div>
       {needsRecoverySecret ? (
-        <details className="mt-3 rounded-lg border border-white/10 p-3 text-sm text-base-content/60">
-          <summary className="cursor-pointer font-medium">Recovery secret</summary>
-          <label className="mt-3 block text-xs">
+        <div className="mt-3 rounded-lg border border-white/10 p-3 text-sm text-base-content/60">
+          <label className="block text-xs">
             Recovery secret
             <input
               className="input input-sm mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
@@ -287,7 +289,7 @@ function FeedbackBonusClaimsControls() {
               autoComplete="off"
             />
           </label>
-        </details>
+        </div>
       ) : null}
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <label className="rateloop-secondary-action cursor-pointer rounded-lg px-4 py-2 text-sm">
@@ -363,13 +365,6 @@ function FeedbackBonusClaimsControls() {
           {error}
         </p>
       ) : null}
-      <details className="mt-4 text-xs text-base-content/55">
-        <summary className="cursor-pointer font-medium text-base-content/70">Technical details</summary>
-        <p className="mt-2 leading-5">
-          Checking sends only the public round and vote key. Claiming reveals the committed payout address and salt
-          on-chain. Any connected wallet may relay; funds still go to the committed payout address.
-        </p>
-      </details>
     </section>
   );
 }
