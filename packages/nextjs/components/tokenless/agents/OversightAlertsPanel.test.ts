@@ -12,7 +12,12 @@ test("the oversight alerts panel lists notifications with an unread count and re
   assert.match(source, /No alerts yet/);
   assert.match(source, /notification\.title/);
   assert.match(source, /notification\.createdAt/);
-  assert.match(source, /Alert settings/);
+  assert.match(source, /Change alert settings/);
+  assert.match(source, /aria-controls="oversight-alert-settings"/);
+  assert.match(source, /aria-expanded=\{settingsOpen\}/);
+  assert.match(source, /settingsOpen \? \(/);
+  assert.match(source, /settingsOpen \? "Done" : "Change alert settings"/);
+  assert.doesNotMatch(source, /<summary[^>]*>Alert settings<\/summary>/);
   // The alert body carries the workspace name; each entry links onward.
   assert.match(source, /notification\.href/);
 });

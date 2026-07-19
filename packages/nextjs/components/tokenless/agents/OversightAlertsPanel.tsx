@@ -223,6 +223,7 @@ export function OversightAlertsPanel({ workspaceId }: { workspaceId: string }) {
   const [browserEnabled, setBrowserEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [marking, setMarking] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const seenIds = useRef<Set<string> | null>(null);
 
   const loadInbox = useCallback(async (signal?: AbortSignal) => {
@@ -319,11 +320,23 @@ export function OversightAlertsPanel({ workspaceId }: { workspaceId: string }) {
             ) : null}
           </h2>
         </div>
-        {inbox && inbox.unreadCount > 0 ? (
-          <Button type="button" size="sm" variant="secondary" disabled={marking} onClick={() => void markAllRead()}>
-            Mark all read
+        <div className="flex flex-wrap gap-2">
+          {inbox && inbox.unreadCount > 0 ? (
+            <Button type="button" size="sm" variant="secondary" disabled={marking} onClick={() => void markAllRead()}>
+              Mark all read
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            aria-controls="oversight-alert-settings"
+            aria-expanded={settingsOpen}
+            onClick={() => setSettingsOpen(current => !current)}
+          >
+            {settingsOpen ? "Done" : "Change alert settings"}
           </Button>
-        ) : null}
+        </div>
       </div>
 
       {error ? (
@@ -367,10 +380,15 @@ export function OversightAlertsPanel({ workspaceId }: { workspaceId: string }) {
         </ol>
       ) : null}
 
-      <details className="mt-5 border-t border-white/10 pt-4">
-        <summary className="cursor-pointer text-sm font-semibold text-base-content/70">Alert settings</summary>
-        <AlertSettings workspaceId={workspaceId} />
-      </details>
+      {settingsOpen ? (
+        <section
+          id="oversight-alert-settings"
+          className="mt-5 border-t border-white/10 pt-4"
+          aria-label="Alert settings"
+        >
+          <AlertSettings workspaceId={workspaceId} />
+        </section>
+      ) : null}
     </Card>
   );
 }
