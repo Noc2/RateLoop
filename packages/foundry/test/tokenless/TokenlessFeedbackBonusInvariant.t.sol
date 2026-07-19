@@ -7,6 +7,7 @@ import { MockERC20 } from "../../contracts/mocks/MockERC20.sol";
 import { CredentialIssuer } from "../../contracts/tokenless/CredentialIssuer.sol";
 import { TokenlessFeedbackBonus } from "../../contracts/tokenless/TokenlessFeedbackBonus.sol";
 import { TokenlessPanel } from "../../contracts/tokenless/TokenlessPanel.sol";
+import { MockBeaconVerifier } from "../../contracts/mocks/MockBeaconVerifier.sol";
 
 contract TokenlessFeedbackBonusInvariantHandler is Test {
     uint256 internal constant ISSUER_PK = 0xA11CE;
@@ -44,7 +45,7 @@ contract TokenlessFeedbackBonusInvariantHandler is Test {
         vm.warp(2_000_000_000);
         usdc = new MockERC20("Invariant USDC", "iUSDC", 6);
         issuer = new CredentialIssuer(address(this), vm.addr(ISSUER_PK), 1 days);
-        panel = new TokenlessPanel(address(usdc), address(issuer));
+        panel = new TokenlessPanel(address(usdc), address(issuer), address(new MockBeaconVerifier()));
         bonus = new TokenlessFeedbackBonus(address(usdc), address(issuer));
         usdc.mint(address(this), type(uint128).max);
         usdc.approve(address(panel), type(uint256).max);
@@ -156,6 +157,7 @@ contract TokenlessFeedbackBonusInvariantHandler is Test {
         if (pool.refunded || bonus.remainingAmount(scenario.poolId) == 0) return;
         if (block.timestamp <= scenario.awardDeadline) vm.warp(scenario.awardDeadline + 1);
         totalBonusRefunded += bonus.refundRemainder(scenario.poolId);
+        bonus.withdrawCredit(address(this));
     }
 
     function scenarioCount() external view returns (uint256) {

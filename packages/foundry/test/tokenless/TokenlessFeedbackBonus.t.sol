@@ -248,7 +248,7 @@ contract TokenlessFeedbackBonusTest is Test {
         bonus.claimAward(poolId, alice.voteKey, alice.payout, alice.salt);
     }
 
-    function test_UnawardedRemainderReturnsOnlyToFunderWithoutStrandingAwardedClaims() public {
+    function test_UnawardedRemainderCreditsOnlyFunderWithoutStrandingAwardedClaims() public {
         uint256 poolId = _createPool(awarder);
         Rater memory alice = _rater(0xA11, "alice", poolId);
         _register(alice, poolId);
@@ -260,13 +260,39 @@ contract TokenlessFeedbackBonusTest is Test {
         uint256 before = usdc.balanceOf(funder);
         vm.prank(outsider);
         assertEq(bonus.refundRemainder(poolId), BONUS_POOL - 7e6);
-        assertEq(usdc.balanceOf(funder) - before, BONUS_POOL - 7e6);
+        assertEq(usdc.balanceOf(funder), before);
+        assertEq(bonus.withdrawableCredit(funder), BONUS_POOL - 7e6);
         vm.expectRevert(TokenlessFeedbackBonus.NothingToRefund.selector);
         bonus.refundRemainder(poolId);
 
         bonus.claimAward(poolId, alice.voteKey, alice.payout, alice.salt);
         assertEq(usdc.balanceOf(alice.payout), 7e6);
+        address refundDestination = makeAddr("refund-destination");
+        vm.prank(funder);
+        assertEq(bonus.withdrawCredit(refundDestination), BONUS_POOL - 7e6);
+        assertEq(usdc.balanceOf(refundDestination), BONUS_POOL - 7e6);
         assertEq(usdc.balanceOf(address(bonus)), 0);
+    }
+
+    function test_BlockedFunderCannotPreventRemainderFinalizationAndCanSelectAnotherDestination() public {
+        uint256 poolId = _createPool(awarder);
+        TokenlessFeedbackBonus.Pool memory pool = bonus.getPool(poolId);
+        usdc.setBlockedRecipient(funder, true);
+        vm.warp(pool.awardDeadline + 1);
+
+        assertEq(bonus.refundRemainder(poolId), BONUS_POOL);
+        assertTrue(bonus.getPool(poolId).refunded);
+        assertEq(bonus.withdrawableCredit(funder), BONUS_POOL);
+
+        vm.prank(funder);
+        vm.expectRevert();
+        bonus.withdrawCredit(funder);
+        assertEq(bonus.withdrawableCredit(funder), BONUS_POOL);
+
+        address destination = makeAddr("unblocked-refund-destination");
+        vm.prank(funder);
+        bonus.withdrawCredit(destination);
+        assertEq(usdc.balanceOf(destination), BONUS_POOL);
     }
 
     function test_FeedbackHorizonIsBoundedFromCreation() public {

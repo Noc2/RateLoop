@@ -5,6 +5,7 @@ import { Test } from "forge-std/Test.sol";
 import { CredentialIssuer } from "../../contracts/tokenless/CredentialIssuer.sol";
 import { TokenlessPanel } from "../../contracts/tokenless/TokenlessPanel.sol";
 import { MockERC20 } from "../../contracts/mocks/MockERC20.sol";
+import { MockBeaconVerifier } from "../../contracts/mocks/MockBeaconVerifier.sol";
 
 contract TokenlessPanelTest is Test {
     uint256 internal constant ISSUER_PK = 0xA11CE;
@@ -35,6 +36,7 @@ contract TokenlessPanelTest is Test {
     MockERC20 internal usdc;
     CredentialIssuer internal issuer;
     TokenlessPanel internal panel;
+    MockBeaconVerifier internal beaconVerifier;
 
     struct Rater {
         uint256 privateKey;
@@ -52,7 +54,8 @@ contract TokenlessPanelTest is Test {
         vm.warp(1_800_000_000);
         usdc = new MockERC20("USD Coin", "USDC", 6);
         issuer = new CredentialIssuer(rotationAuthority, vm.addr(ISSUER_PK), 1 days);
-        panel = new TokenlessPanel(address(usdc), address(issuer));
+        beaconVerifier = new MockBeaconVerifier();
+        panel = new TokenlessPanel(address(usdc), address(issuer), address(beaconVerifier));
         usdc.mint(funder, 10_000e6);
         vm.prank(funder);
         usdc.approve(address(panel), type(uint256).max);
@@ -124,15 +127,16 @@ contract TokenlessPanelTest is Test {
         assertEq(usdc.balanceOf(address(panel)), 0);
     }
 
-    function test_ExpiredEntropyDeterministicallyFallsBackToFixedBaseOnly() public {
+    function test_UnavailableBeaconDeterministicallyFallsBackToFixedBaseOnlyAfterDeadline() public {
         (uint256 roundId, Rater[3] memory raters) = _healthyRound();
         _beginHealthySettlement(roundId);
         panel.processAggregate(roundId, 0, 3);
 
-        uint256 entropyBlock = _round(roundId).entropyBlock;
-        vm.roll(entropyBlock + 257);
-        panel.finalizeScoringSeed(roundId);
-        assertEq(uint8(_round(roundId).scoringMode), uint8(TokenlessPanel.ScoringMode.BaseOnlyEntropyUnavailable));
+        vm.expectRevert(TokenlessPanel.InvalidDeadline.selector);
+        panel.finalizeScoringFallback(roundId);
+        vm.warp(_round(roundId).beaconFailureDeadline + 1);
+        panel.finalizeScoringFallback(roundId);
+        assertEq(uint8(_round(roundId).scoringMode), uint8(TokenlessPanel.ScoringMode.BaseOnlyBeaconUnavailable));
         assertEq(_round(roundId).scoringSeed, bytes32(0));
 
         panel.processScores(roundId, 0, 3);
@@ -150,14 +154,19 @@ contract TokenlessPanelTest is Test {
         }
     }
 
-    function test_EntropyCannotBeReadUntilTheFutureBlockIsHistorical() public {
+    function test_InvalidOrUnavailableBeaconProofCannotSetScoringEntropy() public {
         (uint256 roundId,) = _healthyRound();
         _beginHealthySettlement(roundId);
         panel.processAggregate(roundId, 0, 3);
 
-        vm.roll(_round(roundId).entropyBlock);
-        vm.expectRevert(TokenlessPanel.InvalidDeadline.selector);
-        panel.finalizeScoringSeed(roundId);
+        vm.expectRevert(TokenlessPanel.InvalidBeaconProof.selector);
+        panel.finalizeScoringSeed(roundId, ENTROPY, abi.encode(bytes32("wrong-proof")));
+
+        beaconVerifier.setAvailable(false);
+        bytes32 proof = beaconVerifier.proofFor(_round(roundId).beaconNetworkHash, _round(roundId).beaconRound, ENTROPY);
+        vm.expectRevert(TokenlessPanel.InvalidBeaconProof.selector);
+        panel.finalizeScoringSeed(roundId, ENTROPY, abi.encode(proof));
+        assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.AwaitingSeed));
     }
 
     function test_UnderQuorumWaitsForFailureDeadlineAndPaysOnlyValidRevealers() public {
@@ -484,7 +493,7 @@ contract TokenlessPanelTest is Test {
         }
         vm.warp(_round(roundId).revealDeadline + 1);
         panel.beginSettlement(roundId);
-        assertEq(_round(roundId).entropyBlock, block.number + 1);
+        assertEq(_round(roundId).beaconRound, 12_345_678);
     }
 
     function _materialFromRecord(uint256 roundId, TokenlessPanel.CommitRecord memory record)
@@ -506,10 +515,9 @@ contract TokenlessPanelTest is Test {
     }
 
     function _finalizeSeed(uint256 roundId, bytes32 entropy) internal {
-        uint256 entropyBlock = _round(roundId).entropyBlock;
-        vm.roll(entropyBlock + 1);
-        vm.setBlockhash(entropyBlock, entropy);
-        panel.finalizeScoringSeed(roundId);
+        TokenlessPanel.Round memory round = _round(roundId);
+        bytes32 proof = beaconVerifier.proofFor(round.beaconNetworkHash, round.beaconRound, entropy);
+        panel.finalizeScoringSeed(roundId, entropy, abi.encode(proof));
     }
 
     function _assertEachRoleUsedOnce(Rater[3] memory raters, bytes32[3] memory assignments) internal pure {

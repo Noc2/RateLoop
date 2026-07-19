@@ -6,6 +6,7 @@ import { MockERC20 } from "../../contracts/mocks/MockERC20.sol";
 import { CredentialIssuer } from "../../contracts/tokenless/CredentialIssuer.sol";
 import { TokenlessFeedbackBonus } from "../../contracts/tokenless/TokenlessFeedbackBonus.sol";
 import { TokenlessPanel } from "../../contracts/tokenless/TokenlessPanel.sol";
+import { MockBeaconVerifier } from "../../contracts/mocks/MockBeaconVerifier.sol";
 
 contract TokenlessFeedbackBonusSecurityTest is Test {
     uint256 internal constant ISSUER_PK = 0xA11CE;
@@ -33,7 +34,7 @@ contract TokenlessFeedbackBonusSecurityTest is Test {
         usdc = new MockERC20("Security USDC", "sUSDC", 6);
         issuer = new CredentialIssuer(address(this), vm.addr(ISSUER_PK), 1 days);
         bonus = new TokenlessFeedbackBonus(address(usdc), address(issuer));
-        panel = new TokenlessPanel(address(usdc), address(issuer));
+        panel = new TokenlessPanel(address(usdc), address(issuer), address(new MockBeaconVerifier()));
         usdc.mint(requester, 1_000_000e6);
         usdc.mint(prepaidPayer, 1_000_000e6);
         vm.prank(requester);
@@ -102,8 +103,11 @@ contract TokenlessFeedbackBonusSecurityTest is Test {
 
         vm.warp(pool.awardDeadline + 1);
         bonus.refundRemainder(poolId);
-        assertEq(usdc.balanceOf(address(bonus)), 11e6);
+        assertEq(usdc.balanceOf(address(bonus)), BONUS_AMOUNT);
+        assertEq(bonus.withdrawableCredit(requester), BONUS_AMOUNT - 11e6);
         bonus.claimAward(poolId, registration.voucher.voteKey, payout, registration.payoutSalt);
+        vm.prank(requester);
+        bonus.withdrawCredit(requester);
         assertEq(usdc.balanceOf(address(bonus)), 0);
         assertEq(usdc.balanceOf(address(panel)), baseCustody);
         TokenlessPanel.Round memory afterRound = panel.getRound(roundId);

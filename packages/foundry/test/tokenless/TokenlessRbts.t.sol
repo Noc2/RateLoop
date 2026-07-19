@@ -66,6 +66,11 @@ contract TokenlessRbtsHarness {
     {
         return TokenlessRbts.selectReferenceAndPeer(seed, ownCommitKey, revealedCommitKeys);
     }
+
+    function sortCanonical(bytes32 seed, bytes32[] memory commitKeys) external pure returns (bytes32[] memory) {
+        TokenlessRbts.sortCanonical(seed, commitKeys);
+        return commitKeys;
+    }
 }
 
 /// @dev Includes the storage-to-memory copy used by one paginated panel scoring call.
@@ -225,6 +230,28 @@ contract TokenlessRbtsTest is Test {
         for (uint256 i = 0; i < canonical.length; ++i) {
             assertEq(referenceCounts[i], 1);
             assertEq(peerCounts[i], 1);
+        }
+    }
+
+    function test_CanonicalHeapSortSuccessorsMatchIndependentSelection() public view {
+        bytes32[] memory input = _sevenDistinctKeys();
+        bytes32[] memory sorted = rbts.sortCanonical(VECTOR_SEED, input);
+
+        for (uint256 i = 0; i < sorted.length; ++i) {
+            if (i > 0) {
+                assertTrue(
+                    rbts.rankBefore(
+                        rbts.rankHash(VECTOR_SEED, sorted[i - 1]),
+                        sorted[i - 1],
+                        rbts.rankHash(VECTOR_SEED, sorted[i]),
+                        sorted[i]
+                    )
+                );
+            }
+            (bytes32 expectedReference, bytes32 expectedPeer) =
+                rbts.selectReferenceAndPeer(VECTOR_SEED, sorted[i], sorted);
+            assertEq(sorted[(i + 1) % sorted.length], expectedReference);
+            assertEq(sorted[(i + 2) % sorted.length], expectedPeer);
         }
     }
 

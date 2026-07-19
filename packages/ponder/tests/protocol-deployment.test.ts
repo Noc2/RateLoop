@@ -9,6 +9,7 @@ import {
 const panel = "0x1000000000000000000000000000000000000001";
 const issuer = "0x1000000000000000000000000000000000000002";
 const feedbackBonus = "0x1000000000000000000000000000000000000003";
+const beaconVerifier = "0x1000000000000000000000000000000000000004";
 const deploymentKey = `tokenless-v4:84532:${panel}:${issuer}:${zeroAddress}:${feedbackBonus}`;
 const hostedRuntime = {
   NODE_ENV: "production",
@@ -28,6 +29,7 @@ function baseSepoliaEnv() {
     PONDER_TOKENLESS_PANEL_ADDRESS: panel,
     PONDER_CREDENTIAL_ISSUER_ADDRESS: issuer,
     PONDER_FEEDBACK_BONUS_ADDRESS: feedbackBonus,
+    PONDER_BEACON_VERIFIER_ADDRESS: beaconVerifier,
     PONDER_TOKENLESS_START_BLOCK: "44051709",
     RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY: deploymentKey,
   };
@@ -53,6 +55,7 @@ describe("tokenless deployment identity", () => {
       issuerAddress: issuer,
       adapterAddress: zeroAddress,
       feedbackBonusAddress: feedbackBonus,
+      beaconVerifierAddress: beaconVerifier,
       startBlock: 44_051_709,
     });
     expect(() =>
@@ -89,6 +92,7 @@ describe("tokenless deployment identity", () => {
         PONDER_TOKENLESS_PANEL_ADDRESS: zeroAddress,
         PONDER_CREDENTIAL_ISSUER_ADDRESS: issuer,
         PONDER_FEEDBACK_BONUS_ADDRESS: feedbackBonus,
+        PONDER_BEACON_VERIFIER_ADDRESS: beaconVerifier,
       }),
     ).toThrow("non-zero EVM address");
   });
@@ -101,6 +105,7 @@ describe("tokenless deployment identity", () => {
       chainId: 84_532,
       deploymentKey,
       feedbackBonusAddress: feedbackBonus,
+      beaconVerifierAddress: beaconVerifier,
       startBlock: 44_051_709,
     });
   });

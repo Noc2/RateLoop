@@ -6,6 +6,7 @@ import { Test } from "forge-std/Test.sol";
 import { CredentialIssuer } from "../../contracts/tokenless/CredentialIssuer.sol";
 import { TokenlessPanel } from "../../contracts/tokenless/TokenlessPanel.sol";
 import { MockERC20 } from "../../contracts/mocks/MockERC20.sol";
+import { MockBeaconVerifier } from "../../contracts/mocks/MockBeaconVerifier.sol";
 
 contract TokenlessPanelInvariantHandler is Test {
     uint256 internal constant ISSUER_PK = 0xA11CE;
@@ -51,7 +52,7 @@ contract TokenlessPanelInvariantHandler is Test {
         vm.warp(1_900_000_000);
         usdc = new MockERC20("Invariant USDC", "iUSDC", 6);
         issuer = new CredentialIssuer(address(this), vm.addr(ISSUER_PK), 1 days);
-        panel = new TokenlessPanel(address(usdc), address(issuer));
+        panel = new TokenlessPanel(address(usdc), address(issuer), address(new MockBeaconVerifier()));
         creditDestination = makeAddr("invariantCreditDestination");
         usdc.mint(address(this), type(uint128).max);
         usdc.approve(address(panel), type(uint256).max);
@@ -147,11 +148,7 @@ contract TokenlessPanelInvariantHandler is Test {
         }
 
         if (round.state == TokenlessPanel.RoundState.AwaitingSeed) {
-            if (block.number <= round.entropyBlock) vm.roll(round.entropyBlock + 1);
-            if (block.number - round.entropyBlock <= 256) {
-                vm.setBlockhash(round.entropyBlock, keccak256(abi.encode("invariant-entropy", roundId)));
-            }
-            panel.finalizeScoringSeed(roundId);
+            panel.finalizeScoringFallback(roundId);
             return;
         }
 

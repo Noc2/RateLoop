@@ -17,6 +17,7 @@ export interface TokenlessDeployment {
   issuerAddress: `0x${string}`;
   adapterAddress: `0x${string}`;
   feedbackBonusAddress: `0x${string}`;
+  beaconVerifierAddress: `0x${string}`;
   startBlock: number;
   deploymentKey: string;
 }
@@ -28,6 +29,7 @@ export function tokenlessDeploymentHealth(deployment: TokenlessDeployment) {
     chainId: deployment.chainId,
     deploymentKey: deployment.deploymentKey,
     feedbackBonusAddress: deployment.feedbackBonusAddress,
+    beaconVerifierAddress: deployment.beaconVerifierAddress,
     startBlock: deployment.startBlock,
   };
 }
@@ -161,6 +163,10 @@ export function resolveTokenlessDeployment(
     read(env, "PONDER_FEEDBACK_BONUS_ADDRESS"),
     "PONDER_FEEDBACK_BONUS_ADDRESS",
   );
+  const beaconVerifierAddress = requiredAddress(
+    read(env, "PONDER_BEACON_VERIFIER_ADDRESS"),
+    "PONDER_BEACON_VERIFIER_ADDRESS",
+  );
   const startBlock = unsignedInteger(
     read(env, "PONDER_TOKENLESS_START_BLOCK"),
     "PONDER_TOKENLESS_START_BLOCK",
@@ -196,6 +202,7 @@ export function resolveTokenlessDeployment(
     issuerAddress,
     adapterAddress,
     feedbackBonusAddress,
+    beaconVerifierAddress,
     startBlock,
     deploymentKey,
   };

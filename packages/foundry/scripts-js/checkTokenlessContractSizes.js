@@ -25,7 +25,7 @@ export const TOKENLESS_DEPLOYMENT_CONTRACTS = [
   {
     label: "TokenlessPanel",
     artifact: "TokenlessPanel",
-    args: [placeholderAddress, placeholderAddress],
+    args: [placeholderAddress, placeholderAddress, placeholderAddress],
   },
   {
     label: "TokenlessFeedbackBonus",

@@ -16,10 +16,10 @@ const roundComponents = [
   { name: "totalRbtsScoreBps", type: "uint256" },
   { name: "totalFinalizedLiability", type: "uint256" },
   { name: "totalPaid", type: "uint256" },
-  { name: "entropyBlock", type: "uint256" },
   { name: "revealSetXor", type: "bytes32" },
   { name: "revealSetSum", type: "uint256" },
   { name: "scoringSeed", type: "bytes32" },
+  { name: "beaconEntropy", type: "bytes32" },
   { name: "commitDeadline", type: "uint64" },
   { name: "revealDeadline", type: "uint64" },
   { name: "beaconFailureDeadline", type: "uint64" },
@@ -106,7 +106,7 @@ export const tokenlessPanelAbi = [
     inputs: [
       { name: "roundId", type: "uint256", indexed: true },
       { name: "frozenRevealCount", type: "uint32", indexed: false },
-      { name: "entropyBlock", type: "uint256", indexed: false },
+      { name: "beaconRound", type: "uint64", indexed: false },
     ],
   },
   {
@@ -115,7 +115,7 @@ export const tokenlessPanelAbi = [
     inputs: [
       { name: "roundId", type: "uint256", indexed: true },
       { name: "mode", type: "uint8", indexed: true },
-      { name: "entropyBlock", type: "uint256", indexed: false },
+      { name: "beaconRound", type: "uint64", indexed: false },
       { name: "entropy", type: "bytes32", indexed: false },
       { name: "scoringSeed", type: "bytes32", indexed: false },
       { name: "revealSetXor", type: "bytes32", indexed: false },

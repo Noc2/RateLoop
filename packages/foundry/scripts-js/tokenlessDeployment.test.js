@@ -66,7 +66,12 @@ function completeBroadcast({ includeAdapter = false } = {}) {
       [address(10), address(11), "86400"],
       2,
     ),
-    createTransaction("TokenlessPanel", panel, [testUsdc, credentialIssuer], 3),
+    createTransaction(
+      "TokenlessPanel",
+      panel,
+      [testUsdc, credentialIssuer, address(6)],
+      3,
+    ),
     createTransaction(
       "TokenlessFeedbackBonus",
       feedbackBonus,
@@ -98,6 +103,7 @@ test("reconstructs an isolated versioned tokenless Base Sepolia artifact", () =>
   assert.equal(artifact.contracts.CredentialIssuer.address, address(2));
   assert.equal(artifact.contracts.TokenlessPanel.address, address(3));
   assert.equal(artifact.contracts.TokenlessFeedbackBonus.address, address(4));
+  assert.equal(artifact.beaconVerifier, address(6));
   assert.equal(artifact.contracts.X402PanelSubmitter, undefined);
   // The common start block is the earliest deployed block (TestUSDC at 101),
   // not the latest, so Ponder never skips earlier constructor events.
@@ -263,7 +269,7 @@ test("validates deployment keys against contract addresses", () => {
   );
 });
 
-test("export writes tokenless-v4 separately and leaves historical artifacts untouched", () => {
+test("export writes tokenless-v4 with exact runtime hashes and leaves historical artifacts untouched", async () => {
   const root = mkdtempSync(join(tmpdir(), "rateloop-tokenless-export-"));
   try {
     const unrelatedPath = join(root, "deployments", "unrelated.json");
@@ -288,10 +294,12 @@ test("export writes tokenless-v4 separately and leaves historical artifacts unto
     writeFileSync(historicalV3Path, '{"historicalV3":true}\n');
     writeFileSync(broadcastPath, JSON.stringify(completeBroadcast()));
 
-    exportTokenlessDeploymentFromBroadcast({
+    await exportTokenlessDeploymentFromBroadcast({
       broadcastPath,
       deploymentPath: tokenlessPath,
       targetNetwork: "baseSepolia",
+      getBytecode: async (contractAddress) =>
+        `0x60${contractAddress.slice(-2)}`,
     });
 
     assert.equal(readFileSync(unrelatedPath, "utf8"), '{"unrelated":true}\n');
@@ -302,6 +310,9 @@ test("export writes tokenless-v4 separately and leaves historical artifacts unto
     const exported = JSON.parse(readFileSync(tokenlessPath, "utf8"));
     assert.equal(exported.schemaVersion, TOKENLESS_DEPLOYMENT_SCHEMA);
     assert.equal(exported.chainId, 84532);
+    assert.equal(exported.runtimeCodeEvidenceComplete, true);
+    assert.match(exported.contracts.TokenlessPanel.runtimeCodeHash, /^0x[0-9a-f]{64}$/u);
+    assert.match(exported.beaconVerifierRuntimeCodeHash, /^0x[0-9a-f]{64}$/u);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

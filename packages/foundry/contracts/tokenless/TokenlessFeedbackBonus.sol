@@ -83,6 +83,8 @@ contract TokenlessFeedbackBonus is EIP712, ReentrancyGuard {
     mapping(bytes32 feedbackKey => FeedbackRecord record) private _feedback;
     mapping(bytes32 nullifier => bool used) public nullifierUsed;
     mapping(uint256 poolId => mapping(bytes32 responseHash => bool awarded)) public responseAwarded;
+    mapping(address recipient => uint256 amount) public withdrawableCredit;
+    uint256 public totalWithdrawableCredit;
 
     event PoolCreated(
         uint256 indexed poolId,
@@ -115,6 +117,7 @@ contract TokenlessFeedbackBonus is EIP712, ReentrancyGuard {
         uint256 indexed poolId, bytes32 indexed feedbackKey, address indexed payoutAddress, uint256 amount
     );
     event RemainderRefunded(uint256 indexed poolId, address indexed funder, uint256 amount);
+    event CreditWithdrawn(address indexed recipient, address indexed destination, uint256 amount);
 
     error InvalidAddress();
     error InvalidAmount();
@@ -135,6 +138,7 @@ contract TokenlessFeedbackBonus is EIP712, ReentrancyGuard {
     error AwardNotClaimable();
     error NothingToRefund();
     error TransferAmountMismatch();
+    error NoCredit();
 
     constructor(address usdc_, address credentialIssuer_) EIP712("RateLoop Tokenless Feedback Bonus", "1") {
         if (
@@ -300,7 +304,9 @@ contract TokenlessFeedbackBonus is EIP712, ReentrancyGuard {
         emit FeedbackAwardClaimed(poolId, feedbackKey, payoutAddress, amount);
     }
 
-    /// @notice Return the unawarded remainder to the immutable funder after the disclosed deadline.
+    /// @notice Finalize the remainder refund as pull credit for the immutable funder.
+    /// @dev No token transfer occurs here, so a paused/blacklisted/reverting recipient cannot
+    ///      block permissionless pool finalization. The funder later chooses a destination.
     function refundRemainder(uint256 poolId) external nonReentrant returns (uint256 amount) {
         Pool storage pool = _pools[poolId];
         if (pool.funder == address(0)) revert InvalidPool();
@@ -310,9 +316,22 @@ contract TokenlessFeedbackBonus is EIP712, ReentrancyGuard {
         amount = pool.depositedAmount - pool.awardedAmount;
         if (amount == 0) revert NothingToRefund();
         pool.refunded = true;
-        _transferExact(pool.funder, amount);
+        withdrawableCredit[pool.funder] += amount;
+        totalWithdrawableCredit += amount;
 
         emit RemainderRefunded(poolId, pool.funder, amount);
+    }
+
+    /// @notice Withdraw all remainder credit to a destination selected by the credited funder.
+    function withdrawCredit(address destination) external nonReentrant returns (uint256 amount) {
+        if (destination == address(0)) revert InvalidAddress();
+        amount = withdrawableCredit[msg.sender];
+        if (amount == 0) revert NoCredit();
+
+        withdrawableCredit[msg.sender] = 0;
+        totalWithdrawableCredit -= amount;
+        _transferExact(destination, amount);
+        emit CreditWithdrawn(msg.sender, destination, amount);
     }
 
     /// @notice Namespaced pool-uniqueness key binding a review ID to the paying requester.

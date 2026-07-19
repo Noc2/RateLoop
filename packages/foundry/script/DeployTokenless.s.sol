@@ -34,6 +34,7 @@ contract DeployTokenlessScript is Script {
     error RotationAuthorityThresholdTooLow(uint256 threshold);
     error RotationAuthorityOwnerSetTooSmall(uint256 ownerCount);
     error RotationAuthorityOwnerInvalid(address owner);
+    error BeaconVerifierMustBeContract(address verifier);
     error RuntimeCodeSizeExceeded(string artifact, uint256 actual, uint256 limit);
     error InitcodeSizeExceeded(string artifact, uint256 actual, uint256 limit);
 
@@ -42,7 +43,9 @@ contract DeployTokenlessScript is Script {
 
         address rotationAuthority = vm.envAddress("TOKENLESS_ROTATION_AUTHORITY");
         address initialSigner = vm.envAddress("TOKENLESS_INITIAL_SIGNER");
+        address beaconVerifier = vm.envAddress("TOKENLESS_BEACON_VERIFIER");
         _assertRotationAuthority(rotationAuthority);
+        if (beaconVerifier.code.length == 0) revert BeaconVerifierMustBeContract(beaconVerifier);
         uint256 maxScheduledGraceRaw = vm.envOr("TOKENLESS_MAX_SCHEDULED_GRACE", uint256(1 days));
         if (maxScheduledGraceRaw == 0 || maxScheduledGraceRaw > type(uint64).max) {
             revert InvalidMaxScheduledGrace(maxScheduledGraceRaw);
@@ -53,18 +56,20 @@ contract DeployTokenlessScript is Script {
 
         // The remaining constructors take only addresses, so their encoded size is value-independent.
         bytes memory twoAddressArgs = abi.encode(address(0), address(0));
+        bytes memory threeAddressArgs = abi.encode(address(0), address(0), address(0));
         _assertDeployable(TEST_USDC_ARTIFACT, testUsdcArgs);
         _assertDeployable(CREDENTIAL_ISSUER_ARTIFACT, credentialIssuerArgs);
         _assertDeployable(FEEDBACK_BONUS_ARTIFACT, twoAddressArgs);
-        _assertDeployable(TOKENLESS_PANEL_ARTIFACT, twoAddressArgs);
+        _assertDeployable(TOKENLESS_PANEL_ARTIFACT, threeAddressArgs);
         _assertDeployable(X402_PANEL_SUBMITTER_ARTIFACT, twoAddressArgs);
 
         vm.startBroadcast();
 
         MockERC20 testUsdc = MockERC20(deployCode(TEST_USDC_ARTIFACT, testUsdcArgs));
         CredentialIssuer issuer = CredentialIssuer(deployCode(CREDENTIAL_ISSUER_ARTIFACT, credentialIssuerArgs));
-        TokenlessPanel panel =
-            TokenlessPanel(deployCode(TOKENLESS_PANEL_ARTIFACT, abi.encode(address(testUsdc), address(issuer))));
+        TokenlessPanel panel = TokenlessPanel(
+            deployCode(TOKENLESS_PANEL_ARTIFACT, abi.encode(address(testUsdc), address(issuer), beaconVerifier))
+        );
         TokenlessFeedbackBonus feedbackBonus = TokenlessFeedbackBonus(
             deployCode(FEEDBACK_BONUS_ARTIFACT, abi.encode(address(testUsdc), address(issuer)))
         );
@@ -77,6 +82,7 @@ contract DeployTokenlessScript is Script {
         console2.log("TokenlessTestUSDC:", address(testUsdc));
         console2.log("CredentialIssuer:", address(issuer));
         console2.log("TokenlessPanel:", address(panel));
+        console2.log("BeaconVerifier:", beaconVerifier);
         console2.log("TokenlessFeedbackBonus:", address(feedbackBonus));
         console2.log("X402PanelSubmitter:", address(x402Submitter));
         console2.log("Tokenless deployment schema: rateloop-tokenless-deployment-v4");

@@ -6,6 +6,7 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import { EIP712 } from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import { IBeaconVerifier } from "./interfaces/IBeaconVerifier.sol";
 import { ICredentialIssuer } from "./interfaces/ICredentialIssuer.sol";
 import { TokenlessRbts } from "./libraries/TokenlessRbts.sol";
 
@@ -57,7 +58,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
     enum ScoringMode {
         Pending,
         Rbts,
-        BaseOnlyEntropyUnavailable
+        BaseOnlyBeaconUnavailable
     }
 
     struct Voucher {
@@ -106,10 +107,10 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         uint256 totalRbtsScoreBps;
         uint256 totalFinalizedLiability;
         uint256 totalPaid;
-        uint256 entropyBlock;
         bytes32 revealSetXor;
         uint256 revealSetSum;
         bytes32 scoringSeed;
+        bytes32 beaconEntropy;
         uint64 commitDeadline;
         uint64 revealDeadline;
         uint64 beaconFailureDeadline;
@@ -152,6 +153,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
 
     IERC20 public immutable usdc;
     ICredentialIssuer public immutable credentialIssuer;
+    IBeaconVerifier public immutable beaconVerifier;
 
     uint256 public nextRoundId = 1;
     mapping(uint256 roundId => Round round) private _rounds;
@@ -187,12 +189,12 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         bytes32 responseHash,
         bool scoringEligible
     );
-    event SettlementBegun(uint256 indexed roundId, uint32 frozenRevealCount, uint256 entropyBlock);
+    event SettlementBegun(uint256 indexed roundId, uint32 frozenRevealCount, uint64 beaconRound);
     event SettlementProgressed(uint256 indexed roundId, RoundState indexed state, uint32 cursor);
     event ScoringSeedFinalized(
         uint256 indexed roundId,
         ScoringMode indexed mode,
-        uint256 entropyBlock,
+        uint64 beaconRound,
         bytes32 entropy,
         bytes32 scoringSeed,
         bytes32 revealSetXor,
@@ -242,14 +244,19 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
     error ClaimWindowOpen();
     error TransferAmountMismatch();
     error NoCredit();
+    error InvalidBeaconProof();
 
-    constructor(address usdc_, address credentialIssuer_) EIP712("RateLoop Tokenless Panel", "1") {
+    constructor(address usdc_, address credentialIssuer_, address beaconVerifier_)
+        EIP712("RateLoop Tokenless Panel", "1")
+    {
         if (
             usdc_ == address(0) || usdc_.code.length == 0 || credentialIssuer_ == address(0)
-                || credentialIssuer_.code.length == 0
+                || credentialIssuer_.code.length == 0 || beaconVerifier_ == address(0)
+                || beaconVerifier_.code.length == 0
         ) revert InvalidAddress();
         usdc = IERC20(usdc_);
         credentialIssuer = ICredentialIssuer(credentialIssuer_);
+        beaconVerifier = IBeaconVerifier(beaconVerifier_);
     }
 
     function createRound(RoundTerms calldata terms) external nonReentrant returns (uint256 roundId) {
@@ -451,9 +458,8 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         }
 
         round.frozenRevealCount = round.revealCount;
-        round.entropyBlock = block.number + 1;
         round.state = RoundState.Aggregating;
-        emit SettlementBegun(roundId, round.frozenRevealCount, round.entropyBlock);
+        emit SettlementBegun(roundId, round.frozenRevealCount, round.beaconRound);
     }
 
     /// @notice Paginate the public vote aggregate and order-independent frozen-set commitment.
@@ -475,35 +481,69 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         emit SettlementProgressed(roundId, round.state, end);
     }
 
-    /// @notice Fix the scoring seed from the next block after reveal-set closure.
-    /// @dev If that block hash has aged out, settlement deterministically degrades to fixed-base payouts.
-    function finalizeScoringSeed(uint256 roundId) external {
+    /// @notice Verify the round's frozen public-beacon output and derive the canonical scoring order.
+    /// @dev The immutable verifier must bind the randomness to the exact network hash and beacon round.
+    ///      Invalid or unavailable proofs never substitute caller-selected entropy.
+    function finalizeScoringSeed(uint256 roundId, bytes32 randomness, bytes calldata proof) external {
         Round storage round = _rounds[roundId];
         if (round.state != RoundState.AwaitingSeed) revert InvalidState();
-        if (block.number <= round.entropyBlock) revert InvalidDeadline();
+        if (randomness == bytes32(0)) revert InvalidBeaconProof();
 
-        bytes32 entropy = blockhash(round.entropyBlock);
-        if (entropy == bytes32(0)) {
-            round.scoringMode = ScoringMode.BaseOnlyEntropyUnavailable;
-        } else {
-            round.scoringMode = ScoringMode.Rbts;
-            round.scoringSeed = TokenlessRbts.scoringSeed(
-                block.chainid,
-                address(this),
-                roundId,
-                round.frozenRevealCount,
-                round.revealSetXor,
-                round.revealSetSum,
-                entropy
-            );
+        bool verified;
+        try beaconVerifier.verifyBeacon(round.beaconNetworkHash, round.beaconRound, randomness, proof) returns (
+            bool valid
+        ) {
+            verified = valid;
+        } catch { }
+        if (!verified) revert InvalidBeaconProof();
+
+        round.scoringMode = ScoringMode.Rbts;
+        round.beaconEntropy = randomness;
+        round.scoringSeed = TokenlessRbts.scoringSeed(
+            block.chainid,
+            address(this),
+            roundId,
+            round.frozenRevealCount,
+            round.revealSetXor,
+            round.revealSetSum,
+            randomness
+        );
+
+        // Sort the frozen keys once in O(n log n). Scoring pages can then select the
+        // next and next-next reports in O(1), replacing the former O(n^2) scan.
+        bytes32[] memory canonicalKeys = _roundRevealKeys[roundId];
+        TokenlessRbts.sortCanonical(round.scoringSeed, canonicalKeys);
+        for (uint32 i; i < round.frozenRevealCount; ++i) {
+            _roundRevealKeys[roundId][i] = canonicalKeys[i];
         }
         round.state = RoundState.Scoring;
         emit ScoringSeedFinalized(
             roundId,
             round.scoringMode,
-            round.entropyBlock,
-            entropy,
+            round.beaconRound,
+            randomness,
             round.scoringSeed,
+            round.revealSetXor,
+            round.revealSetSum
+        );
+    }
+
+    /// @notice Enter the deterministic fixed-base path after the frozen beacon has missed its deadline.
+    /// @dev Permissionless and bounded. The caller supplies no replacement entropy and every unused
+    ///      quality bonus returns to the funder during normal finalization.
+    function finalizeScoringFallback(uint256 roundId) external {
+        Round storage round = _rounds[roundId];
+        if (round.state != RoundState.AwaitingSeed) revert InvalidState();
+        if (block.timestamp <= round.beaconFailureDeadline) revert InvalidDeadline();
+
+        round.scoringMode = ScoringMode.BaseOnlyBeaconUnavailable;
+        round.state = RoundState.Scoring;
+        emit ScoringSeedFinalized(
+            roundId,
+            round.scoringMode,
+            round.beaconRound,
+            bytes32(0),
+            bytes32(0),
             round.revealSetXor,
             round.revealSetSum
         );
@@ -526,8 +566,8 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
             TokenlessRbts.Score memory result;
 
             if (round.scoringMode == ScoringMode.Rbts) {
-                (record.referenceCommitKey, record.peerCommitKey) =
-                    TokenlessRbts.selectReferenceAndPeer(round.scoringSeed, commitKey, revealedCommitKeys);
+                record.referenceCommitKey = revealedCommitKeys[(uint256(i) + 1) % round.frozenRevealCount];
+                record.peerCommitKey = revealedCommitKeys[(uint256(i) + 2) % round.frozenRevealCount];
                 CommitRecord storage referenceRecord = _commits[record.referenceCommitKey];
                 CommitRecord storage peerRecord = _commits[record.peerCommitKey];
                 result = TokenlessRbts.score(

@@ -9,7 +9,11 @@ import {
 import { getLogsInBlockChunks } from "./block-log-scan.js";
 import { BoundedLruMap } from "./bounded-lru.js";
 import type { config as runtimeConfig } from "./config.js";
-import { resolveTlockClientForDrandChain } from "./drand.js";
+import {
+  fetchVerifiedDrandBeacon,
+  resolveTlockClientForDrandChain,
+  type VerifiedDrandBeacon,
+} from "./drand.js";
 import { isExpectedPanelRaceError } from "./expected-panel-race.js";
 import type { Logger } from "./logger.js";
 import {
@@ -66,6 +70,7 @@ export interface TokenlessKeeperClients {
   walletClient: TokenlessWalletClient;
   account: { address: Address };
   keeperWorkFeed?: KeeperWorkFeed;
+  beaconFetcher?: (chainHash: Hex, round: bigint) => Promise<VerifiedDrandBeacon>;
 }
 
 export type RevealDecryptor = (params: {
@@ -571,19 +576,41 @@ async function advanceRound(params: {
   }
 
   if (round.state === TokenlessRoundState.AwaitingSeed) {
-    const currentBlock = await params.clients.publicClient.getBlockNumber();
-    if (currentBlock <= round.entropyBlock) {
+    try {
+      const beacon = await (
+        params.clients.beaconFetcher ?? fetchVerifiedDrandBeacon
+      )(round.beaconNetworkHash, round.beaconRound);
+      const seeded = await permissionlessWrite(
+        params.clients,
+        params.config.deployment.panel,
+        "finalizeScoringSeed",
+        [params.roundId, beacon.randomness, beacon.proof],
+        params.logger,
+      );
+      if (seeded) {
+        params.result.scoringSeedsFinalized += 1;
+        return;
+      }
+    } catch (error) {
+      params.logger.warn("Frozen scoring beacon is not yet available", {
+        roundId: params.roundId.toString(),
+        beaconRound: round.beaconRound.toString(),
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    if (params.now <= round.beaconFailureDeadline) {
       params.result.roundsAwaitingScoringEntropy += 1;
       return;
     }
-    const seeded = await permissionlessWrite(
+    const fellBack = await permissionlessWrite(
       params.clients,
       params.config.deployment.panel,
-      "finalizeScoringSeed",
+      "finalizeScoringFallback",
       [params.roundId],
       params.logger,
     );
-    if (seeded) params.result.scoringSeedsFinalized += 1;
+    if (fellBack) params.result.scoringSeedsFinalized += 1;
     return;
   }
 
@@ -714,6 +741,7 @@ export async function validateTokenlessKeeperDeployment(
     panelCode,
     issuerCode,
     feedbackBonusCode,
+    beaconVerifierCode,
     currentBlock,
     issuer,
     scoringVersion,
@@ -722,6 +750,7 @@ export async function validateTokenlessKeeperDeployment(
     panelUsdc,
     feedbackBonusUsdc,
     feedbackBonusIssuer,
+    panelBeaconVerifier,
   ] = await Promise.all([
     clients.publicClient.getBytecode({ address: config.deployment.panel }),
     clients.publicClient.getBytecode({
@@ -729,6 +758,9 @@ export async function validateTokenlessKeeperDeployment(
     }),
     clients.publicClient.getBytecode({
       address: config.deployment.feedbackBonus,
+    }),
+    clients.publicClient.getBytecode({
+      address: config.deployment.beaconVerifier,
     }),
     clients.publicClient.getBlockNumber(),
     clients.publicClient.readContract({
@@ -766,6 +798,11 @@ export async function validateTokenlessKeeperDeployment(
       abi: TokenlessFeedbackBonusAbi,
       functionName: "credentialIssuer",
     }),
+    clients.publicClient.readContract({
+      address: config.deployment.panel,
+      abi: TokenlessPanelAbi,
+      functionName: "beaconVerifier",
+    }),
   ]);
   if (!panelCode || panelCode === "0x") {
     throw new Error("TOKENLESS_PANEL_ADDRESS has no deployed bytecode.");
@@ -780,12 +817,28 @@ export async function validateTokenlessKeeperDeployment(
       "TOKENLESS_FEEDBACK_BONUS_ADDRESS has no deployed bytecode.",
     );
   }
+  if (!beaconVerifierCode || beaconVerifierCode === "0x") {
+    throw new Error(
+      "TOKENLESS_BEACON_VERIFIER_ADDRESS has no deployed bytecode.",
+    );
+  }
   if (
     typeof issuer !== "string" ||
     !isAddressEqual(issuer as Address, config.deployment.credentialIssuer)
   ) {
     throw new Error(
       "TokenlessPanel credentialIssuer does not match the versioned deployment identity.",
+    );
+  }
+  if (
+    typeof panelBeaconVerifier !== "string" ||
+    !isAddressEqual(
+      panelBeaconVerifier as Address,
+      config.deployment.beaconVerifier,
+    )
+  ) {
+    throw new Error(
+      "TokenlessPanel beaconVerifier does not match the configured immutable verifier.",
     );
   }
   if (

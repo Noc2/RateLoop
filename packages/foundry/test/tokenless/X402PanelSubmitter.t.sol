@@ -6,6 +6,7 @@ import { MockERC20 } from "../../contracts/mocks/MockERC20.sol";
 import { CredentialIssuer } from "../../contracts/tokenless/CredentialIssuer.sol";
 import { TokenlessPanel } from "../../contracts/tokenless/TokenlessPanel.sol";
 import { X402PanelSubmitter } from "../../contracts/tokenless/X402PanelSubmitter.sol";
+import { MockBeaconVerifier } from "../../contracts/mocks/MockBeaconVerifier.sol";
 
 contract X402PanelSubmitterTest is Test {
     uint256 internal constant FUNDER_KEY = 0xA11CE;
@@ -21,7 +22,7 @@ contract X402PanelSubmitterTest is Test {
         funder = vm.addr(FUNDER_KEY);
         usdc = new MockERC20("RateLoop Tokenless Test USDC", "tUSDC", 6);
         CredentialIssuer issuer = new CredentialIssuer(address(this), address(0xBEEF), 1 days);
-        panel = new TokenlessPanel(address(usdc), address(issuer));
+        panel = new TokenlessPanel(address(usdc), address(issuer), address(new MockBeaconVerifier()));
         adapter = new X402PanelSubmitter(address(usdc), address(panel));
         usdc.mint(funder, 100e6);
     }
@@ -107,7 +108,8 @@ contract X402PanelSubmitterTest is Test {
             _authorization(terms, nonce);
 
         CredentialIssuer secondIssuer = new CredentialIssuer(address(this), address(0xBEEF), 1 days);
-        TokenlessPanel secondPanel = new TokenlessPanel(address(usdc), address(secondIssuer));
+        TokenlessPanel secondPanel =
+            new TokenlessPanel(address(usdc), address(secondIssuer), address(new MockBeaconVerifier()));
         X402PanelSubmitter secondAdapter = new X402PanelSubmitter(address(usdc), address(secondPanel));
 
         assertNotEq(

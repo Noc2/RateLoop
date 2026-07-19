@@ -5,6 +5,7 @@ import { Test } from "forge-std/Test.sol";
 import { MockERC20 } from "../../contracts/mocks/MockERC20.sol";
 import { CredentialIssuer } from "../../contracts/tokenless/CredentialIssuer.sol";
 import { TokenlessPanel } from "../../contracts/tokenless/TokenlessPanel.sol";
+import { MockBeaconVerifier } from "../../contracts/mocks/MockBeaconVerifier.sol";
 
 /// @notice End-to-end maximum-panel settlement gas regression.
 /// @dev Gas measurements include contract-call execution plus a conservative 100k transaction-envelope allowance.
@@ -22,10 +23,10 @@ contract TokenlessPanelGasBenchmarkTest is Test {
     // These ceilings are the deployment guardrails documented in docs/tokenless-rbts-v1-spec.md.
     uint256 internal constant BEGIN_SETTLEMENT_GAS_CEILING = 200_000;
     uint256 internal constant AGGREGATE_PAGE_GAS_CEILING = 250_000;
-    uint256 internal constant FINALIZE_SEED_GAS_CEILING = 200_000;
-    uint256 internal constant SCORE_PAGE_GAS_CEILING = 35_000_000;
+    uint256 internal constant FINALIZE_SEED_GAS_CEILING = 10_000_000;
+    uint256 internal constant SCORE_PAGE_GAS_CEILING = 2_500_000;
     uint256 internal constant FINALIZE_SETTLEMENT_GAS_CEILING = 250_000;
-    uint256 internal constant TOTAL_SETTLEMENT_GAS_BUDGET = 650_000_000;
+    uint256 internal constant TOTAL_SETTLEMENT_GAS_BUDGET = 60_000_000;
 
     bytes32 internal constant CONTENT_ID = keccak256("500-seat-gas-benchmark");
     bytes32 internal constant TERMS_HASH = keccak256("500-seat-gas-benchmark-terms-v1");
@@ -39,6 +40,7 @@ contract TokenlessPanelGasBenchmarkTest is Test {
     MockERC20 internal usdc;
     CredentialIssuer internal issuer;
     TokenlessPanel internal panel;
+    MockBeaconVerifier internal beaconVerifier;
 
     struct Seat {
         uint256 privateKey;
@@ -55,7 +57,8 @@ contract TokenlessPanelGasBenchmarkTest is Test {
         vm.warp(1_800_000_000);
         usdc = new MockERC20("USD Coin", "USDC", 6);
         issuer = new CredentialIssuer(makeAddr("gas-benchmark-rotation-authority"), vm.addr(ISSUER_PK), 1 days);
-        panel = new TokenlessPanel(address(usdc), address(issuer));
+        beaconVerifier = new MockBeaconVerifier();
+        panel = new TokenlessPanel(address(usdc), address(issuer), address(beaconVerifier));
         usdc.mint(funder, 10_000e6);
         vm.prank(funder);
         usdc.approve(address(panel), type(uint256).max);
@@ -90,9 +93,6 @@ contract TokenlessPanelGasBenchmarkTest is Test {
             totalBudgetedGas += pageGas + TRANSACTION_ENVELOPE_GAS;
         }
 
-        uint256 entropyBlock = panel.getRound(roundId).entropyBlock;
-        vm.roll(entropyBlock + 1);
-        vm.setBlockhash(entropyBlock, ENTROPY);
         uint256 seedGas = _measureFinalizeSeed(roundId);
         _assertTransactionCeiling("finalizeScoringSeed", seedGas, FINALIZE_SEED_GAS_CEILING);
         totalBudgetedGas += seedGas + TRANSACTION_ENVELOPE_GAS;
@@ -206,8 +206,10 @@ contract TokenlessPanelGasBenchmarkTest is Test {
     }
 
     function _measureFinalizeSeed(uint256 roundId) internal returns (uint256 gasUsed) {
+        TokenlessPanel.Round memory round = panel.getRound(roundId);
+        bytes32 proof = beaconVerifier.proofFor(round.beaconNetworkHash, round.beaconRound, ENTROPY);
         uint256 gasBefore = gasleft();
-        panel.finalizeScoringSeed(roundId);
+        panel.finalizeScoringSeed(roundId, ENTROPY, abi.encode(proof));
         gasUsed = gasBefore - gasleft();
     }
 

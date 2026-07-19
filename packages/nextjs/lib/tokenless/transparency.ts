@@ -73,10 +73,10 @@ export type IndexedFinalizedEvidence = {
   };
   scoring: {
     entropy: string;
-    entropyBlock: string;
+    beaconRound: string;
     fixedBasePayAtomic: string;
     maximumBonusAtomic: string;
-    mode: "rbts" | "base_only_entropy_unavailable";
+    mode: "rbts" | "base_only_beacon_unavailable";
     revealSetSum: string;
     revealSetXor: string;
     scoringSeed: string;
@@ -181,7 +181,7 @@ export function recomputeRbtsSettlement(input: {
   entropy: Hex;
   fixedBasePay: bigint;
   maximumBonus: bigint;
-  mode: "rbts" | "base_only_entropy_unavailable";
+  mode: "rbts" | "base_only_beacon_unavailable";
   panelAddress: Address;
   reveals: NormativeRbtsReveal[];
   roundId: bigint;
@@ -778,7 +778,7 @@ function validateFinalizedEvidence(value: IndexedFinalizedEvidence) {
   }
   if (
     value.scoring.version !== RBTS_SCORING_VERSION ||
-    !UNSIGNED_INTEGER.test(value.scoring.entropyBlock) ||
+    !UNSIGNED_INTEGER.test(value.scoring.beaconRound) ||
     !UNSIGNED_INTEGER.test(value.scoring.revealSetSum) ||
     !UNSIGNED_INTEGER.test(value.scoring.totalFinalizedLiabilityAtomic) ||
     !UNSIGNED_INTEGER.test(value.scoring.totalRbtsScoreBps) ||
@@ -789,11 +789,11 @@ function validateFinalizedEvidence(value: IndexedFinalizedEvidence) {
     !BYTES32.test(value.scoring.entropy) ||
     !BYTES32.test(value.scoring.revealSetXor) ||
     !BYTES32.test(value.scoring.scoringSeed) ||
-    !["rbts", "base_only_entropy_unavailable"].includes(value.scoring.mode) ||
+    !["rbts", "base_only_beacon_unavailable"].includes(value.scoring.mode) ||
     (value.scoring.mode === "rbts" &&
       (value.scoring.scoringSeed.toLowerCase() === ZERO_BYTES32 ||
         value.scoring.entropy.toLowerCase() === ZERO_BYTES32)) ||
-    (value.scoring.mode === "base_only_entropy_unavailable" &&
+    (value.scoring.mode === "base_only_beacon_unavailable" &&
       (value.scoring.scoringSeed.toLowerCase() !== ZERO_BYTES32 ||
         value.scoring.entropy.toLowerCase() !== ZERO_BYTES32))
   ) {
@@ -1157,7 +1157,7 @@ async function deriveFinalizedRoundEvidenceBundle(input: {
   }
   const scoringVersion = integerValue(round.scoringVersion, "Indexed scoring version");
   const scoringModeValue = integerValue(round.scoringMode, "Indexed scoring mode");
-  const scoringMode = scoringModeValue === 1 ? "rbts" : scoringModeValue === 2 ? "base_only_entropy_unavailable" : null;
+  const scoringMode = scoringModeValue === 1 ? "rbts" : scoringModeValue === 2 ? "base_only_beacon_unavailable" : null;
   const scoreCursor = integerValue(round.scoreCursor, "Indexed score cursor");
   const fixedBasePay = unsignedValue(round.fixedBasePay, "Indexed fixed base pay");
   const maximumBonus = unsignedValue(round.maximumBonus, "Indexed maximum bonus");
@@ -1166,7 +1166,7 @@ async function deriveFinalizedRoundEvidenceBundle(input: {
   const scoringSeed = exactBytes32(round.scoringSeed, "Indexed scoring seed");
   const revealSetXor = exactBytes32(round.revealSetXor, "Indexed reveal-set XOR");
   const revealSetSum = unsignedValue(round.revealSetSum, "Indexed reveal-set sum");
-  const entropyBlock = unsignedValue(round.entropyBlock, "Indexed entropy block");
+  const beaconRound = unsignedValue(round.beaconRound, "Indexed beacon round");
   const entropy = exactBytes32(round.entropy, "Indexed scoring entropy");
   const maximumCommits = integerValue(round.maximumCommits, "Indexed maximum commits");
   if (maximumCommits < 3 || maximumCommits > MAX_PONDER_COMMITS) {
@@ -1182,7 +1182,7 @@ async function deriveFinalizedRoundEvidenceBundle(input: {
     BigInt(fixedBasePay) !== normativeFixedBasePay ||
     BigInt(maximumBonus) !== normativeMaximumBonus ||
     (scoringMode === "rbts" && (scoringSeed === ZERO_BYTES32 || entropy === ZERO_BYTES32)) ||
-    (scoringMode === "base_only_entropy_unavailable" && (scoringSeed !== ZERO_BYTES32 || entropy !== ZERO_BYTES32))
+    (scoringMode === "base_only_beacon_unavailable" && (scoringSeed !== ZERO_BYTES32 || entropy !== ZERO_BYTES32))
   ) {
     throw new TokenlessServiceError("Indexed RBTS settlement is incomplete.", 409, "indexed_evidence_invalid");
   }
@@ -1426,7 +1426,7 @@ async function deriveFinalizedRoundEvidenceBundle(input: {
     },
     scoring: {
       entropy,
-      entropyBlock,
+      beaconRound,
       fixedBasePayAtomic: fixedBasePay,
       maximumBonusAtomic: maximumBonus,
       mode: scoringMode,

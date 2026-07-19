@@ -11,6 +11,7 @@ const ISSUER = "0x1000000000000000000000000000000000000002" as Address;
 const BONUS = "0x1000000000000000000000000000000000000003" as Address;
 const ADAPTER = "0x1000000000000000000000000000000000000004" as Address;
 const USDC = "0x1000000000000000000000000000000000000005" as Address;
+const BEACON_VERIFIER = "0x1000000000000000000000000000000000000006" as Address;
 
 function deployment(
   overrides: Partial<TokenlessDeployment> = {},
@@ -23,6 +24,7 @@ function deployment(
     issuerAddress: ISSUER,
     adapterAddress: ADAPTER,
     feedbackBonusAddress: BONUS,
+    beaconVerifierAddress: BEACON_VERIFIER,
     startBlock: 100,
     deploymentKey: `tokenless-v4:84532:${PANEL}:${ISSUER}:${ADAPTER}:${BONUS}`,
     ...overrides,
@@ -54,6 +56,7 @@ function client(
       if (functionName === "credentialIssuer") return ISSUER;
       if (functionName === "usdc") return USDC;
       if (functionName === "panel") return PANEL;
+      if (functionName === "beaconVerifier") return BEACON_VERIFIER;
       if (functionName === "SCORING_VERSION") return 2;
       if (functionName === "BASE_PAY_BPS") return 8_000;
       if (functionName === "MAXIMUM_COMMITS") return 500;
@@ -105,6 +108,7 @@ describe("live tokenless deployment health", () => {
             }
             if (functionName === "usdc") return USDC;
             if (functionName === "panel") return PANEL;
+            if (functionName === "beaconVerifier") return BEACON_VERIFIER;
             if (functionName === "SCORING_VERSION") return 2;
             if (functionName === "BASE_PAY_BPS") return 8_000;
             if (functionName === "MAXIMUM_COMMITS") return 500;
@@ -124,6 +128,7 @@ describe("live tokenless deployment health", () => {
               return address === BONUS ? ADAPTER : USDC;
             }
             if (functionName === "panel") return PANEL;
+            if (functionName === "beaconVerifier") return BEACON_VERIFIER;
             if (functionName === "SCORING_VERSION") return 2;
             if (functionName === "BASE_PAY_BPS") return 8_000;
             if (functionName === "MAXIMUM_COMMITS") return 500;
@@ -145,6 +150,7 @@ describe("live tokenless deployment health", () => {
             if (functionName === "panel" && address === ADAPTER) {
               return BONUS;
             }
+            if (functionName === "beaconVerifier") return BEACON_VERIFIER;
             if (functionName === "SCORING_VERSION") return 2;
             if (functionName === "BASE_PAY_BPS") return 8_000;
             if (functionName === "MAXIMUM_COMMITS") return 500;

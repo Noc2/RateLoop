@@ -29,6 +29,7 @@ const ISSUER = "0x0000000000000000000000000000000000000022";
 const ADAPTER = "0x0000000000000000000000000000000000000023";
 const FEEDBACK_BONUS = "0x0000000000000000000000000000000000000024";
 const USDC = "0x0000000000000000000000000000000000000025";
+const BEACON_VERIFIER = "0x0000000000000000000000000000000000000026";
 const VOTE_KEY = "0x0000000000000000000000000000000000000033" as Address;
 const PAYOUT = "0x0000000000000000000000000000000000000044" as Address;
 const COMMIT_KEY = `0x${"55".repeat(32)}` as Hex;
@@ -37,6 +38,8 @@ const RESPONSE_HASH = `0x${"66".repeat(32)}` as Hex;
 const SALT = `0x${"77".repeat(32)}` as Hex;
 const ADMISSION_POLICY_HASH = `0x${"99".repeat(32)}` as Hex;
 const ZERO_HASH = `0x${"00".repeat(32)}` as Hex;
+const BEACON_RANDOMNESS = `0x${"ab".repeat(32)}` as Hex;
+const BEACON_PROOF = `0x${"cd".repeat(48)}` as Hex;
 
 const REVEAL_MATERIAL: TokenlessRevealMaterial = {
   roundId: 1n,
@@ -64,6 +67,7 @@ const config = {
     credentialIssuer: ISSUER,
     x402PanelSubmitter: "0x0000000000000000000000000000000000000000",
     feedbackBonus: FEEDBACK_BONUS,
+    beaconVerifier: BEACON_VERIFIER,
   },
   maxRoundsPerTick: 100,
   settlementBatchSize: 25,
@@ -105,10 +109,10 @@ function round(overrides: Partial<TokenlessRound> = {}): TokenlessRound {
     totalRbtsScoreBps: 0n,
     totalFinalizedLiability: 0n,
     totalPaid: 0n,
-    entropyBlock: 0n,
     revealSetXor: ZERO_HASH,
     revealSetSum: 0n,
     scoringSeed: ZERO_HASH,
+    beaconEntropy: ZERO_HASH,
     commitDeadline: 100n,
     revealDeadline: 200n,
     beaconFailureDeadline: 250n,
@@ -170,6 +174,7 @@ function clients(params: {
   commitClaimed?: boolean;
   commitOverrides?: Partial<TokenlessCommit>;
   currentBlock?: bigint;
+  beaconUnavailable?: boolean;
   receiptStatus?: "success" | "reverted";
   feedbackBonusPool?: {
     depositedAmount: bigint;
@@ -199,6 +204,10 @@ function clients(params: {
         return `0x${"88".repeat(32)}`;
       },
     },
+    async beaconFetcher() {
+      if (params.beaconUnavailable) throw new Error("beacon unavailable");
+      return { randomness: BEACON_RANDOMNESS, proof: BEACON_PROOF };
+    },
     publicClient: {
       async getChainId() {
         return 84532;
@@ -213,6 +222,7 @@ function clients(params: {
         return address === PANEL ||
           address === ISSUER ||
           address === FEEDBACK_BONUS ||
+          address === BEACON_VERIFIER ||
           (address === ADAPTER && params.adapter)
           ? "0x6000"
           : undefined;
@@ -240,6 +250,8 @@ function clients(params: {
         switch (args.functionName) {
           case "credentialIssuer":
             return ISSUER;
+          case "beaconVerifier":
+            return BEACON_VERIFIER;
           case "panel":
             if (args.address === ADAPTER) {
               return params.adapter?.panel ?? PANEL;
@@ -314,10 +326,10 @@ describe("tokenless keeper orchestration", () => {
       { name: "totalRbtsScoreBps", type: "uint256" },
       { name: "totalFinalizedLiability", type: "uint256" },
       { name: "totalPaid", type: "uint256" },
-      { name: "entropyBlock", type: "uint256" },
       { name: "revealSetXor", type: "bytes32" },
       { name: "revealSetSum", type: "uint256" },
       { name: "scoringSeed", type: "bytes32" },
+      { name: "beaconEntropy", type: "bytes32" },
       { name: "commitDeadline", type: "uint64" },
       { name: "revealDeadline", type: "uint64" },
       { name: "beaconFailureDeadline", type: "uint64" },
@@ -458,7 +470,6 @@ describe("tokenless keeper orchestration", () => {
     const instance = clients({
       currentRound: round({
         state: TokenlessRoundState.AwaitingSeed,
-        entropyBlock: 900n,
       }),
       now: 300n,
       currentBlock: 1_000n,
@@ -978,7 +989,7 @@ describe("tokenless keeper orchestration", () => {
     expect(result.terminalRoundsAdvanced).toBe(1);
   });
 
-  it("processes aggregation, future-block seed finalization, RBTS scoring, and finalization", async () => {
+  it("processes aggregation, verified-beacon seed finalization, RBTS scoring, and finalization", async () => {
     const aggregateWrites: string[] = [];
     await runTokenlessKeeper(
       clients({
@@ -1001,7 +1012,6 @@ describe("tokenless keeper orchestration", () => {
         currentRound: round({
           state: TokenlessRoundState.AwaitingSeed,
           frozenRevealCount: 3,
-          entropyBlock: 900n,
         }),
         writes: seedWrites,
       }),
@@ -1046,17 +1056,17 @@ describe("tokenless keeper orchestration", () => {
     expect(finalWrites).toContain("finalizeSettlement");
   });
 
-  it("waits until the committed future entropy block can be read", async () => {
+  it("waits for the frozen beacon until the bounded failure deadline", async () => {
     const writes: string[] = [];
     const result = await runTokenlessKeeper(
       clients({
         currentRound: round({
           state: TokenlessRoundState.AwaitingSeed,
           frozenRevealCount: 3,
-          entropyBlock: 1_000n,
         }),
         writes,
-        currentBlock: 1_000n,
+        now: 240n,
+        beaconUnavailable: true,
       }),
       config,
       logger,
@@ -1064,6 +1074,26 @@ describe("tokenless keeper orchestration", () => {
     );
     expect(writes).not.toContain("finalizeScoringSeed");
     expect(result.roundsAwaitingScoringEntropy).toBe(1);
+  });
+
+  it("uses the permissionless base-only fallback after the beacon deadline", async () => {
+    const writes: string[] = [];
+    const result = await runTokenlessKeeper(
+      clients({
+        currentRound: round({
+          state: TokenlessRoundState.AwaitingSeed,
+          frozenRevealCount: 3,
+        }),
+        writes,
+        now: 251n,
+        beaconUnavailable: true,
+      }),
+      config,
+      logger,
+      decrypt,
+    );
+    expect(writes).toContain("finalizeScoringFallback");
+    expect(result.scoringSeedsFinalized).toBe(1);
   });
 
   it("auto-claims decrypted material and returns stale shares", async () => {

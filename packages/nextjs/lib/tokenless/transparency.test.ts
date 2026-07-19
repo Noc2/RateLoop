@@ -180,7 +180,6 @@ function indexedRound(overrides: Record<string, unknown> = {}) {
     totalRbtsScoreBps: RBTS_FIXTURE.totalRbtsScoreBps.toString(),
     totalFinalizedLiability: RBTS_FIXTURE.totalFinalizedLiability.toString(),
     totalPaid: "0",
-    entropyBlock: "44059900",
     entropy: ENTROPY,
     revealSetXor: RBTS_FIXTURE.revealSetXor,
     revealSetSum: RBTS_FIXTURE.revealSetSum.toString(),
@@ -577,7 +576,7 @@ test("canonical evidence and normative RBTS accounting are deterministic", () =>
     entropy: `0x${"00".repeat(32)}`,
     fixedBasePay: 4_000_000n,
     maximumBonus: 1_000_000n,
-    mode: "base_only_entropy_unavailable",
+    mode: "base_only_beacon_unavailable",
     panelAddress: PANEL as `0x${string}`,
     reveals: COMMIT_KEYS.map((commitKey, index) => ({
       commitKey,

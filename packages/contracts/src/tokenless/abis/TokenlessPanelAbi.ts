@@ -15,6 +15,11 @@ export const TokenlessPanelAbi = [
         "name": "credentialIssuer_",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "beaconVerifier_",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "nonpayable"
@@ -184,6 +189,19 @@ export const TokenlessPanelAbi = [
         "name": "",
         "type": "bytes32",
         "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "beaconVerifier",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IBeaconVerifier"
       }
     ],
     "stateMutability": "view"
@@ -675,12 +693,35 @@ export const TokenlessPanelAbi = [
   },
   {
     "type": "function",
+    "name": "finalizeScoringFallback",
+    "inputs": [
+      {
+        "name": "roundId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "finalizeScoringSeed",
     "inputs": [
       {
         "name": "roundId",
         "type": "uint256",
         "internalType": "uint256"
+      },
+      {
+        "name": "randomness",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "proof",
+        "type": "bytes",
+        "internalType": "bytes"
       }
     ],
     "outputs": [],
@@ -892,11 +933,6 @@ export const TokenlessPanelAbi = [
             "internalType": "uint256"
           },
           {
-            "name": "entropyBlock",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
             "name": "revealSetXor",
             "type": "bytes32",
             "internalType": "bytes32"
@@ -908,6 +944,11 @@ export const TokenlessPanelAbi = [
           },
           {
             "name": "scoringSeed",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "beaconEntropy",
             "type": "bytes32",
             "internalType": "bytes32"
           },
@@ -1804,10 +1845,10 @@ export const TokenlessPanelAbi = [
         "internalType": "enum TokenlessPanel.ScoringMode"
       },
       {
-        "name": "entropyBlock",
-        "type": "uint256",
+        "name": "beaconRound",
+        "type": "uint64",
         "indexed": false,
-        "internalType": "uint256"
+        "internalType": "uint64"
       },
       {
         "name": "entropy",
@@ -1853,10 +1894,10 @@ export const TokenlessPanelAbi = [
         "internalType": "uint32"
       },
       {
-        "name": "entropyBlock",
-        "type": "uint256",
+        "name": "beaconRound",
+        "type": "uint64",
         "indexed": false,
-        "internalType": "uint256"
+        "internalType": "uint64"
       }
     ],
     "anonymous": false
@@ -1944,6 +1985,11 @@ export const TokenlessPanelAbi = [
   {
     "type": "error",
     "name": "InvalidAddress",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidBeaconProof",
     "inputs": []
   },
   {

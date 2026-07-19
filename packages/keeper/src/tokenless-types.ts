@@ -15,7 +15,7 @@ export enum TokenlessRoundState {
 export enum TokenlessScoringMode {
   Pending,
   Rbts,
-  BaseOnlyEntropyUnavailable,
+  BaseOnlyBeaconUnavailable,
 }
 
 export interface TokenlessRound {
@@ -34,10 +34,10 @@ export interface TokenlessRound {
   totalRbtsScoreBps: bigint;
   totalFinalizedLiability: bigint;
   totalPaid: bigint;
-  entropyBlock: bigint;
   revealSetXor: Hex;
   revealSetSum: bigint;
   scoringSeed: Hex;
+  beaconEntropy: Hex;
   commitDeadline: bigint;
   revealDeadline: bigint;
   beaconFailureDeadline: bigint;

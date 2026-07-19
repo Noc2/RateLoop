@@ -42,7 +42,7 @@ After the feedback window closes, the configured human awarder sees the eligible
 
 Awards are never selected by an agent, an automatic quality score, moderation, a majority result, or the platform operator. The immutable payout commitment prevents the awarder or operator from redirecting the selected reviewer’s funds.
 
-After the disclosed award deadline, anyone may trigger return of the unawarded remainder to the immutable refund recipient. There is no operator sweep, treasury forfeiture, pause, upgrade, or administrative redirection path.
+After the disclosed award deadline, anyone may finalize the unawarded remainder as pull credit for the immutable refund recipient. Finalization performs no token transfer, so a paused, blacklisted, or reverting recipient cannot block the pool's terminal transition. The credited funder later selects a withdrawal destination. There is no operator sweep, treasury forfeiture, pause, upgrade, or administrative redirection path.
 
 ## Custody and failure behavior
 

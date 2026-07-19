@@ -24,7 +24,6 @@ export const tokenlessRound = onchainTable(
     totalRbtsScoreBps: t.bigint().notNull().default(0n),
     totalFinalizedLiability: t.bigint().notNull().default(0n),
     totalPaid: t.bigint().notNull().default(0n),
-    entropyBlock: t.bigint().notNull().default(0n),
     entropy: t.hex().notNull(),
     revealSetXor: t.hex().notNull(),
     revealSetSum: t.bigint().notNull().default(0n),

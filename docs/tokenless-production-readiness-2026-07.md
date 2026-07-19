@@ -77,9 +77,10 @@ for redacted publication, open-review rediscovery, multisig issuer-rotation conf
 finality, ordered server-side RPC failover, exact managed-KMS inventory, a non-root keeper image, and a normative
 500-seat settlement gas benchmark.
 
-The following design-review items deliberately remain gates rather than changes to the currently hosted artifact:
-fund-core or Feedback Bonus pull-credit changes that require an atomic fresh contract/service deployment; scoring
-entropy redesign and O(n²) settlement optimization; per-tenant KMS wrapping authorities; managed custody and rotation
+The source now includes Feedback Bonus remainder pull credits, immutable verifier-bound beacon entropy with a bounded
+base-only fallback, and O(n log n) canonical scoring assignment. These fund-core changes remain release gates until an
+audited verifier and complete v4 contract/service bundle are deployed atomically and exercised. Other gates include
+per-tenant KMS wrapping authorities; managed custody and rotation
 for every hosted signer; named-host verification; live alert, backup, deletion, and incident exercises; and the full
 economics/gold/correlation acceptance package. None may be inferred from the isolated Vercel deployment.
 

@@ -10,6 +10,7 @@ import type { TokenlessDeployment } from "./protocol-deployment";
 const panelHealthAbi = parseAbi([
   "function usdc() view returns (address)",
   "function credentialIssuer() view returns (address)",
+  "function beaconVerifier() view returns (address)",
   "function SCORING_VERSION() view returns (uint8)",
   "function BASE_PAY_BPS() view returns (uint16)",
   "function MAXIMUM_COMMITS() view returns (uint32)",
@@ -59,13 +60,14 @@ export async function validateTokenlessDeploymentOnChain(
     deployment.adapterAddress,
     zeroAddress,
   );
-  const [chainId, chainHead, panelCode, issuerCode, feedbackBonusCode] =
+  const [chainId, chainHead, panelCode, issuerCode, feedbackBonusCode, beaconVerifierCode] =
     await Promise.all([
       client.getChainId(),
       client.getBlockNumber(),
       client.getBytecode({ address: deployment.panelAddress }),
       client.getBytecode({ address: deployment.issuerAddress }),
       client.getBytecode({ address: deployment.feedbackBonusAddress }),
+      client.getBytecode({ address: deployment.beaconVerifierAddress }),
     ]);
 
   if (chainId !== deployment.chainId) {
@@ -82,6 +84,7 @@ export async function validateTokenlessDeploymentOnChain(
     ["TokenlessPanel", panelCode],
     ["CredentialIssuer", issuerCode],
     ["TokenlessFeedbackBonus", feedbackBonusCode],
+    ["BeaconVerifier", beaconVerifierCode],
   ] as const) {
     if (!deployed(code)) throw new Error(`${label} has no deployed bytecode.`);
   }
@@ -94,6 +97,7 @@ export async function validateTokenlessDeploymentOnChain(
     maximumCommits,
     bonusIssuerRaw,
     bonusUsdcRaw,
+    panelBeaconVerifierRaw,
   ] = await Promise.all([
     client.readContract({
       address: deployment.panelAddress,
@@ -130,6 +134,11 @@ export async function validateTokenlessDeploymentOnChain(
       abi: feedbackBonusHealthAbi,
       functionName: "usdc",
     }),
+    client.readContract({
+      address: deployment.panelAddress,
+      abi: panelHealthAbi,
+      functionName: "beaconVerifier",
+    }),
   ]);
   const panelIssuer = addressResult(
     panelIssuerRaw,
@@ -141,6 +150,15 @@ export async function validateTokenlessDeploymentOnChain(
     "TokenlessFeedbackBonus credentialIssuer",
   );
   const bonusUsdc = addressResult(bonusUsdcRaw, "TokenlessFeedbackBonus usdc");
+  const panelBeaconVerifier = addressResult(
+    panelBeaconVerifierRaw,
+    "TokenlessPanel beaconVerifier",
+  );
+  if (!isAddressEqual(panelBeaconVerifier, deployment.beaconVerifierAddress)) {
+    throw new Error(
+      "Tokenless panel beacon verifier wiring does not match the deployment identity.",
+    );
+  }
   if (
     !isAddressEqual(panelIssuer, deployment.issuerAddress) ||
     !isAddressEqual(bonusIssuer, deployment.issuerAddress)

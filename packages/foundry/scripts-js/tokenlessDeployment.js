@@ -1,4 +1,4 @@
-import { isAddress, zeroAddress } from "viem";
+import { isAddress, keccak256, zeroAddress } from "viem";
 
 export const TOKENLESS_DEPLOYMENT_SCHEMA = "rateloop-tokenless-deployment-v4";
 export const TOKENLESS_DEPLOYMENT_VERSION = 4;
@@ -34,6 +34,39 @@ function normalizeBlockNumber(value, label) {
     throw new Error(`${label} must be a positive block number.`);
   }
   return parsed;
+}
+
+function normalizeCodeHash(value, label) {
+  if (typeof value !== "string" || !/^0x[0-9a-fA-F]{64}$/u.test(value)) {
+    throw new Error(`${label} must be a 32-byte hex hash.`);
+  }
+  return value.toLowerCase();
+}
+
+export async function attachTokenlessRuntimeCodeEvidence(
+  artifact,
+  { getBytecode },
+) {
+  const evidenced = structuredClone(artifact);
+  for (const [name, contract] of Object.entries(evidenced.contracts)) {
+    const code = await getBytecode(contract.address);
+    if (typeof code !== "string" || !/^0x(?:[0-9a-fA-F]{2})+$/u.test(code)) {
+      throw new Error(`${name} has no exact deployed runtime bytecode.`);
+    }
+    contract.runtimeCodeHash = keccak256(code).toLowerCase();
+  }
+  const beaconCode = await getBytecode(evidenced.beaconVerifier);
+  if (
+    typeof beaconCode !== "string" ||
+    !/^0x(?:[0-9a-fA-F]{2})+$/u.test(beaconCode)
+  ) {
+    throw new Error("BeaconVerifier has no exact deployed runtime bytecode.");
+  }
+  evidenced.beaconVerifierRuntimeCodeHash = keccak256(beaconCode).toLowerCase();
+  evidenced.runtimeCodeEvidenceComplete = true;
+  return validateTokenlessDeploymentArtifact(evidenced, {
+    requireRuntimeCodeEvidence: true,
+  });
 }
 
 function transactionHash(transaction, label = "Transaction") {
@@ -247,7 +280,7 @@ export function reconstructTokenlessDeploymentFromBroadcast(
   }
 
   if (
-    panel.arguments.length < 2 ||
+    panel.arguments.length < 3 ||
     !sameAddress(panel.arguments[0], testUsdc.address) ||
     !sameAddress(panel.arguments[1], credentialIssuer.address)
   ) {
@@ -255,6 +288,10 @@ export function reconstructTokenlessDeploymentFromBroadcast(
       "TokenlessPanel constructor wiring must match the exported TestUSDC and CredentialIssuer addresses.",
     );
   }
+  const beaconVerifier = normalizeAddress(
+    panel.arguments[2],
+    "TokenlessPanel beacon verifier",
+  );
 
   if (
     x402PanelSubmitter &&
@@ -306,6 +343,7 @@ export function reconstructTokenlessDeploymentFromBroadcast(
     chainId,
     deploymentBlockNumber,
     deploymentKey,
+    beaconVerifier,
     contracts,
     testCurrency: {
       contract: "TestUSDC",
@@ -316,7 +354,10 @@ export function reconstructTokenlessDeploymentFromBroadcast(
   });
 }
 
-export function validateTokenlessDeploymentArtifact(artifact) {
+export function validateTokenlessDeploymentArtifact(
+  artifact,
+  { requireRuntimeCodeEvidence = false } = {},
+) {
   if (!artifact || typeof artifact !== "object") {
     throw new Error("Tokenless deployment artifact must be an object.");
   }
@@ -342,6 +383,20 @@ export function validateTokenlessDeploymentArtifact(artifact) {
     throw new Error("Tokenless deployment artifact is not for Base Sepolia.");
   }
   normalizeBlockNumber(artifact.deploymentBlockNumber, "deploymentBlockNumber");
+  normalizeAddress(artifact.beaconVerifier, "beaconVerifier");
+  if (artifact.beaconVerifierRuntimeCodeHash !== undefined) {
+    normalizeCodeHash(
+      artifact.beaconVerifierRuntimeCodeHash,
+      "beaconVerifierRuntimeCodeHash",
+    );
+  }
+  if (
+    requireRuntimeCodeEvidence &&
+    (artifact.runtimeCodeEvidenceComplete !== true ||
+      artifact.beaconVerifierRuntimeCodeHash === undefined)
+  ) {
+    throw new Error("Tokenless deployment runtime bytecode evidence is incomplete.");
+  }
 
   const contracts = artifact.contracts;
   if (!contracts || typeof contracts !== "object") {
@@ -363,6 +418,11 @@ export function validateTokenlessDeploymentArtifact(artifact) {
     normalizeBlockNumber(contract.deployedOnBlock, `${name} deployedOnBlock`);
     if (typeof contract.artifact !== "string" || !contract.artifact) {
       throw new Error(`${name} artifact name is missing.`);
+    }
+    if (contract.runtimeCodeHash !== undefined) {
+      normalizeCodeHash(contract.runtimeCodeHash, `${name} runtimeCodeHash`);
+    } else if (requireRuntimeCodeEvidence) {
+      throw new Error(`${name} runtimeCodeHash is missing.`);
     }
   }
   if (contracts.X402PanelSubmitter) {
@@ -416,7 +476,9 @@ export function validateTokenlessDeploymentArtifact(artifact) {
 
 export function serializeTokenlessDeploymentArtifact(artifact) {
   return `${JSON.stringify(
-    validateTokenlessDeploymentArtifact(artifact),
+    validateTokenlessDeploymentArtifact(artifact, {
+      requireRuntimeCodeEvidence: true,
+    }),
     null,
     2,
   )}\n`;

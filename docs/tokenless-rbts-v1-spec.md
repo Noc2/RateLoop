@@ -1,7 +1,8 @@
 # Tokenless RBTS v1 Scoring Specification
 
-**Status:** Current mechanism specification, implemented in the disposable tokenless v3 test deployment. Real-money
-use remains gated by the production-readiness register.
+**Status:** Current mechanism specification for the undeployed tokenless v4 source. The historical disposable v3
+deployment still uses the superseded future-blockhash entropy path. Real-money use remains gated by a fresh atomic
+deployment, an audited beacon verifier, and the production-readiness register.
 **Scoring version:** `2`  
 **Mechanism identifier:** `tokenless-rbts-v1`  
 **Fund core:** immutable and adminless; no LREP, stake, governance, payout oracle, or operator scoring input
@@ -32,17 +33,18 @@ Reveal(uint256 roundId,address voteKey,uint8 vote,uint16 predictedUpBps,
 
 ## Post-closure entropy and set binding
 
-`beginSettlement` is permissionless after the reveal deadline and fixes `entropyBlock = block.number + 1`. After the
-order-independent reveal-set commitment is complete, anyone finalizes the seed from that exact future block:
+Round terms freeze `beaconNetworkHash` and `beaconRound` before any commit. After the order-independent reveal-set
+commitment is complete, anyone submits the exact public-beacon randomness and proof:
 
 ```text
-entropy = blockhash(entropyBlock)
+verifyBeacon(beaconNetworkHash, beaconRound, randomness, proof) = true
 ```
 
-The seed cannot be finalized until `block.number > entropyBlock`. If the exact hash is unavailable after the EVM
-block-hash retention window, the round takes the deterministic base-only fallback and refunds every unused bonus. The
-public evidence names `base-future-blockhash-v1`; the Base sequencer can still influence block production, so it must
-not be called unbiasable. Before mainnet or material-value use, replace it with a reviewed verifiable beacon.
+`TokenlessPanel` holds an immutable verifier address. A verifier revert, false result, zero randomness, or malformed
+proof leaves the round unchanged; caller-selected or operator-signed entropy is never accepted. If verified randomness
+remains unavailable after `beaconFailureDeadline`, anyone may invoke the deterministic base-only fallback. Every
+revealer then earns the fixed base and every unused bonus returns to the funder. A deployment must bind the panel to a
+reviewed verifier for the exact drand network; the test-only mock verifier is forbidden outside local tests.
 
 Aggregation builds an order-independent reveal-set commitment from both the XOR and modular sum of
 `keccak256(abi.encode(commitKey))`. After aggregation:
@@ -56,7 +58,7 @@ scoringSeed = keccak256(
   frozenRevealCount,
   revealSetXor,
   revealSetSum,
-  entropy
+  randomness
 )
 ```
 
@@ -73,9 +75,9 @@ rank(candidate) = (keccak256(scoringSeed, candidateCommitKey), candidateCommitKe
 
 Sort ascending by the tuple. A rater's next entry, wrapping at the end, is the reference; the next-next entry is the
 peer. This canonical hash-rank permutation is order-independent, excludes self, keeps the two roles distinct, uses each
-report exactly once in each role, and is directly recomputable. Solidity finds the two successors by scanning the
-frozen set. The path is quadratic in panel size but outer processing remains paginated; deployment limits and gas
-benchmarks must cap the maximum panel size.
+report exactly once in each role, and is directly recomputable. After beacon verification, Solidity heap-sorts the
+frozen set once in deterministic O(n log n) time and persists the canonical order. Paginated scoring then resolves both
+successors in O(1) per report, making the full assignment and scoring path O(n log n).
 
 ### Maximum-panel settlement gas budget
 
@@ -90,14 +92,14 @@ With Solidity 0.8.35, Cancun EVM, `via_ir`, optimizer runs 100, and the checked-
 | --- | ---: | ---: | ---: |
 | `beginSettlement` | 1 | 27,992 | 200,000 |
 | `processAggregate` | 20 | 82,819 | 250,000 per page |
-| `finalizeScoringSeed` | 1 | 26,724 | 200,000 |
-| `processScores` | 20 | 30,243,220 | 35,000,000 per page |
-| `finalizeSettlement` | 1 | 99,802 | 250,000 |
+| `finalizeScoringSeed` (including canonical heap sort) | 1 | 7,877,543 | 10,000,000 |
+| `processScores` | 20 | 1,872,040 | 2,500,000 per page |
+| `finalizeSettlement` | 1 | 99,846 | 250,000 |
 
-The measured lifecycle total is 603,376,152 gas after the 100,000-gas allowance for each of 43 transactions. CI caps
-the total at 650,000,000 gas. These are regression ceilings, not a claim that the current quadratic implementation is
-economically suitable for mainnet; any compiler, page-size, or contract change must rerun and deliberately reapprove
-the benchmark.
+The measured scoring-page total is 36,695,913 gas and the measured lifecycle total is 49,874,296 gas after the
+100,000-gas allowance for each of 43 transactions. CI caps the total at 60,000,000 gas. Every individual call remains
+below its transaction ceiling. Any compiler, page-size, verifier, or contract change must rerun and deliberately
+reapprove the benchmark; L1 data fees and the external verifier's own proof-registration costs remain separate.
 
 ## Score
 

@@ -126,6 +126,34 @@ library TokenlessRbts {
         return uint256(leftKey) < uint256(rightKey);
     }
 
+    /// @notice Sort the exact frozen reveal set by the canonical `(rankHash, commitKey)` tuple.
+    /// @dev Heap sort is deterministic O(n log n), in-place in memory, and has bounded stack usage.
+    ///      The fund core persists this order once, after the beacon proof is verified, so each
+    ///      later score requires only constant-time successor lookups.
+    function sortCanonical(bytes32 seed, bytes32[] memory commitKeys) internal pure {
+        uint256 length = commitKeys.length;
+        if (length < 3) revert InvalidRevealSet();
+
+        bytes32[] memory rankHashes = new bytes32[](length);
+        for (uint256 i; i < length; ++i) {
+            rankHashes[i] = rankHash(seed, commitKeys[i]);
+        }
+
+        for (uint256 start = length / 2; start > 0;) {
+            unchecked {
+                --start;
+            }
+            _siftDown(commitKeys, rankHashes, start, length);
+        }
+        for (uint256 end = length - 1; end > 0;) {
+            _swap(commitKeys, rankHashes, 0, end);
+            _siftDown(commitKeys, rankHashes, 0, end);
+            unchecked {
+                --end;
+            }
+        }
+    }
+
     /// @notice Find the next and next-next reports in the canonical circular hash-rank ordering.
     /// @dev `revealedCommitKeys` must be the frozen set of distinct commit keys. The scan is O(n), so the
     ///      integrating fund core must retain a tested maximum panel-size bound and paginate outer scoring.
@@ -174,6 +202,28 @@ library TokenlessRbts {
         if (!right.set) return true;
         if (left.wraps != right.wraps) return !left.wraps;
         return rankBefore(left.rankHash, left.commitKey, right.rankHash, right.commitKey);
+    }
+
+    function _siftDown(bytes32[] memory keys, bytes32[] memory hashes, uint256 root, uint256 length) private pure {
+        while (true) {
+            uint256 child = root * 2 + 1;
+            if (child >= length) return;
+
+            uint256 selected = root;
+            if (rankBefore(hashes[selected], keys[selected], hashes[child], keys[child])) selected = child;
+            if (child + 1 < length && rankBefore(hashes[selected], keys[selected], hashes[child + 1], keys[child + 1]))
+            {
+                selected = child + 1;
+            }
+            if (selected == root) return;
+            _swap(keys, hashes, root, selected);
+            root = selected;
+        }
+    }
+
+    function _swap(bytes32[] memory keys, bytes32[] memory hashes, uint256 left, uint256 right) private pure {
+        (keys[left], keys[right]) = (keys[right], keys[left]);
+        (hashes[left], hashes[right]) = (hashes[right], hashes[left]);
     }
 
     function _requireUserPrediction(uint16 predictedUpBps) private pure {
