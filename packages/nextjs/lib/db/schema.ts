@@ -21,12 +21,24 @@ export const tokenlessAgentQuotes = pgTable(
     requestHash: text("request_hash").notNull(),
     requestJson: text("request_json").notNull(),
     responseJson: text("response_json").notNull(),
+    ownerPrincipalId: text("owner_principal_id"),
+    ownerWorkspaceId: text("owner_workspace_id"),
+    ownerApiKeyId: text("owner_api_key_id"),
     expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
   },
   table => ({
     expiresAtIdx: index("tokenless_agent_quotes_expires_at_idx").on(table.expiresAt),
     requestHashIdx: index("tokenless_agent_quotes_request_hash_idx").on(table.requestHash),
+    principalExpiryIdx: index("tokenless_agent_quotes_principal_expiry_idx").on(
+      table.ownerPrincipalId,
+      table.expiresAt,
+    ),
+    apiKeyExpiryIdx: index("tokenless_agent_quotes_api_key_expiry_idx").on(
+      table.ownerWorkspaceId,
+      table.ownerApiKeyId,
+      table.expiresAt,
+    ),
   }),
 );
 
@@ -102,6 +114,50 @@ export const tokenlessAuthSessions = pgTable(
     accountAddressIdx: index("tokenless_auth_sessions_account_address_idx").on(table.accountAddress),
     expiresAtIdx: index("tokenless_auth_sessions_expires_at_idx").on(table.expiresAt),
     principalIdx: index("tokenless_auth_sessions_principal_idx").on(table.principalId, table.expiresAt),
+  }),
+);
+
+export const tokenlessRecentAccountActionProofs = pgTable(
+  "tokenless_recent_account_action_proofs",
+  {
+    proofHash: text("proof_hash").primaryKey(),
+    principalId: text("principal_id")
+      .notNull()
+      .references(() => tokenlessPrincipals.principalId, { onDelete: "cascade" }),
+    action: text("action").notNull(),
+    betterAuthUserId: text("better_auth_user_id").notNull(),
+    authenticationMethod: text("authentication_method"),
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { mode: "date", withTimezone: true }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    principalActionUnique: uniqueIndex("tokenless_recent_account_action_proofs_principal_action_unique").on(
+      table.principalId,
+      table.action,
+    ),
+  }),
+);
+
+export const tokenlessPasskeyActionProofs = pgTable(
+  "tokenless_passkey_action_proofs",
+  {
+    proofHash: text("proof_hash").primaryKey(),
+    principalId: text("principal_id")
+      .notNull()
+      .references(() => tokenlessPrincipals.principalId, { onDelete: "cascade" }),
+    betterAuthUserId: text("better_auth_user_id").notNull(),
+    action: text("action").notNull(),
+    authenticationMethod: text("authentication_method"),
+    expiresAt: timestamp("expires_at", { mode: "date", withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { mode: "date", withTimezone: true }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    principalActionUnique: uniqueIndex("tokenless_passkey_action_proofs_principal_action_unique").on(
+      table.principalId,
+      table.action,
+    ),
   }),
 );
 
@@ -1463,3 +1519,165 @@ export type TokenlessAgentExecution = typeof tokenlessAgentExecutions.$inferSele
 export type NewTokenlessAgentExecution = typeof tokenlessAgentExecutions.$inferInsert;
 export type TokenlessAgentGenerationSpan = typeof tokenlessAgentGenerationSpans.$inferSelect;
 export type NewTokenlessAgentGenerationSpan = typeof tokenlessAgentGenerationSpans.$inferInsert;
+
+export const tokenlessPaidAssignmentOperations = pgTable(
+  "tokenless_paid_assignment_operations",
+  {
+    operationId: text("operation_id").primaryKey(),
+    workspaceId: text("workspace_id").notNull(),
+    opportunityId: text("opportunity_id").notNull(),
+    lane: text("lane").notNull(),
+    apiKeyId: text("api_key_id").notNull(),
+    publishingPolicyId: text("publishing_policy_id").notNull(),
+    publishingPolicyVersion: integer("publishing_policy_version").notNull(),
+    requestIdempotencyKey: text("request_idempotency_key").notNull(),
+    requestHash: text("request_hash").notNull(),
+    preparedRequestHash: text("prepared_request_hash").notNull(),
+    economicsHash: text("economics_hash").notNull(),
+    reviewerSetHash: text("reviewer_set_hash").notNull(),
+    audiencePolicyHash: text("audience_policy_hash").notNull(),
+    chainAdmissionPolicyHash: text("chain_admission_policy_hash").notNull(),
+    admissionPolicyJson: text("admission_policy_json").notNull(),
+    artifactCommitmentsJson: text("artifact_commitments_json").notNull(),
+    artifactBindingHash: text("artifact_binding_hash").notNull(),
+    expectedAmountAtomic: numeric("expected_amount_atomic", { precision: 78, scale: 0 }).notNull(),
+    state: text("state").notNull().default("prepared"),
+    transitionRevision: integer("transition_revision").notNull().default(1),
+    activationOwner: text("activation_owner"),
+    activationExpiresAt: timestamp("activation_expires_at", { mode: "date", withTimezone: true }),
+    activationAttemptCount: integer("activation_attempt_count").notNull().default(0),
+    lastErrorCode: text("last_error_code"),
+    quoteId: text("quote_id").references(() => tokenlessAgentQuotes.quoteId, { onDelete: "restrict" }),
+    quoteExpiresAt: timestamp("quote_expires_at", { mode: "date", withTimezone: true }),
+    askOperationKey: text("ask_operation_key").references(() => tokenlessAgentAsks.operationKey, {
+      onDelete: "restrict",
+    }),
+    prepaidReservationId: text("prepaid_reservation_id"),
+    policyReservationId: text("policy_reservation_id"),
+    deploymentKey: text("deployment_key"),
+    chainId: integer("chain_id"),
+    panelAddress: text("panel_address"),
+    roundId: numeric("round_id", { precision: 78, scale: 0 }),
+    contentId: text("content_id"),
+    termsHash: text("terms_hash"),
+    roundTermsHash: text("round_terms_hash"),
+    paymentMode: text("payment_mode"),
+    paymentReference: text("payment_reference"),
+    commitDeadline: timestamp("commit_deadline", { mode: "date", withTimezone: true }),
+    confirmedAt: timestamp("confirmed_at", { mode: "date", withTimezone: true }),
+    boundAt: timestamp("bound_at", { mode: "date", withTimezone: true }),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    askUnique: uniqueIndex("tokenless_paid_assignment_operations_ask_unique").on(table.askOperationKey),
+    quoteUnique: uniqueIndex("tokenless_paid_assignment_operations_quote_unique").on(table.quoteId),
+    activationIdx: index("tokenless_paid_assignment_operations_activation_idx").on(
+      table.activationExpiresAt,
+      table.state,
+      table.operationId,
+    ),
+    opportunityLaneUnique: uniqueIndex("tokenless_paid_assignment_operations_opportunity_lane_unique").on(
+      table.workspaceId,
+      table.opportunityId,
+      table.lane,
+    ),
+    stateIdx: index("tokenless_paid_assignment_operations_state_idx").on(
+      table.state,
+      table.updatedAt,
+      table.operationId,
+    ),
+    workspaceRequestUnique: uniqueIndex("tokenless_paid_assignment_operations_workspace_request_unique").on(
+      table.workspaceId,
+      table.requestIdempotencyKey,
+    ),
+  }),
+);
+
+export const tokenlessPaidAssignmentSeats = pgTable(
+  "tokenless_paid_assignment_seats",
+  {
+    seatId: text("seat_id").primaryKey(),
+    operationId: text("operation_id")
+      .notNull()
+      .references(() => tokenlessPaidAssignmentOperations.operationId, { onDelete: "restrict" }),
+    position: integer("position").notNull(),
+    reviewerPrincipalId: text("reviewer_principal_id"),
+    raterId: text("rater_id"),
+    payoutAccount: text("payout_account"),
+    identityCommitment: text("identity_commitment").notNull(),
+    identityErasedAt: timestamp("identity_erased_at", { mode: "date", withTimezone: true }),
+    identityErasureReceiptHash: text("identity_erasure_receipt_hash"),
+    assignmentId: text("assignment_id"),
+    voucherIssuanceId: text("voucher_issuance_id"),
+    state: text("state").notNull().default("planned"),
+    transitionRevision: integer("transition_revision").notNull().default(0),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    assignmentUnique: uniqueIndex("tokenless_paid_assignment_seats_assignment_unique").on(table.assignmentId),
+    operationPayoutUnique: uniqueIndex("tokenless_paid_assignment_seats_operation_payout_unique").on(
+      table.operationId,
+      table.payoutAccount,
+    ),
+    operationPositionUnique: uniqueIndex("tokenless_paid_assignment_seats_operation_position_unique").on(
+      table.operationId,
+      table.position,
+    ),
+    operationPrincipalUnique: uniqueIndex("tokenless_paid_assignment_seats_operation_principal_unique").on(
+      table.operationId,
+      table.reviewerPrincipalId,
+    ),
+    stateIdx: index("tokenless_paid_assignment_seats_state_idx").on(table.operationId, table.state, table.position),
+    voucherIssuanceUnique: uniqueIndex("tokenless_paid_assignment_seats_voucher_issuance_unique").on(
+      table.voucherIssuanceId,
+    ),
+  }),
+);
+
+export const tokenlessPaidAssignmentReceipts = pgTable(
+  "tokenless_paid_assignment_receipts",
+  {
+    receiptId: text("receipt_id").primaryKey(),
+    operationId: text("operation_id")
+      .notNull()
+      .references(() => tokenlessPaidAssignmentOperations.operationId, { onDelete: "restrict" }),
+    seatId: text("seat_id").references(() => tokenlessPaidAssignmentSeats.seatId, { onDelete: "restrict" }),
+    sequence: integer("sequence").notNull(),
+    operationRevision: integer("operation_revision"),
+    seatRevision: integer("seat_revision"),
+    receiptType: text("receipt_type").notNull(),
+    receiptVersion: integer("receipt_version").notNull(),
+    receiptJson: text("receipt_json").notNull(),
+    receiptHash: text("receipt_hash").notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    hashUnique: uniqueIndex("tokenless_paid_assignment_receipts_hash_unique").on(table.receiptHash),
+    operationSequenceUnique: uniqueIndex("tokenless_paid_assignment_receipts_operation_sequence_unique").on(
+      table.operationId,
+      table.sequence,
+    ),
+    operationRevisionUnique: uniqueIndex("tokenless_paid_assignment_receipts_operation_revision_unique").on(
+      table.operationId,
+      table.operationRevision,
+    ),
+    seatRevisionUnique: uniqueIndex("tokenless_paid_assignment_receipts_seat_revision_unique").on(
+      table.seatId,
+      table.seatRevision,
+    ),
+    timelineIdx: index("tokenless_paid_assignment_receipts_timeline_idx").on(
+      table.operationId,
+      table.createdAt,
+      table.sequence,
+    ),
+  }),
+);
+
+export type TokenlessPaidAssignmentOperation = typeof tokenlessPaidAssignmentOperations.$inferSelect;
+export type NewTokenlessPaidAssignmentOperation = typeof tokenlessPaidAssignmentOperations.$inferInsert;
+export type TokenlessPaidAssignmentSeat = typeof tokenlessPaidAssignmentSeats.$inferSelect;
+export type NewTokenlessPaidAssignmentSeat = typeof tokenlessPaidAssignmentSeats.$inferInsert;
+export type TokenlessPaidAssignmentReceipt = typeof tokenlessPaidAssignmentReceipts.$inferSelect;
+export type NewTokenlessPaidAssignmentReceipt = typeof tokenlessPaidAssignmentReceipts.$inferInsert;

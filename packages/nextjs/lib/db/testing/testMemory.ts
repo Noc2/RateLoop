@@ -51,8 +51,10 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
       "0094_assurance_override_decisions.sql",
       "0099_agent_per_request_review_questions.sql",
       "0100_workspace_expertise_definitions.sql",
+      "0120_private_quote_ownership.sql",
+      "0121_paid_assignment_operations.sql",
     ].includes(file) &&
-    (/^CREATE OR REPLACE FUNCTION/u.test(statement) || /^CREATE TRIGGER/u.test(statement))
+    (/\bCREATE OR REPLACE FUNCTION\b/u.test(statement) || /\bCREATE (?:CONSTRAINT )?TRIGGER\b/u.test(statement))
   ) {
     // pg-mem does not implement PostgreSQL trigger functions. The production
     // migration installs the append-only guard; migration source tests cover it.
@@ -168,6 +170,25 @@ export function createMemoryDatabaseResources(): DatabaseResources {
     args: [DataType.jsonb],
     returns: DataType.integer,
     implementation: value => (Array.isArray(value) ? value.length : 0),
+  });
+  memoryDb.public.registerFunction({
+    name: "jsonb_build_object",
+    args: [DataType.text, DataType.text, DataType.text, DataType.text],
+    returns: DataType.jsonb,
+    implementation: (firstKey, firstValue, secondKey, secondValue) => ({
+      [firstKey]: firstValue,
+      [secondKey]: secondValue,
+    }),
+  });
+  memoryDb.public.registerFunction({
+    name: "jsonb_build_object",
+    args: [DataType.text, DataType.text, DataType.text, DataType.text, DataType.text, DataType.text],
+    returns: DataType.jsonb,
+    implementation: (firstKey, firstValue, secondKey, secondValue, thirdKey, thirdValue) => ({
+      [firstKey]: firstValue,
+      [secondKey]: secondValue,
+      [thirdKey]: thirdValue,
+    }),
   });
   memoryDb.public.registerFunction({
     name: "char_length",
