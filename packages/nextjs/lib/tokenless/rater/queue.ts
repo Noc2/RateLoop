@@ -1,13 +1,14 @@
 const QUEUE_DB_NAME = "rateloop-tokenless-rater";
-const QUEUE_DB_VERSION = 1;
+const QUEUE_DB_VERSION = 2;
 const QUEUE_STORE = "commit-queue";
 const MAX_QUEUE_RECORD_BYTES = 32_768;
 const MAX_RETRY_DELAY_MS = 30_000;
 const FORBIDDEN_SECRET_KEYS = new Set(["votePrivateKey", "payoutPrivateKey", "salt", "payoutAddress", "reveal"]);
 
 export type TokenlessQueuedCommit = {
-  schemaVersion: "rateloop.tokenless.commit-queue.v1";
+  schemaVersion: "rateloop.tokenless.commit-queue.v2";
   queueId: string;
+  principalId: string;
   roundId: string;
   commitDeadline: string;
   relayPayload: Record<string, unknown>;
@@ -18,10 +19,10 @@ export type TokenlessQueuedCommit = {
 };
 
 export interface TokenlessCommitQueueStore {
-  get(queueId: string): Promise<TokenlessQueuedCommit | null>;
-  list(): Promise<TokenlessQueuedCommit[]>;
+  get(queueId: string, principalId: string): Promise<TokenlessQueuedCommit | null>;
+  list(principalId: string): Promise<TokenlessQueuedCommit[]>;
   put(record: TokenlessQueuedCommit): Promise<void>;
-  remove(queueId: string): Promise<void>;
+  remove(queueId: string, principalId: string): Promise<void>;
 }
 
 function assertNoSecrets(value: unknown, depth = 0): void {
@@ -40,9 +41,10 @@ function assertNoSecrets(value: unknown, depth = 0): void {
 }
 
 function validateQueuedCommit(record: TokenlessQueuedCommit, now = Date.now()) {
-  if (record.schemaVersion !== "rateloop.tokenless.commit-queue.v1")
+  if (record.schemaVersion !== "rateloop.tokenless.commit-queue.v2")
     throw new Error("Unsupported commit queue record.");
   if (!/^[A-Za-z0-9._:-]{8,160}$/.test(record.queueId)) throw new Error("Invalid commit queue id.");
+  if (!/^[A-Za-z0-9_-]{8,160}$/.test(record.principalId)) throw new Error("Invalid commit queue owner.");
   if (!/^[1-9][0-9]*$/.test(record.roundId)) throw new Error("Invalid queued round id.");
   const deadline = Date.parse(record.commitDeadline);
   if (!Number.isFinite(deadline) || deadline <= now) throw new Error("The commit deadline has passed.");
@@ -72,34 +74,41 @@ function transactionDone(transaction: IDBTransaction) {
 async function openQueueDatabase() {
   if (!globalThis.indexedDB) throw new Error("IndexedDB is required for deadline-aware commit recovery.");
   const request = indexedDB.open(QUEUE_DB_NAME, QUEUE_DB_VERSION);
-  request.onupgradeneeded = () => {
+  request.onupgradeneeded = event => {
     const database = request.result;
-    if (!database.objectStoreNames.contains(QUEUE_STORE))
+    if ((event.oldVersion ?? 0) < 2 && database.objectStoreNames.contains(QUEUE_STORE)) {
+      database.deleteObjectStore(QUEUE_STORE);
+    }
+    if (!database.objectStoreNames.contains(QUEUE_STORE)) {
       database.createObjectStore(QUEUE_STORE, { keyPath: "queueId" });
+    }
   };
   return requestResult(request);
 }
 
 export function createIndexedDbTokenlessCommitQueue(): TokenlessCommitQueueStore {
   return {
-    async get(queueId) {
+    async get(queueId, principalId) {
       const database = await openQueueDatabase();
       try {
         const transaction = database.transaction(QUEUE_STORE, "readonly");
         const result = await requestResult(transaction.objectStore(QUEUE_STORE).get(queueId));
         await transactionDone(transaction);
-        return (result as TokenlessQueuedCommit | undefined) ?? null;
+        const record = (result as TokenlessQueuedCommit | undefined) ?? null;
+        return record?.principalId === principalId ? record : null;
       } finally {
         database.close();
       }
     },
-    async list() {
+    async list(principalId) {
       const database = await openQueueDatabase();
       try {
         const transaction = database.transaction(QUEUE_STORE, "readonly");
         const result = await requestResult(transaction.objectStore(QUEUE_STORE).getAll());
         await transactionDone(transaction);
-        return (result as TokenlessQueuedCommit[]).sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+        return (result as TokenlessQueuedCommit[])
+          .filter(record => record.principalId === principalId)
+          .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
       } finally {
         database.close();
       }
@@ -115,11 +124,13 @@ export function createIndexedDbTokenlessCommitQueue(): TokenlessCommitQueueStore
         database.close();
       }
     },
-    async remove(queueId) {
+    async remove(queueId, principalId) {
       const database = await openQueueDatabase();
       try {
         const transaction = database.transaction(QUEUE_STORE, "readwrite");
-        transaction.objectStore(QUEUE_STORE).delete(queueId);
+        const store = transaction.objectStore(QUEUE_STORE);
+        const existing = (await requestResult(store.get(queueId))) as TokenlessQueuedCommit | undefined;
+        if (existing?.principalId === principalId) store.delete(queueId);
         await transactionDone(transaction);
       } finally {
         database.close();
@@ -132,6 +143,7 @@ export async function enqueueTokenlessCommit(
   store: TokenlessCommitQueueStore,
   input: {
     queueId: string;
+    principalId: string;
     roundId: bigint;
     commitDeadline: Date;
     relayPayload: Record<string, unknown>;
@@ -140,8 +152,9 @@ export async function enqueueTokenlessCommit(
 ) {
   const now = input.now ?? new Date();
   const record: TokenlessQueuedCommit = {
-    schemaVersion: "rateloop.tokenless.commit-queue.v1",
+    schemaVersion: "rateloop.tokenless.commit-queue.v2",
     queueId: input.queueId,
+    principalId: input.principalId,
     roundId: input.roundId.toString(),
     commitDeadline: input.commitDeadline.toISOString(),
     relayPayload: input.relayPayload,
@@ -158,14 +171,15 @@ export async function enqueueTokenlessCommit(
 export async function recordTokenlessCommitRelayFailure(
   store: TokenlessCommitQueueStore,
   queueId: string,
+  principalId: string,
   errorCode: string,
   now = new Date(),
 ) {
-  const record = await store.get(queueId);
+  const record = await store.get(queueId, principalId);
   if (!record) throw new Error("Queued commit was not found.");
   const deadline = Date.parse(record.commitDeadline);
   if (deadline <= now.getTime()) {
-    await store.remove(queueId);
+    await store.remove(queueId, principalId);
     return { expired: true as const, record: null };
   }
   const attempts = record.attempts + 1;
@@ -182,12 +196,12 @@ export async function recordTokenlessCommitRelayFailure(
   return { expired: false as const, record: updated };
 }
 
-export async function dueTokenlessCommits(store: TokenlessCommitQueueStore, now = new Date()) {
-  const records = await store.list();
+export async function dueTokenlessCommits(store: TokenlessCommitQueueStore, principalId: string, now = new Date()) {
+  const records = await store.list(principalId);
   const due: TokenlessQueuedCommit[] = [];
   for (const record of records) {
     if (Date.parse(record.commitDeadline) <= now.getTime()) {
-      await store.remove(record.queueId);
+      await store.remove(record.queueId, principalId);
     } else if (Date.parse(record.nextAttemptAt) <= now.getTime()) {
       due.push(record);
     }

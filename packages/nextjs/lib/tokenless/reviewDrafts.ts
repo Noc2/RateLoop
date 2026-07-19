@@ -1,6 +1,6 @@
 const PREFIX = "rateloop:review-draft:v2:";
 const LEGACY_PREFIX = "rateloop:review-draft:v1:";
-const ACTIVE_PRIVATE_PRINCIPAL_KEY = `${PREFIX}private-principal`;
+const activePrincipalKey = (lane: DraftLane) => `${PREFIX}${lane}-principal`;
 const MAX_DRAFT_BYTES = 64 * 1024;
 const MAX_DRAFTS = 20;
 
@@ -22,7 +22,7 @@ export type ReviewDraftStorage = {
 };
 
 function key(lane: DraftLane, id: string, principalId: string | null) {
-  const owner = lane === "private" ? encodeURIComponent(principalId ?? "missing") : "public";
+  const owner = encodeURIComponent(principalId ?? "missing");
   return `${PREFIX}${lane}:${owner}:${encodeURIComponent(id)}`;
 }
 
@@ -49,12 +49,13 @@ function removeMatching(storage: Storage, predicate: (candidate: string) => bool
   for (const candidate of removals) storage.removeItem(candidate);
 }
 
-function preparePrivateStorage(storage: Storage, legacyStorage: Storage | null, principalId: string) {
-  if (legacyStorage) removeMatching(legacyStorage, candidate => candidate.startsWith(`${LEGACY_PREFIX}private:`));
-  const activePrincipal = storage.getItem(ACTIVE_PRIVATE_PRINCIPAL_KEY);
+function prepareStorage(lane: DraftLane, storage: Storage, legacyStorage: Storage | null, principalId: string) {
+  if (legacyStorage) removeMatching(legacyStorage, candidate => candidate.startsWith(`${LEGACY_PREFIX}${lane}:`));
+  const principalKey = activePrincipalKey(lane);
+  const activePrincipal = storage.getItem(principalKey);
   if (activePrincipal !== principalId) {
-    removeMatching(storage, candidate => candidate.startsWith(`${PREFIX}private:`));
-    storage.setItem(ACTIVE_PRIVATE_PRINCIPAL_KEY, principalId);
+    removeMatching(storage, candidate => candidate.startsWith(`${PREFIX}${lane}:`));
+    storage.setItem(principalKey, principalId);
   }
 }
 
@@ -75,14 +76,14 @@ export function loadReviewDraft<Value>(
   options: ReviewDraftStorage = {},
 ) {
   const principalId = options.principalId?.trim() || null;
-  if (lane === "private" && !principalId) return null;
+  if (!principalId) return null;
   const storage = resolveStorage(lane, options);
   if (!storage) return null;
   const legacyStorage = options.legacyStorage === undefined ? browserLegacyStorage() : options.legacyStorage;
   const now = options.now ?? new Date();
   const storageKey = key(lane, id, principalId);
   try {
-    if (lane === "private") preparePrivateStorage(storage, legacyStorage, principalId!);
+    prepareStorage(lane, storage, legacyStorage, principalId);
     const encoded = storage.getItem(storageKey);
     if (!encoded || encoded.length > MAX_DRAFT_BYTES) {
       if (encoded) storage.removeItem(storageKey);
@@ -107,7 +108,7 @@ export function loadReviewDraft<Value>(
 
 export function saveReviewDraft(lane: DraftLane, id: string, value: unknown, options: ReviewDraftStorage = {}) {
   const principalId = options.principalId?.trim() || null;
-  if (lane === "private" && !principalId) return false;
+  if (!principalId) return false;
   const storage = resolveStorage(lane, options);
   if (!storage) return false;
   const legacyStorage = options.legacyStorage === undefined ? browserLegacyStorage() : options.legacyStorage;
@@ -115,7 +116,7 @@ export function saveReviewDraft(lane: DraftLane, id: string, value: unknown, opt
   const expiresAt = options.expiresAt ?? null;
   const storageKey = key(lane, id, principalId);
   try {
-    if (lane === "private") preparePrivateStorage(storage, legacyStorage, principalId!);
+    prepareStorage(lane, storage, legacyStorage, principalId);
     if ((lane === "private" && expiresAt === null) || !validExpiry(expiresAt, now)) {
       storage.removeItem(storageKey);
       return false;
@@ -155,7 +156,7 @@ export function saveReviewDraft(lane: DraftLane, id: string, value: unknown, opt
 
 export function clearReviewDraft(lane: DraftLane, id: string, options: ReviewDraftStorage = {}) {
   const principalId = options.principalId?.trim() || null;
-  if (lane === "private" && !principalId) return;
+  if (!principalId) return;
   try {
     resolveStorage(lane, options)?.removeItem(key(lane, id, principalId));
   } catch {

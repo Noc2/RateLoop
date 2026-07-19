@@ -20,16 +20,17 @@ test("public rating progressively collects feedback without LREP and hides the a
 });
 
 test("an already reserved voucher retries the prepared device queue and waits for confirmation", () => {
-  assert.match(source, /createIndexedDbTokenlessCommitQueue\(\)\s*\.list\(\)/);
+  assert.match(source, /createIndexedDbTokenlessCommitQueue\(\)\s*\.list\(principalId\)/);
   assert.match(source, /Retry submission/);
   assert.match(source, /\/api\/rater\/commits\/\$\{encodeURIComponent/);
   assert.match(source, /Confirmation is pending/);
-  assert.match(source, /remove\(savedCommit\.queueId\)/);
+  assert.match(source, /remove\(savedCommit\.queueId, principalId\)/);
   assert.match(source, /<ReviewerShell/);
   assert.match(source, /<DeadlineChip/);
   assert.match(source, /loadReviewDraft\("public"/);
-  assert.match(source, /saveReviewDraft\("public"/);
+  assert.match(source, /saveReviewDraft\(\s*"public"/);
   assert.match(source, /clearReviewDraft\("public"/);
+  assert.match(source, /publicDraftStorage = useMemo\(\(\) => \(\{ principalId \}\)/);
   assert.match(source, /generateDeviceRecoverySecret\(\)/);
   assert.match(source, /readBrowserSession\(\)/);
   assert.match(source, /principalId: browserSession\.principalId/);

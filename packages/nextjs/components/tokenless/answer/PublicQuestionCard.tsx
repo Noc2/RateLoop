@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { Hex } from "viem";
 import { type PublicQuestionMedia, QuestionMedia } from "~~/components/tokenless/answer/QuestionMedia";
@@ -152,6 +152,7 @@ export function PublicQuestionCard({
   task,
   paidAccess,
   onSubmitted,
+  principalId,
 }: {
   task: PublicAnswerTask;
   paidAccess: PaidTaskAccess;
@@ -185,9 +186,10 @@ export function PublicQuestionCard({
     sourceUrl,
   });
   const activePreparedSubmission = preparedSubmission?.binding === preparationBinding ? preparedSubmission : null;
+  const publicDraftStorage = useMemo(() => ({ principalId }), [principalId]);
 
   useEffect(() => {
-    const draft = loadReviewDraft("public", task.roundId, isPublicReviewDraft);
+    const draft = loadReviewDraft("public", task.roundId, isPublicReviewDraft, publicDraftStorage);
     if (draft) {
       setAnswer(draft.answer);
       setPrediction(draft.prediction);
@@ -197,12 +199,17 @@ export function PublicQuestionCard({
       if (draft.feedbackBody || draft.sourceUrl) setFeedbackOpen(true);
     }
     setDraftRestored(true);
-  }, [task.roundId]);
+  }, [publicDraftStorage, task.roundId]);
 
   useEffect(() => {
     if (!draftRestored) return;
-    saveReviewDraft("public", task.roundId, { answer, prediction, feedbackCategory, feedbackBody, sourceUrl });
-  }, [answer, draftRestored, feedbackBody, feedbackCategory, prediction, sourceUrl, task.roundId]);
+    saveReviewDraft(
+      "public",
+      task.roundId,
+      { answer, prediction, feedbackCategory, feedbackBody, sourceUrl },
+      publicDraftStorage,
+    );
+  }, [answer, draftRestored, feedbackBody, feedbackCategory, prediction, publicDraftStorage, sourceUrl, task.roundId]);
 
   useEffect(() => {
     if (!preparedSubmission || preparedSubmission.binding === preparationBinding) return;
@@ -227,7 +234,7 @@ export function PublicQuestionCard({
     if (!task.alreadyVouchered) return;
     let active = true;
     void createIndexedDbTokenlessCommitQueue()
-      .list()
+      .list(principalId)
       .then(records => {
         if (!active) return;
         const record = records.find(value => value.roundId === task.roundId) ?? null;
@@ -242,7 +249,7 @@ export function PublicQuestionCard({
     return () => {
       active = false;
     };
-  }, [task.alreadyVouchered, task.roundId]);
+  }, [principalId, task.alreadyVouchered, task.roundId]);
 
   async function retrySavedCommit() {
     if (!savedCommit) return;
@@ -252,6 +259,14 @@ export function PublicQuestionCard({
     setStatus("Submitting…");
     setTechnicalStatus("Sending the saved transaction and checking confirmation.");
     try {
+      const browserSession = await readBrowserSession();
+      if (!browserSession || browserSession.principalId !== principalId) {
+        setSavedCommit(null);
+        setError("Your account changed. Reopen this review before retrying.");
+        setStatus(null);
+        setTechnicalStatus("Saved submissions are available only to the account that created them.");
+        return;
+      }
       const idempotencyKey = String(savedCommit.relayPayload.idempotencyKey ?? "");
       let committed = await readAnswerJson(
         await fetch("/api/rater/commits", {
@@ -271,9 +286,9 @@ export function PublicQuestionCard({
         );
       }
       if (committed.state === "confirmed") {
-        await createIndexedDbTokenlessCommitQueue().remove(savedCommit.queueId);
+        await createIndexedDbTokenlessCommitQueue().remove(savedCommit.queueId, principalId);
         setSavedCommit(null);
-        clearReviewDraft("public", task.roundId);
+        clearReviewDraft("public", task.roundId, publicDraftStorage);
         setStatus("Recorded");
         setTechnicalStatus("The answer is confirmed. The panel rating stays hidden until settlement.");
         onSubmitted();
@@ -445,6 +460,7 @@ export function PublicQuestionCard({
       const queueId = `commit:${task.roundId}:${authorization.voteKey.toLowerCase()}`;
       const queuedCommit = await enqueueTokenlessCommit(queue, {
         queueId,
+        principalId: browserSession.principalId,
         roundId: authorization.roundId,
         commitDeadline: new Date(task.voucherDeadline),
         relayPayload: {
@@ -485,9 +501,9 @@ export function PublicQuestionCard({
         );
       }
       if (current.state === "confirmed") {
-        await queue.remove(queueId);
+        await queue.remove(queueId, browserSession.principalId);
         setSavedCommit(null);
-        clearReviewDraft("public", task.roundId);
+        clearReviewDraft("public", task.roundId, publicDraftStorage);
         setStatus("Recorded");
         setTechnicalStatus("The answer is confirmed. The panel rating stays hidden until settlement.");
         onSubmitted();

@@ -22,7 +22,7 @@ function isDraft(value: unknown): value is { answer: string } {
 
 test("public review drafts remain versioned, bounded, restored, and cleared", () => {
   const storage = memoryStorage();
-  const options = { storage, legacyStorage: null };
+  const options = { storage, legacyStorage: null, principalId: "rlp_account_a" };
   assert.equal(saveReviewDraft("public", "round-1", { answer: "yes" }, options), true);
   assert.deepEqual(loadReviewDraft("public", "round-1", isDraft, options), { answer: "yes" });
   assert.equal(saveReviewDraft("public", "too-large", { rationale: "x".repeat(70 * 1024) }, options), false);
@@ -40,6 +40,29 @@ test("private drafts are session-scoped and purged when the opaque principal cha
   assert.deepEqual(loadReviewDraft("private", "assignment-1", isDraft, principalA), { answer: "A" });
   assert.equal(loadReviewDraft("private", "assignment-1", isDraft, principalB), null);
   assert.equal(loadReviewDraft("private", "assignment-1", isDraft, principalA), null);
+});
+
+test("public drafts are owner-bound and ownerless legacy records are purged", () => {
+  const storage = memoryStorage();
+  const ownerlessKey = "rateloop:review-draft:v2:public:public:round-1";
+  storage.setItem(
+    ownerlessKey,
+    JSON.stringify({
+      version: 2,
+      savedAt: "2030-01-01T00:00:00.000Z",
+      expiresAt: null,
+      principalId: null,
+      value: { answer: "A's private rationale" },
+    }),
+  );
+  const principalA = { storage, legacyStorage: null, principalId: "rlp_account_a" };
+  const principalB = { storage, legacyStorage: null, principalId: "rlp_account_b" };
+
+  assert.equal(loadReviewDraft("public", "round-1", isDraft, principalA), null);
+  assert.equal(storage.getItem(ownerlessKey), null);
+  assert.equal(saveReviewDraft("public", "round-1", { answer: "yes" }, principalA), true);
+  assert.equal(loadReviewDraft("public", "round-1", isDraft, principalB), null);
+  assert.equal(loadReviewDraft("public", "round-1", isDraft, principalA), null);
 });
 
 test("private drafts expire with their artifact lease and legacy plaintext is purged", () => {
@@ -66,10 +89,10 @@ test("private drafts expire with their artifact lease and legacy plaintext is pu
 
 test("review draft storage retains only the latest twenty records", () => {
   const storage = memoryStorage();
-  const options = { storage, legacyStorage: null };
+  const options = { storage, legacyStorage: null, principalId: "rlp_account_a" };
   for (let index = 0; index < 24; index += 1)
     saveReviewDraft("public", `round-${index}`, { answer: "A" }, { ...options, now: new Date(index * 1_000) });
-  assert.equal(storage.length, 20);
+  assert.equal(storage.length, 21);
   assert.deepEqual(loadReviewDraft("public", "round-23", isDraft, options), { answer: "A" });
   assert.equal(loadReviewDraft("public", "round-0", isDraft, options), null);
 });
