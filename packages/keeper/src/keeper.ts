@@ -7,6 +7,7 @@ import {
   type Hex,
 } from "viem";
 import { getLogsInBlockChunks } from "./block-log-scan.js";
+import { BoundedLruMap } from "./bounded-lru.js";
 import type { config as runtimeConfig } from "./config.js";
 import { resolveTlockClientForDrandChain } from "./drand.js";
 import { isExpectedPanelRaceError } from "./expected-panel-race.js";
@@ -67,8 +68,13 @@ export type RevealDecryptor = (params: {
   maxCiphertextBytes: number;
 }) => Promise<TokenlessRevealMaterial>;
 
-const revealMaterialCache = new Map<string, TokenlessRevealMaterial>();
-const permanentlyInvalidRevealCommits = new Set<string>();
+const MAX_REVEAL_CACHE_ENTRIES = 5_000;
+type RevealCacheEntry =
+  | { state: "valid"; material: TokenlessRevealMaterial }
+  | { state: "invalid" };
+const revealCache = new BoundedLruMap<string, RevealCacheEntry>(
+  MAX_REVEAL_CACHE_ENTRIES,
+);
 let nextScanFeedbackBonusPoolId = 1n;
 
 class InvalidRevealMaterialError extends Error {
@@ -79,8 +85,7 @@ class InvalidRevealMaterialError extends Error {
 }
 
 export function resetTokenlessKeeperStateForTests() {
-  revealMaterialCache.clear();
-  permanentlyInvalidRevealCommits.clear();
+  revealCache.clear();
   resetRoundScanStateForTests();
   nextScanFeedbackBonusPoolId = 1n;
 }
@@ -321,16 +326,16 @@ async function materialForCommit(params: {
   sealedPayload: Hex;
   commit: TokenlessCommit;
 }) {
-  const normalizedCommitKey = params.commitKey.toLowerCase();
-  if (permanentlyInvalidRevealCommits.has(normalizedCommitKey)) {
+  const normalizedCommitKey = `${params.roundId}:${params.commitKey.toLowerCase()}`;
+  const cached = revealCache.get(normalizedCommitKey);
+  if (cached?.state === "invalid") {
     throw new InvalidRevealMaterialError(
       "Tokenless reveal material for this commit was permanently rejected.",
     );
   }
-  const cached = revealMaterialCache.get(normalizedCommitKey);
-  if (cached) {
-    validateRevealMaterial(cached, params.commit, params.roundId);
-    return cached;
+  if (cached?.state === "valid") {
+    validateRevealMaterial(cached.material, params.commit, params.roundId);
+    return cached.material;
   }
   const material = await params.decrypt({
     sealedPayload: params.sealedPayload,
@@ -341,11 +346,11 @@ async function materialForCommit(params: {
     validateRevealMaterial(material, params.commit, params.roundId);
   } catch (error) {
     if (error instanceof InvalidRevealMaterialError) {
-      permanentlyInvalidRevealCommits.add(normalizedCommitKey);
+      revealCache.set(normalizedCommitKey, { state: "invalid" });
     }
     throw error;
   }
-  revealMaterialCache.set(normalizedCommitKey, material);
+  revealCache.set(normalizedCommitKey, { state: "valid", material });
   return material;
 }
 
