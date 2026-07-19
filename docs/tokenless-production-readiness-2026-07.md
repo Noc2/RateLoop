@@ -83,6 +83,11 @@ entropy redesign and O(n²) settlement optimization; per-tenant KMS wrapping aut
 for every hosted signer; named-host verification; live alert, backup, deletion, and incident exercises; and the full
 economics/gold/correlation acceptance package. None may be inferred from the isolated Vercel deployment.
 
+The public Vercel review deployment may retain its existing isolated, persisted test-vault key only when the immutable
+tokenless project ID, review origin, production target, and tokenless Git ref all match. It cannot claim managed-KMS
+residency, cannot share that key with another role, and cannot satisfy the main release gate. The next hosted staging
+release must use the signed managed-KMS inventory below; no placeholder resource identifier counts as provisioning.
+
 ## Gates before the next hosted staging release
 
 1. **Complete managed signing.** Replace hosted hot-key assumptions with reviewed managed signing for credential

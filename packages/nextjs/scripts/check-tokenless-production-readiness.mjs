@@ -296,10 +296,28 @@ function validateManagedKmsInventory(env, errors) {
   }
 }
 
+function validateTokenlessTestVault(env, errors) {
+  const kms = tokenlessEuDeploymentManifest.resources.kms;
+  const localKeyRaw = value(env, "TOKENLESS_ARTIFACT_MASTER_KEY");
+  const managedValues = [kms.providerEnv, kms.regionEnv, kms.resourceIdEnv].map(name => value(env, name));
+  if (localKeyRaw && managedValues.some(Boolean)) {
+    errors.push("Configure exactly one tokenless test vault: the isolated review key or the managed KMS inventory.");
+    return null;
+  }
+  if (localKeyRaw) {
+    const localKey = decode32(localKeyRaw);
+    if (!localKey)
+      errors.push("TOKENLESS_ARTIFACT_MASTER_KEY must encode exactly 32 bytes for the isolated review vault.");
+    return localKey;
+  }
+  validateManagedKmsInventory(env, errors);
+  return null;
+}
+
 function validateTokenlessTestDeployment(env) {
   const errors = [];
   errors.push(...validateHostedDatabaseIdentity(env));
-  validateManagedKmsInventory(env, errors);
+  const isolatedReviewVaultKey = validateTokenlessTestVault(env, errors);
   if (env.VERCEL_ENV !== "production") {
     errors.push("The tokenless test deployment may run only as the isolated project's production target.");
   }
@@ -338,6 +356,7 @@ function validateTokenlessTestDeployment(env) {
     errors.push("TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET must encode exactly 32 bytes.");
   }
   const testSecretRoles = new Map();
+  addSecretRole(testSecretRoles, "TOKENLESS_ARTIFACT_MASTER_KEY", isolatedReviewVaultKey);
   addSecretRole(testSecretRoles, "TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET", previewSecret);
   const goldVersion = value(env, "TOKENLESS_GOLD_INJECTION_KEY_VERSION");
   const goldKeys = value(env, "TOKENLESS_GOLD_INJECTION_KEYS");

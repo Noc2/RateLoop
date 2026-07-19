@@ -299,6 +299,36 @@ test("the tokenless hosted gate pins KMS inventory to the signed EU manifest", (
   );
 });
 
+test("the isolated review deployment may retain its existing local vault without weakening the main release gate", () => {
+  const env = {
+    VERCEL: "1",
+    VERCEL_ENV: "production",
+    VERCEL_PROJECT_ID: "prj_H6C2pfWKEAupFroHbLfzhquaNCLm",
+    VERCEL_PROJECT_NAME: "rateloop-tokenless",
+    VERCEL_GIT_COMMIT_REF: "tokenless",
+    APP_URL: "https://rateloop-tokenless.vercel.app",
+    NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
+    TOKENLESS_NETWORK_PANELS_ENABLED: "false",
+    TOKENLESS_ARTIFACT_MASTER_KEY: encodedKey(19),
+    ...tokenlessTestRpc(),
+    ...tokenlessTestDatabase(),
+    TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
+    ...tokenlessGoldKeyring(),
+  };
+  assert.deepEqual(validateTokenlessProductionReadiness({ env, activeRegistry: {} }), []);
+  assert.match(
+    validateTokenlessProductionReadiness({ env: { ...env, ...tokenlessTestKms() }, activeRegistry: {} }).join("\n"),
+    /Configure exactly one tokenless test vault/,
+  );
+  assert.match(
+    validateTokenlessProductionReadiness({
+      env: { ...env, VERCEL_GIT_COMMIT_REF: "main" },
+      activeRegistry: {},
+    }).join("\n"),
+    /TOKENLESS_ARTIFACT_MASTER_KEY is forbidden/,
+  );
+});
+
 test("the tokenless test deployment still rejects browser-exposed secrets", () => {
   const env = {
     VERCEL: "1",

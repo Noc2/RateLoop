@@ -3,6 +3,8 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const MANAGED_KMS_INVENTORY = tokenlessEuDeploymentManifest.resources.kms;
+const TOKENLESS_REVIEW_PROJECT_ID = "prj_H6C2pfWKEAupFroHbLfzhquaNCLm";
+const TOKENLESS_REVIEW_ORIGIN = "https://rateloop-tokenless.vercel.app";
 
 export type VaultContext = Readonly<{
   tenantId: string;
@@ -172,11 +174,21 @@ export function validateVaultEnvironment(env: NodeJS.ProcessEnv = process.env) {
   }
   if (env.NODE_ENV === "test") return { mode: "test" as const };
   if (env.TOKENLESS_ARTIFACT_MASTER_KEY) {
-    throw new TokenlessServiceError(
-      "Hosted runtime cannot use a local artifact master key.",
-      500,
-      "local_production_vault_forbidden",
-    );
+    const isolatedReviewVault =
+      env.VERCEL === "1" &&
+      env.VERCEL_ENV === "production" &&
+      env.VERCEL_PROJECT_ID === TOKENLESS_REVIEW_PROJECT_ID &&
+      env.APP_URL === TOKENLESS_REVIEW_ORIGIN &&
+      env.NEXT_PUBLIC_APP_URL === TOKENLESS_REVIEW_ORIGIN &&
+      (!env.VERCEL_GIT_COMMIT_REF || env.VERCEL_GIT_COMMIT_REF === "tokenless");
+    if (!isolatedReviewVault) {
+      throw new TokenlessServiceError(
+        "Hosted runtime cannot use a local artifact master key.",
+        500,
+        "local_production_vault_forbidden",
+      );
+    }
+    return { mode: "isolated-review" as const };
   }
   const provider = env[MANAGED_KMS_INVENTORY.providerEnv]?.trim();
   const keyResource = env[MANAGED_KMS_INVENTORY.resourceIdEnv]?.trim();

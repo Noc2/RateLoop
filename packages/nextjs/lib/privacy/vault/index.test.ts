@@ -51,6 +51,18 @@ test("vault environment rejects public keys, local production keys, missing KMS,
       } as NodeJS.ProcessEnv),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "local_production_vault_forbidden",
   );
+  assert.deepEqual(
+    validateVaultEnvironment({
+      APP_URL: "https://rateloop-tokenless.vercel.app",
+      NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
+      TOKENLESS_ARTIFACT_MASTER_KEY: Buffer.alloc(32, 3).toString("base64url"),
+      VERCEL: "1",
+      VERCEL_ENV: "production",
+      VERCEL_GIT_COMMIT_REF: "tokenless",
+      VERCEL_PROJECT_ID: "prj_H6C2pfWKEAupFroHbLfzhquaNCLm",
+    } as unknown as NodeJS.ProcessEnv),
+    { mode: "isolated-review" },
+  );
   assert.throws(
     () => validateVaultEnvironment({ NODE_ENV: "production" } as NodeJS.ProcessEnv),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "managed_kms_required",
