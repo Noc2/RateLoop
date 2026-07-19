@@ -503,7 +503,20 @@ export function HumanAssuranceRaterClient({
                       </button>
                     </div>
                   )}
-                  <label className="flex items-start gap-3 rounded-lg border border-white/10 bg-black/20 p-4 text-sm leading-6 text-base-content/65">
+                  <section
+                    className="rounded-lg border border-white/10 bg-black/20 p-4 text-sm text-base-content/65"
+                    aria-labelledby="private-review-access-title"
+                  >
+                    <h3 id="private-review-access-title" className="font-medium text-base-content/80">
+                      Privacy and access
+                    </h3>
+                    <ul className="mt-3 space-y-2 text-xs leading-5">
+                      <li>Only your assigned, blinded cases are returned.</li>
+                      <li>Private artifact access is short-lived and logged.</li>
+                      <li>Do not copy, share, or reuse assigned material, or put personal data in your rationale.</li>
+                    </ul>
+                  </section>
+                  <label className="flex items-start gap-3 rounded-lg border border-white/10 p-4 text-sm leading-6 text-base-content/70">
                     <input
                       type="checkbox"
                       className="checkbox checkbox-sm mt-1"
@@ -511,8 +524,8 @@ export function HumanAssuranceRaterClient({
                       onChange={event => setConfidentialityAccepted(event.target.checked)}
                     />
                     <span>
-                      I received and accept the confidentiality terms referenced by this exact hash. I will not copy,
-                      share, or reuse assigned material outside this review.
+                      I received and accept this assignment&apos;s confidentiality terms and will follow the privacy
+                      rules above.
                     </span>
                   </label>
                   <Button
@@ -539,14 +552,6 @@ export function HumanAssuranceRaterClient({
                     {busyAction === "recovery" ? "Restoring access…" : "Retry expired assignment access"}
                   </Button>
                 ) : null}
-                <details className="mt-4 rounded-lg border border-white/10 px-4 py-3 text-sm text-base-content/60">
-                  <summary className="cursor-pointer font-medium text-base-content/75">Privacy and access</summary>
-                  <ul className="mt-3 space-y-2 text-xs leading-5">
-                    <li>Only your assigned, blinded cases are returned.</li>
-                    <li>Private artifact access is short-lived and logged.</li>
-                    <li>Do not include personal data in your rationale.</li>
-                  </ul>
-                </details>
               </Card>
             </>
           ) : (
