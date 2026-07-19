@@ -68,7 +68,7 @@ async function seedProject(ownerId: string) {
   return { projectId, workspaceId };
 }
 
-test("subject-request intake fails closed until an operator workflow can fulfill it", async () => {
+test("subject-request intake binds requests to the authenticated principal and server-derived scope", async () => {
   const owner = await authenticatedPrincipal("subject_owner");
   const { workspaceId } = await createWorkspace({ name: "Subject requests", ownerAddress: owner.principalId });
 
@@ -81,12 +81,41 @@ test("subject-request intake fails closed until an operator workflow can fulfill
         token: owner.token,
       }),
     );
-    assert.equal(response.status, 503);
+    assert.equal(response.status, 202);
     assert.equal(response.headers.get("cache-control"), NO_STORE);
     const body = await response.json();
-    assert.equal(body.code, "privacy_request_intake_unavailable");
-    assert.match(body.message, /privacy notice/i);
+    assert.match(body.requestId, /^dsr_/u);
+    assert.match(body.dueAt, /^\d{4}-\d{2}-\d{2}T/u);
   }
+
+  const rows = await dbClient.execute({
+    sql: `SELECT principal_id, workspace_id, request_type, scope_json, identity_assurance
+          FROM tokenless_subject_requests ORDER BY received_at ASC`,
+  });
+  assert.equal(rows.rowCount, SUBJECT_REQUEST_TYPES.length);
+  for (const row of rows.rows) {
+    assert.equal(String(row.principal_id), owner.principalId);
+    assert.equal(String(row.workspace_id), workspaceId);
+    assert.equal(String(row.identity_assurance), "better_auth:passkey");
+    assert.deepEqual(JSON.parse(String(row.scope_json)), { principal: true, workspaceId });
+  }
+});
+
+test("subject-request intake rejects workspace scope outside the authenticated membership", async () => {
+  const owner = await authenticatedPrincipal("subject_workspace_owner");
+  const outsider = await authenticatedPrincipal("subject_workspace_outsider");
+  const { workspaceId } = await createWorkspace({ name: "Subject scope", ownerAddress: owner.principalId });
+
+  const response = await createSubjectRequest(
+    browserRequest("/api/account/privacy/subject-requests", {
+      body: { requestType: "access", scope: { ignored: true }, workspaceId },
+      method: "POST",
+      origin: APP_ORIGIN,
+      token: outsider.token,
+    }),
+  );
+  assert.equal(response.status, 404);
+  assert.equal((await response.json()).code, "workspace_not_found");
 
   const rows = await dbClient.execute({ sql: "SELECT request_id FROM tokenless_subject_requests" });
   assert.equal(rows.rowCount, 0);
