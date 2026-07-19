@@ -15,6 +15,7 @@ export type AdaptiveReviewPolicy = {
 export type AdaptiveObservationWindow = {
   comparable: number;
   agreements: number;
+  safetyGatesAvailable: boolean;
   completionGatePassed: boolean;
   humanAgreementGatePassed: boolean;
   latencyGatePassed: boolean;
@@ -66,6 +67,7 @@ function windowPasses(window: AdaptiveObservationWindow, thresholdBps: number, m
   const interval = wilsonIntervalBps(window.agreements, window.comparable);
   return (
     interval.lower >= thresholdBps &&
+    window.safetyGatesAvailable &&
     window.completionGatePassed &&
     window.humanAgreementGatePassed &&
     window.latencyGatePassed &&
@@ -75,6 +77,7 @@ function windowPasses(window: AdaptiveObservationWindow, thresholdBps: number, m
 }
 
 function windowResetReason(window: AdaptiveObservationWindow, thresholdBps: number, minimumSize: number) {
+  if (!window.safetyGatesAvailable) return "safety_gates_unavailable";
   if (
     !Number.isSafeInteger(window.comparable) ||
     !Number.isSafeInteger(window.agreements) ||
@@ -89,8 +92,8 @@ function windowResetReason(window: AdaptiveObservationWindow, thresholdBps: numb
   if (!window.latencyGatePassed) return "latency_gate_failed";
   if (!window.driftGatePassed) return "drift_gate_failed";
   if (window.severeDisagreementOpen) return "severe_disagreement_open";
-  const observedAgreementBps = Math.floor((window.agreements * 10_000) / window.comparable);
-  return observedAgreementBps < thresholdBps ? "agreement_below_threshold" : null;
+  const interval = wilsonIntervalBps(window.agreements, window.comparable);
+  return interval.lower < thresholdBps ? "agreement_below_threshold" : null;
 }
 
 export function nextAdaptiveStage(input: {
@@ -129,7 +132,7 @@ export function nextAdaptiveStage(input: {
   return {
     stage: state.stage,
     reviewRateBps: Math.max(ADAPTIVE_REVIEW_STAGE_RATE_BPS[state.stage], policy.productionFloorBps),
-    reason: latestPasses ? "evidence_window_incomplete" : "quality_gate_not_met",
+    reason: evidenceResetReason ?? (latestPasses ? "evidence_window_incomplete" : "quality_gate_not_met"),
   };
 }
 

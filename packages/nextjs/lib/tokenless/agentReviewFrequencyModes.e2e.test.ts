@@ -212,7 +212,7 @@ test("real persisted policies evaluate manual, always, rules, fixed, and adaptiv
   assert.equal(adaptive.decision, "required");
   assert.equal(adaptive.stage, "calibrating");
   assert.equal(adaptive.reviewRateBps, 10_000);
-  assert.deepEqual(adaptive.reasonCodes, ["calibrating"]);
+  assert.deepEqual(adaptive.reasonCodes, ["calibrating", "safety_gates_unavailable"]);
 
   for (const result of [manual, always, rulesSkipped, rulesRequired, fixed, adaptive]) {
     assert.equal(result.policyFrozen, true);

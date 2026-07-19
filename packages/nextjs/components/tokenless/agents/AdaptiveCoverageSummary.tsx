@@ -9,6 +9,7 @@ const reasonLabels: Record<AdaptiveCoverageReasonCode, string> = {
   two_stable_windows: "Two stable review windows",
   fifty_stable_cases: "50 stable comparable cases",
   one_hundred_stable_cases: "100 stable comparable cases",
+  safety_gates_unavailable: "Safety evidence is not available; review returned to 100%",
   agreement_below_threshold: "Agreement fell below the policy threshold",
   completion_gate_failed: "Completion evidence missed its gate",
   human_agreement_gate_failed: "Human agreement missed its gate",

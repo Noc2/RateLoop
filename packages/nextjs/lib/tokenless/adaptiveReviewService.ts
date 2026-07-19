@@ -37,6 +37,9 @@ type QueryRow = Record<string, unknown>;
 type AdaptivePrincipal = Extract<ProductPrincipal, { kind: "api_key" }>;
 
 const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/;
+// Adaptive coverage must not fall below 100% until these gates are backed by
+// persisted, scope-specific drift and severe-disagreement evidence.
+const ADAPTIVE_SAFETY_GATES_AVAILABLE = false;
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
 const SOURCE_REFERENCE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,239}$/;
 const RISK_TIER_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
@@ -466,18 +469,23 @@ function policyMath(policy: ReviewPolicyRow): AdaptiveReviewPolicy {
   };
 }
 
+function humanAgreementGatePassed(rows: QueryRow[], thresholdBps: number) {
+  return rows.every(row => {
+    if (rowInteger(row, "responding_human_count") < 2) return false;
+    const value = row.human_human_agreement_bps;
+    return value !== null && value !== undefined && Number(value) >= thresholdBps;
+  });
+}
+
 function observationWindow(rows: QueryRow[], policy: ReviewPolicyRow): AdaptiveObservationWindow {
   const comparable = rows.length;
   const agreements = rows.filter(row => rowString(row, "agreement") === "agree").length;
   return {
     comparable,
     agreements,
+    safetyGatesAvailable: ADAPTIVE_SAFETY_GATES_AVAILABLE,
     completionGatePassed: comparable === 15,
-    humanAgreementGatePassed: rows.every(row => {
-      if (rowInteger(row, "responding_human_count") <= 1) return true;
-      const value = row.human_human_agreement_bps;
-      return value !== null && value !== undefined && Number(value) >= policy.agreementThresholdBps;
-    }),
+    humanAgreementGatePassed: humanAgreementGatePassed(rows, policy.agreementThresholdBps),
     latencyGatePassed: rows.every(row => {
       if (policy.rules.maximumLatencyMs === null) return true;
       return (
@@ -892,6 +900,20 @@ function decisionForMode(input: {
         : !metadataComplete
           ? ["missing_metadata"]
           : [rulesMatch ? "rules_match" : "no_rule_match"],
+    };
+  }
+  if (!ADAPTIVE_SAFETY_GATES_AVAILABLE) {
+    return {
+      ...sampled,
+      required: true,
+      decision: "required" as const,
+      reviewRateBps: 10_000,
+      selectionProbabilityBps: 10_000,
+      criticalRisk,
+      reasonCodes: [
+        ...sampled.reasonCodes.filter(reason => reason !== "sampled" && reason !== "not_sampled"),
+        "safety_gates_unavailable",
+      ],
     };
   }
   const forced = sampled.reasonCodes.some(reason => reason !== "sampled" && reason !== "not_sampled");
@@ -1530,7 +1552,12 @@ export async function evaluateAdaptiveReviewRequirement(input: {
         [decision.required ? 0 : scope.unreviewedSinceLastSample + 1, now, workspaceId, scopeId],
       );
       scope = { ...scope, unreviewedSinceLastSample: decision.required ? 0 : scope.unreviewedSinceLastSample + 1 };
-      if (decision.required && decision.reasonCodes.some(reason => reason !== "sampled" && reason !== "calibrating")) {
+      if (
+        decision.required &&
+        decision.reasonCodes.some(
+          reason => reason !== "sampled" && reason !== "calibrating" && reason !== "safety_gates_unavailable",
+        )
+      ) {
         await recordPolicyEvent(client, {
           workspaceId,
           scopeId,
@@ -1627,4 +1654,4 @@ export async function getAdaptiveAssuranceState(input: {
   }
 }
 
-export const __adaptiveReviewServiceTestUtils = { initialLifecycleDisposition, sha256 };
+export const __adaptiveReviewServiceTestUtils = { humanAgreementGatePassed, initialLifecycleDisposition, sha256 };

@@ -57,6 +57,7 @@ export const ADAPTIVE_COVERAGE_REASON_CODES = [
   "two_stable_windows",
   "fifty_stable_cases",
   "one_hundred_stable_cases",
+  "safety_gates_unavailable",
   "agreement_below_threshold",
   "completion_gate_failed",
   "human_agreement_gate_failed",

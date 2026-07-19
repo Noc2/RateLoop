@@ -82,6 +82,8 @@ by default), the completion, human-agreement, latency, and drift gates pass, no 
 at least 30 comparable cases have completed. Fifty more stable cases may reduce review to 25%; 100 more may reduce it
 to the 10% monitoring floor. A completed window that fails a reset gate restores 100% calibration. Critical-risk rules,
 the maximum-unreviewed gap, incomplete metadata, and explicit owner requirements always override the adaptive baseline.
+Until drift and severe-disagreement gates are backed by persisted scope evidence, adaptive review reports
+`safety_gates_unavailable`, remains at 100%, and resets any previously reduced scope to calibration.
 
 The owner separately chooses question authority. An owner-fixed binary question uses `assurance` semantics and may
 produce comparable evidence. An agent-per-request binary question uses `feedback` semantics so a preference such as

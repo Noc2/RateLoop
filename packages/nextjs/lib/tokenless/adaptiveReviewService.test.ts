@@ -132,7 +132,7 @@ test("persists deterministic calibration decisions and returns frozen idempotent
   assert.equal(first.stage, "calibrating");
   assert.equal(first.reviewRateBps, 10_000);
   assert.equal(first.selectionProbabilityBps, 10_000);
-  assert.deepEqual(first.reasonCodes, ["calibrating"]);
+  assert.deepEqual(first.reasonCodes, ["calibrating", "safety_gates_unavailable"]);
   assert.equal(first.policyFrozen, true);
   assert.equal(first.sourceEvidenceHash, request.sourceEvidence.hash);
   assert.match(first.executionId, /^aex_/);
@@ -583,7 +583,7 @@ test("fixed and rules policies never advance adaptive stages", async () => {
   }
 });
 
-test("source-derived observations advance after two stable windows and reset after a measured agreement drop", async () => {
+test("adaptive scopes stay at full review and reduced legacy scopes reset while safety gates are unavailable", async () => {
   const setup = await fixture();
   for (let index = 0; index < 30; index += 1) {
     const decision = await evaluateAdaptiveReviewRequirement({
@@ -595,8 +595,8 @@ test("source-derived observations advance after two stable windows and reset aft
       sql: `INSERT INTO tokenless_agent_evaluation_observations
             (observation_id, workspace_id, scope_id, opportunity_id, evidence_reference, source_payload_hash,
              agent_outcome_commitment, human_outcome_commitment, agreement, comparable,
-             responding_human_count, finalized_at, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'agree', true, 1, ?, ?)`,
+             responding_human_count, human_human_agreement_bps, finalized_at, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'agree', true, 2, 10000, ?, ?)`,
       args: [
         `obs_calibration_${index}`,
         setup.workspaceId,
@@ -612,95 +612,51 @@ test("source-derived observations advance after two stable windows and reset aft
     });
   }
 
-  const steppedDown = await evaluateAdaptiveReviewRequirement({
+  const pinned = await evaluateAdaptiveReviewRequirement({
     principal: setup.principal,
     request: opportunity(setup, "post-calibration-0001"),
   });
-  assert.equal(steppedDown.stage, "high_coverage");
-  assert.equal(steppedDown.reviewRateBps, 5_000);
-  assert.equal(steppedDown.completedComparableCases, 30);
-  assert.equal(steppedDown.humanAgreementBps, 10_000);
-  assert.ok((steppedDown.humanAgreementLower95Bps ?? 0) >= 7_000);
-  assert.equal(steppedDown.nextReassessmentAfter, 50);
+  assert.equal(pinned.stage, "calibrating");
+  assert.equal(pinned.reviewRateBps, 10_000);
+  assert.equal(pinned.selectionProbabilityBps, 10_000);
+  assert.deepEqual(pinned.reasonCodes, ["calibrating", "safety_gates_unavailable"]);
+  assert.equal(pinned.completedComparableCases, 30);
+  assert.equal(pinned.humanAgreementBps, 10_000);
+  assert.ok((pinned.humanAgreementLower95Bps ?? 0) >= 7_000);
 
   await dbClient.execute({
-    sql: `UPDATE tokenless_agent_review_policies SET rules_json = ?
-          WHERE workspace_id = ? AND policy_id = ? AND version = 1`,
-    args: [
-      JSON.stringify({
-        criticalRiskTiers: ["critical"],
-        requiredRiskTiers: ["high"],
-        minimumConfidenceBps: 9_000,
-      }),
-      setup.workspaceId,
-      setup.policyId,
-    ],
+    sql: `UPDATE tokenless_agent_evaluation_scopes
+          SET stage = 'high_coverage', stable_cases_since_stage = 0, stage_entered_at = ?
+          WHERE workspace_id = ? AND scope_id = ?`,
+    args: [new Date(), setup.workspaceId, pinned.scopeId],
   });
-  const forced = await evaluateAdaptiveReviewRequirement({
+
+  const reset = await evaluateAdaptiveReviewRequirement({
     principal: setup.principal,
-    request: { ...opportunity(setup, "post-calibration-low-confidence"), declaredConfidenceBps: 5_000 },
+    request: opportunity(setup, "legacy-reduced-scope-0001"),
   });
-  assert.equal(forced.reviewRateBps, 5_000);
-  assert.equal(forced.selectionProbabilityBps, 10_000);
-  const persistedForced = await dbClient.execute({
+  assert.equal(reset.stage, "calibrating");
+  assert.equal(reset.reviewRateBps, 10_000);
+  assert.equal(reset.selectionProbabilityBps, 10_000);
+  assert.deepEqual(reset.reasonCodes, ["calibrating", "safety_gates_unavailable"]);
+
+  const persisted = await dbClient.execute({
     sql: `SELECT review_rate_bps, selection_probability_bps
           FROM tokenless_agent_review_opportunities
           WHERE workspace_id = ? AND opportunity_id = ?`,
-    args: [setup.workspaceId, forced.opportunityId],
+    args: [setup.workspaceId, reset.opportunityId],
   });
-  assert.equal(persistedForced.rows[0]?.review_rate_bps, 5_000);
-  assert.equal(persistedForced.rows[0]?.selection_probability_bps, 10_000);
-
-  const events = await dbClient.execute({
-    sql: `SELECT event_type, from_stage, to_stage, reason_codes_json
-          FROM tokenless_agent_review_policy_events
-          WHERE workspace_id = ? AND scope_id = ? AND event_type = 'stage_changed'`,
-    args: [setup.workspaceId, steppedDown.scopeId],
-  });
-  assert.equal(events.rowCount, 1);
-  assert.equal(events.rows[0]?.from_stage, "calibrating");
-  assert.equal(events.rows[0]?.to_stage, "high_coverage");
-  assert.deepEqual(JSON.parse(String(events.rows[0]?.reason_codes_json)), ["two_stable_windows"]);
-
-  let deteriorated = steppedDown;
-  for (let index = 0; index < 6; index += 1) {
-    deteriorated = await evaluateAdaptiveReviewRequirement({
-      principal: setup.principal,
-      request: opportunity(setup, `deterioration-${String(index).padStart(4, "0")}`),
-    });
-    const finalizedAt = new Date(Date.now() + 100 + index);
-    await dbClient.execute({
-      sql: `INSERT INTO tokenless_agent_evaluation_observations
-            (observation_id, workspace_id, scope_id, opportunity_id, evidence_reference, source_payload_hash,
-             agent_outcome_commitment, human_outcome_commitment, agreement, comparable,
-             responding_human_count, finalized_at, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'disagree', true, 1, ?, ?)`,
-      args: [
-        `obs_deterioration_${index}`,
-        setup.workspaceId,
-        deteriorated.scopeId,
-        deteriorated.opportunityId,
-        `evidence/deterioration/${index}`,
-        __adaptiveReviewServiceTestUtils.sha256({ source: "deterioration", index }),
-        deteriorated.suggestionCommitment,
-        __adaptiveReviewServiceTestUtils.sha256({ human: "disagree", index }),
-        finalizedAt,
-        finalizedAt,
-      ],
-    });
-  }
-
-  assert.equal(deteriorated.stage, "calibrating");
-  assert.equal(deteriorated.reviewRateBps, 10_000);
+  assert.equal(persisted.rows[0]?.review_rate_bps, 10_000);
+  assert.equal(persisted.rows[0]?.selection_probability_bps, 10_000);
 
   const resetEvents = await dbClient.execute({
     sql: `SELECT event_type, from_stage, to_stage, reason_codes_json
           FROM tokenless_agent_review_policy_events
           WHERE workspace_id = ? AND scope_id = ? AND event_type = 'reset'`,
-    args: [setup.workspaceId, steppedDown.scopeId],
+    args: [setup.workspaceId, pinned.scopeId],
   });
   assert.equal(resetEvents.rowCount, 1);
   assert.equal(resetEvents.rows[0]?.from_stage, "high_coverage");
   assert.equal(resetEvents.rows[0]?.to_stage, "calibrating");
-  assert.deepEqual(JSON.parse(String(resetEvents.rows[0]?.reason_codes_json)), ["agreement_below_threshold"]);
+  assert.deepEqual(JSON.parse(String(resetEvents.rows[0]?.reason_codes_json)), ["safety_gates_unavailable"]);
 });

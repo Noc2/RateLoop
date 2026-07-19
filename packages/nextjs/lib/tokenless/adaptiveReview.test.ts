@@ -11,7 +11,8 @@ const policy = {
 
 const passingWindow = {
   comparable: 15,
-  agreements: 15,
+  agreements: 14,
+  safetyGatesAvailable: true,
   completionGatePassed: true,
   humanAgreementGatePassed: true,
   latencyGatePassed: true,
@@ -59,9 +60,8 @@ test("adaptive stages require two independent calibration windows and stable evi
   assert.deepEqual(monitoring, { stage: "monitoring", reviewRateBps: 1_000, reason: "one_hundred_stable_cases" });
 });
 
-test("uncertain evidence holds coverage while failed quality gates restore calibration", () => {
-  const uncertain = { ...passingWindow, agreements: 13 };
-  const held = nextAdaptiveStage({
+test("the 7,000 bps Wilson threshold accepts 14/15 and resets reduced coverage at 13/15", () => {
+  const agreementDrop = nextAdaptiveStage({
     policy,
     state: {
       stage: "high_coverage",
@@ -69,12 +69,15 @@ test("uncertain evidence holds coverage while failed quality gates restore calib
       stableCasesSinceStage: 90,
       unreviewedSinceLastSample: 0,
     },
-    latestWindow: uncertain,
+    latestWindow: { ...passingWindow, agreements: 13 },
   });
-  assert.equal(held.stage, "high_coverage");
-  assert.equal(held.reviewRateBps, 5_000);
+  assert.deepEqual(agreementDrop, {
+    stage: "calibrating",
+    reviewRateBps: 10_000,
+    reason: "agreement_below_threshold",
+  });
 
-  const agreementDrop = nextAdaptiveStage({
+  const unavailableSafetyEvidence = nextAdaptiveStage({
     policy,
     state: {
       stage: "monitoring",
@@ -82,12 +85,12 @@ test("uncertain evidence holds coverage while failed quality gates restore calib
       stableCasesSinceStage: 300,
       unreviewedSinceLastSample: 0,
     },
-    latestWindow: { ...passingWindow, agreements: 10 },
+    latestWindow: { ...passingWindow, comparable: 0, agreements: 0, safetyGatesAvailable: false },
   });
-  assert.deepEqual(agreementDrop, {
+  assert.deepEqual(unavailableSafetyEvidence, {
     stage: "calibrating",
     reviewRateBps: 10_000,
-    reason: "agreement_below_threshold",
+    reason: "safety_gates_unavailable",
   });
 
   const humanAgreementFailure = nextAdaptiveStage({
