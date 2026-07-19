@@ -13,8 +13,11 @@ import { __setPaidEligibilityOverridesForTests, ensureAssuranceRaterProfile } fr
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
+let databaseResources: ReturnType<typeof createMemoryDatabaseResources>;
+
 beforeEach(() => {
-  __setDatabaseResourcesForTests(createMemoryDatabaseResources());
+  databaseResources = createMemoryDatabaseResources();
+  __setDatabaseResourcesForTests(databaseResources);
   __setPaidEligibilityOverridesForTests({
     vault: {
       provider_evidence: { currentVersion: "test-v1", keys: new Map([["test-v1", Buffer.alloc(32, 11)]]) },
@@ -439,6 +442,43 @@ test("account deletion blocks sole workspace owners and active managed wallets",
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "owned_workspaces_require_resolution",
   );
+});
+
+test("account deletion fails closed before receipting an incomplete erasure", async () => {
+  const now = new Date("2026-07-16T10:00:00.000Z");
+  await seedBetterAuthUser("better-incomplete", "incomplete@example.test");
+  const identity = await resolveBetterAuthPrincipal({ betterAuthUserId: "better-incomplete" });
+  const originalConnect = databaseResources.pool.connect.bind(databaseResources.pool);
+  databaseResources.pool.connect = (async () => {
+    const client = await originalConnect();
+    const originalQuery = client.query.bind(client);
+    client.query = (async (queryText: string, queryValues?: unknown[]) => {
+      const result = await originalQuery(queryText, queryValues);
+      if (typeof queryText === "string" && queryText.includes("AS browser_identities") && result.rows[0]) {
+        result.rows[0].browser_identities = 1;
+      }
+      return result;
+    }) as typeof client.query;
+    return client;
+  }) as typeof databaseResources.pool.connect;
+
+  await assert.rejects(
+    () =>
+      deleteAccount({
+        betterAuthUserId: "better-incomplete",
+        confirmation: "DELETE",
+        principalId: identity.principalId,
+        now,
+      }),
+    /Account deletion postcondition failed: browserIdentities/,
+  );
+  databaseResources.pool.connect = originalConnect as typeof databaseResources.pool.connect;
+  const receipts = await dbClient.execute({
+    sql: `SELECT COUNT(*) AS count FROM tokenless_deletion_jobs WHERE scope_id = ?`,
+    args: [identity.principalId],
+  });
+  const receiptCount = receipts.rows[0]?.count;
+  assert.equal(Number(Array.isArray(receiptCount) ? receiptCount[0] : receiptCount), 0);
 });
 
 test("the account deletion route requires the product session, same-origin mutation, and recent Better Auth", () => {
