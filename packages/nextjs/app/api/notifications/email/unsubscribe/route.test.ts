@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { POST } from "./route";
+import { GET, POST } from "./route";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
@@ -59,4 +59,31 @@ test("one-click unsubscribe rejects missing and tampered tokens but remains idem
   const url = `https://tokenless.example.test/api/notifications/email/unsubscribe?token=${encodeURIComponent(token)}`;
   assert.equal((await POST(new NextRequest(url))).status, 200);
   assert.equal((await POST(new NextRequest(url))).status, 200);
+});
+
+test("manual unsubscribe GET requires confirmation and does not consume scanner-fetched links", async () => {
+  const token = buildTokenlessSignedUnsubscribeToken({
+    principalAddress: PRINCIPAL,
+    unsubscribeTokenHash: UNSUBSCRIBE_HASH,
+  });
+  const url = `https://tokenless.example.test/api/notifications/email/unsubscribe?token=${encodeURIComponent(token)}`;
+  const response = await GET(new NextRequest(url));
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type") ?? "", /^text\/html/u);
+  assert.match(response.headers.get("cache-control") ?? "", /no-store/u);
+  assert.match(await response.text(), /<form method="post"[^>]+manual=1/u);
+  const beforeConfirmation = await dbClient.execute({
+    sql: "SELECT principal_address FROM tokenless_notification_email_subscriptions WHERE principal_address = ?",
+    args: [PRINCIPAL],
+  });
+  assert.equal(beforeConfirmation.rows.length, 1);
+
+  const confirmed = await POST(new NextRequest(`${url}&manual=1`, { method: "POST" }));
+  assert.equal(confirmed.status, 303);
+  assert.match(confirmed.headers.get("location") ?? "", /email=unsubscribed/u);
+  const afterConfirmation = await dbClient.execute({
+    sql: "SELECT principal_address FROM tokenless_notification_email_subscriptions WHERE principal_address = ?",
+    args: [PRINCIPAL],
+  });
+  assert.equal(afterConfirmation.rows.length, 0);
 });
