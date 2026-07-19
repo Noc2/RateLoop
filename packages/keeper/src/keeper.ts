@@ -6,6 +6,7 @@ import {
   type Address,
   type Hex,
 } from "viem";
+import { getLogsInBlockChunks } from "./block-log-scan.js";
 import type { config as runtimeConfig } from "./config.js";
 import { resolveTlockClientForDrandChain } from "./drand.js";
 import { isExpectedPanelRaceError } from "./expected-panel-race.js";
@@ -252,15 +253,24 @@ async function commitLogsForRound(
   publicClient: TokenlessPublicClient,
   config: KeeperConfig,
   roundId: bigint,
+  expectedCommitCount: number,
 ) {
-  return publicClient.getLogs({
-    address: config.deployment.panel,
-    event: TokenlessPanelAbi.find(
-      (item) => item.type === "event" && item.name === "CommitAccepted",
-    ),
-    args: { roundId },
+  if (expectedCommitCount <= 0) return [];
+  const toBlock = await publicClient.getBlockNumber();
+  return getLogsInBlockChunks({
     fromBlock: config.deployment.blockNumber,
-    toBlock: "latest",
+    toBlock,
+    stopAfterCount: expectedCommitCount,
+    getLogs: ({ fromBlock, toBlock }) =>
+      publicClient.getLogs({
+        address: config.deployment.panel,
+        event: TokenlessPanelAbi.find(
+          (item) => item.type === "event" && item.name === "CommitAccepted",
+        ),
+        args: { roundId },
+        fromBlock,
+        toBlock,
+      }),
   });
 }
 
@@ -354,6 +364,7 @@ async function revealAndClaimRound(params: {
     params.clients.publicClient,
     params.config,
     params.roundId,
+    params.round.commitCount,
   );
   for (const log of logs) {
     const commitKey = log.args?.commitKey;
