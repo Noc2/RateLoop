@@ -8,7 +8,9 @@ Every live tokenless component is isolated from the legacy RateLoop deployment.
 
 - Network: Base Sepolia
 - Chain ID: `84532`
-- RPC variable: `BASE_SEPOLIA_RPC_URL`, `PONDER_RPC_URL_84532`, or `RPC_URL`, depending on the package
+- RPC variables: each package has one primary plus one to three ordered, independent fallbacks:
+  `BASE_SEPOLIA_RPC_URL` + `BASE_SEPOLIA_RPC_FALLBACK_URLS`, `PONDER_RPC_URL_84532` +
+  `PONDER_RPC_FALLBACK_URLS_84532`, or `RPC_URL` + `RPC_FALLBACK_URLS`
 - Deployment schema target: `rateloop-tokenless-deployment-v4`
 - Deployment key target: `tokenless-v4:<chainId>:<panel>:<issuer>:<adapter-or-zero>:<feedback-bonus>`
 - Current v4 release status: `unreleased`
@@ -62,6 +64,8 @@ Next.js:
   `TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK`
 - `DATABASE_URL`
 - `NEXT_PUBLIC_TARGET_NETWORKS=84532`
+- server-side `BASE_SEPOLIA_RPC_URL` plus one to three ordered, independent HTTPS URLs in
+  `BASE_SEPOLIA_RPC_FALLBACK_URLS`; the public browser RPC remains separate
 - `TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY`
 - `TOKENLESS_DEPLOYMENT_SCHEMA`, `TOKENLESS_CHAIN_ID`, `TOKENLESS_DEPLOYMENT_KEY`, `TOKENLESS_DEPLOYMENT_BLOCK`
 - `TOKENLESS_PANEL_ADDRESS`, `TOKENLESS_CREDENTIAL_ISSUER_ADDRESS`, `TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS`,
@@ -95,7 +99,8 @@ eligibility, deployment, signer, or pipeline configuration is incomplete.
 
 Ponder:
 
-- `PONDER_NETWORK=baseSepolia`, `PONDER_CHAIN_ID=84532`, `PONDER_RPC_URL_84532`
+- `PONDER_NETWORK=baseSepolia`, `PONDER_CHAIN_ID=84532`, `PONDER_RPC_URL_84532`, and one to three ordered,
+  independent HTTPS URLs in `PONDER_RPC_FALLBACK_URLS_84532`
 - `PONDER_TOKENLESS_PANEL_ADDRESS`, `PONDER_CREDENTIAL_ISSUER_ADDRESS`, `PONDER_X402_PANEL_SUBMITTER_ADDRESS`,
   `PONDER_FEEDBACK_BONUS_ADDRESS`
 - `PONDER_TOKENLESS_START_BLOCK`, `RATELOOP_PONDER_PROTOCOL_DEPLOYMENT_KEY`
@@ -103,7 +108,7 @@ Ponder:
 
 Keeper:
 
-- `CHAIN_ID=84532`, `RPC_URL`
+- `CHAIN_ID=84532`, `RPC_URL`, and one to three ordered, independent HTTPS URLs in `RPC_FALLBACK_URLS`
 - `TOKENLESS_PANEL_ADDRESS`, `TOKENLESS_CREDENTIAL_ISSUER_ADDRESS`, `TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS`,
   `TOKENLESS_FEEDBACK_BONUS_ADDRESS`
 - `TOKENLESS_DEPLOYMENT_KEY`, `TOKENLESS_DEPLOYMENT_BLOCK`
