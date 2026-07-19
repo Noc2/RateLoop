@@ -33,6 +33,11 @@ type OwnerView = {
 
 type PrivateGroup = { groupId: string; name: string; status: string };
 
+type SaveResponse = {
+  privateReviewRouting?: { ready?: boolean; reason?: string } | null;
+  privateReviewRoutingReconciliationFailed?: boolean;
+};
+
 type Draft = {
   questionAuthority: QuestionAuthority;
   mode: Mode;
@@ -272,6 +277,21 @@ function buildMutation(view: OwnerView, draft: Draft) {
   };
 }
 
+function savedStatus(response: SaveResponse, authority: Authority) {
+  if (authority !== "ask_automatically") return "Human-review configuration saved.";
+  if (response.privateReviewRouting?.ready) return "Saved. Automatic review requests are ready.";
+  if (response.privateReviewRouting?.reason === "reviewer_seats_insufficient") {
+    return "Saved. Automatic requests will unlock when enough invited reviewers join.";
+  }
+  if (response.privateReviewRouting?.reason === "expertise_coverage_insufficient") {
+    return "Saved. Automatic requests will unlock when the required specialist coverage is confirmed.";
+  }
+  if (response.privateReviewRoutingReconciliationFailed) {
+    return "Saved. Reviewer routing still needs to be checked before automatic requests can start.";
+  }
+  return "Human-review configuration saved.";
+}
+
 export function AgentHumanReviewEditor({
   workspaceId,
   agentId,
@@ -368,7 +388,7 @@ export function AgentHumanReviewEditor({
       const next = buildMutation(view, draft);
       if (next.confirmation && !window.confirm(next.confirmation)) return;
       setBusy(true);
-      await readJson(
+      const saved = (await readJson(
         await fetch(
           `/api/account/workspaces/${encodeURIComponent(workspaceId)}/agents/${encodeURIComponent(agentId)}/human-review`,
           {
@@ -378,9 +398,9 @@ export function AgentHumanReviewEditor({
             headers: { "Content-Type": "application/json" },
           },
         ),
-      );
+      )) as SaveResponse;
       await load();
-      setStatus("Human-review configuration saved.");
+      setStatus(savedStatus(saved, draft.authority));
       onSaved?.();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to save human review.");

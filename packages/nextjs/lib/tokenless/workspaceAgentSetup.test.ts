@@ -407,7 +407,9 @@ test("atomic setup finalization creates one invitation and safely replays a lost
   assert.equal(finalized.postcondition.reviewBindingActive, true);
   assert.equal(finalized.postcondition.privateGroupStatus, "active");
   assert.equal(finalized.postcondition.setupConfigurationIntact, true);
-  assert.equal(finalized.postcondition.reviewerRoutingStatus, "not_evaluated");
+  assert.equal(finalized.postcondition.reviewerRoutingStatus, "action_required");
+  assert.equal(finalized.postcondition.privateRouting?.reason, "reviewer_seats_insufficient");
+  assert.equal(finalized.postcondition.canSend, false);
 
   const replayed = await finalizeWorkspaceAgentSetup(request);
   assert.equal(replayed.idempotent, true);
@@ -788,6 +790,8 @@ test("unpaid private automatic review grants publishing without payment and reje
     agentId: connected.agent!.agentId,
     body,
   });
+  assert.equal(saved.privateReviewRouting?.reason, "reviewer_seats_insufficient");
+  assert.equal(saved.privateReviewRoutingReconciliationFailed, false);
   const granted = await dbClient.execute({
     sql: "SELECT granted_scopes_json FROM tokenless_agent_integrations WHERE integration_id=?",
     args: [integrationId],

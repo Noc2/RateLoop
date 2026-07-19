@@ -326,7 +326,21 @@ test("invitation copy states that email binds the code but is not delivered", ()
   assert.doesNotMatch(flowSource, /defaultChecked/);
 });
 
+test("People finalizes setup once and reports operational request readiness", () => {
+  assert.match(flowSource, /agent-setup\/finalize/);
+  assert.match(flowSource, /idempotencyKey/);
+  assert.match(flowSource, /crypto\.randomUUID\(\)/);
+  assert.match(flowSource, /postcondition\.canSend/);
+  assert.match(flowSource, /Automatic requests stay unavailable until enough reviewers join/);
+  assert.match(flowSource, /Finish setup/);
+  assert.doesNotMatch(flowSource, /agent-setup\/people/);
+});
+
 test("People shows confirmed and pending specialist coverage separately", () => {
+  assert.match(flowSource, /Confirmed reviewers/);
+  assert.match(flowSource, /group\?\.memberCount/);
+  assert.match(flowSource, /confirmedReviewerPoolReady/);
+  assert.match(flowSource, /Use confirmed reviewers/);
   assert.match(flowSource, /Specialist coverage/);
   assert.match(flowSource, /Pending invitations do not make a request ready/);
   assert.match(flowSource, /private-groups\/\$\{encodeURIComponent\(groupId\)\}\/expertise-coverage/);

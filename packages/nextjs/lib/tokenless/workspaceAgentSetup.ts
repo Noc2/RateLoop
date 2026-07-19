@@ -22,6 +22,10 @@ import {
   normalizeReviewerExpertiseKeys,
 } from "~~/lib/tokenless/reviewerExpertiseVocabulary";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import {
+  type WorkspacePrivateReviewRoutingReadiness,
+  provisionWorkspacePrivateReviewRouting,
+} from "~~/lib/tokenless/workspacePrivateReviewRouting";
 
 export { agentSetupUrl } from "~~/lib/tokenless/agentSetupNavigation";
 export type { AgentSetupScreenStep } from "~~/lib/tokenless/agentSetupNavigation";
@@ -1375,9 +1379,11 @@ async function workspaceSetupFinalizationPostcondition(client: Pick<PoolClient, 
   const result = await client.query(
     `SELECT s.status AS setup_status,s.people_decision,s.primary_integration_id,
             i.status AS integration_status,ci.status AS connection_status,
+            b.binding_id,b.version AS binding_version,
             b.enabled AS binding_enabled,b.superseded_at AS binding_superseded_at,b.authority,
             b.publishing_policy_id,b.publishing_policy_version,
             p.enabled AS selection_policy_enabled,p.superseded_at AS selection_policy_superseded_at,
+            r.profile_id,r.version AS profile_version,r.profile_hash,
             r.configuration_status,r.audience,r.private_group_id,g.status AS private_group_status,
             i.activation_mode,i.publishing_policy_id AS integration_publishing_policy_id,
             i.publishing_policy_version AS integration_publishing_policy_version,
@@ -1433,6 +1439,15 @@ async function workspaceSetupFinalizationPostcondition(client: Pick<PoolClient, 
     ...(privateGroupStatus === "active" || privateGroupStatus === "not_required" ? [] : ["reviewer_group_not_active"]),
     ...(automaticGrantActive === false ? ["automatic_grant_not_active"] : []),
   ];
+  const compensationMode = rowString(row, "compensation_mode");
+  const reviewLane =
+    audience === "public_network"
+      ? "public_paid_network"
+      : audience === "hybrid"
+        ? "hybrid_public_safe"
+        : compensationMode === "usdc"
+          ? "private_invited_paid"
+          : "private_invited_unpaid";
   return {
     schemaVersion: "rateloop.workspace-agent-setup-postcondition.v1" as const,
     setupStatus: rowString(row, "setup_status"),
@@ -1442,10 +1457,87 @@ async function workspaceSetupFinalizationPostcondition(client: Pick<PoolClient, 
     peopleDecision: rowString(row, "people_decision"),
     privateGroupStatus,
     deliveryAuthority: authority,
+    reviewLane,
     automaticGrantActive,
+    reviewBinding: {
+      id: rowString(row, "binding_id"),
+      version: rowOptionalNumber(row, "binding_version"),
+      requestProfile: {
+        id: rowString(row, "profile_id"),
+        version: rowOptionalNumber(row, "profile_version"),
+        hash: rowString(row, "profile_hash"),
+      },
+    },
     setupConfigurationIntact: blockingReasons.length === 0,
     reviewerRoutingStatus: "not_evaluated" as const,
     blockingReasons,
+  };
+}
+
+type WorkspaceSetupFinalizationResponse = {
+  destination: string;
+  idempotent: boolean;
+  policyId?: string;
+  policyVersion?: number;
+  revision?: number;
+  invitation: Awaited<ReturnType<typeof setupFinalizationInvitationReplay>>;
+  postcondition: Awaited<ReturnType<typeof workspaceSetupFinalizationPostcondition>>;
+};
+
+async function setupFinalizationWithRouting(input: {
+  accountAddress: string;
+  workspaceId: string;
+  response: WorkspaceSetupFinalizationResponse;
+}) {
+  const postcondition = input.response.postcondition;
+  const privateLane =
+    postcondition.reviewLane === "private_invited_unpaid" || postcondition.reviewLane === "private_invited_paid";
+  let privateRouting: WorkspacePrivateReviewRoutingReadiness | null = null;
+  let routingReconciliationFailed = false;
+  if (privateLane) {
+    const profile = postcondition.reviewBinding.requestProfile;
+    if (profile.id && profile.version && profile.hash) {
+      try {
+        privateRouting = await provisionWorkspacePrivateReviewRouting({
+          accountAddress: input.accountAddress,
+          workspaceId: input.workspaceId,
+          profileId: profile.id,
+          profileVersion: profile.version,
+          profileHash: profile.hash,
+        });
+      } catch {
+        routingReconciliationFailed = true;
+      }
+    } else {
+      routingReconciliationFailed = true;
+    }
+  }
+  const reviewerRoutingStatus = privateLane
+    ? privateRouting?.ready
+      ? ("ready" as const)
+      : ("action_required" as const)
+    : ("not_required" as const);
+  const canSend = Boolean(
+    postcondition.setupConfigurationIntact &&
+      postcondition.deliveryAuthority === "ask_automatically" &&
+      postcondition.automaticGrantActive === true &&
+      (!privateLane || privateRouting?.ready),
+  );
+  const blockingReasons = [
+    ...postcondition.blockingReasons,
+    ...(postcondition.deliveryAuthority === "ask_automatically" ? [] : ["automatic_delivery_not_authorized"]),
+    ...(routingReconciliationFailed ? ["reviewer_routing_reconciliation_failed"] : []),
+    ...(privateRouting && !privateRouting.ready ? [privateRouting.reason] : []),
+  ];
+  return {
+    ...input.response,
+    postcondition: {
+      ...postcondition,
+      reviewerRoutingStatus,
+      privateRouting,
+      canSend,
+      blockingReasons: [...new Set(blockingReasons)],
+    },
   };
 }
 
@@ -1469,17 +1561,7 @@ export async function finalizeWorkspaceAgentSetup(input: {
   const invitationToken = setupFinalizationInvitationToken(input.workspaceId, idempotencyKey);
   const now = new Date();
   const client = await dbPool.connect();
-  let response:
-    | {
-        destination: string;
-        idempotent: boolean;
-        policyId?: string;
-        policyVersion?: number;
-        revision?: number;
-        invitation: Awaited<ReturnType<typeof setupFinalizationInvitationReplay>>;
-        postcondition: Awaited<ReturnType<typeof workspaceSetupFinalizationPostcondition>>;
-      }
-    | undefined;
+  let response: WorkspaceSetupFinalizationResponse | undefined;
   try {
     await client.query("BEGIN");
     const managerAccess = await client.query(
@@ -1524,7 +1606,11 @@ export async function finalizeWorkspaceAgentSetup(input: {
         postcondition: await workspaceSetupFinalizationPostcondition(client, input.workspaceId),
       };
       await client.query("COMMIT");
-      return response;
+      return setupFinalizationWithRouting({
+        accountAddress: access.actor,
+        workspaceId: input.workspaceId,
+        response,
+      });
     }
     if (status !== "in_progress" || rowNumber(setup, "revision") !== expectedRevision) {
       throw new TokenlessServiceError("Workspace setup changed. Reload and try again.", 409, "agent_setup_conflict");
@@ -1783,5 +1869,9 @@ export async function finalizeWorkspaceAgentSetup(input: {
     revision: expectedRevision + 1,
     occurredAt: now,
   });
-  return response!;
+  return setupFinalizationWithRouting({
+    accountAddress: access.actor,
+    workspaceId: input.workspaceId,
+    response: response!,
+  });
 }

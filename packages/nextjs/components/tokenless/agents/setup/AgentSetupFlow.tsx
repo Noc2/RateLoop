@@ -65,6 +65,18 @@ import type { AgentSetupReviewDraft, WorkspaceAgentSetupView } from "~~/lib/toke
 
 type SetupResponse = WorkspaceAgentSetupView;
 
+type SetupFinalizationPostcondition = {
+  canSend?: boolean;
+  deliveryAuthority?: AgentSetupReviewDraft["authority"] | null;
+  reviewerRoutingStatus?: "ready" | "action_required" | "not_required";
+  privateRouting?: {
+    reason?: string;
+    panelSize?: number;
+    syncedReviewerCount?: number;
+    selectedReviewerCount?: number;
+  } | null;
+};
+
 const ACTIVE_CONNECTION_STATES = new Set([
   "issued",
   "install_required",
@@ -109,6 +121,26 @@ function reviewAuthoritySummary(authority: AgentSetupReviewDraft["authority"], r
   return "Check whether review is required; do not prepare, send, or spend";
 }
 
+function finalizationMessage(postcondition: SetupFinalizationPostcondition | null) {
+  if (!postcondition) return null;
+  if (postcondition.canSend) return "Ready. This agent can send eligible review requests to the saved reviewers.";
+  if (postcondition.deliveryAuthority !== "ask_automatically") {
+    return "Setup is complete. The agent will stop at the authority level you selected.";
+  }
+  const routing = postcondition.privateRouting;
+  if (routing?.reason === "reviewer_seats_insufficient") {
+    const missing = Math.max(0, Number(routing.panelSize ?? 0) - Number(routing.syncedReviewerCount ?? 0));
+    return `Setup is complete. Automatic requests will unlock after ${missing || "enough"} more reviewer${missing === 1 ? "" : "s"} join.`;
+  }
+  if (routing?.reason === "expertise_coverage_insufficient") {
+    return "Setup is complete. Automatic requests will unlock when the required specialist coverage is confirmed.";
+  }
+  if (routing?.reason === "cohort_capacity_insufficient" || routing?.reason === "prior_managed_cohort_busy") {
+    return "Setup is complete. Automatic requests will resume when the current reviewer assignments finish.";
+  }
+  return "Setup is complete, but automatic requests need reviewer routing to be checked again.";
+}
+
 function reviewCompensationValues(draft: AgentSetupReviewDraft | null | undefined) {
   const values = reviewCompensationFormValues(draft?.requestProfile, draft?.authority);
   return draft?.selection.mode === "manual" ? { ...values, authority: "check_only" as const } : values;
@@ -137,6 +169,9 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   const [announcement, setAnnouncement] = useState("");
   const [connectionMessage, setConnectionMessage] = useState<string | null>(null);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [finalizationPostcondition, setFinalizationPostcondition] = useState<SetupFinalizationPostcondition | null>(
+    null,
+  );
   const [workspaceName, setWorkspaceName] = useState(initialSetup.workspaceName);
   const [reviewFrequency, setReviewFrequency] = useState<ReviewFrequencyFormValues>(() =>
     reviewFrequencyFormValues(initialSetup.reviewDraft?.selection),
@@ -173,11 +208,14 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   const [expertiseCoverage, setExpertiseCoverage] = useState<PrivateExpertiseCoverage | null>(null);
   const [expertiseCoverageLoading, setExpertiseCoverageLoading] = useState(false);
   const [expertiseCoverageError, setExpertiseCoverageError] = useState<string | null>(null);
+  const [confirmedReviewerCount, setConfirmedReviewerCount] = useState<number | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const connectionMessageRef = useRef<HTMLTextAreaElement>(null);
   const reviewDetailsRef = useRef<HTMLDetailsElement>(null);
   const invitationExpertiseInitialized = useRef(false);
   const focusOnNavigation = useRef(false);
+  const finalizationKeyRef = useRef<string | null>(null);
+  const peopleDecisionTouched = useRef(false);
   const currentStep = setup.currentStep === "complete" ? "people" : setup.currentStep;
   const privateExpertiseRequirements = useMemo(
     () =>
@@ -200,6 +238,11 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     .filter(Boolean)
     .join(" ");
   const reviewerCount = reviewTiming.panelSize || "—";
+  const requiredReviewerCount = Number(setup.reviewDraft?.requestProfile.panelSize ?? 0);
+  const confirmedReviewerSeatsReady =
+    requiredReviewerCount > 0 && Number(confirmedReviewerCount ?? 0) >= requiredReviewerCount;
+  const confirmedReviewerPoolReady =
+    confirmedReviewerSeatsReady && (privateExpertiseRequirements.length === 0 || expertiseCoverage?.ready === true);
   const reviewerDetailsSummary = `${
     reviewAudience.audience === "private_invited" ? "Invited reviewers · private material" : "Public-safe material"
   } · ${reviewerCount} reviewer${reviewerCount === "1" ? "" : "s"} · ${
@@ -332,6 +375,32 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   useEffect(() => {
     if (currentStep !== "people") return;
     const groupId = setup.reviewDraft?.requestProfile.privateGroupId ?? setup.privateGroupId;
+    if (!groupId) {
+      setConfirmedReviewerCount(null);
+      return;
+    }
+    const controller = new AbortController();
+    void fetch(`/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/private-groups`, {
+      cache: "no-store",
+      credentials: "same-origin",
+      signal: controller.signal,
+    })
+      .then(readJson)
+      .then(body => {
+        if (controller.signal.aborted) return;
+        const groups = Array.isArray(body.groups) ? (body.groups as Array<Record<string, unknown>>) : [];
+        const group = groups.find(candidate => candidate.groupId === groupId);
+        setConfirmedReviewerCount(typeof group?.memberCount === "number" ? group.memberCount : 0);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setConfirmedReviewerCount(null);
+      });
+    return () => controller.abort();
+  }, [currentStep, setup.privateGroupId, setup.reviewDraft?.requestProfile.privateGroupId, setup.workspaceId]);
+
+  useEffect(() => {
+    if (currentStep !== "people") return;
+    const groupId = setup.reviewDraft?.requestProfile.privateGroupId ?? setup.privateGroupId;
     if (!groupId || privateExpertiseRequirements.length === 0) {
       setExpertiseCoverage(null);
       setExpertiseCoverageError(null);
@@ -386,6 +455,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     () => setReviewTiming(reviewTimingFormValues(setup.reviewDraft?.requestProfile)),
     [setup.reviewDraft?.requestProfile],
   );
+
+  useEffect(() => {
+    if (currentStep === "people" && confirmedReviewerPoolReady && !peopleDecisionTouched.current) {
+      setPeopleDecision("later");
+    }
+  }, [confirmedReviewerPoolReady, currentStep]);
 
   useEffect(() => setReviewCompensation(reviewCompensationValues(setup.reviewDraft)), [setup.reviewDraft]);
 
@@ -851,11 +926,14 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     setError(null);
     setInviteToken(null);
     try {
+      const idempotencyKey = finalizationKeyRef.current ?? crypto.randomUUID();
+      finalizationKeyRef.current = idempotencyKey;
       const body = await readJson(
-        await fetch(`/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/agent-setup/people`, {
+        await fetch(`/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/agent-setup/finalize`, {
           method: "POST",
           body: JSON.stringify({
             revision: setup.revision,
+            idempotencyKey,
             decision,
             createInvitation: decision === "invited",
             intendedEmail: form.get("intendedEmail") || null,
@@ -867,7 +945,23 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       );
       const invitation = body.invitation as Record<string, unknown> | null;
       if (invitation && typeof invitation.token === "string") setInviteToken(invitation.token);
-      await loadStep("people", { replace: true, focus: false });
+      const postcondition = (body.postcondition ?? null) as SetupFinalizationPostcondition | null;
+      setFinalizationPostcondition(postcondition);
+      setSetup(current => ({
+        ...current,
+        status: "completed",
+        complete: true,
+        currentStep: "complete",
+        peopleDecision: decision as "invited" | "later" | "not_required",
+        revision: typeof body.revision === "number" ? body.revision : current.revision,
+      }));
+      if (!invitation?.token) {
+        const destination =
+          typeof body.destination === "string"
+            ? body.destination
+            : `/agents?workspace=${encodeURIComponent(setup.workspaceId)}&tab=overview`;
+        window.location.assign(destination);
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to save the people step.");
     } finally {
@@ -876,6 +970,10 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   }
 
   async function finishSetup() {
+    if (setup.complete) {
+      window.location.assign(`/agents?workspace=${encodeURIComponent(setup.workspaceId)}&tab=overview`);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -899,6 +997,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   }
 
   const back = stepBefore(currentStep);
+  const finalizedStatusMessage = finalizationMessage(finalizationPostcondition);
   const backButton = back ? (
     <Button
       variant="secondary"
@@ -1745,6 +1844,29 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               title="People"
               description="Invite reviewers and check that required specialist seats are covered."
             />
+            {setup.reviewDraft?.requestProfile.audience !== "public_network" ? (
+              <section className="surface-card-nested mt-5 flex flex-wrap items-center justify-between gap-3 p-4">
+                <div>
+                  <h3 className="font-semibold">Confirmed reviewers</h3>
+                  <p className="mt-1 text-sm text-base-content/60">
+                    {confirmedReviewerCount === null
+                      ? "Checking the saved reviewer group…"
+                      : `${confirmedReviewerCount}/${requiredReviewerCount} seats ready`}
+                  </p>
+                </div>
+                {confirmedReviewerCount !== null ? (
+                  <span
+                    className={`rounded-md px-2 py-1 text-xs font-medium ${
+                      confirmedReviewerSeatsReady
+                        ? "bg-emerald-300/10 text-emerald-100"
+                        : "bg-amber-200/10 text-amber-100"
+                    }`}
+                  >
+                    {confirmedReviewerSeatsReady ? "Ready" : "Action required"}
+                  </span>
+                ) : null}
+              </section>
+            ) : null}
             {privateExpertiseRequirements.length > 0 ? (
               <section className="surface-card-nested mt-5 p-4" aria-labelledby="setup-specialist-coverage-heading">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1826,7 +1948,10 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                           name="decision"
                           value="invited"
                           checked={peopleDecision === "invited"}
-                          onChange={() => setPeopleDecision("invited")}
+                          onChange={() => {
+                            peopleDecisionTouched.current = true;
+                            setPeopleDecision("invited");
+                          }}
                           label="Create a one-use code"
                           description="The code expires in seven days."
                         />
@@ -1835,9 +1960,16 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                           name="decision"
                           value="later"
                           checked={peopleDecision === "later"}
-                          onChange={() => setPeopleDecision("later")}
-                          label="Invite later"
-                          description="The saved reviewer group stays ready."
+                          onChange={() => {
+                            peopleDecisionTouched.current = true;
+                            setPeopleDecision("later");
+                          }}
+                          label={expertiseCoverage?.ready ? "Use confirmed reviewers" : "Invite later"}
+                          description={
+                            expertiseCoverage?.ready
+                              ? "No new code is needed."
+                              : "Automatic requests stay unavailable until enough reviewers join."
+                          }
                         />
                       </SetupChoiceGroup>
                     </fieldset>
@@ -1914,7 +2046,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 <SetupActionBar>
                   {backButton}
                   <Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={busy}>
-                    {busy ? "Saving…" : "Continue"}
+                    {busy ? "Finishing…" : "Finish setup"}
                   </Button>
                 </SetupActionBar>
               </form>
@@ -1972,6 +2104,18 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     </p>
                   ) : null}
                 </div>
+                {finalizedStatusMessage ? (
+                  <p
+                    className={`rounded-xl border px-4 py-3 text-sm ${
+                      finalizationPostcondition?.canSend
+                        ? "border-success/30 bg-success/10 text-success"
+                        : "border-warning/30 bg-warning/10 text-warning"
+                    }`}
+                    role="status"
+                  >
+                    {finalizedStatusMessage}
+                  </p>
+                ) : null}
                 <SetupActionBar className="mt-0">
                   {backButton}
                   <Button
@@ -1980,7 +2124,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     disabled={busy}
                     onClick={() => void finishSetup()}
                   >
-                    {busy ? "Finishing…" : "Finish setup"}
+                    {busy ? "Finishing…" : setup.complete ? "Go to agents" : "Finish setup"}
                   </Button>
                 </SetupActionBar>
               </div>

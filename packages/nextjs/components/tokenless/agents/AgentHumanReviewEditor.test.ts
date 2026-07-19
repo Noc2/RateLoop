@@ -42,6 +42,9 @@ test("the contextual editor owns every human-review dimension through one canoni
   assert.match(source, /delegation\.publishingPolicy\.id/);
   assert.match(source, /connection\?\.allowedWorkflowKeys/);
   assert.match(source, /provision: "private_invited_unpaid"/);
+  assert.match(source, /privateReviewRouting\?\.ready/);
+  assert.match(source, /Automatic review requests are ready/);
+  assert.match(source, /unlock when enough invited reviewers join/);
   assert.match(source, /privateUnpaidBootstrapAvailable/);
   assert.match(source, /view\.connection\?\.connectionStatus === "connected"/);
   assert.match(routingSource, /disabled=\{automaticUnavailable\}/);

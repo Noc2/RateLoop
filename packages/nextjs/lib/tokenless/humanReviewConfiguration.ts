@@ -25,6 +25,10 @@ import {
 } from "~~/lib/tokenless/reviewRequestProfiles";
 import { validateReviewerExpertiseRequirementsWithClient } from "~~/lib/tokenless/reviewerExpertiseDefinitions";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import {
+  type WorkspacePrivateReviewRoutingReadiness,
+  provisionWorkspacePrivateReviewRouting,
+} from "~~/lib/tokenless/workspacePrivateReviewRouting";
 
 type Row = Record<string, unknown>;
 
@@ -1762,7 +1766,22 @@ export async function putHumanReviewConfigurationForOwner(input: PutHumanReviewC
       }),
     ),
   );
-  return { configuration: saved };
+  let privateReviewRouting: WorkspacePrivateReviewRoutingReadiness | null = null;
+  let privateReviewRoutingReconciliationFailed = false;
+  if (body.requestProfile.audience === "private_invited") {
+    try {
+      privateReviewRouting = await provisionWorkspacePrivateReviewRouting({
+        accountAddress: actor,
+        workspaceId: input.workspaceId,
+        profileId: saved.requestProfile.id,
+        profileVersion: saved.requestProfile.version,
+        profileHash: saved.requestProfile.hash,
+      });
+    } catch {
+      privateReviewRoutingReconciliationFailed = true;
+    }
+  }
+  return { configuration: saved, privateReviewRouting, privateReviewRoutingReconciliationFailed };
 }
 
 function connectionFromRow(row: Row) {
