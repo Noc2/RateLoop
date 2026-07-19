@@ -16,11 +16,14 @@ function isInteractiveTarget(target: EventTarget | null) {
 export function ReviewerShell({
   advanceDisabled,
   advanceLabel,
+  backDisabled = false,
+  backLabel = "Previous case",
   busyLabel,
   caseIndex,
   children,
   laneHeader,
   onAdvance,
+  onBack,
   onSelectFirst,
   onSelectSecond,
   rationaleRef,
@@ -29,11 +32,14 @@ export function ReviewerShell({
 }: {
   advanceDisabled: boolean;
   advanceLabel: string;
+  backDisabled?: boolean;
+  backLabel?: string;
   busyLabel?: string | null;
   caseIndex: number;
   children: ReactNode;
   laneHeader: ReactNode;
   onAdvance: () => void;
+  onBack?: () => void;
   onSelectFirst: () => void;
   onSelectSecond: () => void;
   rationaleRef?: RefObject<HTMLTextAreaElement | null>;
@@ -83,9 +89,16 @@ export function ReviewerShell({
       {children}
 
       <Card className="rounded-2xl p-4 sm:p-5">
-        <Button type="button" className="w-full px-6" disabled={advanceDisabled} onClick={onAdvance}>
-          {busyLabel ?? advanceLabel}
-        </Button>
+        <div className={onBack ? "grid gap-3 sm:grid-cols-2" : undefined}>
+          {onBack ? (
+            <Button type="button" variant="secondary" className="w-full px-6" disabled={backDisabled} onClick={onBack}>
+              {backLabel}
+            </Button>
+          ) : null}
+          <Button type="button" className="w-full px-6" disabled={advanceDisabled} onClick={onAdvance}>
+            {busyLabel ?? advanceLabel}
+          </Button>
+        </div>
         {shortcutsEnabled ? (
           <p className="mt-3 text-center text-xs text-base-content/55">
             Keyboard: 1 or 2 selects · R opens rationale · Enter advances

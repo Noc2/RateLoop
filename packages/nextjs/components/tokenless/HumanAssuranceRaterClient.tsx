@@ -152,6 +152,7 @@ export function HumanAssuranceRaterClient({
   const [canRecover, setCanRecover] = useState(false);
   const [serverAcceptance, setServerAcceptance] = useState<AssuranceServerAcceptance | null>(initialServerAcceptance);
   const [activeCaseIndex, setActiveCaseIndex] = useState(0);
+  const [reviewingResponses, setReviewingResponses] = useState(false);
   const [restoredDraftKey, setRestoredDraftKey] = useState<string | null>(null);
   const [activePrincipalId, setActivePrincipalId] = useState(principalId);
   const [sessionCheckError, setSessionCheckError] = useState<string | null>(null);
@@ -190,6 +191,7 @@ export function HumanAssuranceRaterClient({
           setDrafts({});
           setRestoredDraftKey(null);
           setActiveCaseIndex(0);
+          setReviewingResponses(false);
           setServerAcceptance(null);
           setCanRecover(false);
           setBusyAction(null);
@@ -281,6 +283,7 @@ export function HumanAssuranceRaterClient({
     setTask(nextTask);
     setDrafts(emptyDrafts(nextTask.cases));
     setActiveCaseIndex(0);
+    setReviewingResponses(false);
     setServerAcceptance(null);
     setCanRecover(false);
   }
@@ -412,12 +415,22 @@ export function HumanAssuranceRaterClient({
   }
 
   function advanceReview() {
-    if (!task || !activeCase || !activeCaseComplete || serverAcceptance) return;
+    if (!task || serverAcceptance) return;
+    if (reviewingResponses) {
+      void submitResponses();
+      return;
+    }
+    if (!activeCase || !activeCaseComplete) return;
     if (activeCaseIndex < task.cases.length - 1) {
       setActiveCaseIndex(index => index + 1);
       return;
     }
-    void submitResponses();
+    if (completeDraft) setReviewingResponses(true);
+  }
+
+  function returnToCase(index: number) {
+    setReviewingResponses(false);
+    setActiveCaseIndex(index);
   }
 
   return (
@@ -541,15 +554,23 @@ export function HumanAssuranceRaterClient({
               advanceDisabled={
                 busyAction !== null ||
                 serverAcceptance !== null ||
-                (activeCaseIndex === task.cases.length - 1 ? !completeDraft : !activeCaseComplete)
+                (reviewingResponses
+                  ? !completeDraft
+                  : activeCaseIndex === task.cases.length - 1
+                    ? !completeDraft
+                    : !activeCaseComplete)
               }
               advanceLabel={
                 serverAcceptance
                   ? "Review recorded"
-                  : activeCaseIndex === task.cases.length - 1
+                  : reviewingResponses
                     ? "Submit review"
-                    : "Next case"
+                    : activeCaseIndex === task.cases.length - 1
+                      ? "Review answers"
+                      : "Next case"
               }
+              backDisabled={busyAction !== null || serverAcceptance !== null}
+              backLabel={reviewingResponses ? "Back to last case" : "Previous case"}
               busyLabel={busyAction === "response" ? "Submitting…" : null}
               caseIndex={activeCaseIndex}
               laneHeader={
@@ -562,9 +583,17 @@ export function HumanAssuranceRaterClient({
                 </>
               }
               onAdvance={advanceReview}
+              onBack={
+                reviewingResponses
+                  ? () => returnToCase(task.cases.length - 1)
+                  : activeCaseIndex > 0
+                    ? () => setActiveCaseIndex(index => index - 1)
+                    : undefined
+              }
               onSelectFirst={() => activeCase && updateDraft(activeCase.caseId, { selectedOption: "A" })}
               onSelectSecond={() => activeCase && updateDraft(activeCase.caseId, { selectedOption: "B" })}
               rationaleRef={rationaleRef}
+              shortcutsEnabled={!reviewingResponses}
               totalCases={task.cases.length}
             >
               <Card className="rounded-2xl p-5 sm:p-7">
@@ -582,6 +611,7 @@ export function HumanAssuranceRaterClient({
                       setTask(null);
                       setDrafts({});
                       setActiveCaseIndex(0);
+                      setReviewingResponses(false);
                       setServerAcceptance(null);
                     }}
                   >
@@ -632,111 +662,145 @@ export function HumanAssuranceRaterClient({
                 </div>
               </Card>
 
-              {activeCase
-                ? (() => {
-                    const reviewCase = activeCase;
-                    const draft = drafts[reviewCase.caseId] ?? {
-                      selectedOption: null,
-                      failureTags: [],
-                      rationale: "",
-                    };
-                    const failureTags = reviewCase.failureTags?.length
-                      ? reviewCase.failureTags
-                      : task.rubric.failureTags;
-                    return (
-                      <Card as="article" key={reviewCase.caseId} className="rounded-2xl p-5 sm:p-7">
-                        <p className="font-mono text-xs uppercase tracking-widest text-base-content/45">
-                          Case {String(activeCaseIndex + 1).padStart(2, "0")}
+              {reviewingResponses ? (
+                <Card as="section" className="rounded-2xl p-5 sm:p-7" aria-labelledby="private-review-summary">
+                  <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">
+                    Final check
+                  </p>
+                  <h2 id="private-review-summary" className="mt-2 text-2xl font-semibold">
+                    Review every answer before submitting
+                  </h2>
+                  <p className="mt-2 text-sm leading-6 text-base-content/60">
+                    Submission closes this assignment. Open any case below to make a correction first.
+                  </p>
+                  <ol className="mt-5 space-y-3">
+                    {task.cases.map((reviewCase, index) => {
+                      const draft = drafts[reviewCase.caseId];
+                      return (
+                        <li
+                          key={reviewCase.caseId}
+                          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/20 p-4"
+                        >
+                          <div>
+                            <p className="text-sm font-semibold">
+                              {index + 1}. {reviewCase.title}
+                            </p>
+                            <p className="mt-1 text-xs text-base-content/55">
+                              Candidate {draft?.selectedOption} · {draft?.failureTags.length ?? 0} failure tag
+                              {(draft?.failureTags.length ?? 0) === 1 ? "" : "s"}
+                            </p>
+                          </div>
+                          <Button type="button" variant="secondary" size="sm" onClick={() => returnToCase(index)}>
+                            Edit case {index + 1}
+                          </Button>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </Card>
+              ) : activeCase ? (
+                (() => {
+                  const reviewCase = activeCase;
+                  const draft = drafts[reviewCase.caseId] ?? {
+                    selectedOption: null,
+                    failureTags: [],
+                    rationale: "",
+                  };
+                  const failureTags = reviewCase.failureTags?.length ? reviewCase.failureTags : task.rubric.failureTags;
+                  return (
+                    <Card as="article" key={reviewCase.caseId} className="rounded-2xl p-5 sm:p-7">
+                      <p className="font-mono text-xs uppercase tracking-widest text-base-content/45">
+                        Case {String(activeCaseIndex + 1).padStart(2, "0")}
+                      </p>
+                      <h3 className="mt-2 text-2xl font-semibold">{reviewCase.title}</h3>
+                      <p className="mt-3 text-sm leading-6 text-base-content/60">{reviewCase.instructions}</p>
+                      {reviewCase.objectiveReference ? (
+                        <p className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3 text-xs leading-5 text-base-content/55">
+                          Objective reference: {reviewCase.objectiveReference}
                         </p>
-                        <h3 className="mt-2 text-2xl font-semibold">{reviewCase.title}</h3>
-                        <p className="mt-3 text-sm leading-6 text-base-content/60">{reviewCase.instructions}</p>
-                        {reviewCase.objectiveReference ? (
-                          <p className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3 text-xs leading-5 text-base-content/55">
-                            Objective reference: {reviewCase.objectiveReference}
-                          </p>
-                        ) : null}
-                        <fieldset className="mt-6">
-                          <legend className="text-sm font-semibold">{task.rubric.prompt}</legend>
-                          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                            {reviewCase.options.map(option => (
-                              <label
-                                key={option.key}
-                                className={`rounded-lg border p-4 transition-colors ${
-                                  draft.selectedOption === option.key
-                                    ? "border-[var(--rateloop-green)] bg-emerald-300/10"
-                                    : "border-white/10 bg-black/20 hover:border-white/25"
-                                }`}
-                              >
-                                <span className="flex items-center justify-between gap-3">
-                                  <span className="flex items-center gap-3 font-semibold">
-                                    <input
-                                      type="radio"
-                                      name={`choice-${reviewCase.caseId}`}
-                                      value={option.key}
-                                      checked={draft.selectedOption === option.key}
-                                      disabled={serverAcceptance !== null}
-                                      onChange={() => updateDraft(reviewCase.caseId, { selectedOption: option.key })}
-                                    />
-                                    Candidate {option.key}
-                                  </span>
-                                  {serverAcceptance ? (
-                                    <span className="text-xs text-base-content/40">Access closed</span>
-                                  ) : (
-                                    <a
-                                      href={artifactUrl(task.assignmentId, option)}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="text-xs font-semibold underline underline-offset-4"
-                                    >
-                                      Open private artifact
-                                    </a>
-                                  )}
+                      ) : null}
+                      <fieldset className="mt-6">
+                        <legend className="text-sm font-semibold">{task.rubric.prompt}</legend>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                          {reviewCase.options.map(option => (
+                            <label
+                              key={option.key}
+                              className={`rounded-lg border p-4 transition-colors ${
+                                draft.selectedOption === option.key
+                                  ? "border-[var(--rateloop-green)] bg-emerald-300/10"
+                                  : "border-white/10 bg-black/20 hover:border-white/25"
+                              }`}
+                            >
+                              <span className="flex items-center justify-between gap-3">
+                                <span className="flex items-center gap-3 font-semibold">
+                                  <input
+                                    type="radio"
+                                    name={`choice-${reviewCase.caseId}`}
+                                    value={option.key}
+                                    checked={draft.selectedOption === option.key}
+                                    disabled={serverAcceptance !== null}
+                                    onChange={() => updateDraft(reviewCase.caseId, { selectedOption: option.key })}
+                                  />
+                                  Candidate {option.key}
                                 </span>
-                                <span className="mt-3 block break-all font-mono text-[11px] text-base-content/40">
-                                  {option.artifactId}
-                                </span>
-                              </label>
-                            ))}
-                          </div>
-                        </fieldset>
+                                {serverAcceptance ? (
+                                  <span className="text-xs text-base-content/40">Access closed</span>
+                                ) : (
+                                  <a
+                                    href={artifactUrl(task.assignmentId, option)}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-xs font-semibold underline underline-offset-4"
+                                  >
+                                    Open private artifact
+                                  </a>
+                                )}
+                              </span>
+                              <span className="mt-3 block break-all font-mono text-[11px] text-base-content/40">
+                                {option.artifactId}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </fieldset>
 
-                        <fieldset className="mt-6 border-t border-white/10 pt-5">
-                          <legend className="text-sm font-semibold">Failure tags</legend>
-                          <p className="mt-1 text-xs leading-5 text-base-content/45">
-                            Select every issue that materially affected your decision.
-                          </p>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {failureTags.map(tag => (
-                              <Chip
-                                key={tag.key}
-                                checked={draft.failureTags.includes(tag.key)}
-                                disabled={serverAcceptance !== null}
-                                onChange={() => toggleFailureTag(reviewCase.caseId, tag.key)}
-                              >
-                                {tag.label}
-                              </Chip>
-                            ))}
-                          </div>
-                        </fieldset>
+                      <fieldset className="mt-6 border-t border-white/10 pt-5">
+                        <legend className="text-sm font-semibold">Failure tags</legend>
+                        <p className="mt-1 text-xs leading-5 text-base-content/45">
+                          Select every issue that materially affected your decision.
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {failureTags.map(tag => (
+                            <Chip
+                              key={tag.key}
+                              checked={draft.failureTags.includes(tag.key)}
+                              disabled={serverAcceptance !== null}
+                              onChange={() => toggleFailureTag(reviewCase.caseId, tag.key)}
+                            >
+                              {tag.label}
+                            </Chip>
+                          ))}
+                        </div>
+                      </fieldset>
 
-                        <label className="mt-6 block text-sm font-semibold">
-                          Decision rationale
-                          <textarea
-                            ref={rationaleRef}
-                            className="textarea mt-2 min-h-32 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)] text-sm leading-6"
-                            value={draft.rationale}
-                            onChange={event => updateDraft(reviewCase.caseId, { rationale: event.target.value })}
-                            minLength={Math.max(10, task.rubric.rationale.minLength ?? 0)}
-                            maxLength={Math.min(2_000, task.rubric.rationale.maxLength)}
-                            disabled={serverAcceptance !== null}
-                            placeholder="Identify the concrete difference that determined your choice."
-                            required
-                          />
-                        </label>
-                      </Card>
-                    );
-                  })()
-                : null}
+                      <label className="mt-6 block text-sm font-semibold">
+                        Decision rationale
+                        <textarea
+                          ref={rationaleRef}
+                          className="textarea mt-2 min-h-32 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)] text-sm leading-6"
+                          value={draft.rationale}
+                          onChange={event => updateDraft(reviewCase.caseId, { rationale: event.target.value })}
+                          minLength={Math.max(10, task.rubric.rationale.minLength ?? 0)}
+                          maxLength={Math.min(2_000, task.rubric.rationale.maxLength)}
+                          disabled={serverAcceptance !== null}
+                          placeholder="Identify the concrete difference that determined your choice."
+                          required
+                        />
+                      </label>
+                    </Card>
+                  );
+                })()
+              ) : null}
 
               {serverAcceptance ? (
                 <Card className="rounded-2xl p-5 sm:p-7">

@@ -217,3 +217,69 @@ test("a transient session read failure retains private content and in-memory dra
     restoreDom();
   }
 });
+
+test("the last case opens an editable summary and submits only after explicit confirmation", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
+  const previousFetch = globalThis.fetch;
+  const secondCase = {
+    ...privateTask.cases[0]!,
+    caseId: "hacase_private_session_guard_2",
+    title: "Second private comparison",
+    options: privateTask.cases[0]!.options.map(option => ({
+      ...option,
+      artifactId: `${option.artifactId}_2`,
+      leaseId: `${option.leaseId}_2`,
+    })),
+  };
+  let responsePosts = 0;
+  globalThis.fetch = async input => {
+    const url = String(input);
+    if (url === "/api/auth/session") return Response.json(authenticatedSession(PRINCIPAL_A));
+    if (url.endsWith("/responses")) {
+      responsePosts += 1;
+      return Response.json({
+        accepted: true,
+        replay: false,
+        responseCount: 2,
+        compensation: "unpaid",
+        settlementStatus: "not_applicable",
+      });
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  };
+
+  try {
+    const view = render(
+      <HumanAssuranceRaterClient
+        principalId={PRINCIPAL_A}
+        initialTask={{ ...privateTask, cases: [privateTask.cases[0]!, secondCase] }}
+      />,
+    );
+    const user = userEvent.setup({ document });
+    await user.click(view.getByRole("radio", { name: /Candidate A/u }));
+    await user.type(view.getByRole("textbox", { name: "Decision rationale" }), "First rationale is complete.");
+    await user.click(view.getByRole("button", { name: "Next case" }));
+    await user.click(view.getByRole("radio", { name: /Candidate A/u }));
+    await user.type(view.getByRole("textbox", { name: "Decision rationale" }), "Second rationale is complete.");
+    await user.click(view.getByRole("button", { name: "Review answers" }));
+
+    assert.equal(responsePosts, 0);
+    assert.ok(view.getByRole("heading", { name: "Review every answer before submitting" }));
+    await user.click(view.getByRole("button", { name: "Edit case 1" }));
+    await user.click(view.getByRole("radio", { name: /Candidate B/u }));
+    await user.click(view.getByRole("button", { name: "Next case" }));
+    await user.click(view.getByRole("button", { name: "Review answers" }));
+    assert.equal(responsePosts, 0);
+    await user.click(view.getByRole("button", { name: "Submit review" }));
+
+    await waitFor(() => assert.equal(responsePosts, 1));
+    assert.ok(view.getByRole("status").textContent?.includes("2 assigned responses"));
+  } finally {
+    cleanup();
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
