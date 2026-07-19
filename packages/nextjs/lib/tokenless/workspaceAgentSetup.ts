@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import type { PoolClient } from "pg";
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
@@ -7,7 +8,10 @@ import { AGENT_SETUP_SCREEN_STEPS, type AgentSetupScreenStep } from "~~/lib/toke
 import { getHumanReviewConfigurationForOwner } from "~~/lib/tokenless/humanReviewConfiguration";
 import { sameAutomaticHumanReviewGrantScopes } from "~~/lib/tokenless/humanReviewGrantScopes";
 import { recordWorkspaceSetupFunnelEvent } from "~~/lib/tokenless/onboardingObservability";
-import { createPrivateGroupInvitation } from "~~/lib/tokenless/privateGroups";
+import {
+  createPrivateGroupInvitation,
+  createPrivateGroupInvitationInTransaction,
+} from "~~/lib/tokenless/privateGroups";
 import { MAXIMUM_REVIEW_PANEL_SIZE } from "~~/lib/tokenless/reviewRequestProfiles";
 import {
   type ReviewerExpertiseRequirement,
@@ -1227,4 +1231,557 @@ export async function completeWorkspaceAgentSetup(input: {
     policyVersion,
     revision: expectedRevision + 1,
   };
+}
+
+const SETUP_FINALIZATION_IDEMPOTENCY_KEY_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+
+function setupFinalizationIdempotencyKey(value: unknown) {
+  if (typeof value !== "string" || !SETUP_FINALIZATION_IDEMPOTENCY_KEY_PATTERN.test(value)) {
+    throw new TokenlessServiceError(
+      "Setup finalization idempotency key is invalid.",
+      400,
+      "invalid_agent_setup_finalization",
+    );
+  }
+  return value.toLowerCase();
+}
+
+function setupFinalizationRequest(input: {
+  decision: unknown;
+  groupId?: unknown;
+  createInvitation?: unknown;
+  intendedEmail?: unknown;
+  expertiseDefinitionIds?: unknown;
+}) {
+  if (typeof input.decision !== "string") {
+    throw new TokenlessServiceError("People setup is invalid.", 400, "invalid_agent_setup_people");
+  }
+  if (input.groupId !== undefined && input.groupId !== null && typeof input.groupId !== "string") {
+    throw new TokenlessServiceError("People setup is invalid.", 400, "invalid_agent_setup_people");
+  }
+  if (input.createInvitation !== undefined && typeof input.createInvitation !== "boolean") {
+    throw new TokenlessServiceError("People setup is invalid.", 400, "invalid_agent_setup_people");
+  }
+  const intendedEmail =
+    input.intendedEmail === undefined || input.intendedEmail === null || input.intendedEmail === ""
+      ? null
+      : bounded(input.intendedEmail, "Recipient email", 320)!.toLowerCase();
+  const expertiseDefinitionIds = input.expertiseDefinitionIds ?? [];
+  if (
+    !Array.isArray(expertiseDefinitionIds) ||
+    expertiseDefinitionIds.length > 8 ||
+    expertiseDefinitionIds.some(value => typeof value !== "string") ||
+    new Set(expertiseDefinitionIds).size !== expertiseDefinitionIds.length
+  ) {
+    throw new TokenlessServiceError("Invitation specialist areas are invalid.", 400, "invalid_agent_setup_people");
+  }
+  return {
+    decision: input.decision,
+    groupId: typeof input.groupId === "string" && input.groupId ? input.groupId : null,
+    createInvitation: input.createInvitation === true,
+    intendedEmail,
+    expertiseDefinitionIds: [...expertiseDefinitionIds].sort() as string[],
+  };
+}
+
+function setupFinalizationInvitationToken(workspaceId: string, idempotencyKey: string) {
+  const domain = `rateloop.workspace-agent-setup-invitation.v1\0${workspaceId}\0${idempotencyKey}`;
+  const prefix = digest(`${domain}\0prefix`).slice(0, 16);
+  const secret = createHash("sha256").update(`${domain}\0secret`).digest("base64url");
+  return `rlgi_${prefix}_${secret}`;
+}
+
+function setupFinalizationHash(value: string) {
+  return `sha256:${digest(value)}`;
+}
+
+async function setupFinalizationInvitationReplay(
+  client: Pick<PoolClient, "query">,
+  input: {
+    workspaceId: string;
+    invitationId: string | null;
+    token: string;
+    expected: boolean;
+    now: Date;
+  },
+) {
+  if (!input.invitationId) {
+    if (input.expected) {
+      throw new TokenlessServiceError(
+        "Stored setup finalization is incomplete.",
+        500,
+        "agent_setup_finalization_incomplete",
+      );
+    }
+    return null;
+  }
+  if (!input.expected) {
+    throw new TokenlessServiceError(
+      "Stored setup finalization does not match the request.",
+      409,
+      "agent_setup_finalization_conflict",
+    );
+  }
+  const invitationResult = await client.query(
+    `SELECT invitation_id,token_hash,token_prefix,expires_at,membership_expires_at,
+            maximum_redemptions,redemption_count,revoked_at
+     FROM tokenless_private_group_invitations
+     WHERE workspace_id=$1 AND invitation_id=$2 LIMIT 1 FOR SHARE`,
+    [input.workspaceId, input.invitationId],
+  );
+  const invitation = invitationResult.rows[0] as Row | undefined;
+  if (!invitation || rowString(invitation, "token_hash") !== digest(input.token)) {
+    throw new TokenlessServiceError(
+      "Stored setup invitation does not match its replay key.",
+      500,
+      "agent_setup_finalization_incomplete",
+    );
+  }
+  const maximumRedemptions = rowNumber(invitation, "maximum_redemptions")!;
+  const redemptionCount = rowNumber(invitation, "redemption_count")!;
+  const expiresAt = rowDate(invitation, "expires_at")!;
+  const status = rowDate(invitation, "revoked_at")
+    ? "revoked"
+    : new Date(expiresAt).getTime() <= input.now.getTime()
+      ? "expired"
+      : redemptionCount >= maximumRedemptions
+        ? "redeemed"
+        : "active";
+  const expertiseResult = await client.query(
+    `SELECT expertise_definition_id,expertise_definition_version,expertise_definition_hash,expires_at
+     FROM tokenless_private_group_invitation_expertise_attestations
+     WHERE invitation_id=$1 ORDER BY expertise_definition_id`,
+    [input.invitationId],
+  );
+  return {
+    invitationId: input.invitationId,
+    token: status === "active" ? input.token : null,
+    tokenPrefix: rowString(invitation, "token_prefix"),
+    expiresAt,
+    membershipExpiresAt: rowDate(invitation, "membership_expires_at"),
+    maximumRedemptions,
+    expertiseDefinitions: (expertiseResult.rows as Row[]).map(row => ({
+      definitionId: rowString(row, "expertise_definition_id")!,
+      definitionVersion: rowNumber(row, "expertise_definition_version")!,
+      definitionHash: rowString(row, "expertise_definition_hash")!,
+    })),
+    expertiseExpiresAt: rowDate(expertiseResult.rows[0] as Row | undefined, "expires_at"),
+    status,
+  };
+}
+
+async function workspaceSetupFinalizationPostcondition(client: Pick<PoolClient, "query">, workspaceId: string) {
+  const result = await client.query(
+    `SELECT s.status AS setup_status,s.people_decision,s.primary_integration_id,
+            i.status AS integration_status,ci.status AS connection_status,
+            b.enabled AS binding_enabled,b.superseded_at AS binding_superseded_at,b.authority,
+            b.publishing_policy_id,b.publishing_policy_version,
+            p.enabled AS selection_policy_enabled,p.superseded_at AS selection_policy_superseded_at,
+            r.configuration_status,r.audience,r.private_group_id,g.status AS private_group_status,
+            i.activation_mode,i.publishing_policy_id AS integration_publishing_policy_id,
+            i.publishing_policy_version AS integration_publishing_policy_version,
+            i.granted_scopes_json,i.allowed_workflow_keys_json,r.compensation_mode,r.feedback_bonus_enabled
+     FROM tokenless_workspace_agent_setups s
+     LEFT JOIN tokenless_agent_integrations i ON i.integration_id=s.primary_integration_id
+     LEFT JOIN tokenless_agent_connection_intents ci ON ci.intent_id=i.connection_intent_id
+     LEFT JOIN tokenless_agent_human_review_bindings b
+       ON b.workspace_id=s.workspace_id AND b.binding_id=s.human_review_binding_id
+      AND b.version=s.human_review_binding_version
+     LEFT JOIN tokenless_agent_review_policies p
+       ON p.workspace_id=b.workspace_id AND p.policy_id=b.selection_policy_id
+      AND p.version=b.selection_policy_version
+     LEFT JOIN tokenless_agent_review_request_profiles r
+       ON r.workspace_id=b.workspace_id AND r.profile_id=b.request_profile_id
+      AND r.version=b.request_profile_version AND r.profile_hash=b.request_profile_hash
+     LEFT JOIN tokenless_private_groups g
+       ON g.workspace_id=r.workspace_id AND g.group_id=r.private_group_id
+     WHERE s.workspace_id=$1 LIMIT 1`,
+    [workspaceId],
+  );
+  const row = result.rows[0] as Row | undefined;
+  if (!row) throw new TokenlessServiceError("Workspace setup not found.", 404, "agent_setup_not_found");
+  const audience = rowString(row, "audience");
+  const authority = rowString(row, "authority");
+  const requiresPrivateGroup = audience !== "public_network";
+  const automaticAuthority = authority === "ask_automatically";
+  const automaticGrantActive = automaticAuthority
+    ? rowString(row, "activation_mode") === "owner_approved" &&
+      rowString(row, "publishing_policy_id") === rowString(row, "integration_publishing_policy_id") &&
+      rowOptionalNumber(row, "publishing_policy_version") ===
+        rowOptionalNumber(row, "integration_publishing_policy_version") &&
+      sameAutomaticHumanReviewGrantScopes(parseJson<string[]>(row.granted_scopes_json, []), {
+        compensationMode: rowString(row, "compensation_mode") as "unpaid" | "usdc",
+        feedbackBonusEnabled: row.feedback_bonus_enabled === true || row.feedback_bonus_enabled === "t",
+      }) &&
+      parseJson<string[]>(row.allowed_workflow_keys_json, []).length > 0
+    : null;
+  const connectionActive =
+    rowString(row, "integration_status") === "active" && rowString(row, "connection_status") === "connected";
+  const reviewBindingActive =
+    (row.binding_enabled === true || row.binding_enabled === "t") &&
+    rowString(row, "binding_superseded_at") === null &&
+    (row.selection_policy_enabled === true || row.selection_policy_enabled === "t") &&
+    rowString(row, "selection_policy_superseded_at") === null &&
+    rowString(row, "configuration_status") === "ready";
+  const privateGroupStatus = requiresPrivateGroup ? rowString(row, "private_group_status") : "not_required";
+  const setupComplete = rowString(row, "setup_status") === "completed";
+  const blockingReasons = [
+    ...(setupComplete ? [] : ["setup_not_completed"]),
+    ...(connectionActive ? [] : ["connection_not_active"]),
+    ...(reviewBindingActive ? [] : ["review_binding_not_active"]),
+    ...(privateGroupStatus === "active" || privateGroupStatus === "not_required" ? [] : ["reviewer_group_not_active"]),
+    ...(automaticGrantActive === false ? ["automatic_grant_not_active"] : []),
+  ];
+  return {
+    schemaVersion: "rateloop.workspace-agent-setup-postcondition.v1" as const,
+    setupStatus: rowString(row, "setup_status"),
+    integrationId: rowString(row, "primary_integration_id"),
+    connectionActive,
+    reviewBindingActive,
+    peopleDecision: rowString(row, "people_decision"),
+    privateGroupStatus,
+    deliveryAuthority: authority,
+    automaticGrantActive,
+    setupConfigurationIntact: blockingReasons.length === 0,
+    reviewerRoutingStatus: "not_evaluated" as const,
+    blockingReasons,
+  };
+}
+
+export async function finalizeWorkspaceAgentSetup(input: {
+  accountAddress: string;
+  workspaceId: string;
+  revision: unknown;
+  idempotencyKey: unknown;
+  decision: unknown;
+  groupId?: unknown;
+  createInvitation?: unknown;
+  intendedEmail?: unknown;
+  expertiseDefinitionIds?: unknown;
+}) {
+  const access = await requireManager(input.accountAddress, input.workspaceId);
+  const expectedRevision = requiredRevision(input.revision);
+  const idempotencyKey = setupFinalizationIdempotencyKey(input.idempotencyKey);
+  const normalizedRequest = setupFinalizationRequest(input);
+  const idempotencyKeyHash = setupFinalizationHash(idempotencyKey);
+  const requestHash = setupFinalizationHash(`${idempotencyKey}\0${stableJson(normalizedRequest)}`);
+  const invitationToken = setupFinalizationInvitationToken(input.workspaceId, idempotencyKey);
+  const now = new Date();
+  const client = await dbPool.connect();
+  let response:
+    | {
+        destination: string;
+        idempotent: boolean;
+        policyId?: string;
+        policyVersion?: number;
+        revision?: number;
+        invitation: Awaited<ReturnType<typeof setupFinalizationInvitationReplay>>;
+        postcondition: Awaited<ReturnType<typeof workspaceSetupFinalizationPostcondition>>;
+      }
+    | undefined;
+  try {
+    await client.query("BEGIN");
+    const managerAccess = await client.query(
+      `SELECT m.role FROM tokenless_workspace_members m
+       JOIN tokenless_workspaces w ON w.workspace_id=m.workspace_id AND w.status='active'
+       WHERE m.workspace_id=$1 AND m.account_address=$2 AND m.role IN ('owner','admin')
+       LIMIT 1 FOR SHARE`,
+      [input.workspaceId, access.actor],
+    );
+    if (managerAccess.rowCount !== 1) {
+      throw new TokenlessServiceError("Workspace not found.", 404, "workspace_not_found");
+    }
+    const setupResult = await client.query(
+      `SELECT * FROM tokenless_workspace_agent_setups WHERE workspace_id=$1 FOR UPDATE`,
+      [input.workspaceId],
+    );
+    const setup = setupResult.rows[0] as Row | undefined;
+    if (!setup) throw new TokenlessServiceError("Workspace setup not found.", 404, "agent_setup_not_found");
+    const status = rowString(setup, "status");
+    if (status === "completed") {
+      if (
+        rowString(setup, "finalization_idempotency_key_hash") !== idempotencyKeyHash ||
+        rowString(setup, "finalization_request_hash") !== requestHash
+      ) {
+        throw new TokenlessServiceError(
+          "Workspace setup was already finalized by another request.",
+          409,
+          "agent_setup_finalization_conflict",
+        );
+      }
+      response = {
+        destination: `/agents?workspace=${encodeURIComponent(input.workspaceId)}&tab=overview`,
+        idempotent: true,
+        revision: rowNumber(setup, "revision") ?? undefined,
+        invitation: await setupFinalizationInvitationReplay(client, {
+          workspaceId: input.workspaceId,
+          invitationId: rowString(setup, "people_invitation_id"),
+          token: invitationToken,
+          expected: normalizedRequest.createInvitation,
+          now,
+        }),
+        postcondition: await workspaceSetupFinalizationPostcondition(client, input.workspaceId),
+      };
+      await client.query("COMMIT");
+      return response;
+    }
+    if (status !== "in_progress" || rowNumber(setup, "revision") !== expectedRevision) {
+      throw new TokenlessServiceError("Workspace setup changed. Reload and try again.", 409, "agent_setup_conflict");
+    }
+    const intentId = rowString(setup, "primary_connection_intent_id");
+    const integrationResult = await client.query(
+      `SELECT i.*,ci.status AS connection_status
+       FROM tokenless_agent_integrations i
+       JOIN tokenless_agent_connection_intents ci ON ci.intent_id=i.connection_intent_id
+       WHERE i.workspace_id=$1 AND i.connection_intent_id=$2 AND i.status='active' FOR UPDATE`,
+      [input.workspaceId, intentId],
+    );
+    const integration = integrationResult.rows[0] as Row | undefined;
+    if (
+      !integration ||
+      rowString(integration, "connection_status") !== "connected" ||
+      rowString(integration, "agent_version_id") !== rowString(setup, "confirmed_agent_version_id") ||
+      !rowString(setup, "agent_confirmed_at") ||
+      !rowString(setup, "reviews_confirmed_at")
+    ) {
+      throw new TokenlessServiceError(
+        "Workspace setup prerequisites changed.",
+        409,
+        "agent_setup_prerequisite_mismatch",
+      );
+    }
+    const bindingId = rowString(setup, "human_review_binding_id");
+    const bindingVersion = rowNumber(setup, "human_review_binding_version");
+    const bindingResult = await client.query(
+      `SELECT b.selection_policy_id,b.selection_policy_version,b.publishing_policy_id,b.publishing_policy_version,
+              b.authority,r.profile_id,r.version AS profile_version,r.profile_hash,
+              r.audience,r.private_group_id,r.configuration_status,r.response_window_seconds,r.panel_size,
+              r.compensation_mode,r.feedback_bonus_enabled,r.expertise_requirements_json
+       FROM tokenless_agent_human_review_bindings b
+       JOIN tokenless_agent_review_policies p
+         ON p.workspace_id=b.workspace_id AND p.policy_id=b.selection_policy_id
+        AND p.version=b.selection_policy_version AND p.enabled=true AND p.superseded_at IS NULL
+       JOIN tokenless_agent_review_request_profiles r
+         ON r.workspace_id=b.workspace_id AND r.profile_id=b.request_profile_id
+        AND r.version=b.request_profile_version AND r.profile_hash=b.request_profile_hash
+        AND r.superseded_at IS NULL
+       WHERE b.workspace_id=$1 AND b.binding_id=$2 AND b.version=$3
+         AND b.agent_id=$4 AND b.agent_version_id=$5 AND b.enabled=true AND b.superseded_at IS NULL
+       FOR SHARE`,
+      [
+        input.workspaceId,
+        bindingId,
+        bindingVersion,
+        rowString(integration, "agent_id"),
+        rowString(integration, "agent_version_id"),
+      ],
+    );
+    const binding = bindingResult.rows[0] as Row | undefined;
+    const requiresInvitedGroup = rowString(binding, "audience") !== "public_network";
+    if (
+      (requiresInvitedGroup && normalizedRequest.decision !== "invited" && normalizedRequest.decision !== "later") ||
+      (!requiresInvitedGroup && normalizedRequest.decision !== "not_required")
+    ) {
+      throw new TokenlessServiceError(
+        "People decision does not match the review audience.",
+        400,
+        "invalid_agent_setup_people",
+      );
+    }
+    const groupId = rowString(binding, "private_group_id");
+    if (
+      (normalizedRequest.groupId && normalizedRequest.groupId !== groupId) ||
+      (requiresInvitedGroup && (!groupId || rowString(setup, "private_group_id") !== groupId))
+    ) {
+      throw new TokenlessServiceError("The exact reviewer group is unavailable.", 409, "agent_setup_group_unavailable");
+    }
+    const groupStatus =
+      requiresInvitedGroup && groupId
+        ? rowString(
+            (
+              await client.query(
+                `SELECT status FROM tokenless_private_groups
+                 WHERE workspace_id=$1 AND group_id=$2 FOR SHARE`,
+                [input.workspaceId, groupId],
+              )
+            ).rows[0] as Row | undefined,
+            "status",
+          )
+        : null;
+    const authority = rowString(binding, "authority");
+    const publishingPolicyId = rowString(binding, "publishing_policy_id");
+    const publishingPolicyVersion = rowOptionalNumber(binding, "publishing_policy_version");
+    const automaticAuthority = authority === "ask_automatically";
+    const integrationScopes = parseJson<string[]>(integration.granted_scopes_json, []);
+    const allowedWorkflowKeys = parseJson<string[]>(integration.allowed_workflow_keys_json, []);
+    const exactAutomaticGrant =
+      automaticAuthority &&
+      Boolean(publishingPolicyId && publishingPolicyVersion) &&
+      rowString(integration, "activation_mode") === "owner_approved" &&
+      rowString(integration, "publishing_policy_id") === publishingPolicyId &&
+      rowOptionalNumber(integration, "publishing_policy_version") === publishingPolicyVersion &&
+      sameAutomaticHumanReviewGrantScopes(integrationScopes, {
+        compensationMode: rowString(binding, "compensation_mode") as "unpaid" | "usdc",
+        feedbackBonusEnabled: binding?.feedback_bonus_enabled === true || binding?.feedback_bonus_enabled === "t",
+      }) &&
+      allowedWorkflowKeys.length > 0;
+    const safeAuthority = authority === "check_only" || authority === "prepare_for_approval";
+    const groupMatches = requiresInvitedGroup
+      ? Boolean(groupId && groupStatus === "active")
+      : groupId === null && rowString(setup, "private_group_id") === null;
+    if (
+      !binding ||
+      (!safeAuthority && !exactAutomaticGrant) ||
+      (safeAuthority && publishingPolicyId !== null) ||
+      rowString(binding, "configuration_status") !== "ready" ||
+      rowOptionalNumber(binding, "response_window_seconds") === null ||
+      rowOptionalNumber(binding, "panel_size") === null ||
+      !groupMatches ||
+      rowString(integration, "human_review_binding_id") !== bindingId ||
+      rowNumber(integration, "human_review_binding_version") !== bindingVersion
+    ) {
+      throw new TokenlessServiceError(
+        "The saved human-review configuration no longer matches this setup.",
+        409,
+        "agent_setup_review_configuration_mismatch",
+      );
+    }
+    if (normalizedRequest.createInvitation && (!groupId || normalizedRequest.decision !== "invited")) {
+      throw new TokenlessServiceError(
+        "An invitation is not allowed for this review audience.",
+        400,
+        "invalid_agent_setup_people",
+      );
+    }
+    const expertiseRequirements = parseJson<ReviewerExpertiseRequirement[]>(binding.expertise_requirements_json, []);
+    const expertiseDefinitions = normalizedRequest.expertiseDefinitionIds.map(definitionId => {
+      const requirement = expertiseRequirements.find(candidate => candidate.definitionId === definitionId);
+      if (!requirement || requirement.sourceScope !== "customer_invited") {
+        throw new TokenlessServiceError(
+          "An invitation specialist area is not required by this review profile.",
+          400,
+          "invalid_agent_setup_people",
+        );
+      }
+      return {
+        definitionId: requirement.definitionId,
+        definitionVersion: requirement.definitionVersion,
+        definitionHash: requirement.definitionHash,
+      };
+    });
+    if (expertiseDefinitions.length > 0 && !normalizedRequest.intendedEmail) {
+      throw new TokenlessServiceError(
+        "Enter the recipient email before assigning intended specialist areas.",
+        400,
+        "invalid_agent_setup_people",
+      );
+    }
+    if (
+      !normalizedRequest.createInvitation &&
+      (normalizedRequest.intendedEmail !== null || normalizedRequest.expertiseDefinitionIds.length > 0)
+    ) {
+      throw new TokenlessServiceError(
+        "Invitation details require creating an invitation.",
+        400,
+        "invalid_agent_setup_people",
+      );
+    }
+    const invitation = normalizedRequest.createInvitation
+      ? await createPrivateGroupInvitationInTransaction(client, {
+          actorAddress: access.actor,
+          workspaceId: input.workspaceId,
+          groupId: groupId!,
+          intendedEmail: normalizedRequest.intendedEmail,
+          maximumRedemptions: 1,
+          expertiseDefinitions,
+          token: invitationToken,
+          now,
+        })
+      : null;
+    const policyId = rowString(binding, "selection_policy_id")!;
+    const policyVersion = rowNumber(binding, "selection_policy_version")!;
+    if (safeAuthority) {
+      await client.query(
+        `UPDATE tokenless_agent_integrations
+         SET review_policy_id=$1,review_policy_version=$2,publishing_policy_id=NULL,
+             publishing_policy_version=NULL,activation_mode='preauthorized_safe',
+             granted_scopes_json=$3,updated_at=$4
+         WHERE integration_id=$5`,
+        [
+          policyId,
+          policyVersion,
+          JSON.stringify(SAFE_AGENT_CONNECTION_SCOPES),
+          now,
+          rowString(integration, "integration_id"),
+        ],
+      );
+    } else {
+      await client.query(
+        `UPDATE tokenless_agent_integrations
+         SET review_policy_id=$1,review_policy_version=$2,updated_at=$3
+         WHERE integration_id=$4`,
+        [policyId, policyVersion, now, rowString(integration, "integration_id")],
+      );
+    }
+    const completed = await client.query(
+      `UPDATE tokenless_workspace_agent_setups
+       SET status='completed',current_step='complete',primary_integration_id=$1,
+           review_policy_id=$2,review_policy_version=$3,publishing_policy_id=$4,publishing_policy_version=$5,
+           people_decision=$6,private_group_id=$7,people_decided_at=$8,people_decided_by=$9,
+           finalization_idempotency_key_hash=$10,finalization_request_hash=$11,people_invitation_id=$12,
+           revision=$13,completed_at=$8,completed_by=$9,updated_at=$8
+       WHERE workspace_id=$14 AND status='in_progress' AND revision=$15`,
+      [
+        rowString(integration, "integration_id"),
+        policyId,
+        policyVersion,
+        publishingPolicyId,
+        publishingPolicyVersion,
+        normalizedRequest.decision,
+        groupId,
+        now,
+        access.actor,
+        idempotencyKeyHash,
+        requestHash,
+        invitation?.invitationId ?? null,
+        expectedRevision + 1,
+        input.workspaceId,
+        expectedRevision,
+      ],
+    );
+    if (completed.rowCount !== 1) {
+      throw new TokenlessServiceError("Workspace setup changed. Reload and try again.", 409, "agent_setup_conflict");
+    }
+    response = {
+      destination: `/agents?workspace=${encodeURIComponent(input.workspaceId)}&tab=overview`,
+      idempotent: false,
+      policyId,
+      policyVersion,
+      revision: expectedRevision + 1,
+      invitation: invitation ? { ...invitation, status: "active" as const } : null,
+      postcondition: await workspaceSetupFinalizationPostcondition(client, input.workspaceId),
+    };
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+  await recordWorkspaceSetupFunnelEvent({
+    accountAddress: access.actor,
+    workspaceId: input.workspaceId,
+    event: response!.invitation ? "reviewer_invitation_issued" : "reviewers_deferred",
+    revision: expectedRevision + 1,
+    occurredAt: now,
+  });
+  await recordWorkspaceSetupFunnelEvent({
+    accountAddress: access.actor,
+    workspaceId: input.workspaceId,
+    event: "workspace_setup_completed",
+    revision: expectedRevision + 1,
+    occurredAt: now,
+  });
+  return response!;
 }

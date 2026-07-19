@@ -586,8 +586,11 @@ function validateInvitationToken(token: string) {
   return { token: normalized, prefix: match[1]!, hash: digest(normalized) };
 }
 
-export async function createPrivateGroupInvitation(input: CreatePrivateGroupInvitationInput) {
-  const manager = await requirePrivateGroupManager(input);
+export async function createPrivateGroupInvitationInTransaction(
+  client: Pick<Client, "query">,
+  input: Omit<CreatePrivateGroupInvitationInput, "accountAddress"> & { actorAddress: string; token?: string },
+) {
+  const manager = normalizeAddress(input.actorAddress);
   const now = input.now ?? new Date();
   const expiresAt = input.expiresAt ?? new Date(now.getTime() + DEFAULT_INVITATION_TTL_MS);
   const ttl = expiresAt.getTime() - now.getTime();
@@ -643,108 +646,133 @@ export async function createPrivateGroupInvitation(input: CreatePrivateGroupInvi
       "invalid_private_group_invitation",
     );
   }
-  const prefix = randomBytes(8).toString("hex");
-  const token = `rlgi_${prefix}_${randomBytes(32).toString("base64url")}`;
+  const tokenCandidate =
+    input.token ?? `rlgi_${randomBytes(8).toString("hex")}_${randomBytes(32).toString("base64url")}`;
+  const validatedToken = validateInvitationToken(tokenCandidate);
+  const token = validatedToken.token;
+  const prefix = validatedToken.prefix;
   const invitationId = `pgi_${randomUUID().replaceAll("-", "")}`;
+  const managedGroup = await client.query(
+    `SELECT g.group_id
+     FROM tokenless_private_groups g
+     JOIN tokenless_workspaces w ON w.workspace_id=g.workspace_id AND w.status='active'
+     JOIN tokenless_workspace_members m
+       ON m.workspace_id=g.workspace_id AND m.account_address=$3 AND m.role IN ('owner','admin')
+     WHERE g.workspace_id=$1 AND g.group_id=$2 AND g.status='active'
+     LIMIT 1 FOR SHARE`,
+    [input.workspaceId, input.groupId, manager],
+  );
+  if (managedGroup.rowCount !== 1) {
+    throw new TokenlessServiceError("Private group not found.", 404, "private_group_not_found");
+  }
+  await validateProjects(client, input.workspaceId, allowedProjectIds);
+  for (const definition of expertiseDefinitions) {
+    const available = await client.query(
+      `SELECT 1 FROM tokenless_reviewer_expertise_definitions
+       WHERE definition_id=$1 AND version=$2 AND definition_hash=$3
+         AND status='active' AND superseded_at IS NULL
+         AND (scope='global' OR workspace_id=$4)
+       LIMIT 1 FOR SHARE`,
+      [definition.definitionId, definition.definitionVersion, definition.definitionHash, input.workspaceId],
+    );
+    if (available.rowCount !== 1) {
+      throw new TokenlessServiceError(
+        "An intended specialist area is unavailable.",
+        409,
+        "reviewer_expertise_definition_unavailable",
+      );
+    }
+  }
+  await client.query(
+    `INSERT INTO tokenless_private_group_invitations
+     (invitation_id, workspace_id, group_id, token_hash, token_prefix, role,
+      allowed_project_ids_json, intended_account_address, intended_email_hash, intended_email_domain,
+      membership_expires_at, expires_at, maximum_redemptions, redemption_count, created_by, created_at)
+     VALUES ($1,$2,$3,$4,$5,'reviewer',$6,$7,$8,$9,$10,$11,$12,0,$13,$14)`,
+    [
+      invitationId,
+      input.workspaceId,
+      input.groupId,
+      validatedToken.hash,
+      prefix,
+      canonicalJson(allowedProjectIds),
+      intendedAccount,
+      intendedEmail ? digest(`${token}\0${intendedEmail}`) : null,
+      intendedDomain,
+      membershipExpiresAt,
+      expiresAt,
+      maximumRedemptions,
+      manager,
+      now,
+    ],
+  );
+  for (const definition of expertiseDefinitions) {
+    const evidenceReferenceHash = policyHash({
+      schemaVersion: "rateloop.private-group-invitation-expertise.v1",
+      invitationId,
+      workspaceId: input.workspaceId,
+      groupId: input.groupId,
+      definition,
+      assertedBy: manager,
+      assertedAt: now.toISOString(),
+      expiresAt: expertiseExpiresAt!.toISOString(),
+    });
+    await client.query(
+      `INSERT INTO tokenless_private_group_invitation_expertise_attestations
+       (attestation_id,invitation_id,expertise_definition_id,expertise_definition_version,
+        expertise_definition_hash,asserted_by,asserted_at,expires_at,evidence_reference_hash,status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending')`,
+      [
+        `pgiea_${randomUUID().replaceAll("-", "")}`,
+        invitationId,
+        definition.definitionId,
+        definition.definitionVersion,
+        definition.definitionHash,
+        manager,
+        now,
+        expertiseExpiresAt,
+        evidenceReferenceHash,
+      ],
+    );
+  }
+  await appendEvent(client, {
+    workspaceId: input.workspaceId,
+    groupId: input.groupId,
+    invitationId,
+    eventType: "invitation_created",
+    actorReference: manager,
+    details: {
+      maximumRedemptions,
+      hasAccountBinding: Boolean(intendedAccount),
+      hasEmailBinding: Boolean(intendedEmail),
+      hasDomainBinding: Boolean(intendedDomain),
+      intendedSpecialistAreaCount: expertiseDefinitions.length,
+    },
+    now,
+  });
+  return {
+    invitationId,
+    token,
+    tokenPrefix: prefix,
+    expiresAt: expiresAt.toISOString(),
+    membershipExpiresAt: membershipExpiresAt?.toISOString() ?? null,
+    maximumRedemptions,
+    expertiseDefinitions,
+    expertiseExpiresAt: expertiseExpiresAt?.toISOString() ?? null,
+  };
+}
+
+export async function createPrivateGroupInvitation(input: CreatePrivateGroupInvitationInput) {
+  const manager = await requirePrivateGroupManager(input);
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
-    await validateProjects(client, input.workspaceId, allowedProjectIds);
-    for (const definition of expertiseDefinitions) {
-      const available = await client.query(
-        `SELECT 1 FROM tokenless_reviewer_expertise_definitions
-         WHERE definition_id=$1 AND version=$2 AND definition_hash=$3
-           AND status='active' AND superseded_at IS NULL
-           AND (scope='global' OR workspace_id=$4)
-         LIMIT 1 FOR SHARE`,
-        [definition.definitionId, definition.definitionVersion, definition.definitionHash, input.workspaceId],
-      );
-      if (available.rowCount !== 1) {
-        throw new TokenlessServiceError(
-          "An intended specialist area is unavailable.",
-          409,
-          "reviewer_expertise_definition_unavailable",
-        );
-      }
-    }
-    await client.query(
-      `INSERT INTO tokenless_private_group_invitations
-       (invitation_id, workspace_id, group_id, token_hash, token_prefix, role,
-        allowed_project_ids_json, intended_account_address, intended_email_hash, intended_email_domain,
-        membership_expires_at, expires_at, maximum_redemptions, redemption_count, created_by, created_at)
-       VALUES ($1,$2,$3,$4,$5,'reviewer',$6,$7,$8,$9,$10,$11,$12,0,$13,$14)`,
-      [
-        invitationId,
-        input.workspaceId,
-        input.groupId,
-        digest(token),
-        prefix,
-        canonicalJson(allowedProjectIds),
-        intendedAccount,
-        intendedEmail ? digest(`${token}\0${intendedEmail}`) : null,
-        intendedDomain,
-        membershipExpiresAt,
-        expiresAt,
-        maximumRedemptions,
-        manager,
-        now,
-      ],
-    );
-    for (const definition of expertiseDefinitions) {
-      const evidenceReferenceHash = policyHash({
-        schemaVersion: "rateloop.private-group-invitation-expertise.v1",
-        invitationId,
-        workspaceId: input.workspaceId,
-        groupId: input.groupId,
-        definition,
-        assertedBy: manager,
-        assertedAt: now.toISOString(),
-        expiresAt: expertiseExpiresAt!.toISOString(),
-      });
-      await client.query(
-        `INSERT INTO tokenless_private_group_invitation_expertise_attestations
-         (attestation_id,invitation_id,expertise_definition_id,expertise_definition_version,
-          expertise_definition_hash,asserted_by,asserted_at,expires_at,evidence_reference_hash,status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending')`,
-        [
-          `pgiea_${randomUUID().replaceAll("-", "")}`,
-          invitationId,
-          definition.definitionId,
-          definition.definitionVersion,
-          definition.definitionHash,
-          manager,
-          now,
-          expertiseExpiresAt,
-          evidenceReferenceHash,
-        ],
-      );
-    }
-    await appendEvent(client, {
-      workspaceId: input.workspaceId,
-      groupId: input.groupId,
-      invitationId,
-      eventType: "invitation_created",
-      actorReference: manager,
-      details: {
-        maximumRedemptions,
-        hasAccountBinding: Boolean(intendedAccount),
-        hasEmailBinding: Boolean(intendedEmail),
-        hasDomainBinding: Boolean(intendedDomain),
-        intendedSpecialistAreaCount: expertiseDefinitions.length,
-      },
-      now,
+    const invitation = await createPrivateGroupInvitationInTransaction(client, {
+      ...input,
+      actorAddress: manager,
     });
     await client.query("COMMIT");
-    return {
-      invitationId,
-      token,
-      tokenPrefix: prefix,
-      expiresAt: expiresAt.toISOString(),
-      membershipExpiresAt: membershipExpiresAt?.toISOString() ?? null,
-      maximumRedemptions,
-      expertiseDefinitions,
-      expertiseExpiresAt: expertiseExpiresAt?.toISOString() ?? null,
-    };
+    return invitation;
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;

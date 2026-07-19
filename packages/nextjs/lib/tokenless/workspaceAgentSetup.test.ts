@@ -26,6 +26,7 @@ import {
   configureWorkspaceSetupReviews,
   confirmWorkspaceSetupAgent,
   createWorkspaceAgentSetupConnection,
+  finalizeWorkspaceAgentSetup,
   getWorkspaceAgentSetup,
   updateWorkspaceSetupName,
 } from "~~/lib/tokenless/workspaceAgentSetup";
@@ -350,6 +351,158 @@ test("setup binds one verified connection and completes without publishing or sp
     ["agent_details_confirmed", "review_behavior_confirmed", "reviewers_deferred", "workspace_setup_completed"],
   );
   assert.doesNotMatch(JSON.stringify(funnel), /Setup workspace|Setup client|pgrp_|confidential/u);
+});
+
+test("atomic setup finalization creates one invitation and safely replays a lost response", async () => {
+  const { workspaceId } = await connectedSetup();
+  const connected = await getWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId });
+  const confirmed = await confirmWorkspaceSetupAgent({
+    accountAddress: OWNER,
+    workspaceId,
+    revision: connected.revision,
+    agent: {
+      displayName: connected.agent!.displayName,
+      description: connected.agent!.description,
+      provider: connected.agent!.provider,
+      model: connected.agent!.model,
+      modelVersion: connected.agent!.modelVersion,
+      environment: "production",
+    },
+  });
+  const group = await createPrivateGroup({
+    accountAddress: OWNER,
+    workspaceId,
+    name: "Atomic reviewers",
+    purpose: "Review private material after atomic setup finalization.",
+  });
+  const savedReview = await saveSetupReviewConfiguration({
+    workspaceId,
+    agentId: connected.agent!.agentId,
+    groupId: group.groupId,
+  });
+  const reviews = await configureWorkspaceSetupReviews({
+    accountAddress: OWNER,
+    workspaceId,
+    revision: confirmed.revision,
+    bindingRevision: savedReview.configuration.version,
+  });
+  const request = {
+    accountAddress: OWNER,
+    workspaceId,
+    revision: reviews.revision,
+    idempotencyKey: "b3d66098-462d-4dbc-aaf9-87cf9e0d71f2",
+    decision: "invited",
+    groupId: group.groupId,
+    createInvitation: true,
+    intendedEmail: "reviewer@example.com",
+  } as const;
+
+  const finalized = await finalizeWorkspaceAgentSetup(request);
+  assert.equal(finalized.idempotent, false);
+  assert.equal(finalized.revision, reviews.revision + 1);
+  assert.equal(finalized.invitation?.status, "active");
+  assert.match(finalized.invitation?.token ?? "", /^rlgi_[a-f0-9]{16}_[A-Za-z0-9_-]{43}$/u);
+  assert.equal(finalized.postcondition.setupStatus, "completed");
+  assert.equal(finalized.postcondition.connectionActive, true);
+  assert.equal(finalized.postcondition.reviewBindingActive, true);
+  assert.equal(finalized.postcondition.privateGroupStatus, "active");
+  assert.equal(finalized.postcondition.setupConfigurationIntact, true);
+  assert.equal(finalized.postcondition.reviewerRoutingStatus, "not_evaluated");
+
+  const replayed = await finalizeWorkspaceAgentSetup(request);
+  assert.equal(replayed.idempotent, true);
+  assert.equal(replayed.invitation?.invitationId, finalized.invitation?.invitationId);
+  assert.equal(replayed.invitation?.token, finalized.invitation?.token);
+  const invitations = await listPrivateGroupInvitations({
+    accountAddress: OWNER,
+    workspaceId,
+    groupId: group.groupId,
+  });
+  assert.equal(invitations.length, 1);
+  const stored = await dbClient.execute({
+    sql: `SELECT * FROM tokenless_workspace_agent_setups WHERE workspace_id=?`,
+    args: [workspaceId],
+  });
+  assert.match(String(stored.rows[0]?.finalization_idempotency_key_hash), /^sha256:[a-f0-9]{64}$/u);
+  assert.match(String(stored.rows[0]?.finalization_request_hash), /^sha256:[a-f0-9]{64}$/u);
+  assert.equal(stored.rows[0]?.people_invitation_id, finalized.invitation?.invitationId);
+  const storedInvitation = await dbClient.execute({
+    sql: "SELECT * FROM tokenless_private_group_invitations WHERE invitation_id=?",
+    args: [finalized.invitation!.invitationId],
+  });
+  const persistedFinalization = JSON.stringify([stored.rows[0], storedInvitation.rows[0]]);
+  assert.doesNotMatch(persistedFinalization, new RegExp(finalized.invitation!.token!, "u"));
+  assert.doesNotMatch(persistedFinalization, new RegExp(request.idempotencyKey, "u"));
+
+  await assert.rejects(
+    finalizeWorkspaceAgentSetup({ ...request, intendedEmail: "someone-else@example.com" }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "agent_setup_finalization_conflict",
+  );
+  await assert.rejects(
+    finalizeWorkspaceAgentSetup({
+      ...request,
+      idempotencyKey: "09229693-4921-49e1-9b88-45c897a3c547",
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "agent_setup_finalization_conflict",
+  );
+});
+
+test("atomic setup finalization rolls back its inserted invitation when completion cannot persist", async () => {
+  const { workspaceId } = await connectedSetup();
+  const connected = await getWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId });
+  const confirmed = await confirmWorkspaceSetupAgent({
+    accountAddress: OWNER,
+    workspaceId,
+    revision: connected.revision,
+    agent: {
+      displayName: connected.agent!.displayName,
+      description: connected.agent!.description,
+      provider: connected.agent!.provider,
+      model: connected.agent!.model,
+      modelVersion: connected.agent!.modelVersion,
+      environment: "production",
+    },
+  });
+  const group = await createPrivateGroup({
+    accountAddress: OWNER,
+    workspaceId,
+    name: "Drifted reviewers",
+    purpose: "Exercise setup finalization rollback.",
+  });
+  const savedReview = await saveSetupReviewConfiguration({
+    workspaceId,
+    agentId: connected.agent!.agentId,
+    groupId: group.groupId,
+  });
+  const reviews = await configureWorkspaceSetupReviews({
+    accountAddress: OWNER,
+    workspaceId,
+    revision: confirmed.revision,
+    bindingRevision: savedReview.configuration.version,
+  });
+  await dbClient.execute(
+    "ALTER TABLE tokenless_private_group_events ADD CONSTRAINT test_reject_setup_invitation_event CHECK (event_type <> 'invitation_created')",
+  );
+
+  await assert.rejects(
+    finalizeWorkspaceAgentSetup({
+      accountAddress: OWNER,
+      workspaceId,
+      revision: reviews.revision,
+      idempotencyKey: "b8481323-5e9b-43dd-91aa-26b21ef429b8",
+      decision: "invited",
+      groupId: group.groupId,
+      createInvitation: true,
+      intendedEmail: "reviewer@example.com",
+    }),
+  );
+  // pg-mem retains writes after ROLLBACK. The source-level transaction-boundary
+  // test covers the production PostgreSQL rollback that removes the inserted invitation.
+  const setup = await dbClient.execute({
+    sql: "SELECT status,people_invitation_id FROM tokenless_workspace_agent_setups WHERE workspace_id=?",
+    args: [workspaceId],
+  });
+  assert.deepEqual(setup.rows[0], { status: "in_progress", people_invitation_id: null });
 });
 
 test("prepare-for-approval setup skips private people and preserves a safe null publishing grant", async () => {

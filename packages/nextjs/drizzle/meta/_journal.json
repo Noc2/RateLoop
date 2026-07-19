@@ -799,6 +799,13 @@
       "when": 1784350800000,
       "tag": "0114_principal_welcome_completion",
       "breakpoints": true
+    },
+    {
+      "idx": 115,
+      "version": "7",
+      "when": 1784354400000,
+      "tag": "0115_workspace_agent_setup_finalization",
+      "breakpoints": true
     }
   ]
 }
