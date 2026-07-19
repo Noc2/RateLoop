@@ -26,6 +26,66 @@ export type HumanReviewReadiness = {
   hybridPublicSafe: boolean;
 };
 
+export const HUMAN_REVIEW_LANE_IMPLEMENTATION = {
+  privateInvitedUnpaid: true,
+  privateInvitedPaid: true,
+  publicPaidNetwork: true,
+  hybridPublicSafe: false,
+} as const satisfies Pick<
+  HumanReviewReadiness,
+  "privateInvitedUnpaid" | "privateInvitedPaid" | "publicPaidNetwork" | "hybridPublicSafe"
+>;
+
+export const HUMAN_REVIEW_IMPLEMENTATION_READINESS = {
+  ownerApproval: true,
+  ...HUMAN_REVIEW_LANE_IMPLEMENTATION,
+} as const satisfies Pick<
+  HumanReviewReadiness,
+  "ownerApproval" | "privateInvitedUnpaid" | "privateInvitedPaid" | "publicPaidNetwork" | "hybridPublicSafe"
+>;
+
+type HumanReviewLaneImplementationKey = keyof typeof HUMAN_REVIEW_LANE_IMPLEMENTATION;
+
+const HUMAN_REVIEW_LANE_UNAVAILABLE_MESSAGES: Record<HumanReviewLaneImplementationKey, string> = {
+  privateInvitedUnpaid: "Invited unpaid review delivery is not implemented yet.",
+  privateInvitedPaid: "Invited-review USDC settlement is not implemented yet.",
+  publicPaidNetwork: "Paid RateLoop reviewer network delivery is not implemented yet.",
+  hybridPublicSafe: "Hybrid invited and public delivery is not implemented yet.",
+};
+
+export function configuredHumanReviewLaneMessage(lane: HumanReviewLaneImplementationKey) {
+  return HUMAN_REVIEW_LANE_IMPLEMENTATION[lane]
+    ? "Implemented on this deployment."
+    : HUMAN_REVIEW_LANE_UNAVAILABLE_MESSAGES[lane];
+}
+
+export function configuredHumanReviewLanes() {
+  return {
+    privateInvitedUnpaid: {
+      available: HUMAN_REVIEW_LANE_IMPLEMENTATION.privateInvitedUnpaid,
+      message: configuredHumanReviewLaneMessage("privateInvitedUnpaid"),
+    },
+    privateInvitedPaid: {
+      available: HUMAN_REVIEW_LANE_IMPLEMENTATION.privateInvitedPaid,
+      message: configuredHumanReviewLaneMessage("privateInvitedPaid"),
+    },
+    publicPaidNetwork: {
+      available: HUMAN_REVIEW_LANE_IMPLEMENTATION.publicPaidNetwork,
+      message: configuredHumanReviewLaneMessage("publicPaidNetwork"),
+    },
+    hybridPublicSafe: {
+      available: HUMAN_REVIEW_LANE_IMPLEMENTATION.hybridPublicSafe,
+      message: configuredHumanReviewLaneMessage("hybridPublicSafe"),
+    },
+  } as const;
+}
+
+export function deployedHumanReviewReadiness(
+  runtime: Pick<HumanReviewReadiness, "evaluation" | "autonomousPublishing">,
+): HumanReviewReadiness {
+  return { ...runtime, ...HUMAN_REVIEW_IMPLEMENTATION_READINESS };
+}
+
 export type HumanReviewCapabilityInput = {
   audience: HumanReviewAudience;
   compensationMode: HumanReviewCompensationMode;

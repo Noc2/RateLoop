@@ -237,7 +237,16 @@ test("setup binds one verified connection and completes without publishing or sp
   assert.equal(connected.resumeStep, "agent");
   assert.equal(connected.revision, 2);
   assert.equal(connected.connection.integrationId, integrationId);
-  assert.equal(connected.capabilities.autonomousAccess, false);
+  assert.equal(connected.capabilities.autonomousAccess, true);
+  assert.deepEqual(connected.capabilities.automaticGrantOffer, {
+    available: true,
+    integrationId,
+    allowedWorkflowKeys: ["general-assistance"],
+    supportedAudience: "private_invited",
+    supportedCompensation: "unpaid",
+    supportsFeedbackBonus: false,
+    requiresFundingPermission: false,
+  });
 
   const confirmed = await confirmWorkspaceSetupAgent({
     accountAddress: OWNER,
@@ -583,25 +592,6 @@ test("unpaid private automatic review grants publishing without payment and reje
     purpose: "Review private workspace material without payment.",
     policy: { defaultCompensation: "unpaid", dataClassifications: ["internal", "confidential"] },
   });
-  const publishing = await createAgentPublishingPolicy({
-    accountAddress: OWNER,
-    workspaceId,
-    policy: {
-      name: "Private automatic review",
-      allowedPaymentModes: ["prepaid"],
-      maxPanelAtomic: "6000000",
-      maxDailyAtomic: "60000000",
-      maxMonthlyAtomic: "600000000",
-      maxPanelSize: 3,
-      maxBountyAtomic: "3000000",
-      maxFeeBps: 2_000,
-      maxAttemptReserveAtomic: "3000000",
-      allowedReviewerSources: ["customer_invited"],
-      allowedAdmissionPolicyHashes: [`0x${"c".repeat(64)}`],
-      allowedDataClassifications: ["confidential"],
-      onPolicyMiss: "deny",
-    },
-  });
   const body = {
     expectedBindingVersion: null as number | null,
     selection: {
@@ -635,8 +625,7 @@ test("unpaid private automatic review grants publishing without payment and reje
     authority: "ask_automatically",
     publishingGrant: {
       integrationId,
-      publishingPolicyId: publishing.policyId,
-      publishingPolicyVersion: publishing.version ?? 1,
+      provision: "private_invited_unpaid",
       allowedWorkflowKeys: ["general-assistance"],
     },
   };
@@ -653,6 +642,33 @@ test("unpaid private automatic review grants publishing without payment and reje
   const unpaidScopes = JSON.parse(String(granted.rows[0]?.granted_scopes_json)) as string[];
   assert.ok(unpaidScopes.includes("panel:publish"));
   assert.ok(!unpaidScopes.includes("payment:submit"));
+  const provisionedPolicy = await dbClient.execute({
+    sql: `SELECT allowed_payment_modes_json,max_panel_atomic,max_daily_atomic,max_monthly_atomic,
+                 max_bounty_atomic,max_attempt_reserve_atomic,max_fee_bps,allowed_reviewer_sources_json,
+                 allowed_admission_policy_hashes_json,allowed_data_classifications_json,allow_public_urls,on_policy_miss
+          FROM tokenless_agent_publishing_policies WHERE workspace_id=? AND policy_id=? AND version=?`,
+    args: [workspaceId, saved.configuration.publishingPolicy?.id, saved.configuration.publishingPolicy?.version],
+  });
+  assert.equal(provisionedPolicy.rowCount, 1);
+  assert.deepEqual(JSON.parse(String(provisionedPolicy.rows[0]?.allowed_payment_modes_json)), ["prepaid"]);
+  assert.deepEqual(JSON.parse(String(provisionedPolicy.rows[0]?.allowed_reviewer_sources_json)), ["customer_invited"]);
+  assert.deepEqual(JSON.parse(String(provisionedPolicy.rows[0]?.allowed_data_classifications_json)), ["confidential"]);
+  assert.match(
+    JSON.parse(String(provisionedPolicy.rows[0]?.allowed_admission_policy_hashes_json))[0],
+    /^0x[0-9a-f]{64}$/u,
+  );
+  for (const cap of [
+    "max_panel_atomic",
+    "max_daily_atomic",
+    "max_monthly_atomic",
+    "max_bounty_atomic",
+    "max_attempt_reserve_atomic",
+  ]) {
+    assert.equal(String(provisionedPolicy.rows[0]?.[cap]), "1");
+  }
+  assert.equal(Number(provisionedPolicy.rows[0]?.max_fee_bps), 0);
+  assert.equal(Boolean(provisionedPolicy.rows[0]?.allow_public_urls), false);
+  assert.equal(String(provisionedPolicy.rows[0]?.on_policy_miss), "deny");
   const ownerView = await getHumanReviewConfigurationForOwner({
     accountAddress: OWNER,
     workspaceId,

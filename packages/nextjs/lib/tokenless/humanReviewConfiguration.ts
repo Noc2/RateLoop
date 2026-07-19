@@ -14,7 +14,7 @@ import {
 import {
   HUMAN_REVIEW_AUTHORITY_LEVELS,
   type HumanReviewAuthorityLevel,
-  type HumanReviewReadiness,
+  deployedHumanReviewReadiness,
   resolveHumanReviewCapability,
 } from "~~/lib/tokenless/reviewCapabilities";
 import { normalizeManagedReviewPolicyInput } from "~~/lib/tokenless/reviewPolicyManagement";
@@ -117,7 +117,21 @@ const OWNER_GRANT_KEYS = new Set([
   "publishingPolicyId",
   "publishingPolicyVersion",
   "allowedWorkflowKeys",
+  "provision",
 ]);
+
+type ExactOwnerPublishingGrant = {
+  integrationId: string;
+  publishingPolicyId: string;
+  publishingPolicyVersion: number;
+  allowedWorkflowKeys: string[];
+};
+
+type ProvisionedOwnerPublishingGrant = {
+  integrationId: string;
+  provision: "private_invited_unpaid";
+  allowedWorkflowKeys: string[];
+};
 
 function configurationError(message: string, code = "invalid_human_review_configuration"): never {
   throw new TokenlessServiceError(message, 400, code);
@@ -798,26 +812,15 @@ function normalizeOwnerMutation(value: unknown) {
   if (!HUMAN_REVIEW_AUTHORITY_LEVELS.includes(authority)) {
     configurationError("Human-review authority is invalid.", "invalid_human_review_owner_request");
   }
-  let publishingGrant:
-    | undefined
-    | null
-    | {
-        integrationId: string;
-        publishingPolicyId: string;
-        publishingPolicyVersion: number;
-        allowedWorkflowKeys: string[];
-      };
+  let publishingGrant: undefined | null | ExactOwnerPublishingGrant | ProvisionedOwnerPublishingGrant;
   if ("publishingGrant" in body) {
     if (body.publishingGrant === null) publishingGrant = null;
     else {
       const grant = objectWithAllowedKeys(body.publishingGrant, "publishingGrant", OWNER_GRANT_KEYS);
+      const provision = grant.provision;
       if (
         typeof grant.integrationId !== "string" ||
         !grant.integrationId.trim() ||
-        typeof grant.publishingPolicyId !== "string" ||
-        !grant.publishingPolicyId.trim() ||
-        !Number.isSafeInteger(grant.publishingPolicyVersion) ||
-        Number(grant.publishingPolicyVersion) < 1 ||
         !Array.isArray(grant.allowedWorkflowKeys) ||
         grant.allowedWorkflowKeys.length < 1 ||
         grant.allowedWorkflowKeys.length > 32
@@ -833,12 +836,38 @@ function normalizeOwnerMutation(value: unknown) {
       if (allowedWorkflowKeys.some(entry => !WORKFLOW_PATTERN.test(entry))) {
         configurationError("publishingGrant workflows are invalid.", "invalid_human_review_owner_request");
       }
-      publishingGrant = {
-        integrationId: grant.integrationId.trim(),
-        publishingPolicyId: grant.publishingPolicyId.trim(),
-        publishingPolicyVersion: Number(grant.publishingPolicyVersion),
-        allowedWorkflowKeys,
-      };
+      if (provision === "private_invited_unpaid") {
+        if (grant.publishingPolicyId !== undefined || grant.publishingPolicyVersion !== undefined) {
+          configurationError(
+            "A provisioned publishing grant cannot select a browser-supplied policy.",
+            "invalid_human_review_owner_request",
+          );
+        }
+        publishingGrant = {
+          integrationId: grant.integrationId.trim(),
+          provision,
+          allowedWorkflowKeys,
+        };
+      } else {
+        if (
+          provision !== undefined ||
+          typeof grant.publishingPolicyId !== "string" ||
+          !grant.publishingPolicyId.trim() ||
+          !Number.isSafeInteger(grant.publishingPolicyVersion) ||
+          Number(grant.publishingPolicyVersion) < 1
+        ) {
+          configurationError(
+            "publishingGrant must identify one exact integration, policy version, and workflow set.",
+            "invalid_human_review_owner_request",
+          );
+        }
+        publishingGrant = {
+          integrationId: grant.integrationId.trim(),
+          publishingPolicyId: grant.publishingPolicyId.trim(),
+          publishingPolicyVersion: Number(grant.publishingPolicyVersion),
+          allowedWorkflowKeys,
+        };
+      }
     }
   }
   if (publishingGrant && authority !== "ask_automatically" && selection.mode !== "manual") {
@@ -1224,6 +1253,65 @@ async function resolvePrivateGroupTuple(
   };
 }
 
+async function provisionPrivateInvitedUnpaidPublishingPolicy(
+  client: PoolClient,
+  input: {
+    actor: string;
+    workspaceId: string;
+    agentId: string;
+    requestProfile: ReturnType<typeof normalizeReviewRequestProfileInput>;
+    group: Awaited<ReturnType<typeof resolvePrivateGroupTuple>>;
+    now: Date;
+  },
+): Promise<HumanReviewVersionReference> {
+  const profile = input.requestProfile;
+  if (
+    profile.audience !== "private_invited" ||
+    profile.contentBoundary !== "private_workspace" ||
+    profile.compensationMode !== "unpaid" ||
+    profile.feedbackBonusEnabled ||
+    profile.privateSensitivity === null ||
+    profile.panelSize === null ||
+    !input.group.id ||
+    !input.group.hash ||
+    !HASH_PATTERN.test(input.group.hash)
+  ) {
+    throw new TokenlessServiceError(
+      "Setup can provision automatic publishing only for unpaid invited review without a feedback bonus.",
+      409,
+      "human_review_automatic_provisioning_not_supported",
+    );
+  }
+  const policyId = `agpol_${randomUUID().replaceAll("-", "")}`;
+  const inertAtomicCap = "1";
+  await client.query(
+    `INSERT INTO tokenless_agent_publishing_policies
+     (policy_id,workspace_id,name,version,enabled,effective_at,expires_at,
+      allowed_payment_modes_json,payer_address,max_panel_atomic,max_daily_atomic,max_monthly_atomic,
+      max_panel_size,max_bounty_atomic,max_fee_bps,max_attempt_reserve_atomic,
+      allowed_project_ids_json,allowed_reviewer_sources_json,allowed_admission_policy_hashes_json,
+      allowed_data_classifications_json,max_retention_days,allow_public_urls,
+      allowed_webhook_endpoint_ids_json,allowed_prompt_templates_json,on_policy_miss,
+      created_by,created_at,updated_at)
+     VALUES ($1,$2,$3,1,true,$4,NULL,$5,NULL,$6,$6,$6,$7,$6,0,$6,$8,$9,$10,$11,30,false,$8,$8,'deny',$12,$4,$4)`,
+    [
+      policyId,
+      input.workspaceId,
+      `Automatic private review · ${input.agentId.slice(-12)}`,
+      input.now,
+      stableJson(["prepaid"]),
+      inertAtomicCap,
+      Math.max(3, profile.panelSize),
+      stableJson([]),
+      stableJson(["customer_invited"]),
+      stableJson([`0x${input.group.hash.slice("sha256:".length)}`]),
+      stableJson([profile.privateSensitivity]),
+      input.actor,
+    ],
+  );
+  return { id: policyId, version: 1 };
+}
+
 function assertPrivateSensitivityAllowed(requested: string | null, maximum: string | null) {
   if (requested === null) return;
   const requestedRank = REVIEW_REQUEST_PRIVATE_SENSITIVITIES.indexOf(requested as never);
@@ -1438,8 +1526,10 @@ export async function putHumanReviewConfigurationForOwner(input: PutHumanReviewC
         : null
       : null;
     let preparedGrant: PreparedPublishingGrant | undefined;
+    let exactPublishingGrant: ExactOwnerPublishingGrant | undefined;
     if (body.publishingGrant === null) publishingPolicy = null;
-    else if (body.publishingGrant) {
+    else if (body.publishingGrant && !("provision" in body.publishingGrant)) {
+      exactPublishingGrant = body.publishingGrant;
       publishingPolicy = {
         id: body.publishingGrant.publishingPolicyId,
         version: body.publishingGrant.publishingPolicyVersion,
@@ -1465,12 +1555,28 @@ export async function putHumanReviewConfigurationForOwner(input: PutHumanReviewC
       requirements: profile.expertiseRequirements,
     });
     assertPrivateSensitivityAllowed(profile.privateSensitivity, group.maximumSensitivity);
-    if (body.publishingGrant) {
+    if (body.publishingGrant && "provision" in body.publishingGrant) {
+      publishingPolicy = await provisionPrivateInvitedUnpaidPublishingPolicy(client, {
+        actor,
+        workspaceId: input.workspaceId,
+        agentId: input.agentId,
+        requestProfile: profile,
+        group,
+        now,
+      });
+      exactPublishingGrant = {
+        integrationId: body.publishingGrant.integrationId,
+        publishingPolicyId: publishingPolicy.id,
+        publishingPolicyVersion: publishingPolicy.version,
+        allowedWorkflowKeys: body.publishingGrant.allowedWorkflowKeys,
+      };
+    }
+    if (exactPublishingGrant) {
       preparedGrant = await prepareExactPublishingGrant(client, {
         workspaceId: input.workspaceId,
         agentId: input.agentId,
         agentVersionId: agent.agentVersionId,
-        ...body.publishingGrant,
+        ...exactPublishingGrant,
         paymentProfile: profile,
         now,
       });
@@ -1786,17 +1892,12 @@ export async function getHumanReviewConfigurationForOwner(input: {
         ) ?? null)
       : null;
     const authority = rowString(bindingRow, "authority") as HumanReviewAuthorityLevel;
-    const readiness: HumanReviewReadiness = {
+    const readiness = deployedHumanReviewReadiness({
       evaluation: Boolean(
         connection?.safeAccess.canCheckReviewRequirement && connection.connectionStatus === "connected",
       ),
-      ownerApproval: false,
       autonomousPublishing: Boolean(delegationConnection),
-      privateInvitedUnpaid: false,
-      privateInvitedPaid: false,
-      publicPaidNetwork: false,
-      hybridPublicSafe: false,
-    };
+    });
     const capability = resolveHumanReviewCapability(
       {
         audience: requestProfile.audience as Parameters<typeof resolveHumanReviewCapability>[0]["audience"],

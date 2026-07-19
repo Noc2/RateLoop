@@ -1,6 +1,9 @@
 import {
   HUMAN_REVIEW_CAPABILITY_CASES,
+  HUMAN_REVIEW_IMPLEMENTATION_READINESS,
   type HumanReviewReadiness,
+  configuredHumanReviewLanes,
+  deployedHumanReviewReadiness,
   resolveHumanReviewCapability,
 } from "./reviewCapabilities";
 import assert from "node:assert/strict";
@@ -77,4 +80,59 @@ test("authority readiness is independent from lane readiness", () => {
   );
   assert.equal(capability.available, false);
   assert.equal(capability.code, "owner_approval_unavailable");
+});
+
+test("deployed implementation readiness is shared without overstating hybrid delivery", () => {
+  assert.deepEqual(HUMAN_REVIEW_IMPLEMENTATION_READINESS, {
+    ownerApproval: true,
+    privateInvitedUnpaid: true,
+    privateInvitedPaid: true,
+    publicPaidNetwork: true,
+    hybridPublicSafe: false,
+  });
+  assert.deepEqual(deployedHumanReviewReadiness({ evaluation: true, autonomousPublishing: false }), {
+    evaluation: true,
+    autonomousPublishing: false,
+    ...HUMAN_REVIEW_IMPLEMENTATION_READINESS,
+  });
+});
+
+test("configured lane descriptions use the same implementation truth", () => {
+  assert.deepEqual(configuredHumanReviewLanes(), {
+    privateInvitedUnpaid: { available: true, message: "Implemented on this deployment." },
+    privateInvitedPaid: { available: true, message: "Implemented on this deployment." },
+    publicPaidNetwork: { available: true, message: "Implemented on this deployment." },
+    hybridPublicSafe: {
+      available: false,
+      message: "Hybrid invited and public delivery is not implemented yet.",
+    },
+  });
+});
+
+test("owner approval is deployed while autonomous publishing remains grant-bound", () => {
+  const readiness = deployedHumanReviewReadiness({ evaluation: true, autonomousPublishing: false });
+  assert.equal(
+    resolveHumanReviewCapability(
+      {
+        audience: "private_invited",
+        authority: "prepare_for_approval",
+        compensationMode: "unpaid",
+        contentBoundary: "private_workspace",
+      },
+      readiness,
+    ).code,
+    "ready",
+  );
+  assert.equal(
+    resolveHumanReviewCapability(
+      {
+        audience: "private_invited",
+        authority: "ask_automatically",
+        compensationMode: "unpaid",
+        contentBoundary: "private_workspace",
+      },
+      readiness,
+    ).code,
+    "autonomous_publishing_unavailable",
+  );
 });

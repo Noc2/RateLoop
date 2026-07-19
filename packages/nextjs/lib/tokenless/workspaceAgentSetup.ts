@@ -414,12 +414,17 @@ export async function getWorkspaceAgentSetup(input: {
                  i.integration_id,i.status AS integration_status,i.agent_id,i.agent_version_id,
                  i.review_policy_id AS integration_review_policy_id,
                  i.review_policy_version AS integration_review_policy_version,
+                 i.activation_mode,i.allowed_workflow_keys_json,i.granted_scopes_json,
+                 i.token_family_id,i.oauth_client_id,i.oauth_subject_principal_id,
+                 f.status AS token_family_status,f.revoked_at AS token_family_revoked_at,
+                 f.absolute_expires_at AS token_family_expires_at,
                  v.display_name,v.description,v.declared_provider,v.declared_model,
                  v.declared_model_version,v.environment
           FROM tokenless_workspace_agent_setups s
           LEFT JOIN tokenless_agent_connection_intents ci ON ci.intent_id=s.primary_connection_intent_id
           LEFT JOIN tokenless_agent_integrations i
             ON i.connection_intent_id=s.primary_connection_intent_id AND i.status='active'
+          LEFT JOIN tokenless_agent_oauth_token_families f ON f.token_family_id=i.token_family_id
           LEFT JOIN tokenless_agent_versions v ON v.version_id=i.agent_version_id
           WHERE s.workspace_id=? LIMIT 1`,
     args: [input.workspaceId],
@@ -464,10 +469,25 @@ export async function getWorkspaceAgentSetup(input: {
               : "people";
   const currentStep = clampAgentSetupStep(input.requestedStep, resumeStep);
   const reviewDraft = savedReviewDraft ?? migrateReviewDraft(parseJson<unknown>(row.review_draft_json, {}));
+  const integrationScopes = parseJson<string[]>(row.granted_scopes_json, []);
+  const allowedWorkflowKeys = parseJson<string[]>(row.allowed_workflow_keys_json, []);
+  const tokenFamilyExpiresAt = rowDate(row, "token_family_expires_at");
+  const automaticGrantAvailable = Boolean(
+    access.canManage &&
+      connected &&
+      rowString(row, "token_family_id") &&
+      rowString(row, "oauth_client_id") &&
+      rowString(row, "oauth_subject_principal_id") &&
+      rowString(row, "token_family_status") === "active" &&
+      rowString(row, "token_family_revoked_at") === null &&
+      tokenFamilyExpiresAt &&
+      new Date(tokenFamilyExpiresAt).getTime() > Date.now() &&
+      allowedWorkflowKeys.length > 0,
+  );
   const safeConnection = {
     canCheckReviewRequirement: true,
-    canSpend: false,
-    canPublish: false,
+    canSpend: integrationScopes.includes("payment:submit"),
+    canPublish: integrationScopes.includes("panel:publish"),
     canReadPrivateArtifacts: false,
     canAdministerWorkspace: false,
   };
@@ -513,8 +533,21 @@ export async function getWorkspaceAgentSetup(input: {
     capabilities: {
       reviewerAudiences: ["private_invited"] as const,
       contentBoundaries: ["private_workspace"] as const,
-      autonomousAccess: false,
-      unavailableReason: "Autonomous private review delivery is not connected yet.",
+      autonomousAccess: automaticGrantAvailable,
+      unavailableReason: automaticGrantAvailable
+        ? null
+        : "Connect this workflow through OAuth before allowing automatic review requests.",
+      automaticGrantOffer: access.canManage
+        ? {
+            available: automaticGrantAvailable,
+            integrationId: automaticGrantAvailable ? rowString(row, "integration_id") : null,
+            allowedWorkflowKeys: automaticGrantAvailable ? allowedWorkflowKeys : [],
+            supportedAudience: "private_invited" as const,
+            supportedCompensation: "unpaid" as const,
+            supportsFeedbackBonus: false,
+            requiresFundingPermission: false,
+          }
+        : null,
     },
   };
 }

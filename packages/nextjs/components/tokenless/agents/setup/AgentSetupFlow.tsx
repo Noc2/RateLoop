@@ -205,6 +205,13 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   } · ${reviewerCount} reviewer${reviewerCount === "1" ? "" : "s"} · ${
     reviewCompensation.compensationMode === "usdc" ? `${reviewCompensation.usdcPerReviewer || "—"} USDC each` : "Unpaid"
   }`;
+  const automaticPrivateUnpaidSelected =
+    reviewAudience.audience === "private_invited" &&
+    reviewCompensation.compensationMode === "unpaid" &&
+    reviewCompensation.feedbackBonusEnabled === false;
+  const automaticUnavailableReason = !automaticPrivateUnpaidSelected
+    ? "Setup can grant automatic delivery only for unpaid invited review without a feedback bonus."
+    : (setup.capabilities.unavailableReason ?? "The connected workflow cannot receive a publishing grant.");
   const selectedExpertiseIds = new Set(reviewExpertise.requirements.map(requirement => requirement.definitionId));
   const selectableExpertiseDefinitions = expertiseDefinitions.filter(
     definition =>
@@ -1143,7 +1150,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               mode={reviewFrequency.mode}
               authority={reviewCompensation.authority}
               automaticAvailable={setup.capabilities.autonomousAccess}
-              automaticUnavailableReason={setup.capabilities.unavailableReason}
+              automaticUnavailableReason={automaticUnavailableReason}
               requiresFundingPermission={
                 reviewCompensation.compensationMode === "usdc" || reviewCompensation.feedbackBonusEnabled === true
               }

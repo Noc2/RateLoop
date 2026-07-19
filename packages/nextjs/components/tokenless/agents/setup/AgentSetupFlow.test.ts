@@ -179,7 +179,11 @@ test("review setup controls independent base compensation, optional Feedback Bon
   assert.match(flowSource, /feedbackBonusAwarderKind/);
   assert.match(flowSource, /value=\{reviewCompensation\.usdcPerReviewer\}/);
   assert.match(flowSource, /authority=\{reviewCompensation\.authority\}/);
-  assert.match(flowSource, /automaticAvailable=\{setup\.capabilities\.autonomousAccess\}/);
+  assert.match(flowSource, /const automaticGrantOffer = setup\.capabilities\.automaticGrantOffer/);
+  assert.match(flowSource, /automaticAvailable=\{automaticAvailable\}/);
+  assert.match(flowSource, /provision: "private_invited_unpaid"/);
+  assert.match(flowSource, /allowedWorkflowKeys: automaticGrantOffer!\.allowedWorkflowKeys/);
+  assert.doesNotMatch(flowSource, /maxPanelAtomic|maxDailyAtomic|maxMonthlyAtomic|maxFeeBps/);
   assert.match(flowSource, /buildReviewCompensationConfiguration\(timingProfile, reviewCompensation\)/);
   assert.match(flowSource, /requestProfile: \{ \.\.\.requestProfile, privateGroupId \}/);
   assert.match(flowSource, /\s+authority,\s+/);

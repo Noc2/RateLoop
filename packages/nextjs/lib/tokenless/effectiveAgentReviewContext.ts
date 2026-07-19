@@ -12,7 +12,8 @@ import {
   HUMAN_REVIEW_AUTHORITY_LEVELS,
   HUMAN_REVIEW_COMPENSATION_MODES,
   HUMAN_REVIEW_CONTENT_BOUNDARIES,
-  type HumanReviewReadiness,
+  configuredHumanReviewLanes,
+  deployedHumanReviewReadiness,
   resolveHumanReviewCapability,
 } from "~~/lib/tokenless/reviewCapabilities";
 import { REVIEW_POLICY_MODES } from "~~/lib/tokenless/reviewPolicyManagement";
@@ -31,13 +32,6 @@ const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const REQUIRED_EVALUATION_SCOPES = ["evaluation:read", "review:decide"] as const;
 const REQUIRED_PUBLISHING_SCOPE = "panel:publish";
 const REQUIRED_SPENDING_SCOPE = "payment:submit";
-
-export const HUMAN_REVIEW_LANE_IMPLEMENTATION = {
-  privateInvitedUnpaid: true,
-  privateInvitedPaid: true,
-  publicPaidNetwork: true,
-  hybridPublicSafe: false,
-} as const;
 
 function invalidContext(message: string): never {
   throw new TokenlessServiceError(message, 500, "agent_context_invalid");
@@ -135,12 +129,6 @@ function nullableReference(row: Row, idKey: string, versionKey: string) {
   const version = optionalInteger(row, versionKey);
   if ((id === null) !== (version === null)) invalidContext(`Stored ${idKey} reference is invalid.`);
   return id && version !== null ? { policyId: id, version } : null;
-}
-
-function configuredLaneMessage(lane: keyof typeof HUMAN_REVIEW_LANE_IMPLEMENTATION) {
-  if (HUMAN_REVIEW_LANE_IMPLEMENTATION[lane]) return "Implemented on this deployment.";
-  if (lane === "privateInvitedPaid") return "Invited-review USDC settlement is not implemented yet.";
-  return "Hybrid invited and public delivery is not implemented yet.";
 }
 
 function grantReason(input: {
@@ -328,24 +316,7 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
     enforcementMode: integrationEnforcementMode,
   };
 
-  const implementedLanes = {
-    privateInvitedUnpaid: {
-      available: HUMAN_REVIEW_LANE_IMPLEMENTATION.privateInvitedUnpaid,
-      message: configuredLaneMessage("privateInvitedUnpaid"),
-    },
-    privateInvitedPaid: {
-      available: HUMAN_REVIEW_LANE_IMPLEMENTATION.privateInvitedPaid,
-      message: configuredLaneMessage("privateInvitedPaid"),
-    },
-    publicPaidNetwork: {
-      available: HUMAN_REVIEW_LANE_IMPLEMENTATION.publicPaidNetwork,
-      message: configuredLaneMessage("publicPaidNetwork"),
-    },
-    hybridPublicSafe: {
-      available: HUMAN_REVIEW_LANE_IMPLEMENTATION.hybridPublicSafe,
-      message: configuredLaneMessage("hybridPublicSafe"),
-    },
-  };
+  const implementedLanes = configuredHumanReviewLanes();
 
   if (!bindingId) {
     return {
@@ -594,12 +565,10 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
       agentMayAward: false as const,
     },
   };
-  const readiness: HumanReviewReadiness = {
+  const readiness = deployedHumanReviewReadiness({
     evaluation: canEvaluate,
-    ownerApproval: true,
     autonomousPublishing: exactGrantActive,
-    ...HUMAN_REVIEW_LANE_IMPLEMENTATION,
-  };
+  });
   const effectiveLane =
     profileStatus === "ready"
       ? resolveHumanReviewCapability({ audience, compensationMode, contentBoundary, authority }, readiness)
