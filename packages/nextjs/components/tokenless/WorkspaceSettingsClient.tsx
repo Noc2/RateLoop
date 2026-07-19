@@ -696,7 +696,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
     );
 
   const workspaceForm = (
-    <form className="mt-4" onSubmit={createWorkspace}>
+    <form className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start" onSubmit={createWorkspace}>
       <label className="sr-only" htmlFor="workspace-name">
         Workspace name
       </label>
@@ -709,10 +709,14 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
         maxLength={120}
         required
       />
-      <button className="rateloop-gradient-action mt-3 w-full px-5" disabled={busy}>
+      <button className="rateloop-gradient-action min-h-12 px-5" disabled={busy} type="submit">
         {busy ? "Creating…" : "Create workspace"}
       </button>
-      {error ? <p className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100">{error}</p> : null}
+      {error ? (
+        <p className="rounded-lg bg-red-400/10 p-3 text-sm text-red-100 sm:col-span-2" role="alert">
+          {error}
+        </p>
+      ) : null}
     </form>
   );
 
@@ -1563,10 +1567,12 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
         ) : null}
       </section>
 
-      <details className="surface-card rounded-2xl p-6">
-        <summary className="cursor-pointer text-sm font-semibold">Create another workspace</summary>
+      <section className="surface-card rounded-2xl p-6" aria-labelledby="create-another-workspace-heading">
+        <h2 id="create-another-workspace-heading" className="text-lg font-semibold">
+          Create another workspace
+        </h2>
         {workspaceForm}
-      </details>
+      </section>
     </div>
   );
 }

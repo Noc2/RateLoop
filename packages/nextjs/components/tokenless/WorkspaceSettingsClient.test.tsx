@@ -121,5 +121,9 @@ test("workspace management creation continues into guided agent setup", () => {
   assert.match(source, /window\.location\.assign\(`\/agents\?workspace=.*&step=connect/);
   assert.match(source, /workspaces\.length === 0/);
   assert.match(source, /Create another workspace/);
+  assert.match(source, /aria-labelledby="create-another-workspace-heading"/);
+  assert.match(source, /sm:grid-cols-\[minmax\(0,1fr\)_auto\]/);
+  assert.doesNotMatch(source, /<details[^>]*>\s*<summary[^>]*>Create another workspace/);
+  assert.doesNotMatch(source, /rateloop-gradient-action mt-3 w-full/);
   assert.doesNotMatch(source, /Create a workspace to fund panels/);
 });
