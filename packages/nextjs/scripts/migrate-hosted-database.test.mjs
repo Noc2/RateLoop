@@ -64,7 +64,7 @@ test("migration state rejects unjournaled and divergent databases", () => {
     validateMigrationState({
       hasMigrationTable: false,
       hasCoreSchema: true,
-      latestDatabaseMigration: null,
+      databaseMigrations: [],
       migrations,
     }).join("\n"),
     /no drizzle migration journal/i,
@@ -73,16 +73,16 @@ test("migration state rejects unjournaled and divergent databases", () => {
     validateMigrationState({
       hasMigrationTable: true,
       hasCoreSchema: true,
-      latestDatabaseMigration: { createdAt: 99, hash: "other" },
+      databaseMigrations: [{ createdAt: 99, hash: "other" }],
       migrations,
     }).join("\n"),
-    /not present in the checked-in journal/i,
+    /does not match checked-in journal position/i,
   );
   assert.match(
     validateMigrationState({
       hasMigrationTable: true,
       hasCoreSchema: true,
-      latestDatabaseMigration: { createdAt: 100, hash: "other" },
+      databaseMigrations: [{ createdAt: 100, hash: "other" }],
       migrations,
     }).join("\n"),
     /hash does not match/i,
@@ -98,7 +98,7 @@ test("migration state accepts an empty database or a matching journal boundary",
     validateMigrationState({
       hasMigrationTable: false,
       hasCoreSchema: false,
-      latestDatabaseMigration: null,
+      databaseMigrations: [],
       migrations,
     }),
     [],
@@ -107,9 +107,68 @@ test("migration state accepts an empty database or a matching journal boundary",
     validateMigrationState({
       hasMigrationTable: true,
       hasCoreSchema: true,
-      latestDatabaseMigration: { createdAt: 100, hash: "first" },
+      databaseMigrations: [{ createdAt: 100, hash: "first" }],
       migrations,
     }),
     [],
+  );
+});
+
+test("migration state verifies every applied row as an exact checked-in prefix", () => {
+  const migrations = [
+    { folderMillis: 100, hash: "first" },
+    { folderMillis: 200, hash: "second" },
+    { folderMillis: 300, hash: "third" },
+  ];
+  assert.deepEqual(
+    validateMigrationState({
+      hasMigrationTable: true,
+      hasCoreSchema: true,
+      databaseMigrations: [
+        { createdAt: 100, hash: "first" },
+        { createdAt: 200, hash: "second" },
+      ],
+      migrations,
+    }),
+    [],
+  );
+  assert.match(
+    validateMigrationState({
+      hasMigrationTable: true,
+      hasCoreSchema: true,
+      databaseMigrations: [
+        { createdAt: 100, hash: "first" },
+        { createdAt: 150, hash: "unknown-middle" },
+        { createdAt: 200, hash: "second" },
+      ],
+      migrations,
+    }).join("\n"),
+    /position 1/i,
+  );
+  assert.match(
+    validateMigrationState({
+      hasMigrationTable: true,
+      hasCoreSchema: true,
+      databaseMigrations: [
+        { createdAt: 100, hash: "first" },
+        { createdAt: 200, hash: "changed" },
+      ],
+      migrations,
+    }).join("\n"),
+    /hash does not match/i,
+  );
+  assert.match(
+    validateMigrationState({
+      hasMigrationTable: true,
+      hasCoreSchema: true,
+      databaseMigrations: [
+        { createdAt: 100, hash: "first" },
+        { createdAt: 200, hash: "second" },
+        { createdAt: 300, hash: "third" },
+        { createdAt: 400, hash: "fourth" },
+      ],
+      migrations,
+    }).join("\n"),
+    /longer than/i,
   );
 });

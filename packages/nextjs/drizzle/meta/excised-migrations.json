@@ -1,0 +1,9 @@
+{
+  "schemaVersion": "rateloop.migration-excisions.v1",
+  "exclusions": [
+    {
+      "idx": 66,
+      "reason": "Reserved during development and never shipped; no SQL migration or journal entry exists."
+    }
+  ]
+}

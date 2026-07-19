@@ -18,18 +18,10 @@ export function deriveHostedDatabaseIdentity(databaseUrl) {
   } catch {
     return null;
   }
-  if (
-    (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") ||
-    !parsed.hostname ||
-    !databaseName
-  ) {
+  if ((parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") || !parsed.hostname || !databaseName) {
     return null;
   }
-  const canonicalEndpoint = [
-    parsed.hostname.toLowerCase(),
-    parsed.port || "5432",
-    databaseName,
-  ].join("\0");
+  const canonicalEndpoint = [parsed.hostname.toLowerCase(), parsed.port || "5432", databaseName].join("\0");
   return `sha256:${createHash("sha256").update(canonicalEndpoint).digest("hex")}`;
 }
 
@@ -65,22 +57,26 @@ export function validateHostedMigrationEnvironment(env) {
   return errors;
 }
 
-export function validateMigrationState({ hasMigrationTable, hasCoreSchema, latestDatabaseMigration, migrations }) {
+export function validateMigrationState({ hasMigrationTable, hasCoreSchema, databaseMigrations, migrations }) {
   if (!hasMigrationTable && hasCoreSchema) {
     return ["The tokenless database has application tables but no Drizzle migration journal; refusing to replay DDL."];
   }
-  if (!latestDatabaseMigration) return [];
-
-  const matchingMigration = migrations.find(
-    migration => migration.folderMillis === Number(latestDatabaseMigration.createdAt),
-  );
-  if (!matchingMigration) {
-    return [
-      `Database migration timestamp ${latestDatabaseMigration.createdAt} is not present in the checked-in journal.`,
-    ];
+  if (!hasMigrationTable || databaseMigrations.length === 0) return [];
+  if (databaseMigrations.length > migrations.length) {
+    return ["The database migration journal is longer than the checked-in journal."];
   }
-  if (matchingMigration.hash !== latestDatabaseMigration.hash) {
-    return [`Database migration hash does not match the checked-in journal at ${latestDatabaseMigration.createdAt}.`];
+
+  for (let index = 0; index < databaseMigrations.length; index += 1) {
+    const databaseMigration = databaseMigrations[index];
+    const checkedInMigration = migrations[index];
+    if (Number(databaseMigration.createdAt) !== checkedInMigration.folderMillis) {
+      return [
+        `Database migration timestamp ${databaseMigration.createdAt} does not match checked-in journal position ${index}.`,
+      ];
+    }
+    if (databaseMigration.hash !== checkedInMigration.hash) {
+      return [`Database migration hash does not match the checked-in journal at ${databaseMigration.createdAt}.`];
+    }
   }
   return [];
 }
@@ -96,18 +92,17 @@ async function readDatabaseState(pool) {
     return {
       hasMigrationTable: false,
       hasCoreSchema: relationState.has_core_schema,
-      latestDatabaseMigration: null,
+      databaseMigrations: [],
     };
   }
 
-  const latestResult = await pool.query(
-    "select hash, created_at from drizzle.__drizzle_migrations order by created_at desc limit 1",
+  const migrationResult = await pool.query(
+    "select hash, created_at from drizzle.__drizzle_migrations order by created_at asc",
   );
-  const latest = latestResult.rows[0];
   return {
     hasMigrationTable: true,
     hasCoreSchema: relationState.has_core_schema,
-    latestDatabaseMigration: latest ? { hash: latest.hash, createdAt: Number(latest.created_at) } : null,
+    databaseMigrations: migrationResult.rows.map(row => ({ hash: row.hash, createdAt: Number(row.created_at) })),
   };
 }
 
@@ -150,10 +145,8 @@ async function main() {
     await migrate(drizzle(pool), { migrationsFolder });
 
     const after = await readDatabaseState(pool);
-    if (
-      after.latestDatabaseMigration?.createdAt !== expectedLatest.folderMillis ||
-      after.latestDatabaseMigration?.hash !== expectedLatest.hash
-    ) {
+    const afterErrors = validateMigrationState({ ...after, migrations });
+    if (afterErrors.length > 0 || after.databaseMigrations.length !== migrations.length) {
       throw new Error("Hosted database migration did not reach the checked-in journal head.");
     }
     console.log(`Hosted database migrations verified through ${expectedLatest.folderMillis}.`);
