@@ -50,6 +50,39 @@ or end-to-end paid-path testing is complete.
 - Removed the public limitations page and registry. Customer-facing copy now explains the product mechanisms and links
   technical terms to their detailed documentation; engineering blockers remain in this internal register.
 
+## Design-review remediation — 19 July 2026
+
+The findings in [Tokenless design review — 18 July 2026](tokenless-design-review-2026-07.md) were re-checked against
+the current branch before implementation. The following disposition is part of the internal release record; a code or
+test fix is not evidence that a remaining economics, provider, or live-operations gate has passed.
+
+| Finding | Implemented disposition | Remaining release boundary |
+| ------- | ----------------------- | -------------------------- |
+| W1 adaptive safety gates | Adaptive coverage is fail-closed at 100% while drift and severe-disagreement evidence is unavailable; reduced legacy scopes reset, comparable human agreement requires at least two respondents, and the default agreement threshold is aligned to the documented 7,000 bps policy. | Do not re-enable the coverage ladder until source-derived drift and disagreement gates, detection-latency evidence, and an owner-reviewed rollout exist. |
+| W2 lazy/collusive equilibrium | Reduced review is disabled and the attack benchmark now includes a unilateral constant reporter against an honest population. | Platform-synthetic gold, cross-round correlation analytics, qualified-reviewer economics, and the preregistered real-money acceptance review remain blocking. |
+| W3 disclosure timing | Legal, privacy, product, and design copy now states that a commit irrevocably schedules public vote, prediction, salt, and payout disclosure at the beacon round, independent of reveal or claim. Artifact-wrapping and issuer/token authority claims were narrowed to the implemented boundaries. | Any future claim-time-only or cross-round-unlinkability claim requires a new protocol and tested recovery flow. |
+| W4 late-reveal indexing | Indexed tallies use the contract's scoring-eligibility signal and evidence recomputation is pinned to the frozen scoring set. | Keep the late-reveal regression in every Ponder/contract compatibility run. |
+| W5 keeper liveness | Keeper consumes the authenticated targeted work feed, prioritizes seed finalization, and falls back safely. Ponder exposes bounded index lag/age; keeper readiness covers run freshness, progress, errors, and gas balance; maintenance degrades stale evidence work. | Multiple independent operators, alert delivery exercises, and incentive-backed continuation remain live-operations gates. |
+| W6 x402 signer/reconciliation | The autonomous signer pins deployment identity, quote economics, exact terms, and a local spend ceiling. Used EIP-3009 authorizations require exact round-receipt reconciliation and otherwise stop in a `possibly_paid` state without replacement signing. | Exercise used-nonce, timeout-after-submit, and provider-failover recovery against the isolated chain before real value. |
+| W7 advisory self-reporting | Agent context exposes the advisory enforcement boundary and owner copy states that risk, confidence, metadata, and output occurrence are host/agent supplied. | Silent under-reporting detection, a cadence expectation model, and a verified host-enforced adapter remain required for stronger assurance claims. |
+| W8 deletion completeness | Paid-rater identity is principal-bound; deletion erases World ID/provider linkage, severs the rater profile into a settlement-safe receipt tombstone, records measured category evidence, emits one honest atomic completion event, and permits fresh re-enrollment without reconnecting the deleted identity. | Complete the live deletion/provider exercise and retention/legal review before real users. |
+| W9 surprise-bounty extraction | Unanimous panels are ineligible and frozen per-round liability is capped by fee revenue and report capacity. The benchmark includes manufactured-surprise farming and records that a near-unanimous coalition can still have a positive incentive under the cap. | Treat the bounty as experimental and disabled for real money until the remaining 14/15 farming incentive is removed or accepted through the economics review. |
+| W10 adaptive statistics | Owner-facing defaults no longer imply an impossible 8,000 bps lower-bound setting, Wilson reset logic is tested, and adaptive reduction is disabled pending real safety signals. | A sequential or larger-window design needs power and regression-latency evidence before reduced review. |
+| W11 sybil/collusion trust | Customer claims continue to describe issuer/operator admission authority rather than presenting one-human-one-seat as a protocol property. | Cross-round reviewer, timing, and payout-linkage analytics plus the gold-task gate remain mandatory before paid public panels. |
+| W12 wallet-keyed rater identity | Rater, eligibility, World ID, voucher, task, commit, and assignment access are keyed to the opaque principal; payout wallets are mutable ownership-tracked attributes and paid records freeze payout snapshots. | Run wallet rotation and recovery against the isolated hosted database and chain before real users. |
+
+Cross-cutting fixes also enforce immutable migration history (including the declared journal excision), default-deny
+browser mutation origins, shared Better Auth cookie names, conditional enterprise identity plugins, exact owner approval
+for redacted publication, open-review rediscovery, multisig issuer-rotation configuration, conservative evidence
+finality, ordered server-side RPC failover, exact managed-KMS inventory, a non-root keeper image, and a normative
+500-seat settlement gas benchmark.
+
+The following design-review items deliberately remain gates rather than changes to the currently hosted artifact:
+fund-core or Feedback Bonus pull-credit changes that require an atomic fresh contract/service deployment; scoring
+entropy redesign and O(n²) settlement optimization; per-tenant KMS wrapping authorities; managed custody and rotation
+for every hosted signer; named-host verification; live alert, backup, deletion, and incident exercises; and the full
+economics/gold/correlation acceptance package. None may be inferred from the isolated Vercel deployment.
+
 ## Gates before the next hosted staging release
 
 1. **Complete managed signing.** Replace hosted hot-key assumptions with reviewed managed signing for credential
