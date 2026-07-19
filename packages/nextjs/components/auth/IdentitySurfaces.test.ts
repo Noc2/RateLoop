@@ -13,6 +13,8 @@ test("account sign-in is Better Auth first and explicitly creates no wallet", ()
   assert.match(signIn, /betterAuthClient\.emailOtp\.sendVerificationOtp/);
   assert.match(signIn, /betterAuthClient\.signIn\.passkey/);
   assert.match(signIn, /exchangeBetterAuthSession/);
+  assert.match(signIn, /runBetterAuthAction/);
+  assert.match(signIn, /finally \{\s*setBusy\(false\)/);
   assert.doesNotMatch(signIn, /Creating a RateLoop account does not create a wallet/i);
   assert.doesNotMatch(signIn, /ConnectButton|inAppWallet/);
   assert.match(signIn, /function GoogleIcon/);

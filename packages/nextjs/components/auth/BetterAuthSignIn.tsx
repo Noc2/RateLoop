@@ -1,8 +1,30 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { normalizeSignInReturnPath } from "./signInReturnPath";
 import { betterAuthClient, exchangeBetterAuthSession, readBrowserAuthConfiguration } from "~~/lib/auth/client";
+
+export async function runBetterAuthAction({
+  action,
+  fallbackMessage,
+  setBusy,
+  setError,
+}: {
+  action: () => Promise<void>;
+  fallbackMessage: string;
+  setBusy: (busy: boolean) => void;
+  setError: (error: string | null) => void;
+}) {
+  setBusy(true);
+  setError(null);
+  try {
+    await action();
+  } catch (cause) {
+    setError(cause instanceof Error ? cause.message : fallbackMessage);
+  } finally {
+    setBusy(false);
+  }
+}
 
 function GoogleIcon() {
   return (
@@ -44,6 +66,7 @@ export function BetterAuthSignIn() {
   const [configuration, setConfiguration] = useState<Awaited<ReturnType<typeof readBrowserAuthConfiguration>> | null>(
     null,
   );
+  const [configurationError, setConfigurationError] = useState(false);
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
@@ -51,95 +74,107 @@ export function BetterAuthSignIn() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    void readBrowserAuthConfiguration()
-      .then(setConfiguration)
-      .catch(() => setConfiguration(null));
-    if (new URL(window.location.href).searchParams.get("exchange") === "1") {
-      void finishSignIn();
+  const loadConfiguration = useCallback(async () => {
+    setConfigurationError(false);
+    try {
+      setConfiguration(await readBrowserAuthConfiguration());
+    } catch {
+      setConfiguration(null);
+      setConfigurationError(true);
     }
   }, []);
 
-  async function finishSignIn() {
-    setBusy(true);
-    setError(null);
-    try {
+  const perform = useCallback(
+    (action: () => Promise<void>, fallbackMessage: string) =>
+      runBetterAuthAction({ action, fallbackMessage, setBusy, setError }),
+    [],
+  );
+
+  const finishSignIn = useCallback(async () => {
+    await perform(async () => {
       await exchangeBetterAuthSession();
       await betterAuthClient.signOut().catch(() => undefined);
       window.location.assign(safeReturnPath());
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to finish sign-in.");
-      setBusy(false);
+    }, "Unable to finish sign-in.");
+  }, [perform]);
+
+  useEffect(() => {
+    void loadConfiguration();
+    if (new URL(window.location.href).searchParams.get("exchange") === "1") {
+      void finishSignIn();
     }
-  }
+  }, [finishSignIn, loadConfiguration]);
 
   async function sendCode(event: FormEvent) {
     event.preventDefault();
-    setBusy(true);
-    setError(null);
-    const result = await betterAuthClient.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
-    if (result.error) setError(result.error.message || "Unable to send the sign-in code.");
-    else setOtpSent(true);
-    setBusy(false);
+    await perform(async () => {
+      const result = await betterAuthClient.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+      if (result.error) setError(result.error.message || "Unable to send the sign-in code.");
+      else setOtpSent(true);
+    }, "Unable to send the sign-in code.");
   }
 
   async function verifyCode(event: FormEvent) {
     event.preventDefault();
-    setBusy(true);
-    setError(null);
-    const result = await betterAuthClient.signIn.emailOtp({ email, otp });
-    if (result.error) {
-      setError(result.error.message || "The sign-in code is invalid or expired.");
-      setBusy(false);
-      return;
-    }
-    setVerified(true);
-    setBusy(false);
+    await perform(async () => {
+      const result = await betterAuthClient.signIn.emailOtp({ email, otp });
+      if (result.error) setError(result.error.message || "The sign-in code is invalid or expired.");
+      else setVerified(true);
+    }, "Unable to verify the sign-in code.");
   }
 
   async function signInWithPasskey() {
-    setBusy(true);
-    setError(null);
-    const result = await betterAuthClient.signIn.passkey();
-    if (result.error) {
-      setError(result.error.message || "Passkey sign-in failed.");
-      setBusy(false);
-      return;
-    }
-    await finishSignIn();
+    await perform(async () => {
+      const result = await betterAuthClient.signIn.passkey();
+      if (result.error) setError(result.error.message || "Passkey sign-in failed.");
+      else {
+        await exchangeBetterAuthSession();
+        await betterAuthClient.signOut().catch(() => undefined);
+        window.location.assign(safeReturnPath());
+      }
+    }, "Passkey sign-in failed.");
   }
 
   async function signInWithSso() {
-    setBusy(true);
-    setError(null);
     const callbackURL = `${window.location.origin}/sign-in?exchange=1&returnTo=${encodeURIComponent(safeReturnPath())}`;
-    const result = await betterAuthClient.signIn.sso({ email, callbackURL });
-    if (result.error) {
-      setError(result.error.message || "Company SSO is not available for this email domain.");
-      setBusy(false);
-    }
+    await perform(async () => {
+      const result = await betterAuthClient.signIn.sso({ email, callbackURL });
+      if (result.error) setError(result.error.message || "Company SSO is not available for this email domain.");
+    }, "Company SSO sign-in failed.");
   }
 
   async function addPasskey() {
-    setBusy(true);
-    setError(null);
-    const result = await betterAuthClient.passkey.addPasskey({ name: "RateLoop passkey" });
-    if (result.error) setError(result.error.message || "Unable to add this passkey.");
-    else await finishSignIn();
-    setBusy(false);
+    await perform(async () => {
+      const result = await betterAuthClient.passkey.addPasskey({ name: "RateLoop passkey" });
+      if (result.error) setError(result.error.message || "Unable to add this passkey.");
+      else {
+        await exchangeBetterAuthSession();
+        await betterAuthClient.signOut().catch(() => undefined);
+        window.location.assign(safeReturnPath());
+      }
+    }, "Unable to add this passkey.");
   }
 
   async function social(provider: "apple" | "google") {
-    setBusy(true);
-    setError(null);
     const callbackURL = `${window.location.origin}/sign-in?exchange=1&returnTo=${encodeURIComponent(safeReturnPath())}`;
-    const result = await betterAuthClient.signIn.social({ provider, callbackURL });
-    if (result.error) {
-      setError(result.error.message || `Unable to sign in with ${provider}.`);
-      setBusy(false);
-    }
+    await perform(async () => {
+      const result = await betterAuthClient.signIn.social({ provider, callbackURL });
+      if (result.error) setError(result.error.message || `Unable to sign in with ${provider}.`);
+    }, `Unable to sign in with ${provider}.`);
   }
 
+  if (configurationError) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-error" role="alert">
+          Sign-in options could not be loaded.
+        </p>
+        <button className="btn btn-outline min-h-11 w-full" type="button" onClick={() => void loadConfiguration()}>
+          Try again
+        </button>
+      </div>
+    );
+  }
   if (!configuration) {
     return <p className="text-sm text-base-content/60">Checking sign-in configuration…</p>;
   }
