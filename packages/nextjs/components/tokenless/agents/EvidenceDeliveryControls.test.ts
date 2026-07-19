@@ -10,6 +10,7 @@ const files = [
   "./MetricsEvidenceAccess.tsx",
 ].map(path => readFileSync(new URL(path, import.meta.url), "utf8"));
 const source = files.join("\n");
+const [, wormSource, siemSource, grcSource, metricsSource] = files;
 
 test("enterprise delivery controls use the workspace assurance APIs", () => {
   assert.match(source, /assurance\/worm/);
@@ -21,12 +22,32 @@ test("enterprise delivery controls use the workspace assurance APIs", () => {
   assert.match(source, /assurance\/metrics\/credentials/);
 });
 
-test("configuration remains explicit and progressively disclosed", () => {
+test("enterprise delivery status and management stay visible", () => {
+  assert.match(wormSource, /<section[^>]+aria-labelledby="immutable-archive-heading"/);
+  assert.match(siemSource, /<section[^>]+aria-labelledby="siem-event-streams-heading"/);
+  assert.match(grcSource, /<section[^>]+aria-labelledby="grc-connectors-heading"/);
+  assert.match(metricsSource, /<section[^>]+aria-labelledby="metrics-access-heading"/);
+  for (const value of files.slice(1)) {
+    assert.doesNotMatch(value, /<details className="surface-card-nested/);
+  }
+  assert.match(wormSource, /destination \? "Verified" : "Not configured"/);
+  assert.match(siemSource, /streams\.filter\(stream => stream\.active\)\.length/);
+  assert.match(grcSource, /connectors\.length/);
+  assert.match(metricsSource, /credentials\.filter\(credential => credential\.status === "active"\)\.length/);
+});
+
+test("long configuration forms use direct actions with cancel", () => {
   assert.match(source, /Configure destination/);
   assert.match(source, /Add event stream/);
   assert.match(source, /Add connector/);
   assert.match(source, /Issue credential/);
-  assert.ok(files.slice(1).every(value => value.includes("<details")));
+  for (const value of [wormSource, siemSource, grcSource]) {
+    assert.match(value, /aria-controls=/);
+    assert.match(value, />\s*Cancel\s*<\/button>/);
+  }
+  assert.doesNotMatch(metricsSource, /<details/);
+  assert.match(metricsSource, /<form[\s\S]*Issue credential/);
+  assert.match(wormSource, /<details[\s\S]*Recent archive deliveries/);
 });
 
 test("credential forms accept opaque references and status views omit secret values", () => {

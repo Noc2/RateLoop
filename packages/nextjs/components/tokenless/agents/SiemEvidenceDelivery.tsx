@@ -35,6 +35,7 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
   const [streams, setStreams] = useState<EventStream[]>([]);
   const [url, setUrl] = useState("");
   const [selectedTypes, setSelectedTypes] = useState<EventType[]>(EVENT_TYPES.map(([value]) => value));
+  const [showForm, setShowForm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [oneTimeSecret, setOneTimeSecret] = useState<{ label: string; value: string } | null>(null);
@@ -69,11 +70,18 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
   };
 
   return (
-    <details className="surface-card-nested rounded-xl p-5">
-      <summary className="cursor-pointer font-semibold">SIEM event streams</summary>
-      <p className="mt-2 text-sm leading-6 text-base-content/55">
-        Send CloudEvents and OCSF compliance findings to a public HTTPS receiver.
-      </p>
+    <section className="surface-card-nested rounded-xl p-5" aria-labelledby="siem-event-streams-heading">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 id="siem-event-streams-heading" className="font-semibold">
+            SIEM event streams
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-base-content/55">
+            Send CloudEvents and OCSF findings to a public HTTPS receiver.
+          </p>
+        </div>
+        <span className="badge badge-ghost">{streams.filter(stream => stream.active).length} active</span>
+      </div>
 
       {streams.length > 0 ? (
         <div className="mt-4 space-y-3">
@@ -117,10 +125,20 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
         />
       ) : null}
 
-      <details className="mt-4 rounded-xl border border-white/10 p-4">
-        <summary className="cursor-pointer text-sm font-semibold">Add event stream</summary>
+      <button
+        type="button"
+        className="btn btn-sm rateloop-secondary-action mt-4"
+        aria-expanded={showForm}
+        aria-controls="siem-event-stream-form"
+        disabled={busy || oneTimeSecret !== null}
+        onClick={() => setShowForm(true)}
+      >
+        Add event stream
+      </button>
+      {showForm ? (
         <form
-          className="mt-4 space-y-4"
+          id="siem-event-stream-form"
+          className="mt-4 space-y-4 rounded-xl border border-white/10 p-4"
           onSubmit={event => {
             event.preventDefault();
             setBusy(true);
@@ -138,6 +156,8 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
               })
               .then(() => {
                 setUrl("");
+                setSelectedTypes(EVENT_TYPES.map(([value]) => value));
+                setShowForm(false);
                 setMessage("Event stream created.");
               })
               .catch(error => setMessage(error instanceof Error ? error.message : "Unable to create event stream."))
@@ -175,20 +195,34 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
               ))}
             </div>
           </fieldset>
-          <button
-            type="submit"
-            className="btn btn-sm rateloop-gradient-action"
-            disabled={busy || selectedTypes.length === 0 || oneTimeSecret !== null}
-          >
-            {busy ? "Adding…" : "Add stream"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="submit"
+              className="btn btn-sm rateloop-gradient-action"
+              disabled={busy || selectedTypes.length === 0 || oneTimeSecret !== null}
+            >
+              {busy ? "Adding…" : "Add stream"}
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              disabled={busy}
+              onClick={() => {
+                setUrl("");
+                setSelectedTypes(EVENT_TYPES.map(([value]) => value));
+                setShowForm(false);
+              }}
+            >
+              Cancel
+            </button>
+          </div>
         </form>
-      </details>
+      ) : null}
       {message ? (
         <p className="mt-4 text-xs text-base-content/60" role="status">
           {message}
         </p>
       ) : null}
-    </details>
+    </section>
   );
 }

@@ -53,6 +53,7 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
   const endpoint = `/api/account/workspaces/${encodeURIComponent(workspaceId)}/assurance/grc-connectors`;
   const [connectors, setConnectors] = useState<GrcConnector[]>([]);
   const [form, setForm] = useState(INITIAL_FORM);
+  const [showForm, setShowForm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -92,11 +93,20 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
   };
 
   return (
-    <details className="surface-card-nested rounded-xl p-5">
-      <summary className="cursor-pointer font-semibold">GRC connectors</summary>
-      <p className="mt-2 text-sm leading-6 text-base-content/55">
-        Deliver normalized coverage tests and signed packet bundles to Drata or Vanta.
-      </p>
+    <section className="surface-card-nested rounded-xl p-5" aria-labelledby="grc-connectors-heading">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 id="grc-connectors-heading" className="font-semibold">
+            GRC connectors
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-base-content/55">
+            Deliver signed assurance evidence to Drata or Vanta.
+          </p>
+        </div>
+        <span className="badge badge-ghost">
+          {connectors.length} {connectors.length === 1 ? "connector" : "connectors"}
+        </span>
+      </div>
 
       {connectors.length > 0 ? (
         <div className="mt-4 space-y-3">
@@ -149,10 +159,20 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
         <p className="mt-4 text-sm text-base-content/50">No GRC connector is configured.</p>
       )}
 
-      <details className="mt-4 rounded-xl border border-white/10 p-4">
-        <summary className="cursor-pointer text-sm font-semibold">Add connector</summary>
+      <button
+        type="button"
+        className="btn btn-sm rateloop-secondary-action mt-4"
+        aria-expanded={showForm}
+        aria-controls="grc-connector-form"
+        disabled={busy}
+        onClick={() => setShowForm(true)}
+      >
+        Add connector
+      </button>
+      {showForm ? (
         <form
-          className="mt-4 grid gap-4 sm:grid-cols-2"
+          id="grc-connector-form"
+          className="mt-4 grid gap-4 rounded-xl border border-white/10 p-4 sm:grid-cols-2"
           onSubmit={event => {
             event.preventDefault();
             setBusy(true);
@@ -187,6 +207,7 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
               .then(() => load())
               .then(() => {
                 setForm(INITIAL_FORM);
+                setShowForm(false);
                 setMessage("GRC connector added. Reconciliation runs daily.");
               })
               .catch(error => setMessage(error instanceof Error ? error.message : "Unable to add GRC connector."))
@@ -312,20 +333,29 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
             />
             Require a signed packet for this control
           </label>
-          <button
-            type="submit"
-            className="btn btn-sm rateloop-gradient-action sm:col-span-2 sm:justify-self-start"
-            disabled={busy}
-          >
-            {busy ? "Adding…" : "Add connector"}
-          </button>
+          <div className="flex flex-wrap gap-2 sm:col-span-2">
+            <button type="submit" className="btn btn-sm rateloop-gradient-action" disabled={busy}>
+              {busy ? "Adding…" : "Add connector"}
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              disabled={busy}
+              onClick={() => {
+                setForm(INITIAL_FORM);
+                setShowForm(false);
+              }}
+            >
+              Cancel
+            </button>
+          </div>
         </form>
-      </details>
+      ) : null}
       {message ? (
         <p className="mt-4 text-xs text-base-content/60" role="status">
           {message}
         </p>
       ) : null}
-    </details>
+    </section>
   );
 }

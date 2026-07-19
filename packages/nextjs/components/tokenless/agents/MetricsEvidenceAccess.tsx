@@ -72,11 +72,20 @@ export function MetricsEvidenceAccess({ workspaceId }: { workspaceId: string }) 
   };
 
   return (
-    <details className="surface-card-nested rounded-xl p-5">
-      <summary className="cursor-pointer font-semibold">Metrics access</summary>
-      <p className="mt-2 text-sm leading-6 text-base-content/55">
-        Manage bearer credentials for the workspace OpenMetrics endpoint.
-      </p>
+    <section className="surface-card-nested rounded-xl p-5" aria-labelledby="metrics-access-heading">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 id="metrics-access-heading" className="font-semibold">
+            Metrics access
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-base-content/55">
+            Manage bearer credentials for the workspace OpenMetrics endpoint.
+          </p>
+        </div>
+        <span className="badge badge-ghost">
+          {credentials.filter(credential => credential.status === "active").length} active
+        </span>
+      </div>
       {credentials.length > 0 ? (
         <div className="mt-4 space-y-3">
           {credentials.map(credential => (
@@ -128,60 +137,51 @@ export function MetricsEvidenceAccess({ workspaceId }: { workspaceId: string }) 
           onDismiss={() => setOneTimeToken(null)}
         />
       ) : null}
-      <details className="mt-4 rounded-xl border border-white/10 p-4">
-        <summary className="cursor-pointer text-sm font-semibold">Issue credential</summary>
-        <form
-          className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end"
-          onSubmit={event => {
-            event.preventDefault();
-            setBusy(true);
-            setMessage(null);
-            void fetch(endpoint, {
-              method: "POST",
-              credentials: "same-origin",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ label }),
+      <form
+        className="mt-4 flex flex-col gap-3 rounded-xl border border-white/10 p-4 sm:flex-row sm:items-end"
+        onSubmit={event => {
+          event.preventDefault();
+          setBusy(true);
+          setMessage(null);
+          void fetch(endpoint, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ label }),
+          })
+            .then(response => readEvidenceDeliveryJson<IssuedMetricsCredential>(response))
+            .then(created => {
+              setOneTimeToken(created.token);
+              return load();
             })
-              .then(response => readEvidenceDeliveryJson<IssuedMetricsCredential>(response))
-              .then(created => {
-                setOneTimeToken(created.token);
-                return load();
-              })
-              .then(() => {
-                setLabel("");
-                setMessage("Credential issued.");
-              })
-              .catch(error =>
-                setMessage(error instanceof Error ? error.message : "Unable to issue metrics credential."),
-              )
-              .finally(() => setBusy(false));
-          }}
-        >
-          <label className="w-full text-sm text-base-content/65 sm:max-w-md">
-            Label
-            <input
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={label}
-              onChange={event => setLabel(event.target.value)}
-              placeholder="Security operations"
-              required
-              maxLength={100}
-            />
-          </label>
-          <button
-            type="submit"
-            className="btn btn-sm rateloop-gradient-action"
-            disabled={busy || oneTimeToken !== null}
-          >
-            {busy ? "Issuing…" : "Issue credential"}
-          </button>
-        </form>
-      </details>
+            .then(() => {
+              setLabel("");
+              setMessage("Credential issued.");
+            })
+            .catch(error => setMessage(error instanceof Error ? error.message : "Unable to issue metrics credential."))
+            .finally(() => setBusy(false));
+        }}
+      >
+        <label className="w-full text-sm text-base-content/65 sm:max-w-md">
+          Issue credential
+          <input
+            className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+            value={label}
+            onChange={event => setLabel(event.target.value)}
+            placeholder="Security operations"
+            required
+            maxLength={100}
+          />
+        </label>
+        <button type="submit" className="btn btn-sm rateloop-gradient-action" disabled={busy || oneTimeToken !== null}>
+          {busy ? "Issuing…" : "Issue credential"}
+        </button>
+      </form>
       {message ? (
         <p className="mt-4 text-xs text-base-content/60" role="status">
           {message}
         </p>
       ) : null}
-    </details>
+    </section>
   );
 }

@@ -54,6 +54,7 @@ export function WormEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
   const [destination, setDestination] = useState<WormDestination | null>(null);
   const [exports, setExports] = useState<WormExport[]>([]);
   const [form, setForm] = useState(INITIAL_FORM);
+  const [showForm, setShowForm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -88,11 +89,22 @@ export function WormEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
   };
 
   return (
-    <details className="surface-card-nested rounded-xl p-5">
-      <summary className="cursor-pointer font-semibold">Immutable archive</summary>
-      <p className="mt-2 text-sm leading-6 text-base-content/55">
-        Deliver supervision evidence to a verified S3 Object Lock destination.
-      </p>
+    <section className="surface-card-nested rounded-xl p-5" aria-labelledby="immutable-archive-heading">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 id="immutable-archive-heading" className="font-semibold">
+            Immutable archive
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-base-content/55">
+            Deliver supervision evidence to a verified S3 Object Lock destination.
+          </p>
+        </div>
+        <span
+          className={`badge border-0 ${destination ? "bg-emerald-300/10 text-emerald-100" : "bg-white/[0.06] text-base-content/55"}`}
+        >
+          {destination ? "Verified" : "Not configured"}
+        </span>
+      </div>
 
       {destination ? (
         <div className="mt-4 rounded-xl border border-emerald-300/15 bg-emerald-300/[0.04] p-4">
@@ -168,12 +180,20 @@ export function WormEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
         <p className="mt-4 text-sm text-base-content/50">No immutable archive is configured.</p>
       )}
 
-      <details className="mt-4 rounded-xl border border-white/10 p-4">
-        <summary className="cursor-pointer text-sm font-semibold">
-          {destination ? "Replace destination" : "Configure destination"}
-        </summary>
+      <button
+        type="button"
+        className="btn btn-sm rateloop-secondary-action mt-4"
+        aria-expanded={showForm}
+        aria-controls="immutable-archive-form"
+        disabled={busy}
+        onClick={() => setShowForm(true)}
+      >
+        {destination ? "Replace destination" : "Configure destination"}
+      </button>
+      {showForm ? (
         <form
-          className="mt-4 grid gap-4 sm:grid-cols-2"
+          id="immutable-archive-form"
+          className="mt-4 grid gap-4 rounded-xl border border-white/10 p-4 sm:grid-cols-2"
           onSubmit={event => {
             event.preventDefault();
             void mutate(async () => {
@@ -186,6 +206,7 @@ export function WormEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
                 }),
               );
               setForm(INITIAL_FORM);
+              setShowForm(false);
               setMessage("Destination passed Object Lock preflight and is active.");
             });
           }}
@@ -264,15 +285,24 @@ export function WormEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
               Enter an opaque reference. Access keys never pass through this form.
             </span>
           </label>
-          <button
-            type="submit"
-            className="btn btn-sm rateloop-gradient-action sm:col-span-2 sm:justify-self-start"
-            disabled={busy}
-          >
-            {busy ? "Checking…" : "Verify and save"}
-          </button>
+          <div className="flex flex-wrap gap-2 sm:col-span-2">
+            <button type="submit" className="btn btn-sm rateloop-gradient-action" disabled={busy}>
+              {busy ? "Checking…" : "Verify and save"}
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              disabled={busy}
+              onClick={() => {
+                setForm(INITIAL_FORM);
+                setShowForm(false);
+              }}
+            >
+              Cancel
+            </button>
+          </div>
         </form>
-      </details>
+      ) : null}
 
       {exports.length > 0 ? (
         <details className="mt-4 rounded-xl border border-white/10 p-4">
@@ -295,6 +325,6 @@ export function WormEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
           {message}
         </p>
       ) : null}
-    </details>
+    </section>
   );
 }
