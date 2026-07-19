@@ -31,6 +31,11 @@ export default function PricingPage() {
           <h2 id="plans-heading" className="sr-only">
             Workspace plans
           </h2>
+          <div className="mb-6 rounded-xl border border-[var(--rateloop-green)]/25 bg-[var(--rateloop-green)]/5 px-5 py-4 text-sm leading-6 text-base-content/70">
+            <strong className="text-base-content">Early Access terms:</strong> {earlyAccessPrice} per workspace each
+            month for the first 12 months. We give at least 60 days&apos; notice before a later price change; founding
+            customers then receive 20% off the comparable monthly plan and may cancel before the new price applies.
+          </div>
           <WorkspacePlanCards subscriptionsEnabled={subscriptionsEnabled} />
         </section>
 
@@ -55,14 +60,6 @@ export default function PricingPage() {
               {earlyAccessPrice} subscription.
             </p>
           </article>
-          <details className="lg:col-span-2">
-            <summary className="cursor-pointer text-sm font-semibold text-base-content/70">Early Access terms</summary>
-            <p className="mt-3 max-w-4xl text-sm leading-6 text-base-content/55">
-              The {earlyAccessPrice} price applies for 12 months. RateLoop gives at least 60 days&apos; notice before a
-              later price change; founding customers then receive 20% off the comparable monthly plan and may cancel
-              before the new price takes effect.
-            </p>
-          </details>
         </section>
       </div>
     </div>

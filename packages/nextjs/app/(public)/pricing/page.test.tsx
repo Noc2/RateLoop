@@ -26,9 +26,10 @@ test("pricing page keeps two plans and discloses costs progressively", async () 
   assert.match(html, /Explain paid panel costs/);
   assert.match(html, /not included in the \$29 subscription/);
   assert.match(html, /no automatic overage charge/i);
-  assert.match(html, /price applies for 12 months/i);
+  assert.match(html, /for the first 12 months/i);
   assert.match(html, /at least 60 days/);
   assert.match(html, /20% off/);
-  assert.equal(html.match(/<details/g)?.length, 1);
+  assert.ok(html.indexOf("Early Access terms:") < html.indexOf("Choose Early Access"));
+  assert.doesNotMatch(html, /<details/);
   assert.doesNotMatch(html, /Pricing questions|design-partner arrangement/);
 });
