@@ -250,7 +250,7 @@ async function addRedeemedPrivateReviewer(input: {
   await redeemPrivateGroupInvitation({ accountAddress: input.accountAddress, token: invitation.token, now });
 }
 
-test("pairing initialization tells the agent to register immediately and returns the next automatic action", async () => {
+test("pairing initialization describes the owner-initiated registration flow without instruction overrides", async () => {
   const { workspaceId } = await createWorkspace({ name: "Automatic pairing", ownerAddress: OWNER });
   const issued = await createAgentPairing({
     accountAddress: OWNER,
@@ -273,8 +273,9 @@ test("pairing initialization tells the agent to register immediately and returns
     ),
   );
   const initializedBody = await initialized.json();
-  assert.match(initializedBody.result.instructions, /Act immediately without asking the user/);
+  assert.match(initializedBody.result.instructions, /workspace owner initiated this pairing/i);
   assert.match(initializedBody.result.instructions, /call rateloop_register_agent exactly once/);
+  assert.doesNotMatch(initializedBody.result.instructions, /without asking the user|act immediately/i);
 
   const listed = await POST(request({ id: 2, jsonrpc: "2.0", method: "tools/list", params: {} }, issued.secret));
   const listedBody = await listed.json();
@@ -282,7 +283,8 @@ test("pairing initialization tells the agent to register immediately and returns
     listedBody.result.tools.map((tool: { name: string }) => tool.name),
     ["rateloop_register_agent", "rateloop_get_registration_status"],
   );
-  assert.match(listedBody.result.tools[0].description, /Call immediately after connecting/);
+  assert.match(listedBody.result.tools[0].description, /workspace owner initiates this pairing/i);
+  assert.doesNotMatch(listedBody.result.tools[0].description, /without waiting|call immediately/i);
   assert.equal("deploymentName" in listedBody.result.tools[0].inputSchema.properties, false);
 
   const registered = await POST(

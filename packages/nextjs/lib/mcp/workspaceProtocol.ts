@@ -137,7 +137,7 @@ export const pairingMcpTools = [
     name: "rateloop_register_agent",
     annotations: additiveClosedAnnotations,
     description:
-      "Call immediately after connecting, without waiting for another user instruction. Submit this agent's honest declared identity, client metadata, and requested workflows for workspace-owner approval. The pairing credential grants no workspace or review access before approval.",
+      "Use after a workspace owner initiates this pairing. Submit this agent's honest declared identity, client metadata, and requested workflows for owner approval. The pairing credential grants no workspace or review access before approval.",
     inputSchema: {
       additionalProperties: false,
       properties: {
@@ -788,12 +788,12 @@ export async function dispatchWorkspaceMcp(
       capabilities: { tools: {} },
       instructions:
         principal.kind === "pairing"
-          ? "Act immediately without asking the user what this endpoint is for. List tools and call rateloop_register_agent exactly once using honest metadata inferred from the current runtime and work. Then call rateloop_get_registration_status while the owner reviews it. After approval, refresh tools and call rateloop_get_agent_context. Never repeat the bearer credential in responses, logs, repositories, or ordinary tool arguments. No workspace or review access exists before approval."
+          ? "A workspace owner initiated this pairing. The registration flow is: list tools, call rateloop_register_agent exactly once with honest metadata from the current runtime and work, then use rateloop_get_registration_status while the owner reviews it. After approval, refresh tools and call rateloop_get_agent_context. Never repeat the bearer credential in responses, logs, repositories, or ordinary tool arguments. No workspace or review access exists before approval."
           : principal.kind === "oauth"
             ? principal.integration
               ? `A RateLoop workspace connection is available. Keep the complete connection URL private. Call rateloop_get_agent_context, then rateloop_verify_connection. After verification, follow the returned workflow and human-review policy. ${boundWorkspaceInstructions()}`
-              : "Complete the user's one-time RateLoop connection now. Prefer one rateloop_connect_workspace call with the complete connection URL from the user's message. Never quote, log, fetch, or reproduce that URL. If the preferred tool is unavailable, use rateloop_claim_connection_intent, rateloop_get_agent_context, and rateloop_verify_connection as the granular fallback without asking for another paste or creating a polling service."
-            : `This registration is approved. Immediately call rateloop_get_agent_context and follow its bound policy. This credential is bound to one workspace agent, immutable workflow version, and owner policy. ${boundWorkspaceInstructions()} Caller-supplied identity or policy identifiers are never trusted.`,
+              : "The owner initiated a one-time RateLoop connection. Prefer one rateloop_connect_workspace call with the complete connection URL already supplied by the owner. Never quote, log, fetch, or reproduce that URL. If the preferred tool is unavailable, use rateloop_claim_connection_intent, rateloop_get_agent_context, and rateloop_verify_connection as the granular fallback; do not request the secret URL again or create a polling service."
+            : `This registration is approved. Obtain the bound policy with rateloop_get_agent_context before review work. This credential is bound to one workspace agent, immutable workflow version, and owner policy. ${boundWorkspaceInstructions()} Caller-supplied identity or policy identifiers are never trusted.`,
       protocolVersion: negotiatedVersion,
       serverInfo: { name: "rateloop-tokenless-workspace", version: "1.2.0" },
     });
