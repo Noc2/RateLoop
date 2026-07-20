@@ -274,12 +274,14 @@ test("workspace step remains editable when revisited", () => {
   assert.match(flowSource, /Save and continue/);
 });
 
-test("setup uses one branded stage header aligned to the progress width", () => {
+test("setup uses one stage header aligned to the progress width without repeating progress metadata", () => {
   assert.equal(flowSource.match(/<SetupStageHeader/g)?.length, 6);
   assert.match(startSource, /<SetupStageHeader/);
   assert.match(stageHeaderSource, /font-display/);
   assert.match(stageHeaderSource, /text-3xl/);
-  assert.match(stageHeaderSource, /AGENT_SETUP_STAGE_VISUALS/);
+  assert.doesNotMatch(stageHeaderSource, /AGENT_SETUP_STAGE_VISUALS|AGENT_SETUP_STAGE_LABELS|\/ 05/);
+  assert.doesNotMatch(flowSource, /<SetupStageHeader[^>]*\bstep=/);
+  assert.doesNotMatch(startSource, /<SetupStageHeader[^>]*\bstep=/);
   assert.equal(flowSource.match(/<div className="mt-8 w-full">/g)?.length, 2);
   assert.match(startSource, /<form className="mt-8 w-full"/);
   assert.doesNotMatch(flowSource, /mx-auto mt-8 w-full|max-w-[234]xl/);

@@ -573,7 +573,6 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         <div className="mt-8 w-full">
           <SetupStageHeader
             headingRef={headingRef}
-            step={currentStep}
             title="Workspace setup is not finished"
             description="Ask a workspace owner to finish this step."
           />
@@ -1152,7 +1151,6 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
           <form onSubmit={saveWorkspace} aria-busy={busy}>
             <SetupStageHeader
               headingRef={headingRef}
-              step="workspace"
               title="Name your workspace"
               description="Use a team or project name. You can change it later."
             />
@@ -1181,7 +1179,6 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
           <>
             <SetupStageHeader
               headingRef={headingRef}
-              step="connect"
               title="Connect your agent"
               description="Copy one message into the agent chat. RateLoop continues here after verification."
             />
@@ -1241,7 +1238,6 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
           <form onSubmit={confirmAgent} aria-busy={busy}>
             <SetupStageHeader
               headingRef={headingRef}
-              step="agent"
               title="Name this workflow"
               description="The connected client stays separate from the model, effort, and timing reported for each eligible run."
             />
@@ -1290,7 +1286,6 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
           <form onSubmit={configureReviews} aria-busy={busy}>
             <SetupStageHeader
               headingRef={headingRef}
-              step="reviews"
               title="Set review behavior"
               description="Choose when this workflow needs human review. Nothing is sent or charged during setup."
             />
@@ -1974,7 +1969,6 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
           <>
             <SetupStageHeader
               headingRef={headingRef}
-              step="people"
               title="People"
               description="Invite reviewers and check that required specialist seats are covered."
             />

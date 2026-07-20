@@ -80,11 +80,7 @@ test("shared setup presentation passes a rendered semantic audit", async () => {
         onNavigate={() => undefined}
       />
       <form>
-        <SetupStageHeader
-          step="reviews"
-          title="Set review behavior"
-          description="Choose when this workflow needs human review."
-        />
+        <SetupStageHeader title="Set review behavior" description="Choose when this workflow needs human review." />
         <fieldset>
           <legend>Review frequency</legend>
           <SetupChoiceGroup>

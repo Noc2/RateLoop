@@ -56,7 +56,6 @@ export function WorkspaceSetupStart() {
       />
       <form className="mt-8 w-full" onSubmit={createWorkspace} aria-busy={busy}>
         <SetupStageHeader
-          step="workspace"
           title="Name your workspace"
           description="Use a team or project name. You can change it later."
         />
