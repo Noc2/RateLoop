@@ -12,7 +12,7 @@
     "format": "forge fmt",
     "lint": "make lint",
     "test": "forge test --offline --ignored-error-codes 3860 --ignored-error-codes 6335 --deny warnings",
-    "test:tooling": "node --test scripts-js/tokenlessDeployment.test.js scripts-js/foundryAccounts.test.js scripts-js/tokenlessDeployArgs.test.js scripts-js/checkTokenlessContractSizes.test.js scripts-js/tokenlessRbts.test.js",
+    "test:tooling": "node --test scripts-js/tokenlessDeployment.test.js scripts-js/foundryAccounts.test.js scripts-js/tokenlessDeployArgs.test.js scripts-js/tokenlessRotationAuthority.test.js scripts-js/checkTokenlessContractSizes.test.js scripts-js/tokenlessRbts.test.js",
     "check:sizes": "make check-contract-sizes",
     "coverage": "make coverage"
   },
