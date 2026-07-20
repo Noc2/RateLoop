@@ -184,6 +184,11 @@ test("review setup controls independent base compensation, optional Feedback Bon
     assert.match(`${flowSource}\n${routingSource}`, new RegExp(label));
   }
   assert.match(flowSource, /Public and hybrid network assignments currently require a guaranteed bounty/);
+  assert.match(flowSource, /<InfoPopover label="About Feedback Bonus">/);
+  assert.match(
+    flowSource,
+    /Optional and separate from the guaranteed bounty\. A human later chooses useful written feedback\s+to pay\./,
+  );
   assert.match(flowSource, /reviewCompensation\.feedbackBonusEnabled/);
   assert.match(flowSource, /feedbackBonusAwarderKind/);
   assert.match(flowSource, /value=\{reviewCompensation\.usdcPerReviewer\}/);

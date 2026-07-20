@@ -58,6 +58,7 @@ import {
   buildReviewTimingRequestProfile,
   reviewTimingFormValues,
 } from "./reviewTiming";
+import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
 import { humanReviewConfirmationMessage } from "~~/components/tokenless/agents/humanReviewConfirmation";
 import { Button } from "~~/components/tokenless/ui/Button";
@@ -1871,11 +1872,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   ) : null}
                 </fieldset>
                 <fieldset className="mt-6 border-t border-white/10 pt-5">
-                  <legend className="text-lg font-semibold">Feedback Bonus</legend>
-                  <p className="text-sm text-base-content/60">
-                    Optional and separate from the guaranteed bounty. A human later chooses useful written feedback to
-                    pay.
-                  </p>
+                  <legend className="text-lg font-semibold">
+                    <span className="inline-flex items-center gap-2">
+                      Feedback Bonus
+                      <InfoPopover label="About Feedback Bonus">
+                        Optional and separate from the guaranteed bounty. A human later chooses useful written feedback
+                        to pay.
+                      </InfoPopover>
+                    </span>
+                  </legend>
                   <div className="mt-3 grid grid-cols-2 gap-2 sm:max-w-md">
                     <button
                       type="button"
