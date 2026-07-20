@@ -3,7 +3,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { AgentOAuthError } from "~~/lib/tokenless/agentOAuth";
-import { enforceAgentOAuthRateLimit } from "~~/lib/tokenless/agentOAuthHttp";
+import { enforceAgentOAuthRateLimit, readAgentOAuthResource } from "~~/lib/tokenless/agentOAuthHttp";
 
 const originalSecret = process.env.TOKENLESS_MCP_RATE_LIMIT_SECRET;
 
@@ -34,5 +34,29 @@ test("OAuth provisioning fails closed when the rate-limit identity is unavailabl
   await assert.rejects(
     () => enforceAgentOAuthRateLimit(new Headers()),
     (error: unknown) => error instanceof AgentOAuthError && error.code === "server_error" && error.status === 503,
+  );
+});
+
+test("the token endpoint accepts one exact resource even when a client repeats the same value", () => {
+  const resource = "https://rateloop-tokenless.vercel.app/api/agent/v1/mcp";
+  const repeated = new URLSearchParams();
+  repeated.append("resource", resource);
+  repeated.append("resource", resource);
+
+  assert.equal(readAgentOAuthResource(new URLSearchParams({ resource })), resource);
+  assert.equal(readAgentOAuthResource(repeated), resource);
+});
+
+test("the token endpoint rejects missing, empty, distinct, and oversized resources", () => {
+  const distinct = new URLSearchParams();
+  distinct.append("resource", "https://rateloop-tokenless.vercel.app/api/agent/v1/mcp");
+  distinct.append("resource", "https://example.com/api/agent/v1/mcp");
+
+  assert.throws(() => readAgentOAuthResource(new URLSearchParams()), /one exact server resource/);
+  assert.throws(() => readAgentOAuthResource(new URLSearchParams({ resource: "" })), /one exact server resource/);
+  assert.throws(() => readAgentOAuthResource(distinct), /one exact server resource/);
+  assert.throws(
+    () => readAgentOAuthResource(new URLSearchParams({ resource: "x".repeat(2_049) })),
+    /one exact server resource/,
   );
 });

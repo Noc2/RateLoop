@@ -18,6 +18,15 @@ export async function enforceAgentOAuthRateLimit(headers: Headers, now = new Dat
   }
 }
 
+export function readAgentOAuthResource(form: URLSearchParams, max = 2_048) {
+  const values = form.getAll("resource");
+  const resources = new Set(values);
+  if (values.length === 0 || resources.size !== 1 || !values[0] || values[0].length > max) {
+    throw new AgentOAuthError("invalid_request", "resource must identify one exact server resource.");
+  }
+  return values[0];
+}
+
 export function agentOAuthErrorResponse(error: unknown, fallback: string) {
   const oauth = error instanceof AgentOAuthError ? error : new AgentOAuthError("server_error", fallback, 500);
   return {
