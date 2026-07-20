@@ -45,6 +45,18 @@ test("guided setup renders one stage at a time and keeps implementation details 
   assert.doesNotMatch(flowSource, /Deployment name/i);
 });
 
+test("the connection stage links the setup guide without replacing its primary action", () => {
+  const connectStage = flowSource.slice(
+    flowSource.indexOf('currentStep === "connect"'),
+    flowSource.indexOf('currentStep === "agent"'),
+  );
+  assert.match(connectStage, /href="\/docs\/connect"/);
+  assert.match(connectStage, /Connection guide/);
+  assert.match(connectStage, /target="_blank"/);
+  assert.match(connectStage, /rel="noopener noreferrer"/);
+  assert.match(connectStage, /Create connection message/);
+});
+
 test("review setup distinguishes a saved policy decision from delivery authority", () => {
   assert.doesNotMatch(flowSource, /mark an eligible output for human review/i);
   assert.doesNotMatch(flowSource, /This saves a review policy/i);

@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AgentConnectionTroubleshooting } from "../AgentConnectionTroubleshooting";
 import {
@@ -1200,6 +1201,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         {currentStep === "connect" ? (
           <>
             <SetupStageHeader headingRef={headingRef} title="Connect your agent" />
+            <Link
+              className="mt-3 inline-flex min-h-11 items-center gap-1 text-sm font-medium text-[var(--rateloop-blue)] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rateloop-blue)]"
+              href="/docs/connect"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Connection guide <span aria-hidden="true">↗</span>
+              <span className="sr-only"> (opens in a new tab)</span>
+            </Link>
             <SetupActionBar>
               {backButton}
               {setup.connection.status === "connected" ? (

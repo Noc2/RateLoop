@@ -18,6 +18,7 @@ test("setup wizard creates a workspace and reaches agent connection", async ({ p
     await expect(page).toHaveURL(/\/agents\?workspace=.+&step=connect/u);
   }
   await expect(connectHeading).toBeVisible();
+  await expect(page.getByRole("link", { name: /Connection guide/ })).toHaveAttribute("href", "/docs/connect");
   await expectNoAxeViolations(page);
 });
 
