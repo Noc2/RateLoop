@@ -32,6 +32,7 @@ export type TokenlessRoundTerms = {
   revealDeadline: bigint;
   beaconFailureDeadline: bigint;
   beaconRound: bigint;
+  scoringBeaconRound: bigint;
   claimGracePeriod: bigint;
   feeRecipient: Address;
 };

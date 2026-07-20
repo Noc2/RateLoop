@@ -33,16 +33,23 @@ Reveal(uint256 roundId,address voteKey,uint8 vote,uint16 predictedUpBps,
 
 ## Post-closure entropy and set binding
 
-Round terms freeze `beaconNetworkHash` and `beaconRound` before any commit. After the order-independent reveal-set
-commitment is complete, anyone submits the exact public-beacon randomness and proof:
+Round terms freeze the quicknet-t `beaconNetworkHash`, a tlock disclosure `beaconRound`, and an independent
+`scoringBeaconRound` before any commit. The disclosure round is the first quicknet-t round strictly after the commit
+deadline. The scoring round is the first quicknet-t round strictly after the reveal deadline, so its entropy cannot be
+known while the scored reveal set is still open. After the order-independent reveal-set commitment is complete, anyone
+submits the exact scoring-beacon randomness and proof:
 
 ```text
-verifyBeacon(beaconNetworkHash, beaconRound, randomness, proof) = true
+verifyBeacon(beaconNetworkHash, scoringBeaconRound, randomness, proof) = true
 ```
 
 `TokenlessPanel` holds an immutable verifier address. A verifier revert, false result, zero randomness, or malformed
-proof leaves the round unchanged; caller-selected or operator-signed entropy is never accepted. If verified randomness
-remains unavailable after `beaconFailureDeadline`, anyone may invoke the deterministic base-only fallback. Every
+proof leaves the round unchanged; the disclosure round can never feed scoring, and caller-selected or operator-signed
+entropy is never accepted. The contract pins quicknet-t network hash
+`0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5`, genesis `1689232296`, and three-second
+period, validates both round timestamps arithmetically, and requires `beaconFailureDeadline` to be at least
+`MIN_BEACON_GRACE` after the scoring-beacon timestamp. If verified randomness remains unavailable after that deadline,
+anyone may invoke the deterministic base-only fallback. Every
 revealer then earns the fixed base and every unused bonus returns to the funder. A deployment must bind the panel to a
 reviewed verifier for the exact drand network; the test-only mock verifier is forbidden outside local tests.
 

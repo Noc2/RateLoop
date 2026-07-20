@@ -18,7 +18,7 @@ contract X402PanelSubmitter is EIP712, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     bytes32 public constant ROUND_TERMS_TYPEHASH = keccak256(
-        "RoundTerms(bytes32 contentId,bytes32 termsHash,bytes32 beaconNetworkHash,uint256 bountyAmount,uint256 feeAmount,uint256 attemptReserve,uint256 attemptCompensation,uint32 minimumReveals,uint32 maximumCommits,bytes32 admissionPolicyHash,uint64 commitDeadline,uint64 revealDeadline,uint64 beaconFailureDeadline,uint64 beaconRound,uint64 claimGracePeriod,address feeRecipient)"
+        "RoundTerms(bytes32 contentId,bytes32 termsHash,bytes32 beaconNetworkHash,uint256 bountyAmount,uint256 feeAmount,uint256 attemptReserve,uint256 attemptCompensation,uint32 minimumReveals,uint32 maximumCommits,bytes32 admissionPolicyHash,uint64 commitDeadline,uint64 revealDeadline,uint64 beaconFailureDeadline,uint64 beaconRound,uint64 scoringBeaconRound,uint64 claimGracePeriod,address feeRecipient)"
     );
     bytes32 public constant ROUND_AUTHORIZATION_TYPEHASH = keccak256(
         "RoundAuthorization(address funder,address panel,bytes32 roundTermsDigest,uint256 validAfter,uint256 validBefore,bytes32 nonce)"
@@ -110,6 +110,7 @@ contract X402PanelSubmitter is EIP712, ReentrancyGuard {
                 terms.revealDeadline,
                 terms.beaconFailureDeadline,
                 terms.beaconRound,
+                terms.scoringBeaconRound,
                 terms.claimGracePeriod,
                 terms.feeRecipient
             )

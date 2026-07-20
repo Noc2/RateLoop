@@ -117,6 +117,7 @@ function round(overrides: Partial<TokenlessRound> = {}): TokenlessRound {
     revealDeadline: 200n,
     beaconFailureDeadline: 250n,
     beaconRound: 1n,
+    scoringBeaconRound: 2n,
     claimGracePeriod: 100n,
     claimDeadline: 0n,
     minimumReveals: 1,
@@ -186,6 +187,7 @@ function clients(params: {
     panel?: Address;
     usdc?: Address;
   };
+  beaconFetches?: Array<[Hex, bigint]>;
 }): TokenlessKeeperClients {
   const writes = params.writes ?? [];
   const currentRound = { ...params.currentRound };
@@ -204,7 +206,8 @@ function clients(params: {
         return `0x${"88".repeat(32)}`;
       },
     },
-    async beaconFetcher() {
+    async beaconFetcher(networkHash, beaconRound) {
+      params.beaconFetches?.push([networkHash, beaconRound]);
       if (params.beaconUnavailable) throw new Error("beacon unavailable");
       return { randomness: BEACON_RANDOMNESS, proof: BEACON_PROOF };
     },
@@ -334,6 +337,7 @@ describe("tokenless keeper orchestration", () => {
       { name: "revealDeadline", type: "uint64" },
       { name: "beaconFailureDeadline", type: "uint64" },
       { name: "beaconRound", type: "uint64" },
+      { name: "scoringBeaconRound", type: "uint64" },
       { name: "claimGracePeriod", type: "uint64" },
       { name: "claimDeadline", type: "uint256" },
       { name: "minimumReveals", type: "uint32" },
@@ -1007,19 +1011,24 @@ describe("tokenless keeper orchestration", () => {
 
     resetTokenlessKeeperStateForTests();
     const seedWrites: string[] = [];
+    const beaconFetches: Array<[Hex, bigint]> = [];
     await runTokenlessKeeper(
       clients({
         currentRound: round({
           state: TokenlessRoundState.AwaitingSeed,
           frozenRevealCount: 3,
+          beaconRound: 41n,
+          scoringBeaconRound: 82n,
         }),
         writes: seedWrites,
+        beaconFetches,
       }),
       config,
       logger,
       decrypt,
     );
     expect(seedWrites).toContain("finalizeScoringSeed");
+    expect(beaconFetches).toEqual([[`0x${"03".repeat(32)}`, 82n]]);
 
     resetTokenlessKeeperStateForTests();
     const scoreWrites: string[] = [];

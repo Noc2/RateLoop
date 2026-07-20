@@ -113,6 +113,7 @@ const roundTerms = {
   revealDeadline: "1783878120",
   beaconFailureDeadline: "1783878420",
   beaconRound: "25000000",
+  scoringBeaconRound: "25000040",
   claimGracePeriod: "604800",
   feeRecipient: FEE_RECIPIENT,
 };
@@ -167,6 +168,7 @@ function indexedRound(overrides: Record<string, unknown> = {}) {
     termsHash: TERMS_HASH,
     beaconNetworkHash: BEACON_HASH,
     beaconRound: roundTerms.beaconRound,
+    scoringBeaconRound: roundTerms.scoringBeaconRound,
     feeRecipient: FEE_RECIPIENT,
     bountyAmount: roundTerms.bountyAmount,
     feeAmount: roundTerms.feeAmount,
@@ -669,6 +671,13 @@ test("evidence waits for the configured confirmation depth, then publishes idemp
     fetchImpl: ponderFetch(),
     ponderUrl: "https://ponder.example.test",
   });
+  const storedEvidence = await dbClient.execute({
+    sql: "SELECT evidence_json FROM tokenless_transparency_events WHERE operation_key = ? AND event_type = 'round.finalized'",
+    args: [OPERATION],
+  });
+  const scoring = JSON.parse(String(storedEvidence.rows[0]?.evidence_json)).scoring as Record<string, unknown>;
+  assert.equal(scoring.scoringBeaconRound, roundTerms.scoringBeaconRound);
+  assert.equal("beaconRound" in scoring, false);
   const published = await reviewAndPublishResult({
     operationKey: OPERATION,
     appOrigin: "https://app.example.test",

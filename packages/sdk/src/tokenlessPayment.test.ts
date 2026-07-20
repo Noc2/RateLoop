@@ -44,6 +44,7 @@ function instructions(
       revealDeadline: "2000000120",
       beaconFailureDeadline: "2000000420",
       beaconRound: "1000",
+      scoringBeaconRound: "1040",
       claimGracePeriod: "604800",
       feeRecipient: "0x5555555555555555555555555555555555555555",
     },
@@ -79,6 +80,7 @@ test("reconstructs the Solidity RoundTerms and two x402 typed-data envelopes", (
   assert.equal(roundTerms.message.bountyAmount, 25_000_000n);
   assert.equal(roundTerms.message.minimumReveals, 12);
   assert.equal(roundTerms.message.commitDeadline, 2_000_000_000n);
+  assert.equal(roundTerms.message.scoringBeaconRound, 1_040n);
 
   const eip3009 = buildTokenlessEip3009TypedData(payment);
   assert.equal(eip3009.domain.verifyingContract, addresses.usdcAddress);
@@ -100,7 +102,20 @@ test("reconstructs the Solidity RoundTerms and two x402 typed-data envelopes", (
   );
 
   const built = buildTokenlessX402Authorization(payment);
-  assert.equal(built.roundTermsDigest, roundAuthorization.message.roundTermsDigest);
+  assert.equal(
+    built.roundTermsDigest,
+    roundAuthorization.message.roundTermsDigest,
+  );
+  assert.notEqual(
+    hashTokenlessRoundTerms({
+      ...payment,
+      roundTerms: {
+        ...payment.roundTerms,
+        scoringBeaconRound: payment.roundTerms.beaconRound,
+      },
+    }),
+    built.roundTermsDigest,
+  );
 });
 
 test("fails closed on stale deployment facts and mismatched payment totals", () => {

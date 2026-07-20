@@ -131,7 +131,9 @@ test("feedback bonus ABI exposes only immutable pool and award mechanics", () =>
     assert.equal(functions.has(forbidden), false, `unexpected ${forbidden}`);
   }
   assert.deepEqual(
-    findEntry(TokenlessFeedbackBonusAbi, "function", "award").inputs?.map(input => input.name),
+    findEntry(TokenlessFeedbackBonusAbi, "function", "award").inputs?.map(
+      (input) => input.name,
+    ),
     ["poolId", "voteKey", "amount"],
   );
 });
@@ -227,6 +229,41 @@ test("round and commit evidence use RBTS liabilities instead of accuracy weights
   assert.equal(roundFields.has("totalAccuracyScore"), false);
   assert.equal(roundFields.has("weightCursor"), false);
   assert.equal(commitFields.has("accuracyScore"), false);
+});
+
+test("disclosure and post-reveal scoring beacons remain distinct across the ABI", () => {
+  const panelTerms = tupleComponentNames(
+    findEntry(TokenlessPanelAbi, "function", "createRound"),
+    "inputs",
+  );
+  const roundFields = tupleComponentNames(
+    findEntry(TokenlessPanelAbi, "function", "getRound"),
+    "outputs",
+  );
+  const adapterTerms = tupleComponentNames(
+    findEntry(X402PanelSubmitterAbi, "function", "roundTermsDigest"),
+    "inputs",
+  );
+  for (const fields of [panelTerms, roundFields, adapterTerms]) {
+    assert.ok(fields.has("beaconRound"), "missing tlock disclosure round");
+    assert.ok(fields.has("scoringBeaconRound"), "missing scoring beacon round");
+  }
+  for (const eventName of ["SettlementBegun", "ScoringSeedFinalized"]) {
+    const names = new Set(
+      findEntry(TokenlessPanelAbi, "event", eventName).inputs?.map(
+        (parameter) => parameter.name,
+      ),
+    );
+    assert.ok(
+      names.has("scoringBeaconRound"),
+      `${eventName} must identify the scoring beacon`,
+    );
+    assert.equal(
+      names.has("beaconRound"),
+      false,
+      `${eventName} must not label scoring as disclosure`,
+    );
+  }
 });
 
 test("reveal evidence distinguishes scored votes from compensation-only openings", () => {

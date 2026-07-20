@@ -50,6 +50,7 @@ ponder.on("TokenlessPanel:RoundCreated", async ({ event, context }) => {
     termsHash: round.termsHash,
     beaconNetworkHash: round.beaconNetworkHash,
     beaconRound: round.beaconRound,
+    scoringBeaconRound: round.scoringBeaconRound,
     feeRecipient: round.feeRecipient,
     bountyAmount: round.bountyAmount,
     feeAmount: round.feeAmount,
@@ -181,7 +182,7 @@ ponder.on("TokenlessPanel:SettlementBegun", async ({ event, context }) => {
     .set({
       state: ROUND_STATE.AGGREGATING,
       frozenRevealCount: event.args.frozenRevealCount,
-      beaconRound: event.args.beaconRound,
+      scoringBeaconRound: event.args.scoringBeaconRound,
       updatedAt: event.block.timestamp,
     });
 });
@@ -216,7 +217,7 @@ ponder.on("TokenlessPanel:ScoringSeedFinalized", async ({ event, context }) => {
     .set({
       state: ROUND_STATE.SCORING,
       scoringMode: event.args.mode,
-      beaconRound: event.args.beaconRound,
+      scoringBeaconRound: event.args.scoringBeaconRound,
       entropy: event.args.entropy,
       scoringSeed: event.args.scoringSeed,
       revealSetXor: event.args.revealSetXor,

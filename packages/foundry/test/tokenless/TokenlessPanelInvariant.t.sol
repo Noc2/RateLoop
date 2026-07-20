@@ -72,7 +72,7 @@ contract TokenlessPanelInvariantHandler is Test {
         TokenlessPanel.RoundTerms memory terms = TokenlessPanel.RoundTerms({
             contentId: keccak256(abi.encode("content", _roundIds.length, block.timestamp)),
             termsHash: keccak256(abi.encode("terms", variant, _roundIds.length, block.timestamp)),
-            beaconNetworkHash: keccak256("drand-quicknet"),
+            beaconNetworkHash: 0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5,
             bountyAmount: BOUNTY,
             feeAmount: FEE,
             attemptReserve: RESERVE,
@@ -82,8 +82,9 @@ contract TokenlessPanelInvariantHandler is Test {
             admissionPolicyHash: ADMISSION_POLICY_HASH,
             commitDeadline: uint64(block.timestamp + 10 minutes),
             revealDeadline: uint64(block.timestamp + 20 minutes),
-            beaconFailureDeadline: uint64(block.timestamp + 6 hours + 20 minutes),
-            beaconRound: uint64(10_000 + _roundIds.length),
+            beaconFailureDeadline: uint64(block.timestamp + 6 hours + 20 minutes + 3 seconds),
+            beaconRound: uint64((block.timestamp + 10 minutes - 1_689_232_296) / 3 + 2),
+            scoringBeaconRound: uint64((block.timestamp + 20 minutes - 1_689_232_296) / 3 + 2),
             claimGracePeriod: 1 hours,
             feeRecipient: address(this)
         });
@@ -170,8 +171,9 @@ contract TokenlessPanelInvariantHandler is Test {
         if (round.state == TokenlessPanel.RoundState.AwaitingSeed) {
             if (block.timestamp <= round.beaconFailureDeadline) {
                 bytes32 randomness = keccak256(abi.encode("invariant-beacon-entropy", roundId));
-                bytes memory proof =
-                    abi.encodePacked(beaconVerifier.proofFor(round.beaconNetworkHash, round.beaconRound, randomness));
+                bytes memory proof = abi.encodePacked(
+                    beaconVerifier.proofFor(round.beaconNetworkHash, round.scoringBeaconRound, randomness)
+                );
                 panel.finalizeScoringSeed(roundId, randomness, proof);
                 rbtsSeededRounds += 1;
             } else {

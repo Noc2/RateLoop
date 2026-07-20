@@ -136,7 +136,7 @@ contract TokenlessPanelGasBenchmarkTest is Test {
         return TokenlessPanel.RoundTerms({
             contentId: CONTENT_ID,
             termsHash: TERMS_HASH,
-            beaconNetworkHash: keccak256("drand-quicknet-chain-hash"),
+            beaconNetworkHash: 0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5,
             bountyAmount: BOUNTY,
             feeAmount: FEE,
             attemptReserve: ATTEMPT_RESERVE,
@@ -146,8 +146,9 @@ contract TokenlessPanelGasBenchmarkTest is Test {
             admissionPolicyHash: ADMISSION_POLICY_HASH,
             commitDeadline: uint64(block.timestamp + 10 minutes),
             revealDeadline: uint64(block.timestamp + 20 minutes),
-            beaconFailureDeadline: uint64(block.timestamp + 6 hours + 20 minutes),
-            beaconRound: 12_345_678,
+            beaconFailureDeadline: uint64(block.timestamp + 6 hours + 20 minutes + 3 seconds),
+            beaconRound: uint64((block.timestamp + 10 minutes - 1_689_232_296) / 3 + 2),
+            scoringBeaconRound: uint64((block.timestamp + 20 minutes - 1_689_232_296) / 3 + 2),
             claimGracePeriod: 1 days,
             feeRecipient: feeRecipient
         });
@@ -207,7 +208,7 @@ contract TokenlessPanelGasBenchmarkTest is Test {
 
     function _measureFinalizeSeed(uint256 roundId) internal returns (uint256 gasUsed) {
         TokenlessPanel.Round memory round = panel.getRound(roundId);
-        bytes32 proof = beaconVerifier.proofFor(round.beaconNetworkHash, round.beaconRound, ENTROPY);
+        bytes32 proof = beaconVerifier.proofFor(round.beaconNetworkHash, round.scoringBeaconRound, ENTROPY);
         uint256 gasBefore = gasleft();
         panel.finalizeScoringSeed(roundId, ENTROPY, abi.encode(proof));
         gasUsed = gasBefore - gasleft();

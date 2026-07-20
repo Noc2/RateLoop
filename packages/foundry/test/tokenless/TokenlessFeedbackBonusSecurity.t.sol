@@ -207,7 +207,7 @@ contract TokenlessFeedbackBonusSecurityTest is Test {
         return TokenlessPanel.RoundTerms({
             contentId: keccak256("security-base-content"),
             termsHash: keccak256("security-base-terms"),
-            beaconNetworkHash: keccak256("drand-quicknet"),
+            beaconNetworkHash: 0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5,
             bountyAmount: BASE_BOUNTY,
             feeAmount: 0,
             attemptReserve: ATTEMPT_RESERVE,
@@ -217,8 +217,9 @@ contract TokenlessFeedbackBonusSecurityTest is Test {
             admissionPolicyHash: ADMISSION_POLICY_HASH,
             commitDeadline: uint64(block.timestamp + 1 hours),
             revealDeadline: uint64(block.timestamp + 2 hours),
-            beaconFailureDeadline: uint64(block.timestamp + 8 hours),
-            beaconRound: 50_000,
+            beaconFailureDeadline: uint64(block.timestamp + 8 hours + 3 seconds),
+            beaconRound: uint64((block.timestamp + 1 hours - 1_689_232_296) / 3 + 2),
+            scoringBeaconRound: uint64((block.timestamp + 2 hours - 1_689_232_296) / 3 + 2),
             claimGracePeriod: 1 hours,
             feeRecipient: address(0)
         });

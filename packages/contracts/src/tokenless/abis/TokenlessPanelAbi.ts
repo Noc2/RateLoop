@@ -156,6 +156,45 @@ export const TokenlessPanelAbi = [
   },
   {
     "type": "function",
+    "name": "QUICKNET_T_GENESIS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "QUICKNET_T_NETWORK_HASH",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "QUICKNET_T_PERIOD",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "REVEAL_TYPEHASH",
     "inputs": [],
     "outputs": [
@@ -508,6 +547,11 @@ export const TokenlessPanelAbi = [
             "internalType": "uint64"
           },
           {
+            "name": "scoringBeaconRound",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
             "name": "claimGracePeriod",
             "type": "uint64",
             "internalType": "uint64"
@@ -605,6 +649,11 @@ export const TokenlessPanelAbi = [
           },
           {
             "name": "beaconRound",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "scoringBeaconRound",
             "type": "uint64",
             "internalType": "uint64"
           },
@@ -969,6 +1018,11 @@ export const TokenlessPanelAbi = [
           },
           {
             "name": "beaconRound",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "scoringBeaconRound",
             "type": "uint64",
             "internalType": "uint64"
           },
@@ -1845,7 +1899,7 @@ export const TokenlessPanelAbi = [
         "internalType": "enum TokenlessPanel.ScoringMode"
       },
       {
-        "name": "beaconRound",
+        "name": "scoringBeaconRound",
         "type": "uint64",
         "indexed": false,
         "internalType": "uint64"
@@ -1894,7 +1948,7 @@ export const TokenlessPanelAbi = [
         "internalType": "uint32"
       },
       {
-        "name": "beaconRound",
+        "name": "scoringBeaconRound",
         "type": "uint64",
         "indexed": false,
         "internalType": "uint64"

@@ -365,9 +365,10 @@ CSS rather than migrating call sites; the reviewer answering shell remains two d
 
 ### C. Protocol changes for the v4/v5 redeploy (before real money)
 
-16. **Replace blockhash scoring entropy with the drand beacon already frozen in round terms.** Round terms carry
-    `beaconNetworkHash`/`beaconRound` for tlock; using the same beacon for scoring entropy (verifiable on-chain via
-    the EIP-2537 BLS12-381 precompiles now live, ~130–140k gas) removes sequencer bias, eliminates the 256-block
+16. **Replace blockhash scoring entropy with an independent drand scoring round frozen in round terms.** Round terms
+    carry `beaconNetworkHash`/`beaconRound` for tlock disclosure and a distinct `scoringBeaconRound` strictly after
+    reveal closure. Using only the latter for scoring entropy (verifiable on-chain via the EIP-2537 BLS12-381
+    precompiles now live, ~130–140k gas) removes sequencer bias, eliminates the 256-block
     cliff (drand rounds are permanently retrievable, so keeper outage no longer converts reviewer bonuses into funder
     refunds), and makes base-only a true beacon-failure path. The spec already mandates a reviewed beacon before
     mainnet — but that mandate is absent from the readiness register; add it as an explicit gate either way.

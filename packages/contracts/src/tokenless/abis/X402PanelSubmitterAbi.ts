@@ -143,6 +143,11 @@ export const X402PanelSubmitterAbi = [
             "internalType": "uint64"
           },
           {
+            "name": "scoringBeaconRound",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
             "name": "claimGracePeriod",
             "type": "uint64",
             "internalType": "uint64"
@@ -347,6 +352,11 @@ export const X402PanelSubmitterAbi = [
             "internalType": "uint64"
           },
           {
+            "name": "scoringBeaconRound",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
             "name": "claimGracePeriod",
             "type": "uint64",
             "internalType": "uint64"
@@ -481,6 +491,11 @@ export const X402PanelSubmitterAbi = [
           },
           {
             "name": "beaconRound",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "scoringBeaconRound",
             "type": "uint64",
             "internalType": "uint64"
           },

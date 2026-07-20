@@ -27,7 +27,8 @@ const task: PublicAnswerTask = {
     possibleSurpriseBonusAtomic: "250000",
     attemptCompensationAtomic: "100000",
   },
-  beacon: { network: "quicknet-t", round: 1 },
+  disclosureBeacon: { network: "quicknet-t", round: 1 },
+  scoringBeacon: { network: "quicknet-t", round: 2 },
 };
 
 const PRINCIPAL_A = `rlp_${"a".repeat(48)}`;
@@ -35,7 +36,8 @@ const PRINCIPAL_B = `rlp_${"b".repeat(48)}`;
 const submittableTask: PublicAnswerTask = {
   ...task,
   voucherDeadline: "2099-07-17T09:00:00.000Z",
-  beacon: { network: "quicknet-t", round: 1_000_000_000 },
+  disclosureBeacon: { network: "quicknet-t", round: 1_000_000_000 },
+  scoringBeacon: { network: "quicknet-t", round: 1_000_000_040 },
 };
 
 function session(principalId: string) {

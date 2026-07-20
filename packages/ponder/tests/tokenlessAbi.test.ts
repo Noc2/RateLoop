@@ -35,6 +35,13 @@ describe("tokenless panel indexing ABI", () => {
     const getRound = tokenlessPanelAbi.find(
       (entry) => entry.type === "function" && entry.name === "getRound",
     );
+    const settlementBegun = tokenlessPanelAbi.find(
+      (entry) => entry.type === "event" && entry.name === "SettlementBegun",
+    );
+    const scoringSeedFinalized = tokenlessPanelAbi.find(
+      (entry) =>
+        entry.type === "event" && entry.name === "ScoringSeedFinalized",
+    );
 
     expect(
       roundCreated?.inputs.map(({ name, type, indexed }) => ({
@@ -56,7 +63,10 @@ describe("tokenless panel indexing ABI", () => {
       { name: "scoringVersion", type: "uint8", indexed: false },
     ]);
     expect(
-      getRound?.outputs[0]?.components.map(({ name, type }) => ({ name, type })),
+      getRound?.outputs[0]?.components.map(({ name, type }) => ({
+        name,
+        type,
+      })),
     ).toEqual([
       { name: "funder", type: "address" },
       { name: "contentId", type: "bytes32" },
@@ -81,6 +91,7 @@ describe("tokenless panel indexing ABI", () => {
       { name: "revealDeadline", type: "uint64" },
       { name: "beaconFailureDeadline", type: "uint64" },
       { name: "beaconRound", type: "uint64" },
+      { name: "scoringBeaconRound", type: "uint64" },
       { name: "claimGracePeriod", type: "uint64" },
       { name: "claimDeadline", type: "uint256" },
       { name: "minimumReveals", type: "uint32" },
@@ -102,6 +113,8 @@ describe("tokenless panel indexing ABI", () => {
         (component) => component.name === "totalAccuracyScore",
       ),
     ).toBe(false);
+    expect(settlementBegun?.inputs[2]?.name).toBe("scoringBeaconRound");
+    expect(scoringSeedFinalized?.inputs[2]?.name).toBe("scoringBeaconRound");
     expect(
       getRound?.outputs[0]?.components.some(
         (component) => component.name === "requiredTier",

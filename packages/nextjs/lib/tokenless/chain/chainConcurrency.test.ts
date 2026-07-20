@@ -218,6 +218,11 @@ function prepaidRuntime(input: {
       if (address === PANEL && functionName === "usdc") return USDC;
       if (address === PANEL && functionName === "credentialIssuer") return ISSUER;
       if (address === PANEL && functionName === "SCORING_VERSION") return 2;
+      if (address === PANEL && functionName === "QUICKNET_T_NETWORK_HASH")
+        return "0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5";
+      if (address === PANEL && functionName === "QUICKNET_T_GENESIS") return 1_689_232_296;
+      if (address === PANEL && functionName === "QUICKNET_T_PERIOD") return 3;
+      if (address === PANEL && functionName === "MIN_BEACON_GRACE") return 21_600;
       if (address === PANEL && functionName === "BASE_PAY_BPS") return 8_000;
       if (address === PANEL && functionName === "MAXIMUM_COMMITS") return 500;
       if (address === ADAPTER && functionName === "panel") return PANEL;
@@ -245,6 +250,7 @@ function prepaidRuntime(input: {
           revealDeadline: terms.revealDeadline,
           beaconFailureDeadline: terms.beaconFailureDeadline,
           beaconRound: terms.beaconRound,
+          scoringBeaconRound: terms.scoringBeaconRound,
           claimGracePeriod: terms.claimGracePeriod,
           minimumReveals: terms.minimumReveals,
           maximumCommits: terms.maximumCommits,

@@ -62,7 +62,7 @@ contract TokenlessFeedbackBonusInvariantHandler is Test {
         TokenlessPanel.RoundTerms memory panelTerms = TokenlessPanel.RoundTerms({
             contentId: contentId,
             termsHash: keccak256(abi.encode("bonus-invariant-panel-terms", index, block.timestamp)),
-            beaconNetworkHash: keccak256("drand-quicknet"),
+            beaconNetworkHash: 0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5,
             bountyAmount: BOUNTY,
             feeAmount: 0,
             attemptReserve: RESERVE,
@@ -72,8 +72,9 @@ contract TokenlessFeedbackBonusInvariantHandler is Test {
             admissionPolicyHash: ADMISSION_POLICY_HASH,
             commitDeadline: uint64(block.timestamp + 10 minutes),
             revealDeadline: uint64(block.timestamp + 20 minutes),
-            beaconFailureDeadline: uint64(block.timestamp + 6 hours + 20 minutes),
-            beaconRound: uint64(50_000 + index),
+            beaconFailureDeadline: uint64(block.timestamp + 6 hours + 20 minutes + 3 seconds),
+            beaconRound: uint64((block.timestamp + 10 minutes - 1_689_232_296) / 3 + 2),
+            scoringBeaconRound: uint64((block.timestamp + 20 minutes - 1_689_232_296) / 3 + 2),
             claimGracePeriod: 1 hours,
             feeRecipient: address(0)
         });

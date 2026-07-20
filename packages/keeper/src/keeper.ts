@@ -70,7 +70,10 @@ export interface TokenlessKeeperClients {
   walletClient: TokenlessWalletClient;
   account: { address: Address };
   keeperWorkFeed?: KeeperWorkFeed;
-  beaconFetcher?: (chainHash: Hex, round: bigint) => Promise<VerifiedDrandBeacon>;
+  beaconFetcher?: (
+    chainHash: Hex,
+    round: bigint,
+  ) => Promise<VerifiedDrandBeacon>;
 }
 
 export type RevealDecryptor = (params: {
@@ -579,7 +582,7 @@ async function advanceRound(params: {
     try {
       const beacon = await (
         params.clients.beaconFetcher ?? fetchVerifiedDrandBeacon
-      )(round.beaconNetworkHash, round.beaconRound);
+      )(round.beaconNetworkHash, round.scoringBeaconRound);
       const seeded = await permissionlessWrite(
         params.clients,
         params.config.deployment.panel,
@@ -594,7 +597,7 @@ async function advanceRound(params: {
     } catch (error) {
       params.logger.warn("Frozen scoring beacon is not yet available", {
         roundId: params.roundId.toString(),
-        beaconRound: round.beaconRound.toString(),
+        scoringBeaconRound: round.scoringBeaconRound.toString(),
         error: error instanceof Error ? error.message : String(error),
       });
     }

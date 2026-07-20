@@ -45,6 +45,7 @@ export const TOKENLESS_ROUND_TERMS_TYPES = {
     { name: "revealDeadline", type: "uint64" },
     { name: "beaconFailureDeadline", type: "uint64" },
     { name: "beaconRound", type: "uint64" },
+    { name: "scoringBeaconRound", type: "uint64" },
     { name: "claimGracePeriod", type: "uint64" },
     { name: "feeRecipient", type: "address" },
   ],
@@ -82,6 +83,7 @@ export type TokenlessRoundTermsMessage = {
   revealDeadline: bigint;
   beaconFailureDeadline: bigint;
   beaconRound: bigint;
+  scoringBeaconRound: bigint;
   claimGracePeriod: bigint;
   feeRecipient: `0x${string}`;
 };
@@ -104,12 +106,13 @@ export type TokenlessRoundAuthorizationMessage = {
   nonce: Hex;
 };
 
-export type TokenlessX402AuthorizationEvidence = TokenlessAuthorizationWindow & {
-  v: number;
-  r: Hex;
-  s: Hex;
-  roundAuthorizationSignature: Hex;
-};
+export type TokenlessX402AuthorizationEvidence =
+  TokenlessAuthorizationWindow & {
+    v: number;
+    r: Hex;
+    s: Hex;
+    roundAuthorizationSignature: Hex;
+  };
 
 export type TokenlessEip3009TypedData = {
   domain: TokenlessX402AuthorizationSpec["eip3009Domain"];
@@ -139,7 +142,9 @@ export type TokenlessX402AuthorizationBuild = {
 };
 
 function fail(message: string): never {
-  throw new RateLoopSdkError(`Invalid tokenless payment authorization: ${message}`);
+  throw new RateLoopSdkError(
+    `Invalid tokenless payment authorization: ${message}`,
+  );
 }
 
 function address(value: string, path: string): `0x${string}` {
@@ -148,7 +153,8 @@ function address(value: string, path: string): `0x${string}` {
 }
 
 function bytes32(value: string, path: string): Hex {
-  if (!BYTES32_PATTERN.test(value)) fail(`${path} must be a bytes32 hex value.`);
+  if (!BYTES32_PATTERN.test(value))
+    fail(`${path} must be a bytes32 hex value.`);
   return value as Hex;
 }
 
@@ -157,7 +163,8 @@ function amount(value: string, path: string, max?: bigint): bigint {
     fail(`${path} must be an unsigned decimal amount.`);
   }
   const parsed = BigInt(value);
-  if (max !== undefined && parsed > max) fail(`${path} exceeds its uint width.`);
+  if (max !== undefined && parsed > max)
+    fail(`${path} exceeds its uint width.`);
   return parsed;
 }
 
@@ -171,7 +178,8 @@ function assertDomain(
   expectedContract: string,
   path: string,
 ) {
-  if (!domain.name.trim() || !domain.version.trim()) fail(`${path} name/version are required.`);
+  if (!domain.name.trim() || !domain.version.trim())
+    fail(`${path} name/version are required.`);
   if (!Number.isSafeInteger(domain.chainId) || domain.chainId < 1) {
     fail(`${path}.chainId must be a positive safe integer.`);
   }
@@ -209,12 +217,22 @@ function assertInstructions(
     amount(terms.feeAmount, "roundTerms.feeAmount") +
     amount(terms.attemptReserve, "roundTerms.attemptReserve");
   if (total !== expectedTotal) {
-    fail("totalFundedAtomic must equal bountyAmount + feeAmount + attemptReserve.");
+    fail(
+      "totalFundedAtomic must equal bountyAmount + feeAmount + attemptReserve.",
+    );
   }
-  if (!Number.isSafeInteger(terms.minimumReveals) || terms.minimumReveals < 1 || BigInt(terms.minimumReveals) > MAX_UINT32) {
+  if (
+    !Number.isSafeInteger(terms.minimumReveals) ||
+    terms.minimumReveals < 1 ||
+    BigInt(terms.minimumReveals) > MAX_UINT32
+  ) {
     fail("roundTerms.minimumReveals must be a valid uint32.");
   }
-  if (!Number.isSafeInteger(terms.maximumCommits) || terms.maximumCommits < 1 || BigInt(terms.maximumCommits) > MAX_UINT32) {
+  if (
+    !Number.isSafeInteger(terms.maximumCommits) ||
+    terms.maximumCommits < 1 ||
+    BigInt(terms.maximumCommits) > MAX_UINT32
+  ) {
     fail("roundTerms.maximumCommits must be a valid uint32.");
   }
   for (const [name, value] of [
@@ -222,10 +240,13 @@ function assertInstructions(
     ["revealDeadline", terms.revealDeadline],
     ["beaconFailureDeadline", terms.beaconFailureDeadline],
     ["beaconRound", terms.beaconRound],
+    ["scoringBeaconRound", terms.scoringBeaconRound],
     ["claimGracePeriod", terms.claimGracePeriod],
-  ] as const) amount(value, `roundTerms.${name}`, MAX_UINT64);
+  ] as const)
+    amount(value, `roundTerms.${name}`, MAX_UINT64);
   const spec = instructions.authorizationSpec;
-  if (!spec) fail("authorizationSpec is required for x402 payment instructions.");
+  if (!spec)
+    fail("authorizationSpec is required for x402 payment instructions.");
   if (spec.schemaVersion !== TOKENLESS_PAYMENT_AUTHORIZATION_SCHEMA_VERSION) {
     fail("authorizationSpec.schemaVersion is unsupported.");
   }
@@ -242,11 +263,21 @@ function assertInstructions(
     "authorizationSpec.roundAuthorizationDomain",
   );
   if (deployment) {
-    if (instructions.deploymentKey !== deployment.deploymentKey) fail("deploymentKey does not match the active deployment.");
-    if (instructions.chainId !== deployment.chainId) fail("chainId does not match the active deployment.");
-    if (!sameAddress(instructions.panelAddress, deployment.panelAddress)) fail("panelAddress does not match the active deployment.");
-    if (!sameAddress(instructions.x402SubmitterAddress, deployment.x402SubmitterAddress)) fail("x402SubmitterAddress does not match the active deployment.");
-    if (!sameAddress(instructions.usdcAddress, deployment.usdcAddress)) fail("usdcAddress does not match the active deployment.");
+    if (instructions.deploymentKey !== deployment.deploymentKey)
+      fail("deploymentKey does not match the active deployment.");
+    if (instructions.chainId !== deployment.chainId)
+      fail("chainId does not match the active deployment.");
+    if (!sameAddress(instructions.panelAddress, deployment.panelAddress))
+      fail("panelAddress does not match the active deployment.");
+    if (
+      !sameAddress(
+        instructions.x402SubmitterAddress,
+        deployment.x402SubmitterAddress,
+      )
+    )
+      fail("x402SubmitterAddress does not match the active deployment.");
+    if (!sameAddress(instructions.usdcAddress, deployment.usdcAddress))
+      fail("usdcAddress does not match the active deployment.");
   }
   return instructions;
 }
@@ -269,15 +300,26 @@ function resolveWindow(
   };
   const validAfter = amount(candidate.validAfter, "validAfter");
   const validBefore = amount(candidate.validBefore, "validBefore");
-  if (validBefore <= validAfter) fail("validBefore must be greater than validAfter.");
+  if (validBefore <= validAfter)
+    fail("validBefore must be greater than validAfter.");
   const now = BigInt(Math.floor(Date.now() / 1_000));
   if (validBefore <= now) fail("validBefore has expired.");
-  if (validBefore - validAfter > 3_600n) fail("authorization lifetime must not exceed one hour.");
+  if (validBefore - validAfter > 3_600n)
+    fail("authorization lifetime must not exceed one hour.");
   bytes32(candidate.nonce, "nonce");
-  if (input && (candidate.validAfter !== spec.validAfter || candidate.validBefore !== spec.validBefore || candidate.nonce.toLowerCase() !== spec.nonce.toLowerCase())) {
+  if (
+    input &&
+    (candidate.validAfter !== spec.validAfter ||
+      candidate.validBefore !== spec.validBefore ||
+      candidate.nonce.toLowerCase() !== spec.nonce.toLowerCase())
+  ) {
     fail("authorization window conflicts with canonical payment instructions.");
   }
-  return { validAfter: validAfter.toString(), validBefore: validBefore.toString(), nonce: candidate.nonce };
+  return {
+    validAfter: validAfter.toString(),
+    validBefore: validBefore.toString(),
+    nonce: candidate.nonce,
+  };
 }
 
 export function validateTokenlessPaymentInstructions(
@@ -296,19 +338,53 @@ export function buildTokenlessRoundTermsMessage(
   return {
     contentId: bytes32(terms.contentId, "roundTerms.contentId"),
     termsHash: bytes32(terms.termsHash, "roundTerms.termsHash"),
-    beaconNetworkHash: bytes32(terms.beaconNetworkHash, "roundTerms.beaconNetworkHash"),
+    beaconNetworkHash: bytes32(
+      terms.beaconNetworkHash,
+      "roundTerms.beaconNetworkHash",
+    ),
     bountyAmount: amount(terms.bountyAmount, "roundTerms.bountyAmount"),
     feeAmount: amount(terms.feeAmount, "roundTerms.feeAmount"),
     attemptReserve: amount(terms.attemptReserve, "roundTerms.attemptReserve"),
-    attemptCompensation: amount(terms.attemptCompensation, "roundTerms.attemptCompensation"),
+    attemptCompensation: amount(
+      terms.attemptCompensation,
+      "roundTerms.attemptCompensation",
+    ),
     minimumReveals: terms.minimumReveals,
     maximumCommits: terms.maximumCommits,
-    admissionPolicyHash: bytes32(terms.admissionPolicyHash, "roundTerms.admissionPolicyHash"),
-    commitDeadline: amount(terms.commitDeadline, "roundTerms.commitDeadline", MAX_UINT64),
-    revealDeadline: amount(terms.revealDeadline, "roundTerms.revealDeadline", MAX_UINT64),
-    beaconFailureDeadline: amount(terms.beaconFailureDeadline, "roundTerms.beaconFailureDeadline", MAX_UINT64),
-    beaconRound: amount(terms.beaconRound, "roundTerms.beaconRound", MAX_UINT64),
-    claimGracePeriod: amount(terms.claimGracePeriod, "roundTerms.claimGracePeriod", MAX_UINT64),
+    admissionPolicyHash: bytes32(
+      terms.admissionPolicyHash,
+      "roundTerms.admissionPolicyHash",
+    ),
+    commitDeadline: amount(
+      terms.commitDeadline,
+      "roundTerms.commitDeadline",
+      MAX_UINT64,
+    ),
+    revealDeadline: amount(
+      terms.revealDeadline,
+      "roundTerms.revealDeadline",
+      MAX_UINT64,
+    ),
+    beaconFailureDeadline: amount(
+      terms.beaconFailureDeadline,
+      "roundTerms.beaconFailureDeadline",
+      MAX_UINT64,
+    ),
+    beaconRound: amount(
+      terms.beaconRound,
+      "roundTerms.beaconRound",
+      MAX_UINT64,
+    ),
+    scoringBeaconRound: amount(
+      terms.scoringBeaconRound,
+      "roundTerms.scoringBeaconRound",
+      MAX_UINT64,
+    ),
+    claimGracePeriod: amount(
+      terms.claimGracePeriod,
+      "roundTerms.claimGracePeriod",
+      MAX_UINT64,
+    ),
     feeRecipient: address(terms.feeRecipient, "roundTerms.feeRecipient"),
   };
 }
@@ -387,7 +463,11 @@ export function hashTokenlessRoundAuthorization(
   input?: TokenlessAuthorizationWindow,
   deployment?: TokenlessDeploymentIdentity,
 ): Hex {
-  const typedData = buildTokenlessRoundAuthorizationTypedData(instructions, input, deployment);
+  const typedData = buildTokenlessRoundAuthorizationTypedData(
+    instructions,
+    input,
+    deployment,
+  );
   return hashTypedData(typedData);
 }
 
@@ -397,12 +477,19 @@ export function buildTokenlessX402Authorization(
   deployment?: TokenlessDeploymentIdentity,
 ): TokenlessX402AuthorizationBuild {
   assertInstructions(instructions, deployment);
-  const roundTerms = buildTokenlessRoundTermsTypedData(instructions, deployment);
+  const roundTerms = buildTokenlessRoundTermsTypedData(
+    instructions,
+    deployment,
+  );
   const roundTermsDigest = hashTokenlessRoundTerms(instructions, deployment);
   return {
     eip3009: buildTokenlessEip3009TypedData(instructions, input, deployment),
     roundTerms,
-    roundAuthorization: buildTokenlessRoundAuthorizationTypedData(instructions, input, deployment),
+    roundAuthorization: buildTokenlessRoundAuthorizationTypedData(
+      instructions,
+      input,
+      deployment,
+    ),
     roundTermsDigest,
   };
 }
@@ -412,12 +499,14 @@ export function serializeTokenlessX402Authorization(
 ): Record<string, unknown> {
   amount(evidence.validAfter, "validAfter");
   amount(evidence.validBefore, "validBefore");
-  if (BigInt(evidence.validBefore) <= BigInt(evidence.validAfter)) fail("validBefore must be greater than validAfter.");
+  if (BigInt(evidence.validBefore) <= BigInt(evidence.validAfter))
+    fail("validBefore must be greater than validAfter.");
   bytes32(evidence.nonce, "nonce");
   if (evidence.v !== 27 && evidence.v !== 28) fail("v must be 27 or 28.");
   bytes32(evidence.r, "r");
   bytes32(evidence.s, "s");
-  if (!SIGNATURE_PATTERN.test(evidence.roundAuthorizationSignature)) fail("roundAuthorizationSignature must be a 65-byte signature.");
+  if (!SIGNATURE_PATTERN.test(evidence.roundAuthorizationSignature))
+    fail("roundAuthorizationSignature must be a 65-byte signature.");
   return {
     validAfter: evidence.validAfter,
     validBefore: evidence.validBefore,

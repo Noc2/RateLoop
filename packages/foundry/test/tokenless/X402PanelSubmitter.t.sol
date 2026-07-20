@@ -18,7 +18,7 @@ contract X402PanelSubmitterTest is Test {
     address internal funder;
 
     function setUp() external {
-        vm.warp(100);
+        vm.warp(1_800_000_000);
         funder = vm.addr(FUNDER_KEY);
         usdc = new MockERC20("RateLoop Tokenless Test USDC", "tUSDC", 6);
         CredentialIssuer issuer = new CredentialIssuer(address(this), address(0xBEEF), 1 days);
@@ -130,16 +130,26 @@ contract X402PanelSubmitterTest is Test {
         assertNotEq(firstPolicyDigest, adapter.roundTermsDigest(secondPolicy));
     }
 
+    function testRoundEnvelopeBindsTheIndependentScoringBeaconRound() external view {
+        TokenlessPanel.RoundTerms memory signedTerms = _terms();
+        bytes32 signedDigest = adapter.roundTermsDigest(signedTerms);
+        signedTerms.scoringBeaconRound += 1;
+        assertNotEq(signedDigest, adapter.roundTermsDigest(signedTerms));
+    }
+
     function _authorization(TokenlessPanel.RoundTerms memory terms, bytes32 nonce)
         private
         view
         returns (X402PanelSubmitter.Authorization memory authorization, bytes memory roundSignature)
     {
         uint256 amount = terms.bountyAmount + terms.feeAmount + terms.attemptReserve;
-        bytes32 paymentDigest = usdc.receiveWithAuthorizationDigest(funder, address(adapter), amount, 0, 1 days, nonce);
+        uint256 validBefore = block.timestamp + 1 days;
+        bytes32 paymentDigest =
+            usdc.receiveWithAuthorizationDigest(funder, address(adapter), amount, 0, validBefore, nonce);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(FUNDER_KEY, paymentDigest);
-        authorization =
-            X402PanelSubmitter.Authorization({ validAfter: 0, validBefore: 1 days, nonce: nonce, v: v, r: r, s: s });
+        authorization = X402PanelSubmitter.Authorization({
+            validAfter: 0, validBefore: validBefore, nonce: nonce, v: v, r: r, s: s
+        });
 
         bytes32 roundDigest = adapter.roundAuthorizationDigest(funder, terms, authorization);
         (v, r, s) = vm.sign(FUNDER_KEY, roundDigest);
@@ -154,7 +164,7 @@ contract X402PanelSubmitterTest is Test {
         return TokenlessPanel.RoundTerms({
             contentId: keccak256("question"),
             termsHash: keccak256("terms"),
-            beaconNetworkHash: keccak256("drand-quicknet"),
+            beaconNetworkHash: 0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5,
             bountyAmount: bountyAmount,
             feeAmount: 2e6,
             attemptReserve: fixedBasePay * maximumCommits,
@@ -164,8 +174,9 @@ contract X402PanelSubmitterTest is Test {
             admissionPolicyHash: ADMISSION_POLICY_HASH,
             commitDeadline: uint64(block.timestamp + 10 minutes),
             revealDeadline: uint64(block.timestamp + 20 minutes),
-            beaconFailureDeadline: uint64(block.timestamp + 6 hours + 20 minutes),
-            beaconRound: 12_345_678,
+            beaconFailureDeadline: uint64(block.timestamp + 6 hours + 20 minutes + 3 seconds),
+            beaconRound: uint64((block.timestamp + 10 minutes - 1_689_232_296) / 3 + 2),
+            scoringBeaconRound: uint64((block.timestamp + 20 minutes - 1_689_232_296) / 3 + 2),
             claimGracePeriod: 1 days,
             feeRecipient: address(0xFEE)
         });

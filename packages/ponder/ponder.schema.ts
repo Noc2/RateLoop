@@ -11,6 +11,7 @@ export const tokenlessRound = onchainTable(
     termsHash: t.hex().notNull(),
     beaconNetworkHash: t.hex().notNull(),
     beaconRound: t.bigint().notNull(),
+    scoringBeaconRound: t.bigint().notNull(),
     feeRecipient: t.hex().notNull(),
     bountyAmount: t.bigint().notNull(),
     feeAmount: t.bigint().notNull(),

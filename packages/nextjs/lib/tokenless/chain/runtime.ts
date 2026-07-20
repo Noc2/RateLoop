@@ -1,6 +1,10 @@
 import { createAwsKmsEthereumAccount } from "./awsKmsAccount";
-import type { TokenlessChainConfig } from "./config";
-import type { TokenlessSignerConfig } from "./config";
+import {
+  TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS,
+  TOKENLESS_QUICKNET_T_CHAIN_HASH,
+  type TokenlessChainConfig,
+  type TokenlessSignerConfig,
+} from "./config";
 import { TokenlessFeedbackBonusAbi, TokenlessPanelAbi, X402PanelSubmitterAbi } from "@rateloop/contracts/tokenless";
 import "server-only";
 import {
@@ -222,6 +226,10 @@ export async function assertLiveTokenlessDeployment(
     scoringVersion,
     basePayBps,
     maximumCommits,
+    beaconNetworkHash,
+    beaconGenesis,
+    beaconPeriod,
+    minimumBeaconGrace,
     adapterPanel,
     adapterUsdc,
     authorizationToken,
@@ -233,6 +241,14 @@ export async function assertLiveTokenlessDeployment(
     client.readContract({ abi: TokenlessPanelAbi, address: config.panelAddress, functionName: "SCORING_VERSION" }),
     client.readContract({ abi: TokenlessPanelAbi, address: config.panelAddress, functionName: "BASE_PAY_BPS" }),
     client.readContract({ abi: TokenlessPanelAbi, address: config.panelAddress, functionName: "MAXIMUM_COMMITS" }),
+    client.readContract({
+      abi: TokenlessPanelAbi,
+      address: config.panelAddress,
+      functionName: "QUICKNET_T_NETWORK_HASH",
+    }),
+    client.readContract({ abi: TokenlessPanelAbi, address: config.panelAddress, functionName: "QUICKNET_T_GENESIS" }),
+    client.readContract({ abi: TokenlessPanelAbi, address: config.panelAddress, functionName: "QUICKNET_T_PERIOD" }),
+    client.readContract({ abi: TokenlessPanelAbi, address: config.panelAddress, functionName: "MIN_BEACON_GRACE" }),
     client.readContract({ abi: X402PanelSubmitterAbi, address: config.x402SubmitterAddress, functionName: "panel" }),
     client.readContract({ abi: X402PanelSubmitterAbi, address: config.x402SubmitterAddress, functionName: "usdc" }),
     client.readContract({
@@ -261,7 +277,11 @@ export async function assertLiveTokenlessDeployment(
     !sameAddress(feedbackBonusIssuer, config.issuerAddress) ||
     Number(scoringVersion) !== 2 ||
     Number(basePayBps) !== 8_000 ||
-    Number(maximumCommits) !== 500
+    Number(maximumCommits) !== 500 ||
+    String(beaconNetworkHash).toLowerCase() !== TOKENLESS_QUICKNET_T_CHAIN_HASH ||
+    Number(beaconGenesis) !== 1_689_232_296 ||
+    Number(beaconPeriod) !== 3 ||
+    Number(minimumBeaconGrace) !== TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS
   ) {
     throw new Error("The configured tokenless addresses are a mixed deployment bundle.");
   }

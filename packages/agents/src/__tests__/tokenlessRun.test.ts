@@ -133,7 +133,8 @@ const quoteResponse = {
 };
 
 const roundPolicy = {
-  beaconNetworkHash: `0x${"33".repeat(32)}` as const,
+  beaconNetworkHash:
+    "0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5" as const,
   beaconGenesisSeconds: 1_689_232_296,
   beaconPeriodSeconds: 3,
   revealWindowSeconds: 120,
@@ -147,6 +148,15 @@ function paymentInstructions(
 ): TokenlessPaymentInstructions {
   const now = Math.floor(Date.now() / 1_000);
   const commitDeadline = now + quoteRequest.responseWindowSeconds;
+  const revealDeadline = commitDeadline + roundPolicy.revealWindowSeconds;
+  const scoringBeaconRound =
+    Math.floor(
+      (revealDeadline - roundPolicy.beaconGenesisSeconds) /
+        roundPolicy.beaconPeriodSeconds,
+    ) + 2;
+  const scoringBeaconTimestamp =
+    roundPolicy.beaconGenesisSeconds +
+    (scoringBeaconRound - 1) * roundPolicy.beaconPeriodSeconds;
   const intent = buildTokenlessQuoteIntent(quoteRequest, quoteResponse);
   return {
     operationKey: "op_test",
@@ -167,18 +177,17 @@ function paymentInstructions(
       maximumCommits: 3,
       admissionPolicyHash,
       commitDeadline: String(commitDeadline),
-      revealDeadline: String(commitDeadline + roundPolicy.revealWindowSeconds),
+      revealDeadline: String(revealDeadline),
       beaconFailureDeadline: String(
-        commitDeadline +
-          roundPolicy.revealWindowSeconds +
-          roundPolicy.beaconFailureGraceSeconds,
+        scoringBeaconTimestamp + roundPolicy.beaconFailureGraceSeconds,
       ),
       beaconRound: String(
         Math.floor(
           (commitDeadline - roundPolicy.beaconGenesisSeconds) /
             roundPolicy.beaconPeriodSeconds,
-        ) + 1,
+        ) + 2,
       ),
+      scoringBeaconRound: String(scoringBeaconRound),
       claimGracePeriod: "604800",
       feeRecipient: roundPolicy.feeRecipient,
     },
@@ -248,10 +257,12 @@ function run(
 describe("autonomous x402 custody guard", () => {
   it.each(["short", "run contains spaces", `run:${"x".repeat(157)}`])(
     "matches the SDK idempotency-key boundary before making requests: %s",
-    async idempotencyKey => {
+    async (idempotencyKey) => {
       const h = harness();
 
-      await expect(run(h, { idempotencyKey })).rejects.toThrow(/8-160 characters/);
+      await expect(run(h, { idempotencyKey })).rejects.toThrow(
+        /8-160 characters/,
+      );
       expect(h.mocks.quote).not.toHaveBeenCalled();
       expect(h.mocks.signTypedData).not.toHaveBeenCalled();
     },
@@ -331,14 +342,19 @@ describe("autonomous x402 custody guard", () => {
   it("refuses a server-shifted deadline even when all relative windows remain valid", async () => {
     const baseline = paymentInstructions();
     const commitDeadline = BigInt(baseline.roundTerms.commitDeadline) + 1_800n;
+    const revealDeadline = commitDeadline + 120n;
+    const scoringBeaconRound = (revealDeadline - 1_689_232_296n) / 3n + 2n;
+    const scoringBeaconTimestamp =
+      1_689_232_296n + (scoringBeaconRound - 1n) * 3n;
     const h = harness(
       paymentInstructions({
         roundTerms: {
           ...baseline.roundTerms,
           commitDeadline: commitDeadline.toString(),
-          revealDeadline: (commitDeadline + 120n).toString(),
-          beaconFailureDeadline: (commitDeadline + 21_720n).toString(),
-          beaconRound: ((commitDeadline - 1_689_232_296n) / 3n + 1n).toString(),
+          revealDeadline: revealDeadline.toString(),
+          beaconFailureDeadline: (scoringBeaconTimestamp + 21_600n).toString(),
+          beaconRound: ((commitDeadline - 1_689_232_296n) / 3n + 2n).toString(),
+          scoringBeaconRound: scoringBeaconRound.toString(),
         },
       }),
     );

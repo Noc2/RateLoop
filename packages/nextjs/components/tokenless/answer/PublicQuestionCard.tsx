@@ -63,7 +63,8 @@ export type PublicAnswerTask = {
     possibleSurpriseBonusAtomic: string;
     attemptCompensationAtomic: string;
   };
-  beacon: { network: "quicknet-t"; round: number };
+  disclosureBeacon: { network: "quicknet-t"; round: number };
+  scoringBeacon: { network: "quicknet-t"; round: number };
 };
 
 export type PaidTaskAccess =
@@ -131,7 +132,8 @@ function publicSubmissionBinding(
     reviewerSource: task.reviewerSource,
     voucherDeadline: task.voucherDeadline,
     alreadyVouchered: task.alreadyVouchered,
-    beacon: task.beacon,
+    disclosureBeacon: task.disclosureBeacon,
+    scoringBeacon: task.scoringBeacon,
     rationale: task.question.rationale,
     ...draft,
   });
@@ -495,8 +497,8 @@ export function PublicQuestionCard({
       );
       const sealed = await sealTokenlessReveal({
         material: secrets.reveal,
-        drandNetwork: task.beacon.network,
-        beaconRound: task.beacon.round,
+        drandNetwork: task.disclosureBeacon.network,
+        beaconRound: task.disclosureBeacon.round,
       });
       const idempotencyBase = `voucher:web:${task.roundId}`;
       const voucherBody = await readAnswerJson(

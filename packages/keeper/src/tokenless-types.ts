@@ -42,6 +42,7 @@ export interface TokenlessRound {
   revealDeadline: bigint;
   beaconFailureDeadline: bigint;
   beaconRound: bigint;
+  scoringBeaconRound: bigint;
   claimGracePeriod: bigint;
   claimDeadline: bigint;
   minimumReveals: number;

@@ -420,6 +420,7 @@ async function seedTask(executionState: "confirmed" | "submitted" = "confirmed")
         maximumCommits: 15,
         admissionPolicyHash: frozenPolicy.admissionPolicyHash,
         beaconRound: "123",
+        scoringBeaconRound: "163",
         beaconNetworkHash: `0x${"66".repeat(32)}`,
       }),
       executionState,
@@ -458,6 +459,8 @@ test("task discovery exposes exact compensation for confirmed public work", asyn
   assert.deepEqual(tasks[0]?.question.media, { kind: "youtube", videoId: "dQw4w9WgXcQ" });
   assert.equal(tasks[0]?.admissionPolicyHash, frozenPolicy.admissionPolicyHash);
   assert.equal(tasks[0]?.reviewerSource, "rateloop_network");
+  assert.deepEqual(tasks[0]?.disclosureBeacon, { network: "quicknet-t", round: 123 });
+  assert.deepEqual(tasks[0]?.scoringBeacon, { network: "quicknet-t", round: 163 });
   assert.deepEqual(
     buildPublicVoucherRequest(tasks[0]!, {
       idempotencyKey: "voucher:web:42",

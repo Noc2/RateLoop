@@ -73,7 +73,7 @@ export type IndexedFinalizedEvidence = {
   };
   scoring: {
     entropy: string;
-    beaconRound: string;
+    scoringBeaconRound: string;
     fixedBasePayAtomic: string;
     maximumBonusAtomic: string;
     mode: "rbts" | "base_only_beacon_unavailable";
@@ -778,7 +778,7 @@ function validateFinalizedEvidence(value: IndexedFinalizedEvidence) {
   }
   if (
     value.scoring.version !== RBTS_SCORING_VERSION ||
-    !UNSIGNED_INTEGER.test(value.scoring.beaconRound) ||
+    !UNSIGNED_INTEGER.test(value.scoring.scoringBeaconRound) ||
     !UNSIGNED_INTEGER.test(value.scoring.revealSetSum) ||
     !UNSIGNED_INTEGER.test(value.scoring.totalFinalizedLiabilityAtomic) ||
     !UNSIGNED_INTEGER.test(value.scoring.totalRbtsScoreBps) ||
@@ -907,6 +907,7 @@ function exactIndexedIdentity(input: { deployment: PonderDeployment; execution: 
     [input.round.revealDeadline, input.terms.revealDeadline, "revealDeadline", unsignedValue],
     [input.round.beaconFailureDeadline, input.terms.beaconFailureDeadline, "beaconFailureDeadline", unsignedValue],
     [input.round.beaconRound, input.terms.beaconRound, "beaconRound", unsignedValue],
+    [input.round.scoringBeaconRound, input.terms.scoringBeaconRound, "scoringBeaconRound", unsignedValue],
     [input.round.claimGracePeriod, input.terms.claimGracePeriod, "claimGracePeriod", unsignedValue],
   ];
   if (
@@ -1166,7 +1167,7 @@ async function deriveFinalizedRoundEvidenceBundle(input: {
   const scoringSeed = exactBytes32(round.scoringSeed, "Indexed scoring seed");
   const revealSetXor = exactBytes32(round.revealSetXor, "Indexed reveal-set XOR");
   const revealSetSum = unsignedValue(round.revealSetSum, "Indexed reveal-set sum");
-  const beaconRound = unsignedValue(round.beaconRound, "Indexed beacon round");
+  const scoringBeaconRound = unsignedValue(round.scoringBeaconRound, "Indexed scoring beacon round");
   const entropy = exactBytes32(round.entropy, "Indexed scoring entropy");
   const maximumCommits = integerValue(round.maximumCommits, "Indexed maximum commits");
   if (maximumCommits < 3 || maximumCommits > MAX_PONDER_COMMITS) {
@@ -1426,7 +1427,7 @@ async function deriveFinalizedRoundEvidenceBundle(input: {
     },
     scoring: {
       entropy,
-      beaconRound,
+      scoringBeaconRound,
       fixedBasePayAtomic: fixedBasePay,
       maximumBonusAtomic: maximumBonus,
       mode: scoringMode,

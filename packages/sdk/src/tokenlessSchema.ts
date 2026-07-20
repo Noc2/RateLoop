@@ -562,6 +562,10 @@ export function parseTokenlessPaymentInstructions(
         "roundTerms.beaconFailureDeadline",
       ),
       beaconRound: atomic(terms.beaconRound, "roundTerms.beaconRound"),
+      scoringBeaconRound: atomic(
+        terms.scoringBeaconRound,
+        "roundTerms.scoringBeaconRound",
+      ),
       claimGracePeriod: atomic(
         terms.claimGracePeriod,
         "roundTerms.claimGracePeriod",
@@ -895,7 +899,14 @@ export const TOKENLESS_QUOTE_REQUEST_JSON_SCHEMA = {
     requestProfile: requestProfileReferenceSchema.anyOf[1],
     reviewEconomics: { anyOf: frozenReviewEconomicsSchema.anyOf.slice(1) },
   },
-  required: ["audience", "audiencePolicy", "budget", "question", "requestedPanelSize", "responseWindowSeconds"],
+  required: [
+    "audience",
+    "audiencePolicy",
+    "budget",
+    "question",
+    "requestedPanelSize",
+    "responseWindowSeconds",
+  ],
   title: "RateLoop tokenless quote request v2",
   type: "object",
 } as const;

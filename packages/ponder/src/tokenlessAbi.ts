@@ -24,6 +24,7 @@ const roundComponents = [
   { name: "revealDeadline", type: "uint64" },
   { name: "beaconFailureDeadline", type: "uint64" },
   { name: "beaconRound", type: "uint64" },
+  { name: "scoringBeaconRound", type: "uint64" },
   { name: "claimGracePeriod", type: "uint64" },
   { name: "claimDeadline", type: "uint256" },
   { name: "minimumReveals", type: "uint32" },
@@ -106,7 +107,7 @@ export const tokenlessPanelAbi = [
     inputs: [
       { name: "roundId", type: "uint256", indexed: true },
       { name: "frozenRevealCount", type: "uint32", indexed: false },
-      { name: "beaconRound", type: "uint64", indexed: false },
+      { name: "scoringBeaconRound", type: "uint64", indexed: false },
     ],
   },
   {
@@ -115,7 +116,7 @@ export const tokenlessPanelAbi = [
     inputs: [
       { name: "roundId", type: "uint256", indexed: true },
       { name: "mode", type: "uint8", indexed: true },
-      { name: "beaconRound", type: "uint64", indexed: false },
+      { name: "scoringBeaconRound", type: "uint64", indexed: false },
       { name: "entropy", type: "bytes32", indexed: false },
       { name: "scoringSeed", type: "bytes32", indexed: false },
       { name: "revealSetXor", type: "bytes32", indexed: false },

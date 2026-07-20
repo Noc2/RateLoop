@@ -355,6 +355,7 @@ export interface TokenlessRoundTerms {
   revealDeadline: string;
   beaconFailureDeadline: string;
   beaconRound: string;
+  scoringBeaconRound: string;
   claimGracePeriod: string;
   feeRecipient: `0x${string}`;
 }

@@ -33,6 +33,13 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
     uint64 public constant MAX_REVEAL_HORIZON = 90 days;
     uint64 public constant MAX_BEACON_FAILURE_HORIZON = 120 days;
 
+    // The immutable deployment accepts only drand quicknet-t. Pinning the schedule makes
+    // both disclosure and scoring timing independently checkable from the signed terms.
+    bytes32 public constant QUICKNET_T_NETWORK_HASH =
+        0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5;
+    uint64 public constant QUICKNET_T_GENESIS = 1_689_232_296;
+    uint64 public constant QUICKNET_T_PERIOD = 3;
+
     bytes32 public constant VOUCHER_TYPEHASH = keccak256(
         "Voucher(address voteKey,bytes32 contentId,uint256 roundId,bytes32 nullifier,bytes32 admissionPolicyHash,uint64 issuerEpoch,uint64 expiresAt)"
     );
@@ -71,7 +78,6 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         uint64 expiresAt;
     }
 
-    /// @dev This signed shape deliberately remains unchanged for x402 compatibility.
     struct RoundTerms {
         bytes32 contentId;
         bytes32 termsHash;
@@ -86,7 +92,10 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         uint64 commitDeadline;
         uint64 revealDeadline;
         uint64 beaconFailureDeadline;
+        /// @dev Tlock disclosure round, whose timestamp must be after the commit deadline.
         uint64 beaconRound;
+        /// @dev Independent scoring-entropy round, whose timestamp must be after the reveal deadline.
+        uint64 scoringBeaconRound;
         uint64 claimGracePeriod;
         address feeRecipient;
     }
@@ -115,6 +124,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         uint64 revealDeadline;
         uint64 beaconFailureDeadline;
         uint64 beaconRound;
+        uint64 scoringBeaconRound;
         uint64 claimGracePeriod;
         uint256 claimDeadline;
         uint32 minimumReveals;
@@ -189,12 +199,12 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         bytes32 responseHash,
         bool scoringEligible
     );
-    event SettlementBegun(uint256 indexed roundId, uint32 frozenRevealCount, uint64 beaconRound);
+    event SettlementBegun(uint256 indexed roundId, uint32 frozenRevealCount, uint64 scoringBeaconRound);
     event SettlementProgressed(uint256 indexed roundId, RoundState indexed state, uint32 cursor);
     event ScoringSeedFinalized(
         uint256 indexed roundId,
         ScoringMode indexed mode,
-        uint64 beaconRound,
+        uint64 scoringBeaconRound,
         bytes32 entropy,
         bytes32 scoringSeed,
         bytes32 revealSetXor,
@@ -292,6 +302,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         round.revealDeadline = terms.revealDeadline;
         round.beaconFailureDeadline = terms.beaconFailureDeadline;
         round.beaconRound = terms.beaconRound;
+        round.scoringBeaconRound = terms.scoringBeaconRound;
         round.claimGracePeriod = terms.claimGracePeriod;
 
         uint256 amount = terms.bountyAmount + terms.feeAmount + terms.attemptReserve;
@@ -459,7 +470,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
 
         round.frozenRevealCount = round.revealCount;
         round.state = RoundState.Aggregating;
-        emit SettlementBegun(roundId, round.frozenRevealCount, round.beaconRound);
+        emit SettlementBegun(roundId, round.frozenRevealCount, round.scoringBeaconRound);
     }
 
     /// @notice Paginate the public vote aggregate and order-independent frozen-set commitment.
@@ -482,7 +493,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
     }
 
     /// @notice Verify the round's frozen public-beacon output and derive the canonical scoring order.
-    /// @dev The immutable verifier must bind the randomness to the exact network hash and beacon round.
+    /// @dev The immutable verifier must bind the randomness to the exact network hash and scoring beacon round.
     ///      Invalid or unavailable proofs never substitute caller-selected entropy.
     function finalizeScoringSeed(uint256 roundId, bytes32 randomness, bytes calldata proof) external {
         Round storage round = _rounds[roundId];
@@ -491,7 +502,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         if (randomness == bytes32(0)) revert InvalidBeaconProof();
 
         bool verified;
-        try beaconVerifier.verifyBeacon(round.beaconNetworkHash, round.beaconRound, randomness, proof) returns (
+        try beaconVerifier.verifyBeacon(round.beaconNetworkHash, round.scoringBeaconRound, randomness, proof) returns (
             bool valid
         ) {
             verified = valid;
@@ -521,7 +532,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         emit ScoringSeedFinalized(
             roundId,
             round.scoringMode,
-            round.beaconRound,
+            round.scoringBeaconRound,
             randomness,
             round.scoringSeed,
             round.revealSetXor,
@@ -542,7 +553,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         emit ScoringSeedFinalized(
             roundId,
             round.scoringMode,
-            round.beaconRound,
+            round.scoringBeaconRound,
             bytes32(0),
             bytes32(0),
             round.revealSetXor,
@@ -829,8 +840,9 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         returns (uint256 fixedBasePay, uint256 maximumBonus)
     {
         if (
-            terms.contentId == bytes32(0) || terms.termsHash == bytes32(0) || terms.beaconNetworkHash == bytes32(0)
-                || terms.admissionPolicyHash == bytes32(0) || terms.beaconRound == 0 || terms.bountyAmount == 0
+            terms.contentId == bytes32(0) || terms.termsHash == bytes32(0)
+                || terms.beaconNetworkHash != QUICKNET_T_NETWORK_HASH || terms.admissionPolicyHash == bytes32(0)
+                || terms.beaconRound == 0 || terms.scoringBeaconRound == 0 || terms.bountyAmount == 0
         ) revert InvalidTerms();
         if (
             terms.minimumReveals < 3 || terms.maximumCommits < terms.minimumReveals
@@ -844,10 +856,13 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
             fixedBasePay == 0 || maximumBonus == 0 || terms.attemptCompensation != fixedBasePay
                 || terms.attemptReserve < fixedBasePay * terms.maximumCommits
         ) revert InvalidTerms();
+        uint256 disclosureBeaconTimestamp = _quicknetTimestamp(terms.beaconRound);
+        uint256 scoringBeaconTimestamp = _quicknetTimestamp(terms.scoringBeaconRound);
         if (
             uint256(terms.commitDeadline) < block.timestamp + MIN_COMMIT_WINDOW
                 || uint256(terms.revealDeadline) < uint256(terms.commitDeadline) + MIN_REVEAL_WINDOW
-                || uint256(terms.beaconFailureDeadline) < uint256(terms.revealDeadline) + MIN_BEACON_GRACE
+                || disclosureBeaconTimestamp <= terms.commitDeadline || scoringBeaconTimestamp <= terms.revealDeadline
+                || uint256(terms.beaconFailureDeadline) < scoringBeaconTimestamp + MIN_BEACON_GRACE
                 || terms.claimGracePeriod == 0 || terms.claimGracePeriod > MAX_CLAIM_GRACE_PERIOD
         ) revert InvalidDeadline();
         if (
@@ -856,5 +871,9 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
         ) revert InvalidDeadline();
         if (terms.feeAmount > (terms.bountyAmount * MAX_FEE_BPS) / 10_000) revert InvalidTerms();
         if (terms.feeAmount != 0 && terms.feeRecipient == address(0)) revert InvalidAddress();
+    }
+
+    function _quicknetTimestamp(uint64 beaconRound_) private pure returns (uint256) {
+        return uint256(QUICKNET_T_GENESIS) + (uint256(beaconRound_) - 1) * QUICKNET_T_PERIOD;
     }
 }

@@ -104,6 +104,7 @@ export type PersistedRoundTerms = {
   revealDeadline: string;
   beaconFailureDeadline: string;
   beaconRound: string;
+  scoringBeaconRound: string;
   claimGracePeriod: string;
   feeRecipient: Address;
 };
@@ -207,6 +208,7 @@ function toOnchainTerms(terms: PersistedRoundTerms) {
     revealDeadline: BigInt(terms.revealDeadline),
     beaconFailureDeadline: BigInt(terms.beaconFailureDeadline),
     beaconRound: BigInt(terms.beaconRound),
+    scoringBeaconRound: BigInt(terms.scoringBeaconRound),
     claimGracePeriod: BigInt(terms.claimGracePeriod),
   };
 }
@@ -323,8 +325,10 @@ function buildRoundTerms(row: QueryRow, config: TokenlessChainConfig, now: Date)
   const nowSeconds = Math.floor(now.getTime() / 1_000);
   const commitDeadline = nowSeconds + responseWindowSeconds;
   const revealDeadline = commitDeadline + config.revealWindowSeconds;
-  const beaconFailureDeadline = revealDeadline + config.beaconFailureGraceSeconds;
-  const beaconRound = Math.floor((commitDeadline - QUICKNET_T_GENESIS_SECONDS) / QUICKNET_T_PERIOD_SECONDS) + 1;
+  const beaconRound = Math.floor((commitDeadline - QUICKNET_T_GENESIS_SECONDS) / QUICKNET_T_PERIOD_SECONDS) + 2;
+  const scoringBeaconRound = Math.floor((revealDeadline - QUICKNET_T_GENESIS_SECONDS) / QUICKNET_T_PERIOD_SECONDS) + 2;
+  const scoringBeaconTimestamp = QUICKNET_T_GENESIS_SECONDS + (scoringBeaconRound - 1) * QUICKNET_T_PERIOD_SECONDS;
+  const beaconFailureDeadline = scoringBeaconTimestamp + config.beaconFailureGraceSeconds;
   return {
     contentId: bytes32(rowString(row, "content_hash"), "content hash"),
     termsHash: bytes32(rowString(row, "terms_hash"), "terms hash"),
@@ -340,6 +344,7 @@ function buildRoundTerms(row: QueryRow, config: TokenlessChainConfig, now: Date)
     revealDeadline: String(revealDeadline),
     beaconFailureDeadline: String(beaconFailureDeadline),
     beaconRound: String(beaconRound),
+    scoringBeaconRound: String(scoringBeaconRound),
     claimGracePeriod: String(config.claimGracePeriodSeconds),
     feeRecipient: config.feeRecipient,
   };
@@ -611,6 +616,7 @@ async function assertCompleteRoundMatches(input: {
     round.revealDeadline !== terms.revealDeadline ||
     round.beaconFailureDeadline !== terms.beaconFailureDeadline ||
     round.beaconRound !== terms.beaconRound ||
+    round.scoringBeaconRound !== terms.scoringBeaconRound ||
     round.claimGracePeriod !== terms.claimGracePeriod ||
     round.minimumReveals !== terms.minimumReveals ||
     round.maximumCommits !== terms.maximumCommits ||

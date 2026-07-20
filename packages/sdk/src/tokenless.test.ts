@@ -139,7 +139,9 @@ const TEST_AUDIENCE_POLICY = {
   version: 1,
   reviewerSource: "customer_invited" as const,
   compensation: "paid" as const,
-  cohorts: [{ cohortId: "customer_named", minimumReviewers: 3, maximumReviewers: 500 }],
+  cohorts: [
+    { cohortId: "customer_named", minimumReviewers: 3, maximumReviewers: 500 },
+  ],
   selection: "customer_named" as const,
   fallbacks: { allowed: false, sources: [] },
   requiredQualifications: [],
@@ -152,10 +154,16 @@ const TEST_AUDIENCE_POLICY = {
       },
     ],
   },
-  buyerPrivacy: { visibleFields: [], minimumAggregationSize: 3, suppressSmallCells: true },
+  buyerPrivacy: {
+    visibleFields: [],
+    minimumAggregationSize: 3,
+    suppressSmallCells: true,
+  },
   legalEligibilityRequired: true,
 };
-const TEST_ADMISSION_POLICY_HASH = sha256(stringToHex(canonicalJson(TEST_AUDIENCE_POLICY)));
+const TEST_ADMISSION_POLICY_HASH = sha256(
+  stringToHex(canonicalJson(TEST_AUDIENCE_POLICY)),
+);
 
 test("private quote schema and parser bind an exact canonical audience policy and artifacts", () => {
   const privateReview = {
@@ -171,18 +179,30 @@ test("private quote schema and parser bind an exact canonical audience policy an
   };
   const normalized = normalizeTokenlessQuoteRequest({
     visibility: "private",
-    audience: { admissionPolicyHash: TEST_ADMISSION_POLICY_HASH, source: "customer_invited" },
+    audience: {
+      admissionPolicyHash: TEST_ADMISSION_POLICY_HASH,
+      source: "customer_invited",
+    },
     audiencePolicy: TEST_AUDIENCE_POLICY,
     privateReview,
     budget: { attemptReserveAtomic: "636", bountyAtomic: "800", feeBps: 1_250 },
-    question: { kind: "binary", prompt: "Is this safe?", rationale: { mode: "off" } },
+    question: {
+      kind: "binary",
+      prompt: "Is this safe?",
+      rationale: { mode: "off" },
+    },
     requestedPanelSize: 3,
     responseWindowSeconds: 3_600,
   });
   assert.deepEqual(normalized.privateReview, privateReview);
-  assert.equal(TOKENLESS_QUOTE_REQUEST_JSON_SCHEMA.properties.privateReview.additionalProperties, false);
+  assert.equal(
+    TOKENLESS_QUOTE_REQUEST_JSON_SCHEMA.properties.privateReview
+      .additionalProperties,
+    false,
+  );
   assert.deepEqual(
-    TOKENLESS_QUOTE_REQUEST_JSON_SCHEMA.properties.privateReview.properties.artifactCommitments.required,
+    TOKENLESS_QUOTE_REQUEST_JSON_SCHEMA.properties.privateReview.properties
+      .artifactCommitments.required,
     [
       "privateReviewId",
       "source",
@@ -196,7 +216,10 @@ test("private quote schema and parser bind an exact canonical audience policy an
     () =>
       normalizeTokenlessQuoteRequest({
         ...normalized,
-        privateReview: { ...privateReview, unexpected: true } as typeof privateReview,
+        privateReview: {
+          ...privateReview,
+          unexpected: true,
+        } as typeof privateReview,
       }),
     /unsupported field unexpected/,
   );
@@ -215,7 +238,10 @@ test("private quote schema and parser bind an exact canonical audience policy an
     () =>
       normalizeTokenlessQuoteRequest({
         ...normalized,
-        audiencePolicy: { ...TEST_AUDIENCE_POLICY, unexpected: true } as typeof TEST_AUDIENCE_POLICY,
+        audiencePolicy: {
+          ...TEST_AUDIENCE_POLICY,
+          unexpected: true,
+        } as typeof TEST_AUDIENCE_POLICY,
       }),
     /unsupported or non-canonical fields/,
   );
@@ -977,6 +1003,7 @@ test("direct B2B clients authenticate payment preparation without exposing API k
     revealDeadline: "2000000120",
     beaconFailureDeadline: "2000000420",
     beaconRound: "1000",
+    scoringBeaconRound: "1040",
     claimGracePeriod: "604800",
     feeRecipient: "0x6666666666666666666666666666666666666666",
   };

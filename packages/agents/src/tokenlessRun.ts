@@ -83,6 +83,11 @@ function exactHex(left: string, right: string) {
   return left.toLowerCase() === right.toLowerCase();
 }
 
+const QUICKNET_T_NETWORK_HASH =
+  "0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5";
+const QUICKNET_T_GENESIS_SECONDS = 1_689_232_296n;
+const QUICKNET_T_PERIOD_SECONDS = 3n;
+
 function assertSignedRoundMatchesIntent(input: {
   request: TokenlessAutonomousRunInput;
   quoteIntent: ReturnType<typeof buildTokenlessQuoteIntent>;
@@ -150,9 +155,9 @@ function assertSignedRoundMatchesIntent(input: {
 
   if (
     !/^0x[0-9a-fA-F]{64}$/.test(policy.beaconNetworkHash) ||
-    /^0x0{64}$/i.test(policy.beaconNetworkHash)
+    policy.beaconNetworkHash.toLowerCase() !== QUICKNET_T_NETWORK_HASH
   ) {
-    throw new Error("roundPolicy.beaconNetworkHash must be a bytes32 value.");
+    throw new Error("roundPolicy.beaconNetworkHash must pin drand quicknet-t.");
   }
   if (
     !/^0x[0-9a-fA-F]{40}$/.test(policy.feeRecipient) ||
@@ -200,6 +205,14 @@ function assertSignedRoundMatchesIntent(input: {
     1,
     3_600,
   );
+  if (
+    beaconGenesis !== QUICKNET_T_GENESIS_SECONDS ||
+    beaconPeriod !== QUICKNET_T_PERIOD_SECONDS
+  ) {
+    throw new Error(
+      "roundPolicy must pin the quicknet-t genesis and three-second period.",
+    );
+  }
   const skew = policyInteger(
     policy.clockSkewToleranceSeconds ?? 300,
     "roundPolicy.clockSkewToleranceSeconds",
@@ -221,6 +234,10 @@ function assertSignedRoundMatchesIntent(input: {
     terms.beaconFailureDeadline,
     "roundTerms.beaconFailureDeadline",
   );
+  const scoringBeaconRound = atomicAmount(
+    terms.scoringBeaconRound,
+    "roundTerms.scoringBeaconRound",
+  );
   if (
     commitDeadline < input.requestedAtSeconds + responseWindow - skew ||
     commitDeadline > input.receivedAtSeconds + responseWindow + skew
@@ -234,7 +251,9 @@ function assertSignedRoundMatchesIntent(input: {
       "The payment instructions changed the approved reveal window.",
     );
   }
-  if (beaconFailureDeadline - revealDeadline !== beaconGrace) {
+  const scoringBeaconTimestamp =
+    beaconGenesis + (scoringBeaconRound - 1n) * beaconPeriod;
+  if (beaconFailureDeadline - scoringBeaconTimestamp !== beaconGrace) {
     throw new Error(
       "The payment instructions changed the approved beacon-failure grace period.",
     );
@@ -250,13 +269,20 @@ function assertSignedRoundMatchesIntent(input: {
   if (commitDeadline < beaconGenesis)
     throw new Error("The payment instructions use an invalid beacon deadline.");
   const expectedBeaconRound =
-    (commitDeadline - beaconGenesis) / beaconPeriod + 1n;
+    (commitDeadline - beaconGenesis) / beaconPeriod + 2n;
   if (
     atomicAmount(terms.beaconRound, "roundTerms.beaconRound") !==
     expectedBeaconRound
   ) {
     throw new Error(
       "The payment instructions changed the deterministic beacon round.",
+    );
+  }
+  const expectedScoringBeaconRound =
+    (revealDeadline - beaconGenesis) / beaconPeriod + 2n;
+  if (scoringBeaconRound !== expectedScoringBeaconRound) {
+    throw new Error(
+      "The payment instructions changed the deterministic scoring beacon round.",
     );
   }
 }

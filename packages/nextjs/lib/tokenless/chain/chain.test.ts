@@ -1,5 +1,6 @@
 import {
   TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS,
+  TOKENLESS_QUICKNET_T_CHAIN_HASH,
   type TokenlessChainConfig,
   buildTokenlessDeploymentKey,
   loadTokenlessChainConfig,
@@ -90,6 +91,10 @@ function mockRuntime(
       if (address === PANEL && functionName === "SCORING_VERSION") return 2;
       if (address === PANEL && functionName === "BASE_PAY_BPS") return 8_000;
       if (address === PANEL && functionName === "MAXIMUM_COMMITS") return 500;
+      if (address === PANEL && functionName === "QUICKNET_T_NETWORK_HASH") return TOKENLESS_QUICKNET_T_CHAIN_HASH;
+      if (address === PANEL && functionName === "QUICKNET_T_GENESIS") return 1_689_232_296;
+      if (address === PANEL && functionName === "QUICKNET_T_PERIOD") return 3;
+      if (address === PANEL && functionName === "MIN_BEACON_GRACE") return 21_600;
       if (address === ADAPTER && functionName === "panel") return PANEL;
       if (address === ADAPTER && (functionName === "usdc" || functionName === "authorizationToken")) return USDC;
       if (address === FEEDBACK_BONUS && functionName === "usdc") return USDC;
@@ -116,6 +121,7 @@ function mockRuntime(
           revealDeadline: terms.revealDeadline,
           beaconFailureDeadline: terms.beaconFailureDeadline,
           beaconRound: terms.beaconRound,
+          scoringBeaconRound: terms.scoringBeaconRound,
           claimGracePeriod: terms.claimGracePeriod,
           minimumReveals: terms.minimumReveals,
           maximumCommits: terms.maximumCommits,
@@ -443,6 +449,16 @@ test("the explicit frozen response window creates one immutable deadline across 
   const first = await prepareChainPayment(operationKey, { config: config(), runtime: mockRuntime(), now: createdAt });
   assert.equal(first.roundTerms.commitDeadline, expectedDeadline);
   assert.notEqual(first.roundTerms.commitDeadline, String(Math.floor(createdAt.getTime() / 1_000) + 3_600));
+  const commitDeadline = BigInt(first.roundTerms.commitDeadline);
+  const revealDeadline = BigInt(first.roundTerms.revealDeadline);
+  const expectedDisclosureRound = (commitDeadline - 1_689_232_296n) / 3n + 2n;
+  const expectedScoringRound = (revealDeadline - 1_689_232_296n) / 3n + 2n;
+  const scoringBeaconTimestamp = 1_689_232_296n + (expectedScoringRound - 1n) * 3n;
+  assert.equal(first.roundTerms.beaconRound, expectedDisclosureRound.toString());
+  assert.equal(first.roundTerms.scoringBeaconRound, expectedScoringRound.toString());
+  assert.ok(1_689_232_296n + (expectedDisclosureRound - 1n) * 3n > commitDeadline);
+  assert.ok(scoringBeaconTimestamp > revealDeadline);
+  assert.equal(first.roundTerms.beaconFailureDeadline, (scoringBeaconTimestamp + 21_600n).toString());
 
   const replay = await prepareChainPayment(operationKey, {
     config: config(),
@@ -668,6 +684,23 @@ test("round reconciliation reads back and rejects altered non-event terms", asyn
         expected,
         roundId: 7n,
         runtime: mockRuntime({}, altered),
+      }),
+    /does not match the complete quoted terms/,
+  );
+
+  const alteredScoringRound = {
+    ...expected,
+    roundTerms: {
+      ...expected.roundTerms,
+      scoringBeaconRound: (BigInt(expected.roundTerms.scoringBeaconRound) + 1n).toString(),
+    },
+  };
+  await assert.rejects(
+    () =>
+      __chainPaymentTestUtils.assertCompleteRoundMatches({
+        expected,
+        roundId: 7n,
+        runtime: mockRuntime({}, alteredScoringRound),
       }),
     /does not match the complete quoted terms/,
   );

@@ -62,7 +62,8 @@ test("five primary tokenless surfaces pass rendered DOM axe checks", async () =>
       possibleSurpriseBonusAtomic: "1000000",
       attemptCompensationAtomic: "1000000",
     },
-    beacon: { network: "quicknet-t" as const, round: 1 },
+    disclosureBeacon: { network: "quicknet-t" as const, round: 1 },
+    scoringBeacon: { network: "quicknet-t" as const, round: 2 },
   };
 
   await assertNoSemanticViolations("Landing", <TokenlessLandingPage subscriptionsEnabled socialProofItems={[]} />);

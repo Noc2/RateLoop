@@ -139,6 +139,16 @@ export async function listPaidRaterTasks(
     if (!reviewerSource) return [];
     const terms = JSON.parse(rowString(row, "round_terms_json")!) as Record<string, string | number>;
     const maximumCommits = Number(terms.maximumCommits);
+    const disclosureBeaconRound = Number(terms.beaconRound);
+    const scoringBeaconRound = Number(terms.scoringBeaconRound);
+    if (
+      !Number.isSafeInteger(disclosureBeaconRound) ||
+      disclosureBeaconRound <= 0 ||
+      !Number.isSafeInteger(scoringBeaconRound) ||
+      scoringBeaconRound <= disclosureBeaconRound
+    ) {
+      return [];
+    }
     const guaranteedBaseAtomic = (BigInt(String(terms.bountyAmount)) * 8n) / 10n / BigInt(maximumCommits);
     return [
       {
@@ -158,7 +168,8 @@ export async function listPaidRaterTasks(
           possibleSurpriseBonusAtomic: maximumSurpriseBonusForBase(guaranteedBaseAtomic).toString(),
           attemptCompensationAtomic: String(terms.attemptCompensation),
         },
-        beacon: { network: "quicknet-t" as const, round: Number(terms.beaconRound) },
+        disclosureBeacon: { network: "quicknet-t" as const, round: disclosureBeaconRound },
+        scoringBeacon: { network: "quicknet-t" as const, round: scoringBeaconRound },
         visibility: "public" as const,
       },
     ];

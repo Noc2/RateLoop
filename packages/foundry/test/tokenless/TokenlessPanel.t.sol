@@ -171,7 +171,7 @@ contract TokenlessPanelTest is Test {
 
         vm.warp(_round(expiredRoundId).beaconFailureDeadline + 1);
         bytes32 proof = beaconVerifier.proofFor(
-            _round(expiredRoundId).beaconNetworkHash, _round(expiredRoundId).beaconRound, ENTROPY
+            _round(expiredRoundId).beaconNetworkHash, _round(expiredRoundId).scoringBeaconRound, ENTROPY
         );
         vm.expectRevert(TokenlessPanel.InvalidDeadline.selector);
         panel.finalizeScoringSeed(expiredRoundId, ENTROPY, abi.encode(proof));
@@ -188,7 +188,8 @@ contract TokenlessPanelTest is Test {
         panel.finalizeScoringSeed(roundId, ENTROPY, abi.encode(bytes32("wrong-proof")));
 
         beaconVerifier.setAvailable(false);
-        bytes32 proof = beaconVerifier.proofFor(_round(roundId).beaconNetworkHash, _round(roundId).beaconRound, ENTROPY);
+        bytes32 proof =
+            beaconVerifier.proofFor(_round(roundId).beaconNetworkHash, _round(roundId).scoringBeaconRound, ENTROPY);
         vm.expectRevert(TokenlessPanel.InvalidBeaconProof.selector);
         panel.finalizeScoringSeed(roundId, ENTROPY, abi.encode(proof));
         assertEq(uint8(_round(roundId).state), uint8(TokenlessPanel.RoundState.AwaitingSeed));
@@ -443,7 +444,9 @@ contract TokenlessPanelTest is Test {
         TokenlessPanel.RoundTerms memory terms = _terms(3, 3);
         terms.commitDeadline = uint64(block.timestamp + 10 minutes);
         terms.revealDeadline = uint64(block.timestamp + panel.MAX_REVEAL_HORIZON());
-        terms.beaconFailureDeadline = uint64(block.timestamp + panel.MAX_REVEAL_HORIZON() + panel.MIN_BEACON_GRACE());
+        terms.beaconRound = _firstRoundAfter(terms.commitDeadline);
+        terms.scoringBeaconRound = _firstRoundAfter(terms.revealDeadline);
+        terms.beaconFailureDeadline = uint64(_quicknetTimestamp(terms.scoringBeaconRound) + panel.MIN_BEACON_GRACE());
         vm.prank(funder);
         panel.createRound(terms);
 
@@ -472,6 +475,44 @@ contract TokenlessPanelTest is Test {
         terms = _terms(3, 3);
         terms.commitDeadline = uint64(block.timestamp + 1);
         _expectInvalidDeadline(terms);
+    }
+
+    function test_QuicknetScheduleSeparatesDisclosureFromPostRevealScoring() public {
+        assertEq(panel.QUICKNET_T_NETWORK_HASH(), 0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5);
+        assertEq(panel.QUICKNET_T_GENESIS(), 1_689_232_296);
+        assertEq(panel.QUICKNET_T_PERIOD(), 3);
+
+        TokenlessPanel.RoundTerms memory terms = _terms(3, 3);
+        terms.beaconNetworkHash = keccak256("another-drand-network");
+        _expectInvalidTerms(terms);
+
+        terms = _terms(3, 3);
+        terms.beaconRound -= 1;
+        _expectInvalidDeadline(terms);
+
+        terms = _terms(3, 3);
+        terms.scoringBeaconRound -= 1;
+        _expectInvalidDeadline(terms);
+
+        terms = _terms(3, 3);
+        terms.beaconFailureDeadline =
+            uint64(_quicknetTimestamp(terms.scoringBeaconRound) + panel.MIN_BEACON_GRACE() - 1);
+        _expectInvalidDeadline(terms);
+    }
+
+    function test_DisclosureBeaconCannotFeedScoringSeed() public {
+        (uint256 roundId,) = _healthyRound();
+        _beginHealthySettlement(roundId);
+        panel.processAggregate(roundId, 0, 3);
+        TokenlessPanel.Round memory round = _round(roundId);
+        assertLt(round.beaconRound, round.scoringBeaconRound);
+
+        bytes32 disclosureProof = beaconVerifier.proofFor(round.beaconNetworkHash, round.beaconRound, ENTROPY);
+        vm.expectRevert(TokenlessPanel.InvalidBeaconProof.selector);
+        panel.finalizeScoringSeed(roundId, ENTROPY, abi.encode(disclosureProof));
+
+        _finalizeSeed(roundId, ENTROPY);
+        assertEq(_round(roundId).beaconEntropy, ENTROPY);
     }
 
     function test_BlockedCreditRecipientsCannotPreventFinalizationOrRaterClaim() public {
@@ -520,7 +561,8 @@ contract TokenlessPanelTest is Test {
         }
         vm.warp(_round(roundId).revealDeadline + 1);
         panel.beginSettlement(roundId);
-        assertEq(_round(roundId).beaconRound, 12_345_678);
+        assertEq(_round(roundId).beaconRound, _firstRoundAfter(_round(roundId).commitDeadline));
+        assertEq(_round(roundId).scoringBeaconRound, _firstRoundAfter(_round(roundId).revealDeadline));
     }
 
     function _materialFromRecord(uint256 roundId, TokenlessPanel.CommitRecord memory record)
@@ -543,7 +585,7 @@ contract TokenlessPanelTest is Test {
 
     function _finalizeSeed(uint256 roundId, bytes32 entropy) internal {
         TokenlessPanel.Round memory round = _round(roundId);
-        bytes32 proof = beaconVerifier.proofFor(round.beaconNetworkHash, round.beaconRound, entropy);
+        bytes32 proof = beaconVerifier.proofFor(round.beaconNetworkHash, round.scoringBeaconRound, entropy);
         panel.finalizeScoringSeed(roundId, entropy, abi.encode(proof));
     }
 
@@ -570,7 +612,7 @@ contract TokenlessPanelTest is Test {
         terms = TokenlessPanel.RoundTerms({
             contentId: CONTENT_ID,
             termsHash: TERMS_HASH,
-            beaconNetworkHash: keccak256("drand-quicknet-chain-hash"),
+            beaconNetworkHash: 0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5,
             bountyAmount: BOUNTY,
             feeAmount: FEE,
             attemptReserve: 0,
@@ -580,12 +622,23 @@ contract TokenlessPanelTest is Test {
             admissionPolicyHash: ADMISSION_POLICY_HASH,
             commitDeadline: uint64(block.timestamp + 10 minutes),
             revealDeadline: uint64(block.timestamp + 20 minutes),
-            beaconFailureDeadline: uint64(block.timestamp + 6 hours + 20 minutes),
-            beaconRound: 12_345_678,
+            beaconFailureDeadline: uint64(block.timestamp + 6 hours + 20 minutes + 3 seconds),
+            beaconRound: 1,
+            scoringBeaconRound: 1,
             claimGracePeriod: 1 days,
             feeRecipient: feeRecipient
         });
+        terms.beaconRound = _firstRoundAfter(terms.commitDeadline);
+        terms.scoringBeaconRound = _firstRoundAfter(terms.revealDeadline);
         _setEconomics(terms);
+    }
+
+    function _firstRoundAfter(uint64 timestamp) internal pure returns (uint64) {
+        return uint64((uint256(timestamp) - 1_689_232_296) / 3 + 2);
+    }
+
+    function _quicknetTimestamp(uint64 beaconRound) internal pure returns (uint256) {
+        return 1_689_232_296 + (uint256(beaconRound) - 1) * 3;
     }
 
     function _setEconomics(TokenlessPanel.RoundTerms memory terms) internal pure {
