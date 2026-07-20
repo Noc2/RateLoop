@@ -20,23 +20,20 @@ describe("framework integration documentation", () => {
   });
 
   it("keeps wallet and deployment drift decisions explicit", async () => {
-    const [claude, design, parity, journal] = await Promise.all([
+    const [claude, design, parity] = await Promise.all([
       readFile(`${repoRoot}/CLAUDE.md`, "utf8"),
       readFile(
         `${repoRoot}/docs/tokenless-immutable-implementation-plan-2026-07.md`,
         "utf8",
       ),
       readFile(`${repoRoot}/docs/tokenless-environment-parity.md`, "utf8"),
-      readFile(`${repoRoot}/packages/nextjs/drizzle/meta/_journal.json`, "utf8"),
     ]);
     expect(claude).toContain("optional thirdweb-created app wallet");
     expect(claude).not.toContain("do not restore thirdweb");
     expect(design).toContain("No v4 contract bundle has been deployed");
     expect(design).toContain("Wilson lower confidence bound");
     expect(parity).toContain("_journal.json");
-    const entries = (JSON.parse(journal) as { entries: Array<{ tag: string }> }).entries;
-    const latestTag = entries.at(-1)?.tag;
-    if (!latestTag) throw new Error("Migration journal is empty.");
-    expect(parity).toContain(latestTag);
+    expect(parity).toContain("last entry in `_journal.json` is always the authoritative head");
+    expect(parity).toContain("do not copy a journal tag into this document");
   });
 });
