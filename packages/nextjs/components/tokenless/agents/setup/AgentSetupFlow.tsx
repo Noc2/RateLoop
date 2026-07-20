@@ -1545,10 +1545,6 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 ) : null}
                 <fieldset className="mt-6 border-t border-white/10 pt-5">
                   <legend className="text-lg font-semibold">Does this review need specialist knowledge?</legend>
-                  <p className="mt-1 text-sm leading-6 text-base-content/60">
-                    Choose knowledge needed to answer the review question. You&apos;ll confirm suitable people in the
-                    next step.
-                  </p>
                   <SetupChoiceGroup>
                     <SetupRadioChoice
                       id="agent-setup-specialists-no"
