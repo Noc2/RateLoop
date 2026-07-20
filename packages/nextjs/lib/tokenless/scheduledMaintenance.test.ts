@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
-import { sweepManagedEvmNonceDrift } from "~~/lib/tokenless/nonceRecovery";
+import { sweepManagedEvmNonceDrift, unresolvedManagedEvmNonceFindings } from "~~/lib/tokenless/nonceRecovery";
 import {
   authorizeTokenlessCron,
   runTokenlessScheduledMaintenance,
@@ -528,6 +528,33 @@ test("nonce-drift sweep reopens a chain execution by operation key", async () =>
   assert.deepEqual(finding.rows[0], { business_key: operationKey, business_kind: "chain_execution" });
 });
 
+test("nonce-drift sweep always checks every configured fixed signer role", async () => {
+  const signers = [
+    "0x5555555555555555555555555555555555555555",
+    "0x6666666666666666666666666666666666666666",
+    "0x7777777777777777777777777777777777777777",
+  ] as const;
+  const checked: string[] = [];
+  const summary = await sweepManagedEvmNonceDrift({
+    config: { deploymentKey: "tokenless-v3:test" } as never,
+    limit: 1,
+    now: NOW,
+    runtime: {
+      prepaidAccount: { address: signers[0] },
+      relayerAccount: { address: signers[1] },
+      surpriseBonusAccount: { address: signers[2] },
+      publicClient: {
+        async getTransactionCount({ address }: { address: string }) {
+          checked.push(address.toLowerCase());
+          return 0;
+        },
+      },
+    } as never,
+  });
+  assert.equal(summary.checked, 3);
+  assert.deepEqual(checked, [...signers]);
+});
+
 test("nonce-drift sweep fails closed when two business intents claim the lowest nonce", async () => {
   const signer = "0x5555555555555555555555555555555555555555";
   for (const operationKey of ["operation_duplicate_nonce_a", "operation_duplicate_nonce_b"]) {
@@ -572,6 +599,33 @@ test("nonce-drift sweep fails closed when two business intents claim the lowest 
   assert.deepEqual(finding.rows[0], {
     business_key: null,
     diagnostic_code: "duplicate_reserved_nonce",
+    state: "reconciliation_required",
+  });
+
+  const progressed = await sweepManagedEvmNonceDrift({
+    config: { deploymentKey: "tokenless-v3:test" } as never,
+    now: new Date(NOW.getTime() + 60_000),
+    runtime: {
+      prepaidAccount: { address: signer },
+      publicClient: {
+        async getTransactionCount() {
+          return 5;
+        },
+      },
+    } as never,
+  });
+  assert.equal(progressed.checked, 1);
+  assert.deepEqual(await unresolvedManagedEvmNonceFindings(), {
+    reconciliationRequired: 1,
+    unresolved: 1,
+  });
+  const stillUnresolved = await dbClient.execute({
+    sql: `SELECT state, diagnostic_code, resolved_at
+          FROM tokenless_evm_nonce_recovery_findings`,
+  });
+  assert.deepEqual(stillUnresolved.rows[0], {
+    diagnostic_code: "duplicate_reserved_nonce",
+    resolved_at: null,
     state: "reconciliation_required",
   });
 });

@@ -212,7 +212,7 @@ async function resolveConsumedFindings(input: {
   await dbClient.execute({
     sql: `UPDATE tokenless_evm_nonce_recovery_findings
           SET state = 'resolved', resolved_at = ?, last_detected_at = ?
-          WHERE deployment_key = ? AND signer_address = ? AND state <> 'resolved'
+          WHERE deployment_key = ? AND signer_address = ? AND state = 'pending'
             AND reserved_nonce < ?`,
     args: [input.now, input.now, input.deploymentKey, input.address.toLowerCase(), input.networkPendingNonce],
   });
@@ -229,7 +229,6 @@ export async function sweepManagedEvmNonceDrift(
   const config = input.config ?? loadTokenlessChainConfig();
   const runtime = input.runtime ?? getTokenlessChainRuntime(config);
   const now = input.now ?? new Date();
-  const limit = Math.min(Math.max(input.limit ?? 20, 1), 100);
   const roles = [
     runtime.prepaidAccount
       ? { address: getAddress(runtime.prepaidAccount.address), role: "prepaid_funder" as const }
@@ -242,7 +241,7 @@ export async function sweepManagedEvmNonceDrift(
       : null,
   ].filter((value): value is { address: Address; role: ManagedNonceRole } => value !== null);
   const summary = { checked: 0, pending: 0, reconciliationRequired: 0, reopened: 0, unavailable: 0 };
-  for (const role of roles.slice(0, limit)) {
+  for (const role of roles) {
     summary.checked += 1;
     let networkPendingNonce: number;
     try {
