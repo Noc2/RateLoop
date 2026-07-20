@@ -31,17 +31,20 @@ test("0125 persists unresolved nonce drift as release-blocking evidence", () => 
   assert.match(migration, /"business_kind" IN \('chain_execution', 'rater_commit', 'surprise_bounty'\)/u);
 });
 
-test("0125 is the journal head and its findings table is present in the applied schema", async () => {
+test("0125 remains in the journal and its findings table is present in the applied schema", async () => {
   const journal = JSON.parse(readFileSync(new URL("../../drizzle/meta/_journal.json", import.meta.url), "utf8")) as {
     entries: Array<{ idx: number; tag: string }>;
   };
-  assert.deepEqual(journal.entries.at(-1), {
-    idx: 125,
-    version: "7",
-    when: 1784390400000,
-    tag: "0125_evm_nonce_recovery_posture",
-    breakpoints: true,
-  });
+  assert.deepEqual(
+    journal.entries.find(entry => entry.idx === 125),
+    {
+      idx: 125,
+      version: "7",
+      when: 1784390400000,
+      tag: "0125_evm_nonce_recovery_posture",
+      breakpoints: true,
+    },
+  );
   assert.equal(getTableName(tokenlessEvmNonceRecoveryFindings), "tokenless_evm_nonce_recovery_findings");
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
   const columns = await dbClient.execute(

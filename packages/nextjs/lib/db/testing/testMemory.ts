@@ -55,6 +55,7 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
       "0121_paid_assignment_operations.sql",
       "0122_evm_kms_signing_ledger.sql",
       "0123_evm_kms_signing_ledger_integrity.sql",
+      "0126_evm_transaction_fee_replacements.sql",
     ].includes(file) &&
     (/^DO \$\$/u.test(statement) ||
       /\bCREATE OR REPLACE FUNCTION\b/u.test(statement) ||

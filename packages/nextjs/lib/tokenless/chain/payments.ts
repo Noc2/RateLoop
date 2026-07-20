@@ -1,5 +1,10 @@
 import { TOKENLESS_QUICKNET_T_CHAIN_HASH, type TokenlessChainConfig, loadTokenlessChainConfig } from "./config";
 import {
+  type EvmTransactionLocator,
+  maybeReplaceUnobservedEvmTransaction,
+  persistInitialEvmTransaction,
+} from "./evmTransactionReplacement";
+import {
   type TokenlessChainRuntime,
   type TokenlessWalletClient,
   assertLiveTokenlessDeployment,
@@ -1169,6 +1174,7 @@ async function preparePersistedTransaction(input: {
   data: Hex;
   nonce: number;
   fencingToken: number;
+  locator: EvmTransactionLocator;
 }) {
   const columns = persistedTransactionColumns[input.kind];
   const existing = await dbClient.execute({
@@ -1227,22 +1233,13 @@ async function preparePersistedTransaction(input: {
   const signedTransaction = await input.account.signTransaction(signableRequest);
   const hash = keccak256(signedTransaction);
   await assertSignedTransactionIntent({ ...input, signedTransaction });
-  const stored = await dbClient.execute({
-    sql: `UPDATE tokenless_chain_executions
-          SET ${columns.signed} = ?, ${columns.hash} = ?, state = 'signed', updated_at = ?
-          WHERE execution_id = ? AND claim_fencing_token = ?
-            AND ${columns.signed} IS NULL AND ${columns.hash} IS NULL`,
-    args: [signedTransaction, hash, new Date(), input.executionId, input.fencingToken],
+  const stored = await persistInitialEvmTransaction({
+    account: input.account,
+    locator: input.locator,
+    transaction: { hash, signedTransaction },
   });
-  if (stored.rowCount !== 1) {
-    throw new TokenlessServiceError(
-      "The chain execution claim was superseded before the signed transaction could be fenced.",
-      409,
-      "execution_claim_superseded",
-      true,
-    );
-  }
-  return { hash, signedTransaction, recovered: false };
+  await assertSignedTransactionIntent({ ...input, signedTransaction: stored.signedTransaction });
+  return stored;
 }
 
 async function broadcastPersistedTransaction(
@@ -1469,7 +1466,15 @@ export async function executeServerChainPayment(
         runtime,
         fencingToken,
       });
-      const transaction = await preparePersistedTransaction({
+      const locator = {
+        businessKey: operationKey,
+        businessKind: "chain_execution",
+        deploymentKey: config.deploymentKey,
+        fencingToken,
+        signerRole: "prepaid_funder",
+        transactionKind: "approval",
+      } as const;
+      let transaction = await preparePersistedTransaction({
         executionId,
         kind: "approval",
         account: runtime.prepaidAccount,
@@ -1482,7 +1487,16 @@ export async function executeServerChainPayment(
         }),
         nonce,
         fencingToken,
+        locator,
       });
+      if (transaction.signedTransaction) {
+        transaction = await maybeReplaceUnobservedEvmTransaction({
+          account: runtime.prepaidAccount,
+          locator,
+          publicClient: runtime.publicClient,
+          transaction: { ...transaction, signedTransaction: transaction.signedTransaction },
+        });
+      }
       approvalHash = transaction.hash;
       await broadcastPersistedTransaction(runtime.prepaidWallet, runtime.publicClient, transaction);
       await markPersistedTransactionBroadcast({
@@ -1515,7 +1529,15 @@ export async function executeServerChainPayment(
         runtime,
         fencingToken,
       });
-      const transaction = await preparePersistedTransaction({
+      const locator = {
+        businessKey: operationKey,
+        businessKind: "chain_execution",
+        deploymentKey: config.deploymentKey,
+        fencingToken,
+        signerRole: "prepaid_funder",
+        transactionKind: "submission",
+      } as const;
+      let transaction = await preparePersistedTransaction({
         executionId,
         kind: "submission",
         account: runtime.prepaidAccount,
@@ -1524,7 +1546,16 @@ export async function executeServerChainPayment(
         data: encodeFunctionData({ abi: TokenlessPanelAbi, functionName: "createRound", args: [terms] }),
         nonce,
         fencingToken,
+        locator,
       });
+      if (transaction.signedTransaction) {
+        transaction = await maybeReplaceUnobservedEvmTransaction({
+          account: runtime.prepaidAccount,
+          locator,
+          publicClient: runtime.publicClient,
+          transaction: { ...transaction, signedTransaction: transaction.signedTransaction },
+        });
+      }
       submissionHash = transaction.hash;
       await broadcastPersistedTransaction(runtime.prepaidWallet, runtime.publicClient, transaction);
       await markPersistedTransactionBroadcast({
@@ -1592,7 +1623,15 @@ export async function executeServerChainPayment(
         runtime,
         fencingToken,
       });
-      const transaction = await preparePersistedTransaction({
+      const locator = {
+        businessKey: operationKey,
+        businessKind: "chain_execution",
+        deploymentKey: config.deploymentKey,
+        fencingToken,
+        signerRole: "gas_only_relayer",
+        transactionKind: "submission",
+      } as const;
+      let transaction = await preparePersistedTransaction({
         executionId,
         kind: "submission",
         account: runtime.relayerAccount,
@@ -1605,7 +1644,16 @@ export async function executeServerChainPayment(
         }),
         nonce,
         fencingToken,
+        locator,
       });
+      if (transaction.signedTransaction) {
+        transaction = await maybeReplaceUnobservedEvmTransaction({
+          account: runtime.relayerAccount,
+          locator,
+          publicClient: runtime.publicClient,
+          transaction: { ...transaction, signedTransaction: transaction.signedTransaction },
+        });
+      }
       submissionHash = transaction.hash;
       try {
         await broadcastPersistedTransaction(runtime.relayerWallet, runtime.publicClient, transaction);

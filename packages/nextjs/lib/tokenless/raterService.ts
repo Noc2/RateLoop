@@ -1,5 +1,10 @@
 import { TOKENLESS_QUICKNET_T_CHAIN_HASH, loadTokenlessChainConfig } from "./chain/config";
 import {
+  type EvmTransactionLocator,
+  maybeReplaceUnobservedEvmTransaction,
+  persistInitialEvmTransaction,
+} from "./chain/evmTransactionReplacement";
+import {
   type TokenlessChainRuntime,
   type TokenlessWalletClient,
   assertLiveTokenlessDeployment,
@@ -333,6 +338,7 @@ async function preparePersistedRaterTransaction(input: {
   simulate?: () => Promise<unknown>;
   to: Address;
   wallet: TokenlessWalletClient;
+  locator: EvmTransactionLocator;
 }): Promise<PersistedRaterTransaction> {
   const existing = await dbClient.execute({
     sql: `SELECT relay_signed_transaction, transaction_hash, transaction_recovery_version
@@ -390,33 +396,13 @@ async function preparePersistedRaterTransaction(input: {
   const signedTransaction = await input.account.signTransaction(signableRequest);
   const hash = keccak256(signedTransaction);
   await assertSignedRaterTransactionIntent({ ...input, signedTransaction });
-  const stored = await dbClient.execute({
-    sql: `UPDATE tokenless_rater_commits
-          SET relay_signed_transaction = ?, transaction_hash = ?, state = 'signed', failure_code = NULL, updated_at = ?
-          WHERE commit_id = ? AND relay_nonce = ? AND relay_signed_transaction IS NULL AND transaction_hash IS NULL`,
-    args: [signedTransaction, hash, new Date(), input.commitId, input.nonce],
+  const stored = await persistInitialEvmTransaction({
+    account: input.account,
+    locator: input.locator,
+    transaction: { hash, signedTransaction },
   });
-  if (stored.rowCount !== 1) {
-    const winner = await dbClient.execute({
-      sql: `SELECT relay_signed_transaction, transaction_hash
-            FROM tokenless_rater_commits WHERE commit_id = ? LIMIT 1`,
-      args: [input.commitId],
-    });
-    const winnerRow = winner.rows[0] as Row | undefined;
-    const winnerSigned = rowString(winnerRow, "relay_signed_transaction") as Hex | null;
-    const winnerHash = rowString(winnerRow, "transaction_hash") as Hash | null;
-    if (winnerSigned && winnerHash && isHash(winnerHash) && keccak256(winnerSigned) === winnerHash.toLowerCase()) {
-      await assertSignedRaterTransactionIntent({ ...input, signedTransaction: winnerSigned });
-      return { hash: winnerHash, signedTransaction: winnerSigned, recovered: true };
-    }
-    throw new TokenlessServiceError(
-      "The rater transaction state changed before the signed transaction could be stored.",
-      409,
-      "rater_commit_state_superseded",
-      true,
-    );
-  }
-  return { hash, signedTransaction, recovered: false };
+  await assertSignedRaterTransactionIntent({ ...input, signedTransaction: stored.signedTransaction });
+  return stored;
 }
 
 async function broadcastPersistedRaterTransaction(
@@ -748,7 +734,14 @@ export async function relayPaidRaterCommit(input: { principalId: string; request
       true,
     );
   }
-  const transaction = await preparePersistedRaterTransaction({
+  const locator = {
+    businessKey: commitId,
+    businessKind: "rater_commit",
+    deploymentKey: config.deploymentKey,
+    signerRole: "gas_only_relayer",
+    transactionKind: "relay",
+  } as const;
+  let transaction = await preparePersistedRaterTransaction({
     account: runtime.relayerAccount,
     commitId,
     data,
@@ -756,6 +749,13 @@ export async function relayPaidRaterCommit(input: { principalId: string; request
     simulate: persistedNonce === null ? undefined : simulateCommit,
     to: config.panelAddress,
     wallet: runtime.relayerWallet,
+    locator,
+  });
+  transaction = await maybeReplaceUnobservedEvmTransaction({
+    account: runtime.relayerAccount,
+    locator,
+    publicClient: runtime.publicClient,
+    transaction,
   });
   try {
     await broadcastPersistedRaterTransaction(runtime.relayerWallet, runtime.publicClient, transaction);
@@ -838,13 +838,27 @@ export async function reconcilePaidRaterCommit(commitId: string) {
   }
   assertIsolatedCommitRelayer(runtime);
   await assertLiveTokenlessDeployment(config, runtime);
-  const transaction = await preparePersistedRaterTransaction({
+  const locator = {
+    businessKey: commitId,
+    businessKind: "rater_commit",
+    deploymentKey: config.deploymentKey,
+    signerRole: "gas_only_relayer",
+    transactionKind: "relay",
+  } as const;
+  let transaction = await preparePersistedRaterTransaction({
     account: runtime.relayerAccount,
     commitId,
     data: paidCommitData(row, payload.authorization),
     nonce,
     to: config.panelAddress,
     wallet: runtime.relayerWallet,
+    locator,
+  });
+  transaction = await maybeReplaceUnobservedEvmTransaction({
+    account: runtime.relayerAccount,
+    locator,
+    publicClient: runtime.publicClient,
+    transaction,
   });
   try {
     await broadcastPersistedRaterTransaction(runtime.relayerWallet, runtime.publicClient, transaction);

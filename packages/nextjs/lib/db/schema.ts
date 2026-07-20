@@ -123,6 +123,45 @@ export const tokenlessEvmNonceRecoveryFindings = pgTable(
 export type TokenlessEvmNonceRecoveryFinding = typeof tokenlessEvmNonceRecoveryFindings.$inferSelect;
 export type NewTokenlessEvmNonceRecoveryFinding = typeof tokenlessEvmNonceRecoveryFindings.$inferInsert;
 
+export const tokenlessEvmTransactionVersions = pgTable(
+  "tokenless_evm_transaction_versions",
+  {
+    versionId: text("version_id").primaryKey(),
+    deploymentKey: text("deployment_key").notNull(),
+    signerRole: text("signer_role").notNull(),
+    signerAddress: text("signer_address").notNull(),
+    businessKind: text("business_kind").notNull(),
+    businessKey: text("business_key").notNull(),
+    transactionKind: text("transaction_kind").notNull(),
+    nonce: numeric("nonce", { precision: 78, scale: 0 }).notNull(),
+    generation: integer("generation").notNull(),
+    signedTransaction: text("signed_transaction").notNull(),
+    transactionHash: text("transaction_hash").notNull(),
+    signatureHash: text("signature_hash").notNull(),
+    maxFeePerGas: numeric("max_fee_per_gas", { precision: 78, scale: 0 }).notNull(),
+    maxPriorityFeePerGas: numeric("max_priority_fee_per_gas", { precision: 78, scale: 0 }).notNull(),
+    createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
+  },
+  table => ({
+    businessGenerationUnique: uniqueIndex("tokenless_evm_transaction_versions_business_generation_unique").on(
+      table.businessKind,
+      table.businessKey,
+      table.transactionKind,
+      table.generation,
+    ),
+    hashUnique: uniqueIndex("tokenless_evm_transaction_versions_hash_unique").on(table.transactionHash),
+    nonceIdx: index("tokenless_evm_transaction_versions_nonce_idx").on(
+      table.deploymentKey,
+      table.signerAddress,
+      table.nonce,
+      table.generation,
+    ),
+  }),
+);
+
+export type TokenlessEvmTransactionVersion = typeof tokenlessEvmTransactionVersions.$inferSelect;
+export type NewTokenlessEvmTransactionVersion = typeof tokenlessEvmTransactionVersions.$inferInsert;
+
 export const tokenlessAgentAsks = pgTable(
   "tokenless_agent_asks",
   {

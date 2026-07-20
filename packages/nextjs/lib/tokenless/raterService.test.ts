@@ -280,6 +280,13 @@ test("a signed rater transaction is durable before broadcast and replays exactly
       throw new Error("injected signer outage after nonce reservation");
     },
   } as typeof account;
+  const locator = {
+    businessKey: "commit_recovery",
+    businessKind: "rater_commit",
+    deploymentKey: "deployment-recovery",
+    signerRole: "gas_only_relayer",
+    transactionKind: "relay",
+  } as const;
   await assert.rejects(
     __raterServiceTestUtils.preparePersistedRaterTransaction({
       account: failingAccount as never,
@@ -287,6 +294,7 @@ test("a signed rater transaction is durable before broadcast and replays exactly
       data,
       nonce: 7,
       to: panel,
+      locator,
       wallet: {
         async prepareTransactionRequest(transaction: Record<string, unknown>) {
           return {
@@ -322,6 +330,7 @@ test("a signed rater transaction is durable before broadcast and replays exactly
       simulations += 1;
     },
     to: panel,
+    locator,
     wallet: {
       async prepareTransactionRequest(transaction: Record<string, unknown>) {
         return {

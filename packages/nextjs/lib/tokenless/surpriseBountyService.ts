@@ -19,6 +19,11 @@ import { baseSepolia } from "viem/chains";
 import { dbClient, dbPool } from "~~/lib/db";
 import { type TokenlessChainConfig, loadTokenlessChainConfig } from "~~/lib/tokenless/chain/config";
 import {
+  type EvmTransactionLocator,
+  maybeReplaceUnobservedEvmTransaction,
+  persistInitialEvmTransaction,
+} from "~~/lib/tokenless/chain/evmTransactionReplacement";
+import {
   type TokenlessChainRuntime,
   type TokenlessWalletClient,
   assertLiveTokenlessDeployment,
@@ -587,6 +592,7 @@ async function preparePersistedSurpriseTransaction(input: {
   nonce: number;
   token: Address;
   wallet: TokenlessWalletClient;
+  locator: EvmTransactionLocator;
 }): Promise<PersistedSurpriseTransaction> {
   const existing = await dbClient.execute({
     sql: `SELECT transfer_nonce, transfer_signed_transaction, transfer_transaction_hash,
@@ -646,33 +652,13 @@ async function preparePersistedSurpriseTransaction(input: {
   const signedTransaction = await input.account.signTransaction(signableRequest);
   const hash = keccak256(signedTransaction);
   await assertSignedSurpriseTransactionIntent({ ...input, signedTransaction });
-  const stored = await dbClient.execute({
-    sql: `UPDATE tokenless_surprise_bounty_entitlements
-          SET transfer_signed_transaction = ?, transfer_transaction_hash = ?, state = 'paying',
-              last_error = NULL, updated_at = ?
-          WHERE entitlement_id = ? AND transfer_nonce = ?
-            AND transfer_signed_transaction IS NULL AND transfer_transaction_hash IS NULL
-            AND transaction_recovery_version = 1`,
-    args: [signedTransaction, hash, new Date(), input.entitlementId, input.nonce],
+  const stored = await persistInitialEvmTransaction({
+    account: input.account,
+    locator: input.locator,
+    transaction: { hash, signedTransaction },
   });
-  if (stored.rowCount === 1) return { hash, signedTransaction, recovered: false };
-  const winner = await dbClient.execute({
-    sql: `SELECT transfer_signed_transaction, transfer_transaction_hash
-          FROM tokenless_surprise_bounty_entitlements WHERE entitlement_id = ? LIMIT 1`,
-    args: [input.entitlementId],
-  });
-  const winnerSigned = rowString(winner.rows[0] as Row | undefined, "transfer_signed_transaction") as Hex | null;
-  const winnerHash = rowString(winner.rows[0] as Row | undefined, "transfer_transaction_hash") as Hash | null;
-  if (winnerSigned && winnerHash && isHash(winnerHash) && keccak256(winnerSigned) === winnerHash.toLowerCase()) {
-    await assertSignedSurpriseTransactionIntent({ ...input, signedTransaction: winnerSigned });
-    return { hash: winnerHash, signedTransaction: winnerSigned, recovered: true };
-  }
-  throw new TokenlessServiceError(
-    "The surprise-bonus entitlement changed before its transaction could be stored.",
-    409,
-    "surprise_bonus_state_superseded",
-    true,
-  );
+  await assertSignedSurpriseTransactionIntent({ ...input, signedTransaction: stored.signedTransaction });
+  return stored;
 }
 
 async function broadcastPersistedSurpriseTransaction(
@@ -729,13 +715,27 @@ async function defaultPay(input: SurprisePayment) {
   if (!input.runtime.surpriseBonusWallet) throw new Error("Surprise-bonus wallet is unavailable.");
   await assertLiveTokenlessDeployment(input.config, input.runtime);
   const nonce = await allocateTransferNonce(input);
-  const transaction = await preparePersistedSurpriseTransaction({
+  const locator = {
+    businessKey: input.entitlementId,
+    businessKind: "surprise_bounty",
+    deploymentKey: input.config.deploymentKey,
+    signerRole: "surprise_bonus_funder",
+    transactionKind: "transfer",
+  } as const;
+  let transaction = await preparePersistedSurpriseTransaction({
     account,
     data: surpriseTransferData(input),
     entitlementId: input.entitlementId,
     nonce,
     token: input.config.usdcAddress,
     wallet: input.runtime.surpriseBonusWallet,
+    locator,
+  });
+  transaction = await maybeReplaceUnobservedEvmTransaction({
+    account,
+    locator,
+    publicClient: input.runtime.publicClient,
+    transaction,
   });
   await broadcastPersistedSurpriseTransaction(
     input.runtime.surpriseBonusWallet,
