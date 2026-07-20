@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { sweepManagedEvmNonceDrift } from "~~/lib/tokenless/nonceRecovery";
 import {
   authorizeTokenlessCron,
   runTokenlessScheduledMaintenance,
@@ -187,6 +188,9 @@ function processors(
     },
     async processNotifications() {
       return notifications;
+    },
+    async sweepNonceDrift() {
+      return { checked: 0, pending: 0, reconciliationRequired: 0, reopened: 0, unavailable: 0 };
     },
     async processSurpriseBounties() {
       return { paid: 0, pendingClaim: 0, retry: 0, reconciliationRequired: 0 };
@@ -385,6 +389,191 @@ test("ambiguous rater broadcasts cannot dead-letter a reserved signer nonce", as
           WHERE kind = 'recover_rater_commit' AND subject_key = 'commit_recovery_ambiguous'`,
   });
   assert.deepEqual(item.rows[0], { attempt_count: 19, dead_at: null, state: "retry" });
+});
+
+test("a fresh reserved nonce remains recoverable beyond the scheduled attempt limit", async () => {
+  await seedRecoverableRaterCommit("commit_recovery_persistent_signer", "prepared");
+  await seedTokenlessScheduledWork(NOW);
+  await dbClient.execute({
+    sql: `UPDATE tokenless_scheduled_work_items SET attempt_count = 19
+          WHERE kind = 'recover_rater_commit' AND subject_key = 'commit_recovery_persistent_signer'`,
+  });
+  const result = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    processors: {
+      ...processors(async () => undefined),
+      async recoverRaterCommit() {
+        throw new Error("persistent signer or RPC failure");
+      },
+    },
+  });
+  if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.ok(result.summary);
+  assert.deepEqual(result.summary.work, { completed: 0, dead: 0, deferred: 1, retry: 0 });
+  const item = await dbClient.execute({
+    sql: `SELECT state, attempt_count, dead_at FROM tokenless_scheduled_work_items
+          WHERE kind = 'recover_rater_commit' AND subject_key = 'commit_recovery_persistent_signer'`,
+  });
+  assert.deepEqual(item.rows[0], { attempt_count: 19, dead_at: null, state: "retry" });
+});
+
+test("nonce-drift sweep reopens the lowest exact reserved intent and resolves only after nonce progress", async () => {
+  await seedRecoverableRaterCommit("commit_recovery_drift", "prepared");
+  const signer = "0x1111111111111111111111111111111111111111";
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_chain_signer_nonces
+          (deployment_key, signer_address, next_nonce, updated_at)
+          VALUES ('deployment', ?, 8, ?)`,
+    args: [signer, NOW],
+  });
+  await seedTokenlessScheduledWork(NOW);
+  await dbClient.execute({
+    sql: `UPDATE tokenless_scheduled_work_items
+          SET state = 'dead', attempt_count = 20, dead_at = ?, last_error = 'legacy RPC exhaustion'
+          WHERE kind = 'recover_rater_commit' AND subject_key = 'commit_recovery_drift'`,
+    args: [NOW],
+  });
+  let pendingNonce = 7;
+  const sweep = () =>
+    sweepManagedEvmNonceDrift({
+      config: { deploymentKey: "deployment" } as never,
+      now: NOW,
+      runtime: {
+        relayerAccount: { address: signer },
+        publicClient: {
+          async getTransactionCount() {
+            return pendingNonce;
+          },
+        },
+      } as never,
+    });
+  assert.deepEqual(await sweep(), {
+    checked: 1,
+    pending: 1,
+    reconciliationRequired: 0,
+    reopened: 1,
+    unavailable: 0,
+  });
+  const reopened = await dbClient.execute({
+    sql: `SELECT state, attempt_count, dead_at FROM tokenless_scheduled_work_items
+          WHERE kind = 'recover_rater_commit' AND subject_key = 'commit_recovery_drift'`,
+  });
+  assert.deepEqual(reopened.rows[0], { attempt_count: 0, dead_at: null, state: "pending" });
+  const pending = await dbClient.execute({
+    sql: `SELECT state, diagnostic_code, business_kind, business_key
+          FROM tokenless_evm_nonce_recovery_findings WHERE signer_address = ?`,
+    args: [signer],
+  });
+  assert.deepEqual(pending.rows[0], {
+    business_key: "commit_recovery_drift",
+    business_kind: "rater_commit",
+    diagnostic_code: "reserved_nonce_recovery_due",
+    state: "pending",
+  });
+
+  pendingNonce = 8;
+  await sweep();
+  const resolved = await dbClient.execute({
+    sql: "SELECT state, resolved_at FROM tokenless_evm_nonce_recovery_findings WHERE signer_address = ?",
+    args: [signer],
+  });
+  assert.equal(resolved.rows[0]?.state, "resolved");
+  assert.ok(resolved.rows[0]?.resolved_at);
+});
+
+test("nonce-drift sweep reopens a chain execution by operation key", async () => {
+  const operationKey = "operation_recovery_chain_drift";
+  const signer = "0x5555555555555555555555555555555555555555";
+  await seedRecoverableExecution(operationKey, {
+    claimExpiresAt: new Date(NOW.getTime() - 1),
+    state: "prepared",
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_chain_executions SET approval_nonce = 4 WHERE operation_key = ?;
+          INSERT INTO tokenless_chain_signer_nonces
+          (deployment_key, signer_address, next_nonce, updated_at)
+          VALUES ('tokenless-v3:test', ?, 5, ?)`,
+    args: [operationKey, signer, NOW],
+  });
+  await seedTokenlessScheduledWork(NOW);
+  await dbClient.execute({
+    sql: `UPDATE tokenless_scheduled_work_items
+          SET state = 'dead', attempt_count = 20, dead_at = ?, last_error = 'legacy RPC exhaustion'
+          WHERE kind = 'recover_chain_execution' AND subject_key = ?`,
+    args: [NOW, operationKey],
+  });
+
+  const summary = await sweepManagedEvmNonceDrift({
+    config: { deploymentKey: "tokenless-v3:test" } as never,
+    now: NOW,
+    runtime: {
+      prepaidAccount: { address: signer },
+      publicClient: {
+        async getTransactionCount() {
+          return 4;
+        },
+      },
+    } as never,
+  });
+  assert.equal(summary.reopened, 1);
+  const item = await dbClient.execute({
+    sql: `SELECT subject_key, state FROM tokenless_scheduled_work_items
+          WHERE kind = 'recover_chain_execution'`,
+  });
+  assert.deepEqual(item.rows[0], { state: "pending", subject_key: operationKey });
+  const finding = await dbClient.execute(
+    "SELECT business_key, business_kind FROM tokenless_evm_nonce_recovery_findings",
+  );
+  assert.deepEqual(finding.rows[0], { business_key: operationKey, business_kind: "chain_execution" });
+});
+
+test("nonce-drift sweep fails closed when two business intents claim the lowest nonce", async () => {
+  const signer = "0x5555555555555555555555555555555555555555";
+  for (const operationKey of ["operation_duplicate_nonce_a", "operation_duplicate_nonce_b"]) {
+    await seedRecoverableExecution(operationKey, {
+      claimExpiresAt: new Date(NOW.getTime() - 1),
+      state: "prepared",
+    });
+    await dbClient.execute({
+      sql: "UPDATE tokenless_chain_executions SET approval_nonce = 4 WHERE operation_key = ?",
+      args: [operationKey],
+    });
+  }
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_chain_signer_nonces
+          (deployment_key, signer_address, next_nonce, updated_at)
+          VALUES ('tokenless-v3:test', ?, 5, ?)`,
+    args: [signer, NOW],
+  });
+
+  const summary = await sweepManagedEvmNonceDrift({
+    config: { deploymentKey: "tokenless-v3:test" } as never,
+    now: NOW,
+    runtime: {
+      prepaidAccount: { address: signer },
+      publicClient: {
+        async getTransactionCount() {
+          return 4;
+        },
+      },
+    } as never,
+  });
+  assert.deepEqual(summary, {
+    checked: 1,
+    pending: 0,
+    reconciliationRequired: 1,
+    reopened: 0,
+    unavailable: 0,
+  });
+  const finding = await dbClient.execute({
+    sql: "SELECT state, diagnostic_code, business_key FROM tokenless_evm_nonce_recovery_findings",
+  });
+  assert.deepEqual(finding.rows[0], {
+    business_key: null,
+    diagnostic_code: "duplicate_reserved_nonce",
+    state: "reconciliation_required",
+  });
 });
 
 test("persistent chain recovery failures become dead-letter health evidence", async () => {

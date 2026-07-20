@@ -88,6 +88,41 @@ export const tokenlessEvmKmsSigningLedger = pgTable(
 export type TokenlessEvmKmsSigningLedgerEvent = typeof tokenlessEvmKmsSigningLedger.$inferSelect;
 export type NewTokenlessEvmKmsSigningLedgerEvent = typeof tokenlessEvmKmsSigningLedger.$inferInsert;
 
+export const tokenlessEvmNonceRecoveryFindings = pgTable(
+  "tokenless_evm_nonce_recovery_findings",
+  {
+    findingId: text("finding_id").primaryKey(),
+    deploymentKey: text("deployment_key").notNull(),
+    signerAddress: text("signer_address").notNull(),
+    signerRole: text("signer_role").notNull(),
+    reservedNonce: numeric("reserved_nonce", { precision: 78, scale: 0 }).notNull(),
+    businessKind: text("business_kind"),
+    businessKey: text("business_key"),
+    state: text("state").notNull().default("pending"),
+    diagnosticCode: text("diagnostic_code").notNull(),
+    allocatorNextNonce: numeric("allocator_next_nonce", { precision: 78, scale: 0 }).notNull(),
+    networkPendingNonce: numeric("network_pending_nonce", { precision: 78, scale: 0 }).notNull(),
+    firstDetectedAt: timestamp("first_detected_at", { mode: "date", withTimezone: true }).notNull(),
+    lastDetectedAt: timestamp("last_detected_at", { mode: "date", withTimezone: true }).notNull(),
+    resolvedAt: timestamp("resolved_at", { mode: "date", withTimezone: true }),
+  },
+  table => ({
+    stateIdx: index("tokenless_evm_nonce_recovery_findings_state_idx").on(
+      table.state,
+      table.lastDetectedAt,
+      table.signerRole,
+    ),
+    subjectUnique: uniqueIndex("tokenless_evm_nonce_recovery_findings_subject_unique").on(
+      table.deploymentKey,
+      table.signerAddress,
+      table.reservedNonce,
+    ),
+  }),
+);
+
+export type TokenlessEvmNonceRecoveryFinding = typeof tokenlessEvmNonceRecoveryFindings.$inferSelect;
+export type NewTokenlessEvmNonceRecoveryFinding = typeof tokenlessEvmNonceRecoveryFindings.$inferInsert;
+
 export const tokenlessAgentAsks = pgTable(
   "tokenless_agent_asks",
   {
