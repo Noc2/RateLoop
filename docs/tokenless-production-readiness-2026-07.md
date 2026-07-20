@@ -49,9 +49,10 @@ or end-to-end paid-path testing is complete.
   and production deployments now require the same persisted workflow and complete resource evidence.
 - Removed the public limitations page and registry. Customer-facing copy now explains the product mechanisms and links
   technical terms to their detailed documentation; engineering blockers remain in this internal register.
-- Replaced hosted raw signer material with workload-identity AWS KMS signing for every enabled application and keeper
-  role, and tenant-scoped KMS wrapping for private artifacts. Optional managed app-wallet creation remains disabled
-  until externally verifiable export and recovery exist.
+- Implemented production-gated workload-identity AWS KMS code paths for every enabled application and keeper role, and
+  tenant-scoped KMS wrapping for private artifacts. The isolated deployment is not managed-custody evidence; KMS
+  provisioning and live exercises remain open. Optional managed app-wallet creation remains disabled until externally
+  verifiable export and recovery exist.
 - Made private quote identifiers opaque and owner-bound, with migration-time invalidation of legacy unbound private
   capabilities and retention-aware deletion handling.
 - Kept private-paid, public-network, and hybrid review lanes unavailable while their complete settlement and
