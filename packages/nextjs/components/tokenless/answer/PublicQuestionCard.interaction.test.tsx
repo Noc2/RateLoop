@@ -278,7 +278,9 @@ test("backup confirmation fails closed when the browser principal changes", asyn
     await user.click(screen.getByRole("checkbox", { name: "I saved the recovery backup" }));
 
     await waitFor(() => assert.ok(screen.getByRole("alert").textContent?.includes("account changed")));
-    assert.ok(screen.getByRole("button", { name: "Create recovery backup" }));
+    await waitFor(() =>
+      assert.equal(screen.getByRole<HTMLButtonElement>("button", { name: "Create recovery backup" }).disabled, false),
+    );
     assert.equal(screen.queryByRole("link", { name: "Download recovery backup" }), null);
     assert.deepEqual(requests, ["/api/auth/session", "/api/auth/session"]);
     assertNoRecoveryMaterial(window.localStorage);
