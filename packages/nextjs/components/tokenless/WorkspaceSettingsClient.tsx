@@ -2,7 +2,6 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { WorkspaceDangerZone } from "~~/components/tokenless/WorkspaceDangerZone";
 import { WorkspaceRequestScope } from "~~/lib/tokenless/workspaceRequestScope";
@@ -129,7 +128,6 @@ function billingStatusLabel(status: string) {
 }
 
 export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWorkspaceId?: string }) {
-  const router = useRouter();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspacesLoading, setWorkspacesLoading] = useState(true);
   const [selectedId, setSelectedId] = useState("");
@@ -742,35 +740,12 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
 
   return (
     <div className="space-y-5">
-      <section className="surface-card rounded-2xl p-6">
-        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Workspaces</p>
+      <div className="surface-card rounded-2xl p-6">
         {workspaces.length ? (
           <>
-            <label className="mt-4 block text-sm text-base-content/60">
-              Active workspace
-              {/*
-                The URL-backed parent (AgentWorkspacePanels) is the single source of truth for the active
-                workspace. Navigating the parent route re-renders every sibling panel (stop, deletion,
-                evidence, funding) together, so this control can never leave settings pointing at a
-                different workspace than the rest of the page.
-              */}
-              <select
-                className="select mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                value={selectedId}
-                onChange={event =>
-                  router.push(`/agents?tab=overview&workspace=${encodeURIComponent(event.target.value)}`)
-                }
-              >
-                {workspaces.map(workspace => (
-                  <option key={workspace.workspaceId} value={workspace.workspaceId}>
-                    {workspace.name}
-                  </option>
-                ))}
-              </select>
-            </label>
             <section
               aria-labelledby="workspace-plan"
-              className="mt-6 rounded-xl border border-white/10 bg-base-content/[0.025] p-5"
+              className="rounded-xl border border-white/10 bg-base-content/[0.025] p-5"
             >
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
@@ -1565,7 +1540,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
             workspaceName={selected.name}
           />
         ) : null}
-      </section>
+      </div>
 
       <section className="surface-card rounded-2xl p-6" aria-labelledby="create-another-workspace-heading">
         <h2 id="create-another-workspace-heading" className="text-lg font-semibold">

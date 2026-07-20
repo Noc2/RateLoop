@@ -83,30 +83,17 @@ export function AgentWorkspacePanels({
       {/* Persistent across every agents tab while the workspace stop is engaged. */}
       <WorkspaceStopBanner workspaceId={workspaceId} />
       {hasConnectedAgent ? (
-        <AgentTabs active={resolvedTab} visibleTabs={visibleTabs} workspaceId={workspaceId} />
-      ) : null}
-
-      {workspaces.length > 1 ? (
-        <div className="flex justify-end">
-          <label className="min-w-56 text-sm text-base-content/60">
-            Workspace
-            <select
-              className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={workspaceId}
-              onChange={event =>
-                router.push(
-                  `/agents?tab=${encodeURIComponent(resolvedTab)}&workspace=${encodeURIComponent(event.target.value)}`,
-                )
-              }
-            >
-              {workspaces.map(entry => (
-                <option key={entry.workspaceId} value={entry.workspaceId}>
-                  {entry.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+        <AgentTabs
+          active={resolvedTab}
+          visibleTabs={visibleTabs}
+          workspaceId={workspaceId}
+          workspaces={workspaces}
+          onWorkspaceChange={nextWorkspaceId =>
+            router.push(
+              `/agents?tab=${encodeURIComponent(resolvedTab)}&workspace=${encodeURIComponent(nextWorkspaceId)}`,
+            )
+          }
+        />
       ) : null}
 
       <div

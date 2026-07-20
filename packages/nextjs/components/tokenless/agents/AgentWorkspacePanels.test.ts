@@ -73,6 +73,18 @@ test("agent tabs use roving focus and arrow, Home, and End navigation", () => {
   assert.match(panelsSource, /role="tabpanel"/);
 });
 
+test("the active workspace selector shares the tab header and preserves the current tab", () => {
+  assert.match(tabsSource, /<span className="sr-only">Active workspace<\/span>/);
+  assert.match(tabsSource, /workspaces\.map\(workspace =>/);
+  assert.match(tabsSource, /onWorkspaceChange\(event\.target\.value\)/);
+  assert.match(panelsSource, /workspaces=\{workspaces\}/);
+  assert.match(
+    panelsSource,
+    /`\/agents\?tab=\$\{encodeURIComponent\(resolvedTab\)\}&workspace=\$\{encodeURIComponent\(nextWorkspaceId\)\}`/,
+  );
+  assert.equal(panelsSource.match(/<select/g)?.length, 1);
+});
+
 test("the server resolves onboarding before the client renders downstream panels", () => {
   assert.match(pageSource, /listProductWorkspaces\(session\.principalId\)/);
   assert.match(pageSource, /selectRequestedWorkspace\(workspaces, requestedWorkspaceId\)/);

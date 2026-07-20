@@ -94,16 +94,9 @@ test("workspace setup does not expose manual agent credentials or result webhook
   assert.equal(existsSync(webhookRoute), false);
 });
 
-test("the active-workspace control navigates the URL-backed parent route as the single source of truth", () => {
-  // AUD-04: the inner selector must not locally diverge from the parent workspace. Navigating the
-  // parent route re-renders every sibling panel together instead of only calling setSelectedId.
-  assert.match(source, /Active workspace/);
-  assert.match(
-    source,
-    /router\.push\(`\/agents\?tab=overview&workspace=\$\{encodeURIComponent\(event\.target\.value\)\}`\)/,
-  );
-  assert.match(source, /const router = useRouter\(\)/);
-  assert.doesNotMatch(source, /onChange=\{event => \{\s*setSelectedId\(event\.target\.value\)/);
+test("workspace settings leaves active-workspace navigation to the agents tab header", () => {
+  assert.doesNotMatch(source, /Active workspace/);
+  assert.doesNotMatch(source, /useRouter|router\.push\(`\/agents\?tab=overview/);
 });
 
 test("billing and billing-profile loads are workspace-scoped like top-up and identity", () => {
