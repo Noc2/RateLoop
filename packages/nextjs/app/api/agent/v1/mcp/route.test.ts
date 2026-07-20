@@ -455,7 +455,7 @@ test("an owner can recover only a replay-revoked public OAuth integration", asyn
       exchangeAgentOAuthToken({
         grantType: "refresh_token",
         clientId,
-        refreshToken: retainedRefreshToken,
+        refreshToken: tokens.refresh_token,
         resource: getCanonicalAgentMcpResource(),
       }),
     /replay revoked this token family/u,
@@ -466,6 +466,12 @@ test("an owner can recover only a replay-revoked public OAuth integration", asyn
     before.integrations.find(integration => integration.integrationId === integrationId)?.oauthRecoveryAvailable,
     true,
   );
+  const presented = await dbClient.execute({
+    sql: `SELECT generation FROM tokenless_agent_oauth_refresh_tokens
+          WHERE revocation_reason='refresh_token_replay_presented'`,
+    args: [],
+  });
+  assert.deepEqual(presented.rows, [{ generation: 1 }]);
   const recovered = await recoverAgentIntegrationOAuth({ accountAddress: principalId, workspaceId, integrationId });
   assert.equal(recovered.integration.oauthRecovered, true);
   const after = await listAgentConnections({ accountAddress: principalId, workspaceId });
@@ -477,13 +483,13 @@ test("an owner can recover only a replay-revoked public OAuth integration", asyn
   const refreshed = await exchangeAgentOAuthToken({
     grantType: "refresh_token",
     clientId,
-    refreshToken: retainedRefreshToken,
+    refreshToken: tokens.refresh_token,
     resource: getCanonicalAgentMcpResource(),
   });
-  assert.equal(refreshed.refresh_token, retainedRefreshToken);
+  assert.equal(refreshed.refresh_token, tokens.refresh_token);
   const obsoleteRefresh = await dbClient.execute({
     sql: `SELECT revoked_at FROM tokenless_agent_oauth_refresh_tokens WHERE token_hash=?`,
-    args: [originalRefreshHash],
+    args: [retainedRefreshHash],
   });
   assert.ok(obsoleteRefresh.rows[0]?.revoked_at);
   await assert.rejects(

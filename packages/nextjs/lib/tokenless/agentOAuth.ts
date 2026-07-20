@@ -730,6 +730,12 @@ export async function exchangeAgentOAuthToken(
     }
     const tokenFamilyId = text(row, "token_family_id")!;
     if (date(row, "used_at") || date(row, "replaced_at")) {
+      await client.query(
+        `UPDATE tokenless_agent_oauth_refresh_tokens
+         SET revocation_reason = 'refresh_token_replay_presented'
+         WHERE refresh_token_id = $1`,
+        [text(row, "refresh_token_id")],
+      );
       await revokeTokenFamily(client, tokenFamilyId, now, "refresh_token_replay");
       await client.query("COMMIT");
       throw new AgentOAuthError("invalid_grant", "Refresh-token replay revoked this token family.");

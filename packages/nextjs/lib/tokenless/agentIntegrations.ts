@@ -1291,7 +1291,7 @@ export async function revokeAgentIntegration(input: {
 }
 
 /**
- * Restore the latest consumed refresh token retained by a public OAuth client after the
+ * Restore the consumed refresh token a public OAuth client presented after the
  * pre-stable-refresh server falsely treated its second use as replay. This is an
  * explicit workspace-administrator recovery, not a general replay bypass.
  */
@@ -1322,7 +1322,8 @@ export async function recoverAgentIntegrationOAuth(input: {
        WHERE i.workspace_id=$1 AND i.integration_id=$2 AND i.status='active'
          AND i.activation_mode IN ('preauthorized_safe','owner_approved')
          AND (r.used_at IS NOT NULL OR r.replaced_at IS NOT NULL)
-       ORDER BY r.generation DESC
+       ORDER BY CASE WHEN r.revocation_reason='refresh_token_replay_presented' THEN 0 ELSE 1 END,
+                r.generation DESC
        LIMIT 1
        FOR UPDATE`,
       [input.workspaceId, input.integrationId],
