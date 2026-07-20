@@ -1,3 +1,10 @@
+import {
+  TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS,
+  TOKENLESS_QUICKNET_T_CHAIN_HASH,
+  TOKENLESS_SCORING_BEACON_SAFETY_MARGIN_SECONDS,
+  tokenlessFirstQuicknetRoundAfter,
+  tokenlessQuicknetTimestamp,
+} from "@rateloop/sdk";
 import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
@@ -32,7 +39,7 @@ const FEE_RECIPIENT = `0x${"ee".repeat(20)}`;
 const CONTENT_ID = `0x${"61".repeat(32)}`;
 const TERMS_HASH = `0x${"62".repeat(32)}`;
 const POLICY_HASH = `0x${"63".repeat(32)}`;
-const BEACON_HASH = `0x${"64".repeat(32)}`;
+const BEACON_HASH = TOKENLESS_QUICKNET_T_CHAIN_HASH;
 const DEPLOYMENT = `tokenless-v4:84532:${PANEL}:${ISSUER}:${ADAPTER}:${FEEDBACK_BONUS}`;
 const ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64url");
 const NOW = new Date("2026-07-12T18:00:00.000Z");
@@ -98,6 +105,15 @@ function finalityRuntime(): TokenlessChainRuntime {
   };
 }
 
+const COMMIT_DEADLINE = 1_783_878_000n;
+const REVEAL_DEADLINE = COMMIT_DEADLINE + 300n;
+const BEACON_ROUND = tokenlessFirstQuicknetRoundAfter(COMMIT_DEADLINE);
+const SCORING_BEACON_ROUND = tokenlessFirstQuicknetRoundAfter(
+  REVEAL_DEADLINE + TOKENLESS_SCORING_BEACON_SAFETY_MARGIN_SECONDS,
+);
+const BEACON_FAILURE_DEADLINE =
+  tokenlessQuicknetTimestamp(SCORING_BEACON_ROUND) + TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS;
+
 const roundTerms = {
   contentId: CONTENT_ID,
   termsHash: TERMS_HASH,
@@ -109,11 +125,11 @@ const roundTerms = {
   minimumReveals: 3,
   maximumCommits: 5,
   admissionPolicyHash: POLICY_HASH,
-  commitDeadline: "1783878000",
-  revealDeadline: "1783878120",
-  beaconFailureDeadline: "1783878420",
-  beaconRound: "25000000",
-  scoringBeaconRound: "25000040",
+  commitDeadline: COMMIT_DEADLINE.toString(),
+  revealDeadline: REVEAL_DEADLINE.toString(),
+  beaconFailureDeadline: BEACON_FAILURE_DEADLINE.toString(),
+  beaconRound: BEACON_ROUND.toString(),
+  scoringBeaconRound: SCORING_BEACON_ROUND.toString(),
   claimGracePeriod: "604800",
   feeRecipient: FEE_RECIPIENT,
 };

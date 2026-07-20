@@ -8,6 +8,14 @@ import {
   normalizeTokenlessQuoteRequest,
 } from "./tokenless";
 import {
+  TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS,
+  TOKENLESS_QUICKNET_T_CHAIN_HASH,
+  TOKENLESS_SCORING_BEACON_SAFETY_MARGIN_SECONDS,
+  tokenlessFirstQuicknetRoundAfter,
+  tokenlessQuicknetTimestamp,
+  validateTokenlessPaymentInstructions,
+} from "./tokenlessPayment";
+import {
   normalizeTokenlessQuestion,
   parseTokenlessYouTubeUrl,
 } from "./tokenlessMedia";
@@ -995,10 +1003,19 @@ test("tokenless quote validation rejects ambiguous mechanisms before HTTP", () =
 
 test("direct B2B clients authenticate payment preparation without exposing API keys in browser clients", async () => {
   const requests: { url: string; init: RequestInit }[] = [];
+  const commitDeadline = 2_000_000_000n;
+  const revealDeadline = commitDeadline + 300n;
+  const beaconRound = tokenlessFirstQuicknetRoundAfter(commitDeadline);
+  const scoringBeaconRound = tokenlessFirstQuicknetRoundAfter(
+    revealDeadline + TOKENLESS_SCORING_BEACON_SAFETY_MARGIN_SECONDS,
+  );
+  const beaconFailureDeadline =
+    tokenlessQuicknetTimestamp(scoringBeaconRound) +
+    TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS;
   const terms = {
     contentId: `0x${"11".repeat(32)}`,
     termsHash: `0x${"22".repeat(32)}`,
-    beaconNetworkHash: `0x${"33".repeat(32)}`,
+    beaconNetworkHash: TOKENLESS_QUICKNET_T_CHAIN_HASH,
     bountyAmount: "25000000",
     feeAmount: "1875000",
     attemptReserve: "5000000",
@@ -1006,11 +1023,11 @@ test("direct B2B clients authenticate payment preparation without exposing API k
     minimumReveals: 12,
     maximumCommits: 15,
     admissionPolicyHash: `0x${"44".repeat(32)}`,
-    commitDeadline: "2000000000",
-    revealDeadline: "2000000120",
-    beaconFailureDeadline: "2000000420",
-    beaconRound: "1000",
-    scoringBeaconRound: "1040",
+    commitDeadline: commitDeadline.toString(),
+    revealDeadline: revealDeadline.toString(),
+    beaconFailureDeadline: beaconFailureDeadline.toString(),
+    beaconRound: beaconRound.toString(),
+    scoringBeaconRound: scoringBeaconRound.toString(),
     claimGracePeriod: "604800",
     feeRecipient: "0x6666666666666666666666666666666666666666",
   };
@@ -1058,6 +1075,7 @@ test("direct B2B clients authenticate payment preparation without exposing API k
       return new Response(JSON.stringify(response), { status: 200 });
     },
   });
+  assert.doesNotThrow(() => validateTokenlessPaymentInstructions(response));
   assert.equal(
     (await client.paymentInstructions({ operationKey: "op_payment" }))
       .roundTerms.admissionPolicyHash,

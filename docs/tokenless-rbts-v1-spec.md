@@ -136,7 +136,7 @@ contracts, the benchmark measured:
 | `processScores` | 20 | 1,871,941 | 2,500,000 per page |
 | `finalizeSettlement` | 1 | 99,874 | 250,000 |
 
-The measured scoring-page total is 36,695,463 gas and the measured lifecycle total is 49,975,388 gas after the
+The measured scoring-page total is 36,695,474 gas and the measured lifecycle total is 49,975,388 gas after the
 100,000-gas allowance for each of 43 transactions. CI caps the total at 60,000,000 gas. Every individual call remains
 below its transaction ceiling. Any compiler, page-size, verifier, or contract change must rerun and deliberately
 reapprove the benchmark; L1 data fees remain separate.
