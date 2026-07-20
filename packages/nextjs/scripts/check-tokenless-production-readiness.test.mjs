@@ -122,6 +122,11 @@ function validFixture() {
       "arn:aws:kms:eu-central-1:123456789012:key/55555555-5555-5555-5555-555555555555",
     TOKENLESS_EVIDENCE_KMS_REGION: "eu-central-1",
     TOKENLESS_EVIDENCE_KMS_ROLE_ARN: "arn:aws:iam::123456789012:role/rateloop-evidence",
+    TOKENLESS_KEEPER_KMS_KEY_RESOURCE:
+      "arn:aws:kms:eu-central-1:123456789012:key/77777777-7777-7777-7777-777777777777",
+    TOKENLESS_KEEPER_KMS_EXPECTED_ADDRESS: address(27),
+    TOKENLESS_KEEPER_KMS_REGION: "eu-central-1",
+    TOKENLESS_KEEPER_KMS_ROLE_ARN: "arn:aws:iam::123456789012:role/rateloop-keeper",
     TOKENLESS_ELIGIBILITY_PROVIDER_PUBLIC_KEY: provider.publicKey.export({ format: "pem", type: "spki" }),
     TOKENLESS_MCP_RATE_LIMIT_SECRET: "m".repeat(32),
     TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
@@ -212,6 +217,27 @@ test("production chain execution requires distinct HTTPS RPC fallbacks", () => {
   const plaintext = validFixture();
   plaintext.env.BASE_SEPOLIA_RPC_FALLBACK_URLS = "http://fallback.example";
   assert.match(validateTokenlessProductionReadiness(plaintext).join("\n"), /must contain HTTPS URLs/i);
+});
+
+test("managed signer keys, addresses, and IAM principals are distinct across web and keeper workloads", () => {
+  const reusedWebRole = validFixture();
+  reusedWebRole.env.TOKENLESS_X402_RELAYER_KMS_ROLE_ARN =
+    reusedWebRole.env.TOKENLESS_CREDENTIAL_ISSUER_KMS_ROLE_ARN;
+  assert.match(validateTokenlessProductionReadiness(reusedWebRole).join("\n"), /IAM role ARNs must be distinct/iu);
+
+  const reusedKeeper = validFixture();
+  reusedKeeper.env.TOKENLESS_KEEPER_KMS_KEY_RESOURCE = reusedKeeper.env.TOKENLESS_PREPAID_FUNDER_KMS_KEY_RESOURCE;
+  reusedKeeper.env.TOKENLESS_KEEPER_KMS_EXPECTED_ADDRESS =
+    reusedKeeper.env.TOKENLESS_PREPAID_FUNDER_KMS_EXPECTED_ADDRESS;
+  reusedKeeper.env.TOKENLESS_KEEPER_KMS_ROLE_ARN = reusedKeeper.env.TOKENLESS_PREPAID_FUNDER_KMS_ROLE_ARN;
+  const output = validateTokenlessProductionReadiness(reusedKeeper).join("\n");
+  assert.match(output, /KMS key resources must be distinct/iu);
+  assert.match(output, /EVM addresses must be distinct/iu);
+  assert.match(output, /IAM role ARNs must be distinct/iu);
+
+  const reusedVaultRole = validFixture();
+  reusedVaultRole.env.TOKENLESS_AWS_KMS_ROLE_ARN = reusedVaultRole.env.TOKENLESS_EVIDENCE_KMS_ROLE_ARN;
+  assert.match(validateTokenlessProductionReadiness(reusedVaultRole).join("\n"), /IAM role ARNs must be distinct/iu);
 });
 
 test("production evidence publication requires exactly one conservative finality policy", () => {

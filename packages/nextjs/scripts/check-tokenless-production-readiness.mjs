@@ -110,6 +110,10 @@ export const REQUIRED_TOKENLESS_PRODUCTION_VARIABLES = [
     `TOKENLESS_${role}_KMS_REGION`,
     `TOKENLESS_${role}_KMS_ROLE_ARN`,
   ]),
+  "TOKENLESS_KEEPER_KMS_KEY_RESOURCE",
+  "TOKENLESS_KEEPER_KMS_EXPECTED_ADDRESS",
+  "TOKENLESS_KEEPER_KMS_REGION",
+  "TOKENLESS_KEEPER_KMS_ROLE_ARN",
   "TOKENLESS_VOUCHER_ISSUER_EPOCH",
   "TOKENLESS_ELIGIBILITY_PROVIDER_ID",
   "TOKENLESS_ELIGIBILITY_PROVIDER_PUBLIC_KEY",
@@ -685,6 +689,14 @@ export function validateTokenlessProductionReadiness({
   const secretRoles = new Map();
   const managedSignerResources = new Map();
   const managedSignerAddresses = new Map();
+  const managedSignerRoleArns = new Map();
+  const addDistinctManagedSignerValue = (kind, role, identifier, inventory) => {
+    if (!identifier) return;
+    const roles = inventory.get(identifier) ?? [];
+    roles.push(role);
+    inventory.set(identifier, roles);
+    if (roles.length > 1) errors.push(`Managed signer ${kind} must be distinct: ${roles.join(", ")}.`);
+  };
   for (const role of MANAGED_EVM_SIGNER_ROLES) {
     const prefix = `TOKENLESS_${role}_KMS`;
     const keyResource = value(env, `${prefix}_KEY_RESOURCE`);
@@ -706,11 +718,9 @@ export function validateTokenlessProductionReadiness({
     for (const [kind, identifier, inventory] of [
       ["KMS key resources", keyResource.toLowerCase(), managedSignerResources],
       ["EVM addresses", expectedAddress, managedSignerAddresses],
+      ["IAM role ARNs", roleArn.toLowerCase(), managedSignerRoleArns],
     ]) {
-      const roles = inventory.get(identifier) ?? [];
-      roles.push(role);
-      inventory.set(identifier, roles);
-      if (roles.length > 1) errors.push(`Managed signer ${kind} must be distinct: ${roles.join(", ")}.`);
+      addDistinctManagedSignerValue(kind, role, identifier, inventory);
     }
   }
   const evidenceKeyResource = value(env, "TOKENLESS_EVIDENCE_KMS_KEY_RESOURCE");
@@ -728,6 +738,43 @@ export function validateTokenlessProductionReadiness({
   if (!/^arn:aws:iam::\d{12}:role\/[A-Za-z0-9+=,.@_\/-]{1,512}$/u.test(value(env, "TOKENLESS_EVIDENCE_KMS_ROLE_ARN"))) {
     errors.push("TOKENLESS_EVIDENCE_KMS_ROLE_ARN must identify the evidence workload-identity signer role.");
   }
+  addDistinctManagedSignerValue(
+    "KMS key resources",
+    "EVIDENCE",
+    evidenceKeyResource.toLowerCase(),
+    managedSignerResources,
+  );
+  addDistinctManagedSignerValue(
+    "IAM role ARNs",
+    "EVIDENCE",
+    value(env, "TOKENLESS_EVIDENCE_KMS_ROLE_ARN").toLowerCase(),
+    managedSignerRoleArns,
+  );
+  const keeperKeyResource = value(env, "TOKENLESS_KEEPER_KMS_KEY_RESOURCE");
+  const keeperExpectedAddress = value(env, "TOKENLESS_KEEPER_KMS_EXPECTED_ADDRESS").toLowerCase();
+  const keeperRegion = value(env, "TOKENLESS_KEEPER_KMS_REGION");
+  const keeperRoleArn = value(env, "TOKENLESS_KEEPER_KMS_ROLE_ARN");
+  if (!/^arn:aws:kms:eu-[a-z]+-\d+:\d{12}:key\/[0-9a-f-]{36}$/u.test(keeperKeyResource)) {
+    errors.push("TOKENLESS_KEEPER_KMS_KEY_RESOURCE must identify the keeper's exact AWS KMS key in an EU region.");
+  }
+  if (!ADDRESS_PATTERN.test(keeperExpectedAddress) || /^0x0{40}$/u.test(keeperExpectedAddress)) {
+    errors.push("TOKENLESS_KEEPER_KMS_EXPECTED_ADDRESS must be a non-zero EVM address.");
+  }
+  if (!/^eu-[a-z]+-\d+$/u.test(keeperRegion)) {
+    errors.push("TOKENLESS_KEEPER_KMS_REGION must be a concrete EU AWS region.");
+  }
+  if (!/^arn:aws:iam::\d{12}:role\/[A-Za-z0-9+=,.@_\/-]{1,512}$/u.test(keeperRoleArn)) {
+    errors.push("TOKENLESS_KEEPER_KMS_ROLE_ARN must identify the keeper workload-identity signer role.");
+  }
+  addDistinctManagedSignerValue("KMS key resources", "KEEPER", keeperKeyResource.toLowerCase(), managedSignerResources);
+  addDistinctManagedSignerValue("EVM addresses", "KEEPER", keeperExpectedAddress, managedSignerAddresses);
+  addDistinctManagedSignerValue("IAM role ARNs", "KEEPER", keeperRoleArn.toLowerCase(), managedSignerRoleArns);
+  addDistinctManagedSignerValue(
+    "IAM role ARNs",
+    "ARTIFACT_VAULT",
+    value(env, "TOKENLESS_AWS_KMS_ROLE_ARN").toLowerCase(),
+    managedSignerRoleArns,
+  );
   if (!/^p256:[0-9a-f]{24}$/u.test(value(env, "TOKENLESS_EVIDENCE_SIGNING_KEY_ID"))) {
     errors.push("TOKENLESS_EVIDENCE_SIGNING_KEY_ID must be the configured P-256 KMS public-key fingerprint.");
   }
