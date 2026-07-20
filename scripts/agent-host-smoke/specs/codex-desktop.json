@@ -1,0 +1,54 @@
+{
+  "schemaVersion": "rateloop.host-smoke-spec.v1",
+  "hostId": "codex-desktop",
+  "displayName": "Codex desktop with RateLoop Workspace plugin",
+  "hostCapabilityId": "codex-desktop",
+  "claimedTier": "experimental",
+  "pinnedClientVersion": null,
+  "planRefs": [
+    "docs/tokenless-agent-install-plan-2026-07.md#phase-5--verification-harness-as-the-tier-gate",
+    "docs/tokenless-mcp-cross-client-compatibility-review-2026-07.md#acceptance-criteria-for-a-broad-compatibility-claim"
+  ],
+  "knownQuirks": [
+    "Primary bundled path: plugin install plus bundled workspace-connection skill.",
+    "Plugin install may start a new task; the resume step is therefore mandatory evidence, not optional."
+  ],
+  "steps": [
+    {
+      "id": "install",
+      "name": "Install the RateLoop Workspace plugin at the pinned Codex version",
+      "automated": false,
+      "instructions": "On a clean Codex desktop install at the exact pinned version (record it as clientVersion), paste the owner connection message and approve the plugin://rateloop-workspace@rateloop install prompt. Record every host-presented prompt. Fail if any credential, connection URL, or fragment appears in chat history or in a configuration file."
+    },
+    {
+      "id": "auth",
+      "name": "Complete host-native OAuth against the protected workspace server",
+      "automated": false,
+      "instructions": "Let the host run OAuth discovery, dynamic client registration, S256 PKCE, and token exchange for the protected workspace MCP. Approve the consent screen as the workspace owner. Fail if the flow asks for the connection link a second time, or if a token or authorization URL is echoed into the transcript."
+    },
+    {
+      "id": "lifecycle",
+      "name": "One-session lifecycle: initialize through later tool calls",
+      "automated": false,
+      "instructions": "Verify the session follows initialize -> notifications/initialized -> tools/list -> claim -> context -> verify -> ping -> tools/list on ONE MCP session with no undocumented reconnect (compatibility review P1). Prefer the one-call rateloop_connect_workspace path; also confirm the granular fallback works. Repeat the claim to confirm idempotency with exactly one connected event."
+    },
+    {
+      "id": "rateloop_get_agent_context",
+      "name": "Agent context read returns the bound policy",
+      "automated": false,
+      "instructions": "Call rateloop_get_agent_context and confirm it returns the effective server-bound human-review configuration (selection frequency, request profile, authority, publishing grant, lane readiness) for the connected integration only. Fail if it exposes private artifacts or another integration's scope."
+    },
+    {
+      "id": "rateloop_verify_connection",
+      "name": "Connection verification is idempotent and non-evaluative",
+      "automated": false,
+      "instructions": "Call rateloop_verify_connection and confirm success, then call it again and confirm the repeat is idempotent. Verify server-side that no review opportunity, evidence, spending, or publishing state was created by verification, and that exactly one connected event exists."
+    },
+    {
+      "id": "resume-after-new-task",
+      "name": "Resume in a fresh task without re-asking for the link",
+      "automated": false,
+      "instructions": "Start a brand-new task/conversation in the same host. The agent must rediscover the connection via rateloop_get_agent_context (and rateloop_list_open_reviews where applicable) without asking the owner for the connection URL again and without creating a polling service. Fail if the host demands a fresh OAuth grant for the still-valid token family."
+    }
+  ]
+}

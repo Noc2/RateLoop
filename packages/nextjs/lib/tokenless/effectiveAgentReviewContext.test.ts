@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { __effectiveAgentReviewContextTestUtils } from "~~/lib/tokenless/effectiveAgentReviewContext";
 
@@ -30,4 +31,11 @@ test("manual selection never activates an otherwise exact legacy autonomous gran
     }),
     "active",
   );
+});
+
+test("both context branches surface the host-reported lane next to the enforcement boundary", () => {
+  const source = readFileSync(new URL("./effectiveAgentReviewContext.ts", import.meta.url), "utf8");
+  assert.equal((source.match(/enforcementBoundary: bound\.enforcementMode,\n\s*reportedLane,/gu) ?? []).length, 2);
+  assert.match(source, /connectionLaneFromClientCapabilitiesJson/u);
+  assert.match(source, /Host-attested only/u);
 });

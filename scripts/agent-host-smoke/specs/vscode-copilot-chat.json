@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "rateloop.host-smoke-spec.v1",
+  "hostId": "vscode-copilot-chat",
+  "displayName": "VS Code / Copilot Chat (local) remote HTTP MCP",
+  "hostCapabilityId": "vscode-copilot-chat",
+  "claimedTier": "experimental",
+  "pinnedClientVersion": null,
+  "planRefs": [
+    "docs/tokenless-agent-install-plan-2026-07.md#phase-5--verification-harness-as-the-tier-gate",
+    "docs/tokenless-mcp-cross-client-compatibility-review-2026-07.md#acceptance-criteria-for-a-broad-compatibility-claim"
+  ],
+  "knownQuirks": [
+    "Configuration uses a top-level `servers` object (not `mcpServers`) and supports optional `oauth.clientId`.",
+    "Local Copilot Chat only: the GitHub Copilot cloud agent / code review surface does not support remote OAuth MCP and must never be verified under this spec.",
+    "No install deep link may be published until redirect behavior is verified at the pinned version (review restraint)."
+  ],
+  "steps": [
+    {
+      "id": "install",
+      "name": "Configure the workspace server in the VS Code `servers` shape",
+      "automated": false,
+      "instructions": "On a clean VS Code + Copilot Chat install at exact pinned versions (record both in clientVersion), add the protected workspace server using the documented `servers` config shape. Exercise both DCR and, if applicable, a configured oauth.clientId. Fail if any credential, connection URL, or fragment must be placed in the config file or appears in chat."
+    },
+    {
+      "id": "auth",
+      "name": "Complete OAuth with DCR or configured client ID",
+      "automated": false,
+      "instructions": "Let VS Code run OAuth discovery, registration (DCR) or the preregistered client ID, S256 PKCE, exchange, and resource binding; verify the redirect behavior it actually uses. Approve consent as the workspace owner. Fail on any second request for the connection link or any token/authorization URL reflected into chat."
+    },
+    {
+      "id": "lifecycle",
+      "name": "One-session lifecycle: initialize through later tool calls",
+      "automated": false,
+      "instructions": "Verify initialize -> notifications/initialized -> tools/list -> claim -> context -> verify -> ping -> tools/list on ONE MCP session with no undocumented reconnect. Prefer the one-call rateloop_connect_workspace path; also confirm the granular fallback. Repeat the claim to confirm idempotency with exactly one connected event."
+    },
+    {
+      "id": "rateloop_get_agent_context",
+      "name": "Agent context read returns the bound policy",
+      "automated": false,
+      "instructions": "Call rateloop_get_agent_context from Copilot Chat and confirm it returns the effective server-bound human-review configuration for the connected integration only. Record whether the host surfaces server instructions and tool titles. Fail if it exposes private artifacts or another integration's scope."
+    },
+    {
+      "id": "rateloop_verify_connection",
+      "name": "Connection verification is idempotent and non-evaluative",
+      "automated": false,
+      "instructions": "Call rateloop_verify_connection and confirm success, then repeat it and confirm idempotency. Verify server-side that verification created no review opportunity, evidence, spending, or publishing state, and that exactly one connected event exists."
+    },
+    {
+      "id": "resume-after-new-task",
+      "name": "Resume after window reload and new chat without re-asking for the link",
+      "automated": false,
+      "instructions": "Reload the VS Code window and start a new chat. The agent must rediscover the connection via rateloop_get_agent_context without asking for the connection URL again and without creating a polling service. Fail if a still-valid token family requires a fresh OAuth grant."
+    }
+  ]
+}

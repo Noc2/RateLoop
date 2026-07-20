@@ -2,14 +2,20 @@
 
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { InfoPopover } from "../InfoPopover";
+import {
+  AgentConnectionHostPicker,
+  loadAgentConnectionHostChoice,
+  saveAgentConnectionHostChoice,
+} from "./AgentConnectionHostPicker";
 import { AgentConnectionTroubleshooting } from "./AgentConnectionTroubleshooting";
-import { buildAgentConnectionMessage } from "./agentConnectionMessage";
+import { buildAgentConnectionMessage, buildAgentConnectionMessageForHost } from "./agentConnectionMessage";
 import { isUsableAgentConnection } from "./agentWorkspaceState";
 import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { Badge } from "~~/components/tokenless/ui/Badge";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
+import { type TokenlessHostId } from "~~/lib/tokenless/hostCapabilities";
 import { readJson } from "~~/lib/tokenless/http";
 
 type PairingStatus = "open" | "claimed" | "approved" | "rejected" | "expired" | "revoked";
@@ -330,6 +336,13 @@ function fallbackMcpUrl() {
   return typeof window === "undefined" ? "/api/agent/v1/mcp" : `${window.location.origin}/api/agent/v1/mcp`;
 }
 
+/** The universal message stays the default; a chosen host only tunes the same message. */
+function connectionMessageForHost(connectionUrl: string, hostId: TokenlessHostId | null) {
+  return hostId
+    ? buildAgentConnectionMessageForHost({ connectionUrl, hostId })
+    : buildAgentConnectionMessage({ connectionUrl });
+}
+
 function revealFromResponse(body: Record<string, unknown>, title: string): ConnectionReveal {
   const pairing = record(body.pairing ?? body.session);
   const integration = record(body.integration);
@@ -592,6 +605,8 @@ export function AgentConnectionPanel({
   const [status, setStatus] = useState<string | null>(null);
   const [connectionClock, setConnectionClock] = useState(() => Date.now());
   const [manualConnectionMessage, setManualConnectionMessage] = useState<string | null>(null);
+  const [manualConnectionUrl, setManualConnectionUrl] = useState<string | null>(null);
+  const [selectedHostId, setSelectedHostId] = useState<TokenlessHostId | null>(null);
   const [expandedLegacyPairingId, setExpandedLegacyPairingId] = useState<string | null>(null);
   const [showConnectionManagement, setShowConnectionManagement] = useState(false);
   const manualMessageRef = useRef<HTMLTextAreaElement>(null);
@@ -655,6 +670,18 @@ export function AgentConnectionPanel({
     return () => controller.abort();
   }, [loadConnectionState, publishingRevision, workspaceId]);
 
+  useEffect(() => {
+    setSelectedHostId(loadAgentConnectionHostChoice(workspaceId));
+  }, [workspaceId]);
+
+  function selectConnectionHost(hostId: TokenlessHostId | null) {
+    setSelectedHostId(hostId);
+    saveAgentConnectionHostChoice(workspaceId, hostId);
+    if (manualConnectionUrl) {
+      setManualConnectionMessage(connectionMessageForHost(manualConnectionUrl, hostId));
+    }
+  }
+
   const shouldPoll =
     connectionIntents.some(intent => isActiveAgentConnectionIntent(intent, connectionClock)) ||
     pairings.some(pairing => isPendingAgentPairing(pairing, connectionClock));
@@ -702,6 +729,7 @@ export function AgentConnectionPanel({
     if (!workspaceId) return;
     setBusyAction("create-intent");
     setManualConnectionMessage(null);
+    setManualConnectionUrl(null);
     setError(null);
     setStatus(null);
     try {
@@ -714,7 +742,8 @@ export function AgentConnectionPanel({
       );
       const connectionUrl = stringField(body, "connectionUrl");
       if (!connectionUrl) throw new Error("RateLoop did not return a connection URL.");
-      const message = buildAgentConnectionMessage({ connectionUrl });
+      const message = connectionMessageForHost(connectionUrl, selectedHostId);
+      setManualConnectionUrl(connectionUrl);
       setManualConnectionMessage(message);
       let copied = false;
       try {
@@ -786,6 +815,7 @@ export function AgentConnectionPanel({
       );
       await loadConnectionState(workspaceId);
       setManualConnectionMessage(null);
+      setManualConnectionUrl(null);
       setStatus("Connection attempt cancelled. You can create a new message when ready.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to cancel the connection attempt.");
@@ -968,6 +998,7 @@ export function AgentConnectionPanel({
               {error}
             </p>
           ) : null}
+          <AgentConnectionHostPicker selectedHostId={selectedHostId} onSelectHost={selectConnectionHost} />
         </Card>
       ) : null}
 
@@ -1002,7 +1033,15 @@ export function AgentConnectionPanel({
             <Button type="button" size="sm" variant="secondary" onClick={() => void copyVisibleConnectionMessage()}>
               Copy message
             </Button>
-            <Button type="button" size="sm" variant="secondary" onClick={() => setManualConnectionMessage(null)}>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                setManualConnectionMessage(null);
+                setManualConnectionUrl(null);
+              }}
+            >
               Hide message
             </Button>
           </div>

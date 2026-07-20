@@ -121,3 +121,12 @@ test("the capability card combines owner-stated limits with labeled host-reporte
   // Host-reported labeling stays.
   assert.match(source, /reported by the connected host, not independently verified/);
 });
+
+test("the connection card labels the connection lane as host-reported and defaults to the weakest claim", () => {
+  const source = readFileSync(new URL("./AgentRegistryPanel.tsx", import.meta.url), "utf8");
+  assert.match(source, /Connected via RateLoop plugin · host-reported/);
+  assert.match(source, /Advisory MCP connection — plugin hooks not reported/);
+  assert.match(source, /Device-flow connection — plugin hooks not reported/);
+  assert.match(source, /view === "connection" && agent\.reportedConnectionLane/);
+  assert.doesNotMatch(source, /verified plugin|plugin verified/i);
+});

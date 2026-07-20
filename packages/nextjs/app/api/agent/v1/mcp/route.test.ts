@@ -345,7 +345,10 @@ test("one preferred OAuth tool connects a fresh workspace without reflecting the
           id: 2,
           jsonrpc: "2.0",
           method: "tools/call",
-          params: { name: "rateloop_connect_workspace", arguments: { connectionUrl: intent.connectionUrl } },
+          params: {
+            name: "rateloop_connect_workspace",
+            arguments: { connectionUrl: intent.connectionUrl, reportedLane: "plugin-with-hooks" },
+          },
         },
         tokens.access_token,
         sessionId!,
@@ -359,6 +362,10 @@ test("one preferred OAuth tool connects a fresh workspace without reflecting the
   assert.equal(first.idempotent, false);
   assert.equal(first.nextAction, "follow_bound_policy");
   assert.equal(first.connection.status, "connected");
+  assert.equal(first.connection.reportedLane, "plugin-with-hooks");
+  assert.equal(first.context.reportedLane, "plugin-with-hooks");
+  assert.match(first.verification.reportedLaneStatement, /host-reported/u);
+  assert.match(first.verification.reportedLaneStatement, /not verified/u);
   assert.equal(first.connection.workspaceId, workspaceId);
   assert.equal(first.context.workspaceId, workspaceId);
   assert.equal(first.verification.connection.status, "connected");
@@ -746,6 +753,16 @@ test("OAuth keeps one stable tool list and fails closed for unavailable paid-net
   });
   assert.match(tool("rateloop_connect_workspace")?.description ?? "", /Preferred one-call workspace connection/u);
   assert.match(tool("rateloop_connect_workspace")?.description ?? "", /never returned/u);
+  assert.deepEqual(tool("rateloop_connect_workspace")?.inputSchema?.required, ["connectionUrl"]);
+  assert.deepEqual(
+    (tool("rateloop_connect_workspace")?.inputSchema?.properties?.reportedLane as { enum?: string[] })?.enum,
+    ["plugin-with-hooks", "mcp-oauth"],
+  );
+  assert.match(
+    (tool("rateloop_claim_connection_intent")?.inputSchema?.properties?.reportedLane as { description?: string })
+      ?.description ?? "",
+    /host-reported and never verified/u,
+  );
   assert.deepEqual(tool("rateloop_claim_connection_intent")?.annotations, {
     readOnlyHint: false,
     destructiveHint: false,
@@ -886,6 +903,7 @@ test("OAuth keeps one stable tool list and fails closed for unavailable paid-net
   assert.equal(agentContext.schemaVersion, "rateloop.agent-context.v2");
   assert.equal(agentContext.workspaceId, workspaceId);
   assert.equal(agentContext.enforcementBoundary, "advisory");
+  assert.equal(agentContext.reportedLane, "mcp-oauth");
   assert.match(agentContext.reviewPolicy.audiencePolicyHash, /^sha256:[a-f0-9]{64}$/);
   assert.equal(agentContext.publishingPolicy, null);
   assert.equal(agentContext.humanReview.status, "configuration_required");
@@ -903,6 +921,8 @@ test("OAuth keeps one stable tool list and fails closed for unavailable paid-net
   const firstVerification = (await verified.json()).result.structuredContent;
   assert.deepEqual(atomicRecovery.verification, firstVerification);
   assert.equal(firstVerification.connection.status, "connected");
+  assert.equal(firstVerification.connection.reportedLane, "mcp-oauth");
+  assert.match(firstVerification.reportedLaneStatement, /plugin hooks not reported/u);
   const ping = await POST(oauthRequest({ id: 15, jsonrpc: "2.0", method: "ping", params: {} }));
   assert.deepEqual((await ping.json()).result, {});
   const afterVerification = await POST(oauthRequest({ id: 16, jsonrpc: "2.0", method: "tools/list", params: {} }));

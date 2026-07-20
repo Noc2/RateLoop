@@ -12,7 +12,7 @@ no credential in the transcript).
 
 1. **One mechanism, many presentations.** Every path — pasted message, plugin install, native config snippet, deep
    link, device flow — converges on the same intent claim + OAuth grant. Presentation adapts per host; the security
-   flow never forks. The message is therefore never _wrong_ on any host, only sometimes not optimal alone.
+   flow never forks. The message is therefore never *wrong* on any host, only sometimes not optimal alone.
 2. **The agent adapts at paste time; the owner never has to know what a "lane" is.** Host detection belongs in the
    skill/agent, not in a form the owner must fill correctly. A host picker exists only as optional progressive
    disclosure that tunes the copy and sets expectations — skipping it must always work.

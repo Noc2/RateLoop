@@ -17,6 +17,38 @@ export const SAFE_AGENT_CONNECTION_SCOPES = [
   "review:decide",
 ] as const;
 
+/**
+ * Connection lanes describe how a connection landed, not what is proven.
+ * 'device-flow' is server-detected from the OAuth device-authorization grant.
+ * 'plugin-with-hooks' is only ever a host self-declaration recorded at claim
+ * time; RateLoop never verifies hook presence. Anything unreported defaults to
+ * the weakest assumption, 'mcp-oauth'.
+ */
+export const AGENT_CONNECTION_LANES = ["plugin-with-hooks", "mcp-oauth", "device-flow"] as const;
+export type AgentConnectionLane = (typeof AGENT_CONNECTION_LANES)[number] | (string & {});
+export const HOST_REPORTABLE_CONNECTION_LANES = ["plugin-with-hooks", "mcp-oauth"] as const;
+
+const REPORTED_LANE_MARKER_PREFIX = "reported-lane:";
+const DEVICE_AUTHORIZATION_GRANT_MARKER = "grant:device-authorization";
+
+export function connectionLaneFromClientCapabilitiesJson(value: unknown): AgentConnectionLane {
+  const capabilities = jsonStrings(value);
+  const reported = capabilities
+    .find(entry => entry.startsWith(REPORTED_LANE_MARKER_PREFIX))
+    ?.slice(REPORTED_LANE_MARKER_PREFIX.length);
+  if (reported === "plugin-with-hooks") return "plugin-with-hooks";
+  if (capabilities.includes(DEVICE_AUTHORIZATION_GRANT_MARKER)) return "device-flow";
+  return "mcp-oauth";
+}
+
+export function connectionLaneStatement(lane: AgentConnectionLane) {
+  if (lane === "plugin-with-hooks") {
+    return "Connected via RateLoop plugin — host-reported; hook presence is not verified.";
+  }
+  if (lane === "device-flow") return "Device-flow connection — plugin hooks not reported.";
+  return "Advisory MCP connection — plugin hooks not reported.";
+}
+
 const CLAIM_TTL_MS = 30 * 60_000;
 const HARD_TTL_MS = 45 * 60_000;
 const SAFE_WORKFLOW_KEYS = ["general-assistance"];
@@ -393,7 +425,8 @@ function versionCommitment(input: { clientId: string; clientName: string; tokenF
 async function existingClaim(client: PoolClient, tokenFamilyId: string, intentId: string) {
   const result = await client.query(
     `SELECT i.integration_id,i.connection_intent_id,i.workspace_id,i.agent_id,i.agent_version_id,
-            i.review_policy_id,i.review_policy_version,i.status,c.status AS connection_status
+            i.review_policy_id,i.review_policy_version,i.status,c.status AS connection_status,
+            c.client_capabilities_json
      FROM tokenless_agent_integrations i
      JOIN tokenless_agent_connection_intents c ON c.intent_id = i.connection_intent_id
      WHERE i.token_family_id = $1 LIMIT 1`,
@@ -416,6 +449,7 @@ async function existingClaim(client: PoolClient, tokenFamilyId: string, intentId
     reviewPolicyId: text(row, "review_policy_id")!,
     reviewPolicyVersion: Number(row.review_policy_version),
     status: text(row, "connection_status")!,
+    reportedLane: connectionLaneFromClientCapabilitiesJson(row.client_capabilities_json),
   };
 }
 
@@ -465,8 +499,16 @@ export async function claimAgentConnectionIntent(input: {
   origin: string;
   principal: OAuthConnectionPrincipal;
   mcpSessionHash?: string;
+  /** Host self-declared connection lane. Recorded verbatim as untrusted; never treated as proof of hooks. */
+  reportedLane?: string;
 }) {
   requireSafeScopes(input.principal);
+  if (
+    input.reportedLane !== undefined &&
+    !(HOST_REPORTABLE_CONNECTION_LANES as readonly string[]).includes(input.reportedLane)
+  ) {
+    throw new TokenlessServiceError("The reported connection lane is invalid.", 400, "invalid_reported_lane");
+  }
   const parsed = parseConnectionUrl(input.connectionUrl, input.origin);
   const now = new Date();
   const client = await dbPool.connect();
@@ -539,6 +581,16 @@ export async function claimAgentConnectionIntent(input: {
     const integrationId = `agi_${randomUUID().replaceAll("-", "")}`;
     const externalId = `oauth:${digest(`${input.principal.clientId}:${input.principal.tokenFamilyId}`).slice(0, 40)}`;
     const displayName = input.principal.clientName || "Connected agent";
+    const deviceGrant = await client.query(
+      `SELECT 1 FROM tokenless_agent_oauth_device_authorizations
+       WHERE token_family_id=$1 AND status='consumed' LIMIT 1`,
+      [input.principal.tokenFamilyId],
+    );
+    const laneMarkers = [
+      ...(input.reportedLane ? [`${REPORTED_LANE_MARKER_PREFIX}${input.reportedLane}`] : []),
+      ...(deviceGrant.rowCount ? [DEVICE_AUTHORIZATION_GRANT_MARKER] : []),
+    ];
+    const reportedLane = connectionLaneFromClientCapabilitiesJson(JSON.stringify(laneMarkers));
 
     await client.query(
       `INSERT INTO tokenless_agents
@@ -629,14 +681,16 @@ export async function claimAgentConnectionIntent(input: {
       `UPDATE tokenless_agent_connection_intents
        SET status='testing',claimed_at=$1,consumed_at=$1,claimed_token_family_id=$2,
            claimed_oauth_client_id=$3,claimed_subject_principal_id=$4,client_name=$5,
+           client_capabilities_json=$6,
            last_transition_at=$1,last_transition_reason='safe_intent_claimed',recovery_action='Retry connection verification.'
-       WHERE intent_id=$6`,
+       WHERE intent_id=$7`,
       [
         now,
         input.principal.tokenFamilyId,
         input.principal.clientId,
         input.principal.subjectPrincipalId,
         displayName,
+        JSON.stringify(laneMarkers),
         parsed.intentId,
       ],
     );
@@ -668,7 +722,7 @@ export async function claimAgentConnectionIntent(input: {
       actorType: "oauth_client",
       actorReference: input.principal.clientId,
       reason: "safe_intent_claimed",
-      details: { integrationId },
+      details: { integrationId, reportedLane },
       now,
     });
     await client.query("COMMIT");
@@ -695,6 +749,7 @@ export async function claimAgentConnectionIntent(input: {
         reviewPolicyId,
         reviewPolicyVersion: 1,
         status: "testing",
+        reportedLane,
       },
       idempotent: false,
       nextAction: "Call rateloop_get_agent_context, then rateloop_verify_connection.",
@@ -717,7 +772,7 @@ export async function verifyAgentConnection(input: { principal: OAuthConnectionP
     const result = await client.query(
       `SELECT i.integration_id,i.workspace_id,i.agent_id,i.agent_version_id,i.review_policy_id,
               i.review_policy_version,i.connection_intent_id,c.status AS connection_status,c.hard_expires_at,
-              c.connected_at
+              c.connected_at,c.client_capabilities_json
        FROM tokenless_agent_integrations i
        JOIN tokenless_agent_connection_intents c ON c.intent_id=i.connection_intent_id
        WHERE i.integration_id=$1 AND i.token_family_id=$2 AND i.status='active' FOR UPDATE`,
@@ -785,6 +840,7 @@ export async function verifyAgentConnection(input: { principal: OAuthConnectionP
     await client.query("COMMIT");
     transactionOpen = false;
     const verifiedAt = new Date(String(verifiedAtValue)).toISOString();
+    const reportedLane = connectionLaneFromClientCapabilitiesJson(row.client_capabilities_json);
     return {
       schemaVersion: "rateloop.connection-verification.v1",
       connection: {
@@ -793,7 +849,9 @@ export async function verifyAgentConnection(input: { principal: OAuthConnectionP
         workspaceId,
         agentId: text(row, "agent_id")!,
         agentVersionId: text(row, "agent_version_id")!,
+        reportedLane,
       },
+      reportedLaneStatement: connectionLaneStatement(reportedLane),
       safeAccess: {
         canCheckReviewRequirement: true,
         canSpend: false,

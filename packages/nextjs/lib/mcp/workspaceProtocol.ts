@@ -310,6 +310,12 @@ export const workspaceMcpTools = [
   },
 ] as const;
 
+const reportedLaneSchema = {
+  description:
+    "Optional self-declared connection lane, recorded as host-reported and never verified. Send 'plugin-with-hooks' only when the RateLoop plugin skill and hooks run on this host.",
+  enum: ["plugin-with-hooks", "mcp-oauth"],
+  type: "string",
+} as const;
 const connectionIntentMcpTools = [
   {
     name: "rateloop_connect_workspace",
@@ -318,7 +324,10 @@ const connectionIntentMcpTools = [
       "Preferred one-call workspace connection. Idempotently claim the complete private connection URL, load the newly bound canonical agent context, and verify the safe connection. The URL is accepted only as a protected argument and is never returned.",
     inputSchema: {
       additionalProperties: false,
-      properties: { connectionUrl: { maxLength: 4_096, minLength: 1, type: "string" } },
+      properties: {
+        connectionUrl: { maxLength: 4_096, minLength: 1, type: "string" },
+        reportedLane: reportedLaneSchema,
+      },
       required: ["connectionUrl"],
       type: "object",
     },
@@ -330,7 +339,10 @@ const connectionIntentMcpTools = [
       "Idempotently add the pre-authorized safe workspace connection requested by the user. This cannot spend, publish, read private artifacts, or administer the workspace. Pass the complete URL exactly once in this protected tool argument; never quote, log, fetch, or reproduce it elsewhere.",
     inputSchema: {
       additionalProperties: false,
-      properties: { connectionUrl: { maxLength: 4_096, minLength: 1, type: "string" } },
+      properties: {
+        connectionUrl: { maxLength: 4_096, minLength: 1, type: "string" },
+        reportedLane: reportedLaneSchema,
+      },
       required: ["connectionUrl"],
       type: "object",
     },
@@ -606,9 +618,12 @@ async function callOAuthTool(
 ) {
   try {
     if (name === "rateloop_connect_workspace" || name === "rateloop_claim_connection_intent") {
-      const input = requireObjectWithKeys(args, ["connectionUrl"], "connectionUrl is required.");
+      const input = requireObjectWithKeys(args, ["connectionUrl", "reportedLane"], "connectionUrl is required.");
       if (typeof input.connectionUrl !== "string") {
         throw new TokenlessServiceError("connectionUrl is required.", 400, "invalid_tool_arguments");
+      }
+      if (input.reportedLane !== undefined && typeof input.reportedLane !== "string") {
+        throw new TokenlessServiceError("reportedLane is invalid.", 400, "invalid_tool_arguments");
       }
       if (!context.mcpSessionHash) {
         throw new TokenlessServiceError("MCP-Session-Id is required.", 400, "mcp_session_required");
@@ -618,6 +633,7 @@ async function callOAuthTool(
         mcpSessionHash: context.mcpSessionHash,
         origin: context.origin,
         principal: principal.oauth,
+        ...(typeof input.reportedLane === "string" ? { reportedLane: input.reportedLane } : {}),
       });
       if (name === "rateloop_claim_connection_intent") return toolResult(claim);
       const rehydrated = await rehydrateOAuthAgentMcpPrincipal(principal.oauth);

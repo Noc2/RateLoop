@@ -1,3 +1,5 @@
+import { TOKENLESS_HOST_CAPABILITIES } from "~~/lib/tokenless/hostCapabilities";
+
 export type SiteSearchEntry = {
   title: string;
   href: string;
@@ -174,6 +176,22 @@ export const SITE_SEARCH_INDEX: readonly SiteSearchEntry[] = [
       "Map RateLoop artifacts to ISO 42001, the EU AI Act, NIST AI RMF, FINRA, and SEC recordkeeping references.",
     keywords: ["A.6", "A.9.2", "Article 12", "Article 26", "MEASURE", "MANAGE", "17a-4"],
   },
+  {
+    title: "Connect a Host",
+    href: "/docs/connect",
+    area: "Docs",
+    description: "Pick your agent host for a connection guide generated from the host capability registry.",
+    keywords: TOKENLESS_HOST_CAPABILITIES.map(host => host.displayName),
+  },
+  ...TOKENLESS_HOST_CAPABILITIES.map(
+    (host): SiteSearchEntry => ({
+      title: `Connect ${host.displayName}`,
+      href: `/docs/connect/${host.id}`,
+      area: "Docs",
+      description: `What to expect, the exact connection message, and support status for ${host.displayName}.`,
+      keywords: [host.id, host.category, host.supportTier, ...host.lanes],
+    }),
+  ),
   {
     title: "Agents & MCP",
     href: "/docs/ai",
