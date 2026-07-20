@@ -10,11 +10,6 @@ import { TokenlessPanel } from "../contracts/tokenless/TokenlessPanel.sol";
 import { QuicknetTBeaconVerifier } from "../contracts/tokenless/QuicknetTBeaconVerifier.sol";
 import { X402PanelSubmitter } from "../contracts/tokenless/X402PanelSubmitter.sol";
 
-interface ISafeRotationAuthority {
-    function getOwners() external view returns (address[] memory);
-    function getThreshold() external view returns (uint256);
-}
-
 /// @notice Disposable Base Sepolia deployment for the next tokenless-v4 stack.
 /// @dev Tokenless artifacts live under the isolated deployments/tokenless-v4 schema.
 contract DeployTokenlessScript is Script {
@@ -31,11 +26,6 @@ contract DeployTokenlessScript is Script {
 
     error UnsupportedChain(uint256 chainId);
     error InvalidMaxScheduledGrace(uint256 value);
-    error RotationAuthorityMustBeContract(address authority);
-    error RotationAuthorityPolicyUnavailable(address authority);
-    error RotationAuthorityThresholdTooLow(uint256 threshold);
-    error RotationAuthorityOwnerSetTooSmall(uint256 ownerCount);
-    error RotationAuthorityOwnerInvalid(address owner);
     error BeaconVerifierRuntimeCodeHashMismatch(bytes32 expected, bytes32 actual);
     error RuntimeCodeSizeExceeded(string artifact, uint256 actual, uint256 limit);
     error InitcodeSizeExceeded(string artifact, uint256 actual, uint256 limit);
@@ -45,7 +35,6 @@ contract DeployTokenlessScript is Script {
 
         address rotationAuthority = vm.envAddress("TOKENLESS_ROTATION_AUTHORITY");
         address initialSigner = vm.envAddress("TOKENLESS_INITIAL_SIGNER");
-        _assertRotationAuthority(rotationAuthority);
         uint256 maxScheduledGraceRaw = vm.envOr("TOKENLESS_MAX_SCHEDULED_GRACE", uint256(1 days));
         if (maxScheduledGraceRaw == 0 || maxScheduledGraceRaw > type(uint64).max) {
             revert InvalidMaxScheduledGrace(maxScheduledGraceRaw);
@@ -108,31 +97,5 @@ contract DeployTokenlessScript is Script {
         bytes32 expected = keccak256(vm.getDeployedCode(BEACON_VERIFIER_ARTIFACT));
         bytes32 actual = verifier.codehash;
         if (actual != expected) revert BeaconVerifierRuntimeCodeHashMismatch(expected, actual);
-    }
-
-    function _assertRotationAuthority(address authority) internal view {
-        if (authority.code.length == 0) revert RotationAuthorityMustBeContract(authority);
-
-        address[] memory owners;
-        uint256 threshold;
-        try ISafeRotationAuthority(authority).getOwners() returns (address[] memory configuredOwners) {
-            owners = configuredOwners;
-        } catch {
-            revert RotationAuthorityPolicyUnavailable(authority);
-        }
-        try ISafeRotationAuthority(authority).getThreshold() returns (uint256 configuredThreshold) {
-            threshold = configuredThreshold;
-        } catch {
-            revert RotationAuthorityPolicyUnavailable(authority);
-        }
-
-        if (threshold < 2) revert RotationAuthorityThresholdTooLow(threshold);
-        if (owners.length < 3 || threshold > owners.length) revert RotationAuthorityOwnerSetTooSmall(owners.length);
-        for (uint256 i; i < owners.length; ++i) {
-            if (owners[i] == address(0)) revert RotationAuthorityOwnerInvalid(owners[i]);
-            for (uint256 j; j < i; ++j) {
-                if (owners[i] == owners[j]) revert RotationAuthorityOwnerInvalid(owners[i]);
-            }
-        }
     }
 }

@@ -2,7 +2,6 @@ import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "dotenv";
-import { createPublicClient, http } from "viem";
 
 import {
   requireFoundryAccount,
@@ -12,7 +11,6 @@ import {
   parseTokenlessDeployArgs,
   TOKENLESS_DEPLOY_USAGE,
 } from "./tokenlessDeployArgs.js";
-import { validateTokenlessRotationAuthority } from "./tokenlessRotationAuthority.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 config({ path: join(root, ".env") });
@@ -29,14 +27,6 @@ if (chainProbe.status !== 0) throw new Error(`Base Sepolia RPC probe failed: ${c
 if (chainProbe.stdout.trim() !== "84532") {
   throw new Error(`BASE_SEPOLIA_RPC_URL reports chain ${chainProbe.stdout.trim()}, expected 84532.`);
 }
-
-const rotationPolicy = await validateTokenlessRotationAuthority({
-  client: createPublicClient({ transport: http(rpcUrl) }),
-  authority: process.env.TOKENLESS_ROTATION_AUTHORITY,
-});
-console.log(
-  `Validated tokenless rotation authority: ${rotationPolicy.authority} (${rotationPolicy.threshold}-of-${rotationPolicy.owners.length}).`,
-);
 
 const selectedKeystore = keystore
   ? requireFoundryAccount(keystore)

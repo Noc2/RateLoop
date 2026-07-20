@@ -23,8 +23,9 @@ of trusting stubbed gates; account deletion erases World ID bindings with measur
 identity was re-keyed from wallet address to principal with a migration and fail-closed lifecycle checks; the tlock
 linkage disclosure was corrected on all four surfaces; late reveals were fixed at the protocol level; the SP bounty is
 now fee-capped with unanimous panels ineligible; scoring entropy moved from sequencer-biasable blockhash to an
-immutable on-chain beacon verifier; the issuer rotation authority must now be a Safe-style multisig at deploy time; the
-x402 runner pins deployment identity and a local spend ceiling; evidence publication gained a finality policy and RPC
+immutable on-chain beacon verifier; hardened issuer rotation remains a real-money release gate while the disposable
+Base Sepolia stack permits an EOA; the x402 runner pins deployment identity and a local spend ceiling; evidence
+publication gained a finality policy and RPC
 failover; and a full managed-KMS signing path exists for all seven roles. Several fixes went beyond what the review
 asked for.
 
@@ -62,7 +63,7 @@ on-chain with the v4 redeploy, noted where relevant.
 | W10 Wilson gate semantics/power | Partially fixed | Impossible-threshold implication removed; underlying n=15/14-of-15 semantics and power unreworked (moot while the ladder is pinned) |
 | W11 sybil bounding is an operator promise | Open (unchanged) | Carried honestly in the register; analytics still per-round only |
 | W12 rater identity keyed to payout wallet | Fixed | Re-keyed to principal (migration 0117, fail-closed lifecycle tests); wallet is a rotatable attribute |
-| Issuer rotation authority single EOA | Fixed | Deploy script requires Safe-style multisig (threshold ≥ 2, ≥ 3 owners); no timelocked handover though |
+| Issuer rotation authority single EOA | Deferred to real-money hardening | Disposable Base Sepolia permits an EOA; require a multisig or equivalent hardened authority before real value. |
 | Late reveals pay zero in healthy rounds | Fixed | Protocol now rejects work it would not pay; both outcomes pinned by tests (effective at v4) |
 | Blockhash entropy replacement | Fixed-with-caveats | Replaced by immutable `IBeaconVerifier` + deadline-gated base-only fallback — but see NF2/NF5/NF6 below |
 | Hot keys in SaaS env stores | Partially fixed | KMS paths exist for all seven roles, hot keys forbidden on hosted `main`; the running isolated deployment still legally uses local keys, and see NF1 |

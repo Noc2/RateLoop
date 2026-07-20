@@ -88,7 +88,7 @@ test fix is not evidence that a remaining economics, provider, or live-operation
 
 Cross-cutting fixes also enforce immutable migration history (including the declared journal excision), default-deny
 browser mutation origins, shared Better Auth cookie names, conditional enterprise identity plugins, exact owner approval
-for redacted publication, open-review rediscovery, multisig issuer-rotation configuration, conservative evidence
+for redacted publication, open-review rediscovery, conservative evidence
 finality, ordered server-side RPC failover, exact managed-KMS inventory, a non-root keeper image, and a normative
 500-seat settlement gas benchmark.
 
@@ -96,6 +96,7 @@ The source now includes Feedback Bonus remainder pull credits, immutable verifie
 separate from the earlier tlock disclosure round, a bounded base-only fallback, and O(n log n) canonical scoring
 assignment. These fund-core changes remain release gates until an
 audited verifier and complete v4 contract/service bundle are deployed atomically and exercised. Other gates include
+a multisig or equivalent hardened issuer-rotation authority for any real-value deployment;
 per-tenant KMS wrapping authorities; managed custody and rotation
 for every hosted signer; named-host verification; live alert, backup, deletion, and incident exercises; and the full
 economics/gold/correlation acceptance package. None may be inferred from the isolated Vercel deployment.
