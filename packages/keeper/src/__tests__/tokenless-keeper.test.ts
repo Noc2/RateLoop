@@ -6,6 +6,7 @@ import {
   validateTokenlessKeeperDeployment,
   type TokenlessKeeperClients,
 } from "../keeper.js";
+import { QUICKNET_T_CHAIN_HASH } from "../drand.js";
 import {
   getConsecutiveErrors,
   recordError,
@@ -40,6 +41,13 @@ const ADMISSION_POLICY_HASH = `0x${"99".repeat(32)}` as Hex;
 const ZERO_HASH = `0x${"00".repeat(32)}` as Hex;
 const BEACON_RANDOMNESS = `0x${"ab".repeat(32)}` as Hex;
 const BEACON_PROOF = `0x${"cd".repeat(48)}` as Hex;
+const QUICKNET_T_NETWORK_HASH = `0x${QUICKNET_T_CHAIN_HASH}` as Hex;
+const VALID_COMMIT_DEADLINE = 1_689_232_296n;
+const VALID_REVEAL_DEADLINE = 1_689_232_596n;
+const VALID_DISCLOSURE_ROUND = 2n;
+const VALID_SCORING_ROUND = 28_902n;
+const VALID_SCORING_TIMESTAMP = 1_689_318_999n;
+const VALID_BEACON_FAILURE_DEADLINE = 1_689_340_599n;
 
 const REVEAL_MATERIAL: TokenlessRevealMaterial = {
   roundId: 1n,
@@ -135,6 +143,21 @@ function round(overrides: Partial<TokenlessRound> = {}): TokenlessRound {
     staleReturned: false,
     ...overrides,
   };
+}
+
+function awaitingSeedRound(
+  overrides: Partial<TokenlessRound> = {},
+): TokenlessRound {
+  return round({
+    beaconNetworkHash: QUICKNET_T_NETWORK_HASH,
+    commitDeadline: VALID_COMMIT_DEADLINE,
+    revealDeadline: VALID_REVEAL_DEADLINE,
+    beaconFailureDeadline: VALID_BEACON_FAILURE_DEADLINE,
+    beaconRound: VALID_DISCLOSURE_ROUND,
+    scoringBeaconRound: VALID_SCORING_ROUND,
+    state: TokenlessRoundState.AwaitingSeed,
+    ...overrides,
+  });
 }
 
 function commit(
@@ -472,9 +495,7 @@ describe("tokenless keeper orchestration", () => {
   it("prioritizes feed work beyond the rotating history window and puts awaiting-seed rounds first", async () => {
     const readRoundIds: bigint[] = [];
     const instance = clients({
-      currentRound: round({
-        state: TokenlessRoundState.AwaitingSeed,
-      }),
+      currentRound: awaitingSeedRound(),
       now: 300n,
       currentBlock: 1_000n,
       nextRoundId: 10_001n,
@@ -1014,21 +1035,21 @@ describe("tokenless keeper orchestration", () => {
     const beaconFetches: Array<[Hex, bigint]> = [];
     await runTokenlessKeeper(
       clients({
-        currentRound: round({
-          state: TokenlessRoundState.AwaitingSeed,
+        currentRound: awaitingSeedRound({
           frozenRevealCount: 3,
-          beaconRound: 41n,
-          scoringBeaconRound: 82n,
         }),
         writes: seedWrites,
         beaconFetches,
+        now: VALID_SCORING_TIMESTAMP,
       }),
       config,
       logger,
       decrypt,
     );
     expect(seedWrites).toContain("finalizeScoringSeed");
-    expect(beaconFetches).toEqual([[`0x${"03".repeat(32)}`, 82n]]);
+    expect(beaconFetches).toEqual([
+      [QUICKNET_T_NETWORK_HASH, VALID_SCORING_ROUND],
+    ]);
 
     resetTokenlessKeeperStateForTests();
     const scoreWrites: string[] = [];
@@ -1065,36 +1086,93 @@ describe("tokenless keeper orchestration", () => {
     expect(finalWrites).toContain("finalizeSettlement");
   });
 
-  it("waits for the frozen beacon until the bounded failure deadline", async () => {
+  it("does not fetch or warn before the frozen scoring beacon timestamp", async () => {
     const writes: string[] = [];
+    const beaconFetches: Array<[Hex, bigint]> = [];
+    const warnings: string[] = [];
     const result = await runTokenlessKeeper(
       clients({
-        currentRound: round({
-          state: TokenlessRoundState.AwaitingSeed,
+        currentRound: awaitingSeedRound({
           frozenRevealCount: 3,
         }),
         writes,
-        now: 240n,
-        beaconUnavailable: true,
+        beaconFetches,
+        now: VALID_SCORING_TIMESTAMP - 1n,
+      }),
+      config,
+      {
+        ...logger,
+        warn(message) {
+          warnings.push(message);
+        },
+      },
+      decrypt,
+    );
+    expect(writes).not.toContain("finalizeScoringSeed");
+    expect(beaconFetches).toEqual([]);
+    expect(warnings).toEqual([]);
+    expect(result.roundsAwaitingScoringEntropy).toBe(1);
+  });
+
+  it("fetches the frozen beacon at its exact quicknet-t timestamp", async () => {
+    const writes: string[] = [];
+    const beaconFetches: Array<[Hex, bigint]> = [];
+    const result = await runTokenlessKeeper(
+      clients({
+        currentRound: awaitingSeedRound({ frozenRevealCount: 3 }),
+        writes,
+        beaconFetches,
+        now: VALID_SCORING_TIMESTAMP,
       }),
       config,
       logger,
       decrypt,
     );
-    expect(writes).not.toContain("finalizeScoringSeed");
-    expect(result.roundsAwaitingScoringEntropy).toBe(1);
+    expect(beaconFetches).toEqual([
+      [QUICKNET_T_NETWORK_HASH, VALID_SCORING_ROUND],
+    ]);
+    expect(writes).toContain("finalizeScoringSeed");
+    expect(result.scoringSeedsFinalized).toBe(1);
+    expect(result.roundsAwaitingScoringEntropy).toBe(0);
+  });
+
+  it.each([
+    {
+      label: "foreign beacon network",
+      overrides: { beaconNetworkHash: `0x${"03".repeat(32)}` as Hex },
+      expected: /pinned quicknet-t network/u,
+    },
+    {
+      label: "non-canonical scoring round",
+      overrides: { scoringBeaconRound: VALID_SCORING_ROUND - 1n },
+      expected: /immutable quicknet-t timing rules/u,
+    },
+  ])("fails closed for a $label", async ({ overrides, expected }) => {
+    const beaconFetches: Array<[Hex, bigint]> = [];
+    await expect(
+      runTokenlessKeeper(
+        clients({
+          currentRound: awaitingSeedRound(overrides),
+          beaconFetches,
+          now: VALID_SCORING_TIMESTAMP,
+        }),
+        config,
+        logger,
+        decrypt,
+      ),
+    ).rejects.toThrow(expected);
+    expect(beaconFetches).toEqual([]);
   });
 
   it("uses the permissionless base-only fallback after the beacon deadline", async () => {
     const writes: string[] = [];
     const result = await runTokenlessKeeper(
       clients({
-        currentRound: round({
-          state: TokenlessRoundState.AwaitingSeed,
+        currentRound: awaitingSeedRound({
           frozenRevealCount: 3,
         }),
         writes,
-        now: 251n,
+        now: VALID_BEACON_FAILURE_DEADLINE + 1n,
       }),
       config,
       logger,

@@ -8,6 +8,95 @@ export const MAINNET_QUICKNET_CHAIN_HASH =
   "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971";
 export const QUICKNET_T_CHAIN_HASH =
   "cc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5";
+export const QUICKNET_T_GENESIS_SECONDS = 1_689_232_296n;
+export const QUICKNET_T_PERIOD_SECONDS = 3n;
+export const QUICKNET_T_SCORING_MARGIN_SECONDS = 24n * 60n * 60n;
+export const QUICKNET_T_MINIMUM_REVEAL_WINDOW_SECONDS = 5n * 60n;
+export const QUICKNET_T_MINIMUM_BEACON_GRACE_SECONDS = 6n * 60n * 60n;
+
+const MAX_UINT64 = (1n << 64n) - 1n;
+
+function normalizeDrandChainHash(chainHash: `0x${string}` | string) {
+  const normalized = chainHash.toLowerCase().replace(/^0x/u, "");
+  if (!/^[0-9a-f]{64}$/u.test(normalized)) {
+    throw new Error("Invalid drand chain hash");
+  }
+  return normalized;
+}
+
+function assertUint64(value: bigint, label: string) {
+  if (value < 0n || value > MAX_UINT64) {
+    throw new Error(`Frozen scoring beacon ${label} is outside uint64.`);
+  }
+}
+
+export function firstQuicknetTRoundAfter(timestamp: bigint) {
+  if (timestamp < 0n) {
+    throw new Error("Quicknet-t cutoff timestamp cannot be negative.");
+  }
+  if (timestamp < QUICKNET_T_GENESIS_SECONDS) return 1n;
+  return (
+    (timestamp - QUICKNET_T_GENESIS_SECONDS) / QUICKNET_T_PERIOD_SECONDS + 2n
+  );
+}
+
+export function quicknetTRoundTimestamp(round: bigint) {
+  assertUint64(round, "round");
+  if (round === 0n) {
+    throw new Error("Frozen scoring beacon round must be positive.");
+  }
+  return QUICKNET_T_GENESIS_SECONDS + (round - 1n) * QUICKNET_T_PERIOD_SECONDS;
+}
+
+export function validateQuicknetTScoringSchedule(params: {
+  beaconNetworkHash: Hex;
+  commitDeadline: bigint;
+  revealDeadline: bigint;
+  beaconFailureDeadline: bigint;
+  beaconRound: bigint;
+  scoringBeaconRound: bigint;
+}) {
+  if (
+    normalizeDrandChainHash(params.beaconNetworkHash) !== QUICKNET_T_CHAIN_HASH
+  ) {
+    throw new Error(
+      "Frozen scoring beacon schedule must use the pinned quicknet-t network.",
+    );
+  }
+  assertUint64(params.commitDeadline, "commit deadline");
+  assertUint64(params.revealDeadline, "reveal deadline");
+  assertUint64(params.beaconFailureDeadline, "failure deadline");
+  assertUint64(params.beaconRound, "disclosure round");
+  assertUint64(params.scoringBeaconRound, "scoring round");
+
+  const expectedDisclosureRound = firstQuicknetTRoundAfter(
+    params.commitDeadline,
+  );
+  const expectedScoringRound = firstQuicknetTRoundAfter(
+    params.revealDeadline + QUICKNET_T_SCORING_MARGIN_SECONDS,
+  );
+  if (
+    params.revealDeadline <
+      params.commitDeadline + QUICKNET_T_MINIMUM_REVEAL_WINDOW_SECONDS ||
+    params.beaconRound !== expectedDisclosureRound ||
+    params.scoringBeaconRound !== expectedScoringRound
+  ) {
+    throw new Error(
+      "Frozen scoring beacon schedule does not match the immutable quicknet-t timing rules.",
+    );
+  }
+
+  const scoringTimestamp = quicknetTRoundTimestamp(expectedScoringRound);
+  if (
+    params.beaconFailureDeadline <
+    scoringTimestamp + QUICKNET_T_MINIMUM_BEACON_GRACE_SECONDS
+  ) {
+    throw new Error(
+      "Frozen scoring beacon failure deadline is shorter than the immutable grace.",
+    );
+  }
+  return scoringTimestamp;
+}
 
 interface DrandChainSpec {
   chainHash: string;
@@ -127,10 +216,7 @@ export function resetTlockClientCacheForTests() {
 export function resolveTlockClientForDrandChain(
   chainHash: `0x${string}` | string
 ) {
-  const normalized = chainHash.toLowerCase().replace(/^0x/u, "");
-  if (!/^[0-9a-f]{64}$/u.test(normalized)) {
-    throw new Error("Invalid drand chain hash");
-  }
+  const normalized = normalizeDrandChainHash(chainHash);
   const configuredChainId = Number(process.env.CHAIN_ID ?? 0);
   if (configuredChainId === 84532 && normalized !== QUICKNET_T_CHAIN_HASH) {
     throw new Error(

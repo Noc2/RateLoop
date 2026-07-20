@@ -13,6 +13,7 @@ import {
   fetchVerifiedDrandBeacon,
   resolveTlockClientForDrandChain,
   type VerifiedDrandBeacon,
+  validateQuicknetTScoringSchedule,
 } from "./drand.js";
 import { isExpectedPanelRaceError } from "./expected-panel-race.js";
 import type { Logger } from "./logger.js";
@@ -579,6 +580,11 @@ async function advanceRound(params: {
   }
 
   if (round.state === TokenlessRoundState.AwaitingSeed) {
+    const scoringBeaconTimestamp = validateQuicknetTScoringSchedule(round);
+    if (params.now < scoringBeaconTimestamp) {
+      params.result.roundsAwaitingScoringEntropy += 1;
+      return;
+    }
     if (params.now > round.beaconFailureDeadline) {
       const fellBack = await permissionlessWrite(
         params.clients,
