@@ -13,6 +13,10 @@ import {
 import { __setArtifactPrivacyRuntimeForTests } from "~~/lib/tokenless/artifactPrivacy";
 import { __setAssuranceResponseKeyringsForTests } from "~~/lib/tokenless/assuranceResponses";
 import { createAssuranceProject } from "~~/lib/tokenless/humanAssurance";
+import {
+  type FrozenHumanReviewRoutingContext,
+  __humanReviewRequestRouterTestUtils,
+} from "~~/lib/tokenless/humanReviewRequestRouter";
 import { createPrivateGroup } from "~~/lib/tokenless/privateGroups";
 import { preparePrivateReviewFoundation } from "~~/lib/tokenless/privateReviewFoundation";
 import {
@@ -165,6 +169,100 @@ test("direct private assignments surface in reviewer work and produce a terminal
   assert.equal(stored.rows.length, 2);
   assert.ok(stored.rows.every(row => row.choice === "positive" && row.rationale_ciphertext === null));
   assert.ok(stored.rows.every(row => /^sha256:[0-9a-f]{64}$/u.test(String(row.response_commitment))));
+});
+
+test("private routing releases expired reservations before selecting the next panel", async () => {
+  const setup = await fixture();
+  await requestPrivateUnpaidHumanReview({
+    principal: setup.principal,
+    opportunityId: setup.opportunityId,
+    privateReviewId: setup.prepared.privateReviewId,
+    reviewerAccountAddresses: [REVIEWER_A, REVIEWER_B],
+    now: new Date("2026-07-16T09:20:00.000Z"),
+  });
+
+  const now = new Date("2026-07-16T09:40:00.000Z");
+  const requestProfile = setup.requestProfile;
+  const context = {
+    workspaceId: setup.workspaceId,
+    integrationId: setup.integrationPrincipal.integration.integrationId,
+    opportunityId: "arop_private_unpaid_adapter_second",
+    createdAt: now,
+    workflowKey: "private-review",
+    agent: {
+      id: setup.integrationPrincipal.integration.agentId,
+      versionId: setup.integrationPrincipal.integration.agentVersionId,
+    },
+    selectionPolicy: { id: "policy", version: 1, audiencePolicyHash: hash("audience"), audiencePolicy: {} },
+    contentCommitments: { source: hash("source"), suggestion: hash("suggestion") },
+    decision: "required",
+    lifecycle: { state: "blocked", revision: 1 },
+    binding: { id: "binding", version: 1, hash: hash("binding"), authority: "ask_automatically" },
+    requestProfile: {
+      id: requestProfile.profileId,
+      version: requestProfile.version,
+      hash: requestProfile.profileHash,
+      lane: "private_invited_unpaid",
+      audience: "private_invited",
+      contentBoundary: "private_workspace",
+      privateSensitivity: "confidential",
+      privateGroup: { id: setup.groupId, policyVersion: 1, policyHash: setup.groupPolicyHash },
+      requiredExpertiseKeys: requestProfile.requiredExpertiseKeys,
+      expertiseRequirements: requestProfile.expertiseRequirements,
+      responseWindowSeconds: 3_600,
+      panelSize: 2,
+      compensationMode: "unpaid",
+      bountyPerSeatAtomic: null,
+      feedbackBonusEnabled: false,
+      feedbackBonusPoolAtomic: null,
+      feedbackBonusAwarderKind: "requester",
+      feedbackBonusAwarderAccount: null,
+      feedbackBonusAwardWindowSeconds: null,
+      questionAuthority: "owner_fixed",
+      resultSemantics: "assurance",
+      criterion: "Is this suggestion correct and safe?",
+      positiveLabel: "Approve",
+      negativeLabel: "Reject",
+      rationaleMode: "off",
+    },
+    grant: {
+      active: true,
+      configuredPolicy: { id: "policy", version: 1 },
+      integrationPolicy: { id: "policy", version: 1 },
+      activationMode: "owner_approved",
+      grantedScopes: ["panel:publish"],
+      credentialScopes: ["panel:publish"],
+      allowedWorkflowKeys: ["private-review"],
+      policyCaps: {
+        allowedProjectIds: [setup.projectId],
+        allowedReviewerSources: ["customer_invited"],
+        allowedDataClassifications: ["confidential"],
+        maxRetentionDays: 30,
+      },
+    },
+  } as FrozenHumanReviewRoutingContext;
+  const binding = await __humanReviewRequestRouterTestUtils.resolveExactPrivateBinding(
+    setup.integrationPrincipal,
+    context,
+    now,
+  );
+  assert.deepEqual(binding?.reviewerAccountAddresses, [REVIEWER_A, REVIEWER_B]);
+  const assignments = await dbClient.execute({
+    sql: `SELECT a.status,d.opportunity_id
+          FROM tokenless_private_unpaid_review_assignments a
+          JOIN tokenless_private_unpaid_review_deliveries d ON d.delivery_id=a.delivery_id
+          ORDER BY d.opportunity_id,a.assignment_id`,
+  });
+  assert.equal(
+    assignments.rows.filter(row => row.opportunity_id === setup.opportunityId && row.status === "expired").length,
+    2,
+  );
+  const counters = await dbClient.execute({
+    sql: `SELECT active_reservations FROM tokenless_assurance_cohorts
+          WHERE project_id=? AND cohort_id=?`,
+    args: [setup.projectId, setup.cohortId],
+  });
+  assert.equal(Number(counters.rows[0]?.active_reservations), 0);
 });
 
 async function identity(address: string, email: string, now: Date) {
@@ -499,6 +597,8 @@ async function fixture(
     projectId: project.projectId,
     cohortId,
     groupId: group.groupId,
+    groupPolicyHash: group.policyHash,
+    requestProfile: profile,
     externalContentCommitments: opportunityCommitments,
     expertiseDefinition,
   };

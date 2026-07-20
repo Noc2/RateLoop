@@ -41,7 +41,10 @@ import {
   requestPrivatePaidHumanReview,
 } from "~~/lib/tokenless/privatePaidHumanReviewAdapter";
 import { preparePrivateReviewFoundation } from "~~/lib/tokenless/privateReviewFoundation";
-import { requestPrivateUnpaidHumanReview } from "~~/lib/tokenless/privateUnpaidReviewAdapter";
+import {
+  expirePrivateUnpaidReviewReservations,
+  requestPrivateUnpaidHumanReview,
+} from "~~/lib/tokenless/privateUnpaidReviewAdapter";
 import {
   type PublicPaidHumanReviewPublication,
   requestPublicPaidHumanReview,
@@ -616,6 +619,7 @@ async function resolveExactPrivateBinding(
   ) {
     return null;
   }
+  await expirePrivateUnpaidReviewReservations(now);
   const responseDeadline = new Date(now.getTime() + profile.responseWindowSeconds * 1_000);
   const requiredExpertise = profile.requiredExpertiseKeys ?? [];
   const exactExpertiseRequirements = profile.expertiseRequirements ?? [];
@@ -1413,4 +1417,5 @@ export const __humanReviewRequestRouterTestUtils = {
   deterministicActivationKey,
   deterministicPrivateIdempotencyKey,
   hasExactAutonomousGrant,
+  resolveExactPrivateBinding,
 };
