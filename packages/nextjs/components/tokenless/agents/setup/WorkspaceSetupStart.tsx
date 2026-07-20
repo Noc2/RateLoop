@@ -55,10 +55,7 @@ export function WorkspaceSetupStart() {
         allowNavigation={false}
       />
       <form className="mt-8 w-full" onSubmit={createWorkspace} aria-busy={busy}>
-        <SetupStageHeader
-          title="Name your workspace"
-          description="Use a team or project name. You can change it later."
-        />
+        <SetupStageHeader title="Name your workspace" />
         <label className="mt-8 block text-sm font-medium" htmlFor="setup-workspace-name">
           Workspace name
         </label>

@@ -255,9 +255,7 @@ test("review setup saves directly and confirms only spending or automatic sendin
   assert.doesNotMatch(flowSource, /confirmedReviewFingerprint/);
 });
 
-test("setup separates the connected client from per-run model provenance", () => {
-  assert.match(flowSource, /connected client stays separate/i);
-  assert.match(flowSource, /model, effort, and timing reported for each eligible run/i);
+test("setup does not collect per-run model provenance from the connected client", () => {
   assert.match(flowSource, /provider: "unknown"/);
   assert.match(flowSource, /model: "unknown"/);
   assert.doesNotMatch(flowSource, />Declared details</);
@@ -287,6 +285,15 @@ test("setup uses one stage header aligned to the progress width without repeatin
   assert.doesNotMatch(stageHeaderSource, /AGENT_SETUP_STAGE_VISUALS|AGENT_SETUP_STAGE_LABELS|\/ 05/);
   assert.doesNotMatch(flowSource, /<SetupStageHeader[^>]*\bstep=/);
   assert.doesNotMatch(startSource, /<SetupStageHeader[^>]*\bstep=/);
+  for (const subtitle of [
+    "Use a team or project name. You can change it later.",
+    "Copy one message into the agent chat. RateLoop continues here after verification.",
+    "The connected client stays separate from the model, effort, and timing reported for each eligible run.",
+    "Choose when this workflow needs human review. Nothing is sent or charged during setup.",
+    "Invite reviewers and check that required specialist seats are covered.",
+  ]) {
+    assert.doesNotMatch(`${flowSource}\n${startSource}`, new RegExp(subtitle.replace(/[.]/gu, "\\.")));
+  }
   assert.equal(flowSource.match(/<div className="mt-8 w-full">/g)?.length, 2);
   assert.match(startSource, /<form className="mt-8 w-full"/);
   assert.doesNotMatch(flowSource, /mx-auto mt-8 w-full|max-w-[234]xl/);
