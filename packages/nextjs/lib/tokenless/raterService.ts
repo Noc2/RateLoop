@@ -198,24 +198,46 @@ function validateAuthorization(input: RaterCommitRequest["authorization"]) {
   }
 }
 
-async function allocateRelayNonce(deploymentKey: string, signer: Address, networkNonce: number) {
+async function reserveRelayNonce(input: {
+  commitId: string;
+  deploymentKey: string;
+  signer: Address;
+  networkNonce: number;
+}) {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    const commit = await client.query(
+      "SELECT relay_nonce FROM tokenless_rater_commits WHERE commit_id = $1 FOR UPDATE",
+      [input.commitId],
+    );
+    if (!commit.rows[0]) {
+      throw new TokenlessServiceError("Rater commit not found.", 404, "commit_not_found");
+    }
+    if (commit.rows[0].relay_nonce !== null && commit.rows[0].relay_nonce !== undefined) {
+      await client.query("COMMIT");
+      return Number(commit.rows[0].relay_nonce);
+    }
     await client.query(
       `INSERT INTO tokenless_chain_signer_nonces (deployment_key, signer_address, next_nonce, updated_at)
        VALUES ($1, $2, $3, $4) ON CONFLICT (deployment_key, signer_address) DO NOTHING`,
-      [deploymentKey, signer.toLowerCase(), networkNonce, new Date()],
+      [input.deploymentKey, input.signer.toLowerCase(), input.networkNonce, new Date()],
     );
     const locked = await client.query(
       "SELECT next_nonce FROM tokenless_chain_signer_nonces WHERE deployment_key = $1 AND signer_address = $2 FOR UPDATE",
-      [deploymentKey, signer.toLowerCase()],
+      [input.deploymentKey, input.signer.toLowerCase()],
     );
-    const nonce = Math.max(networkNonce, Number(locked.rows[0].next_nonce));
+    const nonce = Math.max(input.networkNonce, Number(locked.rows[0].next_nonce));
     await client.query(
       "UPDATE tokenless_chain_signer_nonces SET next_nonce = $1, updated_at = $2 WHERE deployment_key = $3 AND signer_address = $4",
-      [nonce + 1, new Date(), deploymentKey, signer.toLowerCase()],
+      [nonce + 1, new Date(), input.deploymentKey, input.signer.toLowerCase()],
     );
+    const reserved = await client.query(
+      `UPDATE tokenless_rater_commits SET relay_nonce = $1, updated_at = $2
+       WHERE commit_id = $3 AND relay_nonce IS NULL`,
+      [nonce, new Date(), input.commitId],
+    );
+    if (reserved.rowCount !== 1) throw new Error("Rater commit nonce reservation changed while locked.");
     await client.query("COMMIT");
     return nonce;
   } catch (error) {
@@ -708,24 +730,15 @@ export async function relayPaidRaterCommit(input: { principalId: string; request
   let nonce = persistedNonce;
   if (persistedNonce === null) {
     await simulateCommit();
-    const candidate = await allocateRelayNonce(
-      config.deploymentKey,
-      runtime.relayerAccount.address,
-      await runtime.publicClient.getTransactionCount({ address: runtime.relayerAccount.address, blockTag: "pending" }),
-    );
-    const reserved = await dbClient.execute({
-      sql: `UPDATE tokenless_rater_commits SET relay_nonce = ?, updated_at = ?
-            WHERE commit_id = ? AND relay_nonce IS NULL RETURNING relay_nonce`,
-      args: [candidate, new Date(), commitId],
+    nonce = await reserveRelayNonce({
+      commitId,
+      deploymentKey: config.deploymentKey,
+      signer: runtime.relayerAccount.address,
+      networkNonce: await runtime.publicClient.getTransactionCount({
+        address: runtime.relayerAccount.address,
+        blockTag: "pending",
+      }),
     });
-    if (reserved.rows[0]) nonce = Number((reserved.rows[0] as Row).relay_nonce);
-    else {
-      const current = await dbClient.execute({
-        sql: "SELECT relay_nonce FROM tokenless_rater_commits WHERE commit_id = ? LIMIT 1",
-        args: [commitId],
-      });
-      nonce = Number((current.rows[0] as Row | undefined)?.relay_nonce);
-    }
   }
   if (nonce === null || !Number.isSafeInteger(nonce) || nonce < 0) {
     throw new TokenlessServiceError(
@@ -775,12 +788,10 @@ export async function reconcilePaidRaterCommit(commitId: string) {
     const runtime = getTokenlessChainRuntime(config);
     return publicCommit(await reconcileSubmittedRaterCommitReceipt(row, runtime.publicClient));
   }
-  const signedTransaction = rowString(row, "relay_signed_transaction") as Hex | null;
-  const transactionHash = rowString(row, "transaction_hash") as Hash | null;
   const nonceValue = rowString(row, "relay_nonce");
-  if (!signedTransaction || !transactionHash || nonceValue === null) {
+  if (nonceValue === null) {
     throw new TokenlessServiceError(
-      "The rater commit has no durable signed transaction to recover.",
+      "The rater commit has no reserved relay nonce to recover.",
       409,
       "rater_transaction_reconciliation_required",
     );
@@ -807,6 +818,11 @@ export async function reconcilePaidRaterCommit(commitId: string) {
   const config = loadTokenlessChainConfig();
   if (
     rowString(row, "deployment_key") !== config.deploymentKey ||
+    rowString(row, "round_id") !== payload.authorization.roundId ||
+    getAddress(rowString(row, "vote_key")!) !== getAddress(payload.authorization.voteKey) ||
+    rowString(row, "sealed_commitment")?.toLowerCase() !== payload.authorization.sealedCommitment.toLowerCase() ||
+    rowString(row, "sealed_payload_hash")?.toLowerCase() !== payload.authorization.sealedPayloadHash.toLowerCase() ||
+    rowString(row, "payout_commitment")?.toLowerCase() !== payload.authorization.payoutCommitment.toLowerCase() ||
     payload.authorization.chainId !== config.chainId ||
     getAddress(payload.authorization.panelAddress) !== getAddress(config.panelAddress)
   ) {
@@ -830,7 +846,12 @@ export async function reconcilePaidRaterCommit(commitId: string) {
     to: config.panelAddress,
     wallet: runtime.relayerWallet,
   });
-  await broadcastPersistedRaterTransaction(runtime.relayerWallet, runtime.publicClient, transaction);
+  try {
+    await broadcastPersistedRaterTransaction(runtime.relayerWallet, runtime.publicClient, transaction);
+  } catch (error) {
+    await markRaterTransactionRetry(commitId, transaction);
+    throw error;
+  }
   await markRaterTransactionSubmitted(commitId, transaction);
   const stored = await dbClient.execute({
     sql: "SELECT * FROM tokenless_rater_commits WHERE commit_id = ? LIMIT 1",
@@ -865,5 +886,6 @@ export const __raterServiceTestUtils = {
   markRaterTransactionRetry,
   preparePersistedRaterTransaction,
   reconcileSubmittedRaterCommitReceipt,
+  reserveRelayNonce,
   validateAuthorization,
 };

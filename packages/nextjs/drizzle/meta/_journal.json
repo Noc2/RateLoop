@@ -862,6 +862,13 @@
       "when": 1784383200000,
       "tag": "0123_evm_kms_signing_ledger_integrity",
       "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1784386800000,
+      "tag": "0124_surprise_bounty_signed_transaction_recovery",
+      "breakpoints": true
     }
   ]
 }

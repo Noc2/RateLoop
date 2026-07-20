@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
-import { type Address, type Hash, type Hex, getAddress } from "viem";
+import { type Account, type Address, type Hash, type Hex, getAddress, keccak256, pad, toHex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
@@ -83,6 +83,67 @@ function runtime(balance = 100_000_000n): TokenlessChainRuntime {
   return {
     publicClient: publicClient as unknown as TokenlessChainRuntime["publicClient"],
     surpriseBonusAccount: BONUS_ACCOUNT,
+  };
+}
+
+function recoveryRuntime(input: {
+  account?: Account;
+  accepted: Set<Hash>;
+  broadcasts: Hex[];
+  failReceipt?: boolean;
+  amountAtomic: bigint;
+}): TokenlessChainRuntime {
+  const base = runtime();
+  const account = input.account ?? BONUS_ACCOUNT;
+  return {
+    ...base,
+    surpriseBonusAccount: account,
+    surpriseBonusWallet: {
+      async prepareTransactionRequest(transaction: Record<string, unknown>) {
+        return {
+          ...transaction,
+          chainId: 84_532,
+          gas: 100_000n,
+          maxFeePerGas: 2n,
+          maxPriorityFeePerGas: 1n,
+          type: "eip1559" as const,
+        };
+      },
+      async sendRawTransaction({ serializedTransaction }: { serializedTransaction: Hex }) {
+        const hash = keccak256(serializedTransaction);
+        input.broadcasts.push(serializedTransaction);
+        input.accepted.add(hash);
+        return hash;
+      },
+    } as never,
+    publicClient: {
+      ...base.publicClient,
+      async getTransactionCount() {
+        return 0;
+      },
+      async getTransaction({ hash }: { hash: Hash }) {
+        if (!input.accepted.has(hash)) throw new Error("transaction not found");
+        return { hash };
+      },
+      async waitForTransactionReceipt({ hash }: { hash: Hash }) {
+        if (input.failReceipt) throw new Error("injected receipt outage after broadcast");
+        assert.ok(input.accepted.has(hash));
+        return {
+          status: "success",
+          logs: [
+            {
+              address: USDC,
+              data: toHex(input.amountAtomic, { size: 32 }),
+              topics: [
+                keccak256(toHex("Transfer(address,address,uint256)")),
+                pad(BONUS_ACCOUNT.address, { size: 32 }),
+                pad(PAYOUT, { size: 32 }),
+              ],
+            },
+          ],
+        };
+      },
+    } as never,
   };
 }
 
@@ -203,6 +264,165 @@ test("central surprise bounties reserve capacity, freeze evidence, and pay only 
     claim_transaction_hash: CLAIM_TX,
     transfer_transaction_hash: BONUS_TX,
   });
+});
+
+test("a signer failure after surprise-bonus nonce reservation recovers with exact persisted bytes", async () => {
+  const operationKey = "operation-surprise-recovery";
+  await seedAsk(operationKey);
+  await reserveSurpriseBountyCapacity({
+    operationKey,
+    guaranteedBasePerReportAtomic: 1_000_000n,
+    maximumReports: 10,
+    feeAmountAtomic: 1_250_000n,
+    config: config(),
+    runtime: runtime(),
+    now: NOW,
+    expiresAt: new Date(NOW.getTime() + 600_000),
+  });
+  await finalizeSurpriseBountyRound({
+    operationKey,
+    deploymentKey: config().deploymentKey,
+    roundId: "43",
+    reports: [
+      ...Array.from({ length: 4 }, (_, index) => ({
+        commitKey: key(index + 20),
+        vote: 1 as const,
+        predictedUpBps: 2_000,
+      })),
+      ...Array.from({ length: 6 }, (_, index) => ({
+        commitKey: key(index + 24),
+        vote: 0 as const,
+        predictedUpBps: 2_000,
+      })),
+    ],
+    now: NOW,
+  });
+  const entitlements = await dbClient.execute({
+    sql: `SELECT entitlement_id, commit_key, bonus_atomic
+          FROM tokenless_surprise_bounty_entitlements ORDER BY commit_key`,
+  });
+  assert.ok(entitlements.rows.length >= 2);
+  const first = entitlements.rows[0]!;
+  const second = entitlements.rows[1]!;
+  await dbClient.execute({
+    sql: `DELETE FROM tokenless_surprise_bounty_entitlements
+          WHERE entitlement_id NOT IN (?, ?);
+          UPDATE tokenless_surprise_bounty_entitlements SET next_attempt_at = ? WHERE entitlement_id = ?`,
+    args: [first.entitlement_id, second.entitlement_id, new Date(NOW.getTime() + 10_000_000), second.entitlement_id],
+  });
+  const claims = [first, second].map(row => ({
+    deploymentKey: config().deploymentKey,
+    roundId: "43",
+    commitKey: String(row.commit_key).toLowerCase() as `0x${string}`,
+    payoutAddress: PAYOUT,
+    amountAtomic: String(row.bonus_atomic),
+    transactionHash: CLAIM_TX,
+  }));
+  const accepted = new Set<Hash>();
+  const broadcasts: Hex[] = [];
+  await dbClient.execute({
+    sql: "UPDATE tokenless_surprise_bounty_entitlements SET attempt_count = 19 WHERE entitlement_id = ?",
+    args: [first.entitlement_id],
+  });
+  const failingAccount = {
+    ...BONUS_ACCOUNT,
+    async signTransaction() {
+      throw new Error("injected signer outage after nonce reservation");
+    },
+  } as typeof BONUS_ACCOUNT;
+  const firstFailure = await processSurpriseBountyPayments({
+    now: NOW,
+    limit: 1,
+    config: config(),
+    runtime: recoveryRuntime({
+      account: failingAccount,
+      accepted,
+      broadcasts,
+      amountAtomic: BigInt(String(first.bonus_atomic)),
+    }),
+    claimSource: async () => claims,
+  });
+  assert.deepEqual(firstFailure, { paid: 0, pendingClaim: 0, retry: 1, reconciliationRequired: 0 });
+  const unsigned = await dbClient.execute({
+    sql: `SELECT state, transfer_nonce, transfer_signed_transaction, transfer_transaction_hash,
+                 transaction_recovery_version
+          FROM tokenless_surprise_bounty_entitlements WHERE entitlement_id = ?`,
+    args: [first.entitlement_id],
+  });
+  assert.deepEqual(unsigned.rows[0], {
+    state: "retry",
+    transaction_recovery_version: 1,
+    transfer_nonce: 0,
+    transfer_signed_transaction: null,
+    transfer_transaction_hash: null,
+  });
+
+  const receiptFailure = await processSurpriseBountyPayments({
+    now: new Date(NOW.getTime() + 3_600_001),
+    limit: 1,
+    config: config(),
+    runtime: recoveryRuntime({
+      accepted,
+      broadcasts,
+      failReceipt: true,
+      amountAtomic: BigInt(String(first.bonus_atomic)),
+    }),
+    claimSource: async () => claims,
+  });
+  assert.deepEqual(receiptFailure, { paid: 0, pendingClaim: 0, retry: 1, reconciliationRequired: 0 });
+  assert.equal(broadcasts.length, 1);
+  const retryAfterLimit = await dbClient.execute({
+    sql: "SELECT state, attempt_count FROM tokenless_surprise_bounty_entitlements WHERE entitlement_id = ?",
+    args: [first.entitlement_id],
+  });
+  assert.deepEqual(retryAfterLimit.rows[0], { attempt_count: 20, state: "retry" });
+  const persisted = await dbClient.execute({
+    sql: `SELECT transfer_signed_transaction, transfer_transaction_hash
+          FROM tokenless_surprise_bounty_entitlements WHERE entitlement_id = ?`,
+    args: [first.entitlement_id],
+  });
+  assert.equal(persisted.rows[0]?.transfer_signed_transaction, broadcasts[0]);
+  assert.equal(persisted.rows[0]?.transfer_transaction_hash, keccak256(broadcasts[0]!));
+
+  const recovered = await processSurpriseBountyPayments({
+    now: new Date(NOW.getTime() + 7_200_002),
+    limit: 1,
+    config: config(),
+    runtime: recoveryRuntime({
+      accepted,
+      broadcasts,
+      amountAtomic: BigInt(String(first.bonus_atomic)),
+    }),
+    claimSource: async () => claims,
+  });
+  assert.deepEqual(recovered, { paid: 1, pendingClaim: 0, retry: 0, reconciliationRequired: 0 });
+  assert.equal(broadcasts.length, 1, "recovery must observe or replay only the exact persisted transaction");
+
+  await dbClient.execute({
+    sql: "UPDATE tokenless_surprise_bounty_entitlements SET next_attempt_at = ? WHERE entitlement_id = ?",
+    args: [new Date(NOW.getTime() + 7_200_002), second.entitlement_id],
+  });
+  const successor = await processSurpriseBountyPayments({
+    now: new Date(NOW.getTime() + 7_200_003),
+    limit: 1,
+    config: config(),
+    runtime: recoveryRuntime({
+      accepted,
+      broadcasts,
+      amountAtomic: BigInt(String(second.bonus_atomic)),
+    }),
+    claimSource: async () => claims,
+  });
+  assert.deepEqual(successor, { paid: 1, pendingClaim: 0, retry: 0, reconciliationRequired: 0 });
+  const nonces = await dbClient.execute({
+    sql: `SELECT transfer_nonce FROM tokenless_surprise_bounty_entitlements
+          WHERE entitlement_id IN (?, ?) ORDER BY transfer_nonce`,
+    args: [first.entitlement_id, second.entitlement_id],
+  });
+  assert.deepEqual(
+    nonces.rows.map(row => Number(row.transfer_nonce)),
+    [0, 1],
+  );
 });
 
 test("reservation fails before a paid round when the dedicated funder is under-collateralized", async () => {

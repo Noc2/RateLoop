@@ -1,11 +1,26 @@
 import { createHash } from "node:crypto";
 import "server-only";
-import { type Address, type Hash, decodeEventLog, encodeFunctionData, getAddress, isAddress, isHash } from "viem";
+import {
+  type Account,
+  type Address,
+  type Hash,
+  type Hex,
+  type TransactionSerializable,
+  decodeEventLog,
+  encodeFunctionData,
+  getAddress,
+  isAddress,
+  isHash,
+  keccak256,
+  parseTransaction,
+  recoverTransactionAddress,
+} from "viem";
 import { baseSepolia } from "viem/chains";
 import { dbClient, dbPool } from "~~/lib/db";
 import { type TokenlessChainConfig, loadTokenlessChainConfig } from "~~/lib/tokenless/chain/config";
 import {
   type TokenlessChainRuntime,
+  type TokenlessWalletClient,
   assertLiveTokenlessDeployment,
   getTokenlessChainRuntime,
 } from "~~/lib/tokenless/chain/runtime";
@@ -473,22 +488,25 @@ async function allocateTransferNonce(input: SurprisePayment) {
   try {
     await client.query("BEGIN");
     const entitlement = await client.query(
-      "SELECT transfer_nonce, transfer_transaction_hash FROM tokenless_surprise_bounty_entitlements WHERE entitlement_id = $1 FOR UPDATE",
+      `SELECT operation_key, payout_address, bonus_atomic, transfer_nonce
+       FROM tokenless_surprise_bounty_entitlements WHERE entitlement_id = $1 FOR UPDATE`,
       [input.entitlementId],
     );
-    if (entitlement.rows[0]?.transfer_transaction_hash) {
-      await client.query("COMMIT");
-      return {
-        nonce: Number(entitlement.rows[0].transfer_nonce),
-        transactionHash: String(entitlement.rows[0].transfer_transaction_hash) as Hash,
-      };
+    if (!entitlement.rows[0]) throw new Error("Surprise-bonus entitlement not found.");
+    if (
+      String(entitlement.rows[0].operation_key) !== input.operationKey ||
+      getAddress(String(entitlement.rows[0].payout_address)) !== input.payoutAddress ||
+      BigInt(String(entitlement.rows[0].bonus_atomic)) !== input.amountAtomic
+    ) {
+      throw new TokenlessServiceError(
+        "The surprise-bonus nonce reservation does not match its durable entitlement.",
+        409,
+        "surprise_bonus_signed_transaction_mismatch",
+      );
     }
     if (entitlement.rows[0]?.transfer_nonce !== null && entitlement.rows[0]?.transfer_nonce !== undefined) {
-      throw new TokenlessServiceError(
-        "A surprise-bonus transfer nonce exists without a recorded transaction hash.",
-        409,
-        "surprise_bonus_reconciliation_required",
-      );
+      await client.query("COMMIT");
+      return Number(entitlement.rows[0].transfer_nonce);
     }
     await client.query(
       `INSERT INTO tokenless_chain_signer_nonces (deployment_key, signer_address, next_nonce, updated_at)
@@ -509,7 +527,7 @@ async function allocateTransferNonce(input: SurprisePayment) {
       [nonce, new Date(), input.entitlementId],
     );
     await client.query("COMMIT");
-    return { nonce, transactionHash: null };
+    return nonce;
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -518,30 +536,213 @@ async function allocateTransferNonce(input: SurprisePayment) {
   }
 }
 
+function surpriseTransferData(input: Pick<SurprisePayment, "amountAtomic" | "payoutAddress" | "config">) {
+  return encodeFunctionData({
+    abi: ERC20_ABI,
+    functionName: "transfer",
+    args: [input.payoutAddress, input.amountAtomic],
+  });
+}
+
+async function assertSignedSurpriseTransactionIntent(input: {
+  account: Account;
+  data: Hex;
+  nonce: number;
+  signedTransaction: Hex;
+  token: Address;
+}) {
+  try {
+    const transaction = parseTransaction(input.signedTransaction);
+    const signer = await recoverTransactionAddress({
+      serializedTransaction: input.signedTransaction as Parameters<
+        typeof recoverTransactionAddress
+      >[0]["serializedTransaction"],
+    });
+    if (
+      transaction.chainId !== baseSepolia.id ||
+      getAddress(signer) !== getAddress(input.account.address) ||
+      transaction.nonce !== input.nonce ||
+      !transaction.to ||
+      getAddress(transaction.to) !== getAddress(input.token) ||
+      (transaction.data ?? "0x").toLowerCase() !== input.data.toLowerCase() ||
+      (transaction.value ?? 0n) !== 0n
+    ) {
+      throw new Error("intent mismatch");
+    }
+  } catch {
+    throw new TokenlessServiceError(
+      "The persisted surprise-bonus transaction does not match its entitlement.",
+      409,
+      "surprise_bonus_signed_transaction_mismatch",
+    );
+  }
+}
+
+type PersistedSurpriseTransaction = { hash: Hash; signedTransaction: Hex; recovered: boolean };
+
+async function preparePersistedSurpriseTransaction(input: {
+  account: Account;
+  data: Hex;
+  entitlementId: string;
+  nonce: number;
+  token: Address;
+  wallet: TokenlessWalletClient;
+}): Promise<PersistedSurpriseTransaction> {
+  const existing = await dbClient.execute({
+    sql: `SELECT transfer_nonce, transfer_signed_transaction, transfer_transaction_hash,
+                 transaction_recovery_version
+          FROM tokenless_surprise_bounty_entitlements WHERE entitlement_id = ? LIMIT 1`,
+    args: [input.entitlementId],
+  });
+  const row = existing.rows[0] as Row | undefined;
+  const persistedNonce = rowString(row, "transfer_nonce");
+  if (persistedNonce === null || Number(persistedNonce) !== input.nonce) {
+    throw new TokenlessServiceError(
+      "The persisted surprise-bonus nonce does not match its entitlement.",
+      409,
+      "surprise_bonus_signed_transaction_mismatch",
+    );
+  }
+  const persistedSigned = rowString(row, "transfer_signed_transaction") as Hex | null;
+  const persistedHash = rowString(row, "transfer_transaction_hash") as Hash | null;
+  if (persistedSigned) {
+    const derivedHash = keccak256(persistedSigned);
+    if (!persistedHash || !isHash(persistedHash) || derivedHash.toLowerCase() !== persistedHash.toLowerCase()) {
+      throw new TokenlessServiceError(
+        "The persisted surprise-bonus transaction does not match its hash.",
+        409,
+        "surprise_bonus_signed_transaction_mismatch",
+      );
+    }
+    await assertSignedSurpriseTransactionIntent({ ...input, signedTransaction: persistedSigned });
+    return { hash: derivedHash, signedTransaction: persistedSigned, recovered: true };
+  }
+  if (persistedHash || Number(row?.transaction_recovery_version ?? 0) !== 1) {
+    throw new TokenlessServiceError(
+      "This legacy surprise-bonus transfer has no durable signed transaction.",
+      409,
+      "surprise_bonus_reconciliation_required",
+    );
+  }
+  if (input.account.type !== "local") {
+    throw new TokenlessServiceError(
+      "Surprise-bonus transfers require a recoverable local account interface.",
+      503,
+      "surprise_bonus_signer_unavailable",
+      true,
+    );
+  }
+  const request = await input.wallet.prepareTransactionRequest({
+    account: input.account,
+    chain: baseSepolia,
+    data: input.data,
+    nonce: input.nonce,
+    to: input.token,
+    value: 0n,
+  });
+  const signableRequest = Object.fromEntries(
+    Object.entries(request).filter(([key]) => key !== "account" && key !== "chain" && key !== "from"),
+  ) as TransactionSerializable;
+  const signedTransaction = await input.account.signTransaction(signableRequest);
+  const hash = keccak256(signedTransaction);
+  await assertSignedSurpriseTransactionIntent({ ...input, signedTransaction });
+  const stored = await dbClient.execute({
+    sql: `UPDATE tokenless_surprise_bounty_entitlements
+          SET transfer_signed_transaction = ?, transfer_transaction_hash = ?, state = 'paying',
+              last_error = NULL, updated_at = ?
+          WHERE entitlement_id = ? AND transfer_nonce = ?
+            AND transfer_signed_transaction IS NULL AND transfer_transaction_hash IS NULL
+            AND transaction_recovery_version = 1`,
+    args: [signedTransaction, hash, new Date(), input.entitlementId, input.nonce],
+  });
+  if (stored.rowCount === 1) return { hash, signedTransaction, recovered: false };
+  const winner = await dbClient.execute({
+    sql: `SELECT transfer_signed_transaction, transfer_transaction_hash
+          FROM tokenless_surprise_bounty_entitlements WHERE entitlement_id = ? LIMIT 1`,
+    args: [input.entitlementId],
+  });
+  const winnerSigned = rowString(winner.rows[0] as Row | undefined, "transfer_signed_transaction") as Hex | null;
+  const winnerHash = rowString(winner.rows[0] as Row | undefined, "transfer_transaction_hash") as Hash | null;
+  if (winnerSigned && winnerHash && isHash(winnerHash) && keccak256(winnerSigned) === winnerHash.toLowerCase()) {
+    await assertSignedSurpriseTransactionIntent({ ...input, signedTransaction: winnerSigned });
+    return { hash: winnerHash, signedTransaction: winnerSigned, recovered: true };
+  }
+  throw new TokenlessServiceError(
+    "The surprise-bonus entitlement changed before its transaction could be stored.",
+    409,
+    "surprise_bonus_state_superseded",
+    true,
+  );
+}
+
+async function broadcastPersistedSurpriseTransaction(
+  wallet: TokenlessWalletClient,
+  publicClient: TokenlessChainRuntime["publicClient"],
+  transaction: PersistedSurpriseTransaction,
+) {
+  let observedHash: string | null = null;
+  try {
+    const observed = await publicClient.getTransaction({ hash: transaction.hash });
+    observedHash = observed.hash;
+  } catch {
+    // The exact transaction is not observable yet. Its persisted bytes are the
+    // only chain mutation that this entitlement may replay.
+  }
+  if (observedHash !== null) {
+    if (observedHash.toLowerCase() !== transaction.hash.toLowerCase()) {
+      throw new TokenlessServiceError(
+        "The RPC returned a different hash for the surprise-bonus transaction.",
+        409,
+        "surprise_bonus_signed_transaction_mismatch",
+      );
+    }
+    return;
+  }
+  try {
+    const broadcastHash = await wallet.sendRawTransaction({ serializedTransaction: transaction.signedTransaction });
+    if (broadcastHash.toLowerCase() !== transaction.hash.toLowerCase()) {
+      throw new TokenlessServiceError(
+        "The RPC returned a different hash for the surprise-bonus transaction.",
+        409,
+        "surprise_bonus_signed_transaction_mismatch",
+      );
+    }
+  } catch (error) {
+    if (error instanceof TokenlessServiceError) throw error;
+    try {
+      const observed = await publicClient.getTransaction({ hash: transaction.hash });
+      if (observed.hash.toLowerCase() === transaction.hash.toLowerCase()) return;
+    } catch {
+      // Acceptance remains ambiguous; preserve the exact bytes for retry.
+    }
+    throw new TokenlessServiceError(
+      "The RPC did not confirm the surprise-bonus transaction.",
+      502,
+      "surprise_bonus_broadcast_unconfirmed",
+      true,
+    );
+  }
+}
+
 async function defaultPay(input: SurprisePayment) {
   const account = assertBonusRuntime(input.runtime);
   if (!input.runtime.surpriseBonusWallet) throw new Error("Surprise-bonus wallet is unavailable.");
   await assertLiveTokenlessDeployment(input.config, input.runtime);
-  const allocated = await allocateTransferNonce(input);
-  let transactionHash = allocated.transactionHash;
-  if (!transactionHash) {
-    transactionHash = await input.runtime.surpriseBonusWallet.sendTransaction({
-      account,
-      chain: baseSepolia,
-      to: input.config.usdcAddress,
-      data: encodeFunctionData({
-        abi: ERC20_ABI,
-        functionName: "transfer",
-        args: [input.payoutAddress, input.amountAtomic],
-      }),
-      nonce: allocated.nonce,
-      value: 0n,
-    });
-    await dbClient.execute({
-      sql: "UPDATE tokenless_surprise_bounty_entitlements SET transfer_transaction_hash = ?, updated_at = ? WHERE entitlement_id = ? AND transfer_nonce = ?",
-      args: [transactionHash, new Date(), input.entitlementId, allocated.nonce],
-    });
-  }
+  const nonce = await allocateTransferNonce(input);
+  const transaction = await preparePersistedSurpriseTransaction({
+    account,
+    data: surpriseTransferData(input),
+    entitlementId: input.entitlementId,
+    nonce,
+    token: input.config.usdcAddress,
+    wallet: input.runtime.surpriseBonusWallet,
+  });
+  await broadcastPersistedSurpriseTransaction(
+    input.runtime.surpriseBonusWallet,
+    input.runtime.publicClient,
+    transaction,
+  );
+  const transactionHash = transaction.hash;
   const receipt = await input.runtime.publicClient.waitForTransactionReceipt({ hash: transactionHash });
   if (receipt.status !== "success") throw new Error("Surprise-bonus USDC transfer reverted.");
   const matchingTransfers = receipt.logs.filter(log => {
@@ -630,13 +831,31 @@ export async function processSurpriseBountyPayments(
         summary.pendingClaim += 1;
         continue;
       }
-      await dbClient.execute({
+      const boundClaim = await dbClient.execute({
         sql: `UPDATE tokenless_surprise_bounty_entitlements
               SET state = CASE WHEN state = 'pending_claim' THEN 'ready' ELSE state END,
-                  payout_address = ?, claim_transaction_hash = ?, updated_at = ?
-              WHERE entitlement_id = ?`,
-        args: [claim.payoutAddress.toLowerCase(), claim.transactionHash, now, entitlementId],
+                  payout_address = COALESCE(payout_address, ?),
+                  claim_transaction_hash = COALESCE(claim_transaction_hash, ?), updated_at = ?
+              WHERE entitlement_id = ?
+                AND (payout_address IS NULL OR payout_address = ?)
+                AND (claim_transaction_hash IS NULL OR claim_transaction_hash = ?)
+              RETURNING entitlement_id`,
+        args: [
+          claim.payoutAddress.toLowerCase(),
+          claim.transactionHash,
+          now,
+          entitlementId,
+          claim.payoutAddress.toLowerCase(),
+          claim.transactionHash,
+        ],
       });
+      if (boundClaim.rowCount !== 1) {
+        throw new TokenlessServiceError(
+          "The indexed claim conflicts with the entitlement's durable payout binding.",
+          409,
+          "surprise_bonus_claim_conflict",
+        );
+      }
       const transactionHash = await (input.payer ?? defaultPay)({
         entitlementId,
         operationKey: rowString(row, "operation_key")!,
@@ -684,12 +903,29 @@ export async function processSurpriseBountyPayments(
       summary.paid += 1;
     } catch (error) {
       const attempt = Number(row.attempt_count) + 1;
+      const currentRecovery = await dbClient.execute({
+        sql: `SELECT transfer_nonce, transaction_recovery_version
+              FROM tokenless_surprise_bounty_entitlements WHERE entitlement_id = ? LIMIT 1`,
+        args: [entitlementId],
+      });
+      const recoveryRow = currentRecovery.rows[0] as Row | undefined;
       const reconciliation =
-        (error instanceof TokenlessServiceError && error.code === "surprise_bonus_reconciliation_required") ||
-        rowString(row, "transfer_nonce") !== null;
+        error instanceof TokenlessServiceError &&
+        new Set([
+          "surprise_bonus_claim_conflict",
+          "surprise_bonus_reconciliation_required",
+          "surprise_bonus_signed_transaction_mismatch",
+        ]).has(error.code);
+      const recoverableNonceReservation =
+        Number(recoveryRow?.transaction_recovery_version ?? 0) === 1 &&
+        rowString(recoveryRow, "transfer_nonce") !== null;
+      // A reserved nonce cannot be abandoned: later transactions from this
+      // signer would remain queued behind it. Keep the exact durable intent
+      // retryable until its signed bytes are accepted or an operator resolves
+      // an explicit integrity/reconciliation failure.
       const state = reconciliation
         ? "reconciliation_required"
-        : attempt >= MAX_ATTEMPTS
+        : attempt >= MAX_ATTEMPTS && !recoverableNonceReservation
           ? "reconciliation_required"
           : "retry";
       await dbClient.execute({
@@ -728,4 +964,13 @@ export async function getSurpriseBountySummary(operationKey: string) {
   );
 }
 
-export const __surpriseBountyServiceTestUtils = { fetchClaims, policy, stableJson };
+export const __surpriseBountyServiceTestUtils = {
+  allocateTransferNonce,
+  assertSignedSurpriseTransactionIntent,
+  broadcastPersistedSurpriseTransaction,
+  fetchClaims,
+  policy,
+  preparePersistedSurpriseTransaction,
+  stableJson,
+  surpriseTransferData,
+};

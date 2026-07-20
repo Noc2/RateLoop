@@ -193,6 +193,38 @@ test("rater commit replay lookup is voucher-scoped and cannot be preclaimed by a
   assert.deepEqual(calls[0]!.values, ["voucher-b"]);
 });
 
+test("a relay nonce reservation is idempotently bound to its prepared commit", async () => {
+  await seedRaterCommitState({ commitId: "commit_nonce_reservation", state: "signed" });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_rater_commits
+          SET relay_nonce = NULL, relay_signed_transaction = NULL, transaction_hash = NULL, state = 'prepared'
+          WHERE commit_id = 'commit_nonce_reservation'`,
+  });
+  const first = await __raterServiceTestUtils.reserveRelayNonce({
+    commitId: "commit_nonce_reservation",
+    deploymentKey: "deployment-receipt",
+    signer: ACCOUNT,
+    networkNonce: 5,
+  });
+  const replay = await __raterServiceTestUtils.reserveRelayNonce({
+    commitId: "commit_nonce_reservation",
+    deploymentKey: "deployment-receipt",
+    signer: ACCOUNT,
+    networkNonce: 99,
+  });
+  assert.equal(first, 5);
+  assert.equal(replay, 5);
+  const stored = await dbClient.execute({
+    sql: `SELECT c.relay_nonce, n.next_nonce
+          FROM tokenless_rater_commits c
+          JOIN tokenless_chain_signer_nonces n
+            ON n.deployment_key = c.deployment_key AND n.signer_address = ?
+          WHERE c.commit_id = 'commit_nonce_reservation'`,
+    args: [ACCOUNT.toLowerCase()],
+  });
+  assert.deepEqual(stored.rows[0], { next_nonce: 6, relay_nonce: 5 });
+});
+
 test("a signed rater transaction is durable before broadcast and replays exactly after acceptance ambiguity", async () => {
   const account = privateKeyToAccount(`0x${"77".repeat(32)}`);
   const panel = "0x2222222222222222222222222222222222222222" as Address;
@@ -241,6 +273,44 @@ test("a signed rater transaction is durable before broadcast and replays exactly
       NOW,
       NOW,
     ],
+  });
+  const failingAccount = {
+    ...account,
+    async signTransaction() {
+      throw new Error("injected signer outage after nonce reservation");
+    },
+  } as typeof account;
+  await assert.rejects(
+    __raterServiceTestUtils.preparePersistedRaterTransaction({
+      account: failingAccount as never,
+      commitId: "commit_recovery",
+      data,
+      nonce: 7,
+      to: panel,
+      wallet: {
+        async prepareTransactionRequest(transaction: Record<string, unknown>) {
+          return {
+            ...transaction,
+            chainId: 84532,
+            gas: 100_000n,
+            maxFeePerGas: 2n,
+            maxPriorityFeePerGas: 1n,
+            type: "eip1559" as const,
+          };
+        },
+      } as never,
+    }),
+    /injected signer outage/u,
+  );
+  const unsigned = await dbClient.execute({
+    sql: `SELECT relay_nonce, relay_signed_transaction, transaction_hash, state
+          FROM tokenless_rater_commits WHERE commit_id = 'commit_recovery'`,
+  });
+  assert.deepEqual(unsigned.rows[0], {
+    relay_nonce: 7,
+    relay_signed_transaction: null,
+    state: "prepared",
+    transaction_hash: null,
   });
   let simulations = 0;
   const prepared = await __raterServiceTestUtils.preparePersistedRaterTransaction({

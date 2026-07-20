@@ -89,7 +89,7 @@ async function seedRecoverableExecution(
   });
 }
 
-async function seedRecoverableRaterCommit(commitId: string, state: "signed" | "submitted" = "signed") {
+async function seedRecoverableRaterCommit(commitId: string, state: "prepared" | "signed" | "submitted" = "signed") {
   await dbClient.execute({
     sql: `INSERT INTO tokenless_principals (principal_id,status,created_at,updated_at)
           VALUES ('rlp_scheduled_recovery','active',?,?);
@@ -141,8 +141,8 @@ async function seedRecoverableRaterCommit(commitId: string, state: "signed" | "s
                   '{}', 7, ?, ?, ?, ?, ?)`,
     args: [
       commitId,
-      state === "submitted" ? null : "0x01",
-      `0x${createHash("sha256").update(commitId).digest("hex")}`,
+      state === "signed" ? "0x01" : null,
+      state === "prepared" ? null : `0x${createHash("sha256").update(commitId).digest("hex")}`,
       state,
       NOW,
       NOW,
@@ -327,6 +327,17 @@ test("scheduled maintenance follows a submitted rater transaction through confir
   assert.deepEqual(item.rows[0], { attempt_count: 1, claim_generation: 2, last_error: null, state: "completed" });
 });
 
+test("scheduled work seeds a prepared rater commit whose signer failed after nonce reservation", async () => {
+  await seedRecoverableRaterCommit("commit_recovery_unsigned", "prepared");
+  const seeded = await seedTokenlessScheduledWork(NOW);
+  assert.equal(seeded.raterCommitRecoveries, 1);
+  const item = await dbClient.execute({
+    sql: `SELECT state FROM tokenless_scheduled_work_items
+          WHERE kind = 'recover_rater_commit' AND subject_key = 'commit_recovery_unsigned'`,
+  });
+  assert.deepEqual(item.rows[0], { state: "pending" });
+});
+
 test("scheduled maintenance treats a reverted submitted rater transaction as terminal", async () => {
   await seedRecoverableRaterCommit("commit_recovery_reverted", "submitted");
   const result = await runTokenlessScheduledMaintenance({
@@ -342,6 +353,38 @@ test("scheduled maintenance treats a reverted submitted rater transaction as ter
   if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
   assert.ok(result.summary);
   assert.deepEqual(result.summary.work, { completed: 1, dead: 0, deferred: 0, retry: 0 });
+});
+
+test("ambiguous rater broadcasts cannot dead-letter a reserved signer nonce", async () => {
+  await seedRecoverableRaterCommit("commit_recovery_ambiguous", "signed");
+  await seedTokenlessScheduledWork(NOW);
+  await dbClient.execute({
+    sql: `UPDATE tokenless_scheduled_work_items SET attempt_count = 19
+          WHERE kind = 'recover_rater_commit' AND subject_key = 'commit_recovery_ambiguous'`,
+  });
+  const result = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    processors: {
+      ...processors(async () => undefined),
+      async recoverRaterCommit() {
+        throw new TokenlessServiceError(
+          "Exact signed transaction acceptance is ambiguous.",
+          502,
+          "rater_broadcast_unconfirmed",
+          true,
+        );
+      },
+    },
+  });
+  if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.ok(result.summary);
+  assert.deepEqual(result.summary.work, { completed: 0, dead: 0, deferred: 1, retry: 0 });
+  const item = await dbClient.execute({
+    sql: `SELECT state, attempt_count, dead_at FROM tokenless_scheduled_work_items
+          WHERE kind = 'recover_rater_commit' AND subject_key = 'commit_recovery_ambiguous'`,
+  });
+  assert.deepEqual(item.rows[0], { attempt_count: 19, dead_at: null, state: "retry" });
 });
 
 test("persistent chain recovery failures become dead-letter health evidence", async () => {

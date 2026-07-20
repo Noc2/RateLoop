@@ -56,6 +56,13 @@ const NON_COUNTING_DEFER_CODES = new Set([
   "deletion_blocked_by_hold",
   "deletion_not_due",
 ]);
+const NON_COUNTING_NONCE_RECOVERY_CODES = new Set([
+  "chain_broadcast_unconfirmed",
+  "managed_signer_outage",
+  "managed_signer_throttled",
+  "managed_signer_timeout",
+  "rater_broadcast_unconfirmed",
+]);
 const IMMEDIATE_DEAD_LETTER_CODES = new Set(["x402_authorization_used_reconciliation_required"]);
 
 function rowString(row: Row | undefined, key: string) {
@@ -130,6 +137,9 @@ export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 1
             WHERE (
                 state IN ('signed', 'retry')
                 AND relay_signed_transaction IS NOT NULL AND transaction_hash IS NOT NULL
+              ) OR (
+                state = 'prepared' AND relay_nonce IS NOT NULL
+                AND transaction_recovery_version = 1
               ) OR (state = 'submitted' AND transaction_hash IS NOT NULL)
             ORDER BY updated_at ASC, commit_id ASC LIMIT ?`,
       args: [limit],
@@ -326,7 +336,11 @@ async function processClaimedWork(input: {
       });
       if (completed.rows.length === 1) summary.completed += 1;
     } catch (error) {
-      const deferred = error instanceof TokenlessServiceError && NON_COUNTING_DEFER_CODES.has(error.code);
+      const deferred =
+        error instanceof TokenlessServiceError &&
+        (NON_COUNTING_DEFER_CODES.has(error.code) ||
+          (new Set(["recover_chain_execution", "recover_rater_commit"]).has(kind) &&
+            NON_COUNTING_NONCE_RECOVERY_CODES.has(error.code)));
       const recordedAttempt = deferred ? Number(row.attempt_count) : attempt;
       const immediatelyDead = error instanceof TokenlessServiceError && IMMEDIATE_DEAD_LETTER_CODES.has(error.code);
       const dead = !deferred && (immediatelyDead || recordedAttempt >= MAX_ATTEMPTS);
