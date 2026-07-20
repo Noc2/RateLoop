@@ -68,7 +68,7 @@ private binary-question delivery stores and leases the question under the encryp
 
 ## Timing and panel
 
-The owner selects a bounded `responseWindowSeconds` and requested panel size. The response window freezes the commit deadline. Reveal, beacon-failure, claim, and settlement grace windows remain protocol-controlled. Existing policy backfills retain the prior effective defaults: 3,600 seconds for public or hybrid requests and 1,800 seconds for invited requests.
+The owner selects a bounded `responseWindowSeconds` and requested panel size. The response window freezes the commit deadline. Reveal, beacon-failure, claim, and settlement grace windows remain protocol-controlled; the reveal window defaults to the immutable five-minute minimum and cannot be configured below it. Existing policy backfills retain the prior effective defaults: 3,600 seconds for public or hybrid requests and 1,800 seconds for invited requests.
 
 Recommended new-policy presets are 20 minutes, 1 hour, 4 hours, and 24 hours. Production availability checks may reject a window that cannot credibly fill the requested panel. Active rounds never change when policy defaults change.
 

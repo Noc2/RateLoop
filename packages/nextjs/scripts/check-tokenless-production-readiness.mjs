@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 
 const BASE_SEPOLIA_CHAIN_ID = 84_532;
 const DEPLOYMENT_SCHEMA = "rateloop-tokenless-deployment-v4";
+const MINIMUM_REVEAL_WINDOW_SECONDS = 300;
 const ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/u;
 const TOKENLESS_REVIEW_ORIGIN = "https://rateloop-tokenless.vercel.app";
 const MANAGED_EVM_SIGNER_ROLES = ["CREDENTIAL_ISSUER", "X402_RELAYER", "PREPAID_FUNDER", "SURPRISE_BONUS_FUNDER"];
@@ -626,6 +627,10 @@ export function validateTokenlessProductionReadiness({
     "TOKENLESS_WORLD_ID_CREDENTIAL_MIN_TTL_SECONDS",
   ]) {
     if (!positiveInteger(value(env, name))) errors.push(`${name} must be a positive integer.`);
+  }
+  const revealWindowSeconds = value(env, "TOKENLESS_REVEAL_WINDOW_SECONDS");
+  if (positiveInteger(revealWindowSeconds) && Number(revealWindowSeconds) < MINIMUM_REVEAL_WINDOW_SECONDS) {
+    errors.push(`TOKENLESS_REVEAL_WINDOW_SECONDS must be at least ${MINIMUM_REVEAL_WINDOW_SECONDS} seconds.`);
   }
   const beaconFailureGraceSeconds = value(env, "TOKENLESS_BEACON_FAILURE_GRACE_SECONDS");
   if (positiveInteger(beaconFailureGraceSeconds) && Number(beaconFailureGraceSeconds) < 21_600) {

@@ -52,7 +52,7 @@ function config(): TokenlessChainConfig {
     feedbackBonusAddress: FEEDBACK_BONUS,
     issuerAddress: ISSUER,
     panelAddress: PANEL,
-    revealWindowSeconds: 120,
+    revealWindowSeconds: 300,
     beaconFailureGraceSeconds: 21_600,
     rpcFallbackUrls: ["https://base-sepolia-fallback.example/"],
     rpcUrl: "https://sepolia.base.org/",

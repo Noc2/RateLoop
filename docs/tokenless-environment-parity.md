@@ -78,7 +78,8 @@ Next.js:
 - `TOKENLESS_PANEL_ADDRESS`, `TOKENLESS_CREDENTIAL_ISSUER_ADDRESS`, `TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS`,
   `TOKENLESS_BEACON_VERIFIER_ADDRESS`,
   `TOKENLESS_FEEDBACK_BONUS_ADDRESS`, `TOKENLESS_USDC_ADDRESS`
-- `TOKENLESS_FEE_RECIPIENT`, round timing variables, and optional `NEXT_PUBLIC_BASE_PAYMASTER_URL`
+- `TOKENLESS_FEE_RECIPIENT`, round timing variables (`TOKENLESS_REVEAL_WINDOW_SECONDS` is at least 300), and optional
+  `NEXT_PUBLIC_BASE_PAYMASTER_URL`
 - distinct `TOKENLESS_X402_RELAYER_KMS_*`, `TOKENLESS_PREPAID_FUNDER_KMS_*`, and
   `TOKENLESS_SURPRISE_BONUS_FUNDER_KMS_*` resource, expected-address, region, role, and OIDC bundles
 - eligibility provider ID/public key/start URL/handoff secret, versioned vault keys, and DAC7 policy

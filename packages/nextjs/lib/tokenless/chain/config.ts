@@ -6,6 +6,7 @@ export const TOKENLESS_BASE_SEPOLIA_CHAIN_ID = 84_532;
 export const TOKENLESS_DEPLOYMENT_SCHEMA = "rateloop-tokenless-deployment-v4";
 export const TOKENLESS_QUICKNET_T_CHAIN_HASH =
   "0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5" as const;
+export const TOKENLESS_MINIMUM_REVEAL_WINDOW_SECONDS = 5 * 60;
 export const TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS = 6 * 60 * 60;
 
 const PRIVATE_KEY_PATTERN = /^0x[0-9a-fA-F]{64}$/;
@@ -184,6 +185,16 @@ export function loadTokenlessChainConfig(env: NodeJS.ProcessEnv = process.env): 
   if (claimGracePeriodSeconds > 30 * 24 * 60 * 60) {
     throw new Error("TOKENLESS_CLAIM_GRACE_PERIOD_SECONDS exceeds the contract maximum of 30 days.");
   }
+  const revealWindowSeconds = positiveInteger(
+    env,
+    "TOKENLESS_REVEAL_WINDOW_SECONDS",
+    TOKENLESS_MINIMUM_REVEAL_WINDOW_SECONDS,
+  );
+  if (revealWindowSeconds < TOKENLESS_MINIMUM_REVEAL_WINDOW_SECONDS) {
+    throw new Error(
+      `TOKENLESS_REVEAL_WINDOW_SECONDS must be at least ${TOKENLESS_MINIMUM_REVEAL_WINDOW_SECONDS} seconds.`,
+    );
+  }
   const beaconFailureGraceSeconds = positiveInteger(
     env,
     "TOKENLESS_BEACON_FAILURE_GRACE_SECONDS",
@@ -250,7 +261,7 @@ export function loadTokenlessChainConfig(env: NodeJS.ProcessEnv = process.env): 
     issuerAddress,
     panelAddress,
     prepaidFunderSigner,
-    revealWindowSeconds: positiveInteger(env, "TOKENLESS_REVEAL_WINDOW_SECONDS", 120),
+    revealWindowSeconds,
     beaconFailureGraceSeconds,
     relayerSigner,
     rpcFallbackUrls,

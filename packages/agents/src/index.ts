@@ -11,7 +11,10 @@ export {
   loadTokenlessAgentAccount,
   splitTokenlessSignature,
 } from "./tokenlessSigner";
-export { runTokenlessAutonomous } from "./tokenlessRun";
+export {
+  runTokenlessAutonomous,
+  TOKENLESS_MINIMUM_REVEAL_WINDOW_SECONDS,
+} from "./tokenlessRun";
 export type {
   TokenlessAutonomousRunInput,
   TokenlessAutonomousRoundPolicy,

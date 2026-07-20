@@ -137,7 +137,7 @@ const roundPolicy = {
     "0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5" as const,
   beaconGenesisSeconds: 1_689_232_296,
   beaconPeriodSeconds: 3,
-  revealWindowSeconds: 120,
+  revealWindowSeconds: 300,
   beaconFailureGraceSeconds: 21_600,
   claimGracePeriodSeconds: 604_800,
   feeRecipient: "0x5555555555555555555555555555555555555555" as const,
@@ -342,7 +342,7 @@ describe("autonomous x402 custody guard", () => {
   it("refuses a server-shifted deadline even when all relative windows remain valid", async () => {
     const baseline = paymentInstructions();
     const commitDeadline = BigInt(baseline.roundTerms.commitDeadline) + 1_800n;
-    const revealDeadline = commitDeadline + 120n;
+    const revealDeadline = commitDeadline + 300n;
     const scoringBeaconRound = (revealDeadline - 1_689_232_296n) / 3n + 2n;
     const scoringBeaconTimestamp =
       1_689_232_296n + (scoringBeaconRound - 1n) * 3n;
@@ -375,6 +375,23 @@ describe("autonomous x402 custody guard", () => {
       }),
     ).rejects.toThrow(
       /roundPolicy\.beaconFailureGraceSeconds must be an integer from 21600 to 86400/,
+    );
+    expect(h.mocks.signTypedData).not.toHaveBeenCalled();
+    expect(h.mocks.submitPayment).not.toHaveBeenCalled();
+  });
+
+  it("refuses a reveal window below the immutable five-minute floor before signing", async () => {
+    const h = harness();
+
+    await expect(
+      run(h, {
+        roundPolicy: {
+          ...roundPolicy,
+          revealWindowSeconds: 299,
+        },
+      }),
+    ).rejects.toThrow(
+      /roundPolicy\.revealWindowSeconds must be an integer from 300 to 86400/,
     );
     expect(h.mocks.signTypedData).not.toHaveBeenCalled();
     expect(h.mocks.submitPayment).not.toHaveBeenCalled();

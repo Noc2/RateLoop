@@ -220,7 +220,8 @@ deadline, or is externally immutable; the receipt contains no raw personal data.
 ## Funding, incentives, and terminal paths
 
 Round terms freeze the bounty, platform fee, accepted-work reserve, minimum reveals, deadlines, audience-policy hash,
-scoring version, and content commitments. The funder cannot cancel or edit a paid round after the first accepted commit.
+scoring version, and content commitments. `revealDeadline` must be at least five minutes after `commitDeadline`, matching
+the immutable panel floor. The funder cannot cancel or edit a paid round after the first accepted commit.
 
 Every valid reveal earns fixed base compensation. The current binary
 [RBTS v1 specification](tokenless-rbts-v1-spec.md) adds a bounded, non-negative reporting bonus without changing the

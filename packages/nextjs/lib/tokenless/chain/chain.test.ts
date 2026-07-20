@@ -1,5 +1,6 @@
 import {
   TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS,
+  TOKENLESS_MINIMUM_REVEAL_WINDOW_SECONDS,
   TOKENLESS_QUICKNET_T_CHAIN_HASH,
   type TokenlessChainConfig,
   buildTokenlessDeploymentKey,
@@ -63,7 +64,7 @@ function config(overrides: Partial<TokenlessChainConfig> = {}): TokenlessChainCo
     feedbackBonusAddress: FEEDBACK_BONUS,
     issuerAddress: ISSUER,
     panelAddress: PANEL,
-    revealWindowSeconds: 120,
+    revealWindowSeconds: TOKENLESS_MINIMUM_REVEAL_WINDOW_SECONDS,
     beaconFailureGraceSeconds: TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS,
     rpcFallbackUrls: ["https://base-sepolia-fallback.example/"],
     rpcUrl: "https://sepolia.base.org/",
@@ -218,6 +219,32 @@ test("deployment config defaults to and enforces the contract beacon-failure gra
         TOKENLESS_BEACON_FAILURE_GRACE_SECONDS: "21599",
       }),
     /must be at least 21600 seconds/,
+  );
+});
+
+test("deployment config defaults to and enforces the immutable five-minute reveal window", () => {
+  const env = {
+    TOKENLESS_DEPLOYMENT_SCHEMA: "rateloop-tokenless-deployment-v4",
+    TOKENLESS_CHAIN_ID: "84532",
+    TOKENLESS_PANEL_ADDRESS: PANEL,
+    TOKENLESS_CREDENTIAL_ISSUER_ADDRESS: ISSUER,
+    TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS: ADAPTER,
+    TOKENLESS_FEEDBACK_BONUS_ADDRESS: FEEDBACK_BONUS,
+    TOKENLESS_USDC_ADDRESS: USDC,
+    TOKENLESS_FEE_RECIPIENT: FEE_RECIPIENT,
+    TOKENLESS_DEPLOYMENT_KEY: config().deploymentKey,
+    TOKENLESS_DEPLOYMENT_BLOCK: "100",
+    BASE_SEPOLIA_RPC_URL: "https://sepolia.base.org",
+  } as unknown as NodeJS.ProcessEnv;
+
+  assert.equal(loadTokenlessChainConfig(env).revealWindowSeconds, TOKENLESS_MINIMUM_REVEAL_WINDOW_SECONDS);
+  assert.equal(
+    loadTokenlessChainConfig({ ...env, TOKENLESS_REVEAL_WINDOW_SECONDS: "300" }).revealWindowSeconds,
+    TOKENLESS_MINIMUM_REVEAL_WINDOW_SECONDS,
+  );
+  assert.throws(
+    () => loadTokenlessChainConfig({ ...env, TOKENLESS_REVEAL_WINDOW_SECONDS: "299" }),
+    /must be at least 300 seconds/,
   );
 });
 

@@ -89,7 +89,7 @@ function validFixture() {
     TOKENLESS_USDC_EIP712_NAME: "RateLoop Tokenless Test USDC",
     TOKENLESS_USDC_EIP712_VERSION: "2",
     TOKENLESS_FEE_RECIPIENT: address(5),
-    TOKENLESS_REVEAL_WINDOW_SECONDS: "120",
+    TOKENLESS_REVEAL_WINDOW_SECONDS: "300",
     TOKENLESS_BEACON_FAILURE_GRACE_SECONDS: "21600",
     TOKENLESS_CLAIM_GRACE_PERIOD_SECONDS: "604800",
     TOKENLESS_VOUCHER_ISSUER_EPOCH: "1",
@@ -222,6 +222,16 @@ test("production chain execution enforces the contract beacon-failure grace floo
   const fixture = validFixture();
   fixture.env.TOKENLESS_BEACON_FAILURE_GRACE_SECONDS = "21599";
   assert.match(validateTokenlessProductionReadiness(fixture).join("\n"), /must be at least 21600 seconds/i);
+});
+
+test("production chain execution enforces the immutable five-minute reveal window", () => {
+  const minimum = validFixture();
+  minimum.env.TOKENLESS_REVEAL_WINDOW_SECONDS = "300";
+  assert.deepEqual(validateTokenlessProductionReadiness(minimum), []);
+
+  const belowMinimum = validFixture();
+  belowMinimum.env.TOKENLESS_REVEAL_WINDOW_SECONDS = "299";
+  assert.match(validateTokenlessProductionReadiness(belowMinimum).join("\n"), /must be at least 300 seconds/i);
 });
 
 test("managed signer keys, addresses, and IAM principals are distinct across web and keeper workloads", () => {

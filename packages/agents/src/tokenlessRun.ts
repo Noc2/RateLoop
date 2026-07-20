@@ -87,6 +87,7 @@ const QUICKNET_T_NETWORK_HASH =
   "0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5";
 const QUICKNET_T_GENESIS_SECONDS = 1_689_232_296n;
 const QUICKNET_T_PERIOD_SECONDS = 3n;
+export const TOKENLESS_MINIMUM_REVEAL_WINDOW_SECONDS = 300;
 
 function assertSignedRoundMatchesIntent(input: {
   request: TokenlessAutonomousRunInput;
@@ -178,7 +179,7 @@ function assertSignedRoundMatchesIntent(input: {
   const revealWindow = policyInteger(
     policy.revealWindowSeconds,
     "roundPolicy.revealWindowSeconds",
-    1,
+    TOKENLESS_MINIMUM_REVEAL_WINDOW_SECONDS,
     86_400,
   );
   const beaconGrace = policyInteger(

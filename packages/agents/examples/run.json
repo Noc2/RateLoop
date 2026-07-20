@@ -12,7 +12,7 @@
     "beaconNetworkHash": "0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5",
     "beaconGenesisSeconds": 1689232296,
     "beaconPeriodSeconds": 3,
-    "revealWindowSeconds": 120,
+    "revealWindowSeconds": 300,
     "beaconFailureGraceSeconds": 21600,
     "claimGracePeriodSeconds": 604800,
     "feeRecipient": "0x0000000000000000000000000000000000000000"
