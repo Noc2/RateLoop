@@ -319,6 +319,9 @@ export async function listAgentConnections(input: { accountAddress: string; work
     dbClient.execute({
       sql: `SELECT i.*, k.key_prefix AS credential_prefix,
                              COALESCE(k.expires_at, f.absolute_expires_at) AS expires_at,
+                             f.status AS token_family_status,
+                             f.revoked_by AS token_family_revoked_by,
+                             f.revocation_reason AS token_family_revocation_reason,
                              a.external_id, v.display_name, c.status AS connection_status,
                              rp.audience_policy_json
                              FROM tokenless_agent_integrations i
@@ -351,6 +354,10 @@ export async function listAgentConnections(input: { accountAddress: string; work
         activationMode: text(row, "activation_mode"),
         connectionStatus: text(row, "connection_status"),
         oauthClientId: text(row, "oauth_client_id"),
+        oauthRecoveryAvailable:
+          text(row, "token_family_status") === "revoked" &&
+          text(row, "token_family_revoked_by") === "oauth_server" &&
+          text(row, "token_family_revocation_reason") === "refresh_token_replay",
       };
     }),
   };
@@ -1281,6 +1288,129 @@ export async function revokeAgentIntegration(input: {
   } finally {
     client.release();
   }
+}
+
+/**
+ * Restore the original refresh token retained by a public OAuth client after the
+ * pre-stable-refresh server falsely treated its second use as replay. This is an
+ * explicit workspace-administrator recovery, not a general replay bypass.
+ */
+export async function recoverAgentIntegrationOAuth(input: {
+  accountAddress: string;
+  workspaceId: string;
+  integrationId: string;
+}) {
+  const actor = await management(input.accountAddress, input.workspaceId);
+  const now = new Date();
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query(
+      `SELECT i.token_family_id,i.granted_scopes_json,c.status AS connection_status,
+              f.status AS token_family_status,f.revoked_by AS token_family_revoked_by,
+              f.revocation_reason AS token_family_revocation_reason,f.absolute_expires_at,
+              o.status AS oauth_client_status,o.token_endpoint_auth_method,o.expires_at AS oauth_client_expires_at,
+              r.refresh_token_id,r.expires_at AS refresh_token_expires_at
+       FROM tokenless_agent_integrations i
+       JOIN tokenless_agent_connection_intents c ON c.intent_id=i.connection_intent_id
+       JOIN tokenless_agent_oauth_token_families f ON f.token_family_id=i.token_family_id
+       JOIN tokenless_agent_oauth_clients o ON o.client_id=i.oauth_client_id
+       JOIN tokenless_agent_oauth_refresh_tokens r
+         ON r.token_family_id=f.token_family_id AND r.generation=1
+        AND r.client_id=i.oauth_client_id AND r.subject_principal_id=i.oauth_subject_principal_id
+        AND r.resource=f.resource AND r.audience=f.audience
+       WHERE i.workspace_id=$1 AND i.integration_id=$2 AND i.status='active'
+         AND i.activation_mode IN ('preauthorized_safe','owner_approved')
+       FOR UPDATE`,
+      [input.workspaceId, input.integrationId],
+    );
+    const row = result.rows[0] as Row | undefined;
+    if (!row) {
+      throw new TokenlessServiceError("OAuth integration not found.", 404, "agent_integration_not_found");
+    }
+    const tokenFamilyId = text(row, "token_family_id");
+    const clientExpiresAt = row.oauth_client_expires_at ? new Date(String(row.oauth_client_expires_at)) : null;
+    const familyExpiresAt = new Date(String(row.absolute_expires_at));
+    const refreshExpiresAt = new Date(String(row.refresh_token_expires_at));
+    const grantedScopes = jsonArray(row.granted_scopes_json, "granted scopes");
+    const eligible =
+      tokenFamilyId &&
+      text(row, "connection_status") === "connected" &&
+      text(row, "token_family_status") === "revoked" &&
+      text(row, "token_family_revoked_by") === "oauth_server" &&
+      text(row, "token_family_revocation_reason") === "refresh_token_replay" &&
+      text(row, "oauth_client_status") === "active" &&
+      text(row, "token_endpoint_auth_method") === "none" &&
+      (!clientExpiresAt || clientExpiresAt.getTime() > now.getTime()) &&
+      familyExpiresAt.getTime() > now.getTime() &&
+      refreshExpiresAt.getTime() > now.getTime() &&
+      grantedScopes.length > 0 &&
+      grantedScopes.every(scope => (OWNER_APPROVED_AGENT_SCOPES as readonly string[]).includes(scope));
+    if (!eligible) {
+      throw new TokenlessServiceError(
+        "This OAuth connection cannot be restored. Create a new connection instead.",
+        409,
+        "oauth_connection_recovery_unavailable",
+      );
+    }
+    await client.query(
+      `UPDATE tokenless_agent_oauth_access_tokens
+       SET revoked_at=COALESCE(revoked_at,$2),revocation_reason=COALESCE(revocation_reason,'owner_refresh_recovery')
+       WHERE token_family_id=$1`,
+      [tokenFamilyId, now],
+    );
+    await client.query(
+      `UPDATE tokenless_agent_oauth_refresh_tokens
+       SET revoked_at=COALESCE(revoked_at,$2),revocation_reason=COALESCE(revocation_reason,'owner_refresh_recovery')
+       WHERE token_family_id=$1 AND generation<>1`,
+      [tokenFamilyId, now],
+    );
+    const restored = await client.query(
+      `UPDATE tokenless_agent_oauth_refresh_tokens
+       SET used_at=NULL,replaced_at=NULL,revoked_at=NULL,revocation_reason=NULL
+       WHERE token_family_id=$1 AND generation=1 AND expires_at>$2
+       RETURNING refresh_token_id`,
+      [tokenFamilyId, now],
+    );
+    if (restored.rowCount !== 1) {
+      throw new TokenlessServiceError(
+        "The retained OAuth credential is no longer available.",
+        409,
+        "oauth_connection_recovery_unavailable",
+      );
+    }
+    await client.query(
+      `UPDATE tokenless_agent_oauth_token_families
+       SET status='active',revoked_at=NULL,revoked_by=NULL,revocation_reason=NULL,last_rotated_at=$2
+       WHERE token_family_id=$1`,
+      [tokenFamilyId, now],
+    );
+    await client.query(
+      `UPDATE tokenless_agent_integrations
+       SET last_diagnostic_code=NULL,last_diagnostic_at=NULL,recovery_action=NULL,updated_at=$2
+       WHERE integration_id=$1`,
+      [input.integrationId, now],
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+  await appendAuditEvent({
+    action: "agent.oauth_connection_recovered",
+    actorKind: isRateLoopPrincipalId(actor) ? "principal" : "account",
+    actorReference: actor,
+    assuranceMethod: "rateloop_session",
+    purpose: "agent_connection",
+    reason: "owner_authorized_refresh_replay_recovery",
+    result: "success",
+    targetId: input.integrationId,
+    targetKind: "agent_integration",
+    workspaceId: input.workspaceId,
+  });
+  return { integration: { integrationId: input.integrationId, status: "active", oauthRecovered: true } };
 }
 
 export async function rotateAgentIntegration(input: {

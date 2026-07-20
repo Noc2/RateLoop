@@ -109,6 +109,13 @@ test("safe OAuth integrations show no bearer rotation or publishing permission",
   assert.match(source, /Rotate legacy credential/);
 });
 
+test("replay-revoked OAuth integrations expose the owner recovery action", () => {
+  assert.match(source, /oauthRecoveryAvailable/);
+  assert.match(source, /recover-oauth/);
+  assert.match(source, /Restore connection/);
+  assert.match(source, /revokes its current access tokens and restores the existing safe OAuth credential/);
+});
+
 test("the default adaptive policy explains its reachable calibration evidence", () => {
   assert.match(source, /two stable\s+15-case windows/);
   assert.match(source, /at least 14 agent-human agreements each/);

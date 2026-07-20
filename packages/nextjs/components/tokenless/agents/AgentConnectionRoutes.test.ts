@@ -23,6 +23,13 @@ const publicApi = readFileSync(
 );
 const publicPage = readFileSync(new URL("../../../app/(public)/connect/[intentId]/page.tsx", import.meta.url), "utf8");
 const publicClient = readFileSync(new URL("./PublicAgentConnectionStatus.tsx", import.meta.url), "utf8");
+const oauthRecovery = readFileSync(
+  new URL(
+    "../../../app/api/account/workspaces/[workspaceId]/agent-integrations/[integrationId]/recover-oauth/route.ts",
+    import.meta.url,
+  ),
+  "utf8",
+);
 
 test("agent connection intent account routes require browser authentication and mutation protection", () => {
   assert.match(accountCollection, /requireBrowserSession\(request\)/);
@@ -34,6 +41,12 @@ test("agent connection intent account routes require browser authentication and 
   assert.match(accountItem, /cancelAgentConnectionIntent/);
   assert.match(accountCollection, /"Cache-Control": "private, no-store"/);
   assert.match(accountItem, /"Cache-Control": "private, no-store"/);
+});
+
+test("OAuth recovery is an authenticated same-origin owner mutation", () => {
+  assert.match(oauthRecovery, /requireBrowserSession\(request, \{ mutation: true \}\)/);
+  assert.match(oauthRecovery, /recoverAgentIntegrationOAuth/);
+  assert.match(oauthRecovery, /"Cache-Control": "private, no-store, max-age=0"/);
 });
 
 test("onboarding telemetry is authenticated and server-allowlisted", () => {

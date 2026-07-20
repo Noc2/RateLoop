@@ -55,6 +55,7 @@ type AgentIntegration = {
   lastSeenAt: string | null;
   credentialExpiresAt: string | null;
   connectionStatus: string | null;
+  oauthRecoveryAvailable: boolean;
 };
 
 type PublishingPolicy = {
@@ -201,6 +202,7 @@ export function normalizeAgentIntegration(value: unknown): AgentIntegration {
     lastSeenAt: nullableStringField(row, "lastSeenAt"),
     credentialExpiresAt: nullableStringField(row, "credentialExpiresAt", "expiresAt"),
     connectionStatus: nullableStringField(row, "connectionStatus"),
+    oauthRecoveryAvailable: row.oauthRecoveryAvailable === true,
   };
 }
 
@@ -932,6 +934,26 @@ export function AgentConnectionPanel({
     }
   }
 
+  async function recoverOAuthIntegration(integration: AgentIntegration) {
+    setBusyAction(`recover-oauth:${integration.integrationId}`);
+    setError(null);
+    setStatus(null);
+    try {
+      await readJson(
+        await fetch(
+          `/api/account/workspaces/${encodeURIComponent(workspaceId)}/agent-integrations/${encodeURIComponent(integration.integrationId)}/recover-oauth`,
+          { method: "POST", credentials: "same-origin" },
+        ),
+      );
+      await loadConnectionState(workspaceId);
+      setStatus("Codex connection restored. The agent can resume with its existing credential.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to restore the OAuth connection.");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   async function copyReveal() {
     if (!reveal) return;
     try {
@@ -1268,6 +1290,30 @@ export function AgentConnectionPanel({
               {showConnectionManagement ? "Done" : "Manage connected agents"}
             </Button>
           </div>
+          {activeIntegrations
+            .filter(integration => integration.oauthRecoveryAvailable)
+            .map(integration => (
+              <div
+                key={`oauth-recovery:${integration.integrationId}`}
+                className="mt-5 flex flex-col gap-3 rounded-xl border border-amber-300/20 bg-amber-300/[0.06] p-4 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <p className="font-medium">{integration.agentDisplayName || "Codex"} needs its connection restored</p>
+                  <p className="mt-1 text-sm text-base-content/60">
+                    This revokes its current access tokens and restores the existing safe OAuth credential.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={Boolean(busyAction)}
+                  onClick={() => void recoverOAuthIntegration(integration)}
+                >
+                  {busyAction === `recover-oauth:${integration.integrationId}` ? "Restoring…" : "Restore connection"}
+                </Button>
+              </div>
+            ))}
           {showConnectionManagement ? (
             <div id="connected-agent-management" className="mt-5 space-y-4">
               {activeIntegrations.map(integration => {

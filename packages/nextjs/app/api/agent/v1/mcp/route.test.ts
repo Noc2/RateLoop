@@ -16,6 +16,7 @@ import {
   authenticateAgentMcpPrincipal,
   createAgentPairing,
   listAgentConnections,
+  recoverAgentIntegrationOAuth,
   rotateAgentIntegration,
   submitAgentRegistration,
 } from "~~/lib/tokenless/agentIntegrations";
@@ -221,7 +222,7 @@ async function setupOAuthConnectionIntent() {
     codeVerifier: verifier,
     resource: getCanonicalAgentMcpResource(),
   });
-  return { intent, principalId, tokens, workspaceId };
+  return { clientId: oauthClient.client_id, intent, principalId, tokens, workspaceId };
 }
 
 async function addRedeemedPrivateReviewer(input: {
@@ -396,6 +397,95 @@ test("one preferred OAuth tool connects a fresh workspace without reflecting the
   assert.equal(Number(state.rows[0]?.agents ?? 0), 1);
   assert.equal(Number(state.rows[0]?.integrations ?? 0), 1);
   assert.equal(Number(state.rows[0]?.connected_events ?? 0), 1);
+});
+
+test("an owner can recover only a replay-revoked public OAuth integration", async () => {
+  const { clientId, intent, principalId, tokens, workspaceId } = await setupOAuthConnectionIntent();
+  const initialized = await POST(
+    request(
+      {
+        id: 1,
+        jsonrpc: "2.0",
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-11-25",
+          capabilities: {},
+          clientInfo: { name: "Recovery MCP client", version: "1.0.0" },
+        },
+      },
+      tokens.access_token,
+    ),
+  );
+  const sessionId = initialized.headers.get("mcp-session-id");
+  assert.ok(sessionId);
+  const connectedResponse = await POST(
+    request(
+      {
+        id: 2,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: "rateloop_connect_workspace", arguments: { connectionUrl: intent.connectionUrl } },
+      },
+      tokens.access_token,
+      sessionId,
+    ),
+  );
+  const connected = (await connectedResponse.json()).result.structuredContent;
+  const integrationId = connected.connection.integrationId as string;
+  const now = new Date();
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_oauth_refresh_tokens
+          SET used_at=?,replaced_at=? WHERE token_hash=?`,
+    args: [now, now, createHash("sha256").update(tokens.refresh_token).digest("hex")],
+  });
+  await assert.rejects(
+    () =>
+      exchangeAgentOAuthToken({
+        grantType: "refresh_token",
+        clientId,
+        refreshToken: tokens.refresh_token,
+        resource: getCanonicalAgentMcpResource(),
+      }),
+    /replay revoked this token family/u,
+  );
+
+  const before = await listAgentConnections({ accountAddress: principalId, workspaceId });
+  assert.equal(
+    before.integrations.find(integration => integration.integrationId === integrationId)?.oauthRecoveryAvailable,
+    true,
+  );
+  const recovered = await recoverAgentIntegrationOAuth({ accountAddress: principalId, workspaceId, integrationId });
+  assert.equal(recovered.integration.oauthRecovered, true);
+  const after = await listAgentConnections({ accountAddress: principalId, workspaceId });
+  assert.equal(
+    after.integrations.find(integration => integration.integrationId === integrationId)?.oauthRecoveryAvailable,
+    false,
+  );
+
+  const refreshed = await exchangeAgentOAuthToken({
+    grantType: "refresh_token",
+    clientId,
+    refreshToken: tokens.refresh_token,
+    resource: getCanonicalAgentMcpResource(),
+  });
+  assert.equal(refreshed.refresh_token, tokens.refresh_token);
+  await assert.rejects(
+    () => authenticateAgentMcpPrincipal(`Bearer ${tokens.access_token}`),
+    /invalid|expired|revoked/iu,
+  );
+  assert.equal((await authenticateAgentMcpPrincipal(`Bearer ${refreshed.access_token}`)).kind, "oauth");
+  await assert.rejects(
+    () => recoverAgentIntegrationOAuth({ accountAddress: principalId, workspaceId, integrationId }),
+    /cannot be restored/u,
+  );
+  const audit = await dbClient.execute({
+    sql: `SELECT action,reason FROM tokenless_audit_events
+          WHERE workspace_id=? AND target_id=? AND action='agent.oauth_connection_recovered'`,
+    args: [workspaceId, integrationId],
+  });
+  assert.deepEqual(audit.rows, [
+    { action: "agent.oauth_connection_recovered", reason: "owner_authorized_refresh_replay_recovery" },
+  ]);
 });
 
 test("finished automatic private setup lets the connected agent assign an eligible review without manual routing", async () => {
