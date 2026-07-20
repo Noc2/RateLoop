@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient, dbPool } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
@@ -17,6 +18,17 @@ import { createReviewRequestProfile, updateReviewRequestProfile } from "~~/lib/t
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
+const humanReviewConfigurationSource = readFileSync(new URL("./humanReviewConfiguration.ts", import.meta.url), "utf8");
+
+test("automatic grant locking is valid PostgreSQL for optional OAuth relations", () => {
+  const start = humanReviewConfigurationSource.indexOf("async function prepareExactPublishingGrant");
+  const end = humanReviewConfigurationSource.indexOf("async function activatePreparedPublishingGrant", start);
+  assert.ok(start >= 0 && end > start);
+  const source = humanReviewConfigurationSource.slice(start, end);
+  assert.match(source, /FROM tokenless_agent_integrations i[\s\S]*FOR UPDATE/u);
+  assert.match(source, /FROM tokenless_agent_connection_intents c[\s\S]*FOR SHARE/u);
+  assert.doesNotMatch(source, /LEFT JOIN[\s\S]*FOR UPDATE/u);
+});
 
 beforeEach(() => __setDatabaseResourcesForTests(createMemoryDatabaseResources()));
 afterEach(() => __setDatabaseResourcesForTests(null));

@@ -1034,11 +1034,7 @@ async function prepareExactPublishingGrant(
   },
 ): Promise<PreparedPublishingGrant> {
   const integrationResult = await client.query(
-    `SELECT i.*, c.status AS connection_status, f.status AS token_family_status,
-            f.revoked_at AS token_family_revoked_at, f.absolute_expires_at AS token_family_expires_at
-     FROM tokenless_agent_integrations i
-     LEFT JOIN tokenless_agent_connection_intents c ON c.intent_id = i.connection_intent_id
-     LEFT JOIN tokenless_agent_oauth_token_families f ON f.token_family_id = i.token_family_id
+    `SELECT i.* FROM tokenless_agent_integrations i
      WHERE i.workspace_id = $1 AND i.agent_id = $2 AND i.agent_version_id = $3
        AND i.integration_id = $4 AND i.status = 'active' AND i.revoked_at IS NULL
      FOR UPDATE`,
@@ -1052,16 +1048,33 @@ async function prepareExactPublishingGrant(
       "human_review_publishing_grant_mismatch",
     );
   }
-  const familyExpiresAt = new Date(String(integration.token_family_expires_at));
+  const connectionIntentId = rowString(integration, "connection_intent_id");
+  const tokenFamilyId = rowString(integration, "token_family_id");
+  if (!connectionIntentId || !tokenFamilyId) {
+    throw new TokenlessServiceError(
+      "Automatic review asks require an active, connected OAuth agent integration.",
+      409,
+      "human_review_publishing_grant_not_supported",
+    );
+  }
+  const credentialResult = await client.query(
+    `SELECT c.status AS connection_status, f.status AS token_family_status,
+            f.revoked_at AS token_family_revoked_at, f.absolute_expires_at AS token_family_expires_at
+     FROM tokenless_agent_connection_intents c
+     JOIN tokenless_agent_oauth_token_families f ON f.token_family_id = $2
+     WHERE c.intent_id = $1
+     FOR SHARE`,
+    [connectionIntentId, tokenFamilyId],
+  );
+  const credential = credentialResult.rows[0] as Row | undefined;
+  const familyExpiresAt = new Date(String(credential?.token_family_expires_at));
   if (
-    !rowString(integration, "connection_intent_id") ||
-    !rowString(integration, "token_family_id") ||
     !rowString(integration, "oauth_client_id") ||
     !rowString(integration, "oauth_subject_principal_id") ||
-    rowString(integration, "connection_status") !== "connected" ||
+    rowString(credential, "connection_status") !== "connected" ||
     !["preauthorized_safe", "owner_approved"].includes(rowString(integration, "activation_mode") ?? "") ||
-    rowString(integration, "token_family_status") !== "active" ||
-    rowString(integration, "token_family_revoked_at") !== null ||
+    rowString(credential, "token_family_status") !== "active" ||
+    rowString(credential, "token_family_revoked_at") !== null ||
     !Number.isFinite(familyExpiresAt.getTime()) ||
     familyExpiresAt <= input.now
   ) {
