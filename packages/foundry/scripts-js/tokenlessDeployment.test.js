@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { keccak256 } from "viem";
 
 import { exportTokenlessDeploymentFromBroadcast } from "./exportTokenlessDeploymentFromBroadcast.js";
 import {
@@ -67,21 +68,27 @@ function completeBroadcast({ includeAdapter = false } = {}) {
       2,
     ),
     createTransaction(
+      "QuicknetTBeaconVerifier",
+      address(6),
+      [],
+      3,
+    ),
+    createTransaction(
       "TokenlessPanel",
       panel,
       [testUsdc, credentialIssuer, address(6)],
-      3,
+      4,
     ),
     createTransaction(
       "TokenlessFeedbackBonus",
       feedbackBonus,
       [testUsdc, credentialIssuer],
-      4,
+      5,
     ),
   ];
   if (includeAdapter) {
     entries.push(
-      createTransaction("X402PanelSubmitter", address(5), [testUsdc, panel], 5),
+      createTransaction("X402PanelSubmitter", address(5), [testUsdc, panel], 6),
     );
   }
   return {
@@ -104,6 +111,8 @@ test("reconstructs an isolated versioned tokenless Base Sepolia artifact", () =>
   assert.equal(artifact.contracts.TokenlessPanel.address, address(3));
   assert.equal(artifact.contracts.TokenlessFeedbackBonus.address, address(4));
   assert.equal(artifact.beaconVerifier, address(6));
+  assert.equal(artifact.beaconVerifierArtifact, "QuicknetTBeaconVerifier");
+  assert.equal(artifact.beaconVerifierDeployedOnBlock, 103);
   assert.equal(artifact.contracts.X402PanelSubmitter, undefined);
   // The common start block is the earliest deployed block (TestUSDC at 101),
   // not the latest, so Ponder never skips earlier constructor events.
@@ -118,7 +127,7 @@ test("exports the earliest deployed block even when the adapter is deployed last
   const artifact = reconstructTokenlessDeploymentFromBroadcast(
     completeBroadcast({ includeAdapter: true }),
   );
-  assert.equal(artifact.contracts.X402PanelSubmitter.deployedOnBlock, 105);
+  assert.equal(artifact.contracts.X402PanelSubmitter.deployedOnBlock, 106);
   assert.equal(artifact.deploymentBlockNumber, 101);
 });
 
@@ -131,7 +140,7 @@ test("rejects a deployment block that is not the earliest contract block", () =>
     () =>
       validateTokenlessDeploymentArtifact({
         ...artifact,
-        deploymentBlockNumber: 105,
+        deploymentBlockNumber: 106,
       }),
     /must equal the earliest contract deployment block/,
   );
@@ -162,9 +171,9 @@ test("resolves Foundry CREATE hash permutations by unique successful receipt add
   const artifact = reconstructTokenlessDeploymentFromBroadcast(broadcast);
   assert.equal(artifact.contracts.TestUSDC.deployedOnBlock, 101);
   assert.equal(artifact.contracts.CredentialIssuer.deployedOnBlock, 102);
-  assert.equal(artifact.contracts.TokenlessPanel.deployedOnBlock, 103);
-  assert.equal(artifact.contracts.TokenlessFeedbackBonus.deployedOnBlock, 104);
-  assert.equal(artifact.contracts.X402PanelSubmitter.deployedOnBlock, 105);
+  assert.equal(artifact.contracts.TokenlessPanel.deployedOnBlock, 104);
+  assert.equal(artifact.contracts.TokenlessFeedbackBonus.deployedOnBlock, 105);
+  assert.equal(artifact.contracts.X402PanelSubmitter.deployedOnBlock, 106);
 });
 
 test("rejects missing required contracts and mixed broadcasts", () => {
@@ -184,6 +193,15 @@ test("rejects missing required contracts and mixed broadcasts", () => {
   assert.throws(
     () => reconstructTokenlessDeploymentFromBroadcast(missingFeedbackBonus),
     /exactly one TokenlessFeedbackBonus/,
+  );
+
+  const missingBeaconVerifier = completeBroadcast();
+  missingBeaconVerifier.transactions = missingBeaconVerifier.transactions.filter(
+    (transaction) => transaction.contractName !== "QuicknetTBeaconVerifier",
+  );
+  assert.throws(
+    () => reconstructTokenlessDeploymentFromBroadcast(missingBeaconVerifier),
+    /exactly one QuicknetTBeaconVerifier/,
   );
 
   const mixed = completeBroadcast();
@@ -229,6 +247,18 @@ test("rejects TokenlessPanel constructor wiring that disagrees with exports", ()
   assert.throws(
     () => reconstructTokenlessDeploymentFromBroadcast(broadcast),
     /constructor wiring must match/,
+  );
+});
+
+test("rejects an arbitrary verifier address not deployed in the same broadcast", () => {
+  const broadcast = completeBroadcast();
+  const panel = broadcast.transactions.find(
+    (transaction) => transaction.contractName === "TokenlessPanel",
+  );
+  panel.arguments[2] = address(99);
+  assert.throws(
+    () => reconstructTokenlessDeploymentFromBroadcast(broadcast),
+    /must be the QuicknetTBeaconVerifier deployed in the same broadcast/,
   );
 });
 
@@ -300,6 +330,7 @@ test("export writes tokenless-v4 with exact runtime hashes and leaves historical
       targetNetwork: "baseSepolia",
       getBytecode: async (contractAddress) =>
         `0x60${contractAddress.slice(-2)}`,
+      expectedBeaconVerifierRuntimeCodeHash: keccak256("0x6006"),
     });
 
     assert.equal(readFileSync(unrelatedPath, "utf8"), '{"unrelated":true}\n');
@@ -313,6 +344,29 @@ test("export writes tokenless-v4 with exact runtime hashes and leaves historical
     assert.equal(exported.runtimeCodeEvidenceComplete, true);
     assert.match(exported.contracts.TokenlessPanel.runtimeCodeHash, /^0x[0-9a-f]{64}$/u);
     assert.match(exported.beaconVerifierRuntimeCodeHash, /^0x[0-9a-f]{64}$/u);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("export rejects deployed verifier bytecode that differs from the compiled runtime", async () => {
+  const root = mkdtempSync(join(tmpdir(), "rateloop-tokenless-verifier-hash-"));
+  try {
+    const broadcastPath = join(root, "run-latest.json");
+    const deploymentPath = join(root, "deployments", "tokenless-v4", "84532.json");
+    writeFileSync(broadcastPath, JSON.stringify(completeBroadcast()));
+
+    await assert.rejects(
+      () =>
+        exportTokenlessDeploymentFromBroadcast({
+          broadcastPath,
+          deploymentPath,
+          targetNetwork: "baseSepolia",
+          getBytecode: async (contractAddress) => `0x60${contractAddress.slice(-2)}`,
+          expectedBeaconVerifierRuntimeCodeHash: keccak256("0x6007"),
+        }),
+      /runtime bytecode hash mismatch/,
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

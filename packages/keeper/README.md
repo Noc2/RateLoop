@@ -65,7 +65,9 @@ The tlock plaintext is ABI encoded as:
  address payoutAddress, bytes32 salt)
 ```
 
-The keeper rejects wrong magic/version, invalid prediction buckets, and round or vote-key mismatches. Base Sepolia is pinned to drand quicknet-t.
+The keeper rejects wrong magic/version, invalid prediction buckets, and round or vote-key mismatches. Base Sepolia is
+pinned to drand quicknet-t. Scoring evidence is the raw 48-byte drand signature, and the keeper also requires the
+reported randomness to equal `sha256(signature)` before it submits the proof on-chain.
 
 If the beacon is late or unavailable, the keeper does not invent or retain a rater key. Both automatic reveal and the rater's client-backed self-reveal remain open through `beaconFailureDeadline`. After the normal reveal deadline, zero-commit and already-quorate rounds settle immediately; an under-quorum round stays open for valid late reveals and settles only after the beacon-failure deadline. The keeper reports both `selfRevealFallbacksPending` and `roundsAwaitingBeaconFailure`. In a beacon-failure terminal round, automatic compensation claiming is possible only if the ciphertext later decrypts. Otherwise the rater must use their locally retained payout material before the claim deadline.
 

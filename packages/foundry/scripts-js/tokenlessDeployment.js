@@ -13,9 +13,14 @@ const REQUIRED_CONTRACTS = [
   "TokenlessFeedbackBonus",
 ];
 const OPTIONAL_CONTRACTS = ["X402PanelSubmitter"];
+const BEACON_VERIFIER_ARTIFACT = "QuicknetTBeaconVerifier";
 const ALLOWED_CONTRACTS = new Set([
   ...REQUIRED_CONTRACTS,
   ...OPTIONAL_CONTRACTS,
+]);
+const ALLOWED_DEPLOYMENTS = new Set([
+  ...ALLOWED_CONTRACTS,
+  BEACON_VERIFIER_ARTIFACT,
 ]);
 
 function normalizeAddress(value, label) {
@@ -45,7 +50,7 @@ function normalizeCodeHash(value, label) {
 
 export async function attachTokenlessRuntimeCodeEvidence(
   artifact,
-  { getBytecode },
+  { getBytecode, expectedBeaconVerifierRuntimeCodeHash },
 ) {
   const evidenced = structuredClone(artifact);
   for (const [name, contract] of Object.entries(evidenced.contracts)) {
@@ -62,10 +67,21 @@ export async function attachTokenlessRuntimeCodeEvidence(
   ) {
     throw new Error("BeaconVerifier has no exact deployed runtime bytecode.");
   }
-  evidenced.beaconVerifierRuntimeCodeHash = keccak256(beaconCode).toLowerCase();
+  const observedBeaconVerifierRuntimeCodeHash = keccak256(beaconCode).toLowerCase();
+  const expectedBeaconVerifierHash = normalizeCodeHash(
+    expectedBeaconVerifierRuntimeCodeHash,
+    "compiled QuicknetTBeaconVerifier runtimeCodeHash",
+  );
+  if (observedBeaconVerifierRuntimeCodeHash !== expectedBeaconVerifierHash) {
+    throw new Error(
+      `QuicknetTBeaconVerifier runtime bytecode hash mismatch: compiled ${expectedBeaconVerifierHash}, deployed ${observedBeaconVerifierRuntimeCodeHash}.`,
+    );
+  }
+  evidenced.beaconVerifierRuntimeCodeHash = observedBeaconVerifierRuntimeCodeHash;
   evidenced.runtimeCodeEvidenceComplete = true;
   return validateTokenlessDeploymentArtifact(evidenced, {
     requireRuntimeCodeEvidence: true,
+    expectedBeaconVerifierRuntimeCodeHash: expectedBeaconVerifierHash,
   });
 }
 
@@ -254,7 +270,7 @@ export function reconstructTokenlessDeploymentFromBroadcast(
   const creates = findCreates(broadcast);
   const unexpectedNames = creates
     .map((deployment) => deploymentLabel(deployment.contractName))
-    .filter((contractName) => !ALLOWED_CONTRACTS.has(contractName));
+    .filter((contractName) => !ALLOWED_DEPLOYMENTS.has(contractName));
   if (unexpectedNames.length > 0) {
     throw new Error(
       `Refusing mixed or unknown tokenless deployment broadcast: ${[
@@ -265,6 +281,10 @@ export function reconstructTokenlessDeploymentFromBroadcast(
 
   const testUsdc = oneDeployment(creates, "TestUSDC");
   const credentialIssuer = oneDeployment(creates, "CredentialIssuer");
+  const beaconVerifierDeployment = oneDeployment(
+    creates,
+    BEACON_VERIFIER_ARTIFACT,
+  );
   const panel = oneDeployment(creates, "TokenlessPanel");
   const feedbackBonus = oneDeployment(creates, "TokenlessFeedbackBonus");
   const x402PanelSubmitter = optionalDeployment(creates, "X402PanelSubmitter");
@@ -292,6 +312,11 @@ export function reconstructTokenlessDeploymentFromBroadcast(
     panel.arguments[2],
     "TokenlessPanel beacon verifier",
   );
+  if (!sameAddress(beaconVerifier, beaconVerifierDeployment.address)) {
+    throw new Error(
+      "TokenlessPanel beacon verifier must be the QuicknetTBeaconVerifier deployed in the same broadcast.",
+    );
+  }
 
   if (
     x402PanelSubmitter &&
@@ -344,6 +369,8 @@ export function reconstructTokenlessDeploymentFromBroadcast(
     deploymentBlockNumber,
     deploymentKey,
     beaconVerifier,
+    beaconVerifierArtifact: BEACON_VERIFIER_ARTIFACT,
+    beaconVerifierDeployedOnBlock: beaconVerifierDeployment.blockNumber,
     contracts,
     testCurrency: {
       contract: "TestUSDC",
@@ -356,7 +383,10 @@ export function reconstructTokenlessDeploymentFromBroadcast(
 
 export function validateTokenlessDeploymentArtifact(
   artifact,
-  { requireRuntimeCodeEvidence = false } = {},
+  {
+    requireRuntimeCodeEvidence = false,
+    expectedBeaconVerifierRuntimeCodeHash,
+  } = {},
 ) {
   if (!artifact || typeof artifact !== "object") {
     throw new Error("Tokenless deployment artifact must be an object.");
@@ -384,11 +414,31 @@ export function validateTokenlessDeploymentArtifact(
   }
   normalizeBlockNumber(artifact.deploymentBlockNumber, "deploymentBlockNumber");
   normalizeAddress(artifact.beaconVerifier, "beaconVerifier");
+  if (artifact.beaconVerifierArtifact !== BEACON_VERIFIER_ARTIFACT) {
+    throw new Error(
+      `Tokenless deployment beacon verifier artifact must be ${BEACON_VERIFIER_ARTIFACT}.`,
+    );
+  }
+  normalizeBlockNumber(
+    artifact.beaconVerifierDeployedOnBlock,
+    "beaconVerifierDeployedOnBlock",
+  );
   if (artifact.beaconVerifierRuntimeCodeHash !== undefined) {
     normalizeCodeHash(
       artifact.beaconVerifierRuntimeCodeHash,
       "beaconVerifierRuntimeCodeHash",
     );
+  }
+  if (expectedBeaconVerifierRuntimeCodeHash !== undefined) {
+    const expectedHash = normalizeCodeHash(
+      expectedBeaconVerifierRuntimeCodeHash,
+      "compiled QuicknetTBeaconVerifier runtimeCodeHash",
+    );
+    if (artifact.beaconVerifierRuntimeCodeHash !== expectedHash) {
+      throw new Error(
+        "Tokenless deployment beacon verifier runtime code hash does not match the compiled artifact.",
+      );
+    }
   }
   if (
     requireRuntimeCodeEvidence &&

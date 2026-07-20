@@ -2,7 +2,7 @@
 src = "contracts"
 out = "out"
 libs = ["lib", "node_modules"]
-evm_version = "cancun"
+evm_version = "prague"
 solc = "0.8.35"
 via_ir = true
 optimizer = true

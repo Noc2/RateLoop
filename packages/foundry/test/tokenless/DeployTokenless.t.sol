@@ -4,6 +4,7 @@ pragma solidity ^0.8.35;
 import { Test } from "forge-std/Test.sol";
 
 import { DeployTokenlessScript } from "../../script/DeployTokenless.s.sol";
+import { QuicknetTBeaconVerifier } from "../../contracts/tokenless/QuicknetTBeaconVerifier.sol";
 
 contract RotationAuthorityMock {
     address[] internal owners;
@@ -26,6 +27,10 @@ contract RotationAuthorityMock {
 contract DeployTokenlessHarness is DeployTokenlessScript {
     function assertRotationAuthority(address authority) external view {
         _assertRotationAuthority(authority);
+    }
+
+    function assertBeaconVerifierRuntimeCodeHash(address verifier) external view {
+        _assertBeaconVerifierRuntimeCodeHash(verifier);
     }
 }
 
@@ -75,6 +80,22 @@ contract DeployTokenlessTest is Test {
     function testAcceptsTwoOfThreeContractAuthority() public {
         RotationAuthorityMock authority = new RotationAuthorityMock(_owners(), 2);
         harness.assertRotationAuthority(address(authority));
+    }
+
+    function testAcceptsOnlyCompiledBeaconVerifierRuntimeCode() public {
+        QuicknetTBeaconVerifier verifier = new QuicknetTBeaconVerifier();
+        harness.assertBeaconVerifierRuntimeCodeHash(address(verifier));
+
+        address differentRuntime = address(new RotationAuthorityMock(_owners(), 2));
+        bytes32 expected = keccak256(vm.getDeployedCode("QuicknetTBeaconVerifier.sol:QuicknetTBeaconVerifier"));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                DeployTokenlessScript.BeaconVerifierRuntimeCodeHashMismatch.selector,
+                expected,
+                differentRuntime.codehash
+            )
+        );
+        harness.assertBeaconVerifierRuntimeCodeHash(differentRuntime);
     }
 
     function _owners() internal returns (address[] memory owners) {

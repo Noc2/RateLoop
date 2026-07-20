@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { keccak256 } from "viem";
 
 import {
   attachTokenlessRuntimeCodeEvidence,
@@ -32,6 +33,26 @@ export function tokenlessDeploymentPath(root = foundryRoot) {
   );
 }
 
+export function compiledBeaconVerifierRuntimeCodeHash(root = foundryRoot) {
+  const artifactPath = join(
+    root,
+    "out",
+    "QuicknetTBeaconVerifier.sol",
+    "QuicknetTBeaconVerifier.json",
+  );
+  if (!existsSync(artifactPath)) {
+    throw new Error(
+      `Missing compiled QuicknetTBeaconVerifier artifact ${artifactPath}. Run the deploy-profile build first.`,
+    );
+  }
+  const artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
+  const bytecode = artifact.deployedBytecode?.object;
+  if (typeof bytecode !== "string" || !/^0x(?:[0-9a-fA-F]{2})+$/u.test(bytecode)) {
+    throw new Error("Compiled QuicknetTBeaconVerifier has no exact deployed runtime bytecode.");
+  }
+  return keccak256(bytecode).toLowerCase();
+}
+
 async function rpcBytecodeLoader(rpcUrl, address) {
   if (!rpcUrl) throw new Error("RPC_URL is required to bind runtime bytecode evidence.");
   const response = await fetch(rpcUrl, {
@@ -55,6 +76,7 @@ export async function exportTokenlessDeploymentFromBroadcast({
   deploymentPath = tokenlessDeploymentPath(),
   targetNetwork = process.env.DEPLOY_TARGET_NETWORK,
   getBytecode = (address) => rpcBytecodeLoader(process.env.RPC_URL, address),
+  expectedBeaconVerifierRuntimeCodeHash = compiledBeaconVerifierRuntimeCodeHash(),
 } = {}) {
   if (targetNetwork !== TOKENLESS_BASE_SEPOLIA_NETWORK) {
     throw new Error(
@@ -69,6 +91,7 @@ export async function exportTokenlessDeploymentFromBroadcast({
   const reconstructed = reconstructTokenlessDeploymentFromBroadcast(broadcast);
   const artifact = await attachTokenlessRuntimeCodeEvidence(reconstructed, {
     getBytecode,
+    expectedBeaconVerifierRuntimeCodeHash,
   });
 
   mkdirSync(dirname(deploymentPath), { recursive: true });

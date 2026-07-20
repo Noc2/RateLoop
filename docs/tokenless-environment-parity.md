@@ -16,10 +16,13 @@ Every live tokenless component is isolated from the legacy RateLoop deployment.
 - Current v4 release status: `unreleased`
 - Current v4 Base Sepolia deployment key and addresses: none
 
-The checked-in v4 registry is intentionally empty until a separately reviewed, non-mock verifier with deployed bytecode,
+The checked-in v4 registry is intentionally empty until the experimental in-repo `QuicknetTBeaconVerifier`,
 TokenlessPanel, CredentialIssuer, the optional x402 adapter, and TokenlessFeedbackBonus are freshly deployed and verified
-as one bundle. The deployment script consumes the verifier as `TOKENLESS_BEACON_VERIFIER`; hosted app, Ponder, and keeper
-configuration consume the pinned address as `TOKENLESS_BEACON_VERIFIER_ADDRESS` or their package-prefixed equivalent.
+as one bundle. The deployment script always deploys that exact verifier; it does not accept a verifier address from the
+environment. Deployment export compares its observed runtime code hash with the compiled artifact and fails closed on
+any difference. Hosted app, Ponder, and keeper configuration consume the resulting pinned address as
+`TOKENLESS_BEACON_VERIFIER_ADDRESS` or their package-prefixed equivalent. The verifier remains unaudited, and this
+deployment binding does not remove the independent-review release gate.
 Historical v1-v3 artifacts, including the
 v3 test bundle deployed at block `44132668`, must not be relabelled or used by a v4 app, Ponder, or keeper process. There
 is no canonical current v4 address to copy into a hosted environment.

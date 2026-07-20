@@ -1,5 +1,5 @@
 import { HttpCachingChain, HttpChainClient, type ChainClient } from "tlock-js";
-import type { Hex } from "viem";
+import { sha256, type Hex } from "viem";
 import { incrementCounter } from "./metrics.js";
 
 type DrandChain = ReturnType<ChainClient["chain"]>;
@@ -156,6 +156,25 @@ export interface VerifiedDrandBeacon {
   proof: Hex;
 }
 
+export function validateDrandBeaconEvidence(
+  beacon: { round: number; randomness: string; signature: string },
+  expectedRound: number
+): VerifiedDrandBeacon {
+  if (
+    beacon.round !== expectedRound ||
+    !/^[0-9a-fA-F]{64}$/u.test(beacon.randomness) ||
+    !/^[0-9a-fA-F]{96}$/u.test(beacon.signature)
+  ) {
+    throw new Error("Verified drand relay returned malformed beacon evidence.");
+  }
+  const proof = `0x${beacon.signature}` as Hex;
+  const randomness = `0x${beacon.randomness}` as Hex;
+  if (sha256(proof).toLowerCase() !== randomness.toLowerCase()) {
+    throw new Error("Verified drand relay returned inconsistent beacon randomness.");
+  }
+  return { randomness, proof };
+}
+
 /// Fetch and locally verify the exact frozen beacon round. The raw drand
 /// signature is forwarded as the proof for the panel's immutable on-chain verifier.
 export async function fetchVerifiedDrandBeacon(
@@ -169,16 +188,5 @@ export async function fetchVerifiedDrandBeacon(
   const beacon = await resolveTlockClientForDrandChain(chainHash).get(
     roundNumber
   );
-  if (
-    beacon.round !== roundNumber ||
-    !/^[0-9a-fA-F]{64}$/u.test(beacon.randomness) ||
-    !/^[0-9a-fA-F]+$/u.test(beacon.signature) ||
-    beacon.signature.length % 2 !== 0
-  ) {
-    throw new Error("Verified drand relay returned malformed beacon evidence.");
-  }
-  return {
-    randomness: `0x${beacon.randomness}`,
-    proof: `0x${beacon.signature}`,
-  };
+  return validateDrandBeaconEvidence(beacon, roundNumber);
 }

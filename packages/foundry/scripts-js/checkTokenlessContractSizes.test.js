@@ -54,12 +54,13 @@ test("blocks deployment when either protocol limit is exceeded", () => {
   );
 });
 
-test("the checked deployment manifest covers the exact five script targets", () => {
+test("the checked deployment manifest covers the exact six script targets", () => {
   assert.deepEqual(
     TOKENLESS_DEPLOYMENT_CONTRACTS.map(({ label }) => label),
     [
       "TokenlessTestUSDC",
       "CredentialIssuer",
+      "QuicknetTBeaconVerifier",
       "TokenlessPanel",
       "TokenlessFeedbackBonus",
       "X402PanelSubmitter",
@@ -69,6 +70,6 @@ test("the checked deployment manifest covers the exact five script targets", () 
 
 test("current compiled deployment artifacts pass the hard size gate", () => {
   const report = inspectTokenlessDeploymentSizes();
-  assert.equal(report.length, 5);
+  assert.equal(report.length, 6);
   assert.doesNotThrow(() => assertWithinDeploymentSizeLimits(report));
 });

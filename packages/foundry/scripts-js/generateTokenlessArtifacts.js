@@ -13,6 +13,7 @@ import {
   TOKENLESS_DEPLOYMENT_SCHEMA,
   validateTokenlessDeploymentArtifact,
 } from "./tokenlessDeployment.js";
+import { compiledBeaconVerifierRuntimeCodeHash } from "./exportTokenlessDeploymentFromBroadcast.js";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const foundryRoot = join(scriptDirectory, "..");
@@ -179,7 +180,14 @@ export function generateTokenlessArtifacts({
   if (!existsSync(deploymentPath)) {
     throw new Error(`Missing tokenless deployment artifact ${deploymentPath}.`);
   }
-  const deployment = JSON.parse(readFileSync(deploymentPath, "utf8"));
+  const deployment = validateTokenlessDeploymentArtifact(
+    JSON.parse(readFileSync(deploymentPath, "utf8")),
+    {
+      requireRuntimeCodeEvidence: true,
+      expectedBeaconVerifierRuntimeCodeHash:
+        compiledBeaconVerifierRuntimeCodeHash(compiledArtifactRoot),
+    },
+  );
   const files = buildTokenlessGeneratedSources(deployment, {
     abiLoader: (_contractName, contract) =>
       readCompiledAbi(compiledArtifactRoot, contract),

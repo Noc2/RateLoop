@@ -4,8 +4,8 @@ pragma solidity ^0.8.35;
 import { Test } from "forge-std/Test.sol";
 import { MockERC20 } from "../../contracts/mocks/MockERC20.sol";
 import { CredentialIssuer } from "../../contracts/tokenless/CredentialIssuer.sol";
+import { QuicknetTBeaconVerifier } from "../../contracts/tokenless/QuicknetTBeaconVerifier.sol";
 import { TokenlessPanel } from "../../contracts/tokenless/TokenlessPanel.sol";
-import { MockBeaconVerifier } from "../../contracts/mocks/MockBeaconVerifier.sol";
 
 /// @notice End-to-end maximum-panel settlement gas regression.
 /// @dev Gas measurements include contract-call execution plus a conservative 100k transaction-envelope allowance.
@@ -31,7 +31,9 @@ contract TokenlessPanelGasBenchmarkTest is Test {
     bytes32 internal constant CONTENT_ID = keccak256("500-seat-gas-benchmark");
     bytes32 internal constant TERMS_HASH = keccak256("500-seat-gas-benchmark-terms-v1");
     bytes32 internal constant ADMISSION_POLICY_HASH = keccak256("500-seat-gas-benchmark-policy-v1");
-    bytes32 internal constant ENTROPY = keccak256("500-seat-gas-benchmark-entropy");
+    bytes32 internal constant ENTROPY = 0xc8788d522aa63a9fd2e715499097597dc94f33ee2bd0f78c5367e11ce825227b;
+    bytes internal constant BEACON_PROOF =
+        hex"b40845f2ae971025215f599b8af346bf329129d1d5ee416665472f91050acb3ecd31ee878033ba14842d4367010e1964";
 
     address internal funder = makeAddr("gas-benchmark-funder");
     address internal feeRecipient = makeAddr("gas-benchmark-fee-recipient");
@@ -40,7 +42,7 @@ contract TokenlessPanelGasBenchmarkTest is Test {
     MockERC20 internal usdc;
     CredentialIssuer internal issuer;
     TokenlessPanel internal panel;
-    MockBeaconVerifier internal beaconVerifier;
+    QuicknetTBeaconVerifier internal beaconVerifier;
 
     struct Seat {
         uint256 privateKey;
@@ -54,10 +56,11 @@ contract TokenlessPanelGasBenchmarkTest is Test {
     }
 
     function setUp() public {
-        vm.warp(1_800_000_000);
+        // Round 12,345,678 is the first quicknet-t round strictly after this test's reveal deadline.
+        vm.warp(1_726_268_126);
         usdc = new MockERC20("USD Coin", "USDC", 6);
         issuer = new CredentialIssuer(makeAddr("gas-benchmark-rotation-authority"), vm.addr(ISSUER_PK), 1 days);
-        beaconVerifier = new MockBeaconVerifier();
+        beaconVerifier = new QuicknetTBeaconVerifier();
         panel = new TokenlessPanel(address(usdc), address(issuer), address(beaconVerifier));
         usdc.mint(funder, 10_000e6);
         vm.prank(funder);
@@ -207,10 +210,8 @@ contract TokenlessPanelGasBenchmarkTest is Test {
     }
 
     function _measureFinalizeSeed(uint256 roundId) internal returns (uint256 gasUsed) {
-        TokenlessPanel.Round memory round = panel.getRound(roundId);
-        bytes32 proof = beaconVerifier.proofFor(round.beaconNetworkHash, round.scoringBeaconRound, ENTROPY);
         uint256 gasBefore = gasleft();
-        panel.finalizeScoringSeed(roundId, ENTROPY, abi.encode(proof));
+        panel.finalizeScoringSeed(roundId, ENTROPY, BEACON_PROOF);
         gasUsed = gasBefore - gasleft();
     }
 

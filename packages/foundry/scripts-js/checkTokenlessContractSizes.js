@@ -23,6 +23,11 @@ export const TOKENLESS_DEPLOYMENT_CONTRACTS = [
     args: [placeholderAddress, placeholderAddress, 86_400n],
   },
   {
+    label: "QuicknetTBeaconVerifier",
+    artifact: "QuicknetTBeaconVerifier",
+    args: [],
+  },
+  {
     label: "TokenlessPanel",
     artifact: "TokenlessPanel",
     args: [placeholderAddress, placeholderAddress, placeholderAddress],

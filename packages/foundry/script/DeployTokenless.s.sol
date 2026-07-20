@@ -7,6 +7,7 @@ import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
 import { CredentialIssuer } from "../contracts/tokenless/CredentialIssuer.sol";
 import { TokenlessFeedbackBonus } from "../contracts/tokenless/TokenlessFeedbackBonus.sol";
 import { TokenlessPanel } from "../contracts/tokenless/TokenlessPanel.sol";
+import { QuicknetTBeaconVerifier } from "../contracts/tokenless/QuicknetTBeaconVerifier.sol";
 import { X402PanelSubmitter } from "../contracts/tokenless/X402PanelSubmitter.sol";
 
 interface ISafeRotationAuthority {
@@ -23,6 +24,7 @@ contract DeployTokenlessScript is Script {
 
     string internal constant TEST_USDC_ARTIFACT = "MockERC20.sol:MockERC20";
     string internal constant CREDENTIAL_ISSUER_ARTIFACT = "CredentialIssuer.sol:CredentialIssuer";
+    string internal constant BEACON_VERIFIER_ARTIFACT = "QuicknetTBeaconVerifier.sol:QuicknetTBeaconVerifier";
     string internal constant FEEDBACK_BONUS_ARTIFACT = "TokenlessFeedbackBonus.sol:TokenlessFeedbackBonus";
     string internal constant TOKENLESS_PANEL_ARTIFACT = "TokenlessPanel.sol:TokenlessPanel";
     string internal constant X402_PANEL_SUBMITTER_ARTIFACT = "X402PanelSubmitter.sol:X402PanelSubmitter";
@@ -34,7 +36,7 @@ contract DeployTokenlessScript is Script {
     error RotationAuthorityThresholdTooLow(uint256 threshold);
     error RotationAuthorityOwnerSetTooSmall(uint256 ownerCount);
     error RotationAuthorityOwnerInvalid(address owner);
-    error BeaconVerifierMustBeContract(address verifier);
+    error BeaconVerifierRuntimeCodeHashMismatch(bytes32 expected, bytes32 actual);
     error RuntimeCodeSizeExceeded(string artifact, uint256 actual, uint256 limit);
     error InitcodeSizeExceeded(string artifact, uint256 actual, uint256 limit);
 
@@ -43,9 +45,7 @@ contract DeployTokenlessScript is Script {
 
         address rotationAuthority = vm.envAddress("TOKENLESS_ROTATION_AUTHORITY");
         address initialSigner = vm.envAddress("TOKENLESS_INITIAL_SIGNER");
-        address beaconVerifier = vm.envAddress("TOKENLESS_BEACON_VERIFIER");
         _assertRotationAuthority(rotationAuthority);
-        if (beaconVerifier.code.length == 0) revert BeaconVerifierMustBeContract(beaconVerifier);
         uint256 maxScheduledGraceRaw = vm.envOr("TOKENLESS_MAX_SCHEDULED_GRACE", uint256(1 days));
         if (maxScheduledGraceRaw == 0 || maxScheduledGraceRaw > type(uint64).max) {
             revert InvalidMaxScheduledGrace(maxScheduledGraceRaw);
@@ -59,6 +59,7 @@ contract DeployTokenlessScript is Script {
         bytes memory threeAddressArgs = abi.encode(address(0), address(0), address(0));
         _assertDeployable(TEST_USDC_ARTIFACT, testUsdcArgs);
         _assertDeployable(CREDENTIAL_ISSUER_ARTIFACT, credentialIssuerArgs);
+        _assertDeployable(BEACON_VERIFIER_ARTIFACT, bytes(""));
         _assertDeployable(FEEDBACK_BONUS_ARTIFACT, twoAddressArgs);
         _assertDeployable(TOKENLESS_PANEL_ARTIFACT, threeAddressArgs);
         _assertDeployable(X402_PANEL_SUBMITTER_ARTIFACT, twoAddressArgs);
@@ -67,6 +68,9 @@ contract DeployTokenlessScript is Script {
 
         MockERC20 testUsdc = MockERC20(deployCode(TEST_USDC_ARTIFACT, testUsdcArgs));
         CredentialIssuer issuer = CredentialIssuer(deployCode(CREDENTIAL_ISSUER_ARTIFACT, credentialIssuerArgs));
+        QuicknetTBeaconVerifier beaconVerifier =
+            QuicknetTBeaconVerifier(deployCode(BEACON_VERIFIER_ARTIFACT, bytes("")));
+        _assertBeaconVerifierRuntimeCodeHash(address(beaconVerifier));
         TokenlessPanel panel = TokenlessPanel(
             deployCode(TOKENLESS_PANEL_ARTIFACT, abi.encode(address(testUsdc), address(issuer), beaconVerifier))
         );
@@ -82,7 +86,7 @@ contract DeployTokenlessScript is Script {
         console2.log("TokenlessTestUSDC:", address(testUsdc));
         console2.log("CredentialIssuer:", address(issuer));
         console2.log("TokenlessPanel:", address(panel));
-        console2.log("BeaconVerifier:", beaconVerifier);
+        console2.log("BeaconVerifier:", address(beaconVerifier));
         console2.log("TokenlessFeedbackBonus:", address(feedbackBonus));
         console2.log("X402PanelSubmitter:", address(x402Submitter));
         console2.log("Tokenless deployment schema: rateloop-tokenless-deployment-v4");
@@ -98,6 +102,12 @@ contract DeployTokenlessScript is Script {
         if (initcodeSize > EIP3860_INITCODE_SIZE_LIMIT) {
             revert InitcodeSizeExceeded(artifact, initcodeSize, EIP3860_INITCODE_SIZE_LIMIT);
         }
+    }
+
+    function _assertBeaconVerifierRuntimeCodeHash(address verifier) internal view {
+        bytes32 expected = keccak256(vm.getDeployedCode(BEACON_VERIFIER_ARTIFACT));
+        bytes32 actual = verifier.codehash;
+        if (actual != expected) revert BeaconVerifierRuntimeCodeHashMismatch(expected, actual);
     }
 
     function _assertRotationAuthority(address authority) internal view {
