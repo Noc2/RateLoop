@@ -59,6 +59,8 @@ test("automatic request consequences distinguish unpaid private review from fund
     "Report that review is required without creating or sending a request.",
   );
   assert.match(source, /disabled=\{automaticUnavailable\}/);
-  assert.match(source, /Unavailable: \{automaticUnavailableReason\}/);
+  assert.match(source, /aria-describedby=\{automaticAvailable \? undefined : authorityUnavailableId\}/);
+  assert.match(source, /\{automaticUnavailableReason\}/);
+  assert.doesNotMatch(source, /Unavailable: \{automaticUnavailableReason\}/);
   assert.match(source, /Send automatically/);
 });

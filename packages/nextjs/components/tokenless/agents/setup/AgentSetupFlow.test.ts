@@ -187,7 +187,7 @@ test("review setup controls independent base compensation, optional Feedback Bon
   assert.match(flowSource, /reviewCompensation\.feedbackBonusEnabled/);
   assert.match(flowSource, /feedbackBonusAwarderKind/);
   assert.match(flowSource, /value=\{reviewCompensation\.usdcPerReviewer\}/);
-  assert.match(flowSource, /authority=\{reviewCompensation\.authority\}/);
+  assert.match(flowSource, /authority=\{displayedReviewAuthority\}/);
   assert.match(flowSource, /const automaticGrantOffer = setup\.capabilities\.automaticGrantOffer/);
   assert.match(flowSource, /automaticAvailable=\{automaticAvailable\}/);
   assert.match(flowSource, /provision: "private_invited_unpaid"/);
@@ -199,6 +199,28 @@ test("review setup controls independent base compensation, optional Feedback Bon
   assert.match(flowSource, /agent may prepare or fund this exact pool/i);
   assert.match(flowSource, /can never select or execute\s+an award/i);
   assert.doesNotMatch(flowSource, /authority: draft\.authority/);
+});
+
+test("setup reconciles automatic sending after its prerequisites and fails closed on the final profile", () => {
+  assert.match(flowSource, /setupAutomaticSendingEligibility/);
+  assert.match(flowSource, /reconcileSetupAutomaticAuthority/);
+  assert.match(flowSource, /authority=\{displayedReviewAuthority\}/);
+  assert.match(flowSource, /authorityAdjustmentNotice/);
+  assert.match(flowSource, /changeReviewCompensationMode\("unpaid"\)/);
+  assert.match(flowSource, /changeReviewCompensationMode\("usdc"\)/);
+  assert.match(flowSource, /changeFeedbackBonus\(false\)/);
+  assert.match(flowSource, /changeFeedbackBonus\(true\)/);
+  assert.match(flowSource, /Automatic sending changed to Prepare for approval/);
+  assert.match(flowSource, /Saving will change it to Prepare for approval/);
+  assert.doesNotMatch(
+    flowSource,
+    /Setup can grant automatic delivery only for unpaid invited review without a feedback bonus/,
+  );
+  assert.match(flowSource, /const finalAutomaticEligibility = setupAutomaticSendingEligibility/);
+  assert.match(flowSource, /requestProfile\.contentBoundary !== "private_workspace"/);
+  assert.match(flowSource, /automaticGrantOffer\.allowedWorkflowKeys\.length === 0/);
+  const finalEligibilityIndex = flowSource.indexOf("const finalAutomaticEligibility");
+  assert.ok(finalEligibilityIndex < flowSource.indexOf("humanReviewConfirmationMessage", finalEligibilityIndex));
 });
 
 test("review save and wizard advance run as one retry-safe operation", () => {

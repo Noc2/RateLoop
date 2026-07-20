@@ -60,12 +60,13 @@ test("manual handoff hides authority and keeps check only when automatic routing
 
     assert.equal(frequency.value, "adaptive");
     assert.ok(authorityGroup);
+    assert.match(authorityGroup.getAttribute("aria-describedby") ?? "", /automatic-unavailable/);
     assert.equal(checkOnly.checked, true);
     assert.match(checkOnly.getAttribute("aria-describedby") ?? "", /check_only-description/);
     assert.equal(prepare.disabled, false);
     assert.equal(automatic.disabled, true);
     assert.match(automatic.getAttribute("aria-describedby") ?? "", /automatic-unavailable/);
-    assert.ok(screen.getByText("Unavailable: Create an exact owner-approved publishing grant first."));
+    assert.ok(screen.getByText("Create an exact owner-approved publishing grant first."));
 
     await user.click(prepare);
     assert.equal((screen.getByRole("radio", { name: "Prepare for approval" }) as HTMLInputElement).checked, true);

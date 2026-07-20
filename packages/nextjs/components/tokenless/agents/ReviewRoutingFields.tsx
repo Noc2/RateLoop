@@ -118,7 +118,7 @@ export function ReviewAuthorityFields({
   const authorityUnavailableId = `${id}-authority-automatic-unavailable`;
 
   return (
-    <fieldset className={className}>
+    <fieldset className={className} aria-describedby={automaticAvailable ? undefined : authorityUnavailableId}>
       <legend className={prominent ? "px-1 text-xl font-semibold" : "text-sm font-medium"}>
         If review is required, what may the agent do?
       </legend>
@@ -162,7 +162,7 @@ export function ReviewAuthorityFields({
                 </span>
                 {automaticUnavailable ? (
                   <span id={authorityUnavailableId} className="mt-1 block text-sm leading-5 text-warning/90">
-                    Unavailable: {automaticUnavailableReason}
+                    {automaticUnavailableReason}
                   </span>
                 ) : null}
               </span>

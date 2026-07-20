@@ -20,6 +20,7 @@ import {
   privateClassificationsThrough,
   reviewAudienceFormValues,
 } from "./reviewAudience";
+import { reconcileSetupAutomaticAuthority, setupAutomaticSendingEligibility } from "./reviewAutomaticSending";
 import {
   REVIEW_USDC_DECIMAL_MAX_LENGTH,
   type ReviewCompensationFormValues,
@@ -146,9 +147,43 @@ function finalizationMessage(postcondition: SetupFinalizationPostcondition | nul
   return "Setup is complete, but automatic requests need reviewer routing to be checked again.";
 }
 
-function reviewCompensationValues(draft: AgentSetupReviewDraft | null | undefined) {
+const SAVED_AUTOMATIC_AUTHORITY_NOTICE =
+  "Setup can’t preserve automatic sending with these choices. Saving will change it to Prepare for approval.";
+
+function automaticGrantReady(offer: WorkspaceAgentSetupView["capabilities"]["automaticGrantOffer"]) {
+  return Boolean(offer?.available && offer.integrationId && offer.allowedWorkflowKeys.length > 0);
+}
+
+function draftAutomaticSendingEligibility(draft: AgentSetupReviewDraft | null | undefined, grantAvailable: boolean) {
   const values = reviewCompensationFormValues(draft?.requestProfile, draft?.authority);
-  return draft?.selection.mode === "manual" ? { ...values, authority: "check_only" as const } : values;
+  return setupAutomaticSendingEligibility({
+    audience: draft?.requestProfile.audience ?? "private_invited",
+    compensationMode: values.compensationMode,
+    feedbackBonusEnabled: values.feedbackBonusEnabled === true,
+    grantAvailable,
+  });
+}
+
+function reviewCompensationValues(draft: AgentSetupReviewDraft | null | undefined, grantAvailable: boolean) {
+  const values = reviewCompensationFormValues(draft?.requestProfile, draft?.authority);
+  if (draft?.selection.mode === "manual") return { ...values, authority: "check_only" as const };
+  return {
+    ...values,
+    authority: reconcileSetupAutomaticAuthority(
+      values.authority,
+      draftAutomaticSendingEligibility(draft, grantAvailable),
+    ).authority,
+  };
+}
+
+function savedAutomaticAuthorityNeedsFallback(
+  draft: AgentSetupReviewDraft | null | undefined,
+  grantAvailable: boolean,
+) {
+  if (draft?.selection.mode === "manual") return false;
+  const values = reviewCompensationFormValues(draft?.requestProfile, draft?.authority);
+  return reconcileSetupAutomaticAuthority(values.authority, draftAutomaticSendingEligibility(draft, grantAvailable))
+    .changed;
 }
 
 async function readJson(response: Response) {
@@ -202,7 +237,18 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     reviewTimingFormValues(initialSetup.reviewDraft?.requestProfile),
   );
   const [reviewCompensation, setReviewCompensation] = useState<ReviewCompensationFormValues>(() =>
-    reviewCompensationValues(initialSetup.reviewDraft),
+    reviewCompensationValues(
+      initialSetup.reviewDraft,
+      automaticGrantReady(initialSetup.capabilities.automaticGrantOffer),
+    ),
+  );
+  const [authorityAdjustmentNotice, setAuthorityAdjustmentNotice] = useState<string | null>(() =>
+    savedAutomaticAuthorityNeedsFallback(
+      initialSetup.reviewDraft,
+      automaticGrantReady(initialSetup.capabilities.automaticGrantOffer),
+    )
+      ? SAVED_AUTOMATIC_AUTHORITY_NOTICE
+      : null,
   );
   const [peopleDecision, setPeopleDecision] = useState<"invited" | "later">("invited");
   const [invitationExpertiseIds, setInvitationExpertiseIds] = useState<string[]>(() =>
@@ -252,15 +298,19 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   } · ${reviewerCount} reviewer${reviewerCount === "1" ? "" : "s"} · ${
     reviewCompensation.compensationMode === "usdc" ? `${reviewCompensation.usdcPerReviewer || "—"} USDC each` : "Unpaid"
   }`;
-  const automaticPrivateUnpaidSelected =
-    reviewAudience.audience === "private_invited" &&
-    reviewCompensation.compensationMode === "unpaid" &&
-    reviewCompensation.feedbackBonusEnabled === false;
   const automaticGrantOffer = setup.capabilities.automaticGrantOffer;
-  const automaticAvailable = Boolean(automaticPrivateUnpaidSelected && automaticGrantOffer?.available);
-  const automaticUnavailableReason = !automaticPrivateUnpaidSelected
-    ? "Setup can grant automatic delivery only for unpaid invited review without a feedback bonus."
-    : (setup.capabilities.unavailableReason ?? "The connected workflow cannot receive a publishing grant.");
+  const automaticEligibility = setupAutomaticSendingEligibility({
+    audience: reviewAudience.audience,
+    compensationMode: reviewCompensation.compensationMode,
+    feedbackBonusEnabled: reviewCompensation.feedbackBonusEnabled === true,
+    grantAvailable: automaticGrantReady(automaticGrantOffer),
+  });
+  const automaticAvailable = automaticEligibility.available;
+  const automaticUnavailableReason = automaticEligibility.reason ?? "";
+  const displayedReviewAuthority = reconcileSetupAutomaticAuthority(
+    reviewCompensation.authority,
+    automaticEligibility,
+  ).authority;
   const selectedExpertiseIds = new Set(reviewExpertise.requirements.map(requirement => requirement.definitionId));
   const selectableExpertiseDefinitions = expertiseDefinitions.filter(
     definition =>
@@ -466,7 +516,13 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     }
   }, [confirmedReviewerPoolReady, currentStep]);
 
-  useEffect(() => setReviewCompensation(reviewCompensationValues(setup.reviewDraft)), [setup.reviewDraft]);
+  useEffect(() => {
+    const grantAvailable = automaticGrantReady(setup.capabilities.automaticGrantOffer);
+    setReviewCompensation(reviewCompensationValues(setup.reviewDraft, grantAvailable));
+    setAuthorityAdjustmentNotice(
+      savedAutomaticAuthorityNeedsFallback(setup.reviewDraft, grantAvailable) ? SAVED_AUTOMATIC_AUTHORITY_NOTICE : null,
+    );
+  }, [setup.capabilities.automaticGrantOffer, setup.reviewDraft]);
 
   useEffect(() => {
     if (currentStep !== "connect" || !ACTIVE_CONNECTION_STATES.has(setup.connection.status ?? "")) return;
@@ -620,6 +676,16 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     }));
   }
 
+  function reconcileAutomaticAuthorityForChoice(eligibility: ReturnType<typeof setupAutomaticSendingEligibility>) {
+    const reconciliation = reconcileSetupAutomaticAuthority(reviewCompensation.authority, eligibility);
+    if (reconciliation.changed) {
+      const notice = `Automatic sending changed to Prepare for approval. ${eligibility.reason ?? "Review the automatic sending requirements."}`;
+      setAuthorityAdjustmentNotice(notice);
+      setAnnouncement(notice);
+    }
+    return reconciliation;
+  }
+
   function changeReviewAudience(audience: AgentSetupReviewDraft["requestProfile"]["audience"]) {
     setReviewAudience(current => ({ ...current, audience }));
     const requirements = requirementsForAudience({
@@ -659,10 +725,55 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
           })
         : next;
     });
-    if (audience !== "private_invited") {
-      setShowCustomExpertise(false);
-      setReviewCompensation(current => ({ ...current, compensationMode: "usdc" }));
-    }
+    const compensationMode = audience === "private_invited" ? reviewCompensation.compensationMode : "usdc";
+    const eligibility = setupAutomaticSendingEligibility({
+      audience,
+      compensationMode,
+      feedbackBonusEnabled: reviewCompensation.feedbackBonusEnabled === true,
+      grantAvailable: automaticGrantReady(setup.capabilities.automaticGrantOffer),
+    });
+    reconcileAutomaticAuthorityForChoice(eligibility);
+    setReviewCompensation(current => ({
+      ...current,
+      compensationMode,
+      authority: reconcileSetupAutomaticAuthority(current.authority, eligibility).authority,
+    }));
+    if (audience !== "private_invited") setShowCustomExpertise(false);
+  }
+
+  function changeReviewCompensationMode(compensationMode: ReviewCompensationFormValues["compensationMode"]) {
+    const eligibility = setupAutomaticSendingEligibility({
+      audience: reviewAudience.audience,
+      compensationMode,
+      feedbackBonusEnabled: reviewCompensation.feedbackBonusEnabled === true,
+      grantAvailable: automaticGrantReady(setup.capabilities.automaticGrantOffer),
+    });
+    reconcileAutomaticAuthorityForChoice(eligibility);
+    setReviewCompensation(current => ({
+      ...current,
+      compensationMode,
+      authority: reconcileSetupAutomaticAuthority(current.authority, eligibility).authority,
+    }));
+  }
+
+  function changeFeedbackBonus(feedbackBonusEnabled: boolean) {
+    const eligibility = setupAutomaticSendingEligibility({
+      audience: reviewAudience.audience,
+      compensationMode: reviewCompensation.compensationMode,
+      feedbackBonusEnabled,
+      grantAvailable: automaticGrantReady(setup.capabilities.automaticGrantOffer),
+    });
+    reconcileAutomaticAuthorityForChoice(eligibility);
+    setReviewCompensation(current => ({
+      ...current,
+      feedbackBonusEnabled,
+      authority: reconcileSetupAutomaticAuthority(current.authority, eligibility).authority,
+    }));
+  }
+
+  function changeReviewAuthority(authority: ReviewCompensationFormValues["authority"]) {
+    setReviewCompensation(current => ({ ...current, authority }));
+    setAuthorityAdjustmentNotice(null);
   }
 
   function changeQuestionAuthority(questionAuthority: ReviewCriterionFormValues["questionAuthority"]) {
@@ -774,6 +885,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       ...current,
       authority: reviewRoutingStateForMode(mode, current.authority).authority,
     }));
+    if (mode === "manual") setAuthorityAdjustmentNotice(null);
   }
 
   async function configureReviews(event: FormEvent<HTMLFormElement>) {
@@ -799,14 +911,30 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       const compensationConfiguration = buildReviewCompensationConfiguration(timingProfile, reviewCompensation);
       const requestProfile = compensationConfiguration.requestProfile;
       const authority = selection.mode === "manual" ? "check_only" : compensationConfiguration.authority;
+      const finalAutomaticEligibility = setupAutomaticSendingEligibility({
+        audience: requestProfile.audience,
+        compensationMode: requestProfile.compensationMode,
+        feedbackBonusEnabled: requestProfile.feedbackBonusEnabled === true,
+        grantAvailable: automaticGrantReady(automaticGrantOffer),
+      });
       let publishingGrant: {
         integrationId: string;
         provision: "private_invited_unpaid";
         allowedWorkflowKeys: string[];
       } | null = null;
       if (authority === "ask_automatically") {
-        if (!automaticGrantOffer?.available || !automaticGrantOffer.integrationId) {
-          throw new Error(automaticUnavailableReason);
+        if (
+          !finalAutomaticEligibility.available ||
+          requestProfile.contentBoundary !== "private_workspace" ||
+          !automaticGrantOffer?.available ||
+          !automaticGrantOffer.integrationId ||
+          automaticGrantOffer.allowedWorkflowKeys.length === 0
+        ) {
+          throw new Error(
+            requestProfile.contentBoundary !== "private_workspace"
+              ? "Choose Invited reviewers to enable automatic sending during setup."
+              : (finalAutomaticEligibility.reason ?? "Automatic sending isn’t available for this connection."),
+          );
         }
         publishingGrant = {
           integrationId: automaticGrantOffer.integrationId,
@@ -1687,7 +1815,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                         reviewCompensation.compensationMode === "unpaid"
                       }
                       disabled={reviewAudience.audience !== "private_invited"}
-                      onChange={() => setReviewCompensation(current => ({ ...current, compensationMode: "unpaid" }))}
+                      onChange={() => changeReviewCompensationMode("unpaid")}
                       label="No bounty"
                       description="No guaranteed payment."
                     />
@@ -1698,7 +1826,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       checked={
                         reviewAudience.audience !== "private_invited" || reviewCompensation.compensationMode === "usdc"
                       }
-                      onChange={() => setReviewCompensation(current => ({ ...current, compensationMode: "usdc" }))}
+                      onChange={() => changeReviewCompensationMode("usdc")}
                       label="Add USDC bounty"
                       description="Pay each accepted reviewer."
                     />
@@ -1738,7 +1866,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       type="button"
                       aria-pressed={!reviewCompensation.feedbackBonusEnabled}
                       className={`btn btn-sm ${!reviewCompensation.feedbackBonusEnabled ? "btn-primary" : "btn-outline"}`}
-                      onClick={() => setReviewCompensation(current => ({ ...current, feedbackBonusEnabled: false }))}
+                      onClick={() => changeFeedbackBonus(false)}
                     >
                       No bonus
                     </button>
@@ -1746,7 +1874,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       type="button"
                       aria-pressed={reviewCompensation.feedbackBonusEnabled}
                       className={`btn btn-sm ${reviewCompensation.feedbackBonusEnabled ? "btn-primary" : "btn-outline"}`}
-                      onClick={() => setReviewCompensation(current => ({ ...current, feedbackBonusEnabled: true }))}
+                      onClick={() => changeFeedbackBonus(true)}
                     >
                       Add bonus
                     </button>
@@ -1815,17 +1943,22 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 </fieldset>
               </div>
             </section>
+            {authorityAdjustmentNotice ? (
+              <p className="mt-7 border-l-2 border-l-[var(--rateloop-yellow)] pl-4 text-sm leading-6 text-base-content/70">
+                {authorityAdjustmentNotice}
+              </p>
+            ) : null}
             {reviewFrequency.mode !== "manual" ? (
               <ReviewAuthorityFields
                 className="surface-card-nested mt-7 p-4 sm:p-5"
                 prominent
-                authority={reviewCompensation.authority}
+                authority={displayedReviewAuthority}
                 automaticAvailable={automaticAvailable}
                 automaticUnavailableReason={automaticUnavailableReason}
                 requiresFundingPermission={
                   reviewCompensation.compensationMode === "usdc" || reviewCompensation.feedbackBonusEnabled === true
                 }
-                onAuthorityChange={authority => setReviewCompensation(current => ({ ...current, authority }))}
+                onAuthorityChange={changeReviewAuthority}
               />
             ) : null}
             <SetupActionBar>
