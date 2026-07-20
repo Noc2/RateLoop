@@ -122,8 +122,7 @@ function validFixture() {
       "arn:aws:kms:eu-central-1:123456789012:key/55555555-5555-5555-5555-555555555555",
     TOKENLESS_EVIDENCE_KMS_REGION: "eu-central-1",
     TOKENLESS_EVIDENCE_KMS_ROLE_ARN: "arn:aws:iam::123456789012:role/rateloop-evidence",
-    TOKENLESS_KEEPER_KMS_KEY_RESOURCE:
-      "arn:aws:kms:eu-central-1:123456789012:key/77777777-7777-7777-7777-777777777777",
+    TOKENLESS_KEEPER_KMS_KEY_RESOURCE: "arn:aws:kms:eu-central-1:123456789012:key/77777777-7777-7777-7777-777777777777",
     TOKENLESS_KEEPER_KMS_EXPECTED_ADDRESS: address(27),
     TOKENLESS_KEEPER_KMS_REGION: "eu-central-1",
     TOKENLESS_KEEPER_KMS_ROLE_ARN: "arn:aws:iam::123456789012:role/rateloop-keeper",
@@ -227,8 +226,7 @@ test("production chain execution enforces the contract beacon-failure grace floo
 
 test("managed signer keys, addresses, and IAM principals are distinct across web and keeper workloads", () => {
   const reusedWebRole = validFixture();
-  reusedWebRole.env.TOKENLESS_X402_RELAYER_KMS_ROLE_ARN =
-    reusedWebRole.env.TOKENLESS_CREDENTIAL_ISSUER_KMS_ROLE_ARN;
+  reusedWebRole.env.TOKENLESS_X402_RELAYER_KMS_ROLE_ARN = reusedWebRole.env.TOKENLESS_CREDENTIAL_ISSUER_KMS_ROLE_ARN;
   assert.match(validateTokenlessProductionReadiness(reusedWebRole).join("\n"), /IAM role ARNs must be distinct/iu);
 
   const reusedKeeper = validFixture();
@@ -613,7 +611,8 @@ test("hosted release remains blocked while required product capabilities are inc
   const fixture = validFixture();
   delete fixture.releaseCapabilities;
   const errors = validateTokenlessProductionReadiness(fixture);
-  assert.doesNotMatch(errors.join("\n"), /managed signing for credential issuance/i);
+  assert.equal(DEFAULT_HOSTED_RELEASE_CAPABILITIES.managedSigning, false);
+  assert.match(errors.join("\n"), /managed signing for credential issuance/i);
   assert.match(errors.join("\n"), /paid assignment reservation/i);
   assert.match(errors.join("\n"), /Feedback Bonus USDC and credential-issuer immutable wiring/i);
   assert.match(errors.join("\n"), /human-signed Feedback Bonus award execution/i);

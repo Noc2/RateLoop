@@ -26,7 +26,7 @@ const FORBIDDEN_HOSTED_PRIVATE_KEYS = [
 ];
 
 export const DEFAULT_HOSTED_RELEASE_CAPABILITIES = Object.freeze({
-  managedSigning: true,
+  managedSigning: false,
   paidAssignmentSettlement: false,
   feedbackBonusLiveWiringVerification: false,
   feedbackBonusHumanAwardExecution: false,
