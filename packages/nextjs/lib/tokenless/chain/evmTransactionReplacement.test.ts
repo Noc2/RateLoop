@@ -5,7 +5,9 @@ import { privateKeyToAccount } from "viem/accounts";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import {
+  type DurableEvmTransaction,
   EVM_FEE_REPLACEMENT_MIN_AGE_MS,
+  EVM_TRANSACTION_FEE_POLICY,
   __evmTransactionReplacementTestUtils,
   maybeReplaceUnobservedEvmTransaction,
   persistInitialEvmTransaction,
@@ -75,11 +77,16 @@ async function seedExecution() {
   });
 }
 
-async function signedTransaction(input: { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint; to?: `0x${string}` }) {
+async function signedTransaction(input: {
+  gas?: bigint;
+  maxFeePerGas: bigint;
+  maxPriorityFeePerGas: bigint;
+  to?: `0x${string}`;
+}) {
   const signed = await ACCOUNT.signTransaction({
     chainId: 84532,
     data: "0x12345678",
-    gas: 75_000n,
+    gas: input.gas ?? 75_000n,
     maxFeePerGas: input.maxFeePerGas,
     maxPriorityFeePerGas: input.maxPriorityFeePerGas,
     nonce: NONCE,
@@ -88,6 +95,16 @@ async function signedTransaction(input: { maxFeePerGas: bigint; maxPriorityFeePe
     value: 42n,
   });
   return { hash: keccak256(signed), signedTransaction: signed };
+}
+
+function countingAccount(onSign: () => void) {
+  return {
+    ...ACCOUNT,
+    async signTransaction(transaction: Parameters<typeof ACCOUNT.signTransaction>[0]) {
+      onSign();
+      return ACCOUNT.signTransaction(transaction);
+    },
+  } as typeof ACCOUNT;
 }
 
 function pendingPublicClient(input: { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint }) {
@@ -209,6 +226,160 @@ test("a mined transaction is never fee-replaced", async () => {
   assert.equal(unchanged.replaced, undefined);
   const versions = await dbClient.execute("SELECT generation FROM tokenless_evm_transaction_versions");
   assert.deepEqual(versions.rows, [{ generation: 0 }]);
+});
+
+test("a pre-0126 durable transaction is adopted without replacement or broadcast mutation", async () => {
+  await seedExecution();
+  const original = await signedTransaction({ maxFeePerGas: 100n, maxPriorityFeePerGas: 10n });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_chain_executions
+          SET approval_signed_transaction = ?, approval_transaction_hash = ?, state = 'signed'
+          WHERE operation_key = ?`,
+    args: [original.signedTransaction, original.hash, OPERATION_KEY],
+  });
+  let signings = 0;
+  const adopted = await maybeReplaceUnobservedEvmTransaction({
+    account: countingAccount(() => (signings += 1)),
+    locator,
+    now: NOW,
+    publicClient: {} as never,
+    transaction: { ...original, recovered: true },
+  });
+  assert.equal(adopted.hash, original.hash);
+  assert.equal(signings, 0);
+  const versions = await dbClient.execute(
+    "SELECT generation, transaction_hash FROM tokenless_evm_transaction_versions ORDER BY generation",
+  );
+  assert.deepEqual(versions.rows, [{ generation: 0, transaction_hash: original.hash }]);
+});
+
+test("RPC estimates above either server fee cap cannot reach signing or replace durable bytes", async () => {
+  await seedExecution();
+  const original = await signedTransaction({ maxFeePerGas: 100n, maxPriorityFeePerGas: 10n });
+  const durable = await persistInitialEvmTransaction({
+    account: ACCOUNT,
+    locator,
+    now: new Date(NOW.getTime() - EVM_FEE_REPLACEMENT_MIN_AGE_MS),
+    transaction: original,
+  });
+  let signings = 0;
+  for (const estimate of [
+    {
+      maxFeePerGas: EVM_TRANSACTION_FEE_POLICY.maxFeePerGas + 1n,
+      maxPriorityFeePerGas: 25n,
+    },
+    {
+      maxFeePerGas: EVM_TRANSACTION_FEE_POLICY.maxPriorityFeePerGas + 1n,
+      maxPriorityFeePerGas: EVM_TRANSACTION_FEE_POLICY.maxPriorityFeePerGas + 1n,
+    },
+  ]) {
+    await assert.rejects(
+      maybeReplaceUnobservedEvmTransaction({
+        account: countingAccount(() => (signings += 1)),
+        locator,
+        now: NOW,
+        publicClient: pendingPublicClient(estimate),
+        transaction: durable,
+      }),
+      (error: unknown) =>
+        error instanceof TokenlessServiceError && error.code === "evm_transaction_fee_policy_exhausted",
+    );
+  }
+  assert.equal(signings, 0);
+  const active = await dbClient.execute({
+    sql: `SELECT approval_signed_transaction, approval_transaction_hash
+          FROM tokenless_chain_executions WHERE operation_key = ?`,
+    args: [OPERATION_KEY],
+  });
+  assert.equal(active.rows[0]?.approval_signed_transaction, original.signedTransaction);
+  assert.equal(active.rows[0]?.approval_transaction_hash, original.hash);
+  const versions = await dbClient.execute("SELECT generation FROM tokenless_evm_transaction_versions");
+  assert.deepEqual(versions.rows, [{ generation: 0 }]);
+});
+
+test("a replacement whose frozen gas liability exceeds the total cap cannot be signed", async () => {
+  await seedExecution();
+  const replacementFee = 9_000_000_000n;
+  const gas = EVM_TRANSACTION_FEE_POLICY.maxTotalFee / replacementFee + 1n;
+  const original = await signedTransaction({
+    gas,
+    maxFeePerGas: 7_000_000_000n,
+    maxPriorityFeePerGas: 500_000_000n,
+  });
+  const durable = await persistInitialEvmTransaction({
+    account: ACCOUNT,
+    locator,
+    now: new Date(NOW.getTime() - EVM_FEE_REPLACEMENT_MIN_AGE_MS),
+    transaction: original,
+  });
+  let signings = 0;
+  await assert.rejects(
+    maybeReplaceUnobservedEvmTransaction({
+      account: countingAccount(() => (signings += 1)),
+      locator,
+      now: NOW,
+      publicClient: pendingPublicClient({
+        maxFeePerGas: replacementFee,
+        maxPriorityFeePerGas: 1_000_000_000n,
+      }),
+      transaction: durable,
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "evm_transaction_fee_policy_exhausted",
+  );
+  assert.equal(signings, 0);
+  const versions = await dbClient.execute("SELECT generation FROM tokenless_evm_transaction_versions");
+  assert.deepEqual(versions.rows, [{ generation: 0 }]);
+});
+
+test("replacement generation exhaustion preserves the last durable version and stops signing", async () => {
+  await seedExecution();
+  const original = await signedTransaction({ maxFeePerGas: 100n, maxPriorityFeePerGas: 10n });
+  let current: DurableEvmTransaction = await persistInitialEvmTransaction({
+    account: ACCOUNT,
+    locator,
+    now: new Date(NOW.getTime() - EVM_FEE_REPLACEMENT_MIN_AGE_MS),
+    transaction: original,
+  });
+  let signings = 0;
+  const account = countingAccount(() => (signings += 1));
+  for (let generation = 1; generation <= EVM_TRANSACTION_FEE_POLICY.maxReplacementGenerations; generation += 1) {
+    current = await maybeReplaceUnobservedEvmTransaction({
+      account,
+      locator,
+      now: new Date(NOW.getTime() + (generation - 1) * EVM_FEE_REPLACEMENT_MIN_AGE_MS),
+      publicClient: pendingPublicClient({ maxFeePerGas: 100n, maxPriorityFeePerGas: 10n }),
+      transaction: current,
+    });
+    assert.equal(current.replaced, true);
+  }
+  const lastDurable = current;
+  await assert.rejects(
+    maybeReplaceUnobservedEvmTransaction({
+      account,
+      locator,
+      now: new Date(
+        NOW.getTime() + EVM_TRANSACTION_FEE_POLICY.maxReplacementGenerations * EVM_FEE_REPLACEMENT_MIN_AGE_MS,
+      ),
+      publicClient: pendingPublicClient({ maxFeePerGas: 100n, maxPriorityFeePerGas: 10n }),
+      transaction: lastDurable,
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "evm_transaction_fee_policy_exhausted",
+  );
+  assert.equal(signings, EVM_TRANSACTION_FEE_POLICY.maxReplacementGenerations);
+  const active = await dbClient.execute({
+    sql: `SELECT approval_signed_transaction, approval_transaction_hash
+          FROM tokenless_chain_executions WHERE operation_key = ?`,
+    args: [OPERATION_KEY],
+  });
+  assert.equal(active.rows[0]?.approval_signed_transaction, lastDurable.signedTransaction);
+  assert.equal(active.rows[0]?.approval_transaction_hash, lastDurable.hash);
+  const versions = await dbClient.execute(
+    "SELECT generation FROM tokenless_evm_transaction_versions ORDER BY generation",
+  );
+  assert.deepEqual(
+    versions.rows.map(row => Number(row.generation)),
+    Array.from({ length: EVM_TRANSACTION_FEE_POLICY.maxReplacementGenerations + 1 }, (_, index) => index),
+  );
 });
 
 test("earlier nonce gaps and already-consumed nonces refuse replacement before fee estimation", async () => {

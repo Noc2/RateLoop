@@ -20,6 +20,7 @@ import { dbClient, dbPool } from "~~/lib/db";
 import { type TokenlessChainConfig, loadTokenlessChainConfig } from "~~/lib/tokenless/chain/config";
 import {
   type EvmTransactionLocator,
+  assertEvmTransactionFeeWithinPolicy,
   maybeReplaceUnobservedEvmTransaction,
   persistInitialEvmTransaction,
 } from "~~/lib/tokenless/chain/evmTransactionReplacement";
@@ -649,6 +650,12 @@ async function preparePersistedSurpriseTransaction(input: {
   const signableRequest = Object.fromEntries(
     Object.entries(request).filter(([key]) => key !== "account" && key !== "chain" && key !== "from"),
   ) as TransactionSerializable;
+  assertEvmTransactionFeeWithinPolicy({
+    gas: signableRequest.gas,
+    generation: 0,
+    maxFeePerGas: signableRequest.maxFeePerGas,
+    maxPriorityFeePerGas: signableRequest.maxPriorityFeePerGas,
+  });
   const signedTransaction = await input.account.signTransaction(signableRequest);
   const hash = keccak256(signedTransaction);
   await assertSignedSurpriseTransactionIntent({ ...input, signedTransaction });
@@ -915,6 +922,7 @@ export async function processSurpriseBountyPayments(
           "surprise_bonus_claim_conflict",
           "surprise_bonus_reconciliation_required",
           "surprise_bonus_signed_transaction_mismatch",
+          "evm_transaction_fee_policy_exhausted",
         ]).has(error.code);
       const recoverableNonceReservation =
         Number(recoveryRow?.transaction_recovery_version ?? 0) === 1 &&

@@ -1,6 +1,7 @@
 import { TOKENLESS_QUICKNET_T_CHAIN_HASH, loadTokenlessChainConfig } from "./chain/config";
 import {
   type EvmTransactionLocator,
+  assertEvmTransactionFeeWithinPolicy,
   maybeReplaceUnobservedEvmTransaction,
   persistInitialEvmTransaction,
 } from "./chain/evmTransactionReplacement";
@@ -393,6 +394,12 @@ async function preparePersistedRaterTransaction(input: {
   const signableRequest = Object.fromEntries(
     Object.entries(request).filter(([key]) => key !== "account" && key !== "chain" && key !== "from"),
   ) as TransactionSerializable;
+  assertEvmTransactionFeeWithinPolicy({
+    gas: signableRequest.gas,
+    generation: 0,
+    maxFeePerGas: signableRequest.maxFeePerGas,
+    maxPriorityFeePerGas: signableRequest.maxPriorityFeePerGas,
+  });
   const signedTransaction = await input.account.signTransaction(signableRequest);
   const hash = keccak256(signedTransaction);
   await assertSignedRaterTransactionIntent({ ...input, signedTransaction });

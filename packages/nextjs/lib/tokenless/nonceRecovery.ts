@@ -129,19 +129,20 @@ async function reopenIntent(intent: ReservedIntent, now: Date) {
           SET state = 'pending', attempt_count = 0, next_attempt_at = EXCLUDED.next_attempt_at,
               completed_at = NULL, dead_at = NULL, updated_at = EXCLUDED.updated_at
           WHERE tokenless_scheduled_work_items.state IN ('completed', 'dead')
-            AND COALESCE(tokenless_scheduled_work_items.last_error, '') NOT LIKE 'nonce_integrity:%'`,
+            AND COALESCE(tokenless_scheduled_work_items.last_error, '') NOT LIKE 'nonce_integrity:%'
+            AND COALESCE(tokenless_scheduled_work_items.last_error, '') NOT LIKE 'operator_action:%'`,
     args: [itemId, kind, intent.businessKey, now, now, now],
   });
   return reopened.rowCount === 1;
 }
 
-async function blockedByIntegrityFinding(intent: ReservedIntent) {
+async function blockedByOperatorFinding(intent: ReservedIntent) {
   const kind = workKind(intent);
   if (!kind) return false;
   const result = await dbClient.execute({
     sql: `SELECT item_id FROM tokenless_scheduled_work_items
           WHERE kind = ? AND subject_key = ? AND state = 'dead'
-            AND last_error LIKE 'nonce_integrity:%' LIMIT 1`,
+            AND (last_error LIKE 'nonce_integrity:%' OR last_error LIKE 'operator_action:%') LIMIT 1`,
     args: [kind, intent.businessKey],
   });
   return result.rows.length === 1;
@@ -288,7 +289,7 @@ export async function sweepManagedEvmNonceDrift(
       continue;
     }
     const candidate = exactCandidates[0]!;
-    const recoverable = structurallyRecoverable(candidate) && !(await blockedByIntegrityFinding(candidate));
+    const recoverable = structurallyRecoverable(candidate) && !(await blockedByOperatorFinding(candidate));
     if (recoverable && (await reopenIntent(candidate, now))) summary.reopened += 1;
     await upsertFinding({
       address: role.address,

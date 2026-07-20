@@ -71,6 +71,7 @@ const NONCE_INTEGRITY_CODES = new Set([
   "signed_transaction_mismatch",
 ]);
 const NONCE_ALREADY_CONSUMED_CODES = new Set(["prepaid_approval_failed", "round_submission_failed"]);
+const OPERATOR_ACTION_CODES = new Set(["evm_transaction_fee_policy_exhausted"]);
 const IMMEDIATE_DEAD_LETTER_CODES = new Set(["x402_authorization_used_reconciliation_required"]);
 
 function rowString(row: Row | undefined, key: string) {
@@ -368,14 +369,16 @@ async function processClaimedWork(input: {
       if (completed.rows.length === 1) summary.completed += 1;
     } catch (error) {
       const nonceIntegrityFailure = error instanceof TokenlessServiceError && NONCE_INTEGRITY_CODES.has(error.code);
+      const operatorActionFailure = error instanceof TokenlessServiceError && OPERATOR_ACTION_CODES.has(error.code);
       const nonceAlreadyConsumed =
         error instanceof TokenlessServiceError && NONCE_ALREADY_CONSUMED_CODES.has(error.code);
       const reservedNonceMustProgress =
         !nonceAlreadyConsumed &&
+        !operatorActionFailure &&
         new Set<WorkKind>(["recover_chain_execution", "recover_rater_commit"]).has(kind) &&
         (await hasFreshReservedNonce(kind, subjectKey));
       const deferred =
-        (!nonceIntegrityFailure && reservedNonceMustProgress) ||
+        (!nonceIntegrityFailure && !operatorActionFailure && reservedNonceMustProgress) ||
         (error instanceof TokenlessServiceError &&
           (NON_COUNTING_DEFER_CODES.has(error.code) ||
             (new Set(["recover_chain_execution", "recover_rater_commit"]).has(kind) &&
@@ -383,10 +386,16 @@ async function processClaimedWork(input: {
       const recordedAttempt = deferred ? Number(row.attempt_count) : attempt;
       const immediatelyDead =
         nonceIntegrityFailure ||
+        operatorActionFailure ||
         (error instanceof TokenlessServiceError && IMMEDIATE_DEAD_LETTER_CODES.has(error.code));
       const dead = !deferred && (immediatelyDead || recordedAttempt >= MAX_ATTEMPTS);
       const rawMessage = error instanceof Error ? error.message : "Scheduled work failed";
-      const message = `${nonceIntegrityFailure ? `nonce_integrity:${error.code}: ` : ""}${rawMessage}`.slice(0, 500);
+      const diagnosticPrefix = nonceIntegrityFailure
+        ? `nonce_integrity:${error.code}: `
+        : operatorActionFailure
+          ? `operator_action:${error.code}: `
+          : "";
+      const message = `${diagnosticPrefix}${rawMessage}`.slice(0, 500);
       const failed = await dbClient.execute({
         sql: `UPDATE tokenless_scheduled_work_items
               SET state = ?, attempt_count = ?, next_attempt_at = ?, last_error = ?, dead_at = ?, updated_at = ?

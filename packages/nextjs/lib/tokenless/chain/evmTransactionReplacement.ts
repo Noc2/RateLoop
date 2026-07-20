@@ -22,6 +22,17 @@ export const EVM_FEE_REPLACEMENT_MIN_AGE_MS = 15 * 60_000;
 const FEE_BUMP_NUMERATOR = 9n;
 const FEE_BUMP_DENOMINATOR = 8n;
 
+// This policy is intentionally owned by server code rather than an RPC or a
+// client request. Reaching any bound preserves the last durable transaction
+// version and requires an operator to inspect the signer before more gas can
+// be committed.
+export const EVM_TRANSACTION_FEE_POLICY = Object.freeze({
+  maxFeePerGas: 10_000_000_000n,
+  maxPriorityFeePerGas: 2_000_000_000n,
+  maxReplacementGenerations: 6,
+  maxTotalFee: 10_000_000_000_000_000n,
+});
+
 export type EvmTransactionSignerRole = "prepaid_funder" | "gas_only_relayer" | "surprise_bonus_funder";
 
 export type EvmTransactionLocator =
@@ -421,10 +432,63 @@ function increasedFee(value: bigint) {
   return (value * FEE_BUMP_NUMERATOR + FEE_BUMP_DENOMINATOR - 1n) / FEE_BUMP_DENOMINATOR;
 }
 
+function replacementFees(
+  current: Pick<TransactionIdentity, "maxFeePerGas" | "maxPriorityFeePerGas">,
+  feeFloor: { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint },
+) {
+  const maxPriorityFeePerGas = [increasedFee(current.maxPriorityFeePerGas), feeFloor.maxPriorityFeePerGas].reduce(
+    (highest, candidate) => (candidate > highest ? candidate : highest),
+  );
+  const maxFeePerGas = [increasedFee(current.maxFeePerGas), feeFloor.maxFeePerGas, maxPriorityFeePerGas].reduce(
+    (highest, candidate) => (candidate > highest ? candidate : highest),
+  );
+  return { maxFeePerGas, maxPriorityFeePerGas };
+}
+
+export function assertEvmTransactionFeeWithinPolicy(input: {
+  gas: unknown;
+  generation: number;
+  maxFeePerGas: unknown;
+  maxPriorityFeePerGas: unknown;
+}) {
+  if (
+    typeof input.gas !== "bigint" ||
+    input.gas <= 0n ||
+    typeof input.maxFeePerGas !== "bigint" ||
+    input.maxFeePerGas <= 0n ||
+    typeof input.maxPriorityFeePerGas !== "bigint" ||
+    input.maxPriorityFeePerGas <= 0n ||
+    input.maxPriorityFeePerGas > input.maxFeePerGas
+  ) {
+    throw new TokenlessServiceError(
+      "The RPC returned invalid EIP-1559 fee fields for a server transaction.",
+      503,
+      "chain_fee_estimate_unavailable",
+      true,
+    );
+  }
+  if (!Number.isSafeInteger(input.generation) || input.generation < 0) {
+    throw new Error("EVM transaction fee-policy generation is invalid.");
+  }
+  const policy = EVM_TRANSACTION_FEE_POLICY;
+  if (
+    input.generation > policy.maxReplacementGenerations ||
+    input.maxFeePerGas > policy.maxFeePerGas ||
+    input.maxPriorityFeePerGas > policy.maxPriorityFeePerGas ||
+    input.gas * input.maxFeePerGas > policy.maxTotalFee
+  ) {
+    throw new TokenlessServiceError(
+      "The server transaction reached the fixed fee safety policy and requires operator review.",
+      409,
+      "evm_transaction_fee_policy_exhausted",
+    );
+  }
+}
+
 async function signedFeeReplacement(
   account: Account,
   current: Hex,
-  feeFloor: { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint },
+  fees: { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint },
 ) {
   if (account.type !== "local") {
     throw new TokenlessServiceError(
@@ -450,19 +514,13 @@ async function signedFeeReplacement(
       "signed_transaction_mismatch",
     );
   }
-  const maxPriorityFeePerGas = [increasedFee(parsed.maxPriorityFeePerGas), feeFloor.maxPriorityFeePerGas].reduce(
-    (highest, candidate) => (candidate > highest ? candidate : highest),
-  );
-  const maxFeePerGas = [increasedFee(parsed.maxFeePerGas), feeFloor.maxFeePerGas, maxPriorityFeePerGas].reduce(
-    (highest, candidate) => (candidate > highest ? candidate : highest),
-  );
   const request: TransactionSerializableEIP1559 = {
     accessList: parsed.accessList ?? [],
     chainId: parsed.chainId,
     data: parsed.data ?? "0x",
     gas: parsed.gas,
-    maxFeePerGas,
-    maxPriorityFeePerGas,
+    maxFeePerGas: fees.maxFeePerGas,
+    maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
     nonce: parsed.nonce,
     to: parsed.to,
     type: "eip1559",
@@ -495,7 +553,7 @@ export async function maybeReplaceUnobservedEvmTransaction(input: {
     return { ...recorded, replaced: true };
   }
   const latest = await dbClient.execute({
-    sql: `SELECT transaction_hash, created_at FROM tokenless_evm_transaction_versions
+    sql: `SELECT transaction_hash, generation, created_at FROM tokenless_evm_transaction_versions
           WHERE business_kind = ? AND business_key = ? AND transaction_kind = ?
           ORDER BY generation DESC LIMIT 1`,
     args: [input.locator.businessKind, input.locator.businessKey, input.locator.transactionKind],
@@ -504,6 +562,14 @@ export async function maybeReplaceUnobservedEvmTransaction(input: {
   if (!latestRow || !sameSigned(String(latestRow.transaction_hash), recorded.hash)) {
     throw new TokenlessServiceError(
       "The durable transaction version history does not match the active transaction.",
+      409,
+      "signed_transaction_mismatch",
+    );
+  }
+  const generation = Number(latestRow.generation);
+  if (!Number.isSafeInteger(generation) || generation < 0) {
+    throw new TokenlessServiceError(
+      "The durable transaction version history has an invalid generation.",
       409,
       "signed_transaction_mismatch",
     );
@@ -557,7 +623,13 @@ export async function maybeReplaceUnobservedEvmTransaction(input: {
       true,
     );
   }
-  const signedTransaction = await signedFeeReplacement(input.account, recorded.signedTransaction, estimatedFees);
+  const fees = replacementFees(identity, estimatedFees);
+  assertEvmTransactionFeeWithinPolicy({
+    gas: identity.gas,
+    generation: generation + 1,
+    ...fees,
+  });
+  const signedTransaction = await signedFeeReplacement(input.account, recorded.signedTransaction, fees);
   await assertSameEvmTransactionIntent({
     account: input.account,
     previous: recorded.signedTransaction,
@@ -582,5 +654,6 @@ export async function maybeReplaceUnobservedEvmTransaction(input: {
 
 export const __evmTransactionReplacementTestUtils = {
   increasedFee,
+  replacementFees,
   transactionIdentity,
 };

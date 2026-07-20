@@ -6,6 +6,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
+import { EVM_TRANSACTION_FEE_POLICY } from "~~/lib/tokenless/chain/evmTransactionReplacement";
 import type { TokenlessChainRuntime } from "~~/lib/tokenless/chain/runtime";
 import { buildPublicVoucherRequest } from "~~/lib/tokenless/rater/publicVoucherRequest";
 import { __raterServiceTestUtils, listPaidRaterTasks } from "~~/lib/tokenless/raterService";
@@ -287,6 +288,38 @@ test("a signed rater transaction is durable before broadcast and replays exactly
     signerRole: "gas_only_relayer",
     transactionKind: "relay",
   } as const;
+  let overCapSignings = 0;
+  const overCapAccount = {
+    ...account,
+    async signTransaction() {
+      overCapSignings += 1;
+      throw new Error("over-cap request reached signing");
+    },
+  } as typeof account;
+  await assert.rejects(
+    __raterServiceTestUtils.preparePersistedRaterTransaction({
+      account: overCapAccount as never,
+      commitId: "commit_recovery",
+      data,
+      nonce: 7,
+      to: panel,
+      locator,
+      wallet: {
+        async prepareTransactionRequest(transaction: Record<string, unknown>) {
+          return {
+            ...transaction,
+            chainId: 84532,
+            gas: 100_000n,
+            maxFeePerGas: EVM_TRANSACTION_FEE_POLICY.maxFeePerGas + 1n,
+            maxPriorityFeePerGas: 1n,
+            type: "eip1559" as const,
+          };
+        },
+      } as never,
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "evm_transaction_fee_policy_exhausted",
+  );
+  assert.equal(overCapSignings, 0);
   await assert.rejects(
     __raterServiceTestUtils.preparePersistedRaterTransaction({
       account: failingAccount as never,

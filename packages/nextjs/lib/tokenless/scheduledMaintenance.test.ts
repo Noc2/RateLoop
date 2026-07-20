@@ -418,6 +418,75 @@ test("a fresh reserved nonce remains recoverable beyond the scheduled attempt li
   assert.deepEqual(item.rows[0], { attempt_count: 19, dead_at: null, state: "retry" });
 });
 
+test("fee-replacement policy exhaustion becomes sticky operator-action health evidence", async () => {
+  await seedRecoverableRaterCommit("commit_recovery_fee_policy", "signed");
+  const result = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    processors: {
+      ...processors(async () => undefined),
+      async recoverRaterCommit() {
+        throw new TokenlessServiceError(
+          "The server fee-replacement safety policy requires operator review.",
+          409,
+          "evm_transaction_fee_policy_exhausted",
+        );
+      },
+    },
+  });
+  if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.equal(result.status, "degraded");
+  assert.deepEqual(result.summary.work, { completed: 0, dead: 1, deferred: 0, retry: 0 });
+  assert.equal(result.summary.deadWorkItems, 1);
+  const item = await dbClient.execute({
+    sql: `SELECT state, attempt_count, last_error, dead_at
+          FROM tokenless_scheduled_work_items
+          WHERE kind = 'recover_rater_commit' AND subject_key = 'commit_recovery_fee_policy'`,
+  });
+  assert.equal(item.rows[0]?.state, "dead");
+  assert.equal(item.rows[0]?.attempt_count, 1);
+  assert.match(String(item.rows[0]?.last_error), /^operator_action:evm_transaction_fee_policy_exhausted:/u);
+  assert.ok(item.rows[0]?.dead_at);
+
+  const signer = "0x8888888888888888888888888888888888888888";
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_chain_signer_nonces
+          (deployment_key, signer_address, next_nonce, updated_at)
+          VALUES ('deployment', ?, 8, ?)`,
+    args: [signer, NOW],
+  });
+  const sweep = await sweepManagedEvmNonceDrift({
+    config: { deploymentKey: "deployment" } as never,
+    now: new Date(NOW.getTime() + 60_000),
+    runtime: {
+      relayerAccount: { address: signer },
+      publicClient: {
+        async getTransactionCount() {
+          return 7;
+        },
+      },
+    } as never,
+  });
+  assert.deepEqual(sweep, {
+    checked: 1,
+    pending: 0,
+    reconciliationRequired: 1,
+    reopened: 0,
+    unavailable: 0,
+  });
+  const finding = await dbClient.execute({
+    sql: `SELECT state, diagnostic_code, business_kind, business_key
+          FROM tokenless_evm_nonce_recovery_findings WHERE signer_address = ?`,
+    args: [signer],
+  });
+  assert.deepEqual(finding.rows[0], {
+    business_key: "commit_recovery_fee_policy",
+    business_kind: "rater_commit",
+    diagnostic_code: "reserved_nonce_reconciliation_required",
+    state: "reconciliation_required",
+  });
+});
+
 test("nonce-drift sweep reopens the lowest exact reserved intent and resolves only after nonce progress", async () => {
   await seedRecoverableRaterCommit("commit_recovery_drift", "prepared");
   const signer = "0x1111111111111111111111111111111111111111";
