@@ -7,6 +7,7 @@ const source = readFileSync(new URL("./EvidenceWorkspacePanel.tsx", import.meta.
 test("the evidence workspace keeps verification and export state explicit", () => {
   assert.match(source, /Decision records and exports/);
   assert.match(source, /Export packet/);
+  assert.doesNotMatch(source, /No decision packet yet|A packet appears after/);
   assert.match(source, /evidence:verify/);
   assert.match(source, /audit:verify/);
   assert.match(source, /Transparency receipt recorded/);

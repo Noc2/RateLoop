@@ -375,15 +375,6 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
         {null}
       </AsyncSection>
 
-      {!loading && packets.length === 0 ? (
-        <section className="surface-card rounded-2xl p-6">
-          <h3 className="font-semibold">No decision packet yet</h3>
-          <p className="mt-2 text-sm text-base-content/55">
-            A packet appears after a completed assurance run is frozen and exported.
-          </p>
-        </section>
-      ) : null}
-
       {packets.length > 0 ? (
         <section className="space-y-3" aria-labelledby="evidence-packets-heading">
           <h2 id="evidence-packets-heading" className="text-xl font-semibold">
