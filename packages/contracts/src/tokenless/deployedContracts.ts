@@ -1,15 +1,68 @@
 /**
- * Generated deployment metadata for rateloop-tokenless-deployment-v4.
- * The registry stays empty until a complete v4 bundle is deployed and verified.
+ * Generated from rateloop-tokenless-deployment-v4.
+ * Do not edit manually.
  */
-export const tokenlessDeploymentSchema =
-  "rateloop-tokenless-deployment-v4" as const;
+export const tokenlessDeploymentSchema = "rateloop-tokenless-deployment-v4" as const;
 
 export const tokenlessDeploymentStatus = {
-  schemaVersion: tokenlessDeploymentSchema,
-  status: "unreleased",
-  chainId: 84_532,
-  deploymentKey: null,
+  "schemaVersion": "rateloop-tokenless-deployment-v4",
+  "status": "released",
+  "chainId": 84532,
+  "deploymentKey": "tokenless-v4:84532:0x377f8631030a06e997cee78bdf649106a90bba46:0xe7f214be85002a6776874e6b624f7cfee98b89d9:0xa33f747ca2e83b12cb67ca407aa4999bf7e68dcc:0xa0c1f730aad6b7cb78eaeaca39743f6430dc57b0"
 } as const;
 
-export const tokenlessDeployedContracts = {} as const;
+export const tokenlessDeployedContracts = {
+  "84532": {
+    "schemaVersion": "rateloop-tokenless-deployment-v4",
+    "version": 4,
+    "deploymentComplete": true,
+    "deploymentProfile": "test",
+    "networkName": "baseSepolia",
+    "chainId": 84532,
+    "deploymentBlockNumber": 44390557,
+    "deploymentKey": "tokenless-v4:84532:0x377f8631030a06e997cee78bdf649106a90bba46:0xe7f214be85002a6776874e6b624f7cfee98b89d9:0xa33f747ca2e83b12cb67ca407aa4999bf7e68dcc:0xa0c1f730aad6b7cb78eaeaca39743f6430dc57b0",
+    "beaconVerifier": "0xCE1E909b374B8AA53feDee189968e5Defa6c9b8f",
+    "beaconVerifierArtifact": "QuicknetTBeaconVerifier",
+    "beaconVerifierDeployedOnBlock": 44390557,
+    "contracts": {
+      "TestUSDC": {
+        "address": "0x067e0566c8242d57e1af9ffecd18150c84f98e92",
+        "artifact": "MockERC20",
+        "deployedOnBlock": 44390557,
+        "runtimeCodeHash": "0x92b4713267cf29a40b2a02f3d5a3eafbd0459bd1d12c7137603e798a1241763d"
+      },
+      "CredentialIssuer": {
+        "address": "0xe7f214be85002a6776874e6b624f7cfee98b89d9",
+        "artifact": "CredentialIssuer",
+        "deployedOnBlock": 44390557,
+        "runtimeCodeHash": "0x318fca6a907b6b0d8fbc6a3274d6dd61e0e6d256834730ce500b9dbfc5730c3f"
+      },
+      "TokenlessPanel": {
+        "address": "0x377f8631030a06e997cee78bdf649106a90bba46",
+        "artifact": "TokenlessPanel",
+        "deployedOnBlock": 44390557,
+        "runtimeCodeHash": "0xeb4ae0d61f7c7f56ee138e1ff7d0ace98bbc4ff2c04a38a6e2e9f2225677e79f"
+      },
+      "TokenlessFeedbackBonus": {
+        "address": "0xa0c1f730aad6b7cb78eaeaca39743f6430dc57b0",
+        "artifact": "TokenlessFeedbackBonus",
+        "deployedOnBlock": 44390557,
+        "runtimeCodeHash": "0x61c3430d6bfbec14a5c2c2e921ad9f7e48ed1011f14aab9a7aadf287b7de860a"
+      },
+      "X402PanelSubmitter": {
+        "address": "0xa33f747ca2e83b12cb67ca407aa4999bf7e68dcc",
+        "artifact": "X402PanelSubmitter",
+        "deployedOnBlock": 44390557,
+        "runtimeCodeHash": "0x382aa4fc7304e4d63462cea71362944ec2cdcecd2c71bab40f52aab8b6b3811c"
+      }
+    },
+    "testCurrency": {
+      "contract": "TestUSDC",
+      "decimals": 6,
+      "symbol": "tUSDC",
+      "unrestrictedMint": true
+    },
+    "beaconVerifierRuntimeCodeHash": "0x7d12931d78e49216044b5809ab12df56cd5ae5332f7ee75d42c4d0bca4c6199a",
+    "runtimeCodeEvidenceComplete": true
+  }
+} as const;
