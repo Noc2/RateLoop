@@ -392,7 +392,7 @@ export function AgentRegistryPanel({
                   disabled={busy}
                   onClick={() => onReviewAgentChange?.(activeReviewAgentId === agent.agentId ? null : agent.agentId)}
                 >
-                  Edit reviews
+                  {agent.humanReview.status === "configuration_required" ? "Finish setup" : "Edit reviews"}
                 </Button>
               ) : null}
             </div>

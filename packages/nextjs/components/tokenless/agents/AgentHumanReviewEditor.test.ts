@@ -46,6 +46,12 @@ test("the contextual editor owns every human-review dimension through one canoni
   assert.match(source, /Automatic review requests are ready/);
   assert.match(source, /unlock when enough invited reviewers join/);
   assert.match(source, /privateUnpaidBootstrapAvailable/);
+  assert.match(source, /view\.configuration\?\.selection\.value \?\?/);
+  assert.match(source, /privateGroupId: groups\[0\]\?\.groupId \?\? ""/);
+  assert.match(source, /expectedBindingVersion: view\.bindingRevision/);
+  assert.match(source, /creating \? "Finish setup" : "Save changes"/);
+  assert.doesNotMatch(source, /Finish human-review setup before editing it/);
+  assert.doesNotMatch(source, /Human-review configuration is unavailable/);
   assert.match(source, /number\(request\.panelSize, 2\)/);
   assert.match(source, /draft\.audience === "private_invited" \? 2 : 3/);
   assert.match(source, /view\.connection\?\.connectionStatus === "connected"/);

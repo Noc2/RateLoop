@@ -87,10 +87,27 @@ function usdcToAtomic(value: string) {
   return atomic;
 }
 
-function draftFromView(view: OwnerView): Draft {
-  if (!view.configuration) throw new Error("Finish human-review setup before editing it.");
-  const selection = view.configuration.selection.value;
-  const request = view.configuration.requestProfile.value;
+function draftFromView(view: OwnerView, groups: PrivateGroup[]): Draft {
+  const selection = view.configuration?.selection.value ?? {
+    mode: "adaptive",
+    productionFloorBps: 1_000,
+    maximumUnreviewedGap: 20,
+    requiredRiskTiers: ["high"],
+    minimumConfidenceBps: 7_000,
+  };
+  const request = view.configuration?.requestProfile.value ?? {
+    questionAuthority: "owner_fixed",
+    criterion: "Is this response safe and correct?",
+    positiveLabel: "Approve",
+    negativeLabel: "Reject",
+    rationaleMode: "required",
+    audience: "private_invited",
+    privateGroupId: groups[0]?.groupId ?? "",
+    responseWindowSeconds: 3_600,
+    panelSize: 2,
+    compensationMode: "unpaid",
+    feedbackBonusEnabled: false,
+  };
   const mode = String(selection.mode) as Mode;
   const rateBps =
     mode === "fixed" ? number(selection.fixedRateBps, 1_000) : number(selection.productionFloorBps, 1_000);
@@ -116,7 +133,7 @@ function draftFromView(view: OwnerView): Draft {
     feedbackBonusUsdc: request.feedbackBonusPoolAtomic ? atomicToUsdc(request.feedbackBonusPoolAtomic) : "2",
     feedbackBonusAwarderKind: request.feedbackBonusAwarderKind === "designated" ? "designated" : "requester",
     feedbackBonusAwarderAccount: String(request.feedbackBonusAwarderAccount ?? ""),
-    authority: mode === "manual" ? "check_only" : view.configuration.authority,
+    authority: mode === "manual" ? "check_only" : (view.configuration?.authority ?? "check_only"),
   };
 }
 
@@ -139,9 +156,17 @@ function bps(value: string, field: string, minimum: number) {
 
 function buildMutation(view: OwnerView, draft: Draft) {
   const configuration = view.configuration;
-  if (!configuration) throw new Error("Human-review configuration is unavailable.");
-  const currentSelection = configuration.selection.value;
-  const currentRequestProfile = configuration.requestProfile.value;
+  const currentSelection = configuration?.selection.value ?? {
+    enforcementMode: "advisory",
+    agreementThresholdBps: 7_000,
+    criticalRiskTiers: ["critical"],
+    maximumLatencyMs: 120_000,
+  };
+  const currentRequestProfile = configuration?.requestProfile.value ?? {
+    requiredExpertiseKeys: [],
+    expertiseRequirements: [],
+    privateSensitivity: "confidential",
+  };
   const authority: Authority = draft.mode === "manual" ? "check_only" : draft.authority;
   if (draft.questionAuthority === "agent_per_request" && draft.mode === "adaptive") {
     throw new Error("Agent-written questions cannot use adaptive review.");
@@ -224,7 +249,7 @@ function buildMutation(view: OwnerView, draft: Draft) {
   }
   let publishingGrant: Record<string, unknown> | null = null;
   if (authority === "ask_automatically") {
-    const delegation = configuration.delegation;
+    const delegation = configuration?.delegation ?? null;
     const connection = view.connection;
     const workflowKeys = delegation?.allowedWorkflowKeys.length
       ? delegation.allowedWorkflowKeys
@@ -328,9 +353,10 @@ export function AgentHumanReviewEditor({
         ),
       ]);
       const nextView = reviewBody as unknown as OwnerView;
+      const nextGroups = ((groupsBody.groups ?? []) as PrivateGroup[]).filter(group => group.status === "active");
       setView(nextView);
-      setGroups(((groupsBody.groups ?? []) as PrivateGroup[]).filter(group => group.status === "active"));
-      setDraft(draftFromView(nextView));
+      setGroups(nextGroups);
+      setDraft(draftFromView(nextView, nextGroups));
     },
     [agentId, workspaceId],
   );
@@ -432,6 +458,7 @@ export function AgentHumanReviewEditor({
       view.connection.allowedWorkflowKeys.length > 0,
   );
   const automaticAvailable = exactDelegationAvailable || privateUnpaidBootstrapAvailable;
+  const creating = view.configuration === null;
 
   return (
     <Card as="section" id="agent-human-review-editor" className="rounded-2xl p-6">
@@ -442,8 +469,10 @@ export function AgentHumanReviewEditor({
       ) : null}
       <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold">Human review</h2>
-          <p className="mt-1 text-sm text-base-content/60">Edit the complete configuration for this agent.</p>
+          <h2 className="text-xl font-semibold">{creating ? "Finish human-review setup" : "Human review"}</h2>
+          <p className="mt-1 text-sm text-base-content/60">
+            {creating ? "Choose how this agent sends work to your reviewers." : "Edit this agent's review settings."}
+          </p>
         </div>
       </div>
       <form className="mt-6 space-y-5" onSubmit={submit}>
@@ -754,7 +783,7 @@ export function AgentHumanReviewEditor({
           </p>
         ) : null}
         <Button type="submit" disabled={busy}>
-          {busy ? "Saving…" : "Save changes"}
+          {busy ? "Saving…" : creating ? "Finish setup" : "Save changes"}
         </Button>
       </form>
     </Card>

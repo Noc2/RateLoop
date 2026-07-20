@@ -9,6 +9,7 @@ test("agent details and review information render in task-focused views", () => 
   assert.match(source, /view === "reviews"/);
   assert.match(source, /Change workflow version/);
   assert.match(source, /Edit reviews/);
+  assert.match(source, /configuration_required" \? "Finish setup" : "Edit reviews"/);
   assert.match(source, /aria-controls="agent-human-review-editor"/);
   assert.match(source, /activeReviewAgentId === agent\.agentId/);
   assert.match(source, /onReviewAgentChange/);
