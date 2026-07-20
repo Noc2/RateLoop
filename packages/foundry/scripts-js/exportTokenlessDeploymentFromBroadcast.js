@@ -13,6 +13,8 @@ import {
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const foundryRoot = join(scriptDirectory, "..");
+const DEFAULT_BYTECODE_RETRY_ATTEMPTS = 30;
+const DEFAULT_BYTECODE_RETRY_DELAY_MS = 1_000;
 
 export function tokenlessBroadcastPath(root = foundryRoot) {
   return join(
@@ -71,12 +73,57 @@ async function rpcBytecodeLoader(rpcUrl, address) {
   return payload.result;
 }
 
+function hasDeployedBytecode(value) {
+  return typeof value === "string" && /^0x(?:[0-9a-fA-F]{2})+$/u.test(value);
+}
+
+function wait(delayMs) {
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
+}
+
+async function loadBytecodeAfterRpcPropagation(
+  getBytecode,
+  address,
+  {
+    attempts = DEFAULT_BYTECODE_RETRY_ATTEMPTS,
+    delayMs = DEFAULT_BYTECODE_RETRY_DELAY_MS,
+    waitForRetry = wait,
+  } = {},
+) {
+  if (!Number.isSafeInteger(attempts) || attempts <= 0) {
+    throw new Error("bytecodeRetryAttempts must be a positive integer.");
+  }
+  if (!Number.isSafeInteger(delayMs) || delayMs < 0) {
+    throw new Error("bytecodeRetryDelayMs must be a non-negative integer.");
+  }
+
+  let lastResult;
+  let lastError;
+  // A successful Forge receipt can reach one load-balanced RPC backend before
+  // eth_getCode reaches another. Retry only the evidence read; never the deploy.
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      lastResult = await getBytecode(address);
+      lastError = undefined;
+      if (hasDeployedBytecode(lastResult)) return lastResult;
+    } catch (error) {
+      lastError = error;
+    }
+    if (attempt < attempts) await waitForRetry(delayMs);
+  }
+  if (lastError) throw lastError;
+  return lastResult;
+}
+
 export async function exportTokenlessDeploymentFromBroadcast({
   broadcastPath = tokenlessBroadcastPath(),
   deploymentPath = tokenlessDeploymentPath(),
   targetNetwork = process.env.DEPLOY_TARGET_NETWORK,
   getBytecode = (address) => rpcBytecodeLoader(process.env.RPC_URL, address),
   expectedBeaconVerifierRuntimeCodeHash = compiledBeaconVerifierRuntimeCodeHash(),
+  bytecodeRetryAttempts = DEFAULT_BYTECODE_RETRY_ATTEMPTS,
+  bytecodeRetryDelayMs = DEFAULT_BYTECODE_RETRY_DELAY_MS,
+  waitForBytecodeRetry = wait,
 } = {}) {
   if (targetNetwork !== TOKENLESS_BASE_SEPOLIA_NETWORK) {
     throw new Error(
@@ -90,7 +137,12 @@ export async function exportTokenlessDeploymentFromBroadcast({
   const broadcast = JSON.parse(readFileSync(broadcastPath, "utf8"));
   const reconstructed = reconstructTokenlessDeploymentFromBroadcast(broadcast);
   const artifact = await attachTokenlessRuntimeCodeEvidence(reconstructed, {
-    getBytecode,
+    getBytecode: (address) =>
+      loadBytecodeAfterRpcPropagation(getBytecode, address, {
+        attempts: bytecodeRetryAttempts,
+        delayMs: bytecodeRetryDelayMs,
+        waitForRetry: waitForBytecodeRetry,
+      }),
     expectedBeaconVerifierRuntimeCodeHash,
   });
 

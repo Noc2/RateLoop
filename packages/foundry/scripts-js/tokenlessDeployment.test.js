@@ -349,6 +349,51 @@ test("export writes tokenless-v4 with exact runtime hashes and leaves historical
   }
 });
 
+test("export waits for a freshly deployed contract to propagate across the RPC", async () => {
+  const root = mkdtempSync(join(tmpdir(), "rateloop-tokenless-rpc-propagation-"));
+  try {
+    const broadcastPath = join(root, "run-latest.json");
+    const deploymentPath = join(
+      root,
+      "deployments",
+      "tokenless-v4",
+      "84532.json",
+    );
+    const broadcast = completeBroadcast();
+    const testUsdc = broadcast.transactions[0].contractAddress;
+    let testUsdcLoads = 0;
+    let waits = 0;
+    writeFileSync(broadcastPath, JSON.stringify(broadcast));
+
+    const { artifact } = await exportTokenlessDeploymentFromBroadcast({
+      broadcastPath,
+      deploymentPath,
+      targetNetwork: "baseSepolia",
+      getBytecode: async (contractAddress) => {
+        if (contractAddress === testUsdc && testUsdcLoads++ < 2) return "0x";
+        return `0x60${contractAddress.slice(-2)}`;
+      },
+      expectedBeaconVerifierRuntimeCodeHash: keccak256("0x6006"),
+      bytecodeRetryAttempts: 3,
+      bytecodeRetryDelayMs: 1,
+      waitForBytecodeRetry: async () => {
+        waits += 1;
+      },
+    });
+
+    assert.equal(testUsdcLoads, 3);
+    assert.equal(waits, 2);
+    assert.equal(artifact.runtimeCodeEvidenceComplete, true);
+    assert.equal(
+      JSON.parse(readFileSync(deploymentPath, "utf8"))
+        .runtimeCodeEvidenceComplete,
+      true,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("export rejects deployed verifier bytecode that differs from the compiled runtime", async () => {
   const root = mkdtempSync(join(tmpdir(), "rateloop-tokenless-verifier-hash-"));
   try {
