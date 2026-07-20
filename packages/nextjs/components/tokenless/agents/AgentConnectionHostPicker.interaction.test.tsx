@@ -49,6 +49,35 @@ test("a selected host shows its honest tier meaning and numbered host prompts", 
   }
 });
 
+test("cli-command affordances render as code with their own copy action", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, fireEvent, render, within } = await import("@testing-library/react");
+  const { AgentConnectionHostPicker } = await import("./AgentConnectionHostPicker");
+  const command =
+    "claude mcp add --scope user --transport http rateloop-workspace https://rateloop-tokenless.vercel.app/api/agent/v1/mcp";
+  const copies: string[] = [];
+  Object.defineProperty(window.navigator, "clipboard", {
+    configurable: true,
+    value: {
+      writeText: async (value: string) => {
+        copies.push(value);
+      },
+    },
+  });
+
+  try {
+    render(<AgentConnectionHostPicker selectedHostId="claude-code" onSelectHost={() => undefined} />);
+    const screen = within(document.body);
+    assert.ok(screen.getByText(command));
+    fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+    assert.ok(await screen.findByRole("button", { name: "Copied" }));
+    assert.deepEqual(copies, [command]);
+  } finally {
+    cleanup();
+    restoreDom();
+  }
+});
+
 test("supported plugin hosts mention the existing plugin path without extra friction", async () => {
   const restoreDom = installTestDom();
   const { cleanup, render, within } = await import("@testing-library/react");

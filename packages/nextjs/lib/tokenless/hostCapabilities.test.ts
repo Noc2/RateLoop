@@ -10,6 +10,7 @@ import {
   tokenlessHostMessageVariant,
 } from "./hostCapabilities";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -46,15 +47,97 @@ test("every install affordance carries its own freshness evidence", () => {
   }
 });
 
-test("only the bundled plugin marketplace affordances exist until others are verified", () => {
-  const hostsWithAffordances = HOSTS.filter(host => host.installAffordances.length > 0);
-  assert.deepEqual(hostsWithAffordances.map(host => host.id).sort(), ["claude-code", "codex-desktop"]);
-  for (const host of hostsWithAffordances) {
-    assert.deepEqual(
-      host.installAffordances.map(affordance => [affordance.kind, affordance.value]),
-      [["plugin-marketplace", "plugin://rateloop-workspace@rateloop"]],
-    );
+test("install affordances exist only where repo-documented syntax exists", () => {
+  assert.deepEqual(
+    HOSTS.filter(host => host.installAffordances.length > 0)
+      .map(host => host.id)
+      .sort(),
+    [
+      "chatgpt-connectors",
+      "claude-code",
+      "claude-desktop",
+      "codex-desktop",
+      "gemini-cli",
+      "headless-sdk",
+      "vscode-copilot-chat",
+    ],
+  );
+  // Cursor and the generic fallback stay affordance-free until verified syntax exists.
+  assert.deepEqual(tokenlessHostCapability("cursor")?.installAffordances, []);
+  assert.deepEqual(tokenlessHostCapability("generic-mcp")?.installAffordances, []);
+});
+
+test("plugin hosts keep the bundled marketplace path as the primary affordance", () => {
+  for (const id of ["codex-desktop", "claude-code"]) {
+    const host = tokenlessHostCapability(id);
+    assert.ok(host, id);
+    assert.equal(host.installAffordances[0].kind, "plugin-marketplace");
+    assert.equal(host.installAffordances[0].value, "plugin://rateloop-workspace@rateloop");
   }
+});
+
+test("every cli-command targets the isolated tokenless deployment and no deep link is published", () => {
+  for (const host of HOSTS) {
+    for (const affordance of host.installAffordances) {
+      assert.notEqual(affordance.kind, "deep-link", `${host.id} must not publish install deep links`);
+      if (affordance.kind === "cli-command") {
+        assert.ok(
+          affordance.value.includes("rateloop-tokenless.vercel.app"),
+          `${host.id} cli-command must name the real server host`,
+        );
+      }
+      if (affordance.checkedAt !== "2026-07-17") {
+        assert.fail(`${host.id} affordance checkedAt must match the compatibility-review check date`);
+      }
+    }
+  }
+});
+
+test("documented per-host shapes match the published connect guide verbatim", () => {
+  const guide = readFileSync(new URL("../../public/docs/agent-connection.md", import.meta.url), "utf8");
+  const claudeCli = tokenlessHostCapability("claude-code")?.installAffordances.find(a => a.kind === "cli-command");
+  assert.ok(claudeCli);
+  assert.equal(
+    claudeCli.value,
+    "claude mcp add --scope user --transport http rateloop-workspace https://rateloop-tokenless.vercel.app/api/agent/v1/mcp",
+  );
+  assert.ok(guide.includes(claudeCli.value), "claude-code cli-command must appear in the guide");
+
+  const vscode = tokenlessHostCapability("vscode-copilot-chat")?.installAffordances.find(
+    a => a.kind === "config-snippet",
+  );
+  assert.ok(vscode);
+  assert.ok(vscode.value.includes('"servers"') && !vscode.value.includes("mcpServers"), "vscode uses servers");
+  assert.match(vscode.label, /oauth\.clientId/);
+  assert.ok(guide.includes(vscode.value), "vscode config-snippet must appear in the guide");
+
+  const gemini = tokenlessHostCapability("gemini-cli");
+  const geminiCli = gemini?.installAffordances.find(a => a.kind === "cli-command");
+  const geminiSnippet = gemini?.installAffordances.find(a => a.kind === "config-snippet");
+  assert.ok(geminiCli && geminiSnippet);
+  assert.ok(geminiCli.value.includes("--transport http"));
+  assert.ok(geminiSnippet.value.includes('"httpUrl"') && !geminiSnippet.value.includes('"url"'), "gemini uses httpUrl");
+  assert.ok(guide.includes(geminiCli.value), "gemini cli-command must appear in the guide");
+  assert.ok(guide.includes(geminiSnippet.value), "gemini config-snippet must appear in the guide");
+});
+
+test("settings-only and headless affordances stay short, honest, and sourced", () => {
+  for (const id of ["claude-desktop", "chatgpt-connectors"]) {
+    const host = tokenlessHostCapability(id);
+    assert.ok(host, id);
+    assert.deepEqual(
+      host.installAffordances.map(affordance => affordance.kind),
+      ["settings-instructions"],
+    );
+    assert.match(host.installAffordances[0].value, /settings/);
+    assert.ok(host.installAffordances[0].value.includes("/docs/connect"), `${id} points at the connect docs`);
+  }
+
+  const headless = tokenlessHostCapability("headless-sdk")?.installAffordances.find(a => a.kind === "cli-command");
+  assert.ok(headless);
+  assert.ok(headless.value.includes("rateloop-agents"), "headless uses the published bin name");
+  assert.ok(headless.value.includes("RATELOOP_AGENT_API_KEY"), "headless names the workspace key env var");
+  assert.equal(headless.clientVersion, "@rateloop/agents@0.2.0");
 });
 
 test("host ids are unique and kebab-case", () => {
