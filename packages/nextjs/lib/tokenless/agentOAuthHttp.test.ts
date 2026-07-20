@@ -49,6 +49,7 @@ test("the token endpoint accepts one exact resource even when a client repeats t
   assert.equal(readAgentOAuthResource(new URLSearchParams({ resource }), resource), resource);
   assert.equal(readAgentOAuthResource(repeated, resource), resource);
   assert.equal(readAgentOAuthResource(serverAndResource, resource), resource);
+  assert.equal(readAgentOAuthResource(new URLSearchParams(), resource, { allowOmitted: true }), resource);
 });
 
 test("the token endpoint rejects missing, empty, distinct, and oversized resources", () => {

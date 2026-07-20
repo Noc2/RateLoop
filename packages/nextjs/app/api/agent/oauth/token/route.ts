@@ -44,7 +44,9 @@ export async function POST(request: NextRequest) {
     }
     const grantType = field(form, "grant_type", 64);
     const clientId = field(form, "client_id", 512);
-    const resource = readAgentOAuthResource(form, getCanonicalAgentMcpResource());
+    const resource = readAgentOAuthResource(form, getCanonicalAgentMcpResource(), {
+      allowOmitted: grantType === "refresh_token",
+    });
     const response =
       grantType === "authorization_code"
         ? await exchangeAgentOAuthToken({

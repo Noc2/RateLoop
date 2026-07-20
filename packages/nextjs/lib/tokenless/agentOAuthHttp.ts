@@ -18,8 +18,14 @@ export async function enforceAgentOAuthRateLimit(headers: Headers, now = new Dat
   }
 }
 
-export function readAgentOAuthResource(form: URLSearchParams, expectedResource: string, max = 2_048) {
+export function readAgentOAuthResource(
+  form: URLSearchParams,
+  expectedResource: string,
+  options: { allowOmitted?: boolean } = {},
+  max = 2_048,
+) {
   const values = form.getAll("resource");
+  if (values.length === 0 && options.allowOmitted === true) return expectedResource;
   const expected = new URL(expectedResource);
   const expectedPath = expected.pathname.replace(/\/+$/u, "") || "/";
   const parsed = values.map(value => {
