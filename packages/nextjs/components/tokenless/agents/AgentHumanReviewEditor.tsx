@@ -109,7 +109,7 @@ function draftFromView(view: OwnerView): Draft {
     audience: String(request.audience ?? "private_invited") as Audience,
     privateGroupId: String(request.privateGroupId ?? ""),
     responseWindowSeconds: String(number(request.responseWindowSeconds, 3_600)),
-    panelSize: String(number(request.panelSize, 1)),
+    panelSize: String(number(request.panelSize, 2)),
     compensationMode: String(request.compensationMode ?? "unpaid") as Draft["compensationMode"],
     bountyUsdc: atomicToUsdc(request.bountyPerSeatAtomic),
     feedbackBonusEnabled: request.feedbackBonusEnabled === true,
@@ -157,7 +157,7 @@ function buildMutation(view: OwnerView, draft: Draft) {
         .filter(Boolean),
     ),
   ];
-  const minimumPanelSize = draft.audience === "private_invited" ? 1 : 3;
+  const minimumPanelSize = draft.audience === "private_invited" ? 2 : 3;
   const panelSize = positiveInteger(draft.panelSize, "Reviewer count", minimumPanelSize, 100);
   const responseWindowSeconds = positiveInteger(draft.responseWindowSeconds, "Response window", 1_200, 86_400);
   const compensationMode = draft.audience === "private_invited" ? draft.compensationMode : "usdc";
@@ -637,7 +637,7 @@ export function AgentHumanReviewEditor({
             <input
               className="input mt-2 w-full"
               type="number"
-              min={draft.audience === "private_invited" ? 1 : 3}
+              min={draft.audience === "private_invited" ? 2 : 3}
               max={100}
               value={draft.panelSize}
               onChange={event => update("panelSize", event.target.value)}

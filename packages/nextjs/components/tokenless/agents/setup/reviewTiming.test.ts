@@ -1,5 +1,6 @@
 import {
   MAX_REVIEW_RESPONSE_WINDOW_SECONDS,
+  MIN_REVIEW_PANEL_SIZE,
   MIN_REVIEW_RESPONSE_WINDOW_SECONDS,
   buildReviewTimingRequestProfile,
   reviewTimingFormValues,
@@ -20,22 +21,27 @@ const profile: Omit<AgentSetupReviewDraft["requestProfile"], "configurationStatu
   privateSensitivity: "confidential",
   privateGroupId: "pgrp_reviewers",
   responseWindowSeconds: 3_600,
-  panelSize: 1,
+  panelSize: 2,
   compensationMode: "unpaid",
   bountyPerSeatAtomic: null,
 };
 
 test("review timing resumes the exact frozen window and panel size", () => {
+  assert.equal(reviewTimingFormValues(undefined).panelSize, String(MIN_REVIEW_PANEL_SIZE));
   assert.deepEqual(reviewTimingFormValues({ ...profile, configurationStatus: "ready" }), {
     responseWindowSeconds: "3600",
-    panelSize: "1",
+    panelSize: "2",
   });
 });
 
 test("private and public profiles enforce their real panel minimums", () => {
   assert.equal(
-    buildReviewTimingRequestProfile(profile, { responseWindowSeconds: "7200", panelSize: "1" }).panelSize,
-    1,
+    buildReviewTimingRequestProfile(profile, { responseWindowSeconds: "7200", panelSize: "2" }).panelSize,
+    MIN_REVIEW_PANEL_SIZE,
+  );
+  assert.throws(
+    () => buildReviewTimingRequestProfile(profile, { responseWindowSeconds: "7200", panelSize: "1" }),
+    /Reviewer count must be between 2 and 500/,
   );
   assert.equal(
     buildReviewTimingRequestProfile(
@@ -58,23 +64,23 @@ test("response window accepts only the protocol range", () => {
   assert.equal(
     buildReviewTimingRequestProfile(profile, {
       responseWindowSeconds: String(MIN_REVIEW_RESPONSE_WINDOW_SECONDS),
-      panelSize: "1",
+      panelSize: "2",
     }).responseWindowSeconds,
     MIN_REVIEW_RESPONSE_WINDOW_SECONDS,
   );
   assert.equal(
     buildReviewTimingRequestProfile(profile, {
       responseWindowSeconds: String(MAX_REVIEW_RESPONSE_WINDOW_SECONDS),
-      panelSize: "1",
+      panelSize: "2",
     }).responseWindowSeconds,
     MAX_REVIEW_RESPONSE_WINDOW_SECONDS,
   );
   assert.throws(
-    () => buildReviewTimingRequestProfile(profile, { responseWindowSeconds: "1199", panelSize: "1" }),
+    () => buildReviewTimingRequestProfile(profile, { responseWindowSeconds: "1199", panelSize: "2" }),
     /Response window must be between 1200 and 86400/,
   );
   assert.throws(
-    () => buildReviewTimingRequestProfile(profile, { responseWindowSeconds: "3600.5", panelSize: "1" }),
+    () => buildReviewTimingRequestProfile(profile, { responseWindowSeconds: "3600.5", panelSize: "2" }),
     /whole number/,
   );
 });

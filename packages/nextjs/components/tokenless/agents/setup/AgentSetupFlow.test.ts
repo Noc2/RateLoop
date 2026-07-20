@@ -139,7 +139,7 @@ test("review setup uses one duration control for the frozen response deadline", 
   assert.match(flowSource, /<DurationInput/);
   assert.match(flowSource, /valueSeconds=\{reviewTiming\.responseWindowSeconds\}/);
   assert.match(flowSource, /summarySuffix="Frozen when a request opens"/);
-  assert.match(flowSource, /reviewAudience\.audience === "private_invited" \? 1 : 3/);
+  assert.match(flowSource, /reviewAudience\.audience === "private_invited" \? MIN_REVIEW_PANEL_SIZE : 3/);
   assert.match(flowSource, /buildReviewTimingRequestProfile\(expertiseProfile, reviewTiming\)/);
   assert.doesNotMatch(flowSource, /Expected active review time|Effective-hourly guidance/);
   assert.doesNotMatch(flowSource, /slo\.estimatedSeconds/);

@@ -53,6 +53,7 @@ import {
 import {
   MAX_REVIEW_PANEL_SIZE,
   MAX_REVIEW_RESPONSE_WINDOW_SECONDS,
+  MIN_REVIEW_PANEL_SIZE,
   MIN_REVIEW_RESPONSE_WINDOW_SECONDS,
   type ReviewTimingFormValues,
   buildReviewTimingRequestProfile,
@@ -1781,7 +1782,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                         className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
                         type="number"
                         inputMode="numeric"
-                        min={reviewAudience.audience === "private_invited" ? 1 : 3}
+                        min={reviewAudience.audience === "private_invited" ? MIN_REVIEW_PANEL_SIZE : 3}
                         max={MAX_REVIEW_PANEL_SIZE}
                         step={1}
                         value={reviewTiming.panelSize}

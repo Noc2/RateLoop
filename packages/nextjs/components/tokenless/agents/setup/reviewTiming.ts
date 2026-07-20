@@ -5,6 +5,7 @@ type ReviewRequestProfile = AgentSetupReviewDraft["requestProfile"];
 
 export const MIN_REVIEW_RESPONSE_WINDOW_SECONDS = 1_200;
 export const MAX_REVIEW_RESPONSE_WINDOW_SECONDS = 86_400;
+export const MIN_REVIEW_PANEL_SIZE = 2;
 export const MAX_REVIEW_PANEL_SIZE = 500;
 
 export type ReviewTimingFormValues = {
@@ -15,7 +16,7 @@ export type ReviewTimingFormValues = {
 export function reviewTimingFormValues(profile: ReviewRequestProfile | null | undefined): ReviewTimingFormValues {
   return {
     responseWindowSeconds: String(profile?.responseWindowSeconds ?? 3_600),
-    panelSize: String(profile?.panelSize ?? 1),
+    panelSize: String(profile?.panelSize ?? MIN_REVIEW_PANEL_SIZE),
   };
 }
 
@@ -38,7 +39,7 @@ export function buildReviewTimingRequestProfile(
     MIN_REVIEW_RESPONSE_WINDOW_SECONDS,
     MAX_REVIEW_RESPONSE_WINDOW_SECONDS,
   );
-  const minimumPanelSize = profile.audience === "private_invited" ? 1 : 3;
+  const minimumPanelSize = profile.audience === "private_invited" ? MIN_REVIEW_PANEL_SIZE : 3;
   const panelSize = requiredInteger(values.panelSize, "Reviewer count", minimumPanelSize, MAX_REVIEW_PANEL_SIZE);
   return { ...profile, responseWindowSeconds, panelSize };
 }

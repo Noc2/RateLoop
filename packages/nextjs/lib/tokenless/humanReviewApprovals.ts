@@ -4,6 +4,7 @@ import "server-only";
 import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbPool } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
+import { MINIMUM_REVIEW_PANEL_SIZE } from "~~/lib/tokenless/reviewRequestProfiles";
 import {
   type ReviewerExpertiseRequirement,
   normalizeReviewerExpertiseRequirementsSelection,
@@ -343,7 +344,12 @@ function preparedRequest(value: unknown): HumanReviewPreparedRequest {
     throw new Error("Stored audience and content-boundary terms are inconsistent.");
   }
   const responseWindowSeconds = integer(timing.responseWindowSeconds, "response window", 1_200, 86_400);
-  const panelSize = integer(panel.size, "panel size", audienceKind === "private_invited" ? 1 : 3, 100);
+  const panelSize = integer(
+    panel.size,
+    "panel size",
+    audienceKind === "private_invited" ? MINIMUM_REVIEW_PANEL_SIZE : 3,
+    100,
+  );
   let requiredExpertiseKeys: ReviewerExpertiseKey[];
   let expertiseRequirements: ReviewerExpertiseRequirement[];
   try {

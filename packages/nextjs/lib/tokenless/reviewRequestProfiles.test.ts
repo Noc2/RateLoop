@@ -174,7 +174,7 @@ test("fixed profiles retain v1 hashes while agent-per-request profiles use feedb
         privateGroupId: "group_1",
         privateGroupPolicyVersion: 1,
         privateGroupPolicyHash: `sha256:${"a".repeat(64)}`,
-        panelSize: 1,
+        panelSize: 2,
         compensationMode: "unpaid",
         bountyPerSeatAtomic: null,
       }),
@@ -386,7 +386,26 @@ test("response windows, panel sizes, and USDC liability use exact bounded intege
     __reviewRequestProfileTestUtils.normalizeReviewRequestProfileInput({ ...base, ...overrides });
   assert.throws(() => normalize({ responseWindowSeconds: 1_199 }), /1200 to 86400/i);
   assert.throws(() => normalize({ responseWindowSeconds: 86_401 }), /1200 to 86400/i);
-  assert.throws(() => normalize({ panelSize: 101 }), /1 to 100/i);
+  assert.throws(() => normalize({ panelSize: 101 }), /2 to 100/i);
+  assert.throws(
+    () =>
+      normalize({
+        audience: "private_invited",
+        contentBoundary: "private_workspace",
+        privateSensitivity: "confidential",
+        privateGroupId: "pgrp_1",
+        privateGroupPolicyVersion: 1,
+        privateGroupPolicyHash: `sha256:${"1".repeat(64)}`,
+        panelSize: 1,
+        compensationMode: "unpaid",
+        bountyPerSeatAtomic: null,
+      }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError &&
+      error.status === 400 &&
+      error.code === "invalid_review_request_profile" &&
+      /panelSize must be an integer from 2 to 100/i.test(error.message),
+  );
   assert.throws(() => normalize({ bountyPerSeatAtomic: "01" }), /positive integer string/i);
   assert.throws(() => normalize({ bountyPerSeatAtomic: "1.5" }), /positive integer string/i);
   assert.throws(

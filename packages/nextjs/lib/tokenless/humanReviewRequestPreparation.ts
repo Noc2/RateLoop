@@ -7,6 +7,7 @@ import {
   resolveHumanReviewQuestion,
   serializeFrozenBinaryReviewQuestion,
 } from "~~/lib/tokenless/humanReviewQuestions";
+import { MINIMUM_REVIEW_PANEL_SIZE } from "~~/lib/tokenless/reviewRequestProfiles";
 import {
   type ReviewerExpertiseRequirement,
   normalizeReviewerExpertiseRequirementsSelection,
@@ -211,7 +212,12 @@ function immutable<Value>(value: Value): Readonly<Value> {
 export function deriveHumanReviewEconomics(
   profile: Pick<BoundHumanReviewRequestProfile, "bountyPerSeatAtomic" | "compensationMode" | "panelSize">,
 ): Readonly<HumanReviewDerivedEconomics> {
-  const panelSize = boundedInteger(profile.panelSize, "review panel size", 1, HUMAN_REVIEW_MAXIMUM_PANEL_SIZE);
+  const panelSize = boundedInteger(
+    profile.panelSize,
+    "review panel size",
+    MINIMUM_REVIEW_PANEL_SIZE,
+    HUMAN_REVIEW_MAXIMUM_PANEL_SIZE,
+  );
   if (profile.compensationMode === "unpaid") {
     if (profile.bountyPerSeatAtomic !== null) {
       configurationError("Stored unpaid review includes a per-seat bounty.");
@@ -343,7 +349,12 @@ function exactProfile(profile: BoundHumanReviewRequestProfile) {
     MAXIMUM_RESPONSE_WINDOW_SECONDS,
   );
   const requiredExpertiseKeys = normalizeReviewerExpertiseKeys(profile.requiredExpertiseKeys ?? []);
-  const panelSize = boundedInteger(profile.panelSize, "review panel size", 1, HUMAN_REVIEW_MAXIMUM_PANEL_SIZE);
+  const panelSize = boundedInteger(
+    profile.panelSize,
+    "review panel size",
+    MINIMUM_REVIEW_PANEL_SIZE,
+    HUMAN_REVIEW_MAXIMUM_PANEL_SIZE,
+  );
   let expertiseRequirements: ReviewerExpertiseRequirement[];
   try {
     expertiseRequirements = normalizeReviewerExpertiseRequirementsSelection(
