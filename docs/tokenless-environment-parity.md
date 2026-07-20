@@ -13,22 +13,23 @@ Every live tokenless component is isolated from the legacy RateLoop deployment.
   `PONDER_RPC_FALLBACK_URLS_84532`, or `RPC_URL` + `RPC_FALLBACK_URLS`
 - Deployment schema target: `rateloop-tokenless-deployment-v4`
 - Deployment key target: `tokenless-v4:<chainId>:<panel>:<issuer>:<adapter-or-zero>:<feedback-bonus>`
-- Current v4 release status: `unreleased`
-- Current v4 Base Sepolia deployment key and addresses: none
+- Current v4 release status: `released` for disposable Base Sepolia testing
+- Current v4 Base Sepolia deployment block: `44390557`
+- Current v4 Base Sepolia deployment key:
+  `tokenless-v4:84532:0x377f8631030a06e997cee78bdf649106a90bba46:0xe7f214be85002a6776874e6b624f7cfee98b89d9:0xa33f747ca2e83b12cb67ca407aa4999bf7e68dcc:0xa0c1f730aad6b7cb78eaeaca39743f6430dc57b0`
 
-The checked-in v4 registry is intentionally empty until the experimental in-repo `QuicknetTBeaconVerifier`,
-TokenlessPanel, CredentialIssuer, the optional x402 adapter, and TokenlessFeedbackBonus are freshly deployed and verified
-as one bundle. The deployment script always deploys that exact verifier; it does not accept a verifier address from the
+The checked-in v4 registry binds the experimental in-repo `QuicknetTBeaconVerifier`, TokenlessPanel,
+CredentialIssuer, x402 adapter, and TokenlessFeedbackBonus as one runtime-evidenced bundle. The deployment script always
+deploys that exact verifier; it does not accept a verifier address from the
 environment. Deployment export compares its observed runtime code hash with the compiled artifact and fails closed on
 any difference. Hosted app, Ponder, and keeper configuration consume the resulting pinned address as
 `TOKENLESS_BEACON_VERIFIER_ADDRESS` or their package-prefixed equivalent. The verifier remains unaudited, and this
 deployment binding does not remove the independent-review release gate.
 Historical v1-v3 artifacts, including the
-v3 test bundle deployed at block `44132668`, must not be relabelled or used by a v4 app, Ponder, or keeper process. There
-is no canonical current v4 address to copy into a hosted environment.
+v3 test bundle deployed at block `44132668`, must not be relabelled or used by a v4 app, Ponder, or keeper process.
 
-After a fresh v4 Base Sepolia deployment, the isolated Vercel app, Ponder, and keeper must all be pinned to the same
-complete key and deployment block before any service is promoted. This remains a test-profile bundle, not a production
+The isolated Vercel app, Ponder, and keeper must all be pinned to the same complete key and deployment block before any
+service is promoted. This remains a test-profile bundle, not a production
 release target. Staging must use the same persisted assignment, payment, settlement, and result machinery as production.
 Hosted startup must fail closed until the signed resource/provider bundle, managed signer roles, workers, and paid
 end-to-end path are verified.

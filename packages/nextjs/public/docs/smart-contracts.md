@@ -1,8 +1,8 @@
 # Smart Contracts
 
-The tokenless v4 target keeps customer-funded settlement in four narrow contracts. The v4 registry is currently
-**unreleased**: no canonical v4 Base Sepolia address bundle exists yet, and historical v1-v3 addresses are not v4
-addresses.
+The tokenless v4 target keeps customer-funded settlement in four narrow contracts. The active disposable Base Sepolia
+test bundle was deployed at block `44390557`. Its complete deployment key is pinned across the app, indexer, and keeper;
+historical v1-v3 addresses are not accepted as v4 addresses.
 
 <a id="tokenless-panel"></a>
 
