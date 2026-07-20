@@ -12,7 +12,7 @@ test("the welcome route is server-authenticated and renders two non-binding star
   assert.match(page, /if \(!welcome\.required\) redirect\("\/"\)/);
   assert.match(page, /Review AI work/);
   assert.match(page, /Connect an agent/);
-  assert.match(page, /You can do both at any time/);
+  assert.doesNotMatch(page, /You can do both at any time/);
   assert.match(page, /choice="review"/);
   assert.match(page, /choice="invitation"/);
   assert.match(page, /choice="agent"/);

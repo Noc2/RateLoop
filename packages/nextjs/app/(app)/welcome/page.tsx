@@ -70,8 +70,6 @@ export default async function WelcomePage() {
           </div>
         </section>
       </div>
-
-      <p className="mt-6 text-sm text-base-content/55">You can do both at any time.</p>
     </AppPageShell>
   );
 }
