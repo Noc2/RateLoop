@@ -1095,12 +1095,12 @@ describe("tokenless keeper orchestration", () => {
         }),
         writes,
         now: 251n,
-        beaconUnavailable: true,
       }),
       config,
       logger,
       decrypt,
     );
+    expect(writes).not.toContain("finalizeScoringSeed");
     expect(writes).toContain("finalizeScoringFallback");
     expect(result.scoringSeedsFinalized).toBe(1);
   });

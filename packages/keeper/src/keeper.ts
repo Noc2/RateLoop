@@ -579,6 +579,17 @@ async function advanceRound(params: {
   }
 
   if (round.state === TokenlessRoundState.AwaitingSeed) {
+    if (params.now > round.beaconFailureDeadline) {
+      const fellBack = await permissionlessWrite(
+        params.clients,
+        params.config.deployment.panel,
+        "finalizeScoringFallback",
+        [params.roundId],
+        params.logger,
+      );
+      if (fellBack) params.result.scoringSeedsFinalized += 1;
+      return;
+    }
     try {
       const beacon = await (
         params.clients.beaconFetcher ?? fetchVerifiedDrandBeacon
@@ -602,18 +613,7 @@ async function advanceRound(params: {
       });
     }
 
-    if (params.now <= round.beaconFailureDeadline) {
-      params.result.roundsAwaitingScoringEntropy += 1;
-      return;
-    }
-    const fellBack = await permissionlessWrite(
-      params.clients,
-      params.config.deployment.panel,
-      "finalizeScoringFallback",
-      [params.roundId],
-      params.logger,
-    );
-    if (fellBack) params.result.scoringSeedsFinalized += 1;
+    params.result.roundsAwaitingScoringEntropy += 1;
     return;
   }
 
