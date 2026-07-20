@@ -29,7 +29,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
     // malformed or hostile terms cannot strand the bounty, attempt reserve, and accepted-work path.
     uint64 public constant MIN_COMMIT_WINDOW = 5 minutes;
     uint64 public constant MIN_REVEAL_WINDOW = 5 minutes;
-    uint64 public constant MIN_BEACON_GRACE = 5 minutes;
+    uint64 public constant MIN_BEACON_GRACE = 6 hours;
     uint64 public constant MAX_REVEAL_HORIZON = 90 days;
     uint64 public constant MAX_BEACON_FAILURE_HORIZON = 120 days;
 
@@ -487,6 +487,7 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
     function finalizeScoringSeed(uint256 roundId, bytes32 randomness, bytes calldata proof) external {
         Round storage round = _rounds[roundId];
         if (round.state != RoundState.AwaitingSeed) revert InvalidState();
+        if (block.timestamp > round.beaconFailureDeadline) revert InvalidDeadline();
         if (randomness == bytes32(0)) revert InvalidBeaconProof();
 
         bool verified;

@@ -179,7 +179,7 @@ function assertSignedRoundMatchesIntent(input: {
   const beaconGrace = policyInteger(
     policy.beaconFailureGraceSeconds,
     "roundPolicy.beaconFailureGraceSeconds",
-    1,
+    21_600,
     86_400,
   );
   const claimGrace = policyInteger(

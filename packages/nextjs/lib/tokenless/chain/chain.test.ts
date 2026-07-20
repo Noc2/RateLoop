@@ -1,4 +1,9 @@
-import { type TokenlessChainConfig, buildTokenlessDeploymentKey, loadTokenlessChainConfig } from "./config";
+import {
+  TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS,
+  type TokenlessChainConfig,
+  buildTokenlessDeploymentKey,
+  loadTokenlessChainConfig,
+} from "./config";
 import {
   __chainPaymentTestUtils,
   attachX402Authorization,
@@ -58,7 +63,7 @@ function config(overrides: Partial<TokenlessChainConfig> = {}): TokenlessChainCo
     issuerAddress: ISSUER,
     panelAddress: PANEL,
     revealWindowSeconds: 120,
-    beaconFailureGraceSeconds: 300,
+    beaconFailureGraceSeconds: TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS,
     rpcFallbackUrls: ["https://base-sepolia-fallback.example/"],
     rpcUrl: "https://sepolia.base.org/",
     schemaVersion: "rateloop-tokenless-deployment-v4",
@@ -181,6 +186,32 @@ test("deployment config binds the complete bundle and forbids credential key reu
         TOKENLESS_DEPLOYMENT_SCHEMA: "rateloop-tokenless-deployment-v2",
       }),
     /must be rateloop-tokenless-deployment-v4/,
+  );
+});
+
+test("deployment config defaults to and enforces the contract beacon-failure grace floor", () => {
+  const env = {
+    TOKENLESS_DEPLOYMENT_SCHEMA: "rateloop-tokenless-deployment-v4",
+    TOKENLESS_CHAIN_ID: "84532",
+    TOKENLESS_PANEL_ADDRESS: PANEL,
+    TOKENLESS_CREDENTIAL_ISSUER_ADDRESS: ISSUER,
+    TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS: ADAPTER,
+    TOKENLESS_FEEDBACK_BONUS_ADDRESS: FEEDBACK_BONUS,
+    TOKENLESS_USDC_ADDRESS: USDC,
+    TOKENLESS_FEE_RECIPIENT: FEE_RECIPIENT,
+    TOKENLESS_DEPLOYMENT_KEY: config().deploymentKey,
+    TOKENLESS_DEPLOYMENT_BLOCK: "100",
+    BASE_SEPOLIA_RPC_URL: "https://sepolia.base.org",
+  } as unknown as NodeJS.ProcessEnv;
+
+  assert.equal(loadTokenlessChainConfig(env).beaconFailureGraceSeconds, 21_600);
+  assert.throws(
+    () =>
+      loadTokenlessChainConfig({
+        ...env,
+        TOKENLESS_BEACON_FAILURE_GRACE_SECONDS: "21599",
+      }),
+    /must be at least 21600 seconds/,
   );
 });
 

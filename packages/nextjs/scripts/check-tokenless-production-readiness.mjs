@@ -627,6 +627,10 @@ export function validateTokenlessProductionReadiness({
   ]) {
     if (!positiveInteger(value(env, name))) errors.push(`${name} must be a positive integer.`);
   }
+  const beaconFailureGraceSeconds = value(env, "TOKENLESS_BEACON_FAILURE_GRACE_SECONDS");
+  if (positiveInteger(beaconFailureGraceSeconds) && Number(beaconFailureGraceSeconds) < 21_600) {
+    errors.push("TOKENLESS_BEACON_FAILURE_GRACE_SECONDS must be at least 21600 seconds.");
+  }
   for (const name of [
     "APP_URL",
     "NEXT_PUBLIC_APP_URL",

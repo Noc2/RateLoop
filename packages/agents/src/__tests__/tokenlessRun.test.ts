@@ -137,7 +137,7 @@ const roundPolicy = {
   beaconGenesisSeconds: 1_689_232_296,
   beaconPeriodSeconds: 3,
   revealWindowSeconds: 120,
-  beaconFailureGraceSeconds: 300,
+  beaconFailureGraceSeconds: 21_600,
   claimGracePeriodSeconds: 604_800,
   feeRecipient: "0x5555555555555555555555555555555555555555" as const,
 };
@@ -337,7 +337,7 @@ describe("autonomous x402 custody guard", () => {
           ...baseline.roundTerms,
           commitDeadline: commitDeadline.toString(),
           revealDeadline: (commitDeadline + 120n).toString(),
-          beaconFailureDeadline: (commitDeadline + 420n).toString(),
+          beaconFailureDeadline: (commitDeadline + 21_720n).toString(),
           beaconRound: ((commitDeadline - 1_689_232_296n) / 3n + 1n).toString(),
         },
       }),
@@ -345,5 +345,22 @@ describe("autonomous x402 custody guard", () => {
 
     await expect(run(h)).rejects.toThrow(/response deadline/);
     expect(h.mocks.signTypedData).not.toHaveBeenCalled();
+  });
+
+  it("refuses a beacon-failure grace below the contract floor before signing", async () => {
+    const h = harness();
+
+    await expect(
+      run(h, {
+        roundPolicy: {
+          ...roundPolicy,
+          beaconFailureGraceSeconds: 21_599,
+        },
+      }),
+    ).rejects.toThrow(
+      /roundPolicy\.beaconFailureGraceSeconds must be an integer from 21600 to 86400/,
+    );
+    expect(h.mocks.signTypedData).not.toHaveBeenCalled();
+    expect(h.mocks.submitPayment).not.toHaveBeenCalled();
   });
 });

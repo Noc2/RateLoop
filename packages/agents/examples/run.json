@@ -13,7 +13,7 @@
     "beaconGenesisSeconds": 1689232296,
     "beaconPeriodSeconds": 3,
     "revealWindowSeconds": 120,
-    "beaconFailureGraceSeconds": 300,
+    "beaconFailureGraceSeconds": 21600,
     "claimGracePeriodSeconds": 604800,
     "feeRecipient": "0x0000000000000000000000000000000000000000"
   },

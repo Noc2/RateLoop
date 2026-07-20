@@ -90,7 +90,7 @@ function validFixture() {
     TOKENLESS_USDC_EIP712_VERSION: "2",
     TOKENLESS_FEE_RECIPIENT: address(5),
     TOKENLESS_REVEAL_WINDOW_SECONDS: "120",
-    TOKENLESS_BEACON_FAILURE_GRACE_SECONDS: "300",
+    TOKENLESS_BEACON_FAILURE_GRACE_SECONDS: "21600",
     TOKENLESS_CLAIM_GRACE_PERIOD_SECONDS: "604800",
     TOKENLESS_VOUCHER_ISSUER_EPOCH: "1",
     TOKENLESS_WORLD_ID_CREDENTIAL_MIN_TTL_SECONDS: "2592000",
@@ -217,6 +217,12 @@ test("production chain execution requires distinct HTTPS RPC fallbacks", () => {
   const plaintext = validFixture();
   plaintext.env.BASE_SEPOLIA_RPC_FALLBACK_URLS = "http://fallback.example";
   assert.match(validateTokenlessProductionReadiness(plaintext).join("\n"), /must contain HTTPS URLs/i);
+});
+
+test("production chain execution enforces the contract beacon-failure grace floor", () => {
+  const fixture = validFixture();
+  fixture.env.TOKENLESS_BEACON_FAILURE_GRACE_SECONDS = "21599";
+  assert.match(validateTokenlessProductionReadiness(fixture).join("\n"), /must be at least 21600 seconds/i);
 });
 
 test("managed signer keys, addresses, and IAM principals are distinct across web and keeper workloads", () => {

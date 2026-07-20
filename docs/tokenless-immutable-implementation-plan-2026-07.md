@@ -234,6 +234,10 @@ after conservation checks pass. Any caller may continue the state machine. Zero-
 quorum, beacon-failure, takedown, and infrastructure-failure paths preserve compensation for accepted valid work and
 return unused customer funds. Unclaimed shares return to the funder after the stale grace.
 
+The disclosed beacon-failure grace is at least six hours. Verified-beacon scoring remains available through
+`beaconFailureDeadline`; the base-only beacon-unavailable fallback becomes available strictly after that deadline, so
+the two scoring-finalization paths are never live at the same timestamp.
+
 Workspace subscriptions are conventional B2B billing and remain separate from panel economics. They are disabled
 unless the complete Stripe configuration and readiness checks are present. Panel quotes and receipts continue to
 itemize bounty, platform fee, reserve, refunds, and compensation.

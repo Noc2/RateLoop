@@ -149,6 +149,8 @@ as stale claims. Attempt reserve and fee accounting remain separate.
 
 - A valid reveal always reaches fixed base pay after a successful scoring-v2 settlement.
 - Under-quorum and beacon-failure compensation pay the same fixed base from the separately funded attempt reserve.
+- Round terms reserve at least six hours between the reveal and beacon-failure deadlines. Verified-beacon scoring is
+  available through the failure deadline; base-only fallback is available only after it.
 - No integrity epoch, World/Self provider, operator, keeper, verdict, takedown, or moderation decision can change the
   contract score, payout address, liability, or claimability after commit acceptance.
 - If future verifiable randomness is unavailable, the permitted fallback is fixed base with the maximum bonus refunded;

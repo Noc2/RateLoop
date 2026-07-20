@@ -154,6 +154,31 @@ contract TokenlessPanelTest is Test {
         }
     }
 
+    function test_SeedAndFallbackFinalizationAreMutuallyExclusiveAtFailureDeadline() public {
+        (uint256 boundaryRoundId,) = _healthyRound();
+        _beginHealthySettlement(boundaryRoundId);
+        panel.processAggregate(boundaryRoundId, 0, 3);
+
+        vm.warp(_round(boundaryRoundId).beaconFailureDeadline);
+        vm.expectRevert(TokenlessPanel.InvalidDeadline.selector);
+        panel.finalizeScoringFallback(boundaryRoundId);
+        _finalizeSeed(boundaryRoundId, ENTROPY);
+        assertEq(uint8(_round(boundaryRoundId).scoringMode), uint8(TokenlessPanel.ScoringMode.Rbts));
+
+        (uint256 expiredRoundId,) = _healthyRound();
+        _beginHealthySettlement(expiredRoundId);
+        panel.processAggregate(expiredRoundId, 0, 3);
+
+        vm.warp(_round(expiredRoundId).beaconFailureDeadline + 1);
+        bytes32 proof = beaconVerifier.proofFor(
+            _round(expiredRoundId).beaconNetworkHash, _round(expiredRoundId).beaconRound, ENTROPY
+        );
+        vm.expectRevert(TokenlessPanel.InvalidDeadline.selector);
+        panel.finalizeScoringSeed(expiredRoundId, ENTROPY, abi.encode(proof));
+        panel.finalizeScoringFallback(expiredRoundId);
+        assertEq(uint8(_round(expiredRoundId).scoringMode), uint8(TokenlessPanel.ScoringMode.BaseOnlyBeaconUnavailable));
+    }
+
     function test_InvalidOrUnavailableBeaconProofCannotSetScoringEntropy() public {
         (uint256 roundId,) = _healthyRound();
         _beginHealthySettlement(roundId);
@@ -412,6 +437,8 @@ contract TokenlessPanelTest is Test {
     }
 
     function test_RevealAndBeaconHorizonsAreBoundedFromCreation() public {
+        assertEq(panel.MIN_BEACON_GRACE(), 6 hours);
+
         // A round pinned to the maximum permitted reveal and beacon horizons is still valid.
         TokenlessPanel.RoundTerms memory terms = _terms(3, 3);
         terms.commitDeadline = uint64(block.timestamp + 10 minutes);
@@ -553,7 +580,7 @@ contract TokenlessPanelTest is Test {
             admissionPolicyHash: ADMISSION_POLICY_HASH,
             commitDeadline: uint64(block.timestamp + 10 minutes),
             revealDeadline: uint64(block.timestamp + 20 minutes),
-            beaconFailureDeadline: uint64(block.timestamp + 30 minutes),
+            beaconFailureDeadline: uint64(block.timestamp + 6 hours + 20 minutes),
             beaconRound: 12_345_678,
             claimGracePeriod: 1 days,
             feeRecipient: feeRecipient

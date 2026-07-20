@@ -72,7 +72,7 @@ contract TokenlessFeedbackBonusInvariantHandler is Test {
             admissionPolicyHash: ADMISSION_POLICY_HASH,
             commitDeadline: uint64(block.timestamp + 10 minutes),
             revealDeadline: uint64(block.timestamp + 20 minutes),
-            beaconFailureDeadline: uint64(block.timestamp + 30 minutes),
+            beaconFailureDeadline: uint64(block.timestamp + 6 hours + 20 minutes),
             beaconRound: uint64(50_000 + index),
             claimGracePeriod: 1 hours,
             feeRecipient: address(0)

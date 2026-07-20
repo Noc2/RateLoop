@@ -45,7 +45,7 @@ function config(): TokenlessChainConfig {
     issuerAddress: ISSUER,
     panelAddress: PANEL,
     revealWindowSeconds: 120,
-    beaconFailureGraceSeconds: 300,
+    beaconFailureGraceSeconds: 21_600,
     rpcFallbackUrls: ["https://base-sepolia-fallback.example/"],
     rpcUrl: "https://sepolia.base.org/",
     schemaVersion: "rateloop-tokenless-deployment-v4",

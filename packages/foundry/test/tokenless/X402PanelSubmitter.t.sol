@@ -164,7 +164,7 @@ contract X402PanelSubmitterTest is Test {
             admissionPolicyHash: ADMISSION_POLICY_HASH,
             commitDeadline: uint64(block.timestamp + 10 minutes),
             revealDeadline: uint64(block.timestamp + 20 minutes),
-            beaconFailureDeadline: uint64(block.timestamp + 30 minutes),
+            beaconFailureDeadline: uint64(block.timestamp + 6 hours + 20 minutes),
             beaconRound: 12_345_678,
             claimGracePeriod: 1 days,
             feeRecipient: address(0xFEE)

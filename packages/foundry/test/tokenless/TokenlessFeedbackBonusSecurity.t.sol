@@ -217,7 +217,7 @@ contract TokenlessFeedbackBonusSecurityTest is Test {
             admissionPolicyHash: ADMISSION_POLICY_HASH,
             commitDeadline: uint64(block.timestamp + 1 hours),
             revealDeadline: uint64(block.timestamp + 2 hours),
-            beaconFailureDeadline: uint64(block.timestamp + 3 hours),
+            beaconFailureDeadline: uint64(block.timestamp + 8 hours),
             beaconRound: 50_000,
             claimGracePeriod: 1 hours,
             feeRecipient: address(0)
