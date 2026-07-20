@@ -49,6 +49,8 @@ test("atomic setup finalization accepts one retry key and the People decision in
   assert.match(source, /"idempotencyKey"/u);
   assert.match(source, /"decision"/u);
   assert.match(source, /"createInvitation"/u);
+  assert.match(source, /"maximumRedemptions"/u);
+  assert.match(source, /"intendedEmailDomain"/u);
   assert.match(source, /finalizeWorkspaceAgentSetup/u);
 });
 

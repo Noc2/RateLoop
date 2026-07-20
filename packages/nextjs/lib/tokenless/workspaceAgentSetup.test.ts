@@ -155,6 +155,42 @@ async function saveSetupReviewConfiguration(input: {
   });
 }
 
+async function readyPrivateSetupForFinalization() {
+  const { workspaceId } = await connectedSetup();
+  const connected = await getWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId });
+  const confirmed = await confirmWorkspaceSetupAgent({
+    accountAddress: OWNER,
+    workspaceId,
+    revision: connected.revision,
+    agent: {
+      displayName: connected.agent!.displayName,
+      description: connected.agent!.description,
+      provider: connected.agent!.provider,
+      model: connected.agent!.model,
+      modelVersion: connected.agent!.modelVersion,
+      environment: "production",
+    },
+  });
+  const group = await createPrivateGroup({
+    accountAddress: OWNER,
+    workspaceId,
+    name: "Atomic reviewers",
+    purpose: "Review private material after atomic setup finalization.",
+  });
+  const savedReview = await saveSetupReviewConfiguration({
+    workspaceId,
+    agentId: connected.agent!.agentId,
+    groupId: group.groupId,
+  });
+  const reviews = await configureWorkspaceSetupReviews({
+    accountAddress: OWNER,
+    workspaceId,
+    revision: confirmed.revision,
+    bindingRevision: savedReview.configuration.version,
+  });
+  return { group, reviews, workspaceId };
+}
+
 test("setup resumes exact workspace specialist requirements without weakening the frozen profile", async () => {
   const { workspaceId } = await connectedSetup();
   const connected = await getWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId });
@@ -414,7 +450,7 @@ test("atomic setup finalization creates one invitation and safely replays a lost
   assert.equal(finalized.postcondition.privateRouting?.reason, "reviewer_seats_insufficient");
   assert.equal(finalized.postcondition.canSend, false);
 
-  const replayed = await finalizeWorkspaceAgentSetup(request);
+  const replayed = await finalizeWorkspaceAgentSetup({ ...request, maximumRedemptions: 1 });
   assert.equal(replayed.idempotent, true);
   assert.equal(replayed.invitation?.invitationId, finalized.invitation?.invitationId);
   assert.equal(replayed.invitation?.token, finalized.invitation?.token);
@@ -449,6 +485,109 @@ test("atomic setup finalization creates one invitation and safely replays a lost
       idempotencyKey: "09229693-4921-49e1-9b88-45c897a3c547",
     }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "agent_setup_finalization_conflict",
+  );
+});
+
+test("atomic setup finalization creates and replays a capacity-limited shared invitation", async () => {
+  const { group, reviews, workspaceId } = await readyPrivateSetupForFinalization();
+  const request = {
+    accountAddress: OWNER,
+    workspaceId,
+    revision: reviews.revision,
+    idempotencyKey: "ec49ed9d-567f-4913-ae6b-5cab8af8e097",
+    decision: "invited",
+    groupId: group.groupId,
+    createInvitation: true,
+    maximumRedemptions: 2,
+    intendedEmailDomain: "EXAMPLE.COM.",
+  } as const;
+
+  const finalized = await finalizeWorkspaceAgentSetup(request);
+  assert.equal(finalized.idempotent, false);
+  assert.equal(finalized.invitation?.maximumRedemptions, 2);
+  assert.equal(finalized.invitation?.status, "active");
+
+  const replayed = await finalizeWorkspaceAgentSetup(request);
+  assert.equal(replayed.idempotent, true);
+  assert.equal(replayed.invitation?.invitationId, finalized.invitation?.invitationId);
+  assert.equal(replayed.invitation?.token, finalized.invitation?.token);
+  assert.equal(replayed.invitation?.maximumRedemptions, 2);
+
+  const invitations = await listPrivateGroupInvitations({
+    accountAddress: OWNER,
+    workspaceId,
+    groupId: group.groupId,
+  });
+  assert.equal(invitations.length, 1);
+  assert.equal(invitations[0]?.maximumRedemptions, 2);
+  assert.equal(invitations[0]?.intendedEmailDomain, "example.com");
+  assert.equal(invitations[0]?.hasEmailBinding, false);
+
+  await assert.rejects(
+    finalizeWorkspaceAgentSetup({ ...request, intendedEmailDomain: "other.example" }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "agent_setup_finalization_conflict",
+  );
+  await assert.rejects(
+    finalizeWorkspaceAgentSetup({ ...request, maximumRedemptions: 1, intendedEmailDomain: null }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "agent_setup_finalization_conflict",
+  );
+});
+
+test("shared setup invitations reject unsafe capacity, recipient, and specialist combinations", async () => {
+  const { group, reviews, workspaceId } = await readyPrivateSetupForFinalization();
+  const request = {
+    accountAddress: OWNER,
+    workspaceId,
+    revision: reviews.revision,
+    decision: "invited",
+    groupId: group.groupId,
+    createInvitation: true,
+  } as const;
+
+  await assert.rejects(
+    finalizeWorkspaceAgentSetup({
+      ...request,
+      idempotencyKey: "946be54f-2bcc-4d8d-81b4-bf468d606481",
+      maximumRedemptions: 1.5,
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_agent_setup_people",
+  );
+  await assert.rejects(
+    finalizeWorkspaceAgentSetup({
+      ...request,
+      idempotencyKey: "d50f39c2-6091-49ea-b760-5a5fc44ac278",
+      maximumRedemptions: 3,
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_agent_setup_people",
+  );
+  await assert.rejects(
+    finalizeWorkspaceAgentSetup({
+      ...request,
+      idempotencyKey: "30c2175e-fe7c-4332-8870-f481f35a7618",
+      maximumRedemptions: 2,
+      intendedEmail: "reviewer@example.com",
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_agent_setup_people",
+  );
+  await assert.rejects(
+    finalizeWorkspaceAgentSetup({
+      ...request,
+      idempotencyKey: "b6091245-c5bd-4057-a9f9-7a1b968b504b",
+      maximumRedemptions: 2,
+      expertiseDefinitionIds: ["expertise_not_allowed"],
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_agent_setup_people",
+  );
+  await assert.rejects(
+    finalizeWorkspaceAgentSetup({
+      ...request,
+      idempotencyKey: "cf172d4f-893d-46ed-92ed-bf4c116e824a",
+      decision: "later",
+      createInvitation: false,
+      maximumRedemptions: 2,
+      intendedEmailDomain: "example.com",
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_agent_setup_people",
   );
 });
 

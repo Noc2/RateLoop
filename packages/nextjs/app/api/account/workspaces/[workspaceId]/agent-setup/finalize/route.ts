@@ -15,6 +15,8 @@ const ALLOWED_FIELDS = [
   "groupId",
   "createInvitation",
   "intendedEmail",
+  "intendedEmailDomain",
+  "maximumRedemptions",
   "expertiseDefinitionIds",
 ] as const;
 
@@ -44,6 +46,8 @@ export async function POST(request: NextRequest, context: Context) {
         groupId: body.groupId,
         createInvitation: body.createInvitation,
         intendedEmail: body.intendedEmail,
+        intendedEmailDomain: body.intendedEmailDomain,
+        maximumRedemptions: body.maximumRedemptions,
         expertiseDefinitionIds: body.expertiseDefinitionIds,
       }),
       { headers: { "Cache-Control": "private, no-store, max-age=0" } },

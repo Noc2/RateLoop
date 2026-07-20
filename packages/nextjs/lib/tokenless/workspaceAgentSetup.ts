@@ -1257,6 +1257,8 @@ function setupFinalizationRequest(input: {
   groupId?: unknown;
   createInvitation?: unknown;
   intendedEmail?: unknown;
+  intendedEmailDomain?: unknown;
+  maximumRedemptions?: unknown;
   expertiseDefinitionIds?: unknown;
 }) {
   if (typeof input.decision !== "string") {
@@ -1272,6 +1274,23 @@ function setupFinalizationRequest(input: {
     input.intendedEmail === undefined || input.intendedEmail === null || input.intendedEmail === ""
       ? null
       : bounded(input.intendedEmail, "Recipient email", 320)!.toLowerCase();
+  const intendedEmailDomain =
+    input.intendedEmailDomain === undefined || input.intendedEmailDomain === null || input.intendedEmailDomain === ""
+      ? null
+      : bounded(input.intendedEmailDomain, "Verified email domain", 253)!.toLowerCase().replace(/\.$/u, "");
+  const maximumRedemptions = input.maximumRedemptions ?? 1;
+  if (
+    typeof maximumRedemptions !== "number" ||
+    !Number.isSafeInteger(maximumRedemptions) ||
+    maximumRedemptions < 1 ||
+    maximumRedemptions > MAXIMUM_REVIEW_PANEL_SIZE
+  ) {
+    throw new TokenlessServiceError(
+      `Invitation capacity must be an integer from 1 to ${MAXIMUM_REVIEW_PANEL_SIZE}.`,
+      400,
+      "invalid_agent_setup_people",
+    );
+  }
   const expertiseDefinitionIds = input.expertiseDefinitionIds ?? [];
   if (
     !Array.isArray(expertiseDefinitionIds) ||
@@ -1281,11 +1300,34 @@ function setupFinalizationRequest(input: {
   ) {
     throw new TokenlessServiceError("Invitation specialist areas are invalid.", 400, "invalid_agent_setup_people");
   }
+  if (intendedEmail && intendedEmailDomain) {
+    throw new TokenlessServiceError(
+      "Choose a recipient email or a verified email domain, not both.",
+      400,
+      "invalid_agent_setup_people",
+    );
+  }
+  if (maximumRedemptions > 1 && intendedEmail) {
+    throw new TokenlessServiceError(
+      "A shared invitation cannot be bound to one recipient email.",
+      400,
+      "invalid_agent_setup_people",
+    );
+  }
+  if (maximumRedemptions > 1 && expertiseDefinitionIds.length > 0) {
+    throw new TokenlessServiceError(
+      "Confirm each shared-code member's specialist areas after they join.",
+      400,
+      "invalid_agent_setup_people",
+    );
+  }
   return {
     decision: input.decision,
     groupId: typeof input.groupId === "string" && input.groupId ? input.groupId : null,
     createInvitation: input.createInvitation === true,
     intendedEmail,
+    intendedEmailDomain,
+    maximumRedemptions,
     expertiseDefinitionIds: [...expertiseDefinitionIds].sort() as string[],
   };
 }
@@ -1551,6 +1593,8 @@ export async function finalizeWorkspaceAgentSetup(input: {
   groupId?: unknown;
   createInvitation?: unknown;
   intendedEmail?: unknown;
+  intendedEmailDomain?: unknown;
+  maximumRedemptions?: unknown;
   expertiseDefinitionIds?: unknown;
 }) {
   const access = await requireManager(input.accountAddress, input.workspaceId);
@@ -1741,6 +1785,16 @@ export async function finalizeWorkspaceAgentSetup(input: {
         "invalid_agent_setup_people",
       );
     }
+    if (
+      normalizedRequest.createInvitation &&
+      normalizedRequest.maximumRedemptions > rowNumber(binding, "panel_size")!
+    ) {
+      throw new TokenlessServiceError(
+        "Invitation capacity cannot exceed the saved reviewer count.",
+        400,
+        "invalid_agent_setup_people",
+      );
+    }
     const expertiseRequirements = parseJson<ReviewerExpertiseRequirement[]>(binding.expertise_requirements_json, []);
     const expertiseDefinitions = normalizedRequest.expertiseDefinitionIds.map(definitionId => {
       const requirement = expertiseRequirements.find(candidate => candidate.definitionId === definitionId);
@@ -1766,7 +1820,10 @@ export async function finalizeWorkspaceAgentSetup(input: {
     }
     if (
       !normalizedRequest.createInvitation &&
-      (normalizedRequest.intendedEmail !== null || normalizedRequest.expertiseDefinitionIds.length > 0)
+      (normalizedRequest.intendedEmail !== null ||
+        normalizedRequest.intendedEmailDomain !== null ||
+        normalizedRequest.maximumRedemptions !== 1 ||
+        normalizedRequest.expertiseDefinitionIds.length > 0)
     ) {
       throw new TokenlessServiceError(
         "Invitation details require creating an invitation.",
@@ -1780,7 +1837,8 @@ export async function finalizeWorkspaceAgentSetup(input: {
           workspaceId: input.workspaceId,
           groupId: groupId!,
           intendedEmail: normalizedRequest.intendedEmail,
-          maximumRedemptions: 1,
+          intendedEmailDomain: normalizedRequest.intendedEmailDomain,
+          maximumRedemptions: normalizedRequest.maximumRedemptions,
           expertiseDefinitions,
           token: invitationToken,
           now,
