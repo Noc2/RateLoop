@@ -584,6 +584,15 @@ test("hosted release accepts only a complete matching v4 bundle", () => {
   assert.deepEqual(validateTokenlessProductionReadiness(fixture), []);
 });
 
+test("hosted release rejects invalid mixed-case EVM checksums", () => {
+  const fixture = validFixture();
+  fixture.env.TOKENLESS_FEEDBACK_BONUS_ADDRESS = "0xa0c1f730aad6b7cb78eAEacA39743F6430Dc57b0";
+  assert.match(
+    validateTokenlessProductionReadiness(fixture).join("\n"),
+    /TOKENLESS_FEEDBACK_BONUS_ADDRESS must be a non-zero EVM address/,
+  );
+});
+
 test("hosted release validates a dedicated server-only gold-injection keyring", () => {
   assert.ok(REQUIRED_TOKENLESS_PRODUCTION_VARIABLES.includes("TOKENLESS_GOLD_INJECTION_KEY_VERSION"));
   assert.ok(REQUIRED_TOKENLESS_PRODUCTION_VARIABLES.includes("TOKENLESS_GOLD_INJECTION_KEYS"));

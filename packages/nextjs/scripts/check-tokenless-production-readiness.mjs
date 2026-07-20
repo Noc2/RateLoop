@@ -11,11 +11,11 @@ import { validateHostedDatabaseIdentity } from "./migrate-hosted-database.mjs";
 import { createHash, createPublicKey } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isAddress, zeroAddress } from "viem";
 
 const BASE_SEPOLIA_CHAIN_ID = 84_532;
 const DEPLOYMENT_SCHEMA = "rateloop-tokenless-deployment-v4";
 const MINIMUM_REVEAL_WINDOW_SECONDS = 300;
-const ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/u;
 const TOKENLESS_REVIEW_ORIGIN = "https://rateloop-tokenless.vercel.app";
 const MANAGED_EVM_SIGNER_ROLES = ["CREDENTIAL_ISSUER", "X402_RELAYER", "PREPAID_FUNDER", "SURPRISE_BONUS_FUNDER"];
 const FORBIDDEN_HOSTED_PRIVATE_KEYS = [
@@ -199,6 +199,10 @@ const FORBIDDEN_FEEDBACK_BONUS_CUSTODY_SECRETS = [
 
 function value(env, name) {
   return env[name]?.trim() || "";
+}
+
+function nonZeroEvmAddress(address) {
+  return isAddress(address) && address.toLowerCase() !== zeroAddress;
 }
 
 function positiveInteger(raw) {
@@ -602,7 +606,7 @@ export function validateTokenlessProductionReadiness({
   ];
   for (const name of addresses) {
     const address = value(env, name);
-    if (!ADDRESS_PATTERN.test(address) || /^0x0{40}$/iu.test(address)) {
+    if (!nonZeroEvmAddress(address)) {
       errors.push(`${name} must be a non-zero EVM address.`);
     }
   }
@@ -715,7 +719,7 @@ export function validateTokenlessProductionReadiness({
     if (!/^arn:aws:kms:eu-[a-z]+-\d+:\d{12}:(?:key\/[0-9a-f-]{36}|alias\/[A-Za-z0-9/_+=,.@-]+)$/u.test(keyResource)) {
       errors.push(`${prefix}_KEY_RESOURCE must identify a dedicated AWS KMS key or alias in an EU region.`);
     }
-    if (!ADDRESS_PATTERN.test(expectedAddress) || /^0x0{40}$/u.test(expectedAddress)) {
+    if (!nonZeroEvmAddress(expectedAddress)) {
       errors.push(`${prefix}_EXPECTED_ADDRESS must be a non-zero EVM address.`);
     }
     if (!/^eu-[a-z]+-\d+$/u.test(region)) {
@@ -766,7 +770,7 @@ export function validateTokenlessProductionReadiness({
   if (!/^arn:aws:kms:eu-[a-z]+-\d+:\d{12}:key\/[0-9a-f-]{36}$/u.test(keeperKeyResource)) {
     errors.push("TOKENLESS_KEEPER_KMS_KEY_RESOURCE must identify the keeper's exact AWS KMS key in an EU region.");
   }
-  if (!ADDRESS_PATTERN.test(keeperExpectedAddress) || /^0x0{40}$/u.test(keeperExpectedAddress)) {
+  if (!nonZeroEvmAddress(keeperExpectedAddress)) {
     errors.push("TOKENLESS_KEEPER_KMS_EXPECTED_ADDRESS must be a non-zero EVM address.");
   }
   if (!/^eu-[a-z]+-\d+$/u.test(keeperRegion)) {
