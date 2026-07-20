@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import "server-only";
 import { dbClient } from "~~/lib/db";
+import { connectionLaneFromClientCapabilitiesJson } from "~~/lib/tokenless/agentConnectionIntents";
 import { type AgentMcpPrincipal, OWNER_APPROVED_AGENT_SCOPES } from "~~/lib/tokenless/agentIntegrations";
 import { humanReviewRequiresPayment } from "~~/lib/tokenless/humanReviewGrantScopes";
 import {
@@ -184,6 +185,7 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
             i.human_review_binding_id AS integration_binding_id,
             i.human_review_binding_version AS integration_binding_version,
             i.connection_intent_id, c.status AS connection_status,
+            c.client_capabilities_json AS connection_client_capabilities_json,
             p.mode AS selection_mode, p.enabled AS selection_enabled,
             p.superseded_at AS selection_superseded_at, p.agreement_threshold_bps,
             p.production_floor_bps, p.fixed_rate_bps, p.maximum_unreviewed_gap,
@@ -301,6 +303,10 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
     "integration_publishing_policy_id",
     "integration_publishing_policy_version",
   );
+  // Host-attested only: never presented as verified hook presence; unreported defaults to 'mcp-oauth'.
+  const reportedLane = text(row, "connection_intent_id")
+    ? connectionLaneFromClientCapabilitiesJson(row.connection_client_capabilities_json)
+    : null;
 
   const selection = {
     policyId: selectionPolicyId!,
@@ -334,6 +340,7 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
       status: bound.status,
       enforcementMode: bound.enforcementMode,
       enforcementBoundary: bound.enforcementMode,
+      reportedLane,
       allowedWorkflowKeys,
       reviewPolicy: {
         policyId: selection.policyId,
@@ -604,6 +611,7 @@ export async function getEffectiveAgentReviewContext(principal: IntegrationPrinc
     status: bound.status,
     enforcementMode: bound.enforcementMode,
     enforcementBoundary: bound.enforcementMode,
+    reportedLane,
     allowedWorkflowKeys,
     reviewPolicy: {
       policyId: selection.policyId,

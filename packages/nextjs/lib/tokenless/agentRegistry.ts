@@ -5,6 +5,10 @@ import { assertCanCreateWorkspaceAgent } from "~~/lib/billing/entitlements";
 import { dbClient, dbPool } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
 import type { AdaptiveReviewStage } from "~~/lib/tokenless/adaptiveReview";
+import {
+  type AgentConnectionLane,
+  connectionLaneFromClientCapabilitiesJson,
+} from "~~/lib/tokenless/agentConnectionIntents";
 import type {
   HumanReviewAudience,
   HumanReviewAuthorityLevel,
@@ -213,6 +217,8 @@ export type WorkspaceAgent = {
   currentVersion: AgentVersionSnapshot;
   versions: AgentVersionSnapshot[];
   assuranceScopes: AgentAssuranceScopeSummary[];
+  /** Host-reported lane of the current version's active connection; never verified by RateLoop. */
+  reportedConnectionLane: AgentConnectionLane | null;
   humanReview: AgentHumanReviewSummary;
 };
 
@@ -488,6 +494,7 @@ type HumanReviewConfigurationRow = QueryRow & {
 type HumanReviewProjectionData = {
   configurations: Map<string, HumanReviewConfigurationRow>;
   integrations: Map<string, QueryRow[]>;
+  reportedConnectionLanes: Map<string, AgentConnectionLane>;
   workloads: Map<string, AgentHumanReviewSummary["workload"]>;
   terminals: Map<string, QueryRow>;
   audits: Map<string, { eventCount: number; latest: QueryRow }>;
@@ -601,7 +608,9 @@ async function loadWorkspaceHumanReviewProjection(
                    i.enforcement_mode, i.granted_scopes_json, i.human_review_binding_id,
                    i.human_review_binding_version, i.publishing_policy_id, i.publishing_policy_version,
                    i.last_decision_at, i.last_request_at, i.last_result_at, i.updated_at,
-                   c.status AS connection_status, p.enabled AS publishing_policy_enabled,
+                   c.status AS connection_status,
+                   c.client_capabilities_json AS connection_capabilities_json,
+                   p.enabled AS publishing_policy_enabled,
                    p.revoked_at AS publishing_policy_revoked_at,
                    p.effective_at AS publishing_policy_effective_at,
                    p.expires_at AS publishing_policy_expires_at
@@ -667,8 +676,26 @@ async function loadWorkspaceHumanReviewProjection(
   }
 
   const integrations = new Map<string, QueryRow[]>();
+  const reportedConnectionLanes = new Map<string, AgentConnectionLane>();
   for (const value of integrationResult.rows) {
     const row = value as QueryRow;
+    const laneAgentId = rowString(row, "agent_id");
+    const laneAgentVersionId = rowString(row, "agent_version_id");
+    if (
+      laneAgentId &&
+      laneAgentVersionId &&
+      rowString(row, "status") === "active" &&
+      row.connection_capabilities_json !== null &&
+      row.connection_capabilities_json !== undefined
+    ) {
+      const laneKey = projectionKey(laneAgentId, laneAgentVersionId);
+      if (!reportedConnectionLanes.has(laneKey)) {
+        reportedConnectionLanes.set(
+          laneKey,
+          connectionLaneFromClientCapabilitiesJson(row.connection_capabilities_json),
+        );
+      }
+    }
     const bindingId = rowString(row, "human_review_binding_id");
     const bindingVersion = rowOptionalInteger(row, "human_review_binding_version");
     if (!bindingId || bindingVersion === null) continue;
@@ -721,7 +748,7 @@ async function loadWorkspaceHumanReviewProjection(
     const current = audits.get(bindingId);
     audits.set(bindingId, { eventCount: (current?.eventCount ?? 0) + 1, latest: current?.latest ?? row });
   }
-  return { configurations, integrations, workloads, terminals, audits };
+  return { configurations, integrations, reportedConnectionLanes, workloads, terminals, audits };
 }
 
 function buildHumanReviewSummary(input: {
@@ -1208,6 +1235,8 @@ async function loadWorkspaceAgents(workspaceId: string, canManage: boolean): Pro
         const rightCurrent = right.agentVersionId === versions[0]?.versionId ? 1 : 0;
         return rightCurrent - leftCurrent || right.updatedAt.localeCompare(left.updatedAt);
       }),
+      reportedConnectionLane:
+        humanReviewProjection.reportedConnectionLanes.get(projectionKey(agentId, versions[0].versionId)) ?? null,
       humanReview: buildHumanReviewSummary({
         agentId,
         agentStatus: status,
