@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
 import {
+  type Account,
   type Address,
   type Hash,
   type Hex,
@@ -20,6 +21,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
+import { EVM_TRANSACTION_FEE_POLICY } from "~~/lib/tokenless/chain/evmTransactionReplacement";
 import { attachProductAsk, createWorkspace, prepareProductAsk } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError, createTokenlessAsk, createTokenlessQuote } from "~~/lib/tokenless/server";
 
@@ -192,8 +194,10 @@ function roundCreatedLog(expected: Prepared, roundId: bigint) {
 // concurrency or crash schedule. A single round id is minted for the one and
 // only createRound so both broadcasts (if the bug regressed) would collide.
 function prepaidRuntime(input: {
+  account?: Account;
   expected: () => Prepared;
   broadcasts: Broadcast[];
+  maxFeePerGas?: bigint;
   serializedBroadcasts?: Hex[];
   onAcceptedBroadcast?: (kind: Broadcast["kind"], hash: Hash) => Promise<void>;
   onBroadcast?: (kind: Broadcast["kind"]) => Promise<void>;
@@ -289,7 +293,7 @@ function prepaidRuntime(input: {
         ...request,
         chainId: 84_532,
         gas: 1_000_000n,
-        maxFeePerGas: 2n,
+        maxFeePerGas: input.maxFeePerGas ?? 2n,
         maxPriorityFeePerGas: 1n,
         type: "eip1559" as const,
       };
@@ -298,7 +302,7 @@ function prepaidRuntime(input: {
   };
   return {
     publicClient: publicClient as unknown as TokenlessChainRuntime["publicClient"],
-    prepaidAccount: PREPAID_ACCOUNT,
+    prepaidAccount: input.account ?? PREPAID_ACCOUNT,
     prepaidWallet: wallet as unknown as TokenlessChainRuntime["prepaidWallet"],
     surpriseBonusAccount: SURPRISE_BONUS_ACCOUNT,
   };
@@ -315,6 +319,42 @@ async function prepaidDebitEntries(workspaceId: string) {
 
 beforeEach(() => __setDatabaseResourcesForTests(createMemoryDatabaseResources()));
 afterEach(() => __setDatabaseResourcesForTests(null));
+
+test("a prepaid execution rejects an over-cap prepared fee before signing", async () => {
+  const { operationKey } = await prepaidAsk();
+  const holder: { current?: Prepared } = {};
+  const broadcasts: Broadcast[] = [];
+  let signings = 0;
+  const account = {
+    ...PREPAID_ACCOUNT,
+    async signTransaction() {
+      signings += 1;
+      throw new Error("over-cap request reached signing");
+    },
+  } as typeof PREPAID_ACCOUNT;
+  const chainConfig = config();
+  const chainRuntime = prepaidRuntime({
+    account,
+    expected: () => holder.current!,
+    broadcasts,
+    maxFeePerGas: EVM_TRANSACTION_FEE_POLICY.maxFeePerGas + 1n,
+  });
+  holder.current = await prepareChainPayment(operationKey, { config: chainConfig, runtime: chainRuntime });
+  await assert.rejects(
+    executeServerChainPayment(operationKey, { config: chainConfig, runtime: chainRuntime }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "evm_transaction_fee_policy_exhausted",
+  );
+  assert.equal(signings, 0);
+  assert.deepEqual(broadcasts, []);
+  const persisted = await dbClient.execute({
+    sql: `SELECT approval_nonce, approval_signed_transaction, approval_transaction_hash
+          FROM tokenless_chain_executions WHERE operation_key = ?`,
+    args: [operationKey],
+  });
+  assert.equal(Number(persisted.rows[0]?.approval_nonce), 0);
+  assert.equal(persisted.rows[0]?.approval_signed_transaction, null);
+  assert.equal(persisted.rows[0]?.approval_transaction_hash, null);
+});
 
 test("two concurrent prepaid executions produce exactly one approval and one createRound", async () => {
   const { operationKey, workspaceId } = await prepaidAsk();

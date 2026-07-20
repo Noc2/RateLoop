@@ -5,8 +5,11 @@ import { privateKeyToAccount } from "viem/accounts";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { type TokenlessChainConfig, buildTokenlessDeploymentKey } from "~~/lib/tokenless/chain/config";
+import { EVM_TRANSACTION_FEE_POLICY } from "~~/lib/tokenless/chain/evmTransactionReplacement";
 import type { TokenlessChainRuntime } from "~~/lib/tokenless/chain/runtime";
+import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
+  __surpriseBountyServiceTestUtils,
   finalizeSurpriseBountyRound,
   processSurpriseBountyPayments,
   reserveSurpriseBountyCapacity,
@@ -321,6 +324,66 @@ test("a signer failure after surprise-bonus nonce reservation recovers with exac
   }));
   const accepted = new Set<Hash>();
   const broadcasts: Hex[] = [];
+
+  await dbClient.execute({
+    sql: `UPDATE tokenless_surprise_bounty_entitlements
+          SET payout_address = ?, transfer_nonce = 1, state = 'paying'
+          WHERE entitlement_id = ?`,
+    args: [PAYOUT.toLowerCase(), second.entitlement_id],
+  });
+  let overCapSignings = 0;
+  const overCapAccount = {
+    ...BONUS_ACCOUNT,
+    async signTransaction() {
+      overCapSignings += 1;
+      throw new Error("over-cap request reached signing");
+    },
+  } as typeof BONUS_ACCOUNT;
+  const secondAmount = BigInt(String(second.bonus_atomic));
+  await assert.rejects(
+    __surpriseBountyServiceTestUtils.preparePersistedSurpriseTransaction({
+      account: overCapAccount,
+      data: __surpriseBountyServiceTestUtils.surpriseTransferData({
+        amountAtomic: secondAmount,
+        config: config(),
+        payoutAddress: PAYOUT,
+      }),
+      entitlementId: String(second.entitlement_id),
+      nonce: 1,
+      token: USDC,
+      locator: {
+        businessKey: String(second.entitlement_id),
+        businessKind: "surprise_bounty",
+        deploymentKey: config().deploymentKey,
+        signerRole: "surprise_bonus_funder",
+        transactionKind: "transfer",
+      },
+      wallet: {
+        async prepareTransactionRequest(transaction: Record<string, unknown>) {
+          return {
+            ...transaction,
+            chainId: 84_532,
+            gas: 100_000n,
+            maxFeePerGas: EVM_TRANSACTION_FEE_POLICY.maxFeePerGas + 1n,
+            maxPriorityFeePerGas: 1n,
+            type: "eip1559" as const,
+          };
+        },
+      } as never,
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "evm_transaction_fee_policy_exhausted",
+  );
+  assert.equal(overCapSignings, 0);
+  const overCap = await dbClient.execute({
+    sql: `SELECT transfer_signed_transaction, transfer_transaction_hash
+          FROM tokenless_surprise_bounty_entitlements WHERE entitlement_id = ?`,
+    args: [second.entitlement_id],
+  });
+  assert.deepEqual(overCap.rows[0], {
+    transfer_signed_transaction: null,
+    transfer_transaction_hash: null,
+  });
+
   await dbClient.execute({
     sql: "UPDATE tokenless_surprise_bounty_entitlements SET attempt_count = 19 WHERE entitlement_id = ?",
     args: [first.entitlement_id],
