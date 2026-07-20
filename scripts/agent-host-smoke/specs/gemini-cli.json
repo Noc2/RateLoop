@@ -1,0 +1,54 @@
+{
+  "schemaVersion": "rateloop.host-smoke-spec.v1",
+  "hostId": "gemini-cli",
+  "displayName": "Gemini CLI remote HTTP MCP",
+  "hostCapabilityId": "gemini-cli",
+  "claimedTier": "experimental",
+  "pinnedClientVersion": null,
+  "planRefs": [
+    "docs/tokenless-agent-install-plan-2026-07.md#phase-5--verification-harness-as-the-tier-gate",
+    "docs/tokenless-mcp-cross-client-compatibility-review-2026-07.md#acceptance-criteria-for-a-broad-compatibility-claim"
+  ],
+  "knownQuirks": [
+    "JSON configuration uses `httpUrl` (not the downloadable `mcpServers`+`url` shape); the CLI also accepts `--transport http` with a URL.",
+    "Gemini CLI documents schema sanitization; the CI gate in packages/nextjs/lib/mcp/schemaAdapterCompatibility.test.ts pins the expected constraint drops (rateloop_request_review loses its material oneOf arms). A live run must confirm the sanitized tools still validate correct arguments server-side."
+  ],
+  "steps": [
+    {
+      "id": "install",
+      "name": "Configure the workspace server via the `httpUrl` shape at the pinned CLI version",
+      "automated": false,
+      "instructions": "On a clean Gemini CLI install at the exact pinned version (record it as clientVersion), configure the protected workspace server with the documented `httpUrl` JSON shape, and separately exercise the CLI command lane. Fail if any credential, connection URL, or fragment must be placed in configuration or appears in the transcript."
+    },
+    {
+      "id": "auth",
+      "name": "Complete OAuth discovery and DCR from the CLI",
+      "automated": false,
+      "instructions": "Let the CLI run OAuth discovery, dynamic client registration, S256 PKCE, exchange, and resource binding against the protected server, and approve consent as the workspace owner. Fail on any second request for the connection link or any token/authorization URL reflected into the transcript."
+    },
+    {
+      "id": "lifecycle",
+      "name": "One-session lifecycle: initialize through later tool calls",
+      "automated": false,
+      "instructions": "Verify initialize -> notifications/initialized -> tools/list -> claim -> context -> verify -> ping -> tools/list on ONE MCP session with no undocumented reconnect. Prefer the one-call rateloop_connect_workspace path; also confirm the granular fallback. Repeat the claim to confirm idempotency with exactly one connected event."
+    },
+    {
+      "id": "rateloop_get_agent_context",
+      "name": "Agent context read returns the bound policy through sanitized schemas",
+      "automated": false,
+      "instructions": "Call rateloop_get_agent_context and confirm it returns the effective server-bound human-review configuration for the connected integration only. Additionally spot-check that the sanitized tool schemas (see the CI adapter gate) still let the model produce arguments the server accepts — especially rateloop_request_review with both public and private material shapes, whose union arms the sanitizer drops."
+    },
+    {
+      "id": "rateloop_verify_connection",
+      "name": "Connection verification is idempotent and non-evaluative",
+      "automated": false,
+      "instructions": "Call rateloop_verify_connection and confirm success, then repeat it and confirm idempotency. Verify server-side that verification created no review opportunity, evidence, spending, or publishing state, and that exactly one connected event exists."
+    },
+    {
+      "id": "resume-after-new-task",
+      "name": "Resume in a fresh CLI session without re-asking for the link",
+      "automated": false,
+      "instructions": "Exit and restart the Gemini CLI, then start a new conversation. The agent must rediscover the connection via rateloop_get_agent_context without asking for the connection URL again and without creating a polling service. Fail if a still-valid token family requires a fresh OAuth grant."
+    }
+  ]
+}
