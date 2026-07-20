@@ -5,6 +5,7 @@ import { StdInvariant } from "forge-std/StdInvariant.sol";
 import { Test } from "forge-std/Test.sol";
 import { CredentialIssuer } from "../../contracts/tokenless/CredentialIssuer.sol";
 import { TokenlessPanel } from "../../contracts/tokenless/TokenlessPanel.sol";
+import { TokenlessRbts } from "../../contracts/tokenless/libraries/TokenlessRbts.sol";
 import { MockERC20 } from "../../contracts/mocks/MockERC20.sol";
 import { MockBeaconVerifier } from "../../contracts/mocks/MockBeaconVerifier.sol";
 
@@ -33,10 +34,12 @@ contract TokenlessPanelInvariantHandler is Test {
 
     MockERC20 public immutable usdc;
     CredentialIssuer public immutable issuer;
+    MockBeaconVerifier public immutable beaconVerifier;
     TokenlessPanel public immutable panel;
     address public immutable creditDestination;
 
     uint256[] internal _roundIds;
+    uint256[] internal _rbtsRoundIds;
     mapping(uint256 roundId => RaterMaterial[] materials) internal _materials;
 
     uint256 public totalFunded;
@@ -47,12 +50,15 @@ contract TokenlessPanelInvariantHandler is Test {
     uint256 public zeroCommitRounds;
     uint256 public underQuorumRounds;
     uint256 public beaconFailureRounds;
+    uint256 public rbtsSeededRounds;
+    uint256 public rbtsScoredReports;
 
     constructor() {
         vm.warp(1_900_000_000);
         usdc = new MockERC20("Invariant USDC", "iUSDC", 6);
         issuer = new CredentialIssuer(address(this), vm.addr(ISSUER_PK), 1 days);
-        panel = new TokenlessPanel(address(usdc), address(issuer), address(new MockBeaconVerifier()));
+        beaconVerifier = new MockBeaconVerifier();
+        panel = new TokenlessPanel(address(usdc), address(issuer), address(beaconVerifier));
         creditDestination = makeAddr("invariantCreditDestination");
         usdc.mint(address(this), type(uint128).max);
         usdc.approve(address(panel), type(uint256).max);
@@ -86,6 +92,7 @@ contract TokenlessPanelInvariantHandler is Test {
         totalFunded += ROUND_TOTAL;
         _roundIds.push(roundId);
         if (variant == 1) {
+            _rbtsRoundIds.push(roundId);
             for (uint256 i = 0; i < 3; ++i) {
                 _commitRater(roundId, terms.contentId, i, true);
             }
@@ -100,7 +107,15 @@ contract TokenlessPanelInvariantHandler is Test {
 
     function advanceRound(uint256 seed) external {
         if (_roundIds.length == 0) return;
-        uint256 roundId = _roundIds[seed % _roundIds.length];
+        _advanceRound(_roundIds[seed % _roundIds.length], seed);
+    }
+
+    function advanceRbtsRound(uint256 seed) external {
+        if (_rbtsRoundIds.length == 0) return;
+        _advanceRound(_rbtsRoundIds[seed % _rbtsRoundIds.length], seed);
+    }
+
+    function _advanceRound(uint256 roundId, uint256 seed) private {
         TokenlessPanel.Round memory round = panel.getRound(roundId);
 
         if (round.state == TokenlessPanel.RoundState.Open || round.state == TokenlessPanel.RoundState.Revealable) {
@@ -129,7 +144,12 @@ contract TokenlessPanelInvariantHandler is Test {
                     }
                 }
             }
-            _warpForward(round.beaconFailureDeadline + 1);
+            TokenlessPanel.Round memory revealedRound = panel.getRound(roundId);
+            if (revealedRound.revealCount >= revealedRound.minimumReveals) {
+                _warpForward(round.revealDeadline + 1);
+            } else {
+                _warpForward(round.beaconFailureDeadline + 1);
+            }
             panel.beginSettlement(roundId);
             TokenlessPanel.RoundState resultingState = panel.getRound(roundId).state;
             if (resultingState == TokenlessPanel.RoundState.UnderQuorumCompensation) underQuorumRounds += 1;
@@ -148,7 +168,15 @@ contract TokenlessPanelInvariantHandler is Test {
         }
 
         if (round.state == TokenlessPanel.RoundState.AwaitingSeed) {
-            panel.finalizeScoringFallback(roundId);
+            if (block.timestamp <= round.beaconFailureDeadline) {
+                bytes32 randomness = keccak256(abi.encode("invariant-beacon-entropy", roundId));
+                bytes memory proof =
+                    abi.encodePacked(beaconVerifier.proofFor(round.beaconNetworkHash, round.beaconRound, randomness));
+                panel.finalizeScoringSeed(roundId, randomness, proof);
+                rbtsSeededRounds += 1;
+            } else {
+                panel.finalizeScoringFallback(roundId);
+            }
             return;
         }
 
@@ -161,6 +189,9 @@ contract TokenlessPanelInvariantHandler is Test {
                     retryOrderViolations += 1;
                 }
                 panel.processScores(roundId, cursorBefore, uint32((seed % 3) + 1));
+                if (round.scoringMode == TokenlessPanel.ScoringMode.Rbts) {
+                    rbtsScoredReports += panel.getRound(roundId).scoreCursor - cursorBefore;
+                }
             }
             if (panel.getRound(roundId).scoreCursor == round.frozenRevealCount) {
                 panel.finalizeSettlement(roundId);
@@ -215,6 +246,16 @@ contract TokenlessPanelInvariantHandler is Test {
                         || round.state == TokenlessPanel.RoundState.BeaconFailureCompensation)
                     && round.claimDeadline == 0
             ) return false;
+        }
+        return true;
+    }
+
+    function allRbtsRoundsHaveConsistentEvidenceAndLiability() external view returns (bool) {
+        for (uint256 i = 0; i < _rbtsRoundIds.length; ++i) {
+            uint256 roundId = _rbtsRoundIds[i];
+            TokenlessPanel.Round memory round = panel.getRound(roundId);
+            if (round.scoringMode != TokenlessPanel.ScoringMode.Rbts) continue;
+            if (!_rbtsRoundIsConsistent(roundId, round)) return false;
         }
         return true;
     }
@@ -276,6 +317,77 @@ contract TokenlessPanelInvariantHandler is Test {
         );
     }
 
+    function _rbtsRoundIsConsistent(uint256 roundId, TokenlessPanel.Round memory round) private view returns (bool) {
+        if (round.scoringMode != TokenlessPanel.ScoringMode.Rbts) return false;
+        if (round.frozenRevealCount < 3 || round.beaconEntropy == bytes32(0) || round.scoringSeed == bytes32(0)) {
+            return false;
+        }
+        if (
+            round.scoringSeed
+                != keccak256(
+                    abi.encode(
+                        "rateloop-tokenless-rbts-v1",
+                        block.chainid,
+                        address(panel),
+                        roundId,
+                        round.frozenRevealCount,
+                        round.revealSetXor,
+                        round.revealSetSum,
+                        round.beaconEntropy
+                    )
+                )
+        ) return false;
+
+        uint256 scoreTotal;
+        uint256 liabilityTotal;
+        bytes32 revealSetXor;
+        uint256 revealSetSum;
+        for (uint256 i = 0; i < round.frozenRevealCount; ++i) {
+            bytes32 commitKey = panel.roundRevealKey(roundId, i);
+            bytes32 leaf = keccak256(abi.encode(commitKey));
+            revealSetXor ^= leaf;
+            unchecked {
+                revealSetSum += uint256(leaf);
+            }
+            if (i > 0 && !_rankBefore(round.scoringSeed, panel.roundRevealKey(roundId, i - 1), commitKey)) {
+                return false;
+            }
+            if (i >= round.scoreCursor) continue;
+
+            bytes32 referenceKey = panel.roundRevealKey(roundId, (i + 1) % round.frozenRevealCount);
+            bytes32 peerKey = panel.roundRevealKey(roundId, (i + 2) % round.frozenRevealCount);
+            TokenlessPanel.CommitRecord memory record = panel.getCommit(commitKey);
+            TokenlessPanel.CommitRecord memory referenceRecord = panel.getCommit(referenceKey);
+            TokenlessPanel.CommitRecord memory peer = panel.getCommit(peerKey);
+            if (record.referenceCommitKey != referenceKey || record.peerCommitKey != peerKey) return false;
+
+            TokenlessRbts.Score memory expected =
+                TokenlessRbts.score(record.vote, record.predictedUpBps, referenceRecord.predictedUpBps, peer.vote);
+            if (
+                record.informationScoreBps != expected.informationScoreBps
+                    || record.predictionScoreBps != expected.predictionScoreBps
+                    || record.rbtsScoreBps != expected.scoreBps
+            ) return false;
+            if (
+                record.finalizedPayout
+                    != round.fixedBasePay + ((round.maximumBonus * uint256(expected.scoreBps)) / 10_000)
+            ) return false;
+            scoreTotal += expected.scoreBps;
+            liabilityTotal += record.finalizedPayout;
+        }
+
+        return scoreTotal == round.totalRbtsScoreBps && liabilityTotal == round.totalFinalizedLiability
+            && revealSetXor == round.revealSetXor && revealSetSum == round.revealSetSum
+            && liabilityTotal <= round.bountyAmount && round.totalPaid <= liabilityTotal;
+    }
+
+    function _rankBefore(bytes32 seed, bytes32 leftKey, bytes32 rightKey) private pure returns (bool) {
+        bytes32 leftHash = keccak256(abi.encode(seed, leftKey));
+        bytes32 rightHash = keccak256(abi.encode(seed, rightKey));
+        if (leftHash != rightHash) return uint256(leftHash) < uint256(rightHash);
+        return uint256(leftKey) < uint256(rightKey);
+    }
+
     function _withdrawCredit() private {
         uint256 amount = panel.withdrawableCredit(address(this));
         if (amount == 0) return;
@@ -297,10 +409,19 @@ contract TokenlessPanelInvariantTest is StdInvariant, Test {
 
     function setUp() external {
         handler = new TokenlessPanelInvariantHandler();
-        bytes4[] memory selectors = new bytes4[](3);
+        // Seed every invariant campaign with an in-progress verified RBTS round. The
+        // targeted handler then fuzzes pagination, liabilities, claims, and sweeping.
+        handler.createRound(1);
+        handler.advanceRbtsRound(2);
+        handler.advanceRbtsRound(2);
+        handler.advanceRbtsRound(0);
+        handler.advanceRbtsRound(0);
+
+        bytes4[] memory selectors = new bytes4[](4);
         selectors[0] = handler.createRound.selector;
         selectors[1] = handler.advanceRound.selector;
-        selectors[2] = handler.withdrawCredit.selector;
+        selectors[2] = handler.advanceRbtsRound.selector;
+        selectors[3] = handler.withdrawCredit.selector;
         targetSelector(FuzzSelector({ addr: address(handler), selectors: selectors }));
         targetContract(address(handler));
     }
@@ -324,21 +445,31 @@ contract TokenlessPanelInvariantTest is StdInvariant, Test {
         assertTrue(handler.allRoundsHaveExitClassification());
     }
 
+    function invariant_VerifiedRbtsEvidenceAndLiabilitiesRemainConsistent() external view {
+        assertGt(handler.rbtsSeededRounds(), 0);
+        assertGt(handler.rbtsScoredReports(), 0);
+        assertTrue(handler.allRbtsRoundsHaveConsistentEvidenceAndLiability());
+    }
+
     function test_HandlerCanDriveEveryLifecycleToAConservingTerminalState() external {
+        TokenlessPanelInvariantHandler lifecycle = new TokenlessPanelInvariantHandler();
         for (uint256 variant = 0; variant < 4; ++variant) {
-            handler.createRound(variant);
+            lifecycle.createRound(variant);
             for (uint256 pass = 0; pass < 12; ++pass) {
-                handler.advanceRound(variant);
+                lifecycle.advanceRound(variant);
             }
         }
-        handler.withdrawCredit();
+        lifecycle.withdrawCredit();
 
-        assertTrue(handler.allRoundsTerminalAndSwept());
-        assertEq(handler.usdc().balanceOf(address(handler.panel())), 0);
-        assertEq(handler.retryOrderViolations(), 0);
-        assertEq(handler.zeroCommitRounds(), 1);
-        assertEq(handler.finalizedRounds(), 1);
-        assertEq(handler.underQuorumRounds(), 1);
-        assertEq(handler.beaconFailureRounds(), 1);
+        assertTrue(lifecycle.allRoundsTerminalAndSwept());
+        assertTrue(lifecycle.allRbtsRoundsHaveConsistentEvidenceAndLiability());
+        assertEq(lifecycle.usdc().balanceOf(address(lifecycle.panel())), 0);
+        assertEq(lifecycle.retryOrderViolations(), 0);
+        assertEq(lifecycle.zeroCommitRounds(), 1);
+        assertEq(lifecycle.finalizedRounds(), 1);
+        assertEq(lifecycle.underQuorumRounds(), 1);
+        assertEq(lifecycle.beaconFailureRounds(), 1);
+        assertEq(lifecycle.rbtsSeededRounds(), 1);
+        assertEq(lifecycle.rbtsScoredReports(), 3);
     }
 }

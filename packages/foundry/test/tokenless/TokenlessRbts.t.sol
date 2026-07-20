@@ -59,37 +59,20 @@ contract TokenlessRbtsHarness {
         return TokenlessRbts.rankBefore(leftHash, leftKey, rightHash, rightKey);
     }
 
-    function selectReferenceAndPeer(bytes32 seed, bytes32 ownCommitKey, bytes32[] memory revealedCommitKeys)
-        external
-        pure
-        returns (bytes32 referenceCommitKey, bytes32 peerCommitKey)
-    {
-        return TokenlessRbts.selectReferenceAndPeer(seed, ownCommitKey, revealedCommitKeys);
-    }
-
     function sortCanonical(bytes32 seed, bytes32[] memory commitKeys) external pure returns (bytes32[] memory) {
         TokenlessRbts.sortCanonical(seed, commitKeys);
         return commitKeys;
     }
 }
 
-/// @dev Includes the storage-to-memory copy used by one paginated panel scoring call.
-contract TokenlessRbtsStorageGasHarness {
-    bytes32[] internal _keys;
-
-    constructor(uint256 count) {
-        for (uint256 i = 0; i < count; ++i) {
-            _keys.push(keccak256(abi.encode("maximum-panel-key", i)));
-        }
-    }
-
-    function selectAt(bytes32 seed, uint256 index) external view returns (bytes32 referenceKey, bytes32 peerKey) {
-        bytes32[] memory keys = _keys;
-        return TokenlessRbts.selectReferenceAndPeer(seed, keys[index], keys);
-    }
-}
-
 contract TokenlessRbtsTest is Test {
+    struct OracleCandidate {
+        bytes32 commitKey;
+        bytes32 rankHash;
+        bool wraps;
+        bool set;
+    }
+
     TokenlessRbtsHarness internal rbts = new TokenlessRbtsHarness();
 
     bytes32 internal constant VECTOR_SEED = 0xb31ec78a68f9fafb9fb8a2306cdb0f66274cf1611dfd001862bf44dc3d16d889;
@@ -213,15 +196,15 @@ contract TokenlessRbtsTest is Test {
         reordered[4] = canonical[2];
         uint256[] memory referenceCounts = new uint256[](canonical.length);
         uint256[] memory peerCounts = new uint256[](canonical.length);
+        bytes32[] memory sorted = rbts.sortCanonical(VECTOR_SEED, canonical);
+        bytes32[] memory reorderedSorted = rbts.sortCanonical(VECTOR_SEED, reordered);
 
         for (uint256 i = 0; i < canonical.length; ++i) {
-            (bytes32 referenceKey, bytes32 peerKey) = rbts.selectReferenceAndPeer(VECTOR_SEED, canonical[i], canonical);
-            (bytes32 reorderedReference, bytes32 reorderedPeer) =
-                rbts.selectReferenceAndPeer(VECTOR_SEED, canonical[i], reordered);
-            assertEq(referenceKey, reorderedReference);
-            assertEq(peerKey, reorderedPeer);
-            assertNotEq(referenceKey, canonical[i]);
-            assertNotEq(peerKey, canonical[i]);
+            assertEq(sorted[i], reorderedSorted[i]);
+            bytes32 referenceKey = sorted[(i + 1) % sorted.length];
+            bytes32 peerKey = sorted[(i + 2) % sorted.length];
+            assertNotEq(referenceKey, sorted[i]);
+            assertNotEq(peerKey, sorted[i]);
             assertNotEq(referenceKey, peerKey);
             ++referenceCounts[_indexOf(canonical, referenceKey)];
             ++peerCounts[_indexOf(canonical, peerKey)];
@@ -238,37 +221,27 @@ contract TokenlessRbtsTest is Test {
         bytes32[] memory sorted = rbts.sortCanonical(VECTOR_SEED, input);
 
         for (uint256 i = 0; i < sorted.length; ++i) {
-            if (i > 0) {
-                assertTrue(
-                    rbts.rankBefore(
-                        rbts.rankHash(VECTOR_SEED, sorted[i - 1]),
-                        sorted[i - 1],
-                        rbts.rankHash(VECTOR_SEED, sorted[i]),
-                        sorted[i]
-                    )
-                );
-            }
+            if (i > 0) assertTrue(_oracleRankBefore(VECTOR_SEED, sorted[i - 1], sorted[i]));
             (bytes32 expectedReference, bytes32 expectedPeer) =
-                rbts.selectReferenceAndPeer(VECTOR_SEED, sorted[i], sorted);
+                _selectReferenceAndPeerOracle(VECTOR_SEED, sorted[i], input);
             assertEq(sorted[(i + 1) % sorted.length], expectedReference);
             assertEq(sorted[(i + 2) % sorted.length], expectedPeer);
         }
     }
 
-    function testFuzz_SelectionIsDeterministicAcrossRotation(bytes32 seed, uint8 rotationSeed) public view {
-        bytes32[] memory canonical = _sevenDistinctKeys();
-        bytes32[] memory rotated = new bytes32[](canonical.length);
-        uint256 rotation = uint256(rotationSeed) % canonical.length;
-        for (uint256 i = 0; i < canonical.length; ++i) {
-            rotated[i] = canonical[(i + rotation) % canonical.length];
-        }
+    function testFuzz_CanonicalHeapSortMatchesIndependentOracleAcrossPanelCap(
+        bytes32 seed,
+        bytes32 keyDomain,
+        uint16 panelSizeSeed,
+        uint16 ownIndexSeed
+    ) public view {
+        uint256 panelSize = bound(uint256(panelSizeSeed), 3, 500);
+        bytes32[] memory input = _distinctKeys(panelSize, keyDomain);
+        bytes32[] memory sorted = rbts.sortCanonical(seed, input);
 
-        for (uint256 i = 0; i < canonical.length; ++i) {
-            (bytes32 referenceKey, bytes32 peerKey) = rbts.selectReferenceAndPeer(seed, canonical[i], canonical);
-            (bytes32 rotatedReference, bytes32 rotatedPeer) = rbts.selectReferenceAndPeer(seed, canonical[i], rotated);
-            assertEq(referenceKey, rotatedReference);
-            assertEq(peerKey, rotatedPeer);
-        }
+        _assertSameRevealSet(input, sorted);
+        _assertStrictlyCanonical(seed, sorted);
+        _assertOracleAssignment(seed, input, sorted, uint256(ownIndexSeed) % panelSize);
     }
 
     function test_InvalidOrIncompleteRevealSetsFailClosed() public {
@@ -276,37 +249,111 @@ contract TokenlessRbtsTest is Test {
         tooSmall[0] = bytes32(uint256(1));
         tooSmall[1] = bytes32(uint256(2));
         vm.expectRevert(TokenlessRbts.InvalidRevealSet.selector);
-        rbts.selectReferenceAndPeer(VECTOR_SEED, tooSmall[0], tooSmall);
-
-        bytes32[] memory missingOwn = _fiveKeys();
-        vm.expectRevert(TokenlessRbts.InvalidRevealSet.selector);
-        rbts.selectReferenceAndPeer(VECTOR_SEED, bytes32(uint256(99)), missingOwn);
-
-        bytes32[] memory duplicateOwn = new bytes32[](3);
-        duplicateOwn[0] = bytes32(uint256(1));
-        duplicateOwn[1] = bytes32(uint256(1));
-        duplicateOwn[2] = bytes32(uint256(2));
-        vm.expectRevert(TokenlessRbts.InvalidRevealSet.selector);
-        rbts.selectReferenceAndPeer(VECTOR_SEED, duplicateOwn[0], duplicateOwn);
+        rbts.sortCanonical(VECTOR_SEED, tooSmall);
     }
 
-    function test_GasMaximumPanelSingleSeatSelectionRemainsPaginateable() public {
-        TokenlessRbtsStorageGasHarness harness = new TokenlessRbtsStorageGasHarness(500);
-        uint256 gasBefore = gasleft();
-        (bytes32 referenceKey, bytes32 peerKey) = harness.selectAt(VECTOR_SEED, 249);
-        uint256 gasUsed = gasBefore - gasleft();
+    function test_MaximumPanelCanonicalSortMatchesIndependentOracleSamples() public view {
+        bytes32[] memory input = _distinctKeys(500, keccak256("maximum-panel"));
+        bytes32[] memory sorted = rbts.sortCanonical(VECTOR_SEED, input);
 
-        emit log_named_uint("500-seat storage-copy plus single selection gas", gasUsed);
-        assertNotEq(referenceKey, bytes32(0));
-        assertNotEq(peerKey, bytes32(0));
-        assertNotEq(referenceKey, peerKey);
-        assertLt(gasUsed, 2_000_000);
+        _assertSameRevealSet(input, sorted);
+        _assertStrictlyCanonical(VECTOR_SEED, sorted);
+        _assertOracleAssignment(VECTOR_SEED, input, sorted, 0);
+        _assertOracleAssignment(VECTOR_SEED, input, sorted, 249);
+        _assertOracleAssignment(VECTOR_SEED, input, sorted, 499);
     }
 
     function _assertAssignment(bytes32[] memory keys, uint256 own, uint256 referenceKey, uint256 peerKey) private view {
-        (bytes32 actualReference, bytes32 actualPeer) = rbts.selectReferenceAndPeer(VECTOR_SEED, bytes32(own), keys);
-        assertEq(actualReference, bytes32(referenceKey));
-        assertEq(actualPeer, bytes32(peerKey));
+        bytes32[] memory sorted = rbts.sortCanonical(VECTOR_SEED, keys);
+        uint256 ownIndex = _indexOf(sorted, bytes32(own));
+        assertEq(sorted[(ownIndex + 1) % sorted.length], bytes32(referenceKey));
+        assertEq(sorted[(ownIndex + 2) % sorted.length], bytes32(peerKey));
+    }
+
+    function _assertSameRevealSet(bytes32[] memory input, bytes32[] memory sorted) private view {
+        (bytes32 inputXor, uint256 inputSum) = _accumulate(input);
+        (bytes32 sortedXor, uint256 sortedSum) = _accumulate(sorted);
+        assertEq(sortedXor, inputXor);
+        assertEq(sortedSum, inputSum);
+    }
+
+    function _assertStrictlyCanonical(bytes32 seed, bytes32[] memory sorted) private pure {
+        for (uint256 i = 1; i < sorted.length; ++i) {
+            assertTrue(_oracleRankBefore(seed, sorted[i - 1], sorted[i]));
+        }
+    }
+
+    function _assertOracleAssignment(bytes32 seed, bytes32[] memory input, bytes32[] memory sorted, uint256 ownIndex)
+        private
+        pure
+    {
+        bytes32 ownCommitKey = sorted[ownIndex];
+        (bytes32 expectedReference, bytes32 expectedPeer) = _selectReferenceAndPeerOracle(seed, ownCommitKey, input);
+        assertEq(sorted[(ownIndex + 1) % sorted.length], expectedReference);
+        assertEq(sorted[(ownIndex + 2) % sorted.length], expectedPeer);
+    }
+
+    /// @dev Independent O(n) test oracle retained outside production code.
+    function _selectReferenceAndPeerOracle(bytes32 seed, bytes32 ownCommitKey, bytes32[] memory commitKeys)
+        private
+        pure
+        returns (bytes32 referenceCommitKey, bytes32 peerCommitKey)
+    {
+        bytes32 ownRankHash = keccak256(abi.encode(seed, ownCommitKey));
+        uint256 ownMatches;
+        OracleCandidate memory first;
+        OracleCandidate memory second;
+
+        for (uint256 i = 0; i < commitKeys.length; ++i) {
+            bytes32 candidateKey = commitKeys[i];
+            if (candidateKey == ownCommitKey) {
+                ++ownMatches;
+                continue;
+            }
+
+            bytes32 candidateRankHash = keccak256(abi.encode(seed, candidateKey));
+            OracleCandidate memory candidate = OracleCandidate({
+                commitKey: candidateKey,
+                rankHash: candidateRankHash,
+                wraps: _oracleTupleBefore(candidateRankHash, candidateKey, ownRankHash, ownCommitKey),
+                set: true
+            });
+            if (_oracleCandidateBefore(candidate, first)) {
+                second = first;
+                first = candidate;
+            } else if (_oracleCandidateBefore(candidate, second)) {
+                second = candidate;
+            }
+        }
+
+        assertEq(ownMatches, 1);
+        assertTrue(first.set && second.set);
+        return (first.commitKey, second.commitKey);
+    }
+
+    function _oracleCandidateBefore(OracleCandidate memory left, OracleCandidate memory right)
+        private
+        pure
+        returns (bool)
+    {
+        if (!right.set) return true;
+        if (left.wraps != right.wraps) return !left.wraps;
+        return _oracleTupleBefore(left.rankHash, left.commitKey, right.rankHash, right.commitKey);
+    }
+
+    function _oracleRankBefore(bytes32 seed, bytes32 leftKey, bytes32 rightKey) private pure returns (bool) {
+        return _oracleTupleBefore(
+            keccak256(abi.encode(seed, leftKey)), leftKey, keccak256(abi.encode(seed, rightKey)), rightKey
+        );
+    }
+
+    function _oracleTupleBefore(bytes32 leftHash, bytes32 leftKey, bytes32 rightHash, bytes32 rightKey)
+        private
+        pure
+        returns (bool)
+    {
+        if (leftHash != rightHash) return uint256(leftHash) < uint256(rightHash);
+        return uint256(leftKey) < uint256(rightKey);
     }
 
     function _accumulate(bytes32[] memory keys) private view returns (bytes32 setXor, uint256 setSum) {
@@ -333,6 +380,13 @@ contract TokenlessRbtsTest is Test {
         keys = new bytes32[](7);
         for (uint256 i = 0; i < keys.length; ++i) {
             keys[i] = keccak256(abi.encode("rater", i));
+        }
+    }
+
+    function _distinctKeys(uint256 count, bytes32 domain) private pure returns (bytes32[] memory keys) {
+        keys = new bytes32[](count);
+        for (uint256 i = 0; i < count; ++i) {
+            keys[i] = keccak256(abi.encode("fuzz-rater", domain, i));
         }
     }
 }

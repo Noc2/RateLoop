@@ -19,13 +19,6 @@ library TokenlessRbts {
         uint16 scoreBps;
     }
 
-    struct RankedCandidate {
-        bytes32 commitKey;
-        bytes32 rankHash;
-        bool wraps;
-        bool set;
-    }
-
     error InvalidPrediction();
     error InvalidRevealSet();
     error InvalidVote();
@@ -152,56 +145,6 @@ library TokenlessRbts {
                 --end;
             }
         }
-    }
-
-    /// @notice Find the next and next-next reports in the canonical circular hash-rank ordering.
-    /// @dev `revealedCommitKeys` must be the frozen set of distinct commit keys. The scan is O(n), so the
-    ///      integrating fund core must retain a tested maximum panel-size bound and paginate outer scoring.
-    function selectReferenceAndPeer(bytes32 seed, bytes32 ownCommitKey, bytes32[] memory revealedCommitKeys)
-        internal
-        pure
-        returns (bytes32 referenceCommitKey, bytes32 peerCommitKey)
-    {
-        if (revealedCommitKeys.length < 3) revert InvalidRevealSet();
-
-        bytes32 ownRankHash = rankHash(seed, ownCommitKey);
-        uint256 ownMatches;
-        RankedCandidate memory first;
-        RankedCandidate memory second;
-
-        for (uint256 i = 0; i < revealedCommitKeys.length; ++i) {
-            bytes32 candidateKey = revealedCommitKeys[i];
-            if (candidateKey == ownCommitKey) {
-                ++ownMatches;
-                continue;
-            }
-
-            bytes32 candidateRankHash = rankHash(seed, candidateKey);
-            RankedCandidate memory candidate = RankedCandidate({
-                commitKey: candidateKey,
-                rankHash: candidateRankHash,
-                wraps: rankBefore(candidateRankHash, candidateKey, ownRankHash, ownCommitKey),
-                set: true
-            });
-
-            if (_candidateBefore(candidate, first)) {
-                second = first;
-                first = candidate;
-            } else if (_candidateBefore(candidate, second)) {
-                second = candidate;
-            }
-        }
-
-        if (ownMatches != 1 || !first.set || !second.set || first.commitKey == second.commitKey) {
-            revert InvalidRevealSet();
-        }
-        return (first.commitKey, second.commitKey);
-    }
-
-    function _candidateBefore(RankedCandidate memory left, RankedCandidate memory right) private pure returns (bool) {
-        if (!right.set) return true;
-        if (left.wraps != right.wraps) return !left.wraps;
-        return rankBefore(left.rankHash, left.commitKey, right.rankHash, right.commitKey);
     }
 
     function _siftDown(bytes32[] memory keys, bytes32[] memory hashes, uint256 root, uint256 length) private pure {
