@@ -402,6 +402,14 @@ function validateTokenlessTestDeployment(env) {
   ]) {
     if (!positiveInteger(value(env, name))) errors.push(`${name} must be a positive integer.`);
   }
+  const testRevealWindowSeconds = value(env, "TOKENLESS_REVEAL_WINDOW_SECONDS");
+  if (positiveInteger(testRevealWindowSeconds) && Number(testRevealWindowSeconds) < MINIMUM_REVEAL_WINDOW_SECONDS) {
+    errors.push(`TOKENLESS_REVEAL_WINDOW_SECONDS must be at least ${MINIMUM_REVEAL_WINDOW_SECONDS} seconds.`);
+  }
+  const testBeaconFailureGraceSeconds = value(env, "TOKENLESS_BEACON_FAILURE_GRACE_SECONDS");
+  if (positiveInteger(testBeaconFailureGraceSeconds) && Number(testBeaconFailureGraceSeconds) < 21_600) {
+    errors.push("TOKENLESS_BEACON_FAILURE_GRACE_SECONDS must be at least 21600 seconds.");
+  }
   for (const name of ["TOKENLESS_USDC_EIP712_NAME", "TOKENLESS_USDC_EIP712_VERSION"]) {
     if (!value(env, name)) errors.push(`${name} is required for live tokenless chain execution.`);
   }

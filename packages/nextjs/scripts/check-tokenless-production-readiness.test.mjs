@@ -334,6 +334,8 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
     ["APP_URL", "https://rateloop.ai", /must remain https:\/\/rateloop-tokenless\.vercel\.app/i],
     ["NEXT_PUBLIC_APP_URL", "https://www.rateloop.ai", /must remain https:\/\/rateloop-tokenless\.vercel\.app/i],
     ["TOKENLESS_NETWORK_PANELS_ENABLED", "true", /must remain false/i],
+    ["TOKENLESS_REVEAL_WINDOW_SECONDS", "299", /must be at least 300 seconds/i],
+    ["TOKENLESS_BEACON_FAILURE_GRACE_SECONDS", "21599", /must be at least 21600 seconds/i],
   ]) {
     const invalid = { ...env, [name]: invalidValue };
     assert.match(validateTokenlessProductionReadiness({ env: invalid, activeRegistry: {} }).join("\n"), expected);
