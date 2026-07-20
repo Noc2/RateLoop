@@ -13,8 +13,10 @@ import {
   type Hex,
   encodeAbiParameters,
   encodeEventTopics,
+  encodeFunctionData,
   getAddress,
   keccak256,
+  parseAbi,
   parseTransaction,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -34,6 +36,7 @@ const FUNDER = getAddress("0x5555555555555555555555555555555555555555");
 const FEE_RECIPIENT = getAddress("0x6666666666666666666666666666666666666666");
 const SURPRISE_BONUS_ACCOUNT = privateKeyToAccount(`0x${"77".repeat(32)}`);
 const PREPAID_ACCOUNT = privateKeyToAccount(`0x${"88".repeat(32)}`);
+const APPROVE_ABI = parseAbi(["function approve(address spender, uint256 amount) returns (bool)"]);
 
 type Prepared = Awaited<ReturnType<typeof prepareChainPayment>>;
 type Broadcast = { to: Address; kind: "approval" | "createRound" };
@@ -317,6 +320,42 @@ async function prepaidDebitEntries(workspaceId: string) {
   return result.rows;
 }
 
+async function persistLegacyApproval(operationKey: string, expected: Prepared, maxFeePerGas: bigint) {
+  const signedTransaction = await PREPAID_ACCOUNT.signTransaction({
+    chainId: 84_532,
+    data: encodeFunctionData({
+      abi: APPROVE_ABI,
+      functionName: "approve",
+      args: [PANEL, BigInt(expected.totalFundedAtomic)],
+    }),
+    gas: 1_000_000n,
+    maxFeePerGas,
+    maxPriorityFeePerGas: 1n,
+    nonce: 0,
+    to: USDC,
+    type: "eip1559",
+    value: 0n,
+  });
+  const hash = keccak256(signedTransaction);
+  await dbClient.execute({
+    sql: `UPDATE tokenless_chain_executions
+          SET approval_nonce = 0, approval_signed_transaction = ?, approval_transaction_hash = ?, state = 'signed'
+          WHERE operation_key = ?;
+          INSERT INTO tokenless_chain_signer_nonces
+          (deployment_key, signer_address, next_nonce, updated_at)
+          VALUES (?, ?, 1, ?)`,
+    args: [
+      signedTransaction,
+      hash,
+      operationKey,
+      config().deploymentKey,
+      PREPAID_ACCOUNT.address.toLowerCase(),
+      new Date(),
+    ],
+  });
+  return { hash, signedTransaction };
+}
+
 beforeEach(() => __setDatabaseResourcesForTests(createMemoryDatabaseResources()));
 afterEach(() => __setDatabaseResourcesForTests(null));
 
@@ -354,6 +393,63 @@ test("a prepaid execution rejects an over-cap prepared fee before signing", asyn
   assert.equal(Number(persisted.rows[0]?.approval_nonce), 0);
   assert.equal(persisted.rows[0]?.approval_signed_transaction, null);
   assert.equal(persisted.rows[0]?.approval_transaction_hash, null);
+});
+
+test("an over-cap pre-policy approval is preserved but never re-signed or broadcast", async () => {
+  const { operationKey } = await prepaidAsk();
+  const holder: { current?: Prepared } = {};
+  const broadcasts: Broadcast[] = [];
+  let signings = 0;
+  const account = {
+    ...PREPAID_ACCOUNT,
+    async signTransaction() {
+      signings += 1;
+      throw new Error("over-cap legacy transaction reached signing");
+    },
+  } as typeof PREPAID_ACCOUNT;
+  const chainConfig = config();
+  const chainRuntime = prepaidRuntime({ account, expected: () => holder.current!, broadcasts });
+  holder.current = await prepareChainPayment(operationKey, { config: chainConfig, runtime: chainRuntime });
+  const legacy = await persistLegacyApproval(
+    operationKey,
+    holder.current,
+    EVM_TRANSACTION_FEE_POLICY.maxFeePerGas + 1n,
+  );
+  await assert.rejects(
+    executeServerChainPayment(operationKey, { config: chainConfig, runtime: chainRuntime }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "evm_transaction_fee_policy_exhausted",
+  );
+  assert.equal(signings, 0);
+  assert.deepEqual(broadcasts, []);
+  const persisted = await dbClient.execute({
+    sql: `SELECT approval_signed_transaction, approval_transaction_hash
+          FROM tokenless_chain_executions WHERE operation_key = ?`,
+    args: [operationKey],
+  });
+  assert.equal(persisted.rows[0]?.approval_signed_transaction, legacy.signedTransaction);
+  assert.equal(persisted.rows[0]?.approval_transaction_hash, legacy.hash);
+});
+
+test("an acceptable pre-policy approval replays its exact bytes", async () => {
+  const { operationKey } = await prepaidAsk();
+  const holder: { current?: Prepared } = {};
+  const broadcasts: Broadcast[] = [];
+  const serializedBroadcasts: Hex[] = [];
+  const chainConfig = config();
+  const chainRuntime = prepaidRuntime({
+    expected: () => holder.current!,
+    broadcasts,
+    serializedBroadcasts,
+  });
+  holder.current = await prepareChainPayment(operationKey, { config: chainConfig, runtime: chainRuntime });
+  const legacy = await persistLegacyApproval(operationKey, holder.current, 2n);
+  const confirmed = await executeServerChainPayment(operationKey, { config: chainConfig, runtime: chainRuntime });
+  assert.equal(confirmed.paymentState, "confirmed");
+  assert.equal(serializedBroadcasts[0], legacy.signedTransaction);
+  assert.deepEqual(
+    broadcasts.map(value => value.kind),
+    ["approval", "createRound"],
+  );
 });
 
 test("two concurrent prepaid executions produce exactly one approval and one createRound", async () => {

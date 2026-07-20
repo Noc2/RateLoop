@@ -253,6 +253,43 @@ test("a pre-0126 durable transaction is adopted without replacement or broadcast
   assert.deepEqual(versions.rows, [{ generation: 0, transaction_hash: original.hash }]);
 });
 
+test("an over-cap pre-policy durable transaction is recorded but blocked before replay", async () => {
+  await seedExecution();
+  const original = await signedTransaction({
+    maxFeePerGas: EVM_TRANSACTION_FEE_POLICY.maxFeePerGas + 1n,
+    maxPriorityFeePerGas: 10n,
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_chain_executions
+          SET approval_signed_transaction = ?, approval_transaction_hash = ?, state = 'signed'
+          WHERE operation_key = ?`,
+    args: [original.signedTransaction, original.hash, OPERATION_KEY],
+  });
+  let signings = 0;
+  await assert.rejects(
+    maybeReplaceUnobservedEvmTransaction({
+      account: countingAccount(() => (signings += 1)),
+      locator,
+      now: NOW,
+      publicClient: {} as never,
+      transaction: { ...original, recovered: true },
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "evm_transaction_fee_policy_exhausted",
+  );
+  assert.equal(signings, 0);
+  const versions = await dbClient.execute(
+    "SELECT generation, transaction_hash FROM tokenless_evm_transaction_versions ORDER BY generation",
+  );
+  assert.deepEqual(versions.rows, [{ generation: 0, transaction_hash: original.hash }]);
+  const active = await dbClient.execute({
+    sql: `SELECT approval_signed_transaction, approval_transaction_hash
+          FROM tokenless_chain_executions WHERE operation_key = ?`,
+    args: [OPERATION_KEY],
+  });
+  assert.equal(active.rows[0]?.approval_signed_transaction, original.signedTransaction);
+  assert.equal(active.rows[0]?.approval_transaction_hash, original.hash);
+});
+
 test("RPC estimates above either server fee cap cannot reach signing or replace durable bytes", async () => {
   await seedExecution();
   const original = await signedTransaction({ maxFeePerGas: 100n, maxPriorityFeePerGas: 10n });

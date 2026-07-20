@@ -574,9 +574,15 @@ export async function maybeReplaceUnobservedEvmTransaction(input: {
       "signed_transaction_mismatch",
     );
   }
+  const identity = await transactionIdentity(recorded.signedTransaction);
+  assertEvmTransactionFeeWithinPolicy({
+    gas: identity.gas,
+    generation,
+    maxFeePerGas: identity.maxFeePerGas,
+    maxPriorityFeePerGas: identity.maxPriorityFeePerGas,
+  });
   const createdAt = new Date(String(latestRow.created_at));
   if (!Number.isFinite(createdAt.getTime()) || now.getTime() - createdAt.getTime() < minAgeMs) return recorded;
-  const identity = await transactionIdentity(recorded.signedTransaction);
   const networkConfirmedNonce = await input.publicClient.getTransactionCount({
     address: identity.signer,
     blockTag: "latest",
