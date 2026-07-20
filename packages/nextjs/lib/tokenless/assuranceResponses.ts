@@ -97,7 +97,7 @@ function loadKeyring(prefix: string, publicPrefix: string): AssuranceResponseKey
   return { currentVersion, keys };
 }
 
-function getKeyrings(): AssuranceResponseKeyrings {
+export function getAssuranceResponseKeyrings(): AssuranceResponseKeyrings {
   if (keyringsOverride) return keyringsOverride;
   return {
     rationale: loadKeyring("TOKENLESS_ASSURANCE_RATIONALE_VAULT", "TOKENLESS_ASSURANCE_RATIONALE_VAULT"),
@@ -105,11 +105,11 @@ function getKeyrings(): AssuranceResponseKeyrings {
   };
 }
 
-function rationaleDigest(value: string) {
+export function assuranceRationaleDigest(value: string) {
   return `sha256:${createHash("sha256").update(value, "utf8").digest("hex")}`;
 }
 
-function reviewerKey(
+export function assuranceReviewerKey(
   input: { accountAddress: string; runId: string },
   keyring: AssuranceResponseKeyring,
   version = keyring.currentVersion,
@@ -121,7 +121,7 @@ function reviewerKey(
     .digest("hex")}`;
 }
 
-function encryptRationale(
+export function encryptAssuranceRationale(
   input: {
     caseId: string;
     digest: string;
@@ -148,7 +148,7 @@ function encryptRationale(
 function decryptRationale(row: QueryRow) {
   const keyRef = rowString(row, "rationale_key_ref") ?? "";
   const keyVersion = keyRef.startsWith(`${RATIONALE_KEY_DOMAIN}:`) ? keyRef.slice(RATIONALE_KEY_DOMAIN.length + 1) : "";
-  const key = getKeyrings().rationale.keys.get(keyVersion);
+  const key = getAssuranceResponseKeyrings().rationale.keys.get(keyVersion);
   if (!key) throw new Error(`Assurance rationale vault key ${keyVersion} is unavailable.`);
   const parts = (rowString(row, "rationale_ciphertext") ?? "").split(".");
   if (parts.length !== 4 || parts[0] !== "v1") throw new Error("Assurance rationale ciphertext is invalid.");
@@ -361,7 +361,7 @@ function buildResponseRecord(input: {
   if (!canonicalChoice) {
     serviceError("The selected artifact is not a frozen case variant.", "assurance_case_binding_mismatch", 409);
   }
-  const digest = rationaleDigest(input.rationale);
+  const digest = assuranceRationaleDigest(input.rationale);
   const responseDigest = hashHumanAssuranceDocument({
     schemaVersion: RESPONSE_SCHEMA_VERSION,
     runId: rowString(input.assignment, "run_id"),
@@ -381,7 +381,7 @@ function buildResponseRecord(input: {
   const encrypted =
     input.rationaleMode === "off"
       ? { ciphertext: null, keyRef: null }
-      : encryptRationale(
+      : encryptAssuranceRationale(
           {
             caseId: rowString(input.caseRow, "case_id")!,
             digest,
@@ -435,7 +435,7 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
   if (!principalId) serviceError("A valid signed-in account is required.", "invalid_account", 401);
   const responses = validateResponseBatch(input.responses);
   const now = input.now ?? new Date();
-  const keyrings = getKeyrings();
+  const keyrings = getAssuranceResponseKeyrings();
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
@@ -513,7 +513,7 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
     }
     const { assuranceCapabilities, qualificationKeys } = loadCapabilitySnapshot(assignment);
     const pseudonymCandidates = [...keyrings.reviewerMapping.keys.keys()].map(version =>
-      reviewerKey(
+      assuranceReviewerKey(
         { accountAddress: identityReference, runId: rowString(assignment, "run_id")! },
         keyrings.reviewerMapping,
         version,
@@ -526,7 +526,7 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
     );
     const pseudonym =
       rowString(existingReviewer.rows[0] as QueryRow | undefined, "reviewer_key") ??
-      reviewerKey(
+      assuranceReviewerKey(
         { accountAddress: identityReference, runId: rowString(assignment, "run_id")! },
         keyrings.reviewerMapping,
       );

@@ -1,4 +1,5 @@
 import type {
+  HumanReviewResultEnvelope,
   TokenlessAskResponse,
   TokenlessQuoteRequest,
   TokenlessResult,
@@ -13,6 +14,7 @@ import {
 } from "~~/lib/tokenless/adaptiveReviewEvidence";
 import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import type { BoundHumanReviewRequestProfile } from "~~/lib/tokenless/humanReviewRequestPreparation";
+import { getDirectPrivateReviewState } from "~~/lib/tokenless/privateReviewResponses";
 import { authorizeAskAccess, requireProductPrincipalScope } from "~~/lib/tokenless/productCore";
 import {
   type PublicPaidHumanReviewPublication,
@@ -253,14 +255,22 @@ export async function requestAdaptiveHumanReview(
   return requestPublicPaidHumanReview(input);
 }
 
-async function requireBoundOperation(input: { principal: AdaptiveReviewIntegrationPrincipal; opportunityId: string }) {
+async function requireBoundReview(input: { principal: AdaptiveReviewIntegrationPrincipal; opportunityId: string }) {
   requireProductPrincipalScope(input.principal.principal, "result:read");
   const opportunity = await loadBoundOpportunity(input.principal, input.opportunityId);
-  if (!opportunity.operationKey || !["review_requested", "completed"].includes(opportunity.status)) {
+  if (!["review_requested", "completed", "failed"].includes(opportunity.status)) {
     throw new TokenlessServiceError("Human review has not been requested.", 409, "review_not_requested");
   }
-  await authorizeAskAccess(input.principal.principal, opportunity.operationKey);
-  return opportunity;
+  if (opportunity.operationKey) {
+    await authorizeAskAccess(input.principal.principal, opportunity.operationKey);
+    return { kind: "public" as const, opportunity };
+  }
+  const direct = await getDirectPrivateReviewState({
+    workspaceId: input.principal.integration.workspaceId,
+    opportunityId: input.opportunityId,
+  });
+  if (!direct) throw new TokenlessServiceError("Human review has not been requested.", 409, "review_not_requested");
+  return { kind: "private" as const, opportunity, direct };
 }
 
 export async function waitForAdaptiveHumanReview(input: {
@@ -271,11 +281,41 @@ export async function waitForAdaptiveHumanReview(input: {
 }): Promise<{
   schemaVersion: "rateloop.adaptive-review-wait.v1";
   opportunityId: string;
-  wait: TokenlessWaitResponse;
+  wait:
+    | TokenlessWaitResponse
+    | {
+        schemaVersion: "rateloop.private-review-wait.v1";
+        deliveryId: string;
+        status: "pending" | "ready";
+        lifecycle: { state: string; revision: number };
+        responseCount: number;
+        responseDeadline: string;
+        outcome: HumanReviewResultEnvelope["outcome"] | null;
+      };
 }> {
-  const opportunity = await requireBoundOperation(input);
-  const wait = await waitForTokenlessAsk(opportunity.operationKey!, input.appOrigin, input.options);
-  return { schemaVersion: "rateloop.adaptive-review-wait.v1", opportunityId: opportunity.opportunityId, wait };
+  const bound = await requireBoundReview(input);
+  if (bound.kind === "public") {
+    const wait = await waitForTokenlessAsk(bound.opportunity.operationKey!, input.appOrigin, input.options);
+    return {
+      schemaVersion: "rateloop.adaptive-review-wait.v1",
+      opportunityId: bound.opportunity.opportunityId,
+      wait,
+    };
+  }
+  const wait = {
+    schemaVersion: "rateloop.private-review-wait.v1" as const,
+    deliveryId: bound.direct.deliveryId,
+    status: bound.direct.envelope ? ("ready" as const) : ("pending" as const),
+    lifecycle: bound.direct.lifecycle,
+    responseCount: bound.direct.responseCount,
+    responseDeadline: bound.direct.responseDeadline,
+    outcome: bound.direct.envelope?.outcome ?? null,
+  };
+  return {
+    schemaVersion: "rateloop.adaptive-review-wait.v1",
+    opportunityId: bound.opportunity.opportunityId,
+    wait,
+  };
 }
 
 export async function getAdaptiveHumanReviewResult(input: {
@@ -284,15 +324,26 @@ export async function getAdaptiveHumanReviewResult(input: {
 }): Promise<{
   schemaVersion: "rateloop.adaptive-review-result.v1";
   opportunityId: string;
-  result: TokenlessResult;
+  result: TokenlessResult | HumanReviewResultEnvelope;
   observation: AdaptiveReviewObservation | null;
 }> {
-  const opportunity = await requireBoundOperation(input);
-  const result = await getTokenlessResult(opportunity.operationKey!);
-  const observation = await finalizeAdaptiveReviewEvidence({ operationKey: opportunity.operationKey! });
+  const bound = await requireBoundReview(input);
+  if (bound.kind === "private") {
+    if (!bound.direct.envelope) {
+      throw new TokenlessServiceError("Human-review result is not ready.", 409, "result_not_ready");
+    }
+    return {
+      schemaVersion: "rateloop.adaptive-review-result.v1",
+      opportunityId: bound.opportunity.opportunityId,
+      result: bound.direct.envelope,
+      observation: null,
+    };
+  }
+  const result = await getTokenlessResult(bound.opportunity.operationKey!);
+  const observation = await finalizeAdaptiveReviewEvidence({ operationKey: bound.opportunity.operationKey! });
   return {
     schemaVersion: "rateloop.adaptive-review-result.v1",
-    opportunityId: opportunity.opportunityId,
+    opportunityId: bound.opportunity.opportunityId,
     result,
     observation,
   };

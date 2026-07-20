@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
 import { recoverExpiredAudienceAssignment } from "~~/lib/tokenless/audienceAssignments";
+import { isDirectPrivateReviewAssignmentId } from "~~/lib/tokenless/privateReviewResponses";
+import { recoverPrivateUnpaidReviewAssignment } from "~~/lib/tokenless/privateUnpaidReviewAdapter";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
@@ -24,12 +26,19 @@ export async function POST(request: NextRequest, context: Context) {
       }
     }
     return NextResponse.json(
-      await recoverExpiredAudienceAssignment({
-        assignmentId,
-        baseAccountAddress: session.principalId,
-        confidentialityTermsHash:
-          typeof body.confidentialityTermsHash === "string" ? body.confidentialityTermsHash : undefined,
-      }),
+      isDirectPrivateReviewAssignmentId(assignmentId)
+        ? await recoverPrivateUnpaidReviewAssignment({
+            assignmentId,
+            reviewerAccountAddress: session.principalId,
+            confidentialityTermsHash:
+              typeof body.confidentialityTermsHash === "string" ? body.confidentialityTermsHash : "",
+          })
+        : await recoverExpiredAudienceAssignment({
+            assignmentId,
+            baseAccountAddress: session.principalId,
+            confidentialityTermsHash:
+              typeof body.confidentialityTermsHash === "string" ? body.confidentialityTermsHash : undefined,
+          }),
     );
   } catch (error) {
     const response = tokenlessErrorResponse(error);

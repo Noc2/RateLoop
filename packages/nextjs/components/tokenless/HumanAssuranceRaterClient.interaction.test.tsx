@@ -36,6 +36,45 @@ const privateTask: AssignmentTask = {
   ],
 };
 
+const binaryTask: AssignmentTask = {
+  ...privateTask,
+  assignmentId: "hpua_1111111111111111111111111111111111111111",
+  runId: "hpud_2222222222222222222222222222222222222222",
+  taskKind: "binary_review",
+  rubric: {
+    prompt: "Is the agent output correct?",
+    failureTags: [],
+    rationale: { mode: "off", minLength: 0, maxLength: 2_000 },
+  },
+  cases: [
+    {
+      caseId: "hpr_binary_session_guard",
+      position: 0,
+      title: "Review the agent output",
+      instructions: "Is the agent output correct?",
+      options: [],
+      context: [],
+      objectiveReference: null,
+      binaryReview: {
+        positiveLabel: "Approve",
+        negativeLabel: "Reject",
+        source: {
+          artifactId: "artifact_binary_source",
+          leaseId: "lease_binary_source",
+          expiresAt: "2030-01-01T00:00:00.000Z",
+          contentType: "text/plain",
+        },
+        suggestion: {
+          artifactId: "artifact_binary_suggestion",
+          leaseId: "lease_binary_suggestion",
+          expiresAt: "2030-01-01T00:00:00.000Z",
+          contentType: "text/plain",
+        },
+      },
+    },
+  ],
+};
+
 function authenticatedSession(principalId: string) {
   return {
     authenticated: true,
@@ -73,6 +112,48 @@ test("private-review links carry both invitation credentials", () => {
   assert.match(page, /initialTermsHash=\{params\.terms\}/);
   assert.match(card, /assignment=\$\{encodeURIComponent\(assignment\.assignmentId\)\}/);
   assert.match(card, /terms=\$\{encodeURIComponent\(assignment\.confidentialityTermsHash \?\? ""\)\}/);
+});
+
+test("an owner-fixed private task shows source and output separately and submits the binary rating", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
+  const previousFetch = globalThis.fetch;
+  const submission: { current: Record<string, unknown> | null } = { current: null };
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url === "/api/auth/session") return Response.json(authenticatedSession(PRINCIPAL_A));
+    if (url.endsWith("/responses")) {
+      submission.current = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return Response.json({
+        accepted: true,
+        replay: false,
+        responseCount: 1,
+        compensation: "unpaid",
+        settlementStatus: "not_applicable",
+      });
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  };
+
+  try {
+    const view = render(<HumanAssuranceRaterClient principalId={PRINCIPAL_A} initialTask={binaryTask} />);
+    const user = userEvent.setup({ document });
+    assert.ok(view.getByText("Review the source and decide whether the agent output meets the criterion."));
+    assert.equal(view.getAllByRole("link", { name: "Open private artifact" }).length, 2);
+    await user.click(view.getByRole("radio", { name: "Approve" }));
+    await user.click(view.getByRole("button", { name: "Review answers" }));
+    await user.click(view.getByRole("button", { name: "Submit review" }));
+    await waitFor(() => assert.ok(submission.current));
+    const responses = submission.current?.responses as Array<Record<string, unknown>>;
+    assert.equal(responses[0]?.displayedOption, "A");
+    assert.equal(responses[0]?.selectedArtifactId, "artifact_binary_suggestion");
+  } finally {
+    cleanup();
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
 });
 
 test("an initially signed-out visitor without loaded private content is not treated as a session loss", async () => {

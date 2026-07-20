@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
 import { type AssuranceCaseResponseInput, submitAssuranceResponses } from "~~/lib/tokenless/assuranceResponses";
+import {
+  isDirectPrivateReviewAssignmentId,
+  submitDirectPrivateReviewResponse,
+} from "~~/lib/tokenless/privateReviewResponses";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
@@ -18,12 +22,19 @@ export async function POST(request: NextRequest, context: Context) {
     } catch {
       throw new TokenlessServiceError("Response batch must be valid JSON.", 400, "invalid_assurance_response");
     }
-    const result = await submitAssuranceResponses({
-      assignmentId,
-      baseAccountAddress: session.principalId,
-      idempotencyKey: body.idempotencyKey ?? "",
-      responses: body.responses ?? [],
-    });
+    const result = isDirectPrivateReviewAssignmentId(assignmentId)
+      ? await submitDirectPrivateReviewResponse({
+          assignmentId,
+          accountAddress: session.principalId,
+          idempotencyKey: body.idempotencyKey ?? "",
+          responses: body.responses ?? [],
+        })
+      : await submitAssuranceResponses({
+          assignmentId,
+          baseAccountAddress: session.principalId,
+          idempotencyKey: body.idempotencyKey ?? "",
+          responses: body.responses ?? [],
+        });
     return NextResponse.json(result, {
       status: result.replay ? 200 : 201,
       headers: { "Cache-Control": "private, no-store, max-age=0" },

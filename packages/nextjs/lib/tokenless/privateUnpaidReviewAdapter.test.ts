@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { getAdaptiveHumanReviewResult, waitForAdaptiveHumanReview } from "~~/lib/tokenless/adaptiveReviewOrchestration";
 import {
   approveAgentPairing,
   authenticateAgentMcpPrincipal,
@@ -10,9 +11,16 @@ import {
   submitAgentRegistration,
 } from "~~/lib/tokenless/agentIntegrations";
 import { __setArtifactPrivacyRuntimeForTests } from "~~/lib/tokenless/artifactPrivacy";
+import { __setAssuranceResponseKeyringsForTests } from "~~/lib/tokenless/assuranceResponses";
 import { createAssuranceProject } from "~~/lib/tokenless/humanAssurance";
 import { createPrivateGroup } from "~~/lib/tokenless/privateGroups";
 import { preparePrivateReviewFoundation } from "~~/lib/tokenless/privateReviewFoundation";
+import {
+  getDirectPrivateReviewState,
+  getDirectPrivateReviewTask,
+  listDirectPrivateReviewAssignments,
+  submitDirectPrivateReviewResponse,
+} from "~~/lib/tokenless/privateReviewResponses";
 import {
   __privateUnpaidReviewAdapterTestUtils,
   acceptPrivateUnpaidReviewAssignment,
@@ -48,13 +56,115 @@ beforeEach(() => {
       },
     },
   });
+  __setAssuranceResponseKeyringsForTests({
+    rationale: { currentVersion: "rationale-test-v1", keys: new Map([["rationale-test-v1", Buffer.alloc(32, 7)]]) },
+    reviewerMapping: {
+      currentVersion: "reviewer-test-v1",
+      keys: new Map([["reviewer-test-v1", Buffer.alloc(32, 8)]]),
+    },
+  });
 });
 
 afterEach(() => {
   __privateUnpaidReviewAdapterTestUtils.setBeforeDeliveryCommitForTests(null);
   __privateUnpaidReviewAdapterTestUtils.setBeforeLeaseCommitForTests(null);
   __setArtifactPrivacyRuntimeForTests(null);
+  __setAssuranceResponseKeyringsForTests(null);
   __setDatabaseResourcesForTests(null);
+});
+
+test("direct private assignments surface in reviewer work and produce a terminal aggregate result", async () => {
+  const setup = await fixture();
+  const delivered = await requestPrivateUnpaidHumanReview({
+    principal: setup.principal,
+    opportunityId: setup.opportunityId,
+    privateReviewId: setup.prepared.privateReviewId,
+    reviewerAccountAddresses: [REVIEWER_A, REVIEWER_B],
+    now: new Date("2026-07-16T09:20:00.000Z"),
+  });
+  const termsHash = setup.prepared.bindings.privateGroup.policyHash;
+  const queue = await listDirectPrivateReviewAssignments({ accountAddress: REVIEWER_A });
+  assert.equal(queue.length, 1);
+  assert.equal(queue[0]?.assignmentId, delivered.assignments[0]?.assignmentId);
+  assert.equal(queue[0]?.confidentialityTermsHash, termsHash);
+  const pendingWait = await waitForAdaptiveHumanReview({
+    principal: setup.integrationPrincipal,
+    opportunityId: setup.opportunityId,
+    appOrigin: "https://rateloop-tokenless.vercel.app",
+  });
+  assert.equal(pendingWait.wait.status, "pending");
+  await assert.rejects(
+    () =>
+      getAdaptiveHumanReviewResult({
+        principal: setup.integrationPrincipal,
+        opportunityId: setup.opportunityId,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "result_not_ready",
+  );
+
+  for (const assignment of delivered.assignments) {
+    await acceptPrivateUnpaidReviewAssignment({
+      assignmentId: assignment.assignmentId,
+      reviewerAccountAddress: assignment.reviewerAccountAddress,
+      confidentialityTermsHash: termsHash,
+      now: new Date("2026-07-16T09:25:00.000Z"),
+    });
+    const task = await getDirectPrivateReviewTask({
+      assignmentId: assignment.assignmentId,
+      accountAddress: assignment.reviewerAccountAddress,
+      now: new Date("2026-07-16T09:26:00.000Z"),
+    });
+    assert.equal(task.taskKind, "binary_review");
+    assert.equal(task.rubric.prompt, "Is this suggestion correct and safe?");
+    assert.equal(task.cases[0]?.binaryReview?.positiveLabel, "Approve");
+    assert.equal(task.cases[0]?.binaryReview?.negativeLabel, "Reject");
+  }
+
+  const respond = (index: number) => {
+    const assignment = delivered.assignments[index]!;
+    return submitDirectPrivateReviewResponse({
+      assignmentId: assignment.assignmentId,
+      accountAddress: assignment.reviewerAccountAddress,
+      idempotencyKey: `response:test:${assignment.assignmentId}`,
+      responses: [
+        {
+          caseId: setup.prepared.privateReviewId,
+          displayedOption: "A",
+          selectedArtifactId: setup.prepared.artifacts.suggestionArtifactId,
+          failureTagKeys: [],
+          rationale: "",
+        },
+      ],
+      now: new Date(`2026-07-16T09:2${7 + index}:00.000Z`),
+    });
+  };
+  const first = await respond(0);
+  assert.equal(first.responseCount, 1);
+  assert.equal((await getDirectPrivateReviewState(setup))?.envelope, null);
+  const second = await respond(1);
+  assert.equal(second.responseCount, 2);
+  const terminal = await getDirectPrivateReviewState(setup);
+  assert.equal(terminal?.envelope?.outcome, "positive");
+  assert.equal(terminal?.lifecycle.state, "completed");
+  assert.equal(terminal?.envelope?.panel.responseCount, 2);
+  assert.equal(terminal?.envelope?.economics.guaranteedBase.mode, "off");
+  const readyWait = await waitForAdaptiveHumanReview({
+    principal: setup.integrationPrincipal,
+    opportunityId: setup.opportunityId,
+    appOrigin: "https://rateloop-tokenless.vercel.app",
+  });
+  assert.equal(readyWait.wait.status, "ready");
+  const agentResult = await getAdaptiveHumanReviewResult({
+    principal: setup.integrationPrincipal,
+    opportunityId: setup.opportunityId,
+  });
+  assert.equal("outcome" in agentResult.result ? agentResult.result.outcome : null, "positive");
+  const stored = await dbClient.execute(
+    "SELECT choice,rationale_ciphertext,response_commitment FROM tokenless_private_review_responses ORDER BY response_id",
+  );
+  assert.equal(stored.rows.length, 2);
+  assert.ok(stored.rows.every(row => row.choice === "positive" && row.rationale_ciphertext === null));
+  assert.ok(stored.rows.every(row => /^sha256:[0-9a-f]{64}$/u.test(String(row.response_commitment))));
 });
 
 async function identity(address: string, email: string, now: Date) {
@@ -383,6 +493,7 @@ async function fixture(
   return {
     prepared,
     principal: integrated.principal,
+    integrationPrincipal: integrated,
     opportunityId,
     workspaceId,
     projectId: project.projectId,

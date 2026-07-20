@@ -7,6 +7,10 @@ import {
   assertAssuranceAssignmentSettlementAvailable,
   assertMatchingPrivateGroupSnapshot,
 } from "~~/lib/tokenless/audienceAssignments";
+import {
+  directPrivateArtifactAccess,
+  isDirectPrivateReviewAssignmentId,
+} from "~~/lib/tokenless/privateReviewResponses";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
@@ -24,8 +28,17 @@ export async function GET(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request);
     const { artifactId, assignmentId } = await context.params;
-    const result = await dbClient.execute({
-      sql: `SELECT a.workspace_id, a.project_id, a.source, a.paid_assignment,
+    const directAccess = isDirectPrivateReviewAssignmentId(assignmentId)
+      ? await directPrivateArtifactAccess({
+          accountAddress: session.principalId,
+          assignmentId,
+          artifactId,
+        })
+      : null;
+    const result = directAccess
+      ? null
+      : await dbClient.execute({
+          sql: `SELECT a.workspace_id, a.project_id, a.source, a.paid_assignment,
                    a.private_group_id, a.private_group_policy_version, a.private_group_policy_hash,
                    sp.private_group_id AS subpanel_private_group_id,
                    sp.private_group_policy_version AS subpanel_private_group_policy_version,
@@ -38,20 +51,22 @@ export async function GET(request: NextRequest, context: Context) {
               ON ap.policy_id = r.audience_policy_id AND ap.version = r.audience_policy_version
             WHERE a.assignment_id = ? AND a.reviewer_account_address = ? AND a.status = 'accepted'
               AND a.confidentiality_accepted_at IS NOT NULL AND a.assignment_expires_at > ? LIMIT 1`,
-      args: [assignmentId, session.principalId.toLowerCase(), new Date()],
-    });
-    const assignment = result.rows[0] as QueryRow | undefined;
-    const workspaceId = rowString(assignment, "workspace_id");
-    const projectId = rowString(assignment, "project_id");
+          args: [assignmentId, session.principalId.toLowerCase(), new Date()],
+        });
+    const assignment = result?.rows[0] as QueryRow | undefined;
+    const workspaceId = directAccess?.workspaceId ?? rowString(assignment, "workspace_id");
+    const projectId = directAccess?.projectId ?? rowString(assignment, "project_id");
     if (!workspaceId || !projectId) {
       throw new TokenlessServiceError("Artifact not found.", 404, "artifact_not_found");
     }
-    assertMatchingPrivateGroupSnapshot(assignment!);
-    assertAssuranceAssignmentSettlementAvailable({
-      paidAssignment: assignment?.paid_assignment === true,
-      policy: JSON.parse(String(assignment?.policy_json)) as HumanAssuranceAudiencePolicy,
-      source: rowString(assignment, "source") as "customer_invited" | "rateloop_network",
-    });
+    if (!directAccess) {
+      assertMatchingPrivateGroupSnapshot(assignment!);
+      assertAssuranceAssignmentSettlementAvailable({
+        paidAssignment: assignment?.paid_assignment === true,
+        policy: JSON.parse(String(assignment?.policy_json)) as HumanAssuranceAudiencePolicy,
+        source: rowString(assignment, "source") as "customer_invited" | "rateloop_network",
+      });
+    }
     const artifact = await readEncryptedArtifact({
       accountAddress: session.principalId,
       artifactId,

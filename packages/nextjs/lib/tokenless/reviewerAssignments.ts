@@ -1,5 +1,6 @@
 import "server-only";
 import { dbClient } from "~~/lib/db";
+import { listDirectPrivateReviewAssignments } from "~~/lib/tokenless/privateReviewResponses";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
@@ -60,7 +61,7 @@ export async function listReviewerAssignments(input: {
           ORDER BY a.created_at DESC, a.assignment_id DESC LIMIT ?`,
     args: [new Date(), principalId, principalId, state, state, query, `%${query}%`, `%${query}%`, limit],
   });
-  return result.rows.map(row => {
+  const standardAssignments = result.rows.map(row => {
     const value = row as Row;
     return {
       assignmentId: stringValue(value, "assignment_id"),
@@ -85,4 +86,8 @@ export async function listReviewerAssignments(input: {
       caseCount: Number(value.case_count ?? 0),
     };
   });
+  const directAssignments = await listDirectPrivateReviewAssignments(input);
+  return [...directAssignments, ...standardAssignments]
+    .sort((left, right) => String(right.createdAt ?? "").localeCompare(String(left.createdAt ?? "")))
+    .slice(0, limit);
 }

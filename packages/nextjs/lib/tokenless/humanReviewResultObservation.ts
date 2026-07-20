@@ -13,7 +13,7 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 type Row = Record<string, unknown>;
 type QueryableClient = Pick<PoolClient, "query">;
 
-type SelectionPolicySnapshot = {
+export type SelectionPolicySnapshot = {
   schemaVersion: "rateloop.human-review-selection-policy.v1";
   workspaceId: string;
   agentId: string;
