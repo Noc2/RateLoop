@@ -112,6 +112,8 @@ registry-level gate: an affordance renders only with its own `checkedAt` + clien
   additionally publish the org **managed-settings snippet** that pins the plugin + hooks as policy — this is the
   bridge from "advisory" to org-enforced and belongs in the Enterprise conversation, not just install docs.
 - **Codex:** current plugin path stays primary; add the config command equivalent for headless Codex use.
+  Authenticate the workspace plugin during installation, not first use, so a fresh connection task receives its
+  protected tool inventory after OAuth instead of stopping for a second user turn.
 - **VS Code / Copilot Chat:** config snippet in its `servers` shape with `oauth.clientId` guidance; an install deep
   link only after verifying redirect behavior (the review's restraint here is correct — keep it until verified).
 - **Cursor:** config snippet; deep-link install only after verification at a pinned version.

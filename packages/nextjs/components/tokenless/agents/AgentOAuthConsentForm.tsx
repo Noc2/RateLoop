@@ -113,7 +113,7 @@ export function AgentOAuthConsentForm({ autoAuthorize, values }: Props) {
         </h2>
         <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-base-content/65">
           {callbackDelivered && callbackOutcome === "approved"
-            ? "Return to the same agent task. RateLoop will show the connection after verification."
+            ? "Return to the same agent task and use Continue if the host offers it."
             : callbackDelivered
               ? "Returning to RateLoop…"
               : "Finishing the secure callback…"}

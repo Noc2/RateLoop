@@ -74,6 +74,11 @@ test("plugin hosts keep the bundled marketplace path as the primary affordance",
     assert.equal(host.installAffordances[0].kind, "plugin-marketplace");
     assert.equal(host.installAffordances[0].value, "plugin://rateloop-workspace@rateloop");
   }
+
+  const codex = tokenlessHostCapability("codex-desktop");
+  assert.equal(codex?.installAffordances[0].checkedAt, "2026-07-20");
+  assert.match(codex?.installAffordances[0].clientVersion ?? "", /^rateloop-workspace@0\.1\.1\+codex\./);
+  assert.match(codex?.notes ?? "", /authentication runs during install/i);
 });
 
 test("every cli-command targets the isolated tokenless deployment and no deep link is published", () => {
@@ -85,9 +90,6 @@ test("every cli-command targets the isolated tokenless deployment and no deep li
           affordance.value.includes("rateloop-tokenless.vercel.app"),
           `${host.id} cli-command must name the real server host`,
         );
-      }
-      if (affordance.checkedAt !== "2026-07-17") {
-        assert.fail(`${host.id} affordance checkedAt must match the compatibility-review check date`);
       }
     }
   }

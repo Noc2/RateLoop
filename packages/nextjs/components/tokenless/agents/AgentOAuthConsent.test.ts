@@ -28,7 +28,7 @@ test("loopback OAuth completion stays branded while preserving a no-JavaScript r
   assert.match(consentForm, /x-rateloop-oauth-callback-relay/);
   assert.match(consentForm, /Authorization approved/);
   assert.match(consentForm, /Authentication complete/);
-  assert.match(consentForm, /Return to the same agent task\. RateLoop will show the connection after verification\./);
+  assert.match(consentForm, /use Continue if the host offers it/);
   assert.match(consentForm, /Authorization canceled/);
   assert.doesNotMatch(consentForm, /Agent connected/);
   assert.match(consentForm, /sandbox=""/);

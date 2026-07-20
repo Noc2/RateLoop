@@ -1,6 +1,6 @@
 {
   "name": "rateloop-workspace",
-  "version": "0.1.1+codex.20260716092220",
+  "version": "0.1.1+codex.20260720135555",
   "description": "Connect Codex to one RateLoop workspace through host-native OAuth.",
   "author": {
     "name": "RateLoop",
@@ -9,7 +9,13 @@
   "homepage": "https://rateloop-tokenless.vercel.app/docs/agents",
   "repository": "https://github.com/Noc2/RateLoop",
   "license": "MIT",
-  "keywords": ["rateloop", "mcp", "agents", "oauth", "workspace"],
+  "keywords": [
+    "rateloop",
+    "mcp",
+    "agents",
+    "oauth",
+    "workspace"
+  ],
   "skills": "./skills/",
   "interface": {
     "displayName": "RateLoop Workspace",
@@ -17,7 +23,10 @@
     "longDescription": "Activates RateLoop's OAuth-protected workspace server so an agent can claim one single-use connection message, load its bound policy, and verify readiness without receiving a bearer credential in chat.",
     "developerName": "RateLoop",
     "category": "Developer Tools",
-    "capabilities": ["Interactive", "Write"],
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
     "websiteURL": "https://rateloop-tokenless.vercel.app/",
     "privacyPolicyURL": "https://rateloop-tokenless.vercel.app/legal/privacy",
     "termsOfServiceURL": "https://rateloop-tokenless.vercel.app/legal/terms",

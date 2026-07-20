@@ -20,7 +20,7 @@ const STATUS_COPY: Record<string, { label: string; action: string; showDeadline?
   },
   install_required: {
     label: "Finish setup in the agent host",
-    action: "Complete the install or trust prompt. The connection will then resume automatically.",
+    action: "Complete the install or trust prompt, then return to the same agent task.",
     showDeadline: true,
   },
   authorizing: {

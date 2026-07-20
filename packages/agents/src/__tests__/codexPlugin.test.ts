@@ -87,7 +87,7 @@ describe("RateLoop agent host assets", () => {
       expect.objectContaining({
         name: "rateloop-workspace",
         source: { source: "local", path: "./plugins/rateloop-workspace" },
-        policy: { installation: "AVAILABLE", authentication: "ON_USE" },
+        policy: { installation: "AVAILABLE", authentication: "ON_INSTALL" },
       }),
     );
     expect(publicManifest.interface.defaultPrompt).toHaveLength(2);

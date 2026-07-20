@@ -114,8 +114,8 @@ export const TOKENLESS_HOST_CAPABILITIES = [
         kind: "plugin-marketplace",
         label: "RateLoop Workspace plugin from the tokenless-pinned Noc2/RateLoop marketplace",
         value: "plugin://rateloop-workspace@rateloop",
-        checkedAt: "2026-07-17",
-        clientVersion: "rateloop-workspace@0.1.1+codex.20260716092220",
+        checkedAt: "2026-07-20",
+        clientVersion: "rateloop-workspace@0.1.1+codex.20260720135555",
       },
     ],
     humanActions: [
@@ -124,7 +124,7 @@ export const TOKENLESS_HOST_CAPABILITIES = [
       "Approve the RateLoop OAuth consent screen",
     ],
     notes:
-      "Primary path. Structured plugin setup can offer Continue for same-task resume; the first missing-tool check after install is activation pending, not a failure.",
+      "Primary path. Marketplace authentication runs during install so a fresh task normally starts with workspace tools available. Existing or revoked installs may still need the host's Continue action.",
     messageVariant: "plugin",
   },
   {

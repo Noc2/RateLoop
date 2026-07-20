@@ -31,10 +31,13 @@ new intent; the next context read returns the active version. A new intent is re
 The generated Codex message includes both the structured **RateLoop Workspace** plugin mention and an explicit
 `$rateloop-workspace-connection` skill invocation. This dedicated plugin contains only the OAuth-protected workspace MCP
 server, so the host must activate the correct connection instead of silently falling back to RateLoop's separate public
-handoff tools. The same message works for a first connection and after a previous workspace has been deleted.
+handoff tools. Its marketplace entry authenticates during installation rather than first use, so a fresh connection task
+normally starts only after OAuth is complete and can see the protected tools immediately. The same message works for a
+first connection and after a previous workspace has been deleted.
 
-OAuth approval is a one-time action for the connection attempt. Follow only the continuation, restart, or new-task action
-the host actually presents; Codex's structured plugin setup offers **Continue** when same-task resumption is available.
+OAuth approval is a one-time action for the connection attempt. Existing or revoked plugin installations can still need
+host reauthorization. Follow only the continuation, restart, or new-task action the host actually presents; Codex's
+structured plugin setup offers **Continue** when same-task resumption is available.
 Treat the first missing-tool check as activation pending, including when the task resumed after host setup. On the next
 active turn, check again and use the one-call connector when the tools appear, with claim, context, and verification as
 its granular fallback. Do not invent a reload button or settings path, start a second login or nested runtime, or report

@@ -179,16 +179,17 @@ export default function TokenlessAgentDocsPage() {
 codex plugin add rateloop@rateloop`}</CodeBlock>
       <p>
         A copied workspace connection message targets <code>rateloop-workspace@rateloop</code> directly, so Codex can
-        install the protected workspace plugin and start OAuth on use. Select <strong>Continue</strong> when Codex
-        offers it to resume that task.
+        install the protected workspace plugin and complete OAuth during installation, before the connection task
+        starts. Existing or revoked installs may still need <strong>Continue</strong> when Codex offers it.
       </p>
       <h4>Authentication finished, but still waiting?</h4>
       <p>
-        Codex&apos;s <strong>Authentication complete</strong> page confirms only the OAuth callback, not RateLoop
-        verification. Return to the same task. Treat the first missing-tool check as activation pending. If the
-        protected tools are still missing on a later active turn and Codex offers no native action, uninstall all
-        existing RateLoop plugins before resuming that task with the original message. Do not remove unrelated plugins
-        or create a replacement connection link.
+        Codex&apos;s <strong>Authentication complete</strong> page confirms the OAuth callback, not RateLoop
+        verification. Return to the same task and use <strong>Continue</strong> if it appears; a fresh install should
+        not require a typed follow-up. Treat the first missing-tool check as activation pending. If the protected tools
+        are still missing on a later active turn and Codex offers no native action, uninstall all existing RateLoop
+        plugins before resuming that task with the original message. Do not remove unrelated plugins or create a
+        replacement connection link.
       </p>
 
       <details className="not-prose mt-8 rounded-xl border border-base-content/10 bg-base-200/40 p-4">
