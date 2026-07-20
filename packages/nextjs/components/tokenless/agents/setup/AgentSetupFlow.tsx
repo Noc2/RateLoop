@@ -209,6 +209,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   const [announcement, setAnnouncement] = useState("");
   const [connectionMessage, setConnectionMessage] = useState<string | null>(null);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [issuedInvitationCapacity, setIssuedInvitationCapacity] = useState(1);
   const [finalizationPostcondition, setFinalizationPostcondition] = useState<SetupFinalizationPostcondition | null>(
     null,
   );
@@ -251,6 +252,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       : null,
   );
   const [peopleDecision, setPeopleDecision] = useState<"invited" | "later">("invited");
+  const [sharedInvitation, setSharedInvitation] = useState(false);
+  const [sharedInvitationCapacity, setSharedInvitationCapacity] = useState(2);
   const [invitationExpertiseIds, setInvitationExpertiseIds] = useState<string[]>(() =>
     (initialSetup.reviewDraft?.requestProfile.expertiseRequirements ?? [])
       .filter(requirement => requirement.sourceScope === "customer_invited")
@@ -266,6 +269,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   const focusOnNavigation = useRef(false);
   const finalizationKeyRef = useRef<string | null>(null);
   const peopleDecisionTouched = useRef(false);
+  const sharedInvitationCapacityTouched = useRef(false);
   const currentStep = setup.currentStep === "complete" ? "people" : setup.currentStep;
   const privateExpertiseRequirements = useMemo(
     () =>
@@ -289,6 +293,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     .join(" ");
   const reviewerCount = reviewTiming.panelSize || "—";
   const requiredReviewerCount = Number(setup.reviewDraft?.requestProfile.panelSize ?? 0);
+  const missingReviewerSeats = Math.max(0, requiredReviewerCount - Number(confirmedReviewerCount ?? 0));
+  const canCreateSharedInvitation = missingReviewerSeats >= 2;
   const confirmedReviewerSeatsReady =
     requiredReviewerCount > 0 && Number(confirmedReviewerCount ?? 0) >= requiredReviewerCount;
   const confirmedReviewerPoolReady =
@@ -513,8 +519,17 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   useEffect(() => {
     if (currentStep === "people" && confirmedReviewerPoolReady && !peopleDecisionTouched.current) {
       setPeopleDecision("later");
+      setSharedInvitation(false);
     }
   }, [confirmedReviewerPoolReady, currentStep]);
+
+  useEffect(() => {
+    const availableCapacity = Math.max(2, missingReviewerSeats);
+    setSharedInvitationCapacity(current =>
+      sharedInvitationCapacityTouched.current ? Math.min(current, availableCapacity) : availableCapacity,
+    );
+    if (!canCreateSharedInvitation && sharedInvitation) setSharedInvitation(false);
+  }, [canCreateSharedInvitation, missingReviewerSeats, sharedInvitation]);
 
   useEffect(() => {
     const grantAvailable = automaticGrantReady(setup.capabilities.automaticGrantOffer);
@@ -1056,9 +1071,11 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     setBusy(true);
     setError(null);
     setInviteToken(null);
+    setIssuedInvitationCapacity(1);
     try {
       const idempotencyKey = finalizationKeyRef.current ?? crypto.randomUUID();
       finalizationKeyRef.current = idempotencyKey;
+      const creatingSharedInvitation = decision === "invited" && sharedInvitation;
       const body = await readJson(
         await fetch(`/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/agent-setup/finalize`, {
           method: "POST",
@@ -1067,15 +1084,22 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             idempotencyKey,
             decision,
             createInvitation: decision === "invited",
-            intendedEmail: form.get("intendedEmail") || null,
-            expertiseDefinitionIds: decision === "invited" ? invitationExpertiseIds : [],
+            intendedEmail: creatingSharedInvitation ? null : form.get("intendedEmail") || null,
+            intendedEmailDomain: creatingSharedInvitation ? form.get("intendedEmailDomain") || null : null,
+            maximumRedemptions: creatingSharedInvitation ? Number(form.get("maximumRedemptions")) : 1,
+            expertiseDefinitionIds: decision === "invited" && !creatingSharedInvitation ? invitationExpertiseIds : [],
           }),
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
         }),
       );
       const invitation = body.invitation as Record<string, unknown> | null;
-      if (invitation && typeof invitation.token === "string") setInviteToken(invitation.token);
+      if (invitation && typeof invitation.token === "string") {
+        setInviteToken(invitation.token);
+        setIssuedInvitationCapacity(
+          typeof invitation.maximumRedemptions === "number" ? invitation.maximumRedemptions : 1,
+        );
+      }
       const postcondition = (body.postcondition ?? null) as SetupFinalizationPostcondition | null;
       setFinalizationPostcondition(postcondition);
       setSetup(current => ({
@@ -2068,24 +2092,41 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   </>
                 ) : (
                   <>
+                    <input type="hidden" name="decision" value={peopleDecision} />
                     <fieldset>
-                      <legend className="font-medium">Invite a reviewer now?</legend>
+                      <legend className="font-medium">Invite reviewers now?</legend>
                       <SetupChoiceGroup>
                         <SetupRadioChoice
                           id="agent-setup-people-invited"
-                          name="decision"
-                          value="invited"
-                          checked={peopleDecision === "invited"}
+                          name="peopleInvitationKind"
+                          value="single"
+                          checked={peopleDecision === "invited" && !sharedInvitation}
                           onChange={() => {
                             peopleDecisionTouched.current = true;
                             setPeopleDecision("invited");
+                            setSharedInvitation(false);
                           }}
-                          label="Create a one-use code"
-                          description="The code expires in seven days."
+                          label="Invite one person"
+                          description="Create a one-use code that expires in seven days."
                         />
+                        {canCreateSharedInvitation ? (
+                          <SetupRadioChoice
+                            id="agent-setup-people-shared"
+                            name="peopleInvitationKind"
+                            value="shared"
+                            checked={peopleDecision === "invited" && sharedInvitation}
+                            onChange={() => {
+                              peopleDecisionTouched.current = true;
+                              setPeopleDecision("invited");
+                              setSharedInvitation(true);
+                            }}
+                            label="Invite several people"
+                            description="Create one code for the currently missing reviewer seats."
+                          />
+                        ) : null}
                         <SetupRadioChoice
                           id="agent-setup-people-later"
-                          name="decision"
+                          name="peopleInvitationKind"
                           value="later"
                           checked={peopleDecision === "later"}
                           onChange={() => {
@@ -2103,54 +2144,107 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     </fieldset>
                     {peopleDecision === "invited" ? (
                       <div className="mt-4 space-y-4">
-                        <label className="block text-sm">
-                          Bind code to recipient email{" "}
-                          {invitationExpertiseIds.length === 0 ? (
-                            <span className="text-base-content/50">(optional)</span>
-                          ) : null}
-                          <input
-                            className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                            type="email"
-                            name="intendedEmail"
-                            maxLength={320}
-                            required={invitationExpertiseIds.length > 0}
-                          />
-                          <span className="mt-1 block text-xs text-base-content/55">
-                            RateLoop does not send this email. The recipient must use the code while signed in with that
-                            address.
-                          </span>
-                        </label>
-                        {privateExpertiseRequirements.length > 0 ? (
-                          <fieldset className="rounded-lg border border-white/10 p-4">
-                            <legend className="px-1 text-sm font-medium">Intended specialist areas</legend>
-                            <p className="mt-1 text-xs leading-5 text-base-content/55">
-                              Choose what you expect this person to cover. These remain pending until you confirm them
-                              after redemption.
-                            </p>
-                            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                              {privateExpertiseRequirements.map(requirement => (
-                                <label
-                                  key={`${requirement.definitionId}:${requirement.definitionVersion}:${requirement.definitionHash}`}
-                                  className="flex cursor-pointer items-start gap-2 rounded-lg border border-white/10 p-3 text-sm"
-                                >
-                                  <input
-                                    type="checkbox"
-                                    className="checkbox checkbox-sm mt-0.5"
-                                    checked={invitationExpertiseIds.includes(requirement.definitionId)}
-                                    onChange={event =>
-                                      setInvitationExpertiseIds(current =>
-                                        event.target.checked
-                                          ? [...current, requirement.definitionId]
-                                          : current.filter(definitionId => definitionId !== requirement.definitionId),
-                                      )
-                                    }
-                                  />
-                                  <span>{expertiseRequirementLabel(requirement, expertiseDefinitions)}</span>
-                                </label>
-                              ))}
+                        {sharedInvitation ? (
+                          <>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                              <label className="block text-sm">
+                                Number of people
+                                <input
+                                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                                  type="number"
+                                  name="maximumRedemptions"
+                                  min={2}
+                                  max={missingReviewerSeats}
+                                  value={sharedInvitationCapacity}
+                                  onChange={event => {
+                                    sharedInvitationCapacityTouched.current = true;
+                                    setSharedInvitationCapacity(Number(event.target.value));
+                                  }}
+                                  required
+                                />
+                              </label>
+                              <label className="block text-sm">
+                                Verified email domain <span className="text-base-content/50">(optional)</span>
+                                <input
+                                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                                  type="text"
+                                  name="intendedEmailDomain"
+                                  maxLength={253}
+                                  placeholder="company.com"
+                                />
+                              </label>
                             </div>
-                          </fieldset>
-                        ) : null}
+                            <div className="surface-card-nested p-4 text-sm">
+                              <p>
+                                Anyone with this code can claim one place until {sharedInvitationCapacity} people join
+                                or it expires in seven days. Restrict it to a verified company domain for sensitive
+                                work.
+                              </p>
+                              <p className="mt-2 text-base-content/60">
+                                Revoking the code stops future joins but does not remove existing members.
+                              </p>
+                              {privateExpertiseRequirements.length > 0 ? (
+                                <p className="mt-2 text-base-content/60">
+                                  This code creates reviewer memberships only. Confirm each person&apos;s specialist
+                                  knowledge after they join.
+                                </p>
+                              ) : null}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <label className="block text-sm">
+                              Bind code to recipient email{" "}
+                              {invitationExpertiseIds.length === 0 ? (
+                                <span className="text-base-content/50">(optional)</span>
+                              ) : null}
+                              <input
+                                className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                                type="email"
+                                name="intendedEmail"
+                                maxLength={320}
+                                required={invitationExpertiseIds.length > 0}
+                              />
+                              <span className="mt-1 block text-xs text-base-content/55">
+                                RateLoop does not send this email. The recipient must use the code while signed in with
+                                that address.
+                              </span>
+                            </label>
+                            {privateExpertiseRequirements.length > 0 ? (
+                              <fieldset className="rounded-lg border border-white/10 p-4">
+                                <legend className="px-1 text-sm font-medium">Intended specialist areas</legend>
+                                <p className="mt-1 text-xs leading-5 text-base-content/55">
+                                  Choose what you expect this person to cover. These remain pending until you confirm
+                                  them after redemption.
+                                </p>
+                                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                  {privateExpertiseRequirements.map(requirement => (
+                                    <label
+                                      key={`${requirement.definitionId}:${requirement.definitionVersion}:${requirement.definitionHash}`}
+                                      className="flex cursor-pointer items-start gap-2 rounded-lg border border-white/10 p-3 text-sm"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        className="checkbox checkbox-sm mt-0.5"
+                                        checked={invitationExpertiseIds.includes(requirement.definitionId)}
+                                        onChange={event =>
+                                          setInvitationExpertiseIds(current =>
+                                            event.target.checked
+                                              ? [...current, requirement.definitionId]
+                                              : current.filter(
+                                                  definitionId => definitionId !== requirement.definitionId,
+                                                ),
+                                          )
+                                        }
+                                      />
+                                      <span>{expertiseRequirementLabel(requirement, expertiseDefinitions)}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              </fieldset>
+                            ) : null}
+                          </>
+                        )}
                       </div>
                     ) : null}
                   </>
@@ -2183,6 +2277,11 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 {inviteToken ? (
                   <div className="rounded-xl border border-primary/30 bg-primary/10 p-4">
                     <p className="font-medium">Copy this invitation code now</p>
+                    <p className="mt-1 text-sm text-base-content/60">
+                      {issuedInvitationCapacity > 1
+                        ? `Up to ${issuedInvitationCapacity} people can use it before it expires.`
+                        : "It can be used once before it expires."}
+                    </p>
                     <code className="mt-2 block break-all text-sm">{inviteToken}</code>
                     <button
                       className="btn btn-sm rateloop-secondary-action mt-3"

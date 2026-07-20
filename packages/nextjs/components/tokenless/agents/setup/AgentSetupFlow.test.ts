@@ -347,18 +347,39 @@ test("people and funding are conditional on the exact review audience and compen
 
 test("invitation copy states that email binds the code but is not delivered", () => {
   assert.match(flowSource, /const \[peopleDecision, setPeopleDecision\]/);
-  assert.match(flowSource, /checked=\{peopleDecision === "invited"\}/);
+  assert.match(flowSource, /checked=\{peopleDecision === "invited" && !sharedInvitation\}/);
   assert.match(flowSource, /checked=\{peopleDecision === "later"\}/);
   assert.match(flowSource, /peopleDecision === "invited" \? \(/);
+  assert.match(flowSource, /Invite one person/);
   assert.match(flowSource, /Bind code to recipient email/);
   assert.match(flowSource, /RateLoop does not send this email/);
   assert.match(flowSource, /Copy this invitation code now/);
+  assert.match(flowSource, /issuedInvitationCapacity/);
   assert.match(flowSource, /copyInvitationCode/);
   assert.match(flowSource, /notifications\.success\("Invitation code copied to clipboard\."\)/);
   assert.match(flowSource, /Intended specialist areas/);
   assert.match(flowSource, /expertiseDefinitionIds/);
   assert.match(flowSource, /required=\{invitationExpertiseIds\.length > 0\}/);
   assert.doesNotMatch(flowSource, /defaultChecked/);
+});
+
+test("People offers a bounded shared code without recipient-specific specialist claims", () => {
+  assert.match(flowSource, /const \[sharedInvitation, setSharedInvitation\]/);
+  assert.match(flowSource, /missingReviewerSeats >= 2/);
+  assert.match(flowSource, /Invite several people/);
+  assert.match(flowSource, /name="maximumRedemptions"/);
+  assert.match(flowSource, /min=\{2\}/);
+  assert.match(flowSource, /max=\{missingReviewerSeats\}/);
+  assert.match(flowSource, /name="intendedEmailDomain"/);
+  assert.match(flowSource, /Verified email domain/);
+  assert.match(flowSource, /Anyone with this code can claim one place/);
+  assert.match(flowSource, /Revoking the code stops future joins but does not remove existing members/);
+  assert.match(flowSource, /creates reviewer memberships only/);
+  assert.match(flowSource, /const creatingSharedInvitation = decision === "invited" && sharedInvitation/);
+  assert.match(flowSource, /intendedEmail: creatingSharedInvitation \? null/);
+  assert.match(flowSource, /intendedEmailDomain: creatingSharedInvitation/);
+  assert.match(flowSource, /maximumRedemptions: creatingSharedInvitation/);
+  assert.match(flowSource, /decision === "invited" && !creatingSharedInvitation \? invitationExpertiseIds : \[\]/);
 });
 
 test("People finalizes setup once and reports operational request readiness", () => {
