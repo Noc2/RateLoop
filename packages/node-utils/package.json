@@ -40,6 +40,11 @@
       "types": "./dist/esm/aws-kms-secp256k1.d.ts",
       "import": "./dist/esm/aws-kms-secp256k1.js",
       "require": "./dist/cjs/aws-kms-secp256k1.js"
+    },
+    "./aws-kms-signing-audit": {
+      "types": "./dist/esm/aws-kms-signing-audit.d.ts",
+      "import": "./dist/esm/aws-kms-signing-audit.js",
+      "require": "./dist/cjs/aws-kms-signing-audit.js"
     }
   },
   "typesVersions": {
@@ -49,6 +54,9 @@
       ],
       "aws-kms-secp256k1": [
         "dist/esm/aws-kms-secp256k1.d.ts"
+      ],
+      "aws-kms-signing-audit": [
+        "dist/esm/aws-kms-signing-audit.d.ts"
       ],
       "*": [
         "dist/esm/index.d.ts"

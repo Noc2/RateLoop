@@ -53,6 +53,7 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
       "0100_workspace_expertise_definitions.sql",
       "0120_private_quote_ownership.sql",
       "0121_paid_assignment_operations.sql",
+      "0122_evm_kms_signing_ledger.sql",
     ].includes(file) &&
     (/\bCREATE OR REPLACE FUNCTION\b/u.test(statement) || /\bCREATE (?:CONSTRAINT )?TRIGGER\b/u.test(statement))
   ) {

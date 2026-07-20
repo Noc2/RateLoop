@@ -287,6 +287,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   const kmsRoleSessionName =
     readEnv(env, "TOKENLESS_KEEPER_KMS_ROLE_SESSION_NAME") ??
     "rateloop-tokenless-keeper";
+  const databaseUrl = readEnv(env, "DATABASE_URL");
   const kmsValues = [kmsKeyResource, kmsExpectedAddress, kmsRegion, kmsRoleArn];
   const kmsConfigured = kmsValues.some(Boolean);
   const localSignerConfigured = Boolean(privateKey || keystoreAccount);
@@ -355,6 +356,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
       errors.push(
         "TOKENLESS_KEEPER_KMS_EXPECTED_ADDRESS must be a non-zero address",
       );
+    }
+    if (!databaseUrl) {
+      errors.push(
+        "DATABASE_URL is required for the durable managed-signing ledger",
+      );
+    } else {
+      try {
+        const parsed = new URL(databaseUrl);
+        if (!["postgres:", "postgresql:"].includes(parsed.protocol))
+          throw new Error("invalid");
+      } catch {
+        errors.push(
+          "DATABASE_URL must be a PostgreSQL URL for the managed-signing ledger",
+        );
+      }
     }
   }
   if (
@@ -487,6 +503,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     metricsAuthToken,
     logFormat: readEnv(env, "LOG_FORMAT") === "text" ? "text" : "json",
     minGasBalanceWei,
+    kmsSigningDatabaseUrl: kmsConfigured ? databaseUrl! : null,
     ponderWorkFeed:
       ponderUrl && ponderKeeperWorkToken
         ? { baseUrl: ponderUrl, token: ponderKeeperWorkToken }

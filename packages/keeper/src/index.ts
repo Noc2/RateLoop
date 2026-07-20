@@ -1,6 +1,7 @@
 import { config } from "./config.js";
 import {
   chain,
+  closeKeeperSigningLedger,
   getAccount,
   getWalletClient,
   publicClient,
@@ -102,6 +103,7 @@ async function main() {
     clearInterval(interval);
     logger.info("Tokenless keeper shutting down", { signal });
     await new Promise<void>((resolve) => metricsServer.close(() => resolve()));
+    await closeKeeperSigningLedger();
   }
 
   process.once("SIGINT", () => void shutdown("SIGINT"));

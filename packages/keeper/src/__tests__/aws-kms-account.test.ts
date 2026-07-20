@@ -1,5 +1,9 @@
 import { GetPublicKeyCommand, SignCommand } from "@aws-sdk/client-kms";
 import {
+  EvmKmsSigningError,
+  type EvmKmsSigningLedgerEvent,
+} from "@rateloop/node-utils/aws-kms-signing-audit";
+import {
   type Hex,
   parseSignature,
   recoverMessageAddress,
@@ -38,7 +42,11 @@ async function derSignature(hash: Hex) {
   return Buffer.concat([Buffer.from([0x30, r.length + s.length]), r, s]);
 }
 
-function kmsClient(input?: { keyId?: string; publicKey?: Hex }) {
+function kmsClient(input?: {
+  keyId?: string;
+  publicKey?: Hex;
+  signError?: Error;
+}) {
   const calls: unknown[] = [];
   return {
     calls,
@@ -47,6 +55,7 @@ function kmsClient(input?: { keyId?: string; publicKey?: Hex }) {
         calls.push(command);
         if (command instanceof GetPublicKeyCommand) {
           return {
+            $metadata: { requestId: "aws-get-public-key-request" },
             KeyId: input?.keyId ?? KEY_ARN,
             KeySpec: "ECC_SECG_P256K1",
             KeyUsage: "SIGN_VERIFY",
@@ -61,13 +70,27 @@ function kmsClient(input?: { keyId?: string; publicKey?: Hex }) {
           };
         }
         if (command instanceof SignCommand) {
+          if (input?.signError) throw input.signError;
           return {
+            $metadata: { requestId: "aws-sign-request" },
             KeyId: KEY_ARN,
             Signature: await derSignature(toHex(command.input.Message!)),
             SigningAlgorithm: "ECDSA_SHA_256",
           };
         }
         throw new Error("unexpected command");
+      },
+    },
+  };
+}
+
+function recordingLedger() {
+  const events: EvmKmsSigningLedgerEvent[] = [];
+  return {
+    events,
+    ledger: {
+      async append(event: EvmKmsSigningLedgerEvent) {
+        events.push(event);
       },
     },
   };
@@ -87,9 +110,11 @@ function configuration() {
 describe("AWS KMS keeper account", () => {
   it("verifies the exact key and signs recoverable Ethereum messages", async () => {
     const kms = kmsClient();
+    const audit = recordingLedger();
     const account = createAwsKmsKeeperAccount({
       client: kms.client as never,
       configuration: configuration(),
+      ledger: audit.ledger,
     });
 
     const message = "RateLoop managed keeper signing";
@@ -105,13 +130,26 @@ describe("AWS KMS keeper account", () => {
     expect(
       kms.calls.filter((call) => call instanceof SignCommand),
     ).toHaveLength(1);
+    expect(audit.events.map((event) => event.outcome)).toEqual([
+      "attempted",
+      "succeeded",
+    ]);
+    expect(audit.events[1]).toMatchObject({
+      signerRole: "keeper",
+      keyArn: KEY_ARN,
+      purpose: "eip191_message",
+      awsRequestId: "aws-sign-request",
+      errorClass: null,
+    });
   });
 
   it("signs serialized transactions without exporting key material", async () => {
     const kms = kmsClient();
+    const audit = recordingLedger();
     const account = createAwsKmsKeeperAccount({
       client: kms.client as never,
       configuration: configuration(),
+      ledger: audit.ledger,
     });
     const transaction = {
       chainId: 84532,
@@ -127,6 +165,7 @@ describe("AWS KMS keeper account", () => {
     await expect(account.signTransaction(transaction)).resolves.not.toBe(
       await serializeTransaction(transaction),
     );
+    expect(audit.events[1]?.transactionHash).toMatch(/^0x[0-9a-f]{64}$/u);
   });
 
   it("refuses a different key resource or Ethereum address", async () => {
@@ -134,29 +173,76 @@ describe("AWS KMS keeper account", () => {
       keyId:
         "arn:aws:kms:eu-central-1:123456789012:key/22222222-2222-2222-2222-222222222222",
     });
+    const wrongKeyAudit = recordingLedger();
     const wrongKeyAccount = createAwsKmsKeeperAccount({
       client: wrongKey.client as never,
       configuration: configuration(),
+      ledger: wrongKeyAudit.ledger,
     });
     await expect(
       wrongKeyAccount.signMessage({ message: "must fail" }),
-    ).rejects.toThrow(/unavailable/iu);
+    ).rejects.toMatchObject({
+      errorClass: "access_or_key_configuration",
+      retryable: false,
+    });
     expect(wrongKey.calls.some((call) => call instanceof SignCommand)).toBe(
       false,
     );
 
     const other = privateKeyToAccount(`0x${"32".repeat(32)}`);
     const wrongAddress = kmsClient({ publicKey: other.publicKey });
+    const wrongAddressAudit = recordingLedger();
     const wrongAddressAccount = createAwsKmsKeeperAccount({
       client: wrongAddress.client as never,
       configuration: configuration(),
+      ledger: wrongAddressAudit.ledger,
     });
     await expect(
       wrongAddressAccount.signMessage({ message: "must fail" }),
-    ).rejects.toThrow(/unavailable/iu);
+    ).rejects.toMatchObject({
+      errorClass: "access_or_key_configuration",
+      retryable: false,
+    });
     expect(wrongAddress.calls.some((call) => call instanceof SignCommand)).toBe(
       false,
     );
+    expect(wrongAddressAudit.events[1]).toMatchObject({
+      outcome: "failed",
+      errorClass: "access_or_key_configuration",
+      retryable: false,
+    });
+  });
+
+  it("exposes retryable throttling as a typed failure and a failed ledger event", async () => {
+    const providerError = Object.assign(new Error("provider detail"), {
+      name: "ThrottlingException",
+      $metadata: { requestId: "aws-throttled-request" },
+    });
+    const kms = kmsClient({ signError: providerError });
+    const audit = recordingLedger();
+    const failures: string[] = [];
+    const account = createAwsKmsKeeperAccount({
+      client: kms.client as never,
+      configuration: configuration(),
+      ledger: audit.ledger,
+      onFailure: (errorClass) => failures.push(errorClass),
+    });
+
+    await expect(
+      account.signMessage({ message: "retry later" }),
+    ).rejects.toMatchObject({
+      name: "EvmKmsSigningError",
+      errorClass: "throttling",
+      retryable: true,
+      awsRequestId: "aws-throttled-request",
+    } satisfies Partial<EvmKmsSigningError>);
+    expect(failures).toEqual(["throttling"]);
+    expect(audit.events[1]).toMatchObject({
+      outcome: "failed",
+      awsRequestId: "aws-throttled-request",
+      errorClass: "throttling",
+      retryable: true,
+    });
   });
 
   it("rejects malformed DER signatures", () => {

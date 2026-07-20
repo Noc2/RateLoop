@@ -848,6 +848,13 @@
       "when": 1784376000000,
       "tag": "0121_paid_assignment_operations",
       "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1784379600000,
+      "tag": "0122_evm_kms_signing_ledger",
+      "breakpoints": true
     }
   ]
 }

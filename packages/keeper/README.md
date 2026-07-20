@@ -46,6 +46,15 @@ and refreshes them from the file. Static AWS access keys, raw keeper private key
 and local keystores are rejected in production. A Foundry keystore or raw key is
 available only for explicit non-production development and tests.
 
+Every managed signing attempt is written to the shared Postgres ledger before
+KMS is called, then receives an immutable success or failure event before the
+keeper continues. The events bind the keeper role, exact key ARN, digest,
+purpose, AWS request ID, error class, timestamps, and signature or transaction
+identity without storing signature bytes or secret material. `DATABASE_URL` is
+therefore required whenever the managed signer is configured. Per-class signing
+failure counters distinguish retryable timeouts, throttling, and outages from
+key/access configuration or malformed-response incidents.
+
 ## Sealed reveal payload
 
 The tlock plaintext is ABI encoded as:

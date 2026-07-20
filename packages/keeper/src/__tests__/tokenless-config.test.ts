@@ -8,8 +8,7 @@ const KEEPER = "0x0000000000000000000000000000000000000055";
 const ZERO = "0x0000000000000000000000000000000000000000";
 const KMS_KEY_ARN =
   "arn:aws:kms:eu-central-1:123456789012:key/11111111-1111-1111-1111-111111111111";
-const KMS_ROLE_ARN =
-  "arn:aws:iam::123456789012:role/rateloop-tokenless-keeper";
+const KMS_ROLE_ARN = "arn:aws:iam::123456789012:role/rateloop-tokenless-keeper";
 
 let loadConfig: typeof import("../config.js").loadConfig;
 let buildTokenlessDeploymentKey: typeof import("../config.js").buildTokenlessDeploymentKey;
@@ -47,13 +46,14 @@ function productionEnv(): NodeJS.ProcessEnv {
     TOKENLESS_DEPLOYMENT_BLOCK: "123",
     TOKENLESS_PONDER_URL: "https://tokenless-ponder.example",
     PONDER_KEEPER_WORK_TOKEN: "keeper-work-secret",
+    DATABASE_URL:
+      "postgresql://keeper:secret@postgres.internal/rateloop_tokenless",
     TOKENLESS_KEEPER_KMS_KEY_RESOURCE: KMS_KEY_ARN,
     TOKENLESS_KEEPER_KMS_EXPECTED_ADDRESS: KEEPER,
     TOKENLESS_KEEPER_KMS_REGION: "eu-central-1",
     TOKENLESS_KEEPER_KMS_ROLE_ARN: KMS_ROLE_ARN,
     AWS_ROLE_ARN: KMS_ROLE_ARN,
-    AWS_WEB_IDENTITY_TOKEN_FILE:
-      "/var/run/secrets/rateloop/aws-oidc-token",
+    AWS_WEB_IDENTITY_TOKEN_FILE: "/var/run/secrets/rateloop/aws-oidc-token",
     METRICS_BIND_ADDRESS: "0.0.0.0",
     METRICS_AUTH_TOKEN: "0123456789abcdef",
   };
@@ -88,6 +88,9 @@ describe("tokenless keeper config", () => {
     expect(config.rpcFallbackUrls).toEqual([
       "https://base-sepolia-fallback.example/",
     ]);
+    expect(config.kmsSigningDatabaseUrl).toBe(
+      "postgresql://keeper:secret@postgres.internal/rateloop_tokenless",
+    );
   });
 
   it("requires a nonzero deployment block in production", () => {
@@ -181,6 +184,11 @@ describe("tokenless keeper config", () => {
         TOKENLESS_KEEPER_KMS_KEY_RESOURCE: "alias/tokenless-keeper",
       }),
     ).toThrow(/must be an exact AWS KMS key ARN/);
+    expect(() =>
+      loadConfig({ ...productionEnv(), DATABASE_URL: undefined }),
+    ).toThrow(
+      /DATABASE_URL is required for the durable managed-signing ledger/,
+    );
   });
 
   it("binds the KMS key, role, and region to the configured keeper", () => {

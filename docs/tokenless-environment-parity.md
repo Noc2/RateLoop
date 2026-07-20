@@ -118,7 +118,8 @@ Keeper:
   `TOKENLESS_FEEDBACK_BONUS_ADDRESS`, `TOKENLESS_BEACON_VERIFIER_ADDRESS`
 - `TOKENLESS_DEPLOYMENT_KEY`, `TOKENLESS_DEPLOYMENT_BLOCK`
 - `TOKENLESS_KEEPER_KMS_KEY_RESOURCE`, `_EXPECTED_ADDRESS`, `_REGION`, and `_ROLE_ARN`, plus
-  `AWS_WEB_IDENTITY_TOKEN_FILE` and `METRICS_AUTH_TOKEN`; raw keys and keystores are local-test only
+  `AWS_WEB_IDENTITY_TOKEN_FILE`, `DATABASE_URL` for the append-only signing ledger, and `METRICS_AUTH_TOKEN`; raw keys
+  and keystores are local-test only
 - the same non-secret keeper key, address, region, and IAM-role inventory in the web release environment, where the
   release preflight rejects reuse across every EVM signer, the evidence signer, the artifact vault, and the keeper
 

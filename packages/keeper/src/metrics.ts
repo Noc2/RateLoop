@@ -1,4 +1,5 @@
 import { createServer, type Server } from "node:http";
+import type { EvmKmsSigningFailureClass } from "@rateloop/node-utils/aws-kms-signing-audit";
 import type { TokenlessKeeperResult } from "./tokenless-types.js";
 
 const counters: Record<string, number> = {
@@ -16,6 +17,11 @@ const counters: Record<string, number> = {
   keeper_claims_executed_total: 0,
   keeper_stale_returns_executed_total: 0,
   keeper_feedback_bonus_refunds_executed_total: 0,
+  keeper_kms_signing_errors_timeout_total: 0,
+  keeper_kms_signing_errors_throttling_total: 0,
+  keeper_kms_signing_errors_access_or_key_configuration_total: 0,
+  keeper_kms_signing_errors_malformed_response_or_recovery_total: 0,
+  keeper_kms_signing_errors_outage_total: 0,
 };
 
 const gauges: Record<string, number> = {
@@ -71,6 +77,10 @@ export function getConsecutiveErrors() {
 export function recordError() {
   counters.keeper_errors_total += 1;
   consecutiveErrors += 1;
+}
+
+export function recordKmsSigningFailure(errorClass: EvmKmsSigningFailureClass) {
+  incrementCounter(`keeper_kms_signing_errors_${errorClass}_total`);
 }
 
 export function recordRun(result: TokenlessKeeperResult, durationMs: number) {
