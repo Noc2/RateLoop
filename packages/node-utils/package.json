@@ -35,12 +35,20 @@
       "types": "./dist/esm/keystore.d.ts",
       "import": "./dist/esm/keystore.js",
       "require": "./dist/cjs/keystore.js"
+    },
+    "./aws-kms-secp256k1": {
+      "types": "./dist/esm/aws-kms-secp256k1.d.ts",
+      "import": "./dist/esm/aws-kms-secp256k1.js",
+      "require": "./dist/cjs/aws-kms-secp256k1.js"
     }
   },
   "typesVersions": {
     "*": {
       "keystore": [
         "dist/esm/keystore.d.ts"
+      ],
+      "aws-kms-secp256k1": [
+        "dist/esm/aws-kms-secp256k1.d.ts"
       ],
       "*": [
         "dist/esm/index.d.ts"

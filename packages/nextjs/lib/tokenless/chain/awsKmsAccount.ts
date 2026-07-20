@@ -1,15 +1,14 @@
 import { GetPublicKeyCommand, KMSClient, type KMSClientConfig, SignCommand } from "@aws-sdk/client-kms";
+import { parseAwsKmsDerSignature, parseAwsKmsSecp256k1PublicKey } from "@rateloop/node-utils/aws-kms-secp256k1";
 import { awsCredentialsProvider } from "@vercel/oidc-aws-credentials-provider";
 import "server-only";
 import {
   type Address,
   type Hash,
-  type Hex,
   type Signature,
   getAddress,
   hashMessage,
   hashTypedData,
-  hexToBigInt,
   keccak256,
   recoverAddress,
   serializeSignature,
@@ -19,8 +18,6 @@ import {
 import { type LocalAccount, publicKeyToAddress, toAccount } from "viem/accounts";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
-const CURVE_ORDER = BigInt("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141");
-const HALF_CURVE_ORDER = CURVE_ORDER / 2n;
 const KMS_TIMEOUT_MS = 8_000;
 
 type KmsClient = Pick<KMSClient, "send">;
@@ -42,55 +39,6 @@ function kmsClientConfiguration(input: AwsKmsEthereumAccountConfiguration): KMSC
     }),
     region: input.region,
   };
-}
-
-function readDerLength(bytes: Uint8Array, cursor: number) {
-  const first = bytes[cursor];
-  if (first === undefined) throw new Error("DER length is truncated.");
-  if ((first & 0x80) === 0) return { cursor: cursor + 1, length: first };
-  const octets = first & 0x7f;
-  if (octets === 0 || octets > 2 || cursor + octets >= bytes.length) throw new Error("DER length is invalid.");
-  let length = 0;
-  for (let index = 0; index < octets; index += 1) length = length * 256 + bytes[cursor + 1 + index]!;
-  return { cursor: cursor + 1 + octets, length };
-}
-
-function readDerInteger(bytes: Uint8Array, cursor: number) {
-  if (bytes[cursor] !== 0x02) throw new Error("DER signature integer is missing.");
-  const encodedLength = readDerLength(bytes, cursor + 1);
-  const end = encodedLength.cursor + encodedLength.length;
-  if (encodedLength.length === 0 || end > bytes.length) throw new Error("DER signature integer is invalid.");
-  let start = encodedLength.cursor;
-  if (bytes[start] === 0) {
-    if (encodedLength.length > 1 && (bytes[start + 1]! & 0x80) === 0) {
-      throw new Error("DER signature integer is not canonical.");
-    }
-    start += 1;
-  } else if ((bytes[start]! & 0x80) !== 0) {
-    throw new Error("DER signature integer is negative.");
-  }
-  if (end - start > 32 || start === end) throw new Error("DER signature integer is out of range.");
-  const hex = Buffer.from(bytes.slice(start, end)).toString("hex").padStart(64, "0");
-  return { cursor: end, value: BigInt(`0x${hex}`) };
-}
-
-export function parseAwsKmsDerSignature(bytes: Uint8Array) {
-  if (bytes[0] !== 0x30) throw new Error("KMS signature is not a DER sequence.");
-  const sequence = readDerLength(bytes, 1);
-  if (sequence.cursor + sequence.length !== bytes.length) throw new Error("KMS signature sequence is invalid.");
-  const r = readDerInteger(bytes, sequence.cursor);
-  const s = readDerInteger(bytes, r.cursor);
-  if (s.cursor !== bytes.length || r.value <= 0n || r.value >= CURVE_ORDER || s.value <= 0n || s.value >= CURVE_ORDER) {
-    throw new Error("KMS signature scalar is invalid.");
-  }
-  return { r: r.value, s: s.value > HALF_CURVE_ORDER ? CURVE_ORDER - s.value : s.value };
-}
-
-export function parseAwsKmsSecp256k1PublicKey(spki: Uint8Array): Hex {
-  if (spki.length < 65) throw new Error("KMS public key is truncated.");
-  const key = spki.slice(spki.length - 65);
-  if (key[0] !== 0x04) throw new Error("KMS public key is not uncompressed secp256k1.");
-  return toHex(key);
 }
 
 async function recoverSignature(input: { address: Address; hash: Hash; r: bigint; s: bigint }): Promise<Signature> {
@@ -212,4 +160,4 @@ export function loadAwsKmsEthereumAccountConfiguration(input: {
   } satisfies AwsKmsEthereumAccountConfiguration;
 }
 
-export const __awsKmsAccountTestUtils = { HALF_CURVE_ORDER, hexToBigInt };
+export { parseAwsKmsDerSignature, parseAwsKmsSecp256k1PublicKey };

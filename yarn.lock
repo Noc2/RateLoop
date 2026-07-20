@@ -4310,6 +4310,7 @@ __metadata:
     "@next/bundle-analyzer": ^16.1.6
     "@playwright/test": 1.61.1
     "@rateloop/contracts": "workspace:*"
+    "@rateloop/node-utils": "workspace:*"
     "@rateloop/sdk": "workspace:*"
     "@tailwindcss/postcss": 4.0.15
     "@tanstack/react-query": ~5.59.15
