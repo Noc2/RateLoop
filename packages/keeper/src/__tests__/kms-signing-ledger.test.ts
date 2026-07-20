@@ -51,4 +51,40 @@ describe("keeper EVM KMS signing ledger adapter", () => {
       event.recordedAt,
     ]);
   });
+
+  it("reads a terminal event for lost-write acknowledgement reconciliation", async () => {
+    const row = {
+      event_id: `kms_evt_${"1".repeat(32)}`,
+      attempt_id: `kms_att_${"2".repeat(32)}`,
+      outcome: "succeeded",
+      signer_role: "keeper",
+      key_arn:
+        "arn:aws:kms:eu-central-1:123456789012:key/11111111-1111-1111-1111-111111111111",
+      digest: `0x${"3".repeat(64)}`,
+      purpose: "evm_transaction",
+      aws_request_id: "aws-request-keeper-1",
+      error_class: null,
+      retryable: null,
+      signature_hash: `0x${"4".repeat(64)}`,
+      transaction_hash: `0x${"5".repeat(64)}`,
+      started_at: new Date("2026-07-20T11:00:00.000Z"),
+      completed_at: new Date("2026-07-20T11:00:01.000Z"),
+      recorded_at: new Date("2026-07-20T11:00:01.000Z"),
+    };
+    const query = vi.fn(async (_text: string, _values: readonly unknown[]) => ({
+      rows: [row],
+      rowCount: 1,
+    }));
+    const ledger = createKeeperEvmKmsSigningLedger({ query } as never);
+
+    await expect(ledger.readTerminal(row.attempt_id)).resolves.toMatchObject({
+      eventId: row.event_id,
+      outcome: "succeeded",
+      awsRequestId: row.aws_request_id,
+      transactionHash: row.transaction_hash,
+    });
+    expect(query.mock.calls[0]?.[0]).toContain(
+      "outcome IN ('succeeded', 'failed')",
+    );
+  });
 });

@@ -855,6 +855,13 @@
       "when": 1784379600000,
       "tag": "0122_evm_kms_signing_ledger",
       "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1784383200000,
+      "tag": "0123_evm_kms_signing_ledger_integrity",
+      "breakpoints": true
     }
   ]
 }

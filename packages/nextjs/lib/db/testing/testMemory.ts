@@ -54,11 +54,37 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
       "0120_private_quote_ownership.sql",
       "0121_paid_assignment_operations.sql",
       "0122_evm_kms_signing_ledger.sql",
+      "0123_evm_kms_signing_ledger_integrity.sql",
     ].includes(file) &&
-    (/\bCREATE OR REPLACE FUNCTION\b/u.test(statement) || /\bCREATE (?:CONSTRAINT )?TRIGGER\b/u.test(statement))
+    (/^DO \$\$/u.test(statement) ||
+      /\bCREATE OR REPLACE FUNCTION\b/u.test(statement) ||
+      /\bCREATE (?:CONSTRAINT )?TRIGGER\b/u.test(statement))
   ) {
     // pg-mem does not implement PostgreSQL trigger functions. The production
     // migration installs the append-only guard; migration source tests cover it.
+    return null;
+  }
+  if (
+    file === "0123_evm_kms_signing_ledger_integrity.sql" &&
+    /^ALTER TABLE "tokenless_evm_kms_signing_ledger"\s+ADD CONSTRAINT/u.test(statement)
+  ) {
+    // pg-mem does not parse PostgreSQL's NOT VALID modifier. The in-memory
+    // schema is empty, so installing the same CHECK immediately is equivalent.
+    return statement.replace(/\s+NOT VALID;?$/u, "");
+  }
+  if (
+    file === "0123_evm_kms_signing_ledger_integrity.sql" &&
+    /^ALTER TABLE "tokenless_evm_kms_signing_ledger"\s+VALIDATE CONSTRAINT/u.test(statement)
+  ) {
+    return null;
+  }
+  if (
+    file === "0123_evm_kms_signing_ledger_integrity.sql" &&
+    /^CREATE UNIQUE INDEX "tokenless_evm_kms_signing_ledger_terminal_unique"/u.test(statement)
+  ) {
+    // pg-mem applies this partial index to attempted rows and then returns only
+    // the terminal row for attempt-id lookups. Production retains the index;
+    // the migration source test pins its terminal-only predicate.
     return null;
   }
   if (

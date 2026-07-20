@@ -6,6 +6,7 @@ import {
   EvmKmsSigningError,
   type EvmKmsSigningLedger,
   type EvmKmsSigningPurpose,
+  appendOrReconcileEvmKmsSigningTerminalEvent,
   awsKmsRequestId,
   normalizeEvmKmsSigningError,
 } from "@rateloop/node-utils/aws-kms-signing-audit";
@@ -196,6 +197,7 @@ export function createAwsKmsEthereumAccount(input: {
       });
 
       let requestId: string | null = null;
+      let projected: Awaited<ReturnType<typeof operation.project>>;
       try {
         const signature = await withTimeout(async signal => {
           const keyResource = await verifyKey(signal);
@@ -240,7 +242,6 @@ export function createAwsKmsEthereumAccount(input: {
             });
           }
         });
-        let projected: Awaited<ReturnType<typeof operation.project>>;
         try {
           projected = await operation.project(signature);
         } catch (error) {
@@ -250,24 +251,10 @@ export function createAwsKmsEthereumAccount(input: {
             { cause: error, awsRequestId: requestId },
           );
         }
-        const completedAt = new Date();
-        await appendLedger({
-          ...baseEvent,
-          eventId: `kms_evt_${randomUUID().replaceAll("-", "")}`,
-          outcome: "succeeded",
-          awsRequestId: requestId,
-          errorClass: null,
-          retryable: null,
-          signatureHash: projected.signatureHash,
-          transactionHash: projected.transactionHash,
-          completedAt,
-          recordedAt: completedAt,
-        });
-        return projected.result;
       } catch (error) {
         const failure = normalizeEvmKmsSigningError(error, { awsRequestId: requestId });
         const completedAt = new Date();
-        await appendLedger({
+        await appendOrReconcileEvmKmsSigningTerminalEvent(ledger, {
           ...baseEvent,
           eventId: `kms_evt_${randomUUID().replaceAll("-", "")}`,
           outcome: "failed",
@@ -281,6 +268,20 @@ export function createAwsKmsEthereumAccount(input: {
         });
         throw failure;
       }
+      const completedAt = new Date();
+      await appendOrReconcileEvmKmsSigningTerminalEvent(ledger, {
+        ...baseEvent,
+        eventId: `kms_evt_${randomUUID().replaceAll("-", "")}`,
+        outcome: "succeeded",
+        awsRequestId: requestId,
+        errorClass: null,
+        retryable: null,
+        signatureHash: projected.signatureHash,
+        transactionHash: projected.transactionHash,
+        completedAt,
+        recordedAt: completedAt,
+      });
+      return projected.result;
     } catch (error) {
       throw serviceError(normalizeEvmKmsSigningError(error));
     }

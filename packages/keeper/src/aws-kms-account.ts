@@ -14,6 +14,7 @@ import {
   type EvmKmsSigningFailureClass,
   type EvmKmsSigningLedger,
   type EvmKmsSigningPurpose,
+  appendOrReconcileEvmKmsSigningTerminalEvent,
   awsKmsRequestId,
   normalizeEvmKmsSigningError,
 } from "@rateloop/node-utils/aws-kms-signing-audit";
@@ -214,6 +215,7 @@ export function createAwsKmsKeeperAccount(input: {
       });
 
       let requestId: string | null = null;
+      let projected: Awaited<ReturnType<typeof operation.project>>;
       try {
         const signature = await withTimeout(async (signal) => {
           const keyResource = await verifyKey(signal);
@@ -262,7 +264,6 @@ export function createAwsKmsKeeperAccount(input: {
             });
           }
         });
-        let projected: Awaited<ReturnType<typeof operation.project>>;
         try {
           projected = await operation.project(signature);
         } catch (error) {
@@ -272,26 +273,12 @@ export function createAwsKmsKeeperAccount(input: {
             { cause: error, awsRequestId: requestId },
           );
         }
-        const completedAt = new Date();
-        await appendLedger({
-          ...baseEvent,
-          eventId: `kms_evt_${randomUUID().replaceAll("-", "")}`,
-          outcome: "succeeded",
-          awsRequestId: requestId,
-          errorClass: null,
-          retryable: null,
-          signatureHash: projected.signatureHash,
-          transactionHash: projected.transactionHash,
-          completedAt,
-          recordedAt: completedAt,
-        });
-        return projected.result;
       } catch (error) {
         const failure = normalizeEvmKmsSigningError(error, {
           awsRequestId: requestId,
         });
         const completedAt = new Date();
-        await appendLedger({
+        await appendOrReconcileEvmKmsSigningTerminalEvent(input.ledger, {
           ...baseEvent,
           eventId: `kms_evt_${randomUUID().replaceAll("-", "")}`,
           outcome: "failed",
@@ -305,6 +292,20 @@ export function createAwsKmsKeeperAccount(input: {
         });
         throw failure;
       }
+      const completedAt = new Date();
+      await appendOrReconcileEvmKmsSigningTerminalEvent(input.ledger, {
+        ...baseEvent,
+        eventId: `kms_evt_${randomUUID().replaceAll("-", "")}`,
+        outcome: "succeeded",
+        awsRequestId: requestId,
+        errorClass: null,
+        retryable: null,
+        signatureHash: projected.signatureHash,
+        transactionHash: projected.transactionHash,
+        completedAt,
+        recordedAt: completedAt,
+      });
+      return projected.result;
     } catch (error) {
       const failure = normalizeEvmKmsSigningError(error, {
         message: "Managed keeper signer is unavailable.",

@@ -94,9 +94,8 @@ Better Auth callback and passkey origins must allow only local development and `
 add `rateloop.ai`. Managed thirdweb wallet creation is fail-closed in hosted environments.
 
 Apply every migration recorded in `packages/nextjs/drizzle/meta/_journal.json` in order before smoke testing the
-human-assurance APIs or enabling a hosted release. At this revision the journal head is
-`0121_paid_assignment_operations`; `_journal.json`, rather than a copied range in this document, remains
-authoritative.
+human-assurance APIs or enabling a hosted release. The last entry in `_journal.json` is always the authoritative head;
+do not copy a journal tag into this document because it becomes stale when the next migration lands.
 Isolated Vercel production builds apply and verify pending journal entries
 before compiling; preview and local builds never mutate a database. The app must fail closed when moderation,
 eligibility, deployment, signer, or pipeline configuration is incomplete.

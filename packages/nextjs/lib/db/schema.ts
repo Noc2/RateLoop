@@ -79,6 +79,9 @@ export const tokenlessEvmKmsSigningLedger = pgTable(
       table.startedAt,
       table.attemptId,
     ),
+    terminalUnique: uniqueIndex("tokenless_evm_kms_signing_ledger_terminal_unique")
+      .on(table.attemptId)
+      .where(sql`${table.outcome} IN ('succeeded', 'failed')`),
   }),
 );
 

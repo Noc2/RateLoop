@@ -1,6 +1,6 @@
 import { createAwsKmsEthereumAccount, parseAwsKmsDerSignature } from "./awsKmsAccount";
 import { GetPublicKeyCommand, SignCommand } from "@aws-sdk/client-kms";
-import type { EvmKmsSigningLedgerEvent } from "@rateloop/node-utils/aws-kms-signing-audit";
+import type { EvmKmsSigningLedgerEvent, EvmKmsSigningTerminalEvent } from "@rateloop/node-utils/aws-kms-signing-audit";
 import assert from "node:assert/strict";
 import { generateKeyPairSync, randomBytes, sign } from "node:crypto";
 import { test } from "node:test";
@@ -28,14 +28,14 @@ function derInteger(hex: Hex) {
   return Buffer.concat([Buffer.from([0x02, bytes.length]), bytes]);
 }
 
-async function derSignature(hash: Hex) {
-  const signature = parseSignature(await LOCAL.sign({ hash }));
+async function derSignature(hash: Hex, account = LOCAL) {
+  const signature = parseSignature(await account.sign({ hash }));
   const r = derInteger(signature.r);
   const s = derInteger(signature.s);
   return Buffer.concat([Buffer.from([0x30, r.length + s.length]), r, s]);
 }
 
-function kmsClient(publicKey = LOCAL.publicKey, signError?: Error) {
+function kmsClient(publicKey = LOCAL.publicKey, signError?: Error, signingAccount = LOCAL) {
   const calls: unknown[] = [];
   return {
     calls,
@@ -57,7 +57,7 @@ function kmsClient(publicKey = LOCAL.publicKey, signError?: Error) {
           return {
             $metadata: { requestId: "aws-sign-request" },
             KeyId: KEY_ARN,
-            Signature: await derSignature(toHex(command.input.Message!)),
+            Signature: await derSignature(toHex(command.input.Message!), signingAccount),
             SigningAlgorithm: "ECDSA_SHA_256",
           };
         }
@@ -74,6 +74,13 @@ function recordingLedger() {
     ledger: {
       async append(event: EvmKmsSigningLedgerEvent) {
         events.push(event);
+      },
+      async readTerminal(attemptId: string) {
+        return ([...events]
+          .reverse()
+          .find(
+            event => event.attemptId === attemptId && (event.outcome === "succeeded" || event.outcome === "failed"),
+          ) ?? null) as EvmKmsSigningTerminalEvent | null;
       },
     },
   };
@@ -205,6 +212,65 @@ test("AWS KMS account preserves retryable throttling class and failed request id
   );
 });
 
+test("AWS KMS account preserves the request ID when signature recovery fails", async () => {
+  const other = privateKeyToAccount(`0x${"32".repeat(32)}`);
+  const kms = kmsClient(LOCAL.publicKey, undefined, other);
+  const audit = recordingLedger();
+  const account = createAwsKmsEthereumAccount({
+    client: kms.client as never,
+    ledger: audit.ledger,
+    configuration: {
+      expectedAddress: LOCAL.address,
+      keyResource: KEY_ARN,
+      region: "eu-central-1",
+      signerRole: "credential_issuer",
+    },
+  });
+
+  await assert.rejects(
+    () => account.signMessage({ message: "wrong recovered signer" }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "managed_signer_response_invalid",
+  );
+  assert.deepEqual(
+    audit.events.map(event => [event.outcome, event.awsRequestId, event.errorClass]),
+    [
+      ["attempted", null, null],
+      ["failed", "aws-sign-request", "malformed_response_or_recovery"],
+    ],
+  );
+});
+
+test("AWS KMS account reconciles a committed success after its insert acknowledgement is lost", async () => {
+  const kms = kmsClient();
+  const events: EvmKmsSigningLedgerEvent[] = [];
+  const account = createAwsKmsEthereumAccount({
+    client: kms.client as never,
+    ledger: {
+      async append(event) {
+        events.push(event);
+        if (event.outcome === "succeeded") throw new Error("success acknowledgement lost");
+      },
+      async readTerminal(attemptId) {
+        return events.find(
+          event => event.attemptId === attemptId && event.outcome === "succeeded",
+        ) as EvmKmsSigningTerminalEvent | null;
+      },
+    },
+    configuration: {
+      expectedAddress: LOCAL.address,
+      keyResource: KEY_ARN,
+      region: "eu-central-1",
+      signerRole: "credential_issuer",
+    },
+  });
+
+  await assert.doesNotReject(() => account.signMessage({ message: "durably recorded" }));
+  assert.deepEqual(
+    events.map(event => event.outcome),
+    ["attempted", "succeeded"],
+  );
+});
+
 test("AWS KMS account never returns a signature without a durable terminal ledger event", async () => {
   const kms = kmsClient();
   let appendCount = 0;
@@ -214,6 +280,9 @@ test("AWS KMS account never returns a signature without a durable terminal ledge
       async append() {
         appendCount += 1;
         if (appendCount > 1) throw new Error("database unavailable");
+      },
+      async readTerminal() {
+        throw new Error("database unavailable");
       },
     },
     configuration: {
@@ -230,7 +299,7 @@ test("AWS KMS account never returns a signature without a durable terminal ledge
       error instanceof TokenlessServiceError && error.code === "managed_signer_outage" && error.retryable === true,
   );
   assert.equal(kms.calls.filter(call => call instanceof SignCommand).length, 1);
-  assert.equal(appendCount, 3, "success and failed terminal writes both fail closed");
+  assert.equal(appendCount, 2, "a failed success write is reconciled without appending a contradictory failure");
 });
 
 test("AWS KMS DER parser rejects malformed and out-of-range signatures", () => {

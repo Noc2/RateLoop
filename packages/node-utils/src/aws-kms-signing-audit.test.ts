@@ -57,4 +57,10 @@ test("shared KMS signing errors carry AWS request identity without exposing prov
     "malformed_response_or_recovery",
   );
   assert.equal(malformed.retryable, false);
+
+  const enriched = normalizeEvmKmsSigningError(malformed, {
+    awsRequestId: "aws-request-recovery",
+  });
+  assert.equal(enriched.errorClass, "malformed_response_or_recovery");
+  assert.equal(enriched.awsRequestId, "aws-request-recovery");
 });

@@ -40,8 +40,12 @@ export type EvmKmsSigningLedgerEvent = Readonly<{
   recordedAt: Date;
 }>;
 
+export type EvmKmsSigningTerminalEvent = EvmKmsSigningLedgerEvent &
+  Readonly<{ outcome: "succeeded" | "failed" }>;
+
 export type EvmKmsSigningLedger = Readonly<{
   append(event: EvmKmsSigningLedgerEvent): Promise<void>;
+  readTerminal(attemptId: string): Promise<EvmKmsSigningTerminalEvent | null>;
 }>;
 
 const RETRYABLE_FAILURE_CLASSES = new Set<EvmKmsSigningFailureClass>([
@@ -147,7 +151,18 @@ export function normalizeEvmKmsSigningError(
     awsRequestId?: string | null;
   },
 ) {
-  if (error instanceof EvmKmsSigningError) return error;
+  if (error instanceof EvmKmsSigningError) {
+    if (!options?.errorClass && !options?.message && !options?.awsRequestId)
+      return error;
+    return new EvmKmsSigningError(
+      options.message ?? error.message,
+      options.errorClass ?? error.errorClass,
+      {
+        cause: error,
+        awsRequestId: options.awsRequestId ?? error.awsRequestId,
+      },
+    );
+  }
   return new EvmKmsSigningError(
     options?.message ?? "Managed EVM signer is unavailable.",
     options?.errorClass ?? classifyEvmKmsSigningFailure(error),
@@ -156,4 +171,69 @@ export function normalizeEvmKmsSigningError(
       awsRequestId: options?.awsRequestId ?? awsKmsRequestId(error),
     },
   );
+}
+
+function sameDate(left: Date | null, right: Date | null) {
+  return left === null || right === null
+    ? left === right
+    : left.getTime() === right.getTime();
+}
+
+function sameTerminalEvent(
+  left: EvmKmsSigningTerminalEvent,
+  right: EvmKmsSigningTerminalEvent,
+) {
+  return (
+    left.eventId === right.eventId &&
+    left.attemptId === right.attemptId &&
+    left.outcome === right.outcome &&
+    left.signerRole === right.signerRole &&
+    left.keyArn === right.keyArn &&
+    left.digest === right.digest &&
+    left.purpose === right.purpose &&
+    left.awsRequestId === right.awsRequestId &&
+    left.errorClass === right.errorClass &&
+    left.retryable === right.retryable &&
+    left.signatureHash === right.signatureHash &&
+    left.transactionHash === right.transactionHash &&
+    sameDate(left.startedAt, right.startedAt) &&
+    sameDate(left.completedAt, right.completedAt) &&
+    sameDate(left.recordedAt, right.recordedAt)
+  );
+}
+
+export async function appendOrReconcileEvmKmsSigningTerminalEvent(
+  ledger: EvmKmsSigningLedger,
+  event: EvmKmsSigningTerminalEvent,
+) {
+  try {
+    await ledger.append(event);
+    return;
+  } catch (appendError) {
+    let recorded: EvmKmsSigningTerminalEvent | null;
+    try {
+      recorded = await ledger.readTerminal(event.attemptId);
+    } catch (readError) {
+      throw new EvmKmsSigningError(
+        "Managed EVM signing audit ledger is unavailable.",
+        "outage",
+        {
+          cause: new AggregateError(
+            [appendError, readError],
+            "Terminal ledger write and reconciliation failed.",
+          ),
+          awsRequestId: event.awsRequestId,
+        },
+      );
+    }
+    if (recorded && sameTerminalEvent(recorded, event)) return;
+    throw new EvmKmsSigningError(
+      "Managed EVM signing audit ledger is unavailable.",
+      "outage",
+      {
+        cause: appendError,
+        awsRequestId: event.awsRequestId,
+      },
+    );
+  }
 }
