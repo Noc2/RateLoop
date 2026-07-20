@@ -15,6 +15,8 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
 function docsPageHrefs(directory: string, routeSegments: string[] = []): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
     if (entry.isDirectory()) {
+      // Dynamic segments (e.g. /docs/connect/[host]) are reached from their static index page, not the nav.
+      if (entry.name.startsWith("[")) return [];
       return docsPageHrefs(join(directory, entry.name), [...routeSegments, entry.name]);
     }
     if (!entry.isFile() || entry.name !== "page.tsx") return [];
@@ -38,7 +40,10 @@ test("documentation uses the shared application sidebar instead of a second rail
     DOCS_NAV.map(group => [group.section, group.links.map(link => link.label)]),
     [
       ["Start Here", ["Introduction", "How It Works", "Use Cases"]],
-      ["Platform", ["Human Oversight", "Compliance", "Agents & MCP", "Tech Stack", "Smart Contracts"]],
+      [
+        "Platform",
+        ["Human Oversight", "Compliance", "Connect a Host", "Agents & MCP", "Tech Stack", "Smart Contracts"],
+      ],
       ["Build", ["SDK", "API Errors"]],
     ],
   );
