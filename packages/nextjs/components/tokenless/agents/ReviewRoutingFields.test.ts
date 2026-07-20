@@ -11,6 +11,10 @@ const source = readFileSync(new URL("./ReviewRoutingFields.tsx", import.meta.url
 
 test("review routing keeps selection and authority together with accessible explanations", () => {
   assert.match(source, /Review routing/);
+  assert.match(source, /export function ReviewFrequencyFields/);
+  assert.match(source, /export function ReviewAuthorityFields/);
+  assert.match(source, /<ReviewFrequencyFields/);
+  assert.match(source, /<ReviewAuthorityFields/);
   assert.match(source, /When should RateLoop require human review\?/);
   assert.match(source, /If review is required, what may the agent do\?/);
   assert.match(source, /Adaptive — Recommended/);

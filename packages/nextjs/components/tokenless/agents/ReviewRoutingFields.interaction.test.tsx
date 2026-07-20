@@ -8,7 +8,9 @@ test("manual handoff hides authority and keeps check only when automatic routing
   const restoreDom = installTestDom();
   const { cleanup, render, screen } = await import("@testing-library/react");
   const userEvent = (await import("@testing-library/user-event")).default;
-  const { ReviewRoutingFields, reviewRoutingStateForMode } = await import("./ReviewRoutingFields");
+  const { ReviewAuthorityFields, ReviewFrequencyFields, ReviewRoutingFields, reviewRoutingStateForMode } = await import(
+    "./ReviewRoutingFields"
+  );
 
   function Harness() {
     const [routing, setRouting] = useState<{
@@ -29,6 +31,23 @@ test("manual handoff hides authority and keeps check only when automatic routing
   }
 
   try {
+    const standalone = render(
+      <>
+        <ReviewFrequencyFields mode="adaptive" onModeChange={() => undefined} />
+        <ReviewAuthorityFields
+          authority="check_only"
+          automaticAvailable={false}
+          automaticUnavailableReason="Choose No bounty to enable automatic sending."
+          requiresFundingPermission
+          onAuthorityChange={() => undefined}
+        />
+      </>,
+    );
+    assert.ok(screen.getByRole("combobox", { name: "When should RateLoop require human review?" }));
+    assert.ok(screen.getByRole("group", { name: "If review is required, what may the agent do?" }));
+    assert.equal((screen.getByRole("radio", { name: "Send automatically" }) as HTMLInputElement).disabled, true);
+    standalone.unmount();
+
     render(<Harness />);
     const user = userEvent.setup();
     const frequencyName = "When should RateLoop require human review?";
