@@ -161,6 +161,11 @@ contract X402PanelSubmitterTest is Test {
         uint32 maximumCommits = 3;
         uint256 maximumSeatPay = bountyAmount / maximumCommits;
         uint256 fixedBasePay = (maximumSeatPay * 8_000) / 10_000;
+        uint64 commitDeadline = uint64(block.timestamp + 10 minutes);
+        uint64 revealDeadline = uint64(block.timestamp + 20 minutes);
+        uint64 disclosureRound = uint64((uint256(commitDeadline) - 1_689_232_296) / 3 + 2);
+        uint64 scoringRound = uint64((uint256(revealDeadline) + 24 hours - 1_689_232_296) / 3 + 2);
+        uint64 beaconFailureDeadline = uint64(1_689_232_296 + (uint256(scoringRound) - 1) * 3 + 6 hours);
         return TokenlessPanel.RoundTerms({
             contentId: keccak256("question"),
             termsHash: keccak256("terms"),
@@ -172,11 +177,11 @@ contract X402PanelSubmitterTest is Test {
             minimumReveals: 3,
             maximumCommits: maximumCommits,
             admissionPolicyHash: ADMISSION_POLICY_HASH,
-            commitDeadline: uint64(block.timestamp + 10 minutes),
-            revealDeadline: uint64(block.timestamp + 20 minutes),
-            beaconFailureDeadline: uint64(block.timestamp + 6 hours + 20 minutes + 3 seconds),
-            beaconRound: uint64((block.timestamp + 10 minutes - 1_689_232_296) / 3 + 2),
-            scoringBeaconRound: uint64((block.timestamp + 20 minutes - 1_689_232_296) / 3 + 2),
+            commitDeadline: commitDeadline,
+            revealDeadline: revealDeadline,
+            beaconFailureDeadline: beaconFailureDeadline,
+            beaconRound: disclosureRound,
+            scoringBeaconRound: scoringRound,
             claimGracePeriod: 1 days,
             feeRecipient: address(0xFEE)
         });

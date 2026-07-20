@@ -13,6 +13,31 @@ const SIGNATURE_PATTERN = /^0x[0-9a-fA-F]{130}$/;
 const MAX_UINT32 = 4_294_967_295n;
 const MAX_UINT64 = 18_446_744_073_709_551_615n;
 
+export const TOKENLESS_QUICKNET_T_CHAIN_HASH =
+  "0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5";
+export const TOKENLESS_QUICKNET_T_GENESIS_SECONDS = 1_689_232_296n;
+export const TOKENLESS_QUICKNET_T_PERIOD_SECONDS = 3n;
+export const TOKENLESS_SCORING_BEACON_SAFETY_MARGIN_SECONDS = 24n * 60n * 60n;
+export const TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS = 6n * 60n * 60n;
+
+export function tokenlessFirstQuicknetRoundAfter(timestamp: bigint): bigint {
+  if (timestamp < TOKENLESS_QUICKNET_T_GENESIS_SECONDS) return 1n;
+  return (
+    (timestamp - TOKENLESS_QUICKNET_T_GENESIS_SECONDS) /
+      TOKENLESS_QUICKNET_T_PERIOD_SECONDS +
+    2n
+  );
+}
+
+export function tokenlessQuicknetTimestamp(round: bigint): bigint {
+  if (round < 1n || round > MAX_UINT64)
+    fail("quicknet-t round must be a valid uint64.");
+  return (
+    TOKENLESS_QUICKNET_T_GENESIS_SECONDS +
+    (round - 1n) * TOKENLESS_QUICKNET_T_PERIOD_SECONDS
+  );
+}
+
 export const TOKENLESS_X402_DOMAIN = {
   name: "RateLoop X402 Panel Submitter",
   version: "1",
@@ -235,15 +260,63 @@ function assertInstructions(
   ) {
     fail("roundTerms.maximumCommits must be a valid uint32.");
   }
-  for (const [name, value] of [
-    ["commitDeadline", terms.commitDeadline],
-    ["revealDeadline", terms.revealDeadline],
-    ["beaconFailureDeadline", terms.beaconFailureDeadline],
-    ["beaconRound", terms.beaconRound],
-    ["scoringBeaconRound", terms.scoringBeaconRound],
-    ["claimGracePeriod", terms.claimGracePeriod],
-  ] as const)
-    amount(value, `roundTerms.${name}`, MAX_UINT64);
+  const commitDeadline = amount(
+    terms.commitDeadline,
+    "roundTerms.commitDeadline",
+    MAX_UINT64,
+  );
+  const revealDeadline = amount(
+    terms.revealDeadline,
+    "roundTerms.revealDeadline",
+    MAX_UINT64,
+  );
+  const beaconFailureDeadline = amount(
+    terms.beaconFailureDeadline,
+    "roundTerms.beaconFailureDeadline",
+    MAX_UINT64,
+  );
+  const beaconRound = amount(
+    terms.beaconRound,
+    "roundTerms.beaconRound",
+    MAX_UINT64,
+  );
+  const scoringBeaconRound = amount(
+    terms.scoringBeaconRound,
+    "roundTerms.scoringBeaconRound",
+    MAX_UINT64,
+  );
+  amount(terms.claimGracePeriod, "roundTerms.claimGracePeriod", MAX_UINT64);
+  if (
+    terms.beaconNetworkHash.toLowerCase() !== TOKENLESS_QUICKNET_T_CHAIN_HASH
+  ) {
+    fail("roundTerms.beaconNetworkHash must pin drand quicknet-t.");
+  }
+  const expectedDisclosureRound =
+    tokenlessFirstQuicknetRoundAfter(commitDeadline);
+  const protectedScoringCutoff =
+    revealDeadline + TOKENLESS_SCORING_BEACON_SAFETY_MARGIN_SECONDS;
+  const expectedScoringRound = tokenlessFirstQuicknetRoundAfter(
+    protectedScoringCutoff,
+  );
+  const scoringTimestamp = tokenlessQuicknetTimestamp(expectedScoringRound);
+  if (beaconRound !== expectedDisclosureRound) {
+    fail(
+      "roundTerms.beaconRound is not the first quicknet-t round after the commit deadline.",
+    );
+  }
+  if (scoringBeaconRound !== expectedScoringRound) {
+    fail(
+      "roundTerms.scoringBeaconRound is not the first protected quicknet-t round after reveal closure.",
+    );
+  }
+  if (
+    beaconFailureDeadline <
+    scoringTimestamp + TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS
+  ) {
+    fail(
+      "roundTerms.beaconFailureDeadline is shorter than the immutable scoring-beacon grace.",
+    );
+  }
   const spec = instructions.authorizationSpec;
   if (!spec)
     fail("authorizationSpec is required for x402 payment instructions.");

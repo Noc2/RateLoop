@@ -69,6 +69,11 @@ contract TokenlessPanelInvariantHandler is Test {
     function createRound(uint256 variantSeed) external {
         if (_roundIds.length >= MAX_TRACKED_ROUNDS) return;
         uint8 variant = uint8(variantSeed % 4);
+        uint64 commitDeadline = uint64(block.timestamp + 10 minutes);
+        uint64 revealDeadline = uint64(block.timestamp + 20 minutes);
+        uint64 disclosureRound = uint64((uint256(commitDeadline) - 1_689_232_296) / 3 + 2);
+        uint64 scoringRound = uint64((uint256(revealDeadline) + 24 hours - 1_689_232_296) / 3 + 2);
+        uint64 beaconFailureDeadline = uint64(1_689_232_296 + (uint256(scoringRound) - 1) * 3 + 6 hours);
         TokenlessPanel.RoundTerms memory terms = TokenlessPanel.RoundTerms({
             contentId: keccak256(abi.encode("content", _roundIds.length, block.timestamp)),
             termsHash: keccak256(abi.encode("terms", variant, _roundIds.length, block.timestamp)),
@@ -80,11 +85,11 @@ contract TokenlessPanelInvariantHandler is Test {
             minimumReveals: 3,
             maximumCommits: 3,
             admissionPolicyHash: ADMISSION_POLICY_HASH,
-            commitDeadline: uint64(block.timestamp + 10 minutes),
-            revealDeadline: uint64(block.timestamp + 20 minutes),
-            beaconFailureDeadline: uint64(block.timestamp + 6 hours + 20 minutes + 3 seconds),
-            beaconRound: uint64((block.timestamp + 10 minutes - 1_689_232_296) / 3 + 2),
-            scoringBeaconRound: uint64((block.timestamp + 20 minutes - 1_689_232_296) / 3 + 2),
+            commitDeadline: commitDeadline,
+            revealDeadline: revealDeadline,
+            beaconFailureDeadline: beaconFailureDeadline,
+            beaconRound: disclosureRound,
+            scoringBeaconRound: scoringRound,
             claimGracePeriod: 1 hours,
             feeRecipient: address(this)
         });
@@ -170,6 +175,8 @@ contract TokenlessPanelInvariantHandler is Test {
 
         if (round.state == TokenlessPanel.RoundState.AwaitingSeed) {
             if (block.timestamp <= round.beaconFailureDeadline) {
+                uint256 scoringTimestamp = 1_689_232_296 + (uint256(round.scoringBeaconRound) - 1) * 3;
+                _warpForward(scoringTimestamp);
                 bytes32 randomness = keccak256(abi.encode("invariant-beacon-entropy", roundId));
                 bytes memory proof = abi.encodePacked(
                     beaconVerifier.proofFor(round.beaconNetworkHash, round.scoringBeaconRound, randomness)

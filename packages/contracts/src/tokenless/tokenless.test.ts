@@ -167,6 +167,7 @@ test("panel ABI exposes deterministic RBTS lifecycle evidence and no mutable adm
     "claim",
     "claimCompensation",
     "returnStaleShares",
+    "SCORING_BEACON_SAFETY_MARGIN",
   ]) {
     assert.ok(functions.has(functionName), `missing ${functionName}`);
   }

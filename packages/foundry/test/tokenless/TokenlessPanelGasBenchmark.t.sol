@@ -56,8 +56,9 @@ contract TokenlessPanelGasBenchmarkTest is Test {
     }
 
     function setUp() public {
-        // Round 12,345,678 is the first quicknet-t round strictly after this test's reveal deadline.
-        vm.warp(1_726_268_126);
+        // Round 12,345,678 is the first quicknet-t round strictly after the reveal
+        // deadline plus the pinned 24-hour sequencer safety margin.
+        vm.warp(1_726_268_126 - 24 hours);
         usdc = new MockERC20("USD Coin", "USDC", 6);
         issuer = new CredentialIssuer(makeAddr("gas-benchmark-rotation-authority"), vm.addr(ISSUER_PK), 1 days);
         beaconVerifier = new QuicknetTBeaconVerifier();
@@ -96,6 +97,7 @@ contract TokenlessPanelGasBenchmarkTest is Test {
             totalBudgetedGas += pageGas + TRANSACTION_ENVELOPE_GAS;
         }
 
+        vm.warp(1_689_232_296 + (uint256(panel.getRound(roundId).scoringBeaconRound) - 1) * 3);
         uint256 seedGas = _measureFinalizeSeed(roundId);
         _assertTransactionCeiling("finalizeScoringSeed", seedGas, FINALIZE_SEED_GAS_CEILING);
         totalBudgetedGas += seedGas + TRANSACTION_ENVELOPE_GAS;
@@ -136,6 +138,11 @@ contract TokenlessPanelGasBenchmarkTest is Test {
     }
 
     function _terms() internal view returns (TokenlessPanel.RoundTerms memory) {
+        uint64 commitDeadline = uint64(block.timestamp + 10 minutes);
+        uint64 revealDeadline = uint64(block.timestamp + 20 minutes);
+        uint64 disclosureRound = uint64((uint256(commitDeadline) - 1_689_232_296) / 3 + 2);
+        uint64 scoringRound = uint64((uint256(revealDeadline) + 24 hours - 1_689_232_296) / 3 + 2);
+        uint64 beaconFailureDeadline = uint64(1_689_232_296 + (uint256(scoringRound) - 1) * 3 + 6 hours);
         return TokenlessPanel.RoundTerms({
             contentId: CONTENT_ID,
             termsHash: TERMS_HASH,
@@ -147,11 +154,11 @@ contract TokenlessPanelGasBenchmarkTest is Test {
             minimumReveals: MAXIMUM_SEATS,
             maximumCommits: MAXIMUM_SEATS,
             admissionPolicyHash: ADMISSION_POLICY_HASH,
-            commitDeadline: uint64(block.timestamp + 10 minutes),
-            revealDeadline: uint64(block.timestamp + 20 minutes),
-            beaconFailureDeadline: uint64(block.timestamp + 6 hours + 20 minutes + 3 seconds),
-            beaconRound: uint64((block.timestamp + 10 minutes - 1_689_232_296) / 3 + 2),
-            scoringBeaconRound: uint64((block.timestamp + 20 minutes - 1_689_232_296) / 3 + 2),
+            commitDeadline: commitDeadline,
+            revealDeadline: revealDeadline,
+            beaconFailureDeadline: beaconFailureDeadline,
+            beaconRound: disclosureRound,
+            scoringBeaconRound: scoringRound,
             claimGracePeriod: 1 days,
             feeRecipient: feeRecipient
         });

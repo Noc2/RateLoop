@@ -70,6 +70,7 @@ function runtime(balance = 100_000_000n): TokenlessChainRuntime {
       if (address === PANEL && functionName === "QUICKNET_T_GENESIS") return 1_689_232_296;
       if (address === PANEL && functionName === "QUICKNET_T_PERIOD") return 3;
       if (address === PANEL && functionName === "MIN_BEACON_GRACE") return 21_600;
+      if (address === PANEL && functionName === "SCORING_BEACON_SAFETY_MARGIN") return 86_400;
       if (address === PANEL && functionName === "BASE_PAY_BPS") return 8_000;
       if (address === PANEL && functionName === "MAXIMUM_COMMITS") return 500;
       if (address === ADAPTER && functionName === "panel") return PANEL;

@@ -6,9 +6,15 @@ import type {
   TokenlessRateLoopClient,
 } from "@rateloop/sdk";
 import {
+  TOKENLESS_QUICKNET_T_CHAIN_HASH,
+  TOKENLESS_QUICKNET_T_GENESIS_SECONDS,
+  TOKENLESS_QUICKNET_T_PERIOD_SECONDS,
+  TOKENLESS_SCORING_BEACON_SAFETY_MARGIN_SECONDS,
   buildTokenlessQuoteIntent,
   buildTokenlessX402Authorization,
   serializeTokenlessX402Authorization,
+  tokenlessFirstQuicknetRoundAfter,
+  tokenlessQuicknetTimestamp,
 } from "@rateloop/sdk";
 import type { PrivateKeyAccount } from "viem/accounts";
 import type { Hex } from "viem";
@@ -29,6 +35,8 @@ export type TokenlessAutonomousRoundPolicy = {
   beaconNetworkHash: `0x${string}`;
   beaconGenesisSeconds: number;
   beaconPeriodSeconds: number;
+  /** Must equal the immutable 24-hour OP Stack sequencing-window safety margin. */
+  scoringBeaconSafetyMarginSeconds: number;
   revealWindowSeconds: number;
   beaconFailureGraceSeconds: number;
   claimGracePeriodSeconds: number;
@@ -83,10 +91,6 @@ function exactHex(left: string, right: string) {
   return left.toLowerCase() === right.toLowerCase();
 }
 
-const QUICKNET_T_NETWORK_HASH =
-  "0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5";
-const QUICKNET_T_GENESIS_SECONDS = 1_689_232_296n;
-const QUICKNET_T_PERIOD_SECONDS = 3n;
 export const TOKENLESS_MINIMUM_REVEAL_WINDOW_SECONDS = 300;
 
 function assertSignedRoundMatchesIntent(input: {
@@ -156,7 +160,7 @@ function assertSignedRoundMatchesIntent(input: {
 
   if (
     !/^0x[0-9a-fA-F]{64}$/.test(policy.beaconNetworkHash) ||
-    policy.beaconNetworkHash.toLowerCase() !== QUICKNET_T_NETWORK_HASH
+    policy.beaconNetworkHash.toLowerCase() !== TOKENLESS_QUICKNET_T_CHAIN_HASH
   ) {
     throw new Error("roundPolicy.beaconNetworkHash must pin drand quicknet-t.");
   }
@@ -206,12 +210,19 @@ function assertSignedRoundMatchesIntent(input: {
     1,
     3_600,
   );
+  const scoringBeaconSafetyMargin = policyInteger(
+    policy.scoringBeaconSafetyMarginSeconds,
+    "roundPolicy.scoringBeaconSafetyMarginSeconds",
+    1,
+    7 * 86_400,
+  );
   if (
-    beaconGenesis !== QUICKNET_T_GENESIS_SECONDS ||
-    beaconPeriod !== QUICKNET_T_PERIOD_SECONDS
+    beaconGenesis !== TOKENLESS_QUICKNET_T_GENESIS_SECONDS ||
+    beaconPeriod !== TOKENLESS_QUICKNET_T_PERIOD_SECONDS ||
+    scoringBeaconSafetyMargin !== TOKENLESS_SCORING_BEACON_SAFETY_MARGIN_SECONDS
   ) {
     throw new Error(
-      "roundPolicy must pin the quicknet-t genesis and three-second period.",
+      "roundPolicy must pin the quicknet-t schedule and 24-hour scoring safety margin.",
     );
   }
   const skew = policyInteger(
@@ -252,8 +263,7 @@ function assertSignedRoundMatchesIntent(input: {
       "The payment instructions changed the approved reveal window.",
     );
   }
-  const scoringBeaconTimestamp =
-    beaconGenesis + (scoringBeaconRound - 1n) * beaconPeriod;
+  const scoringBeaconTimestamp = tokenlessQuicknetTimestamp(scoringBeaconRound);
   if (beaconFailureDeadline - scoringBeaconTimestamp !== beaconGrace) {
     throw new Error(
       "The payment instructions changed the approved beacon-failure grace period.",
@@ -269,8 +279,7 @@ function assertSignedRoundMatchesIntent(input: {
   }
   if (commitDeadline < beaconGenesis)
     throw new Error("The payment instructions use an invalid beacon deadline.");
-  const expectedBeaconRound =
-    (commitDeadline - beaconGenesis) / beaconPeriod + 2n;
+  const expectedBeaconRound = tokenlessFirstQuicknetRoundAfter(commitDeadline);
   if (
     atomicAmount(terms.beaconRound, "roundTerms.beaconRound") !==
     expectedBeaconRound
@@ -279,8 +288,9 @@ function assertSignedRoundMatchesIntent(input: {
       "The payment instructions changed the deterministic beacon round.",
     );
   }
-  const expectedScoringBeaconRound =
-    (revealDeadline - beaconGenesis) / beaconPeriod + 2n;
+  const expectedScoringBeaconRound = tokenlessFirstQuicknetRoundAfter(
+    revealDeadline + scoringBeaconSafetyMargin,
+  );
   if (scoringBeaconRound !== expectedScoringBeaconRound) {
     throw new Error(
       "The payment instructions changed the deterministic scoring beacon round.",

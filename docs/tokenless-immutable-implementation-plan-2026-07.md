@@ -243,8 +243,14 @@ The disclosed beacon-failure grace is at least six hours. Verified-beacon scorin
 `beaconFailureDeadline`; the base-only beacon-unavailable fallback becomes available strictly after that deadline, so
 the two scoring-finalization paths are never live at the same timestamp. Immutable round terms pin quicknet-t and
 freeze two distinct rounds: the tlock disclosure round is the first round strictly after `commitDeadline`, while the
-scoring-entropy round is the first round strictly after `revealDeadline`. Only the latter may feed the beacon verifier
-or scoring seed, and the failure deadline is measured from its timestamp.
+scoring-entropy round is the first round strictly after the protected cutoff `revealDeadline + 24 hours`. The contract
+derives both exact rounds arithmetically, rejects alternate/equal/reversed schedules, and accepts scoring proofs only at
+or after the scoring-round timestamp. Only the scoring round may feed the beacon verifier or scoring seed, and the
+failure deadline is measured from its timestamp. The 24-hour margin is twice the nominal 12-hour OP Stack sequencing
+window (3,600 L1 blocks at 12-second Ethereum slots), so the post-closure guarantee explicitly assumes at least 3,600
+canonical L1 blocks are produced during the margin. This condition is monitored readiness evidence, not an
+unconditional wall-clock claim; an L1 liveness failure beyond it weakens entropy timing without removing the paid
+fallback path.
 
 Workspace subscriptions are conventional B2B billing and remain separate from panel economics. They are disabled
 unless the complete Stripe configuration and readiness checks are present. Panel quotes and receipts continue to

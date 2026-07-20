@@ -33,6 +33,12 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
     uint64 public constant MAX_REVEAL_HORIZON = 90 days;
     uint64 public constant MAX_BEACON_FAILURE_HORIZON = 120 days;
 
+    // OP Stack sequencer batches have a 3,600-L1-block sequencing window. At Ethereum's
+    // 12-second slots that is nominally 12 hours; use twice that duration before selecting
+    // scoring entropy. The post-closure property therefore assumes Ethereum produces at
+    // least 3,600 canonical L1 blocks during this pinned 24-hour margin.
+    uint64 public constant SCORING_BEACON_SAFETY_MARGIN = 24 hours;
+
     // The immutable deployment accepts only drand quicknet-t. Pinning the schedule makes
     // both disclosure and scoring timing independently checkable from the signed terms.
     bytes32 public constant QUICKNET_T_NETWORK_HASH =
@@ -498,7 +504,10 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
     function finalizeScoringSeed(uint256 roundId, bytes32 randomness, bytes calldata proof) external {
         Round storage round = _rounds[roundId];
         if (round.state != RoundState.AwaitingSeed) revert InvalidState();
-        if (block.timestamp > round.beaconFailureDeadline) revert InvalidDeadline();
+        if (
+            block.timestamp < _quicknetTimestamp(round.scoringBeaconRound)
+                || block.timestamp > round.beaconFailureDeadline
+        ) revert InvalidDeadline();
         if (randomness == bytes32(0)) revert InvalidBeaconProof();
 
         bool verified;
@@ -856,12 +865,15 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
             fixedBasePay == 0 || maximumBonus == 0 || terms.attemptCompensation != fixedBasePay
                 || terms.attemptReserve < fixedBasePay * terms.maximumCommits
         ) revert InvalidTerms();
-        uint256 disclosureBeaconTimestamp = _quicknetTimestamp(terms.beaconRound);
-        uint256 scoringBeaconTimestamp = _quicknetTimestamp(terms.scoringBeaconRound);
+        uint64 expectedDisclosureBeaconRound = _firstQuicknetRoundAfter(terms.commitDeadline);
+        uint256 protectedScoringCutoff = uint256(terms.revealDeadline) + SCORING_BEACON_SAFETY_MARGIN;
+        uint64 expectedScoringBeaconRound = _firstQuicknetRoundAfter(protectedScoringCutoff);
+        uint256 scoringBeaconTimestamp = _quicknetTimestamp(expectedScoringBeaconRound);
         if (
             uint256(terms.commitDeadline) < block.timestamp + MIN_COMMIT_WINDOW
                 || uint256(terms.revealDeadline) < uint256(terms.commitDeadline) + MIN_REVEAL_WINDOW
-                || disclosureBeaconTimestamp <= terms.commitDeadline || scoringBeaconTimestamp <= terms.revealDeadline
+                || terms.beaconRound != expectedDisclosureBeaconRound
+                || terms.scoringBeaconRound != expectedScoringBeaconRound
                 || uint256(terms.beaconFailureDeadline) < scoringBeaconTimestamp + MIN_BEACON_GRACE
                 || terms.claimGracePeriod == 0 || terms.claimGracePeriod > MAX_CLAIM_GRACE_PERIOD
         ) revert InvalidDeadline();
@@ -875,5 +887,10 @@ contract TokenlessPanel is EIP712, ReentrancyGuard {
 
     function _quicknetTimestamp(uint64 beaconRound_) private pure returns (uint256) {
         return uint256(QUICKNET_T_GENESIS) + (uint256(beaconRound_) - 1) * QUICKNET_T_PERIOD;
+    }
+
+    function _firstQuicknetRoundAfter(uint256 timestamp) private pure returns (uint64) {
+        if (timestamp < QUICKNET_T_GENESIS) return 1;
+        return uint64((timestamp - QUICKNET_T_GENESIS) / QUICKNET_T_PERIOD + 2);
     }
 }

@@ -7,6 +7,11 @@ import {
   buildTokenlessX402Authorization,
   hashTokenlessRoundTerms,
   serializeTokenlessX402Authorization,
+  TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS,
+  TOKENLESS_QUICKNET_T_CHAIN_HASH,
+  TOKENLESS_SCORING_BEACON_SAFETY_MARGIN_SECONDS,
+  tokenlessFirstQuicknetRoundAfter,
+  tokenlessQuicknetTimestamp,
   validateTokenlessPaymentInstructions,
 } from "./tokenlessPayment";
 import type { TokenlessPaymentInstructions } from "./tokenlessTypes";
@@ -21,6 +26,15 @@ const addresses = {
 function instructions(
   overrides: Partial<TokenlessPaymentInstructions> = {},
 ): TokenlessPaymentInstructions {
+  const commitDeadline = 2_000_000_000n;
+  const revealDeadline = commitDeadline + 300n;
+  const beaconRound = tokenlessFirstQuicknetRoundAfter(commitDeadline);
+  const scoringBeaconRound = tokenlessFirstQuicknetRoundAfter(
+    revealDeadline + TOKENLESS_SCORING_BEACON_SAFETY_MARGIN_SECONDS,
+  );
+  const beaconFailureDeadline =
+    tokenlessQuicknetTimestamp(scoringBeaconRound) +
+    TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS;
   return {
     operationKey: "op_payment",
     paymentMode: "x402",
@@ -32,7 +46,7 @@ function instructions(
     roundTerms: {
       contentId: `0x${"11".repeat(32)}`,
       termsHash: `0x${"22".repeat(32)}`,
-      beaconNetworkHash: `0x${"33".repeat(32)}`,
+      beaconNetworkHash: TOKENLESS_QUICKNET_T_CHAIN_HASH,
       bountyAmount: "25000000",
       feeAmount: "1875000",
       attemptReserve: "5000000",
@@ -40,11 +54,11 @@ function instructions(
       minimumReveals: 12,
       maximumCommits: 15,
       admissionPolicyHash: `0x${"44".repeat(32)}`,
-      commitDeadline: "2000000000",
-      revealDeadline: "2000000120",
-      beaconFailureDeadline: "2000000420",
-      beaconRound: "1000",
-      scoringBeaconRound: "1040",
+      commitDeadline: commitDeadline.toString(),
+      revealDeadline: revealDeadline.toString(),
+      beaconFailureDeadline: beaconFailureDeadline.toString(),
+      beaconRound: beaconRound.toString(),
+      scoringBeaconRound: scoringBeaconRound.toString(),
       claimGracePeriod: "604800",
       feeRecipient: "0x5555555555555555555555555555555555555555",
     },
@@ -80,7 +94,13 @@ test("reconstructs the Solidity RoundTerms and two x402 typed-data envelopes", (
   assert.equal(roundTerms.message.bountyAmount, 25_000_000n);
   assert.equal(roundTerms.message.minimumReveals, 12);
   assert.equal(roundTerms.message.commitDeadline, 2_000_000_000n);
-  assert.equal(roundTerms.message.scoringBeaconRound, 1_040n);
+  assert.equal(
+    roundTerms.message.scoringBeaconRound,
+    tokenlessFirstQuicknetRoundAfter(
+      roundTerms.message.revealDeadline +
+        TOKENLESS_SCORING_BEACON_SAFETY_MARGIN_SECONDS,
+    ),
+  );
 
   const eip3009 = buildTokenlessEip3009TypedData(payment);
   assert.equal(eip3009.domain.verifyingContract, addresses.usdcAddress);
@@ -106,16 +126,52 @@ test("reconstructs the Solidity RoundTerms and two x402 typed-data envelopes", (
     built.roundTermsDigest,
     roundAuthorization.message.roundTermsDigest,
   );
-  assert.notEqual(
-    hashTokenlessRoundTerms({
-      ...payment,
-      roundTerms: {
-        ...payment.roundTerms,
-        scoringBeaconRound: payment.roundTerms.beaconRound,
-      },
-    }),
-    built.roundTermsDigest,
+  assert.throws(
+    () =>
+      hashTokenlessRoundTerms({
+        ...payment,
+        roundTerms: {
+          ...payment.roundTerms,
+          scoringBeaconRound: payment.roundTerms.beaconRound,
+        },
+      }),
+    /first protected quicknet-t round/,
   );
+});
+
+test("rejects delayed, reversed, and under-protected beacon schedules before signing", () => {
+  const payment = instructions({ authorizationSpec });
+  for (const roundTerms of [
+    {
+      ...payment.roundTerms,
+      beaconRound: (BigInt(payment.roundTerms.beaconRound) + 1n).toString(),
+    },
+    {
+      ...payment.roundTerms,
+      beaconRound: payment.roundTerms.scoringBeaconRound,
+    },
+    {
+      ...payment.roundTerms,
+      scoringBeaconRound: (
+        BigInt(payment.roundTerms.scoringBeaconRound) + 1n
+      ).toString(),
+    },
+    {
+      ...payment.roundTerms,
+      beaconFailureDeadline: (
+        tokenlessQuicknetTimestamp(
+          BigInt(payment.roundTerms.scoringBeaconRound),
+        ) +
+        TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS -
+        1n
+      ).toString(),
+    },
+  ]) {
+    assert.throws(
+      () => validateTokenlessPaymentInstructions({ ...payment, roundTerms }),
+      /[Bb]eaconRound|beaconFailureDeadline/,
+    );
+  }
 });
 
 test("fails closed on stale deployment facts and mismatched payment totals", () => {

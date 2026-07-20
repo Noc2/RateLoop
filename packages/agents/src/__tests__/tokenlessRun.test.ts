@@ -137,6 +137,7 @@ const roundPolicy = {
     "0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5" as const,
   beaconGenesisSeconds: 1_689_232_296,
   beaconPeriodSeconds: 3,
+  scoringBeaconSafetyMarginSeconds: 86_400,
   revealWindowSeconds: 300,
   beaconFailureGraceSeconds: 21_600,
   claimGracePeriodSeconds: 604_800,
@@ -149,9 +150,11 @@ function paymentInstructions(
   const now = Math.floor(Date.now() / 1_000);
   const commitDeadline = now + quoteRequest.responseWindowSeconds;
   const revealDeadline = commitDeadline + roundPolicy.revealWindowSeconds;
+  const protectedScoringCutoff =
+    revealDeadline + roundPolicy.scoringBeaconSafetyMarginSeconds;
   const scoringBeaconRound =
     Math.floor(
-      (revealDeadline - roundPolicy.beaconGenesisSeconds) /
+      (protectedScoringCutoff - roundPolicy.beaconGenesisSeconds) /
         roundPolicy.beaconPeriodSeconds,
     ) + 2;
   const scoringBeaconTimestamp =
@@ -343,7 +346,8 @@ describe("autonomous x402 custody guard", () => {
     const baseline = paymentInstructions();
     const commitDeadline = BigInt(baseline.roundTerms.commitDeadline) + 1_800n;
     const revealDeadline = commitDeadline + 300n;
-    const scoringBeaconRound = (revealDeadline - 1_689_232_296n) / 3n + 2n;
+    const scoringBeaconRound =
+      (revealDeadline + 86_400n - 1_689_232_296n) / 3n + 2n;
     const scoringBeaconTimestamp =
       1_689_232_296n + (scoringBeaconRound - 1n) * 3n;
     const h = harness(
@@ -376,6 +380,21 @@ describe("autonomous x402 custody guard", () => {
     ).rejects.toThrow(
       /roundPolicy\.beaconFailureGraceSeconds must be an integer from 21600 to 86400/,
     );
+    expect(h.mocks.signTypedData).not.toHaveBeenCalled();
+    expect(h.mocks.submitPayment).not.toHaveBeenCalled();
+  });
+
+  it("refuses a local scoring margin that does not match the immutable contract", async () => {
+    const h = harness();
+
+    await expect(
+      run(h, {
+        roundPolicy: {
+          ...roundPolicy,
+          scoringBeaconSafetyMarginSeconds: 43_200,
+        },
+      }),
+    ).rejects.toThrow(/24-hour scoring safety margin/);
     expect(h.mocks.signTypedData).not.toHaveBeenCalled();
     expect(h.mocks.submitPayment).not.toHaveBeenCalled();
   });

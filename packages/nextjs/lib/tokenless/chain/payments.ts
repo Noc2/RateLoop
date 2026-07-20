@@ -8,8 +8,11 @@ import {
 import { TokenlessPanelAbi, TokenlessTestUSDCAbi, X402PanelSubmitterAbi } from "@rateloop/contracts/tokenless";
 import {
   TOKENLESS_PAYMENT_AUTHORIZATION_SCHEMA_VERSION,
+  TOKENLESS_SCORING_BEACON_SAFETY_MARGIN_SECONDS,
   type TokenlessPaymentInstructions,
   type TokenlessQuoteResponse,
+  tokenlessFirstQuicknetRoundAfter,
+  tokenlessQuicknetTimestamp,
 } from "@rateloop/sdk";
 import { randomBytes, randomUUID } from "node:crypto";
 import "server-only";
@@ -36,8 +39,6 @@ import { normalizedX402Authorization } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { reserveSurpriseBountyCapacity } from "~~/lib/tokenless/surpriseBountyService";
 
-const QUICKNET_T_GENESIS_SECONDS = 1_689_232_296;
-const QUICKNET_T_PERIOD_SECONDS = 3;
 // A single server-funded execution holds an exclusive claim lease for this long.
 // It must comfortably cover approval + createRound broadcast and receipt
 // confirmation so a live worker is never displaced, yet still expire so a truly
@@ -325,10 +326,11 @@ function buildRoundTerms(row: QueryRow, config: TokenlessChainConfig, now: Date)
   const nowSeconds = Math.floor(now.getTime() / 1_000);
   const commitDeadline = nowSeconds + responseWindowSeconds;
   const revealDeadline = commitDeadline + config.revealWindowSeconds;
-  const beaconRound = Math.floor((commitDeadline - QUICKNET_T_GENESIS_SECONDS) / QUICKNET_T_PERIOD_SECONDS) + 2;
-  const scoringBeaconRound = Math.floor((revealDeadline - QUICKNET_T_GENESIS_SECONDS) / QUICKNET_T_PERIOD_SECONDS) + 2;
-  const scoringBeaconTimestamp = QUICKNET_T_GENESIS_SECONDS + (scoringBeaconRound - 1) * QUICKNET_T_PERIOD_SECONDS;
-  const beaconFailureDeadline = scoringBeaconTimestamp + config.beaconFailureGraceSeconds;
+  const beaconRound = tokenlessFirstQuicknetRoundAfter(BigInt(commitDeadline));
+  const protectedScoringCutoff = BigInt(revealDeadline) + TOKENLESS_SCORING_BEACON_SAFETY_MARGIN_SECONDS;
+  const scoringBeaconRound = tokenlessFirstQuicknetRoundAfter(protectedScoringCutoff);
+  const scoringBeaconTimestamp = tokenlessQuicknetTimestamp(scoringBeaconRound);
+  const beaconFailureDeadline = scoringBeaconTimestamp + BigInt(config.beaconFailureGraceSeconds);
   return {
     contentId: bytes32(rowString(row, "content_hash"), "content hash"),
     termsHash: bytes32(rowString(row, "terms_hash"), "terms hash"),
@@ -342,9 +344,9 @@ function buildRoundTerms(row: QueryRow, config: TokenlessChainConfig, now: Date)
     admissionPolicyHash: admissionPolicy.admissionPolicyHash,
     commitDeadline: String(commitDeadline),
     revealDeadline: String(revealDeadline),
-    beaconFailureDeadline: String(beaconFailureDeadline),
-    beaconRound: String(beaconRound),
-    scoringBeaconRound: String(scoringBeaconRound),
+    beaconFailureDeadline: beaconFailureDeadline.toString(),
+    beaconRound: beaconRound.toString(),
+    scoringBeaconRound: scoringBeaconRound.toString(),
     claimGracePeriod: String(config.claimGracePeriodSeconds),
     feeRecipient: config.feeRecipient,
   };

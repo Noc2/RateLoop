@@ -2,6 +2,7 @@ import { createAwsKmsEthereumAccount } from "./awsKmsAccount";
 import {
   TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS,
   TOKENLESS_QUICKNET_T_CHAIN_HASH,
+  TOKENLESS_SCORING_BEACON_SAFETY_MARGIN_SECONDS,
   type TokenlessChainConfig,
   type TokenlessSignerConfig,
 } from "./config";
@@ -230,6 +231,7 @@ export async function assertLiveTokenlessDeployment(
     beaconGenesis,
     beaconPeriod,
     minimumBeaconGrace,
+    scoringBeaconSafetyMargin,
     adapterPanel,
     adapterUsdc,
     authorizationToken,
@@ -249,6 +251,11 @@ export async function assertLiveTokenlessDeployment(
     client.readContract({ abi: TokenlessPanelAbi, address: config.panelAddress, functionName: "QUICKNET_T_GENESIS" }),
     client.readContract({ abi: TokenlessPanelAbi, address: config.panelAddress, functionName: "QUICKNET_T_PERIOD" }),
     client.readContract({ abi: TokenlessPanelAbi, address: config.panelAddress, functionName: "MIN_BEACON_GRACE" }),
+    client.readContract({
+      abi: TokenlessPanelAbi,
+      address: config.panelAddress,
+      functionName: "SCORING_BEACON_SAFETY_MARGIN",
+    }),
     client.readContract({ abi: X402PanelSubmitterAbi, address: config.x402SubmitterAddress, functionName: "panel" }),
     client.readContract({ abi: X402PanelSubmitterAbi, address: config.x402SubmitterAddress, functionName: "usdc" }),
     client.readContract({
@@ -281,7 +288,8 @@ export async function assertLiveTokenlessDeployment(
     String(beaconNetworkHash).toLowerCase() !== TOKENLESS_QUICKNET_T_CHAIN_HASH ||
     Number(beaconGenesis) !== 1_689_232_296 ||
     Number(beaconPeriod) !== 3 ||
-    Number(minimumBeaconGrace) !== TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS
+    Number(minimumBeaconGrace) !== TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS ||
+    Number(scoringBeaconSafetyMargin) !== TOKENLESS_SCORING_BEACON_SAFETY_MARGIN_SECONDS
   ) {
     throw new Error("The configured tokenless addresses are a mixed deployment bundle.");
   }

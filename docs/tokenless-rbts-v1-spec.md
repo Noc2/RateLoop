@@ -35,9 +35,10 @@ Reveal(uint256 roundId,address voteKey,uint8 vote,uint16 predictedUpBps,
 
 Round terms freeze the quicknet-t `beaconNetworkHash`, a tlock disclosure `beaconRound`, and an independent
 `scoringBeaconRound` before any commit. The disclosure round is the first quicknet-t round strictly after the commit
-deadline. The scoring round is the first quicknet-t round strictly after the reveal deadline, so its entropy cannot be
-known while the scored reveal set is still open. After the order-independent reveal-set commitment is complete, anyone
-submits the exact scoring-beacon randomness and proof:
+deadline. The scoring round is the first quicknet-t round strictly after the protected scoring cutoff,
+`revealDeadline + 24 hours`. The contract rejects earlier, later, equal, or reversed round choices and will not accept a
+scoring proof before that exact round's timestamp. After the order-independent reveal-set commitment is complete,
+anyone submits the exact scoring-beacon randomness and proof:
 
 ```text
 verifyBeacon(beaconNetworkHash, scoringBeaconRound, randomness, proof) = true
@@ -52,6 +53,13 @@ period, validates both round timestamps arithmetically, and requires `beaconFail
 anyone may invoke the deterministic base-only fallback. Every
 revealer then earns the fixed base and every unused bonus returns to the funder. A deployment must bind the panel to a
 reviewed verifier for the exact drand network; the test-only mock verifier is forbidden outside local tests.
+
+The 24-hour cutoff is a pinned OP Stack sequencing assumption, not an unconditional wall-clock proof. The standard
+sequencing window is 3,600 L1 blocks, nominally 12 hours at Ethereum's 12-second slots; the protocol uses twice that
+nominal duration. The post-closure claim therefore assumes Ethereum produces at least 3,600 canonical L1 blocks during
+those 24 hours. Readiness evidence must monitor and record that condition. A prolonged L1 liveness failure that violates
+it weakens the entropy-timing guarantee, although the six-hour fallback and 120-day custody horizon still preserve a
+paid terminal settlement path. See the [OP Stack derivation specification](https://specs.optimism.io/protocol/derivation.html).
 
 ### Quicknet-t proof format
 
@@ -122,13 +130,13 @@ contracts, the benchmark measured:
 
 | Settlement transaction | Count | Maximum execution gas | Asserted gas ceiling including allowance |
 | --- | ---: | ---: | ---: |
-| `beginSettlement` | 1 | 7,743 | 200,000 |
+| `beginSettlement` | 1 | 7,765 | 200,000 |
 | `processAggregate` | 20 | 82,819 | 250,000 per page |
-| `finalizeScoringSeed` (BLS verification and canonical heap sort) | 1 | 7,978,742 | 10,000,000 |
+| `finalizeScoringSeed` (BLS verification and canonical heap sort) | 1 | 7,978,974 | 10,000,000 |
 | `processScores` | 20 | 1,871,941 | 2,500,000 per page |
-| `finalizeSettlement` | 1 | 99,852 | 250,000 |
+| `finalizeSettlement` | 1 | 99,874 | 250,000 |
 
-The measured scoring-page total is 36,695,463 gas and the measured lifecycle total is 49,975,101 gas after the
+The measured scoring-page total is 36,695,463 gas and the measured lifecycle total is 49,975,388 gas after the
 100,000-gas allowance for each of 43 transactions. CI caps the total at 60,000,000 gas. Every individual call remains
 below its transaction ceiling. Any compiler, page-size, verifier, or contract change must rerun and deliberately
 reapprove the benchmark; L1 data fees remain separate.

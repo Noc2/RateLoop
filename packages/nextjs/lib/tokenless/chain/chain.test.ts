@@ -2,6 +2,7 @@ import {
   TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS,
   TOKENLESS_MINIMUM_REVEAL_WINDOW_SECONDS,
   TOKENLESS_QUICKNET_T_CHAIN_HASH,
+  TOKENLESS_SCORING_BEACON_SAFETY_MARGIN_SECONDS,
   type TokenlessChainConfig,
   buildTokenlessDeploymentKey,
   loadTokenlessChainConfig,
@@ -96,6 +97,7 @@ function mockRuntime(
       if (address === PANEL && functionName === "QUICKNET_T_GENESIS") return 1_689_232_296;
       if (address === PANEL && functionName === "QUICKNET_T_PERIOD") return 3;
       if (address === PANEL && functionName === "MIN_BEACON_GRACE") return 21_600;
+      if (address === PANEL && functionName === "SCORING_BEACON_SAFETY_MARGIN") return 86_400;
       if (address === ADAPTER && functionName === "panel") return PANEL;
       if (address === ADAPTER && (functionName === "usdc" || functionName === "authorizationToken")) return USDC;
       if (address === FEEDBACK_BONUS && functionName === "usdc") return USDC;
@@ -479,12 +481,14 @@ test("the explicit frozen response window creates one immutable deadline across 
   const commitDeadline = BigInt(first.roundTerms.commitDeadline);
   const revealDeadline = BigInt(first.roundTerms.revealDeadline);
   const expectedDisclosureRound = (commitDeadline - 1_689_232_296n) / 3n + 2n;
-  const expectedScoringRound = (revealDeadline - 1_689_232_296n) / 3n + 2n;
+  const protectedScoringCutoff = revealDeadline + BigInt(TOKENLESS_SCORING_BEACON_SAFETY_MARGIN_SECONDS);
+  const expectedScoringRound = (protectedScoringCutoff - 1_689_232_296n) / 3n + 2n;
   const scoringBeaconTimestamp = 1_689_232_296n + (expectedScoringRound - 1n) * 3n;
   assert.equal(first.roundTerms.beaconRound, expectedDisclosureRound.toString());
   assert.equal(first.roundTerms.scoringBeaconRound, expectedScoringRound.toString());
   assert.ok(1_689_232_296n + (expectedDisclosureRound - 1n) * 3n > commitDeadline);
-  assert.ok(scoringBeaconTimestamp > revealDeadline);
+  assert.ok(scoringBeaconTimestamp > protectedScoringCutoff);
+  assert.ok(scoringBeaconTimestamp <= protectedScoringCutoff + 3n);
   assert.equal(first.roundTerms.beaconFailureDeadline, (scoringBeaconTimestamp + 21_600n).toString());
 
   const replay = await prepareChainPayment(operationKey, {

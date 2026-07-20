@@ -204,6 +204,11 @@ contract TokenlessFeedbackBonusSecurityTest is Test {
     }
 
     function _panelTerms() internal view returns (TokenlessPanel.RoundTerms memory) {
+        uint64 commitDeadline = uint64(block.timestamp + 1 hours);
+        uint64 revealDeadline = uint64(block.timestamp + 2 hours);
+        uint64 disclosureRound = uint64((uint256(commitDeadline) - 1_689_232_296) / 3 + 2);
+        uint64 scoringRound = uint64((uint256(revealDeadline) + 24 hours - 1_689_232_296) / 3 + 2);
+        uint64 beaconFailureDeadline = uint64(1_689_232_296 + (uint256(scoringRound) - 1) * 3 + 6 hours);
         return TokenlessPanel.RoundTerms({
             contentId: keccak256("security-base-content"),
             termsHash: keccak256("security-base-terms"),
@@ -215,11 +220,11 @@ contract TokenlessFeedbackBonusSecurityTest is Test {
             minimumReveals: 3,
             maximumCommits: 3,
             admissionPolicyHash: ADMISSION_POLICY_HASH,
-            commitDeadline: uint64(block.timestamp + 1 hours),
-            revealDeadline: uint64(block.timestamp + 2 hours),
-            beaconFailureDeadline: uint64(block.timestamp + 8 hours + 3 seconds),
-            beaconRound: uint64((block.timestamp + 1 hours - 1_689_232_296) / 3 + 2),
-            scoringBeaconRound: uint64((block.timestamp + 2 hours - 1_689_232_296) / 3 + 2),
+            commitDeadline: commitDeadline,
+            revealDeadline: revealDeadline,
+            beaconFailureDeadline: beaconFailureDeadline,
+            beaconRound: disclosureRound,
+            scoringBeaconRound: scoringRound,
             claimGracePeriod: 1 hours,
             feeRecipient: address(0)
         });

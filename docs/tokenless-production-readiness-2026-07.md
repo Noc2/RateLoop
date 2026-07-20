@@ -93,6 +93,11 @@ per-tenant KMS wrapping authorities; managed custody and rotation
 for every hosted signer; named-host verification; live alert, backup, deletion, and incident exercises; and the full
 economics/gold/correlation acceptance package. None may be inferred from the isolated Vercel deployment.
 
+Post-closure scoring additionally requires evidence that at least 3,600 canonical Ethereum L1 blocks were produced
+during each pinned 24-hour scoring margin. That margin is twice the OP Stack sequencing window's nominal duration; it
+is an explicit L1-liveness assumption, not an unconditional wall-clock guarantee. Alerting must block the associated
+post-closure assurance claim if the condition is not met while preserving keeper progression to the paid base-only fallback.
+
 The public Vercel review deployment may retain its existing isolated, persisted test-vault key only when the immutable
 tokenless project ID, review origin, production target, and tokenless Git ref all match. It cannot claim managed-KMS
 residency, cannot share that key with another role, and cannot satisfy the main release gate. The next hosted staging

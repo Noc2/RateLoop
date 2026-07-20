@@ -208,6 +208,19 @@ export const TokenlessPanelAbi = [
   },
   {
     "type": "function",
+    "name": "SCORING_BEACON_SAFETY_MARGIN",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "SCORING_VERSION",
     "inputs": [],
     "outputs": [
