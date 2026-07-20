@@ -433,17 +433,29 @@ test("an owner can recover only a replay-revoked public OAuth integration", asyn
   const connected = (await connectedResponse.json()).result.structuredContent;
   const integrationId = connected.connection.integrationId as string;
   const now = new Date();
+  const retainedRefreshToken = `rlo_rt_${"r".repeat(64)}`;
+  const originalRefreshHash = createHash("sha256").update(tokens.refresh_token).digest("hex");
+  const retainedRefreshHash = createHash("sha256").update(retainedRefreshToken).digest("hex");
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_oauth_refresh_tokens
+          (refresh_token_id,token_hash,token_family_id,client_id,subject_principal_id,audience,resource,
+           granted_scopes_json,generation,created_at,expires_at)
+          SELECT ?,?,token_family_id,client_id,subject_principal_id,audience,resource,
+                 granted_scopes_json,2,created_at,expires_at
+          FROM tokenless_agent_oauth_refresh_tokens WHERE token_hash=?`,
+    args: [`art_${"f".repeat(32)}`, retainedRefreshHash, originalRefreshHash],
+  });
   await dbClient.execute({
     sql: `UPDATE tokenless_agent_oauth_refresh_tokens
-          SET used_at=?,replaced_at=? WHERE token_hash=?`,
-    args: [now, now, createHash("sha256").update(tokens.refresh_token).digest("hex")],
+          SET used_at=?,replaced_at=? WHERE token_hash IN (?,?)`,
+    args: [now, now, originalRefreshHash, retainedRefreshHash],
   });
   await assert.rejects(
     () =>
       exchangeAgentOAuthToken({
         grantType: "refresh_token",
         clientId,
-        refreshToken: tokens.refresh_token,
+        refreshToken: retainedRefreshToken,
         resource: getCanonicalAgentMcpResource(),
       }),
     /replay revoked this token family/u,
@@ -465,10 +477,15 @@ test("an owner can recover only a replay-revoked public OAuth integration", asyn
   const refreshed = await exchangeAgentOAuthToken({
     grantType: "refresh_token",
     clientId,
-    refreshToken: tokens.refresh_token,
+    refreshToken: retainedRefreshToken,
     resource: getCanonicalAgentMcpResource(),
   });
-  assert.equal(refreshed.refresh_token, tokens.refresh_token);
+  assert.equal(refreshed.refresh_token, retainedRefreshToken);
+  const obsoleteRefresh = await dbClient.execute({
+    sql: `SELECT revoked_at FROM tokenless_agent_oauth_refresh_tokens WHERE token_hash=?`,
+    args: [originalRefreshHash],
+  });
+  assert.ok(obsoleteRefresh.rows[0]?.revoked_at);
   await assert.rejects(
     () => authenticateAgentMcpPrincipal(`Bearer ${tokens.access_token}`),
     /invalid|expired|revoked/iu,

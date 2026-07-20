@@ -1291,7 +1291,7 @@ export async function revokeAgentIntegration(input: {
 }
 
 /**
- * Restore the original refresh token retained by a public OAuth client after the
+ * Restore the latest consumed refresh token retained by a public OAuth client after the
  * pre-stable-refresh server falsely treated its second use as replay. This is an
  * explicit workspace-administrator recovery, not a general replay bypass.
  */
@@ -1316,11 +1316,14 @@ export async function recoverAgentIntegrationOAuth(input: {
        JOIN tokenless_agent_oauth_token_families f ON f.token_family_id=i.token_family_id
        JOIN tokenless_agent_oauth_clients o ON o.client_id=i.oauth_client_id
        JOIN tokenless_agent_oauth_refresh_tokens r
-         ON r.token_family_id=f.token_family_id AND r.generation=1
+         ON r.token_family_id=f.token_family_id
         AND r.client_id=i.oauth_client_id AND r.subject_principal_id=i.oauth_subject_principal_id
         AND r.resource=f.resource AND r.audience=f.audience
        WHERE i.workspace_id=$1 AND i.integration_id=$2 AND i.status='active'
          AND i.activation_mode IN ('preauthorized_safe','owner_approved')
+         AND (r.used_at IS NOT NULL OR r.replaced_at IS NOT NULL)
+       ORDER BY r.generation DESC
+       LIMIT 1
        FOR UPDATE`,
       [input.workspaceId, input.integrationId],
     );
@@ -1329,12 +1332,14 @@ export async function recoverAgentIntegrationOAuth(input: {
       throw new TokenlessServiceError("OAuth integration not found.", 404, "agent_integration_not_found");
     }
     const tokenFamilyId = text(row, "token_family_id");
+    const refreshTokenId = text(row, "refresh_token_id");
     const clientExpiresAt = row.oauth_client_expires_at ? new Date(String(row.oauth_client_expires_at)) : null;
     const familyExpiresAt = new Date(String(row.absolute_expires_at));
     const refreshExpiresAt = new Date(String(row.refresh_token_expires_at));
     const grantedScopes = jsonArray(row.granted_scopes_json, "granted scopes");
     const eligible =
       tokenFamilyId &&
+      refreshTokenId &&
       text(row, "connection_status") === "connected" &&
       text(row, "token_family_status") === "revoked" &&
       text(row, "token_family_revoked_by") === "oauth_server" &&
@@ -1362,15 +1367,15 @@ export async function recoverAgentIntegrationOAuth(input: {
     await client.query(
       `UPDATE tokenless_agent_oauth_refresh_tokens
        SET revoked_at=COALESCE(revoked_at,$2),revocation_reason=COALESCE(revocation_reason,'owner_refresh_recovery')
-       WHERE token_family_id=$1 AND generation<>1`,
-      [tokenFamilyId, now],
+       WHERE token_family_id=$1 AND refresh_token_id<>$3`,
+      [tokenFamilyId, now, refreshTokenId],
     );
     const restored = await client.query(
       `UPDATE tokenless_agent_oauth_refresh_tokens
        SET used_at=NULL,replaced_at=NULL,revoked_at=NULL,revocation_reason=NULL
-       WHERE token_family_id=$1 AND generation=1 AND expires_at>$2
+       WHERE token_family_id=$1 AND refresh_token_id=$2 AND expires_at>$3
        RETURNING refresh_token_id`,
-      [tokenFamilyId, now],
+      [tokenFamilyId, refreshTokenId, now],
     );
     if (restored.rowCount !== 1) {
       throw new TokenlessServiceError(
