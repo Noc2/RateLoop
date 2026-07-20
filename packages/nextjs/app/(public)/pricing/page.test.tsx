@@ -21,12 +21,14 @@ test("pricing page shows three tiers and discloses costs progressively", async (
   assert.match(html, /250 completed review decisions/);
   assert.match(html, /href="\/agents\?tab=overview"/);
   assert.match(html, /href="\/agents\?tab=overview&amp;billing=upgrade"/);
-  assert.match(html, /href="mailto:hawigxyz@proton\.me\?subject=RateLoop%20Demo"[^>]*>Book Demo<\/a>/);
+  assert.doesNotMatch(html, /subject=RateLoop%20Demo/);
   assert.match(html, /Paid panels/);
   assert.match(html, /Explain paid panel costs/);
   assert.match(html, /not included in the \$29 subscription/);
   assert.match(html, /Enterprise/);
   assert.match(html, /Custom/);
+  assert.match(html, /Custom integrations/);
+  assert.match(html, /Compliance solutions/);
   assert.match(html, /href="mailto:hawigxyz@proton\.me\?subject=RateLoop%20Enterprise"[^>]*>Book demo<\/a>/);
   assert.match(html, /<s[^>]*>\$99/);
   assert.match(html, /Then \$99\/month after 12 months/);

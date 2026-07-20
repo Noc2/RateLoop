@@ -65,17 +65,9 @@ export function WorkspacePlanCards({ subscriptionsEnabled }: WorkspacePlanCardsP
           `Then ${earlyAccessListPrice}/month after 12 months`,
         ]}
         footer={
-          <>
-            <Link href={earlyAccessHref} className="rateloop-gradient-action min-h-12 w-full justify-center px-5">
-              {earlyAccessCta}
-            </Link>
-            <Link
-              href="mailto:hawigxyz@proton.me?subject=RateLoop%20Demo"
-              className="btn btn-ghost mt-2 min-h-11 w-full justify-center text-sm"
-            >
-              Book Demo
-            </Link>
-          </>
+          <Link href={earlyAccessHref} className="rateloop-gradient-action min-h-12 w-full justify-center px-5">
+            {earlyAccessCta}
+          </Link>
         }
       />
       <PlanCard
@@ -86,7 +78,12 @@ export function WorkspacePlanCards({ subscriptionsEnabled }: WorkspacePlanCardsP
             <span className="display-section text-6xl leading-none">Custom</span>
           </div>
         }
-        features={["Everything in Early Access", "Custom volumes and terms"]}
+        features={[
+          "Everything in Early Access",
+          "Custom volumes and terms",
+          "Custom integrations",
+          "Compliance solutions",
+        ]}
         footer={
           <Link
             href="mailto:hawigxyz@proton.me?subject=RateLoop%20Enterprise"
