@@ -742,17 +742,11 @@ async function verifyIntegrationBinding(
   },
 ): Promise<IntegrationReviewGrant> {
   if (input.integrationId === null) return { active: false, reason: "integration_not_supplied" };
-  const result = await client.query(
+  const integrationResult = await client.query(
     `SELECT i.activation_mode, i.granted_scopes_json, i.allowed_workflow_keys_json,
             i.publishing_policy_id, i.publishing_policy_version,
-            i.api_key_id, i.token_family_id, c.status AS connection_status,
-            p.enabled AS publishing_policy_enabled, p.revoked_at AS publishing_policy_revoked_at,
-            p.effective_at AS publishing_policy_effective_at, p.expires_at AS publishing_policy_expires_at
+            i.api_key_id, i.token_family_id, i.connection_intent_id
      FROM tokenless_agent_integrations i
-     LEFT JOIN tokenless_agent_connection_intents c ON c.intent_id = i.connection_intent_id
-     LEFT JOIN tokenless_agent_publishing_policies p
-       ON p.workspace_id = i.workspace_id AND p.policy_id = i.publishing_policy_id
-      AND p.version = i.publishing_policy_version
      WHERE i.workspace_id = $1 AND i.integration_id = $2 AND i.status = 'active'
        AND i.agent_id = $3 AND i.agent_version_id = $4
        AND i.review_policy_id = $5 AND i.review_policy_version = $6
@@ -769,15 +763,39 @@ async function verifyIntegrationBinding(
       input.binding.bindingVersion,
     ],
   );
-  if (result.rowCount !== 1) {
+  if (integrationResult.rowCount !== 1) {
     throw new TokenlessServiceError(
       "The agent connection is not bound to this exact human-review configuration.",
       409,
       "human_review_integration_binding_mismatch",
     );
   }
-  const row = result.rows[0] as QueryRow;
-  const callerCredentialId = rowString(row, "token_family_id") ?? rowString(row, "api_key_id");
+  const integration = integrationResult.rows[0] as QueryRow;
+  const connectionIntentId = rowString(integration, "connection_intent_id");
+  const publishingPolicyId = rowString(integration, "publishing_policy_id");
+  const publishingPolicyVersion = rowOptionalInteger(integration, "publishing_policy_version");
+  const connectionResult = connectionIntentId
+    ? await client.query(
+        `SELECT status
+         FROM tokenless_agent_connection_intents
+         WHERE workspace_id = $1 AND intent_id = $2
+         FOR SHARE`,
+        [input.workspaceId, connectionIntentId],
+      )
+    : null;
+  const publishingPolicyResult =
+    publishingPolicyId && publishingPolicyVersion !== null
+      ? await client.query(
+          `SELECT enabled, revoked_at, effective_at, expires_at
+           FROM tokenless_agent_publishing_policies
+           WHERE workspace_id = $1 AND policy_id = $2 AND version = $3
+           FOR SHARE`,
+          [input.workspaceId, publishingPolicyId, publishingPolicyVersion],
+        )
+      : null;
+  const connection = connectionResult?.rows[0] as QueryRow | undefined;
+  const publishingPolicy = publishingPolicyResult?.rows[0] as QueryRow | undefined;
+  const callerCredentialId = rowString(integration, "token_family_id") ?? rowString(integration, "api_key_id");
   if (callerCredentialId !== input.apiKeyId) {
     throw new TokenlessServiceError(
       "The agent connection credential does not match this evaluator.",
@@ -785,24 +803,24 @@ async function verifyIntegrationBinding(
       "human_review_integration_binding_mismatch",
     );
   }
-  const scopes = parseStringArray(row.granted_scopes_json, "integration scopes");
-  const workflows = parseStringArray(row.allowed_workflow_keys_json, "integration workflows");
-  const effectiveAt = new Date(String(row.publishing_policy_effective_at));
-  const expiresAt = row.publishing_policy_expires_at ? new Date(String(row.publishing_policy_expires_at)) : null;
+  const scopes = parseStringArray(integration.granted_scopes_json, "integration scopes");
+  const workflows = parseStringArray(integration.allowed_workflow_keys_json, "integration workflows");
+  const effectiveAt = new Date(String(publishingPolicy?.effective_at));
+  const expiresAt = publishingPolicy?.expires_at ? new Date(String(publishingPolicy.expires_at)) : null;
   const now = Date.now();
   const policyActive =
-    rowBoolean(row, "publishing_policy_enabled") &&
-    (row.publishing_policy_revoked_at === null || row.publishing_policy_revoked_at === undefined) &&
+    rowBoolean(publishingPolicy, "enabled") &&
+    (publishingPolicy?.revoked_at === null || publishingPolicy?.revoked_at === undefined) &&
     Number.isFinite(effectiveAt.getTime()) &&
     effectiveAt.getTime() <= now &&
     (!expiresAt || (Number.isFinite(expiresAt.getTime()) && expiresAt.getTime() > now));
   const exactPolicy =
     input.binding.publishingPolicyId !== null &&
-    rowString(row, "publishing_policy_id") === input.binding.publishingPolicyId &&
-    rowOptionalInteger(row, "publishing_policy_version") === input.binding.publishingPolicyVersion;
+    publishingPolicyId === input.binding.publishingPolicyId &&
+    publishingPolicyVersion === input.binding.publishingPolicyVersion;
   const active =
-    rowString(row, "activation_mode") === "owner_approved" &&
-    rowString(row, "connection_status") === "connected" &&
+    rowString(integration, "activation_mode") === "owner_approved" &&
+    rowString(connection, "status") === "connected" &&
     exactPolicy &&
     policyActive &&
     workflows.includes(input.request.workflowKey) &&
@@ -1668,4 +1686,9 @@ export async function getAdaptiveAssuranceState(input: {
   }
 }
 
-export const __adaptiveReviewServiceTestUtils = { humanAgreementGatePassed, initialLifecycleDisposition, sha256 };
+export const __adaptiveReviewServiceTestUtils = {
+  humanAgreementGatePassed,
+  initialLifecycleDisposition,
+  sha256,
+  verifyIntegrationBinding,
+};

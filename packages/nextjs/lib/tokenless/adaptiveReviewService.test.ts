@@ -463,6 +463,77 @@ test("automatic disposition requires both an exact owner grant and a ready publi
   );
 });
 
+test("locks optional integration grant rows with PostgreSQL-compatible queries", async () => {
+  const queries: string[] = [];
+  const client = {
+    async query(sql: string) {
+      queries.push(sql);
+      if (sql.includes("FROM tokenless_agent_integrations")) {
+        return {
+          rowCount: 1,
+          rows: [
+            {
+              activation_mode: "owner_approved",
+              granted_scopes_json: JSON.stringify(["panel:publish"]),
+              allowed_workflow_keys_json: JSON.stringify(["general-assistance"]),
+              publishing_policy_id: "agpol_exact",
+              publishing_policy_version: 1,
+              api_key_id: null,
+              token_family_id: "atf_exact",
+              connection_intent_id: "aci_exact",
+            },
+          ],
+        };
+      }
+      if (sql.includes("FROM tokenless_agent_connection_intents")) {
+        return { rowCount: 1, rows: [{ status: "connected" }] };
+      }
+      if (sql.includes("FROM tokenless_agent_publishing_policies")) {
+        return {
+          rowCount: 1,
+          rows: [{ enabled: true, revoked_at: null, effective_at: new Date(0), expires_at: null }],
+        };
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    },
+  };
+  const grant = await __adaptiveReviewServiceTestUtils.verifyIntegrationBinding(
+    client as never,
+    {
+      workspaceId: "ws_exact",
+      integrationId: "agi_exact",
+      request: {
+        agentId: "agt_exact",
+        agentVersionId: "agtv_exact",
+        policyId: "arp_exact",
+        policyVersion: 1,
+        workflowKey: "general-assistance",
+      },
+      binding: {
+        bindingId: "hrb_exact",
+        bindingVersion: 1,
+        requestProfileId: "rrp_exact",
+        requestProfileVersion: 1,
+        requestProfileHash: `sha256:${"1".repeat(64)}`,
+        configurationStatus: "ready",
+        authority: "ask_automatically",
+        publishingPolicyId: "agpol_exact",
+        publishingPolicyVersion: 1,
+        audience: "private_invited",
+        contentBoundary: "private_workspace",
+        compensationMode: "unpaid",
+        feedbackBonusEnabled: false,
+      },
+      apiKeyId: "atf_exact",
+    } as never,
+  );
+
+  assert.deepEqual(grant, { active: true, reason: "active_exact_owner_grant" });
+  assert.equal(queries.length, 3);
+  assert.doesNotMatch(queries[0]!, /JOIN/u);
+  assert.ok(queries.every(sql => /FOR SHARE/u.test(sql)));
+});
+
 test("enforces dedicated scopes and fails closed when the sampler secret is absent", async () => {
   const setup = await fixture();
   const narrow = await createWorkspaceApiKey({
