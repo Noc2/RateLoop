@@ -27,7 +27,7 @@ export function SetupStageHeader({
       >
         {title}
       </h1>
-      {description ? <p className="mt-3 max-w-3xl text-base leading-7 text-base-content/65">{description}</p> : null}
+      {description ? <p className="mt-3 text-base leading-7 text-base-content/65">{description}</p> : null}
     </header>
   );
 }

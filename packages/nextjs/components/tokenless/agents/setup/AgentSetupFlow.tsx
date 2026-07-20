@@ -509,7 +509,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
           onNavigate={() => undefined}
           allowNavigation={false}
         />
-        <div className="mx-auto mt-8 w-full max-w-4xl">
+        <div className="mt-8 w-full">
           <SetupStageHeader
             headingRef={headingRef}
             step={currentStep}
@@ -1014,7 +1014,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       <p className="sr-only" aria-live="polite">
         {announcement}
       </p>
-      <div className="mx-auto mt-8 w-full max-w-4xl">
+      <div className="mt-8 w-full">
         {currentStep === "workspace" ? (
           <form onSubmit={saveWorkspace} aria-busy={busy}>
             <SetupStageHeader

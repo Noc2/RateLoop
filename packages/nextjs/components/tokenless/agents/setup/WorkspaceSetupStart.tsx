@@ -54,7 +54,7 @@ export function WorkspaceSetupStart() {
         onNavigate={() => undefined}
         allowNavigation={false}
       />
-      <form className="mx-auto mt-8 w-full max-w-4xl" onSubmit={createWorkspace} aria-busy={busy}>
+      <form className="mt-8 w-full" onSubmit={createWorkspace} aria-busy={busy}>
         <SetupStageHeader
           step="workspace"
           title="Name your workspace"

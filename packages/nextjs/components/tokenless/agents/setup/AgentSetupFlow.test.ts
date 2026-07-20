@@ -243,15 +243,17 @@ test("workspace step remains editable when revisited", () => {
   assert.match(flowSource, /Save and continue/);
 });
 
-test("setup uses one branded stage header and a readable content width", () => {
+test("setup uses one branded stage header aligned to the progress width", () => {
   assert.equal(flowSource.match(/<SetupStageHeader/g)?.length, 6);
   assert.match(startSource, /<SetupStageHeader/);
   assert.match(stageHeaderSource, /font-display/);
   assert.match(stageHeaderSource, /text-3xl/);
   assert.match(stageHeaderSource, /AGENT_SETUP_STAGE_VISUALS/);
-  assert.match(flowSource, /<div className="mx-auto mt-8 w-full max-w-4xl">/);
-  assert.match(startSource, /<form className="mx-auto mt-8 w-full max-w-4xl"/);
-  assert.doesNotMatch(flowSource, /max-w-2xl/);
+  assert.equal(flowSource.match(/<div className="mt-8 w-full">/g)?.length, 2);
+  assert.match(startSource, /<form className="mt-8 w-full"/);
+  assert.doesNotMatch(flowSource, /mx-auto mt-8 w-full|max-w-[234]xl/);
+  assert.doesNotMatch(startSource, /mx-auto mt-8 w-full|max-w-[234]xl/);
+  assert.doesNotMatch(stageHeaderSource, /max-w-/);
   assert.match(flowSource, /<SetupActionBar>\s*\{backButton\}\s*\{setup\.connection\.status/);
   assert.equal(flowSource.match(/\{backButton\}/g)?.length, 6);
 });
