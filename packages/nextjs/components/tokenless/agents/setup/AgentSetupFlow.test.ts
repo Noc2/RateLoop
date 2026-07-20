@@ -64,8 +64,10 @@ test("review setup distinguishes a saved policy decision from delivery authority
   assert.doesNotMatch(flowSource, /reviewerAudience|contentBoundary: "private_workspace"/);
 });
 
-test("review setup uses compact shared routing selects and reveals only selected frequency details", () => {
-  assert.match(flowSource, /<ReviewRoutingFields/);
+test("review setup resolves frequency before reviewer terms and authority", () => {
+  assert.match(flowSource, /<ReviewFrequencyFields/);
+  assert.match(flowSource, /<ReviewAuthorityFields/);
+  assert.doesNotMatch(flowSource, /<ReviewRoutingFields/);
   assert.match(routingSource, /<select/);
   assert.match(routingSource, /sm:grid-cols-2/);
   assert.match(flowSource, /reviewFrequency\.mode === "adaptive" \|\| reviewFrequency\.mode === "fixed"/);
@@ -74,6 +76,13 @@ test("review setup uses compact shared routing selects and reveals only selected
   assert.match(flowSource, /authority: "check_only"/);
   assert.match(flowSource, /Reviewers, timing and payment/);
   assert.match(flowSource, /reviewerDetailsSummary/);
+  const frequencyIndex = flowSource.indexOf("<ReviewFrequencyFields");
+  const reviewerTermsIndex = flowSource.indexOf("Reviewers, timing and payment");
+  const authorityIndex = flowSource.indexOf("<ReviewAuthorityFields");
+  const actionIndex = flowSource.indexOf("<SetupActionBar>", authorityIndex);
+  assert.ok(frequencyIndex < reviewerTermsIndex);
+  assert.ok(reviewerTermsIndex < authorityIndex);
+  assert.ok(authorityIndex < actionIndex);
   assert.match(choiceGroupSource, /surface-card-nested/);
   assert.match(choiceGroupSource, /min-h-16/);
   assert.doesNotMatch(choiceGroupSource, /#[\da-f]{3,8}/iu);

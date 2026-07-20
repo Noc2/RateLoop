@@ -101,6 +101,7 @@ type ReviewAuthorityFieldsProps = {
   automaticUnavailableReason: string;
   requiresFundingPermission: boolean;
   className?: string;
+  prominent?: boolean;
   onAuthorityChange: (authority: ReviewRoutingAuthority) => void;
 };
 
@@ -110,6 +111,7 @@ export function ReviewAuthorityFields({
   automaticUnavailableReason,
   requiresFundingPermission,
   className,
+  prominent = false,
   onAuthorityChange,
 }: ReviewAuthorityFieldsProps) {
   const id = useId();
@@ -117,7 +119,9 @@ export function ReviewAuthorityFields({
 
   return (
     <fieldset className={className}>
-      <legend className="text-sm font-medium">If review is required, what may the agent do?</legend>
+      <legend className={prominent ? "px-1 text-xl font-semibold" : "text-sm font-medium"}>
+        If review is required, what may the agent do?
+      </legend>
       <div className="mt-1 flex items-center gap-2 text-sm text-base-content/65">
         <span>Choose the furthest step the agent may take.</span>
         <InfoPopover label="About agent authority after review is required">

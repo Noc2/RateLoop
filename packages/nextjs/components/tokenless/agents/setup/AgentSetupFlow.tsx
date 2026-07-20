@@ -3,7 +3,12 @@
 import { type FormEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AgentConnectionTroubleshooting } from "../AgentConnectionTroubleshooting";
-import { ReviewRoutingFields, type ReviewRoutingMode, reviewRoutingStateForMode } from "../ReviewRoutingFields";
+import {
+  ReviewAuthorityFields,
+  ReviewFrequencyFields,
+  type ReviewRoutingMode,
+  reviewRoutingStateForMode,
+} from "../ReviewRoutingFields";
 import { buildAgentConnectionMessage } from "../agentConnectionMessage";
 import { AgentSetupProgress } from "./AgentSetupProgress";
 import { SetupActionBar } from "./SetupActionBar";
@@ -1254,19 +1259,14 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 </label>
               </div>
             </fieldset>
-            <ReviewRoutingFields
-              className="mt-7"
-              mode={reviewFrequency.mode}
-              authority={reviewCompensation.authority}
-              automaticAvailable={automaticAvailable}
-              automaticUnavailableReason={automaticUnavailableReason}
-              requiresFundingPermission={
-                reviewCompensation.compensationMode === "usdc" || reviewCompensation.feedbackBonusEnabled === true
-              }
-              adaptiveAvailable={reviewCriterion.questionAuthority !== "agent_per_request"}
-              onModeChange={changeReviewMode}
-              onAuthorityChange={authority => setReviewCompensation(current => ({ ...current, authority }))}
-            />
+            <fieldset className="surface-card-nested mt-7 p-4 sm:p-5">
+              <legend className="px-1 text-xl font-semibold">Review frequency</legend>
+              <ReviewFrequencyFields
+                mode={reviewFrequency.mode}
+                adaptiveAvailable={reviewCriterion.questionAuthority !== "agent_per_request"}
+                onModeChange={changeReviewMode}
+              />
+            </fieldset>
             {reviewFrequency.mode === "adaptive" || reviewFrequency.mode === "fixed" ? (
               <div className="mt-4 border-l-2 border-l-[var(--rateloop-pink)] bg-black/10 px-4 py-4">
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -1815,6 +1815,19 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 </fieldset>
               </div>
             </section>
+            {reviewFrequency.mode !== "manual" ? (
+              <ReviewAuthorityFields
+                className="surface-card-nested mt-7 p-4 sm:p-5"
+                prominent
+                authority={reviewCompensation.authority}
+                automaticAvailable={automaticAvailable}
+                automaticUnavailableReason={automaticUnavailableReason}
+                requiresFundingPermission={
+                  reviewCompensation.compensationMode === "usdc" || reviewCompensation.feedbackBonusEnabled === true
+                }
+                onAuthorityChange={authority => setReviewCompensation(current => ({ ...current, authority }))}
+              />
+            ) : null}
             <SetupActionBar>
               {backButton}
               <Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={busy}>
