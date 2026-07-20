@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { AGENT_OAUTH_DEVICE_GRANT_TYPE, AgentOAuthError, exchangeAgentOAuthToken } from "~~/lib/tokenless/agentOAuth";
+import {
+  AGENT_OAUTH_DEVICE_GRANT_TYPE,
+  AgentOAuthError,
+  exchangeAgentOAuthToken,
+  getCanonicalAgentMcpResource,
+} from "~~/lib/tokenless/agentOAuth";
 import { exchangeAgentOAuthDeviceCode } from "~~/lib/tokenless/agentOAuthDevice";
 import { readAgentOAuthResource } from "~~/lib/tokenless/agentOAuthHttp";
 
@@ -39,7 +44,7 @@ export async function POST(request: NextRequest) {
     }
     const grantType = field(form, "grant_type", 64);
     const clientId = field(form, "client_id", 512);
-    const resource = readAgentOAuthResource(form);
+    const resource = readAgentOAuthResource(form, getCanonicalAgentMcpResource());
     const response =
       grantType === "authorization_code"
         ? await exchangeAgentOAuthToken({

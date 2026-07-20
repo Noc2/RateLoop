@@ -18,13 +18,41 @@ export async function enforceAgentOAuthRateLimit(headers: Headers, now = new Dat
   }
 }
 
-export function readAgentOAuthResource(form: URLSearchParams, max = 2_048) {
+export function readAgentOAuthResource(form: URLSearchParams, expectedResource: string, max = 2_048) {
   const values = form.getAll("resource");
-  const resources = new Set(values);
-  if (values.length === 0 || resources.size !== 1 || !values[0] || values[0].length > max) {
-    throw new AgentOAuthError("invalid_request", "resource must identify one exact server resource.");
+  const expected = new URL(expectedResource);
+  const expectedPath = expected.pathname.replace(/\/+$/u, "") || "/";
+  const parsed = values.map(value => {
+    try {
+      return new URL(value);
+    } catch {
+      return null;
+    }
+  });
+  const includesExpectedResource = parsed.some(
+    value => value && (value.pathname.replace(/\/+$/u, "") || "/") === expectedPath,
+  );
+  if (
+    values.length === 0 ||
+    values.length > 4 ||
+    values.some(value => !value || value.length > max) ||
+    parsed.some(
+      value =>
+        !value ||
+        value.origin !== expected.origin ||
+        value.username !== "" ||
+        value.password !== "" ||
+        value.search !== "" ||
+        value.hash !== "",
+    ) ||
+    !includesExpectedResource
+  ) {
+    throw new AgentOAuthError(
+      "invalid_request",
+      "resource must include the RateLoop MCP resource and may repeat only this server origin.",
+    );
   }
-  return values[0];
+  return expectedResource;
 }
 
 export function agentOAuthErrorResponse(error: unknown, fallback: string) {

@@ -42,9 +42,13 @@ test("the token endpoint accepts one exact resource even when a client repeats t
   const repeated = new URLSearchParams();
   repeated.append("resource", resource);
   repeated.append("resource", resource);
+  const serverAndResource = new URLSearchParams();
+  serverAndResource.append("resource", "https://rateloop-tokenless.vercel.app");
+  serverAndResource.append("resource", `${resource}/`);
 
-  assert.equal(readAgentOAuthResource(new URLSearchParams({ resource })), resource);
-  assert.equal(readAgentOAuthResource(repeated), resource);
+  assert.equal(readAgentOAuthResource(new URLSearchParams({ resource }), resource), resource);
+  assert.equal(readAgentOAuthResource(repeated, resource), resource);
+  assert.equal(readAgentOAuthResource(serverAndResource, resource), resource);
 });
 
 test("the token endpoint rejects missing, empty, distinct, and oversized resources", () => {
@@ -52,11 +56,16 @@ test("the token endpoint rejects missing, empty, distinct, and oversized resourc
   distinct.append("resource", "https://rateloop-tokenless.vercel.app/api/agent/v1/mcp");
   distinct.append("resource", "https://example.com/api/agent/v1/mcp");
 
-  assert.throws(() => readAgentOAuthResource(new URLSearchParams()), /one exact server resource/);
-  assert.throws(() => readAgentOAuthResource(new URLSearchParams({ resource: "" })), /one exact server resource/);
-  assert.throws(() => readAgentOAuthResource(distinct), /one exact server resource/);
+  const resource = "https://rateloop-tokenless.vercel.app/api/agent/v1/mcp";
+  const tooMany = new URLSearchParams();
+  for (let value = 0; value < 5; value += 1) tooMany.append("resource", resource);
+
+  assert.throws(() => readAgentOAuthResource(new URLSearchParams(), resource), /RateLoop MCP resource/);
+  assert.throws(() => readAgentOAuthResource(new URLSearchParams({ resource: "" }), resource), /RateLoop MCP resource/);
+  assert.throws(() => readAgentOAuthResource(distinct, resource), /RateLoop MCP resource/);
+  assert.throws(() => readAgentOAuthResource(tooMany, resource), /RateLoop MCP resource/);
   assert.throws(
-    () => readAgentOAuthResource(new URLSearchParams({ resource: "x".repeat(2_049) })),
-    /one exact server resource/,
+    () => readAgentOAuthResource(new URLSearchParams({ resource: "x".repeat(2_049) }), resource),
+    /RateLoop MCP resource/,
   );
 });
