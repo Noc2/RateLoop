@@ -153,6 +153,7 @@ export async function POST(request: NextRequest) {
       for (const [key, value] of cors) response.headers.set(key, value);
       return error.status === 401 ? applyOAuthChallenge(response, request) : response;
     }
+    console.error("[workspace-mcp] unexpected POST error", error);
     const response = rpcError(500, "RateLoop workspace MCP request failed.", "internal_error", -32603);
     for (const [key, value] of cors) response.headers.set(key, value);
     return response;
