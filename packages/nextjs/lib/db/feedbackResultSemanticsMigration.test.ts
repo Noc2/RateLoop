@@ -12,7 +12,7 @@ test("0101 backfills assurance semantics without changing existing result identi
   assert.match(migration, /SET "result_semantics" = 'assurance'/u);
   assert.match(migration, /ALTER COLUMN "result_semantics" SET NOT NULL/u);
   assert.doesNotMatch(migration, /SET\s+"(?:result_envelope_commitment|result_commitment|observation_id)"/u);
-  const entry = journal.entries.find((e) => e.idx === 101);
+  const entry = journal.entries.find(e => e.idx === 101);
   assert.equal(entry?.tag, "0101_feedback_result_semantics");
 });
 
