@@ -20,10 +20,34 @@ const tokenlessTestDatabase = () => {
   const DATABASE_URL = "postgresql://rateloop:secret@tokenless-db.example/tokenless?sslmode=require";
   return { DATABASE_URL, TOKENLESS_DATABASE_IDENTITY: deriveHostedDatabaseIdentity(DATABASE_URL) };
 };
-const tokenlessTestRpc = () => ({
-  BASE_SEPOLIA_RPC_URL: "https://sepolia.base.org",
-  BASE_SEPOLIA_RPC_FALLBACK_URLS: "https://base-sepolia-fallback.example",
-});
+const tokenlessTestRpc = () => {
+  const panel = address(1);
+  const issuer = address(2);
+  const adapter = address(3);
+  const usdc = address(4);
+  const feeRecipient = address(5);
+  const feedbackBonus = address(6);
+  return {
+    BASE_SEPOLIA_RPC_URL: "https://sepolia.base.org",
+    BASE_SEPOLIA_RPC_FALLBACK_URLS: "https://base-sepolia-fallback.example",
+    TOKENLESS_DEPLOYMENT_SCHEMA: "rateloop-tokenless-deployment-v4",
+    TOKENLESS_CHAIN_ID: "84532",
+    TOKENLESS_DEPLOYMENT_KEY: `tokenless-v4:84532:${panel}:${issuer}:${adapter}:${feedbackBonus}`,
+    TOKENLESS_DEPLOYMENT_BLOCK: "123",
+    TOKENLESS_PANEL_ADDRESS: panel,
+    TOKENLESS_CREDENTIAL_ISSUER_ADDRESS: issuer,
+    TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS: adapter,
+    TOKENLESS_FEEDBACK_BONUS_ADDRESS: feedbackBonus,
+    TOKENLESS_BEACON_VERIFIER_ADDRESS: address(7),
+    TOKENLESS_USDC_ADDRESS: usdc,
+    TOKENLESS_FEE_RECIPIENT: feeRecipient,
+    TOKENLESS_REVEAL_WINDOW_SECONDS: "300",
+    TOKENLESS_BEACON_FAILURE_GRACE_SECONDS: "21600",
+    TOKENLESS_CLAIM_GRACE_PERIOD_SECONDS: "604800",
+    TOKENLESS_USDC_EIP712_NAME: "RateLoop Tokenless Test USDC",
+    TOKENLESS_USDC_EIP712_VERSION: "2",
+  };
+};
 const tokenlessTestKms = () => {
   const kms = tokenlessEuDeploymentManifest.resources.kms;
   return {
@@ -314,6 +338,23 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
     const invalid = { ...env, [name]: invalidValue };
     assert.match(validateTokenlessProductionReadiness({ env: invalid, activeRegistry: {} }).join("\n"), expected);
   }
+
+  const missingFeeRecipient = { ...env };
+  delete missingFeeRecipient.TOKENLESS_FEE_RECIPIENT;
+  assert.match(
+    validateTokenlessProductionReadiness({ env: missingFeeRecipient, activeRegistry: {} }).join("\n"),
+    /TOKENLESS_FEE_RECIPIENT must be a non-zero EVM address/,
+  );
+  assert.match(
+    validateTokenlessProductionReadiness({
+      env: {
+        ...env,
+        TOKENLESS_FEEDBACK_BONUS_ADDRESS: "0xa0c1f730aad6b7cb78eAEacA39743F6430Dc57b0",
+      },
+      activeRegistry: {},
+    }).join("\n"),
+    /TOKENLESS_FEEDBACK_BONUS_ADDRESS must be a non-zero EVM address/,
+  );
 
   const mainErrors = validateTokenlessProductionReadiness({
     env: { ...env, VERCEL_GIT_COMMIT_REF: "main" },

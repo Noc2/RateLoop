@@ -363,6 +363,48 @@ function validateTokenlessTestDeployment(env) {
   if (!httpsUrl(value(env, "BASE_SEPOLIA_RPC_URL"))) {
     errors.push("BASE_SEPOLIA_RPC_URL must be an HTTPS URL without embedded credentials or fragments.");
   }
+  if (value(env, "TOKENLESS_DEPLOYMENT_SCHEMA") !== DEPLOYMENT_SCHEMA) {
+    errors.push(`TOKENLESS_DEPLOYMENT_SCHEMA must be ${DEPLOYMENT_SCHEMA}.`);
+  }
+  if (value(env, "TOKENLESS_CHAIN_ID") !== String(BASE_SEPOLIA_CHAIN_ID)) {
+    errors.push(`TOKENLESS_CHAIN_ID must be ${BASE_SEPOLIA_CHAIN_ID}.`);
+  }
+  const chainAddresses = [
+    "TOKENLESS_PANEL_ADDRESS",
+    "TOKENLESS_CREDENTIAL_ISSUER_ADDRESS",
+    "TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS",
+    "TOKENLESS_FEEDBACK_BONUS_ADDRESS",
+    "TOKENLESS_BEACON_VERIFIER_ADDRESS",
+    "TOKENLESS_USDC_ADDRESS",
+    "TOKENLESS_FEE_RECIPIENT",
+  ];
+  for (const name of chainAddresses) {
+    if (!nonZeroEvmAddress(value(env, name))) {
+      errors.push(`${name} must be a non-zero EVM address.`);
+    }
+  }
+  const expectedDeploymentKey = [
+    "tokenless-v4",
+    BASE_SEPOLIA_CHAIN_ID,
+    value(env, "TOKENLESS_PANEL_ADDRESS").toLowerCase(),
+    value(env, "TOKENLESS_CREDENTIAL_ISSUER_ADDRESS").toLowerCase(),
+    value(env, "TOKENLESS_X402_PANEL_SUBMITTER_ADDRESS").toLowerCase(),
+    value(env, "TOKENLESS_FEEDBACK_BONUS_ADDRESS").toLowerCase(),
+  ].join(":");
+  if (value(env, "TOKENLESS_DEPLOYMENT_KEY").toLowerCase() !== expectedDeploymentKey) {
+    errors.push("TOKENLESS_DEPLOYMENT_KEY must match the complete configured tokenless v4 bundle.");
+  }
+  for (const name of [
+    "TOKENLESS_DEPLOYMENT_BLOCK",
+    "TOKENLESS_REVEAL_WINDOW_SECONDS",
+    "TOKENLESS_BEACON_FAILURE_GRACE_SECONDS",
+    "TOKENLESS_CLAIM_GRACE_PERIOD_SECONDS",
+  ]) {
+    if (!positiveInteger(value(env, name))) errors.push(`${name} must be a positive integer.`);
+  }
+  for (const name of ["TOKENLESS_USDC_EIP712_NAME", "TOKENLESS_USDC_EIP712_VERSION"]) {
+    if (!value(env, name)) errors.push(`${name} is required for live tokenless chain execution.`);
+  }
   if (value(env, "TOKENLESS_NETWORK_PANELS_ENABLED") !== "false") {
     errors.push("TOKENLESS_NETWORK_PANELS_ENABLED must remain false for a tokenless test deployment.");
   }
