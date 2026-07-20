@@ -100,8 +100,12 @@ function parseAudienceSource(value: unknown): TokenlessQuoteRequest["audience"][
   }
   try {
     const parsed = JSON.parse(value) as { reviewerSource?: unknown };
-    if (parsed.reviewerSource === "private_invited") return "customer_invited";
-    if (parsed.reviewerSource === "public_network") return "rateloop_network";
+    if (parsed.reviewerSource === "private_invited" || parsed.reviewerSource === "customer_invited") {
+      return "customer_invited";
+    }
+    if (parsed.reviewerSource === "public_network" || parsed.reviewerSource === "rateloop_network") {
+      return "rateloop_network";
+    }
     if (parsed.reviewerSource === "hybrid") return "hybrid";
   } catch {
     // Report the same fail-closed configuration error below.
@@ -296,5 +300,6 @@ export async function getAdaptiveHumanReviewResult(input: {
 
 export const __adaptiveReviewOrchestrationTestUtils = {
   normalizePublicationDeclaration: normalizePublicPaidReviewPublication,
+  parseAudienceSource,
   sha256,
 };

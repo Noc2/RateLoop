@@ -125,6 +125,15 @@ afterEach(() => {
   else process.env.TOKENLESS_NETWORK_PANELS_ENABLED = originalNetworkPanelsEnabled;
 });
 
+test("accepts canonical and legacy stored reviewer-source names", () => {
+  const parse = __adaptiveReviewOrchestrationTestUtils.parseAudienceSource;
+  assert.equal(parse(JSON.stringify({ reviewerSource: "customer_invited" })), "customer_invited");
+  assert.equal(parse(JSON.stringify({ reviewerSource: "private_invited" })), "customer_invited");
+  assert.equal(parse(JSON.stringify({ reviewerSource: "rateloop_network" })), "rateloop_network");
+  assert.equal(parse(JSON.stringify({ reviewerSource: "public_network" })), "rateloop_network");
+  assert.equal(parse(JSON.stringify({ reviewerSource: "hybrid" })), "hybrid");
+});
+
 async function activateEarlyAccess(workspaceId: string) {
   const now = new Date();
   await dbClient.execute({
