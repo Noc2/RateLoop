@@ -209,7 +209,10 @@ describe("RateLoop agent host assets", () => {
     expect(skill).toContain("rateloop_connect_workspace");
     expect(skill).toContain("prefer `rateloop_connect_workspace`");
     expect(skill).toContain("rateloop_claim_connection_intent");
-    expect(skill).toContain('{ "connectionUrl": "<complete URL>" }');
+    expect(skill).toContain(
+      '{ "connectionUrl": "<complete URL>", "reportedLane": "plugin-with-hooks" }',
+    );
+    expect(skill).toContain("host-reported, never as verified");
     expect(skill).toContain("rateloop_get_agent_context");
     expect(skill).toContain("rateloop_verify_connection");
     expect(skill).toContain("granular fallback");
