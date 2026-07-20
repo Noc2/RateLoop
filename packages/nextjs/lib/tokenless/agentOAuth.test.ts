@@ -200,7 +200,7 @@ test("authorization codes are single-use and opaque tokens remain hash-only", as
   assert.equal(serialized.includes(tokens.refresh_token), false);
 });
 
-test("refresh tokens rotate once and replay revokes the entire stable family", async () => {
+test("public-client refresh tokens stay stable while issuing bounded access tokens", async () => {
   const fixture = await authorizationFixture();
   const first = await exchangeAgentOAuthToken({
     grantType: "authorization_code",
@@ -210,35 +210,25 @@ test("refresh tokens rotate once and replay revokes the entire stable family", a
     codeVerifier: CODE_VERIFIER,
     resource: getCanonicalAgentMcpResource(),
   });
-  const rotated = await exchangeAgentOAuthToken({
+  const refreshed = await exchangeAgentOAuthToken({
     grantType: "refresh_token",
     clientId: fixture.clientId,
     refreshToken: first.refresh_token,
     resource: getCanonicalAgentMcpResource(),
     scope: "connection:claim context:read",
   });
-  assert.notEqual(rotated.refresh_token, first.refresh_token);
-  const beforeReplay = await authenticateAgentOAuthAccessToken(`Bearer ${rotated.access_token}`);
-  await assert.rejects(
-    () =>
-      exchangeAgentOAuthToken({
-        grantType: "refresh_token",
-        clientId: fixture.clientId,
-        refreshToken: first.refresh_token,
-        resource: getCanonicalAgentMcpResource(),
-      }),
-    /replay revoked this token family/,
-  );
-  await assert.rejects(
-    () => authenticateAgentOAuthAccessToken(`Bearer ${rotated.access_token}`),
-    /invalid, expired, revoked, or misbound/,
-  );
-  const family = await dbClient.execute({
-    sql: `SELECT status, revocation_reason FROM tokenless_agent_oauth_token_families WHERE token_family_id = ?`,
-    args: [beforeReplay.tokenFamilyId],
+  assert.equal(refreshed.refresh_token, first.refresh_token);
+  assert.notEqual(refreshed.access_token, first.access_token);
+  await authenticateAgentOAuthAccessToken(`Bearer ${refreshed.access_token}`);
+  const next = await exchangeAgentOAuthToken({
+    grantType: "refresh_token",
+    clientId: fixture.clientId,
+    refreshToken: first.refresh_token,
+    resource: getCanonicalAgentMcpResource(),
   });
-  assert.equal(family.rows[0].status, "revoked");
-  assert.equal(family.rows[0].revocation_reason, "refresh_token_replay");
+  assert.equal(next.refresh_token, first.refresh_token);
+  assert.notEqual(next.access_token, refreshed.access_token);
+  await authenticateAgentOAuthAccessToken(`Bearer ${next.access_token}`);
 });
 
 test("revocation is idempotent, client-bound, and invalidates the next access-token use", async () => {

@@ -98,12 +98,6 @@ function date(row: Row | undefined, key: string) {
   return parsed;
 }
 
-function integer(row: Row | undefined, key: string) {
-  const value = Number(row?.[key]);
-  if (!Number.isSafeInteger(value) || value < 0) throw new Error(`Database returned invalid ${key}.`);
-  return value;
-}
-
 function digest(value: string) {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -470,6 +464,44 @@ function verifyPkce(codeVerifier: string, codeChallenge: string) {
   return actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes);
 }
 
+async function issueAccessToken(input: {
+  client: PoolClient;
+  tokenFamilyId: string;
+  refreshTokenId: string;
+  clientId: string;
+  subjectPrincipalId: string;
+  resource: string;
+  scopes: AgentOAuthScope[];
+  familyExpiresAt: Date;
+  now: Date;
+}) {
+  const accessToken = opaqueToken("rlo_at_");
+  const accessTokenId = `aat_${randomUUID().replaceAll("-", "")}`;
+  const accessExpiresAt = new Date(
+    Math.min(input.now.getTime() + ACCESS_TOKEN_TTL_MS, input.familyExpiresAt.getTime()),
+  );
+  const scopesJson = stableJson(input.scopes);
+  await input.client.query(
+    `INSERT INTO tokenless_agent_oauth_access_tokens
+     (access_token_id, token_hash, token_family_id, refresh_token_id, client_id, subject_principal_id,
+      audience, resource, granted_scopes_json, created_at, expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9, $10)`,
+    [
+      accessTokenId,
+      digest(accessToken),
+      input.tokenFamilyId,
+      input.refreshTokenId,
+      input.clientId,
+      input.subjectPrincipalId,
+      input.resource,
+      scopesJson,
+      input.now,
+      accessExpiresAt,
+    ],
+  );
+  return { accessToken, accessExpiresAt };
+}
+
 async function issueTokenPair(input: {
   client: PoolClient;
   tokenFamilyId: string;
@@ -482,14 +514,9 @@ async function issueTokenPair(input: {
   now: Date;
 }) {
   const refreshToken = opaqueToken("rlo_rt_");
-  const accessToken = opaqueToken("rlo_at_");
   const refreshTokenId = `art_${randomUUID().replaceAll("-", "")}`;
-  const accessTokenId = `aat_${randomUUID().replaceAll("-", "")}`;
   const refreshExpiresAt = new Date(
     Math.min(input.now.getTime() + REFRESH_TOKEN_TTL_MS, input.familyExpiresAt.getTime()),
-  );
-  const accessExpiresAt = new Date(
-    Math.min(input.now.getTime() + ACCESS_TOKEN_TTL_MS, input.familyExpiresAt.getTime()),
   );
   const scopesJson = stableJson(input.scopes);
   await input.client.query(
@@ -510,24 +537,10 @@ async function issueTokenPair(input: {
       refreshExpiresAt,
     ],
   );
-  await input.client.query(
-    `INSERT INTO tokenless_agent_oauth_access_tokens
-     (access_token_id, token_hash, token_family_id, refresh_token_id, client_id, subject_principal_id,
-      audience, resource, granted_scopes_json, created_at, expires_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9, $10)`,
-    [
-      accessTokenId,
-      digest(accessToken),
-      input.tokenFamilyId,
-      refreshTokenId,
-      input.clientId,
-      input.subjectPrincipalId,
-      input.resource,
-      scopesJson,
-      input.now,
-      accessExpiresAt,
-    ],
-  );
+  const { accessToken, accessExpiresAt } = await issueAccessToken({
+    ...input,
+    refreshTokenId,
+  });
   return {
     response: {
       access_token: accessToken,
@@ -736,33 +749,26 @@ export async function exchangeAgentOAuthToken(
     if (requestedScopes.some(scope => !existingScopes.includes(scope))) {
       throw new AgentOAuthError("invalid_scope", "A refresh cannot widen its original scope.");
     }
-    const issued = await issueTokenPair({
+    const issued = await issueAccessToken({
       client,
       tokenFamilyId,
+      refreshTokenId: text(row, "refresh_token_id")!,
       clientId: input.clientId,
       subjectPrincipalId: text(row, "subject_principal_id")!,
       resource: input.resource,
       scopes: requestedScopes,
-      generation: integer(row, "generation") + 1,
       familyExpiresAt: date(row, "absolute_expires_at")!,
       now,
     });
-    const rotated = await client.query(
-      `UPDATE tokenless_agent_oauth_refresh_tokens SET used_at = $2, replaced_at = $2
-       WHERE refresh_token_id = $1 AND used_at IS NULL AND replaced_at IS NULL RETURNING refresh_token_id`,
-      [text(row, "refresh_token_id"), now],
-    );
-    if (rotated.rowCount !== 1) {
-      await revokeTokenFamily(client, tokenFamilyId, now, "refresh_token_replay");
-      await client.query("COMMIT");
-      throw new AgentOAuthError("invalid_grant", "Refresh-token replay revoked this token family.");
-    }
-    await client.query(
-      `UPDATE tokenless_agent_oauth_token_families SET last_rotated_at = $2 WHERE token_family_id = $1`,
-      [tokenFamilyId, now],
-    );
     await client.query("COMMIT");
-    return issued.response;
+    return {
+      access_token: issued.accessToken,
+      token_type: "Bearer",
+      expires_in: Math.max(1, Math.floor((issued.accessExpiresAt.getTime() - now.getTime()) / 1_000)),
+      refresh_token: input.refreshToken,
+      scope: requestedScopes.join(" "),
+      resource: input.resource,
+    };
   } catch (error) {
     try {
       await client.query("ROLLBACK");
