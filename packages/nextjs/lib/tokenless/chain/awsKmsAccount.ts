@@ -61,8 +61,15 @@ function readDerInteger(bytes: Uint8Array, cursor: number) {
   const end = encodedLength.cursor + encodedLength.length;
   if (encodedLength.length === 0 || end > bytes.length) throw new Error("DER signature integer is invalid.");
   let start = encodedLength.cursor;
-  if (bytes[start] === 0) start += 1;
-  if (end - start > 32 || (bytes[start]! & 0x80) !== 0) throw new Error("DER signature integer is out of range.");
+  if (bytes[start] === 0) {
+    if (encodedLength.length > 1 && (bytes[start + 1]! & 0x80) === 0) {
+      throw new Error("DER signature integer is not canonical.");
+    }
+    start += 1;
+  } else if ((bytes[start]! & 0x80) !== 0) {
+    throw new Error("DER signature integer is negative.");
+  }
+  if (end - start > 32 || start === end) throw new Error("DER signature integer is out of range.");
   const hex = Buffer.from(bytes.slice(start, end)).toString("hex").padStart(64, "0");
   return { cursor: end, value: BigInt(`0x${hex}`) };
 }

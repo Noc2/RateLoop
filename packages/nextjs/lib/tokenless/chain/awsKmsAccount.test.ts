@@ -1,6 +1,7 @@
 import { createAwsKmsEthereumAccount, parseAwsKmsDerSignature } from "./awsKmsAccount";
 import { GetPublicKeyCommand, SignCommand } from "@aws-sdk/client-kms";
 import assert from "node:assert/strict";
+import { generateKeyPairSync, randomBytes, sign } from "node:crypto";
 import { test } from "node:test";
 import { type Hex, hashMessage, parseSignature, recoverMessageAddress, serializeTransaction, toHex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -119,5 +120,26 @@ test("AWS KMS account refuses a key whose address differs from the configured ro
 test("AWS KMS DER parser rejects malformed and out-of-range signatures", () => {
   assert.throws(() => parseAwsKmsDerSignature(Uint8Array.from([0x30, 0x00])), /integer/iu);
   assert.throws(() => parseAwsKmsDerSignature(Uint8Array.from([0x31, 0x00])), /sequence/iu);
+  assert.throws(
+    () => parseAwsKmsDerSignature(Uint8Array.from([0x30, 0x06, 0x02, 0x01, 0x80, 0x02, 0x01, 0x01])),
+    /negative/iu,
+  );
+  assert.throws(
+    () => parseAwsKmsDerSignature(Uint8Array.from([0x30, 0x07, 0x02, 0x02, 0x00, 0x01, 0x02, 0x01, 0x01])),
+    /canonical/iu,
+  );
   assert.equal(hashMessage("stable").length, 66);
+});
+
+test("AWS KMS DER parser accepts randomized canonical secp256k1 signatures with sign padding", () => {
+  const { privateKey } = generateKeyPairSync("ec", { namedCurve: "secp256k1" });
+  let paddedScalars = 0;
+  for (let index = 0; index < 512; index += 1) {
+    const signature = sign("sha256", randomBytes(32), { dsaEncoding: "der", key: privateKey });
+    const parsed = parseAwsKmsDerSignature(signature);
+    assert.ok(parsed.r > 0n);
+    assert.ok(parsed.s > 0n);
+    if (signature.includes(Buffer.from([0x02, 0x21, 0x00]))) paddedScalars += 1;
+  }
+  assert.ok(paddedScalars > 0, "randomized corpus must exercise DER sign padding");
 });
