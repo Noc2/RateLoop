@@ -100,26 +100,20 @@ test("agent management actions stay visible while technical records remain optio
   assert.match(source, /Audit history \(\{agent\.versions\.length\}\)/);
 });
 
-test("the capability card combines owner-stated limits with labeled host-reported metadata", () => {
+test("the agent evidence card shows only labeled host-reported and observed metadata", () => {
   const source = readFileSync(new URL("./AgentRegistryPanel.tsx", import.meta.url), "utf8");
-  assert.match(source, /Capabilities and limits/);
-  assert.match(source, /Intended purpose/);
-  assert.match(source, /Known limitations/);
-  assert.match(source, /Do-not-use conditions/);
-  assert.match(source, /Not stated yet\./);
-  // Owner-editable through the dedicated statement endpoint only.
-  assert.match(source, /capability-statement/);
-  assert.match(source, /method: "PUT"/);
-  assert.match(source, /Save capability statement/);
-  // Observed data joins the card: declared model, coverage stage, workflows,
-  // risk tiers, and the evaluation profile.
+  assert.match(source, /Model and evidence/);
   assert.match(source, /Declared model/);
   assert.match(source, /Coverage stage/);
   assert.match(source, /Observed workflows/);
   assert.match(source, /Observed risk tiers/);
   assert.match(source, /Evaluation profile/);
-  // Host-reported labeling stays.
   assert.match(source, /reported by the connected host, not independently verified/);
+  assert.doesNotMatch(source, /Capabilities and limits/);
+  assert.doesNotMatch(source, /Intended purpose/);
+  assert.doesNotMatch(source, /Known limitations/);
+  assert.doesNotMatch(source, /Do-not-use conditions/);
+  assert.doesNotMatch(source, /capability-statement/);
 });
 
 test("the connection card labels the connection lane as host-reported and defaults to the weakest claim", () => {

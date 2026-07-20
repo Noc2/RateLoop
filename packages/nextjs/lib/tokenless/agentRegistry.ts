@@ -189,20 +189,6 @@ export type AgentAssuranceScopeSummary = {
   updatedAt: string;
 };
 
-/**
- * Owner-stated capability card fields. These describe what the workspace
- * intends the agent for and where it must not be used; they complement the
- * host-reported declared metadata, which stays labeled as not independently
- * verified.
- */
-export type AgentCapabilityStatement = {
-  intendedPurpose: string | null;
-  knownLimitations: string | null;
-  doNotUseConditions: string | null;
-  updatedAt: string | null;
-  updatedBy: string | null;
-};
-
 export type WorkspaceAgent = {
   agentId: string;
   workspaceId: string;
@@ -213,7 +199,6 @@ export type WorkspaceAgent = {
   createdAt: string;
   updatedAt: string;
   deactivatedAt: string | null;
-  capabilityStatement: AgentCapabilityStatement;
   currentVersion: AgentVersionSnapshot;
   versions: AgentVersionSnapshot[];
   assuranceScopes: AgentAssuranceScopeSummary[];
@@ -1161,9 +1146,7 @@ async function loadWorkspaceAgents(workspaceId: string, canManage: boolean): Pro
   const [agentsResult, versionsResult, assuranceByAgent, humanReviewProjection] = await Promise.all([
     dbClient.execute({
       sql: `SELECT agent_id, workspace_id, external_id, owner_account_address, status,
-                   created_by, created_at, updated_at, deactivated_at,
-                   intended_purpose, known_limitations, do_not_use_conditions,
-                   capability_statement_updated_at, capability_statement_updated_by
+                   created_by, created_at, updated_at, deactivated_at
             FROM tokenless_agents
             WHERE workspace_id = ?
             ORDER BY created_at DESC, agent_id ASC`,
@@ -1219,15 +1202,6 @@ async function loadWorkspaceAgents(workspaceId: string, canManage: boolean): Pro
       createdAt: iso(row.created_at, "agent creation timestamp"),
       updatedAt: iso(row.updated_at, "agent update timestamp"),
       deactivatedAt: row.deactivated_at ? iso(row.deactivated_at, "agent deactivation timestamp") : null,
-      capabilityStatement: {
-        intendedPurpose: rowString(row, "intended_purpose"),
-        knownLimitations: rowString(row, "known_limitations"),
-        doNotUseConditions: rowString(row, "do_not_use_conditions"),
-        updatedAt: row.capability_statement_updated_at
-          ? iso(row.capability_statement_updated_at, "capability statement timestamp")
-          : null,
-        updatedBy: canManage ? rowString(row, "capability_statement_updated_by") : null,
-      },
       currentVersion: versions[0],
       versions,
       assuranceScopes: (assuranceByAgent.get(agentId) ?? []).sort((left, right) => {
@@ -1428,102 +1402,6 @@ export async function createWorkspaceAgentVersion(input: {
   const updated = agents.find(agent => agent.agentId === input.agentId);
   if (!updated) throw new Error("Updated agent could not be loaded.");
   return updated;
-}
-
-function normalizeCapabilityStatementField(value: unknown, field: string) {
-  if (value === null || value === undefined) return null;
-  if (typeof value !== "string") {
-    throw new TokenlessServiceError(
-      `${field} must be text of at most 2000 characters.`,
-      400,
-      "invalid_capability_statement",
-    );
-  }
-  const normalized = value.trim();
-  if (normalized.length > 2_000) {
-    throw new TokenlessServiceError(
-      `${field} must be text of at most 2000 characters.`,
-      400,
-      "invalid_capability_statement",
-    );
-  }
-  return normalized || null;
-}
-
-/**
- * Owner-editable capability card: intended purpose, known limitations, and
- * do-not-use conditions. Audited like every other registry change.
- */
-export async function updateWorkspaceAgentCapabilityStatement(input: {
-  accountAddress: string;
-  workspaceId: string;
-  agentId: string;
-  statement: {
-    intendedPurpose?: unknown;
-    knownLimitations?: unknown;
-    doNotUseConditions?: unknown;
-  };
-  now?: Date;
-}) {
-  const access = await requireWorkspaceManagement(input.accountAddress, input.workspaceId);
-  if (!input.statement || typeof input.statement !== "object" || Array.isArray(input.statement)) {
-    throw new TokenlessServiceError("A capability statement object is required.", 400, "invalid_capability_statement");
-  }
-  const unexpected = Object.keys(input.statement).filter(
-    key => !["intendedPurpose", "knownLimitations", "doNotUseConditions"].includes(key),
-  );
-  if (unexpected.length > 0) {
-    throw new TokenlessServiceError(
-      "Capability statements carry only intendedPurpose, knownLimitations, and doNotUseConditions.",
-      400,
-      "invalid_capability_statement",
-    );
-  }
-  const intendedPurpose = normalizeCapabilityStatementField(input.statement.intendedPurpose, "intendedPurpose");
-  const knownLimitations = normalizeCapabilityStatementField(input.statement.knownLimitations, "knownLimitations");
-  const doNotUseConditions = normalizeCapabilityStatementField(
-    input.statement.doNotUseConditions,
-    "doNotUseConditions",
-  );
-  const now = input.now ?? new Date();
-  const updated = await dbClient.execute({
-    sql: `UPDATE tokenless_agents
-          SET intended_purpose = ?, known_limitations = ?, do_not_use_conditions = ?,
-              capability_statement_updated_at = ?, capability_statement_updated_by = ?, updated_at = ?
-          WHERE workspace_id = ? AND agent_id = ?`,
-    args: [
-      intendedPurpose,
-      knownLimitations,
-      doNotUseConditions,
-      now,
-      access.address,
-      now,
-      input.workspaceId,
-      input.agentId,
-    ],
-  });
-  if (!updated.rowCount) throw new TokenlessServiceError("Agent not found.", 404, "agent_not_found");
-  await dbClient.execute({
-    sql: `INSERT INTO tokenless_agent_audit_events
-          (event_id, workspace_id, agent_id, event_type, actor_account_address, details_json, created_at)
-          VALUES (?, ?, ?, 'agent.capability_statement_updated', ?, ?, ?)`,
-    args: [
-      `agevt_${randomUUID().replaceAll("-", "")}`,
-      input.workspaceId,
-      input.agentId,
-      access.address,
-      JSON.stringify({
-        hasIntendedPurpose: intendedPurpose !== null,
-        hasKnownLimitations: knownLimitations !== null,
-        hasDoNotUseConditions: doNotUseConditions !== null,
-      }),
-      now,
-    ],
-  });
-  const agents = await loadWorkspaceAgents(input.workspaceId, true);
-  const agent = agents.find(entry => entry.agentId === input.agentId);
-  if (!agent) throw new Error("Updated agent could not be loaded.");
-  return agent;
 }
 
 export async function deactivateWorkspaceAgent(input: {

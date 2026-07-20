@@ -6,7 +6,7 @@ const OVERSIGHT_SECTIONS = [
     id: "monitor",
     requirement: "Article 14(4)(a)",
     title: "Monitor operation",
-    body: "Your designated people monitor operation from the oversight dashboard: sampling coverage, response latency, disagreement, and blocked outputs, per scope. In-app, email, and browser alerts flag disagreement spikes, coverage-floor hits, blocked outputs, failed or expired reviews, and workspace stops, and event webhooks feed your own monitoring. Per-agent capability cards summarize the owner-stated purpose, known limitations, and do-not-use conditions, the declared provider and model, and observed workflows and risk tiers — declared metadata labelled host-reported, not independently verified.",
+    body: "Your designated people monitor operation from the oversight dashboard: sampling coverage, response latency, disagreement, and blocked outputs, per scope. In-app, email, and browser alerts flag disagreement spikes, coverage-floor hits, blocked outputs, failed or expired reviews, and workspace stops, and event webhooks feed your own monitoring. Per-agent evidence summaries show the declared provider and model alongside observed workflows and risk tiers — declared metadata labelled host-reported, not independently verified.",
     responsibility:
       "You remain responsible for watching those surfaces, understanding the agent's capacities and limitations, and acting on what they show for your use case.",
   },

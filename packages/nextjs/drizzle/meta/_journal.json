@@ -883,6 +883,13 @@
       "when": 1784394000000,
       "tag": "0126_evm_transaction_fee_replacements",
       "breakpoints": true
+    },
+    {
+      "idx": 127,
+      "version": "7",
+      "when": 1784397600000,
+      "tag": "0127_remove_agent_capability_statements",
+      "breakpoints": true
     }
   ]
 }

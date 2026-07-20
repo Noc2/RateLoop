@@ -51,7 +51,7 @@ test("human-oversight docs map each Article 14(4) measure to a capability and a 
   assert.match(html, /fail-closed/i);
   assert.match(html, /advisory integrations record the same lifecycle without proving the host blocked delivery/i);
   assert.match(html, /releasing the stop restores nothing automatically/i);
-  assert.match(html, /owner-stated purpose, known limitations, and do-not-use conditions/i);
+  assert.match(html, /per-agent evidence summaries/i);
   assert.match(html, /host-reported, not independently verified/i);
 
   assert.match(html, /id="designation-and-literacy"/);

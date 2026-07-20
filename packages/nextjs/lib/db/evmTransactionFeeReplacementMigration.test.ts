@@ -22,17 +22,20 @@ test("0126 stores append-only transaction versions with signer and fee audit ide
   assert.match(migration, /BEFORE TRUNCATE/u);
 });
 
-test("0126 is the journal head and its version table is present in the applied schema", async () => {
+test("0126 is ordered before the current journal head and its version table is present in the applied schema", async () => {
   const journal = JSON.parse(readFileSync(new URL("../../drizzle/meta/_journal.json", import.meta.url), "utf8")) as {
     entries: Array<{ idx: number; tag: string }>;
   };
-  assert.deepEqual(journal.entries.at(-1), {
-    idx: 126,
-    version: "7",
-    when: 1784394000000,
-    tag: "0126_evm_transaction_fee_replacements",
-    breakpoints: true,
-  });
+  assert.deepEqual(
+    journal.entries.find(entry => entry.idx === 126),
+    {
+      idx: 126,
+      version: "7",
+      when: 1784394000000,
+      tag: "0126_evm_transaction_fee_replacements",
+      breakpoints: true,
+    },
+  );
   assert.equal(getTableName(tokenlessEvmTransactionVersions), "tokenless_evm_transaction_versions");
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
   const columns = await dbClient.execute(

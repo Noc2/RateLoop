@@ -7,7 +7,7 @@ import { AUTH_SESSION_COOKIE, createAuthSession } from "~~/lib/auth/session";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { __adaptiveCoverageExportTestUtils, exportAdaptiveCoverage } from "~~/lib/tokenless/adaptiveCoverageExport";
-import { createWorkspaceAgent, updateWorkspaceAgentCapabilityStatement } from "~~/lib/tokenless/agentRegistry";
+import { createWorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
@@ -432,43 +432,4 @@ test("GET returns the authenticated attachment and rejects ambiguous export boun
   assert.equal((await duplicate.json()).code, "invalid_coverage_export_window");
   const unauthenticated = await GET(request("", null), context);
   assert.equal(unauthenticated.status, 401);
-});
-
-test("the export carries per-agent capability statements with host-reported labeling and no deciding accounts", async () => {
-  const setup = await fixture("capability");
-  await updateWorkspaceAgentCapabilityStatement({
-    accountAddress: setup.identity.principalId,
-    workspaceId: setup.workspaceId,
-    agentId: setup.agent.agentId,
-    statement: {
-      intendedPurpose: "Answer routine support questions.",
-      knownLimitations: "Weak on billing disputes.",
-      doNotUseConditions: "Never for legal or medical questions.",
-    },
-    now: new Date("2026-07-01T10:00:00.000Z"),
-  });
-  const exported = await exportAdaptiveCoverage({
-    accountAddress: setup.identity.principalId,
-    workspaceId: setup.workspaceId,
-    from: FROM,
-    to: TO,
-    now: SNAPSHOT,
-  });
-  assert.equal(exported.capabilityStatements.length, 1);
-  const statement = exported.capabilityStatements[0]!;
-  assert.equal(statement.agentId, setup.agent.agentId);
-  assert.deepEqual(statement.ownerStatement, {
-    intendedPurpose: "Answer routine support questions.",
-    knownLimitations: "Weak on billing disputes.",
-    doNotUseConditions: "Never for legal or medical questions.",
-    updatedAt: "2026-07-01T10:00:00.000Z",
-  });
-  assert.equal(statement.declared.provider, "OpenAI");
-  assert.equal(statement.declared.model, "gpt-5");
-  assert.equal(statement.declared.verification, "host_reported_not_independently_verified");
-  assert.deepEqual(statement.observedScopes, [
-    { scopeId: `aesc_coverage_capability`, workflowKey: "support-reply", riskTier: "normal", stage: "high_coverage" },
-  ]);
-  // The account that stated the capability card never enters the export.
-  assert.doesNotMatch(JSON.stringify(exported.capabilityStatements), new RegExp(setup.identity.principalId, "u"));
 });

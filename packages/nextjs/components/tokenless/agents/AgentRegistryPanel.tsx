@@ -138,140 +138,24 @@ function reviewCapability(agent: WorkspaceAgent) {
   return { blocked: false, label: "Automatic requests ready" };
 }
 
-function CapabilityStatementText({ label, value }: { label: string; value: string | null }) {
-  return (
-    <div>
-      <dt className="text-xs text-base-content/45">{label}</dt>
-      <dd className={`mt-1 text-sm leading-6 ${value ? "" : "text-base-content/40"}`}>{value ?? "Not stated yet."}</dd>
-    </div>
-  );
-}
-
-function AgentCapabilityCard({
-  agent,
-  canManage,
-  workspaceId,
-  onSaved,
-}: {
-  agent: WorkspaceAgent;
-  canManage: boolean;
-  workspaceId: string;
-  onSaved: () => Promise<void> | void;
-}) {
-  const statement = agent.capabilityStatement;
-  const [editing, setEditing] = useState(false);
-  const [intendedPurpose, setIntendedPurpose] = useState(statement.intendedPurpose ?? "");
-  const [knownLimitations, setKnownLimitations] = useState(statement.knownLimitations ?? "");
-  const [doNotUseConditions, setDoNotUseConditions] = useState(statement.doNotUseConditions ?? "");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
+function AgentEvidenceCard({ agent }: { agent: WorkspaceAgent }) {
   const workflows = [...new Set(agent.assuranceScopes.map(scope => scope.workflowKey))];
   const riskTiers = [...new Set(agent.assuranceScopes.map(scope => scope.riskTier))];
   const latestScope = agent.assuranceScopes[0] ?? null;
   const version = agent.currentVersion;
-
-  async function save() {
-    setBusy(true);
-    setError(null);
-    try {
-      await readJson(
-        await fetch(
-          `/api/account/workspaces/${encodeURIComponent(workspaceId)}/agents/${encodeURIComponent(agent.agentId)}/capability-statement`,
-          {
-            method: "PUT",
-            credentials: "same-origin",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              statement: {
-                intendedPurpose: intendedPurpose.trim() || null,
-                knownLimitations: knownLimitations.trim() || null,
-                doNotUseConditions: doNotUseConditions.trim() || null,
-              },
-            }),
-          },
-        ),
-      );
-      setEditing(false);
-      await onSaved();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to save the capability statement.");
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
     <Card
       as="section"
       variant="nested"
       className="mt-4 rounded-xl p-4"
-      aria-labelledby={`capability-card-${agent.agentId}`}
+      aria-labelledby={`agent-evidence-${agent.agentId}`}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 id={`capability-card-${agent.agentId}`} className="text-sm font-semibold">
-          Capabilities and limits
-        </h3>
-        {canManage ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            disabled={busy}
-            onClick={() => setEditing(current => !current)}
-          >
-            {editing ? "Cancel" : "Edit"}
-          </Button>
-        ) : null}
-      </div>
+      <h3 id={`agent-evidence-${agent.agentId}`} className="text-sm font-semibold">
+        Model and evidence
+      </h3>
 
-      {editing && canManage ? (
-        <div className="mt-3 space-y-2">
-          <textarea
-            className="textarea w-full border-white/10 bg-[var(--rateloop-field)] text-sm"
-            placeholder="Intended purpose"
-            aria-label="Intended purpose"
-            value={intendedPurpose}
-            maxLength={2000}
-            rows={2}
-            onChange={event => setIntendedPurpose(event.target.value)}
-          />
-          <textarea
-            className="textarea w-full border-white/10 bg-[var(--rateloop-field)] text-sm"
-            placeholder="Known limitations"
-            aria-label="Known limitations"
-            value={knownLimitations}
-            maxLength={2000}
-            rows={2}
-            onChange={event => setKnownLimitations(event.target.value)}
-          />
-          <textarea
-            className="textarea w-full border-white/10 bg-[var(--rateloop-field)] text-sm"
-            placeholder="Do-not-use conditions"
-            aria-label="Do-not-use conditions"
-            value={doNotUseConditions}
-            maxLength={2000}
-            rows={2}
-            onChange={event => setDoNotUseConditions(event.target.value)}
-          />
-          <Button type="button" size="sm" variant="secondary" disabled={busy} onClick={() => void save()}>
-            {busy ? "Saving…" : "Save capability statement"}
-          </Button>
-        </div>
-      ) : (
-        <dl className="mt-3 grid gap-3 sm:grid-cols-3">
-          <CapabilityStatementText label="Intended purpose" value={statement.intendedPurpose} />
-          <CapabilityStatementText label="Known limitations" value={statement.knownLimitations} />
-          <CapabilityStatementText label="Do-not-use conditions" value={statement.doNotUseConditions} />
-        </dl>
-      )}
-      {statement.updatedAt ? (
-        <p className="mt-2 text-xs text-base-content/40">
-          Stated by the workspace owner · updated {new Date(statement.updatedAt).toLocaleString()}
-        </p>
-      ) : null}
-
-      <dl className="mt-4 grid gap-3 border-t border-white/10 pt-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+      <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <dt className="text-xs text-base-content/45">Declared model</dt>
           <dd className="mt-1">
@@ -308,14 +192,8 @@ function AgentCapabilityCard({
         ) : null}
       </dl>
       <p className="mt-3 text-xs text-base-content/45">
-        Declared and execution metadata is reported by the connected host, not independently verified. The owner-stated
-        purpose and limits describe how your organization intends this agent to be used.
+        Declared and execution metadata is reported by the connected host, not independently verified.
       </p>
-      {error ? (
-        <p className="mt-2 text-xs text-red-100" role="alert">
-          {error}
-        </p>
-      ) : null}
     </Card>
   );
 }
@@ -737,12 +615,7 @@ export function AgentRegistryPanel({
             </div>
             {view === "connection" ? (
               <>
-                <AgentCapabilityCard
-                  agent={agent}
-                  canManage={Boolean(registry?.canManage) && agent.status === "active"}
-                  workspaceId={workspaceId}
-                  onSaved={() => loadRegistry(workspaceId)}
-                />
+                <AgentEvidenceCard agent={agent} />
                 <div className="mt-3 space-y-4 border-t border-white/10 pt-3">
                   {registry?.canManage && agent.status === "active" ? (
                     <div className="flex flex-wrap gap-2">

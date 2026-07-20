@@ -24,7 +24,7 @@ const OVERSIGHT_MATRIX = [
   {
     requirement: "Art 14(4)(a) · Monitor",
     provides:
-      "An oversight dashboard (sampling, latency, disagreement, blocked outputs), in-app, email, and browser alerts, event webhooks, and per-agent capability cards.",
+      "An oversight dashboard (sampling, latency, disagreement, blocked outputs), in-app, email, and browser alerts, event webhooks, and per-agent evidence summaries.",
     yours: "Watching those surfaces, understanding the agent's capacities and limitations, and acting on anomalies.",
   },
   {
