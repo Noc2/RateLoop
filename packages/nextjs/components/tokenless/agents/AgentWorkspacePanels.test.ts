@@ -113,9 +113,9 @@ test("workspace managers see the human-only Feedback Bonus award inbox", () => {
   assert.match(panelsSource, /<FeedbackBonusAwardInbox workspaceId=\{workspaceId\} \/>/);
 });
 
-test("the connected-agent task path shows a concise evidence summary", () => {
-  assert.match(panelsSource, /import \{ WorkspaceEvidenceSummaryStrip \}/);
-  assert.match(panelsSource, /<WorkspaceEvidenceSummaryStrip workspaceId=\{workspaceId\} canManage=\{canManage\} \/>/);
+test("the overview starts with workspace settings instead of an evidence summary strip", () => {
+  assert.doesNotMatch(panelsSource, /WorkspaceEvidenceSummaryStrip/);
+  assert.doesNotMatch(panelsSource, /Last decision packet|Most conservative coverage stage|Latest packet anchor/);
 });
 
 test("one canonical human-review editor renders only for the selected agent", () => {

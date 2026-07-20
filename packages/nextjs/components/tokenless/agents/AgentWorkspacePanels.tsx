@@ -14,7 +14,6 @@ import { FeedbackBonusAwardInbox } from "./FeedbackBonusAwardInbox";
 import { HumanReviewApprovalInbox } from "./HumanReviewApprovalInbox";
 import { OversightAlertsPanel } from "./OversightAlertsPanel";
 import { PrivateGroupsPanel } from "./PrivateGroupsPanel";
-import { WorkspaceEvidenceSummaryStrip } from "./WorkspaceEvidenceSummaryStrip";
 import { connectedAgentTabs, resolveAvailableAgentTab } from "./agentWorkspaceState";
 import { AgentSetupFlow } from "./setup/AgentSetupFlow";
 import { WorkspaceSetupStart } from "./setup/WorkspaceSetupStart";
@@ -118,9 +117,6 @@ export function AgentWorkspacePanels({
         tabIndex={0}
         className="space-y-5 outline-none focus-visible:ring-2 focus-visible:ring-[var(--rateloop-blue)]"
       >
-        {hasConnectedAgent && resolvedTab === "overview" ? (
-          <WorkspaceEvidenceSummaryStrip workspaceId={workspaceId} canManage={canManage} />
-        ) : null}
         {hasConnectedAgent && resolvedTab === "overview" ? (
           <WorkspaceSettingsClient initialWorkspaceId={workspaceId} />
         ) : null}
