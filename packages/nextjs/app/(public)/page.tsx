@@ -87,7 +87,7 @@ const questions = [
   ],
   [
     "Can I Use Private Data?",
-    "Only submit material you are authorized to share. Minimize it, redact unnecessary sensitive data, and remember that assigned reviewers and RateLoop may read what you submit.",
+    "Only submit material you are authorized to share. Minimize it, redact sensitive data, and remember assigned reviewers and RateLoop may read it.",
   ],
   [
     "What Does the Blockchain Record?",

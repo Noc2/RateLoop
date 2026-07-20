@@ -110,7 +110,7 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /250 completed review decisions/);
   assert.match(html, /href="\/agents\?tab=overview"/);
   assert.match(html, /href="\/agents\?tab=overview&amp;billing=upgrade"/);
-  assert.match(html, /Book Demo/);
+  assert.match(html, /Book demo/);
   assert.doesNotMatch(html, /See pricing|href="\/pricing"/);
   assert.match(html, /Works with the agents your team already uses/);
   assert.match(html, /Claude Code/);
