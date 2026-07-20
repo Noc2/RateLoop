@@ -23,6 +23,25 @@ test("default connection UI creates and copies one safe connection intent", () =
   assert.doesNotMatch(source, /onClick=\{\(\) => void generatePairing/);
 });
 
+test("host chips are optional disclosure below the unchanged universal copy path", () => {
+  assert.match(
+    source,
+    /<AgentConnectionHostPicker selectedHostId=\{selectedHostId\} onSelectHost=\{selectConnectionHost\} \/>/,
+  );
+  // The universal message stays the zero-friction default; a chip only tunes it.
+  assert.match(source, /buildAgentConnectionMessage\(\{ connectionUrl \}\)/);
+  assert.match(source, /buildAgentConnectionMessageForHost\(\{ connectionUrl, hostId \}\)/);
+  assert.match(source, /connectionMessageForHost\(connectionUrl, selectedHostId\)/);
+  // A selection made while the message is visible re-tunes it in place.
+  assert.match(source, /connectionMessageForHost\(manualConnectionUrl, hostId\)/);
+  // The choice is remembered per workspace and restored on load.
+  assert.match(source, /setSelectedHostId\(loadAgentConnectionHostChoice\(workspaceId\)\)/);
+  assert.match(source, /saveAgentConnectionHostChoice\(workspaceId, hostId\)/);
+  const copyAction = source.indexOf('"Copy connection message"');
+  const picker = source.indexOf("<AgentConnectionHostPicker");
+  assert.ok(copyAction >= 0 && copyAction < picker, "the disclosure renders below the primary copy action");
+});
+
 test("the complete connection message stays visible with accessible copy recovery", () => {
   const exposeMessage = source.indexOf("setManualConnectionMessage(message)");
   const automaticCopy = source.indexOf("navigator.clipboard.writeText(message)");
