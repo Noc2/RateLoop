@@ -1,6 +1,6 @@
 ---
 name: rateloop-human-review-loop
-description: Operate an already connected RateLoop workspace's ongoing, policy-bound human-review loop before eligible outputs: evaluate, route owner approval or authorized autonomous review, wait, and consume the result.
+description: "Operate an already connected RateLoop workspace's ongoing, policy-bound human-review loop before eligible outputs: evaluate, route owner approval or authorized autonomous review, wait, and consume the result."
 ---
 
 # RateLoop Human Review Loop

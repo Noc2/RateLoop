@@ -115,7 +115,7 @@ export const TOKENLESS_HOST_CAPABILITIES = [
         label: "RateLoop Workspace plugin from the tokenless-pinned Noc2/RateLoop marketplace",
         value: "plugin://rateloop-workspace@rateloop",
         checkedAt: "2026-07-20",
-        clientVersion: "rateloop-workspace@0.1.1+codex.20260720135555",
+        clientVersion: "rateloop-workspace@0.1.1+codex.20260720140232",
       },
     ],
     humanActions: [
