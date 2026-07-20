@@ -104,7 +104,11 @@ A first workspace uses one resumable setup flow:
 2. connect an agent;
 3. confirm the agent identity and declaration;
 4. choose review behavior, public/private material boundaries, and safe spending defaults; and
-5. invite people or prepare one-use invitation codes when an invited reviewer lane is needed.
+5. invite people or prepare invitation codes when an invited reviewer lane is needed. Setup may create either an
+   individually bound one-use code or a capacity-limited shared code for the currently missing reviewer seats. A
+   shared code is a short-lived bearer credential, may be restricted to a verified email domain, and grants only
+   private-group membership. It never carries intended specialist areas; each member's knowledge is confirmed
+   individually after joining.
 
 The flow shows the current stage, permits backward navigation, persists progress per workspace, and hides the normal
 Agents management menu until setup is completed or the workspace is grandfathered. The global product shell remains
