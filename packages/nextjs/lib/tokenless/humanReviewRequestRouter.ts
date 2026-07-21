@@ -28,6 +28,7 @@ import {
 } from "~~/lib/tokenless/humanReviewOpportunityQuestions";
 import { assertHumanReviewPayloadCommitments } from "~~/lib/tokenless/humanReviewPayloadCommitments";
 import { hashFrozenBinaryReviewQuestion, resolveHumanReviewQuestion } from "~~/lib/tokenless/humanReviewQuestions";
+import { mapHumanReviewRequestDatabaseError } from "~~/lib/tokenless/humanReviewRequestDatabase";
 import {
   hashPreparedHumanReviewValue,
   prepareHumanReviewRequest,
@@ -180,6 +181,11 @@ export type ExactPrivateReviewBinding = {
   paidReviewers: PaidReviewerBinding[] | null;
 };
 
+type RetryableHumanReviewRoutingBlockCode =
+  | "automatic_grant_inactive"
+  | "private_routing_configuration_required"
+  | "workspace_stopped";
+
 export type HumanReviewRoutingResult =
   | {
       schemaVersion: "rateloop.human-review-route.v1";
@@ -268,6 +274,11 @@ type RouterDependencies = {
     context: FrozenHumanReviewRoutingContext,
     privateBinding: ExactPrivateReviewBinding | null,
     frozenQuestion: FrozenHumanReviewOpportunityQuestion,
+    now: Date,
+  ) => Promise<void>;
+  blockRetryablePrerequisite?: (
+    context: FrozenHumanReviewRoutingContext,
+    code: RetryableHumanReviewRoutingBlockCode,
     now: Date,
   ) => Promise<void>;
   preparePrivateFoundation: typeof preparePrivateReviewFoundation;
@@ -898,6 +909,45 @@ async function activateExactAutonomousLane(
   });
 }
 
+async function blockRetryableRoutingPrerequisite(
+  context: FrozenHumanReviewRoutingContext,
+  code: RetryableHumanReviewRoutingBlockCode,
+  now: Date,
+) {
+  if (context.lifecycle.state !== "approval_required" && context.lifecycle.state !== "request_ready") return;
+  const transitionKey = `route-prerequisite-blocked:${sha256(
+    JSON.stringify({
+      schemaVersion: "rateloop.review-route-prerequisite-block.v1",
+      workspaceId: context.workspaceId,
+      opportunityId: context.opportunityId,
+      state: context.lifecycle.state,
+      revision: context.lifecycle.revision,
+      code,
+    }),
+  )}`;
+  await transitionHumanReviewOpportunityLifecycle({
+    workspaceId: context.workspaceId,
+    opportunityId: context.opportunityId,
+    transitionKey,
+    expectedState: context.lifecycle.state,
+    expectedRevision: context.lifecycle.revision,
+    toState: "blocked",
+    reasonCodes: ["review_request_prerequisite_unavailable", code],
+    actor: { kind: "lane_adapter", reference: "human-review-router-v1" },
+    details: {
+      code,
+      workflowKey: context.workflowKey,
+      bindingId: context.binding.id,
+      bindingVersion: context.binding.version,
+      requestProfileId: context.requestProfile.id,
+      requestProfileVersion: context.requestProfile.version,
+      requestProfileHash: context.requestProfile.hash,
+      lane: context.requestProfile.lane,
+    },
+    occurredAt: now,
+  });
+}
+
 function requiredMaterial(context: FrozenHumanReviewRoutingContext, material: HumanReviewRoutingMaterial | undefined) {
   const expectedKind = context.requestProfile.lane.startsWith("private_invited_") ? "private" : "public";
   if (!material || material.kind !== expectedKind) {
@@ -1124,6 +1174,7 @@ const DEFAULT_DEPENDENCIES: RouterDependencies = {
   reconcilePrivateRouting: reconcileWorkspacePrivateReviewRoutingForFrozenRequest,
   resolvePrivateBinding: resolveExactPrivateBinding,
   activateAutonomousLane: activateExactAutonomousLane,
+  blockRetryablePrerequisite: blockRetryableRoutingPrerequisite,
   preparePrivateFoundation: preparePrivateReviewFoundation,
   assignPrivateUnpaid: requestPrivateUnpaidHumanReview,
   assignPrivatePaid: requestPrivatePaidHumanReview,
@@ -1133,7 +1184,7 @@ const DEFAULT_DEPENDENCIES: RouterDependencies = {
 };
 
 export function createHumanReviewRequestRouter(dependencies: RouterDependencies = DEFAULT_DEPENDENCIES) {
-  return async function routeHumanReviewRequest(input: HumanReviewRoutingRequest): Promise<HumanReviewRoutingResult> {
+  async function routeHumanReviewRequestUnchecked(input: HumanReviewRoutingRequest): Promise<HumanReviewRoutingResult> {
     const now = input.now ?? new Date();
     if (!Number.isFinite(now.getTime())) {
       throw new TokenlessServiceError("Routing time is invalid.", 400, "invalid_review_routing_time");
@@ -1145,16 +1196,20 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
       authority: context.binding.authority,
       lane: context.requestProfile.lane,
     };
+    const retryableBlocked = async (code: RetryableHumanReviewRoutingBlockCode) => {
+      await (dependencies.blockRetryablePrerequisite ?? blockRetryableRoutingPrerequisite)(context, code, now);
+      return {
+        ...common,
+        action: "blocked" as const,
+        code,
+        retryable: true as const,
+        sideEffects: NO_SIDE_EFFECTS,
+      };
+    };
     if (await (dependencies.isWorkspaceStopped ?? isWorkspaceStopEngaged)(context.workspaceId)) {
       // The workspace stop control halts every review-triggered release path
       // until a manager releases the stop and re-grants agents individually.
-      return {
-        ...common,
-        action: "blocked",
-        code: "workspace_stopped",
-        retryable: true,
-        sideEffects: NO_SIDE_EFFECTS,
-      };
+      return retryableBlocked("workspace_stopped");
     }
     if (context.decision !== "required") {
       return { ...common, action: "no_review_required", sideEffects: NO_SIDE_EFFECTS };
@@ -1239,13 +1294,7 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
     }
     requiredMaterial(context, input.material);
     if (!hasExactAutonomousGrant(context)) {
-      return {
-        ...common,
-        action: "blocked",
-        code: "automatic_grant_inactive",
-        retryable: true,
-        sideEffects: NO_SIDE_EFFECTS,
-      };
+      return retryableBlocked("automatic_grant_inactive");
     }
     if (context.requestProfile.lane === "hybrid_public_safe") {
       const material = input.material!;
@@ -1391,36 +1440,18 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
         now,
       });
       if (!privateRouting.ready) {
-        return {
-          ...common,
-          action: "blocked",
-          code: "private_routing_configuration_required",
-          retryable: true,
-          sideEffects: NO_SIDE_EFFECTS,
-        };
+        return retryableBlocked("private_routing_configuration_required");
       }
     }
     const privateBinding = await dependencies.resolvePrivateBinding(input.principal, context, now);
     if (!privateBinding) {
-      return {
-        ...common,
-        action: "blocked",
-        code: "private_routing_configuration_required",
-        retryable: true,
-        sideEffects: NO_SIDE_EFFECTS,
-      };
+      return retryableBlocked("private_routing_configuration_required");
     }
     if (
       (context.requestProfile.lane === "private_invited_paid" || context.requestProfile.feedbackBonusEnabled) &&
       privateBinding.paidReviewers === null
     ) {
-      return {
-        ...common,
-        action: "blocked",
-        code: "private_routing_configuration_required",
-        retryable: true,
-        sideEffects: NO_SIDE_EFFECTS,
-      };
+      return retryableBlocked("private_routing_configuration_required");
     }
     await ensureRoutingFeedbackBonus(
       dependencies,
@@ -1513,6 +1544,14 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
       foundation,
       delivery,
     };
+  }
+
+  return async function routeHumanReviewRequest(input: HumanReviewRoutingRequest): Promise<HumanReviewRoutingResult> {
+    try {
+      return await routeHumanReviewRequestUnchecked(input);
+    } catch (error) {
+      throw mapHumanReviewRequestDatabaseError(error);
+    }
   };
 }
 

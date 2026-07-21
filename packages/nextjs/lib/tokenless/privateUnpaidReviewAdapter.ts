@@ -4,6 +4,7 @@ import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
 import { transitionHumanReviewOpportunityLifecycleInTransaction } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
+import { applyHumanReviewRequestTransactionTimeouts } from "~~/lib/tokenless/humanReviewRequestDatabase";
 import {
   hasAcceptedPrivateGroupPolicy,
   requirePrivateGroupPolicyAcceptance,
@@ -436,6 +437,7 @@ async function requestPrivateHumanReviewAssignments(input: {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    await applyHumanReviewRequestTransactionTimeouts(client);
     const { row, responseDeadline } = await loadFrozenFoundation(client, { ...input, now });
     const paid = input.compensationMode === "usdc";
     const laneSlug = paid ? "private-paid" : "private-unpaid";
@@ -901,6 +903,7 @@ export async function expirePrivateUnpaidReviewReservations(now = new Date()) {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    await applyHumanReviewRequestTransactionTimeouts(client);
     const due = await client.query(
       `SELECT assignment_id,project_id,cohort_id,reviewer_account_address
        FROM tokenless_private_unpaid_review_assignments

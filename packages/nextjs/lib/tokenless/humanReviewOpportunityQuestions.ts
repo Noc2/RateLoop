@@ -9,6 +9,7 @@ import {
   resolveHumanReviewQuestion,
   serializeFrozenBinaryReviewQuestion,
 } from "~~/lib/tokenless/humanReviewQuestions";
+import { applyHumanReviewRequestTransactionTimeouts } from "~~/lib/tokenless/humanReviewRequestDatabase";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
@@ -159,6 +160,7 @@ export function createHumanReviewOpportunityQuestionFreezer(
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
+      await applyHumanReviewRequestTransactionTimeouts(client as PoolClient);
       const opportunityResult = await client.query(
         `SELECT rp.question_authority,rp.result_semantics,rp.criterion,rp.positive_label,
                 rp.negative_label,rp.rationale_mode,rp.content_boundary

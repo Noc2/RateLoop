@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
 import { dbPool } from "~~/lib/db";
+import { applyHumanReviewRequestTransactionTimeouts } from "~~/lib/tokenless/humanReviewRequestDatabase";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export const HUMAN_REVIEW_OPPORTUNITY_TRANSITIONS = {
@@ -392,6 +393,7 @@ export async function transitionHumanReviewOpportunityLifecycle(
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    await applyHumanReviewRequestTransactionTimeouts(client);
     const transition = await transitionHumanReviewOpportunityLifecycleInTransaction(client, {
       ...input,
       workspaceId: validated.workspaceId,

@@ -6,6 +6,7 @@ import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import { hashHumanReviewConfiguration } from "~~/lib/tokenless/humanReviewConfiguration";
 import { transitionHumanReviewOpportunityLifecycleInTransaction } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
 import type { FrozenBinaryReviewQuestion } from "~~/lib/tokenless/humanReviewQuestions";
+import { applyHumanReviewRequestTransactionTimeouts } from "~~/lib/tokenless/humanReviewRequestDatabase";
 import {
   type BoundHumanReviewRequestProfile,
   type HumanReviewDerivedEconomics,
@@ -585,6 +586,7 @@ export async function prepareHumanReviewForOwnerApproval(input: {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    await applyHumanReviewRequestTransactionTimeouts(client);
     const approvalAuthority =
       input.approvalAuthority ?? (input.publicationApproval ? "ask_automatically" : "prepare_for_approval");
     const opportunity = await loadAndVerifyOpportunity(
@@ -748,6 +750,7 @@ export async function consumeRedactedPublicationApproval(input: {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    await applyHumanReviewRequestTransactionTimeouts(client);
     const opportunity = await loadAndVerifyOpportunity(
       client,
       input.principal,

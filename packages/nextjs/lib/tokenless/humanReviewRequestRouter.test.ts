@@ -262,6 +262,7 @@ function dependencies(
     workspaceStopped?: boolean;
     approvalStatus?: "pending" | "approved" | "consumed";
     laneImplementation?: HumanReviewLaneReadiness;
+    loadError?: unknown;
   } = {},
 ) {
   const calls = {
@@ -278,6 +279,7 @@ function dependencies(
     feedbackBonus: 0,
     feedbackBonusEligibility: 0,
     freeze: 0,
+    block: 0,
     order: [] as string[],
     foundationInput: null as null | Record<string, unknown>,
     assignmentInput: null as null | Record<string, unknown>,
@@ -291,7 +293,10 @@ function dependencies(
       publicPaidNetwork: true,
       hybridPublicSafe: true,
     },
-    loadContext: async () => frozen,
+    loadContext: async () => {
+      if (options.loadError) throw options.loadError;
+      return frozen;
+    },
     freezeQuestion: async (input: { callerQuestion?: unknown }) => {
       calls.freeze += 1;
       const question = resolveHumanReviewQuestion({
@@ -326,6 +331,11 @@ function dependencies(
     activateAutonomousLane: async () => {
       calls.activate += 1;
       calls.order.push("activate");
+    },
+    blockRetryablePrerequisite: async (_context: unknown, code: string) => {
+      if (frozen.lifecycle.state !== "approval_required" && frozen.lifecycle.state !== "request_ready") return;
+      calls.block += 1;
+      calls.order.push(`block:${code}`);
     },
     publishPublicPaid: async () => {
       calls.public += 1;
@@ -459,6 +469,29 @@ const redactedPublicMaterial = {
   },
 };
 
+for (const code of ["55P03", "57014"]) {
+  test(`request routing maps PostgreSQL ${code} to a retryable stable error`, async () => {
+    const { router } = dependencies(context(), {
+      loadError: Object.assign(new Error("database wait ended"), { code }),
+    });
+    await assert.rejects(
+      router({
+        principal,
+        opportunityId: "opportunity_router",
+        sourcePayload: "source",
+        suggestionPayload: "suggestion",
+        material: publicMaterial,
+        now: NOW,
+      }),
+      (error: unknown) =>
+        error instanceof TokenlessServiceError &&
+        error.code === "review_request_temporarily_unavailable" &&
+        error.retryable === true &&
+        error.status === 503,
+    );
+  });
+}
+
 test("an engaged workspace stop blocks every release path before any preparation or delivery side effect", async () => {
   const { calls, router } = dependencies(context({ questionAuthority: "agent_per_request" }), {
     workspaceStopped: true,
@@ -480,7 +513,8 @@ test("an engaged workspace stop blocks every release path before any preparation
     fundsReserved: false,
     spent: false,
   });
-  assert.deepEqual(calls.order, []);
+  assert.deepEqual(calls.order, ["block:workspace_stopped"]);
+  assert.equal(calls.block, 1);
   assert.equal(calls.freeze, 0);
 });
 
@@ -545,7 +579,8 @@ test("inactive automatic grants block before activation, publication, assignment
   });
   assert.equal(result.action, "blocked");
   assert.equal(result.action === "blocked" ? result.code : null, "automatic_grant_inactive");
-  assert.deepEqual(calls.order, []);
+  assert.deepEqual(calls.order, ["block:automatic_grant_inactive"]);
+  assert.equal(calls.block, 1);
   assert.equal(calls.freeze, 0);
 });
 
@@ -685,6 +720,42 @@ test("private routing stops before binding resolution when request-time seat rec
   assert.equal(result.action === "blocked" ? result.code : null, "private_routing_configuration_required");
   assert.deepEqual(calls.order, ["reconcile_private"]);
   assert.equal(calls.resolvePrivate, 0);
+});
+
+test("request-ready private prerequisites durably block before recovery can reactivate the same opportunity", async () => {
+  const blockedAttempt = dependencies(context({ lane: "private_invited_unpaid", lifecycleState: "request_ready" }), {
+    privateRoutingReady: false,
+  });
+  const blocked = await blockedAttempt.router({
+    principal,
+    opportunityId: "opportunity_router",
+    sourcePayload: "private source",
+    suggestionPayload: "private suggestion",
+    material: { kind: "private", sourceContentType: "text/plain", suggestionContentType: "text/plain" },
+    now: NOW,
+  });
+  assert.equal(blocked.action, "blocked");
+  assert.equal(blocked.action === "blocked" ? blocked.code : null, "private_routing_configuration_required");
+  assert.deepEqual(blockedAttempt.calls.order, ["reconcile_private", "block:private_routing_configuration_required"]);
+  assert.equal(blockedAttempt.calls.block, 1);
+
+  const recoveredAttempt = dependencies(context({ lane: "private_invited_unpaid", lifecycleState: "blocked" }));
+  const recovered = await recoveredAttempt.router({
+    principal,
+    opportunityId: "opportunity_router",
+    sourcePayload: "private source",
+    suggestionPayload: "private suggestion",
+    material: { kind: "private", sourceContentType: "text/plain", suggestionContentType: "text/plain" },
+    now: NOW,
+  });
+  assert.equal(recovered.action, "private_review_assigned");
+  assert.deepEqual(recoveredAttempt.calls.order, [
+    "reconcile_private",
+    "resolve_private",
+    "activate",
+    "foundation",
+    "assign",
+  ]);
 });
 
 test("private routing rejects changed source or suggestion bytes before every side effect", async () => {

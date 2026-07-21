@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbPool } from "~~/lib/db";
+import { applyHumanReviewRequestTransactionTimeouts } from "~~/lib/tokenless/humanReviewRequestDatabase";
 import { expirePrivateUnpaidReviewReservations } from "~~/lib/tokenless/privateUnpaidReviewAdapter";
 import {
   expertiseQualificationRules,
@@ -1100,6 +1101,7 @@ export async function reconcileWorkspacePrivateReviewRoutingForFrozenRequest(inp
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    await applyHumanReviewRequestTransactionTimeouts(client);
     const profile = await loadProfile(client, {
       workspaceId: input.workspaceId,
       profileId: input.profileId,

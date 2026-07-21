@@ -242,6 +242,7 @@ test("the managed transaction rolls back the lifecycle if event insertion fails"
     async query(sql: string) {
       queries.push(sql);
       if (sql === "BEGIN" || sql === "ROLLBACK") return { rows: [], rowCount: null };
+      if (sql.startsWith("SET LOCAL ")) return { rows: [], rowCount: null };
       if (sql.includes("FROM tokenless_agent_review_opportunity_lifecycles")) {
         return { rows: [{ state: "evaluating", state_revision: 1, terminal_at: null }], rowCount: 1 };
       }
