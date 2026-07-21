@@ -3,7 +3,7 @@ export const RATELOOP_OSCAL_NAMESPACE = "https://rateloop.ai/ns/oscal";
 export const assuranceComplianceMap = Object.freeze({
   mappingVersion: "rateloop.assurance-compliance-map.v1",
   published: "2026-07-16T00:00:00Z",
-  lastModified: "2026-07-16T00:00:00Z",
+  lastModified: "2026-07-21T00:00:00Z",
   oscalVersion: "1.2.2",
   claimBoundary:
     "These mappings identify evidence RateLoop artifacts can support. They do not establish certification, legal compliance, control effectiveness, or discharge a customer's duties.",
@@ -49,7 +49,7 @@ export const assuranceComplianceMap = Object.freeze({
       title: "Host-reported execution evidence",
       schemaVersion: "rateloop.execution-evidence.v1",
       description:
-        "A canonical commitment to host-reported execution metadata. It is explicitly marked independentlyVerified:false and does not verify which model produced an output.",
+        "A canonical commitment to model identity and execution metadata reported by the connected host. It is explicitly marked independentlyVerified:false and does not independently verify that the reported model produced the output.",
       sourceLocations: [
         "packages/nextjs/lib/tokenless/agentExecutionEvidence.ts",
         "packages/nextjs/lib/tokenless/agentExecutionProvenance.ts",

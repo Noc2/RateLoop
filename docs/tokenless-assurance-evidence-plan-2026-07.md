@@ -20,10 +20,10 @@ disagreement, available cost/settlement references, and how review coverage adap
 regulators, insurers, and GRC tooling can consume. No single packet is claimed to contain every field from that combined
 evidence set.
 
-**What RateLoop never claims:** to verify what model actually produced an output (execution provenance is
-host-reported and labelled so); to make anyone "compliant" by itself; or to market SOC 2 / ISO / HIPAA /
-residency attestations RateLoop does not hold (per the readiness register). On Article 14/26 human oversight
-the framing is shared responsibility, per the
+**What RateLoop never claims:** to independently verify that the reported model produced an output. RateLoop records
+the model identity reported by the connected host for each execution and labels it host-reported. RateLoop neither
+claims to make anyone "compliant" by itself nor markets SOC 2 / ISO / HIPAA / residency attestations it does not hold
+(per the readiness register). On Article 14/26 human oversight the framing is shared responsibility, per the
 [human-oversight plan](tokenless-human-oversight-plan-2026-07.md): oversight is performed by the deployer's
 own natural persons with "competence, training and authority"
 ([official Article 26 text](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-26)) — in the invited

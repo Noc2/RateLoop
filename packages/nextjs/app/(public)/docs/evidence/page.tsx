@@ -193,10 +193,11 @@ export default function EvidencePage() {
         </table>
       </div>
       <p>
-        RateLoop operates around your AI system, gating its outputs; it does not modify the system itself. Execution
-        provenance is host-reported and labelled so; RateLoop does not verify which model actually produced an output.
-        RateLoop does not market SOC 2 / ISO / HIPAA / residency attestations it does not hold, and no evidence export
-        by itself makes anyone compliant. The capability-by-capability mapping behind each row lives on{" "}
+        RateLoop operates around your AI system, gating its outputs; it does not modify the system itself. RateLoop
+        records the model identity reported by the connected host for each execution and labels it host-reported; it
+        does not independently verify that the reported model produced the output. RateLoop does not market SOC 2 / ISO
+        / HIPAA / residency attestations it does not hold, and no evidence export by itself makes anyone compliant. The
+        capability-by-capability mapping behind each row lives on{" "}
         <Link href="/docs/human-oversight">Human Oversight</Link>.
       </p>
 

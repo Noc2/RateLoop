@@ -23,10 +23,11 @@ configure and operate RateLoop for your purpose; RateLoop provides the capabilit
 | Art 26(6) · Log retention      | A six-month retention floor with retention export, scheduled enforcement, and legal hold.                                                                                          | Your full legal and contractual retention schedule beyond that floor.                                   |
 | Art 4 · AI literacy            | Exportable training and calibration records for reviewers and oversight persons.                                                                                                   | Ensuring sufficient AI literacy across the staff who operate the system.                                |
 
-RateLoop operates around your AI system, gating its outputs; it does not modify the system itself.
-Execution provenance is host-reported and labelled so; RateLoop does not verify which model actually produced an
-output. RateLoop does not market SOC 2 / ISO / HIPAA / residency attestations it does not hold, and no evidence
-export by itself makes anyone compliant. The capability-by-capability mapping behind each row lives in
+RateLoop operates around your AI system, gating its outputs; it does not modify the system itself. RateLoop records the
+model identity reported by the connected host for each execution and labels it host-reported; it does not independently
+verify that the reported model produced the output. RateLoop does not market SOC 2 / ISO / HIPAA / residency
+attestations it does not hold, and no evidence export by itself makes anyone compliant. The capability-by-capability
+mapping behind each row lives in
 [`human-oversight.md`](./human-oversight.md); the browser version is [`/docs/human-oversight`](/docs/human-oversight).
 
 ## Packet fields
@@ -43,7 +44,7 @@ Schema: `rateloop.human-assurance.evidence.v3`
 - **Integrity:** Ed25519 key ID and public key, canonical packet digest, and signature.
 
 Reviewer identities and raw or decryptable rationales are excluded. Host-reported execution metadata remains marked
-`independentlyVerified:false`; it does not establish which model produced an output.
+`independentlyVerified:false`; it does not establish that the reported model produced the output.
 
 Redacted shape:
 

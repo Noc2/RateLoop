@@ -50,7 +50,11 @@ test("evidence docs explain exact artifacts, checks, mappings, and boundaries", 
     html,
     /RateLoop operates around your AI system, gating its outputs; it does not modify the system itself\./,
   );
-  assert.match(html, /execution provenance is host-reported and labelled so/i);
+  assert.match(
+    html,
+    /records the model identity reported by the connected host for each execution and labels it host-reported/i,
+  );
+  assert.match(html, /does not independently verify that the reported model produced the output/i);
   assert.match(html, /SOC 2 \/ ISO \/ HIPAA \/ residency attestations it does not hold/i);
   assert.match(html, /no evidence export by itself makes anyone compliant/i);
   assert.match(html, /rateloop\.human-assurance\.evidence\.v3/i);
@@ -91,7 +95,11 @@ test("machine docs mirror evidence boundaries and are linked from agent setup", 
   );
 
   assert.match(evidence, /rateloop\.human-assurance\.evidence\.v3/);
-  assert.match(evidence, /execution provenance is host-reported and labelled so/i);
+  assert.match(
+    evidence,
+    /records the[\s\S]*model identity reported by the connected host for each execution and labels it host-reported/i,
+  );
+  assert.match(evidence, /does not independently[\s\S]*verify that the reported model produced the output/i);
   assert.match(evidence, /evidence:verify.*--public-key.*--key-id/is);
   assert.match(evidence, /audit:verify.*--expected-head/is);
   assert.match(evidence, /attestation:verify.*--signer-public-key.*--rekor-public-key.*--tsa-ca/is);

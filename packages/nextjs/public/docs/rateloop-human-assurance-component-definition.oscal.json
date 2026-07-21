@@ -4,7 +4,7 @@
     "metadata": {
       "title": "RateLoop Human Assurance Evidence Compliance Map",
       "published": "2026-07-16T00:00:00Z",
-      "last-modified": "2026-07-16T00:00:00Z",
+      "last-modified": "2026-07-21T00:00:00Z",
       "version": "rateloop.assurance-compliance-map.v1",
       "oscal-version": "1.2.2",
       "document-ids": [
@@ -22,7 +22,7 @@
         {
           "name": "mapping-hash",
           "ns": "https://rateloop.ai/ns/oscal",
-          "value": "sha256:225fbd3e0e9236e644dc593c345712d656cb8151dcff67353ac9bdaaee1acc88"
+          "value": "sha256:84303ba2ae483b4b1352d5c9913367346bfc3f72b19a07a119e4d10957264927"
         },
         {
           "name": "claim-boundary",
@@ -56,7 +56,7 @@
           {
             "name": "mapping-hash",
             "ns": "https://rateloop.ai/ns/oscal",
-            "value": "sha256:225fbd3e0e9236e644dc593c345712d656cb8151dcff67353ac9bdaaee1acc88"
+            "value": "sha256:84303ba2ae483b4b1352d5c9913367346bfc3f72b19a07a119e4d10957264927"
           },
           {
             "name": "claim-boundary",
@@ -922,7 +922,7 @@
         {
           "uuid": "de8163fc-29a5-5adc-a1d7-ab627d5d605d",
           "title": "Host-reported execution evidence",
-          "description": "A canonical commitment to host-reported execution metadata. It is explicitly marked independentlyVerified:false and does not verify which model produced an output.",
+          "description": "A canonical commitment to model identity and execution metadata reported by the connected host. It is explicitly marked independentlyVerified:false and does not independently verify that the reported model produced the output.",
           "props": [
             {
               "name": "artifact-id",
