@@ -71,6 +71,33 @@ test("assignment locks only the non-nullable reviewer grant rows", () => {
   assert.match(source, /FROM tokenless_workspace_reviewer_invitation_redemptions[\s\S]*?LIMIT 1 FOR SHARE`/u);
 });
 
+test("assignment acceptance and recovery do not lock nullable project grants", () => {
+  const source = readFileSync(new URL("./privateUnpaidReviewAdapter.ts", import.meta.url), "utf8");
+  const acceptance = source.slice(
+    source.indexOf("export async function acceptPrivateUnpaidReviewAssignment"),
+    source.indexOf("export async function getPrivateUnpaidReviewAssignmentAccess"),
+  );
+  const recovery = source.slice(
+    source.indexOf("export async function recoverPrivateUnpaidReviewAssignment"),
+    source.indexOf(
+      "export async function",
+      source.indexOf("export async function recoverPrivateUnpaidReviewAssignment") + 1,
+    ),
+  );
+  const acceptanceLock = acceptance.match(/SELECT a\.assignment_id[\s\S]*?LIMIT 1 FOR UPDATE`/u)?.[0];
+  const recoveryLock = recovery.match(/SELECT a\.assignment_id[\s\S]*?LIMIT 1 FOR UPDATE`/u)?.[0];
+
+  assert.ok(acceptanceLock, "expected the assignment acceptance lock query");
+  assert.doesNotMatch(acceptanceLock, /LEFT JOIN/u);
+  assert.match(acceptance, /LEFT JOIN tokenless_workspace_reviewer_access_grant_projects grant_project/u);
+  assert.doesNotMatch(acceptance, /LEFT JOIN[\s\S]*?LIMIT 1 FOR UPDATE`/u);
+
+  assert.ok(recoveryLock, "expected the assignment recovery lock query");
+  assert.doesNotMatch(recoveryLock, /LEFT JOIN/u);
+  assert.match(recovery, /LEFT JOIN tokenless_workspace_reviewer_access_grant_projects grant_project/u);
+  assert.doesNotMatch(recovery, /LEFT JOIN[\s\S]*?LIMIT 1 FOR UPDATE`/u);
+});
+
 beforeEach(() => {
   process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = "79".repeat(32);
   process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION = "private-content-e2e-v1";

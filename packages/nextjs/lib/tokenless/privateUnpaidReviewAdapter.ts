@@ -1071,6 +1071,28 @@ export async function acceptPrivateUnpaidReviewAssignment(input: {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    await client.query(
+      `SELECT a.assignment_id
+       FROM tokenless_private_unpaid_review_assignments a
+       JOIN tokenless_private_unpaid_review_deliveries d ON d.delivery_id = a.delivery_id
+       JOIN tokenless_private_review_requests f ON f.private_review_id = a.private_review_id
+       JOIN tokenless_agent_review_request_profiles p
+         ON p.workspace_id=f.workspace_id AND p.profile_id=f.request_profile_id
+        AND p.version=f.request_profile_version AND p.profile_hash=f.request_profile_hash
+       JOIN tokenless_agent_review_opportunity_lifecycles l
+         ON l.workspace_id=d.workspace_id AND l.opportunity_id=d.opportunity_id
+       JOIN tokenless_workspace_reviewers reviewer
+         ON reviewer.workspace_id=a.workspace_id AND reviewer.principal_address=a.reviewer_account_address
+       JOIN tokenless_principals principal ON principal.principal_id=reviewer.principal_address
+       JOIN tokenless_workspace_reviewer_access_grants access_grant
+         ON access_grant.workspace_id=a.workspace_id
+        AND access_grant.principal_address=a.reviewer_account_address
+        AND access_grant.grant_id=a.workspace_reviewer_access_grant_id
+        AND access_grant.grant_hash=a.workspace_reviewer_access_grant_hash
+       WHERE a.assignment_id = $1 AND a.reviewer_account_address = $2
+       LIMIT 1 FOR UPDATE`,
+      [input.assignmentId, reviewer],
+    );
     const result = await client.query(
       `SELECT a.*, d.response_deadline AS delivery_response_deadline,
               d.private_group_policy_version,d.private_group_policy_hash,d.status AS delivery_status,
@@ -1106,7 +1128,7 @@ export async function acceptPrivateUnpaidReviewAssignment(input: {
          ON grant_project.workspace_id=a.workspace_id AND grant_project.grant_id=access_grant.grant_id
         AND grant_project.project_id=a.project_id
        WHERE a.assignment_id = $1 AND a.reviewer_account_address = $2
-       LIMIT 1 FOR UPDATE`,
+       LIMIT 1`,
       [input.assignmentId, reviewer],
     );
     const row = result.rows[0] as Row | undefined;
@@ -1338,6 +1360,31 @@ export async function recoverPrivateUnpaidReviewAssignment(input: {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    await client.query(
+      `SELECT a.assignment_id
+       FROM tokenless_private_unpaid_review_assignments a
+       JOIN tokenless_private_unpaid_review_deliveries d ON d.delivery_id=a.delivery_id
+       JOIN tokenless_agent_review_opportunity_lifecycles l
+         ON l.workspace_id=d.workspace_id AND l.opportunity_id=d.opportunity_id
+       JOIN tokenless_agent_review_request_profiles p
+         ON p.workspace_id=d.workspace_id AND p.profile_id=d.request_profile_id
+        AND p.version=d.request_profile_version AND p.profile_hash=d.request_profile_hash
+       JOIN tokenless_workspace_reviewers reviewer
+         ON reviewer.workspace_id=a.workspace_id AND reviewer.principal_address=a.reviewer_account_address
+       JOIN tokenless_principals principal ON principal.principal_id=reviewer.principal_address
+       JOIN tokenless_workspace_reviewer_access_grants access_grant
+         ON access_grant.workspace_id=a.workspace_id
+        AND access_grant.principal_address=a.reviewer_account_address
+        AND access_grant.grant_id=a.workspace_reviewer_access_grant_id
+        AND access_grant.grant_hash=a.workspace_reviewer_access_grant_hash
+       JOIN tokenless_assurance_cohorts c ON c.project_id=a.project_id AND c.cohort_id=a.cohort_id
+       JOIN tokenless_assurance_cohort_reviewers cr
+         ON cr.project_id=a.project_id AND cr.cohort_id=a.cohort_id
+        AND cr.reviewer_account_address=a.reviewer_account_address
+       WHERE a.assignment_id=$1 AND a.reviewer_account_address=$2
+       LIMIT 1 FOR UPDATE`,
+      [input.assignmentId, reviewer],
+    );
     const result = await client.query(
       `SELECT a.*,d.private_group_policy_hash,d.status AS delivery_status,
               l.state AS lifecycle_state,
@@ -1378,7 +1425,8 @@ export async function recoverPrivateUnpaidReviewAssignment(input: {
        JOIN tokenless_assurance_cohort_reviewers cr
          ON cr.project_id=a.project_id AND cr.cohort_id=a.cohort_id
         AND cr.reviewer_account_address=a.reviewer_account_address
-       WHERE a.assignment_id=$1 AND a.reviewer_account_address=$2 LIMIT 1 FOR UPDATE`,
+       WHERE a.assignment_id=$1 AND a.reviewer_account_address=$2
+       LIMIT 1`,
       [input.assignmentId, reviewer],
     );
     const row = result.rows[0] as Row | undefined;
