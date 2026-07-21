@@ -4,7 +4,11 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
-import { getAdaptiveHumanReviewResult, waitForAdaptiveHumanReview } from "~~/lib/tokenless/adaptiveReviewOrchestration";
+import {
+  __adaptiveReviewOrchestrationTestUtils,
+  getAdaptiveHumanReviewResult,
+  waitForAdaptiveHumanReview,
+} from "~~/lib/tokenless/adaptiveReviewOrchestration";
 import { evaluateAdaptiveReviewRequirement } from "~~/lib/tokenless/adaptiveReviewService";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import {
@@ -139,6 +143,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  __adaptiveReviewOrchestrationTestUtils.setBeforePrivateWaitPollForTests(null);
   __privateUnpaidReviewAdapterTestUtils.setBeforeDeliveryCommitForTests(null);
   __privateUnpaidReviewAdapterTestUtils.setBeforeLeaseCommitForTests(null);
   __setArtifactPrivacyRuntimeForTests(null);
@@ -150,6 +155,72 @@ afterEach(() => {
   else process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION = originalSamplerVersion;
 });
 
+type PrivateAdapterFixture = Awaited<ReturnType<typeof fixture>>;
+
+async function deliverPrivateFixture(setup: PrivateAdapterFixture) {
+  return requestPrivateUnpaidHumanReview({
+    principal: setup.principal,
+    opportunityId: setup.opportunityId,
+    privateReviewId: setup.prepared.privateReviewId,
+    reviewerAccountAddresses: [REVIEWER_A, REVIEWER_B],
+    now: new Date("2026-07-16T09:20:00.000Z"),
+  });
+}
+
+async function setPrivateFixtureDeadline(setup: PrivateAdapterFixture, deadline: Date) {
+  await dbClient.execute({
+    sql: `UPDATE tokenless_private_unpaid_review_deliveries SET response_deadline=?,updated_at=?
+          WHERE workspace_id=? AND opportunity_id=?`,
+    args: [deadline, deadline, setup.workspaceId, setup.opportunityId],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_private_unpaid_review_assignments
+          SET response_deadline=?,
+              assignment_expires_at=CASE WHEN status IN ('accepted','completed') THEN ? ELSE assignment_expires_at END,
+              updated_at=?
+          WHERE delivery_id IN (
+            SELECT delivery_id FROM tokenless_private_unpaid_review_deliveries
+            WHERE workspace_id=? AND opportunity_id=?
+          )`,
+    args: [deadline, deadline, deadline, setup.workspaceId, setup.opportunityId],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_private_review_requests SET response_deadline=?,updated_at=?
+          WHERE workspace_id=? AND private_review_id=?`,
+    args: [deadline, deadline, setup.workspaceId, setup.prepared.privateReviewId],
+  });
+}
+
+async function submitPositivePrivateResponse(
+  setup: PrivateAdapterFixture,
+  delivered: Awaited<ReturnType<typeof deliverPrivateFixture>>,
+  index: number,
+) {
+  const assignment = delivered.assignments[index]!;
+  await acceptPrivateUnpaidReviewAssignment({
+    assignmentId: assignment.assignmentId,
+    reviewerAccountAddress: assignment.reviewerAccountAddress,
+    confidentialityTermsAccepted: true,
+    confidentialityTermsHash: setup.prepared.bindings.privateGroup.policyHash,
+    now: new Date(`2026-07-16T09:2${5 + index}:00.000Z`),
+  });
+  return submitDirectPrivateReviewResponse({
+    assignmentId: assignment.assignmentId,
+    accountAddress: assignment.reviewerAccountAddress,
+    idempotencyKey: `response:wait:${assignment.assignmentId}`,
+    responses: [
+      {
+        caseId: setup.prepared.privateReviewId,
+        displayedOption: "A",
+        selectedArtifactId: setup.prepared.artifacts.suggestionArtifactId,
+        failureTagKeys: [],
+        rationale: "",
+      },
+    ],
+    now: new Date(`2026-07-16T09:3${index}:00.000Z`),
+  });
+}
+
 test("direct private assignments surface in reviewer work and produce a terminal aggregate result", async () => {
   const setup = await fixture();
   const delivered = await requestPrivateUnpaidHumanReview({
@@ -159,6 +230,7 @@ test("direct private assignments surface in reviewer work and produce a terminal
     reviewerAccountAddresses: [REVIEWER_A, REVIEWER_B],
     now: new Date("2026-07-16T09:20:00.000Z"),
   });
+  await setPrivateFixtureDeadline(setup, new Date(Date.now() + 60_000));
   const termsHash = setup.prepared.bindings.privateGroup.policyHash;
   const queue = await listDirectPrivateReviewAssignments({ accountAddress: REVIEWER_A });
   assert.equal(queue.length, 1);
@@ -168,6 +240,7 @@ test("direct private assignments surface in reviewer work and produce a terminal
     principal: setup.integrationPrincipal,
     opportunityId: setup.opportunityId,
     appOrigin: "https://rateloop-tokenless.vercel.app",
+    options: { pollIntervalMs: 1, timeoutMs: 1 },
   });
   assert.equal(pendingWait.wait.status, "pending");
   await assert.rejects(
@@ -246,6 +319,174 @@ test("direct private assignments surface in reviewer work and produce a terminal
   assert.equal(stored.rows.length, 2);
   assert.ok(stored.rows.every(row => row.choice === "positive" && row.rationale_ciphertext === null));
   assert.ok(stored.rows.every(row => /^sha256:[0-9a-f]{64}$/u.test(String(row.response_commitment))));
+});
+
+test("private review wait returns a pending continuation after its bounded timeout", async () => {
+  const setup = await fixture();
+  await deliverPrivateFixture(setup);
+  await setPrivateFixtureDeadline(setup, new Date(Date.now() + 60_000));
+
+  const startedAt = Date.now();
+  const pending = await waitForAdaptiveHumanReview({
+    principal: setup.integrationPrincipal,
+    opportunityId: setup.opportunityId,
+    appOrigin: "https://rateloop-tokenless.vercel.app",
+    options: { pollIntervalMs: 1, timeoutMs: 1 },
+  });
+
+  assert.equal(pending.wait.status, "pending");
+  assert.ok(Date.now() - startedAt < 1_000);
+  assert.ok("cursor" in pending.wait);
+  if ("cursor" in pending.wait) assert.match(pending.wait.cursor, /^\d+:0$/u);
+  await assert.rejects(
+    getAdaptiveHumanReviewResult({
+      principal: setup.integrationPrincipal,
+      opportunityId: setup.opportunityId,
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "result_not_ready" && error.retryable,
+  );
+});
+
+test("private review wait observes a terminal state change after its cursor", async () => {
+  const setup = await fixture();
+  const delivered = await deliverPrivateFixture(setup);
+  await setPrivateFixtureDeadline(setup, new Date(Date.now() + 60_000));
+  const initial = await getDirectPrivateReviewState(setup);
+  assert.ok(initial);
+
+  __adaptiveReviewOrchestrationTestUtils.setBeforePrivateWaitPollForTests(async () => {
+    await submitPositivePrivateResponse(setup, delivered, 0);
+    await submitPositivePrivateResponse(setup, delivered, 1);
+  });
+  const ready = await waitForAdaptiveHumanReview({
+    principal: setup.integrationPrincipal,
+    opportunityId: setup.opportunityId,
+    appOrigin: "https://rateloop-tokenless.vercel.app",
+    options: {
+      cursor: `${initial.lifecycle.revision}:${initial.responseCount}`,
+      pollIntervalMs: 1,
+      timeoutMs: 1_000,
+    },
+  });
+  assert.equal(ready.wait.status, "ready");
+  assert.equal("outcome" in ready.wait ? ready.wait.outcome : null, "positive");
+  assert.equal("responseCount" in ready.wait ? ready.wait.responseCount : null, 2);
+});
+
+test("private review wait aborts without converting pending into a releasable result", async () => {
+  const setup = await fixture();
+  await deliverPrivateFixture(setup);
+  await setPrivateFixtureDeadline(setup, new Date(Date.now() + 60_000));
+  const controller = new AbortController();
+  const waiting = waitForAdaptiveHumanReview({
+    principal: setup.integrationPrincipal,
+    opportunityId: setup.opportunityId,
+    appOrigin: "https://rateloop-tokenless.vercel.app",
+    options: { pollIntervalMs: 100, signal: controller.signal, timeoutMs: 1_000 },
+  });
+  setTimeout(() => controller.abort(), 10);
+
+  await assert.rejects(
+    waiting,
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "wait_cancelled" && error.retryable,
+  );
+  await assert.rejects(
+    getAdaptiveHumanReviewResult({
+      principal: setup.integrationPrincipal,
+      opportunityId: setup.opportunityId,
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "result_not_ready",
+  );
+});
+
+test("an elapsed zero-response private review finalizes once as an inconclusive envelope", async () => {
+  const setup = await fixture();
+  await deliverPrivateFixture(setup);
+  await setPrivateFixtureDeadline(setup, new Date(Date.now() - 1_000));
+
+  const firstWait = await waitForAdaptiveHumanReview({
+    principal: setup.integrationPrincipal,
+    opportunityId: setup.opportunityId,
+    appOrigin: "https://rateloop-tokenless.vercel.app",
+    options: { pollIntervalMs: 1, timeoutMs: 50 },
+  });
+  assert.equal(firstWait.wait.status, "ready");
+  assert.equal("outcome" in firstWait.wait ? firstWait.wait.outcome : null, "inconclusive");
+  assert.equal("responseCount" in firstWait.wait ? firstWait.wait.responseCount : null, 0);
+  assert.equal("lifecycle" in firstWait.wait ? firstWait.wait.lifecycle.state : null, "inconclusive");
+
+  const firstResult = await getAdaptiveHumanReviewResult({
+    principal: setup.integrationPrincipal,
+    opportunityId: setup.opportunityId,
+  });
+  assert.equal("outcome" in firstResult.result ? firstResult.result.outcome : null, "inconclusive");
+  const firstCommitment = "commitments" in firstResult.result ? firstResult.result.commitments.result : null;
+  const firstRevision = "lifecycle" in firstResult.result ? firstResult.result.lifecycle.revision : null;
+
+  const repeatedWait = await waitForAdaptiveHumanReview({
+    principal: setup.integrationPrincipal,
+    opportunityId: setup.opportunityId,
+    appOrigin: "https://rateloop-tokenless.vercel.app",
+    options: { pollIntervalMs: 1, timeoutMs: 50 },
+  });
+  const repeatedResult = await getAdaptiveHumanReviewResult({
+    principal: setup.integrationPrincipal,
+    opportunityId: setup.opportunityId,
+  });
+  assert.equal(repeatedWait.wait.status, "ready");
+  assert.equal(
+    "commitments" in repeatedResult.result ? repeatedResult.result.commitments.result : null,
+    firstCommitment,
+  );
+  assert.equal("lifecycle" in repeatedResult.result ? repeatedResult.result.lifecycle.revision : null, firstRevision);
+
+  const assignments = await dbClient.execute({
+    sql: `SELECT status,lease_state FROM tokenless_private_unpaid_review_assignments
+          WHERE delivery_id IN (
+            SELECT delivery_id FROM tokenless_private_unpaid_review_deliveries
+            WHERE workspace_id=? AND opportunity_id=?
+          ) ORDER BY assignment_id`,
+    args: [setup.workspaceId, setup.opportunityId],
+  });
+  assert.deepEqual(
+    assignments.rows.map(row => [row.status, row.lease_state]),
+    [
+      ["expired", "expired"],
+      ["expired", "expired"],
+    ],
+  );
+});
+
+test("an elapsed partial-response private review returns an under-quorum envelope", async () => {
+  const setup = await fixture();
+  const delivered = await deliverPrivateFixture(setup);
+  await setPrivateFixtureDeadline(setup, new Date(Date.now() + 60_000));
+  await submitPositivePrivateResponse(setup, delivered, 0);
+  const pending = await getDirectPrivateReviewState(setup);
+  assert.equal(pending?.responseCount, 1);
+  assert.equal(pending?.envelope, null);
+  await setPrivateFixtureDeadline(setup, new Date(Date.now() - 1_000));
+
+  const ready = await waitForAdaptiveHumanReview({
+    principal: setup.integrationPrincipal,
+    opportunityId: setup.opportunityId,
+    appOrigin: "https://rateloop-tokenless.vercel.app",
+    options: {
+      cursor: `${pending!.lifecycle.revision}:${pending!.responseCount}`,
+      pollIntervalMs: 1,
+      timeoutMs: 50,
+    },
+  });
+  assert.equal(ready.wait.status, "ready");
+  assert.equal("outcome" in ready.wait ? ready.wait.outcome : null, "inconclusive");
+  assert.equal("responseCount" in ready.wait ? ready.wait.responseCount : null, 1);
+
+  const result = await getAdaptiveHumanReviewResult({
+    principal: setup.integrationPrincipal,
+    opportunityId: setup.opportunityId,
+  });
+  assert.equal("outcome" in result.result ? result.result.outcome : null, "inconclusive");
+  assert.equal("panel" in result.result ? result.result.panel.responseCount : null, 1);
 });
 
 test("accepted workspace reviewer invitations route exact private content through completion end to end", async () => {

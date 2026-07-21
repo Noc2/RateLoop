@@ -14,7 +14,10 @@ import {
 } from "~~/lib/tokenless/adaptiveReviewEvidence";
 import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import type { BoundHumanReviewRequestProfile } from "~~/lib/tokenless/humanReviewRequestPreparation";
-import { getDirectPrivateReviewState } from "~~/lib/tokenless/privateReviewResponses";
+import {
+  getDirectPrivateReviewState,
+  reconcileDirectPrivateReviewDeadline,
+} from "~~/lib/tokenless/privateReviewResponses";
 import { authorizeAskAccess, requireProductPrincipalScope } from "~~/lib/tokenless/productCore";
 import {
   type PublicPaidHumanReviewPublication,
@@ -27,6 +30,10 @@ import { TokenlessServiceError, getTokenlessResult, waitForTokenlessAsk } from "
 type QueryRow = Record<string, unknown>;
 
 const BYTES32_PATTERN = /^0x[0-9a-f]{64}$/;
+const DEFAULT_PRIVATE_WAIT_TIMEOUT_MS = 30_000;
+const DEFAULT_PRIVATE_WAIT_POLL_INTERVAL_MS = 250;
+const MAX_PRIVATE_WAIT_TIMEOUT_MS = 60_000;
+let beforePrivateWaitPollForTests: null | (() => Promise<void>) = null;
 
 export type AdaptiveReviewIntegrationPrincipal = Extract<AgentMcpPrincipal, { kind: "integration" }>;
 
@@ -273,6 +280,112 @@ async function requireBoundReview(input: { principal: AdaptiveReviewIntegrationP
   return { kind: "private" as const, opportunity, direct };
 }
 
+type DirectPrivateReviewState = NonNullable<Awaited<ReturnType<typeof getDirectPrivateReviewState>>>;
+
+function normalizePrivateWaitOptions(options: {
+  cursor?: string;
+  pollIntervalMs?: number;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}) {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_PRIVATE_WAIT_TIMEOUT_MS;
+  const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_PRIVATE_WAIT_POLL_INTERVAL_MS;
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_PRIVATE_WAIT_TIMEOUT_MS) {
+    throw new TokenlessServiceError("timeoutMs must be between 1 and 60000.", 400, "invalid_wait_timeout");
+  }
+  if (!Number.isSafeInteger(pollIntervalMs) || pollIntervalMs < 1 || pollIntervalMs > MAX_PRIVATE_WAIT_TIMEOUT_MS) {
+    throw new TokenlessServiceError("pollIntervalMs must be between 1 and 60000.", 400, "invalid_wait_timeout");
+  }
+  const cursor = options.cursor?.trim();
+  if (cursor && !/^\d{1,16}(?::\d{1,16})?$/u.test(cursor)) {
+    throw new TokenlessServiceError("cursor is invalid.", 400, "invalid_wait_cursor");
+  }
+  const [revisionValue, responseCountValue] = cursor?.split(":") ?? [];
+  const revision = revisionValue === undefined ? null : Number(revisionValue);
+  const responseCount = responseCountValue === undefined ? 0 : Number(responseCountValue);
+  if (
+    (revision !== null && !Number.isSafeInteger(revision)) ||
+    !Number.isSafeInteger(responseCount) ||
+    responseCount < 0
+  ) {
+    throw new TokenlessServiceError("cursor is invalid.", 400, "invalid_wait_cursor");
+  }
+  return { cursor: revision === null ? null : { responseCount, revision }, pollIntervalMs, timeoutMs };
+}
+
+function privateReviewCursor(state: DirectPrivateReviewState) {
+  return `${state.lifecycle.revision}:${state.responseCount}`;
+}
+
+function privateReviewChangedSince(
+  state: DirectPrivateReviewState,
+  cursor: { responseCount: number; revision: number } | null,
+) {
+  return Boolean(
+    cursor &&
+      (state.lifecycle.revision > cursor.revision ||
+        (state.lifecycle.revision === cursor.revision && state.responseCount > cursor.responseCount)),
+  );
+}
+
+async function refreshDirectPrivateReviewState(input: {
+  workspaceId: string;
+  opportunityId: string;
+  current?: DirectPrivateReviewState;
+  now?: Date;
+}) {
+  let state =
+    input.current ??
+    (await getDirectPrivateReviewState({ workspaceId: input.workspaceId, opportunityId: input.opportunityId }));
+  if (!state) throw new TokenlessServiceError("Human review has not been requested.", 409, "review_not_requested");
+  const now = input.now ?? new Date();
+  if (!state.envelope && Date.parse(state.responseDeadline) <= now.getTime()) {
+    await reconcileDirectPrivateReviewDeadline({
+      workspaceId: input.workspaceId,
+      opportunityId: input.opportunityId,
+      now,
+    });
+    state = await getDirectPrivateReviewState({ workspaceId: input.workspaceId, opportunityId: input.opportunityId });
+    if (!state) throw new TokenlessServiceError("Human review has not been requested.", 409, "review_not_requested");
+  }
+  return state;
+}
+
+function cancelledWait(): TokenlessServiceError {
+  return new TokenlessServiceError("Wait request was cancelled.", 499, "wait_cancelled", true);
+}
+
+async function waitForPrivatePoll(delayMs: number, signal?: AbortSignal) {
+  if (signal?.aborted) throw cancelledWait();
+  await new Promise<void>((resolve, reject) => {
+    const cleanup = () => signal?.removeEventListener("abort", abort);
+    const abort = () => {
+      clearTimeout(timer);
+      cleanup();
+      reject(cancelledWait());
+    };
+    const timer = setTimeout(() => {
+      cleanup();
+      resolve();
+    }, delayMs);
+    signal?.addEventListener("abort", abort, { once: true });
+    if (signal?.aborted) abort();
+  });
+}
+
+function privateWaitSnapshot(state: DirectPrivateReviewState) {
+  return {
+    schemaVersion: "rateloop.private-review-wait.v1" as const,
+    deliveryId: state.deliveryId,
+    status: state.envelope ? ("ready" as const) : ("pending" as const),
+    lifecycle: state.lifecycle,
+    responseCount: state.responseCount,
+    responseDeadline: state.responseDeadline,
+    outcome: state.envelope?.outcome ?? null,
+    cursor: privateReviewCursor(state),
+  };
+}
+
 export async function waitForAdaptiveHumanReview(input: {
   principal: AdaptiveReviewIntegrationPrincipal;
   opportunityId: string;
@@ -291,6 +404,7 @@ export async function waitForAdaptiveHumanReview(input: {
         responseCount: number;
         responseDeadline: string;
         outcome: HumanReviewResultEnvelope["outcome"] | null;
+        cursor: string;
       };
 }> {
   const bound = await requireBoundReview(input);
@@ -302,15 +416,35 @@ export async function waitForAdaptiveHumanReview(input: {
       wait,
     };
   }
-  const wait = {
-    schemaVersion: "rateloop.private-review-wait.v1" as const,
-    deliveryId: bound.direct.deliveryId,
-    status: bound.direct.envelope ? ("ready" as const) : ("pending" as const),
-    lifecycle: bound.direct.lifecycle,
-    responseCount: bound.direct.responseCount,
-    responseDeadline: bound.direct.responseDeadline,
-    outcome: bound.direct.envelope?.outcome ?? null,
-  };
+  const options = normalizePrivateWaitOptions(input.options ?? {});
+  if (input.options?.signal?.aborted) throw cancelledWait();
+  const waitDeadline = Date.now() + options.timeoutMs;
+  let state = await refreshDirectPrivateReviewState({
+    workspaceId: input.principal.integration.workspaceId,
+    opportunityId: input.opportunityId,
+    current: bound.direct,
+  });
+  while (!state.envelope && !privateReviewChangedSince(state, options.cursor)) {
+    if (input.options?.signal?.aborted) throw cancelledWait();
+    const now = Date.now();
+    const remainingMs = waitDeadline - now;
+    if (remainingMs <= 0) break;
+    if (beforePrivateWaitPollForTests) {
+      const beforePoll = beforePrivateWaitPollForTests;
+      beforePrivateWaitPollForTests = null;
+      await beforePoll();
+    }
+    const untilResponseDeadlineMs = Date.parse(state.responseDeadline) - now;
+    await waitForPrivatePoll(
+      Math.max(1, Math.min(options.pollIntervalMs, remainingMs, Math.max(1, untilResponseDeadlineMs))),
+      input.options?.signal,
+    );
+    state = await refreshDirectPrivateReviewState({
+      workspaceId: input.principal.integration.workspaceId,
+      opportunityId: input.opportunityId,
+    });
+  }
+  const wait = privateWaitSnapshot(state);
   return {
     schemaVersion: "rateloop.adaptive-review-wait.v1",
     opportunityId: bound.opportunity.opportunityId,
@@ -329,13 +463,18 @@ export async function getAdaptiveHumanReviewResult(input: {
 }> {
   const bound = await requireBoundReview(input);
   if (bound.kind === "private") {
-    if (!bound.direct.envelope) {
-      throw new TokenlessServiceError("Human-review result is not ready.", 409, "result_not_ready");
+    const direct = await refreshDirectPrivateReviewState({
+      workspaceId: input.principal.integration.workspaceId,
+      opportunityId: input.opportunityId,
+      current: bound.direct,
+    });
+    if (!direct.envelope) {
+      throw new TokenlessServiceError("Human-review result is not ready.", 409, "result_not_ready", true);
     }
     return {
       schemaVersion: "rateloop.adaptive-review-result.v1",
       opportunityId: bound.opportunity.opportunityId,
-      result: bound.direct.envelope,
+      result: direct.envelope,
       observation: null,
     };
   }
@@ -352,5 +491,8 @@ export async function getAdaptiveHumanReviewResult(input: {
 export const __adaptiveReviewOrchestrationTestUtils = {
   normalizePublicationDeclaration: normalizePublicPaidReviewPublication,
   parseAudienceSource,
+  setBeforePrivateWaitPollForTests(value: null | (() => Promise<void>)) {
+    beforePrivateWaitPollForTests = value;
+  },
   sha256,
 };

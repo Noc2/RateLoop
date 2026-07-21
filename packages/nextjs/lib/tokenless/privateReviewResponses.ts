@@ -429,13 +429,58 @@ function selectionPolicySnapshot(row: Row): SelectionPolicySnapshot {
   };
 }
 
-async function terminalEnvelopeForDelivery(client: PoolClient, deliveryId: string, now: Date) {
+type PrivateReviewTerminalTrigger = "panel_complete" | "response_deadline_elapsed";
+
+async function expireOutstandingDeliveryAssignments(client: PoolClient, deliveryId: string, now: Date) {
+  const outstanding = await client.query(
+    `SELECT assignment_id,project_id,cohort_id,reviewer_account_address,status,lease_state
+     FROM tokenless_private_unpaid_review_assignments
+     WHERE delivery_id=$1
+       AND (status='reserved' OR (status='accepted' AND lease_state<>'expired'))
+     ORDER BY assignment_id ASC FOR UPDATE`,
+    [deliveryId],
+  );
+  for (const value of outstanding.rows) {
+    const row = value as Row;
+    const expired = await client.query(
+      `UPDATE tokenless_private_unpaid_review_assignments
+       SET status=CASE WHEN status='reserved' THEN 'expired' ELSE status END,
+           lease_state='expired',updated_at=$1
+       WHERE assignment_id=$2
+         AND (status='reserved' OR (status='accepted' AND lease_state<>'expired'))`,
+      [now, text(row, "assignment_id")],
+    );
+    if (expired.rowCount !== 1) continue;
+    await client.query(
+      `UPDATE tokenless_assurance_cohort_reviewers
+       SET active_reservations=active_reservations - 1,updated_at=$1
+       WHERE project_id=$2 AND cohort_id=$3 AND reviewer_account_address=$4
+         AND active_reservations>0`,
+      [now, text(row, "project_id"), text(row, "cohort_id"), text(row, "reviewer_account_address")],
+    );
+    await client.query(
+      `UPDATE tokenless_assurance_cohorts
+       SET active_reservations=active_reservations - 1,updated_at=$1
+       WHERE project_id=$2 AND cohort_id=$3 AND active_reservations>0`,
+      [now, text(row, "project_id"), text(row, "cohort_id")],
+    );
+  }
+}
+
+async function terminalEnvelopeForDelivery(
+  client: PoolClient,
+  deliveryId: string,
+  now: Date,
+  trigger: PrivateReviewTerminalTrigger = "panel_complete",
+) {
   const result = await client.query(
     `SELECT d.*,f.external_source_evidence_hash,f.external_suggestion_commitment,
             source.digest AS source_digest,suggestion.digest AS suggestion_digest,
             o.agent_id,o.agent_version_id,o.policy_id,o.policy_version,
             o.human_review_binding_id,o.human_review_binding_version,
-            l.state AS lifecycle_state,l.state_revision,l.created_at AS lifecycle_created_at,
+            l.state AS lifecycle_state,l.state_revision,l.reason_codes_json AS lifecycle_reason_codes_json,
+            l.created_at AS lifecycle_created_at,l.state_entered_at AS lifecycle_state_entered_at,
+            l.terminal_at AS lifecycle_terminal_at,
             p.mode AS policy_mode,p.agreement_threshold_bps,p.production_floor_bps,p.fixed_rate_bps,
             p.maximum_unreviewed_gap,p.rules_json,p.audience_policy_json,
             p.publishing_policy_id AS review_publishing_policy_id,
@@ -458,16 +503,41 @@ async function terminalEnvelopeForDelivery(client: PoolClient, deliveryId: strin
   );
   const row = result.rows[0] as Row | undefined;
   if (!row) throw new Error("Private review delivery disappeared.");
+  if (row.result_envelope_json) {
+    return parseHumanReviewResultEnvelope(JSON.parse(String(row.result_envelope_json)));
+  }
   const responses = await client.query(
     `SELECT response_commitment,choice FROM tokenless_private_review_responses
      WHERE delivery_id=$1 ORDER BY response_commitment ASC`,
     [deliveryId],
   );
-  if (responses.rowCount !== integer(row, "panel_size", 1)) return null;
+  const panelSize = integer(row, "panel_size", 1);
+  const responseCount = responses.rowCount ?? responses.rows.length;
+  const panelComplete = responseCount === panelSize;
+  const responseDeadline = date(row, "response_deadline");
+  if (trigger === "panel_complete" && !panelComplete) return null;
+  if (trigger === "response_deadline_elapsed" && responseDeadline > now) return null;
+
   const positive = responses.rows.filter(value => text(value as Row, "choice") === "positive").length;
-  const negative = responses.rowCount - positive;
-  const outcome = positive === negative ? "inconclusive" : positive > negative ? "positive" : "negative";
-  const toState = outcome === "inconclusive" ? "inconclusive" : "completed";
+  const negative = responseCount - positive;
+  const currentLifecycleState = text(row, "lifecycle_state");
+  const expiredWithoutQuorum = trigger === "response_deadline_elapsed" && !panelComplete;
+  let outcome: HumanReviewResultEnvelope["outcome"] = expiredWithoutQuorum
+    ? "inconclusive"
+    : positive === negative
+      ? "inconclusive"
+      : positive > negative
+        ? "positive"
+        : "negative";
+  let toState: HumanReviewResultEnvelope["lifecycle"]["state"] =
+    outcome === "inconclusive" ? "inconclusive" : "completed";
+  if (currentLifecycleState === "inconclusive") {
+    outcome = "inconclusive";
+    toState = "inconclusive";
+  } else if (currentLifecycleState === "failed_terminal") {
+    outcome = "failed";
+    toState = "failed_terminal";
+  }
   const responseCommitments = responses.rows.map(value => text(value as Row, "response_commitment")!);
   const responseSet = sha256({ schemaVersion: "rateloop.private-review-response-set.v1", responseCommitments });
   const resultCommitment = sha256({
@@ -476,19 +546,48 @@ async function terminalEnvelopeForDelivery(client: PoolClient, deliveryId: strin
     outcome,
     responseSet,
   });
-  const reasonCodes = ["private_panel_complete", "responses_recorded"].sort();
-  const transition = await transitionHumanReviewOpportunityLifecycleInTransaction(client, {
-    workspaceId: text(row, "workspace_id")!,
-    opportunityId: text(row, "opportunity_id")!,
-    transitionKey: `private-result:${text(row, "operation_hash")!.slice("sha256:".length)}`,
-    expectedState: "pending",
-    expectedRevision: integer(row, "state_revision", 1),
-    toState,
-    reasonCodes,
-    actor: { kind: "lane_adapter", reference: "private-unpaid-v1" },
-    details: { deliveryId, responseCount: responses.rowCount, responseSet, outcome },
-    occurredAt: now,
-  });
+  const reasonCodes = expiredWithoutQuorum
+    ? [
+        "response_deadline_elapsed",
+        responseCount === 0 ? "no_responses" : "private_panel_under_quorum",
+        ...(responseCount === 0 ? [] : ["responses_recorded"]),
+      ].sort()
+    : ["private_panel_complete", "responses_recorded"].sort();
+  let lifecycleRevision: number;
+  let stateEnteredAt: string;
+  let finalizedAt: string;
+  if (currentLifecycleState === "pending") {
+    if (expiredWithoutQuorum) await expireOutstandingDeliveryAssignments(client, deliveryId, now);
+    const transition = await transitionHumanReviewOpportunityLifecycleInTransaction(client, {
+      workspaceId: text(row, "workspace_id")!,
+      opportunityId: text(row, "opportunity_id")!,
+      transitionKey:
+        trigger === "response_deadline_elapsed"
+          ? `private-deadline:${text(row, "operation_hash")!.slice("sha256:".length)}`
+          : `private-result:${text(row, "operation_hash")!.slice("sha256:".length)}`,
+      expectedState: "pending",
+      expectedRevision: integer(row, "state_revision", 1),
+      toState,
+      reasonCodes,
+      actor: { kind: "lane_adapter", reference: "private-unpaid-v1" },
+      details: { deliveryId, responseCount, responseSet, outcome },
+      occurredAt: now,
+    });
+    lifecycleRevision = transition.toRevision;
+    stateEnteredAt = transition.occurredAt;
+    finalizedAt = transition.occurredAt;
+  } else if (["completed", "inconclusive", "failed_terminal"].includes(currentLifecycleState ?? "")) {
+    const storedReasons = json<unknown>(row.lifecycle_reason_codes_json, "lifecycle reason codes");
+    if (!Array.isArray(storedReasons) || storedReasons.some(value => typeof value !== "string")) {
+      throw new Error("Stored lifecycle reason codes are invalid.");
+    }
+    lifecycleRevision = integer(row, "state_revision", 1);
+    stateEnteredAt = date(row, "lifecycle_state_entered_at").toISOString();
+    finalizedAt = date(row, "lifecycle_terminal_at").toISOString();
+    reasonCodes.splice(0, reasonCodes.length, ...(storedReasons as string[]));
+  } else {
+    return null;
+  }
   const envelope = projectPrivateHumanReviewResultEnvelope({
     workspaceId: text(row, "workspace_id")!,
     integrationId: text(row, "integration_id")!,
@@ -497,11 +596,11 @@ async function terminalEnvelopeForDelivery(client: PoolClient, deliveryId: strin
     lifecycle: {
       state: toState,
       terminal: true,
-      revision: transition.toRevision,
+      revision: lifecycleRevision,
       reasonCodes,
       startedAt: date(row, "lifecycle_created_at").toISOString(),
-      stateEnteredAt: transition.occurredAt,
-      finalizedAt: transition.occurredAt,
+      stateEnteredAt,
+      finalizedAt,
     },
     frozen: {
       selectionPolicy: {
@@ -519,18 +618,18 @@ async function terminalEnvelopeForDelivery(client: PoolClient, deliveryId: strin
         version: integer(row, "request_profile_version", 1),
         hash: text(row, "request_profile_hash")! as `sha256:${string}`,
       },
-      responseDeadline: date(row, "response_deadline").toISOString(),
+      responseDeadline: responseDeadline.toISOString(),
     },
     panel: {
-      requestedCount: integer(row, "panel_size", 1),
-      assignedCount: integer(row, "panel_size", 1),
-      responseCount: responses.rowCount,
+      requestedCount: panelSize,
+      assignedCount: panelSize,
+      responseCount,
       cohorts: [
         {
           source: "invited",
-          requestedCount: integer(row, "panel_size", 1),
-          assignedCount: integer(row, "panel_size", 1),
-          responseCount: responses.rowCount,
+          requestedCount: panelSize,
+          assignedCount: panelSize,
+          responseCount,
         },
       ],
     },
@@ -554,13 +653,18 @@ async function terminalEnvelopeForDelivery(client: PoolClient, deliveryId: strin
   await client.query(
     `UPDATE tokenless_private_unpaid_review_deliveries
      SET status=$1,result_envelope_json=$2,result_commitment=$3,completed_at=$4,updated_at=$4
-     WHERE delivery_id=$5 AND status='pending'`,
+     WHERE delivery_id=$5 AND result_envelope_json IS NULL`,
     [toState, JSON.stringify(envelope), resultCommitment, now, deliveryId],
   );
   await client.query(
-    `UPDATE tokenless_agent_review_opportunities SET status='completed',updated_at=$1
-     WHERE workspace_id=$2 AND opportunity_id=$3 AND status='review_requested'`,
-    [now, text(row, "workspace_id"), text(row, "opportunity_id")],
+    `UPDATE tokenless_agent_review_opportunities SET status=$1,updated_at=$2
+     WHERE workspace_id=$3 AND opportunity_id=$4 AND status='review_requested'`,
+    [
+      toState === "failed_terminal" ? "failed" : "completed",
+      now,
+      text(row, "workspace_id"),
+      text(row, "opportunity_id"),
+    ],
   );
   await client.query(
     `UPDATE tokenless_agent_integrations
@@ -569,6 +673,36 @@ async function terminalEnvelopeForDelivery(client: PoolClient, deliveryId: strin
      WHERE integration_id=$2 AND workspace_id=$3`,
     [now, text(row, "integration_id"), text(row, "workspace_id")],
   );
+  return envelope;
+}
+
+export async function reconcileDirectPrivateReviewDeadline(input: {
+  workspaceId: string;
+  opportunityId: string;
+  now?: Date;
+}) {
+  const now = input.now ?? new Date();
+  const client = await dbPool.connect();
+  let envelope: HumanReviewResultEnvelope | null = null;
+  try {
+    await client.query("BEGIN");
+    const delivery = await client.query(
+      `SELECT delivery_id FROM tokenless_private_unpaid_review_deliveries
+       WHERE workspace_id=$1 AND opportunity_id=$2 LIMIT 1`,
+      [input.workspaceId, input.opportunityId],
+    );
+    const deliveryId = text(delivery.rows[0] as Row | undefined, "delivery_id");
+    if (deliveryId) {
+      envelope = await terminalEnvelopeForDelivery(client, deliveryId, now, "response_deadline_elapsed");
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+  if (envelope) await observeHumanReviewResult({ envelope });
   return envelope;
 }
 
