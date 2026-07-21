@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
+import { resolveBetterAuthPrincipal } from "~~/lib/auth/principal";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
+  changeWorkspaceMemberAccessRole,
   createWorkspaceClient,
   createWorkspaceCostCenter,
   createWorkspaceMemberInvite,
@@ -12,8 +14,11 @@ import {
   getWorkspaceGovernance,
   listAccessibleWorkspaceClients,
   listAccessibleWorkspaceCostCenters,
+  listWorkspaceMemberInvites,
   listWorkspaceMembers,
-  redeemWorkspaceMemberInviteWithBaseAccount,
+  redeemWorkspaceMemberInvite,
+  removeWorkspaceMember,
+  revokeWorkspaceMemberInvite,
   updateWorkspaceClientGovernance,
   updateWorkspaceGovernance,
 } from "~~/lib/tokenless/workspaceGovernance";
@@ -200,33 +205,33 @@ test("one-time member invitations store only hashes, bind redemption to the brow
 
   await assert.rejects(
     () =>
-      redeemWorkspaceMemberInviteWithBaseAccount({
+      redeemWorkspaceMemberInvite({
         token: created[0]!.invite.token,
-        baseAccountAddress: END_CLIENT,
+        accountAddress: END_CLIENT,
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "invite_account_mismatch",
   );
 
   for (const { invitation, invite } of created) {
-    const redeemed = await redeemWorkspaceMemberInviteWithBaseAccount({
+    const redeemed = await redeemWorkspaceMemberInvite({
       token: invite.token,
-      baseAccountAddress: invitation.address,
+      accountAddress: invitation.address,
     });
     assert.equal(redeemed.accountAddress, invitation.address.toLowerCase());
     assert.equal(redeemed.governanceRole, invitation.governanceRole);
   }
   await assert.rejects(
     () =>
-      redeemWorkspaceMemberInviteWithBaseAccount({
+      redeemWorkspaceMemberInvite({
         token: created[0]!.invite.token,
-        baseAccountAddress: CONSULTANT,
+        accountAddress: CONSULTANT,
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "invite_unavailable",
   );
 
   const members = await listWorkspaceMembers({ accountAddress: OWNER_A, workspaceId });
   for (const invitation of invitations) {
-    const member = members.find(value => value.accountAddress === invitation.address.toLowerCase());
+    const member = members.find(value => value.principalId === invitation.address.toLowerCase());
     assert.equal(member?.accessRole, invitation.accessRole);
     assert.equal(member?.governanceRole, invitation.governanceRole);
     assert.deepEqual(member?.clientIds, [client.clientId]);
@@ -236,6 +241,177 @@ test("one-time member invitations store only hashes, bind redemption to the brow
   );
   assert.equal(redeemedRows.rowCount, invitations.length);
   assert.ok(redeemedRows.rows.every(row => String(row.redeemed_by_account_address).startsWith("0x")));
+});
+
+async function betterAuthPrincipal(label: string, email: string) {
+  const now = new Date();
+  const betterAuthUserId = `better_workspace_member_${label}`;
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_better_auth_users
+          (id, name, email, email_verified, created_at, updated_at)
+          VALUES (?, ?, ?, true, ?, ?)`,
+    args: [betterAuthUserId, `User ${label}`, email, now, now],
+  });
+  return resolveBetterAuthPrincipal({ betterAuthUserId, displayName: `User ${label}`, method: "email-otp" });
+}
+
+test("ordinary workspace invitations support opaque principals without granting reviewer membership", async () => {
+  const owner = await betterAuthPrincipal("ordinary_owner", "owner@workspace.test");
+  const member = await betterAuthPrincipal("ordinary_member", "member@workspace.test");
+  const { workspaceId } = await createWorkspace({ name: "Ordinary members", ownerAddress: owner.principalId });
+
+  const invitation = await createWorkspaceMemberInvite({
+    accountAddress: owner.principalId,
+    workspaceId,
+    accessRole: "member",
+    intendedAccountAddress: member.principalId,
+  });
+  assert.match(invitation.token, /^rlwi_[a-f0-9]{16}_[A-Za-z0-9_-]{43}$/u);
+  assert.equal(
+    JSON.stringify(await listWorkspaceMemberInvites({ accountAddress: owner.principalId, workspaceId })).includes(
+      invitation.token,
+    ),
+    false,
+  );
+
+  const redeemed = await redeemWorkspaceMemberInvite({ token: invitation.token, accountAddress: member.principalId });
+  assert.equal(redeemed.accessRole, "member");
+  assert.equal(redeemed.governanceRole, null);
+  assert.equal(redeemed.clientId, null);
+
+  let listed = await listWorkspaceMembers({ accountAddress: owner.principalId, workspaceId });
+  const listedMember = listed.find(value => value.principalId === member.principalId);
+  assert.equal(listedMember?.displayName, "User ordinary_member");
+  assert.equal(listedMember?.email, "member@workspace.test");
+  assert.equal(listedMember?.accessRole, "member");
+
+  await changeWorkspaceMemberAccessRole({
+    accountAddress: owner.principalId,
+    workspaceId,
+    principalId: member.principalId,
+    accessRole: "admin",
+  });
+  listed = await listWorkspaceMembers({ accountAddress: owner.principalId, workspaceId });
+  assert.equal(listed.find(value => value.principalId === member.principalId)?.accessRole, "admin");
+
+  const unrelatedBefore = await Promise.all([
+    dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_private_group_memberships"),
+    dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_assurance_cohort_reviewers"),
+  ]);
+  assert.deepEqual(
+    unrelatedBefore.map(result => Number(result.rows[0]?.count)),
+    [0, 0],
+  );
+
+  await removeWorkspaceMember({
+    accountAddress: owner.principalId,
+    workspaceId,
+    principalId: member.principalId,
+  });
+  assert.equal(
+    (await listWorkspaceMembers({ accountAddress: owner.principalId, workspaceId })).some(
+      value => value.principalId === member.principalId,
+    ),
+    false,
+  );
+  const unrelatedAfter = await Promise.all([
+    dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_private_group_memberships"),
+    dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_assurance_cohort_reviewers"),
+  ]);
+  assert.deepEqual(
+    unrelatedAfter.map(result => Number(result.rows[0]?.count)),
+    [0, 0],
+  );
+});
+
+test("email-bound workspace invitations require the signed-in verified email and can be revoked", async () => {
+  const owner = await betterAuthPrincipal("email_owner", "owner-email@workspace.test");
+  const intended = await betterAuthPrincipal("email_intended", "intended@workspace.test");
+  const other = await betterAuthPrincipal("email_other", "other@workspace.test");
+  const { workspaceId } = await createWorkspace({ name: "Email invites", ownerAddress: owner.principalId });
+
+  const invitation = await createWorkspaceMemberInvite({
+    accountAddress: owner.principalId,
+    workspaceId,
+    accessRole: "billing",
+    intendedEmail: " Intended@Workspace.Test ",
+  });
+  await assert.rejects(
+    () => redeemWorkspaceMemberInvite({ token: invitation.token, accountAddress: other.principalId }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invite_email_mismatch",
+  );
+  const redeemed = await redeemWorkspaceMemberInvite({ token: invitation.token, accountAddress: intended.principalId });
+  assert.equal(redeemed.accessRole, "billing");
+
+  const revokedInvitation = await createWorkspaceMemberInvite({
+    accountAddress: owner.principalId,
+    workspaceId,
+    accessRole: "member",
+    intendedEmail: "other@workspace.test",
+  });
+  await revokeWorkspaceMemberInvite({
+    accountAddress: owner.principalId,
+    workspaceId,
+    inviteId: revokedInvitation.inviteId,
+  });
+  await assert.rejects(
+    () => redeemWorkspaceMemberInvite({ token: revokedInvitation.token, accountAddress: other.principalId }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invite_unavailable",
+  );
+});
+
+test("owner and identity-provider managed memberships are immutable in member management", async () => {
+  const owner = await betterAuthPrincipal("managed_owner", "managed-owner@workspace.test");
+  const managed = await betterAuthPrincipal("managed_member", "managed-member@workspace.test");
+  const { workspaceId } = await createWorkspace({ name: "Managed members", ownerAddress: owner.principalId });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_workspace_members (workspace_id, account_address, role, created_at)
+          VALUES (?, ?, 'member', ?)`,
+    args: [workspaceId, managed.principalId, new Date()],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_enterprise_managed_members
+          (workspace_id, provider_id, better_auth_user_id, principal_id, source, status,
+           created_at, last_synced_at, deactivated_at)
+          VALUES (?, ?, ?, ?, 'scim', 'active', ?, ?, NULL)`,
+    args: [
+      workspaceId,
+      "provider_workspace_members",
+      "better_workspace_member_managed_member",
+      managed.principalId,
+      new Date(),
+      new Date(),
+    ],
+  });
+
+  await assert.rejects(
+    () =>
+      removeWorkspaceMember({
+        accountAddress: owner.principalId,
+        workspaceId,
+        principalId: owner.principalId,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "workspace_owner_immutable",
+  );
+  await assert.rejects(
+    () =>
+      changeWorkspaceMemberAccessRole({
+        accountAddress: owner.principalId,
+        workspaceId,
+        principalId: managed.principalId,
+        accessRole: "admin",
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "workspace_member_managed",
+  );
+  await assert.rejects(
+    () =>
+      removeWorkspaceMember({
+        accountAddress: owner.principalId,
+        workspaceId,
+        principalId: managed.principalId,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "workspace_member_managed",
+  );
 });
 
 test("only owners and admins manage governance while client and cost-center reads fail closed across scopes", async () => {
@@ -267,9 +443,9 @@ test("only owners and admins manage governance while client and cost-center read
     governanceRole: "consultant",
     intendedAccountAddress: CONSULTANT,
   });
-  await redeemWorkspaceMemberInviteWithBaseAccount({
+  await redeemWorkspaceMemberInvite({
     token: consultantInvite.token,
-    baseAccountAddress: CONSULTANT,
+    accountAddress: CONSULTANT,
   });
   const adminInvite = await createWorkspaceMemberInvite({
     accountAddress: OWNER_A,
@@ -278,7 +454,7 @@ test("only owners and admins manage governance while client and cost-center read
     governanceRole: "consultant",
     intendedAccountAddress: ADMIN,
   });
-  await redeemWorkspaceMemberInviteWithBaseAccount({ token: adminInvite.token, baseAccountAddress: ADMIN });
+  await redeemWorkspaceMemberInvite({ token: adminInvite.token, accountAddress: ADMIN });
 
   assert.deepEqual(
     (await listAccessibleWorkspaceClients({ accountAddress: CONSULTANT, workspaceId: firstWorkspace.workspaceId })).map(
@@ -376,7 +552,7 @@ test("membership grants, upgrades, and invite redemptions land in the workspace 
     governanceRole: "decision_owner",
     intendedAccountAddress: DECISION_OWNER,
   });
-  await redeemWorkspaceMemberInviteWithBaseAccount({ token: memberInvite.token, baseAccountAddress: DECISION_OWNER });
+  await redeemWorkspaceMemberInvite({ token: memberInvite.token, accountAddress: DECISION_OWNER });
 
   const adminInvite = await createWorkspaceMemberInvite({
     accountAddress: OWNER_A,
@@ -385,7 +561,7 @@ test("membership grants, upgrades, and invite redemptions land in the workspace 
     governanceRole: "decision_owner",
     intendedAccountAddress: DECISION_OWNER,
   });
-  await redeemWorkspaceMemberInviteWithBaseAccount({ token: adminInvite.token, baseAccountAddress: DECISION_OWNER });
+  await redeemWorkspaceMemberInvite({ token: adminInvite.token, accountAddress: DECISION_OWNER });
 
   const events = await dbClient.execute({
     sql: `SELECT action, actor_reference, target_kind, target_id, metadata_json, previous_digest, event_digest

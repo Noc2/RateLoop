@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import type { PoolClient } from "pg";
 import "server-only";
-import { getAddress } from "viem";
-import { isRateLoopPrincipalId } from "~~/lib/auth/accountSubject";
+import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -22,7 +22,10 @@ const GOVERNANCE_ROLE_SET = new Set<string>(WORKSPACE_GOVERNANCE_ROLES);
 const INVITE_ACCESS_ROLE_SET = new Set<string>(WORKSPACE_INVITE_ACCESS_ROLES);
 const DPA_STATUS_SET = new Set<string>(WORKSPACE_DPA_STATUSES);
 const TRADER_STATUS_SET = new Set<string>(WORKSPACE_TRADER_STATUSES);
-const INVITE_TOKEN_PATTERN = /^rli_[a-f0-9]{16}_[A-Za-z0-9_-]{40,64}$/;
+const INVITE_TOKEN_PATTERN = /^rlwi_([a-f0-9]{16})_([A-Za-z0-9_-]{43})$/u;
+const EMAIL_PATTERN = /^[^\s@]+@([^\s@]+)$/u;
+const EMAIL_DOMAIN_PATTERN =
+  /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
 const COST_CENTER_CODE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/;
 const DEFAULT_RETENTION_DAYS = 30;
 const MAX_RETENTION_DAYS = 3_650;
@@ -81,10 +84,19 @@ function rowDate(row: QueryRow | undefined, key: string) {
 
 function normalizeAddress(value: string, field: string) {
   try {
-    return getAddress(value).toLowerCase();
+    return normalizeAccountSubject(value);
   } catch {
-    throw new TokenlessServiceError(`${field} must be a valid account address.`, 400, "invalid_account");
+    throw new TokenlessServiceError(`${field} must be a valid account.`, 400, "invalid_account");
   }
+}
+
+function normalizeEmail(value: string) {
+  const normalized = value.trim().toLowerCase();
+  const match = EMAIL_PATTERN.exec(normalized);
+  if (!match || normalized.length > 320 || !EMAIL_DOMAIN_PATTERN.test(match[1]!)) {
+    throw new TokenlessServiceError("intendedEmail must be a valid email address.", 400, "invalid_invite");
+  }
+  return normalized;
 }
 
 function requiredText(value: string, field: string, maxLength: number) {
@@ -172,6 +184,25 @@ async function requireWorkspaceManagement(accountAddress: string, workspaceId: s
   return member;
 }
 
+async function requireWorkspaceManagementInTransaction(
+  client: PoolClient,
+  accountAddress: string,
+  workspaceId: string,
+) {
+  const manager = normalizeAddress(accountAddress, "accountAddress");
+  const result = await client.query(
+    `SELECT m.role FROM tokenless_workspace_members m
+     JOIN tokenless_workspaces w ON w.workspace_id=m.workspace_id
+     WHERE m.workspace_id=$1 AND m.account_address=$2 AND m.role IN ('owner','admin')
+       AND w.status='active' LIMIT 1 FOR SHARE`,
+    [workspaceId, manager],
+  );
+  if (result.rowCount !== 1) {
+    throw new TokenlessServiceError("Workspace not found.", 404, "workspace_not_found");
+  }
+  return manager;
+}
+
 async function requireClientInWorkspace(workspaceId: string, clientId: string) {
   const result = await dbClient.execute({
     sql: `SELECT client_id FROM tokenless_workspace_clients
@@ -226,7 +257,12 @@ function clientFromRow(row: QueryRow): WorkspaceClient {
 async function appendMembershipAuditEvent(input: {
   workspaceId: string;
   actor: string;
-  action: "workspace.member_invited" | "workspace.role_assigned" | "workspace.role_changed" | "workspace.role_removed";
+  action:
+    | "workspace.member_invited"
+    | "workspace.member_invitation_revoked"
+    | "workspace.role_assigned"
+    | "workspace.role_changed"
+    | "workspace.role_removed";
   targetKind: string;
   targetId: string;
   reason: string;
@@ -432,15 +468,17 @@ export async function createWorkspaceMemberInvite(input: {
   workspaceId: string;
   clientId?: string | null;
   accessRole: WorkspaceInviteAccessRole;
-  governanceRole: WorkspaceGovernanceRole;
+  governanceRole?: WorkspaceGovernanceRole | null;
   intendedAccountAddress?: string | null;
+  intendedEmail?: string | null;
   expiresAt?: Date;
 }) {
   const manager = await requireWorkspaceManagement(input.accountAddress, input.workspaceId);
-  if (!INVITE_ACCESS_ROLE_SET.has(input.accessRole) || !GOVERNANCE_ROLE_SET.has(input.governanceRole)) {
+  const governanceRole = input.governanceRole ?? null;
+  if (!INVITE_ACCESS_ROLE_SET.has(input.accessRole) || (governanceRole && !GOVERNANCE_ROLE_SET.has(governanceRole))) {
     throw new TokenlessServiceError("Invitation role is unsupported.", 400, "invalid_invite");
   }
-  if ((input.accessRole === "billing") !== (input.governanceRole === "billing")) {
+  if (governanceRole && (input.accessRole === "billing") !== (governanceRole === "billing")) {
     throw new TokenlessServiceError(
       "Billing access and billing governance roles must be assigned together.",
       400,
@@ -450,12 +488,18 @@ export async function createWorkspaceMemberInvite(input: {
   const clientId = input.clientId ?? null;
   if (clientId) {
     await requireClientInWorkspace(input.workspaceId, clientId);
-  } else if (input.accessRole !== "admin") {
-    throw new TokenlessServiceError("Non-admin invitations must be bound to one client.", 400, "invalid_invite");
   }
   const intendedAccountAddress = input.intendedAccountAddress
     ? normalizeAddress(input.intendedAccountAddress, "intendedAccountAddress")
     : null;
+  const intendedEmail = input.intendedEmail ? normalizeEmail(input.intendedEmail) : null;
+  if (intendedAccountAddress && intendedEmail) {
+    throw new TokenlessServiceError(
+      "An invitation can be bound to an account or an email, not both.",
+      400,
+      "invalid_invite",
+    );
+  }
   const now = new Date();
   const expiresAt = input.expiresAt ?? new Date(now.getTime() + INVITE_TTL_MS);
   const ttl = expiresAt.getTime() - now.getTime();
@@ -464,20 +508,22 @@ export async function createWorkspaceMemberInvite(input: {
   }
   const inviteIdPart = randomBytes(8).toString("hex");
   const inviteId = `win_${inviteIdPart}`;
-  const token = `rli_${inviteIdPart}_${randomBytes(32).toString("base64url")}`;
+  const token = `rlwi_${inviteIdPart}_${randomBytes(32).toString("base64url")}`;
   await dbClient.execute({
     sql: `INSERT INTO tokenless_workspace_member_invites
-          (invite_id, workspace_id, client_id, invite_token_hash, intended_account_address,
-           access_role, governance_role, expires_at, created_by, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (invite_id, workspace_id, client_id, invite_token_hash, token_prefix, intended_account_address,
+           intended_email_hash, access_role, governance_role, expires_at, created_by, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       inviteId,
       input.workspaceId,
       clientId,
       hashToken(token),
+      inviteIdPart,
       intendedAccountAddress,
+      intendedEmail ? hashToken(`${token}\0${intendedEmail}`) : null,
       input.accessRole,
-      input.governanceRole,
+      governanceRole,
       expiresAt,
       manager.accountAddress,
       now,
@@ -492,13 +538,21 @@ export async function createWorkspaceMemberInvite(input: {
     reason: "workspace_manager_created_member_invite",
     metadata: {
       accessRole: input.accessRole,
-      governanceRole: input.governanceRole,
+      governanceRole,
       clientBound: clientId !== null,
+      accountBound: intendedAccountAddress !== null,
+      verifiedRecipientBound: intendedEmail !== null,
       expiresAt: expiresAt.toISOString(),
     },
     occurredAt: now,
   });
-  return { inviteId, token, expiresAt: expiresAt.toISOString() };
+  return {
+    inviteId,
+    token,
+    tokenPrefix: inviteIdPart,
+    accessRole: input.accessRole,
+    expiresAt: expiresAt.toISOString(),
+  };
 }
 
 const ACCESS_ROLE_RANK: Record<ExistingWorkspaceAccessRole, number> = {
@@ -508,9 +562,10 @@ const ACCESS_ROLE_RANK: Record<ExistingWorkspaceAccessRole, number> = {
   owner: 3,
 };
 
-export async function redeemWorkspaceMemberInviteWithBaseAccount(input: { token: string; baseAccountAddress: string }) {
-  const accountAddress = normalizeAddress(input.baseAccountAddress, "baseAccountAddress");
-  if (!INVITE_TOKEN_PATTERN.test(input.token)) {
+export async function redeemWorkspaceMemberInvite(input: { token: string; accountAddress: string }) {
+  const accountAddress = normalizeAddress(input.accountAddress, "accountAddress");
+  const tokenMatch = INVITE_TOKEN_PATTERN.exec(input.token);
+  if (!tokenMatch) {
     throw new TokenlessServiceError("Invitation not found.", 404, "invite_not_found");
   }
   const tokenHash = hashToken(input.token);
@@ -530,10 +585,11 @@ export async function redeemWorkspaceMemberInviteWithBaseAccount(input: { token:
     const workspaceId = rowString(row, "workspace_id");
     const clientId = rowString(row, "client_id");
     const intendedAccountAddress = rowString(row, "intended_account_address");
+    const intendedEmailHash = rowString(row, "intended_email_hash");
     const accessRole = rowString(row, "access_role") as WorkspaceInviteAccessRole | null;
     const governanceRole = rowString(row, "governance_role") as WorkspaceGovernanceRole | null;
     const expiresAt = rowDate(row, "expires_at");
-    if (!inviteId || !workspaceId || !accessRole || !governanceRole || !expiresAt) {
+    if (!inviteId || !workspaceId || !accessRole || !expiresAt || rowString(row, "token_prefix") !== tokenMatch[1]) {
       throw new TokenlessServiceError("Invitation not found.", 404, "invite_not_found");
     }
     if (
@@ -550,6 +606,29 @@ export async function redeemWorkspaceMemberInviteWithBaseAccount(input: { token:
         403,
         "invite_account_mismatch",
       );
+    }
+    if (intendedEmailHash) {
+      const identity = await client.query(
+        `SELECT u.email, u.email_verified
+         FROM tokenless_identity_bindings b
+         JOIN tokenless_better_auth_users u ON u.id = b.provider_subject
+         WHERE b.principal_id = $1 AND b.provider = 'better_auth' AND b.status = 'active'
+         LIMIT 1 FOR SHARE`,
+        [accountAddress],
+      );
+      const identityRow = identity.rows[0] as QueryRow | undefined;
+      const email = rowString(identityRow, "email")?.trim().toLowerCase() ?? "";
+      const verified =
+        identityRow?.email_verified === true ||
+        identityRow?.email_verified === "t" ||
+        identityRow?.email_verified === 1;
+      if (!verified || !email || hashToken(`${input.token}\0${email}`) !== intendedEmailHash) {
+        throw new TokenlessServiceError(
+          "Invitation is bound to a different verified email.",
+          403,
+          "invite_email_mismatch",
+        );
+      }
     }
 
     const existingMember = await client.query(
@@ -575,27 +654,29 @@ export async function redeemWorkspaceMemberInviteWithBaseAccount(input: { token:
       );
     }
 
-    const existingGovernance = await client.query(
-      `SELECT governance_role FROM tokenless_workspace_member_governance
-       WHERE workspace_id = $1 AND account_address = $2 LIMIT 1 FOR UPDATE`,
-      [workspaceId, accountAddress],
-    );
-    const existingGovernanceRole = rowString(existingGovernance.rows[0] as QueryRow | undefined, "governance_role");
-    if (existingGovernanceRole && existingGovernanceRole !== governanceRole) {
-      throw new TokenlessServiceError(
-        "Existing workspace membership has a different governance role.",
-        409,
-        "membership_role_conflict",
+    const now = new Date();
+    if (governanceRole) {
+      const existingGovernance = await client.query(
+        `SELECT governance_role FROM tokenless_workspace_member_governance
+         WHERE workspace_id = $1 AND account_address = $2 LIMIT 1 FOR UPDATE`,
+        [workspaceId, accountAddress],
+      );
+      const existingGovernanceRole = rowString(existingGovernance.rows[0] as QueryRow | undefined, "governance_role");
+      if (existingGovernanceRole && existingGovernanceRole !== governanceRole) {
+        throw new TokenlessServiceError(
+          "Existing workspace membership has a different governance role.",
+          409,
+          "membership_role_conflict",
+        );
+      }
+      await client.query(
+        `INSERT INTO tokenless_workspace_member_governance
+         (workspace_id, account_address, governance_role, created_by, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $5)
+         ON CONFLICT (workspace_id, account_address) DO UPDATE SET updated_at = EXCLUDED.updated_at`,
+        [workspaceId, accountAddress, governanceRole, rowString(row, "created_by"), now],
       );
     }
-    const now = new Date();
-    await client.query(
-      `INSERT INTO tokenless_workspace_member_governance
-       (workspace_id, account_address, governance_role, created_by, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $5)
-       ON CONFLICT (workspace_id, account_address) DO UPDATE SET updated_at = EXCLUDED.updated_at`,
-      [workspaceId, accountAddress, governanceRole, rowString(row, "created_by"), now],
-    );
     if (clientId) {
       await client.query(
         `INSERT INTO tokenless_workspace_member_clients
@@ -614,6 +695,8 @@ export async function redeemWorkspaceMemberInviteWithBaseAccount(input: { token:
     if (redeemed.rowCount !== 1) {
       throw new TokenlessServiceError("Invitation is no longer available.", 410, "invite_unavailable");
     }
+    const effectiveAccessRole =
+      existingRole && ACCESS_ROLE_RANK[accessRole] <= ACCESS_ROLE_RANK[existingRole] ? existingRole : accessRole;
     await client.query("COMMIT");
     await appendMembershipAuditEvent({
       workspaceId,
@@ -624,8 +707,7 @@ export async function redeemWorkspaceMemberInviteWithBaseAccount(input: { token:
       reason: "workspace_member_invite_redeemed",
       metadata: {
         inviteId,
-        accessRole:
-          existingRole && ACCESS_ROLE_RANK[accessRole] <= ACCESS_ROLE_RANK[existingRole] ? existingRole : accessRole,
+        accessRole: effectiveAccessRole,
         governanceRole,
         invitedBy: rowString(row, "created_by"),
       },
@@ -643,7 +725,7 @@ export async function redeemWorkspaceMemberInviteWithBaseAccount(input: { token:
         occurredAt: now,
       });
     }
-    return { workspaceId, clientId, accessRole, governanceRole, accountAddress };
+    return { workspaceId, clientId, accessRole: effectiveAccessRole, governanceRole, accountAddress };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -656,10 +738,18 @@ export async function listWorkspaceMembers(input: { accountAddress: string; work
   await requireWorkspaceManagement(input.accountAddress, input.workspaceId);
   const [members, assignments] = await Promise.all([
     dbClient.execute({
-      sql: `SELECT m.account_address, m.role, g.governance_role
+      sql: `SELECT m.account_address, m.role, m.created_at, g.governance_role,
+                   u.name AS display_name,
+                   CASE WHEN u.email_verified = true THEN u.email ELSE NULL END AS email,
+                   e.source AS managed_source
             FROM tokenless_workspace_members m
             LEFT JOIN tokenless_workspace_member_governance g
               ON g.workspace_id = m.workspace_id AND g.account_address = m.account_address
+            LEFT JOIN tokenless_identity_bindings b
+              ON b.principal_id = m.account_address AND b.provider = 'better_auth' AND b.status = 'active'
+            LEFT JOIN tokenless_better_auth_users u ON u.id = b.provider_subject
+            LEFT JOIN tokenless_enterprise_managed_members e
+              ON e.workspace_id = m.workspace_id AND e.principal_id = m.account_address AND e.status = 'active'
             WHERE m.workspace_id = ? ORDER BY m.created_at ASC`,
       args: [input.workspaceId],
     }),
@@ -682,12 +772,231 @@ export async function listWorkspaceMembers(input: { accountAddress: string; work
     const accountAddress = rowString(row, "account_address");
     if (!accountAddress) throw new Error("Database returned an invalid workspace member.");
     return {
-      accountAddress,
+      principalId: accountAddress,
+      displayName: rowString(row, "display_name"),
+      email: rowString(row, "email"),
       accessRole: rowString(row, "role") as ExistingWorkspaceAccessRole,
       governanceRole: rowString(row, "governance_role") as WorkspaceGovernanceRole | null,
       clientIds: clientIdsByAccount.get(accountAddress) ?? [],
+      managedBy: rowString(row, "managed_source") as "sso" | "scim" | null,
+      joinedAt: rowDate(row, "created_at")?.toISOString() ?? null,
     };
   });
+}
+
+export async function listWorkspaceMemberInvites(input: { accountAddress: string; workspaceId: string }) {
+  await requireWorkspaceManagement(input.accountAddress, input.workspaceId);
+  const result = await dbClient.execute({
+    sql: `SELECT invite_id, token_prefix, access_role, governance_role, client_id,
+                 intended_account_address, intended_email_hash, expires_at, redeemed_at,
+                 redeemed_by_account_address, revoked_at, created_by, created_at
+          FROM tokenless_workspace_member_invites
+          WHERE workspace_id = ? ORDER BY created_at DESC`,
+    args: [input.workspaceId],
+  });
+  const now = Date.now();
+  return result.rows.map(value => {
+    const row = value as QueryRow;
+    const expiresAt = rowDate(row, "expires_at");
+    const redeemedAt = rowDate(row, "redeemed_at");
+    const revokedAt = rowDate(row, "revoked_at");
+    return {
+      inviteId: rowString(row, "invite_id"),
+      tokenPrefix: rowString(row, "token_prefix"),
+      accessRole: rowString(row, "access_role") as WorkspaceInviteAccessRole,
+      governanceRole: rowString(row, "governance_role") as WorkspaceGovernanceRole | null,
+      clientId: rowString(row, "client_id"),
+      hasAccountBinding: Boolean(rowString(row, "intended_account_address")),
+      hasEmailBinding: Boolean(rowString(row, "intended_email_hash")),
+      status: revokedAt
+        ? ("revoked" as const)
+        : redeemedAt
+          ? ("redeemed" as const)
+          : !expiresAt || expiresAt.getTime() <= now
+            ? ("expired" as const)
+            : ("pending" as const),
+      expiresAt: expiresAt?.toISOString() ?? null,
+      redeemedAt: redeemedAt?.toISOString() ?? null,
+      redeemedByPrincipalId: rowString(row, "redeemed_by_account_address"),
+      revokedAt: revokedAt?.toISOString() ?? null,
+      createdBy: rowString(row, "created_by"),
+      createdAt: rowDate(row, "created_at")?.toISOString() ?? null,
+    };
+  });
+}
+
+export async function revokeWorkspaceMemberInvite(input: {
+  accountAddress: string;
+  workspaceId: string;
+  inviteId: string;
+}) {
+  const manager = await requireWorkspaceManagement(input.accountAddress, input.workspaceId);
+  const inviteId = requiredText(input.inviteId, "inviteId", 160);
+  const now = new Date();
+  const result = await dbClient.execute({
+    sql: `UPDATE tokenless_workspace_member_invites
+          SET revoked_at = ?
+          WHERE workspace_id = ? AND invite_id = ?
+            AND redeemed_at IS NULL AND revoked_at IS NULL AND expires_at > ?`,
+    args: [now, input.workspaceId, inviteId, now],
+  });
+  if (result.rowCount !== 1) {
+    throw new TokenlessServiceError("Invitation not found.", 404, "invite_not_found");
+  }
+  await appendMembershipAuditEvent({
+    workspaceId: input.workspaceId,
+    actor: manager.accountAddress,
+    action: "workspace.member_invitation_revoked",
+    targetKind: "workspace_member_invite",
+    targetId: inviteId,
+    reason: "workspace_manager_revoked_member_invite",
+    metadata: {},
+    occurredAt: now,
+  });
+  return { inviteId, revoked: true as const, revokedAt: now.toISOString() };
+}
+
+async function managedWorkspaceMemberForUpdate(client: PoolClient, workspaceId: string, principalId: string) {
+  const result = await client.query(
+    `SELECT role FROM tokenless_workspace_members
+     WHERE workspace_id = $1 AND account_address = $2 LIMIT 1 FOR UPDATE`,
+    [workspaceId, principalId],
+  );
+  const row = result.rows[0] as QueryRow | undefined;
+  const role = rowString(row, "role") as ExistingWorkspaceAccessRole | null;
+  if (!role) throw new TokenlessServiceError("Workspace member not found.", 404, "workspace_member_not_found");
+  const managed = await client.query(
+    `SELECT source FROM tokenless_enterprise_managed_members
+     WHERE workspace_id = $1 AND principal_id = $2 AND status = 'active' LIMIT 1 FOR SHARE`,
+    [workspaceId, principalId],
+  );
+  return {
+    role,
+    managedBy: rowString(managed.rows[0] as QueryRow | undefined, "source") as "sso" | "scim" | null,
+  };
+}
+
+function assertMutableWorkspaceMember(input: {
+  actor: string;
+  principalId: string;
+  role: ExistingWorkspaceAccessRole;
+  managedBy: "sso" | "scim" | null;
+}) {
+  if (input.role === "owner") {
+    throw new TokenlessServiceError(
+      "Workspace ownership cannot be changed from member management.",
+      409,
+      "workspace_owner_immutable",
+    );
+  }
+  if (input.actor === input.principalId) {
+    throw new TokenlessServiceError("You cannot change your own membership.", 409, "workspace_self_management");
+  }
+  if (input.managedBy) {
+    throw new TokenlessServiceError(
+      "This member is managed by the workspace identity provider.",
+      409,
+      "workspace_member_managed",
+    );
+  }
+}
+
+export async function changeWorkspaceMemberAccessRole(input: {
+  accountAddress: string;
+  workspaceId: string;
+  principalId: string;
+  accessRole: WorkspaceInviteAccessRole;
+}) {
+  if (!INVITE_ACCESS_ROLE_SET.has(input.accessRole)) {
+    throw new TokenlessServiceError("Workspace role is unsupported.", 400, "invalid_workspace_role");
+  }
+  const principalId = normalizeAddress(input.principalId, "principalId");
+  const client = await dbPool.connect();
+  let previousRole: ExistingWorkspaceAccessRole;
+  let manager: string;
+  try {
+    await client.query("BEGIN");
+    manager = await requireWorkspaceManagementInTransaction(client, input.accountAddress, input.workspaceId);
+    const target = await managedWorkspaceMemberForUpdate(client, input.workspaceId, principalId);
+    assertMutableWorkspaceMember({ actor: manager, principalId, ...target });
+    previousRole = target.role;
+    if (previousRole !== input.accessRole) {
+      await client.query(
+        `UPDATE tokenless_workspace_members SET role = $1
+         WHERE workspace_id = $2 AND account_address = $3`,
+        [input.accessRole, input.workspaceId, principalId],
+      );
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+  if (previousRole !== input.accessRole) {
+    await appendMembershipAuditEvent({
+      workspaceId: input.workspaceId,
+      actor: manager,
+      action: "workspace.role_changed",
+      targetKind: "workspace_member",
+      targetId: principalId,
+      reason: "workspace_manager_changed_access_role",
+      metadata: { previousAccessRole: previousRole, accessRole: input.accessRole },
+      occurredAt: new Date(),
+    });
+  }
+  return { principalId, accessRole: input.accessRole };
+}
+
+export async function removeWorkspaceMember(input: {
+  accountAddress: string;
+  workspaceId: string;
+  principalId: string;
+}) {
+  const principalId = normalizeAddress(input.principalId, "principalId");
+  const client = await dbPool.connect();
+  let previousRole: ExistingWorkspaceAccessRole;
+  let manager: string;
+  try {
+    await client.query("BEGIN");
+    manager = await requireWorkspaceManagementInTransaction(client, input.accountAddress, input.workspaceId);
+    const target = await managedWorkspaceMemberForUpdate(client, input.workspaceId, principalId);
+    assertMutableWorkspaceMember({ actor: manager, principalId, ...target });
+    previousRole = target.role;
+    await client.query(
+      "DELETE FROM tokenless_workspace_member_clients WHERE workspace_id = $1 AND account_address = $2",
+      [input.workspaceId, principalId],
+    );
+    await client.query(
+      "DELETE FROM tokenless_workspace_member_governance WHERE workspace_id = $1 AND account_address = $2",
+      [input.workspaceId, principalId],
+    );
+    const removed = await client.query(
+      "DELETE FROM tokenless_workspace_members WHERE workspace_id = $1 AND account_address = $2",
+      [input.workspaceId, principalId],
+    );
+    if (removed.rowCount !== 1) {
+      throw new TokenlessServiceError("Workspace member not found.", 404, "workspace_member_not_found");
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+  await appendMembershipAuditEvent({
+    workspaceId: input.workspaceId,
+    actor: manager,
+    action: "workspace.role_removed",
+    targetKind: "workspace_member",
+    targetId: principalId,
+    reason: "workspace_manager_removed_member",
+    metadata: { previousAccessRole: previousRole },
+    occurredAt: new Date(),
+  });
+  return { principalId, removed: true as const };
 }
 
 export async function listAccessibleWorkspaceClients(input: {

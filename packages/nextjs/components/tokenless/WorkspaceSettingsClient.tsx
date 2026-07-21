@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { WorkspaceDangerZone } from "~~/components/tokenless/WorkspaceDangerZone";
+import { WorkspaceMembersPanel } from "~~/components/tokenless/WorkspaceMembersPanel";
 import { WorkspaceRequestScope } from "~~/lib/tokenless/workspaceRequestScope";
 
 type Workspace = {
@@ -743,9 +744,12 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
       <div className="surface-card rounded-2xl p-6">
         {workspaces.length ? (
           <>
+            {selected && canManageWorkspace ? (
+              <WorkspaceMembersPanel canManage workspaceId={selected.workspaceId} />
+            ) : null}
             <section
               aria-labelledby="workspace-plan"
-              className="rounded-xl border border-white/10 bg-base-content/[0.025] p-5"
+              className={`${selected && canManageWorkspace ? "mt-5 " : ""}rounded-xl border border-white/10 bg-base-content/[0.025] p-5`}
             >
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
@@ -813,13 +817,9 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                       style={{ width: `${usagePercent}%` }}
                     />
                   </div>
-                  <div className="mt-4 grid gap-2 text-xs text-base-content/50 sm:grid-cols-3">
+                  <div className="mt-4 grid gap-2 text-xs text-base-content/50 sm:grid-cols-2">
                     <span>
                       {billing.limits.activeAgents} active {billing.limits.activeAgents === 1 ? "agent" : "agents"}
-                    </span>
-                    <span>
-                      {billing.limits.activePrivateGroups} active private{" "}
-                      {billing.limits.activePrivateGroups === 1 ? "group" : "groups"}
                     </span>
                     <span>{billing.limits.paidPanels ? "Paid panels available" : "Private unpaid reviews"}</span>
                   </div>

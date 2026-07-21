@@ -7,7 +7,7 @@ import { agentTabHref, nextAgentTabIndex } from "./agentWorkspaceState";
 export type AgentTab = "overview" | "connect" | "inbox" | "registry" | "evaluations" | "evidence";
 
 const tabs: Array<{ value: AgentTab; label: string }> = [
-  { value: "overview", label: "Overview" },
+  { value: "overview", label: "Workspace" },
   { value: "connect", label: "Connection" },
   { value: "inbox", label: "Inbox" },
   { value: "registry", label: "Reviews" },

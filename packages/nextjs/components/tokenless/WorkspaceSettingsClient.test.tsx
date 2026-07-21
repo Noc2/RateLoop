@@ -6,6 +6,14 @@ const source = readFileSync(new URL("./WorkspaceSettingsClient.tsx", import.meta
 const apiKeyRoute = new URL("../../app/api/account/workspaces/[workspaceId]/api-keys/route.ts", import.meta.url);
 const webhookRoute = new URL("../../app/api/account/workspaces/[workspaceId]/webhooks/route.ts", import.meta.url);
 
+test("workspace members are managed before billing without reviewer controls", () => {
+  const members = source.indexOf("<WorkspaceMembersPanel");
+  const subscription = source.indexOf("Workspace subscription");
+  assert.ok(members >= 0 && members < subscription);
+  assert.match(source, /workspaceId=\{selected\.workspaceId\}/);
+  assert.doesNotMatch(source, /active private|private groups/);
+});
+
 test("workspace settings keeps subscription and panel funding separate", () => {
   assert.match(source, /Workspace subscription/);
   assert.match(source, /Panel funding/);
