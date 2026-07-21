@@ -18,7 +18,7 @@ const LOCAL_IDENTIFIER = /^[A-Za-z0-9_-]{1,128}$/;
 const KEY_IDENTIFIER = /^[A-Za-z0-9._:-]{1,128}$/;
 const OPAQUE_IDENTIFIER = /^[A-Za-z0-9._:-]{8,200}$/;
 const SHA256 = /^sha256:[0-9a-f]{64}$/;
-const BASE64URL_SIGNATURE = /^[A-Za-z0-9_-]{86}$/;
+const BASE64URL_SIGNATURE = /^[A-Za-z0-9_-]{80,128}$/;
 const NONTERMINAL_STATES = new Set([
   "approval_required",
   "request_ready",
@@ -373,21 +373,32 @@ function validateKeyring(value, keyId) {
   const seen = new Set();
   let candidate = null;
   for (const key of value.keys) {
+    const ed25519 =
+      key?.algorithm === "Ed25519" &&
+      exactKeys(key.publicKeyJwk, ["kty", "crv", "x"]) &&
+      key.publicKeyJwk.kty === "OKP" &&
+      key.publicKeyJwk.crv === "Ed25519" &&
+      typeof key.publicKeyJwk.x === "string" &&
+      /^[A-Za-z0-9_-]{43}$/.test(key.publicKeyJwk.x);
+    const p256 =
+      key?.algorithm === "ECDSA-SHA256" &&
+      exactKeys(key.publicKeyJwk, ["kty", "crv", "x", "y"]) &&
+      key.publicKeyJwk.kty === "EC" &&
+      key.publicKeyJwk.crv === "P-256" &&
+      typeof key.publicKeyJwk.x === "string" &&
+      typeof key.publicKeyJwk.y === "string" &&
+      /^[A-Za-z0-9_-]{43}$/.test(key.publicKeyJwk.x) &&
+      /^[A-Za-z0-9_-]{43}$/.test(key.publicKeyJwk.y);
     if (
       !exactKeys(key, ["keyId", "algorithm", "publicKeyJwk"]) ||
       !KEY_IDENTIFIER.test(key.keyId) ||
-      key.algorithm !== "Ed25519" ||
-      !exactKeys(key.publicKeyJwk, ["kty", "crv", "x"]) ||
-      key.publicKeyJwk.kty !== "OKP" ||
-      key.publicKeyJwk.crv !== "Ed25519" ||
-      typeof key.publicKeyJwk.x !== "string" ||
-      !/^[A-Za-z0-9_-]{43}$/.test(key.publicKeyJwk.x) ||
+      (!ed25519 && !p256) ||
       seen.has(key.keyId)
     ) {
       throw new Error("trusted_key_invalid");
     }
     seen.add(key.keyId);
-    if (key.keyId === keyId) candidate = key.publicKeyJwk;
+    if (key.keyId === keyId) candidate = key;
   }
   if (!candidate) throw new Error("trusted_key_missing");
   return candidate;
@@ -405,12 +416,13 @@ export async function verifyAdvisoryTerminalEvidence(
     contractRoot,
   );
   const publicKey = createPublicKey({
-    key: validateKeyring(keyring, validated.keyId),
+    key: validateKeyring(keyring, validated.keyId).publicKeyJwk,
     format: "jwk",
   });
+  const trustedKey = validateKeyring(keyring, validated.keyId);
   if (
     !verify(
-      null,
+      trustedKey.algorithm === "ECDSA-SHA256" ? "sha256" : null,
       advisoryTerminalPayload(validated),
       publicKey,
       Buffer.from(validated.signature, "base64url"),

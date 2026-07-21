@@ -53,6 +53,10 @@ function connectionPath(data: string) {
   return join(data, contractDirectory, "connection.json");
 }
 
+function trustedKeysPath(data: string) {
+  return join(data, contractDirectory, "trusted-keys.json");
+}
+
 async function state(data: string) {
   return JSON.parse(await readFile(statePath(data), "utf8")) as Record<
     string,
@@ -95,6 +99,19 @@ function connectionInput(
       canPublish: false,
       canReadPrivateArtifacts: false,
       canAdministerWorkspace: false,
+    },
+    advisoryGate: {
+      enforcementBoundary: "advisory",
+      trustedKeys: {
+        schemaVersion: "rateloop.stop-gate-trusted-keys.v1",
+        keys: [
+          {
+            keyId: "advisory-connection-key",
+            algorithm: "Ed25519",
+            publicKeyJwk: { kty: "OKP", crv: "Ed25519", x: "A".repeat(43) },
+          },
+        ],
+      },
     },
     verifiedAt: "2026-07-21T12:00:00.000Z",
   };
@@ -281,6 +298,10 @@ describe("RateLoop advisory PostToolUse integration", () => {
     });
     expect(await readFile(connectionPath(data), "utf8")).not.toContain(
       "must-not-persist",
+    );
+    expect(JSON.parse(await readFile(trustedKeysPath(data), "utf8"))).toEqual(
+      connected.tool_response.structuredContent.verification.advisoryGate
+        .trustedKeys,
     );
     expect(runScript(stopPath, data, stopInput())).toBeNull();
     expect(runScript(stopPath, data, stopInput("turn_advisory_02"))).toEqual(

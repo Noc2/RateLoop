@@ -17,6 +17,7 @@ import {
   __setHumanReviewGateEvidenceConfigForTests,
   issueHumanReviewAdvisoryTerminalEvidence,
   issueHumanReviewHostReleaseEvidence,
+  projectHumanReviewAdvisoryTrustedKeyring,
   projectHumanReviewGateTrustedKeyHistory,
   projectHumanReviewGateTrustedKeyring,
   verifyHumanReviewGateEvidence,
@@ -28,6 +29,9 @@ const RETIRED = generateKeyPairSync("ed25519");
 const ROTATED = generateKeyPairSync("ed25519");
 const ISSUED_AT = new Date("2026-07-16T12:00:00.000Z");
 const originalVerificationKeys = process.env.TOKENLESS_EVIDENCE_VERIFICATION_KEYS;
+const originalDecisionPacketVerificationKeys = process.env.TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS;
+const originalKmsKeyResource = process.env.TOKENLESS_EVIDENCE_KMS_KEY_RESOURCE;
+const originalSigningKeyId = process.env.TOKENLESS_EVIDENCE_SIGNING_KEY_ID;
 const issueHumanReviewGateEvidence = __humanReviewGateEvidenceTestUtils.issueGenericEvidence;
 const HOST_CANDIDATE = Buffer.from("candidate output held for exact review-gate release", "utf8");
 const HASH_OUTPUT = `sha256:${createHash("sha256").update(HOST_CANDIDATE).digest("hex")}` as const;
@@ -132,6 +136,46 @@ afterEach(() => {
   __setHumanReviewGateEvidenceConfigForTests(null);
   if (originalVerificationKeys === undefined) delete process.env.TOKENLESS_EVIDENCE_VERIFICATION_KEYS;
   else process.env.TOKENLESS_EVIDENCE_VERIFICATION_KEYS = originalVerificationKeys;
+  if (originalDecisionPacketVerificationKeys === undefined)
+    delete process.env.TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS;
+  else process.env.TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS = originalDecisionPacketVerificationKeys;
+  if (originalKmsKeyResource === undefined) delete process.env.TOKENLESS_EVIDENCE_KMS_KEY_RESOURCE;
+  else process.env.TOKENLESS_EVIDENCE_KMS_KEY_RESOURCE = originalKmsKeyResource;
+  if (originalSigningKeyId === undefined) delete process.env.TOKENLESS_EVIDENCE_SIGNING_KEY_ID;
+  else process.env.TOKENLESS_EVIDENCE_SIGNING_KEY_ID = originalSigningKeyId;
+});
+
+test("projects the hosted P-256 advisory keyring only when its current fingerprint matches", () => {
+  const current = generateKeyPairSync("ec", { namedCurve: "prime256v1" }).publicKey;
+  const retired = generateKeyPairSync("ec", { namedCurve: "prime256v1" }).publicKey;
+  const entry = (publicKey: typeof current, status: "current" | "retired") => {
+    const der = publicKey.export({ format: "der", type: "spki" });
+    return {
+      algorithm: "ECDSA-SHA256",
+      keyId: `p256:${createHash("sha256").update(der).digest("hex").slice(0, 24)}`,
+      publicKey: der.toString("base64url"),
+      status,
+    };
+  };
+  const currentEntry = entry(current, "current");
+  const retiredEntry = entry(retired, "retired");
+  process.env.TOKENLESS_EVIDENCE_KMS_KEY_RESOURCE = "arn:aws:kms:eu-central-1:123456789012:key/test";
+  process.env.TOKENLESS_EVIDENCE_SIGNING_KEY_ID = currentEntry.keyId;
+  process.env.TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS = JSON.stringify([currentEntry, retiredEntry]);
+
+  const keyring = projectHumanReviewAdvisoryTrustedKeyring();
+  assert.deepEqual(
+    keyring.keys.map(key => ({ algorithm: key.algorithm, keyId: key.keyId })),
+    [
+      { algorithm: "ECDSA-SHA256", keyId: currentEntry.keyId },
+      { algorithm: "ECDSA-SHA256", keyId: retiredEntry.keyId },
+    ],
+  );
+  assert.equal(keyring.keys[0]?.publicKeyJwk.kty, "EC");
+  assert.equal(keyring.keys[0]?.publicKeyJwk.crv, "P-256");
+
+  process.env.TOKENLESS_EVIDENCE_SIGNING_KEY_ID = retiredEntry.keyId;
+  assertServiceError(() => projectHumanReviewAdvisoryTrustedKeyring(), "review_gate_evidence_verification_unavailable");
 });
 
 test("issues a compact signed receipt for exact server-known review-gate state", () => {

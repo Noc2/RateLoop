@@ -279,10 +279,58 @@ function validateConnectionEnvelope(input) {
   ) {
     throw new Error("connection_verification_invalid");
   }
+  const advisoryGate = verification.advisoryGate;
+  if (
+    !isRecord(advisoryGate) ||
+    advisoryGate.enforcementBoundary !== "advisory"
+  ) {
+    throw new Error("connection_advisory_gate_invalid");
+  }
+  const trustedKeys = advisoryGate.trustedKeys;
+  if (
+    !isRecord(trustedKeys) ||
+    trustedKeys.schemaVersion !== "rateloop.stop-gate-trusted-keys.v1" ||
+    !Array.isArray(trustedKeys.keys) ||
+    trustedKeys.keys.length < 1 ||
+    trustedKeys.keys.length > 16
+  ) {
+    throw new Error("connection_trusted_keys_invalid");
+  }
+  const seen = new Set();
+  for (const key of trustedKeys.keys) {
+    const ed25519 =
+      key?.algorithm === "Ed25519" &&
+      isRecord(key.publicKeyJwk) &&
+      key.publicKeyJwk.kty === "OKP" &&
+      key.publicKeyJwk.crv === "Ed25519" &&
+      typeof key.publicKeyJwk.x === "string" &&
+      /^[A-Za-z0-9_-]{43}$/.test(key.publicKeyJwk.x) &&
+      Object.keys(key.publicKeyJwk).length === 3;
+    const p256 =
+      key?.algorithm === "ECDSA-SHA256" &&
+      isRecord(key.publicKeyJwk) &&
+      key.publicKeyJwk.kty === "EC" &&
+      key.publicKeyJwk.crv === "P-256" &&
+      typeof key.publicKeyJwk.x === "string" &&
+      typeof key.publicKeyJwk.y === "string" &&
+      /^[A-Za-z0-9_-]{43}$/.test(key.publicKeyJwk.x) &&
+      /^[A-Za-z0-9_-]{43}$/.test(key.publicKeyJwk.y) &&
+      Object.keys(key.publicKeyJwk).length === 4;
+    if (
+      !isRecord(key) ||
+      !OPAQUE_IDENTIFIER.test(key.keyId) ||
+      (!ed25519 && !p256) ||
+      seen.has(key.keyId)
+    ) {
+      throw new Error("connection_trusted_keys_invalid");
+    }
+    seen.add(key.keyId);
+  }
   return {
     workspaceId: verification.connection.workspaceId,
     integrationId: verification.connection.integrationId,
     verifiedAt: verification.verifiedAt,
+    trustedKeys,
   };
 }
 
@@ -607,10 +655,12 @@ async function main() {
   }
   const contractRoot = join(pluginDataRoot, CONTRACT_DIRECTORY);
   const connectionPath = join(contractRoot, "connection.json");
+  const trustedKeysPath = join(contractRoot, "trusted-keys.json");
   const statePath = join(contractRoot, "sessions", `${input.sessionId}.json`);
   try {
     if (CONNECTION_TOOLS.has(input.tool)) {
       const verified = validateConnectionEnvelope(input);
+      await writeStateAtomically(trustedKeysPath, verified.trustedKeys);
       let connection;
       try {
         connection = await readExistingConnectionState(

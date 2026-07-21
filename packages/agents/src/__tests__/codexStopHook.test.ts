@@ -170,9 +170,10 @@ describe("RateLoop Codex Stop hook", () => {
     expect(keyringSchema.$id).toContain(
       "rateloop-stop-gate-trusted-keys.v1.json",
     );
-    expect(keyringSchema.properties.keys.items.properties.algorithm.const).toBe(
+    expect(keyringSchema.properties.keys.items.properties.algorithm.enum).toEqual([
       "Ed25519",
-    );
+      "ECDSA-SHA256",
+    ]);
     expect(readme).toContain(
       "separately reviews and trusts the exact hook definition",
     );

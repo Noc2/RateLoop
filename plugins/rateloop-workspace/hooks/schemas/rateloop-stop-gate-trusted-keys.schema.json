@@ -23,24 +23,32 @@
             "pattern": "^[A-Za-z0-9._:-]{1,128}$"
           },
           "algorithm": {
-            "const": "Ed25519"
+            "enum": ["Ed25519", "ECDSA-SHA256"]
           },
           "publicKeyJwk": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["kty", "crv", "x"],
-            "properties": {
-              "kty": {
-                "const": "OKP"
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kty", "crv", "x"],
+                "properties": {
+                  "kty": { "const": "OKP" },
+                  "crv": { "const": "Ed25519" },
+                  "x": { "type": "string", "pattern": "^[A-Za-z0-9_-]{43}$" }
+                }
               },
-              "crv": {
-                "const": "Ed25519"
-              },
-              "x": {
-                "type": "string",
-                "pattern": "^[A-Za-z0-9_-]{43}$"
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["kty", "crv", "x", "y"],
+                "properties": {
+                  "kty": { "const": "EC" },
+                  "crv": { "const": "P-256" },
+                  "x": { "type": "string", "pattern": "^[A-Za-z0-9_-]{43}$" },
+                  "y": { "type": "string", "pattern": "^[A-Za-z0-9_-]{43}$" }
+                }
               }
-            }
+            ]
           }
         }
       }

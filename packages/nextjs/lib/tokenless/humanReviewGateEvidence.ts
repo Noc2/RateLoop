@@ -1,5 +1,6 @@
 import { type KeyObject, createHash, createPrivateKey, createPublicKey, randomBytes, sign, verify } from "node:crypto";
 import "server-only";
+import { createConfiguredAwsKmsEvidenceSigner } from "~~/lib/tokenless/awsKmsEvidenceSigner";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export const HUMAN_REVIEW_GATE_EVIDENCE_SCHEMA_VERSION = "rateloop.human-review-gate-evidence.v1" as const;
@@ -9,6 +10,10 @@ export const HUMAN_REVIEW_ADVISORY_TERMINAL_EVIDENCE_SCHEMA_VERSION =
   "rateloop.human-review-terminal-evidence.v1" as const;
 export const HUMAN_REVIEW_ADVISORY_TERMINAL_PAYLOAD_SCHEMA_VERSION =
   "rateloop.human-review-terminal-payload.v1" as const;
+export const HUMAN_REVIEW_ADVISORY_SKIP_EVIDENCE_SCHEMA_VERSION =
+  "rateloop.human-review-skip-release-evidence.v1" as const;
+export const HUMAN_REVIEW_ADVISORY_SKIP_PAYLOAD_SCHEMA_VERSION =
+  "rateloop.human-review-skip-release-payload.v1" as const;
 export const HUMAN_REVIEW_HOST_RELEASE_EVIDENCE_SCHEMA_VERSION = "rateloop.host-output-release-evidence.v1" as const;
 export const HUMAN_REVIEW_HOST_RELEASE_PAYLOAD_SCHEMA_VERSION = "rateloop.host-output-release-payload.v1" as const;
 
@@ -138,6 +143,24 @@ export type HumanReviewAdvisoryTerminalEvidence = {
     terminalStatus: "completed" | "inconclusive" | "failed_terminal" | "cancelled_before_commit";
     outputCommitment: `sha256:${string}`;
     policyBindingHash: `sha256:${string}`;
+    issuedAt: string;
+  };
+  signature: string;
+};
+
+export type HumanReviewAdvisorySkipEvidence = {
+  schemaVersion: typeof HUMAN_REVIEW_ADVISORY_SKIP_EVIDENCE_SCHEMA_VERSION;
+  keyId: string;
+  payload: {
+    schemaVersion: typeof HUMAN_REVIEW_ADVISORY_SKIP_PAYLOAD_SCHEMA_VERSION;
+    workspaceId: string;
+    integrationId: string;
+    opportunityId: string;
+    decision: "skipped";
+    terminalStatus: "skipped";
+    outputCommitment: `sha256:${string}`;
+    policyBindingHash: `sha256:${string}`;
+    scopeCommitment: `sha256:${string}`;
     issuedAt: string;
   };
   signature: string;
@@ -731,6 +754,111 @@ export function projectHumanReviewGateTrustedKeyring() {
   return trustedKeyring();
 }
 
+function managedAdvisoryTrustedKeyring() {
+  let entries: unknown;
+  try {
+    entries = JSON.parse(process.env.TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS?.trim() ?? "");
+  } catch {
+    serviceError(
+      "Advisory review-gate verification keys are invalid.",
+      "review_gate_evidence_verification_unavailable",
+      503,
+      true,
+    );
+  }
+  if (!Array.isArray(entries) || entries.length < 1 || entries.length > 16) {
+    serviceError(
+      "Advisory review-gate verification keys are unavailable.",
+      "review_gate_evidence_verification_unavailable",
+      503,
+      true,
+    );
+  }
+  const expectedCurrent = process.env.TOKENLESS_EVIDENCE_SIGNING_KEY_ID?.trim();
+  let currentKeyId: string | null = null;
+  const seen = new Set<string>();
+  const keys = entries.map((entry, index) => {
+    const value = record(entry, `advisory verification key ${index}`);
+    exactKeys(value, ["algorithm", "keyId", "publicKey", "status"], `advisory verification key ${index}`);
+    if (
+      value.algorithm !== "ECDSA-SHA256" ||
+      typeof value.keyId !== "string" ||
+      !/^p256:[0-9a-f]{24}$/u.test(value.keyId) ||
+      typeof value.publicKey !== "string" ||
+      (value.status !== "current" && value.status !== "retired") ||
+      seen.has(value.keyId)
+    ) {
+      serviceError(
+        "Advisory review-gate verification keys are invalid.",
+        "review_gate_evidence_verification_unavailable",
+        503,
+        true,
+      );
+    }
+    let publicKey: KeyObject;
+    try {
+      publicKey = createPublicKey({ key: Buffer.from(value.publicKey, "base64url"), format: "der", type: "spki" });
+    } catch {
+      serviceError(
+        "Advisory review-gate verification keys are invalid.",
+        "review_gate_evidence_verification_unavailable",
+        503,
+        true,
+      );
+    }
+    const canonical = publicKey!.export({ format: "der", type: "spki" });
+    const derived = `p256:${createHash("sha256").update(canonical).digest("hex").slice(0, 24)}`;
+    const jwk = publicKey!.export({ format: "jwk" });
+    if (
+      publicKey!.asymmetricKeyType !== "ec" ||
+      publicKey!.asymmetricKeyDetails?.namedCurve !== "prime256v1" ||
+      derived !== value.keyId ||
+      canonical.toString("base64url") !== value.publicKey ||
+      jwk.kty !== "EC" ||
+      jwk.crv !== "P-256" ||
+      typeof jwk.x !== "string" ||
+      typeof jwk.y !== "string"
+    ) {
+      serviceError(
+        "Advisory review-gate verification keys are invalid.",
+        "review_gate_evidence_verification_unavailable",
+        503,
+        true,
+      );
+    }
+    seen.add(value.keyId);
+    if (value.status === "current") {
+      if (currentKeyId) {
+        serviceError(
+          "Advisory review-gate verification keys are invalid.",
+          "review_gate_evidence_verification_unavailable",
+          503,
+          true,
+        );
+      }
+      currentKeyId = value.keyId;
+    }
+    return {
+      keyId: value.keyId,
+      algorithm: "ECDSA-SHA256" as const,
+      publicKeyJwk: { kty: "EC" as const, crv: "P-256" as const, x: jwk.x, y: jwk.y },
+    };
+  });
+  if (!expectedCurrent || currentKeyId !== expectedCurrent) {
+    serviceError(
+      "The current advisory review-gate verification key is invalid.",
+      "review_gate_evidence_verification_unavailable",
+      503,
+      true,
+    );
+  }
+  return { schemaVersion: "rateloop.stop-gate-trusted-keys.v1" as const, keys };
+}
+
+export function projectHumanReviewAdvisoryTrustedKeyring() {
+  return process.env.TOKENLESS_EVIDENCE_KMS_KEY_RESOURCE?.trim() ? managedAdvisoryTrustedKeyring() : trustedKeyring();
+}
+
 export function projectHumanReviewGateTrustedKeyHistory() {
   const keyring = trustedKeyring();
   const statuses = verificationKeys();
@@ -758,6 +886,104 @@ function advisoryPayloadBytes(evidence: HumanReviewAdvisoryTerminalEvidence) {
     }),
     "utf8",
   );
+}
+
+function advisorySkipPayloadBytes(evidence: HumanReviewAdvisorySkipEvidence) {
+  const payload = evidence.payload;
+  return Buffer.from(
+    JSON.stringify({
+      schemaVersion: payload.schemaVersion,
+      workspaceId: payload.workspaceId,
+      integrationId: payload.integrationId,
+      opportunityId: payload.opportunityId,
+      decision: payload.decision,
+      terminalStatus: payload.terminalStatus,
+      outputCommitment: payload.outputCommitment,
+      policyBindingHash: payload.policyBindingHash,
+      scopeCommitment: payload.scopeCommitment,
+      issuedAt: payload.issuedAt,
+    }),
+    "utf8",
+  );
+}
+
+async function signAdvisoryDocument(document: Uint8Array) {
+  if (process.env.TOKENLESS_EVIDENCE_KMS_KEY_RESOURCE?.trim() && !testConfig) {
+    const signer = createConfiguredAwsKmsEvidenceSigner();
+    const metadata = await signer.metadata();
+    return { keyId: metadata.keyId, signature: await signer.sign(document) };
+  }
+  const signer = currentSigningKey();
+  return {
+    keyId: signer.keyId,
+    signature: sign(null, document, signer.privateKey).toString("base64url"),
+  };
+}
+
+export async function issueHumanReviewAdvisorySkipEvidence(input: {
+  resolver: HumanReviewGateServerStateResolver;
+  expected: {
+    workspaceId: string;
+    integrationId: string;
+    opportunityId: string;
+    lifecycleRevision: number;
+    outputCommitment: string;
+    policyBindingHash: string;
+    scopeCommitment: string;
+  };
+}): Promise<HumanReviewAdvisorySkipEvidence> {
+  const expected = record(input.expected, "advisory skip evidence expectation");
+  exactKeys(
+    expected,
+    [
+      "workspaceId",
+      "integrationId",
+      "opportunityId",
+      "lifecycleRevision",
+      "outputCommitment",
+      "policyBindingHash",
+      "scopeCommitment",
+    ],
+    "advisory skip evidence expectation",
+    invalidBinding,
+  );
+  const state = await resolveServerState(input.resolver, {
+    workspaceId: String(expected.workspaceId),
+    integrationId: String(expected.integrationId),
+    opportunityId: String(expected.opportunityId),
+  });
+  if (
+    !Number.isSafeInteger(expected.lifecycleRevision) ||
+    state.lifecycle.revision !== expected.lifecycleRevision ||
+    state.outputCommitment !== expected.outputCommitment ||
+    state.humanReviewBinding.hash !== expected.policyBindingHash ||
+    state.scopeCommitment !== expected.scopeCommitment ||
+    state.lifecycle.state !== "skipped" ||
+    (state.reviewDecision !== "skip" && state.reviewDecision !== "recommended")
+  ) {
+    serverStateMismatch("Advisory skip evidence expectations do not match resolved review-gate state.");
+  }
+  const evidence: HumanReviewAdvisorySkipEvidence = {
+    schemaVersion: HUMAN_REVIEW_ADVISORY_SKIP_EVIDENCE_SCHEMA_VERSION,
+    keyId: "",
+    payload: {
+      schemaVersion: HUMAN_REVIEW_ADVISORY_SKIP_PAYLOAD_SCHEMA_VERSION,
+      workspaceId: state.workspaceId,
+      integrationId: state.integrationId,
+      opportunityId: state.opportunityId,
+      decision: "skipped",
+      terminalStatus: "skipped",
+      outputCommitment: state.outputCommitment,
+      policyBindingHash: state.humanReviewBinding.hash,
+      scopeCommitment: state.scopeCommitment,
+      issuedAt: now().toISOString(),
+    },
+    signature: "",
+  };
+  const signed = await signAdvisoryDocument(advisorySkipPayloadBytes(evidence));
+  evidence.keyId = signed.keyId;
+  evidence.signature = signed.signature;
+  return evidence;
 }
 
 export async function issueHumanReviewAdvisoryTerminalEvidence(input: {
@@ -799,10 +1025,9 @@ export async function issueHumanReviewAdvisoryTerminalEvidence(input: {
   ) {
     serverStateMismatch("Advisory terminal evidence requires an exact terminal review lifecycle.");
   }
-  const signer = currentSigningKey();
   const evidence: HumanReviewAdvisoryTerminalEvidence = {
     schemaVersion: HUMAN_REVIEW_ADVISORY_TERMINAL_EVIDENCE_SCHEMA_VERSION,
-    keyId: signer.keyId,
+    keyId: "",
     payload: {
       schemaVersion: HUMAN_REVIEW_ADVISORY_TERMINAL_PAYLOAD_SCHEMA_VERSION,
       workspaceId: state.workspaceId,
@@ -815,7 +1040,9 @@ export async function issueHumanReviewAdvisoryTerminalEvidence(input: {
     },
     signature: "",
   };
-  evidence.signature = sign(null, advisoryPayloadBytes(evidence), signer.privateKey).toString("base64url");
+  const signed = await signAdvisoryDocument(advisoryPayloadBytes(evidence));
+  evidence.keyId = signed.keyId;
+  evidence.signature = signed.signature;
   return evidence;
 }
 

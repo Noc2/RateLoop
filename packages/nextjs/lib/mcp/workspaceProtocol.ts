@@ -32,6 +32,8 @@ import {
   submitAgentRegistration,
 } from "~~/lib/tokenless/agentIntegrations";
 import { getEffectiveAgentReviewContext } from "~~/lib/tokenless/effectiveAgentReviewContext";
+import { projectHumanReviewAdvisoryTrustedKeyring } from "~~/lib/tokenless/humanReviewGateEvidence";
+import { projectHumanReviewMcpEnvelope } from "~~/lib/tokenless/humanReviewMcpEnvelope";
 import { routeHumanReviewRequest } from "~~/lib/tokenless/humanReviewRequestRouter";
 import { listOpenHumanReviewOpportunities } from "~~/lib/tokenless/openHumanReviewOpportunities";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -429,8 +431,26 @@ function errorResponse(id: JsonRpcId, code: number, message: string, data?: unkn
   return { error: { code, message, ...(data === undefined ? {} : { data }) }, id, jsonrpc: "2.0" as const };
 }
 
-function toolResult(value: unknown) {
-  return { content: [{ text: JSON.stringify(value), type: "text" }], structuredContent: value };
+function toolResult(value: unknown, structuredContent: unknown = value) {
+  return { content: [{ text: JSON.stringify(value), type: "text" }], structuredContent };
+}
+
+function connectionVerificationResult<T extends JsonRecord>(value: T) {
+  return {
+    ...value,
+    advisoryGate: {
+      enforcementBoundary: "advisory" as const,
+      trustedKeys: projectHumanReviewAdvisoryTrustedKeyring(),
+    },
+  };
+}
+
+async function reviewToolResult(
+  principal: Extract<AgentMcpPrincipal, { kind: "integration" }>,
+  opportunityId: string,
+  value: unknown,
+) {
+  return toolResult(value, await projectHumanReviewMcpEnvelope({ principal, opportunityId, rawResult: value }));
 }
 
 function toolError(error: TokenlessServiceError) {
@@ -590,19 +610,18 @@ async function callIntegrationTool(
           "workflow_not_allowed",
         );
       }
-      return toolResult(
-        await evaluateAdaptiveReviewRequirement({
-          principal: principal.principal,
-          integrationId: binding.integrationId,
-          request: {
-            ...input,
-            agentId: binding.agentId,
-            agentVersionId: binding.agentVersionId,
-            policyId: binding.reviewPolicyId,
-            policyVersion: binding.reviewPolicyVersion,
-          } as unknown as AdaptiveReviewDecisionRequest,
-        }),
-      );
+      const decision = await evaluateAdaptiveReviewRequirement({
+        principal: principal.principal,
+        integrationId: binding.integrationId,
+        request: {
+          ...input,
+          agentId: binding.agentId,
+          agentVersionId: binding.agentVersionId,
+          policyId: binding.reviewPolicyId,
+          policyVersion: binding.reviewPolicyVersion,
+        } as unknown as AdaptiveReviewDecisionRequest,
+      });
+      return reviewToolResult(principal, decision.opportunityId, decision);
     }
     if (name === "rateloop_request_review") {
       const input = requireObjectWithKeys(
@@ -610,16 +629,15 @@ async function callIntegrationTool(
         ["opportunityId", "sourcePayload", "suggestionPayload", "question", "material"],
         "Review request arguments are invalid.",
       );
-      return toolResult(
-        await routeHumanReviewRequest({
-          principal,
-          opportunityId: input.opportunityId as string,
-          sourcePayload: input.sourcePayload as string,
-          suggestionPayload: input.suggestionPayload as string,
-          ...(input.question === undefined ? {} : { question: input.question }),
-          material: reviewMaterial(input.material, context.origin),
-        }),
-      );
+      const route = await routeHumanReviewRequest({
+        principal,
+        opportunityId: input.opportunityId as string,
+        sourcePayload: input.sourcePayload as string,
+        suggestionPayload: input.suggestionPayload as string,
+        ...(input.question === undefined ? {} : { question: input.question }),
+        material: reviewMaterial(input.material, context.origin),
+      });
+      return reviewToolResult(principal, route.opportunityId, route);
     }
     if (name === "rateloop_wait_for_review") {
       const input = requireObjectWithKeys(
@@ -627,24 +645,25 @@ async function callIntegrationTool(
         ["opportunityId", "cursor", "timeoutMs"],
         "Review wait arguments are invalid.",
       );
-      return toolResult(
-        await waitForAdaptiveHumanReview({
-          principal,
-          opportunityId: input.opportunityId as string,
-          appOrigin: context.origin,
-          options: {
-            ...(typeof input.cursor === "string" ? { cursor: input.cursor } : {}),
-            ...(typeof input.timeoutMs === "number" ? { timeoutMs: input.timeoutMs } : {}),
-            ...(context.signal ? { signal: context.signal } : {}),
-          },
-        }),
-      );
+      const wait = await waitForAdaptiveHumanReview({
+        principal,
+        opportunityId: input.opportunityId as string,
+        appOrigin: context.origin,
+        options: {
+          ...(typeof input.cursor === "string" ? { cursor: input.cursor } : {}),
+          ...(typeof input.timeoutMs === "number" ? { timeoutMs: input.timeoutMs } : {}),
+          ...(context.signal ? { signal: context.signal } : {}),
+        },
+      });
+      return reviewToolResult(principal, wait.opportunityId, wait);
     }
     if (name === "rateloop_get_review_result") {
       const input = requireObjectWithKeys(args, ["opportunityId"], "Review result arguments are invalid.");
-      return toolResult(
-        await getAdaptiveHumanReviewResult({ principal, opportunityId: input.opportunityId as string }),
-      );
+      const result = await getAdaptiveHumanReviewResult({
+        principal,
+        opportunityId: input.opportunityId as string,
+      });
+      return reviewToolResult(principal, result.opportunityId, result);
     }
     return null;
   } catch (error) {
@@ -807,10 +826,12 @@ async function callOAuthTool(
       };
       const agentContext = await getEffectiveAgentReviewContext(integrationPrincipal);
       await recordOAuthAgentContextRead(rehydrated);
-      const verification = await verifyAgentConnection({
-        principal: rehydrated.oauth,
-        integrationId: rehydrated.integration.integrationId,
-      });
+      const verification = connectionVerificationResult(
+        await verifyAgentConnection({
+          principal: rehydrated.oauth,
+          integrationId: rehydrated.integration.integrationId,
+        }),
+      );
       return toolResult({
         schemaVersion: "rateloop.workspace-connection.v1",
         connected: true,
@@ -859,10 +880,12 @@ async function callOAuthTool(
     if (name === "rateloop_verify_connection") {
       requireObjectWithKeys(args, [], "Connection verification arguments are invalid.");
       return toolResult(
-        await verifyAgentConnection({
-          principal: principal.oauth,
-          integrationId: principal.integration.integrationId,
-        }),
+        connectionVerificationResult(
+          await verifyAgentConnection({
+            principal: principal.oauth,
+            integrationId: principal.integration.integrationId,
+          }),
+        ),
       );
     }
     if (principal.connectionStatus !== "connected") {

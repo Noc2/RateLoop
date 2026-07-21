@@ -19,14 +19,14 @@ The active state must conform to [`schemas/rateloop-advisory-stop-gate-state.sch
 $PLUGIN_DATA/review-stop-gate-v1/trusted-keys.json
 ```
 
-The keyring must conform to [`schemas/rateloop-stop-gate-trusted-keys.schema.json`](./schemas/rateloop-stop-gate-trusted-keys.schema.json). The `PostToolUse` updater creates and atomically advances only the session state from validated workspace-tool envelopes; it never writes or changes the trusted-key ring. A trusted host component must provision the key ring, restrict plugin-data permissions, and keep its update path outside agent-controlled workspace files.
+The keyring must conform to [`schemas/rateloop-stop-gate-trusted-keys.schema.json`](./schemas/rateloop-stop-gate-trusted-keys.schema.json). A successful authenticated connection or verification response carries the server-projected trust anchors, and the `PostToolUse` updater writes them atomically with mode `0600` before recording the connection marker. The updater then advances only the session state from validated workspace-tool envelopes. The keyring supports the hosted P-256 KMS signer and the isolated Ed25519 test signer; it is never sourced from agent-controlled workspace files.
 
 ## Active decision contract
 
 - No connection marker means the advisory plugin has not activated omission checking; it is not evidence that review was enforced.
 - After a valid connection marker exists, the exact setup session and turn may stop without a review evaluation. Any later Stop without review state updated for the current turn fails closed as `evaluation_missing`. Re-running idempotent connection verification cannot refresh this exemption.
 - A connection marker and review state bound to different workspace integrations fail closed. A malformed or unreadable connection marker never authorizes release; a new successful verification can replace it.
-- An authenticated MCP selection skip stays armed unless it carries matching trusted Ed25519 skip-release evidence bound to the exact workspace, integration, opportunity, output, policy, and scope. Missing, invalid, or mismatched evidence fails closed. The Stop hook re-verifies the persisted receipt before allowing output.
+- An authenticated MCP selection skip stays armed unless it carries matching signed skip-release evidence from a connection-provisioned trusted key, bound to the exact workspace, integration, opportunity, output, policy, and scope. Missing, invalid, or mismatched evidence fails closed. The Stop hook re-verifies the persisted receipt before allowing output.
 - The updater accepts only the supported RateLoop workspace MCP result envelopes and binds state to the exact workspace, integration, opportunity, session, turn, frozen policy, and monotonic lifecycle revision.
 - An armed non-terminal state is valid only for `approval_required`, `request_ready`, `pending`, or `blocked` and for the exact Codex session and turn.
 - A matching signed `completed` terminal receipt lets the advisory turn stop. A signed `inconclusive` receipt remains blocked because this compact receipt does not carry the separately verified policy decision needed to release it. Signed `failed_terminal` and `cancelled_before_commit` receipts never release output.
@@ -34,7 +34,7 @@ The keyring must conform to [`schemas/rateloop-stop-gate-trusted-keys.schema.jso
 - Expiry fails closed with `recovery_required`. Time alone never authorizes release. A trusted host must write a fresh evaluation, valid signed terminal evidence, or an explicit separately authorized owner override/disarm.
 - A malformed, mismatched, or unverifiable armed state fails closed and exposes only a bounded recovery reason.
 
-The v2 terminal evidence payload is signed with Ed25519 over the exact server-known projection documented in [`ADVISORY_STATE_CONTRACT.md`](./ADVISORY_STATE_CONTRACT.md). It never claims that the RateLoop server knew the local Codex session or turn.
+The v2 terminal evidence payload is signed by the configured hosted P-256 KMS key (or the isolated Ed25519 test signer) over the exact server-known projection documented in [`ADVISORY_STATE_CONTRACT.md`](./ADVISORY_STATE_CONTRACT.md). It never claims that the RateLoop server knew the local Codex session or turn.
 
 The hooks consume only stable `PostToolUse` and `Stop` fields plus this local state contract. They deliberately ignore `transcript_path`, never parse conversation history, never read source or suggestion artifacts, make no network calls, and cannot approve, publish, assign reviewers, reserve funds, or spend. The connection marker closes an accidental missing-evaluation path only while the separately trusted hook is enabled; it neither binds candidate bytes nor changes the stored integration from advisory to host-enforced.
 

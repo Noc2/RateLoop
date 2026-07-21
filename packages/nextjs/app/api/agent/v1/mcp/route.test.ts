@@ -1,7 +1,12 @@
 import { NextRequest } from "next/server";
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { spawn } from "node:child_process";
+import { createHash, generateKeyPairSync } from "node:crypto";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { GET, POST } from "~~/app/api/agent/v1/mcp/route";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
@@ -29,6 +34,11 @@ import {
 } from "~~/lib/tokenless/agentOAuth";
 import { __setArtifactPrivacyRuntimeForTests } from "~~/lib/tokenless/artifactPrivacy";
 import { putHumanReviewConfigurationForOwner } from "~~/lib/tokenless/humanReviewConfiguration";
+import {
+  __setHumanReviewGateEvidenceConfigForTests,
+  projectHumanReviewGateTrustedKeyring,
+} from "~~/lib/tokenless/humanReviewGateEvidence";
+import { projectHumanReviewMcpEnvelope } from "~~/lib/tokenless/humanReviewMcpEnvelope";
 import { createPrivateGroup } from "~~/lib/tokenless/privateGroups";
 import { createAgentPublishingPolicy, createWorkspace } from "~~/lib/tokenless/productCore";
 import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
@@ -51,18 +61,27 @@ const originalRateLimitSecret = process.env.TOKENLESS_MCP_RATE_LIMIT_SECRET;
 const originalAppUrl = process.env.APP_URL;
 const PRIVATE_REVIEWER_A = "0x2222222222222222222222222222222222222222";
 const PRIVATE_REVIEWER_B = "0x3333333333333333333333333333333333333333";
+const gateSigningKey = generateKeyPairSync("ed25519");
+const repoRoot = fileURLToPath(new URL("../../../../../../../", import.meta.url));
+const pluginRoot = join(repoRoot, "plugins", "rateloop-workspace");
+const advisoryUpdater = join(pluginRoot, "hooks", "rateloop-advisory-state-update.mjs");
+const advisoryStopGate = join(pluginRoot, "hooks", "rateloop-advisory-stop-gate.mjs");
+const temporaryPluginData: string[] = [];
 
 beforeEach(() => {
   process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = "99".repeat(32);
   process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION = "sampler-route-v1";
   process.env.TOKENLESS_MCP_RATE_LIMIT_SECRET = "workspace-mcp-test-rate-limit-secret-with-32-characters";
   process.env.APP_URL = "https://rateloop-tokenless.vercel.app";
+  __setHumanReviewGateEvidenceConfigForTests({ signingPrivateKey: gateSigningKey.privateKey });
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
 });
 
-afterEach(() => {
+afterEach(async () => {
   __setArtifactPrivacyRuntimeForTests(null);
+  __setHumanReviewGateEvidenceConfigForTests(null);
   __setDatabaseResourcesForTests(null);
+  await Promise.all(temporaryPluginData.splice(0).map(path => rm(path, { recursive: true, force: true })));
   if (originalSamplerKey === undefined) delete process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY;
   else process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = originalSamplerKey;
   if (originalSamplerVersion === undefined) delete process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION;
@@ -100,6 +119,62 @@ function streamRequest(token: string, sessionId: string, protocolVersion: string
       ...(lastEventId ? { "last-event-id": lastEventId } : {}),
     },
   });
+}
+
+async function pluginDataWithTrustedKeys() {
+  const path = await mkdtemp(join(tmpdir(), "rateloop-real-mcp-hook-"));
+  temporaryPluginData.push(path);
+  const contract = join(path, "review-stop-gate-v1");
+  await mkdir(contract, { recursive: true });
+  await writeFile(join(contract, "trusted-keys.json"), `${JSON.stringify(projectHumanReviewGateTrustedKeyring())}\n`, {
+    mode: 0o600,
+  });
+  return path;
+}
+
+async function runAdvisoryHook(script: string, pluginData: string, input: unknown) {
+  const child = spawn(process.execPath, [script], {
+    cwd: repoRoot,
+    env: { ...process.env, PLUGIN_DATA: pluginData, PLUGIN_ROOT: pluginRoot },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  child.stdin.end(JSON.stringify(input));
+  const output: Buffer[] = [];
+  const errors: Buffer[] = [];
+  child.stdout.on("data", chunk => output.push(Buffer.from(chunk)));
+  child.stderr.on("data", chunk => errors.push(Buffer.from(chunk)));
+  const code = await new Promise<number | null>(resolve => child.on("close", resolve));
+  assert.equal(code, 0);
+  assert.equal(Buffer.concat(errors).toString("utf8"), "");
+  const text = Buffer.concat(output).toString("utf8").trim();
+  return text ? (JSON.parse(text) as Record<string, unknown>) : null;
+}
+
+function postToolUseInput(input: {
+  tool: "evaluate_review_requirement" | "get_review_result";
+  structuredContent: Record<string, unknown>;
+  toolUseId: string;
+}) {
+  return {
+    session_id: "session_real_mcp_gate_01",
+    turn_id: "turn_real_mcp_gate_01",
+    hook_event_name: "PostToolUse",
+    tool_name: `mcp__rateloop-workspace__rateloop_${input.tool}`,
+    tool_use_id: input.toolUseId,
+    tool_input:
+      input.tool === "evaluate_review_requirement"
+        ? { externalOpportunityId: "real-mcp-gate-opportunity-0001" }
+        : { opportunityId: input.structuredContent.opportunityId },
+    tool_response: { content: [], structuredContent: input.structuredContent },
+  };
+}
+
+function stopInput() {
+  return {
+    session_id: "session_real_mcp_gate_01",
+    turn_id: "turn_real_mcp_gate_01",
+    hook_event_name: "Stop",
+  };
 }
 
 async function setup() {
@@ -2331,4 +2406,161 @@ test("rediscovers only the bound integration's active reviews with safe bounded 
   const invalidCursorBody = await invalidCursor.json();
   assert.equal(invalidCursorBody.result.isError, true);
   assert.equal(invalidCursorBody.result.structuredContent.code, "invalid_open_review_query");
+});
+
+test("real MCP envelopes drive the advisory updater and stop gate for pending, completed, and skipped output", async () => {
+  const setupData = await setup();
+  const contentHash = (value: string) => `sha256:${createHash("sha256").update(value).digest("hex")}`;
+  const sourcePayload = "Review the exact candidate response for a high-risk support request.";
+  const suggestionPayload = "This exact candidate remains held until the review gate releases it.";
+  const args = {
+    externalOpportunityId: "real-mcp-gate-opportunity-0001",
+    workflowKey: "support-reply",
+    riskTier: "high",
+    audiencePolicyHash: setupData.audiencePolicyHash,
+    suggestionCommitment: contentHash(suggestionPayload),
+    sourceEvidence: { reference: "case/real-mcp-gate-0001", hash: contentHash(sourcePayload) },
+    declaredConfidenceBps: 8_500,
+    criticalRisk: false,
+    metadataComplete: true,
+    execution: {
+      externalExecutionId: "execution-real-mcp-gate-0001",
+      status: "completed",
+      primarySpanId: "primary",
+      generationSpans: [
+        {
+          spanId: "primary",
+          role: "primary",
+          provider: "OpenAI",
+          requestedModel: "gpt-test",
+        },
+      ],
+    },
+  };
+  const evaluate = async (id: number, value = args) => {
+    const response = await POST(
+      request(
+        {
+          id,
+          jsonrpc: "2.0",
+          method: "tools/call",
+          params: { name: "rateloop_evaluate_review_requirement", arguments: value },
+        },
+        setupData.token,
+      ),
+    );
+    const body = await response.json();
+    assert.ok(body.result?.structuredContent, JSON.stringify(body));
+    return body.result.structuredContent as Record<string, any>;
+  };
+
+  const first = await evaluate(301);
+  assert.equal(first.schemaVersion, "rateloop.human-review-tool-envelope.v1");
+  assert.equal(first.rawResult.schemaVersion, "rateloop.review-decision.v1");
+  const pendingAt = new Date();
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_opportunity_lifecycles
+          SET state='pending',state_revision=3,reason_codes_json='["private_review_pending"]',
+              state_entered_at=?,terminal_at=NULL,updated_at=?
+          WHERE workspace_id=? AND opportunity_id=?`,
+    args: [pendingAt, pendingAt, setupData.workspaceId, first.opportunityId],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_opportunities
+          SET status='review_requested',updated_at=? WHERE workspace_id=? AND opportunity_id=?`,
+    args: [pendingAt, setupData.workspaceId, first.opportunityId],
+  });
+  const pending = await evaluate(302);
+  assert.equal(pending.lifecycle.state, "pending");
+  assert.ok(pending.continuation);
+
+  const pluginData = await pluginDataWithTrustedKeys();
+  assert.equal(
+    await runAdvisoryHook(
+      advisoryUpdater,
+      pluginData,
+      postToolUseInput({
+        tool: "evaluate_review_requirement",
+        structuredContent: pending,
+        toolUseId: "tool_real_mcp_pending_01",
+      }),
+    ),
+    null,
+  );
+  assert.match(
+    String((await runAdvisoryHook(advisoryStopGate, pluginData, stopInput()))?.stopReason),
+    /review_pending/u,
+  );
+
+  const terminalAt = new Date();
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_opportunity_lifecycles
+          SET state='completed',state_revision=4,reason_codes_json='["human_review_completed"]',
+              state_entered_at=?,terminal_at=?,updated_at=?
+          WHERE workspace_id=? AND opportunity_id=?`,
+    args: [terminalAt, terminalAt, terminalAt, setupData.workspaceId, first.opportunityId],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_opportunities
+          SET status='completed',updated_at=? WHERE workspace_id=? AND opportunity_id=?`,
+    args: [terminalAt, setupData.workspaceId, first.opportunityId],
+  });
+  const principal = await authenticateAgentMcpPrincipal(`Bearer ${setupData.token}`);
+  assert.equal(principal.kind, "integration");
+  if (principal.kind !== "integration") throw new Error("Integration principal expected.");
+  const completed = await projectHumanReviewMcpEnvelope({
+    principal,
+    opportunityId: first.opportunityId,
+    rawResult: { schemaVersion: "rateloop.adaptive-review-result.v1", opportunityId: first.opportunityId },
+  });
+  assert.equal(completed.lifecycle.state, "completed");
+  assert.equal(completed.terminalEvidence?.schemaVersion, "rateloop.human-review-terminal-evidence.v1");
+  assert.equal(
+    await runAdvisoryHook(
+      advisoryUpdater,
+      pluginData,
+      postToolUseInput({
+        tool: "get_review_result",
+        structuredContent: completed,
+        toolUseId: "tool_real_mcp_completed_01",
+      }),
+    ),
+    null,
+  );
+  assert.equal(await runAdvisoryHook(advisoryStopGate, pluginData, stopInput()), null);
+
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_policies SET mode='manual'
+          WHERE workspace_id=? AND policy_id=? AND version=?`,
+    args: [setupData.workspaceId, setupData.approved.integration.reviewPolicyId, 1],
+  });
+  const skipped = await evaluate(303, {
+    ...args,
+    externalOpportunityId: "real-mcp-gate-opportunity-0002",
+    suggestionCommitment: contentHash("A second candidate selected for a signed policy skip."),
+    sourceEvidence: { reference: "case/real-mcp-gate-0002", hash: contentHash("A second exact source.") },
+    execution: { ...args.execution, externalExecutionId: "execution-real-mcp-gate-0002" },
+  });
+  assert.equal(skipped.lifecycle.state, "skipped");
+  assert.equal(skipped.terminalEvidence?.schemaVersion, "rateloop.human-review-skip-release-evidence.v1");
+  assert.equal(
+    await runAdvisoryHook(
+      advisoryUpdater,
+      pluginData,
+      postToolUseInput({
+        tool: "evaluate_review_requirement",
+        structuredContent: skipped,
+        toolUseId: "tool_real_mcp_skipped_01",
+      }),
+    ),
+    null,
+  );
+  assert.equal(await runAdvisoryHook(advisoryStopGate, pluginData, stopInput()), null);
+
+  const state = await readFile(
+    join(pluginData, "review-stop-gate-v1", "sessions", "session_real_mcp_gate_01.json"),
+    "utf8",
+  );
+  assert.equal(state.includes(sourcePayload), false);
+  assert.equal(state.includes(suggestionPayload), false);
 });
