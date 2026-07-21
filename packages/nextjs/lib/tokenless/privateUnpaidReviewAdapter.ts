@@ -26,6 +26,13 @@ type PrivateReviewCompensationMode = "unpaid" | "usdc";
 const RESERVATION_TTL_MS = 15 * 60_000;
 const ARTIFACT_LEASE_TTL_MS = 10 * 60_000;
 const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/u;
+const PRIVATE_SENSITIVITIES = ["internal", "confidential", "restricted", "regulated"] as const;
+
+type PrivateSensitivity = (typeof PRIVATE_SENSITIVITIES)[number];
+
+function exactPrivateSensitivity(value: string | null): PrivateSensitivity | null {
+  return value && PRIVATE_SENSITIVITIES.includes(value as PrivateSensitivity) ? (value as PrivateSensitivity) : null;
+}
 
 let beforeDeliveryCommitForTests: null | (() => Promise<void>) = null;
 let beforeLeaseCommitForTests: null | ((artifactId: string) => Promise<void>) = null;
@@ -69,16 +76,6 @@ function identifier(prefix: string, value: unknown) {
   return `${prefix}_${sha256(value).slice("sha256:".length, "sha256:".length + 40)}`;
 }
 
-function parseStringArray(value: unknown, field: string) {
-  try {
-    const parsed = JSON.parse(String(value)) as unknown;
-    if (!Array.isArray(parsed) || parsed.some(entry => typeof entry !== "string")) throw new Error();
-    return [...new Set(parsed)].sort();
-  } catch {
-    throw new Error(`Stored ${field} is invalid.`);
-  }
-}
-
 function parseJsonDocument(value: unknown, field: string) {
   try {
     return JSON.parse(String(value)) as unknown;
@@ -112,6 +109,42 @@ function normalizeReviewers(values: readonly string[]) {
 function assertHash(value: string | null, field: string) {
   if (!value || !HASH_PATTERN.test(value)) throw new Error(`Stored ${field} is invalid.`);
   return value;
+}
+
+function workspaceGrantSnapshotIsCurrent(row: Row, now: Date, responseDeadline: Date) {
+  const grantId = text(row, "current_workspace_grant_id");
+  const grantHash = text(row, "current_workspace_grant_hash");
+  const projectScope = text(row, "current_workspace_grant_project_scope");
+  const requiredSensitivity = exactPrivateSensitivity(text(row, "private_sensitivity"));
+  const grantSensitivity = exactPrivateSensitivity(text(row, "current_workspace_grant_sensitivity"));
+  if (
+    !grantId ||
+    !grantHash ||
+    !HASH_PATTERN.test(grantHash) ||
+    grantId !== text(row, "workspace_reviewer_access_grant_id") ||
+    grantHash !== text(row, "workspace_reviewer_access_grant_hash") ||
+    text(row, "current_workspace_reviewer_status") !== "active" ||
+    text(row, "current_workspace_principal_status") !== "active" ||
+    row.current_workspace_grant_revoked_at !== null ||
+    (projectScope !== "all" && projectScope !== "selected") ||
+    (projectScope === "selected" && text(row, "current_workspace_grant_project_id") !== text(row, "project_id")) ||
+    !requiredSensitivity ||
+    !grantSensitivity ||
+    PRIVATE_SENSITIVITIES.indexOf(grantSensitivity) < PRIVATE_SENSITIVITIES.indexOf(requiredSensitivity)
+  ) {
+    return false;
+  }
+  const validFrom = date(row, "current_workspace_grant_valid_from");
+  const validUntil = row.current_workspace_grant_valid_until ? date(row, "current_workspace_grant_valid_until") : null;
+  const frozenExpiry = row.membership_expires_at ? date(row, "membership_expires_at") : null;
+  const allowedProjects = projectScope === "selected" ? [text(row, "project_id")!] : [];
+  return (
+    validFrom <= now &&
+    (validUntil === null || validUntil >= responseDeadline) &&
+    date(row, "membership_joined_at").getTime() === validFrom.getTime() &&
+    (frozenExpiry?.getTime() ?? null) === (validUntil?.getTime() ?? null) &&
+    sha256(allowedProjects) === text(row, "membership_allowed_projects_hash")
+  );
 }
 
 function assertExactFoundation(input: {
@@ -514,6 +547,8 @@ async function requestPrivateHumanReviewAssignments(input: {
       joinedAt: Date;
       expiresAt: Date | null;
       allowedProjects: string[];
+      workspaceReviewerGrantId: string;
+      workspaceReviewerGrantHash: string;
       qualificationJson: string;
       membershipSnapshotHash: string;
     }> = [];
@@ -526,44 +561,77 @@ async function requestPrivateHumanReviewAssignments(input: {
     );
     const exactExpertiseByReviewer = new Map<string, Set<string>>();
     for (const reviewer of reviewers) {
-      const memberResult = await client.query(
-        `SELECT m.status AS membership_status, m.allowed_project_ids_json,m.source_invitation_id,
-                m.membership_expires_at, m.joined_at,
-                cr.status AS cohort_reviewer_status, cr.qualification_provenance_json,
-                cr.qualification_expires_at, cr.maximum_active_assignments, cr.active_reservations
-         FROM tokenless_private_group_memberships m
-         JOIN tokenless_assurance_cohort_reviewers cr
-           ON cr.project_id = $1 AND cr.cohort_id = $2
-          AND cr.reviewer_account_address = m.principal_address
-         WHERE m.group_id = $3 AND m.principal_address = $4
-         LIMIT 1 FOR UPDATE`,
-        [text(row, "project_id"), text(row, "cohort_id"), text(row, "private_group_id"), reviewer],
+      const grantResult = await client.query(
+        `SELECT reviewer.status AS reviewer_status,access_grant.grant_id,access_grant.grant_hash,access_grant.project_scope,
+                access_grant.max_private_sensitivity,access_grant.valid_from,access_grant.valid_until
+         FROM tokenless_workspace_reviewers reviewer
+         JOIN tokenless_principals principal
+           ON principal.principal_id=reviewer.principal_address AND principal.status='active'
+         JOIN tokenless_workspace_reviewer_access_grants access_grant
+           ON access_grant.workspace_id=reviewer.workspace_id AND access_grant.principal_address=reviewer.principal_address
+         LEFT JOIN tokenless_workspace_reviewer_access_grant_projects grant_project
+           ON grant_project.workspace_id=access_grant.workspace_id AND grant_project.grant_id=access_grant.grant_id
+          AND grant_project.project_id=$5
+         LEFT JOIN tokenless_workspace_reviewer_invitation_redemptions redemption
+           ON redemption.workspace_id=access_grant.workspace_id AND redemption.grant_id=access_grant.grant_id
+          AND redemption.principal_address=access_grant.principal_address
+          AND redemption.invitation_id=access_grant.source_invitation_id
+         WHERE reviewer.workspace_id=$1 AND reviewer.principal_address=$2 AND reviewer.status='active'
+           AND access_grant.revoked_at IS NULL AND access_grant.valid_from<=$3
+           AND (access_grant.valid_until IS NULL OR access_grant.valid_until>=$4)
+           AND (access_grant.project_scope='all' OR grant_project.grant_id IS NOT NULL)
+           AND (access_grant.source_invitation_id IS NULL OR redemption.grant_id IS NOT NULL)
+         ORDER BY access_grant.valid_until DESC NULLS FIRST,access_grant.created_at,access_grant.grant_id
+         FOR SHARE`,
+        [input.principal.workspaceId, reviewer, now, responseDeadline, text(row, "project_id")],
       );
-      const member = memberResult.rows[0] as Row | undefined;
-      const joinedAt = member ? date(member, "joined_at") : new Date(Number.NaN);
-      const expiresAt = member?.membership_expires_at ? date(member, "membership_expires_at") : null;
-      const qualificationExpiresAt = member?.qualification_expires_at ? date(member, "qualification_expires_at") : null;
-      const allowedProjects = member
-        ? parseStringArray(member.allowed_project_ids_json, "private-group project allowlist")
-        : [];
+      const requiredSensitivity = exactPrivateSensitivity(text(row, "project_private_sensitivity"));
+      const grant = (grantResult.rows as Row[]).find(value => {
+        const ceiling = exactPrivateSensitivity(text(value, "max_private_sensitivity"));
+        return (
+          requiredSensitivity !== null &&
+          ceiling !== null &&
+          PRIVATE_SENSITIVITIES.indexOf(ceiling) >= PRIVATE_SENSITIVITIES.indexOf(requiredSensitivity)
+        );
+      });
+      const cohortReviewerResult = await client.query(
+        `SELECT status AS cohort_reviewer_status,qualification_provenance_json,qualification_expires_at,
+                maximum_active_assignments,active_reservations
+         FROM tokenless_assurance_cohort_reviewers
+         WHERE project_id=$1 AND cohort_id=$2 AND reviewer_account_address=$3
+         LIMIT 1 FOR UPDATE`,
+        [text(row, "project_id"), text(row, "cohort_id"), reviewer],
+      );
+      const cohortReviewer = cohortReviewerResult.rows[0] as Row | undefined;
+      const joinedAt = grant ? date(grant, "valid_from") : new Date(Number.NaN);
+      const expiresAt = grant?.valid_until ? date(grant, "valid_until") : null;
+      const qualificationExpiresAt = cohortReviewer?.qualification_expires_at
+        ? date(cohortReviewer, "qualification_expires_at")
+        : null;
+      const allowedProjects = text(grant, "project_scope") === "selected" ? [text(row, "project_id")!] : [];
+      const workspaceReviewerGrantId = text(grant, "grant_id");
+      const workspaceReviewerGrantHash = text(grant, "grant_hash");
       if (
-        !member ||
-        text(member, "membership_status") !== "active" ||
-        text(member, "cohort_reviewer_status") !== "active" ||
+        !grant ||
+        !cohortReviewer ||
+        !workspaceReviewerGrantId ||
+        !workspaceReviewerGrantHash ||
+        !HASH_PATTERN.test(workspaceReviewerGrantHash) ||
+        text(grant, "reviewer_status") !== "active" ||
+        text(cohortReviewer, "cohort_reviewer_status") !== "active" ||
         !Number.isFinite(joinedAt.getTime()) ||
         joinedAt > now ||
         (expiresAt !== null && expiresAt < responseDeadline) ||
         (qualificationExpiresAt !== null && qualificationExpiresAt < responseDeadline) ||
         !qualificationProvenanceSatisfiesExpertise(
-          member?.qualification_provenance_json,
+          cohortReviewer.qualification_provenance_json,
           requiredExpertise,
           responseDeadline,
         ) ||
-        (allowedProjects.length > 0 && !allowedProjects.includes(text(row, "project_id")!)) ||
-        integer(member, "active_reservations") >= integer(member, "maximum_active_assignments", 1)
+        integer(cohortReviewer, "active_reservations") >= integer(cohortReviewer, "maximum_active_assignments", 1)
       ) {
         throw new TokenlessServiceError(
-          "A named reviewer is not an active eligible member of the exact private group and cohort.",
+          "A named reviewer does not have active workspace access for the exact private project and cohort.",
           409,
           "private_reviewer_not_eligible",
         );
@@ -576,9 +644,8 @@ async function requestPrivateHumanReviewAssignments(input: {
          WHERE workspace_id=$1 AND reviewer_account_address=$2
            AND reviewer_source='customer_invited' AND qualification_kind='expertise'
            AND expertise_record_schema_version=2 AND status='active' AND expires_at>=$3
-           AND source_invitation_id=$4
          ORDER BY expertise_definition_id,expertise_definition_version,qualification_id`,
-        [text(row, "workspace_id"), reviewer, responseDeadline, text(member, "source_invitation_id")],
+        [text(row, "workspace_id"), reviewer, responseDeadline],
       );
       const exactQualificationRecords = (exactResult.rows as Row[]).map(qualification => ({
         kind: "exact_expertise",
@@ -603,7 +670,7 @@ async function requestPrivateHumanReviewAssignments(input: {
       );
       exactExpertiseByReviewer.set(reviewer, exactKeys);
       const legacyQualificationProvenance = parseJsonDocument(
-        member.qualification_provenance_json,
+        cohortReviewer.qualification_provenance_json,
         "reviewer qualification provenance",
       );
       if (!Array.isArray(legacyQualificationProvenance)) {
@@ -615,11 +682,15 @@ async function requestPrivateHumanReviewAssignments(input: {
         joinedAt,
         expiresAt,
         allowedProjects,
+        workspaceReviewerGrantId,
+        workspaceReviewerGrantHash,
         qualificationJson,
         membershipSnapshotHash: sha256({
-          schemaVersion: "rateloop.private-review-membership-snapshot.v1",
+          schemaVersion: "rateloop.private-review-workspace-access-snapshot.v1",
           groupId: text(row, "private_group_id"),
           reviewer,
+          workspaceReviewerGrantId,
+          workspaceReviewerGrantHash,
           joinedAt: joinedAt.toISOString(),
           expiresAt: expiresAt?.toISOString() ?? null,
           allowedProjects,
@@ -698,8 +769,9 @@ async function requestPrivateHumanReviewAssignments(input: {
          (assignment_id,delivery_id,workspace_id,project_id,private_review_id,cohort_id,
           private_group_id,reviewer_account_address,membership_joined_at,membership_expires_at,
           membership_allowed_projects_hash,qualification_snapshot_json,membership_snapshot_hash,
-          snapshot_cutoff_at,reservation_expires_at,response_deadline,status,lease_state,created_at,updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'reserved','pending',$14,$14)`,
+          snapshot_cutoff_at,reservation_expires_at,response_deadline,status,lease_state,created_at,updated_at,
+          workspace_reviewer_access_grant_id,workspace_reviewer_access_grant_hash)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'reserved','pending',$14,$14,$17,$18)`,
         [
           assignmentId,
           deliveryId,
@@ -717,6 +789,8 @@ async function requestPrivateHumanReviewAssignments(input: {
           now,
           reservationExpiresAt,
           responseDeadline,
+          snapshot.workspaceReviewerGrantId,
+          snapshot.workspaceReviewerGrantHash,
         ],
       );
       const reviewerCapacity = await client.query(
@@ -951,10 +1025,17 @@ export async function acceptPrivateUnpaidReviewAssignment(input: {
       `SELECT a.*, d.response_deadline AS delivery_response_deadline,
               d.private_group_policy_version,d.private_group_policy_hash,d.status AS delivery_status,
               l.state AS lifecycle_state,
-              f.source_artifact_id, f.suggestion_artifact_id,p.compensation_mode,
-              m.status AS membership_status, m.joined_at AS current_membership_joined_at,
-              m.membership_expires_at AS current_membership_expires_at,
-              m.allowed_project_ids_json AS current_allowed_project_ids_json
+              f.source_artifact_id, f.suggestion_artifact_id,p.compensation_mode,p.private_sensitivity,
+              reviewer.status AS current_workspace_reviewer_status,
+              principal.status AS current_workspace_principal_status,
+              access_grant.grant_id AS current_workspace_grant_id,
+              access_grant.grant_hash AS current_workspace_grant_hash,
+              access_grant.project_scope AS current_workspace_grant_project_scope,
+              access_grant.max_private_sensitivity AS current_workspace_grant_sensitivity,
+              access_grant.valid_from AS current_workspace_grant_valid_from,
+              access_grant.valid_until AS current_workspace_grant_valid_until,
+              access_grant.revoked_at AS current_workspace_grant_revoked_at,
+              grant_project.project_id AS current_workspace_grant_project_id
        FROM tokenless_private_unpaid_review_assignments a
        JOIN tokenless_private_unpaid_review_deliveries d ON d.delivery_id = a.delivery_id
        JOIN tokenless_private_review_requests f ON f.private_review_id = a.private_review_id
@@ -963,8 +1044,17 @@ export async function acceptPrivateUnpaidReviewAssignment(input: {
         AND p.version=f.request_profile_version AND p.profile_hash=f.request_profile_hash
        JOIN tokenless_agent_review_opportunity_lifecycles l
          ON l.workspace_id=d.workspace_id AND l.opportunity_id=d.opportunity_id
-       JOIN tokenless_private_group_memberships m
-         ON m.group_id = a.private_group_id AND m.principal_address = a.reviewer_account_address
+       JOIN tokenless_workspace_reviewers reviewer
+         ON reviewer.workspace_id=a.workspace_id AND reviewer.principal_address=a.reviewer_account_address
+       JOIN tokenless_principals principal ON principal.principal_id=reviewer.principal_address
+       JOIN tokenless_workspace_reviewer_access_grants access_grant
+         ON access_grant.workspace_id=a.workspace_id
+        AND access_grant.principal_address=a.reviewer_account_address
+        AND access_grant.grant_id=a.workspace_reviewer_access_grant_id
+        AND access_grant.grant_hash=a.workspace_reviewer_access_grant_hash
+       LEFT JOIN tokenless_workspace_reviewer_access_grant_projects grant_project
+         ON grant_project.workspace_id=a.workspace_id AND grant_project.grant_id=access_grant.grant_id
+        AND grant_project.project_id=a.project_id
        WHERE a.assignment_id = $1 AND a.reviewer_account_address = $2
        LIMIT 1 FOR UPDATE`,
       [input.assignmentId, reviewer],
@@ -1006,25 +1096,14 @@ export async function acceptPrivateUnpaidReviewAssignment(input: {
         "assignment_closed",
       );
     }
-    const allowedProjects = parseStringArray(
-      row.current_allowed_project_ids_json,
-      "current private-group project allowlist",
-    );
-    const currentExpiry = row.current_membership_expires_at ? date(row, "current_membership_expires_at") : null;
-    const frozenExpiry = row.membership_expires_at ? date(row, "membership_expires_at") : null;
     if (
       responseDeadline.getTime() !== date(row, "delivery_response_deadline").getTime() ||
-      text(row, "membership_status") !== "active" ||
-      date(row, "membership_joined_at").getTime() !== date(row, "current_membership_joined_at").getTime() ||
-      (frozenExpiry?.getTime() ?? null) !== (currentExpiry?.getTime() ?? null) ||
-      (currentExpiry !== null && currentExpiry <= now) ||
-      sha256(allowedProjects) !== text(row, "membership_allowed_projects_hash") ||
-      (allowedProjects.length > 0 && !allowedProjects.includes(text(row, "project_id")!))
+      !workspaceGrantSnapshotIsCurrent(row, now, responseDeadline)
     ) {
       throw new TokenlessServiceError(
-        "Private-group membership changed before assignment acceptance.",
+        "Workspace reviewer access changed before assignment acceptance.",
         409,
-        "private_group_membership_changed",
+        "workspace_reviewer_access_changed",
       );
     }
     const replayed = text(row, "status") === "accepted";
@@ -1043,11 +1122,14 @@ export async function acceptPrivateUnpaidReviewAssignment(input: {
       }
       if (input.confidentialityTermsHash !== undefined) {
         await requirePrivateGroupPolicyAcceptance(client, {
+          workspaceId: text(row, "workspace_id")!,
           groupId: text(row, "private_group_id")!,
           policyVersion: integer(row, "private_group_policy_version", 1),
           policyHash: text(row, "private_group_policy_hash")!,
           principalAddress: reviewer,
           acceptedFromAssignmentId: input.assignmentId,
+          workspaceReviewerAccessGrantId: text(row, "workspace_reviewer_access_grant_id")!,
+          workspaceReviewerAccessGrantHash: text(row, "workspace_reviewer_access_grant_hash")!,
           acceptedNow: input.confidentialityTermsAccepted === true,
           now,
         });
@@ -1111,13 +1193,43 @@ export async function getPrivateUnpaidReviewAssignmentAccess(input: {
   const now = input.now ?? new Date();
   const reviewer = normalizeReviewers([input.reviewerAccountAddress])[0]!;
   const result = await dbClient.execute({
-    sql: `SELECT a.status,a.reservation_expires_at,a.response_deadline,
+    sql: `SELECT a.*,
                  d.private_group_id,d.private_group_policy_version,d.private_group_policy_hash,
-                 d.status AS delivery_status,l.state AS lifecycle_state
+                 d.status AS delivery_status,l.state AS lifecycle_state,
+                 g.name AS private_group_name,g.purpose AS private_group_purpose,p.policy_json,
+                 profile.private_sensitivity,
+                 reviewer.status AS current_workspace_reviewer_status,
+                 principal.status AS current_workspace_principal_status,
+                 access_grant.grant_id AS current_workspace_grant_id,
+                 access_grant.grant_hash AS current_workspace_grant_hash,
+                 access_grant.project_scope AS current_workspace_grant_project_scope,
+                 access_grant.max_private_sensitivity AS current_workspace_grant_sensitivity,
+                 access_grant.valid_from AS current_workspace_grant_valid_from,
+                 access_grant.valid_until AS current_workspace_grant_valid_until,
+                 access_grant.revoked_at AS current_workspace_grant_revoked_at,
+                 grant_project.project_id AS current_workspace_grant_project_id
           FROM tokenless_private_unpaid_review_assignments a
           JOIN tokenless_private_unpaid_review_deliveries d ON d.delivery_id=a.delivery_id
           JOIN tokenless_agent_review_opportunity_lifecycles l
             ON l.workspace_id=d.workspace_id AND l.opportunity_id=d.opportunity_id
+          JOIN tokenless_private_groups g ON g.group_id=d.private_group_id
+          JOIN tokenless_private_group_policy_versions p
+            ON p.group_id=d.private_group_id AND p.version=d.private_group_policy_version
+           AND p.policy_hash=d.private_group_policy_hash
+          JOIN tokenless_agent_review_request_profiles profile
+            ON profile.workspace_id=d.workspace_id AND profile.profile_id=d.request_profile_id
+           AND profile.version=d.request_profile_version AND profile.profile_hash=d.request_profile_hash
+          JOIN tokenless_workspace_reviewers reviewer
+            ON reviewer.workspace_id=a.workspace_id AND reviewer.principal_address=a.reviewer_account_address
+          JOIN tokenless_principals principal ON principal.principal_id=reviewer.principal_address
+          JOIN tokenless_workspace_reviewer_access_grants access_grant
+            ON access_grant.workspace_id=a.workspace_id
+           AND access_grant.principal_address=a.reviewer_account_address
+           AND access_grant.grant_id=a.workspace_reviewer_access_grant_id
+           AND access_grant.grant_hash=a.workspace_reviewer_access_grant_hash
+          LEFT JOIN tokenless_workspace_reviewer_access_grant_projects grant_project
+            ON grant_project.workspace_id=a.workspace_id AND grant_project.grant_id=access_grant.grant_id
+           AND grant_project.project_id=a.project_id
           WHERE a.assignment_id=? AND a.reviewer_account_address=? LIMIT 1`,
     args: [input.assignmentId, reviewer],
   });
@@ -1128,6 +1240,9 @@ export async function getPrivateUnpaidReviewAssignmentAccess(input: {
   }
   const responseDeadline = date(row, "response_deadline");
   const status = text(row, "status");
+  if (status !== "completed" && !workspaceGrantSnapshotIsCurrent(row, now, responseDeadline)) {
+    throw new TokenlessServiceError("Private review assignment not found.", 404, "assignment_not_found");
+  }
   const closed =
     responseDeadline <= now ||
     text(row, "delivery_status") !== "pending" ||
@@ -1144,11 +1259,17 @@ export async function getPrivateUnpaidReviewAssignmentAccess(input: {
     assignmentId: input.assignmentId,
     state: state as "accepted" | "closed" | "ready" | "recoverable",
     termsAccepted: await hasAcceptedPrivateGroupPolicy({
+      workspaceId: text(row, "workspace_id")!,
       groupId: text(row, "private_group_id")!,
       policyVersion: integer(row, "private_group_policy_version", 1),
       policyHash: text(row, "private_group_policy_hash")!,
       principalAddress: reviewer,
     }),
+    terms: {
+      groupName: text(row, "private_group_name")!,
+      purpose: text(row, "private_group_purpose")!,
+      policy: parseJsonDocument(row.policy_json, "private-group policy"),
+    },
     responseDeadline: responseDeadline.toISOString(),
   };
 }
@@ -1168,14 +1289,21 @@ export async function recoverPrivateUnpaidReviewAssignment(input: {
     const result = await client.query(
       `SELECT a.*,d.private_group_policy_hash,d.status AS delivery_status,
               l.state AS lifecycle_state,
-              m.status AS membership_status,m.joined_at AS current_membership_joined_at,
-              m.membership_expires_at AS current_membership_expires_at,
-              m.allowed_project_ids_json AS current_allowed_project_ids_json,
+              reviewer.status AS current_workspace_reviewer_status,
+              principal.status AS current_workspace_principal_status,
+              access_grant.grant_id AS current_workspace_grant_id,
+              access_grant.grant_hash AS current_workspace_grant_hash,
+              access_grant.project_scope AS current_workspace_grant_project_scope,
+              access_grant.max_private_sensitivity AS current_workspace_grant_sensitivity,
+              access_grant.valid_from AS current_workspace_grant_valid_from,
+              access_grant.valid_until AS current_workspace_grant_valid_until,
+              access_grant.revoked_at AS current_workspace_grant_revoked_at,
+              grant_project.project_id AS current_workspace_grant_project_id,
               c.status AS cohort_status,c.capacity,c.active_reservations AS cohort_active_reservations,
               cr.status AS cohort_reviewer_status,cr.qualification_provenance_json,
               cr.qualification_expires_at,cr.maximum_active_assignments,
               cr.active_reservations AS reviewer_active_reservations,
-              p.required_expertise_keys_json
+              p.required_expertise_keys_json,p.private_sensitivity
        FROM tokenless_private_unpaid_review_assignments a
        JOIN tokenless_private_unpaid_review_deliveries d ON d.delivery_id=a.delivery_id
        JOIN tokenless_agent_review_opportunity_lifecycles l
@@ -1183,8 +1311,17 @@ export async function recoverPrivateUnpaidReviewAssignment(input: {
        JOIN tokenless_agent_review_request_profiles p
          ON p.workspace_id=d.workspace_id AND p.profile_id=d.request_profile_id
         AND p.version=d.request_profile_version AND p.profile_hash=d.request_profile_hash
-       JOIN tokenless_private_group_memberships m
-         ON m.group_id=a.private_group_id AND m.principal_address=a.reviewer_account_address
+       JOIN tokenless_workspace_reviewers reviewer
+         ON reviewer.workspace_id=a.workspace_id AND reviewer.principal_address=a.reviewer_account_address
+       JOIN tokenless_principals principal ON principal.principal_id=reviewer.principal_address
+       JOIN tokenless_workspace_reviewer_access_grants access_grant
+         ON access_grant.workspace_id=a.workspace_id
+        AND access_grant.principal_address=a.reviewer_account_address
+        AND access_grant.grant_id=a.workspace_reviewer_access_grant_id
+        AND access_grant.grant_hash=a.workspace_reviewer_access_grant_hash
+       LEFT JOIN tokenless_workspace_reviewer_access_grant_projects grant_project
+         ON grant_project.workspace_id=a.workspace_id AND grant_project.grant_id=access_grant.grant_id
+        AND grant_project.project_id=a.project_id
        JOIN tokenless_assurance_cohorts c ON c.project_id=a.project_id AND c.cohort_id=a.cohort_id
        JOIN tokenless_assurance_cohort_reviewers cr
          ON cr.project_id=a.project_id AND cr.cohort_id=a.cohort_id
@@ -1197,13 +1334,7 @@ export async function recoverPrivateUnpaidReviewAssignment(input: {
       throw new TokenlessServiceError("Assignment cannot be recovered.", 409, "assignment_recovery_unavailable");
     }
     const responseDeadline = date(row, "response_deadline");
-    const currentExpiry = row.current_membership_expires_at ? date(row, "current_membership_expires_at") : null;
-    const frozenExpiry = row.membership_expires_at ? date(row, "membership_expires_at") : null;
     const qualificationExpiry = row.qualification_expires_at ? date(row, "qualification_expires_at") : null;
-    const allowedProjects = parseStringArray(
-      row.current_allowed_project_ids_json,
-      "current private-group project allowlist",
-    );
     const requiredExpertise = normalizeReviewerExpertiseKeys(
       JSON.parse(text(row, "required_expertise_keys_json") ?? "[]"),
     );
@@ -1212,20 +1343,11 @@ export async function recoverPrivateUnpaidReviewAssignment(input: {
       responseDeadline <= now ||
       text(row, "delivery_status") !== "pending" ||
       text(row, "lifecycle_state") !== "pending" ||
-      text(row, "membership_status") !== "active" ||
+      !workspaceGrantSnapshotIsCurrent(row, now, responseDeadline) ||
       text(row, "cohort_status") !== "active" ||
       text(row, "cohort_reviewer_status") !== "active" ||
-      date(row, "membership_joined_at").getTime() !== date(row, "current_membership_joined_at").getTime() ||
-      (frozenExpiry?.getTime() ?? null) !== (currentExpiry?.getTime() ?? null) ||
-      (currentExpiry !== null && currentExpiry <= now) ||
       (qualificationExpiry !== null && qualificationExpiry < responseDeadline) ||
-      !qualificationProvenanceSatisfiesExpertise(
-        row.qualification_provenance_json,
-        requiredExpertise,
-        responseDeadline,
-      ) ||
-      sha256(allowedProjects) !== text(row, "membership_allowed_projects_hash") ||
-      (allowedProjects.length > 0 && !allowedProjects.includes(text(row, "project_id")!))
+      !qualificationProvenanceSatisfiesExpertise(row.qualification_provenance_json, requiredExpertise, responseDeadline)
     ) {
       throw new TokenlessServiceError("Assignment cannot be recovered.", 409, "assignment_recovery_unavailable");
     }

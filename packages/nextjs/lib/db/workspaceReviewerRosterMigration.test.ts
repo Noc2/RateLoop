@@ -7,14 +7,17 @@ const journal = JSON.parse(readFileSync(new URL("../../drizzle/meta/_journal.jso
   entries: Array<{ idx: number; tag: string }>;
 };
 
-test("0130 registers the workspace reviewer roster as the migration journal head", () => {
-  assert.deepEqual(journal.entries.at(-1), {
-    idx: 130,
-    version: "7",
-    when: 1784408400000,
-    tag: "0130_workspace_reviewer_roster",
-    breakpoints: true,
-  });
+test("0130 registers the workspace reviewer roster before the current migration journal head", () => {
+  assert.deepEqual(
+    journal.entries.find(entry => entry.idx === 130),
+    {
+      idx: 130,
+      version: "7",
+      when: 1784408400000,
+      tag: "0130_workspace_reviewer_roster",
+      breakpoints: true,
+    },
+  );
 });
 
 test("0130 keeps workspace membership and reviewer authority independent", () => {

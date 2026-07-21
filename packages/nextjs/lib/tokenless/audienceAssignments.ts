@@ -2070,6 +2070,7 @@ async function issueAssignmentArtifactLeases(
 export async function acceptAudienceAssignment(input: {
   baseAccountAddress: string;
   assignmentId: string;
+  confidentialityTermsAccepted: boolean;
   confidentialityTermsHash: string;
   now?: Date;
 }) {
@@ -2078,6 +2079,13 @@ export async function acceptAudienceAssignment(input: {
   const now = input.now ?? new Date();
   if (!HASH_PATTERN.test(input.confidentialityTermsHash)) {
     throw new TokenlessServiceError("Confidentiality terms hash is invalid.", 400, "invalid_confidentiality_terms");
+  }
+  if (input.confidentialityTermsAccepted !== true) {
+    throw new TokenlessServiceError(
+      "Accept the current confidentiality terms before opening this assignment.",
+      409,
+      "confidentiality_acceptance_required",
+    );
   }
   const client = await dbPool.connect();
   let replay = false;

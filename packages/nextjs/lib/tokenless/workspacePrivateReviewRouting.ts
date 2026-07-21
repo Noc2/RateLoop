@@ -51,6 +51,8 @@ type Member = {
   createdBy: string;
   joinedAt: Date;
   membershipExpiresAt: Date | null;
+  workspaceReviewerGrantId: string;
+  workspaceReviewerGrantHash: string;
   provenance: Array<Record<string, unknown>>;
 };
 
@@ -60,6 +62,16 @@ const MANAGED_PROJECT_NAME = "Agent private reviews";
 const MANAGED_PROJECT_DESCRIPTION = "RateLoop-managed private review routing foundation.";
 const MANAGED_COHORT_NAME = "Invited reviewers";
 const MANAGED_RETENTION_DAYS = 30;
+const PRIVATE_SENSITIVITIES = ["internal", "confidential", "restricted", "regulated"] as const;
+
+type PrivateSensitivity = (typeof PRIVATE_SENSITIVITIES)[number];
+
+function privateSensitivity(value: string): PrivateSensitivity {
+  if (!PRIVATE_SENSITIVITIES.includes(value as PrivateSensitivity)) {
+    throw new Error("Stored workspace-reviewer sensitivity is invalid.");
+  }
+  return value as PrivateSensitivity;
+}
 
 function text(row: Row | undefined, key: string) {
   const value = row?.[key];
@@ -477,33 +489,53 @@ async function loadMembers(
     workspaceId: string;
     privateGroupId: string;
     projectId: string;
+    privateSensitivity: PrivateSensitivity;
     worldIdRequired: boolean;
     now: Date;
   },
 ) {
   const result = await client.query(
-    `SELECT m.principal_address,m.allowed_project_ids_json,m.membership_expires_at,m.joined_at,
-            m.created_by,m.source_invitation_id
-     FROM tokenless_private_group_memberships m
-     JOIN tokenless_private_group_invitations i
-       ON i.invitation_id=m.source_invitation_id AND i.workspace_id=$1 AND i.group_id=m.group_id
-     JOIN tokenless_private_group_invitation_redemptions r
-       ON r.invitation_id=i.invitation_id AND r.group_id=m.group_id AND r.principal_address=m.principal_address
-     WHERE m.group_id=$2 AND m.status='active' AND m.joined_at<=$3
-       AND (m.membership_expires_at IS NULL OR m.membership_expires_at>$3)
-     ORDER BY m.principal_address
+    `SELECT reviewer.principal_address,access_grant.grant_id,access_grant.grant_hash,access_grant.project_scope,
+            access_grant.max_private_sensitivity,access_grant.valid_from,access_grant.valid_until,access_grant.created_by,
+            access_grant.source_invitation_id,redemption.grant_id AS redeemed_grant_id
+     FROM tokenless_workspace_reviewers reviewer
+     JOIN tokenless_principals principal
+       ON principal.principal_id=reviewer.principal_address AND principal.status='active'
+     JOIN tokenless_workspace_reviewer_access_grants access_grant
+       ON access_grant.workspace_id=reviewer.workspace_id AND access_grant.principal_address=reviewer.principal_address
+      AND access_grant.revoked_at IS NULL AND access_grant.valid_from<=$2
+      AND (access_grant.valid_until IS NULL OR access_grant.valid_until>$2)
+     LEFT JOIN tokenless_workspace_reviewer_access_grant_projects grant_project
+       ON grant_project.workspace_id=access_grant.workspace_id AND grant_project.grant_id=access_grant.grant_id
+      AND grant_project.project_id=$3
+     LEFT JOIN tokenless_workspace_reviewer_invitation_redemptions redemption
+       ON redemption.workspace_id=access_grant.workspace_id AND redemption.grant_id=access_grant.grant_id
+      AND redemption.principal_address=access_grant.principal_address
+      AND redemption.invitation_id=access_grant.source_invitation_id
+     WHERE reviewer.workspace_id=$1 AND reviewer.status='active'
+       AND (access_grant.project_scope='all' OR grant_project.project_id IS NOT NULL)
+       AND (access_grant.source_invitation_id IS NULL OR redemption.grant_id IS NOT NULL)
+     ORDER BY reviewer.principal_address,access_grant.valid_until DESC NULLS FIRST,access_grant.created_at,access_grant.grant_id
      FOR SHARE`,
-    [input.workspaceId, input.privateGroupId, input.now],
+    [input.workspaceId, input.now, input.projectId],
   );
   const members: Member[] = [];
+  const selectedReviewers = new Set<string>();
   for (const value of result.rows as Row[]) {
     const accountAddress = text(value, "principal_address");
-    const sourceInvitationId = text(value, "source_invitation_id");
     const createdBy = text(value, "created_by");
-    if (!accountAddress || !sourceInvitationId || !createdBy)
-      throw new Error("Stored private group membership is invalid.");
-    const allowedProjectIds = json<string[]>(value.allowed_project_ids_json, "membership project IDs");
-    if (allowedProjectIds.length > 0 && !allowedProjectIds.includes(input.projectId)) continue;
+    const grantId = text(value, "grant_id");
+    const grantHash = text(value, "grant_hash");
+    if (!accountAddress || !createdBy || !grantId || !grantHash || !HASH_PATTERN.test(grantHash)) {
+      throw new Error("Stored workspace-reviewer grant is invalid.");
+    }
+    if (selectedReviewers.has(accountAddress)) continue;
+    if (
+      PRIVATE_SENSITIVITIES.indexOf(privateSensitivity(text(value, "max_private_sensitivity")!)) <
+      PRIVATE_SENSITIVITIES.indexOf(input.privateSensitivity)
+    ) {
+      continue;
+    }
     if (input.worldIdRequired) {
       const worldId = await client.query(
         `SELECT a.assertion_id FROM tokenless_rater_profiles p
@@ -516,23 +548,34 @@ async function loadMembers(
       );
       if (worldId.rowCount !== 1) continue;
     }
-    const joinedAt = date(value.joined_at, "membership joined at");
-    const membershipExpiresAt = optionalDate(value.membership_expires_at, "membership expiry");
+    const joinedAt = date(value.valid_from, "workspace-reviewer grant start");
+    const membershipExpiresAt = optionalDate(value.valid_until, "workspace-reviewer grant expiry");
     const provenance: Array<Record<string, unknown>> = [
       {
         key: "customer_invitation",
         value: true,
-        source: "private_group_membership",
+        source: "workspace_reviewer_access_grant",
         assertedBy: createdBy,
         verifiedAt: joinedAt.toISOString(),
+        evidenceReferenceHash: grantHash,
         ...(membershipExpiresAt ? { expiresAt: membershipExpiresAt.toISOString() } : {}),
       },
       {
-        key: "private_group_membership",
+        key: "private_review_policy_group",
         value: input.privateGroupId,
-        source: "private_group_membership",
+        source: "workspace_reviewer_access_grant",
         assertedBy: createdBy,
         verifiedAt: joinedAt.toISOString(),
+        evidenceReferenceHash: grantHash,
+        ...(membershipExpiresAt ? { expiresAt: membershipExpiresAt.toISOString() } : {}),
+      },
+      {
+        key: "workspace_reviewer_access_grant",
+        value: grantId,
+        source: "workspace_reviewer_access_grant",
+        assertedBy: createdBy,
+        verifiedAt: joinedAt.toISOString(),
+        evidenceReferenceHash: grantHash,
         ...(membershipExpiresAt ? { expiresAt: membershipExpiresAt.toISOString() } : {}),
       },
     ];
@@ -543,9 +586,8 @@ async function loadMembers(
        FROM tokenless_reviewer_qualifications
        WHERE workspace_id=$1 AND reviewer_account_address=$2 AND reviewer_source='customer_invited'
          AND qualification_kind='expertise' AND status='active' AND expires_at>$3
-         AND (expertise_record_schema_version<>2 OR source_invitation_id=$4)
        ORDER BY expertise_record_schema_version,expertise_definition_id`,
-      [input.workspaceId, accountAddress, input.now, sourceInvitationId],
+      [input.workspaceId, accountAddress, input.now],
     );
     for (const qualification of qualifications.rows as Row[]) {
       const verifiedAt = date(qualification.verified_at, "expertise verification time");
@@ -584,11 +626,14 @@ async function loadMembers(
       }
     }
     provenance.sort((left, right) => String(left.key).localeCompare(String(right.key)));
+    selectedReviewers.add(accountAddress);
     members.push({
       accountAddress,
       createdBy,
       joinedAt,
       membershipExpiresAt,
+      workspaceReviewerGrantId: grantId,
+      workspaceReviewerGrantHash: grantHash,
       provenance,
     });
   }
@@ -820,6 +865,7 @@ export async function provisionWorkspacePrivateReviewRouting(input: {
       workspaceId: input.workspaceId,
       privateGroupId: profile.privateGroupId,
       projectId,
+      privateSensitivity: privateSensitivity(profile.sensitivity),
       worldIdRequired: profile.groupPolicy.worldIdRequired === true,
       now,
     });

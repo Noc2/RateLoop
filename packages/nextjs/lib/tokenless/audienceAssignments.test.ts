@@ -675,6 +675,17 @@ test("confidentiality acceptance unlocks only the assigned blinded task and shor
     () => getAssignmentOnlyTask({ baseAccountAddress: REVIEWER, assignmentId: reserved.assignmentId, now }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "assignment_not_found",
   );
+  await assert.rejects(
+    () =>
+      acceptAudienceAssignment({
+        baseAccountAddress: REVIEWER,
+        assignmentId: reserved.assignmentId,
+        confidentialityTermsAccepted: false,
+        confidentialityTermsHash: TERMS_HASH,
+        now,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "confidentiality_acceptance_required",
+  );
   await dbClient.execute({
     sql: "UPDATE tokenless_assurance_audience_policies SET policy_json = ? WHERE project_id = ?",
     args: [JSON.stringify({ ...policy, compensation: "paid", legalEligibilityRequired: true }), project.projectId],
@@ -684,6 +695,7 @@ test("confidentiality acceptance unlocks only the assigned blinded task and shor
       acceptAudienceAssignment({
         baseAccountAddress: REVIEWER,
         assignmentId: reserved.assignmentId,
+        confidentialityTermsAccepted: true,
         confidentialityTermsHash: TERMS_HASH,
         now,
       }),
@@ -699,6 +711,7 @@ test("confidentiality acceptance unlocks only the assigned blinded task and shor
       acceptAudienceAssignment({
         baseAccountAddress: REVIEWER,
         assignmentId: reserved.assignmentId,
+        confidentialityTermsAccepted: true,
         confidentialityTermsHash: POLICY_HASH,
         now,
       }),
@@ -707,6 +720,7 @@ test("confidentiality acceptance unlocks only the assigned blinded task and shor
   const accepted = await acceptAudienceAssignment({
     baseAccountAddress: REVIEWER,
     assignmentId: reserved.assignmentId,
+    confidentialityTermsAccepted: true,
     confidentialityTermsHash: TERMS_HASH,
     now,
   });
@@ -969,6 +983,11 @@ test("durable private-group membership gates reservation discovery and acceptanc
   const visible = await listReviewerAssignments({ accountAddress: REVIEWER });
   assert.equal(visible[0]?.assignmentId, reserved.assignmentId);
   assert.equal(visible[0]?.privateGroup?.groupId, group.groupId);
+  assert.equal(
+    (await listReviewerAssignments({ accountAddress: REVIEWER, view: "active" }))[0]?.assignmentId,
+    reserved.assignmentId,
+  );
+  assert.deepEqual(await listReviewerAssignments({ accountAddress: REVIEWER, view: "history" }), []);
   const expertiseNow = new Date();
   await attestInvitedReviewerExpertise({
     accountAddress: OWNER,
@@ -998,6 +1017,7 @@ test("durable private-group membership gates reservation discovery and acceptanc
       acceptAudienceAssignment({
         baseAccountAddress: REVIEWER,
         assignmentId: reserved.assignmentId,
+        confidentialityTermsAccepted: true,
         confidentialityTermsHash: TERMS_HASH,
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "private_group_membership_required",
@@ -1021,6 +1041,7 @@ test("durable private-group membership gates reservation discovery and acceptanc
   await acceptAudienceAssignment({
     baseAccountAddress: SECOND_REVIEWER,
     assignmentId: acceptedReservation.assignmentId,
+    confidentialityTermsAccepted: true,
     confidentialityTermsHash: TERMS_HASH,
   });
   await removePrivateGroupMember({
@@ -1039,13 +1060,17 @@ test("durable private-group membership gates reservation discovery and acceptanc
     (await listReviewerAssignments({ accountAddress: SECOND_REVIEWER }))[0]?.assignmentId,
     acceptedReservation.assignmentId,
   );
+  assert.deepEqual(await listReviewerAssignments({ accountAddress: SECOND_REVIEWER, view: "active" }), []);
   assert.equal(
-    (
-      await getAssignmentOnlyTask({
+    (await listReviewerAssignments({ accountAddress: SECOND_REVIEWER, view: "history" }))[0]?.assignmentId,
+    acceptedReservation.assignmentId,
+  );
+  await assert.rejects(
+    () =>
+      getAssignmentOnlyTask({
         baseAccountAddress: SECOND_REVIEWER,
         assignmentId: acceptedReservation.assignmentId,
-      })
-    ).privateGroup?.policyHash,
-    group.policyHash,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "assignment_not_found",
   );
 });

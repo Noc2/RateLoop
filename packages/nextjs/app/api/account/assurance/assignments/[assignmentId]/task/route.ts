@@ -23,6 +23,9 @@ export async function GET(request: NextRequest, context: Context) {
     );
   } catch (error) {
     const response = tokenlessErrorResponse(error);
-    return NextResponse.json(response.body, { status: response.status });
+    return NextResponse.json(response.body, {
+      status: response.status,
+      headers: { "Cache-Control": "private, no-store, max-age=0" },
+    });
   }
 }

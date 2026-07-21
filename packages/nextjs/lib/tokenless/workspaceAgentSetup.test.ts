@@ -14,7 +14,7 @@ import {
   putHumanReviewConfigurationForOwner,
 } from "~~/lib/tokenless/humanReviewConfiguration";
 import { loadWorkspaceOnboardingFunnel } from "~~/lib/tokenless/onboardingObservability";
-import { createPrivateGroup, listPrivateGroupInvitations } from "~~/lib/tokenless/privateGroups";
+import { createPrivateGroup } from "~~/lib/tokenless/privateGroups";
 import { createAgentPublishingPolicy, createWorkspace } from "~~/lib/tokenless/productCore";
 import { createWorkspaceReviewerExpertiseDefinition } from "~~/lib/tokenless/reviewerExpertiseDefinitions";
 import type { ReviewerExpertiseRequirement } from "~~/lib/tokenless/reviewerExpertiseOptions";
@@ -31,6 +31,7 @@ import {
   getWorkspaceAgentSetup,
   updateWorkspaceSetupName,
 } from "~~/lib/tokenless/workspaceAgentSetup";
+import { listWorkspaceReviewerInvitations } from "~~/lib/tokenless/workspaceReviewers";
 
 const OWNER = `rlp_${"b".repeat(24)}`;
 const CLIENT_ID = "rloc_setup_client";
@@ -245,28 +246,20 @@ test("setup resumes exact workspace specialist requirements without weakening th
   assert.deepEqual(setup.reviewDraft?.requestProfile.expertiseRequirements, expertiseRequirements);
   assert.deepEqual(setup.reviewDraft?.requestProfile.requiredExpertiseKeys, []);
 
-  const people = await configureWorkspaceSetupPeople({
-    accountAddress: OWNER,
-    workspaceId,
-    revision: reviews.revision,
-    decision: "invited",
-    createInvitation: true,
-    intendedEmail: "specialist@example.com",
-    expertiseDefinitionIds: [definition.definitionId],
-  });
-  assert.deepEqual(people.invitation?.expertiseDefinitions, [
-    {
-      definitionId: definition.definitionId,
-      definitionVersion: definition.version,
-      definitionHash: definition.hash,
-    },
-  ]);
-  const invitations = await listPrivateGroupInvitations({
-    accountAddress: OWNER,
-    workspaceId,
-    groupId: group.groupId,
-  });
-  assert.equal(invitations[0]?.intendedExpertise[0]?.status, "pending");
+  await assert.rejects(
+    configureWorkspaceSetupPeople({
+      accountAddress: OWNER,
+      workspaceId,
+      revision: reviews.revision,
+      decision: "invited",
+      createInvitation: true,
+      intendedEmail: "specialist@example.com",
+      expertiseDefinitionIds: [definition.definitionId],
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_agent_setup_people",
+  );
+  const invitations = await listWorkspaceReviewerInvitations({ accountAddress: OWNER, workspaceId });
+  assert.equal(invitations.length, 0);
 });
 
 test("setup binds one verified connection and completes without publishing or spending authority", async () => {
@@ -440,7 +433,7 @@ test("atomic setup finalization creates one invitation and safely replays a lost
   assert.equal(finalized.idempotent, false);
   assert.equal(finalized.revision, reviews.revision + 1);
   assert.equal(finalized.invitation?.status, "active");
-  assert.match(finalized.invitation?.token ?? "", /^rlgi_[a-f0-9]{16}_[A-Za-z0-9_-]{43}$/u);
+  assert.match(finalized.invitation?.token ?? "", /^rlri_[a-f0-9]{16}_[A-Za-z0-9_-]{43}$/u);
   assert.equal(finalized.postcondition.setupStatus, "completed");
   assert.equal(finalized.postcondition.connectionActive, true);
   assert.equal(finalized.postcondition.reviewBindingActive, true);
@@ -454,11 +447,7 @@ test("atomic setup finalization creates one invitation and safely replays a lost
   assert.equal(replayed.idempotent, true);
   assert.equal(replayed.invitation?.invitationId, finalized.invitation?.invitationId);
   assert.equal(replayed.invitation?.token, finalized.invitation?.token);
-  const invitations = await listPrivateGroupInvitations({
-    accountAddress: OWNER,
-    workspaceId,
-    groupId: group.groupId,
-  });
+  const invitations = await listWorkspaceReviewerInvitations({ accountAddress: OWNER, workspaceId });
   assert.equal(invitations.length, 1);
   const stored = await dbClient.execute({
     sql: `SELECT * FROM tokenless_workspace_agent_setups WHERE workspace_id=?`,
@@ -468,7 +457,7 @@ test("atomic setup finalization creates one invitation and safely replays a lost
   assert.match(String(stored.rows[0]?.finalization_request_hash), /^sha256:[a-f0-9]{64}$/u);
   assert.equal(stored.rows[0]?.people_invitation_id, finalized.invitation?.invitationId);
   const storedInvitation = await dbClient.execute({
-    sql: "SELECT * FROM tokenless_private_group_invitations WHERE invitation_id=?",
+    sql: "SELECT * FROM tokenless_workspace_reviewer_invitations WHERE invitation_id=?",
     args: [finalized.invitation!.invitationId],
   });
   const persistedFinalization = JSON.stringify([stored.rows[0], storedInvitation.rows[0]]);
@@ -513,11 +502,7 @@ test("atomic setup finalization creates and replays a capacity-limited shared in
   assert.equal(replayed.invitation?.token, finalized.invitation?.token);
   assert.equal(replayed.invitation?.maximumRedemptions, 2);
 
-  const invitations = await listPrivateGroupInvitations({
-    accountAddress: OWNER,
-    workspaceId,
-    groupId: group.groupId,
-  });
+  const invitations = await listWorkspaceReviewerInvitations({ accountAddress: OWNER, workspaceId });
   assert.equal(invitations.length, 1);
   assert.equal(invitations[0]?.maximumRedemptions, 2);
   assert.equal(invitations[0]?.intendedEmailDomain, "example.com");
@@ -625,7 +610,7 @@ test("atomic setup finalization rolls back its inserted invitation when completi
     bindingRevision: savedReview.configuration.version,
   });
   await dbClient.execute(
-    "ALTER TABLE tokenless_private_group_events ADD CONSTRAINT test_reject_setup_invitation_event CHECK (event_type <> 'invitation_created')",
+    "ALTER TABLE tokenless_workspace_reviewer_events ADD CONSTRAINT test_reject_setup_invitation_event CHECK (event_type <> 'invitation_created')",
   );
 
   await assert.rejects(

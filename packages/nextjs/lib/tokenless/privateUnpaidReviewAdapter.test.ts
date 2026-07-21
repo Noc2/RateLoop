@@ -4,22 +4,26 @@ import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { getAdaptiveHumanReviewResult, waitForAdaptiveHumanReview } from "~~/lib/tokenless/adaptiveReviewOrchestration";
+import { evaluateAdaptiveReviewRequirement } from "~~/lib/tokenless/adaptiveReviewService";
+import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import {
   approveAgentPairing,
   authenticateAgentMcpPrincipal,
   createAgentPairing,
   submitAgentRegistration,
 } from "~~/lib/tokenless/agentIntegrations";
-import { __setArtifactPrivacyRuntimeForTests } from "~~/lib/tokenless/artifactPrivacy";
+import { __setArtifactPrivacyRuntimeForTests, readEncryptedArtifact } from "~~/lib/tokenless/artifactPrivacy";
 import { __setAssuranceResponseKeyringsForTests } from "~~/lib/tokenless/assuranceResponses";
 import { createAssuranceProject } from "~~/lib/tokenless/humanAssurance";
 import {
   type FrozenHumanReviewRoutingContext,
   __humanReviewRequestRouterTestUtils,
+  routeHumanReviewRequest,
 } from "~~/lib/tokenless/humanReviewRequestRouter";
 import { createPrivateGroup } from "~~/lib/tokenless/privateGroups";
 import { preparePrivateReviewFoundation } from "~~/lib/tokenless/privateReviewFoundation";
 import {
+  directPrivateArtifactAccess,
   getDirectPrivateReviewState,
   getDirectPrivateReviewTask,
   listDirectPrivateReviewAssignments,
@@ -37,16 +41,25 @@ import { attestInvitedReviewerExpertise } from "~~/lib/tokenless/reviewerExperti
 import { replacePrivateGroupMemberExpertise } from "~~/lib/tokenless/reviewerExpertiseAssignments";
 import { createWorkspaceReviewerExpertiseDefinition } from "~~/lib/tokenless/reviewerExpertiseDefinitions";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import {
+  createWorkspaceReviewerInvitation,
+  leaveWorkspaceReviewer,
+  redeemWorkspaceReviewerInvitation,
+} from "~~/lib/tokenless/workspaceReviewers";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const REVIEWER_A = "0x2222222222222222222222222222222222222222";
 const REVIEWER_B = "0x3333333333333333333333333333333333333333";
+const originalSamplerKey = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY;
+const originalSamplerVersion = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION;
 
 function hash(value: string): `sha256:${string}` {
   return `sha256:${createHash("sha256").update(value).digest("hex")}`;
 }
 
 beforeEach(() => {
+  process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = "79".repeat(32);
+  process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION = "private-content-e2e-v1";
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
   __setArtifactPrivacyRuntimeForTests({
     keyVersion: "private-unpaid-test-v1",
@@ -76,6 +89,10 @@ afterEach(() => {
   __setArtifactPrivacyRuntimeForTests(null);
   __setAssuranceResponseKeyringsForTests(null);
   __setDatabaseResourcesForTests(null);
+  if (originalSamplerKey === undefined) delete process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY;
+  else process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = originalSamplerKey;
+  if (originalSamplerVersion === undefined) delete process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION;
+  else process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION = originalSamplerVersion;
 });
 
 test("direct private assignments surface in reviewer work and produce a terminal aggregate result", async () => {
@@ -121,6 +138,9 @@ test("direct private assignments surface in reviewer work and produce a terminal
       now: new Date("2026-07-16T09:26:00.000Z"),
     });
     assert.equal(task.taskKind, "binary_review");
+    assert.equal(task.compensationMode, "unpaid");
+    assert.equal(task.forecastRequired, false);
+    assert.equal(task.settlement, null);
     assert.equal(task.rubric.prompt, "Is this suggestion correct and safe?");
     assert.equal(task.cases[0]?.binaryReview?.positiveLabel, "Approve");
     assert.equal(task.cases[0]?.binaryReview?.negativeLabel, "Reject");
@@ -173,6 +193,437 @@ test("direct private assignments surface in reviewer work and produce a terminal
   assert.ok(stored.rows.every(row => /^sha256:[0-9a-f]{64}$/u.test(String(row.response_commitment))));
 });
 
+test("accepted workspace reviewer invitations route exact private content through completion end to end", async () => {
+  const setup = await fixture();
+  await dbClient.execute({
+    sql: `DELETE FROM tokenless_private_group_memberships
+          WHERE group_id=? AND principal_address IN (?,?)`,
+    args: [setup.groupId, REVIEWER_A, REVIEWER_B],
+  });
+  const legacyMemberships = await dbClient.execute({
+    sql: "SELECT COUNT(*) AS count FROM tokenless_private_group_memberships WHERE group_id=?",
+    args: [setup.groupId],
+  });
+  assert.equal(Number(legacyMemberships.rows[0]?.count), 0);
+  const grantNow = new Date();
+  const admissionPolicy = freezeAdmissionPolicy({
+    schemaVersion: "rateloop.human-assurance.v2",
+    policyId: "audience_private_content_e2e",
+    version: 1,
+    reviewerSource: "customer_invited",
+    compensation: "unpaid",
+    cohorts: [{ cohortId: setup.cohortId, minimumReviewers: 2, maximumReviewers: 2 }],
+    selection: "customer_named",
+    fallbacks: { allowed: false, sources: [] },
+    requiredQualifications: [],
+    assurance: {
+      requirements: [
+        {
+          capability: "customer_invitation",
+          reviewerSources: ["customer_invited"],
+          allowedProviders: ["workspace-invitation"],
+        },
+      ],
+    },
+    buyerPrivacy: { visibleFields: ["reviewer_source"], minimumAggregationSize: 2, suppressSmallCells: true },
+    legalEligibilityRequired: false,
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_policies SET audience_policy_json=?
+          WHERE workspace_id=? AND policy_id=? AND version=?`,
+    args: [
+      admissionPolicy.policyJson,
+      setup.workspaceId,
+      setup.integrationPrincipal.integration.reviewPolicyId,
+      setup.integrationPrincipal.integration.reviewPolicyVersion,
+    ],
+  });
+  const oauthPrincipalId = `rlp_${"e".repeat(24)}`;
+  const oauthClientId = "rlo_client_private_content_e2e";
+  const tokenFamilyId = "atf_private_content_e2e";
+  const connectionIntentId = "aci_private_content_e2e";
+  const oauthScopes: NonNullable<(typeof setup.principal)["scopes"]> = [
+    "evaluation:read",
+    "review:decide",
+    "panel:publish",
+    "result:read",
+  ];
+  await dbClient.execute({
+    sql: "INSERT INTO tokenless_principals (principal_id,status,created_at,updated_at) VALUES (?,'active',?,?)",
+    args: [oauthPrincipalId, grantNow, grantNow],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_oauth_clients
+          (client_id,client_name,redirect_uris_json,redirect_uris_digest,token_endpoint_auth_method,
+           grant_types_json,response_types_json,allowed_scopes_json,registration_source,status,created_at,updated_at)
+          VALUES (?,'Private content E2E','[]',?,'none','["authorization_code","refresh_token"]',
+                  '["code"]',?,'dynamic','active',?,?)`,
+    args: [oauthClientId, hash("private-content-e2e-redirects"), JSON.stringify(oauthScopes), grantNow, grantNow],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_oauth_token_families
+          (token_family_id,client_id,subject_principal_id,audience,resource,granted_scopes_json,status,
+           created_at,absolute_expires_at)
+          VALUES (?,?,?,'rateloop-agent','https://rateloop-tokenless.vercel.app/api/agent/v1/mcp',?,'active',?,?)`,
+    args: [
+      tokenFamilyId,
+      oauthClientId,
+      oauthPrincipalId,
+      JSON.stringify(oauthScopes),
+      grantNow,
+      new Date(grantNow.getTime() + 86_400_000),
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_connection_intents
+          (intent_id,claim_nonce_hash,workspace_id,created_by,status,profile_key,profile_version,
+           maximum_scopes_json,allowed_workflow_keys_json,review_preset_json,allowed_host_families_json,
+           auto_activate,created_at,claim_expires_at,hard_expires_at,claimed_at,consumed_at,tested_at,
+           connected_at,claimed_token_family_id,claimed_oauth_client_id,claimed_subject_principal_id,
+          client_capabilities_json,last_transition_at)
+          VALUES (?,?,?,?,'connected','default',1,?, '["private-review"]','{}','[]',false,
+                  ?,?,?,?,?,?,?,?,?,?,'[]',?)`,
+    args: [
+      connectionIntentId,
+      hash("private-content-e2e-claim"),
+      setup.workspaceId,
+      oauthPrincipalId,
+      JSON.stringify(oauthScopes),
+      grantNow,
+      new Date(grantNow.getTime() + 30 * 60_000),
+      new Date(grantNow.getTime() + 45 * 60_000),
+      grantNow,
+      grantNow,
+      grantNow,
+      grantNow,
+      tokenFamilyId,
+      oauthClientId,
+      oauthPrincipalId,
+      grantNow,
+    ],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_integrations
+          SET pairing_id=NULL,api_key_id=NULL,connection_intent_id=?,token_family_id=?,
+              activation_mode='owner_approved',granted_scopes_json=?,oauth_client_id=?,
+              oauth_subject_principal_id=?,updated_at=?
+          WHERE integration_id=?`,
+    args: [
+      connectionIntentId,
+      tokenFamilyId,
+      JSON.stringify(oauthScopes),
+      oauthClientId,
+      oauthPrincipalId,
+      grantNow,
+      setup.integrationPrincipal.integration.integrationId,
+    ],
+  });
+  const oauthProductPrincipal = { ...setup.principal, apiKeyId: tokenFamilyId, scopes: oauthScopes };
+  const oauthIntegrationPrincipal = {
+    ...setup.integrationPrincipal,
+    principal: oauthProductPrincipal,
+    integration: { ...setup.integrationPrincipal.integration, audiencePolicyHash: admissionPolicy.policyHash },
+  };
+  const encryptedObjects = new Map<string, Uint8Array>();
+  __setArtifactPrivacyRuntimeForTests({
+    keyVersion: "private-unpaid-test-v1",
+    masterKey: new Uint8Array(32).fill(9),
+    store: {
+      async delete(reference) {
+        encryptedObjects.delete(reference);
+      },
+      async get(reference) {
+        const bytes = encryptedObjects.get(reference);
+        if (!bytes) throw new Error(`Missing encrypted test object ${reference}.`);
+        return new Uint8Array(bytes);
+      },
+      async put(pathname, body) {
+        encryptedObjects.set(pathname, new Uint8Array(body));
+        return pathname;
+      },
+    },
+  });
+  const sourcePayload = "Customer request #RL-EXACT-2048:\r\n  Please preserve café hours ☕ and spacing.\n";
+  const suggestionPayload = "Agent candidate #RL-EXACT-2048:\nOpen 08:00–17:00.\nNo synthetic setup text.";
+  const evaluated = await evaluateAdaptiveReviewRequirement({
+    principal: oauthProductPrincipal,
+    integrationId: oauthIntegrationPrincipal.integration.integrationId,
+    request: {
+      externalOpportunityId: "private-exact-content-e2e-0001",
+      agentId: oauthIntegrationPrincipal.integration.agentId,
+      agentVersionId: oauthIntegrationPrincipal.integration.agentVersionId,
+      policyId: oauthIntegrationPrincipal.integration.reviewPolicyId,
+      policyVersion: oauthIntegrationPrincipal.integration.reviewPolicyVersion,
+      workflowKey: "private-review",
+      riskTier: "normal",
+      audiencePolicyHash: oauthIntegrationPrincipal.integration.audiencePolicyHash!,
+      suggestionCommitment: hash(suggestionPayload),
+      sourceEvidence: { reference: "case/private-exact-content-e2e-0001", hash: hash(sourcePayload) },
+      declaredConfidenceBps: 8_800,
+      criticalRisk: false,
+      metadataComplete: true,
+      execution: {
+        externalExecutionId: "execution-private-exact-content-e2e-0001",
+        status: "completed",
+        primarySpanId: "generation-primary",
+        generationSpans: [
+          {
+            spanId: "generation-primary",
+            role: "primary",
+            provider: "OpenAI",
+            requestedModel: "gpt-5.6-sol",
+            resolvedModel: "gpt-5.6-sol-2026-07-01",
+          },
+        ],
+      },
+    },
+  });
+  assert.equal(evaluated.decision, "required");
+  assert.equal(evaluated.lifecycle.state, "blocked");
+
+  const routedAt = new Date();
+  const routed = await routeHumanReviewRequest({
+    principal: oauthIntegrationPrincipal,
+    opportunityId: evaluated.opportunityId,
+    sourcePayload,
+    suggestionPayload,
+    material: { kind: "private", sourceContentType: "text/plain", suggestionContentType: "text/plain" },
+    now: routedAt,
+  });
+  assert.equal(routed.action, "private_review_assigned");
+  if (routed.action !== "private_review_assigned") assert.fail("Expected a private unpaid assignment.");
+  assert.equal(encryptedObjects.size, 2);
+  assert.equal(routed.delivery.assignments.length, 2);
+  const assignmentGrants = await dbClient.execute({
+    sql: `SELECT reviewer_account_address,workspace_reviewer_access_grant_id,
+                 workspace_reviewer_access_grant_hash
+          FROM tokenless_private_unpaid_review_assignments
+          WHERE delivery_id=? ORDER BY reviewer_account_address`,
+    args: [routed.delivery.deliveryId],
+  });
+  assert.deepEqual(
+    assignmentGrants.rows.map(row => ({
+      reviewer: row.reviewer_account_address,
+      grantId: row.workspace_reviewer_access_grant_id,
+      grantHash: row.workspace_reviewer_access_grant_hash,
+    })),
+    [REVIEWER_A, REVIEWER_B].map(reviewer => ({
+      reviewer,
+      grantId: setup.workspaceReviewerGrants.get(reviewer)!.grantId,
+      grantHash: setup.workspaceReviewerGrants.get(reviewer)!.grantHash,
+    })),
+  );
+
+  const outsider = "0x4444444444444444444444444444444444444444";
+  assert.equal(
+    Number(
+      (
+        await dbClient.execute({
+          sql: "SELECT COUNT(*) AS count FROM tokenless_private_group_memberships WHERE group_id=? AND principal_address=?",
+          args: [setup.groupId, outsider],
+        })
+      ).rows[0]?.count,
+    ),
+    0,
+  );
+  assert.deepEqual(await listDirectPrivateReviewAssignments({ accountAddress: outsider }), []);
+  await assert.rejects(
+    () =>
+      acceptPrivateUnpaidReviewAssignment({
+        assignmentId: routed.delivery.assignments[0]!.assignmentId,
+        reviewerAccountAddress: outsider,
+        confidentialityTermsAccepted: true,
+        confidentialityTermsHash: routed.foundation.bindings.privateGroup.policyHash,
+        now: routedAt,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "assignment_not_found",
+  );
+
+  for (const [index, assignment] of routed.delivery.assignments.entries()) {
+    const acceptedAt = routedAt;
+    await acceptPrivateUnpaidReviewAssignment({
+      assignmentId: assignment.assignmentId,
+      reviewerAccountAddress: assignment.reviewerAccountAddress,
+      confidentialityTermsAccepted: true,
+      confidentialityTermsHash: routed.foundation.bindings.privateGroup.policyHash,
+      now: acceptedAt,
+    });
+    const taskAt = acceptedAt;
+    const task = await getDirectPrivateReviewTask({
+      assignmentId: assignment.assignmentId,
+      accountAddress: assignment.reviewerAccountAddress,
+      now: taskAt,
+    });
+    const binary = task.cases[0]?.binaryReview;
+    assert.ok(binary);
+    const source = await readEncryptedArtifact({
+      accountAddress: assignment.reviewerAccountAddress,
+      artifactId: binary.source.artifactId,
+      leaseId: binary.source.leaseId,
+      projectId: setup.projectId,
+      purpose: "preview",
+      workspaceId: setup.workspaceId,
+      now: taskAt,
+    });
+    const suggestion = await readEncryptedArtifact({
+      accountAddress: assignment.reviewerAccountAddress,
+      artifactId: binary.suggestion.artifactId,
+      leaseId: binary.suggestion.leaseId,
+      projectId: setup.projectId,
+      purpose: "preview",
+      workspaceId: setup.workspaceId,
+      now: taskAt,
+    });
+    assert.deepEqual(Buffer.from(source.bytes), Buffer.from(sourcePayload, "utf8"));
+    assert.deepEqual(Buffer.from(suggestion.bytes), Buffer.from(suggestionPayload, "utf8"));
+    assert.equal(Buffer.from(source.bytes).toString("utf8").includes("Synthetic setup verification"), false);
+
+    if (index === 0) {
+      await assert.rejects(
+        () =>
+          getDirectPrivateReviewTask({
+            assignmentId: assignment.assignmentId,
+            accountAddress: outsider,
+            now: taskAt,
+          }),
+        (error: unknown) => error instanceof TokenlessServiceError && error.code === "assignment_not_found",
+      );
+      await assert.rejects(
+        () =>
+          readEncryptedArtifact({
+            accountAddress: outsider,
+            artifactId: binary.source.artifactId,
+            leaseId: binary.source.leaseId,
+            projectId: setup.projectId,
+            purpose: "preview",
+            workspaceId: setup.workspaceId,
+            now: taskAt,
+          }),
+        (error: unknown) => error instanceof TokenlessServiceError && error.code === "artifact_not_found",
+      );
+    }
+
+    await submitDirectPrivateReviewResponse({
+      assignmentId: assignment.assignmentId,
+      accountAddress: assignment.reviewerAccountAddress,
+      idempotencyKey: `response:e2e:${assignment.assignmentId}`,
+      responses: [
+        {
+          caseId: routed.foundation.privateReviewId,
+          displayedOption: "A",
+          selectedArtifactId: binary.suggestion.artifactId,
+          failureTagKeys: [],
+          rationale: "",
+        },
+      ],
+      now: taskAt,
+    });
+  }
+
+  const result = await getAdaptiveHumanReviewResult({
+    principal: oauthIntegrationPrincipal,
+    opportunityId: evaluated.opportunityId,
+  });
+  assert.equal("outcome" in result.result ? result.result.outcome : null, "positive");
+  const lifecycle = await dbClient.execute({
+    sql: "SELECT state FROM tokenless_agent_review_opportunity_lifecycles WHERE workspace_id=? AND opportunity_id=?",
+    args: [setup.workspaceId, evaluated.opportunityId],
+  });
+  assert.equal(lifecycle.rows[0]?.state, "completed");
+});
+
+test("legacy private-group membership drift cannot revoke exact workspace reviewer access", async () => {
+  const setup = await fixture();
+  const delivered = await requestPrivateUnpaidHumanReview({
+    principal: setup.principal,
+    opportunityId: setup.opportunityId,
+    privateReviewId: setup.prepared.privateReviewId,
+    reviewerAccountAddresses: [REVIEWER_A, REVIEWER_B],
+    now: new Date("2026-07-16T09:20:00.000Z"),
+  });
+  const assignmentId = delivered.assignments[0]!.assignmentId;
+  const termsHash = setup.prepared.bindings.privateGroup.policyHash;
+  await acceptPrivateUnpaidReviewAssignment({
+    assignmentId,
+    reviewerAccountAddress: REVIEWER_A,
+    confidentialityTermsAccepted: true,
+    confidentialityTermsHash: termsHash,
+    now: new Date("2026-07-16T09:25:00.000Z"),
+  });
+
+  const accessAt = new Date("2026-07-16T09:26:00.000Z");
+  await getDirectPrivateReviewTask({ assignmentId, accountAddress: REVIEWER_A, now: accessAt });
+  const artifactAccess = await directPrivateArtifactAccess({
+    assignmentId,
+    accountAddress: REVIEWER_A,
+    artifactId: setup.prepared.artifacts.sourceArtifactId,
+    now: accessAt,
+  });
+  assert.equal(artifactAccess.workspaceId, setup.workspaceId);
+
+  await dbClient.execute({
+    sql: `UPDATE tokenless_private_group_memberships SET allowed_project_ids_json='["project_no_longer_allowed"]'
+          WHERE group_id=? AND principal_address=?`,
+    args: [setup.groupId, REVIEWER_A],
+  });
+  await getDirectPrivateReviewTask({ assignmentId, accountAddress: REVIEWER_A, now: accessAt });
+  const stillIssued = await dbClient.execute({
+    sql: `SELECT lease_state FROM tokenless_private_unpaid_review_assignments WHERE assignment_id=?`,
+    args: [assignmentId],
+  });
+  assert.equal(stillIssued.rows[0]?.lease_state, "issued");
+  const activeLeases = await dbClient.execute({
+    sql: `SELECT COUNT(*) AS count FROM tokenless_assurance_artifact_leases
+          WHERE assignment_id=? AND revoked_at IS NULL`,
+    args: [assignmentId],
+  });
+  assert.equal(Number(activeLeases.rows[0]?.count), 2);
+});
+
+test("accepted direct private access is revoked when the workspace reviewer grant ends", async () => {
+  const setup = await fixture();
+  const delivered = await requestPrivateUnpaidHumanReview({
+    principal: setup.principal,
+    opportunityId: setup.opportunityId,
+    privateReviewId: setup.prepared.privateReviewId,
+    reviewerAccountAddresses: [REVIEWER_A, REVIEWER_B],
+    now: new Date("2026-07-16T09:20:00.000Z"),
+  });
+  const assignmentId = delivered.assignments[0]!.assignmentId;
+
+  await acceptPrivateUnpaidReviewAssignment({
+    assignmentId,
+    reviewerAccountAddress: REVIEWER_A,
+    confidentialityTermsAccepted: true,
+    confidentialityTermsHash: setup.prepared.bindings.privateGroup.policyHash,
+    now: new Date("2026-07-16T09:25:00.000Z"),
+  });
+  const accessAt = new Date("2026-07-16T09:26:00.000Z");
+  await getDirectPrivateReviewTask({ assignmentId, accountAddress: REVIEWER_A, now: accessAt });
+
+  await leaveWorkspaceReviewer({
+    accountAddress: REVIEWER_A,
+    workspaceId: setup.workspaceId,
+    reason: "workspace_reviewer_access_revoked",
+  });
+
+  await assert.rejects(
+    () => getDirectPrivateReviewTask({ assignmentId, accountAddress: REVIEWER_A, now: accessAt }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "assignment_not_found",
+  );
+  const assignment = await dbClient.execute({
+    sql: `SELECT lease_state FROM tokenless_private_unpaid_review_assignments WHERE assignment_id=?`,
+    args: [assignmentId],
+  });
+  assert.equal(assignment.rows[0]?.lease_state, "expired");
+  const leases = await dbClient.execute({
+    sql: `SELECT COUNT(*) AS count FROM tokenless_assurance_artifact_leases
+          WHERE assignment_id=? AND revoked_at IS NOT NULL`,
+    args: [assignmentId],
+  });
+  assert.equal(Number(leases.rows[0]?.count), 2);
+});
+
 test("private group terms are accepted once per exact policy and closed reviews are not recoverable", async () => {
   const setup = await fixture();
   const delivered = await requestPrivateUnpaidHumanReview({
@@ -192,6 +643,10 @@ test("private group terms are accepted once per exact policy and closed reviews 
   });
   assert.equal(initialAccess.state, "ready");
   assert.equal(initialAccess.termsAccepted, false);
+  assert.equal(initialAccess.terms.groupName, "Named private reviewers");
+  assert.equal(initialAccess.terms.purpose, "Review confidential suggestions without base compensation.");
+  assert.deepEqual((initialAccess.terms.policy as Record<string, unknown>).dataClassifications, ["confidential"]);
+  assert.equal((initialAccess.terms.policy as Record<string, unknown>).exportAllowed, false);
   await assert.rejects(
     () =>
       acceptPrivateUnpaidReviewAssignment({
@@ -342,6 +797,11 @@ test("private routing releases expired reservations before selecting the next pa
 });
 
 async function identity(address: string, email: string, now: Date) {
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_principals (principal_id,status,created_at,updated_at)
+          VALUES (?,'active',?,?) ON CONFLICT (principal_id) DO NOTHING`,
+    args: [address, now, now],
+  });
   await dbClient.execute({
     sql: `INSERT INTO tokenless_browser_identities
           (principal_address,thirdweb_user_id,auth_provider,primary_email,email_verified,
@@ -506,7 +966,28 @@ async function fixture(
           VALUES (?,?,'Named private reviewers','customer_invited','customer_named',10,0,?,'[]','active',?,?,?)`,
     args: [cohortId, project.projectId, group.groupId, OWNER, foundationNow, foundationNow],
   });
+  const workspaceReviewerGrants = new Map<string, { grantId: string; grantHash: `sha256:${string}` }>();
   for (const reviewer of [REVIEWER_A, REVIEWER_B]) {
+    const invitation = await createWorkspaceReviewerInvitation({
+      accountAddress: OWNER,
+      workspaceId,
+      projectIds: [project.projectId],
+      maxPrivateSensitivity: "confidential",
+      intendedAccountAddress: reviewer,
+      expiresAt: new Date("2026-07-17T09:00:00.000Z"),
+      accessExpiresAt: new Date("2026-07-23T09:00:00.000Z"),
+      now: foundationNow,
+    });
+    const redeemed = await redeemWorkspaceReviewerInvitation({
+      accountAddress: reviewer,
+      token: invitation.token,
+      now: foundationNow,
+    });
+    assert.match(redeemed.grantHash ?? "", /^sha256:[0-9a-f]{64}$/u);
+    workspaceReviewerGrants.set(reviewer, {
+      grantId: redeemed.grantId!,
+      grantHash: redeemed.grantHash as `sha256:${string}`,
+    });
     const invitationId = `pgi_private_${reviewer.slice(2, 10)}`;
     await dbClient.execute({
       sql: `INSERT INTO tokenless_private_group_invitations
@@ -677,6 +1158,7 @@ async function fixture(
     requestProfile: profile,
     externalContentCommitments: opportunityCommitments,
     expertiseDefinition,
+    workspaceReviewerGrants,
   };
 }
 
@@ -824,7 +1306,7 @@ test("profile expertise requirements fail closed through private assignment unti
       reviewerAccountAddresses: [REVIEWER_A, REVIEWER_B],
       now: new Date("2026-07-16T09:20:00.000Z"),
     });
-  await assert.rejects(assignment, /not an active eligible member/u);
+  await assert.rejects(assignment, /does not have active workspace access/u);
   await attestInvitedReviewerExpertise({
     accountAddress: OWNER,
     workspaceId: setup.workspaceId,
@@ -835,7 +1317,7 @@ test("profile expertise requirements fail closed through private assignment unti
     expiresAt: "2026-07-17T10:00:00.000Z",
     now: new Date("2026-07-16T09:10:00.000Z"),
   });
-  await assert.rejects(assignment, /not an active eligible member/u);
+  await assert.rejects(assignment, /does not have active workspace access/u);
   await attestInvitedReviewerExpertise({
     accountAddress: OWNER,
     workspaceId: setup.workspaceId,
@@ -943,13 +1425,14 @@ test("fails closed when frozen cohort rules drift before assignment", async () =
   );
 });
 
-test("requires membership and qualifications to remain valid through the response deadline", async () => {
+test("requires workspace access and qualifications to remain valid through the response deadline", async () => {
   const setup = await fixture();
   const expiresBeforeDeadline = new Date("2026-07-16T09:50:00.000Z");
+  const reviewerGrant = setup.workspaceReviewerGrants.get(REVIEWER_A)!;
   await dbClient.execute({
-    sql: `UPDATE tokenless_private_group_memberships
-          SET membership_expires_at = ? WHERE group_id = ? AND principal_address = ?`,
-    args: [expiresBeforeDeadline, setup.prepared.bindings.privateGroup.groupId, REVIEWER_A],
+    sql: `UPDATE tokenless_workspace_reviewer_access_grants
+          SET valid_until = ? WHERE workspace_id = ? AND grant_id = ?`,
+    args: [expiresBeforeDeadline, setup.workspaceId, reviewerGrant.grantId],
   });
   await assert.rejects(
     () =>
@@ -960,13 +1443,13 @@ test("requires membership and qualifications to remain valid through the respons
         reviewerAccountAddresses: [REVIEWER_A, REVIEWER_B],
         now: new Date("2026-07-16T09:20:00.000Z"),
       }),
-    /not an active eligible member/u,
+    /does not have active workspace access/u,
   );
 
   await dbClient.execute({
-    sql: `UPDATE tokenless_private_group_memberships
-          SET membership_expires_at = NULL WHERE group_id = ? AND principal_address = ?`,
-    args: [setup.prepared.bindings.privateGroup.groupId, REVIEWER_A],
+    sql: `UPDATE tokenless_workspace_reviewer_access_grants
+          SET valid_until = ? WHERE workspace_id = ? AND grant_id = ?`,
+    args: [new Date("2026-07-23T09:00:00.000Z"), setup.workspaceId, reviewerGrant.grantId],
   });
   await dbClient.execute({
     sql: `UPDATE tokenless_assurance_cohort_reviewers
@@ -983,7 +1466,7 @@ test("requires membership and qualifications to remain valid through the respons
         reviewerAccountAddresses: [REVIEWER_A, REVIEWER_B],
         now: new Date("2026-07-16T09:20:00.000Z"),
       }),
-    /not an active eligible member/u,
+    /does not have active workspace access/u,
   );
 });
 

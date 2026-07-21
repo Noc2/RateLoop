@@ -1196,6 +1196,26 @@ async function endMembership(input: {
     if (result.rowCount !== 1) {
       throw new TokenlessServiceError("Private-group membership not found.", 404, "private_group_membership_not_found");
     }
+    const revokedLeases = await client.query(
+      `UPDATE tokenless_assurance_artifact_leases
+       SET revoked_at = $1
+       WHERE workspace_id = $2 AND account_address = $3
+         AND revoked_at IS NULL
+         AND assignment_id IN (
+           SELECT assignment_id FROM tokenless_assurance_assignments
+           WHERE private_group_id = $4 AND reviewer_account_address = $3
+         )
+       RETURNING lease_id`,
+      [now, input.workspaceId, input.principalAddress, input.groupId],
+    );
+    const expiredAccepted = await client.query(
+      `UPDATE tokenless_assurance_assignments
+       SET lease_state = 'expired', updated_at = $1
+       WHERE private_group_id = $2 AND reviewer_account_address = $3
+         AND status = 'accepted' AND lease_state <> 'expired'
+       RETURNING assignment_id`,
+      [now, input.groupId, input.principalAddress],
+    );
     const released = await client.query(
       `UPDATE tokenless_assurance_assignments
        SET status = 'released', lease_state = 'expired', updated_at = $1
@@ -1228,7 +1248,12 @@ async function endMembership(input: {
       principalAddress: input.principalAddress,
       eventType: input.status === "removed" ? "membership_removed" : "membership_left",
       actorReference: input.actorAddress,
-      details: { reason: input.reason, releasedReservationCount: released.rowCount },
+      details: {
+        reason: input.reason,
+        revokedArtifactLeaseCount: revokedLeases.rowCount,
+        expiredAcceptedAssignmentCount: expiredAccepted.rowCount,
+        releasedReservationCount: released.rowCount,
+      },
       now,
     });
     await client.query("COMMIT");

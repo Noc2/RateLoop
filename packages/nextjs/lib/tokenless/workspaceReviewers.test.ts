@@ -117,12 +117,12 @@ test("reviewer invitations persist only token hashes and never grant workspace m
     args: [workspaceId, reviewer],
   });
   assert.equal(workspaceMember.rowCount, 0);
-  const compatibilityMembership = await dbClient.execute({
+  const privateGroupMembership = await dbClient.execute({
     sql: `SELECT status FROM tokenless_private_group_memberships
           WHERE group_id=? AND principal_address=?`,
     args: [routingGroup.groupId, reviewer],
   });
-  assert.equal(compatibilityMembership.rows[0]?.status, "active");
+  assert.equal(privateGroupMembership.rowCount, 0);
   const reviewers = await listWorkspaceReviewers({ accountAddress: owner, workspaceId, now });
   assert.equal(reviewers.length, 1);
   assert.equal(reviewers[0]?.principalAddress, reviewer);
@@ -403,10 +403,10 @@ test("revocation blocks unused invitations and reviewer removal revokes assignme
     args: [workspaceId, reviewer],
   });
   assert.equal(member.rowCount, 0);
-  const compatibilityMembership = await dbClient.execute({
+  const privateGroupMembership = await dbClient.execute({
     sql: `SELECT status FROM tokenless_private_group_memberships
           WHERE group_id=? AND principal_address=?`,
     args: [routingGroup.groupId, reviewer],
   });
-  assert.equal(compatibilityMembership.rows[0]?.status, "removed");
+  assert.equal(privateGroupMembership.rowCount, 0);
 });

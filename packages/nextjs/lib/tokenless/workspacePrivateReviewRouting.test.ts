@@ -15,6 +15,10 @@ import {
 } from "~~/lib/tokenless/reviewerExpertiseAssignments";
 import type { ReviewerExpertiseRequirement } from "~~/lib/tokenless/reviewerExpertiseOptions";
 import { provisionWorkspacePrivateReviewRouting } from "~~/lib/tokenless/workspacePrivateReviewRouting";
+import {
+  createWorkspaceReviewerInvitation,
+  redeemWorkspaceReviewerInvitation,
+} from "~~/lib/tokenless/workspaceReviewers";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const REVIEWER_A = "0x2222222222222222222222222222222222222222";
@@ -73,6 +77,11 @@ async function fixture(expertiseRequirements: ReviewerExpertiseRequirement[] = [
     [REVIEWER_C, "reviewer-c@example.test"],
   ] as const) {
     await dbClient.execute({
+      sql: `INSERT INTO tokenless_principals (principal_id,status,created_at,updated_at)
+            VALUES (?,'active',?,?)`,
+      args: [reviewer, now, now],
+    });
+    await dbClient.execute({
       sql: `INSERT INTO tokenless_browser_identities
             (principal_address,thirdweb_user_id,auth_provider,primary_email,email_verified,email_domain,
              display_name,created_at,updated_at,last_login_at)
@@ -110,6 +119,19 @@ async function fixture(expertiseRequirements: ReviewerExpertiseRequirement[] = [
 }
 
 async function addMember(input: { workspaceId: string; groupId: string; reviewer: string; now: Date }) {
+  const invitation = await createWorkspaceReviewerInvitation({
+    accountAddress: OWNER,
+    workspaceId: input.workspaceId,
+    maxPrivateSensitivity: "confidential",
+    intendedAccountAddress: input.reviewer,
+    accessExpiresAt: new Date(input.now.getTime() + 30 * 86_400_000),
+    now: input.now,
+  });
+  await redeemWorkspaceReviewerInvitation({ accountAddress: input.reviewer, token: invitation.token, now: input.now });
+  return invitation;
+}
+
+async function addLegacyExpertiseBinding(input: { workspaceId: string; groupId: string; reviewer: string; now: Date }) {
   const invitation = await createPrivateGroupInvitation({
     accountAddress: OWNER,
     workspaceId: input.workspaceId,
@@ -119,7 +141,6 @@ async function addMember(input: { workspaceId: string; groupId: string; reviewer
     now: input.now,
   });
   await redeemPrivateGroupInvitation({ accountAddress: input.reviewer, token: invitation.token, now: input.now });
-  return invitation;
 }
 
 function provision(input: { workspaceId: string; now: Date; profileVersion?: number; profileHash?: string }) {
@@ -217,7 +238,7 @@ test("managed private routing is idempotent and stays unready until the exact re
     const provenance = JSON.parse(String(row.qualification_provenance_json)) as Array<Record<string, unknown>>;
     assert.deepEqual(
       provenance.map(value => value.key),
-      ["customer_invitation", "private_group_membership"],
+      ["customer_invitation", "private_review_policy_group", "workspace_reviewer_access_grant"],
     );
   }
 });
@@ -232,6 +253,8 @@ test("exact expertise and cohort capacity both fail closed", async () => {
   const setup = await fixture([requirement]);
   await addMember({ ...setup, reviewer: REVIEWER_A });
   await addMember({ ...setup, reviewer: REVIEWER_B });
+  await addLegacyExpertiseBinding({ ...setup, reviewer: REVIEWER_A });
+  await addLegacyExpertiseBinding({ ...setup, reviewer: REVIEWER_B });
   const expertiseExpiresAt = new Date(setup.now.getTime() + 10 * 86_400_000);
   await replacePrivateGroupMemberExpertise({
     accountAddress: OWNER,

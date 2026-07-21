@@ -74,6 +74,11 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
     // tests pin those statements while service tests exercise the new schema.
     return null;
   }
+  if (file === "0131_workspace_reviewer_policy_acceptances.sql" && /^UPDATE\b/u.test(statement)) {
+    // pg-mem does not support the production UPDATE ... FROM backfills. Memory
+    // databases start empty, so only the structural migration is required here.
+    return null;
+  }
   if (
     file === "0123_evm_kms_signing_ledger_integrity.sql" &&
     /^ALTER TABLE "tokenless_evm_kms_signing_ledger"\s+ADD CONSTRAINT/u.test(statement)

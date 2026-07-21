@@ -140,7 +140,7 @@ async function requireManagerInTransaction(client: PoolClient, accountAddress: s
     `SELECT 1 FROM tokenless_workspace_members m
      JOIN tokenless_workspaces w ON w.workspace_id=m.workspace_id
      WHERE m.workspace_id=$1 AND m.account_address=$2 AND m.role IN ('owner','admin')
-       AND w.status='active' LIMIT 1 FOR SHARE OF m`,
+       AND w.status='active' LIMIT 1 FOR SHARE`,
     [workspaceId, manager],
   );
   if (result.rowCount !== 1) {
@@ -335,8 +335,7 @@ export async function listMyWorkspaceReviewerAccess(input: { accountAddress: str
   });
 }
 
-export async function createWorkspaceReviewerInvitation(input: {
-  accountAddress: string;
+type WorkspaceReviewerInvitationCreateInput = {
   workspaceId: string;
   projectIds?: string[];
   maxPrivateSensitivity: Sensitivity;
@@ -347,7 +346,12 @@ export async function createWorkspaceReviewerInvitation(input: {
   accessExpiresAt?: Date | null;
   maximumRedemptions?: number;
   now?: Date;
-}) {
+};
+
+export async function createWorkspaceReviewerInvitationInTransaction(
+  client: PoolClient,
+  input: WorkspaceReviewerInvitationCreateInput & { actorAddress: string; token?: string },
+) {
   const projects = projectIds(input.projectIds);
   const ceiling = sensitivity(input.maxPrivateSensitivity);
   const intendedAccount = input.intendedAccountAddress
@@ -393,78 +397,95 @@ export async function createWorkspaceReviewerInvitation(input: {
       "invalid_workspace_reviewer",
     );
   }
-  const suffix = randomBytes(8).toString("hex");
+  const tokenCandidate =
+    input.token ?? `rlri_${randomBytes(8).toString("hex")}_${randomBytes(32).toString("base64url")}`;
+  const tokenMatch = INVITATION_PATTERN.exec(tokenCandidate);
+  if (!tokenMatch) {
+    throw new TokenlessServiceError("Reviewer invitation token is invalid.", 400, "invalid_workspace_reviewer");
+  }
+  const suffix = tokenMatch[1]!;
   const invitationId = `wri_${suffix}`;
-  const token = `rlri_${suffix}_${randomBytes(32).toString("base64url")}`;
+  const token = tokenCandidate;
+  const manager = await requireManagerInTransaction(client, input.actorAddress, input.workspaceId);
+  if (projects.length) {
+    const projectPlaceholders = projects.map((_, index) => `$${index + 2}`).join(",");
+    const existing = await client.query(
+      `SELECT project_id FROM tokenless_assurance_projects
+       WHERE workspace_id=$1 AND project_id IN (${projectPlaceholders}) AND status='active'`,
+      [input.workspaceId, ...projects],
+    );
+    if (existing.rowCount !== projects.length) {
+      throw new TokenlessServiceError("A reviewer project was not found.", 404, "workspace_reviewers_not_found");
+    }
+  }
+  await client.query(
+    `INSERT INTO tokenless_workspace_reviewer_invitations
+     (invitation_id,workspace_id,token_hash,token_prefix,project_scope,max_private_sensitivity,
+      intended_account_address,intended_email_hash,intended_email_domain,access_expires_at,expires_at,
+      maximum_redemptions,redemption_count,created_by,created_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,0,$13,$14)`,
+    [
+      invitationId,
+      input.workspaceId,
+      digest(token),
+      suffix,
+      projects.length ? "selected" : "all",
+      ceiling,
+      intendedAccount,
+      intendedEmail ? digest(`${token}\0${intendedEmail}`) : null,
+      intendedDomain,
+      accessExpiresAt,
+      expiresAt,
+      maximumRedemptions,
+      manager,
+      now,
+    ],
+  );
+  for (const projectId of projects) {
+    await client.query(
+      `INSERT INTO tokenless_workspace_reviewer_invitation_projects
+       (invitation_id,workspace_id,project_id) VALUES ($1,$2,$3)`,
+      [invitationId, input.workspaceId, projectId],
+    );
+  }
+  await appendEvent(client, {
+    workspaceId: input.workspaceId,
+    invitationId,
+    eventType: "invitation_created",
+    actorReference: manager,
+    details: {
+      projectScope: projects.length ? "selected" : "all",
+      projectCount: projects.length,
+      maxPrivateSensitivity: ceiling,
+      maximumRedemptions,
+      accountBound: intendedAccount !== null,
+      contactBound: intendedEmail !== null,
+      domainBound: intendedDomain !== null,
+    },
+    now,
+  });
+  return {
+    invitationId,
+    token,
+    tokenPrefix: suffix,
+    accessExpiresAt: iso(accessExpiresAt),
+    expiresAt: expiresAt.toISOString(),
+    maximumRedemptions,
+  };
+}
+
+export async function createWorkspaceReviewerInvitation(
+  input: WorkspaceReviewerInvitationCreateInput & { accountAddress: string },
+) {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
-    const manager = await requireManagerInTransaction(client, input.accountAddress, input.workspaceId);
-    if (projects.length) {
-      const existing = await client.query(
-        `SELECT project_id FROM tokenless_assurance_projects
-         WHERE workspace_id=$1 AND project_id=ANY($2::text[]) AND status='active'`,
-        [input.workspaceId, projects],
-      );
-      if (existing.rowCount !== projects.length) {
-        throw new TokenlessServiceError("A reviewer project was not found.", 404, "workspace_reviewers_not_found");
-      }
-    }
-    await client.query(
-      `INSERT INTO tokenless_workspace_reviewer_invitations
-       (invitation_id,workspace_id,token_hash,token_prefix,project_scope,max_private_sensitivity,
-        intended_account_address,intended_email_hash,intended_email_domain,access_expires_at,expires_at,
-        maximum_redemptions,redemption_count,created_by,created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,0,$13,$14)`,
-      [
-        invitationId,
-        input.workspaceId,
-        digest(token),
-        suffix,
-        projects.length ? "selected" : "all",
-        ceiling,
-        intendedAccount,
-        intendedEmail ? digest(`${token}\0${intendedEmail}`) : null,
-        intendedDomain,
-        accessExpiresAt,
-        expiresAt,
-        maximumRedemptions,
-        manager,
-        now,
-      ],
-    );
-    for (const projectId of projects) {
-      await client.query(
-        `INSERT INTO tokenless_workspace_reviewer_invitation_projects
-         (invitation_id,workspace_id,project_id) VALUES ($1,$2,$3)`,
-        [invitationId, input.workspaceId, projectId],
-      );
-    }
-    await appendEvent(client, {
-      workspaceId: input.workspaceId,
-      invitationId,
-      eventType: "invitation_created",
-      actorReference: manager,
-      details: {
-        projectScope: projects.length ? "selected" : "all",
-        projectCount: projects.length,
-        maxPrivateSensitivity: ceiling,
-        maximumRedemptions,
-        accountBound: intendedAccount !== null,
-        contactBound: intendedEmail !== null,
-        domainBound: intendedDomain !== null,
-      },
-      now,
+    const invitation = await createWorkspaceReviewerInvitationInTransaction(client, {
+      ...input,
+      actorAddress: input.accountAddress,
     });
     await client.query("COMMIT");
-    return {
-      invitationId,
-      token,
-      tokenPrefix: suffix,
-      accessExpiresAt: iso(accessExpiresAt),
-      expiresAt: expiresAt.toISOString(),
-      maximumRedemptions,
-    };
+    return invitation;
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -479,7 +500,7 @@ async function verifiedEmail(client: PoolClient, principalAddress: string) {
      FROM tokenless_identity_bindings b
      JOIN tokenless_better_auth_users u ON u.id=b.provider_subject
      WHERE b.principal_id=$1 AND b.provider='better_auth' AND b.status='active'
-     ORDER BY b.last_used_at DESC LIMIT 1 FOR SHARE OF b`,
+     ORDER BY b.last_used_at DESC LIMIT 1 FOR SHARE`,
     [principalAddress],
   );
   const row = result.rows[0] as Row | undefined;
@@ -520,7 +541,7 @@ async function invitationByToken(client: PoolClient, token: string, lock: boolea
     `SELECT i.*,w.name AS workspace_name,w.status AS workspace_status
      FROM tokenless_workspace_reviewer_invitations i
      JOIN tokenless_workspaces w ON w.workspace_id=i.workspace_id
-     WHERE i.token_hash=$1 AND i.token_prefix=$2 LIMIT 1${lock ? " FOR UPDATE OF i" : ""}`,
+     WHERE i.token_hash=$1 AND i.token_prefix=$2 LIMIT 1${lock ? " FOR UPDATE" : ""}`,
     [digest(token), match[1]],
   );
   const row = result.rows[0] as Row | undefined;
@@ -647,40 +668,6 @@ export async function redeemWorkspaceReviewerInvitation(input: { accountAddress:
         [grantId, workspaceId, projectId],
       );
     }
-    const routingGroups = await client.query(
-      `SELECT legacy_group.group_id,policy.max_private_sensitivity
-       FROM tokenless_private_groups legacy_group
-       JOIN tokenless_private_group_policy_versions policy
-         ON policy.group_id=legacy_group.group_id AND policy.version=legacy_group.current_policy_version
-       WHERE legacy_group.workspace_id=$1 AND legacy_group.status='active'
-       ORDER BY legacy_group.group_id`,
-      [workspaceId],
-    );
-    for (const value of routingGroups.rows) {
-      const routingGroup = value as Row;
-      const routingSensitivity = sensitivity(text(routingGroup, "max_private_sensitivity")!);
-      if (
-        SENSITIVITIES.indexOf(routingSensitivity) >
-        SENSITIVITIES.indexOf(sensitivity(text(row, "max_private_sensitivity")!))
-      ) {
-        continue;
-      }
-      await client.query(
-        `INSERT INTO tokenless_private_group_memberships
-         (group_id,principal_address,role,status,allowed_project_ids_json,source_invitation_id,
-          membership_expires_at,joined_at,ended_at,end_reason,created_by,updated_at)
-         VALUES ($1,$2,'reviewer','active',$3,NULL,$4,$5,NULL,NULL,$6,$5)
-         ON CONFLICT (group_id,principal_address) DO NOTHING`,
-        [
-          text(routingGroup, "group_id"),
-          principalAddress,
-          JSON.stringify(projects),
-          date(row, "access_expires_at"),
-          now,
-          text(row, "created_by"),
-        ],
-      );
-    }
     await client.query(
       `INSERT INTO tokenless_workspace_reviewer_invitation_redemptions
        (invitation_id,workspace_id,principal_address,grant_id,redeemed_at) VALUES ($1,$2,$3,$4,$5)`,
@@ -793,6 +780,30 @@ async function endWorkspaceReviewer(input: {
        ) AND principal_address=$5 AND status='active'`,
       [input.status, input.now, input.reason, input.workspaceId, principalAddress],
     );
+    const revokedLeases = await client.query(
+      `UPDATE tokenless_assurance_artifact_leases
+       SET revoked_at=$1
+       WHERE workspace_id=$2 AND account_address=$3
+         AND assignment_id IS NOT NULL AND revoked_at IS NULL
+       RETURNING lease_id`,
+      [input.now, input.workspaceId, principalAddress],
+    );
+    const expiredAccepted = await client.query(
+      `UPDATE tokenless_assurance_assignments
+       SET lease_state='expired',updated_at=$1
+       WHERE workspace_id=$2 AND reviewer_account_address=$3
+         AND status='accepted' AND lease_state<>'expired'
+       RETURNING assignment_id`,
+      [input.now, input.workspaceId, principalAddress],
+    );
+    const expiredAcceptedDirect = await client.query(
+      `UPDATE tokenless_private_unpaid_review_assignments
+       SET lease_state='expired',updated_at=$1
+       WHERE workspace_id=$2 AND reviewer_account_address=$3
+         AND status='accepted' AND lease_state<>'expired'
+       RETURNING assignment_id`,
+      [input.now, input.workspaceId, principalAddress],
+    );
     const released = await client.query(
       `UPDATE tokenless_assurance_assignments
        SET status='released',lease_state='expired',updated_at=$1
@@ -846,6 +857,8 @@ async function endWorkspaceReviewer(input: {
       details: {
         reason: input.reason,
         revokedGrantCount: revoked.rowCount,
+        revokedArtifactLeaseCount: revokedLeases.rowCount,
+        expiredAcceptedAssignmentCount: (expiredAccepted.rowCount ?? 0) + (expiredAcceptedDirect.rowCount ?? 0),
         releasedReservationCount: (released.rowCount ?? 0) + (expiredDirect.rowCount ?? 0),
       },
       now: input.now,

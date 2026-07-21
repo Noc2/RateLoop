@@ -5,7 +5,7 @@ import test from "node:test";
 
 const routeRoot = join(process.cwd(), "app", "api", "account", "workspaces", "[workspaceId]", "agent-setup");
 const coordinatorSource = readFileSync(join(process.cwd(), "lib", "tokenless", "workspaceAgentSetup.ts"), "utf8");
-const privateGroupsSource = readFileSync(join(process.cwd(), "lib", "tokenless", "privateGroups.ts"), "utf8");
+const workspaceReviewersSource = readFileSync(join(process.cwd(), "lib", "tokenless", "workspaceReviewers.ts"), "utf8");
 
 function routeSource(name: string) {
   return readFileSync(join(routeRoot, name, "route.ts"), "utf8");
@@ -60,11 +60,11 @@ test("invitation insertion and setup completion share the finalizer transaction 
   );
   assert.match(
     finalizer,
-    /client\.query\("BEGIN"\)[\s\S]*createPrivateGroupInvitationInTransaction\(client[\s\S]*UPDATE tokenless_workspace_agent_setups[\s\S]*client\.query\("COMMIT"\)[\s\S]*client\.query\("ROLLBACK"\)/u,
+    /client\.query\("BEGIN"\)[\s\S]*createWorkspaceReviewerInvitationInTransaction\(client[\s\S]*UPDATE tokenless_workspace_agent_setups[\s\S]*client\.query\("COMMIT"\)[\s\S]*client\.query\("ROLLBACK"\)/u,
   );
-  const invitationSeam = privateGroupsSource.slice(
-    privateGroupsSource.indexOf("export async function createPrivateGroupInvitationInTransaction"),
-    privateGroupsSource.indexOf("export async function createPrivateGroupInvitation(input"),
+  const invitationSeam = workspaceReviewersSource.slice(
+    workspaceReviewersSource.indexOf("export async function createWorkspaceReviewerInvitationInTransaction"),
+    workspaceReviewersSource.indexOf("export async function createWorkspaceReviewerInvitation("),
   );
   assert.doesNotMatch(invitationSeam, /client\.query\("(?:BEGIN|COMMIT|ROLLBACK)"\)/u);
 });

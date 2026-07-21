@@ -72,6 +72,13 @@ type PrivateUnpaidDelivery = Awaited<ReturnType<typeof requestPrivateUnpaidHuman
 
 const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const ACTIVE_OPPORTUNITY_STATES = new Set(["approval_required", "request_ready", "pending", "blocked"]);
+const PRIVATE_SENSITIVITIES = ["internal", "confidential", "restricted", "regulated"] as const;
+
+type PrivateSensitivity = (typeof PRIVATE_SENSITIVITIES)[number];
+
+function exactPrivateSensitivity(value: string | null): PrivateSensitivity | null {
+  return value && PRIVATE_SENSITIVITIES.includes(value as PrivateSensitivity) ? (value as PrivateSensitivity) : null;
+}
 
 export type HumanReviewRoutingMaterial =
   | {
@@ -590,10 +597,6 @@ async function loadFrozenContext(
   };
 }
 
-function parseAllowedProjects(value: unknown) {
-  return stringArray(value, "private membership project IDs");
-}
-
 async function resolveExactPrivateBinding(
   _principal: IntegrationPrincipal,
   context: FrozenHumanReviewRoutingContext,
@@ -627,7 +630,9 @@ async function resolveExactPrivateBinding(
   const paidIdentityRequired = profile.lane === "private_invited_paid" || profile.feedbackBonusEnabled;
   const result = await dbClient.execute({
     sql: `SELECT p.project_id,p.retention_days,c.cohort_id,c.capacity,c.active_reservations,
-                 cr.reviewer_account_address,cr.qualification_provenance_json,m.allowed_project_ids_json,
+                 cr.reviewer_account_address,cr.qualification_provenance_json,
+                 reviewer_grant.grant_id,reviewer_grant.grant_hash,
+                 reviewer_grant.max_private_sensitivity,
                  q.expertise_definition_id,q.expertise_definition_version,q.expertise_definition_hash,
                  wb.principal_id AS reviewer_principal_id,wb.wallet_address AS reviewer_payout_account
           FROM tokenless_assurance_projects p
@@ -643,10 +648,25 @@ async function resolveExactPrivateBinding(
             ON cr.project_id=p.project_id AND cr.cohort_id=c.cohort_id AND cr.status='active'
            AND cr.active_reservations<cr.maximum_active_assignments
            AND (cr.qualification_expires_at IS NULL OR cr.qualification_expires_at>?)
-          JOIN tokenless_private_group_memberships m
-            ON m.group_id=g.group_id AND m.principal_address=cr.reviewer_account_address
-           AND m.status='active' AND m.joined_at<=?
-           AND (m.membership_expires_at IS NULL OR m.membership_expires_at>?)
+          JOIN tokenless_workspace_reviewers reviewer
+            ON reviewer.workspace_id=p.workspace_id AND reviewer.principal_address=cr.reviewer_account_address
+           AND reviewer.status='active'
+          JOIN tokenless_principals reviewer_principal
+            ON reviewer_principal.principal_id=reviewer.principal_address AND reviewer_principal.status='active'
+          JOIN tokenless_workspace_reviewer_access_grants reviewer_grant
+            ON reviewer_grant.workspace_id=p.workspace_id
+           AND reviewer_grant.principal_address=reviewer.principal_address
+           AND reviewer_grant.revoked_at IS NULL AND reviewer_grant.valid_from<=?
+           AND (reviewer_grant.valid_until IS NULL OR reviewer_grant.valid_until>?)
+          LEFT JOIN tokenless_workspace_reviewer_access_grant_projects reviewer_grant_project
+            ON reviewer_grant_project.workspace_id=p.workspace_id
+           AND reviewer_grant_project.grant_id=reviewer_grant.grant_id
+           AND reviewer_grant_project.project_id=p.project_id
+          LEFT JOIN tokenless_workspace_reviewer_invitation_redemptions reviewer_redemption
+            ON reviewer_redemption.workspace_id=p.workspace_id
+           AND reviewer_redemption.grant_id=reviewer_grant.grant_id
+           AND reviewer_redemption.principal_address=reviewer.principal_address
+           AND reviewer_redemption.invitation_id=reviewer_grant.source_invitation_id
           LEFT JOIN tokenless_reviewer_qualifications q
             ON q.workspace_id=p.workspace_id AND q.reviewer_account_address=cr.reviewer_account_address
            AND q.reviewer_source='customer_invited' AND q.qualification_kind='expertise'
@@ -656,7 +676,10 @@ async function resolveExactPrivateBinding(
            AND wb.purpose='payout' AND wb.revoked_at IS NULL
           WHERE p.workspace_id=? AND p.status='active' AND p.visibility='private'
             AND p.data_classification=? AND p.private_sensitivity=?
-          ORDER BY p.project_id,c.cohort_id,cr.reviewer_account_address`,
+            AND (reviewer_grant.project_scope='all' OR reviewer_grant_project.project_id IS NOT NULL)
+            AND (reviewer_grant.source_invitation_id IS NULL OR reviewer_redemption.grant_id IS NOT NULL)
+          ORDER BY p.project_id,c.cohort_id,cr.reviewer_account_address,
+                   reviewer_grant.valid_until DESC NULLS FIRST,reviewer_grant.created_at,reviewer_grant.grant_id`,
     args: [
       group.id,
       group.policyVersion,
@@ -687,6 +710,13 @@ async function resolveExactPrivateBinding(
     const cohortId = text(row, "cohort_id");
     const reviewer = text(row, "reviewer_account_address");
     if (!projectId || !cohortId || !reviewer) continue;
+    const grantSensitivity = exactPrivateSensitivity(text(row, "max_private_sensitivity"));
+    if (
+      !grantSensitivity ||
+      PRIVATE_SENSITIVITIES.indexOf(grantSensitivity) < PRIVATE_SENSITIVITIES.indexOf(profile.privateSensitivity)
+    ) {
+      continue;
+    }
     const reviewerPrincipalId = text(row, "reviewer_principal_id");
     const reviewerPayoutAccount = text(row, "reviewer_payout_account")?.toLowerCase() ?? null;
     const paidReviewer =
@@ -701,8 +731,6 @@ async function resolveExactPrivateBinding(
     ) {
       continue;
     }
-    const allowedProjects = parseAllowedProjects(row.allowed_project_ids_json);
-    if (allowedProjects.length > 0 && !allowedProjects.includes(projectId)) continue;
     const key = `${projectId}\0${cohortId}`;
     const candidate = candidates.get(key) ?? {
       projectId,

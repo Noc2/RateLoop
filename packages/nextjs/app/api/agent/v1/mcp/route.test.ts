@@ -29,11 +29,7 @@ import {
 } from "~~/lib/tokenless/agentOAuth";
 import { __setArtifactPrivacyRuntimeForTests } from "~~/lib/tokenless/artifactPrivacy";
 import { putHumanReviewConfigurationForOwner } from "~~/lib/tokenless/humanReviewConfiguration";
-import {
-  createPrivateGroup,
-  createPrivateGroupInvitation,
-  redeemPrivateGroupInvitation,
-} from "~~/lib/tokenless/privateGroups";
+import { createPrivateGroup } from "~~/lib/tokenless/privateGroups";
 import { createAgentPublishingPolicy, createWorkspace } from "~~/lib/tokenless/productCore";
 import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
 import {
@@ -43,6 +39,10 @@ import {
   finalizeWorkspaceAgentSetup,
   getWorkspaceAgentSetup,
 } from "~~/lib/tokenless/workspaceAgentSetup";
+import {
+  createWorkspaceReviewerInvitation,
+  redeemWorkspaceReviewerInvitation,
+} from "~~/lib/tokenless/workspaceReviewers";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const originalSamplerKey = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY;
@@ -228,11 +228,15 @@ async function setupOAuthConnectionIntent() {
 async function addRedeemedPrivateReviewer(input: {
   accountAddress: string;
   email: string;
-  groupId: string;
   ownerAddress: string;
   workspaceId: string;
 }) {
   const now = new Date();
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_principals (principal_id,status,created_at,updated_at)
+          VALUES (?,'active',?,?)`,
+    args: [input.accountAddress, now, now],
+  });
   await dbClient.execute({
     sql: `INSERT INTO tokenless_browser_identities
           (principal_address,thirdweb_user_id,auth_provider,primary_email,email_verified,email_domain,
@@ -240,15 +244,15 @@ async function addRedeemedPrivateReviewer(input: {
           VALUES (?,?,'email',?,true,'example.test',NULL,?,?,?)`,
     args: [input.accountAddress, `thirdweb-${input.accountAddress}`, input.email, now, now, now],
   });
-  const invitation = await createPrivateGroupInvitation({
+  const invitation = await createWorkspaceReviewerInvitation({
     accountAddress: input.ownerAddress,
     workspaceId: input.workspaceId,
-    groupId: input.groupId,
+    maxPrivateSensitivity: "confidential",
     intendedAccountAddress: input.accountAddress,
-    membershipExpiresAt: new Date(now.getTime() + 30 * 86_400_000),
+    accessExpiresAt: new Date(now.getTime() + 30 * 86_400_000),
     now,
   });
-  await redeemPrivateGroupInvitation({ accountAddress: input.accountAddress, token: invitation.token, now });
+  await redeemWorkspaceReviewerInvitation({ accountAddress: input.accountAddress, token: invitation.token, now });
 }
 
 test("pairing initialization describes the owner-initiated registration flow without instruction overrides", async () => {
@@ -597,14 +601,12 @@ test("finished automatic private setup lets the connected agent assign an eligib
   await addRedeemedPrivateReviewer({
     accountAddress: PRIVATE_REVIEWER_A,
     email: "setup-reviewer-a@example.test",
-    groupId: group.groupId,
     ownerAddress: principalId,
     workspaceId,
   });
   await addRedeemedPrivateReviewer({
     accountAddress: PRIVATE_REVIEWER_B,
     email: "setup-reviewer-b@example.test",
-    groupId: group.groupId,
     ownerAddress: principalId,
     workspaceId,
   });
@@ -908,7 +910,7 @@ test("OAuth keeps one stable tool list and fails closed for unavailable paid-net
     openWorldHint: true,
   });
   const requestReviewTool = tool("rateloop_request_review");
-  assert.match(requestReviewTool?.description ?? "", /exact owner-bound authority and lane/);
+  assert.match(requestReviewTool?.description ?? "", /exact reviewer-visible source and completed candidate/);
   assert.match(requestReviewTool?.description ?? "", /Check-only records the requirement without preparing/);
   assert.match(requestReviewTool?.description ?? "", /requires one binary agent-written question/);
   assert.match(requestReviewTool?.description ?? "", /derives the panel, response window, bounty, fee/);

@@ -1,5 +1,6 @@
 import type { HumanAssurancePrivateReviewCreateResponse, TokenlessAskResponse } from "@rateloop/sdk";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
@@ -16,6 +17,10 @@ type IntegrationPrincipal = Extract<AgentMcpPrincipal, { kind: "integration" }>;
 
 const NOW = new Date("2026-07-16T12:00:00.000Z");
 const HASH = `sha256:${"58".repeat(32)}` as const;
+const SOURCE_PAYLOAD = "public or encrypted source";
+const SUGGESTION_PAYLOAD = "candidate suggestion";
+const SOURCE_PAYLOAD_HASH = `sha256:${createHash("sha256").update(SOURCE_PAYLOAD).digest("hex")}` as const;
+const SUGGESTION_PAYLOAD_HASH = `sha256:${createHash("sha256").update(SUGGESTION_PAYLOAD).digest("hex")}` as const;
 const REVIEWERS = ["0x1111111111111111111111111111111111111111", "0x2222222222222222222222222222222222222222"];
 const PAID_REVIEWERS = REVIEWERS.map(payoutAccount => ({
   principalId: `rlp_${payoutAccount.slice(2, 26)}`,
@@ -116,7 +121,7 @@ function context(input: {
       audiencePolicyHash: frozenAudiencePolicy.policyHash,
       audiencePolicy: frozenAudiencePolicy.policy,
     },
-    contentCommitments: { source: HASH, suggestion: HASH },
+    contentCommitments: { source: SOURCE_PAYLOAD_HASH, suggestion: SUGGESTION_PAYLOAD_HASH },
     decision: "required",
     lifecycle: { state: "approval_required", revision: 2 },
     binding: { id: "binding_agent_flow_e2e", version: 1, hash: HASH, authority: input.authority },
@@ -305,8 +310,8 @@ test("check-only, owner-approval, and automatic authority route each supported a
       const result = await route({
         principal,
         opportunityId: frozen.opportunityId,
-        sourcePayload: "public or encrypted source",
-        suggestionPayload: "candidate suggestion",
+        sourcePayload: SOURCE_PAYLOAD,
+        suggestionPayload: SUGGESTION_PAYLOAD,
         material: material(frozen),
         now: NOW,
       });
@@ -365,8 +370,8 @@ test("private unpaid routing needs publish scope only while a Feedback Bonus als
   const assigned = await unpaidFixture.route({
     principal,
     opportunityId: unpaid.opportunityId,
-    sourcePayload: "private source",
-    suggestionPayload: "private suggestion",
+    sourcePayload: SOURCE_PAYLOAD,
+    suggestionPayload: SUGGESTION_PAYLOAD,
     material: material(unpaid),
     now: NOW,
   });
@@ -386,8 +391,8 @@ test("private unpaid routing needs publish scope only while a Feedback Bonus als
   const blocked = await bonusFixture.route({
     principal,
     opportunityId: bonus.opportunityId,
-    sourcePayload: "private source",
-    suggestionPayload: "private suggestion",
+    sourcePayload: SOURCE_PAYLOAD,
+    suggestionPayload: SUGGESTION_PAYLOAD,
     material: material(bonus),
     now: NOW,
   });

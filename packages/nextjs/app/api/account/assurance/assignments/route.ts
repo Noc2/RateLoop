@@ -16,10 +16,12 @@ export async function GET(request: NextRequest) {
           accountAddress: session.principalId,
           query: params.get("q") ?? "",
           state: params.get("state") ?? "",
+          view: params.get("view") ?? "active",
           limit: Number(params.get("limit") ?? 50),
         }),
         query: params.get("q") ?? "",
         state: params.get("state") ?? "",
+        view: params.get("view") ?? "active",
       },
       { headers: { "Cache-Control": "private, no-store, max-age=0" } },
     );

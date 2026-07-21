@@ -9,10 +9,6 @@ import { AGENT_SETUP_SCREEN_STEPS, type AgentSetupScreenStep } from "~~/lib/toke
 import { getHumanReviewConfigurationForOwner } from "~~/lib/tokenless/humanReviewConfiguration";
 import { sameAutomaticHumanReviewGrantScopes } from "~~/lib/tokenless/humanReviewGrantScopes";
 import { recordWorkspaceSetupFunnelEvent } from "~~/lib/tokenless/onboardingObservability";
-import {
-  createPrivateGroupInvitation,
-  createPrivateGroupInvitationInTransaction,
-} from "~~/lib/tokenless/privateGroups";
 import { MAXIMUM_REVIEW_PANEL_SIZE } from "~~/lib/tokenless/reviewRequestProfiles";
 import {
   type ReviewerExpertiseRequirement,
@@ -27,6 +23,10 @@ import {
   type WorkspacePrivateReviewRoutingReadiness,
   provisionWorkspacePrivateReviewRouting,
 } from "~~/lib/tokenless/workspacePrivateReviewRouting";
+import {
+  createWorkspaceReviewerInvitation,
+  createWorkspaceReviewerInvitationInTransaction,
+} from "~~/lib/tokenless/workspaceReviewers";
 
 export { agentSetupUrl } from "~~/lib/tokenless/agentSetupNavigation";
 export type { AgentSetupScreenStep } from "~~/lib/tokenless/agentSetupNavigation";
@@ -955,7 +955,7 @@ export async function configureWorkspaceSetupPeople(input: {
       throw new TokenlessServiceError("Reviewer group is unavailable.", 409, "agent_setup_group_unavailable");
     }
   }
-  let invitation: Awaited<ReturnType<typeof createPrivateGroupInvitation>> | null = null;
+  let invitation: Awaited<ReturnType<typeof createWorkspaceReviewerInvitation>> | null = null;
   if (input.createInvitation === true) {
     if (!boundGroupId || input.decision !== "invited") {
       throw new TokenlessServiceError(
@@ -977,36 +977,27 @@ export async function configureWorkspaceSetupPeople(input: {
     ) {
       throw new TokenlessServiceError("Invitation specialist areas are invalid.", 400, "invalid_agent_setup_people");
     }
-    const expertiseRequirements = review.requestProfile.expertiseRequirements ?? [];
-    const expertiseDefinitions = expertiseDefinitionIds.map(definitionId => {
-      const requirement = expertiseRequirements.find(candidate => candidate.definitionId === definitionId);
-      if (!requirement || requirement.sourceScope !== "customer_invited") {
-        throw new TokenlessServiceError(
-          "An invitation specialist area is not required by this review profile.",
-          400,
-          "invalid_agent_setup_people",
-        );
-      }
-      return {
-        definitionId: requirement.definitionId,
-        definitionVersion: requirement.definitionVersion,
-        definitionHash: requirement.definitionHash,
-      };
-    });
-    if (expertiseDefinitions.length > 0 && !intendedEmail) {
+    if (expertiseDefinitionIds.length > 0) {
       throw new TokenlessServiceError(
-        "Enter the recipient email before assigning intended specialist areas.",
+        "Confirm specialist knowledge after the reviewer accepts the invitation.",
         400,
         "invalid_agent_setup_people",
       );
     }
-    invitation = await createPrivateGroupInvitation({
+    const maxPrivateSensitivity = review.requestProfile.privateSensitivity;
+    if (!maxPrivateSensitivity) {
+      throw new TokenlessServiceError(
+        "Private reviewer access requires an exact sensitivity limit.",
+        409,
+        "agent_setup_review_configuration_required",
+      );
+    }
+    invitation = await createWorkspaceReviewerInvitation({
       accountAddress: access.actor,
       workspaceId: input.workspaceId,
-      groupId: boundGroupId,
+      maxPrivateSensitivity,
       intendedEmail,
       maximumRedemptions: 1,
-      expertiseDefinitions,
     });
   }
   const now = new Date();
@@ -1336,7 +1327,7 @@ function setupFinalizationInvitationToken(workspaceId: string, idempotencyKey: s
   const domain = `rateloop.workspace-agent-setup-invitation.v1\0${workspaceId}\0${idempotencyKey}`;
   const prefix = digest(`${domain}\0prefix`).slice(0, 16);
   const secret = createHash("sha256").update(`${domain}\0secret`).digest("base64url");
-  return `rlgi_${prefix}_${secret}`;
+  return `rlri_${prefix}_${secret}`;
 }
 
 function setupFinalizationHash(value: string) {
@@ -1371,9 +1362,9 @@ async function setupFinalizationInvitationReplay(
     );
   }
   const invitationResult = await client.query(
-    `SELECT invitation_id,token_hash,token_prefix,expires_at,membership_expires_at,
+    `SELECT invitation_id,token_hash,token_prefix,expires_at,access_expires_at,
             maximum_redemptions,redemption_count,revoked_at
-     FROM tokenless_private_group_invitations
+     FROM tokenless_workspace_reviewer_invitations
      WHERE workspace_id=$1 AND invitation_id=$2 LIMIT 1 FOR SHARE`,
     [input.workspaceId, input.invitationId],
   );
@@ -1395,25 +1386,13 @@ async function setupFinalizationInvitationReplay(
       : redemptionCount >= maximumRedemptions
         ? "redeemed"
         : "active";
-  const expertiseResult = await client.query(
-    `SELECT expertise_definition_id,expertise_definition_version,expertise_definition_hash,expires_at
-     FROM tokenless_private_group_invitation_expertise_attestations
-     WHERE invitation_id=$1 ORDER BY expertise_definition_id`,
-    [input.invitationId],
-  );
   return {
     invitationId: input.invitationId,
     token: status === "active" ? input.token : null,
     tokenPrefix: rowString(invitation, "token_prefix"),
     expiresAt,
-    membershipExpiresAt: rowDate(invitation, "membership_expires_at"),
+    accessExpiresAt: rowDate(invitation, "access_expires_at"),
     maximumRedemptions,
-    expertiseDefinitions: (expertiseResult.rows as Row[]).map(row => ({
-      definitionId: rowString(row, "expertise_definition_id")!,
-      definitionVersion: rowNumber(row, "expertise_definition_version")!,
-      definitionHash: rowString(row, "expertise_definition_hash")!,
-    })),
-    expertiseExpiresAt: rowDate(expertiseResult.rows[0] as Row | undefined, "expires_at"),
     status,
   };
 }
@@ -1688,7 +1667,7 @@ export async function finalizeWorkspaceAgentSetup(input: {
       `SELECT b.selection_policy_id,b.selection_policy_version,b.publishing_policy_id,b.publishing_policy_version,
               b.authority,r.profile_id,r.version AS profile_version,r.profile_hash,
               r.audience,r.private_group_id,r.configuration_status,r.response_window_seconds,r.panel_size,
-              r.compensation_mode,r.feedback_bonus_enabled,r.expertise_requirements_json
+              r.compensation_mode,r.feedback_bonus_enabled,r.expertise_requirements_json,r.private_sensitivity
        FROM tokenless_agent_human_review_bindings b
        JOIN tokenless_agent_review_policies p
          ON p.workspace_id=b.workspace_id AND p.policy_id=b.selection_policy_id
@@ -1795,25 +1774,9 @@ export async function finalizeWorkspaceAgentSetup(input: {
         "invalid_agent_setup_people",
       );
     }
-    const expertiseRequirements = parseJson<ReviewerExpertiseRequirement[]>(binding.expertise_requirements_json, []);
-    const expertiseDefinitions = normalizedRequest.expertiseDefinitionIds.map(definitionId => {
-      const requirement = expertiseRequirements.find(candidate => candidate.definitionId === definitionId);
-      if (!requirement || requirement.sourceScope !== "customer_invited") {
-        throw new TokenlessServiceError(
-          "An invitation specialist area is not required by this review profile.",
-          400,
-          "invalid_agent_setup_people",
-        );
-      }
-      return {
-        definitionId: requirement.definitionId,
-        definitionVersion: requirement.definitionVersion,
-        definitionHash: requirement.definitionHash,
-      };
-    });
-    if (expertiseDefinitions.length > 0 && !normalizedRequest.intendedEmail) {
+    if (normalizedRequest.expertiseDefinitionIds.length > 0) {
       throw new TokenlessServiceError(
-        "Enter the recipient email before assigning intended specialist areas.",
+        "Confirm specialist knowledge after the reviewer accepts the invitation.",
         400,
         "invalid_agent_setup_people",
       );
@@ -1831,15 +1794,27 @@ export async function finalizeWorkspaceAgentSetup(input: {
         "invalid_agent_setup_people",
       );
     }
+    const maxPrivateSensitivity = rowString(binding, "private_sensitivity") as
+      | "internal"
+      | "confidential"
+      | "restricted"
+      | "regulated"
+      | null;
+    if (normalizedRequest.createInvitation && !maxPrivateSensitivity) {
+      throw new TokenlessServiceError(
+        "Private reviewer access requires an exact sensitivity limit.",
+        409,
+        "agent_setup_review_configuration_required",
+      );
+    }
     const invitation = normalizedRequest.createInvitation
-      ? await createPrivateGroupInvitationInTransaction(client, {
+      ? await createWorkspaceReviewerInvitationInTransaction(client, {
           actorAddress: access.actor,
           workspaceId: input.workspaceId,
-          groupId: groupId!,
+          maxPrivateSensitivity: maxPrivateSensitivity!,
           intendedEmail: normalizedRequest.intendedEmail,
           intendedEmailDomain: normalizedRequest.intendedEmailDomain,
           maximumRedemptions: normalizedRequest.maximumRedemptions,
-          expertiseDefinitions,
           token: invitationToken,
           now,
         })
