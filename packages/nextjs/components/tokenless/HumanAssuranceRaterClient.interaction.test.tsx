@@ -114,6 +114,143 @@ test("private-review links carry both invitation credentials", () => {
   assert.match(card, /terms=\$\{encodeURIComponent\(assignment\.confidentialityTermsHash \?\? ""\)\}/);
 });
 
+test("an unchanged private-group policy opens without asking for terms again", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
+  const previousFetch = globalThis.fetch;
+  const termsHash = `sha256:${"a".repeat(64)}`;
+  const acceptanceBody: { current: Record<string, unknown> | null } = { current: null };
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url === "/api/auth/session") return Response.json(authenticatedSession(PRINCIPAL_A));
+    if (url.includes("/accept?terms=")) {
+      return Response.json({
+        assignmentId: binaryTask.assignmentId,
+        state: "ready",
+        termsAccepted: true,
+        responseDeadline: "2030-01-01T00:00:00.000Z",
+      });
+    }
+    if (url.endsWith("/accept")) {
+      acceptanceBody.current = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return Response.json({ accepted: true });
+    }
+    if (url.endsWith("/task")) return Response.json(binaryTask);
+    throw new Error(`Unexpected request: ${url}`);
+  };
+
+  try {
+    const view = render(
+      <HumanAssuranceRaterClient
+        principalId={PRINCIPAL_A}
+        initialAssignmentId={binaryTask.assignmentId}
+        initialTermsHash={termsHash}
+      />,
+    );
+    await waitFor(() => assert.ok(view.getByText("Confidentiality terms already accepted for this reviewer group.")));
+    assert.equal(view.queryByRole("checkbox"), null);
+    await userEvent.setup({ document }).click(view.getByRole("button", { name: "Open assignment" }));
+    await waitFor(() => assert.ok(view.getByRole("heading", { name: "Complete your assigned review" })));
+    assert.equal(acceptanceBody.current?.confidentialityTermsAccepted, false);
+    assert.equal(acceptanceBody.current?.confidentialityTermsHash, termsHash);
+  } finally {
+    cleanup();
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
+test("a closed private review has one terminal recovery path", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
+  const previousFetch = globalThis.fetch;
+  const termsHash = `sha256:${"b".repeat(64)}`;
+  globalThis.fetch = async input => {
+    const url = String(input);
+    if (url === "/api/auth/session") return Response.json(authenticatedSession(PRINCIPAL_A));
+    if (url.includes("/accept?terms=")) {
+      return Response.json({
+        assignmentId: binaryTask.assignmentId,
+        state: "closed",
+        termsAccepted: false,
+        responseDeadline: "2026-01-01T00:00:00.000Z",
+      });
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  };
+
+  try {
+    const view = render(
+      <HumanAssuranceRaterClient
+        principalId={PRINCIPAL_A}
+        initialAssignmentId={binaryTask.assignmentId}
+        initialTermsHash={termsHash}
+      />,
+    );
+    await waitFor(() => assert.ok(view.getByText("Review window closed")));
+    assert.equal(view.queryByRole("button", { name: "Accept terms and open assignment" }), null);
+    assert.equal(view.queryByRole("button", { name: "Restore assignment access" }), null);
+    assert.equal(
+      view.getByRole("link", { name: "Return to Review work" }).getAttribute("href"),
+      "/human?scope=private",
+    );
+  } finally {
+    cleanup();
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
+test("a recoverable reservation shows restore instead of a second acceptance action", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
+  const previousFetch = globalThis.fetch;
+  const termsHash = `sha256:${"c".repeat(64)}`;
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url === "/api/auth/session") return Response.json(authenticatedSession(PRINCIPAL_A));
+    if (url.includes("/accept?terms=")) {
+      return Response.json({
+        assignmentId: binaryTask.assignmentId,
+        state: "recoverable",
+        termsAccepted: false,
+        responseDeadline: "2030-01-01T00:00:00.000Z",
+      });
+    }
+    if (url.endsWith("/recover") && init?.method === "POST") {
+      return Response.json(
+        { error: "Assignment cannot be recovered.", code: "assignment_recovery_unavailable" },
+        { status: 409 },
+      );
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  };
+
+  try {
+    const view = render(
+      <HumanAssuranceRaterClient
+        principalId={PRINCIPAL_A}
+        initialAssignmentId={binaryTask.assignmentId}
+        initialTermsHash={termsHash}
+      />,
+    );
+    await waitFor(() => assert.ok(view.getByRole("button", { name: "Restore assignment access" })));
+    assert.equal(view.queryByRole("button", { name: "Accept terms and open assignment" }), null);
+    await userEvent.setup({ document }).click(view.getByRole("button", { name: "Restore assignment access" }));
+    await waitFor(() => assert.ok(view.getByText("Assignment unavailable")));
+    assert.equal(view.queryByRole("button", { name: "Accept terms and open assignment" }), null);
+  } finally {
+    cleanup();
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
 test("an owner-fixed private task shows source and output separately and submits the binary rating", async () => {
   const restoreDom = installTestDom();
   const { cleanup, render, waitFor } = await import("@testing-library/react");

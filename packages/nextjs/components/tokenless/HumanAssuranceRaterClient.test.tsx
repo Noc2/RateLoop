@@ -27,7 +27,7 @@ test("private rater queue opens one assigned task without unrelated eligibility 
   assert.match(html, /Only your assigned, blinded cases are returned/);
   assert.match(html, /Private artifact access is short-lived and logged/);
   assert.match(html, /Do not copy, share, or reuse assigned material/);
-  assert.ok(html.indexOf("Privacy and access") < html.indexOf("I received and accept"));
+  assert.ok(html.indexOf("Privacy and access") < html.indexOf("I accept this reviewer group"));
   assert.doesNotMatch(html, /<details/);
   assert.doesNotMatch(html, /Capability status|Review eligibility|No capability evidence is shown/);
   assert.doesNotMatch(html, /Tier \d|World ID|Self\.xyz|passport uniqueness|guaranteed base|on-chain payment/i);

@@ -2,8 +2,12 @@ import { createHash } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
-import { dbPool } from "~~/lib/db";
+import { dbClient, dbPool } from "~~/lib/db";
 import { transitionHumanReviewOpportunityLifecycleInTransaction } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
+import {
+  hasAcceptedPrivateGroupPolicy,
+  requirePrivateGroupPolicyAcceptance,
+} from "~~/lib/tokenless/privateGroupPolicyAcceptances";
 import type { ProductPrincipal } from "~~/lib/tokenless/productCore";
 import { qualificationProvenanceSatisfiesExpertise } from "~~/lib/tokenless/reviewerExpertise";
 import { exactReviewerExpertiseDefinitionKey } from "~~/lib/tokenless/reviewerExpertiseAssignments";
@@ -932,6 +936,7 @@ async function upsertPrivateArtifactLease(
 
 export async function acceptPrivateUnpaidReviewAssignment(input: {
   assignmentId: string;
+  confidentialityTermsAccepted?: boolean;
   confidentialityTermsHash?: string;
   reviewerAccountAddress: string;
   now?: Date;
@@ -944,7 +949,7 @@ export async function acceptPrivateUnpaidReviewAssignment(input: {
     await client.query("BEGIN");
     const result = await client.query(
       `SELECT a.*, d.response_deadline AS delivery_response_deadline,
-              d.private_group_policy_hash,d.status AS delivery_status,
+              d.private_group_policy_version,d.private_group_policy_hash,d.status AS delivery_status,
               l.state AS lifecycle_state,
               f.source_artifact_id, f.suggestion_artifact_id,p.compensation_mode,
               m.status AS membership_status, m.joined_at AS current_membership_joined_at,
@@ -965,10 +970,22 @@ export async function acceptPrivateUnpaidReviewAssignment(input: {
       [input.assignmentId, reviewer],
     );
     const row = result.rows[0] as Row | undefined;
-    if (row && text(row, "status") === "expired") {
-      throw new TokenlessServiceError("Assignment reservation expired.", 410, "assignment_expired");
-    }
     if (!row || !["reserved", "accepted"].includes(text(row, "status") ?? "")) {
+      if (row && text(row, "status") === "expired") {
+        const responseDeadline = date(row, "response_deadline");
+        if (
+          responseDeadline <= now ||
+          text(row, "delivery_status") !== "pending" ||
+          text(row, "lifecycle_state") !== "pending"
+        ) {
+          throw new TokenlessServiceError(
+            "This review window has closed. Return to Review work for a new assignment.",
+            410,
+            "assignment_closed",
+          );
+        }
+        throw new TokenlessServiceError("Assignment reservation expired.", 410, "assignment_expired");
+      }
       throw new TokenlessServiceError("Private review assignment not found.", 404, "assignment_not_found");
     }
     if (
@@ -978,6 +995,17 @@ export async function acceptPrivateUnpaidReviewAssignment(input: {
       throw new TokenlessServiceError("Confidentiality terms changed.", 409, "confidentiality_terms_mismatch");
     }
     const responseDeadline = date(row, "response_deadline");
+    if (
+      responseDeadline <= now ||
+      text(row, "delivery_status") !== "pending" ||
+      text(row, "lifecycle_state") !== "pending"
+    ) {
+      throw new TokenlessServiceError(
+        "This review window has closed. Return to Review work for a new assignment.",
+        410,
+        "assignment_closed",
+      );
+    }
     const allowedProjects = parseStringArray(
       row.current_allowed_project_ids_json,
       "current private-group project allowlist",
@@ -986,9 +1014,6 @@ export async function acceptPrivateUnpaidReviewAssignment(input: {
     const frozenExpiry = row.membership_expires_at ? date(row, "membership_expires_at") : null;
     if (
       responseDeadline.getTime() !== date(row, "delivery_response_deadline").getTime() ||
-      responseDeadline <= now ||
-      text(row, "delivery_status") !== "pending" ||
-      text(row, "lifecycle_state") !== "pending" ||
       text(row, "membership_status") !== "active" ||
       date(row, "membership_joined_at").getTime() !== date(row, "current_membership_joined_at").getTime() ||
       (frozenExpiry?.getTime() ?? null) !== (currentExpiry?.getTime() ?? null) ||
@@ -1015,6 +1040,17 @@ export async function acceptPrivateUnpaidReviewAssignment(input: {
     if (!replayed) {
       if (date(row, "reservation_expires_at") <= now) {
         throw new TokenlessServiceError("Assignment reservation expired.", 410, "assignment_expired");
+      }
+      if (input.confidentialityTermsHash !== undefined) {
+        await requirePrivateGroupPolicyAcceptance(client, {
+          groupId: text(row, "private_group_id")!,
+          policyVersion: integer(row, "private_group_policy_version", 1),
+          policyHash: text(row, "private_group_policy_hash")!,
+          principalAddress: reviewer,
+          acceptedFromAssignmentId: input.assignmentId,
+          acceptedNow: input.confidentialityTermsAccepted === true,
+          now,
+        });
       }
       const accepted = await client.query(
         `UPDATE tokenless_private_unpaid_review_assignments
@@ -1064,6 +1100,57 @@ export async function acceptPrivateUnpaidReviewAssignment(input: {
   } finally {
     client.release();
   }
+}
+
+export async function getPrivateUnpaidReviewAssignmentAccess(input: {
+  assignmentId: string;
+  confidentialityTermsHash: string;
+  reviewerAccountAddress: string;
+  now?: Date;
+}) {
+  const now = input.now ?? new Date();
+  const reviewer = normalizeReviewers([input.reviewerAccountAddress])[0]!;
+  const result = await dbClient.execute({
+    sql: `SELECT a.status,a.reservation_expires_at,a.response_deadline,
+                 d.private_group_id,d.private_group_policy_version,d.private_group_policy_hash,
+                 d.status AS delivery_status,l.state AS lifecycle_state
+          FROM tokenless_private_unpaid_review_assignments a
+          JOIN tokenless_private_unpaid_review_deliveries d ON d.delivery_id=a.delivery_id
+          JOIN tokenless_agent_review_opportunity_lifecycles l
+            ON l.workspace_id=d.workspace_id AND l.opportunity_id=d.opportunity_id
+          WHERE a.assignment_id=? AND a.reviewer_account_address=? LIMIT 1`,
+    args: [input.assignmentId, reviewer],
+  });
+  const row = result.rows[0] as Row | undefined;
+  if (!row) throw new TokenlessServiceError("Private review assignment not found.", 404, "assignment_not_found");
+  if (input.confidentialityTermsHash !== text(row, "private_group_policy_hash")) {
+    throw new TokenlessServiceError("Confidentiality terms changed.", 409, "confidentiality_terms_mismatch");
+  }
+  const responseDeadline = date(row, "response_deadline");
+  const status = text(row, "status");
+  const closed =
+    responseDeadline <= now ||
+    text(row, "delivery_status") !== "pending" ||
+    text(row, "lifecycle_state") !== "pending" ||
+    status === "completed";
+  const state = closed
+    ? "closed"
+    : status === "accepted"
+      ? "accepted"
+      : status === "expired" || date(row, "reservation_expires_at") <= now
+        ? "recoverable"
+        : "ready";
+  return {
+    assignmentId: input.assignmentId,
+    state: state as "accepted" | "closed" | "ready" | "recoverable",
+    termsAccepted: await hasAcceptedPrivateGroupPolicy({
+      groupId: text(row, "private_group_id")!,
+      policyVersion: integer(row, "private_group_policy_version", 1),
+      policyHash: text(row, "private_group_policy_hash")!,
+      principalAddress: reviewer,
+    }),
+    responseDeadline: responseDeadline.toISOString(),
+  };
 }
 
 export async function recoverPrivateUnpaidReviewAssignment(input: {

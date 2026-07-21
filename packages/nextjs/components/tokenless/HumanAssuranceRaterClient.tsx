@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { DeadlineChip } from "~~/components/tokenless/review/DeadlineChip";
 import { ReviewerShell } from "~~/components/tokenless/review/ReviewerShell";
 import { Button } from "~~/components/tokenless/ui/Button";
@@ -65,6 +66,13 @@ type ReviewDraft = {
   selectedOption: "A" | "B" | null;
   failureTags: string[];
   rationale: string;
+};
+
+type DirectAssignmentAccess = {
+  assignmentId: string;
+  state: "accepted" | "closed" | "ready" | "recoverable";
+  termsAccepted: boolean;
+  responseDeadline: string;
 };
 
 export type AssuranceServerAcceptance = {
@@ -154,6 +162,11 @@ export function HumanAssuranceRaterClient({
   const [termsHash, setTermsHash] = useState(initialTerms);
   const [manualCredentialEntry, setManualCredentialEntry] = useState(false);
   const [confidentialityAccepted, setConfidentialityAccepted] = useState(false);
+  const [termsRequired, setTermsRequired] = useState<boolean | null>(() =>
+    /^hpua_[0-9a-f]{40}$/u.test(initialAssignment.trim()) ? null : true,
+  );
+  const [assignmentClosed, setAssignmentClosed] = useState(false);
+  const [assignmentUnavailable, setAssignmentUnavailable] = useState(false);
   const [task, setTask] = useState<AssignmentTask | null>(initialTask);
   const [drafts, setDrafts] = useState<Record<string, ReviewDraft>>(() =>
     initialTask ? emptyDrafts(initialTask.cases) : {},
@@ -205,6 +218,9 @@ export function HumanAssuranceRaterClient({
           setReviewingResponses(false);
           setServerAcceptance(null);
           setCanRecover(false);
+          setAssignmentClosed(false);
+          setAssignmentUnavailable(false);
+          setTermsRequired(null);
           setBusyAction(null);
           setConfidentialityAccepted(false);
           setError(null);
@@ -227,6 +243,50 @@ export function HumanAssuranceRaterClient({
       unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    const id = assignmentId.trim();
+    const terms = termsHash.trim();
+    if (task || !activePrincipalId || !/^hpua_[0-9a-f]{40}$/u.test(id) || !/^sha256:[0-9a-f]{64}$/u.test(terms)) {
+      if (!/^hpua_[0-9a-f]{40}$/u.test(id)) setTermsRequired(true);
+      return;
+    }
+    let active = true;
+    setTermsRequired(null);
+    void (async () => {
+      try {
+        const body = (await readJson(
+          await fetch(
+            `/api/account/assurance/assignments/${encodeURIComponent(id)}/accept?terms=${encodeURIComponent(terms)}`,
+            { cache: "no-store", credentials: "same-origin" },
+          ),
+          PRIVATE_REVIEW_JSON_OPTIONS,
+        )) as DirectAssignmentAccess;
+        if (!active) return;
+        if (
+          body.assignmentId !== id ||
+          !["accepted", "closed", "ready", "recoverable"].includes(body.state) ||
+          typeof body.termsAccepted !== "boolean"
+        ) {
+          throw new Error("The assignment access status was incomplete.");
+        }
+        setTermsRequired(!body.termsAccepted);
+        setConfidentialityAccepted(body.termsAccepted);
+        setAssignmentClosed(body.state === "closed");
+        setAssignmentUnavailable(false);
+        setCanRecover(body.state === "recoverable");
+        setError(null);
+      } catch (cause) {
+        if (!active) return;
+        setTermsRequired(true);
+        setCanRecover(false);
+        setError(cause instanceof Error ? cause.message : "Unable to check assignment access.");
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [activePrincipalId, assignmentId, task, termsHash]);
 
   const leaseDeadline = useMemo(() => {
     const values = task?.cases.flatMap(reviewCase => [
@@ -297,10 +357,13 @@ export function HumanAssuranceRaterClient({
     setReviewingResponses(false);
     setServerAcceptance(null);
     setCanRecover(false);
+    setAssignmentClosed(false);
+    setAssignmentUnavailable(false);
   }
 
-  async function openAssignment(event?: FormEvent<HTMLFormElement>) {
+  async function openAssignment(event?: FormEvent<HTMLFormElement>, afterRecovery = false) {
     event?.preventDefault();
+    if ((!afterRecovery && canRecover) || assignmentClosed || assignmentUnavailable || termsRequired === null) return;
     const id = assignmentId.trim();
     const privateStateEpoch = privateStateEpochRef.current;
     setBusyAction("assignment");
@@ -312,7 +375,10 @@ export function HumanAssuranceRaterClient({
           method: "POST",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ confidentialityTermsHash: termsHash.trim() }),
+          body: JSON.stringify({
+            confidentialityTermsAccepted: termsRequired === true && confidentialityAccepted,
+            confidentialityTermsHash: termsHash.trim(),
+          }),
         }),
         PRIVATE_REVIEW_JSON_OPTIONS,
       );
@@ -320,11 +386,16 @@ export function HumanAssuranceRaterClient({
       await loadAssignment(id);
     } catch (cause) {
       if (privateStateEpoch !== privateStateEpochRef.current) return;
-      const recoverable =
-        cause instanceof HttpJsonError &&
-        (cause.code === "assignment_expired" || cause.code === "artifact_lease_expired" || cause.status === 410);
+      const recoverable = cause instanceof HttpJsonError && cause.code === "assignment_expired";
+      const closed = cause instanceof HttpJsonError && cause.code === "assignment_closed";
+      if (cause instanceof HttpJsonError && cause.code === "confidentiality_acceptance_required") {
+        setTermsRequired(true);
+        setConfidentialityAccepted(false);
+      }
       if (recoverable) clearReviewDraft("private", id, privateDraftStorage);
       setCanRecover(recoverable);
+      setAssignmentClosed(closed);
+      setAssignmentUnavailable(false);
       setError(cause instanceof Error ? cause.message : "Unable to open this assignment.");
     } finally {
       if (privateStateEpoch === privateStateEpochRef.current) setBusyAction(null);
@@ -348,9 +419,13 @@ export function HumanAssuranceRaterClient({
       );
       if (privateStateEpoch !== privateStateEpochRef.current) return;
       setCanRecover(false);
-      await openAssignment();
+      if (termsRequired && !confidentialityAccepted) return;
+      await openAssignment(undefined, true);
     } catch (cause) {
       if (privateStateEpoch !== privateStateEpochRef.current) return;
+      setCanRecover(false);
+      setAssignmentClosed(cause instanceof HttpJsonError && cause.code === "assignment_closed");
+      setAssignmentUnavailable(!(cause instanceof HttpJsonError && cause.code === "assignment_closed"));
       setError(
         cause instanceof Error
           ? cause.message
@@ -534,30 +609,64 @@ export function HumanAssuranceRaterClient({
                       <li>Do not copy, share, or reuse assigned material, or put personal data in your rationale.</li>
                     </ul>
                   </section>
-                  <label className="flex items-start gap-3 rounded-lg border border-white/10 p-4 text-sm leading-6 text-base-content/70">
-                    <input
-                      type="checkbox"
-                      className="checkbox checkbox-sm mt-1"
-                      checked={confidentialityAccepted}
-                      onChange={event => setConfidentialityAccepted(event.target.checked)}
-                    />
-                    <span>
-                      I received and accept this assignment&apos;s confidentiality terms and will follow the privacy
-                      rules above.
-                    </span>
-                  </label>
-                  <Button
-                    type="submit"
-                    className="w-full px-6"
-                    disabled={
-                      busyAction !== null ||
-                      !confidentialityAccepted ||
-                      assignmentId.trim().length < 8 ||
-                      !/^sha256:[0-9a-f]{64}$/.test(termsHash.trim())
-                    }
-                  >
-                    {busyAction === "assignment" ? "Checking assignment…" : "Accept terms and open assignment"}
-                  </Button>
+                  {assignmentClosed || assignmentUnavailable ? (
+                    <div role="status" className="rounded-lg border border-white/10 bg-white/[0.02] p-4 text-sm">
+                      <p className="font-semibold">
+                        {assignmentClosed ? "Review window closed" : "Assignment unavailable"}
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-base-content/55">
+                        {assignmentClosed
+                          ? "This assignment can no longer accept a response."
+                          : "This assignment could not be restored. Open Review work for another assignment."}
+                      </p>
+                      <Link
+                        href="/human?scope=private"
+                        className="mt-3 inline-flex text-xs font-semibold underline underline-offset-4"
+                      >
+                        Return to Review work
+                      </Link>
+                    </div>
+                  ) : termsRequired === null ? (
+                    <p role="status" className="rounded-lg border border-white/10 p-4 text-sm text-base-content/60">
+                      Checking confidentiality terms…
+                    </p>
+                  ) : termsRequired ? (
+                    <label className="flex items-start gap-3 rounded-lg border border-white/10 p-4 text-sm leading-6 text-base-content/70">
+                      <input
+                        type="checkbox"
+                        className="checkbox checkbox-sm mt-1"
+                        checked={confidentialityAccepted}
+                        onChange={event => setConfidentialityAccepted(event.target.checked)}
+                      />
+                      <span>
+                        I accept this reviewer group&apos;s current confidentiality terms and will follow the privacy
+                        rules above.
+                      </span>
+                    </label>
+                  ) : (
+                    <p role="status" className="rounded-lg border border-white/10 p-4 text-sm text-base-content/65">
+                      Confidentiality terms already accepted for this reviewer group.
+                    </p>
+                  )}
+                  {!canRecover && !assignmentClosed && !assignmentUnavailable ? (
+                    <Button
+                      type="submit"
+                      className="w-full px-6"
+                      disabled={
+                        busyAction !== null ||
+                        termsRequired === null ||
+                        (termsRequired && !confidentialityAccepted) ||
+                        assignmentId.trim().length < 8 ||
+                        !/^sha256:[0-9a-f]{64}$/.test(termsHash.trim())
+                      }
+                    >
+                      {busyAction === "assignment"
+                        ? "Opening assignment…"
+                        : termsRequired === false
+                          ? "Open assignment"
+                          : "Accept terms and open assignment"}
+                    </Button>
+                  ) : null}
                 </form>
                 {canRecover ? (
                   <Button
@@ -567,7 +676,7 @@ export function HumanAssuranceRaterClient({
                     disabled={busyAction !== null}
                     onClick={() => void recoverAssignment()}
                   >
-                    {busyAction === "recovery" ? "Restoring access…" : "Retry expired assignment access"}
+                    {busyAction === "recovery" ? "Restoring access…" : "Restore assignment access"}
                   </Button>
                 ) : null}
               </Card>

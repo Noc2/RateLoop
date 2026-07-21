@@ -28,6 +28,7 @@ import {
 import {
   __privateUnpaidReviewAdapterTestUtils,
   acceptPrivateUnpaidReviewAssignment,
+  getPrivateUnpaidReviewAssignmentAccess,
   requestPrivateUnpaidHumanReview,
 } from "~~/lib/tokenless/privateUnpaidReviewAdapter";
 import { createAgentPublishingPolicy, createWorkspace } from "~~/lib/tokenless/productCore";
@@ -110,6 +111,7 @@ test("direct private assignments surface in reviewer work and produce a terminal
     await acceptPrivateUnpaidReviewAssignment({
       assignmentId: assignment.assignmentId,
       reviewerAccountAddress: assignment.reviewerAccountAddress,
+      confidentialityTermsAccepted: true,
       confidentialityTermsHash: termsHash,
       now: new Date("2026-07-16T09:25:00.000Z"),
     });
@@ -169,6 +171,80 @@ test("direct private assignments surface in reviewer work and produce a terminal
   assert.equal(stored.rows.length, 2);
   assert.ok(stored.rows.every(row => row.choice === "positive" && row.rationale_ciphertext === null));
   assert.ok(stored.rows.every(row => /^sha256:[0-9a-f]{64}$/u.test(String(row.response_commitment))));
+});
+
+test("private group terms are accepted once per exact policy and closed reviews are not recoverable", async () => {
+  const setup = await fixture();
+  const delivered = await requestPrivateUnpaidHumanReview({
+    principal: setup.principal,
+    opportunityId: setup.opportunityId,
+    privateReviewId: setup.prepared.privateReviewId,
+    reviewerAccountAddresses: [REVIEWER_A, REVIEWER_B],
+    now: new Date("2026-07-16T09:20:00.000Z"),
+  });
+  const assignmentId = delivered.assignments[0]!.assignmentId;
+  const termsHash = setup.prepared.bindings.privateGroup.policyHash;
+  const initialAccess = await getPrivateUnpaidReviewAssignmentAccess({
+    assignmentId,
+    reviewerAccountAddress: REVIEWER_A,
+    confidentialityTermsHash: termsHash,
+    now: new Date("2026-07-16T09:21:00.000Z"),
+  });
+  assert.equal(initialAccess.state, "ready");
+  assert.equal(initialAccess.termsAccepted, false);
+  await assert.rejects(
+    () =>
+      acceptPrivateUnpaidReviewAssignment({
+        assignmentId,
+        reviewerAccountAddress: REVIEWER_A,
+        confidentialityTermsHash: termsHash,
+        now: new Date("2026-07-16T09:22:00.000Z"),
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "confidentiality_acceptance_required",
+  );
+  await acceptPrivateUnpaidReviewAssignment({
+    assignmentId,
+    reviewerAccountAddress: REVIEWER_A,
+    confidentialityTermsAccepted: true,
+    confidentialityTermsHash: termsHash,
+    now: new Date("2026-07-16T09:23:00.000Z"),
+  });
+  const acceptedAccess = await getPrivateUnpaidReviewAssignmentAccess({
+    assignmentId,
+    reviewerAccountAddress: REVIEWER_A,
+    confidentialityTermsHash: termsHash,
+    now: new Date("2026-07-16T09:24:00.000Z"),
+  });
+  assert.equal(acceptedAccess.state, "accepted");
+  assert.equal(acceptedAccess.termsAccepted, true);
+  const acceptance = await dbClient.execute({
+    sql: `SELECT policy_version,policy_hash,accepted_from_assignment_id
+          FROM tokenless_private_group_policy_acceptances
+          WHERE group_id=? AND principal_address=?`,
+    args: [setup.groupId, REVIEWER_A],
+  });
+  assert.equal(acceptance.rowCount, 1);
+  assert.equal(Number(acceptance.rows[0]?.policy_version), 1);
+  assert.equal(acceptance.rows[0]?.policy_hash, termsHash);
+  assert.equal(acceptance.rows[0]?.accepted_from_assignment_id, assignmentId);
+
+  const closedAccess = await getPrivateUnpaidReviewAssignmentAccess({
+    assignmentId,
+    reviewerAccountAddress: REVIEWER_A,
+    confidentialityTermsHash: termsHash,
+    now: new Date("2026-07-16T10:21:00.000Z"),
+  });
+  assert.equal(closedAccess.state, "closed");
+  await assert.rejects(
+    () =>
+      acceptPrivateUnpaidReviewAssignment({
+        assignmentId,
+        reviewerAccountAddress: REVIEWER_A,
+        confidentialityTermsHash: termsHash,
+        now: new Date("2026-07-16T10:21:00.000Z"),
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "assignment_closed",
+  );
 });
 
 test("private routing releases expired reservations before selecting the next panel", async () => {
