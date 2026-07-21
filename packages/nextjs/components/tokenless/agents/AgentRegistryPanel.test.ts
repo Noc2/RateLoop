@@ -78,7 +78,9 @@ test("agent management actions stay visible while technical records remain optio
   assert.match(source, />\s*Deactivate\s*</);
   assert.doesNotMatch(source, /<summary[^>]*>Manage<\/summary>/);
   assert.match(source, /<summary[^>]*>\s*Technical details/);
-  assert.match(source, /Audit history \(\{agent\.versions\.length\}\)/);
+  assert.match(source, /Audit history \(\{auditEntries\.length\}\)/);
+  assert.match(source, /mergeAgentAuditHistory\(visibleAgents, connectionHistory\)/);
+  assert.match(source, /entry\.kind === "connection"/);
 });
 
 test("the agent evidence card shows only labeled host-reported and observed metadata", () => {

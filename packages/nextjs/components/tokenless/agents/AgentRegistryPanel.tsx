@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { type AgentConnectionHistoryEntry, mergeAgentAuditHistory } from "./agentAuditHistory";
 import { AgentVersionForm } from "~~/components/tokenless/agents/AgentVersionForm";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { Badge } from "~~/components/tokenless/ui/Badge";
@@ -248,6 +249,7 @@ export function AgentRegistryPanel({
   activeReviewAgentId = null,
   onAgentsChanged,
   onReviewAgentChange,
+  connectionHistory = [],
 }: {
   view: "connection" | "reviews";
   workspaceId: string;
@@ -255,6 +257,7 @@ export function AgentRegistryPanel({
   activeReviewAgentId?: string | null;
   onAgentsChanged?: () => void;
   onReviewAgentChange?: (agentId: string | null) => void;
+  connectionHistory?: readonly AgentConnectionHistoryEntry[];
 }) {
   const [registry, setRegistry] = useState<AgentRegistry | null>(null);
   const [editingAgent, setEditingAgent] = useState<WorkspaceAgent | null>(null);
@@ -353,6 +356,7 @@ export function AgentRegistryPanel({
   const archivedAgentCount = agents.filter(agent => agent.status === "inactive").length;
   const visibleAgents =
     view === "connection" && showArchived ? agents : agents.filter(agent => agent.status === "active");
+  const auditEntries = mergeAgentAuditHistory(visibleAgents, connectionHistory);
 
   return (
     <div className="space-y-5">
@@ -455,30 +459,6 @@ export function AgentRegistryPanel({
                       ) : null}
                     </dl>
                   </details>
-
-                  <details>
-                    <summary className="cursor-pointer text-sm font-medium text-base-content/65">
-                      Audit history ({agent.versions.length})
-                    </summary>
-                    <ol className="mt-3 space-y-3">
-                      {agent.versions.map(version => (
-                        <li key={version.versionId} className="surface-card-nested rounded-lg p-4 text-sm">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <strong>Workflow version {version.versionNumber}</strong>
-                            <time dateTime={version.createdAt} className="text-xs text-base-content/45">
-                              {new Date(version.createdAt).toLocaleString()}
-                            </time>
-                          </div>
-                          <p className="mt-2 text-base-content/60">
-                            {version.displayName} · <span className="capitalize">{version.environment}</span>
-                          </p>
-                          <code className="mt-2 block break-all text-[11px] text-base-content/40">
-                            sha256:{version.configurationCommitment}
-                          </code>
-                        </li>
-                      ))}
-                    </ol>
-                  </details>
                 </div>
               </>
             ) : (
@@ -500,6 +480,48 @@ export function AgentRegistryPanel({
             {showArchived ? "Hide archived" : `Show archived (${archivedAgentCount})`}
           </Button>
         </div>
+      ) : null}
+
+      {!loading && view === "connection" && auditEntries.length > 0 ? (
+        <Card as="section" className="rounded-2xl p-5">
+          <details>
+            <summary className="cursor-pointer text-sm font-medium text-base-content/65">
+              Audit history ({auditEntries.length})
+            </summary>
+            <ol className="mt-4 space-y-3">
+              {auditEntries.map(entry => (
+                <li key={entry.eventId} className="surface-card-nested rounded-lg p-4 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <strong>
+                      {entry.kind === "connection"
+                        ? entry.clientName
+                        : `${entry.displayName} · Workflow version ${entry.versionNumber}`}
+                    </strong>
+                    {entry.occurredAt ? (
+                      <time dateTime={entry.occurredAt} className="text-xs text-base-content/45">
+                        {new Date(entry.occurredAt).toLocaleString()}
+                      </time>
+                    ) : null}
+                  </div>
+                  {entry.kind === "connection" ? (
+                    <div className="mt-2">
+                      <Badge variant="neutral" className="text-xs">
+                        {entry.legacy ? `legacy · ${entry.status}` : entry.status}
+                      </Badge>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="mt-2 capitalize text-base-content/60">{entry.environment}</p>
+                      <code className="mt-2 block break-all text-[11px] text-base-content/40">
+                        sha256:{entry.configurationCommitment}
+                      </code>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </details>
+        </Card>
       ) : null}
 
       {status ? (

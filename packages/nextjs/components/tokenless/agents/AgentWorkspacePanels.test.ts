@@ -148,3 +148,9 @@ test("agent and human-review mutations still refresh dependent panels", () => {
   assert.match(panelsSource, /onAgentsChanged=\{refreshAgents\}/);
   assert.match(panelsSource, /onSaved=\{refreshAgents\}/);
 });
+
+test("connection events feed the shared audit history at the bottom of the connection view", () => {
+  assert.match(panelsSource, /onConnectionHistoryChange=\{handleConnectionHistoryChange\}/);
+  assert.match(panelsSource, /connectionHistory=\{connectionHistory\}/);
+  assert.match(panelsSource, /connectionHistoryState\.workspaceId === workspaceId/);
+});

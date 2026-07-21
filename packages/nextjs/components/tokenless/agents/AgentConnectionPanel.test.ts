@@ -130,7 +130,8 @@ test("connected agent management opens from a direct action while technical stat
   assert.match(source, /showConnectionManagement \? \(/);
   assert.match(source, /\? "Done" : "Manage connected agents"/);
   assert.match(source, /Connection details/);
-  assert.match(source, /Connection history/);
+  assert.doesNotMatch(source, /Connection history/);
+  assert.match(source, /onConnectionHistoryChange\?\.\(connectionHistory\)/);
   assert.match(source, />\s*Disconnect\s*</);
   assert.match(source, /setStatus\("Agent disconnected\."\)/);
 });

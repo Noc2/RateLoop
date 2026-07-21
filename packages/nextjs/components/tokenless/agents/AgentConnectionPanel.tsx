@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { InfoPopover } from "../InfoPopover";
 import {
   AgentConnectionHostPicker,
@@ -8,6 +8,7 @@ import {
   saveAgentConnectionHostChoice,
 } from "./AgentConnectionHostPicker";
 import { AgentConnectionTroubleshooting } from "./AgentConnectionTroubleshooting";
+import type { AgentConnectionHistoryEntry } from "./agentAuditHistory";
 import { buildAgentConnectionMessage, buildAgentConnectionMessageForHost } from "./agentConnectionMessage";
 import { isUsableAgentConnection } from "./agentWorkspaceState";
 import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
@@ -25,6 +26,8 @@ type AgentPairing = {
   status: PairingStatus;
   createdAt: string | null;
   expiresAt: string | null;
+  approvedAt: string | null;
+  rejectedAt: string | null;
   externalId: string;
   displayName: string;
   description: string;
@@ -165,6 +168,8 @@ export function normalizeAgentPairing(value: unknown): AgentPairing {
     status: ["open", "claimed", "approved", "rejected", "expired", "revoked"].includes(status) ? status : "open",
     createdAt: nullableStringField(row, "createdAt"),
     expiresAt: nullableStringField(row, "expiresAt"),
+    approvedAt: nullableStringField(row, "approvedAt"),
+    rejectedAt: nullableStringField(row, "rejectedAt"),
     externalId: stringField(row, "externalId"),
     displayName: stringField(row, "displayName"),
     description: stringField(row, "description"),
@@ -589,11 +594,13 @@ export function AgentConnectionPanel({
   publishingRevision = 0,
   onAgentApproved,
   onConnectionStateChange,
+  onConnectionHistoryChange,
 }: {
   workspaceId: string;
   publishingRevision?: number;
   onAgentApproved?: () => void;
   onConnectionStateChange?: (connected: boolean) => void;
+  onConnectionHistoryChange?: (history: AgentConnectionHistoryEntry[]) => void;
 }) {
   const notifications = useRateLoopNotifications();
   const [connectionIntents, setConnectionIntents] = useState<AgentConnectionIntent[]>([]);
@@ -969,11 +976,7 @@ export function AgentConnectionPanel({
   const activeConnectionIntents = connectionIntents.filter(intent =>
     isActiveAgentConnectionIntent(intent, connectionClock),
   );
-  const connectionIntentHistory = connectionIntents.filter(
-    intent => !isActiveAgentConnectionIntent(intent, connectionClock),
-  );
   const activePairings = pairings.filter(pairing => isPendingAgentPairing(pairing, connectionClock));
-  const pairingHistory = pairings.filter(pairing => !isPendingAgentPairing(pairing, connectionClock));
   const activeIntegrations = integrations.filter(integration =>
     isUsableAgentConnection(
       {
@@ -986,6 +989,49 @@ export function AgentConnectionPanel({
   );
   const isFreshWorkspace =
     !loading && activeConnectionIntents.length === 0 && activePairings.length === 0 && activeIntegrations.length === 0;
+  const connectionHistory = useMemo<AgentConnectionHistoryEntry[]>(
+    () => [
+      ...connectionIntents
+        .filter(intent => !isActiveAgentConnectionIntent(intent, connectionClock))
+        .map(intent => ({
+          eventId: `connection-intent:${intent.intentId}`,
+          clientName: intent.clientName || "Agent connection",
+          status:
+            intent.status === "connected" ||
+            !intent.hardExpiresAt ||
+            new Date(intent.hardExpiresAt).getTime() > connectionClock
+              ? intent.status
+              : "expired",
+          occurredAt: intent.lastTransitionAt ?? intent.createdAt,
+          legacy: false,
+        })),
+      ...pairings
+        .filter(pairing => !isPendingAgentPairing(pairing, connectionClock))
+        .map(pairing => {
+          const expired =
+            (pairing.status === "open" || pairing.status === "claimed") &&
+            pairing.expiresAt &&
+            new Date(pairing.expiresAt).getTime() <= connectionClock;
+          const status = expired ? "expired" : pairing.status;
+          return {
+            eventId: `legacy-pairing:${pairing.pairingId}`,
+            clientName: pairing.displayName || pairing.clientName || "Agent connection",
+            status,
+            occurredAt:
+              (status === "approved" ? pairing.approvedAt : null) ??
+              (status === "rejected" ? pairing.rejectedAt : null) ??
+              (status === "expired" ? pairing.expiresAt : null) ??
+              pairing.createdAt,
+            legacy: true,
+          };
+        }),
+    ],
+    [connectionClock, connectionIntents, pairings],
+  );
+
+  useEffect(() => {
+    onConnectionHistoryChange?.(connectionHistory);
+  }, [connectionHistory, onConnectionHistoryChange]);
 
   return (
     <div className="space-y-5">
@@ -1413,56 +1459,6 @@ export function AgentConnectionPanel({
                   </article>
                 );
               })}
-              {connectionIntentHistory.length + pairingHistory.length > 0 ? (
-                <details className="border-t border-white/10 pt-4">
-                  <summary className="cursor-pointer text-sm font-semibold">
-                    Connection history ({connectionIntentHistory.length + pairingHistory.length})
-                  </summary>
-                  <div className="mt-4 space-y-3">
-                    {connectionIntentHistory.map(intent => {
-                      const displayStatus =
-                        isActiveAgentConnectionIntent(intent, connectionClock) ||
-                        intent.status === "connected" ||
-                        !intent.hardExpiresAt ||
-                        new Date(intent.hardExpiresAt).getTime() > connectionClock
-                          ? intent.status
-                          : "expired";
-                      return (
-                        <article key={intent.intentId} className="surface-card-nested rounded-xl p-4 text-sm">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="font-medium">{intent.clientName || "Agent connection"}</span>
-                            <span className="badge badge-ghost">{displayStatus}</span>
-                          </div>
-                          <p className="mt-2 text-xs text-base-content/45">
-                            Created {formatTimestamp(intent.createdAt, "at an unknown time")}
-                          </p>
-                        </article>
-                      );
-                    })}
-                    {pairingHistory.map(pairing => {
-                      const displayStatus =
-                        (pairing.status === "open" || pairing.status === "claimed") &&
-                        pairing.expiresAt &&
-                        new Date(pairing.expiresAt).getTime() <= connectionClock
-                          ? "expired"
-                          : pairing.status;
-                      return (
-                        <article key={pairing.pairingId} className="surface-card-nested rounded-xl p-4 text-sm">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="font-medium">
-                              {pairing.displayName || pairing.clientName || "Agent connection"}
-                            </span>
-                            <span className="badge badge-ghost">legacy · {displayStatus}</span>
-                          </div>
-                          <p className="mt-2 text-xs text-base-content/45">
-                            Created {formatTimestamp(pairing.createdAt, "at an unknown time")}
-                          </p>
-                        </article>
-                      );
-                    })}
-                  </div>
-                </details>
-              ) : null}
             </div>
           ) : null}
         </section>

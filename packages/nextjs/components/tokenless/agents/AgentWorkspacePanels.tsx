@@ -14,6 +14,7 @@ import { FeedbackBonusAwardInbox } from "./FeedbackBonusAwardInbox";
 import { HumanReviewApprovalInbox } from "./HumanReviewApprovalInbox";
 import { OversightAlertsPanel } from "./OversightAlertsPanel";
 import { PrivateGroupsPanel } from "./PrivateGroupsPanel";
+import type { AgentConnectionHistoryEntry } from "./agentAuditHistory";
 import { connectedAgentTabs, resolveAvailableAgentTab } from "./agentWorkspaceState";
 import { AgentSetupFlow } from "./setup/AgentSetupFlow";
 import { WorkspaceSetupStart } from "./setup/WorkspaceSetupStart";
@@ -40,8 +41,17 @@ export function AgentWorkspacePanels({
   const [agentRevision, refreshAgents] = useReducer(value => value + 1, 0);
   const publishingRevision = 0;
   const [reviewAgentId, setReviewAgentId] = useState<string | null>(null);
+  const [connectionHistoryState, setConnectionHistoryState] = useState<{
+    workspaceId: string;
+    entries: AgentConnectionHistoryEntry[];
+  }>({ workspaceId, entries: [] });
+  const connectionHistory = connectionHistoryState.workspaceId === workspaceId ? connectionHistoryState.entries : [];
 
   const handleConnectionState = useCallback(() => refreshAgents(), []);
+  const handleConnectionHistoryChange = useCallback(
+    (entries: AgentConnectionHistoryEntry[]) => setConnectionHistoryState({ workspaceId, entries }),
+    [workspaceId],
+  );
 
   if (workspaces.length === 0) {
     return <WorkspaceSetupStart />;
@@ -113,6 +123,7 @@ export function AgentWorkspacePanels({
             publishingRevision={publishingRevision}
             onAgentApproved={refreshAgents}
             onConnectionStateChange={handleConnectionState}
+            onConnectionHistoryChange={handleConnectionHistoryChange}
           />
         ) : null}
         {hasConnectedAgent && resolvedTab === "connect" ? (
@@ -120,6 +131,7 @@ export function AgentWorkspacePanels({
             view="connection"
             workspaceId={workspaceId}
             agentRevision={agentRevision}
+            connectionHistory={connectionHistory}
             onAgentsChanged={refreshAgents}
           />
         ) : null}
