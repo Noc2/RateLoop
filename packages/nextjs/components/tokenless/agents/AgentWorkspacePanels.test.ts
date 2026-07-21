@@ -45,13 +45,7 @@ test("only active, connected, unexpired integrations complete onboarding", () =>
 
 test("connected navigation splits the owner stack into URL-backed task tabs", () => {
   assert.deepEqual(connectedAgentTabs(), ["overview", "connect", "inbox", "registry", "evaluations", "evidence"]);
-  assert.deepEqual(connectedAgentTabs({ canManage: false }), [
-    "overview",
-    "connect",
-    "registry",
-    "evaluations",
-    "evidence",
-  ]);
+  assert.deepEqual(connectedAgentTabs({ canManage: false }), ["overview", "connect", "evaluations", "evidence"]);
   assert.equal(resolveAvailableAgentTab("connect", connectedAgentTabs({ canManage: false })), "connect");
   assert.equal(resolveAgentTabParam("agents"), "connect");
   assert.equal(resolveAgentTabParam("groups"), "registry");
@@ -103,8 +97,8 @@ test("the server resolves onboarding before the client renders downstream panels
   assert.match(panelsSource, /hasConnectedAgent && resolvedTab === "connect"/);
   assert.match(panelsSource, /hasConnectedAgent && resolvedTab === "inbox"/);
   assert.match(panelsSource, /hasConnectedAgent && resolvedTab === "registry"/);
-  assert.match(panelsSource, /view="connection"/);
-  assert.match(panelsSource, /view="reviews"/);
+  assert.doesNotMatch(panelsSource, /view="connection"|view="reviews"/);
+  assert.match(panelsSource, /<AgentReviewsPanel workspaceId=\{workspaceId\} canManage=\{canManage\} \/>/);
   assert.match(panelsSource, /resolvedTab === "evaluations"/);
   assert.match(panelsSource, /resolvedTab === "evidence"/);
 });
@@ -131,20 +125,15 @@ test("the overview starts with workspace settings instead of an evidence summary
   assert.doesNotMatch(panelsSource, /Last decision packet|Most conservative coverage stage|Latest packet anchor/);
 });
 
-test("one canonical human-review editor renders only for the selected agent", () => {
-  assert.match(panelsSource, /const \[reviewAgentId, setReviewAgentId\] = useState/);
-  assert.match(panelsSource, /activeReviewAgentId=\{reviewAgentId\}/);
-  assert.match(panelsSource, /onReviewAgentChange=\{setReviewAgentId\}/);
-  assert.match(panelsSource, /<AgentHumanReviewEditor/);
-  assert.match(panelsSource, /key=\{reviewAgentId\}/);
-  assert.match(panelsSource, /agentId=\{reviewAgentId\}/);
+test("the Reviews tab opens the canonical human-review editor directly", () => {
+  assert.doesNotMatch(panelsSource, /reviewAgentId|onReviewAgentChange|activeReviewAgentId/);
+  assert.match(panelsSource, /<AgentReviewsPanel/);
   assert.doesNotMatch(panelsSource, /AgentReviewPolicyPanel|AgentPublishingPolicyPanel/);
-  assert.match(editorSource, /Back to reviews/);
-  assert.doesNotMatch(editorSource, />\s*Close\s*</);
+  assert.doesNotMatch(editorSource, /Back to reviews|onClose|>\s*Close\s*</);
 });
 
-test("review managers use one workspace reviewer roster without groups", () => {
-  assert.match(panelsSource, /<WorkspaceReviewersPanel workspaceId=\{workspaceId\} \/>/);
+test("review managers use the direct Reviews panel without groups", () => {
+  assert.match(panelsSource, /<AgentReviewsPanel workspaceId=\{workspaceId\} canManage=\{canManage\} \/>/);
   assert.doesNotMatch(panelsSource, /PrivateGroupsPanel/);
 });
 
@@ -152,7 +141,6 @@ test("agent and human-review mutations still refresh dependent panels", () => {
   assert.match(panelsSource, /const \[agentRevision, refreshAgents\] = useReducer/);
   assert.match(panelsSource, /onAgentApproved=\{refreshAgents\}/);
   assert.match(panelsSource, /onAgentsChanged=\{refreshAgents\}/);
-  assert.match(panelsSource, /onSaved=\{refreshAgents\}/);
 });
 
 test("connection events feed the shared audit history at the bottom of the connection view", () => {

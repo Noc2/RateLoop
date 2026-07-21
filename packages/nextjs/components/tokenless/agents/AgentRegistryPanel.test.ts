@@ -2,17 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-test("agent details and review information render in task-focused views", () => {
+test("agent details render in the connection-focused registry", () => {
   const source = readFileSync(new URL("./AgentRegistryPanel.tsx", import.meta.url), "utf8");
   const form = readFileSync(new URL("./AgentVersionForm.tsx", import.meta.url), "utf8");
-  assert.match(source, /view === "connection"/);
-  assert.match(source, /view === "reviews"/);
   assert.match(source, /Change workflow version/);
-  assert.match(source, /Edit reviews/);
-  assert.match(source, /configuration_required" \? "Finish setup" : "Edit reviews"/);
-  assert.match(source, /aria-controls="agent-human-review-editor"/);
-  assert.match(source, /activeReviewAgentId === agent\.agentId/);
-  assert.match(source, /onReviewAgentChange/);
+  assert.doesNotMatch(source, /Edit reviews|Review configuration|onReviewAgentChange|activeReviewAgentId/);
   assert.doesNotMatch(source, />Review behavior</);
   assert.doesNotMatch(source, />Autonomous requests</);
   assert.match(source, /Technical details/);
@@ -34,30 +28,6 @@ test("agent details and review information render in task-focused views", () => 
   assert.match(source, /Hide archived/);
   assert.match(source, /aria-pressed=\{showArchived\}/);
   assert.match(source, /visibleAgents\.map/);
-  assert.match(source, /Review configuration/);
-  assert.match(source, /Frequency/);
-  assert.match(source, /Reviewers/);
-  assert.match(source, /Question author/);
-  assert.match(source, /One owner-set question/);
-  assert.match(source, /Agent writes each review question · feedback only/);
-  assert.match(source, /Response window/);
-  assert.match(source, /Base payment/);
-  assert.match(source, /Feedback Bonus/);
-  assert.match(source, /Agent authority/);
-  assert.match(source, /Every eligible output/);
-  assert.match(source, /Manual handoff only/);
-  assert.match(source, /Manual handoffs only/);
-  assert.match(source, /configuration\.selection\.mode !== "manual"/);
-  assert.match(source, /Adaptive ·/);
-  assert.match(source, /Invited reviewers · private workspace material/);
-  assert.match(source, /RateLoop network · public-safe material/);
-  assert.match(source, /USDC \/ reviewer/);
-  assert.match(source, /Policy checks ready/);
-  assert.match(source, /Owner-approved requests ready/);
-  assert.match(source, /Automatic requests ready/);
-  assert.match(source, /Blocked · finish review setup/);
-  assert.match(source, /Blocked · reconnect the agent/);
-  assert.match(source, /Blocked · automatic requests are off/);
   assert.doesNotMatch(source, /Workflow v\{agent\.currentVersion\.versionNumber\}/);
   assert.doesNotMatch(source, /\{agent\.currentVersion\.declaredModel\}/);
   assert.doesNotMatch(source, />Declared provider</);
@@ -99,6 +69,6 @@ test("the agent card header omits connection implementation details", () => {
   assert.doesNotMatch(source, /Connected via RateLoop plugin · host-reported/);
   assert.doesNotMatch(source, /Advisory MCP connection — plugin hooks not reported/);
   assert.doesNotMatch(source, /Device-flow connection — plugin hooks not reported/);
-  assert.doesNotMatch(source, /view === "connection" && agent\.reportedConnectionLane/);
+  assert.doesNotMatch(source, /reportedConnectionLane/);
   assert.doesNotMatch(source, /verified plugin|plugin verified/i);
 });

@@ -5,15 +5,14 @@ import { useRouter } from "next/navigation";
 import { WorkspaceSettingsClient } from "../WorkspaceSettingsClient";
 import { WorkspaceStopBanner } from "../WorkspaceStopControl";
 import { AgentConnectionPanel } from "./AgentConnectionPanel";
-import { AgentHumanReviewEditor } from "./AgentHumanReviewEditor";
 import { AgentRegistryPanel } from "./AgentRegistryPanel";
+import { AgentReviewsPanel } from "./AgentReviewsPanel";
 import { type AgentTab, AgentTabs } from "./AgentTabs";
 import { EvaluationDashboardPanel } from "./EvaluationDashboardPanel";
 import { EvidenceWorkspacePanel } from "./EvidenceWorkspacePanel";
 import { FeedbackBonusAwardInbox } from "./FeedbackBonusAwardInbox";
 import { HumanReviewApprovalInbox } from "./HumanReviewApprovalInbox";
 import { OversightAlertsPanel } from "./OversightAlertsPanel";
-import { WorkspaceReviewersPanel } from "./WorkspaceReviewersPanel";
 import type { AgentConnectionHistoryEntry } from "./agentAuditHistory";
 import { connectedAgentTabs, resolveAvailableAgentTab } from "./agentWorkspaceState";
 import { AgentSetupFlow } from "./setup/AgentSetupFlow";
@@ -40,7 +39,6 @@ export function AgentWorkspacePanels({
   const hasConnectedAgent = initialSetup?.complete ?? initialHasConnectedAgent;
   const [agentRevision, refreshAgents] = useReducer(value => value + 1, 0);
   const publishingRevision = 0;
-  const [reviewAgentId, setReviewAgentId] = useState<string | null>(null);
   const [connectionHistoryState, setConnectionHistoryState] = useState<{
     workspaceId: string;
     entries: AgentConnectionHistoryEntry[];
@@ -128,7 +126,6 @@ export function AgentWorkspacePanels({
         ) : null}
         {hasConnectedAgent && resolvedTab === "connect" ? (
           <AgentRegistryPanel
-            view="connection"
             workspaceId={workspaceId}
             agentRevision={agentRevision}
             connectionHistory={connectionHistory}
@@ -141,27 +138,8 @@ export function AgentWorkspacePanels({
         {hasConnectedAgent && resolvedTab === "inbox" && canManage ? (
           <FeedbackBonusAwardInbox workspaceId={workspaceId} />
         ) : null}
-        {hasConnectedAgent && resolvedTab === "registry" && !reviewAgentId ? (
-          <AgentRegistryPanel
-            view="reviews"
-            workspaceId={workspaceId}
-            agentRevision={agentRevision}
-            activeReviewAgentId={reviewAgentId}
-            onAgentsChanged={refreshAgents}
-            onReviewAgentChange={setReviewAgentId}
-          />
-        ) : null}
-        {hasConnectedAgent && resolvedTab === "registry" && canManage && reviewAgentId ? (
-          <AgentHumanReviewEditor
-            key={reviewAgentId}
-            workspaceId={workspaceId}
-            agentId={reviewAgentId}
-            onSaved={refreshAgents}
-            onClose={() => setReviewAgentId(null)}
-          />
-        ) : null}
-        {hasConnectedAgent && resolvedTab === "registry" && canManage && !reviewAgentId ? (
-          <WorkspaceReviewersPanel workspaceId={workspaceId} />
+        {hasConnectedAgent && resolvedTab === "registry" && canManage ? (
+          <AgentReviewsPanel workspaceId={workspaceId} canManage={canManage} />
         ) : null}
         {hasConnectedAgent && resolvedTab === "evaluations" && canManage ? (
           <OversightAlertsPanel workspaceId={workspaceId} />

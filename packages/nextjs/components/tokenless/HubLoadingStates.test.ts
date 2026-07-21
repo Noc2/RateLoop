@@ -8,6 +8,7 @@ test("human and agent hubs use shared skeleton loading states", async () => {
       "./answer/AnswerPageClient.tsx",
       "./agents/AgentConnectionPanel.tsx",
       "./agents/AgentRegistryPanel.tsx",
+      "./agents/AgentReviewsPanel.tsx",
       "./agents/EvaluationDashboardPanel.tsx",
       "./agents/EvidenceWorkspacePanel.tsx",
       "../../app/(app)/human/loading.tsx",

@@ -56,6 +56,7 @@ test("the contextual editor owns every human-review dimension through one canoni
   assert.match(source, /expectedBindingVersion: view\.bindingRevision/);
   assert.match(source, /creating \? "Finish setup" : "Save changes"/);
   assert.doesNotMatch(source, /Finish human-review setup before editing it/);
+  assert.doesNotMatch(source, /Back to reviews|onClose/);
   assert.doesNotMatch(source, /Human-review configuration is unavailable/);
   assert.match(source, /number\(request\.panelSize, 2\)/);
   assert.match(source, /draft\.audience === "private_invited" \? 2 : 3/);

@@ -320,12 +320,10 @@ export function AgentHumanReviewEditor({
   workspaceId,
   agentId,
   onSaved,
-  onClose,
 }: {
   workspaceId: string;
   agentId: string;
   onSaved?: () => void;
-  onClose?: () => void;
 }) {
   const [view, setView] = useState<OwnerView | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -429,11 +427,6 @@ export function AgentHumanReviewEditor({
   if (!draft || !view) {
     return (
       <Card as="section" id="agent-human-review-editor" className="rounded-2xl p-6">
-        {onClose ? (
-          <Button type="button" size="sm" variant="ghost" onClick={onClose}>
-            ← Back to reviews
-          </Button>
-        ) : null}
         <p className="text-sm text-base-content/60">{error ?? "Loading human-review configuration…"}</p>
       </Card>
     );
@@ -453,12 +446,7 @@ export function AgentHumanReviewEditor({
 
   return (
     <Card as="section" id="agent-human-review-editor" className="rounded-2xl p-6">
-      {onClose ? (
-        <Button type="button" size="sm" variant="ghost" onClick={onClose} disabled={busy}>
-          ← Back to reviews
-        </Button>
-      ) : null}
-      <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold">{creating ? "Finish human-review setup" : "Human review"}</h2>
           <p className="mt-1 text-sm text-base-content/60">

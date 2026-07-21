@@ -26,9 +26,9 @@ test("workspace owner configures human review", async ({ page }) => {
   test.slow();
   await authenticate(page, browserState.ownerSessionToken);
   await page.goto(`/agents?tab=registry&workspace=${browserState.workspaceId}`);
-  await expect(page.getByRole("heading", { name: "Review Copilot" })).toBeVisible({ timeout: 90_000 });
-  await page.getByRole("button", { name: "Edit reviews" }).click();
-  await expect(page.getByRole("heading", { name: "Human review" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Human review" })).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByRole("button", { name: "Edit reviews" })).toHaveCount(0);
+  await expect(page.getByText("Review configuration", { exact: true })).toHaveCount(0);
   const frequency = page.getByRole("combobox", { name: "When should RateLoop require human review?" });
   await expect(frequency).toBeVisible();
   await frequency.selectOption({ label: "Every output" });
