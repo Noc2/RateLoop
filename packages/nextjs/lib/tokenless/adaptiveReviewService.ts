@@ -985,6 +985,15 @@ function initialLifecycleDisposition(input: {
   if (!input.grant.active) {
     return { state: "approval_required" as const, reason: input.grant.reason };
   }
+  const privateInvitedUnpaidLane =
+    input.binding.audience === "private_invited" &&
+    input.binding.contentBoundary === "private_workspace" &&
+    input.binding.compensationMode === "unpaid" &&
+    input.binding.publishingPolicyId !== null &&
+    input.binding.publishingPolicyId === input.policy.publishingPolicyId;
+  if (privateInvitedUnpaidLane) {
+    return { state: "request_ready" as const, reason: "private_invited_unpaid_lane_ready" };
+  }
   const publicPaidLane =
     input.binding.audience === "public_network" &&
     input.binding.contentBoundary === "public_or_test" &&

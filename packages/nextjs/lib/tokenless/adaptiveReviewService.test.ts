@@ -415,7 +415,7 @@ test("legitimate negative selection terminates as skipped without an owner or la
   assert.ok(stored.rows[0]?.terminal_at);
 });
 
-test("automatic disposition requires both an exact owner grant and a ready public paid lane", () => {
+test("automatic disposition recognizes exact deployed lanes and requires their owner grant", () => {
   const binding = {
     authority: "ask_automatically",
     audience: "public_network",
@@ -445,6 +445,39 @@ test("automatic disposition requires both an exact owner grant and a ready publi
     state: "request_ready",
     reason: "public_paid_lane_ready",
   });
+  assert.deepEqual(
+    __adaptiveReviewServiceTestUtils.initialLifecycleDisposition({
+      decision: "required",
+      binding: {
+        ...binding,
+        audience: "private_invited",
+        contentBoundary: "private_workspace",
+        compensationMode: "unpaid",
+      } as never,
+      policy: policy as never,
+      grant: { active: true, reason: "active_exact_owner_grant" },
+      // Invited delivery does not depend on public-network panel readiness.
+      networkPanelsEnabled: false,
+      workspaceStopped: false,
+    }),
+    { state: "request_ready", reason: "private_invited_unpaid_lane_ready" },
+  );
+  assert.deepEqual(
+    __adaptiveReviewServiceTestUtils.initialLifecycleDisposition({
+      decision: "required",
+      binding: {
+        ...binding,
+        audience: "private_invited",
+        contentBoundary: "private_workspace",
+        compensationMode: "unpaid",
+      } as never,
+      policy: policy as never,
+      grant: { active: false, reason: "owner_grant_inactive" },
+      networkPanelsEnabled: false,
+      workspaceStopped: false,
+    }),
+    { state: "approval_required", reason: "owner_grant_inactive" },
+  );
   // An engaged workspace stop fails everything closed before any lane logic.
   assert.deepEqual(disposition(true, true, true), {
     state: "blocked",

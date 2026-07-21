@@ -717,6 +717,8 @@ test("finished automatic private setup lets the connected agent assign an eligib
     },
   });
   assert.equal(evaluation.decision, "required");
+  assert.equal(evaluation.lifecycle.state, "request_ready");
+  assert.ok(evaluation.lifecycle.reasonCodes.includes("private_invited_unpaid_lane_ready"));
 
   const routed = await call(5, "rateloop_request_review", {
     opportunityId: evaluation.opportunityId,
