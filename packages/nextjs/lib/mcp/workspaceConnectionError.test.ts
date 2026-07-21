@@ -38,8 +38,10 @@ test("workspace moves disclose both consequences and the dual-consent sequence w
     "Moving this Codex connection will disconnect it from its current RateLoop workspace and replace the selected agent’s previous connection.",
   );
   assert.match(WORKSPACE_MOVE_CONFIRMATION_ACTION, /user explicitly accepts/u);
+  assert.match(WORKSPACE_MOVE_CONFIRMATION_ACTION, /rateloop_confirm_workspace_move/u);
+  assert.match(WORKSPACE_MOVE_CONFIRMATION_ACTION, /confirm_move fragment parameter/u);
   assert.match(WORKSPACE_MOVE_CONFIRMATION_ACTION, /workspace owner must then approve/u);
-  assert.match(WORKSPACE_MOVE_CONFIRMATION_ACTION, /same privately preserved connection URL/u);
+  assert.match(WORKSPACE_MOVE_CONFIRMATION_ACTION, /unmodified privately preserved URL/u);
   for (const value of [WORKSPACE_MOVE_CONSEQUENCE, WORKSPACE_MOVE_CONFIRMATION_ACTION]) {
     assert.doesNotMatch(value, /ws_|agi_|aci_|claim=|token|secret/iu);
   }

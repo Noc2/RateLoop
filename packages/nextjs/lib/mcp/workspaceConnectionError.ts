@@ -5,7 +5,7 @@ export const WORKSPACE_MOVE_CONSEQUENCE =
   "Moving this Codex connection will disconnect it from its current RateLoop workspace and replace the selected agent’s previous connection.";
 
 export const WORKSPACE_MOVE_CONFIRMATION_ACTION =
-  "Confirm the move only after the user explicitly accepts that consequence. The workspace owner must then approve it on RateLoop before the agent retries the same privately preserved connection URL.";
+  "After the user explicitly accepts that consequence, call rateloop_confirm_workspace_move. If that tool is unavailable, privately append the returned confirm_move fragment parameter to the preserved original connection URL and call rateloop_connect_workspace again. The workspace owner must then approve the move on RateLoop before the agent retries the unmodified privately preserved URL.";
 
 type WorkspaceToolError = {
   code: string;

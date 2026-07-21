@@ -657,6 +657,52 @@ function connectionNotReady(message = "Claim the RateLoop connection URL before 
   return toolError(new TokenlessServiceError(message, 409, "connection_not_ready", true));
 }
 
+function splitWorkspaceMoveConfirmation(connectionUrl: string) {
+  let url: URL;
+  try {
+    url = new URL(connectionUrl);
+  } catch {
+    return { connectionUrl };
+  }
+  const fragment = new URLSearchParams(url.hash.slice(1));
+  const markers = fragment.getAll("confirm_move");
+  if (markers.length === 0) return { connectionUrl };
+  if (markers.length !== 1 || !/^acm_[a-f0-9]{32}$/u.test(markers[0])) {
+    throw new TokenlessServiceError(
+      "The workspace move confirmation marker is invalid.",
+      400,
+      "workspace_move_confirmation_invalid",
+    );
+  }
+  fragment.delete("confirm_move");
+  url.hash = fragment.toString();
+  return { connectionUrl: url.toString(), transferId: markers[0] };
+}
+
+function ownerApprovalRequiredResult(input: {
+  approvalUrl: string;
+  expiresAt: string;
+  idempotent: boolean;
+  transferId: string;
+}) {
+  return toolResult({
+    schemaVersion: "rateloop.workspace-move.v1",
+    workspaceMove: {
+      status: "owner_approval_required",
+      transferId: input.transferId,
+      approvalUrl: input.approvalUrl,
+      expiresAt: input.expiresAt,
+      consequence: WORKSPACE_MOVE_CONSEQUENCE,
+      credentialHolderConfirmed: true,
+      ownerApprovalRequired: true,
+      nextAction: "owner_approve_then_retry_connection",
+    },
+    idempotent: input.idempotent,
+    instruction:
+      "Ask the workspace owner to approve or deny this move on RateLoop. After approval, retry rateloop_connect_workspace with the unmodified privately preserved connection URL. Do not approve the website decision for the owner or ask for the URL again.",
+  });
+}
+
 async function callOAuthTool(
   principal: Extract<AgentMcpPrincipal, { kind: "oauth" }>,
   name: string,
@@ -678,16 +724,51 @@ async function callOAuthTool(
       if (input.reportedLane !== undefined && typeof input.reportedLane !== "string") {
         throw new TokenlessServiceError("reportedLane is invalid.", 400, "invalid_tool_arguments");
       }
+      const confirmation = splitWorkspaceMoveConfirmation(input.connectionUrl);
+      if (name === "rateloop_claim_connection_intent" && confirmation.transferId) {
+        throw new TokenlessServiceError(
+          "Workspace move confirmation is supported only by rateloop_connect_workspace.",
+          400,
+          "workspace_move_confirmation_requires_connect",
+        );
+      }
       if (!context.mcpSessionHash) {
         throw new TokenlessServiceError("MCP-Session-Id is required.", 400, "mcp_session_required");
       }
       const claim = await claimAgentConnectionIntent({
-        connectionUrl: input.connectionUrl,
+        connectionUrl: confirmation.connectionUrl,
         mcpSessionHash: context.mcpSessionHash,
         origin: context.origin,
         principal: principal.oauth,
         ...(typeof input.reportedLane === "string" ? { reportedLane: input.reportedLane } : {}),
       });
+      if (confirmation.transferId) {
+        if (!claim.workspaceMove || claim.workspaceMove.transferId !== confirmation.transferId) {
+          throw new TokenlessServiceError(
+            "The workspace move confirmation does not match this reconnect.",
+            409,
+            "workspace_move_confirmation_mismatch",
+          );
+        }
+        const confirmed = await confirmAgentWorkspaceMove({
+          principal: principal.oauth,
+          transferId: confirmation.transferId,
+          origin: context.origin,
+        });
+        if (confirmed.workspaceMove.status !== "owner_approval_required") {
+          throw new TokenlessServiceError(
+            "The workspace move confirmation returned an invalid state.",
+            500,
+            "workspace_move_state_invalid",
+          );
+        }
+        return ownerApprovalRequiredResult({
+          approvalUrl: confirmed.workspaceMove.approvalUrl,
+          expiresAt: confirmed.workspaceMove.expiresAt,
+          idempotent: confirmed.idempotent,
+          transferId: confirmed.workspaceMove.transferId,
+        });
+      }
       if (claim.workspaceMove?.status === "source_confirmation_required") {
         return toolResult({
           schemaVersion: "rateloop.workspace-move.v1",
@@ -698,6 +779,12 @@ async function callOAuthTool(
             consequence: WORKSPACE_MOVE_CONSEQUENCE,
             confirmationRequired: true,
             confirmationAction: WORKSPACE_MOVE_CONFIRMATION_ACTION,
+            fallbackConfirmation: {
+              fragmentParameter: "confirm_move",
+              fragmentValue: claim.workspaceMove.transferId,
+              instruction:
+                "If rateloop_confirm_workspace_move is unavailable, append &confirm_move=<fragmentValue> inside the fragment of a one-use private copy of the preserved original connection URL, then call rateloop_connect_workspace with that copy. Do this only after the user explicitly accepts the consequence. Never display or replace the preserved original URL.",
+            },
             nextAction: "confirm_workspace_move",
           },
           idempotent: claim.idempotent,
@@ -751,20 +838,11 @@ async function callOAuthTool(
           "workspace_move_state_invalid",
         );
       }
-      return toolResult({
-        schemaVersion: "rateloop.workspace-move.v1",
-        workspaceMove: {
-          status: "owner_approval_required",
-          transferId: confirmed.workspaceMove.transferId,
-          approvalUrl: confirmed.workspaceMove.approvalUrl,
-          expiresAt: confirmed.workspaceMove.expiresAt,
-          consequence: WORKSPACE_MOVE_CONSEQUENCE,
-          credentialHolderConfirmed: true,
-          ownerApprovalRequired: true,
-          nextAction: "owner_approve_then_retry_connection",
-        },
-        instruction:
-          "Ask the workspace owner to approve or deny this move on RateLoop. After approval, retry rateloop_connect_workspace with the same privately preserved connection URL. Do not approve the website decision for the owner or ask for the URL again.",
+      return ownerApprovalRequiredResult({
+        approvalUrl: confirmed.workspaceMove.approvalUrl,
+        expiresAt: confirmed.workspaceMove.expiresAt,
+        idempotent: confirmed.idempotent,
+        transferId: confirmed.workspaceMove.transferId,
       });
     }
     if (!principal.integration || !principal.principal) return connectionNotReady();

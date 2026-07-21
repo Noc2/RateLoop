@@ -681,22 +681,101 @@ test("a targeted OAuth reconnect returns ordinary dual-consent tool actions", as
   assert.equal(proposed.workspaceMove.nextAction, "confirm_workspace_move");
   assert.match(proposed.workspaceMove.consequence, /disconnect it from its current RateLoop workspace/u);
   assert.match(proposed.workspaceMove.confirmationAction, /workspace owner must then approve/u);
+  assert.equal(proposed.workspaceMove.fallbackConfirmation.fragmentParameter, "confirm_move");
+  assert.equal(proposed.workspaceMove.fallbackConfirmation.fragmentValue, proposed.workspaceMove.transferId);
+  assert.match(proposed.workspaceMove.fallbackConfirmation.instruction, /one-use private copy/u);
+  assert.match(proposed.workspaceMove.fallbackConfirmation.instruction, /Never display or replace/u);
   assert.equal(proposed.idempotent, false);
   const proposedJson = JSON.stringify(proposed);
   assert.equal(proposedJson.includes(sourceWorkspaceId), false);
   assert.equal(proposedJson.includes(reconnectIntent.connectionUrl), false);
   assert.equal(proposedJson.includes(new URL(reconnectIntent.connectionUrl).hash), false);
 
-  const confirmedResponse = await POST(
+  const mismatchedFallbackUrl = new URL(reconnectIntent.connectionUrl);
+  const mismatchedFallbackFragment = new URLSearchParams(mismatchedFallbackUrl.hash.slice(1));
+  const allFsTransferId = `acm_${"f".repeat(32)}`;
+  const mismatchedTransferId =
+    proposed.workspaceMove.transferId === allFsTransferId ? `acm_${"e".repeat(32)}` : allFsTransferId;
+  assert.notEqual(mismatchedTransferId, proposed.workspaceMove.transferId);
+  mismatchedFallbackFragment.append("confirm_move", mismatchedTransferId);
+  mismatchedFallbackUrl.hash = mismatchedFallbackFragment.toString();
+  const mismatchedFallbackResponse = await POST(
     request(
       {
         id: 6,
         jsonrpc: "2.0",
         method: "tools/call",
         params: {
-          name: "rateloop_confirm_workspace_move",
-          arguments: { transferId: proposed.workspaceMove.transferId },
+          name: "rateloop_connect_workspace",
+          arguments: { connectionUrl: mismatchedFallbackUrl.toString() },
         },
+      },
+      sourceTokens.access_token,
+      sourceSessionId,
+    ),
+  );
+  assert.equal(mismatchedFallbackResponse.status, 200);
+  const mismatchedFallback = (await mismatchedFallbackResponse.json()).result;
+  assert.equal(mismatchedFallback.isError, true);
+  assert.equal(mismatchedFallback.structuredContent.code, "workspace_move_confirmation_mismatch");
+
+  const ordinaryRetryResponse = await POST(
+    request(
+      {
+        id: 7,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: "rateloop_connect_workspace", arguments: { connectionUrl: reconnectIntent.connectionUrl } },
+      },
+      sourceTokens.access_token,
+      sourceSessionId,
+    ),
+  );
+  assert.equal(ordinaryRetryResponse.status, 200);
+  const ordinaryRetry = (await ordinaryRetryResponse.json()).result.structuredContent;
+  assert.equal(ordinaryRetry.workspaceMove.status, "source_confirmation_required");
+  assert.equal(ordinaryRetry.workspaceMove.transferId, proposed.workspaceMove.transferId);
+  assert.equal(ordinaryRetry.idempotent, true);
+  const stillUnconfirmed = await dbClient.execute({
+    sql: "SELECT status,source_confirmed_at FROM tokenless_agent_workspace_moves WHERE move_id=?",
+    args: [proposed.workspaceMove.transferId],
+  });
+  assert.deepEqual(stillUnconfirmed.rows[0], {
+    status: "source_confirmation_required",
+    source_confirmed_at: null,
+  });
+
+  const fallbackUrl = new URL(reconnectIntent.connectionUrl);
+  const fallbackFragment = new URLSearchParams(fallbackUrl.hash.slice(1));
+  fallbackFragment.append(
+    proposed.workspaceMove.fallbackConfirmation.fragmentParameter,
+    proposed.workspaceMove.fallbackConfirmation.fragmentValue,
+  );
+  fallbackUrl.hash = fallbackFragment.toString();
+  const rejectedLegacyClaim = await POST(
+    request(
+      {
+        id: 8,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: "rateloop_claim_connection_intent", arguments: { connectionUrl: fallbackUrl.toString() } },
+      },
+      sourceTokens.access_token,
+      sourceSessionId,
+    ),
+  );
+  assert.equal(rejectedLegacyClaim.status, 200);
+  const rejectedLegacyClaimBody = (await rejectedLegacyClaim.json()).result;
+  assert.equal(rejectedLegacyClaimBody.isError, true);
+  assert.equal(rejectedLegacyClaimBody.structuredContent.code, "workspace_move_confirmation_requires_connect");
+
+  const confirmedResponse = await POST(
+    request(
+      {
+        id: 9,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: "rateloop_connect_workspace", arguments: { connectionUrl: fallbackUrl.toString() } },
       },
       sourceTokens.access_token,
       sourceSessionId,
@@ -710,13 +789,16 @@ test("a targeted OAuth reconnect returns ordinary dual-consent tool actions", as
   assert.equal(confirmed.workspaceMove.credentialHolderConfirmed, true);
   assert.equal(confirmed.workspaceMove.ownerApprovalRequired, true);
   assert.equal(confirmed.workspaceMove.nextAction, "owner_approve_then_retry_connection");
+  assert.equal(confirmed.idempotent, false);
   assert.match(confirmed.workspaceMove.approvalUrl, /\/agents\?tab=connect&workspace=/u);
   assert.match(confirmed.instruction, /After approval, retry rateloop_connect_workspace/u);
+  assert.match(confirmed.instruction, /unmodified privately preserved connection URL/u);
   assert.match(confirmed.instruction, /Do not approve the website decision for the owner/u);
   const confirmedJson = JSON.stringify(confirmed);
   assert.equal(confirmedJson.includes(sourceWorkspaceId), false);
   assert.equal(confirmedJson.includes(reconnectIntent.connectionUrl), false);
   assert.equal(confirmedJson.includes(new URL(reconnectIntent.connectionUrl).hash), false);
+  assert.equal(confirmedJson.includes(fallbackUrl.toString()), false);
 });
 
 test("an owner can recover only a replay-revoked public OAuth integration", async () => {

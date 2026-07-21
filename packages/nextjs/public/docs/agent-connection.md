@@ -62,17 +62,24 @@ targeted reconnect uses two explicit decisions and never exposes or replaces the
 1. The agent reports: **Moving this Codex connection will disconnect it from its current RateLoop workspace and replace
    the selected agent’s previous connection.** The current credential holder must explicitly confirm that consequence
    in the agent task.
-2. RateLoop then gives the selected agent’s workspace owner a website approval. The owner approves or denies the move
+2. The agent records that confirmation with the dedicated move-confirmation tool. If the host has not refreshed its
+   tool list yet, the same confirmation works through `rateloop_connect_workspace`: the agent privately appends the
+   server-provided `confirm_move` value to a one-use copy of the preserved URL fragment. The unmodified URL remains
+   private and an ordinary retry never confirms the move.
+3. RateLoop then gives the selected agent’s workspace owner a website approval. The owner approves or denies the move
    while signed in to RateLoop.
-3. After approval, the agent retries the same privately preserved connection URL. RateLoop moves the one active binding,
-   invalidates the replaced sessions, preserves the selected agent and its saved review configuration, and verifies the
-   connection.
+4. After approval, the agent retries the unmodified privately preserved connection URL. RateLoop moves the one active
+   binding, invalidates the replaced sessions, preserves the selected agent and its saved review configuration, and
+   verifies the connection.
 
 The agent cannot approve the owner’s website decision, and the owner’s approval cannot substitute for the credential
 holder’s confirmation. Neither surface reveals the other workspace’s identity. If RateLoop instead reports the legacy
 `workspace_conflict`, create a targeted reconnect message for the intended agent and retry in the same task. Do not
 claim an invisible OAuth prompt is pending, copy the connection secret again, expose a workspace identifier, handle a
 bearer token, or change MCP configuration.
+
+The fallback marker is valid only with `rateloop_connect_workspace`; the lower-level claim tool rejects it. The agent
+must never display the original URL, its fragment, or a marked copy.
 
 Do not put credentials in the MCP configuration. Do not create a background service or polling task to keep a connection
 alive.
