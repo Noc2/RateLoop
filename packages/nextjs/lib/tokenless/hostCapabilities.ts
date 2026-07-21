@@ -114,8 +114,8 @@ export const TOKENLESS_HOST_CAPABILITIES = [
         kind: "plugin-marketplace",
         label: "RateLoop Workspace plugin from the tokenless-pinned Noc2/RateLoop marketplace",
         value: "plugin://rateloop-workspace@rateloop",
-        checkedAt: "2026-07-20",
-        clientVersion: "rateloop-workspace@0.1.1+codex.20260720140232",
+        checkedAt: "2026-07-21",
+        clientVersion: "rateloop-workspace@0.1.2+codex.20260721222513",
       },
     ],
     humanActions: [
@@ -138,8 +138,8 @@ export const TOKENLESS_HOST_CAPABILITIES = [
         kind: "plugin-marketplace",
         label: "RateLoop Workspace plugin from the tokenless-pinned Noc2/RateLoop marketplace",
         value: "plugin://rateloop-workspace@rateloop",
-        checkedAt: "2026-07-17",
-        clientVersion: "rateloop-workspace@0.1.1",
+        checkedAt: "2026-07-21",
+        clientVersion: "rateloop-workspace@0.1.2",
       },
       // The org managed-settings snippet is intentionally absent: no repo doc or
       // hooks contract pins its shape yet, and unverified shapes are never published.

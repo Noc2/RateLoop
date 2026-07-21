@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "rateloop-workspace",
   "displayName": "RateLoop Workspace",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Secure workspace policy connections for AI-enabled workflows.",
   "author": {
     "name": "RateLoop",

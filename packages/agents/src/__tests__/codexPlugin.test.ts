@@ -66,7 +66,7 @@ describe("RateLoop agent host assets", () => {
     });
     expect(workspaceManifest.name).toBe("rateloop-workspace");
     expect(workspaceManifest.version).toMatch(
-      /^0\.1\.1\+codex\.[0-9A-Za-z.-]+$/,
+      /^0\.1\.2\+codex\.[0-9A-Za-z.-]+$/,
     );
     expect(workspaceManifest.skills).toBe("./skills/");
     expect(workspaceManifest.mcpServers).toBe("./.mcp.json");
@@ -281,7 +281,7 @@ describe("RateLoop agent host assets", () => {
       expect.objectContaining({
         name: "rateloop-workspace",
         displayName: "RateLoop Workspace",
-        version: "0.1.1",
+        version: "0.1.2",
         skills: "./skills/",
         mcpServers: "./.mcp.json",
       }),

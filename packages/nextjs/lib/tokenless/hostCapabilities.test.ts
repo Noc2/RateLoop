@@ -76,8 +76,8 @@ test("plugin hosts keep the bundled marketplace path as the primary affordance",
   }
 
   const codex = tokenlessHostCapability("codex-desktop");
-  assert.equal(codex?.installAffordances[0].checkedAt, "2026-07-20");
-  assert.match(codex?.installAffordances[0].clientVersion ?? "", /^rateloop-workspace@0\.1\.1\+codex\./);
+  assert.equal(codex?.installAffordances[0].checkedAt, "2026-07-21");
+  assert.match(codex?.installAffordances[0].clientVersion ?? "", /^rateloop-workspace@0\.1\.2\+codex\./);
   assert.match(codex?.notes ?? "", /authentication runs during install/i);
 });
 
