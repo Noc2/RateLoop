@@ -50,8 +50,9 @@ limits on what those records establish.
 
 ## Agent integration
 
-Workspace owners change audience, frequency, response window, panel, compensation, and authority from the connected
-agent's **Manage → Human review** editor. The connected workspace MCP uses `rateloop_get_agent_context ->
+Workspace owners change audience, frequency, response window, panel, compensation, and authority directly in
+**Reviews**. When multiple agents are active, a compact selector chooses which agent's policy to edit; the workspace
+reviewer roster follows the editor. The connected workspace MCP uses `rateloop_get_agent_context ->
 rateloop_evaluate_review_requirement -> skip or rateloop_request_review -> rateloop_wait_for_review ->
 rateloop_get_review_result -> rateloop_get_assurance_state`. Its basic safe connection can evaluate review requirements
 but cannot spend or publish. Autonomous review requires a separate owner-approved publishing grant with explicit

@@ -103,16 +103,11 @@ reviewer groups. Workspace members are managed separately in **Workspace**. Revi
 for assignment-bound review leases and never grants workspace membership, project administration, or general access to
 private material.
 
-## Owner-facing summary
+## Owner-facing journey
 
-Every connected-agent card exposes, without opening an advanced disclosure:
+**Reviews** opens the active agent's **Human review** editor directly. It does not show an agent summary card,
+configuration summary, or separate **Edit reviews** step. When a workspace has multiple active agents, a compact agent
+selector appears above the editor. The operational workspace reviewer roster remains directly below the editor.
 
-- effective frequency and current adaptive rate;
-- reviewers and material boundary;
-- response window and panel size;
-- guaranteed compensation, automatic quality reward, and optional Feedback Bonus as separate values;
-- authority, spend cap, and kill-switch state;
-- last policy check, last request, pending review, and last result; and
-- advisory or verified host-enforced status.
-
-Advanced statistical thresholds, immutable version history, technical commitments, and raw audit identifiers remain progressively disclosed.
+The editor keeps the current policy controls and required status or recovery actions visible. Advanced statistical
+thresholds, immutable version history, technical commitments, and raw audit identifiers remain progressively disclosed.

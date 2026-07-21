@@ -24,9 +24,10 @@ Before every eligible output, the agent reloads context and calls `rateloop_eval
 `rateloop_request_review -> rateloop_wait_for_review -> rateloop_get_review_result` within the exact authority returned
 by the workspace.
 
-Workspace owners inspect and change audience, frequency, response window, panel, compensation, and agent authority on
-**Agents**: open the connected agent's **Manage** section, then **Human review**. A saved policy change does not require a
-new intent; the next context read returns the active version. A new intent is required after deletion or revocation.
+Workspace owners inspect and change audience, frequency, response window, panel, compensation, and agent authority
+directly in **Reviews**. When multiple agents are active, a compact selector chooses which agent's policy to edit; the
+workspace reviewer roster follows the editor. A saved policy change does not require a new intent; the next context read
+returns the active version. A new intent is required after deletion or revocation.
 
 The generated Codex message includes both the structured **RateLoop Workspace** plugin mention and an explicit
 `$rateloop-workspace-connection` skill invocation. This dedicated plugin contains only the OAuth-protected workspace MCP
