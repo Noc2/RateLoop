@@ -64,7 +64,10 @@ import { exactReviewerExpertiseDefinitionKey } from "~~/lib/tokenless/reviewerEx
 import { chooseExpertiseCoveredPanel } from "~~/lib/tokenless/reviewerExpertiseCoverage";
 import type { ReviewerExpertiseRequirement } from "~~/lib/tokenless/reviewerExpertiseOptions";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
-import { workspacePrivateReviewRoutingIds } from "~~/lib/tokenless/workspacePrivateReviewRouting";
+import {
+  reconcileWorkspacePrivateReviewRoutingForFrozenRequest,
+  workspacePrivateReviewRoutingIds,
+} from "~~/lib/tokenless/workspacePrivateReviewRouting";
 import { isWorkspaceStopEngaged } from "~~/lib/tokenless/workspaceStopControl";
 
 type Row = Record<string, unknown>;
@@ -255,6 +258,7 @@ type RouterDependencies = {
   prepareApproval: typeof prepareHumanReviewForOwnerApproval;
   consumePublicationApproval?: typeof consumeRedactedPublicationApproval;
   publishPublicPaid: typeof requestPublicPaidHumanReview;
+  reconcilePrivateRouting: typeof reconcileWorkspacePrivateReviewRoutingForFrozenRequest;
   resolvePrivateBinding: (
     principal: IntegrationPrincipal,
     context: FrozenHumanReviewRoutingContext,
@@ -1117,6 +1121,7 @@ const DEFAULT_DEPENDENCIES: RouterDependencies = {
   prepareApproval: prepareHumanReviewForOwnerApproval,
   consumePublicationApproval: consumeRedactedPublicationApproval,
   publishPublicPaid: requestPublicPaidHumanReview,
+  reconcilePrivateRouting: reconcileWorkspacePrivateReviewRoutingForFrozenRequest,
   resolvePrivateBinding: resolveExactPrivateBinding,
   activateAutonomousLane: activateExactAutonomousLane,
   preparePrivateFoundation: preparePrivateReviewFoundation,
@@ -1375,6 +1380,26 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
     }
     const material = input.material!;
     if (material.kind !== "private") throw new Error("Private material was checked before routing.");
+    // Request-time seat refresh is readiness-complete only for the deployed
+    // unpaid lane without paid-identity requirements.
+    if (context.requestProfile.lane === "private_invited_unpaid" && !context.requestProfile.feedbackBonusEnabled) {
+      const privateRouting = await dependencies.reconcilePrivateRouting({
+        workspaceId: context.workspaceId,
+        profileId: context.requestProfile.id,
+        profileVersion: context.requestProfile.version,
+        profileHash: context.requestProfile.hash,
+        now,
+      });
+      if (!privateRouting.ready) {
+        return {
+          ...common,
+          action: "blocked",
+          code: "private_routing_configuration_required",
+          retryable: true,
+          sideEffects: NO_SIDE_EFFECTS,
+        };
+      }
+    }
     const privateBinding = await dependencies.resolvePrivateBinding(input.principal, context, now);
     if (!privateBinding) {
       return {

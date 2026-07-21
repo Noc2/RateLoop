@@ -14,7 +14,10 @@ import {
   replacePrivateGroupMemberExpertise,
 } from "~~/lib/tokenless/reviewerExpertiseAssignments";
 import type { ReviewerExpertiseRequirement } from "~~/lib/tokenless/reviewerExpertiseOptions";
-import { provisionWorkspacePrivateReviewRouting } from "~~/lib/tokenless/workspacePrivateReviewRouting";
+import {
+  provisionWorkspacePrivateReviewRouting,
+  reconcileWorkspacePrivateReviewRoutingForFrozenRequest,
+} from "~~/lib/tokenless/workspacePrivateReviewRouting";
 import {
   createWorkspaceReviewerInvitation,
   redeemWorkspaceReviewerInvitation,
@@ -23,7 +26,7 @@ import {
 const OWNER = "0x1111111111111111111111111111111111111111";
 const REVIEWER_A = "0x2222222222222222222222222222222222222222";
 const REVIEWER_B = "0x3333333333333333333333333333333333333333";
-const REVIEWER_C = "0x4444444444444444444444444444444444444444";
+const REVIEWER_C = "0x0000000000000000000000000000000000000001";
 const PROFILE_ID = "hrrp_workspace_private_routing";
 const PROFILE_HASH = `sha256:${"a".repeat(64)}`;
 
@@ -229,9 +232,9 @@ test("managed private routing is idempotent and stays unready until the exact re
   assert.deepEqual(
     reviewers.rows.map(row => [row.reviewer_account_address, row.status]),
     [
+      [REVIEWER_C, "active"],
       [REVIEWER_A, "active"],
-      [REVIEWER_B, "active"],
-      [REVIEWER_C, "inactive"],
+      [REVIEWER_B, "inactive"],
     ],
   );
   for (const row of reviewers.rows) {
@@ -241,6 +244,147 @@ test("managed private routing is idempotent and stays unready until the exact re
       ["customer_invitation", "private_review_policy_group", "workspace_reviewer_access_grant"],
     );
   }
+});
+
+test("frozen request reconciliation admits a newly redeemed reviewer after the prior panel expires", async () => {
+  const setup = await fixture();
+  await addMember({ ...setup, reviewer: REVIEWER_A });
+  await addMember({ ...setup, reviewer: REVIEWER_B });
+  const initial = await provision(setup);
+  assert.equal(initial.ready, true);
+  assert.deepEqual(
+    (
+      await dbClient.execute({
+        sql: `SELECT reviewer_account_address FROM tokenless_assurance_cohort_reviewers
+              WHERE project_id=? AND cohort_id=? AND status='active'
+              ORDER BY reviewer_account_address`,
+        args: [initial.projectId, initial.cohortId],
+      })
+    ).rows.map(row => row.reviewer_account_address),
+    [REVIEWER_A, REVIEWER_B],
+  );
+
+  await dbClient.execute({
+    sql: `UPDATE tokenless_assurance_cohorts SET active_reservations=2
+          WHERE project_id=? AND cohort_id=?`,
+    args: [initial.projectId, initial.cohortId],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_assurance_cohort_reviewers SET active_reservations=1
+          WHERE project_id=? AND cohort_id=? AND reviewer_account_address IN (?,?)`,
+    args: [initial.projectId, initial.cohortId, REVIEWER_A, REVIEWER_B],
+  });
+  await addMember({ ...setup, reviewer: REVIEWER_C });
+  await dbClient.execute({
+    sql: `DELETE FROM tokenless_workspace_members WHERE workspace_id=? AND account_address=?`,
+    args: [setup.workspaceId, OWNER],
+  });
+
+  const reconcile = (now: Date, profileHash = PROFILE_HASH) =>
+    reconcileWorkspacePrivateReviewRoutingForFrozenRequest({
+      workspaceId: setup.workspaceId,
+      profileId: PROFILE_ID,
+      profileVersion: 1,
+      profileHash,
+      now,
+    });
+  const busy = await reconcile(new Date(setup.now.getTime() + 5 * 60_000));
+  assert.equal(busy.ready, false);
+  assert.equal(busy.syncedReviewerCount, 3);
+  assert.equal(busy.selectedReviewerCount, 0);
+  const syncedWhileBusy = await dbClient.execute({
+    sql: `SELECT reviewer_account_address,status,active_reservations
+          FROM tokenless_assurance_cohort_reviewers
+          WHERE project_id=? AND cohort_id=? ORDER BY reviewer_account_address`,
+    args: [initial.projectId, initial.cohortId],
+  });
+  assert.deepEqual(
+    syncedWhileBusy.rows.map(row => [row.reviewer_account_address, row.status, Number(row.active_reservations)]),
+    [
+      [REVIEWER_C, "inactive", 0],
+      [REVIEWER_A, "active", 1],
+      [REVIEWER_B, "active", 1],
+    ],
+  );
+
+  // Model the expiration worker's release before the next request refreshes
+  // the frozen cohort. The entry point also runs that worker in production.
+  await dbClient.execute({
+    sql: `UPDATE tokenless_assurance_cohorts SET active_reservations=0
+          WHERE project_id=? AND cohort_id=?`,
+    args: [initial.projectId, initial.cohortId],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_assurance_cohort_reviewers SET active_reservations=0
+          WHERE project_id=? AND cohort_id=?`,
+    args: [initial.projectId, initial.cohortId],
+  });
+  const refreshed = await reconcile(new Date(setup.now.getTime() + 20 * 60_000));
+  assert.equal(refreshed.ready, true);
+  assert.equal(refreshed.eligibleReviewerCount, 3);
+  assert.equal(refreshed.selectedReviewerCount, 2);
+  const selected = await dbClient.execute({
+    sql: `SELECT reviewer_account_address FROM tokenless_assurance_cohort_reviewers
+          WHERE project_id=? AND cohort_id=? AND status='active'
+          ORDER BY reviewer_account_address`,
+    args: [initial.projectId, initial.cohortId],
+  });
+  assert.deepEqual(
+    selected.rows.map(row => row.reviewer_account_address),
+    [REVIEWER_C, REVIEWER_A],
+  );
+  await assert.rejects(reconcile(new Date(setup.now.getTime() + 25 * 60_000), `sha256:${"b".repeat(64)}`));
+});
+
+test("frozen request reconciliation cannot provision a missing routing foundation", async () => {
+  const setup = await fixture();
+  await addMember({ ...setup, reviewer: REVIEWER_A });
+  await addMember({ ...setup, reviewer: REVIEWER_B });
+  const readiness = await reconcileWorkspacePrivateReviewRoutingForFrozenRequest({
+    workspaceId: setup.workspaceId,
+    profileId: PROFILE_ID,
+    profileVersion: 1,
+    profileHash: PROFILE_HASH,
+    now: setup.now,
+  });
+  assert.equal(readiness.ready, false);
+  assert.equal(readiness.reason, "managed_foundation_unavailable");
+  const resources = await dbClient.execute({
+    sql: `SELECT
+            (SELECT COUNT(*) FROM tokenless_assurance_projects WHERE project_id LIKE 'hap_setup_%') AS projects,
+            (SELECT COUNT(*) FROM tokenless_assurance_cohorts WHERE cohort_id LIKE 'hacoh_setup_%') AS cohorts,
+            (SELECT COUNT(*) FROM tokenless_project_access_assignments WHERE assignment_id LIKE 'paccess_setup_%') AS access`,
+  });
+  assert.deepEqual(
+    {
+      projects: Number(resources.rows[0]?.projects),
+      cohorts: Number(resources.rows[0]?.cohorts),
+      access: Number(resources.rows[0]?.access),
+    },
+    { projects: 0, cohorts: 0, access: 0 },
+  );
+});
+
+test("frozen request reconciliation reports a drifted managed cohort as unready", async () => {
+  const setup = await fixture();
+  await addMember({ ...setup, reviewer: REVIEWER_A });
+  await addMember({ ...setup, reviewer: REVIEWER_B });
+  const initial = await provision(setup);
+  await dbClient.execute({
+    sql: `UPDATE tokenless_assurance_cohorts SET selection='randomized'
+          WHERE project_id=? AND cohort_id=?`,
+    args: [initial.projectId, initial.cohortId],
+  });
+  const readiness = await reconcileWorkspacePrivateReviewRoutingForFrozenRequest({
+    workspaceId: setup.workspaceId,
+    profileId: PROFILE_ID,
+    profileVersion: 1,
+    profileHash: PROFILE_HASH,
+    now: setup.now,
+  });
+  assert.equal(readiness.ready, false);
+  assert.equal(readiness.reason, "managed_foundation_unavailable");
+  assert.equal(readiness.selectedReviewerCount, 0);
 });
 
 test("exact expertise and cohort capacity both fail closed", async () => {

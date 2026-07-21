@@ -204,7 +204,16 @@ function material(frozen: FrozenHumanReviewRoutingContext): HumanReviewRoutingMa
 }
 
 function routeFixture(frozen: FrozenHumanReviewRoutingContext) {
-  const calls = { approval: 0, activate: 0, public: 0, resolvePrivate: 0, foundation: 0, unpaid: 0, hybrid: 0 };
+  const calls = {
+    approval: 0,
+    activate: 0,
+    public: 0,
+    reconcilePrivate: 0,
+    resolvePrivate: 0,
+    foundation: 0,
+    unpaid: 0,
+    hybrid: 0,
+  };
   const ask = {
     schemaVersion: "rateloop.tokenless.v2",
     idempotencyKey: "ask_agent_flow_e2e",
@@ -239,6 +248,23 @@ function routeFixture(frozen: FrozenHumanReviewRoutingContext) {
     publishPublicPaid: async () => {
       calls.public += 1;
       return { schemaVersion: "rateloop.adaptive-review-request.v1", opportunityId: frozen.opportunityId, ask };
+    },
+    reconcilePrivateRouting: async () => {
+      calls.reconcilePrivate += 1;
+      return {
+        schemaVersion: "rateloop.workspace-private-review-routing-readiness.v1",
+        ready: true,
+        reason: "ready",
+        projectId: "project_agent_flow_e2e",
+        cohortId: "cohort_agent_flow_e2e",
+        privateGroupId: "group_agent_flow_e2e",
+        panelSize: 2,
+        syncedReviewerCount: 2,
+        eligibleReviewerCount: 2,
+        selectedReviewerCount: 2,
+        availableCapacity: 2,
+        responseDeadline: "2026-07-16T13:00:00.000Z",
+      };
     },
     resolvePrivateBinding: async () => {
       calls.resolvePrivate += 1;
@@ -323,6 +349,7 @@ test("check-only, owner-approval, and automatic authority route each supported a
           approval: 0,
           activate: 0,
           public: 0,
+          reconcilePrivate: 0,
           resolvePrivate: 0,
           foundation: 0,
           unpaid: 0,
@@ -332,7 +359,13 @@ test("check-only, owner-approval, and automatic authority route each supported a
         assert.equal(result.action, "owner_approval_required");
         assert.equal(calls.approval, 1);
         assert.equal(
-          calls.activate + calls.public + calls.resolvePrivate + calls.foundation + calls.unpaid + calls.hybrid,
+          calls.activate +
+            calls.public +
+            calls.reconcilePrivate +
+            calls.resolvePrivate +
+            calls.foundation +
+            calls.unpaid +
+            calls.hybrid,
           0,
         );
       } else if (lane === "public_paid_network") {
@@ -344,11 +377,12 @@ test("check-only, owner-approval, and automatic authority route each supported a
         assert.deepEqual(
           {
             activate: calls.activate,
+            reconcilePrivate: calls.reconcilePrivate,
             resolvePrivate: calls.resolvePrivate,
             foundation: calls.foundation,
             unpaid: calls.unpaid,
           },
-          { activate: 1, resolvePrivate: 1, foundation: 1, unpaid: 1 },
+          { activate: 1, reconcilePrivate: 1, resolvePrivate: 1, foundation: 1, unpaid: 1 },
         );
       } else {
         assert.equal(result.action, "hybrid_review_requested");
@@ -399,4 +433,5 @@ test("private unpaid routing needs publish scope only while a Feedback Bonus als
   assert.equal(blocked.action, "blocked");
   assert.equal(blocked.action === "blocked" ? blocked.code : null, "automatic_grant_inactive");
   assert.equal(bonusFixture.calls.activate, 0);
+  assert.equal(bonusFixture.calls.reconcilePrivate, 0);
 });

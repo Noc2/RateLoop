@@ -27,6 +27,7 @@ type Row = Record<string, unknown>;
 
 export type WorkspacePrivateReviewRoutingReadinessReason =
   | "ready"
+  | "managed_foundation_unavailable"
   | "reviewer_seats_insufficient"
   | "expertise_coverage_insufficient"
   | "cohort_capacity_insufficient"
@@ -168,6 +169,15 @@ function normalizeActor(value: string) {
   }
 }
 
+function storedApprovalActor(value: string | null) {
+  if (!value) throw new Error("Stored private review approval actor is missing.");
+  try {
+    return normalizeAccountSubject(value);
+  } catch {
+    throw new Error("Stored private review approval actor is invalid.");
+  }
+}
+
 function requiredProfileVersion(value: number) {
   if (!Number.isSafeInteger(value) || value < 1) {
     throw new TokenlessServiceError("Review profile version is invalid.", 400, "invalid_review_request_profile");
@@ -185,29 +195,37 @@ function requiredProfileHash(value: string) {
 async function loadProfile(
   client: PoolClient,
   input: {
-    actor: string;
+    actor?: string;
     workspaceId: string;
     profileId: string;
     profileVersion: number;
     profileHash: string;
   },
 ) {
+  const interactive = input.actor !== undefined;
   const result = await client.query(
     `SELECT r.*,g.current_policy_version,g.status AS group_status,
             gp.policy_json,gp.allowed_project_ids_json,gp.data_classifications_json,gp.policy_hash AS group_policy_hash
      FROM tokenless_agent_review_request_profiles r
      JOIN tokenless_workspaces w ON w.workspace_id=r.workspace_id AND w.status='active'
-     JOIN tokenless_workspace_members wm
-       ON wm.workspace_id=r.workspace_id AND wm.account_address=$1 AND wm.role IN ('owner','admin')
+     ${
+       interactive
+         ? `JOIN tokenless_workspace_members wm
+       ON wm.workspace_id=r.workspace_id AND wm.account_address=$1 AND wm.role IN ('owner','admin')`
+         : ""
+     }
      JOIN tokenless_private_groups g
        ON g.workspace_id=r.workspace_id AND g.group_id=r.private_group_id
      JOIN tokenless_private_group_policy_versions gp
        ON gp.group_id=g.group_id AND gp.version=r.private_group_policy_version
       AND gp.policy_hash=r.private_group_policy_hash
-     WHERE r.workspace_id=$2 AND r.profile_id=$3 AND r.version=$4 AND r.profile_hash=$5
+     WHERE r.workspace_id=$${interactive ? 2 : 1} AND r.profile_id=$${interactive ? 3 : 2}
+       AND r.version=$${interactive ? 4 : 3} AND r.profile_hash=$${interactive ? 5 : 4}
        AND r.configuration_status='ready' AND r.approved_at IS NOT NULL AND r.superseded_at IS NULL
      LIMIT 1 FOR UPDATE`,
-    [input.actor, input.workspaceId, input.profileId, input.profileVersion, input.profileHash],
+    interactive
+      ? [input.actor, input.workspaceId, input.profileId, input.profileVersion, input.profileHash]
+      : [input.workspaceId, input.profileId, input.profileVersion, input.profileHash],
   );
   const row = result.rows[0] as Row | undefined;
   if (!row) {
@@ -260,6 +278,7 @@ async function loadProfile(
     throw new Error("Stored private-group human-verification policy is invalid.");
   }
   return {
+    approvedBy: text(row, "approved_by"),
     sensitivity,
     panelSize,
     responseWindowSeconds,
@@ -342,6 +361,37 @@ async function ensureManagedProject(
   return projectId;
 }
 
+async function requireManagedProject(
+  client: PoolClient,
+  input: { projectId: string; workspaceId: string; sensitivity: string },
+) {
+  const stored = await client.query(
+    `SELECT workspace_id,name,description,data_classification,visibility,material_kind,private_sensitivity,
+            retention_days,status
+     FROM tokenless_assurance_projects WHERE project_id=$1 LIMIT 1 FOR UPDATE`,
+    [input.projectId],
+  );
+  const row = stored.rows[0] as Row | undefined;
+  if (
+    !row ||
+    text(row, "workspace_id") !== input.workspaceId ||
+    text(row, "name") !== MANAGED_PROJECT_NAME ||
+    text(row, "description") !== MANAGED_PROJECT_DESCRIPTION ||
+    text(row, "data_classification") !== input.sensitivity ||
+    text(row, "visibility") !== "private" ||
+    row.material_kind !== null ||
+    text(row, "private_sensitivity") !== input.sensitivity ||
+    integer(row, "retention_days") !== MANAGED_RETENTION_DAYS ||
+    text(row, "status") !== "active"
+  ) {
+    throw new TokenlessServiceError(
+      "The exact managed private review project is unavailable.",
+      409,
+      "private_review_project_conflict",
+    );
+  }
+}
+
 async function ensureManagedCohort(
   client: PoolClient,
   input: {
@@ -398,6 +448,44 @@ async function ensureManagedCohort(
     );
   }
   return { cohortId, activeReservations: integer(row, "active_reservations") };
+}
+
+async function requireManagedCohort(
+  client: PoolClient,
+  input: {
+    cohortId: string;
+    projectId: string;
+    privateGroupId: string;
+    panelSize: number;
+    qualificationRules: unknown[];
+  },
+) {
+  const qualificationRulesJson = stableJson(input.qualificationRules);
+  const stored = await client.query(
+    `SELECT project_id,name,source,selection,capacity,active_reservations,private_group_id,
+            qualification_rules_json,status
+     FROM tokenless_assurance_cohorts WHERE project_id=$1 AND cohort_id=$2 LIMIT 1 FOR UPDATE`,
+    [input.projectId, input.cohortId],
+  );
+  const row = stored.rows[0] as Row | undefined;
+  if (
+    !row ||
+    text(row, "project_id") !== input.projectId ||
+    text(row, "name") !== MANAGED_COHORT_NAME ||
+    text(row, "source") !== "customer_invited" ||
+    text(row, "selection") !== "customer_named" ||
+    integer(row, "capacity") !== input.panelSize ||
+    text(row, "private_group_id") !== input.privateGroupId ||
+    stableJson(json(row.qualification_rules_json, "cohort qualification rules")) !== qualificationRulesJson ||
+    text(row, "status") !== "active"
+  ) {
+    throw new TokenlessServiceError(
+      "The exact managed private reviewer cohort is unavailable.",
+      409,
+      "private_review_cohort_conflict",
+    );
+  }
+  return { cohortId: input.cohortId, activeReservations: integer(row, "active_reservations") };
 }
 
 async function reconcilePriorManagedRouting(
@@ -782,6 +870,101 @@ function exactPanel(input: {
       };
 }
 
+type LoadedProfile = Awaited<ReturnType<typeof loadProfile>>;
+
+async function syncManagedRoutingMembers(
+  client: PoolClient,
+  input: {
+    actor: string;
+    workspaceId: string;
+    profile: LoadedProfile;
+    projectId: string;
+    cohortId: string;
+    cohortActiveReservations: number;
+    now: Date;
+    responseDeadline: Date;
+  },
+): Promise<WorkspacePrivateReviewRoutingReadiness> {
+  const members = await loadMembers(client, {
+    workspaceId: input.workspaceId,
+    privateGroupId: input.profile.privateGroupId,
+    projectId: input.projectId,
+    privateSensitivity: privateSensitivity(input.profile.sensitivity),
+    worldIdRequired: input.profile.groupPolicy.worldIdRequired === true,
+    now: input.now,
+  });
+  await syncMembers(client, {
+    actor: input.actor,
+    projectId: input.projectId,
+    cohortId: input.cohortId,
+    members,
+    now: input.now,
+  });
+  const availableAddresses = await availableMemberAddresses(client, {
+    projectId: input.projectId,
+    cohortId: input.cohortId,
+    members,
+  });
+  const availableMembers = members.filter(member => availableAddresses.has(member.accountAddress));
+  const panel = exactPanel({
+    members: availableMembers,
+    panelSize: input.profile.panelSize,
+    requiredExpertiseKeys: input.profile.requiredExpertiseKeys,
+    expertiseRequirements: input.profile.expertiseRequirements,
+    responseDeadline: input.responseDeadline,
+  });
+  const availableCapacity = Math.max(0, input.profile.panelSize - input.cohortActiveReservations);
+  const reason: WorkspacePrivateReviewRoutingReadinessReason =
+    panel.reason !== "ready"
+      ? panel.reason
+      : availableCapacity < input.profile.panelSize
+        ? "cohort_capacity_insufficient"
+        : "ready";
+  const selected = reason === "ready" ? panel.selected : [];
+  if (selected.length > 0) {
+    const activated = await client.query(
+      `UPDATE tokenless_assurance_cohort_reviewers
+       SET status='active',updated_at=$1
+       WHERE project_id=$2 AND cohort_id=$3 AND reviewer_account_address=ANY($4::text[])
+         AND active_reservations<maximum_active_assignments`,
+      [input.now, input.projectId, input.cohortId, selected],
+    );
+    if (activated.rowCount !== selected.length) {
+      throw new TokenlessServiceError(
+        "The exact reviewer panel changed while routing was prepared.",
+        409,
+        "private_review_panel_conflict",
+      );
+    }
+  }
+  const active = await client.query(
+    `SELECT reviewer_account_address FROM tokenless_assurance_cohort_reviewers
+     WHERE project_id=$1 AND cohort_id=$2 AND status='active'
+     ORDER BY reviewer_account_address`,
+    [input.projectId, input.cohortId],
+  );
+  const activeAddresses = (active.rows as Row[]).map(row => text(row, "reviewer_account_address")!).filter(Boolean);
+  const exactActivePanel =
+    reason === "ready" &&
+    activeAddresses.length === selected.length &&
+    activeAddresses.every((value, index) => value === [...selected].sort()[index]);
+  const resultReason = exactActivePanel ? "ready" : reason === "ready" ? "cohort_capacity_insufficient" : reason;
+  return {
+    schemaVersion: "rateloop.workspace-private-review-routing-readiness.v1",
+    ready: resultReason === "ready",
+    reason: resultReason,
+    projectId: input.projectId,
+    cohortId: input.cohortId,
+    privateGroupId: input.profile.privateGroupId,
+    panelSize: input.profile.panelSize,
+    syncedReviewerCount: members.length,
+    eligibleReviewerCount: panel.eligible,
+    selectedReviewerCount: resultReason === "ready" ? selected.length : 0,
+    availableCapacity,
+    responseDeadline: input.responseDeadline.toISOString(),
+  };
+}
+
 export async function provisionWorkspacePrivateReviewRouting(input: {
   accountAddress: string;
   workspaceId: string;
@@ -875,79 +1058,122 @@ export async function provisionWorkspacePrivateReviewRouting(input: {
       now,
     });
     if (cohort.cohortId !== currentCohortId) throw new Error("Managed private reviewer cohort derivation changed.");
-    const members = await loadMembers(client, {
+    const result = await syncManagedRoutingMembers(client, {
+      actor,
       workspaceId: input.workspaceId,
-      privateGroupId: profile.privateGroupId,
-      projectId,
-      privateSensitivity: privateSensitivity(profile.sensitivity),
-      worldIdRequired: profile.groupPolicy.worldIdRequired === true,
-      now,
-    });
-    await syncMembers(client, { actor, projectId, cohortId: cohort.cohortId, members, now });
-    const availableAddresses = await availableMemberAddresses(client, {
+      profile,
       projectId,
       cohortId: cohort.cohortId,
-      members,
-    });
-    const availableMembers = members.filter(member => availableAddresses.has(member.accountAddress));
-    const panel = exactPanel({
-      members: availableMembers,
-      panelSize: profile.panelSize,
-      requiredExpertiseKeys: profile.requiredExpertiseKeys,
-      expertiseRequirements: profile.expertiseRequirements,
+      cohortActiveReservations: cohort.activeReservations,
+      now,
       responseDeadline,
     });
-    const availableCapacity = Math.max(0, profile.panelSize - cohort.activeReservations);
-    const reason: WorkspacePrivateReviewRoutingReadinessReason =
-      panel.reason !== "ready"
-        ? panel.reason
-        : availableCapacity < profile.panelSize
-          ? "cohort_capacity_insufficient"
-          : "ready";
-    const selected = reason === "ready" ? panel.selected : [];
-    if (selected.length > 0) {
-      const activated = await client.query(
-        `UPDATE tokenless_assurance_cohort_reviewers
-         SET status='active',updated_at=$1
-         WHERE project_id=$2 AND cohort_id=$3 AND reviewer_account_address=ANY($4::text[])
-           AND active_reservations<maximum_active_assignments`,
-        [now, projectId, cohort.cohortId, selected],
-      );
-      if (activated.rowCount !== selected.length) {
-        throw new TokenlessServiceError(
-          "The exact reviewer panel changed while routing was prepared.",
-          409,
-          "private_review_panel_conflict",
-        );
-      }
-    }
-    const active = await client.query(
-      `SELECT reviewer_account_address FROM tokenless_assurance_cohort_reviewers
-       WHERE project_id=$1 AND cohort_id=$2 AND status='active'
-       ORDER BY reviewer_account_address`,
-      [projectId, cohort.cohortId],
-    );
-    const activeAddresses = (active.rows as Row[]).map(row => text(row, "reviewer_account_address")!).filter(Boolean);
-    const exactActivePanel =
-      reason === "ready" &&
-      activeAddresses.length === selected.length &&
-      activeAddresses.every((value, index) => value === [...selected].sort()[index]);
-    const resultReason = exactActivePanel ? "ready" : reason === "ready" ? "cohort_capacity_insufficient" : reason;
     await client.query("COMMIT");
-    return {
-      schemaVersion: "rateloop.workspace-private-review-routing-readiness.v1",
-      ready: resultReason === "ready",
-      reason: resultReason,
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Refreshes reviewer seats for an already provisioned route using only the
+ * exact approved profile frozen into a request. This path deliberately cannot
+ * create projects, cohorts, access assignments, or grants.
+ */
+export async function reconcileWorkspacePrivateReviewRoutingForFrozenRequest(input: {
+  workspaceId: string;
+  profileId: string;
+  profileVersion: number;
+  profileHash: string;
+  now?: Date;
+}): Promise<WorkspacePrivateReviewRoutingReadiness> {
+  const profileVersion = requiredProfileVersion(input.profileVersion);
+  const profileHash = requiredProfileHash(input.profileHash);
+  const now = input.now ?? new Date();
+  if (!Number.isFinite(now.getTime())) {
+    throw new TokenlessServiceError("Routing time is invalid.", 400, "invalid_review_request_profile");
+  }
+  await expirePrivateUnpaidReviewReservations(now);
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const profile = await loadProfile(client, {
+      workspaceId: input.workspaceId,
+      profileId: input.profileId,
+      profileVersion,
+      profileHash,
+    });
+    const actor = storedApprovalActor(profile.approvedBy);
+    const projectId = managedProjectId({
+      workspaceId: input.workspaceId,
+      profileId: input.profileId,
+      profileVersion,
+      profileHash,
+    });
+    const cohortId = managedCohortId({ projectId, profileHash, privateGroupId: profile.privateGroupId });
+    const responseDeadline = new Date(now.getTime() + profile.responseWindowSeconds * 1_000);
+    if (
+      !profile.groupDataClassifications.includes(profile.sensitivity) ||
+      (profile.groupAllowedProjectIds.length > 0 && !profile.groupAllowedProjectIds.includes(projectId))
+    ) {
+      throw new TokenlessServiceError(
+        "The frozen reviewer-group policy does not allow the managed private review project.",
+        409,
+        "private_review_project_not_allowed",
+      );
+    }
+    let cohort: { cohortId: string; activeReservations: number };
+    try {
+      await requireManagedProject(client, {
+        projectId,
+        workspaceId: input.workspaceId,
+        sensitivity: profile.sensitivity,
+      });
+      cohort = await requireManagedCohort(client, {
+        cohortId,
+        projectId,
+        privateGroupId: profile.privateGroupId,
+        panelSize: profile.panelSize,
+        qualificationRules: expertiseQualificationRules(profile.requiredExpertiseKeys),
+      });
+    } catch (error) {
+      if (
+        error instanceof TokenlessServiceError &&
+        (error.code === "private_review_project_conflict" || error.code === "private_review_cohort_conflict")
+      ) {
+        await client.query("COMMIT");
+        return {
+          schemaVersion: "rateloop.workspace-private-review-routing-readiness.v1",
+          ready: false,
+          reason: "managed_foundation_unavailable",
+          projectId,
+          cohortId,
+          privateGroupId: profile.privateGroupId,
+          panelSize: profile.panelSize,
+          syncedReviewerCount: 0,
+          eligibleReviewerCount: 0,
+          selectedReviewerCount: 0,
+          availableCapacity: 0,
+          responseDeadline: responseDeadline.toISOString(),
+        };
+      }
+      throw error;
+    }
+    const result = await syncManagedRoutingMembers(client, {
+      actor,
+      workspaceId: input.workspaceId,
+      profile,
       projectId,
-      cohortId: cohort.cohortId,
-      privateGroupId: profile.privateGroupId,
-      panelSize: profile.panelSize,
-      syncedReviewerCount: members.length,
-      eligibleReviewerCount: panel.eligible,
-      selectedReviewerCount: resultReason === "ready" ? selected.length : 0,
-      availableCapacity,
-      responseDeadline: responseDeadline.toISOString(),
-    };
+      cohortId,
+      cohortActiveReservations: cohort.activeReservations,
+      now,
+      responseDeadline,
+    });
+    await client.query("COMMIT");
+    return result;
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;

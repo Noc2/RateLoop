@@ -258,6 +258,7 @@ function dependencies(
   frozen: FrozenHumanReviewRoutingContext,
   options: {
     privateBinding?: ExactPrivateReviewBinding | null;
+    privateRoutingReady?: boolean;
     workspaceStopped?: boolean;
     approvalStatus?: "pending" | "approved" | "consumed";
     laneImplementation?: HumanReviewLaneReadiness;
@@ -268,6 +269,7 @@ function dependencies(
     consumeApproval: 0,
     activate: 0,
     public: 0,
+    reconcilePrivate: 0,
     resolvePrivate: 0,
     foundation: 0,
     assign: 0,
@@ -332,6 +334,24 @@ function dependencies(
         schemaVersion: "rateloop.adaptive-review-request.v1" as const,
         opportunityId: frozen.opportunityId,
         ask,
+      };
+    },
+    reconcilePrivateRouting: async () => {
+      calls.reconcilePrivate += 1;
+      calls.order.push("reconcile_private");
+      return {
+        schemaVersion: "rateloop.workspace-private-review-routing-readiness.v1" as const,
+        ready: options.privateRoutingReady ?? true,
+        reason: options.privateRoutingReady === false ? ("cohort_capacity_insufficient" as const) : ("ready" as const),
+        projectId: PRIVATE_ROUTING_IDS.projectId,
+        cohortId: PRIVATE_ROUTING_IDS.cohortId,
+        privateGroupId: "group_router",
+        panelSize: 2,
+        syncedReviewerCount: 2,
+        eligibleReviewerCount: 2,
+        selectedReviewerCount: options.privateRoutingReady === false ? 0 : 2,
+        availableCapacity: options.privateRoutingReady === false ? 1 : 2,
+        responseDeadline: "2026-07-16T13:00:00.000Z",
       };
     },
     resolvePrivateBinding: async () => {
@@ -646,7 +666,25 @@ test("private unpaid routing blocks without changing lifecycle when exact owner 
   });
   assert.equal(result.action, "blocked");
   assert.equal(result.action === "blocked" ? result.code : null, "private_routing_configuration_required");
-  assert.deepEqual(calls.order, ["resolve_private"]);
+  assert.deepEqual(calls.order, ["reconcile_private", "resolve_private"]);
+});
+
+test("private routing stops before binding resolution when request-time seat reconciliation is not ready", async () => {
+  const { calls, router } = dependencies(context({ lane: "private_invited_unpaid", lifecycleState: "blocked" }), {
+    privateRoutingReady: false,
+  });
+  const result = await router({
+    principal,
+    opportunityId: "opportunity_router",
+    sourcePayload: "private source",
+    suggestionPayload: "private suggestion",
+    material: { kind: "private", sourceContentType: "text/plain", suggestionContentType: "text/plain" },
+    now: NOW,
+  });
+  assert.equal(result.action, "blocked");
+  assert.equal(result.action === "blocked" ? result.code : null, "private_routing_configuration_required");
+  assert.deepEqual(calls.order, ["reconcile_private"]);
+  assert.equal(calls.resolvePrivate, 0);
 });
 
 test("private routing rejects changed source or suggestion bytes before every side effect", async () => {
@@ -717,7 +755,7 @@ test("private unpaid automatic routing activates a blocked opportunity then free
     now: NOW,
   });
   assert.equal(result.action, "private_review_assigned");
-  assert.deepEqual(calls.order, ["resolve_private", "activate", "foundation", "assign"]);
+  assert.deepEqual(calls.order, ["reconcile_private", "resolve_private", "activate", "foundation", "assign"]);
   const foundationInput = calls.foundationInput as {
     request: {
       idempotencyKey: string;
@@ -748,6 +786,7 @@ test("private unpaid automatic routing activates a blocked opportunity then free
 test("private unpaid plus optional bonus preflights every invited human before pool funding and delivery", async () => {
   const { calls, router } = dependencies(
     context({ lane: "private_invited_unpaid", lifecycleState: "blocked", feedbackBonus: true }),
+    { privateRoutingReady: false },
   );
   const result = await router({
     principal,
@@ -758,6 +797,7 @@ test("private unpaid plus optional bonus preflights every invited human before p
     now: NOW,
   });
   assert.equal(result.action, "private_review_assigned");
+  assert.equal(calls.reconcilePrivate, 0);
   assert.equal(calls.feedbackBonusEligibility, 2);
   assert.deepEqual(calls.order, [
     "resolve_private",
@@ -777,6 +817,7 @@ test("private paid automatic routing uses the distinct paid adapter with frozen 
       lifecycleState: "blocked",
       requiredExpertiseKeys: ["code-review:security"],
     }),
+    { privateRoutingReady: false },
   );
   const result = await router({
     principal,
@@ -788,6 +829,7 @@ test("private paid automatic routing uses the distinct paid adapter with frozen 
   });
   assert.equal(result.action, "private_paid_review_assigned");
   assert.deepEqual(calls.order, ["resolve_private", "activate", "foundation", "assign_paid"]);
+  assert.equal(calls.reconcilePrivate, 0);
   assert.equal(calls.assign, 0);
   const paid = calls.paidAssignmentInput as {
     projectId: string;
