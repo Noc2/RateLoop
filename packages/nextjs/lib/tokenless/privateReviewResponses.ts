@@ -601,6 +601,29 @@ export async function submitDirectPrivateReviewResponse(input: {
   let replay = false;
   try {
     await client.query("BEGIN");
+    await client.query(
+      `SELECT a.assignment_id
+       FROM tokenless_private_unpaid_review_assignments a
+       JOIN tokenless_private_unpaid_review_deliveries d ON d.delivery_id=a.delivery_id
+       JOIN tokenless_private_review_requests f ON f.private_review_id=a.private_review_id
+       JOIN tokenless_agent_review_request_profiles rp
+         ON rp.workspace_id=d.workspace_id AND rp.profile_id=d.request_profile_id
+        AND rp.version=d.request_profile_version AND rp.profile_hash=d.request_profile_hash
+       JOIN tokenless_private_groups private_group ON private_group.group_id=a.private_group_id
+       JOIN tokenless_workspace_reviewers workspace_reviewer
+         ON workspace_reviewer.workspace_id=a.workspace_id
+        AND workspace_reviewer.principal_address=a.reviewer_account_address
+       JOIN tokenless_principals workspace_principal
+         ON workspace_principal.principal_id=workspace_reviewer.principal_address
+       JOIN tokenless_workspace_reviewer_access_grants workspace_grant
+         ON workspace_grant.workspace_id=a.workspace_id
+        AND workspace_grant.principal_address=a.reviewer_account_address
+        AND workspace_grant.grant_id=a.workspace_reviewer_access_grant_id
+        AND workspace_grant.grant_hash=a.workspace_reviewer_access_grant_hash
+       WHERE a.assignment_id=$1 AND a.reviewer_account_address=$2
+       LIMIT 1 FOR UPDATE`,
+      [input.assignmentId, principal],
+    );
     const loaded = await client.query(
       `SELECT a.*,d.private_group_policy_hash,d.foundation_binding_hash,d.operation_hash,d.status AS delivery_status,
               f.suggestion_artifact_id,rp.rationale_mode,rp.compensation_mode,rp.feedback_bonus_enabled,
@@ -637,7 +660,7 @@ export async function submitDirectPrivateReviewResponse(input: {
          ON workspace_grant_project.workspace_id=a.workspace_id
         AND workspace_grant_project.grant_id=workspace_grant.grant_id
         AND workspace_grant_project.project_id=a.project_id
-       WHERE a.assignment_id=$1 AND a.reviewer_account_address=$2 LIMIT 1 FOR UPDATE`,
+       WHERE a.assignment_id=$1 AND a.reviewer_account_address=$2 LIMIT 1`,
       [input.assignmentId, principal],
     );
     const row = loaded.rows[0] as Row | undefined;

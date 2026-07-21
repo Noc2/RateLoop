@@ -98,6 +98,20 @@ test("assignment acceptance and recovery do not lock nullable project grants", (
   assert.doesNotMatch(recovery, /LEFT JOIN[\s\S]*?LIMIT 1 FOR UPDATE`/u);
 });
 
+test("private response submission does not lock the nullable project grant", () => {
+  const source = readFileSync(new URL("./privateReviewResponses.ts", import.meta.url), "utf8");
+  const submission = source.slice(
+    source.indexOf("export async function submitDirectPrivateReviewResponse"),
+    source.indexOf("export async function getDirectPrivateReviewState"),
+  );
+  const submissionLock = submission.match(/SELECT a\.assignment_id[\s\S]*?LIMIT 1 FOR UPDATE`/u)?.[0];
+
+  assert.ok(submissionLock, "expected the private-response submission lock query");
+  assert.doesNotMatch(submissionLock, /LEFT JOIN/u);
+  assert.match(submission, /LEFT JOIN tokenless_workspace_reviewer_access_grant_projects workspace_grant_project/u);
+  assert.doesNotMatch(submission, /LEFT JOIN[\s\S]*?LIMIT 1 FOR UPDATE`/u);
+});
+
 beforeEach(() => {
   process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = "79".repeat(32);
   process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION = "private-content-e2e-v1";
