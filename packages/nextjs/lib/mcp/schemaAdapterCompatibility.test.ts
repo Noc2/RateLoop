@@ -112,6 +112,21 @@ const KNOWN_ADAPTER_BASELINE: Record<string, ToolBaseline> = {
       semanticChanges: [],
     },
   },
+  rateloop_confirm_workspace_move: {
+    openai: {
+      droppedConstraints: [
+        "$.transferId: maxLength 160 dropped (outside the strict-mode keyword floor)",
+        "$.transferId: minLength 1 dropped (outside the strict-mode keyword floor)",
+      ],
+      semanticChanges: [],
+    },
+    gemini: {
+      droppedConstraints: [
+        "$: additionalProperties:false dropped (closed-object constraint not representable after sanitization)",
+      ],
+      semanticChanges: [],
+    },
+  },
   rateloop_get_agent_context: {
     openai: {
       droppedConstraints: [],

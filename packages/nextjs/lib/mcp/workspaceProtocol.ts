@@ -1,6 +1,10 @@
 import "server-only";
 import { TOKENLESS_MCP_PROTOCOL_VERSION, TOKENLESS_MCP_PROTOCOL_VERSIONS } from "~~/lib/mcp/protocol";
-import { workspaceToolErrorPayload } from "~~/lib/mcp/workspaceConnectionError";
+import {
+  WORKSPACE_MOVE_CONFIRMATION_ACTION,
+  WORKSPACE_MOVE_CONSEQUENCE,
+  workspaceToolErrorPayload,
+} from "~~/lib/mcp/workspaceConnectionError";
 import {
   createWorkspaceMcpSession,
   enqueueOwnerApprovalElicitation,
@@ -13,7 +17,11 @@ import {
   evaluateAdaptiveReviewRequirement,
   getAdaptiveAssuranceState,
 } from "~~/lib/tokenless/adaptiveReviewService";
-import { claimAgentConnectionIntent, verifyAgentConnection } from "~~/lib/tokenless/agentConnectionIntents";
+import {
+  claimAgentConnectionIntent,
+  confirmAgentWorkspaceMove,
+  verifyAgentConnection,
+} from "~~/lib/tokenless/agentConnectionIntents";
 import {
   type AgentMcpPrincipal,
   getAgentRegistrationStatus,
@@ -127,6 +135,12 @@ const consequentialOpenAnnotations = {
   destructiveHint: true,
   idempotentHint: false,
   openWorldHint: true,
+} as const;
+const idempotentConsequentialClosedAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: true,
+  idempotentHint: true,
+  openWorldHint: false,
 } as const;
 
 function boundWorkspaceInstructions() {
@@ -374,6 +388,18 @@ const connectionIntentMcpTools = [
     },
   },
   {
+    name: "rateloop_confirm_workspace_move",
+    annotations: idempotentConsequentialClosedAnnotations,
+    description:
+      "Record the current credential holder's confirmation that moving this Codex connection will disconnect its current RateLoop workspace and replace the selected agent's previous connection. Call only after the user explicitly accepts that consequence. This does not complete the move: the target workspace owner must approve it on RateLoop, then the agent retries the same privately preserved connection URL.",
+    inputSchema: {
+      additionalProperties: false,
+      properties: { transferId: identifierSchema },
+      required: ["transferId"],
+      type: "object",
+    },
+  },
+  {
     name: "rateloop_verify_connection",
     annotations: idempotentAdditiveClosedAnnotations,
     description:
@@ -385,8 +411,9 @@ const connectionIntentMcpTools = [
 export const oauthWorkspaceMcpTools = [
   connectionIntentMcpTools[0],
   connectionIntentMcpTools[1],
-  workspaceMcpTools[0],
   connectionIntentMcpTools[2],
+  workspaceMcpTools[0],
+  connectionIntentMcpTools[3],
   ...workspaceMcpTools.slice(1),
 ] as const;
 
@@ -661,6 +688,21 @@ async function callOAuthTool(
         principal: principal.oauth,
         ...(typeof input.reportedLane === "string" ? { reportedLane: input.reportedLane } : {}),
       });
+      if (claim.workspaceMove?.status === "source_confirmation_required") {
+        return toolResult({
+          schemaVersion: "rateloop.workspace-move.v1",
+          workspaceMove: {
+            status: "source_confirmation_required",
+            transferId: claim.workspaceMove.transferId,
+            expiresAt: claim.workspaceMove.expiresAt,
+            consequence: WORKSPACE_MOVE_CONSEQUENCE,
+            confirmationRequired: true,
+            confirmationAction: WORKSPACE_MOVE_CONFIRMATION_ACTION,
+            nextAction: "confirm_workspace_move",
+          },
+          idempotent: claim.idempotent,
+        });
+      }
       if (name === "rateloop_claim_connection_intent") return toolResult(claim);
       const rehydrated = await rehydrateOAuthAgentMcpPrincipal(principal.oauth);
       if (!rehydrated.integration || !rehydrated.principal) {
@@ -690,6 +732,39 @@ async function callOAuthTool(
         context: agentContext,
         verification,
         nextAction: "follow_bound_policy",
+      });
+    }
+    if (name === "rateloop_confirm_workspace_move") {
+      const input = requireObjectWithKeys(args, ["transferId"], "transferId is required.");
+      if (typeof input.transferId !== "string") {
+        throw new TokenlessServiceError("transferId is required.", 400, "invalid_tool_arguments");
+      }
+      const confirmed = await confirmAgentWorkspaceMove({
+        principal: principal.oauth,
+        transferId: input.transferId,
+        origin: context.origin,
+      });
+      if (confirmed.workspaceMove.status !== "owner_approval_required") {
+        throw new TokenlessServiceError(
+          "The workspace move confirmation returned an invalid state.",
+          500,
+          "workspace_move_state_invalid",
+        );
+      }
+      return toolResult({
+        schemaVersion: "rateloop.workspace-move.v1",
+        workspaceMove: {
+          status: "owner_approval_required",
+          transferId: confirmed.workspaceMove.transferId,
+          approvalUrl: confirmed.workspaceMove.approvalUrl,
+          expiresAt: confirmed.workspaceMove.expiresAt,
+          consequence: WORKSPACE_MOVE_CONSEQUENCE,
+          credentialHolderConfirmed: true,
+          ownerApprovalRequired: true,
+          nextAction: "owner_approve_then_retry_connection",
+        },
+        instruction:
+          "Ask the workspace owner to approve or deny this move on RateLoop. After approval, retry rateloop_connect_workspace with the same privately preserved connection URL. Do not approve the website decision for the owner or ask for the URL again.",
       });
     }
     if (!principal.integration || !principal.principal) return connectionNotReady();

@@ -555,6 +555,170 @@ test("an active OAuth workspace conflict requests fresh authorization without mo
   assert.equal(reconnected.verification.connection.status, "connected");
 });
 
+test("a targeted OAuth reconnect returns ordinary dual-consent tool actions", async () => {
+  const {
+    clientId,
+    intent: sourceIntent,
+    principalId,
+    tokens: sourceTokens,
+    workspaceId: sourceWorkspaceId,
+  } = await setupOAuthConnectionIntent();
+  const initialize = async (id: number, accessToken: string, clientName: string) => {
+    const response = await POST(
+      request(
+        {
+          id,
+          jsonrpc: "2.0",
+          method: "initialize",
+          params: {
+            protocolVersion: "2025-11-25",
+            capabilities: {},
+            clientInfo: { name: clientName, version: "1.0.0" },
+          },
+        },
+        accessToken,
+      ),
+    );
+    assert.equal(response.status, 200);
+    const sessionId = response.headers.get("mcp-session-id");
+    assert.ok(sessionId);
+    return sessionId;
+  };
+  const sourceSessionId = await initialize(1, sourceTokens.access_token, "Reconnect source");
+  const sourceConnectionResponse = await POST(
+    request(
+      {
+        id: 2,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: "rateloop_connect_workspace", arguments: { connectionUrl: sourceIntent.connectionUrl } },
+      },
+      sourceTokens.access_token,
+      sourceSessionId,
+    ),
+  );
+  assert.equal(sourceConnectionResponse.status, 200);
+  assert.equal((await sourceConnectionResponse.json()).result.structuredContent.connected, true);
+
+  const { workspaceId: targetWorkspaceId } = await createWorkspace({
+    name: "Reconnect target",
+    ownerAddress: principalId,
+  });
+  const targetIntent = await createAgentConnectionIntent({
+    accountAddress: principalId,
+    workspaceId: targetWorkspaceId,
+    origin: "https://rateloop-tokenless.vercel.app",
+  });
+  const redirectUri = "http://127.0.0.1:43220/oauth/callback";
+  const verifier = "y".repeat(64);
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  const authorization = await validateAgentOAuthAuthorizationRequest(
+    new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      response_type: "code",
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+      resource: getCanonicalAgentMcpResource(),
+      scope: sourceTokens.scope,
+    }),
+  );
+  const codeRedirect = await issueAgentOAuthAuthorizationCode({
+    request: authorization,
+    subjectPrincipalId: principalId,
+    consented: true,
+  });
+  const code = new URL(codeRedirect.redirectUri).searchParams.get("code");
+  assert.ok(code);
+  const targetTokens = await exchangeAgentOAuthToken({
+    grantType: "authorization_code",
+    clientId,
+    code,
+    redirectUri,
+    codeVerifier: verifier,
+    resource: getCanonicalAgentMcpResource(),
+  });
+  const targetSessionId = await initialize(3, targetTokens.access_token, "Reconnect target");
+  const targetConnectionResponse = await POST(
+    request(
+      {
+        id: 4,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: "rateloop_connect_workspace", arguments: { connectionUrl: targetIntent.connectionUrl } },
+      },
+      targetTokens.access_token,
+      targetSessionId,
+    ),
+  );
+  assert.equal(targetConnectionResponse.status, 200);
+  const targetConnection = (await targetConnectionResponse.json()).result.structuredContent;
+  assert.equal(targetConnection.connected, true);
+  const reconnectIntent = await createAgentConnectionIntent({
+    accountAddress: principalId,
+    workspaceId: targetWorkspaceId,
+    origin: "https://rateloop-tokenless.vercel.app",
+    reconnectIntegrationId: targetConnection.connection.integrationId,
+  });
+  const proposedResponse = await POST(
+    request(
+      {
+        id: 5,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: "rateloop_connect_workspace", arguments: { connectionUrl: reconnectIntent.connectionUrl } },
+      },
+      sourceTokens.access_token,
+      sourceSessionId,
+    ),
+  );
+  assert.equal(proposedResponse.status, 200);
+  assert.equal(proposedResponse.headers.get("www-authenticate"), null);
+  const proposed = (await proposedResponse.json()).result.structuredContent;
+  assert.equal(proposed.schemaVersion, "rateloop.workspace-move.v1", JSON.stringify(proposed));
+  assert.equal(proposed.workspaceMove.status, "source_confirmation_required");
+  assert.equal(proposed.workspaceMove.confirmationRequired, true);
+  assert.equal(proposed.workspaceMove.nextAction, "confirm_workspace_move");
+  assert.match(proposed.workspaceMove.consequence, /disconnect it from its current RateLoop workspace/u);
+  assert.match(proposed.workspaceMove.confirmationAction, /workspace owner must then approve/u);
+  assert.equal(proposed.idempotent, false);
+  const proposedJson = JSON.stringify(proposed);
+  assert.equal(proposedJson.includes(sourceWorkspaceId), false);
+  assert.equal(proposedJson.includes(reconnectIntent.connectionUrl), false);
+  assert.equal(proposedJson.includes(new URL(reconnectIntent.connectionUrl).hash), false);
+
+  const confirmedResponse = await POST(
+    request(
+      {
+        id: 6,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: {
+          name: "rateloop_confirm_workspace_move",
+          arguments: { transferId: proposed.workspaceMove.transferId },
+        },
+      },
+      sourceTokens.access_token,
+      sourceSessionId,
+    ),
+  );
+  assert.equal(confirmedResponse.status, 200);
+  assert.equal(confirmedResponse.headers.get("www-authenticate"), null);
+  const confirmed = (await confirmedResponse.json()).result.structuredContent;
+  assert.equal(confirmed.schemaVersion, "rateloop.workspace-move.v1");
+  assert.equal(confirmed.workspaceMove.status, "owner_approval_required");
+  assert.equal(confirmed.workspaceMove.credentialHolderConfirmed, true);
+  assert.equal(confirmed.workspaceMove.ownerApprovalRequired, true);
+  assert.equal(confirmed.workspaceMove.nextAction, "owner_approve_then_retry_connection");
+  assert.match(confirmed.workspaceMove.approvalUrl, /\/agents\?tab=connect&workspace=/u);
+  assert.match(confirmed.instruction, /After approval, retry rateloop_connect_workspace/u);
+  assert.match(confirmed.instruction, /Do not approve the website decision for the owner/u);
+  const confirmedJson = JSON.stringify(confirmed);
+  assert.equal(confirmedJson.includes(sourceWorkspaceId), false);
+  assert.equal(confirmedJson.includes(reconnectIntent.connectionUrl), false);
+  assert.equal(confirmedJson.includes(new URL(reconnectIntent.connectionUrl).hash), false);
+});
+
 test("an owner can recover only a replay-revoked public OAuth integration", async () => {
   const { clientId, intent, principalId, tokens, workspaceId } = await setupOAuthConnectionIntent();
   const initialized = await POST(
@@ -990,6 +1154,7 @@ test("OAuth keeps one stable tool list and fails closed for unavailable paid-net
   const names = [
     "rateloop_connect_workspace",
     "rateloop_claim_connection_intent",
+    "rateloop_confirm_workspace_move",
     "rateloop_get_agent_context",
     "rateloop_verify_connection",
     "rateloop_list_open_reviews",
@@ -1038,6 +1203,15 @@ test("OAuth keeps one stable tool list and fails closed for unavailable paid-net
     idempotentHint: true,
     openWorldHint: false,
   });
+  assert.deepEqual(tool("rateloop_confirm_workspace_move")?.annotations, {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: true,
+    openWorldHint: false,
+  });
+  assert.deepEqual(tool("rateloop_confirm_workspace_move")?.inputSchema?.required, ["transferId"]);
+  assert.match(tool("rateloop_confirm_workspace_move")?.description ?? "", /user explicitly accepts/u);
+  assert.match(tool("rateloop_confirm_workspace_move")?.description ?? "", /workspace owner must approve/u);
   assert.deepEqual(tool("rateloop_get_agent_context")?.annotations, {
     readOnlyHint: true,
     destructiveHint: false,

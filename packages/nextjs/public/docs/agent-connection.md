@@ -55,12 +55,24 @@ unrelated plugins or create a replacement link.
 
 ### Codex is connected to another workspace
 
-One Codex OAuth connection can have only one active RateLoop workspace binding. When RateLoop reports a
-`workspace_conflict`, it requests one fresh authorization from the host. Use the owner-facing recovery action: **This
-Codex connection is active in another workspace. Complete the host’s OAuth action to connect this task with a separate
-credential.** Then retry the preserved connection intent. Do not identify, disconnect, or change the other workspace;
-do not expose a workspace identifier, copy the connection secret again, or change MCP configuration. Deleted and
-revoked bindings are cleared by RateLoop and should not produce this conflict.
+One Codex OAuth connection can have only one active RateLoop workspace binding. Reconnect an existing agent from its
+RateLoop connection screen; do not reuse an older untargeted connection message. The targeted reconnect uses two
+explicit decisions and never exposes or replaces the bearer credential:
+
+1. The agent reports: **Moving this Codex connection will disconnect it from its current RateLoop workspace and replace
+   the selected agent’s previous connection.** The current credential holder must explicitly confirm that consequence
+   in the agent task.
+2. RateLoop then gives the selected agent’s workspace owner a website approval. The owner approves or denies the move
+   while signed in to RateLoop.
+3. After approval, the agent retries the same privately preserved connection URL. RateLoop moves the one active binding,
+   invalidates the replaced sessions, preserves the selected agent and its saved review configuration, and verifies the
+   connection.
+
+The agent cannot approve the owner’s website decision, and the owner’s approval cannot substitute for the credential
+holder’s confirmation. Neither surface reveals the other workspace’s identity. If RateLoop instead reports the legacy
+`workspace_conflict`, create a targeted reconnect message for the intended agent and retry in the same task. Do not
+claim an invisible OAuth prompt is pending, copy the connection secret again, expose a workspace identifier, handle a
+bearer token, or change MCP configuration.
 
 Do not put credentials in the MCP configuration. Do not create a background service or polling task to keep a connection
 alive.
