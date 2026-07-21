@@ -55,6 +55,21 @@ function rpcError(status: number, message: string, code: string, rpcCode = -3200
   return json({ error: { code: rpcCode, data: { code }, message }, id: null, jsonrpc: "2.0" }, status);
 }
 
+function requiresWorkspaceOAuthReauthorization(result: unknown) {
+  if (!result || typeof result !== "object" || Array.isArray(result) || !("result" in result)) return false;
+  const toolResult = result.result;
+  if (!toolResult || typeof toolResult !== "object" || Array.isArray(toolResult)) return false;
+  if (!("isError" in toolResult) || toolResult.isError !== true || !("structuredContent" in toolResult)) return false;
+  const structuredContent = toolResult.structuredContent;
+  return (
+    structuredContent !== null &&
+    typeof structuredContent === "object" &&
+    !Array.isArray(structuredContent) &&
+    "code" in structuredContent &&
+    structuredContent.code === "workspace_conflict"
+  );
+}
+
 function validateHeaders(request: NextRequest) {
   const contentType = request.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase();
   if (contentType !== "application/json") {
@@ -131,6 +146,15 @@ export async function POST(request: NextRequest) {
       ...(sessionId ? { sessionId } : {}),
       signal: request.signal,
     });
+    if (principal.kind === "oauth" && requiresWorkspaceOAuthReauthorization(result)) {
+      const response = rpcError(
+        401,
+        "Authorize RateLoop with the workspace owner account that created this connection.",
+        "oauth_reauthorization_required",
+      );
+      for (const [key, value] of cors) response.headers.set(key, value);
+      return applyOAuthChallenge(response, request);
+    }
     if (result === null) {
       const headers = new Headers(cors);
       headers.set("Cache-Control", "no-store");

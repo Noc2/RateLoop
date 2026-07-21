@@ -403,6 +403,158 @@ test("one preferred OAuth tool connects a fresh workspace without reflecting the
   assert.equal(Number(state.rows[0]?.connected_events ?? 0), 1);
 });
 
+test("an active OAuth workspace conflict requests fresh authorization without moving the existing binding", async () => {
+  const { clientId, intent: firstIntent, tokens, workspaceId: firstWorkspaceId } = await setupOAuthConnectionIntent();
+  const initialized = await POST(
+    request(
+      {
+        id: 1,
+        jsonrpc: "2.0",
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-11-25",
+          capabilities: {},
+          clientInfo: { name: "Workspace switching client", version: "1.0.0" },
+        },
+      },
+      tokens.access_token,
+    ),
+  );
+  const sessionId = initialized.headers.get("mcp-session-id");
+  assert.ok(sessionId);
+  const connectedResponse = await POST(
+    request(
+      {
+        id: 2,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: "rateloop_connect_workspace", arguments: { connectionUrl: firstIntent.connectionUrl } },
+      },
+      tokens.access_token,
+      sessionId,
+    ),
+  );
+  assert.equal(connectedResponse.status, 200);
+
+  const secondPrincipalId = `rlp_${"d".repeat(24)}`;
+  const now = new Date();
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_principals (principal_id,status,created_at,updated_at)
+          VALUES (?, 'active', ?, ?)`,
+    args: [secondPrincipalId, now, now],
+  });
+  const { workspaceId: secondWorkspaceId } = await createWorkspace({
+    name: "Separate OAuth workspace",
+    ownerAddress: secondPrincipalId,
+  });
+  const secondIntent = await createAgentConnectionIntent({
+    accountAddress: secondPrincipalId,
+    workspaceId: secondWorkspaceId,
+    origin: "https://rateloop-tokenless.vercel.app",
+  });
+  const conflictedResponse = await POST(
+    request(
+      {
+        id: 3,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: "rateloop_connect_workspace", arguments: { connectionUrl: secondIntent.connectionUrl } },
+      },
+      tokens.access_token,
+      sessionId,
+    ),
+  );
+  assert.equal(conflictedResponse.status, 401);
+  assert.match(conflictedResponse.headers.get("www-authenticate") ?? "", /oauth-protected-resource/u);
+  const conflictedBody = await conflictedResponse.json();
+  assert.equal(conflictedBody.error.data.code, "oauth_reauthorization_required");
+  const conflictedJson = JSON.stringify(conflictedBody);
+  assert.equal(conflictedJson.includes(secondIntent.connectionUrl), false);
+  assert.equal(conflictedJson.includes(new URL(secondIntent.connectionUrl).hash), false);
+
+  const retained = await dbClient.execute({
+    sql: `SELECT i.workspace_id,i.status AS integration_status,f.status AS family_status
+          FROM tokenless_agent_integrations i
+          JOIN tokenless_agent_oauth_token_families f ON f.token_family_id=i.token_family_id
+          WHERE i.workspace_id=?`,
+    args: [firstWorkspaceId],
+  });
+  assert.deepEqual(retained.rows[0], {
+    workspace_id: firstWorkspaceId,
+    integration_status: "active",
+    family_status: "active",
+  });
+  const unclaimed = await dbClient.execute({
+    sql: "SELECT status,claimed_token_family_id FROM tokenless_agent_connection_intents WHERE intent_id=?",
+    args: [secondIntent.intent.intentId],
+  });
+  assert.deepEqual(unclaimed.rows[0], { status: "issued", claimed_token_family_id: null });
+
+  const redirectUri = "http://127.0.0.1:43220/oauth/callback";
+  const reauthorizationVerifier = "z".repeat(64);
+  const reauthorizationChallenge = createHash("sha256").update(reauthorizationVerifier).digest("base64url");
+  const reauthorization = await validateAgentOAuthAuthorizationRequest(
+    new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      response_type: "code",
+      code_challenge: reauthorizationChallenge,
+      code_challenge_method: "S256",
+      resource: getCanonicalAgentMcpResource(),
+      scope: tokens.scope,
+    }),
+  );
+  const reauthorizationRedirect = await issueAgentOAuthAuthorizationCode({
+    request: reauthorization,
+    subjectPrincipalId: secondPrincipalId,
+    consented: true,
+  });
+  const reauthorizationCode = new URL(reauthorizationRedirect.redirectUri).searchParams.get("code");
+  assert.ok(reauthorizationCode);
+  const reauthorizedTokens = await exchangeAgentOAuthToken({
+    grantType: "authorization_code",
+    clientId,
+    code: reauthorizationCode,
+    redirectUri,
+    codeVerifier: reauthorizationVerifier,
+    resource: getCanonicalAgentMcpResource(),
+  });
+  const reinitialized = await POST(
+    request(
+      {
+        id: 4,
+        jsonrpc: "2.0",
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-11-25",
+          capabilities: {},
+          clientInfo: { name: "Workspace switching client", version: "1.0.0" },
+        },
+      },
+      reauthorizedTokens.access_token,
+    ),
+  );
+  const reauthorizedSessionId = reinitialized.headers.get("mcp-session-id");
+  assert.ok(reauthorizedSessionId);
+  const reconnectedResponse = await POST(
+    request(
+      {
+        id: 5,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: "rateloop_connect_workspace", arguments: { connectionUrl: secondIntent.connectionUrl } },
+      },
+      reauthorizedTokens.access_token,
+      reauthorizedSessionId,
+    ),
+  );
+  assert.equal(reconnectedResponse.status, 200);
+  const reconnected = (await reconnectedResponse.json()).result.structuredContent;
+  assert.equal(reconnected.connected, true);
+  assert.equal(reconnected.context.workspaceId, secondWorkspaceId);
+  assert.equal(reconnected.verification.connection.status, "connected");
+});
+
 test("an owner can recover only a replay-revoked public OAuth integration", async () => {
   const { clientId, intent, principalId, tokens, workspaceId } = await setupOAuthConnectionIntent();
   const initialized = await POST(
