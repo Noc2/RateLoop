@@ -34,20 +34,27 @@ type DecisionPacketVerificationKey = {
   status: "current" | "retired";
 };
 
-export function parseDecisionPacketVerificationKeys(encoded: string): DecisionPacketVerificationKey[] {
+type EvidenceSigningEnvironment = {
+  TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS?: string;
+  TOKENLESS_EVIDENCE_KMS_KEY_RESOURCE?: string;
+  TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY?: string;
+};
+
+function parseDecisionPacketVerificationKeysWithOptions(encoded: string, options: { allowEmpty?: boolean }) {
   let entries: unknown;
   try {
     entries = JSON.parse(encoded);
   } catch {
     throw new TokenlessServiceError("Decision-packet verification keys are invalid.", 503, "invalid_evidence_keyring");
   }
-  if (!Array.isArray(entries) || entries.length === 0) {
+  if (!Array.isArray(entries) || (entries.length === 0 && !options.allowEmpty)) {
     throw new TokenlessServiceError(
       "Decision-packet verification keys are unavailable.",
       503,
       "invalid_evidence_keyring",
     );
   }
+  if (entries.length === 0) return [];
   const seen = new Set<string>();
   let current = 0;
   const parsed = entries.map(entry => {
@@ -85,6 +92,33 @@ export function parseDecisionPacketVerificationKeys(encoded: string): DecisionPa
   });
   if (current !== 1) throw new Error("exactly one current key is required");
   return parsed;
+}
+
+export function parseDecisionPacketVerificationKeys(encoded: string): DecisionPacketVerificationKey[] {
+  return parseDecisionPacketVerificationKeysWithOptions(encoded, {});
+}
+
+export function configuredDecisionPacketVerificationKeys(
+  env?: EvidenceSigningEnvironment,
+): DecisionPacketVerificationKey[] {
+  const configuration = env ?? {
+    TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS: process.env.TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS,
+    TOKENLESS_EVIDENCE_KMS_KEY_RESOURCE: process.env.TOKENLESS_EVIDENCE_KMS_KEY_RESOURCE,
+    TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY: process.env.TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY,
+  };
+  const encoded = configuration.TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS?.trim();
+  const usesManagedSigner = Boolean(configuration.TOKENLESS_EVIDENCE_KMS_KEY_RESOURCE?.trim());
+  const usesTestSigner = Boolean(configuration.TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY?.trim());
+  const allowEmpty = usesTestSigner && !usesManagedSigner;
+  if (!encoded) {
+    if (allowEmpty) return [];
+    throw new TokenlessServiceError(
+      "Decision-packet verification keys are unavailable.",
+      503,
+      "invalid_evidence_keyring",
+    );
+  }
+  return parseDecisionPacketVerificationKeysWithOptions(encoded, { allowEmpty });
 }
 
 export async function listWorkspaceEvidenceSigningKeys(input: { accountAddress: string; workspaceId: string }) {
@@ -127,7 +161,7 @@ export async function listWorkspaceEvidenceSigningKeys(input: { accountAddress: 
   });
   let packetKeys: DecisionPacketVerificationKey[];
   try {
-    packetKeys = parseDecisionPacketVerificationKeys(process.env.TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS ?? "");
+    packetKeys = configuredDecisionPacketVerificationKeys();
   } catch (error) {
     if (error instanceof TokenlessServiceError) throw error;
     throw new TokenlessServiceError("Decision-packet verification keys are invalid.", 503, "invalid_evidence_keyring");

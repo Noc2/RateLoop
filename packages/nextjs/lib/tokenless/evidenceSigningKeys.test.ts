@@ -1,4 +1,4 @@
-import { parseDecisionPacketVerificationKeys } from "./evidenceSigningKeys";
+import { configuredDecisionPacketVerificationKeys, parseDecisionPacketVerificationKeys } from "./evidenceSigningKeys";
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync } from "node:crypto";
 import { test } from "node:test";
@@ -12,6 +12,10 @@ function p256Entry(status: "current" | "retired" = "current") {
     publicKey: publicKey.toString("base64url"),
     status,
   };
+}
+
+function testSigningPrivateKey() {
+  return generateKeyPairSync("ed25519").privateKey.export({ format: "der", type: "pkcs8" }).toString("base64url");
 }
 
 test("decision packet trust history accepts one current P-256 key and retired predecessors", () => {
@@ -35,4 +39,54 @@ test("decision packet trust history rejects unpinned fingerprints and ambiguous 
     parseDecisionPacketVerificationKeys(JSON.stringify([{ ...first, keyId: `p256:${"00".repeat(12)}` }])),
   );
   assert.throws(() => parseDecisionPacketVerificationKeys(JSON.stringify([first, p256Entry()])));
+});
+
+test("test signer may use its Ed25519 trust history without a P-256 keyring", () => {
+  const env = { TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY: testSigningPrivateKey() };
+  assert.deepEqual(configuredDecisionPacketVerificationKeys(env), []);
+  assert.deepEqual(
+    configuredDecisionPacketVerificationKeys({
+      ...env,
+      TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS: "[]",
+    }),
+    [],
+  );
+});
+
+test("managed signer still requires a valid non-empty P-256 keyring", () => {
+  const current = p256Entry();
+  assert.throws(() => configuredDecisionPacketVerificationKeys({}), /verification keys are unavailable/u);
+  assert.throws(
+    () =>
+      configuredDecisionPacketVerificationKeys({
+        TOKENLESS_EVIDENCE_KMS_KEY_RESOURCE: "arn:aws:kms:eu-central-1:123456789012:key/example",
+      }),
+    /verification keys are unavailable/u,
+  );
+  assert.throws(
+    () =>
+      configuredDecisionPacketVerificationKeys({
+        TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS: "[]",
+        TOKENLESS_EVIDENCE_KMS_KEY_RESOURCE: "arn:aws:kms:eu-central-1:123456789012:key/example",
+      }),
+    /verification keys are unavailable/u,
+  );
+  assert.deepEqual(
+    configuredDecisionPacketVerificationKeys({
+      TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS: JSON.stringify([current]),
+      TOKENLESS_EVIDENCE_KMS_KEY_RESOURCE: "arn:aws:kms:eu-central-1:123456789012:key/example",
+    }).map(key => key.keyId),
+    [current.keyId],
+  );
+});
+
+test("test signer does not hide a malformed configured keyring", () => {
+  assert.throws(
+    () =>
+      configuredDecisionPacketVerificationKeys({
+        TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS: "not-json",
+        TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY: testSigningPrivateKey(),
+      }),
+    /verification keys are invalid/u,
+  );
 });
