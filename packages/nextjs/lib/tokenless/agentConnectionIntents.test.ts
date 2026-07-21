@@ -5,7 +5,9 @@ import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS } from "~~/lib/tokenless/adaptiveReviewDefaults";
 import {
   SAFE_AGENT_CONNECTION_SCOPES,
+  approveAgentWorkspaceMove,
   claimAgentConnectionIntent,
+  confirmAgentWorkspaceMove,
   connectionLaneFromClientCapabilitiesJson,
   createAgentConnectionIntent,
   getPublicAgentConnectionIntent,
@@ -16,6 +18,7 @@ import { listWorkspaceAgents } from "~~/lib/tokenless/agentRegistry";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 
 const OWNER = `rlp_${"a".repeat(24)}`;
+const OTHER_OWNER = `rlp_${"b".repeat(24)}`;
 const CLIENT_ID = "rloc_test_client";
 const RESOURCE = "https://rateloop-tokenless.example/api/agent/v1/mcp";
 
@@ -283,6 +286,172 @@ test("one OAuth token family cannot claim a second workspace", async () => {
     (error: unknown) =>
       Boolean(error && typeof error === "object" && "code" in error && error.code === "workspace_conflict"),
   );
+});
+
+test("a targeted reconnect requires source confirmation and target-owner approval before replacing credentials", async () => {
+  const now = new Date();
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_principals (principal_id,status,created_at,updated_at)
+          VALUES (?, 'active', ?, ?)`,
+    args: [OTHER_OWNER, now, now],
+  });
+  const sourceWorkspace = await createWorkspace({ name: "Source", ownerAddress: OTHER_OWNER });
+  const targetWorkspace = await createWorkspace({ name: "Target", ownerAddress: OWNER });
+  const sourceIntent = await createAgentConnectionIntent({
+    accountAddress: OTHER_OWNER,
+    workspaceId: sourceWorkspace.workspaceId,
+    origin: "https://rateloop-tokenless.example",
+  });
+  const targetIntent = await createAgentConnectionIntent({
+    accountAddress: OWNER,
+    workspaceId: targetWorkspace.workspaceId,
+    origin: "https://rateloop-tokenless.example",
+  });
+  const sourcePrincipal = await createTokenFamily("oatf_move_source", OTHER_OWNER);
+  const targetPrincipal = await createTokenFamily("oatf_move_target", OWNER);
+  const sourceClaim = await claimAgentConnectionIntent({
+    connectionUrl: sourceIntent.connectionUrl,
+    origin: "https://rateloop-tokenless.example",
+    principal: sourcePrincipal,
+  });
+  const targetClaim = await claimAgentConnectionIntent({
+    connectionUrl: targetIntent.connectionUrl,
+    origin: "https://rateloop-tokenless.example",
+    principal: targetPrincipal,
+  });
+  const targetBeforeReconnect = await dbClient.execute({
+    sql: `SELECT status,activation_mode,token_family_id FROM tokenless_agent_integrations
+          WHERE integration_id=? AND workspace_id=?`,
+    args: [targetClaim.connection.integrationId, targetWorkspace.workspaceId],
+  });
+  assert.deepEqual(targetBeforeReconnect.rows[0], {
+    status: "active",
+    activation_mode: "preauthorized_safe",
+    token_family_id: targetPrincipal.tokenFamilyId,
+  });
+  const sessionHash = `sha256:${"c".repeat(64)}`;
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_mcp_sessions
+          (session_hash,workspace_id,integration_id,subject_principal_id,token_family_id,client_name,client_version,
+           protocol_version,elicitation_mode,status,created_at,last_seen_at,expires_at)
+          VALUES (?,?,?,?,?,'Test client','1.0.0','2025-06-18','form','active',?,?,?)`,
+    args: [
+      sessionHash,
+      sourceWorkspace.workspaceId,
+      sourceClaim.connection.integrationId,
+      OTHER_OWNER,
+      sourcePrincipal.tokenFamilyId,
+      now,
+      now,
+      new Date(now.getTime() + 60 * 60_000),
+    ],
+  });
+  const reconnectIntent = await createAgentConnectionIntent({
+    accountAddress: OWNER,
+    workspaceId: targetWorkspace.workspaceId,
+    origin: "https://rateloop-tokenless.example",
+    reconnectIntegrationId: targetClaim.connection.integrationId,
+  });
+  const requested = await claimAgentConnectionIntent({
+    connectionUrl: reconnectIntent.connectionUrl,
+    origin: "https://rateloop-tokenless.example",
+    principal: sourcePrincipal,
+    mcpSessionHash: sessionHash,
+  });
+  assert.equal(requested.workspaceMove.status, "source_confirmation_required");
+  assert.equal(requested.workspaceMove.nextAction, "confirm_workspace_move");
+  await assert.rejects(
+    () =>
+      approveAgentWorkspaceMove({
+        accountAddress: OWNER,
+        workspaceId: targetWorkspace.workspaceId,
+        transferId: requested.workspaceMove.transferId,
+      }),
+    (error: unknown) =>
+      Boolean(
+        error &&
+          typeof error === "object" &&
+          "code" in error &&
+          error.code === "workspace_move_source_confirmation_required",
+      ),
+  );
+  const confirmed = await confirmAgentWorkspaceMove({
+    principal: sourcePrincipal,
+    transferId: requested.workspaceMove.transferId,
+    origin: "https://rateloop-tokenless.example",
+  });
+  assert.equal(confirmed.workspaceMove.status, "owner_approval_required");
+  assert.match(confirmed.workspaceMove.approvalUrl, /tab=connect/u);
+  assert.match(confirmed.workspaceMove.approvalUrl, new RegExp(requested.workspaceMove.transferId, "u"));
+
+  const approved = await approveAgentWorkspaceMove({
+    accountAddress: OWNER,
+    workspaceId: targetWorkspace.workspaceId,
+    transferId: requested.workspaceMove.transferId,
+  });
+  assert.equal(approved.workspaceMove.status, "completed");
+  assert.equal(approved.connection.status, "testing");
+  assert.notEqual(approved.connection.integrationId, targetClaim.connection.integrationId);
+  assert.equal(approved.connection.agentId, targetClaim.connection.agentId);
+  assert.equal(approved.connection.agentVersionId, targetClaim.connection.agentVersionId);
+  assert.equal(approved.connection.reviewPolicyId, targetClaim.connection.reviewPolicyId);
+
+  const integrations = await dbClient.execute({
+    sql: `SELECT integration_id,status,token_family_id,agent_id,review_policy_id,granted_scopes_json
+          FROM tokenless_agent_integrations
+          WHERE integration_id IN (?,?,?) ORDER BY integration_id`,
+    args: [
+      sourceClaim.connection.integrationId,
+      targetClaim.connection.integrationId,
+      approved.connection.integrationId,
+    ],
+  });
+  const integrationById = new Map(integrations.rows.map(row => [String(row.integration_id), row]));
+  assert.equal(integrationById.get(sourceClaim.connection.integrationId)?.status, "revoked");
+  assert.equal(integrationById.get(sourceClaim.connection.integrationId)?.token_family_id, null);
+  assert.equal(integrationById.get(targetClaim.connection.integrationId)?.status, "revoked");
+  assert.equal(integrationById.get(targetClaim.connection.integrationId)?.token_family_id, null);
+  assert.equal(integrationById.get(approved.connection.integrationId)?.status, "active");
+  assert.equal(integrationById.get(approved.connection.integrationId)?.token_family_id, sourcePrincipal.tokenFamilyId);
+  assert.deepEqual(
+    JSON.parse(String(integrationById.get(approved.connection.integrationId)?.granted_scopes_json)),
+    SAFE_AGENT_CONNECTION_SCOPES,
+  );
+  const families = await dbClient.execute({
+    sql: `SELECT token_family_id,status FROM tokenless_agent_oauth_token_families
+          WHERE token_family_id IN (?,?) ORDER BY token_family_id`,
+    args: [sourcePrincipal.tokenFamilyId, targetPrincipal.tokenFamilyId],
+  });
+  assert.deepEqual(Object.fromEntries(families.rows.map(row => [String(row.token_family_id), String(row.status)])), {
+    oatf_move_source: "active",
+    oatf_move_target: "revoked",
+  });
+  const session = await dbClient.execute({
+    sql: "SELECT status,integration_id,token_family_id FROM tokenless_mcp_sessions WHERE session_hash=?",
+    args: [sessionHash],
+  });
+  assert.equal(session.rows[0]?.status, "revoked");
+  assert.equal(session.rows[0]?.integration_id, sourceClaim.connection.integrationId);
+  assert.equal(session.rows[0]?.token_family_id, sourcePrincipal.tokenFamilyId);
+  const intents = await dbClient.execute({
+    sql: `SELECT intent_id,status,claimed_token_family_id FROM tokenless_agent_connection_intents
+          WHERE intent_id IN (?,?,?)`,
+    args: [sourceIntent.intent.intentId, targetIntent.intent.intentId, reconnectIntent.intent.intentId],
+  });
+  const intentById = new Map(intents.rows.map(row => [String(row.intent_id), row]));
+  assert.equal(intentById.get(sourceIntent.intent.intentId)?.status, "superseded");
+  assert.equal(intentById.get(sourceIntent.intent.intentId)?.claimed_token_family_id, null);
+  assert.equal(intentById.get(targetIntent.intent.intentId)?.status, "superseded");
+  assert.equal(intentById.get(targetIntent.intent.intentId)?.claimed_token_family_id, null);
+  assert.equal(intentById.get(reconnectIntent.intent.intentId)?.status, "testing");
+  assert.equal(intentById.get(reconnectIntent.intent.intentId)?.claimed_token_family_id, sourcePrincipal.tokenFamilyId);
+  const retriedApproval = await approveAgentWorkspaceMove({
+    accountAddress: OWNER,
+    workspaceId: targetWorkspace.workspaceId,
+    transferId: requested.workspaceMove.transferId,
+  });
+  assert.equal(retriedApproval.idempotent, true);
+  assert.equal(retriedApproval.connection.integrationId, approved.connection.integrationId);
 });
 
 test("verification fails closed after the hard connection deadline", async () => {
