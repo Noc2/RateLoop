@@ -39,6 +39,10 @@ import {
   projectHumanReviewGateTrustedKeyring,
 } from "~~/lib/tokenless/humanReviewGateEvidence";
 import { projectHumanReviewMcpEnvelope } from "~~/lib/tokenless/humanReviewMcpEnvelope";
+import {
+  hashHumanReviewSelectionPolicySnapshot,
+  observeHumanReviewResult,
+} from "~~/lib/tokenless/humanReviewResultObservation";
 import { createPrivateGroup } from "~~/lib/tokenless/privateGroups";
 import { createAgentPublishingPolicy, createWorkspace } from "~~/lib/tokenless/productCore";
 import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
@@ -2505,6 +2509,89 @@ test("real MCP envelopes drive the advisory updater and stop gate for pending, c
           SET status='completed',updated_at=? WHERE workspace_id=? AND opportunity_id=?`,
     args: [terminalAt, setupData.workspaceId, first.opportunityId],
   });
+  const frozenResult = await dbClient.execute({
+    sql: `SELECT o.created_at,o.agent_id,o.agent_version_id,o.policy_id,o.policy_version,
+                 p.mode,p.agreement_threshold_bps,p.production_floor_bps,p.fixed_rate_bps,
+                 p.maximum_unreviewed_gap,p.rules_json,p.audience_policy_json,p.publishing_policy_id
+          FROM tokenless_agent_review_opportunities o
+          JOIN tokenless_agent_review_policies p
+            ON p.workspace_id=o.workspace_id AND p.policy_id=o.policy_id AND p.version=o.policy_version
+          WHERE o.workspace_id=? AND o.opportunity_id=?`,
+    args: [setupData.workspaceId, first.opportunityId],
+  });
+  const frozenRow = frozenResult.rows[0] as Record<string, any>;
+  const selectionPolicy = {
+    schemaVersion: "rateloop.human-review-selection-policy.v1" as const,
+    workspaceId: setupData.workspaceId,
+    agentId: String(frozenRow.agent_id),
+    agentVersionId: String(frozenRow.agent_version_id),
+    policyId: String(frozenRow.policy_id),
+    version: Number(frozenRow.policy_version),
+    mode: String(frozenRow.mode),
+    agreementThresholdBps: Number(frozenRow.agreement_threshold_bps),
+    productionFloorBps: Number(frozenRow.production_floor_bps),
+    fixedRateBps: frozenRow.fixed_rate_bps === null ? null : Number(frozenRow.fixed_rate_bps),
+    maximumUnreviewedGap: Number(frozenRow.maximum_unreviewed_gap),
+    rules: JSON.parse(String(frozenRow.rules_json)),
+    audience: JSON.parse(String(frozenRow.audience_policy_json)),
+    publishingPolicyId: frozenRow.publishing_policy_id === null ? null : String(frozenRow.publishing_policy_id),
+  };
+  const resultCommitment = contentHash("real-mcp-gate-positive-result");
+  await observeHumanReviewResult({
+    envelope: {
+      schemaVersion: "rateloop.human-review-result.v1",
+      workspaceId: setupData.workspaceId,
+      integrationId: setupData.approved.integration.integrationId,
+      opportunityId: first.opportunityId,
+      lane: "public_paid",
+      lifecycle: {
+        state: "completed",
+        terminal: true,
+        revision: 4,
+        reasonCodes: ["human_review_completed"],
+        startedAt: new Date(frozenRow.created_at).toISOString(),
+        stateEnteredAt: terminalAt.toISOString(),
+        finalizedAt: terminalAt.toISOString(),
+      },
+      frozen: {
+        selectionPolicy: {
+          id: selectionPolicy.policyId,
+          version: selectionPolicy.version,
+          hash: hashHumanReviewSelectionPolicySnapshot(selectionPolicy),
+        },
+        binding: first.frozen.binding,
+        requestProfile: first.frozen.requestProfile,
+        responseDeadline: new Date(terminalAt.getTime() + 60_000).toISOString(),
+      },
+      panel: {
+        requestedCount: 1,
+        assignedCount: 1,
+        responseCount: 1,
+        cohorts: [{ source: "network", requestedCount: 1, assignedCount: 1, responseCount: 1 }],
+      },
+      outcome: "positive",
+      rationale: { mode: "withheld", summary: null },
+      economics: {
+        asset: "USDC",
+        decimals: 6,
+        guaranteedBase: { mode: "usdc", fundedAtomic: "1", paidAtomic: "1", refundedAtomic: "0" },
+        automaticQualityAllocation: {
+          mode: "usdc",
+          availableAtomic: "1",
+          awardedAtomic: "1",
+          refundedAtomic: "0",
+        },
+        feedbackBonus: { mode: "off", fundedAtomic: "0", awardedAtomic: "0", refundedAtomic: "0", awards: [] },
+      },
+      commitments: {
+        sourceArtifact: args.sourceEvidence.hash,
+        suggestionArtifact: args.suggestionCommitment,
+        responseSet: contentHash("real-mcp-gate-response-set"),
+        result: resultCommitment,
+      },
+      terminalEvidence: null,
+    },
+  });
   const principal = await authenticateAgentMcpPrincipal(`Bearer ${setupData.token}`);
   assert.equal(principal.kind, "integration");
   if (principal.kind !== "integration") throw new Error("Integration principal expected.");
@@ -2514,7 +2601,9 @@ test("real MCP envelopes drive the advisory updater and stop gate for pending, c
     rawResult: { schemaVersion: "rateloop.adaptive-review-result.v1", opportunityId: first.opportunityId },
   });
   assert.equal(completed.lifecycle.state, "completed");
-  assert.equal(completed.terminalEvidence?.schemaVersion, "rateloop.human-review-terminal-evidence.v1");
+  assert.equal(completed.terminalEvidence?.schemaVersion, "rateloop.human-review-terminal-evidence.v2");
+  assert.equal(completed.terminalEvidence?.payload.releaseDisposition, "authorized_positive");
+  assert.equal(completed.terminalEvidence?.payload.resultCommitment, resultCommitment);
   assert.equal(
     await runAdvisoryHook(
       advisoryUpdater,
