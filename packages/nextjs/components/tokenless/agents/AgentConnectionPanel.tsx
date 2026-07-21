@@ -101,6 +101,14 @@ type AgentConnectionIntent = {
   clientVersion: string;
   lastTransitionAt: string | null;
   recoveryAction: string;
+  reconnectIntegrationId: string;
+  workspaceMove: {
+    transferId: string;
+    status: "source_confirmation_required" | "owner_approval_required" | "completed" | "expired";
+    sourceConfirmedAt: string | null;
+    targetApprovedAt: string | null;
+    expiresAt: string | null;
+  } | null;
 };
 
 type ApprovalPayload = {
@@ -214,7 +222,11 @@ export function normalizeAgentIntegration(value: unknown): AgentIntegration {
 export function normalizeAgentConnectionIntent(value: unknown): AgentConnectionIntent {
   const row = record(value);
   const profile = record(row.profile);
+  const workspaceMove = record(row.workspaceMove);
   const status = stringField(row, "status") as ConnectionIntentStatus;
+  const workspaceMoveStatus = stringField(workspaceMove, "status") as NonNullable<
+    AgentConnectionIntent["workspaceMove"]
+  >["status"];
   return {
     intentId: stringField(row, "intentId"),
     status: [
@@ -247,6 +259,20 @@ export function normalizeAgentConnectionIntent(value: unknown): AgentConnectionI
     clientVersion: stringField(row, "clientVersion"),
     lastTransitionAt: nullableStringField(row, "lastTransitionAt"),
     recoveryAction: stringField(row, "recoveryAction"),
+    reconnectIntegrationId: stringField(row, "reconnectIntegrationId"),
+    workspaceMove: stringField(workspaceMove, "transferId")
+      ? {
+          transferId: stringField(workspaceMove, "transferId"),
+          status: ["source_confirmation_required", "owner_approval_required", "completed", "expired"].includes(
+            workspaceMoveStatus,
+          )
+            ? workspaceMoveStatus
+            : "expired",
+          sourceConfirmedAt: nullableStringField(workspaceMove, "sourceConfirmedAt"),
+          targetApprovedAt: nullableStringField(workspaceMove, "targetApprovedAt"),
+          expiresAt: nullableStringField(workspaceMove, "expiresAt"),
+        }
+      : null,
   };
 }
 
@@ -734,7 +760,7 @@ export function AgentConnectionPanel({
     };
   }, [loadConnectionState, shouldPoll, workspaceId]);
 
-  async function copyConnectionMessage() {
+  async function copyConnectionMessage(reconnectIntegrationId?: string) {
     if (!workspaceId) return;
     setBusyAction("create-intent");
     setManualConnectionMessage(null);
@@ -747,6 +773,7 @@ export function AgentConnectionPanel({
           method: "POST",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(reconnectIntegrationId ? { reconnectIntegrationId } : {}),
         }),
       );
       const connectionUrl = stringField(body, "connectionUrl");
@@ -758,7 +785,11 @@ export function AgentConnectionPanel({
       try {
         await navigator.clipboard.writeText(message);
         copied = true;
-        setStatus("Connection message copied. Paste it once into the agent chat you want to connect.");
+        setStatus(
+          reconnectIntegrationId
+            ? "Reconnect message copied. Paste it once into the same agent task."
+            : "Connection message copied. Paste it once into the agent chat you want to connect.",
+        );
         notifications.success("Connection message copied to clipboard.");
         void fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/agent-connections/onboarding-events`, {
           method: "POST",
@@ -828,6 +859,39 @@ export function AgentConnectionPanel({
       setStatus("Connection attempt cancelled. You can create a new message when ready.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to cancel the connection attempt.");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function approveWorkspaceMove(intent: AgentConnectionIntent) {
+    const move = intent.workspaceMove;
+    if (!move || move.status !== "owner_approval_required") return;
+    if (
+      !window.confirm(
+        "Reconnect this agent here? Its current RateLoop workspace connection will stop, and this agent's previous credential will be replaced.",
+      )
+    )
+      return;
+    setBusyAction(`approve-move:${move.transferId}`);
+    setError(null);
+    setStatus(null);
+    try {
+      await readJson(
+        await fetch(
+          `/api/account/workspaces/${encodeURIComponent(workspaceId)}/agent-connection-moves/${encodeURIComponent(move.transferId)}/approve`,
+          {
+            method: "POST",
+            body: JSON.stringify({ decision: "approve" }),
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+      await loadConnectionState(workspaceId);
+      setStatus("Reconnect approved. Return to the same agent task; it can now finish automatically.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to approve the reconnect.");
     } finally {
       setBusyAction(null);
     }
@@ -1173,8 +1237,20 @@ export function AgentConnectionPanel({
               .filter(intent => isActiveAgentConnectionIntent(intent, connectionClock))
               .slice(0, 1)
               .map(intent => {
-                const copy = connectionIntentCopy(intent.status);
-                const recoveryAction = intent.status === "action_required" ? intent.recoveryAction : "";
+                const move = intent.workspaceMove;
+                const copy =
+                  move?.status === "source_confirmation_required"
+                    ? {
+                        heading: "Confirm the reconnect in your agent",
+                        detail: "Return to the same agent task and confirm moving its RateLoop connection.",
+                      }
+                    : move?.status === "owner_approval_required"
+                      ? {
+                          heading: "Approve reconnecting this agent",
+                          detail: "The agent confirmed the move. Approve it here to keep this agent's settings.",
+                        }
+                      : connectionIntentCopy(intent.status);
+                const recoveryAction = intent.recoveryAction;
                 return (
                   <article key={intent.intentId}>
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -1186,6 +1262,13 @@ export function AgentConnectionPanel({
                           <span className="badge badge-ghost font-mono text-xs">{intent.status}</span>
                         </div>
                         <p className="mt-2 text-sm leading-6 text-base-content/55">{copy.detail}</p>
+                        {move ? (
+                          <p className="mt-4 max-w-3xl rounded-xl border border-amber-300/25 bg-amber-300/[0.07] p-4 text-sm leading-6 text-amber-50/85">
+                            This disconnects that Codex credential from its current RateLoop workspace and replaces this
+                            agent&apos;s previous connection. This agent&apos;s review and publishing settings stay
+                            unchanged.
+                          </p>
+                        ) : null}
                         {recoveryAction ? (
                           <div
                             className="mt-4 rounded-xl border border-amber-300/25 bg-amber-300/[0.07] p-4"
@@ -1194,9 +1277,9 @@ export function AgentConnectionPanel({
                             <p className="text-sm font-semibold text-amber-100">Resolve this connection</p>
                             <p className="mt-1 text-sm leading-6 text-amber-50/80">{recoveryAction}</p>
                           </div>
-                        ) : (
+                        ) : !move ? (
                           <p className="mt-2 text-sm text-base-content/55">You can close this page.</p>
-                        )}
+                        ) : null}
                         {(intent.clientName || intent.clientVersion) && (
                           <p className="mt-2 text-xs text-base-content/45">
                             {intent.clientName || "Agent host"}
@@ -1209,6 +1292,16 @@ export function AgentConnectionPanel({
                           Finishes by {formatTimestamp(intent.hardExpiresAt, "soon")}
                         </time>
                         <div className="flex flex-wrap gap-2">
+                          {move?.status === "owner_approval_required" ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={Boolean(busyAction)}
+                              onClick={() => void approveWorkspaceMove(intent)}
+                            >
+                              {busyAction === `approve-move:${move.transferId}` ? "Approving…" : "Approve reconnect"}
+                            </Button>
+                          ) : null}
                           <button
                             type="button"
                             className="btn btn-sm rateloop-secondary-action"
@@ -1333,16 +1426,29 @@ export function AgentConnectionPanel({
                 Safe access · No spending or private workspace content
               </p>
             </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              aria-controls="connected-agent-management"
-              aria-expanded={showConnectionManagement}
-              onClick={() => setShowConnectionManagement(current => !current)}
-            >
-              {showConnectionManagement ? "Done" : "Manage connected agents"}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              {activeIntegrations.length === 1 && !activeIntegrations[0].apiKeyId ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={Boolean(busyAction) || activeConnectionIntents.length > 0}
+                  onClick={() => void copyConnectionMessage(activeIntegrations[0].integrationId)}
+                >
+                  {busyAction === "create-intent" ? "Creating…" : "Reconnect"}
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                aria-controls="connected-agent-management"
+                aria-expanded={showConnectionManagement}
+                onClick={() => setShowConnectionManagement(current => !current)}
+              >
+                {showConnectionManagement ? "Done" : "Manage connected agents"}
+              </Button>
+            </div>
           </div>
           {activeIntegrations
             .filter(integration => integration.oauthRecoveryAvailable)
@@ -1408,6 +1514,16 @@ export function AgentConnectionPanel({
                               onClick={() => void rotateIntegration(integration)}
                             >
                               Rotate legacy credential
+                            </button>
+                          ) : null}
+                          {!legacyCredential && activeIntegrations.length > 1 ? (
+                            <button
+                              type="button"
+                              className="btn btn-sm rateloop-secondary-action"
+                              disabled={Boolean(busyAction) || activeConnectionIntents.length > 0}
+                              onClick={() => void copyConnectionMessage(integration.integrationId)}
+                            >
+                              Reconnect
                             </button>
                           ) : null}
                           <button

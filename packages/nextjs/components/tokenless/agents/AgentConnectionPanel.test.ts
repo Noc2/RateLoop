@@ -82,11 +82,11 @@ test("intent deadlines end pending state client-side", () => {
 });
 
 test("workspace conflicts present the saved recovery action as the primary next step", () => {
-  assert.match(source, /intent\.status === "action_required" \? intent\.recoveryAction : ""/);
+  assert.match(source, /const recoveryAction = intent\.recoveryAction/);
   assert.match(source, /Resolve this connection/);
   assert.match(source, /role="alert"/);
   assert.match(source, /\{recoveryAction\}/);
-  assert.match(source, /recoveryAction \? \([\s\S]*?\) : \([\s\S]*?You can close this page\./);
+  assert.match(source, /recoveryAction \? \([\s\S]*?\) : !move \? \([\s\S]*?You can close this page\./);
 });
 
 test("legacy pairings remain manageable but cannot be issued from the default path", () => {
@@ -142,6 +142,28 @@ test("connected agent management opens from a direct action while technical stat
   assert.match(source, /onConnectionHistoryChange\?\.\(connectionHistory\)/);
   assert.match(source, />\s*Disconnect\s*</);
   assert.match(source, /setStatus\("Agent disconnected\."\)/);
+});
+
+test("a connected OAuth agent has a direct targeted reconnect path", () => {
+  assert.match(source, />\s*Reconnect\s*</);
+  assert.match(source, /copyConnectionMessage\(activeIntegrations\[0\]\.integrationId\)/);
+  assert.match(source, /copyConnectionMessage\(integration\.integrationId\)/);
+  assert.match(source, /JSON\.stringify\(reconnectIntegrationId \? \{ reconnectIntegrationId \} : \{\}\)/);
+  assert.match(source, /Reconnect message copied\. Paste it once into the same agent task\./);
+  assert.match(source, /activeConnectionIntents\.length > 0/);
+});
+
+test("a workspace owner explicitly approves a source-confirmed reconnect on the website", () => {
+  assert.match(source, /source_confirmation_required/);
+  assert.match(source, /Confirm the reconnect in your agent/);
+  assert.match(source, /owner_approval_required/);
+  assert.match(source, /Approve reconnecting this agent/);
+  assert.match(source, /Approve reconnect/);
+  assert.match(source, /agent-connection-moves\/\$\{encodeURIComponent\(move\.transferId\)\}\/approve/);
+  assert.match(source, /JSON\.stringify\(\{ decision: "approve" \}\)/);
+  assert.match(source, /This disconnects that Codex credential from its current RateLoop workspace/);
+  assert.match(source, /review and publishing settings stay/);
+  assert.match(source, /Reconnect approved\. Return to the same agent task; it can now finish automatically\./);
 });
 
 test("elapsed legacy attempts are never kept pending client-side", () => {
