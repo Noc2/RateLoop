@@ -16,27 +16,20 @@ test("human-oversight docs map each Article 14(4) measure to a capability and a 
   const html = renderToStaticMarkup(<HumanOversightPage />).replace(/\s+/g, " ");
 
   assert.match(html, /Human.*rateloop-text-gradient.*Oversight/i);
-  assert.match(html, /instrument a deployer&#x27;s own people use/i);
-  assert.match(html, /Your people provide the oversight\. RateLoop provides the instrument — and the proof\./);
+  assert.match(html, /support a deployer&#x27;s configured human oversight/i);
   assert.match(
     html,
-    /Whether a specific deployment meets a legal requirement depends on your system, context, and organization — you configure and operate RateLoop for your purpose; RateLoop provides the capabilities and the evidence\./,
+    /Your people provide oversight\. RateLoop supports the configured workflow and records its evidence\./,
   );
-  assert.match(
-    html,
-    /RateLoop operates around your AI system, gating its outputs; it does not modify the system itself\./,
-  );
+  assert.match(html, /RateLoop does not determine whether the EU AI Act applies or establish compliance\./);
+  assert.match(html, /only a verified host integration can enforce its review state at the output boundary\./);
 
   for (const [requirement, capability, responsibility] of [
     ["Article 14\\(4\\)\\(a\\)", "oversight dashboard", "watching those surfaces"],
     ["Article 14\\(4\\)\\(b\\)", "Independent blinded panels", "pull to over-rely"],
     ["Article 14\\(4\\)\\(c\\)", "owner case view", "correctly interpreting the output"],
     ["Article 14\\(4\\)\\(d\\)", "required reasons field", "disregard, override, or reverse"],
-    [
-      "Article 14\\(4\\)\\(e\\)",
-      "held in a safe state — undelivered — by default until a person decides",
-      "when to halt",
-    ],
+    ["Article 14\\(4\\)\\(e\\)", "verified host adapter that controls delivery", "when to halt"],
   ] as const) {
     assert.match(html, new RegExp(requirement));
     assert.match(html, new RegExp(capability, "i"));
@@ -47,17 +40,18 @@ test("human-oversight docs map each Article 14(4) measure to a capability and a 
   assert.match(html, /in-app, email, and browser alerts/i);
   assert.match(html, /no preselected choice/i);
   assert.match(html, /override-rate trend/i);
-  assert.match(html, /workspace stop control/i);
-  assert.match(html, /fail-closed/i);
-  assert.match(html, /advisory integrations record the same lifecycle without proving the host blocked delivery/i);
-  assert.match(html, /releasing the stop restores nothing automatically/i);
+  assert.match(html, /workspace stop blocks new review-triggered release authorizations/i);
+  assert.match(html, /Ordinary Codex, plugin, and MCP integrations are advisory/i);
+  assert.match(html, /do not verify interception or withheld delivery/i);
+  assert.match(html, /an advisory host can bypass it/i);
+  assert.match(html, /Releasing the stop restores no agent grant automatically/i);
   assert.match(html, /per-agent evidence summaries/i);
   assert.match(html, /host-reported, not independently verified/i);
 
   assert.match(html, /id="designation-and-literacy"/);
   assert.match(html, /attestation records — competence basis, training completed, and authority granted/i);
   assert.match(html, /audit events on every role assignment and change/i);
-  assert.match(html, /Article 4 AI-literacy record/i);
+  assert.match(html, /evidence relevant to Article 4 AI-literacy duties/i);
   assert.match(html, /Choosing those people, and ensuring their competence, training, and authority, remains yours\./);
   assert.match(html, /draft Article 73 serious-incident reporting template/i);
   assert.match(html, /labelled draft-aligned until the template is final/i);
@@ -66,10 +60,11 @@ test("human-oversight docs map each Article 14(4) measure to a capability and a 
   assert.match(html, /id="reviewer-lanes"/);
   assert.match(html, /Invited reviewers are your personnel/i);
   assert.match(html, /supplementary review capacity and an independent quality signal/i);
-  assert.match(html, /does not by itself discharge Article 26\(2\)/i);
+  assert.match(html, /neither lane by itself establishes that Article 14 or Article 26 duties are met/i);
   assert.match(html, /href="\/docs\/evidence"/);
 
   assert.doesNotMatch(html, /compliant|compliance-ready|certif|presumption of conformity|satisfies Article/i);
+  assert.doesNotMatch(html, /RateLoop provides the instrument — and the proof/i);
 });
 
 test("machine human-oversight doc mirrors the page and is cross-linked with evidence", () => {
@@ -79,11 +74,11 @@ test("machine human-oversight doc mirrors the page and is cross-linked with evid
   );
   const evidence = readFileSync(fileURLToPath(new URL("../../../../public/docs/evidence.md", import.meta.url)), "utf8");
 
-  assert.match(oversight, /Your people provide the oversight\. RateLoop provides the instrument — and the proof\./);
   assert.match(
     oversight,
-    /RateLoop operates around your AI system, gating its outputs; it does not modify the system itself\./,
+    /Your people provide oversight\. RateLoop supports the configured workflow and records its evidence\./,
   );
+  assert.match(oversight, /only a verified host integration can\s+enforce its review state at the output boundary\./);
   for (const heading of [
     "### 1. Monitor operation — Article 14(4)(a)",
     "### 2. Counter automation bias — Article 14(4)(b)",
@@ -95,13 +90,15 @@ test("machine human-oversight doc mirrors the page and is cross-linked with evid
   }
   assert.match(oversight, /## Designation, competence, and literacy/);
   assert.match(oversight, /## Which reviewer lane carries this/);
-  assert.match(oversight, /advisory integrations record the same lifecycle without proving the host blocked delivery/i);
+  assert.match(oversight, /Ordinary Codex, plugin, and MCP integrations are advisory/i);
+  assert.match(oversight, /do not\s+verify interception or withheld delivery/i);
   assert.match(oversight, /draft Article 73 serious-incident reporting template/i);
   assert.match(oversight, /Article 27 fundamental-rights impact\s+assessment/i);
   assert.match(oversight, /Invited reviewers are your personnel/);
-  assert.match(oversight, /does not by itself discharge Article 26\(2\)/);
+  assert.match(oversight, /neither lane by itself establishes that Article 14 or Article 26\s+duties are met/i);
   assert.match(oversight, /\[`evidence\.md`\]\(\.\/evidence\.md\)/);
   assert.match(evidence, /\[`human-oversight\.md`\]\(\.\/human-oversight\.md\)/);
   assert.match(evidence, /\[`\/docs\/human-oversight`\]\(\/docs\/human-oversight\)/);
   assert.doesNotMatch(oversight, /compliant|compliance-ready|certif|presumption of conformity|satisfies Article/i);
+  assert.doesNotMatch(oversight, /RateLoop provides the instrument — and the proof/i);
 });

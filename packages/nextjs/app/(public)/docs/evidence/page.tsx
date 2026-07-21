@@ -48,7 +48,7 @@ const OVERSIGHT_MATRIX = [
   {
     requirement: "Art 14(4)(e) · Stop",
     provides:
-      "A fail-closed output gate — on host-enforced integrations output is held undelivered until a person decides — and a workspace stop control that halts new releases workspace-wide.",
+      "Verified host enforcement can hold output undelivered until a person decides. Advisory Codex, plugin, and MCP integrations record lifecycle state but do not verify withholding. Workspace stop blocks new RateLoop release authorizations that verified hosts honor.",
     yours: "Choosing which outputs are gated, when to intervene, and when to halt.",
   },
   {
@@ -88,7 +88,8 @@ const COMPLIANCE_ROWS = [
     href: "https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng",
     references: "Articles 12, 14(3)(b), 14(4), 26(2), 26(5)-(6), 72, and 73",
     artifacts: "Review packet, coverage export, audit chain, gate evidence, and host-reported execution context.",
-    boundary: "Supports your implementation and evidence of these duties; the duties remain yours.",
+    boundary:
+      "May support evidence relevant to these duties; it neither determines applicability nor establishes fulfillment or compliance.",
   },
   {
     framework: "NIST AI RMF",
@@ -161,11 +162,11 @@ export default function EvidencePage() {
           Shared responsibility
         </p>
         <p className="mt-3 max-w-4xl text-base font-semibold leading-7 text-base-content sm:text-lg">
-          Your people provide the oversight. RateLoop provides the instrument — and the proof.
+          Your people provide oversight. RateLoop records configured review activity and its evidence.
         </p>
         <p className="mt-3 max-w-4xl text-sm leading-7 text-base-content/75 sm:text-base">
-          Whether a specific deployment meets a legal requirement depends on your system, context, and organization —
-          you configure and operate RateLoop for your purpose; RateLoop provides the capabilities and the evidence.
+          RateLoop does not determine which legal requirements apply or establish compliance. That depends on your
+          system, role, context, organization, and operation.
         </p>
       </aside>
 
@@ -193,12 +194,12 @@ export default function EvidencePage() {
         </table>
       </div>
       <p>
-        RateLoop operates around your AI system, gating its outputs; it does not modify the system itself. RateLoop
-        records the model identity reported by the connected host for each execution and labels it host-reported; it
-        does not independently verify that the reported model produced the output. RateLoop does not market SOC 2 / ISO
-        / HIPAA / residency attestations it does not hold, and no evidence export by itself makes anyone compliant. The
-        capability-by-capability mapping behind each row lives on{" "}
-        <Link href="/docs/human-oversight">Human Oversight</Link>.
+        RateLoop does not control output delivery in advisory integrations. Only a verified host adapter that owns the
+        delivery boundary can enforce a held review state. RateLoop records the model identity reported by the connected
+        host for each execution and labels it host-reported; it does not independently verify that the reported model
+        produced the output. RateLoop does not market SOC 2 / ISO / HIPAA / residency attestations it does not hold, and
+        no evidence export by itself makes anyone compliant. The capability-by-capability mapping behind each row lives
+        on <Link href="/docs/human-oversight">Human Oversight</Link>.
       </p>
 
       <h2 id="packet">What an evidence packet contains</h2>

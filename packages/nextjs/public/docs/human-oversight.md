@@ -1,16 +1,16 @@
 # Human Oversight
 
-RateLoop is the instrument a deployer's own people use to oversee AI agent outputs: monitor, interpret, override, and
-stop — with evidence of each step. This page maps each Article 14(4) oversight measure to the concrete capability that
-carries it.
+RateLoop can support a deployer's configured human oversight of AI agent outputs: monitor, interpret, override, and
+stop, with records of each step. This page maps Article 14(4) measures to relevant RateLoop capabilities and the duties
+that remain with the deployer.
 
 ## Shared responsibility
 
-Your people provide the oversight. RateLoop provides the instrument — and the proof.
+Your people provide oversight. RateLoop supports the configured workflow and records its evidence.
 
-Whether a specific deployment meets a legal requirement depends on your system, context, and organization — you
-configure and operate RateLoop for your purpose; RateLoop provides the capabilities and the evidence.
-RateLoop operates around your AI system, gating its outputs; it does not modify the system itself.
+RateLoop does not determine whether the EU AI Act applies or establish compliance. That depends on your system, role,
+context, organization, and operation. RateLoop operates around your AI system; only a verified host integration can
+enforce its review state at the output boundary.
 
 ## The five Article 14(4) measures
 
@@ -53,11 +53,11 @@ You remain responsible for deciding when to disregard, override, or reverse an o
 
 ### 5. Intervene or stop — Article 14(4)(e)
 
-The output gate is fail-closed: on host-enforced integrations an eligible output is held in a safe state —
-undelivered — by default until a person decides, a pre-emptive form of the stop-or-similar-procedure the Act
-describes; advisory integrations record the same lifecycle without proving the host blocked delivery. The workspace
-stop control halts new releases workspace-wide in one audited action with a required reason and a banner while
-stopped; releasing the stop restores nothing automatically — each agent resumes only with a fresh human grant.
+Only a verified host adapter that controls delivery can establish that an eligible output stayed undelivered until a
+person decided. Ordinary Codex, plugin, and MCP integrations are advisory: they report the review lifecycle but do not
+verify interception or withheld delivery. RateLoop's workspace stop blocks new review-triggered release
+authorizations; a verified host must honor that state at delivery, while an advisory host can bypass it. Releasing the
+stop restores no agent grant automatically.
 
 You remain responsible for choosing which outputs are gated, when to intervene, and when to halt.
 
@@ -66,8 +66,8 @@ You remain responsible for choosing which outputs are gated, when to intervene, 
 Article 26(2) requires oversight to be assigned to natural persons with competence, training, and authority. RateLoop
 records oversight designations with attestation records — competence basis, training completed, and authority granted
 — exportable as an assignment record, and emits audit events on every role assignment and change. Reviewer and
-oversight-person training and calibration records export as an Article 4 AI-literacy record. Choosing those people,
-and ensuring their competence, training, and authority, remains yours.
+oversight-person training and calibration records can be exported as evidence relevant to Article 4 AI-literacy
+duties. Choosing those people, and ensuring their competence, training, and authority, remains yours.
 
 Audit and evidence exports map to the Commission's draft Article 73 serious-incident reporting template — labelled
 draft-aligned until the template is final — and the workspace's oversight configuration exports as a factual
@@ -77,8 +77,9 @@ assessment.
 ## Which reviewer lane carries this
 
 Invited reviewers are your personnel: the people your organization designates, whose competence, training, and
-authority you attest. That lane carries the Article 14 and Article 26 story. The public network is supplementary
-review capacity and an independent quality signal; it does not by itself discharge Article 26(2).
+authority you attest. That lane can support your configured oversight workflow. The public network is supplementary
+review capacity and an independent quality signal; neither lane by itself establishes that Article 14 or Article 26
+duties are met.
 
 The shared-responsibility matrix and the exportable evidence behind each capability live in
 [`evidence.md`](./evidence.md). The browser version is [`/docs/human-oversight`](/docs/human-oversight).

@@ -18,11 +18,8 @@ test("evidence docs explain exact artifacts, checks, mappings, and boundaries", 
   assert.match(html, /Evidence &amp; Compliance.*rateloop-text-gradient.*Mapping/i);
   assert.doesNotMatch(html, /What this is not|RateLoop never claims/i);
   assert.match(html, /Shared responsibility/i);
-  assert.match(html, /Your people provide the oversight\. RateLoop provides the instrument — and the proof\./);
-  assert.match(
-    html,
-    /Whether a specific deployment meets a legal requirement depends on your system, context, and organization — you configure and operate RateLoop for your purpose; RateLoop provides the capabilities and the evidence\./,
-  );
+  assert.match(html, /Your people provide oversight\. RateLoop records configured review activity and its evidence\./);
+  assert.match(html, /RateLoop does not determine which legal requirements apply or establish compliance\./);
   assert.match(html, /Requirement.*RateLoop provides.*You remain responsible for/i);
   for (const requirement of [
     "Art 14(4)(a) · Monitor",
@@ -37,8 +34,12 @@ test("evidence docs explain exact artifacts, checks, mappings, and boundaries", 
   ]) {
     assert.match(html, new RegExp(requirement.replace(/[()·]/g, "\\$&")));
   }
-  assert.match(html, /on host-enforced integrations output is held undelivered until a person decides/i);
-  assert.match(html, /workspace stop control/i);
+  assert.match(html, /Verified host enforcement can hold output undelivered until a person decides/i);
+  assert.match(
+    html,
+    /Advisory Codex, plugin, and MCP integrations record lifecycle state but do not verify withholding/i,
+  );
+  assert.match(html, /Workspace stop blocks new RateLoop release authorizations that verified hosts honor/i);
   assert.match(html, /per-output override records with required reasons/i);
   assert.match(html, /Independent blinded review panels/i);
   assert.match(html, /surfaced disagreement before the decision/i);
@@ -46,10 +47,8 @@ test("evidence docs explain exact artifacts, checks, mappings, and boundaries", 
   assert.match(html, /six-month retention floor/i);
   assert.match(html, /Exportable training and calibration records/i);
   assert.match(html, /Choosing those natural persons and ensuring they are competent, trained, and authorized/i);
-  assert.match(
-    html,
-    /RateLoop operates around your AI system, gating its outputs; it does not modify the system itself\./,
-  );
+  assert.match(html, /RateLoop does not control output delivery in advisory integrations/i);
+  assert.match(html, /Only a verified host adapter that owns the delivery boundary can enforce a held review state/i);
   assert.match(
     html,
     /records the model identity reported by the connected host for each execution and labels it host-reported/i,
@@ -76,7 +75,8 @@ test("evidence docs explain exact artifacts, checks, mappings, and boundaries", 
   assert.match(html, /canonical audit chain remain as integrity records/i);
   assert.match(html, /ISO\/IEC 42001:2023.*A\.6, including A\.6\.2\.8, and A\.9\.2/i);
   assert.match(html, /Articles 12, 14\(3\)\(b\), 14\(4\), 26\(2\), 26\(5\)-\(6\), 72, and 73/i);
-  assert.match(html, /supports your implementation and evidence of these duties; the duties remain yours/i);
+  assert.match(html, /May support evidence relevant to these duties/i);
+  assert.match(html, /neither determines applicability nor establishes fulfillment or compliance/i);
   assert.doesNotMatch(html, /26\(1\)/);
   assert.match(html, /NIST AI RMF.*MEASURE and MANAGE/i);
   assert.match(html, /Regulatory Notice 24-09 and Rule 3110/i);
@@ -85,6 +85,7 @@ test("evidence docs explain exact artifacts, checks, mappings, and boundaries", 
   assert.match(html, /supports evidence for/i);
   assert.match(html, /rateloop-human-assurance-component-definition\.oscal\.json/i);
   assert.doesNotMatch(html, /trust status|compliance-ready|certified RateLoop/i);
+  assert.doesNotMatch(html, /RateLoop provides the instrument — and the proof/i);
 });
 
 test("machine docs mirror evidence boundaries and are linked from agent setup", () => {
@@ -97,7 +98,7 @@ test("machine docs mirror evidence boundaries and are linked from agent setup", 
   assert.match(evidence, /rateloop\.human-assurance\.evidence\.v3/);
   assert.match(
     evidence,
-    /records the[\s\S]*model identity reported by the connected host for each execution and labels it host-reported/i,
+    /records the[\s\S]*model identity reported by the connected host for each\s+execution and labels it host-reported/i,
   );
   assert.match(evidence, /does not independently[\s\S]*verify that the reported model produced the output/i);
   assert.match(evidence, /evidence:verify.*--public-key.*--key-id/is);
@@ -105,11 +106,15 @@ test("machine docs mirror evidence boundaries and are linked from agent setup", 
   assert.match(evidence, /attestation:verify.*--signer-public-key.*--rekor-public-key.*--tsa-ca/is);
   assert.match(evidence, /ISO\/IEC 42001:2023.*A\.6 including A\.6\.2\.8, and A\.9\.2/is);
   assert.match(evidence, /Articles 12, 14\(3\)\(b\), 14\(4\), 26\(2\), 26\(5\)-\(6\), 72, and 73/);
-  assert.match(evidence, /Your people provide the oversight\. RateLoop provides the instrument — and the proof\./);
-  assert.match(evidence, /You remain responsible for/);
   assert.match(
     evidence,
-    /RateLoop operates around your AI system, gating its outputs; it does not modify the system itself\./,
+    /Your people provide oversight\. RateLoop records configured review activity and its evidence\./,
+  );
+  assert.match(evidence, /You remain responsible for/);
+  assert.match(evidence, /RateLoop does not control output delivery in advisory integrations/i);
+  assert.match(
+    evidence,
+    /Only a verified host adapter that owns the delivery\s+boundary can enforce a held review state/i,
   );
   assert.doesNotMatch(evidence, /What this is not|RateLoop never claims|26\(1\)/);
   assert.match(
@@ -118,6 +123,7 @@ test("machine docs mirror evidence boundaries and are linked from agent setup", 
   );
   assert.match(evidence, /canonical audit chain remain as integrity records/i);
   assert.match(evidence, /rateloop-human-assurance-component-definition\.oscal\.json/);
+  assert.doesNotMatch(evidence, /RateLoop provides the instrument — and the proof/i);
   assert.match(connection, /\[`evidence\.md`\]\(\.\/evidence\.md\)/);
   assert.match(connection, /\[`\/docs\/evidence`\]\(\/docs\/evidence\)/);
   assert.match(connection, /MCP does not define\s+a universal client configuration file/i);

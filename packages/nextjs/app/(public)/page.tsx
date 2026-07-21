@@ -41,8 +41,8 @@ const whyItWorksFeatures = [
     ],
   },
   {
-    title: "Human oversight, operationalized",
-    body: "Your people provide the oversight. RateLoop provides the instrument — and the proof.",
+    title: "Human oversight, supported",
+    body: "Your people provide oversight. RateLoop supports configured review and records the resulting evidence.",
     color: "var(--rateloop-yellow)",
     links: [
       ["Human Oversight", "/docs/human-oversight"],
@@ -82,7 +82,7 @@ const questions = [
   ],
   [
     "Can an Agent Run Reviews Automatically?",
-    "Yes. After you approve its connection and limits, an agent can request reviews and receive results automatically. You control the project, audience, data rules, and budget.",
+    "Connection alone does not intercept outputs. An active agent can call RateLoop for each eligible output; only a verified host adapter that controls delivery can enforce waiting before release. Ordinary Codex integrations are advisory.",
   ],
   [
     "Can I Use Private Data?",
@@ -93,8 +93,8 @@ const questions = [
     "Funding terms, accepted commitments, scoring inputs, and settlement evidence. Private context stays off-chain, and the chain record does not replace your final judgment.",
   ],
   [
-    "Does RateLoop help with EU AI Act human oversight?",
-    "Yes. Your designated people monitor, override, and stop AI outputs through RateLoop, and each decision leaves exportable evidence. Configuring RateLoop and using it correctly for your purpose remain yours.",
+    "How can RateLoop support EU AI Act human oversight?",
+    "RateLoop can support configured human-review controls and export evidence relevant to Article 14. It does not determine whether the Act applies or establish compliance; you remain responsible for classification, deployment, competent oversight, and operation.",
   ],
 ] as const;
 

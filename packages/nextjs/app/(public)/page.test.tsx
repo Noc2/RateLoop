@@ -64,9 +64,13 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /Agent-native/);
   assert.match(html, /Verified and blind/);
   assert.match(html, /Useful signal, auditable pay/);
-  assert.match(html, /Human oversight, operationalized/);
+  assert.match(html, /Human oversight, supported/);
   assert.doesNotMatch(html, /Evidence your auditors can check|Trace review policy/i);
-  assert.match(html, /Your people provide the oversight\. RateLoop provides the instrument — and the proof\./);
+  assert.match(
+    html,
+    /Your people provide oversight\. RateLoop supports configured review and records the resulting evidence\./,
+  );
+  assert.doesNotMatch(html, /RateLoop provides the instrument — and the proof/i);
   assert.match(html, /href="\/docs\/human-oversight"[^>]*>Human Oversight<\/a>/i);
   assert.match(html, /href="\/docs\/evidence"[^>]*>Evidence guide<\/a>/i);
   for (const term of [
@@ -152,11 +156,13 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /Common/);
   assert.doesNotMatch(html, /What Does RateLoop Do\?|What Can I Evaluate\?/);
   assert.match(html, /Can an Agent Run Reviews Automatically\?/);
-  assert.match(html, /approve its connection and limits/i);
+  assert.match(html, /Connection alone does not intercept outputs/i);
+  assert.match(html, /only a verified host adapter that controls delivery can enforce waiting before release/i);
+  assert.match(html, /Ordinary Codex integrations are advisory/i);
   assert.match(html, /What Does the Blockchain Record\?/);
-  assert.match(html, /Does RateLoop help with EU AI Act human oversight\?/);
-  assert.match(html, /monitor, override, and stop AI outputs through RateLoop/i);
-  assert.match(html, /Configuring RateLoop and using it correctly for your purpose remain yours\./);
+  assert.match(html, /How can RateLoop support EU AI Act human oversight\?/);
+  assert.match(html, /support configured human-review controls and export evidence relevant to Article 14/i);
+  assert.match(html, /does not determine whether the Act applies or establish compliance/i);
   assert.equal(html.match(/<details/g)?.length, 5);
   assert.match(html, /href="\/docs"/);
   assert.ok(html.indexOf('id="use-cases"') < html.indexOf('id="how-it-works"'));
