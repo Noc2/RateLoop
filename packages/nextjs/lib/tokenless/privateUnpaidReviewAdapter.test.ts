@@ -47,6 +47,10 @@ import { replacePrivateGroupMemberExpertise } from "~~/lib/tokenless/reviewerExp
 import { createWorkspaceReviewerExpertiseDefinition } from "~~/lib/tokenless/reviewerExpertiseDefinitions";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
+  provisionWorkspacePrivateReviewRouting,
+  workspacePrivateReviewRoutingIds,
+} from "~~/lib/tokenless/workspacePrivateReviewRouting";
+import {
   createWorkspaceReviewerInvitation,
   leaveWorkspaceReviewer,
   redeemWorkspaceReviewerInvitation,
@@ -156,6 +160,41 @@ afterEach(() => {
 });
 
 type PrivateAdapterFixture = Awaited<ReturnType<typeof fixture>>;
+
+async function provisionManagedFixtureRouting(setup: PrivateAdapterFixture, now: Date) {
+  const ids = workspacePrivateReviewRoutingIds({
+    workspaceId: setup.workspaceId,
+    profileId: setup.requestProfile.profileId,
+    profileVersion: setup.requestProfile.version,
+    profileHash: setup.requestProfile.profileHash,
+    privateGroupId: setup.groupId,
+  });
+  await provisionWorkspacePrivateReviewRouting({
+    accountAddress: OWNER,
+    workspaceId: setup.workspaceId,
+    profileId: setup.requestProfile.profileId,
+    profileVersion: setup.requestProfile.version,
+    profileHash: setup.requestProfile.profileHash,
+    now,
+  });
+  for (const grant of setup.workspaceReviewerGrants.values()) {
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_workspace_reviewer_access_grant_projects
+            (grant_id,workspace_id,project_id) VALUES (?,?,?) ON CONFLICT DO NOTHING`,
+      args: [grant.grantId, setup.workspaceId, ids.projectId],
+    });
+  }
+  const readiness = await provisionWorkspacePrivateReviewRouting({
+    accountAddress: OWNER,
+    workspaceId: setup.workspaceId,
+    profileId: setup.requestProfile.profileId,
+    profileVersion: setup.requestProfile.version,
+    profileHash: setup.requestProfile.profileHash,
+    now,
+  });
+  assert.equal(readiness.ready, true, JSON.stringify(readiness));
+  return ids;
+}
 
 async function deliverPrivateFixture(setup: PrivateAdapterFixture) {
   return requestPrivateUnpaidHumanReview({
@@ -502,13 +541,14 @@ test("accepted workspace reviewer invitations route exact private content throug
   });
   assert.equal(Number(legacyMemberships.rows[0]?.count), 0);
   const grantNow = new Date();
+  const managedRouting = await provisionManagedFixtureRouting(setup, grantNow);
   const admissionPolicy = freezeAdmissionPolicy({
     schemaVersion: "rateloop.human-assurance.v2",
     policyId: "audience_private_content_e2e",
     version: 1,
     reviewerSource: "customer_invited",
     compensation: "unpaid",
-    cohorts: [{ cohortId: setup.cohortId, minimumReviewers: 2, maximumReviewers: 2 }],
+    cohorts: [{ cohortId: managedRouting.cohortId, minimumReviewers: 2, maximumReviewers: 2 }],
     selection: "customer_named",
     fallbacks: { allowed: false, sources: [] },
     requiredQualifications: [],
@@ -686,7 +726,7 @@ test("accepted workspace reviewer invitations route exact private content throug
     material: { kind: "private", sourceContentType: "text/plain", suggestionContentType: "text/plain" },
     now: routedAt,
   });
-  assert.equal(routed.action, "private_review_assigned");
+  assert.equal(routed.action, "private_review_assigned", JSON.stringify(routed));
   if (routed.action !== "private_review_assigned") assert.fail("Expected a private unpaid assignment.");
   assert.equal(encryptedObjects.size, 2);
   assert.equal(routed.delivery.assignments.length, 2);
@@ -756,7 +796,7 @@ test("accepted workspace reviewer invitations route exact private content throug
       accountAddress: assignment.reviewerAccountAddress,
       artifactId: binary.source.artifactId,
       leaseId: binary.source.leaseId,
-      projectId: setup.projectId,
+      projectId: managedRouting.projectId,
       purpose: "preview",
       workspaceId: setup.workspaceId,
       now: taskAt,
@@ -765,7 +805,7 @@ test("accepted workspace reviewer invitations route exact private content throug
       accountAddress: assignment.reviewerAccountAddress,
       artifactId: binary.suggestion.artifactId,
       leaseId: binary.suggestion.leaseId,
-      projectId: setup.projectId,
+      projectId: managedRouting.projectId,
       purpose: "preview",
       workspaceId: setup.workspaceId,
       now: taskAt,
@@ -1026,6 +1066,29 @@ test("private routing releases expired reserved and accepted seats before select
 
   const now = new Date("2026-07-16T10:21:00.000Z");
   const requestProfile = setup.requestProfile;
+  const managedRouting = await provisionManagedFixtureRouting(setup, now);
+  const frozenAudiencePolicy = freezeAdmissionPolicy({
+    schemaVersion: "rateloop.human-assurance.v2",
+    policyId: "audience_private_reservation_recovery",
+    version: 1,
+    reviewerSource: "customer_invited",
+    compensation: "unpaid",
+    cohorts: [{ cohortId: managedRouting.cohortId, minimumReviewers: 2, maximumReviewers: 2 }],
+    selection: "customer_named",
+    fallbacks: { allowed: false, sources: [] },
+    requiredQualifications: [],
+    assurance: {
+      requirements: [
+        {
+          capability: "customer_invitation",
+          reviewerSources: ["customer_invited"],
+          allowedProviders: ["workspace-invitation"],
+        },
+      ],
+    },
+    buyerPrivacy: { visibleFields: ["reviewer_source"], minimumAggregationSize: 2, suppressSmallCells: true },
+    legalEligibilityRequired: false,
+  });
   const context = {
     workspaceId: setup.workspaceId,
     integrationId: setup.integrationPrincipal.integration.integrationId,
@@ -1036,7 +1099,12 @@ test("private routing releases expired reserved and accepted seats before select
       id: setup.integrationPrincipal.integration.agentId,
       versionId: setup.integrationPrincipal.integration.agentVersionId,
     },
-    selectionPolicy: { id: "policy", version: 1, audiencePolicyHash: hash("audience"), audiencePolicy: {} },
+    selectionPolicy: {
+      id: "policy",
+      version: 1,
+      audiencePolicyHash: frozenAudiencePolicy.policyHash,
+      audiencePolicy: frozenAudiencePolicy.policy,
+    },
     contentCommitments: { source: hash("source"), suggestion: hash("suggestion") },
     decision: "required",
     lifecycle: { state: "blocked", revision: 1 },
@@ -1077,7 +1145,7 @@ test("private routing releases expired reserved and accepted seats before select
       credentialScopes: ["panel:publish"],
       allowedWorkflowKeys: ["private-review"],
       policyCaps: {
-        allowedProjectIds: [setup.projectId],
+        allowedProjectIds: [managedRouting.projectId],
         allowedReviewerSources: ["customer_invited"],
         allowedDataClassifications: ["confidential"],
         maxRetentionDays: 30,
