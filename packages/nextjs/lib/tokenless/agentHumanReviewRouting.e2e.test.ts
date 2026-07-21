@@ -234,6 +234,7 @@ function routeFixture(frozen: FrozenHumanReviewRoutingContext) {
   const dependencies: Parameters<typeof createHumanReviewRequestRouter>[0] = {
     isWorkspaceStopped: async () => false,
     loadContext: async () => frozen,
+    blockRetryablePrerequisite: async () => {},
     prepareApproval: async () => {
       calls.approval += 1;
       return {
