@@ -2,17 +2,14 @@
 
 import { FormEvent, useState } from "react";
 
-type PrivateInvitationPreview = {
-  groupId: string;
-  groupName: string;
-  groupPurpose: string;
+type ReviewerInvitationPreview = {
   workspaceName: string;
-  role: string;
+  maxPrivateSensitivity: "internal" | "confidential" | "restricted" | "regulated";
+  accessExpiresAt: string | null;
   expiresAt: string | null;
-  membershipExpiresAt: string | null;
 };
 
-export type InvitationKind = "private_group" | "reviewer";
+export type InvitationKind = "reviewer" | "workspace";
 
 function formatDate(value: string | null) {
   return value ? new Date(value).toLocaleString() : "No expiry";
@@ -30,7 +27,7 @@ async function readJson(response: Response) {
 
 export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: InvitationKind) => void }) {
   const [token, setToken] = useState("");
-  const [preview, setPreview] = useState<PrivateInvitationPreview | null>(null);
+  const [preview, setPreview] = useState<ReviewerInvitationPreview | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +40,20 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
     setError(null);
     setPreview(null);
     try {
+      if (normalized.startsWith("rlwi_")) {
+        await readJson(
+          await fetch("/api/account/workspace-invitations/redeem", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token: normalized }),
+          }),
+        );
+        setToken("");
+        setStatus("Workspace invitation accepted.");
+        onAccepted?.("workspace");
+        return;
+      }
       if (normalized.startsWith("rli_")) {
         await readJson(
           await fetch("/api/account/assurance/reviewer-invitations/redeem", {
@@ -57,16 +68,16 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
         onAccepted?.("reviewer");
         return;
       }
-      if (normalized.startsWith("rlgi_")) {
+      if (normalized.startsWith("rlri_")) {
         const body = await readJson(
-          await fetch("/api/account/private-groups/invitations/preview", {
+          await fetch("/api/account/reviewer-invitations/preview", {
             method: "POST",
             credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ token: normalized }),
           }),
         );
-        setPreview(body.invitation as PrivateInvitationPreview);
+        setPreview(body.invitation as ReviewerInvitationPreview);
         return;
       }
       throw new Error("Enter a valid RateLoop invitation code.");
@@ -77,14 +88,14 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
     }
   }
 
-  async function acceptPrivateGroup() {
+  async function acceptReviewerInvitation() {
     if (!preview) return;
     setBusy(true);
     setStatus(null);
     setError(null);
     try {
       await readJson(
-        await fetch("/api/account/private-groups/invitations/redeem", {
+        await fetch("/api/account/reviewer-invitations/redeem", {
           method: "POST",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
@@ -93,8 +104,8 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
       );
       setPreview(null);
       setToken("");
-      setStatus("Group invitation accepted.");
-      onAccepted?.("private_group");
+      setStatus("Reviewer invitation accepted.");
+      onAccepted?.("reviewer");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to accept the invitation.");
     } finally {
@@ -131,20 +142,22 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
       {preview ? (
         <div className="surface-card-nested mt-5 rounded-xl p-5">
           <p className="text-sm text-base-content/55">{preview.workspaceName}</p>
-          <h3 className="mt-1 text-lg font-semibold">{preview.groupName}</h3>
-          {preview.groupPurpose ? <p className="mt-2 text-sm text-base-content/60">{preview.groupPurpose}</p> : null}
+          <h3 className="mt-1 text-lg font-semibold">Reviewer invitation</h3>
+          <p className="mt-2 text-sm text-base-content/60">
+            Review assigned private work without joining the workspace.
+          </p>
           <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
             <div>
-              <dt className="text-xs text-base-content/45">Role</dt>
-              <dd className="mt-1 capitalize">{preview.role}</dd>
+              <dt className="text-xs text-base-content/45">Private material limit</dt>
+              <dd className="mt-1 capitalize">{preview.maxPrivateSensitivity}</dd>
             </div>
             <div>
               <dt className="text-xs text-base-content/45">Invitation expires</dt>
               <dd className="mt-1">{formatDate(preview.expiresAt)}</dd>
             </div>
             <div>
-              <dt className="text-xs text-base-content/45">Membership expires</dt>
-              <dd className="mt-1">{formatDate(preview.membershipExpiresAt)}</dd>
+              <dt className="text-xs text-base-content/45">Reviewer access expires</dt>
+              <dd className="mt-1">{formatDate(preview.accessExpiresAt)}</dd>
             </div>
           </dl>
           <div className="mt-5 flex flex-wrap gap-3">
@@ -152,9 +165,9 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
               type="button"
               className="rateloop-gradient-action px-5"
               disabled={busy}
-              onClick={acceptPrivateGroup}
+              onClick={acceptReviewerInvitation}
             >
-              {busy ? "Joining…" : "Accept invitation"}
+              {busy ? "Accepting…" : "Accept invitation"}
             </button>
             <button type="button" className="btn rateloop-secondary-action" onClick={() => setPreview(null)}>
               Cancel

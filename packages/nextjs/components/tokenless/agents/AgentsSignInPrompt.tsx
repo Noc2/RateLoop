@@ -6,7 +6,7 @@ import { Button } from "~~/components/tokenless/ui/Button";
 export function AgentsSignInPrompt() {
   return (
     <SignedOutGate
-      description="Sign in to connect an agent, configure human review, manage private groups, and evaluate performance."
+      description="Sign in to connect an agent, configure human review, manage reviewers, and evaluate performance."
       preview={<AgentWorkspaceExample />}
       returnTo="/agents"
       secondaryAction={

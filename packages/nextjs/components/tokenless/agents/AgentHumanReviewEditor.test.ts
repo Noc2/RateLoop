@@ -21,7 +21,6 @@ test("the contextual editor owns every human-review dimension through one canoni
     "Outputs reviewed",
     "Maximum outputs between reviews",
     "Reviewers",
-    "Invited reviewer group",
     "Response window",
     "Reviewers per request",
     "Guaranteed bounty",
@@ -47,7 +46,13 @@ test("the contextual editor owns every human-review dimension through one canoni
   assert.match(source, /unlock when enough invited reviewers join/);
   assert.match(source, /privateUnpaidBootstrapAvailable/);
   assert.match(source, /view\.configuration\?\.selection\.value \?\?/);
-  assert.match(source, /privateGroupId: groups\[0\]\?\.groupId \?\? ""/);
+  assert.match(source, /privateReviewerCompatibilityId: String\(request\.privateGroupId \?\? ""\)/);
+  assert.match(
+    source,
+    /privateGroupId\s*=\s*draft\.audience === "public_network" \? null : draft\.privateReviewerCompatibilityId\.trim\(\)/,
+  );
+  assert.match(source, /Workspace reviewer routing is not ready\. Invite reviewers in Reviews, then try again\./);
+  assert.doesNotMatch(source, /private-groups|PrivateGroup|Invited reviewer group|Choose a group/);
   assert.match(source, /expectedBindingVersion: view\.bindingRevision/);
   assert.match(source, /creating \? "Finish setup" : "Save changes"/);
   assert.doesNotMatch(source, /Finish human-review setup before editing it/);

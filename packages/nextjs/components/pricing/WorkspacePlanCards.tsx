@@ -30,8 +30,7 @@ export function WorkspacePlanCards({ subscriptionsEnabled }: WorkspacePlanCardsP
         features={[
           `${freePlan.decisionsPerPeriod} completed review decisions each calendar month`,
           `${freePlan.activeAgents} active agent`,
-          `${freePlan.activePrivateGroups} active private group`,
-          "Unpaid reviews with invited reviewers",
+          "Unpaid reviews with workspace reviewers",
         ]}
         footer={
           <Link
@@ -60,7 +59,6 @@ export function WorkspacePlanCards({ subscriptionsEnabled }: WorkspacePlanCardsP
         features={[
           `${earlyAccessPlan.decisionsPerPeriod} completed review decisions each subscription period`,
           `${earlyAccessPlan.activeAgents} active agents`,
-          `${earlyAccessPlan.activePrivateGroups} active private groups`,
           "Unlimited invited reviewers",
           `Then ${earlyAccessListPrice}/month after 12 months`,
         ]}

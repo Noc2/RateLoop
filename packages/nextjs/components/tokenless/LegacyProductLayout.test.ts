@@ -29,7 +29,7 @@ test("Agents uses URL-backed workspace tabs", () => {
 
   assert.match(tabs, /tab-control/);
   assert.match(tabs, /pill-active/);
-  assert.match(tabs, /Overview/);
+  assert.match(tabs, /Workspace/);
   assert.doesNotMatch(tabs, /Integrate/);
   assert.match(tabs, /Evaluations/);
   assert.doesNotMatch(page, /integrate/);
@@ -91,18 +91,19 @@ test("Human profile and settings render their controls directly", () => {
   assert.match(signInPrompt, /<SignedOutGate/);
   assert.match(page, /findAuthSession/);
   assert.match(profileContent, /InvitationRouterPanel/);
-  assert.match(profileContent, /PrivateGroupMembershipsPanel/);
+  assert.match(profileContent, /ReviewerAccessPanel/);
   assert.match(profileContent, /worldIdEnabled \? <WorldIdProfilePanel \/>/);
   assert.match(profileContent, /<PaidEligibilityClient \/>/);
   assert.ok(profileContent.indexOf("<ProfileClient />") < profileContent.indexOf("<InvitationRouterPanel"));
-  assert.ok(profileContent.indexOf("<InvitationRouterPanel") < profileContent.indexOf("<PrivateGroupMembershipsPanel"));
+  assert.ok(profileContent.indexOf("<InvitationRouterPanel") < profileContent.indexOf("<ReviewerAccessPanel"));
   assert.doesNotMatch(page, /ProfileOverview|SettingsOverview|Customize|SectionBackLink/);
   assert.doesNotMatch(page, /section ===/);
   assert.doesNotMatch(profile, /<details|<summary/);
   assert.doesNotMatch(profile, /Sign-in details|Provider|Not provided|Account ID|\/api\/auth\/session/);
   assert.doesNotMatch(profile, /InvitationRedemption|reviewer memberships/);
   assert.match(invitations, /startsWith\("rli_"\)/);
-  assert.match(invitations, /startsWith\("rlgi_"\)/);
+  assert.match(invitations, /startsWith\("rlri_"\)/);
+  assert.doesNotMatch(invitations, /rlgi_|private-groups/);
   assert.match(invitations, /aria-label="Invitation code"/);
   assert.doesNotMatch(invitations, /<label/);
   assert.match(paidEligibility, /Add payout wallet/);

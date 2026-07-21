@@ -11,6 +11,8 @@ import {
   acceptWorkspaceReviewerTerms,
   createWorkspaceReviewerInvitation,
   createWorkspaceReviewerTermsVersion,
+  leaveWorkspaceReviewer,
+  listMyWorkspaceReviewerAccess,
   listWorkspaceReviewers,
   previewWorkspaceReviewerInvitation,
   redeemWorkspaceReviewerInvitation,
@@ -158,6 +160,37 @@ test("reviewer invitation redemption is idempotent after reaching its redemption
     args: [workspaceId],
   });
   assert.equal(Number(grants.rows[0]?.count), 1);
+});
+
+test("reviewers can inspect and leave workspace access without workspace membership", async () => {
+  const { workspaceId, owner, reviewer } = await fixture();
+  const now = new Date("2026-07-21T09:00:00.000Z");
+  const invitation = await createWorkspaceReviewerInvitation({
+    accountAddress: owner,
+    workspaceId,
+    maxPrivateSensitivity: "internal",
+    intendedAccountAddress: reviewer,
+    now,
+  });
+  await redeemWorkspaceReviewerInvitation({ accountAddress: reviewer, token: invitation.token, now });
+
+  const before = await listMyWorkspaceReviewerAccess({ accountAddress: reviewer, now });
+  assert.equal(before[0]?.workspaceId, workspaceId);
+  assert.equal(before[0]?.status, "active");
+  assert.equal(before[0]?.grants[0]?.status, "active");
+
+  const left = await leaveWorkspaceReviewer({
+    accountAddress: reviewer,
+    workspaceId,
+    now: new Date(now.getTime() + 10_000),
+  });
+  assert.equal(left.status, "left");
+  const after = await listMyWorkspaceReviewerAccess({
+    accountAddress: reviewer,
+    now: new Date(now.getTime() + 10_000),
+  });
+  assert.equal(after[0]?.status, "left");
+  assert.equal(after[0]?.grants[0]?.status, "revoked");
 });
 
 test("reviewer invitations reject access authority that expires before the invitation", async () => {

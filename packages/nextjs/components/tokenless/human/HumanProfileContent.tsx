@@ -5,21 +5,20 @@ import { PaidEligibilityClient } from "~~/components/tokenless/PaidEligibilityCl
 import { InvitationRouterPanel } from "~~/components/tokenless/account/InvitationRouterPanel";
 import { ProfileClient } from "~~/components/tokenless/account/ProfileClient";
 import { FeedbackBonusClaimsClient } from "~~/components/tokenless/human/FeedbackBonusClaimsClient";
-import { PrivateGroupMembershipsPanel } from "~~/components/tokenless/human/PrivateGroupMembershipsPanel";
+import { ReviewerAccessPanel } from "~~/components/tokenless/human/ReviewerAccessPanel";
 import { WorldIdProfilePanel } from "~~/components/tokenless/human/WorldIdProfilePanel";
 
 export function HumanProfileContent({ worldIdEnabled }: { worldIdEnabled: boolean }) {
-  const [membershipsRevision, setMembershipsRevision] = useState(0);
-
+  const [reviewerAccessRevision, setReviewerAccessRevision] = useState(0);
   return (
     <>
       <ProfileClient />
       <InvitationRouterPanel
         onAccepted={kind => {
-          if (kind === "private_group") setMembershipsRevision(current => current + 1);
+          if (kind === "reviewer") setReviewerAccessRevision(revision => revision + 1);
         }}
       />
-      <PrivateGroupMembershipsPanel refreshKey={membershipsRevision} />
+      <ReviewerAccessPanel refreshKey={reviewerAccessRevision} />
       {worldIdEnabled ? <WorldIdProfilePanel /> : null}
       <section id="paid-work" className="scroll-mt-24">
         <PaidEligibilityClient />

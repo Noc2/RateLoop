@@ -57,6 +57,7 @@ test("connected navigation splits the owner stack into URL-backed task tabs", ()
   assert.equal(resolveAgentTabParam("groups"), "registry");
   assert.equal(resolveAgentTabParam("unknown"), "overview");
   assert.equal(agentTabHref("inbox", "workspace one"), "/agents?tab=inbox&workspace=workspace+one");
+  assert.match(tabsSource, /value: "overview", label: "Workspace"/);
   assert.match(tabsSource, /value: "connect", label: "Connection"/);
   assert.match(tabsSource, /value: "registry", label: "Reviews"/);
 });
@@ -140,6 +141,11 @@ test("one canonical human-review editor renders only for the selected agent", ()
   assert.doesNotMatch(panelsSource, /AgentReviewPolicyPanel|AgentPublishingPolicyPanel/);
   assert.match(editorSource, /Back to reviews/);
   assert.doesNotMatch(editorSource, />\s*Close\s*</);
+});
+
+test("review managers use one workspace reviewer roster without groups", () => {
+  assert.match(panelsSource, /<WorkspaceReviewersPanel workspaceId=\{workspaceId\} \/>/);
+  assert.doesNotMatch(panelsSource, /PrivateGroupsPanel/);
 });
 
 test("agent and human-review mutations still refresh dependent panels", () => {

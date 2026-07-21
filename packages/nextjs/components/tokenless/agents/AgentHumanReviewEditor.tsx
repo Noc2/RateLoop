@@ -31,8 +31,6 @@ type OwnerView = {
   connection: { allowedWorkflowKeys: string[]; connectionStatus: string | null; integrationId: string } | null;
 };
 
-type PrivateGroup = { groupId: string; name: string; status: string };
-
 type SaveResponse = {
   privateReviewRouting?: { ready?: boolean; reason?: string } | null;
   privateReviewRoutingReconciliationFailed?: boolean;
@@ -50,7 +48,7 @@ type Draft = {
   negativeLabel: string;
   rationaleMode: "off" | "optional" | "required";
   audience: Audience;
-  privateGroupId: string;
+  privateReviewerCompatibilityId: string;
   responseWindowSeconds: string;
   panelSize: string;
   compensationMode: "unpaid" | "usdc";
@@ -87,7 +85,7 @@ function usdcToAtomic(value: string) {
   return atomic;
 }
 
-function draftFromView(view: OwnerView, groups: PrivateGroup[]): Draft {
+function draftFromView(view: OwnerView): Draft {
   const selection = view.configuration?.selection.value ?? {
     mode: "adaptive",
     productionFloorBps: 1_000,
@@ -102,7 +100,6 @@ function draftFromView(view: OwnerView, groups: PrivateGroup[]): Draft {
     negativeLabel: "Reject",
     rationaleMode: "required",
     audience: "private_invited",
-    privateGroupId: groups[0]?.groupId ?? "",
     responseWindowSeconds: 3_600,
     panelSize: 2,
     compensationMode: "unpaid",
@@ -124,7 +121,7 @@ function draftFromView(view: OwnerView, groups: PrivateGroup[]): Draft {
     negativeLabel: String(request.negativeLabel ?? "Reject"),
     rationaleMode: String(request.rationaleMode ?? "required") as Draft["rationaleMode"],
     audience: String(request.audience ?? "private_invited") as Audience,
-    privateGroupId: String(request.privateGroupId ?? ""),
+    privateReviewerCompatibilityId: String(request.privateGroupId ?? ""),
     responseWindowSeconds: String(number(request.responseWindowSeconds, 3_600)),
     panelSize: String(number(request.panelSize, 2)),
     compensationMode: String(request.compensationMode ?? "unpaid") as Draft["compensationMode"],
@@ -186,8 +183,10 @@ function buildMutation(view: OwnerView, draft: Draft) {
   const panelSize = positiveInteger(draft.panelSize, "Reviewer count", minimumPanelSize, 100);
   const responseWindowSeconds = positiveInteger(draft.responseWindowSeconds, "Response window", 1_200, 86_400);
   const compensationMode = draft.audience === "private_invited" ? draft.compensationMode : "usdc";
-  const privateGroupId = draft.audience === "public_network" ? null : draft.privateGroupId.trim();
-  if (draft.audience !== "public_network" && !privateGroupId) throw new Error("Choose an invited reviewer group.");
+  const privateGroupId = draft.audience === "public_network" ? null : draft.privateReviewerCompatibilityId.trim();
+  if (draft.audience !== "public_network" && !privateGroupId) {
+    throw new Error("Workspace reviewer routing is not ready. Invite reviewers in Reviews, then try again.");
+  }
   const selection = {
     mode: draft.mode,
     enforcementMode: draft.mode === "manual" ? "advisory" : currentSelection.enforcementMode,
@@ -329,7 +328,6 @@ export function AgentHumanReviewEditor({
   onClose?: () => void;
 }) {
   const [view, setView] = useState<OwnerView | null>(null);
-  const [groups, setGroups] = useState<PrivateGroup[]>([]);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -337,26 +335,19 @@ export function AgentHumanReviewEditor({
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
-      const [reviewBody, groupsBody] = await Promise.all([
-        readJson(
-          await fetch(
-            `/api/account/workspaces/${encodeURIComponent(workspaceId)}/agents/${encodeURIComponent(agentId)}/human-review`,
-            { cache: "no-store", credentials: "same-origin", signal },
-          ),
-        ),
-        readJson(
-          await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/private-groups`, {
+      const reviewBody = await readJson(
+        await fetch(
+          `/api/account/workspaces/${encodeURIComponent(workspaceId)}/agents/${encodeURIComponent(agentId)}/human-review`,
+          {
             cache: "no-store",
             credentials: "same-origin",
             signal,
-          }),
+          },
         ),
-      ]);
+      );
       const nextView = reviewBody as unknown as OwnerView;
-      const nextGroups = ((groupsBody.groups ?? []) as PrivateGroup[]).filter(group => group.status === "active");
       setView(nextView);
-      setGroups(nextGroups);
-      setDraft(draftFromView(nextView, nextGroups));
+      setDraft(draftFromView(nextView));
     },
     [agentId, workspaceId],
   );
@@ -631,24 +622,6 @@ export function AgentHumanReviewEditor({
               </option>
             </select>
           </label>
-          {draft.audience !== "public_network" ? (
-            <label className="text-sm">
-              Invited reviewer group
-              <select
-                className="select mt-2 w-full"
-                value={draft.privateGroupId}
-                onChange={event => update("privateGroupId", event.target.value)}
-                required
-              >
-                <option value="">Choose a group</option>
-                {groups.map(group => (
-                  <option key={group.groupId} value={group.groupId}>
-                    {group.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
           <label className="text-sm">
             Response window (seconds)
             <input
