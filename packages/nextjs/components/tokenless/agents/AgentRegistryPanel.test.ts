@@ -83,20 +83,15 @@ test("agent management actions stay visible while technical records remain optio
   assert.match(source, /entry\.kind === "connection"/);
 });
 
-test("the agent evidence card shows only labeled host-reported and observed metadata", () => {
+test("the connection view omits model and evaluation evidence", () => {
   const source = readFileSync(new URL("./AgentRegistryPanel.tsx", import.meta.url), "utf8");
-  assert.match(source, /Model and evidence/);
-  assert.match(source, /Declared model/);
-  assert.match(source, /Coverage stage/);
-  assert.match(source, /Observed workflows/);
-  assert.match(source, /Observed risk tiers/);
-  assert.match(source, /Evaluation profile/);
-  assert.match(source, /reported by the connected host, not independently verified/);
-  assert.doesNotMatch(source, /Capabilities and limits/);
-  assert.doesNotMatch(source, /Intended purpose/);
-  assert.doesNotMatch(source, /Known limitations/);
-  assert.doesNotMatch(source, /Do-not-use conditions/);
-  assert.doesNotMatch(source, /capability-statement/);
+  assert.doesNotMatch(source, /Model and evidence/);
+  assert.doesNotMatch(source, /Declared model/);
+  assert.doesNotMatch(source, /Coverage stage/);
+  assert.doesNotMatch(source, /Observed workflows/);
+  assert.doesNotMatch(source, /Observed risk tiers/);
+  assert.doesNotMatch(source, /Evaluation profile/);
+  assert.doesNotMatch(source, /reported by the connected host, not independently verified/);
 });
 
 test("the agent card header omits connection implementation details", () => {

@@ -86,6 +86,68 @@ export type AdaptiveCoverageTile = {
   changes: AdaptiveCoverageChange[];
 };
 
+export type EvaluationModelIdentity = {
+  provider: string;
+  requestedModel: string;
+  resolvedModel: string | null;
+  modelVersion: string | null;
+};
+
+export type EvaluationModelScope = {
+  scopeId: string;
+  workflowKey: string;
+  riskTier: string;
+  stage: AdaptiveReviewStage;
+  updatedAt: string;
+};
+
+export type EvaluationModelDailyPoint = {
+  date: string;
+  executionCount: number;
+  opportunityCount: number;
+  reviewRequestedCount: number;
+  comparableCount: number;
+  agreementCount: number;
+};
+
+export type EvaluationModelExecution = {
+  executionId: string;
+  occurredAt: string;
+  status: "completed" | "failed";
+  workflowKey: string | null;
+  riskTier: string | null;
+  reviewStatus: string | null;
+  metadataComplete: boolean | null;
+  modelCallCount: number;
+  durationMs: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  agreement: string | null;
+};
+
+export type EvaluationModelProfile = {
+  profileHash: string;
+  primary: EvaluationModelIdentity;
+  contributors: EvaluationModelIdentity[];
+  orchestrationMode: "single_model" | "multi_model";
+  agentNames: string[];
+  executionCount: number;
+  failedExecutionCount: number;
+  opportunityCount: number;
+  reviewRequestedCount: number;
+  skippedCount: number;
+  comparableCount: number;
+  agreementCount: number;
+  humanAgreementBps: number | null;
+  averageDurationMs: number | null;
+  inputTokenTotal: number | null;
+  outputTokenTotal: number | null;
+  lastExecutedAt: string | null;
+  scopes: EvaluationModelScope[];
+  daily: EvaluationModelDailyPoint[];
+  recentExecutions: EvaluationModelExecution[];
+};
+
 export type EvaluationDashboard = {
   workspaceId: string;
   callerRole: TokenlessWorkspaceRole;
@@ -105,12 +167,11 @@ export type EvaluationDashboard = {
     versionId: string;
     versionNumber: number;
     displayName: string;
-    declaredProvider: string;
-    declaredModel: string;
     environment: string;
     attributedRunCount: 0;
     adaptiveCoverage: AdaptiveCoverageTile[];
   }>;
+  modelProfiles: EvaluationModelProfile[];
   deciderTrend: DeciderDecisionTrend;
   runs: EvaluationRun[];
   publishingPolicies: Array<{
@@ -139,6 +200,22 @@ function rowNumber(row: QueryRow | undefined, key: string) {
   const value = row?.[key];
   const number = typeof value === "number" ? value : Number(value);
   return Number.isSafeInteger(number) && number >= 0 ? number : 0;
+}
+
+function rowNullableNumber(row: QueryRow | undefined, key: string) {
+  const value = row?.[key];
+  if (value === null || value === undefined) return null;
+  const number = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(number) || number < 0) throw new Error(`Database returned an invalid ${key}.`);
+  return number;
+}
+
+function rowBoolean(row: QueryRow | undefined, key: string) {
+  const value = row?.[key];
+  if (value === null || value === undefined) return null;
+  if (value === true || value === "t" || value === 1) return true;
+  if (value === false || value === "f" || value === 0) return false;
+  throw new Error(`Database returned an invalid ${key}.`);
 }
 
 function iso(value: unknown) {
@@ -189,6 +266,147 @@ function adaptiveCoverageReason(value: unknown): AdaptiveCoverageReasonCode {
     : "policy_evidence_changed";
 }
 
+function modelIdentity(value: unknown): EvaluationModelIdentity | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const profile = value as Record<string, unknown>;
+  if (typeof profile.provider !== "string" || !profile.provider.trim()) return null;
+  if (typeof profile.requestedModel !== "string" || !profile.requestedModel.trim()) return null;
+  const optionalString = (field: string) => {
+    const fieldValue = profile[field];
+    return typeof fieldValue === "string" && fieldValue.trim() ? fieldValue.trim() : null;
+  };
+  return {
+    provider: profile.provider.trim(),
+    requestedModel: profile.requestedModel.trim(),
+    resolvedModel: optionalString("resolvedModel"),
+    modelVersion: optionalString("modelVersion"),
+  };
+}
+
+function modelIdentityKey(profile: EvaluationModelIdentity) {
+  return JSON.stringify([profile.provider, profile.resolvedModel ?? profile.requestedModel, profile.modelVersion]);
+}
+
+function executionProfileFromRow(row: QueryRow) {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(String(row.execution_profile_json ?? "{}")) as unknown;
+  } catch {
+    parsed = null;
+  }
+  const record =
+    parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+  const fallback = modelIdentity({
+    provider: row.primary_provider,
+    requestedModel: row.primary_requested_model,
+    resolvedModel: row.primary_resolved_model,
+    modelVersion: row.primary_model_version,
+  });
+  const primary = modelIdentity(record?.primary) ?? fallback;
+  if (!primary) return null;
+  const contributors = Array.isArray(record?.contributors)
+    ? record.contributors.map(modelIdentity).filter((value): value is EvaluationModelIdentity => value !== null)
+    : [];
+  const primaryKey = modelIdentityKey(primary);
+  const visibleContributors = [
+    ...new Map(
+      contributors
+        .filter(contributor => modelIdentityKey(contributor) !== primaryKey)
+        .map(contributor => [modelIdentityKey(contributor), contributor] as const),
+    ).values(),
+  ];
+  return {
+    primary,
+    contributors: visibleContributors,
+    orchestrationMode:
+      record?.orchestrationMode === "multi_model" || visibleContributors.length > 0
+        ? ("multi_model" as const)
+        : ("single_model" as const),
+  };
+}
+
+type ModelProfileAccumulator = {
+  profileHash: string;
+  primary: EvaluationModelIdentity;
+  contributors: EvaluationModelIdentity[];
+  orchestrationMode: "single_model" | "multi_model";
+  agentIds: Set<string>;
+  executionIds: Set<string>;
+  executionCount: number;
+  failedExecutionCount: number;
+  opportunityCount: number;
+  reviewRequestedCount: number;
+  skippedCount: number;
+  comparableCount: number;
+  agreementCount: number;
+  durationTotal: number;
+  durationCount: number;
+  inputTokenTotal: number;
+  inputTokenCount: number;
+  outputTokenTotal: number;
+  outputTokenCount: number;
+  lastExecutedAt: string | null;
+  scopes: Map<string, EvaluationModelScope>;
+  daily: Map<string, EvaluationModelDailyPoint>;
+  recentExecutions: EvaluationModelExecution[];
+};
+
+function modelAccumulator(
+  profiles: Map<string, ModelProfileAccumulator>,
+  row: QueryRow,
+): ModelProfileAccumulator | null {
+  const profileHash = rowString(row, "execution_profile_hash");
+  const profile = executionProfileFromRow(row);
+  if (!profileHash || !profile) return null;
+  const existing = profiles.get(profileHash);
+  if (existing) {
+    const agentId = rowString(row, "agent_id");
+    if (agentId) existing.agentIds.add(agentId);
+    return existing;
+  }
+  const created: ModelProfileAccumulator = {
+    profileHash,
+    ...profile,
+    agentIds: new Set(rowString(row, "agent_id") ? [rowString(row, "agent_id")!] : []),
+    executionIds: new Set(),
+    executionCount: 0,
+    failedExecutionCount: 0,
+    opportunityCount: 0,
+    reviewRequestedCount: 0,
+    skippedCount: 0,
+    comparableCount: 0,
+    agreementCount: 0,
+    durationTotal: 0,
+    durationCount: 0,
+    inputTokenTotal: 0,
+    inputTokenCount: 0,
+    outputTokenTotal: 0,
+    outputTokenCount: 0,
+    lastExecutedAt: null,
+    scopes: new Map(),
+    daily: new Map(),
+    recentExecutions: [],
+  };
+  profiles.set(profileHash, created);
+  return created;
+}
+
+function modelDailyPoint(profile: ModelProfileAccumulator, occurredAt: string) {
+  const date = occurredAt.slice(0, 10);
+  const existing = profile.daily.get(date);
+  if (existing) return existing;
+  const created: EvaluationModelDailyPoint = {
+    date,
+    executionCount: 0,
+    opportunityCount: 0,
+    reviewRequestedCount: 0,
+    comparableCount: 0,
+    agreementCount: 0,
+  };
+  profile.daily.set(date, created);
+  return created;
+}
+
 async function requireWorkspaceAccess(accountAddress: string, workspaceId: string) {
   let address: string;
   try {
@@ -222,6 +440,9 @@ export async function getWorkspaceEvaluationDashboard(input: {
     adaptiveEventResult,
     trendDecisions,
     trendOverrides,
+    modelExecutionResult,
+    modelScopeResult,
+    modelOpportunityResult,
   ] = await Promise.all([
     listWorkspaceAgents(input),
     dbClient.execute({
@@ -317,6 +538,42 @@ export async function getWorkspaceEvaluationDashboard(input: {
             WHERE workspace_id = ? AND decided_by = ?
             ORDER BY decided_at DESC LIMIT 50`,
       args: [input.workspaceId, access.address],
+    }),
+    dbClient.execute({
+      sql: `SELECT e.execution_id,e.agent_id,e.agent_version_id,e.status,e.total_duration_ms,
+                   e.model_call_count,e.input_token_total,e.output_token_total,e.execution_profile_hash,
+                   e.execution_profile_json,e.created_at,
+                   primary_span.provider AS primary_provider,
+                   primary_span.requested_model AS primary_requested_model,
+                   primary_span.resolved_model AS primary_resolved_model,
+                   primary_span.model_version AS primary_model_version
+            FROM tokenless_agent_executions e
+            LEFT JOIN tokenless_agent_generation_spans primary_span
+              ON primary_span.execution_id=e.execution_id AND primary_span.span_id=e.primary_span_id
+            WHERE e.workspace_id=?
+            ORDER BY e.created_at DESC,e.execution_id ASC LIMIT 2000`,
+      args: [input.workspaceId],
+    }),
+    dbClient.execute({
+      sql: `SELECT scope_id,agent_id,agent_version_id,workflow_key,risk_tier,stage,
+                   execution_profile_hash,execution_profile_json,updated_at
+            FROM tokenless_agent_evaluation_scopes
+            WHERE workspace_id=?
+            ORDER BY updated_at DESC,scope_id ASC LIMIT 2000`,
+      args: [input.workspaceId],
+    }),
+    dbClient.execute({
+      sql: `SELECT o.opportunity_id,o.execution_id,o.agent_id,o.status,o.metadata_complete,o.created_at,
+                   s.execution_profile_hash,s.execution_profile_json,s.workflow_key,s.risk_tier,
+                   observation.comparable,observation.agreement
+            FROM tokenless_agent_review_opportunities o
+            JOIN tokenless_agent_evaluation_scopes s
+              ON s.workspace_id=o.workspace_id AND s.scope_id=o.scope_id
+            LEFT JOIN tokenless_agent_evaluation_observations observation
+              ON observation.workspace_id=o.workspace_id AND observation.opportunity_id=o.opportunity_id
+            WHERE o.workspace_id=?
+            ORDER BY o.created_at DESC,o.opportunity_id ASC LIMIT 4000`,
+      args: [input.workspaceId],
     }),
   ]);
 
@@ -429,6 +686,143 @@ export async function getWorkspaceEvaluationDashboard(input: {
     coverageByAgentVersion.set(key, [...(coverageByAgentVersion.get(key) ?? []), tile]);
   }
 
+  const opportunityByExecution = new Map<string, QueryRow>();
+  for (const value of modelOpportunityResult.rows) {
+    const row = value as QueryRow;
+    const executionId = rowString(row, "execution_id");
+    if (executionId && !opportunityByExecution.has(executionId)) opportunityByExecution.set(executionId, row);
+  }
+
+  const modelProfileAccumulators = new Map<string, ModelProfileAccumulator>();
+  for (const value of modelExecutionResult.rows) {
+    const row = value as QueryRow;
+    const profile = modelAccumulator(modelProfileAccumulators, row);
+    const executionId = rowString(row, "execution_id");
+    if (!profile || !executionId || profile.executionIds.has(executionId)) continue;
+    profile.executionIds.add(executionId);
+    profile.executionCount += 1;
+    const status = rowString(row, "status");
+    if (status !== "completed" && status !== "failed") {
+      throw new Error("Database returned an invalid execution status.");
+    }
+    if (status === "failed") profile.failedExecutionCount += 1;
+    const occurredAt = iso(row.created_at);
+    profile.lastExecutedAt =
+      !profile.lastExecutedAt || occurredAt > profile.lastExecutedAt ? occurredAt : profile.lastExecutedAt;
+    modelDailyPoint(profile, occurredAt).executionCount += 1;
+    const durationMs = rowNullableNumber(row, "total_duration_ms");
+    if (durationMs !== null) {
+      profile.durationTotal += durationMs;
+      profile.durationCount += 1;
+    }
+    const inputTokens = rowNullableNumber(row, "input_token_total");
+    if (inputTokens !== null) {
+      profile.inputTokenTotal += inputTokens;
+      profile.inputTokenCount += 1;
+    }
+    const outputTokens = rowNullableNumber(row, "output_token_total");
+    if (outputTokens !== null) {
+      profile.outputTokenTotal += outputTokens;
+      profile.outputTokenCount += 1;
+    }
+    const opportunity = opportunityByExecution.get(executionId);
+    profile.recentExecutions.push({
+      executionId,
+      occurredAt,
+      status,
+      workflowKey: rowString(opportunity, "workflow_key"),
+      riskTier: rowString(opportunity, "risk_tier"),
+      reviewStatus: rowString(opportunity, "status"),
+      metadataComplete: rowBoolean(opportunity, "metadata_complete"),
+      modelCallCount: rowNumber(row, "model_call_count"),
+      durationMs,
+      inputTokens,
+      outputTokens,
+      agreement: rowString(opportunity, "agreement"),
+    });
+  }
+
+  for (const value of modelScopeResult.rows) {
+    const row = value as QueryRow;
+    const profile = modelAccumulator(modelProfileAccumulators, row);
+    const scopeId = rowString(row, "scope_id");
+    const workflowKey = rowString(row, "workflow_key");
+    const riskTier = rowString(row, "risk_tier");
+    if (!profile || !scopeId || !workflowKey || !riskTier) continue;
+    profile.scopes.set(scopeId, {
+      scopeId,
+      workflowKey,
+      riskTier,
+      stage: adaptiveStage(row.stage),
+      updatedAt: iso(row.updated_at),
+    });
+  }
+
+  for (const value of modelOpportunityResult.rows) {
+    const row = value as QueryRow;
+    const profile = modelAccumulator(modelProfileAccumulators, row);
+    if (!profile) continue;
+    profile.opportunityCount += 1;
+    const status = rowString(row, "status");
+    if (status === "review_requested" || status === "completed" || status === "failed") {
+      profile.reviewRequestedCount += 1;
+    }
+    if (status === "skipped") profile.skippedCount += 1;
+    const comparable = rowBoolean(row, "comparable") === true;
+    const agreement = rowString(row, "agreement");
+    if (comparable) {
+      profile.comparableCount += 1;
+      if (agreement === "agree") profile.agreementCount += 1;
+    }
+    const point = modelDailyPoint(profile, iso(row.created_at));
+    point.opportunityCount += 1;
+    if (status === "review_requested" || status === "completed" || status === "failed") {
+      point.reviewRequestedCount += 1;
+    }
+    if (comparable) {
+      point.comparableCount += 1;
+      if (agreement === "agree") point.agreementCount += 1;
+    }
+  }
+
+  const agentNames = new Map(registry.agents.map(agent => [agent.agentId, agent.currentVersion.displayName] as const));
+  const modelProfiles = [...modelProfileAccumulators.values()]
+    .map(profile => ({
+      profileHash: profile.profileHash,
+      primary: profile.primary,
+      contributors: profile.contributors,
+      orchestrationMode: profile.orchestrationMode,
+      agentNames: [...profile.agentIds]
+        .map(agentId => agentNames.get(agentId))
+        .filter((name): name is string => Boolean(name))
+        .sort((left, right) => left.localeCompare(right)),
+      executionCount: profile.executionCount,
+      failedExecutionCount: profile.failedExecutionCount,
+      opportunityCount: profile.opportunityCount,
+      reviewRequestedCount: profile.reviewRequestedCount,
+      skippedCount: profile.skippedCount,
+      comparableCount: profile.comparableCount,
+      agreementCount: profile.agreementCount,
+      humanAgreementBps:
+        profile.comparableCount > 0 ? Math.floor((profile.agreementCount * 10_000) / profile.comparableCount) : null,
+      averageDurationMs: profile.durationCount > 0 ? Math.round(profile.durationTotal / profile.durationCount) : null,
+      inputTokenTotal: profile.inputTokenCount > 0 ? profile.inputTokenTotal : null,
+      outputTokenTotal: profile.outputTokenCount > 0 ? profile.outputTokenTotal : null,
+      lastExecutedAt: profile.lastExecutedAt,
+      scopes: [...profile.scopes.values()].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
+      daily: [...profile.daily.values()].sort((left, right) => left.date.localeCompare(right.date)).slice(-30),
+      recentExecutions: profile.recentExecutions
+        .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))
+        .slice(0, 50),
+    }))
+    .sort(
+      (left, right) =>
+        right.executionCount - left.executionCount ||
+        `${left.primary.provider}:${left.primary.resolvedModel ?? left.primary.requestedModel}`.localeCompare(
+          `${right.primary.provider}:${right.primary.resolvedModel ?? right.primary.requestedModel}`,
+        ),
+    ) satisfies EvaluationModelProfile[];
+
   return {
     workspaceId: input.workspaceId,
     callerRole: access.role,
@@ -448,12 +842,11 @@ export async function getWorkspaceEvaluationDashboard(input: {
       versionId: agent.currentVersion.versionId,
       versionNumber: agent.currentVersion.versionNumber,
       displayName: agent.currentVersion.displayName,
-      declaredProvider: agent.currentVersion.declaredProvider,
-      declaredModel: agent.currentVersion.declaredModel,
       environment: agent.currentVersion.environment,
       attributedRunCount: 0,
       adaptiveCoverage: coverageByAgentVersion.get(`${agent.agentId}\0${agent.currentVersion.versionId}`) ?? [],
     })),
+    modelProfiles,
     deciderTrend: {
       clientDecisions: {
         total: trendDecisions.rows.length,

@@ -7,13 +7,7 @@ import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { Badge } from "~~/components/tokenless/ui/Badge";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
-import type {
-  AgentAssuranceScopeSummary,
-  AgentExecutionModelProfile,
-  AgentRegistry,
-  AgentVersionInput,
-  WorkspaceAgent,
-} from "~~/lib/tokenless/agentRegistry";
+import type { AgentRegistry, AgentVersionInput, WorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
 import { readJson } from "~~/lib/tokenless/http";
 import { formatUsdcAtomic } from "~~/lib/tokenless/usdc";
 
@@ -25,17 +19,6 @@ function formatPercent(bps: number | null) {
   if (bps === null) return "—";
   const percent = bps / 100;
   return `${Number.isInteger(percent) ? percent.toFixed(0) : percent.toFixed(1)}%`;
-}
-
-function modelLabel(profile: AgentExecutionModelProfile) {
-  const model = profile.resolvedModel ?? profile.requestedModel;
-  return `${profile.provider} · ${model}${profile.modelVersion ? ` · ${profile.modelVersion}` : ""}`;
-}
-
-function assuranceStageLabel(stage: AgentAssuranceScopeSummary["stage"]) {
-  if (stage === "high_coverage") return "High coverage";
-  if (stage === "medium_coverage") return "Medium coverage";
-  return stage === "monitoring" ? "Monitoring" : "Calibrating";
 }
 
 type HumanReviewConfiguration = NonNullable<WorkspaceAgent["humanReview"]["configuration"]>;
@@ -118,66 +101,6 @@ function reviewCapability(agent: WorkspaceAgent) {
     return { blocked: false, label: "Owner-approved requests ready" };
   }
   return { blocked: false, label: "Automatic requests ready" };
-}
-
-function AgentEvidenceCard({ agent }: { agent: WorkspaceAgent }) {
-  const workflows = [...new Set(agent.assuranceScopes.map(scope => scope.workflowKey))];
-  const riskTiers = [...new Set(agent.assuranceScopes.map(scope => scope.riskTier))];
-  const latestScope = agent.assuranceScopes[0] ?? null;
-  const version = agent.currentVersion;
-
-  return (
-    <Card
-      as="section"
-      variant="nested"
-      className="mt-4 rounded-xl p-4"
-      aria-labelledby={`agent-evidence-${agent.agentId}`}
-    >
-      <h3 id={`agent-evidence-${agent.agentId}`} className="text-sm font-semibold">
-        Model and evidence
-      </h3>
-
-      <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-        <div>
-          <dt className="text-xs text-base-content/45">Declared model</dt>
-          <dd className="mt-1">
-            {version.declaredProvider} · {version.declaredModel}
-            {version.declaredModelVersion ? ` · ${version.declaredModelVersion}` : ""}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-base-content/45">Coverage stage</dt>
-          <dd className="mt-1">{latestScope ? assuranceStageLabel(latestScope.stage) : "No evidence scope yet"}</dd>
-        </div>
-        <div>
-          <dt className="text-xs text-base-content/45">Observed workflows</dt>
-          <dd className="mt-1">{workflows.length > 0 ? workflows.join(", ") : "None observed"}</dd>
-        </div>
-        <div>
-          <dt className="text-xs text-base-content/45">Observed risk tiers</dt>
-          <dd className="mt-1 capitalize">{riskTiers.length > 0 ? riskTiers.join(", ") : "None observed"}</dd>
-        </div>
-        {latestScope?.executionProfile.available ? (
-          <div className="sm:col-span-2">
-            <dt className="text-xs text-base-content/45">Evaluation profile</dt>
-            <dd className="mt-1">
-              {modelLabel(latestScope.executionProfile.primary)}
-              {latestScope.executionProfile.orchestrationMode === "multi_model"
-                ? ` (+${latestScope.executionProfile.contributors.length} contributing models)`
-                : ""}
-              {" · "}
-              {latestScope.humanAgreementBps === null
-                ? "agreement pending"
-                : `${formatPercent(latestScope.humanAgreementBps)} human agreement`}
-            </dd>
-          </div>
-        ) : null}
-      </dl>
-      <p className="mt-3 text-xs text-base-content/45">
-        Declared and execution metadata is reported by the connected host, not independently verified.
-      </p>
-    </Card>
-  );
 }
 
 function AgentHumanReviewConfigurationSummary({ agent }: { agent: WorkspaceAgent }) {
@@ -390,7 +313,6 @@ export function AgentRegistryPanel({
             </div>
             {view === "connection" ? (
               <>
-                <AgentEvidenceCard agent={agent} />
                 <div className="mt-3 space-y-4 border-t border-white/10 pt-3">
                   {registry?.canManage && agent.status === "active" ? (
                     <div className="flex flex-wrap gap-2">

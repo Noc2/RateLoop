@@ -44,6 +44,20 @@ async function seedAdaptiveCoverage(workspaceId: string, agent: Awaited<ReturnTy
   const policyId = "arp_evaluation_coverage";
   const scopeId = "aesc_evaluation_coverage";
   const latestChangeAt = new Date("2026-07-16T12:00:00.000Z");
+  const executionProfileHash = hash("coverage-execution-profile");
+  const executionProfile = {
+    schemaVersion: "rateloop.execution-profile.v2",
+    orchestrationMode: "single_model",
+    primary: {
+      provider: "OpenAI",
+      requestedModel: "gpt-5.6-sol",
+      resolvedModel: "gpt-5.6-sol-2026-07-01",
+      modelVersion: "2026-07-01",
+      reasoningEffort: "medium",
+      serviceTier: "standard",
+    },
+    contributors: [],
+  };
   await dbClient.execute({
     sql: `INSERT INTO tokenless_agent_review_policies
           (policy_id,version,workspace_id,agent_id,agent_version_id,mode,enabled,
@@ -73,10 +87,10 @@ async function seedAdaptiveCoverage(workspaceId: string, agent: Awaited<ReturnTy
           (scope_id,workspace_id,agent_id,agent_version_id,policy_id,policy_version,
            workflow_key,risk_tier,audience_policy_hash,partition_commitment,execution_profile_hash,
            execution_profile_json,human_review_binding_id,human_review_binding_version,
-           request_profile_id,request_profile_version,request_profile_hash,stage,
+          request_profile_id,request_profile_version,request_profile_hash,stage,
            completed_comparable_cases,stable_cases_since_stage,unreviewed_since_last_sample,
            stage_entered_at,updated_at)
-          VALUES (?,?,?,?,?,1,'support-reply','low',?,?,?,'{}',?,1,?,1,?,
+          VALUES (?,?,?,?,?,1,'support-reply','low',?,?,?,?,?,1,?,1,?,
                   'high_coverage',60,30,0,?,?)`,
     args: [
       scopeId,
@@ -86,7 +100,8 @@ async function seedAdaptiveCoverage(workspaceId: string, agent: Awaited<ReturnTy
       policyId,
       hash("coverage-audience"),
       hash("coverage-partition"),
-      hash("coverage-execution-profile"),
+      executionProfileHash,
+      JSON.stringify(executionProfile),
       binding.bindingId,
       binding.profileId,
       binding.profileHash,
@@ -147,7 +162,98 @@ async function seedAdaptiveCoverage(workspaceId: string, agent: Awaited<ReturnTy
       ],
     });
   }
-  return { scopeId };
+  return { binding, executionProfile, executionProfileHash, policyId, scopeId };
+}
+
+async function seedModelEvidence(
+  workspaceId: string,
+  agent: Awaited<ReturnType<typeof createWorkspaceAgent>>,
+  coverage: Awaited<ReturnType<typeof seedAdaptiveCoverage>>,
+) {
+  const executionId = "aex_evaluation_model";
+  const opportunityId = "aeop_evaluation_model";
+  const occurredAt = new Date("2026-07-20T10:00:00.000Z");
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_executions
+          (execution_id,workspace_id,agent_id,agent_version_id,external_execution_id,status,metadata_source,
+           started_at,completed_at,total_duration_ms,tool_call_count,tool_duration_ms,model_call_count,
+           input_token_total,cached_input_token_total,output_token_total,reasoning_output_token_total,
+           primary_span_id,manifest_commitment,execution_profile_hash,execution_profile_json,created_at)
+          VALUES (?,?,?,?,?,'completed','host_reported',?,?,1500,2,300,1,2000,500,500,100,
+                  'primary',?,?,?,?)`,
+    args: [
+      executionId,
+      workspaceId,
+      agent.agentId,
+      agent.currentVersion.versionId,
+      "external-evaluation-model",
+      occurredAt,
+      new Date(occurredAt.getTime() + 1_500),
+      hash("evaluation-model-manifest"),
+      coverage.executionProfileHash,
+      JSON.stringify(coverage.executionProfile),
+      occurredAt,
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_generation_spans
+          (execution_id,span_id,role,provider,requested_model,resolved_model,model_version,
+           reasoning_effort,service_tier,started_at,completed_at,duration_ms,time_to_first_output_ms,
+           input_tokens,cached_input_tokens,output_tokens,reasoning_output_tokens,metadata_source)
+          VALUES (?,'primary','primary','OpenAI','gpt-5.6-sol','gpt-5.6-sol-2026-07-01','2026-07-01',
+                  'medium','standard',?,?,1500,250,2000,500,500,100,'host_reported')`,
+    args: [executionId, occurredAt, new Date(occurredAt.getTime() + 1_500)],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_review_opportunities
+          (opportunity_id,workspace_id,agent_id,agent_version_id,scope_id,policy_id,policy_version,
+           execution_id,external_opportunity_id,suggestion_commitment,declared_confidence_bps,
+           metadata_commitment,metadata_complete,critical_risk,decision,review_rate_bps,
+           selection_probability_bps,sample_bucket,sampler_key_version,sampler_commitment,
+           reason_codes_json,status,source_evidence_reference,source_evidence_hash,
+           human_review_binding_id,human_review_binding_version,request_profile_id,
+           request_profile_version,request_profile_hash,created_at,updated_at)
+          VALUES (?,?,?,?,?,?,1,?,?,?,9000,?,true,false,'required',6000,6000,12,'sampler-v1',?,
+                  '["sampled"]','completed','evidence/evaluation-model',?,?,1,?,1,?,?,?)`,
+    args: [
+      opportunityId,
+      workspaceId,
+      agent.agentId,
+      agent.currentVersion.versionId,
+      coverage.scopeId,
+      coverage.policyId,
+      executionId,
+      "external-evaluation-model",
+      hash("evaluation-model-suggestion"),
+      hash("evaluation-model-metadata"),
+      hash("evaluation-model-sampler"),
+      hash("evaluation-model-source"),
+      coverage.binding.bindingId,
+      coverage.binding.profileId,
+      coverage.binding.profileHash,
+      occurredAt,
+      occurredAt,
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_evaluation_observations
+          (observation_id,workspace_id,scope_id,opportunity_id,execution_id,evidence_reference,
+           source_payload_hash,agent_outcome_commitment,human_outcome_commitment,agreement,comparable,
+           responding_human_count,human_human_agreement_bps,latency_ms,finalized_at,created_at)
+          VALUES ('aeob_evaluation_model',?,?,?,?,?,?,?,?, 'agree',true,3,8500,120000,?,?)`,
+    args: [
+      workspaceId,
+      coverage.scopeId,
+      opportunityId,
+      executionId,
+      "evidence/evaluation-model",
+      hash("evaluation-model-payload"),
+      hash("evaluation-model-agent-outcome"),
+      hash("evaluation-model-human-outcome"),
+      new Date(occurredAt.getTime() + 120_000),
+      occurredAt,
+    ],
+  });
 }
 
 test("evaluation dashboard suppresses small cells and never attributes legacy runs to registered agents", async () => {
@@ -236,6 +342,7 @@ test("evaluation dashboard suppresses small cells and never attributes legacy ru
     },
   });
   const coverageFixture = await seedAdaptiveCoverage(workspaceId, agent);
+  await seedModelEvidence(workspaceId, agent, coverageFixture);
 
   const now = new Date();
   for (const [index, choice] of ["candidate", "baseline"].entries()) {
@@ -275,6 +382,67 @@ test("evaluation dashboard suppresses small cells and never attributes legacy ru
   assert.equal(suppressed.runs[0]?.mechanismHealth, null);
   assert.equal(suppressed.agents[0]?.attributedRunCount, 0);
   assert.equal(suppressed.summary.attributedRuns, 0);
+  assert.deepEqual(suppressed.modelProfiles, [
+    {
+      profileHash: coverageFixture.executionProfileHash,
+      primary: {
+        provider: "OpenAI",
+        requestedModel: "gpt-5.6-sol",
+        resolvedModel: "gpt-5.6-sol-2026-07-01",
+        modelVersion: "2026-07-01",
+      },
+      contributors: [],
+      orchestrationMode: "single_model",
+      agentNames: ["Support agent"],
+      executionCount: 1,
+      failedExecutionCount: 0,
+      opportunityCount: 1,
+      reviewRequestedCount: 1,
+      skippedCount: 0,
+      comparableCount: 1,
+      agreementCount: 1,
+      humanAgreementBps: 10_000,
+      averageDurationMs: 1_500,
+      inputTokenTotal: 2_000,
+      outputTokenTotal: 500,
+      lastExecutedAt: "2026-07-20T10:00:00.000Z",
+      scopes: [
+        {
+          scopeId: coverageFixture.scopeId,
+          workflowKey: "support-reply",
+          riskTier: "low",
+          stage: "high_coverage",
+          updatedAt: "2026-07-16T12:00:00.000Z",
+        },
+      ],
+      daily: [
+        {
+          date: "2026-07-20",
+          executionCount: 1,
+          opportunityCount: 1,
+          reviewRequestedCount: 1,
+          comparableCount: 1,
+          agreementCount: 1,
+        },
+      ],
+      recentExecutions: [
+        {
+          executionId: "aex_evaluation_model",
+          occurredAt: "2026-07-20T10:00:00.000Z",
+          status: "completed",
+          workflowKey: "support-reply",
+          riskTier: "low",
+          reviewStatus: "completed",
+          metadataComplete: true,
+          modelCallCount: 1,
+          durationMs: 1_500,
+          inputTokens: 2_000,
+          outputTokens: 500,
+          agreement: "agree",
+        },
+      ],
+    },
+  ]);
   assert.deepEqual(suppressed.agents[0]?.adaptiveCoverage, [
     {
       scopeId: coverageFixture.scopeId,

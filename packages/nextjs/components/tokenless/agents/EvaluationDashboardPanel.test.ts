@@ -37,6 +37,10 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.match(source, /Latest evidence anchor/);
   assert.match(source, /AdaptiveCoverageSummary/);
   assert.match(source, /<AdaptiveCoverageSummary agents=\{dashboard\.agents\}/);
+  assert.match(source, /ModelEvidencePanel/);
+  assert.match(source, /<ModelEvidencePanel profiles=\{dashboard\.modelProfiles\}/);
+  assert.doesNotMatch(source, /agent\.declaredProvider|agent\.declaredModel/);
+  assert.doesNotMatch(source, /Registered agents/);
   assert.doesNotMatch(source, /leaderboard|top agent|worst agent/i);
 });
 

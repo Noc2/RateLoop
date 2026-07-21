@@ -18,8 +18,6 @@ const agents: EvaluationDashboard["agents"] = [
     versionId: "version_1",
     versionNumber: 1,
     displayName: "Support agent",
-    declaredProvider: "OpenAI",
-    declaredModel: "gpt-5",
     environment: "production",
     attributedRunCount: 0,
     adaptiveCoverage: [

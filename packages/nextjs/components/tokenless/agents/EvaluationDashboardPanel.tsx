@@ -2,6 +2,7 @@
 
 import { type FormEvent, useEffect, useState } from "react";
 import { AdaptiveCoverageSummary } from "~~/components/tokenless/agents/AdaptiveCoverageSummary";
+import { ModelEvidencePanel } from "~~/components/tokenless/agents/ModelEvidencePanel";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import type { AssuranceMetricsSnapshot } from "~~/lib/tokenless/assuranceMetrics";
 import type { DeciderDecisionTrend, EvaluationDashboard, EvaluationRun } from "~~/lib/tokenless/evaluationDashboard";
@@ -745,6 +746,7 @@ export function EvaluationDashboardPanel({
         </p>
       ) : null}
 
+      {dashboard ? <ModelEvidencePanel profiles={dashboard.modelProfiles} /> : null}
       {dashboard ? <AdaptiveCoverageSummary agents={dashboard.agents} /> : null}
 
       {!loading && dashboard?.runs.length === 0 ? (
@@ -831,29 +833,6 @@ export function EvaluationDashboardPanel({
                     </div>
                   ))}
                 </dl>
-              </section>
-
-              <section aria-labelledby="agent-attribution-heading">
-                <h2 id="agent-attribution-heading" className="text-base font-semibold">
-                  Registered agents
-                </h2>
-                {dashboard.agents.length === 0 ? (
-                  <p className="mt-3 text-sm text-base-content/50">No registered agents.</p>
-                ) : (
-                  <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {dashboard.agents.map(agent => (
-                      <article key={agent.agentId} className="surface-card-nested rounded-xl p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <h3 className="font-medium">{agent.displayName}</h3>
-                          <span className="rounded-md bg-white/[0.06] px-2 py-1 text-xs">v{agent.versionNumber}</span>
-                        </div>
-                        <p className="mt-2 text-xs text-base-content/50">
-                          {agent.declaredProvider} · {agent.declaredModel}
-                        </p>
-                      </article>
-                    ))}
-                  </div>
-                )}
               </section>
             </div>
           </details>
