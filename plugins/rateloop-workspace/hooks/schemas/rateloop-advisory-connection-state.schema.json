@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rateloop-tokenless.vercel.app/schemas/rateloop-advisory-connection-state.v1.json",
+  "title": "RateLoop advisory connection state v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "active",
+    "workspaceId",
+    "integrationId",
+    "setupSessionId",
+    "setupTurnId",
+    "verifiedAt",
+    "lastToolUseId"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "rateloop.advisory-connection-state.v1"
+    },
+    "active": {
+      "const": true
+    },
+    "workspaceId": {
+      "$ref": "#/$defs/opaqueIdentifier"
+    },
+    "integrationId": {
+      "$ref": "#/$defs/opaqueIdentifier"
+    },
+    "setupSessionId": {
+      "$ref": "#/$defs/localIdentifier"
+    },
+    "setupTurnId": {
+      "$ref": "#/$defs/localIdentifier"
+    },
+    "verifiedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "lastToolUseId": {
+      "$ref": "#/$defs/localIdentifier"
+    }
+  },
+  "$defs": {
+    "localIdentifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,128}$"
+    },
+    "opaqueIdentifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{8,200}$"
+    }
+  }
+}

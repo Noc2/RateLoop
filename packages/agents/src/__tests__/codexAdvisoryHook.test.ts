@@ -49,11 +49,89 @@ function statePath(data: string, sessionId = "session_advisory_01") {
   return join(data, contractDirectory, "sessions", `${sessionId}.json`);
 }
 
+function connectionPath(data: string) {
+  return join(data, contractDirectory, "connection.json");
+}
+
 async function state(data: string) {
   return JSON.parse(await readFile(statePath(data), "utf8")) as Record<
     string,
     any
   >;
+}
+
+async function connectionState(data: string) {
+  return JSON.parse(await readFile(connectionPath(data), "utf8")) as Record<
+    string,
+    any
+  >;
+}
+
+function connectionInput(
+  tool: "connect_workspace" | "verify_connection" = "connect_workspace",
+  input: {
+    integrationId?: string;
+    sessionId?: string;
+    turnId?: string;
+    toolUseId?: string;
+    workspaceId?: string;
+  } = {},
+): Record<string, any> {
+  const verification = {
+    schemaVersion: "rateloop.connection-verification.v1",
+    connection: {
+      status: "connected",
+      integrationId: input.integrationId ?? "integration_fixture_01",
+      workspaceId: input.workspaceId ?? "workspace_fixture_01",
+      agentId: "agent_fixture_01",
+      agentVersionId: "version_fixture_01",
+      reportedLane: "plugin-with-hooks",
+    },
+    reportedLaneStatement:
+      "Connected via RateLoop plugin — host-reported; hook presence is not verified.",
+    safeAccess: {
+      canCheckReviewRequirement: true,
+      canSpend: false,
+      canPublish: false,
+      canReadPrivateArtifacts: false,
+      canAdministerWorkspace: false,
+    },
+    verifiedAt: "2026-07-21T12:00:00.000Z",
+  };
+  return {
+    session_id: input.sessionId ?? "session_advisory_01",
+    turn_id: input.turnId ?? "turn_advisory_01",
+    transcript_path: "/must/not/be/read/transcript.jsonl",
+    cwd: "/fixture/workspace",
+    hook_event_name: "PostToolUse",
+    permission_mode: "default",
+    model: "gpt-5.4",
+    tool_name: `mcp__rateloop-workspace__rateloop_${tool}`,
+    tool_use_id: input.toolUseId ?? "tool_connection_01",
+    tool_input:
+      tool === "connect_workspace"
+        ? {
+            connectionUrl:
+              "https://rateloop-tokenless.vercel.app/connect/aci_fixture#claim=must-not-persist",
+            reportedLane: "plugin-with-hooks",
+          }
+        : {},
+    tool_response: {
+      content: [{ type: "text", text: "This field is deliberately ignored." }],
+      structuredContent:
+        tool === "connect_workspace"
+          ? {
+              schemaVersion: "rateloop.workspace-connection.v1",
+              connected: true,
+              idempotent: false,
+              connection: verification.connection,
+              context: { enforcementBoundary: "advisory" },
+              verification,
+              nextAction: "follow_bound_policy",
+            }
+          : verification,
+    },
+  };
 }
 
 function stopInput(turnId = "turn_advisory_01") {
@@ -137,6 +215,7 @@ describe("RateLoop advisory PostToolUse integration", () => {
       "utf8",
     );
     const updater = await readFile(updaterPath, "utf8");
+    const stop = await readFile(stopPath, "utf8");
     const schema = JSON.parse(
       await readFile(
         join(
@@ -147,7 +226,23 @@ describe("RateLoop advisory PostToolUse integration", () => {
         "utf8",
       ),
     ) as Record<string, any>;
+    const connectionSchema = JSON.parse(
+      await readFile(
+        join(
+          hookRoot,
+          "schemas",
+          "rateloop-advisory-connection-state.schema.json",
+        ),
+        "utf8",
+      ),
+    ) as Record<string, any>;
 
+    expect(config.hooks.PostToolUse[0].matcher).toContain(
+      "connect_workspace",
+    );
+    expect(config.hooks.PostToolUse[0].matcher).toContain(
+      "verify_connection",
+    );
     expect(config.hooks.PostToolUse[0].matcher).toContain(
       "evaluate_review_requirement",
     );
@@ -158,10 +253,157 @@ describe("RateLoop advisory PostToolUse integration", () => {
     expect(contract).toContain("separately reviewable, trustable, disableable");
     expect(contract).toContain("is not verified host enforcement");
     expect(schema.$id).toContain("rateloop-advisory-stop-gate-state.v2.json");
-    expect(updater).not.toContain("transcript_path");
-    expect(updater).not.toContain("sourcePayload");
-    expect(updater).not.toContain("suggestionPayload");
-    expect(updater).not.toMatch(/\bfetch\s*\(/);
+    expect(connectionSchema.$id).toContain(
+      "rateloop-advisory-connection-state.v1.json",
+    );
+    for (const source of [updater, stop]) {
+      expect(source).not.toContain("transcript_path");
+      expect(source).not.toContain("sourcePayload");
+      expect(source).not.toContain("suggestionPayload");
+      expect(source).not.toMatch(/\bfetch\s*\(/);
+    }
+  });
+
+  it("fails closed after setup when a later turn has no review evaluation", async () => {
+    const data = await pluginData();
+    const connected = connectionInput();
+
+    expect(runScript(updaterPath, data, connected)).toBeNull();
+    expect(await connectionState(data)).toEqual({
+      schemaVersion: "rateloop.advisory-connection-state.v1",
+      active: true,
+      workspaceId: "workspace_fixture_01",
+      integrationId: "integration_fixture_01",
+      setupSessionId: "session_advisory_01",
+      setupTurnId: "turn_advisory_01",
+      verifiedAt: "2026-07-21T12:00:00.000Z",
+      lastToolUseId: "tool_connection_01",
+    });
+    expect(await readFile(connectionPath(data), "utf8")).not.toContain(
+      "must-not-persist",
+    );
+    expect(runScript(stopPath, data, stopInput())).toBeNull();
+    expect(runScript(stopPath, data, stopInput("turn_advisory_02"))).toEqual(
+      expect.objectContaining({
+        continue: false,
+        stopReason: "RateLoop advisory review gate: evaluation_missing",
+      }),
+    );
+
+    const pending = lifecycle(await fixture(), "pending", 1);
+    pending.turn_id = "turn_advisory_02";
+    expect(runScript(updaterPath, data, pending)).toBeNull();
+    expect(
+      runScript(stopPath, data, stopInput("turn_advisory_02"))?.stopReason,
+    ).toBe("RateLoop advisory review gate: review_pending");
+    expect(
+      runScript(stopPath, data, stopInput("turn_advisory_03"))?.stopReason,
+    ).toBe("RateLoop advisory review gate: evaluation_missing");
+  });
+
+  it("does not let idempotent verification move the setup-turn exemption", async () => {
+    const data = await pluginData();
+    expect(runScript(updaterPath, data, connectionInput())).toBeNull();
+    expect(
+      runScript(
+        updaterPath,
+        data,
+        connectionInput("verify_connection", {
+          turnId: "turn_advisory_02",
+          toolUseId: "tool_connection_02",
+        }),
+      ),
+    ).toBeNull();
+
+    expect(await connectionState(data)).toEqual(
+      expect.objectContaining({
+        setupTurnId: "turn_advisory_01",
+        lastToolUseId: "tool_connection_01",
+      }),
+    );
+    expect(
+      runScript(stopPath, data, stopInput("turn_advisory_02"))?.stopReason,
+    ).toBe("RateLoop advisory review gate: evaluation_missing");
+  });
+
+  it("replaces the marker only for a verified different integration", async () => {
+    const data = await pluginData();
+    expect(runScript(updaterPath, data, connectionInput())).toBeNull();
+    expect(
+      runScript(
+        updaterPath,
+        data,
+        connectionInput("verify_connection", {
+          integrationId: "integration_fixture_02",
+          workspaceId: "workspace_fixture_02",
+          turnId: "turn_advisory_02",
+          toolUseId: "tool_connection_02",
+        }),
+      ),
+    ).toBeNull();
+
+    expect(await connectionState(data)).toEqual(
+      expect.objectContaining({
+        workspaceId: "workspace_fixture_02",
+        integrationId: "integration_fixture_02",
+        setupTurnId: "turn_advisory_02",
+        lastToolUseId: "tool_connection_02",
+      }),
+    );
+    expect(runScript(stopPath, data, stopInput("turn_advisory_02"))).toBeNull();
+    expect(
+      runScript(stopPath, data, stopInput("turn_advisory_03"))?.stopReason,
+    ).toBe("RateLoop advisory review gate: evaluation_missing");
+  });
+
+  it("fails closed for invalid connection state and connection-review mismatch", async () => {
+    const invalidData = await pluginData();
+    await mkdir(dirname(connectionPath(invalidData)), { recursive: true });
+    await writeFile(connectionPath(invalidData), '{"active":true}\n', "utf8");
+    expect(runScript(stopPath, invalidData, stopInput())?.stopReason).toBe(
+      "RateLoop advisory review gate: connection_state_invalid_recovery_required",
+    );
+    expect(
+      runScript(
+        updaterPath,
+        invalidData,
+        connectionInput("verify_connection", {
+          turnId: "turn_advisory_02",
+          toolUseId: "tool_connection_repair",
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      runScript(stopPath, invalidData, stopInput("turn_advisory_03"))
+        ?.stopReason,
+    ).toBe("RateLoop advisory review gate: evaluation_missing");
+
+    const mismatchData = await pluginData();
+    const pending = lifecycle(await fixture(), "pending", 1);
+    expect(runScript(updaterPath, mismatchData, pending)).toBeNull();
+    expect(
+      runScript(
+        updaterPath,
+        mismatchData,
+        connectionInput("verify_connection", {
+          integrationId: "integration_fixture_02",
+          workspaceId: "workspace_fixture_02",
+        }),
+      ),
+    ).toBeNull();
+    expect(runScript(stopPath, mismatchData, stopInput())?.stopReason).toBe(
+      "RateLoop advisory review gate: connection_review_binding_mismatch_recovery_required",
+    );
+  });
+
+  it("does not activate omission checking from a failed connection", async () => {
+    const data = await pluginData();
+    const failed = connectionInput();
+    failed.tool_response.isError = true;
+    expect(runScript(updaterPath, data, failed)?.systemMessage).toContain(
+      "mcp_tool_failed",
+    );
+    expect(runScript(stopPath, data, stopInput("turn_advisory_02"))).toBeNull();
   });
 
   it("keeps an unsigned selection skip armed and fails closed", async () => {
@@ -185,6 +427,7 @@ describe("RateLoop advisory PostToolUse integration", () => {
 
   it("disarms only for a signed skip release bound to scope, policy, and output", async () => {
     const data = await pluginData();
+    expect(runScript(updaterPath, data, connectionInput())).toBeNull();
     const input = await fixture();
     expect(runScript(updaterPath, data, input)?.systemMessage).toContain(
       "skip_release_evidence_missing_recovery_required",
@@ -231,6 +474,9 @@ describe("RateLoop advisory PostToolUse integration", () => {
       }),
     );
     expect(runScript(stopPath, data, stopInput())).toBeNull();
+    expect(
+      runScript(stopPath, data, stopInput("turn_advisory_02"))?.stopReason,
+    ).toBe("RateLoop advisory review gate: evaluation_missing");
 
     const tampered = await state(data);
     tampered.scopeCommitment = `sha256:${"5".repeat(64)}`;

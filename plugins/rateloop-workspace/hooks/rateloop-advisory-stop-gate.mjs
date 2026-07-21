@@ -6,6 +6,7 @@ import { isAbsolute, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const STATE_SCHEMA = "rateloop.advisory-stop-gate.v2";
+const CONNECTION_SCHEMA = "rateloop.advisory-connection-state.v1";
 const EVIDENCE_SCHEMA = "rateloop.human-review-terminal-evidence.v1";
 const PAYLOAD_SCHEMA = "rateloop.human-review-terminal-payload.v1";
 const SKIP_EVIDENCE_SCHEMA = "rateloop.human-review-skip-release-evidence.v1";
@@ -50,6 +51,16 @@ const STATE_KEYS = [
   "lastToolUseId",
   "envelopeCommitment",
   "terminalEvidence",
+];
+const CONNECTION_KEYS = [
+  "schemaVersion",
+  "active",
+  "workspaceId",
+  "integrationId",
+  "setupSessionId",
+  "setupTurnId",
+  "verifiedAt",
+  "lastToolUseId",
 ];
 
 function isRecord(value) {
@@ -125,6 +136,31 @@ function validateStopInput(value) {
   )
     return null;
   return { sessionId: value.session_id, turnId: value.turn_id };
+}
+
+export function validateAdvisoryConnectionState(value) {
+  if (
+    !exactKeys(value, CONNECTION_KEYS) ||
+    value.schemaVersion !== CONNECTION_SCHEMA ||
+    value.active !== true
+  ) {
+    throw new Error("connection_state_shape_invalid");
+  }
+  for (const field of ["workspaceId", "integrationId"]) {
+    if (!OPAQUE_IDENTIFIER.test(value[field]))
+      throw new Error("connection_state_identifier_invalid");
+  }
+  for (const field of [
+    "setupSessionId",
+    "setupTurnId",
+    "lastToolUseId",
+  ]) {
+    if (!LOCAL_IDENTIFIER.test(value[field]))
+      throw new Error("connection_state_local_identifier_invalid");
+  }
+  if (!isIsoDate(value.verifiedAt))
+    throw new Error("connection_state_time_invalid");
+  return value;
 }
 
 export function validateAdvisoryGateState(value, input, options = {}) {
@@ -396,7 +432,29 @@ async function main() {
   const pluginData = process.env.PLUGIN_DATA ?? process.env.CLAUDE_PLUGIN_DATA;
   if (!pluginData) return;
   const contractRoot = join(pluginData, CONTRACT_DIRECTORY);
+  const connectionPath = join(contractRoot, "connection.json");
   const statePath = join(contractRoot, "sessions", `${input.sessionId}.json`);
+  let connection = null;
+  try {
+    connection = validateAdvisoryConnectionState(
+      await readBoundedJson(connectionPath, contractRoot),
+    );
+  } catch (error) {
+    if (
+      !(
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        error.code === "ENOENT"
+      )
+    ) {
+      block(
+        "connection_state_invalid_recovery_required",
+        "Advisory RateLoop connection state is unreadable or invalid. Re-verify the connection through RateLoop before releasing another output; plugin trust is not host enforcement.",
+      );
+      return;
+    }
+  }
   let state;
   try {
     state = validateAdvisoryGateState(
@@ -412,11 +470,56 @@ async function main() {
       typeof error === "object" &&
       "code" in error &&
       error.code === "ENOENT"
-    )
+    ) {
+      if (!connection) return;
+      if (
+        connection.setupSessionId === input.sessionId &&
+        connection.setupTurnId === input.turnId
+      ) {
+        return;
+      }
+      block(
+        "evaluation_missing",
+        "This connected RateLoop plugin has no current-turn review evaluation. Call rateloop_get_agent_context and rateloop_evaluate_review_requirement before releasing an eligible output. This advisory hook can be disabled and is not host enforcement.",
+      );
       return;
+    }
     block(
       "state_invalid_recovery_required",
       "Advisory RateLoop review state is unreadable, invalid, or bound to another turn. A trusted host must refresh or explicitly disarm it; plugin trust is not host enforcement.",
+    );
+    return;
+  }
+
+  if (
+    connection &&
+    (connection.workspaceId !== state.workspaceId ||
+      connection.integrationId !== state.integrationId)
+  ) {
+    block(
+      "connection_review_binding_mismatch_recovery_required",
+      "The current advisory review state belongs to a different RateLoop connection. Re-evaluate this output with the active connection before release.",
+    );
+    return;
+  }
+
+  if (state.turnId !== input.turnId) {
+    if (
+      connection?.setupSessionId === input.sessionId &&
+      connection.setupTurnId === input.turnId
+    ) {
+      return;
+    }
+    if (connection) {
+      block(
+        "evaluation_missing",
+        "This connected RateLoop plugin has no current-turn review evaluation. Evaluate this output, or resume the prior armed review with the RateLoop progress tools, before release. This advisory hook can be disabled and is not host enforcement.",
+      );
+      return;
+    }
+    block(
+      "armed_state_turn_mismatch_recovery_required",
+      "An advisory RateLoop gate remains armed for a prior turn. Resume that exact review opportunity or use the separately authorized recovery path before releasing this output.",
     );
     return;
   }
@@ -440,13 +543,6 @@ async function main() {
     block(
       "skip_release_evidence_invalid_recovery_required",
       "RateLoop selection skip release evidence is missing, mismatched, or not signed by a trusted key. Refresh the exact opportunity or use the separately authorized recovery path.",
-    );
-    return;
-  }
-  if (state.turnId !== input.turnId) {
-    block(
-      "armed_state_turn_mismatch_recovery_required",
-      "An advisory RateLoop gate remains armed for a prior turn. Resume that exact review opportunity or use the separately authorized recovery path before releasing this output.",
     );
     return;
   }

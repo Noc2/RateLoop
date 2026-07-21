@@ -128,7 +128,7 @@ describe("RateLoop Codex Stop hook", () => {
         PostToolUse: [
           {
             matcher:
-              "^mcp__rateloop[-_]workspace__rateloop_(evaluate_review_requirement|request_review|wait_for_review|get_review_result)$",
+              "^mcp__rateloop[-_]workspace__rateloop_(connect_workspace|verify_connection|evaluate_review_requirement|request_review|wait_for_review|get_review_result)$",
             hooks: [
               {
                 type: "command",
@@ -137,7 +137,8 @@ describe("RateLoop Codex Stop hook", () => {
                 commandWindows:
                   'if defined CLAUDE_PLUGIN_ROOT (node "%CLAUDE_PLUGIN_ROOT%\\hooks\\rateloop-advisory-state-update.mjs") else (node "%PLUGIN_ROOT%\\hooks\\rateloop-advisory-state-update.mjs")',
                 timeout: 5,
-                statusMessage: "Updating advisory RateLoop review state",
+                statusMessage:
+                  "Updating advisory RateLoop connection or review state",
               },
             ],
           },

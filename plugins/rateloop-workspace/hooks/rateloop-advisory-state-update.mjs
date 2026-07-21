@@ -12,19 +12,22 @@ import {
 import { isAbsolute, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
+  validateAdvisoryConnectionState,
   validateAdvisoryGateState,
   verifyAdvisoryTerminalEvidence,
 } from "./rateloop-advisory-stop-gate.mjs";
 
 const ENVELOPE_SCHEMA = "rateloop.human-review-tool-envelope.v1";
 const STATE_SCHEMA = "rateloop.advisory-stop-gate.v2";
+const CONNECTION_SCHEMA = "rateloop.advisory-connection-state.v1";
 const CONTRACT_DIRECTORY = "review-stop-gate-v1";
 const MAX_FILE_BYTES = 64 * 1024;
 const LOCAL_IDENTIFIER = /^[A-Za-z0-9_-]{1,128}$/;
 const OPAQUE_IDENTIFIER = /^[A-Za-z0-9._:-]{8,200}$/;
 const SHA256 = /^sha256:[0-9a-f]{64}$/;
 const TOOL_NAME =
-  /^mcp__rateloop[-_]workspace__rateloop_(evaluate_review_requirement|request_review|wait_for_review|get_review_result)$/;
+  /^mcp__rateloop[-_]workspace__rateloop_(connect_workspace|verify_connection|evaluate_review_requirement|request_review|wait_for_review|get_review_result)$/;
+const CONNECTION_TOOLS = new Set(["connect_workspace", "verify_connection"]);
 const NONTERMINAL_STATES = new Set([
   "approval_required",
   "request_ready",
@@ -249,6 +252,53 @@ function validateToolEnvelope(input) {
   return envelope;
 }
 
+function validateConnectionEnvelope(input) {
+  const value = input.envelope;
+  let verification;
+  if (input.tool === "connect_workspace") {
+    if (
+      value.schemaVersion !== "rateloop.workspace-connection.v1" ||
+      value.connected !== true ||
+      !isRecord(value.verification)
+    ) {
+      throw new Error("connection_envelope_invalid");
+    }
+    verification = value.verification;
+  } else if (input.tool === "verify_connection") {
+    verification = value;
+  } else {
+    throw new Error("connection_tool_invalid");
+  }
+  if (
+    verification.schemaVersion !== "rateloop.connection-verification.v1" ||
+    !isRecord(verification.connection) ||
+    verification.connection.status !== "connected" ||
+    !OPAQUE_IDENTIFIER.test(verification.connection.workspaceId) ||
+    !OPAQUE_IDENTIFIER.test(verification.connection.integrationId) ||
+    !isIsoDate(verification.verifiedAt)
+  ) {
+    throw new Error("connection_verification_invalid");
+  }
+  return {
+    workspaceId: verification.connection.workspaceId,
+    integrationId: verification.connection.integrationId,
+    verifiedAt: verification.verifiedAt,
+  };
+}
+
+function buildConnectionState(input, connection) {
+  return {
+    schemaVersion: CONNECTION_SCHEMA,
+    active: true,
+    workspaceId: connection.workspaceId,
+    integrationId: connection.integrationId,
+    setupSessionId: input.sessionId,
+    setupTurnId: input.turnId,
+    verifiedAt: connection.verifiedAt,
+    lastToolUseId: input.toolUseId,
+  };
+}
+
 function projectedEnvelope(envelope) {
   return {
     schemaVersion: envelope.schemaVersion,
@@ -397,6 +447,38 @@ async function readExistingState(statePath, contractRoot, input) {
   }
 }
 
+async function readExistingConnectionState(connectionPath, contractRoot) {
+  try {
+    const [rootPath, filePath, metadata] = await Promise.all([
+      realpath(contractRoot),
+      realpath(connectionPath),
+      lstat(connectionPath),
+    ]);
+    const relativePath = relative(rootPath, filePath);
+    if (
+      metadata.isSymbolicLink() ||
+      !metadata.isFile() ||
+      relativePath.startsWith("..") ||
+      isAbsolute(relativePath)
+    ) {
+      throw new Error("connection_state_path_invalid");
+    }
+    const bytes = await readFile(connectionPath);
+    if (bytes.length > MAX_FILE_BYTES)
+      throw new Error("connection_state_file_too_large");
+    return validateAdvisoryConnectionState(JSON.parse(bytes.toString("utf8")));
+  } catch (error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === "ENOENT"
+    )
+      return null;
+    throw error;
+  }
+}
+
 async function authorizeTransition(input, envelope, existing, pluginData) {
   if (!existing) {
     if (input.tool !== "evaluate_review_requirement")
@@ -511,7 +593,6 @@ async function main() {
   let envelope;
   try {
     input = validateHookInput(JSON.parse(await readStdin()));
-    envelope = validateToolEnvelope(input);
   } catch (error) {
     warn(error instanceof Error ? error.message : "tool_result_invalid");
     return;
@@ -525,8 +606,44 @@ async function main() {
     return;
   }
   const contractRoot = join(pluginDataRoot, CONTRACT_DIRECTORY);
+  const connectionPath = join(contractRoot, "connection.json");
   const statePath = join(contractRoot, "sessions", `${input.sessionId}.json`);
   try {
+    if (CONNECTION_TOOLS.has(input.tool)) {
+      const verified = validateConnectionEnvelope(input);
+      let connection;
+      try {
+        connection = await readExistingConnectionState(
+          connectionPath,
+          contractRoot,
+        );
+      } catch {
+        connection = null;
+      }
+      if (
+        connection?.workspaceId === verified.workspaceId &&
+        connection?.integrationId === verified.integrationId
+      ) {
+        return;
+      }
+      await writeStateAtomically(
+        connectionPath,
+        buildConnectionState(input, verified),
+      );
+      return;
+    }
+    const connection = await readExistingConnectionState(
+      connectionPath,
+      contractRoot,
+    );
+    envelope = validateToolEnvelope(input);
+    if (
+      connection &&
+      (connection.workspaceId !== envelope.workspaceId ||
+        connection.integrationId !== envelope.integrationId)
+    ) {
+      throw new Error("connection_review_binding_mismatch");
+    }
     const existing = await readExistingState(statePath, contractRoot, input);
     await authorizeTransition(input, envelope, existing, pluginDataRoot);
     let state = buildState(input, envelope, existing);
