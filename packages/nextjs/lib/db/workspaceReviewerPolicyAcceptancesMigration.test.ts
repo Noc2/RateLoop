@@ -11,8 +11,9 @@ const journal = JSON.parse(readFileSync(new URL("../../drizzle/meta/_journal.jso
 };
 
 test("0131 binds private policy acceptance to exact workspace reviewer grants", () => {
-  assert.equal(journal.entries.at(-1)?.idx, 131);
-  assert.equal(journal.entries.at(-1)?.tag, "0131_workspace_reviewer_policy_acceptances");
+  const journalEntry = journal.entries.find(entry => entry.idx === 131);
+  assert.equal(journalEntry?.idx, 131);
+  assert.equal(journalEntry?.tag, "0131_workspace_reviewer_policy_acceptances");
   assert.match(migration, /DROP CONSTRAINT "tokenless_private_group_policy_acceptances_membership_fk"/u);
   assert.match(migration, /DROP CONSTRAINT "tokenless_private_unpaid_review_assignments_membership_fk"/u);
   assert.match(
