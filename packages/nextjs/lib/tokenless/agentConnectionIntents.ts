@@ -676,9 +676,21 @@ async function prepareAgentWorkspaceMove(
   if (existing) {
     if (
       text(existing, "source_token_family_id") !== input.principal.tokenFamilyId ||
+      text(existing, "oauth_client_id") !== input.principal.clientId ||
       text(existing, "oauth_subject_principal_id") !== input.principal.subjectPrincipalId
     ) {
       throw new TokenlessServiceError("This reconnect belongs to another credential.", 409, "claimant_mismatch");
+    }
+    if (
+      ["source_confirmation_required", "owner_approval_required"].includes(text(existing, "status") ?? "") &&
+      new Date(String(existing.expires_at)).getTime() > input.now.getTime() &&
+      text(existing, "initiating_mcp_session_hash") !== input.mcpSessionHash
+    ) {
+      await client.query(
+        `UPDATE tokenless_agent_workspace_moves
+         SET initiating_mcp_session_hash=$1 WHERE move_id=$2`,
+        [input.mcpSessionHash, text(existing, "move_id")],
+      );
     }
     return { workspaceMove: workspaceMovePayload(existing), idempotent: true } as const;
   }

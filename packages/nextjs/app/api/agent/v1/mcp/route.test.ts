@@ -691,6 +691,43 @@ test("a targeted OAuth reconnect returns ordinary dual-consent tool actions", as
   assert.equal(proposedJson.includes(reconnectIntent.connectionUrl), false);
   assert.equal(proposedJson.includes(new URL(reconnectIntent.connectionUrl).hash), false);
 
+  const sourceSessionHash = `sha256:${createHash("sha256").update(sourceSessionId).digest("hex")}`;
+  const revokedSourceSession = await dbClient.execute({
+    sql: "UPDATE tokenless_mcp_sessions SET status='revoked' WHERE session_hash=? RETURNING session_hash",
+    args: [sourceSessionHash],
+  });
+  assert.equal(revokedSourceSession.rowCount, 1);
+  const renewedSourceSessionId = await initialize(6, sourceTokens.access_token, "Reconnect source renewed");
+  const renewedSourceSessionHash = `sha256:${createHash("sha256").update(renewedSourceSessionId).digest("hex")}`;
+
+  const ordinaryRetryResponse = await POST(
+    request(
+      {
+        id: 7,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { name: "rateloop_connect_workspace", arguments: { connectionUrl: reconnectIntent.connectionUrl } },
+      },
+      sourceTokens.access_token,
+      renewedSourceSessionId,
+    ),
+  );
+  assert.equal(ordinaryRetryResponse.status, 200);
+  const ordinaryRetry = (await ordinaryRetryResponse.json()).result.structuredContent;
+  assert.equal(ordinaryRetry.workspaceMove.status, "source_confirmation_required");
+  assert.equal(ordinaryRetry.workspaceMove.transferId, proposed.workspaceMove.transferId);
+  assert.equal(ordinaryRetry.idempotent, true);
+  const stillUnconfirmed = await dbClient.execute({
+    sql: `SELECT status,source_confirmed_at,initiating_mcp_session_hash
+          FROM tokenless_agent_workspace_moves WHERE move_id=?`,
+    args: [proposed.workspaceMove.transferId],
+  });
+  assert.deepEqual(stillUnconfirmed.rows[0], {
+    status: "source_confirmation_required",
+    source_confirmed_at: null,
+    initiating_mcp_session_hash: renewedSourceSessionHash,
+  });
+
   const mismatchedFallbackUrl = new URL(reconnectIntent.connectionUrl);
   const mismatchedFallbackFragment = new URLSearchParams(mismatchedFallbackUrl.hash.slice(1));
   const allFsTransferId = `acm_${"f".repeat(32)}`;
@@ -702,7 +739,7 @@ test("a targeted OAuth reconnect returns ordinary dual-consent tool actions", as
   const mismatchedFallbackResponse = await POST(
     request(
       {
-        id: 6,
+        id: 8,
         jsonrpc: "2.0",
         method: "tools/call",
         params: {
@@ -711,39 +748,13 @@ test("a targeted OAuth reconnect returns ordinary dual-consent tool actions", as
         },
       },
       sourceTokens.access_token,
-      sourceSessionId,
+      renewedSourceSessionId,
     ),
   );
   assert.equal(mismatchedFallbackResponse.status, 200);
   const mismatchedFallback = (await mismatchedFallbackResponse.json()).result;
   assert.equal(mismatchedFallback.isError, true);
   assert.equal(mismatchedFallback.structuredContent.code, "workspace_move_confirmation_mismatch");
-
-  const ordinaryRetryResponse = await POST(
-    request(
-      {
-        id: 7,
-        jsonrpc: "2.0",
-        method: "tools/call",
-        params: { name: "rateloop_connect_workspace", arguments: { connectionUrl: reconnectIntent.connectionUrl } },
-      },
-      sourceTokens.access_token,
-      sourceSessionId,
-    ),
-  );
-  assert.equal(ordinaryRetryResponse.status, 200);
-  const ordinaryRetry = (await ordinaryRetryResponse.json()).result.structuredContent;
-  assert.equal(ordinaryRetry.workspaceMove.status, "source_confirmation_required");
-  assert.equal(ordinaryRetry.workspaceMove.transferId, proposed.workspaceMove.transferId);
-  assert.equal(ordinaryRetry.idempotent, true);
-  const stillUnconfirmed = await dbClient.execute({
-    sql: "SELECT status,source_confirmed_at FROM tokenless_agent_workspace_moves WHERE move_id=?",
-    args: [proposed.workspaceMove.transferId],
-  });
-  assert.deepEqual(stillUnconfirmed.rows[0], {
-    status: "source_confirmation_required",
-    source_confirmed_at: null,
-  });
 
   const fallbackUrl = new URL(reconnectIntent.connectionUrl);
   const fallbackFragment = new URLSearchParams(fallbackUrl.hash.slice(1));
@@ -755,13 +766,13 @@ test("a targeted OAuth reconnect returns ordinary dual-consent tool actions", as
   const rejectedLegacyClaim = await POST(
     request(
       {
-        id: 8,
+        id: 9,
         jsonrpc: "2.0",
         method: "tools/call",
         params: { name: "rateloop_claim_connection_intent", arguments: { connectionUrl: fallbackUrl.toString() } },
       },
       sourceTokens.access_token,
-      sourceSessionId,
+      renewedSourceSessionId,
     ),
   );
   assert.equal(rejectedLegacyClaim.status, 200);
@@ -772,13 +783,13 @@ test("a targeted OAuth reconnect returns ordinary dual-consent tool actions", as
   const confirmedResponse = await POST(
     request(
       {
-        id: 9,
+        id: 10,
         jsonrpc: "2.0",
         method: "tools/call",
         params: { name: "rateloop_connect_workspace", arguments: { connectionUrl: fallbackUrl.toString() } },
       },
       sourceTokens.access_token,
-      sourceSessionId,
+      renewedSourceSessionId,
     ),
   );
   assert.equal(confirmedResponse.status, 200);

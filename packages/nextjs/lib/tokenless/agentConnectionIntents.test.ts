@@ -375,6 +375,17 @@ test("a targeted reconnect requires source confirmation and target-owner approva
           error.code === "workspace_move_source_confirmation_required",
       ),
   );
+  const wrongPrincipal = await createTokenFamily("oatf_move_wrong", OTHER_OWNER);
+  await assert.rejects(
+    () =>
+      confirmAgentWorkspaceMove({
+        principal: wrongPrincipal,
+        transferId: requested.workspaceMove.transferId,
+        origin: "https://rateloop-tokenless.example",
+      }),
+    (error: unknown) =>
+      Boolean(error && typeof error === "object" && "code" in error && error.code === "claimant_mismatch"),
+  );
   const confirmed = await confirmAgentWorkspaceMove({
     principal: sourcePrincipal,
     transferId: requested.workspaceMove.transferId,
