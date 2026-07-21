@@ -138,9 +138,9 @@ test("landing page presents the tokenless human-assurance story", async () => {
       "/docs/use-cases#research-deliverables",
     ],
     [
-      "Product experiences",
-      "Tests can pass while users stay confused. Is the next action clear?",
-      "/docs/use-cases#product-experiences",
+      "AI-assisted hiring",
+      "Candidate-ranking AI can be high-risk under the EU AI Act. Give an authorized recruiter oversight before it affects a candidate.",
+      "/docs/use-cases#hiring-decisions",
     ],
   ]) {
     assert.match(html, new RegExp(title, "i"));

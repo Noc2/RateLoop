@@ -7,7 +7,7 @@ import type { UseCaseExample, UseCaseIconKind } from "~~/components/docs/UseCase
 export const metadata = {
   title: "Human Assurance Use Cases",
   description:
-    "Three worked examples of independent human judgment checking AI-generated customer replies, research conclusions, and product experiences.",
+    "Three worked examples of independent human judgment checking AI-generated customer replies, research conclusions, and hiring recommendations.",
 } satisfies Metadata;
 
 type UseCase = {
@@ -20,6 +20,11 @@ type UseCase = {
   reviewers: string;
   decision: string;
   example: UseCaseExample;
+  legalContext?: {
+    label: string;
+    body: string;
+    sources: readonly { label: string; href: string }[];
+  };
 };
 
 const useCases: readonly UseCase[] = [
@@ -69,25 +74,42 @@ const useCases: readonly UseCase[] = [
     },
   },
   {
-    id: "product-experiences",
-    title: "Product experiences",
-    icon: "experience",
+    id: "hiring-decisions",
+    title: "AI-assisted hiring",
+    icon: "hiring",
     color: "var(--rateloop-pink)",
     scenario:
-      "A screen, campaign, or generated asset can pass automated checks while leaving the intended audience unsure what to do.",
-    trigger: "Before release of a bounded screenshot, image set, or video — or to compare two public-safe versions.",
+      "A recruiting system ranks applicants and recommends who should advance. A plausible recommendation can still overlook job-relevant evidence or reproduce discriminatory patterns.",
+    trigger:
+      "Before a recommendation materially influences who advances or is rejected, and after a material model, prompt, data, or workflow change.",
     reviewers:
-      "Representative target users when that qualification matters; a general-human panel for broadly legible public experiences.",
+      "Authorized recruiting or employment specialists with the competence, training, and authority required for the workflow. Candidate data stays in a private invited-review lane.",
     decision:
-      "The panel result with reasons and disagreement. The owner publishes, revises, or compares again; a pilot tracks clarity failures and avoided rework.",
+      "A recorded human result, reasons, disagreement, timing, and any override or escalation. The designated hiring owner remains responsible for the decision.",
     example: {
       color: "var(--rateloop-pink)",
-      artifactLabel: "Screens under review",
-      artifact: "Two checkout screens: version A pairs the Pay button with a promo banner; version B shows one action.",
-      question: "Is the intended next action clear from this screen?",
-      verdict: "Version B — 4 of 5 reviewers",
-      reasons: ["Banner competes with Pay", "B has one clear action"],
-      outcome: "The owner ships version B and keeps the comparison as evidence.",
+      artifactLabel: "AI recommendation",
+      artifact: "“Do not advance — no team-lead experience.”",
+      question: "Does the supplied application evidence support this recommendation under the approved job criteria?",
+      verdict: "Override — 4 of 5 authorized reviewers",
+      reasons: ["CV shows two years leading six engineers", "Relevant contract role was omitted"],
+      outcome:
+        "The hiring owner advances the candidate, records the override, and checks whether other applicants were affected.",
+    },
+    legalContext: {
+      label: "EU AI Act · high-risk context",
+      body: "AI used to analyse applications or evaluate candidates is listed in Annex III. For systems that qualify as high-risk under Article 6, the Act requires effective human oversight, and deployers must assign people with the necessary competence, training, and authority. The Commission currently says the employment rules apply from 2 December 2027. RateLoop can support the review workflow and its evidence; it does not determine legal classification, perform the provider's conformity assessment, or make a system compliant.",
+      sources: [
+        { label: "Annex III", href: "https://ai-act-service-desk.ec.europa.eu/en/ai-act/annex-3" },
+        { label: "Article 6", href: "https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-6" },
+        { label: "Article 14", href: "https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-14" },
+        { label: "Article 26", href: "https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-26" },
+        { label: "Article 43", href: "https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-43" },
+        {
+          label: "Current EU timeline",
+          href: "https://digital-strategy.ec.europa.eu/en/policies/guidelines-ai-high-risk-systems",
+        },
+      ],
     },
   },
 ] as const;
@@ -115,6 +137,25 @@ export default function UseCasesPage() {
               <h2 className="text-2xl font-bold text-base-content">{useCase.title}</h2>
             </div>
             <p className="mt-3 max-w-3xl text-base leading-7 text-base-content/68">{useCase.scenario}</p>
+            {useCase.legalContext ? (
+              <aside className="mt-5 max-w-3xl rounded-xl border border-[var(--rateloop-yellow)]/25 bg-amber-300/[0.06] p-4">
+                <p className="font-mono text-xs font-semibold uppercase tracking-wider text-[var(--rateloop-yellow)]">
+                  {useCase.legalContext.label}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-base-content/72">{useCase.legalContext.body}</p>
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs font-semibold">
+                  {useCase.legalContext.sources.map(source => (
+                    <a
+                      key={source.href}
+                      href={source.href}
+                      className="text-base-content/65 underline decoration-base-content/30 underline-offset-4 hover:text-base-content"
+                    >
+                      {source.label}
+                    </a>
+                  ))}
+                </div>
+              </aside>
+            ) : null}
             <div className="mt-5 grid gap-6 lg:grid-cols-2">
               <UseCaseExampleCard example={useCase.example} />
               <dl className="grid content-start gap-4">

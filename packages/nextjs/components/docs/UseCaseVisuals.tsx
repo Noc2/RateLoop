@@ -1,6 +1,6 @@
 import React, { type ReactNode } from "react";
 
-export type UseCaseIconKind = "reply" | "research" | "experience";
+export type UseCaseIconKind = "reply" | "research" | "hiring";
 
 const ICON_PATHS: Record<UseCaseIconKind, ReactNode> = {
   reply: (
@@ -18,11 +18,13 @@ const ICON_PATHS: Record<UseCaseIconKind, ReactNode> = {
       <path d="m13 15 2.4 2.4" />
     </>
   ),
-  experience: (
+  hiring: (
     <>
-      <rect x="3.5" y="4.5" width="17" height="13" rx="1.2" />
-      <path d="M3.5 8h17" />
-      <path d="m12.5 11 5.8 2.2-2.5 1 1.7 2.9-1.5.9-1.7-3-1.8 2Z" />
+      <rect x="3.5" y="6.5" width="17" height="13" rx="1.2" />
+      <path d="M9 6.5V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1.5" />
+      <circle cx="9" cy="12" r="2" />
+      <path d="M6.5 17c.5-1.7 1.3-2.5 2.5-2.5s2 .8 2.5 2.5" />
+      <path d="M14 11h3.5M14 14h3.5" />
     </>
   ),
 };

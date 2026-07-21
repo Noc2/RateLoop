@@ -67,11 +67,11 @@ const useCases = [
     icon: "research",
   },
   {
-    title: "Product experiences",
-    body: "Tests can pass while users stay confused. Is the next action clear?",
-    href: "/docs/use-cases#product-experiences",
+    title: "AI-assisted hiring",
+    body: "Candidate-ranking AI can be high-risk under the EU AI Act. Give an authorized recruiter oversight before it affects a candidate.",
+    href: "/docs/use-cases#hiring-decisions",
     color: "var(--rateloop-pink)",
-    icon: "experience",
+    icon: "hiring",
   },
 ] as const;
 

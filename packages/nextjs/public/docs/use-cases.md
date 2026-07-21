@@ -28,20 +28,30 @@ appropriate for this situation. Three worked examples:
   that is the agreed criterion.
 - **What you get back:** The result with reasons and source-linked evidence. The owner delivers, revises, or escalates.
 
-## Product experiences
+## AI-assisted hiring
 
-- **Scenario:** A screen, campaign, or generated asset can pass automated checks while leaving its audience unsure what
-  to do.
-- **When to check:** Before release of a bounded screenshot, image set, or video — or to compare two public-safe
-  versions.
-- **Human check:** `Is the intended next action clear from this screen?`
-- **Worked example:** Two checkout screens: version A pairs the Pay button with a promo banner; version B shows one
-  action. Panel result: Version B — 4 of 5 reviewers (banner competes with Pay; B has one clear action). The owner
-  ships version B and keeps the comparison as evidence.
-- **Who reviews:** Representative target users when that qualification matters; a general-human panel for broadly
-  legible public experiences.
-- **What you get back:** The panel result with reasons and disagreement. The owner publishes, revises, or compares
-  again.
+- **Scenario:** A recruiting system ranks applicants and recommends who should advance. A plausible recommendation can
+  still overlook job-relevant evidence or reproduce discriminatory patterns.
+- **EU AI Act context:** AI used to analyse applications or evaluate candidates is listed in
+  [Annex III](https://ai-act-service-desk.ec.europa.eu/en/ai-act/annex-3). For systems that qualify as high-risk under
+  [Article 6](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-6),
+  [Article 14](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-14) requires effective human oversight and
+  [Article 26](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-26) requires deployers to assign people with
+  the necessary competence, training, and authority. The Commission currently says the employment rules apply from
+  2 December 2027 in its [current timeline](https://digital-strategy.ec.europa.eu/en/policies/guidelines-ai-high-risk-systems).
+  RateLoop can support the review workflow and its evidence; it does not determine legal classification, perform the
+  provider's [Article 43](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-43) conformity assessment, or make
+  a system compliant.
+- **When to check:** Before a recommendation materially influences who advances or is rejected, and after a material
+  model, prompt, data, or workflow change.
+- **Human check:** `Does the supplied application evidence support this recommendation under the approved job criteria?`
+- **Worked example:** AI recommendation: "Do not advance — no team-lead experience." Panel result: Override — 4 of 5
+  authorized reviewers (the CV shows two years leading six engineers; a relevant contract role was omitted). The hiring
+  owner advances the candidate, records the override, and checks whether other applicants were affected.
+- **Who reviews:** Authorized recruiting or employment specialists with the competence, training, and authority
+  required for the workflow. Candidate data stays in a private invited-review lane.
+- **What you get back:** A recorded human result, reasons, disagreement, timing, and any override or escalation. The
+  designated hiring owner remains responsible for the decision.
 
 ## Combine people with automated evaluation
 
