@@ -66,7 +66,7 @@ function assertNoRecoveryMaterial(storage: Storage) {
   );
 }
 
-test("a public reviewer can choose a rating, prediction, and optional feedback", async () => {
+test("a public reviewer can choose a rating, exact crowd forecast, and optional feedback", async () => {
   const restoreDom = installTestDom();
   const { cleanup, render, within } = await import("@testing-library/react");
   const userEvent = (await import("@testing-library/user-event")).default;
@@ -84,11 +84,27 @@ test("a public reviewer can choose a rating, prediction, and optional feedback",
     const screen = within(document.body);
     const prepare = screen.getByRole("button", { name: "Create recovery backup" }) as HTMLButtonElement;
     assert.equal(prepare.disabled, true);
+    assert.equal(screen.queryByRole("spinbutton", { name: /what percentage/iu }), null);
 
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Supported" }));
-    await user.click(screen.getByRole("button", { name: "70%" }));
+    const forecast = screen.getByRole<HTMLInputElement>("spinbutton", {
+      name: /what percentage of reviewers do you expect to choose “Supported”/iu,
+    });
+    assert.equal(forecast.value, "");
+    assert.equal(forecast.min, "1");
+    assert.equal(forecast.max, "99");
+    assert.equal(forecast.step, "1");
+    assert.match(screen.getByText(/your forecast stays hidden until settlement/iu).textContent ?? "", /hidden/u);
+    assert.equal(screen.queryByRole("button", { name: "70%" }), null);
+    await user.type(forecast, "73");
     assert.equal(screen.getByRole<HTMLButtonElement>("button", { name: "Create recovery backup" }).disabled, false);
+    await user.clear(forecast);
+    await user.type(forecast, "100");
+    assert.equal(screen.getByRole<HTMLButtonElement>("button", { name: "Create recovery backup" }).disabled, true);
+    assert.match(screen.getByRole("alert").textContent ?? "", /whole number from 1 to 99/u);
+    await user.clear(forecast);
+    await user.type(forecast, "73");
     await user.click(screen.getByRole("button", { name: "Add feedback" }));
     await user.type(screen.getByRole("textbox", { name: "Feedback" }), "The cited source supports the answer.");
     assert.equal((screen.getByRole("textbox", { name: "Feedback" }) as HTMLInputElement).value.length, 37);
@@ -139,7 +155,10 @@ test("voucher and commit APIs stay unreachable until the downloaded recovery bac
     const screen = within(document.body);
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Supported" }));
-    await user.click(screen.getByRole("button", { name: "70%" }));
+    fireEvent.change(screen.getByRole("spinbutton", { name: /what percentage/iu }), { target: { value: "73" } });
+    await waitFor(() =>
+      assert.equal(screen.getByRole<HTMLButtonElement>("button", { name: "Create recovery backup" }).disabled, false),
+    );
     await user.click(screen.getByRole("button", { name: "Create recovery backup" }));
 
     const download = await screen.findByRole("link", { name: "Download recovery backup" }, { timeout: 20_000 });
@@ -177,7 +196,9 @@ test("voucher and commit APIs stay unreachable until the downloaded recovery bac
       false,
     );
 
-    await user.click(screen.getByRole("button", { name: "90%" }));
+    const forecast = screen.getByRole("spinbutton", { name: /what percentage/iu });
+    await screen.findByRole("alert");
+    fireEvent.change(forecast, { target: { value: "91" } });
     await waitFor(() => assert.ok(screen.getByRole("button", { name: "Create recovery backup" })));
     assert.equal(screen.queryByRole("link", { name: "Download recovery backup" }), null);
     assert.equal(requests.filter(url => url === "/api/rater/vouchers").length, 1);
@@ -194,7 +215,7 @@ test("voucher and commit APIs stay unreachable until the downloaded recovery bac
 
 test("a reload before backup confirmation discards private preparation and safely restarts", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, waitFor, within } = await import("@testing-library/react");
+  const { cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
   const userEvent = (await import("@testing-library/user-event")).default;
   const { PublicQuestionCard } = await import("./PublicQuestionCard");
   const previousFetch = globalThis.fetch;
@@ -218,7 +239,10 @@ test("a reload before backup confirmation discards private preparation and safel
     const screen = within(document.body);
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Supported" }));
-    await user.click(screen.getByRole("button", { name: "70%" }));
+    fireEvent.change(screen.getByRole("spinbutton", { name: /what percentage/iu }), { target: { value: "73" } });
+    await waitFor(() =>
+      assert.equal(screen.getByRole<HTMLButtonElement>("button", { name: "Create recovery backup" }).disabled, false),
+    );
     await user.click(screen.getByRole("button", { name: "Create recovery backup" }));
     await screen.findByRole("link", { name: "Download recovery backup" }, { timeout: 20_000 });
 
@@ -234,6 +258,7 @@ test("a reload before backup confirmation discards private preparation and safel
     await waitFor(() =>
       assert.equal(screen.getByRole<HTMLButtonElement>("button", { name: "Create recovery backup" }).disabled, false),
     );
+    assert.equal(screen.getByRole<HTMLInputElement>("spinbutton", { name: /what percentage/iu }).value, "73");
     assert.equal(screen.queryByRole("link", { name: "Download recovery backup" }), null);
     assert.deepEqual(requests, ["/api/auth/session"]);
     assertNoRecoveryMaterial(window.localStorage);
@@ -270,7 +295,10 @@ test("backup confirmation fails closed when the browser principal changes", asyn
     const screen = within(document.body);
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Supported" }));
-    await user.click(screen.getByRole("button", { name: "70%" }));
+    fireEvent.change(screen.getByRole("spinbutton", { name: /what percentage/iu }), { target: { value: "73" } });
+    await waitFor(() =>
+      assert.equal(screen.getByRole<HTMLButtonElement>("button", { name: "Create recovery backup" }).disabled, false),
+    );
     await user.click(screen.getByRole("button", { name: "Create recovery backup" }));
     const download = await screen.findByRole("link", { name: "Download recovery backup" }, { timeout: 20_000 });
     download.addEventListener("click", event => event.preventDefault(), { once: true });

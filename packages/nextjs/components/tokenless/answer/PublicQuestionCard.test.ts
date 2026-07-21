@@ -59,3 +59,15 @@ test("binary review instructions stay neutral for feedback questions", () => {
   assert.match(source, /Choose one answer, then estimate how the panel will respond/);
   assert.doesNotMatch(source, /Choose the stronger answer/);
 });
+
+test("the blind crowd forecast accepts the full one-percent RBTS grid without a default", () => {
+  assert.match(source, /Crowd forecast/);
+  assert.match(source, /What percentage of reviewers do you expect to choose “\{options\[0\]\}”\?/);
+  assert.match(source, /min=\{1\}/);
+  assert.match(source, /max=\{99\}/);
+  assert.match(source, /step=\{1\}/);
+  assert.match(source, /value=\{prediction \?\? ""\}/);
+  assert.match(source, /Your forecast stays hidden until settlement/);
+  assert.match(source, /predictedUpBps: prediction \* 100/);
+  assert.doesNotMatch(source, /\[10, 30, 50, 70, 90\]/);
+});

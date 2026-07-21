@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { Hex } from "viem";
 import { type PublicQuestionMedia, QuestionMedia } from "~~/components/tokenless/answer/QuestionMedia";
@@ -16,6 +16,7 @@ import {
   dueTokenlessCommits,
   enqueueTokenlessCommit,
   exportTokenlessRecoveryPackage,
+  isTokenlessPredictionBps,
   recordTokenlessCommitRelayFailure,
   sealTokenlessReveal,
   signTokenlessCommit,
@@ -144,12 +145,16 @@ function isPublicReviewDraft(value: unknown): value is PublicReviewDraft {
   const draft = value as Partial<PublicReviewDraft>;
   return (
     [null, "yes", "no"].includes(draft.answer ?? null) &&
-    (draft.prediction === null || [10, 30, 50, 70, 90].includes(draft.prediction ?? -1)) &&
+    (draft.prediction === null || isPublicPredictionPercent(draft.prediction)) &&
     typeof draft.feedbackCategory === "string" &&
     PUBLIC_RATER_RESPONSE_CATEGORIES.includes(draft.feedbackCategory as PublicRaterResponseCategory) &&
     typeof draft.feedbackBody === "string" &&
     typeof draft.sourceUrl === "string"
   );
+}
+
+function isPublicPredictionPercent(value: number | null | undefined): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && isTokenlessPredictionBps(value * 100);
 }
 
 export function PublicQuestionCard({
@@ -184,6 +189,8 @@ export function PublicQuestionCard({
   const [retryClock, setRetryClock] = useState(() => Date.now());
   const [draftRestored, setDraftRestored] = useState(false);
   const rationaleRef = useRef<HTMLTextAreaElement>(null);
+  const predictionInputId = useId();
+  const predictionHelpId = `${predictionInputId}-help`;
   const feedbackEnabled = task.question.rationale?.mode !== "off";
   const preparationBinding = publicSubmissionBinding(task, {
     answer,
@@ -380,7 +387,9 @@ export function PublicQuestionCard({
   }
 
   async function prepareRecoveryBackup() {
-    if (paidAccess.state !== "ready" || !answer || prediction === null || task.alreadyVouchered) return;
+    if (paidAccess.state !== "ready" || !answer || !isPublicPredictionPercent(prediction) || task.alreadyVouchered) {
+      return;
+    }
     setBusy(true);
     setBusyLabel("Creating backup…");
     setError(null);
@@ -406,7 +415,7 @@ export function PublicQuestionCard({
       const secrets = createTokenlessRaterRoundSecrets({
         roundId: BigInt(task.roundId),
         vote: answer === "yes" ? 1 : 0,
-        predictedUpBps: (prediction * 100) as 1000 | 3000 | 5000 | 7000 | 9000,
+        predictedUpBps: prediction * 100,
         responseHash: response.responseHash,
       });
       const recoverySecret = generateDeviceRecoverySecret();
@@ -625,7 +634,7 @@ export function PublicQuestionCard({
         (Boolean(savedCommit) && !retryAvailable) ||
         (!savedCommit &&
           (!answer ||
-            prediction === null ||
+            !isPublicPredictionPercent(prediction) ||
             task.alreadyVouchered ||
             (Boolean(activePreparedSubmission) && !recoveryConfirmed)))
       }
@@ -711,6 +720,48 @@ export function PublicQuestionCard({
                   </button>
                 ))}
               </div>
+              {answer ? (
+                <fieldset className="mt-5 border-t border-white/10 pt-4">
+                  <legend className="text-xs font-semibold">Crowd forecast</legend>
+                  <label htmlFor={predictionInputId} className="mt-2 block text-xs leading-5 text-base-content/60">
+                    What percentage of reviewers do you expect to choose “{options[0]}”?
+                  </label>
+                  <div className="mt-3 flex items-center gap-2">
+                    <input
+                      id={predictionInputId}
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      max={99}
+                      step={1}
+                      required
+                      aria-describedby={predictionHelpId}
+                      className="input input-sm w-24 border-white/10 bg-[var(--rateloop-field)] text-right tabular-nums"
+                      value={prediction ?? ""}
+                      onChange={event => {
+                        const nextValue = event.currentTarget.value;
+                        setPrediction(nextValue === "" ? null : Number(nextValue));
+                      }}
+                    />
+                    <span aria-hidden="true" className="text-sm text-base-content/60">
+                      %
+                    </span>
+                  </div>
+                  <p
+                    id={predictionHelpId}
+                    role={prediction !== null && !isPublicPredictionPercent(prediction) ? "alert" : undefined}
+                    className={`mt-2 text-[11px] leading-4 ${
+                      prediction !== null && !isPublicPredictionPercent(prediction)
+                        ? "text-red-100"
+                        : "text-base-content/45"
+                    }`}
+                  >
+                    {prediction !== null && !isPublicPredictionPercent(prediction)
+                      ? "Enter a whole number from 1 to 99."
+                      : "Enter a whole number from 1 to 99. Your forecast stays hidden until settlement."}
+                  </p>
+                </fieldset>
+              ) : null}
               {feedbackEnabled && answer && !feedbackOpen ? (
                 <button
                   type="button"
@@ -763,22 +814,6 @@ export function PublicQuestionCard({
                   />
                 </fieldset>
               ) : null}
-              <p className="mt-5 text-xs leading-5 text-base-content/50">Predict the share choosing the first option</p>
-              <div className="mt-2 grid grid-cols-5 gap-1.5">
-                {[10, 30, 50, 70, 90].map(value => (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-pressed={prediction === value}
-                    className={`rounded-md px-1 py-2 text-xs transition-colors ${
-                      prediction === value ? "pill-active" : "pill-inactive"
-                    }`}
-                    onClick={() => setPrediction(value)}
-                  >
-                    {value}%
-                  </button>
-                ))}
-              </div>
               {recoveryUrl && activePreparedSubmission ? (
                 <div className="mt-5 rounded-lg border border-white/10 p-3">
                   <p className="font-mono text-[11px] uppercase tracking-widest text-[var(--rateloop-blue)]">
