@@ -1402,7 +1402,7 @@ test("OAuth keeps one stable tool list and fails closed for unavailable paid-net
   assert.deepEqual(tool("rateloop_request_review")?.annotations, {
     readOnlyHint: false,
     destructiveHint: true,
-    idempotentHint: false,
+    idempotentHint: true,
     openWorldHint: true,
   });
   const requestReviewTool = tool("rateloop_request_review");

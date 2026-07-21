@@ -138,6 +138,10 @@ const consequentialOpenAnnotations = {
   idempotentHint: false,
   openWorldHint: true,
 } as const;
+const idempotentConsequentialOpenAnnotations = {
+  ...consequentialOpenAnnotations,
+  idempotentHint: true,
+} as const;
 const idempotentConsequentialClosedAnnotations = {
   readOnlyHint: false,
   destructiveHint: true,
@@ -274,7 +278,7 @@ export const workspaceMcpTools = [
   },
   {
     name: "rateloop_request_review",
-    annotations: consequentialOpenAnnotations,
+    annotations: idempotentConsequentialOpenAnnotations,
     description:
       "Route a required frozen opportunity using the exact reviewer-visible source and completed candidate that were committed during evaluation. Setup messages, connection checks, tool chatter, and review-status text are not reviewable outputs. Check-only records the requirement without preparing, publishing, assigning, reserving, or spending. Prepare-for-approval creates only an immutable owner approval. Automatic routing requires the exact active grant. The bound profile either forbids question overrides or requires one binary agent-written question for this public-network request; RateLoop always derives the panel, response window, bounty, fee, and accepted-work reserve.",
     inputSchema: {
