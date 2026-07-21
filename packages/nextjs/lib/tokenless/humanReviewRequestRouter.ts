@@ -787,9 +787,7 @@ async function resolveExactPrivateBinding(
             minimumSeats: requirement.minimumSeats,
           })),
         )
-      : candidate.reviewers.size === profile.panelSize
-        ? [...candidate.reviewers.keys()].sort()
-        : null;
+      : selectDeterministicReviewerPanel([...candidate.reviewers.keys()], profile.panelSize);
     const paidReviewers = reviewerAccountAddresses?.map(address => candidate.reviewers.get(address)?.paidReviewer);
     return reviewerAccountAddresses && (!paidIdentityRequired || paidReviewers?.every(Boolean))
       ? [{ ...candidate, reviewerAccountAddresses, paidReviewers }]
@@ -803,6 +801,14 @@ async function resolveExactPrivateBinding(
     reviewerAccountAddresses: selected.reviewerAccountAddresses,
     paidReviewers: paidIdentityRequired ? (selected.paidReviewers as PaidReviewerBinding[]) : null,
   };
+}
+
+function selectDeterministicReviewerPanel(
+  reviewerAccountAddresses: readonly string[],
+  panelSize: number,
+): string[] | null {
+  const available = [...new Set(reviewerAccountAddresses)].sort();
+  return available.length >= panelSize ? available.slice(0, panelSize) : null;
 }
 
 function selectPrivatePolicyRoutingCandidate<T extends { cohortId: string; projectId: string }>(
@@ -1491,6 +1497,7 @@ export const __humanReviewRequestRouterTestUtils = {
   deterministicActivationKey,
   deterministicPrivateIdempotencyKey,
   hasExactAutonomousGrant,
+  selectDeterministicReviewerPanel,
   selectPrivatePolicyRoutingCandidate,
   resolveExactPrivateBinding,
 };

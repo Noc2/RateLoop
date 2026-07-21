@@ -208,6 +208,15 @@ test("private routing selects the one cohort frozen into the admission policy", 
   assert.equal(__humanReviewRequestRouterTestUtils.selectPrivatePolicyRoutingCandidate(frozen, [legacy]), null);
 });
 
+test("private routing selects a deterministic panel from a larger invited reviewer pool", () => {
+  const selected = __humanReviewRequestRouterTestUtils.selectDeterministicReviewerPanel(
+    ["rlp_e4829e", "rlp_9a99d1", "rlp_b7c203"],
+    2,
+  );
+  assert.deepEqual(selected, ["rlp_9a99d1", "rlp_b7c203"]);
+  assert.equal(__humanReviewRequestRouterTestUtils.selectDeterministicReviewerPanel(["rlp_b7c203"], 2), null);
+});
+
 const ask = {
   schemaVersion: "rateloop.tokenless.v2",
   idempotencyKey: "ask_router",
