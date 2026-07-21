@@ -379,7 +379,7 @@ test("accepted workspace reviewer invitations route exact private content throug
     },
   });
   assert.equal(evaluated.decision, "required");
-  assert.equal(evaluated.lifecycle.state, "blocked");
+  assert.equal(evaluated.lifecycle.state, "request_ready");
 
   const routedAt = new Date();
   const routed = await routeHumanReviewRequest({
