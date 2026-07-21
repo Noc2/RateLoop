@@ -151,7 +151,7 @@ CREATE TABLE "tokenless_workspace_reviewer_access_grant_projects" (
   FOREIGN KEY ("workspace_id", "project_id")
     REFERENCES "tokenless_assurance_projects"("workspace_id", "project_id") ON DELETE RESTRICT
 );--> statement-breakpoint
-CREATE INDEX "tokenless_workspace_reviewer_access_grant_projects_candidate_idx"
+CREATE INDEX "tokenless_reviewer_grant_projects_candidate_idx"
   ON "tokenless_workspace_reviewer_access_grant_projects" USING btree
   ("workspace_id", "project_id", "grant_id");--> statement-breakpoint
 
@@ -273,7 +273,7 @@ CREATE TABLE "tokenless_workspace_reviewer_invitation_redemptions" (
   FOREIGN KEY ("invitation_id", "grant_id")
     REFERENCES "tokenless_workspace_reviewer_access_grants"("source_invitation_id", "grant_id") ON DELETE RESTRICT
 );--> statement-breakpoint
-CREATE INDEX "tokenless_workspace_reviewer_invitation_redemptions_principal_idx"
+CREATE INDEX "tokenless_reviewer_redemptions_principal_idx"
   ON "tokenless_workspace_reviewer_invitation_redemptions" USING btree
   ("principal_address", "redeemed_at");--> statement-breakpoint
 
@@ -337,11 +337,11 @@ ALTER TABLE "tokenless_agent_review_request_profiles"
   ADD COLUMN "workspace_reviewer_terms_version" integer,
   ADD COLUMN "workspace_reviewer_terms_hash" text,
   ADD COLUMN "workspace_reviewer_world_id_required" boolean,
-  ADD CONSTRAINT "tokenless_agent_review_request_profiles_workspace_reviewer_terms_check" CHECK (
+  ADD CONSTRAINT "tokenless_review_profiles_reviewer_terms_check" CHECK (
     ("workspace_reviewer_terms_version" IS NULL AND "workspace_reviewer_terms_hash" IS NULL)
     OR ("workspace_reviewer_terms_version" IS NOT NULL AND "workspace_reviewer_terms_hash" IS NOT NULL)
   ),
-  ADD CONSTRAINT "tokenless_agent_review_request_profiles_workspace_reviewer_terms_fk"
+  ADD CONSTRAINT "tokenless_review_profiles_reviewer_terms_fk"
     FOREIGN KEY ("workspace_id", "workspace_reviewer_terms_version", "workspace_reviewer_terms_hash")
     REFERENCES "tokenless_workspace_reviewer_terms_versions"("workspace_id", "version", "terms_hash")
     ON DELETE RESTRICT;--> statement-breakpoint
@@ -349,11 +349,11 @@ ALTER TABLE "tokenless_agent_review_request_profiles"
 ALTER TABLE "tokenless_assurance_run_subpanels"
   ADD COLUMN "workspace_reviewer_terms_version" integer,
   ADD COLUMN "workspace_reviewer_terms_hash" text,
-  ADD CONSTRAINT "tokenless_assurance_run_subpanels_workspace_reviewer_terms_check" CHECK (
+  ADD CONSTRAINT "tokenless_run_subpanels_reviewer_terms_check" CHECK (
     ("workspace_reviewer_terms_version" IS NULL AND "workspace_reviewer_terms_hash" IS NULL)
     OR ("workspace_reviewer_terms_version" IS NOT NULL AND "workspace_reviewer_terms_hash" IS NOT NULL)
   ),
-  ADD CONSTRAINT "tokenless_assurance_run_subpanels_workspace_reviewer_terms_fk"
+  ADD CONSTRAINT "tokenless_run_subpanels_reviewer_terms_fk"
     FOREIGN KEY ("workspace_id", "workspace_reviewer_terms_version", "workspace_reviewer_terms_hash")
     REFERENCES "tokenless_workspace_reviewer_terms_versions"("workspace_id", "version", "terms_hash")
     ON DELETE RESTRICT;--> statement-breakpoint
@@ -383,11 +383,11 @@ ALTER TABLE "tokenless_assurance_assignments"
 ALTER TABLE "tokenless_private_review_requests"
   ADD COLUMN "workspace_reviewer_terms_version" integer,
   ADD COLUMN "workspace_reviewer_terms_hash" text,
-  ADD CONSTRAINT "tokenless_private_review_requests_workspace_reviewer_terms_check" CHECK (
+  ADD CONSTRAINT "tokenless_private_reviews_reviewer_terms_check" CHECK (
     ("workspace_reviewer_terms_version" IS NULL AND "workspace_reviewer_terms_hash" IS NULL)
     OR ("workspace_reviewer_terms_version" IS NOT NULL AND "workspace_reviewer_terms_hash" IS NOT NULL)
   ),
-  ADD CONSTRAINT "tokenless_private_review_requests_workspace_reviewer_terms_fk"
+  ADD CONSTRAINT "tokenless_private_reviews_reviewer_terms_fk"
     FOREIGN KEY ("workspace_id", "workspace_reviewer_terms_version", "workspace_reviewer_terms_hash")
     REFERENCES "tokenless_workspace_reviewer_terms_versions"("workspace_id", "version", "terms_hash")
     ON DELETE RESTRICT;--> statement-breakpoint
@@ -395,11 +395,11 @@ ALTER TABLE "tokenless_private_review_requests"
 ALTER TABLE "tokenless_private_unpaid_review_deliveries"
   ADD COLUMN "workspace_reviewer_terms_version" integer,
   ADD COLUMN "workspace_reviewer_terms_hash" text,
-  ADD CONSTRAINT "tokenless_private_unpaid_review_deliveries_workspace_reviewer_terms_check" CHECK (
+  ADD CONSTRAINT "tokenless_private_deliveries_reviewer_terms_check" CHECK (
     ("workspace_reviewer_terms_version" IS NULL AND "workspace_reviewer_terms_hash" IS NULL)
     OR ("workspace_reviewer_terms_version" IS NOT NULL AND "workspace_reviewer_terms_hash" IS NOT NULL)
   ),
-  ADD CONSTRAINT "tokenless_private_unpaid_review_deliveries_workspace_reviewer_terms_fk"
+  ADD CONSTRAINT "tokenless_private_deliveries_reviewer_terms_fk"
     FOREIGN KEY ("workspace_id", "workspace_reviewer_terms_version", "workspace_reviewer_terms_hash")
     REFERENCES "tokenless_workspace_reviewer_terms_versions"("workspace_id", "version", "terms_hash")
     ON DELETE RESTRICT;--> statement-breakpoint
@@ -407,11 +407,11 @@ ALTER TABLE "tokenless_private_unpaid_review_deliveries"
 ALTER TABLE "tokenless_private_unpaid_review_assignments"
   ADD COLUMN "workspace_reviewer_access_grant_id" text,
   ADD COLUMN "workspace_reviewer_access_grant_hash" text,
-  ADD CONSTRAINT "tokenless_private_unpaid_review_assignments_workspace_reviewer_grant_check" CHECK (
+  ADD CONSTRAINT "tokenless_private_assignments_reviewer_grant_check" CHECK (
     ("workspace_reviewer_access_grant_id" IS NULL AND "workspace_reviewer_access_grant_hash" IS NULL)
     OR ("workspace_reviewer_access_grant_id" IS NOT NULL AND "workspace_reviewer_access_grant_hash" IS NOT NULL)
   ),
-  ADD CONSTRAINT "tokenless_private_unpaid_review_assignments_workspace_reviewer_grant_fk"
+  ADD CONSTRAINT "tokenless_private_assignments_reviewer_grant_fk"
     FOREIGN KEY ("workspace_id", "workspace_reviewer_access_grant_id", "workspace_reviewer_access_grant_hash")
     REFERENCES "tokenless_workspace_reviewer_access_grants"("workspace_id", "grant_id", "grant_hash")
     ON DELETE RESTRICT;

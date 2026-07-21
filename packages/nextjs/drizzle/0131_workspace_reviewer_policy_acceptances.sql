@@ -1,5 +1,5 @@
 ALTER TABLE "tokenless_workspace_agent_setups"
-  DROP CONSTRAINT "tokenless_workspace_agent_setups_people_invitation_id_fk";--> statement-breakpoint
+  DROP CONSTRAINT "tokenless_workspace_agent_setups_people_invitation_id_fkey";--> statement-breakpoint
 
 UPDATE "tokenless_workspace_agent_setups" setup
 SET "people_invitation_id" = NULL

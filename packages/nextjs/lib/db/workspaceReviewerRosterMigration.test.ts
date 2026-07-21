@@ -92,3 +92,14 @@ test("0130 preserves legacy member invitations while assigning new invitation na
   assert.match(migration, /ADD COLUMN "intended_email_hash" text/u);
   assert.match(migration, /"governance_role" IS NULL/u);
 });
+
+test("0130 keeps explicit constraint and index names within PostgreSQL's identifier limit", () => {
+  const identifiers = [
+    ...[...migration.matchAll(/(?:ADD )?CONSTRAINT "([^"]+)"/gu)].map(match => match[1]!),
+    ...[...migration.matchAll(/CREATE (?:UNIQUE )?INDEX "([^"]+)"/gu)].map(match => match[1]!),
+  ];
+  assert.ok(identifiers.length > 0);
+  for (const identifier of identifiers) {
+    assert.ok(Buffer.byteLength(identifier, "utf8") <= 63, `${identifier} exceeds PostgreSQL's 63-byte limit`);
+  }
+});
