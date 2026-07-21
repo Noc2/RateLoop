@@ -22,7 +22,7 @@ test("agent details and review information render in task-focused views", () => 
   assert.match(form, /Workflow name/);
   assert.match(form, /provider: "unknown"/);
   assert.match(form, /model: "unknown"/);
-  assert.match(form, /Saving creates an immutable workflow version/);
+  assert.doesNotMatch(form, /Saving creates an immutable workflow version/);
   assert.doesNotMatch(form, />\s*Declared provider/);
   assert.doesNotMatch(form, />\s*Declared model/);
   assert.doesNotMatch(form, />\s*Model version/);

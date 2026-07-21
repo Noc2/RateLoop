@@ -90,9 +90,6 @@ export function AgentVersionForm({
           maxLength={1_000}
         />
       </label>
-      <p className="text-xs leading-5 text-base-content/50">
-        Saving creates an immutable workflow version. Execution model details are reported separately for each run.
-      </p>
       <button className="rateloop-gradient-action px-5" disabled={busy}>
         {busy ? "Saving…" : submitLabel}
       </button>
