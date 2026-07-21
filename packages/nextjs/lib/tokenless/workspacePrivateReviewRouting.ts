@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbPool } from "~~/lib/db";
+import { expirePrivateUnpaidReviewReservations } from "~~/lib/tokenless/privateUnpaidReviewAdapter";
 import {
   expertiseQualificationRules,
   qualificationProvenanceSatisfiesExpertise,
@@ -784,6 +785,7 @@ export async function provisionWorkspacePrivateReviewRouting(input: {
   if (!Number.isFinite(now.getTime())) {
     throw new TokenlessServiceError("Routing time is invalid.", 400, "invalid_review_request_profile");
   }
+  await expirePrivateUnpaidReviewReservations(now);
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");

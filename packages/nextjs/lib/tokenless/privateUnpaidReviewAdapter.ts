@@ -910,8 +910,38 @@ export async function expirePrivateUnpaidReviewReservations(now = new Date()) {
         [now, text(row, "project_id"), text(row, "cohort_id")],
       );
     }
+    const acceptedDue = await client.query(
+      `SELECT assignment_id,project_id,cohort_id,reviewer_account_address
+       FROM tokenless_private_unpaid_review_assignments
+       WHERE status = 'accepted' AND lease_state <> 'expired' AND response_deadline <= $1
+       ORDER BY response_deadline ASC,assignment_id ASC FOR UPDATE`,
+      [now],
+    );
+    for (const value of acceptedDue.rows) {
+      const row = value as Row;
+      const expired = await client.query(
+        `UPDATE tokenless_private_unpaid_review_assignments
+         SET lease_state = 'expired', updated_at = $1
+         WHERE assignment_id = $2 AND status = 'accepted' AND lease_state <> 'expired'`,
+        [now, text(row, "assignment_id")],
+      );
+      if (expired.rowCount !== 1) continue;
+      await client.query(
+        `UPDATE tokenless_assurance_cohort_reviewers
+         SET active_reservations = active_reservations - 1, updated_at = $1
+         WHERE project_id = $2 AND cohort_id = $3 AND reviewer_account_address = $4
+           AND active_reservations > 0`,
+        [now, text(row, "project_id"), text(row, "cohort_id"), text(row, "reviewer_account_address")],
+      );
+      await client.query(
+        `UPDATE tokenless_assurance_cohorts
+         SET active_reservations = active_reservations - 1, updated_at = $1
+         WHERE project_id = $2 AND cohort_id = $3 AND active_reservations > 0`,
+        [now, text(row, "project_id"), text(row, "cohort_id")],
+      );
+    }
     await client.query("COMMIT");
-    return due.rowCount;
+    return (due.rowCount ?? 0) + (acceptedDue.rowCount ?? 0);
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;

@@ -702,17 +702,22 @@ test("private group terms are accepted once per exact policy and closed reviews 
   );
 });
 
-test("private routing releases expired reservations before selecting the next panel", async () => {
+test("private routing releases expired reserved and accepted seats before selecting the next panel", async () => {
   const setup = await fixture();
-  await requestPrivateUnpaidHumanReview({
+  const first = await requestPrivateUnpaidHumanReview({
     principal: setup.principal,
     opportunityId: setup.opportunityId,
     privateReviewId: setup.prepared.privateReviewId,
     reviewerAccountAddresses: [REVIEWER_A, REVIEWER_B],
     now: new Date("2026-07-16T09:20:00.000Z"),
   });
+  await acceptPrivateUnpaidReviewAssignment({
+    assignmentId: first.assignments[0]!.assignmentId,
+    reviewerAccountAddress: first.assignments[0]!.reviewerAccountAddress,
+    now: new Date("2026-07-16T09:25:00.000Z"),
+  });
 
-  const now = new Date("2026-07-16T09:40:00.000Z");
+  const now = new Date("2026-07-16T10:21:00.000Z");
   const requestProfile = setup.requestProfile;
   const context = {
     workspaceId: setup.workspaceId,
@@ -778,22 +783,42 @@ test("private routing releases expired reservations before selecting the next pa
     now,
   );
   assert.deepEqual(binding?.reviewerAccountAddresses, [REVIEWER_A, REVIEWER_B]);
+  const replayedBinding = await __humanReviewRequestRouterTestUtils.resolveExactPrivateBinding(
+    setup.integrationPrincipal,
+    context,
+    now,
+  );
+  assert.deepEqual(replayedBinding, binding);
   const assignments = await dbClient.execute({
-    sql: `SELECT a.status,d.opportunity_id
+    sql: `SELECT a.status,a.lease_state,d.opportunity_id
           FROM tokenless_private_unpaid_review_assignments a
           JOIN tokenless_private_unpaid_review_deliveries d ON d.delivery_id=a.delivery_id
           ORDER BY d.opportunity_id,a.assignment_id`,
   });
   assert.equal(
     assignments.rows.filter(row => row.opportunity_id === setup.opportunityId && row.status === "expired").length,
-    2,
+    1,
   );
+  const accepted = assignments.rows.filter(
+    row => row.opportunity_id === setup.opportunityId && row.status === "accepted",
+  );
+  assert.equal(accepted.length, 1);
+  assert.equal(accepted[0]?.lease_state, "expired");
   const counters = await dbClient.execute({
     sql: `SELECT active_reservations FROM tokenless_assurance_cohorts
           WHERE project_id=? AND cohort_id=?`,
     args: [setup.projectId, setup.cohortId],
   });
   assert.equal(Number(counters.rows[0]?.active_reservations), 0);
+  const reviewerCounters = await dbClient.execute({
+    sql: `SELECT active_reservations FROM tokenless_assurance_cohort_reviewers
+          WHERE project_id=? AND cohort_id=? ORDER BY reviewer_account_address`,
+    args: [setup.projectId, setup.cohortId],
+  });
+  assert.deepEqual(
+    reviewerCounters.rows.map(row => Number(row.active_reservations)),
+    [0, 0],
+  );
 });
 
 async function identity(address: string, email: string, now: Date) {
