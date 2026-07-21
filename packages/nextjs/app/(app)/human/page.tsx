@@ -54,17 +54,12 @@ export default async function HumanPage({
       ? (requestedScope as "all" | "public" | "private")
       : "all";
     return (
-      <>
-        <AppPageShell contentClassName="mb-4">
-          <HumanTabs active={tab} />
-        </AppPageShell>
-        <AnswerPageClient
-          initialInvitationOpen={invitation === "1"}
-          initialQuery={query}
-          initialScope={scope}
-          initialView={requestedView === "history" ? "history" : "active"}
-        />
-      </>
+      <AnswerPageClient
+        initialInvitationOpen={invitation === "1"}
+        initialQuery={query}
+        initialScope={scope}
+        initialView={requestedView === "history" ? "history" : "active"}
+      />
     );
   }
 

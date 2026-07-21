@@ -17,9 +17,11 @@ test("Human Discover keeps the compact legacy feed and action-rail composition",
   assert.match(card, /17\.25rem/);
   assert.match(card, /import \{ Card \}/);
   assert.match(card, /<Card/);
-  assert.match(tabs, /Discover/);
+  assert.match(tabs, /To review/);
+  assert.match(tabs, /History/);
   assert.match(tabs, /Profile/);
   assert.match(tabs, /Settings/);
+  assert.doesNotMatch(page, /aria-label="Review status"/);
 });
 
 test("Agents uses URL-backed workspace tabs", () => {

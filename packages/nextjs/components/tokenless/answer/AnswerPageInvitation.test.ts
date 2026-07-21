@@ -12,6 +12,7 @@ test("Discover opens invitation entry only from the boolean URL marker", () => {
   assert.match(answer, /aria-controls="discover-invitation-panel"/);
   assert.match(answer, /hidden=\{!invitationOpen\}/);
   assert.match(answer, /principalId \? \(/);
+  assert.match(answer, /<HumanTabs[\s\S]*endAction=/);
 });
 
 test("Discover refreshes both queues after acceptance and preserves invitation intent through sign-in", () => {

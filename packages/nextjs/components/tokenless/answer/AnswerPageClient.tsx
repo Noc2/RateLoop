@@ -16,6 +16,7 @@ import {
   type PublicAnswerTask,
   PublicQuestionCard,
 } from "~~/components/tokenless/answer/PublicQuestionCard";
+import { HumanTabs } from "~~/components/tokenless/human/HumanTabs";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { readBrowserSession, subscribeToBrowserAuthSessionChanges } from "~~/lib/auth/client";
 import { AnswerRequestError, loadAnswerQueues } from "~~/lib/tokenless/answerQueue";
@@ -155,76 +156,59 @@ export function AnswerPageClient({
     router.push(discoverHref(pathname, query, nextScope, invitationOpen, view));
   }
 
-  function changeView(nextView: ReviewView) {
-    const nextScope = nextView === "history" ? "private" : scope;
-    setView(nextView);
-    setScope(nextScope);
-    router.push(discoverHref(pathname, query, nextScope, invitationOpen, nextView));
-  }
-
   const showScopeControls = !loading && tasks.length > 0 && assignments.length > 0;
 
   return (
     <AppPageShell outerClassName="pb-8" contentClassName="space-y-4">
       <h1 className="sr-only">Review work</h1>
-      <div className="flex flex-wrap items-center gap-2">
-        {principalId ? (
-          <div className="flex items-center gap-2" role="tablist" aria-label="Review status">
-            {(["active", "history"] as const).map(value => (
-              <button
-                key={value}
-                type="button"
-                role="tab"
-                aria-selected={view === value}
-                onClick={() => changeView(value)}
-                className={`tab-control px-4 py-1.5 text-base font-medium capitalize transition-colors ${
-                  view === value ? "pill-active" : "pill-inactive"
-                }`}
-              >
-                {value === "active" ? "To review" : "History"}
-              </button>
-            ))}
-          </div>
-        ) : null}
-        {showScopeControls ? (
-          <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Review sources">
-            {(["all", "public", "private"] as const).map(value => (
-              <button
-                key={value}
-                type="button"
-                role="tab"
-                aria-selected={scope === value}
-                onClick={() => changeScope(value)}
-                className={`tab-control px-4 py-1.5 text-base font-medium capitalize transition-colors ${
-                  scope === value ? "pill-active" : "pill-inactive"
-                }`}
-              >
-                {value}
-              </button>
-            ))}
-          </div>
-        ) : null}
-        {query ? (
-          <span className="surface-card-nested ml-auto rounded-lg px-3 py-2 text-sm text-base-content/65">
-            Results for <strong className="font-medium text-base-content">&quot;{query}&quot;</strong>
-          </span>
-        ) : null}
-        {principalId ? (
-          <button
-            type="button"
-            className="btn btn-sm rateloop-secondary-action ml-auto"
-            aria-controls="discover-invitation-panel"
-            aria-expanded={invitationOpen}
-            onClick={() => setInvitationOpen(current => !current)}
-          >
-            {invitationOpen ? "Hide invitation" : "Have an invitation?"}
-          </button>
-        ) : null}
-      </div>
+      <HumanTabs
+        active={view === "history" ? "history" : "discover"}
+        endAction={
+          principalId ? (
+            <button
+              type="button"
+              className="btn btn-sm rateloop-secondary-action ml-auto"
+              aria-controls="discover-invitation-panel"
+              aria-expanded={invitationOpen}
+              onClick={() => setInvitationOpen(current => !current)}
+            >
+              {invitationOpen ? "Hide invitation" : "Have an invitation?"}
+            </button>
+          ) : null
+        }
+      />
 
       {principalId ? (
         <div id="discover-invitation-panel" hidden={!invitationOpen}>
           <InvitationRouterPanel onAccepted={() => void load()} />
+        </div>
+      ) : null}
+
+      {showScopeControls || query ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {showScopeControls ? (
+            <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Review sources">
+              {(["all", "public", "private"] as const).map(value => (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  aria-selected={scope === value}
+                  onClick={() => changeScope(value)}
+                  className={`tab-control px-4 py-1.5 text-base font-medium capitalize transition-colors ${
+                    scope === value ? "pill-active" : "pill-inactive"
+                  }`}
+                >
+                  {value}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {query ? (
+            <span className="surface-card-nested ml-auto rounded-lg px-3 py-2 text-sm text-base-content/65">
+              Results for <strong className="font-medium text-base-content">&quot;{query}&quot;</strong>
+            </span>
+          ) : null}
         </div>
       ) : null}
 
