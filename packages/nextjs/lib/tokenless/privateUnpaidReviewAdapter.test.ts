@@ -616,6 +616,17 @@ test("accepted direct private access is revoked when the workspace reviewer gran
     args: [assignmentId],
   });
   assert.equal(assignment.rows[0]?.lease_state, "expired");
+  const releasedCapacity = await dbClient.execute({
+    sql: `SELECT c.active_reservations AS cohort_reservations,
+                 cr.active_reservations AS reviewer_reservations
+          FROM tokenless_assurance_cohorts c
+          JOIN tokenless_assurance_cohort_reviewers cr
+            ON cr.project_id=c.project_id AND cr.cohort_id=c.cohort_id
+          WHERE c.project_id=? AND c.cohort_id=? AND cr.reviewer_account_address=?`,
+    args: [setup.projectId, setup.cohortId, REVIEWER_A],
+  });
+  assert.equal(Number(releasedCapacity.rows[0]?.cohort_reservations), 1);
+  assert.equal(Number(releasedCapacity.rows[0]?.reviewer_reservations), 0);
   const leases = await dbClient.execute({
     sql: `SELECT COUNT(*) AS count FROM tokenless_assurance_artifact_leases
           WHERE assignment_id=? AND revoked_at IS NOT NULL`,

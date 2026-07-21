@@ -801,9 +801,25 @@ async function endWorkspaceReviewer(input: {
        SET lease_state='expired',updated_at=$1
        WHERE workspace_id=$2 AND reviewer_account_address=$3
          AND status='accepted' AND lease_state<>'expired'
-       RETURNING assignment_id`,
+       RETURNING assignment_id,project_id,cohort_id,reviewer_account_address`,
       [input.now, input.workspaceId, principalAddress],
     );
+    for (const value of expiredAcceptedDirect.rows) {
+      const row = value as Row;
+      await client.query(
+        `UPDATE tokenless_assurance_cohorts
+         SET active_reservations = active_reservations - 1, updated_at = $1
+         WHERE project_id = $2 AND cohort_id = $3 AND active_reservations > 0`,
+        [input.now, text(row, "project_id"), text(row, "cohort_id")],
+      );
+      await client.query(
+        `UPDATE tokenless_assurance_cohort_reviewers
+         SET active_reservations = active_reservations - 1, updated_at = $1
+         WHERE project_id = $2 AND cohort_id = $3 AND reviewer_account_address = $4
+           AND active_reservations > 0`,
+        [input.now, text(row, "project_id"), text(row, "cohort_id"), text(row, "reviewer_account_address")],
+      );
+    }
     const released = await client.query(
       `UPDATE tokenless_assurance_assignments
        SET status='released',lease_state='expired',updated_at=$1

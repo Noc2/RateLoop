@@ -89,6 +89,11 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
       return null;
     }
   }
+  if (file === "0134_expired_private_review_capacity.sql") {
+    // This is a one-time production data repair. In-memory databases start
+    // empty, and pg-mem does not parse PostgreSQL's CREATE TABLE AS backfill.
+    return null;
+  }
   if (
     file === "0123_evm_kms_signing_ledger_integrity.sql" &&
     /^ALTER TABLE "tokenless_evm_kms_signing_ledger"\s+ADD CONSTRAINT/u.test(statement)
