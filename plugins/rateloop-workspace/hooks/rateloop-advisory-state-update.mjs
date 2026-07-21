@@ -551,8 +551,11 @@ async function authorizeTransition(input, envelope, existing, pluginData) {
         pluginData,
       );
       if (
-        evidence.payload.terminalStatus !== "completed" &&
-        evidence.payload.terminalStatus !== "skipped"
+        evidence.payload.terminalStatus !== "skipped" &&
+        !(
+          evidence.payload.terminalStatus === "completed" &&
+          evidence.payload.releaseDisposition === "authorized_positive"
+        )
       ) {
         throw new Error("prior_opportunity_does_not_release");
       }

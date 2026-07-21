@@ -53,6 +53,10 @@ function serverState(): HumanReviewGateServerState {
     outputCommitment: HASH_OUTPUT,
     scopeCommitment: HASH_SCOPE,
     inconclusiveReleaseAllowed: false,
+    resultSemantics: "assurance",
+    resultOutcome: "positive",
+    resultCommitment: `sha256:${"7".repeat(64)}`,
+    releaseDisposition: "authorized_positive",
   };
 }
 

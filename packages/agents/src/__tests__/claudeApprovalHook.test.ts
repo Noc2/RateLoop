@@ -73,7 +73,15 @@ async function installState(data: string, lifecycle = "approval_required") {
   );
 }
 
-async function installSignedTerminalEvidence(data: string, lifecycle: string) {
+async function installSignedTerminalEvidence(
+  data: string,
+  lifecycle: string,
+  result: {
+    semantics?: "assurance" | "feedback";
+    outcome?: string;
+    authorized?: boolean;
+  } = {},
+) {
   await installState(data, lifecycle);
   const path = join(
     data,
@@ -88,17 +96,28 @@ async function installSignedTerminalEvidence(data: string, lifecycle: string) {
   const evidence = {
     schemaVersion: skipped
       ? "rateloop.human-review-skip-release-evidence.v1"
-      : "rateloop.human-review-terminal-evidence.v1",
+      : "rateloop.human-review-terminal-evidence.v2",
     keyId: "claude-test-key",
     payload: {
       schemaVersion: skipped
         ? "rateloop.human-review-skip-release-payload.v1"
-        : "rateloop.human-review-terminal-payload.v1",
+        : "rateloop.human-review-terminal-payload.v2",
       workspaceId: state.workspaceId,
       integrationId: state.integrationId,
       opportunityId: state.opportunityId,
       ...(skipped ? { decision: "skipped" } : {}),
       terminalStatus: lifecycle,
+      ...(!skipped
+        ? {
+            releaseDisposition:
+              result.authorized === false
+                ? "not_authorized"
+                : "authorized_positive",
+            resultSemantics: result.semantics ?? "assurance",
+            resultOutcome: result.outcome ?? "positive",
+            resultCommitment: `sha256:${"e".repeat(64)}`,
+          }
+        : {}),
       outputCommitment: state.outputCommitment,
       policyBindingHash: state.policyBindingHash,
       ...(skipped ? { scopeCommitment } : {}),
@@ -220,7 +239,36 @@ describe("RateLoop Claude PreToolUse adapter", () => {
     "denies a tool for a signed %s terminal receipt",
     async (lifecycle) => {
       const data = await pluginData();
-      await installSignedTerminalEvidence(data, lifecycle);
+      await installSignedTerminalEvidence(data, lifecycle, {
+        authorized: false,
+        outcome:
+          lifecycle === "inconclusive"
+            ? "inconclusive"
+            : lifecycle === "failed_terminal"
+              ? "failed"
+              : "cancelled",
+      });
+      expect(run(data)).toMatchObject({
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "deny",
+        },
+      });
+    },
+  );
+
+  it.each([
+    ["negative assurance", "assurance", "negative"],
+    ["positive feedback", "feedback", "positive"],
+  ] as const)(
+    "denies a tool for a signed completed %s result",
+    async (_label, semantics, outcome) => {
+      const data = await pluginData();
+      await installSignedTerminalEvidence(data, "completed", {
+        semantics,
+        outcome,
+        authorized: false,
+      });
       expect(run(data)).toMatchObject({
         hookSpecificOutput: {
           hookEventName: "PreToolUse",

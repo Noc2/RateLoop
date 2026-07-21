@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://rateloop-tokenless.vercel.app/schemas/rateloop-host-output-release-evidence.v1.json",
-  "title": "RateLoop signed host output release evidence v1",
+  "$id": "https://rateloop-tokenless.vercel.app/schemas/rateloop-host-output-release-evidence.v2.json",
+  "title": "RateLoop signed host output release evidence v2",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "keyId", "payload", "signature"],
   "properties": {
-    "schemaVersion": { "const": "rateloop.host-output-release-evidence.v1" },
+    "schemaVersion": { "const": "rateloop.host-output-release-evidence.v2" },
     "keyId": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$" },
     "payload": {
       "type": "object",
@@ -19,6 +19,10 @@
         "opportunityId",
         "decision",
         "terminalStatus",
+        "releaseDisposition",
+        "resultSemantics",
+        "resultOutcome",
+        "resultCommitment",
         "outputCommitment",
         "policyBindingHash",
         "scopeCommitment",
@@ -27,13 +31,24 @@
         "expiresAt"
       ],
       "properties": {
-        "schemaVersion": { "const": "rateloop.host-output-release-payload.v1" },
+        "schemaVersion": { "const": "rateloop.host-output-release-payload.v2" },
         "releaseId": { "$ref": "#/$defs/opaqueId" },
         "workspaceId": { "$ref": "#/$defs/opaqueId" },
         "integrationId": { "$ref": "#/$defs/opaqueId" },
         "opportunityId": { "$ref": "#/$defs/opaqueId" },
         "decision": { "enum": ["satisfied", "skipped"] },
-        "terminalStatus": { "enum": ["completed", "inconclusive", "skipped"] },
+        "terminalStatus": { "enum": ["completed", "skipped"] },
+        "releaseDisposition": {
+          "enum": ["authorized_positive", "selection_skipped"]
+        },
+        "resultSemantics": { "enum": ["assurance", "feedback"] },
+        "resultOutcome": {
+          "type": ["string", "null"],
+          "enum": ["positive", null]
+        },
+        "resultCommitment": {
+          "anyOf": [{ "$ref": "#/$defs/commitment" }, { "type": "null" }]
+        },
         "outputCommitment": { "$ref": "#/$defs/commitment" },
         "policyBindingHash": { "$ref": "#/$defs/commitment" },
         "scopeCommitment": { "$ref": "#/$defs/commitment" },
@@ -47,7 +62,14 @@
             "properties": { "decision": { "const": "skipped" } },
             "required": ["decision"]
           },
-          "then": { "properties": { "terminalStatus": { "const": "skipped" } } }
+          "then": {
+            "properties": {
+              "terminalStatus": { "const": "skipped" },
+              "releaseDisposition": { "const": "selection_skipped" },
+              "resultOutcome": { "type": "null" },
+              "resultCommitment": { "type": "null" }
+            }
+          }
         },
         {
           "if": {
@@ -56,7 +78,11 @@
           },
           "then": {
             "properties": {
-              "terminalStatus": { "enum": ["completed", "inconclusive"] }
+              "terminalStatus": { "const": "completed" },
+              "releaseDisposition": { "const": "authorized_positive" },
+              "resultSemantics": { "const": "assurance" },
+              "resultOutcome": { "const": "positive" },
+              "resultCommitment": { "$ref": "#/$defs/commitment" }
             }
           }
         }

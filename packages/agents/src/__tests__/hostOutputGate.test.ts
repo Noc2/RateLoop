@@ -20,6 +20,7 @@ import {
 const NOW = new Date("2026-07-16T12:00:00.000Z");
 const HASH_A = `sha256:${"a".repeat(64)}`;
 const HASH_B = `sha256:${"b".repeat(64)}`;
+const HASH_RESULT = `sha256:${"c".repeat(64)}`;
 const candidate = Buffer.from(
   "candidate output held behind the host boundary",
   "utf8",
@@ -58,6 +59,11 @@ function fixture(decision: "satisfied" | "skipped" = "satisfied") {
       opportunityId: request.opportunityId,
       decision,
       terminalStatus: decision === "satisfied" ? "completed" : "skipped",
+      releaseDisposition:
+        decision === "satisfied" ? "authorized_positive" : "selection_skipped",
+      resultSemantics: "assurance",
+      resultOutcome: decision === "satisfied" ? "positive" : null,
+      resultCommitment: decision === "satisfied" ? HASH_RESULT : null,
       outputCommitment: request.outputCommitment,
       policyBindingHash: request.policyBindingHash,
       scopeCommitment: request.scopeCommitment,
@@ -106,6 +112,13 @@ describe("host-owned RateLoop output gate", () => {
       );
       expect(released.receipt).toMatchObject({
         decision,
+        releaseDisposition:
+          decision === "satisfied"
+            ? "authorized_positive"
+            : "selection_skipped",
+        resultSemantics: "assurance",
+        resultOutcome: decision === "satisfied" ? "positive" : null,
+        resultCommitment: decision === "satisfied" ? HASH_RESULT : null,
         outputCommitment: sha256Bytes(candidate),
         hostBindingCommitment: hostBindingCommitment(values.request),
       });
@@ -225,8 +238,33 @@ describe("host-owned RateLoop output gate", () => {
         candidateBytes: candidate,
         now: new Date(NOW.getTime() + 2_000),
       }),
-    ).toThrow("release_terminal_status_invalid");
+    ).toThrow("release_disposition_invalid");
   });
+
+  it.each([
+    ["negative assurance", "assurance", "negative"],
+    ["positive feedback", "feedback", "positive"],
+  ] as const)(
+    "refuses a signed completed %s result",
+    (_label, resultSemantics, resultOutcome) => {
+      const values = fixture();
+      values.evidence.payload.releaseDisposition = "not_authorized";
+      values.evidence.payload.resultSemantics = resultSemantics;
+      values.evidence.payload.resultOutcome = resultOutcome;
+      values.evidence.signature = sign(
+        null,
+        serverReleaseEvidencePayload(values.evidence),
+        values.privateKey,
+      ).toString("base64url");
+      expect(() =>
+        verifyHostOutputRelease({
+          ...values,
+          candidateBytes: candidate,
+          now: new Date(NOW.getTime() + 2_000),
+        }),
+      ).toThrow("release_disposition_invalid");
+    },
+  );
 
   it.each([
     [

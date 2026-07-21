@@ -1,3 +1,4 @@
+import { parseHumanReviewResultEnvelope } from "@rateloop/sdk";
 import { createHash } from "node:crypto";
 import "server-only";
 import { dbPool } from "~~/lib/db";
@@ -179,9 +180,71 @@ function resultReference(row: Row, state: LifecycleState) {
   });
 }
 
+function terminalResult(row: Row, state: LifecycleState) {
+  const storedResultSemantics = text(row, "frozen_result_semantics");
+  if (storedResultSemantics !== "assurance" && storedResultSemantics !== "feedback") {
+    throw new Error("Stored human-review result semantics are invalid.");
+  }
+  const resultSemantics: "assurance" | "feedback" = storedResultSemantics;
+  const privateEnvelopeJson = text(row, "private_result_envelope_json");
+  const privateCommitment = text(row, "private_result_commitment");
+  const observedCommitment = text(row, "observed_result_commitment");
+  const observedOutcome = text(row, "observed_outcome");
+  const observedSemantics = text(row, "observed_result_semantics");
+  let resultCommitment: `sha256:${string}` | null = null;
+  let resultOutcome: "positive" | "negative" | "inconclusive" | "failed" | "cancelled" | null = null;
+  if (privateEnvelopeJson !== null || privateCommitment !== null) {
+    if (
+      privateEnvelopeJson === null ||
+      privateCommitment === null ||
+      !/^sha256:[0-9a-f]{64}$/u.test(privateCommitment)
+    ) {
+      throw new Error("Stored private human-review result is incomplete.");
+    }
+    const envelope = parseHumanReviewResultEnvelope(JSON.parse(privateEnvelopeJson) as unknown);
+    if (
+      envelope.workspaceId !== text(row, "workspace_id") ||
+      envelope.integrationId !== text(row, "integration_id") ||
+      envelope.opportunityId !== text(row, "opportunity_id") ||
+      envelope.lifecycle.state !== state ||
+      envelope.commitments.result !== privateCommitment
+    ) {
+      throw new Error("Stored private human-review result does not match its frozen opportunity.");
+    }
+    resultCommitment = privateCommitment as `sha256:${string}`;
+    resultOutcome = envelope.outcome;
+  }
+  if (observedCommitment !== null || observedOutcome !== null || observedSemantics !== null) {
+    if (
+      observedCommitment === null ||
+      !/^sha256:[0-9a-f]{64}$/u.test(observedCommitment) ||
+      !["positive", "negative", "inconclusive", "failed", "cancelled"].includes(observedOutcome ?? "") ||
+      observedSemantics !== resultSemantics
+    ) {
+      throw new Error("Stored observed human-review result is invalid.");
+    }
+    if (
+      (resultCommitment !== null && resultCommitment !== observedCommitment) ||
+      (resultOutcome !== null && resultOutcome !== observedOutcome)
+    ) {
+      throw new Error("Stored human-review result projections disagree.");
+    }
+    resultCommitment = observedCommitment as `sha256:${string}`;
+    resultOutcome = observedOutcome as typeof resultOutcome;
+  }
+  const releaseDisposition =
+    state === "completed" &&
+    resultSemantics === "assurance" &&
+    resultOutcome === "positive" &&
+    resultCommitment !== null
+      ? ("authorized_positive" as const)
+      : ("not_authorized" as const);
+  return { resultSemantics, resultOutcome, resultCommitment, releaseDisposition };
+}
+
 async function loadAuthoritativeState(principal: IntegrationPrincipal, opportunityId: string) {
-  const result = await dbPool.query(
-    `SELECT o.workspace_id,o.opportunity_id,o.scope_id,o.agent_id,o.agent_version_id,
+  const queryResult = await dbPool.query(
+    `SELECT i.integration_id,o.workspace_id,o.opportunity_id,o.scope_id,o.agent_id,o.agent_version_id,
             o.policy_id,o.policy_version,o.decision,o.suggestion_commitment,o.operation_key,
             o.created_at AS opportunity_created_at,
             l.state AS lifecycle_state,l.state_revision,l.reason_codes_json,l.state_entered_at,l.terminal_at,
@@ -190,12 +253,17 @@ async function loadAuthoritativeState(principal: IntegrationPrincipal, opportuni
             p.publishing_policy_id AS review_publishing_policy_id,
             b.binding_id,b.version AS binding_version,b.canonical_hash AS binding_hash,b.authority,
             rp.profile_id,rp.version AS profile_version,rp.profile_hash,rp.audience AS profile_audience,
-            rp.compensation_mode,rp.response_window_seconds,
+            rp.compensation_mode,rp.response_window_seconds,rp.result_semantics AS frozen_result_semantics,
             private_delivery.delivery_id AS private_delivery_id,
             private_delivery.response_deadline AS private_response_deadline,
+            private_delivery.result_envelope_json AS private_result_envelope_json,
+            private_delivery.result_commitment AS private_result_commitment,
             chain_execution.round_terms_json,
             approval.approval_id,approval.expires_at AS approval_expires_at,
-            observation.result_envelope_commitment
+            observation.result_envelope_commitment,
+            observation.result_commitment AS observed_result_commitment,
+            observation.outcome AS observed_outcome,
+            observation.result_semantics AS observed_result_semantics
      FROM tokenless_agent_integrations i
      JOIN tokenless_agent_review_opportunities o
        ON o.workspace_id=i.workspace_id AND o.agent_id=i.agent_id AND o.agent_version_id=i.agent_version_id
@@ -226,7 +294,7 @@ async function loadAuthoritativeState(principal: IntegrationPrincipal, opportuni
      WHERE i.integration_id=$1 AND i.status='active' AND o.opportunity_id=$2`,
     [principal.integration.integrationId, opportunityId],
   );
-  const row = result.rows[0] as Row | undefined;
+  const row = queryResult.rows[0] as Row | undefined;
   if (!row) {
     throw new TokenlessServiceError("Review opportunity not found.", 404, "review_opportunity_not_found");
   }
@@ -251,6 +319,7 @@ async function loadAuthoritativeState(principal: IntegrationPrincipal, opportuni
     binding: { id: text(row, "binding_id"), version: integer(row, "binding_version"), hash: bindingHash },
     requestProfile: { id: text(row, "profile_id"), version: integer(row, "profile_version"), hash: profileHash },
   });
+  const terminal = terminalResult(row, state);
   const serverState: HumanReviewGateServerState = {
     schemaVersion: "rateloop.human-review-gate-server-state.v1",
     workspaceId: text(row, "workspace_id")!,
@@ -273,6 +342,7 @@ async function loadAuthoritativeState(principal: IntegrationPrincipal, opportuni
     outputCommitment,
     scopeCommitment,
     inconclusiveReleaseAllowed: false,
+    ...terminal,
   };
   return { row, serverState, state, decision, scopeCommitment };
 }

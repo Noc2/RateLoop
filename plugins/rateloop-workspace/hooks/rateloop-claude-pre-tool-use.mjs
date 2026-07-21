@@ -147,10 +147,14 @@ async function main() {
         state,
         pluginData,
       );
-      if (evidence.payload.terminalStatus === "completed") return;
+      if (
+        evidence.payload.terminalStatus === "completed" &&
+        evidence.payload.releaseDisposition === "authorized_positive"
+      )
+        return;
       emitDecision(
         "deny",
-        "RateLoop signed a terminal lifecycle that does not authorize release. Inconclusive review requires separately verified release policy; failed and cancelled review never authorize this tool.",
+        "RateLoop signed a terminal result that does not explicitly authorize the candidate. Negative, feedback, inconclusive, failed, and cancelled results never authorize this tool.",
       );
       return;
     } catch {

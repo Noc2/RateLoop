@@ -37,6 +37,7 @@ const HOST_CANDIDATE = Buffer.from("candidate output held for exact review-gate 
 const HASH_OUTPUT = `sha256:${createHash("sha256").update(HOST_CANDIDATE).digest("hex")}` as const;
 const HASH_POLICY = `sha256:${"d".repeat(64)}` as const;
 const HASH_SCOPE = `sha256:${"e".repeat(64)}` as const;
+const HASH_RESULT = `sha256:${"f".repeat(64)}` as const;
 
 function pendingBinding(): HumanReviewGateBinding {
   return {
@@ -79,6 +80,10 @@ function serverState(overrides: Partial<HumanReviewGateServerState> = {}): Human
     outputCommitment: HASH_OUTPUT,
     scopeCommitment: HASH_SCOPE,
     inconclusiveReleaseAllowed: false,
+    resultSemantics: "assurance",
+    resultOutcome: "positive",
+    resultCommitment: HASH_RESULT,
+    releaseDisposition: "authorized_positive",
     ...overrides,
   };
 }
@@ -450,9 +455,13 @@ test("issues advisory terminal evidence accepted by the actual commit43 stop-gat
       opportunityId: state.opportunityId,
     },
   ]);
-  assert.equal(evidence.schemaVersion, "rateloop.human-review-terminal-evidence.v1");
-  assert.equal(evidence.payload.schemaVersion, "rateloop.human-review-terminal-payload.v1");
+  assert.equal(evidence.schemaVersion, "rateloop.human-review-terminal-evidence.v2");
+  assert.equal(evidence.payload.schemaVersion, "rateloop.human-review-terminal-payload.v2");
   assert.equal(evidence.payload.terminalStatus, "completed");
+  assert.equal(evidence.payload.releaseDisposition, "authorized_positive");
+  assert.equal(evidence.payload.resultSemantics, "assurance");
+  assert.equal(evidence.payload.resultOutcome, "positive");
+  assert.equal(evidence.payload.resultCommitment, HASH_RESULT);
 });
 
 test("issues host release evidence accepted by the actual commit44 host verifier", async () => {
@@ -492,10 +501,12 @@ test("issues host release evidence accepted by the actual commit44 host verifier
     now: crossNow,
   });
 
-  assert.equal(evidence.schemaVersion, "rateloop.host-output-release-evidence.v1");
-  assert.equal(evidence.payload.schemaVersion, "rateloop.host-output-release-payload.v1");
+  assert.equal(evidence.schemaVersion, "rateloop.host-output-release-evidence.v2");
+  assert.equal(evidence.payload.schemaVersion, "rateloop.host-output-release-payload.v2");
   assert.equal(evidence.payload.hostBindingCommitment, binding);
   assert.equal(evidence.payload.outputCommitment, HASH_OUTPUT);
+  assert.equal(evidence.payload.releaseDisposition, "authorized_positive");
+  assert.equal(evidence.payload.resultCommitment, HASH_RESULT);
   assert.equal(verified.hostBindingCommitment, binding);
 });
 
@@ -545,12 +556,15 @@ test("host issuer independently enforces exact output, policy, scope, and host b
   );
 });
 
-test("host issuer authorizes only skipped or policy-permitted terminal satisfied states", async () => {
+test("host issuer authorizes only skipped or explicitly positive assurance results", async () => {
   const crossNow = new Date();
   configure({ now: crossNow });
   const inconclusive = serverState({
     lifecycle: { state: "inconclusive", revision: 6 },
     terminalDisposition: "inconclusive",
+    resultOutcome: "inconclusive",
+    resultCommitment: `sha256:${"8".repeat(64)}`,
+    releaseDisposition: "not_authorized",
   });
   const satisfiedRequest = buildHostReleaseRequest(
     {
@@ -581,18 +595,25 @@ test("host issuer authorizes only skipped or policy-permitted terminal satisfied
     "review_gate_server_state_mismatch",
     /authorize/u,
   );
-  const allowed = await issueHumanReviewHostReleaseEvidence({
-    resolver: resolverFor(serverState({ ...inconclusive, inconclusiveReleaseAllowed: true })).resolver,
-    request: satisfiedRequest,
-    hostBindingCommitment: satisfiedBinding,
-  });
-  assert.equal(allowed.payload.terminalStatus, "inconclusive");
+  await assertServiceErrorAsync(
+    () =>
+      issueHumanReviewHostReleaseEvidence({
+        resolver: resolverFor(serverState({ ...inconclusive, inconclusiveReleaseAllowed: true })).resolver,
+        request: satisfiedRequest,
+        hostBindingCommitment: satisfiedBinding,
+      }),
+    "review_gate_server_state_mismatch",
+    /authorize/u,
+  );
 
   const skipped = serverState({
     lifecycle: { state: "skipped", revision: 1 },
     references: { operationKey: null, requestReference: null, resultReference: null },
     reviewDecision: "skip",
     terminalDisposition: "skipped",
+    resultOutcome: null,
+    resultCommitment: null,
+    releaseDisposition: "not_authorized",
   });
   const skippedRequest = buildHostReleaseRequest(
     {
@@ -618,12 +639,56 @@ test("host issuer authorizes only skipped or policy-permitted terminal satisfied
     hostBindingCommitment: hostBindingCommitment(skippedRequest),
   });
   assert.equal(skippedEvidence.payload.terminalStatus, "skipped");
+  assert.equal(skippedEvidence.payload.releaseDisposition, "selection_skipped");
+  assert.equal(skippedEvidence.payload.resultOutcome, null);
+  assert.equal(skippedEvidence.payload.resultCommitment, null);
+});
+
+test("completed negative assurance and positive feedback results never authorize host release", async () => {
+  const crossNow = new Date();
+  configure({ now: crossNow });
+  for (const state of [
+    serverState({ resultOutcome: "negative", releaseDisposition: "not_authorized" }),
+    serverState({ resultSemantics: "feedback", releaseDisposition: "not_authorized" }),
+  ]) {
+    const request = buildHostReleaseRequest(
+      {
+        releaseId: `release_denied_${state.resultSemantics}_${state.resultOutcome}`,
+        hostId: "host_gate_cross_01",
+        sessionId: "session_01",
+        turnId: "turn_01",
+        gateId: "gate_gate_cross_01",
+        workspaceId: state.workspaceId,
+        integrationId: state.integrationId,
+        opportunityId: state.opportunityId,
+        decision: "satisfied",
+        policyBindingHash: state.humanReviewBinding.hash,
+        scopeCommitment: state.scopeCommitment,
+        nonce: `deny${state.resultSemantics.padEnd(28, "x")}`,
+      },
+      HOST_CANDIDATE,
+      crossNow,
+    );
+    await assertServiceErrorAsync(
+      () =>
+        issueHumanReviewHostReleaseEvidence({
+          resolver: resolverFor(state).resolver,
+          request,
+          hostBindingCommitment: hostBindingCommitment(request),
+        }),
+      "review_gate_server_state_mismatch",
+      /authorize/u,
+    );
+  }
 });
 
 test("consumer issuers reject non-terminal advisory state and malformed resolver state", async () => {
   const pending = serverState({
     ...pendingBinding(),
     schemaVersion: "rateloop.human-review-gate-server-state.v1",
+    resultOutcome: null,
+    resultCommitment: null,
+    releaseDisposition: "not_authorized",
   });
   await assertServiceErrorAsync(
     () =>

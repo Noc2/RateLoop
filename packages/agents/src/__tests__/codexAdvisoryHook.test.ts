@@ -254,12 +254,8 @@ describe("RateLoop advisory PostToolUse integration", () => {
       ),
     ) as Record<string, any>;
 
-    expect(config.hooks.PostToolUse[0].matcher).toContain(
-      "connect_workspace",
-    );
-    expect(config.hooks.PostToolUse[0].matcher).toContain(
-      "verify_connection",
-    );
+    expect(config.hooks.PostToolUse[0].matcher).toContain("connect_workspace");
+    expect(config.hooks.PostToolUse[0].matcher).toContain("verify_connection");
     expect(config.hooks.PostToolUse[0].matcher).toContain(
       "evaluate_review_requirement",
     );
@@ -587,14 +583,18 @@ describe("RateLoop advisory PostToolUse integration", () => {
 
     const { keyId, privateKey } = await installKeyring(data);
     const evidence = {
-      schemaVersion: "rateloop.human-review-terminal-evidence.v1",
+      schemaVersion: "rateloop.human-review-terminal-evidence.v2",
       keyId,
       payload: {
-        schemaVersion: "rateloop.human-review-terminal-payload.v1",
+        schemaVersion: "rateloop.human-review-terminal-payload.v2",
         workspaceId: result.tool_response.structuredContent.workspaceId,
         integrationId: result.tool_response.structuredContent.integrationId,
         opportunityId: result.tool_response.structuredContent.opportunityId,
         terminalStatus: "completed",
+        releaseDisposition: "authorized_positive",
+        resultSemantics: "assurance",
+        resultOutcome: "positive",
+        resultCommitment: `sha256:${"d".repeat(64)}`,
         outputCommitment:
           result.tool_response.structuredContent.frozen.evaluationCommitment,
         policyBindingHash:
@@ -637,14 +637,23 @@ describe("RateLoop advisory PostToolUse integration", () => {
       result.turn_id = "turn_advisory_02";
       const { keyId, privateKey } = await installKeyring(data);
       const evidence = {
-        schemaVersion: "rateloop.human-review-terminal-evidence.v1",
+        schemaVersion: "rateloop.human-review-terminal-evidence.v2",
         keyId,
         payload: {
-          schemaVersion: "rateloop.human-review-terminal-payload.v1",
+          schemaVersion: "rateloop.human-review-terminal-payload.v2",
           workspaceId: result.tool_response.structuredContent.workspaceId,
           integrationId: result.tool_response.structuredContent.integrationId,
           opportunityId: result.tool_response.structuredContent.opportunityId,
           terminalStatus,
+          releaseDisposition: "not_authorized",
+          resultSemantics: "assurance",
+          resultOutcome:
+            terminalStatus === "inconclusive"
+              ? "inconclusive"
+              : terminalStatus === "failed_terminal"
+                ? "failed"
+                : "cancelled",
+          resultCommitment: `sha256:${"e".repeat(64)}`,
           outputCommitment:
             result.tool_response.structuredContent.frozen.evaluationCommitment,
           policyBindingHash:
@@ -667,7 +676,72 @@ describe("RateLoop advisory PostToolUse integration", () => {
       expect(runScript(stopPath, data, stopInput("turn_advisory_02"))).toEqual(
         expect.objectContaining({
           continue: false,
-          stopReason: `RateLoop advisory review gate: terminal_${terminalStatus}_does_not_release`,
+          stopReason:
+            "RateLoop advisory review gate: terminal_not_authorized_does_not_release",
+        }),
+      );
+    },
+  );
+
+  it.each([
+    ["negative assurance", "assurance", "negative"],
+    ["positive feedback", "feedback", "positive"],
+  ])(
+    "does not release a signed completed %s result",
+    async (_label, resultSemantics, resultOutcome) => {
+      const data = await pluginData();
+      const pending = lifecycle(await fixture(), "pending", 1);
+      pending.tool_response.structuredContent.continuation = {
+        cursor: "cursor_fixture_01",
+        retryAfterMs: 1_000,
+        expiresAt: "2099-01-01T00:00:00.000Z",
+      };
+      expect(runScript(updaterPath, data, pending)).toBeNull();
+
+      const result = asTool(
+        lifecycle(await fixture(), "completed", 2, true),
+        "get_review_result",
+        `tool_result_completed_${resultSemantics}`,
+      );
+      result.turn_id = "turn_advisory_02";
+      const { keyId, privateKey } = await installKeyring(data);
+      const evidence = {
+        schemaVersion: "rateloop.human-review-terminal-evidence.v2",
+        keyId,
+        payload: {
+          schemaVersion: "rateloop.human-review-terminal-payload.v2",
+          workspaceId: result.tool_response.structuredContent.workspaceId,
+          integrationId: result.tool_response.structuredContent.integrationId,
+          opportunityId: result.tool_response.structuredContent.opportunityId,
+          terminalStatus: "completed",
+          releaseDisposition: "not_authorized",
+          resultSemantics,
+          resultOutcome,
+          resultCommitment: `sha256:${"f".repeat(64)}`,
+          outputCommitment:
+            result.tool_response.structuredContent.frozen.evaluationCommitment,
+          policyBindingHash:
+            result.tool_response.structuredContent.frozen.binding.hash,
+          issuedAt: new Date().toISOString(),
+        },
+        signature: "",
+      };
+      const stopModule = (await import(pathToFileURL(stopPath).href)) as {
+        advisoryTerminalPayload(value: Record<string, any>): Buffer;
+      };
+      evidence.signature = sign(
+        null,
+        stopModule.advisoryTerminalPayload(evidence),
+        privateKey,
+      ).toString("base64url");
+      result.tool_response.structuredContent.terminalEvidence = evidence;
+
+      expect(runScript(updaterPath, data, result)).toBeNull();
+      expect(runScript(stopPath, data, stopInput("turn_advisory_02"))).toEqual(
+        expect.objectContaining({
+          continue: false,
+          stopReason:
+            "RateLoop advisory review gate: terminal_not_authorized_does_not_release",
         }),
       );
     },

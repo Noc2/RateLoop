@@ -7,8 +7,8 @@ import { pathToFileURL } from "node:url";
 
 const STATE_SCHEMA = "rateloop.advisory-stop-gate.v2";
 const CONNECTION_SCHEMA = "rateloop.advisory-connection-state.v1";
-const EVIDENCE_SCHEMA = "rateloop.human-review-terminal-evidence.v1";
-const PAYLOAD_SCHEMA = "rateloop.human-review-terminal-payload.v1";
+const EVIDENCE_SCHEMA = "rateloop.human-review-terminal-evidence.v2";
+const PAYLOAD_SCHEMA = "rateloop.human-review-terminal-payload.v2";
 const SKIP_EVIDENCE_SCHEMA = "rateloop.human-review-skip-release-evidence.v1";
 const SKIP_PAYLOAD_SCHEMA = "rateloop.human-review-skip-release-payload.v1";
 const KEYRING_SCHEMA = "rateloop.stop-gate-trusted-keys.v1";
@@ -150,11 +150,7 @@ export function validateAdvisoryConnectionState(value) {
     if (!OPAQUE_IDENTIFIER.test(value[field]))
       throw new Error("connection_state_identifier_invalid");
   }
-  for (const field of [
-    "setupSessionId",
-    "setupTurnId",
-    "lastToolUseId",
-  ]) {
+  for (const field of ["setupSessionId", "setupTurnId", "lastToolUseId"]) {
     if (!LOCAL_IDENTIFIER.test(value[field]))
       throw new Error("connection_state_local_identifier_invalid");
   }
@@ -263,6 +259,10 @@ export function advisoryTerminalPayload(evidence) {
       integrationId: payload.integrationId,
       opportunityId: payload.opportunityId,
       terminalStatus: payload.terminalStatus,
+      releaseDisposition: payload.releaseDisposition,
+      resultSemantics: payload.resultSemantics,
+      resultOutcome: payload.resultOutcome,
+      resultCommitment: payload.resultCommitment,
       outputCommitment: payload.outputCommitment,
       policyBindingHash: payload.policyBindingHash,
       issuedAt: payload.issuedAt,
@@ -327,6 +327,10 @@ function validateTerminalEvidence(evidence, state) {
     "integrationId",
     "opportunityId",
     "terminalStatus",
+    "releaseDisposition",
+    "resultSemantics",
+    "resultOutcome",
+    "resultCommitment",
     "outputCommitment",
     "policyBindingHash",
     "issuedAt",
@@ -346,6 +350,33 @@ function validateTerminalEvidence(evidence, state) {
     payload.policyBindingHash !== state.policyBindingHash
   ) {
     throw new Error("terminal_binding_mismatch");
+  }
+  const resultShape =
+    (payload.resultOutcome === null && payload.resultCommitment === null) ||
+    (new Set([
+      "positive",
+      "negative",
+      "inconclusive",
+      "failed",
+      "cancelled",
+    ]).has(payload.resultOutcome) &&
+      SHA256.test(payload.resultCommitment));
+  const authorizedPositive =
+    payload.terminalStatus === "completed" &&
+    payload.releaseDisposition === "authorized_positive" &&
+    payload.resultSemantics === "assurance" &&
+    payload.resultOutcome === "positive" &&
+    SHA256.test(payload.resultCommitment);
+  if (
+    !new Set(["authorized_positive", "not_authorized"]).has(
+      payload.releaseDisposition,
+    ) ||
+    !new Set(["assurance", "feedback"]).has(payload.resultSemantics) ||
+    !resultShape ||
+    (payload.releaseDisposition === "authorized_positive") !==
+      authorizedPositive
+  ) {
+    throw new Error("terminal_release_disposition_invalid");
   }
   if (
     !TERMINAL_STATES.has(payload.terminalStatus) ||
@@ -565,10 +596,14 @@ async function main() {
         state,
         pluginData,
       );
-      if (evidence.payload.terminalStatus === "completed") return;
+      if (
+        evidence.payload.terminalStatus === "completed" &&
+        evidence.payload.releaseDisposition === "authorized_positive"
+      )
+        return;
       block(
-        `terminal_${evidence.payload.terminalStatus}_does_not_release`,
-        "RateLoop signed this terminal lifecycle, but it does not authorize release. Inconclusive review requires separately verified release policy; failed and cancelled review never release output.",
+        `terminal_${evidence.payload.releaseDisposition}_does_not_release`,
+        "RateLoop signed this terminal result, but it does not explicitly authorize the candidate. Negative, feedback, inconclusive, failed, and cancelled results remain held.",
       );
       return;
     } catch {

@@ -20,11 +20,11 @@ import { isAbsolute, join, relative } from "node:path";
 export const HOST_RELEASE_REQUEST_SCHEMA =
   "rateloop.host-output-release-request.v1";
 export const HOST_RELEASE_EVIDENCE_SCHEMA =
-  "rateloop.host-output-release-evidence.v1";
+  "rateloop.host-output-release-evidence.v2";
 export const HOST_RELEASE_PAYLOAD_SCHEMA =
-  "rateloop.host-output-release-payload.v1";
+  "rateloop.host-output-release-payload.v2";
 export const HOST_RELEASE_RECEIPT_SCHEMA =
-  "rateloop.host-output-release-receipt.v1";
+  "rateloop.host-output-release-receipt.v2";
 export const TRUSTED_KEYRING_SCHEMA = "rateloop.stop-gate-trusted-keys.v1";
 
 const MAX_CONTROL_FILE_BYTES = 64 * 1024;
@@ -38,7 +38,6 @@ const SHA256 = /^sha256:[0-9a-f]{64}$/;
 const BASE64URL_SIGNATURE = /^[A-Za-z0-9_-]{86}$/;
 const NONCE = /^[A-Za-z0-9_-]{32,128}$/;
 const RELEASE_DECISIONS = new Set(["satisfied", "skipped"]);
-const SATISFIED_STATES = new Set(["completed", "inconclusive"]);
 const REQUEST_KEYS = [
   "schemaVersion",
   "releaseId",
@@ -65,6 +64,10 @@ const PAYLOAD_KEYS = [
   "opportunityId",
   "decision",
   "terminalStatus",
+  "releaseDisposition",
+  "resultSemantics",
+  "resultOutcome",
+  "resultCommitment",
   "outputCommitment",
   "policyBindingHash",
   "scopeCommitment",
@@ -79,6 +82,10 @@ const RECEIPT_KEYS = [
   "integrationId",
   "opportunityId",
   "decision",
+  "releaseDisposition",
+  "resultSemantics",
+  "resultOutcome",
+  "resultCommitment",
   "outputCommitment",
   "policyBindingHash",
   "scopeCommitment",
@@ -225,6 +232,10 @@ export function serverReleaseEvidencePayload(evidence) {
       opportunityId: payload.opportunityId,
       decision: payload.decision,
       terminalStatus: payload.terminalStatus,
+      releaseDisposition: payload.releaseDisposition,
+      resultSemantics: payload.resultSemantics,
+      resultOutcome: payload.resultOutcome,
+      resultCommitment: payload.resultCommitment,
       outputCommitment: payload.outputCommitment,
       policyBindingHash: payload.policyBindingHash,
       scopeCommitment: payload.scopeCommitment,
@@ -306,10 +317,19 @@ function parseReleaseEvidence(value, request, now) {
     throw failure("release_decision_invalid");
   if (
     (payload.decision === "satisfied" &&
-      !SATISFIED_STATES.has(payload.terminalStatus)) ||
-    (payload.decision === "skipped" && payload.terminalStatus !== "skipped")
+      (payload.terminalStatus !== "completed" ||
+        payload.releaseDisposition !== "authorized_positive" ||
+        payload.resultSemantics !== "assurance" ||
+        payload.resultOutcome !== "positive" ||
+        !SHA256.test(payload.resultCommitment))) ||
+    (payload.decision === "skipped" &&
+      (payload.terminalStatus !== "skipped" ||
+        payload.releaseDisposition !== "selection_skipped" ||
+        !new Set(["assurance", "feedback"]).has(payload.resultSemantics) ||
+        payload.resultOutcome !== null ||
+        payload.resultCommitment !== null))
   ) {
-    throw failure("release_terminal_status_invalid");
+    throw failure("release_disposition_invalid");
   }
   if (!isIsoDate(payload.issuedAt) || !isIsoDate(payload.expiresAt)) {
     throw failure("release_time_invalid");
@@ -334,6 +354,10 @@ function parseReleaseEvidence(value, request, now) {
     integrationId: request.integrationId,
     opportunityId: request.opportunityId,
     decision: request.decision,
+    releaseDisposition: payload.releaseDisposition,
+    resultSemantics: payload.resultSemantics,
+    resultOutcome: payload.resultOutcome,
+    resultCommitment: payload.resultCommitment,
     outputCommitment: request.outputCommitment,
     policyBindingHash: request.policyBindingHash,
     scopeCommitment: request.scopeCommitment,
@@ -491,6 +515,10 @@ function receiptFor(verified, releasedAt) {
     integrationId: request.integrationId,
     opportunityId: request.opportunityId,
     decision: request.decision,
+    releaseDisposition: evidence.payload.releaseDisposition,
+    resultSemantics: evidence.payload.resultSemantics,
+    resultOutcome: evidence.payload.resultOutcome,
+    resultCommitment: evidence.payload.resultCommitment,
     outputCommitment: request.outputCommitment,
     policyBindingHash: request.policyBindingHash,
     scopeCommitment: request.scopeCommitment,

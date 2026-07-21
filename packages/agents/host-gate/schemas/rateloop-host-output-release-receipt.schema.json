@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://rateloop-tokenless.vercel.app/schemas/rateloop-host-output-release-receipt.v1.json",
-  "title": "RateLoop host output release receipt v1",
+  "$id": "https://rateloop-tokenless.vercel.app/schemas/rateloop-host-output-release-receipt.v2.json",
+  "title": "RateLoop host output release receipt v2",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -11,6 +11,10 @@
     "integrationId",
     "opportunityId",
     "decision",
+    "releaseDisposition",
+    "resultSemantics",
+    "resultOutcome",
+    "resultCommitment",
     "outputCommitment",
     "policyBindingHash",
     "scopeCommitment",
@@ -19,12 +23,20 @@
     "releasedAt"
   ],
   "properties": {
-    "schemaVersion": { "const": "rateloop.host-output-release-receipt.v1" },
+    "schemaVersion": { "const": "rateloop.host-output-release-receipt.v2" },
     "releaseId": { "$ref": "#/$defs/opaqueId" },
     "workspaceId": { "$ref": "#/$defs/opaqueId" },
     "integrationId": { "$ref": "#/$defs/opaqueId" },
     "opportunityId": { "$ref": "#/$defs/opaqueId" },
     "decision": { "enum": ["satisfied", "skipped"] },
+    "releaseDisposition": {
+      "enum": ["authorized_positive", "selection_skipped"]
+    },
+    "resultSemantics": { "enum": ["assurance", "feedback"] },
+    "resultOutcome": { "type": ["string", "null"], "enum": ["positive", null] },
+    "resultCommitment": {
+      "anyOf": [{ "$ref": "#/$defs/commitment" }, { "type": "null" }]
+    },
     "outputCommitment": { "$ref": "#/$defs/commitment" },
     "policyBindingHash": { "$ref": "#/$defs/commitment" },
     "scopeCommitment": { "$ref": "#/$defs/commitment" },
@@ -32,6 +44,35 @@
     "evidenceCommitment": { "$ref": "#/$defs/commitment" },
     "releasedAt": { "type": "string", "format": "date-time" }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "decision": { "const": "satisfied" } },
+        "required": ["decision"]
+      },
+      "then": {
+        "properties": {
+          "releaseDisposition": { "const": "authorized_positive" },
+          "resultSemantics": { "const": "assurance" },
+          "resultOutcome": { "const": "positive" },
+          "resultCommitment": { "$ref": "#/$defs/commitment" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "decision": { "const": "skipped" } },
+        "required": ["decision"]
+      },
+      "then": {
+        "properties": {
+          "releaseDisposition": { "const": "selection_skipped" },
+          "resultOutcome": { "type": "null" },
+          "resultCommitment": { "type": "null" }
+        }
+      }
+    }
+  ],
   "$defs": {
     "opaqueId": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{8,200}$" },
     "commitment": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }

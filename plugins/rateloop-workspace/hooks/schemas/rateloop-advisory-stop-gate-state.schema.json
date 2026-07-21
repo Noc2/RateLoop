@@ -189,7 +189,7 @@
       "required": ["schemaVersion", "keyId", "payload", "signature"],
       "properties": {
         "schemaVersion": {
-          "const": "rateloop.human-review-terminal-evidence.v1"
+          "const": "rateloop.human-review-terminal-evidence.v2"
         },
         "keyId": {
           "$ref": "#/$defs/localIdentifier"
@@ -203,13 +203,17 @@
             "integrationId",
             "opportunityId",
             "terminalStatus",
+            "releaseDisposition",
+            "resultSemantics",
+            "resultOutcome",
+            "resultCommitment",
             "outputCommitment",
             "policyBindingHash",
             "issuedAt"
           ],
           "properties": {
             "schemaVersion": {
-              "const": "rateloop.human-review-terminal-payload.v1"
+              "const": "rateloop.human-review-terminal-payload.v2"
             },
             "workspaceId": {
               "$ref": "#/$defs/opaqueIdentifier"
@@ -228,6 +232,26 @@
                 "cancelled_before_commit"
               ]
             },
+            "releaseDisposition": {
+              "enum": ["authorized_positive", "not_authorized"]
+            },
+            "resultSemantics": {
+              "enum": ["assurance", "feedback"]
+            },
+            "resultOutcome": {
+              "type": ["string", "null"],
+              "enum": [
+                "positive",
+                "negative",
+                "inconclusive",
+                "failed",
+                "cancelled",
+                null
+              ]
+            },
+            "resultCommitment": {
+              "anyOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }]
+            },
             "outputCommitment": {
               "$ref": "#/$defs/sha256"
             },
@@ -238,7 +262,25 @@
               "type": "string",
               "format": "date-time"
             }
-          }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "releaseDisposition": { "const": "authorized_positive" }
+                },
+                "required": ["releaseDisposition"]
+              },
+              "then": {
+                "properties": {
+                  "terminalStatus": { "const": "completed" },
+                  "resultSemantics": { "const": "assurance" },
+                  "resultOutcome": { "const": "positive" },
+                  "resultCommitment": { "$ref": "#/$defs/sha256" }
+                }
+              }
+            }
+          ]
         },
         "signature": {
           "type": "string",

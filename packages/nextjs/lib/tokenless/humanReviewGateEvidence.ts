@@ -7,15 +7,15 @@ export const HUMAN_REVIEW_GATE_EVIDENCE_SCHEMA_VERSION = "rateloop.human-review-
 export const HUMAN_REVIEW_GATE_PAYLOAD_SCHEMA_VERSION = "rateloop.human-review-gate-payload.v1" as const;
 export const HUMAN_REVIEW_GATE_SERVER_STATE_SCHEMA_VERSION = "rateloop.human-review-gate-server-state.v1" as const;
 export const HUMAN_REVIEW_ADVISORY_TERMINAL_EVIDENCE_SCHEMA_VERSION =
-  "rateloop.human-review-terminal-evidence.v1" as const;
+  "rateloop.human-review-terminal-evidence.v2" as const;
 export const HUMAN_REVIEW_ADVISORY_TERMINAL_PAYLOAD_SCHEMA_VERSION =
-  "rateloop.human-review-terminal-payload.v1" as const;
+  "rateloop.human-review-terminal-payload.v2" as const;
 export const HUMAN_REVIEW_ADVISORY_SKIP_EVIDENCE_SCHEMA_VERSION =
   "rateloop.human-review-skip-release-evidence.v1" as const;
 export const HUMAN_REVIEW_ADVISORY_SKIP_PAYLOAD_SCHEMA_VERSION =
   "rateloop.human-review-skip-release-payload.v1" as const;
-export const HUMAN_REVIEW_HOST_RELEASE_EVIDENCE_SCHEMA_VERSION = "rateloop.host-output-release-evidence.v1" as const;
-export const HUMAN_REVIEW_HOST_RELEASE_PAYLOAD_SCHEMA_VERSION = "rateloop.host-output-release-payload.v1" as const;
+export const HUMAN_REVIEW_HOST_RELEASE_EVIDENCE_SCHEMA_VERSION = "rateloop.host-output-release-evidence.v2" as const;
+export const HUMAN_REVIEW_HOST_RELEASE_PAYLOAD_SCHEMA_VERSION = "rateloop.host-output-release-payload.v2" as const;
 
 const SIGNATURE_VERSION = 1 as const;
 const EVIDENCE_TTL_MS = 5 * 60 * 1_000;
@@ -50,10 +50,16 @@ const TERMINAL_DISPOSITIONS = [
   "cancelled_before_commit",
 ] as const;
 const REVIEW_DECISIONS = ["required", "recommended", "skip"] as const;
+const RESULT_SEMANTICS = ["assurance", "feedback"] as const;
+const RESULT_OUTCOMES = ["positive", "negative", "inconclusive", "failed", "cancelled"] as const;
+const RELEASE_DISPOSITIONS = ["authorized_positive", "not_authorized"] as const;
 
 export type HumanReviewGateLifecycleState = (typeof LIFECYCLE_STATES)[number];
 export type HumanReviewGateTerminalDisposition = (typeof TERMINAL_DISPOSITIONS)[number] | null;
 export type HumanReviewGateDecision = (typeof REVIEW_DECISIONS)[number];
+export type HumanReviewGateResultSemantics = (typeof RESULT_SEMANTICS)[number];
+export type HumanReviewGateResultOutcome = (typeof RESULT_OUTCOMES)[number];
+export type HumanReviewGateReleaseDisposition = (typeof RELEASE_DISPOSITIONS)[number];
 
 export type HumanReviewGateBinding = {
   workspaceId: string;
@@ -126,6 +132,10 @@ export type HumanReviewGateServerState = HumanReviewGateBinding & {
   outputCommitment: `sha256:${string}`;
   scopeCommitment: `sha256:${string}`;
   inconclusiveReleaseAllowed: boolean;
+  resultSemantics: HumanReviewGateResultSemantics;
+  resultOutcome: HumanReviewGateResultOutcome | null;
+  resultCommitment: `sha256:${string}` | null;
+  releaseDisposition: HumanReviewGateReleaseDisposition;
 };
 
 export type HumanReviewGateServerStateResolver = {
@@ -141,6 +151,10 @@ export type HumanReviewAdvisoryTerminalEvidence = {
     integrationId: string;
     opportunityId: string;
     terminalStatus: "completed" | "inconclusive" | "failed_terminal" | "cancelled_before_commit";
+    releaseDisposition: HumanReviewGateReleaseDisposition;
+    resultSemantics: HumanReviewGateResultSemantics;
+    resultOutcome: HumanReviewGateResultOutcome | null;
+    resultCommitment: `sha256:${string}` | null;
     outputCommitment: `sha256:${string}`;
     policyBindingHash: `sha256:${string}`;
     issuedAt: string;
@@ -196,6 +210,10 @@ export type HumanReviewHostReleaseEvidence = {
     opportunityId: string;
     decision: "satisfied" | "skipped";
     terminalStatus: "completed" | "inconclusive" | "skipped";
+    releaseDisposition: "authorized_positive" | "selection_skipped";
+    resultSemantics: HumanReviewGateResultSemantics;
+    resultOutcome: "positive" | null;
+    resultCommitment: `sha256:${string}` | null;
     outputCommitment: `sha256:${string}`;
     policyBindingHash: `sha256:${string}`;
     scopeCommitment: `sha256:${string}`;
@@ -257,6 +275,10 @@ const SERVER_STATE_KEYS = [
   "outputCommitment",
   "scopeCommitment",
   "inconclusiveReleaseAllowed",
+  "resultSemantics",
+  "resultOutcome",
+  "resultCommitment",
+  "releaseDisposition",
 ] as const;
 const HOST_REQUEST_KEYS = [
   "schemaVersion",
@@ -458,6 +480,20 @@ function versionReference(value: unknown, field: string): HumanReviewGateVersion
   };
 }
 
+function expectedReleaseDisposition(input: {
+  lifecycle: HumanReviewGateLifecycleState;
+  resultSemantics: HumanReviewGateResultSemantics;
+  resultOutcome: HumanReviewGateResultOutcome | null;
+  resultCommitment: string | null;
+}): HumanReviewGateReleaseDisposition {
+  return input.lifecycle === "completed" &&
+    input.resultSemantics === "assurance" &&
+    input.resultOutcome === "positive" &&
+    input.resultCommitment !== null
+    ? "authorized_positive"
+    : "not_authorized";
+}
+
 function normalizeServerState(value: unknown): HumanReviewGateServerState {
   const state = serverStateRecord(value, "review-gate server state");
   exactKeys(state, SERVER_STATE_KEYS, "review-gate server state", serverStateInvalid);
@@ -493,6 +529,56 @@ function normalizeServerState(value: unknown): HumanReviewGateServerState {
   ) {
     serverStateInvalid("Review-gate server commitments or release policy are invalid.");
   }
+  const resultSemantics = enumValue(state.resultSemantics, RESULT_SEMANTICS, "resultSemantics", serverStateInvalid);
+  const resultOutcome =
+    state.resultOutcome === null
+      ? null
+      : enumValue(state.resultOutcome, RESULT_OUTCOMES, "resultOutcome", serverStateInvalid);
+  const resultCommitment =
+    state.resultCommitment === null
+      ? null
+      : typeof state.resultCommitment === "string" && HASH.test(state.resultCommitment)
+        ? (state.resultCommitment as `sha256:${string}`)
+        : serverStateInvalid("resultCommitment must be null or an exact SHA-256 commitment.");
+  if ((resultOutcome === null) !== (resultCommitment === null)) {
+    serverStateInvalid("A terminal result outcome and commitment must be present or absent together.");
+  }
+  const expectedOutcomeState =
+    resultOutcome === "positive" || resultOutcome === "negative"
+      ? "completed"
+      : resultOutcome === "inconclusive"
+        ? "inconclusive"
+        : resultOutcome === "failed"
+          ? "failed_terminal"
+          : resultOutcome === "cancelled"
+            ? "cancelled_before_commit"
+            : null;
+  if (expectedOutcomeState !== null && binding.lifecycle.state !== expectedOutcomeState) {
+    serverStateInvalid("The result outcome does not match the terminal review lifecycle.");
+  }
+  if (
+    resultOutcome === null &&
+    (binding.lifecycle.state === "completed" || binding.lifecycle.state === "inconclusive")
+  ) {
+    serverStateInvalid("A completed or inconclusive review must carry its canonical result outcome and commitment.");
+  }
+  const releaseDisposition = enumValue(
+    state.releaseDisposition,
+    RELEASE_DISPOSITIONS,
+    "releaseDisposition",
+    serverStateInvalid,
+  );
+  if (
+    releaseDisposition !==
+    expectedReleaseDisposition({
+      lifecycle: binding.lifecycle.state,
+      resultSemantics,
+      resultOutcome,
+      resultCommitment,
+    })
+  ) {
+    serverStateInvalid("The release disposition does not match the frozen semantics and canonical result.");
+  }
   return {
     schemaVersion: HUMAN_REVIEW_GATE_SERVER_STATE_SCHEMA_VERSION,
     ...binding,
@@ -502,6 +588,10 @@ function normalizeServerState(value: unknown): HumanReviewGateServerState {
     outputCommitment: state.outputCommitment as `sha256:${string}`,
     scopeCommitment: state.scopeCommitment as `sha256:${string}`,
     inconclusiveReleaseAllowed: state.inconclusiveReleaseAllowed,
+    resultSemantics,
+    resultOutcome,
+    resultCommitment,
+    releaseDisposition,
   };
 }
 
@@ -880,6 +970,10 @@ function advisoryPayloadBytes(evidence: HumanReviewAdvisoryTerminalEvidence) {
       integrationId: payload.integrationId,
       opportunityId: payload.opportunityId,
       terminalStatus: payload.terminalStatus,
+      releaseDisposition: payload.releaseDisposition,
+      resultSemantics: payload.resultSemantics,
+      resultOutcome: payload.resultOutcome,
+      resultCommitment: payload.resultCommitment,
       outputCommitment: payload.outputCommitment,
       policyBindingHash: payload.policyBindingHash,
       issuedAt: payload.issuedAt,
@@ -1034,6 +1128,10 @@ export async function issueHumanReviewAdvisoryTerminalEvidence(input: {
       integrationId: state.integrationId,
       opportunityId: state.opportunityId,
       terminalStatus: state.lifecycle.state,
+      releaseDisposition: state.releaseDisposition,
+      resultSemantics: state.resultSemantics,
+      resultOutcome: state.resultOutcome,
+      resultCommitment: state.resultCommitment,
       outputCommitment: state.outputCommitment,
       policyBindingHash: state.humanReviewBinding.hash,
       issuedAt: now().toISOString(),
@@ -1101,6 +1199,10 @@ function hostReleasePayloadBytes(evidence: HumanReviewHostReleaseEvidence) {
       opportunityId: payload.opportunityId,
       decision: payload.decision,
       terminalStatus: payload.terminalStatus,
+      releaseDisposition: payload.releaseDisposition,
+      resultSemantics: payload.resultSemantics,
+      resultOutcome: payload.resultOutcome,
+      resultCommitment: payload.resultCommitment,
       outputCommitment: payload.outputCommitment,
       policyBindingHash: payload.policyBindingHash,
       scopeCommitment: payload.scopeCommitment,
@@ -1131,10 +1233,7 @@ export async function issueHumanReviewHostReleaseEvidence(input: {
     serverStateMismatch("Host release commitments do not match independently resolved review-gate state.");
   }
   const skipped = request.decision === "skipped" && state.lifecycle.state === "skipped";
-  const satisfied =
-    request.decision === "satisfied" &&
-    (state.lifecycle.state === "completed" ||
-      (state.lifecycle.state === "inconclusive" && state.inconclusiveReleaseAllowed));
+  const satisfied = request.decision === "satisfied" && state.releaseDisposition === "authorized_positive";
   if (!skipped && !satisfied) {
     serverStateMismatch("Resolved review-gate state does not authorize the requested host release decision.");
   }
@@ -1154,7 +1253,11 @@ export async function issueHumanReviewHostReleaseEvidence(input: {
       integrationId: state.integrationId,
       opportunityId: state.opportunityId,
       decision: request.decision,
-      terminalStatus: skipped ? "skipped" : (state.lifecycle.state as "completed" | "inconclusive"),
+      terminalStatus: skipped ? "skipped" : "completed",
+      releaseDisposition: skipped ? "selection_skipped" : "authorized_positive",
+      resultSemantics: state.resultSemantics,
+      resultOutcome: skipped ? null : "positive",
+      resultCommitment: skipped ? null : state.resultCommitment,
       outputCommitment: state.outputCommitment,
       policyBindingHash: state.humanReviewBinding.hash,
       scopeCommitment: state.scopeCommitment,
