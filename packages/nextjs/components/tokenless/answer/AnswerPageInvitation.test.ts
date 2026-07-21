@@ -17,5 +17,5 @@ test("Discover opens invitation entry only from the boolean URL marker", () => {
 test("Discover refreshes both queues after acceptance and preserves invitation intent through sign-in", () => {
   assert.match(answer, /<InvitationRouterPanel onAccepted=\{\(\) => void load\(\)\} \/>/);
   assert.match(answer, /if \(invitationOpen\) params\.set\("invite", "1"\)/);
-  assert.match(answer, /returnTo=\{discoverHref\(pathname, query, scope, initialInvitationOpen\)\}/);
+  assert.match(answer, /returnTo=\{discoverHref\(pathname, query, scope, initialInvitationOpen, view\)\}/);
 });

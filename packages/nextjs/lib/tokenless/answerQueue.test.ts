@@ -14,7 +14,7 @@ test("starts public and private queue requests together so either rejection is o
 
   assert.deepEqual(requests, [
     "/api/rater/tasks?q=risk%20review&scope=public",
-    "/api/account/assurance/assignments?q=risk%20review",
+    "/api/account/assurance/assignments?q=risk%20review&view=active",
   ]);
 
   pending[0](Response.json({ tasks: [] }));
@@ -37,6 +37,20 @@ test("skips queues excluded by the selected scope", async () => {
     { body: { assignments: [] }, error: null },
   ]);
   assert.deepEqual(requests, ["/api/rater/tasks?q=&scope=public"]);
+});
+
+test("history fetches only terminal private assignments", async () => {
+  const requests: string[] = [];
+  const fetchImpl = (async (input: string | URL | Request) => {
+    requests.push(String(input));
+    return Response.json({ assignments: [] });
+  }) as typeof fetch;
+
+  assert.deepEqual(await loadAnswerQueues("", "private", fetchImpl, "history"), [
+    { body: { tasks: [] }, error: null },
+    { body: { assignments: [] }, error: null },
+  ]);
+  assert.deepEqual(requests, ["/api/account/assurance/assignments?q=&view=history"]);
 });
 
 test("preserves one queue when the other queue returns an expected API error", async () => {

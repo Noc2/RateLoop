@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 export type PrivateAnswerAssignment = {
   assignmentId: string;
   projectName: string | null;
@@ -24,7 +22,7 @@ export function PrivateAssignmentCard({ assignment }: { assignment: PrivateAnswe
           {assignment.status ?? "reserved"}
         </span>
       </div>
-      <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-3">
+      <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2">
         <div>
           <dt className="text-xs text-base-content/45">Data handling</dt>
           <dd className="mt-1">{assignment.dataClassification ?? "Private"}</dd>
@@ -33,26 +31,12 @@ export function PrivateAssignmentCard({ assignment }: { assignment: PrivateAnswe
           <dt className="text-xs text-base-content/45">Cases</dt>
           <dd className="mt-1">{assignment.caseCount}</dd>
         </div>
-        <div>
-          <dt className="text-xs text-base-content/45">Reviewer source</dt>
-          <dd className="mt-1">{assignment.source?.replaceAll("_", " ") ?? "Assigned"}</dd>
-        </div>
       </dl>
-      <p className="mt-5 text-sm leading-6 text-base-content/60">
-        Artifacts remain hidden until you accept the exact confidentiality terms. Access is account-bound and leased for
-        a short period.
-      </p>
       {assignment.assignmentExpiresAt ? (
         <p className="mt-3 text-xs text-base-content/45">
           Assignment expires {new Date(assignment.assignmentExpiresAt).toLocaleString()}
         </p>
       ) : null}
-      <Link
-        href={`/rate?assignment=${encodeURIComponent(assignment.assignmentId)}&terms=${encodeURIComponent(assignment.confidentialityTermsHash ?? "")}`}
-        className="rateloop-gradient-action mt-5 inline-flex px-5"
-      >
-        Open private review
-      </Link>
     </article>
   );
 }

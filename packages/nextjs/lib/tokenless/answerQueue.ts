@@ -47,6 +47,7 @@ export function loadAnswerQueues(
   query: string,
   scope: AnswerScope,
   fetchImpl: typeof fetch = fetch,
+  privateView: "active" | "history" = "active",
 ): Promise<[AnswerQueueResponse, AnswerQueueResponse]> {
   const encodedQuery = encodeURIComponent(query);
   return Promise.all([
@@ -58,7 +59,7 @@ export function loadAnswerQueues(
     settle(
       scope === "public" || scope === "submitted"
         ? Promise.resolve({ assignments: [] })
-        : fetchJson(`/api/account/assurance/assignments?q=${encodedQuery}`, fetchImpl),
+        : fetchJson(`/api/account/assurance/assignments?q=${encodedQuery}&view=${privateView}`, fetchImpl),
     ),
   ]);
 }

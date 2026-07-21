@@ -82,67 +82,136 @@ test("reviewer answers a public task and restores the draft", async ({ page }) =
   await page
     .getByRole("textbox", { name: "Feedback" })
     .fill("The conclusion follows from the supplied public evidence.");
-  await page.getByRole("button", { name: "70%" }).click();
+  await page.getByLabel(/What percentage of reviewers/u).fill("70");
   await expect(page.getByRole("button", { name: "Create recovery backup" })).toBeEnabled();
   await page.reload();
   await expect(page.getByRole("button", { name: "Approve" })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByRole("button", { name: "70%" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByLabel(/What percentage of reviewers/u)).toHaveValue("70");
   await expect(page.getByRole("textbox", { name: "Feedback" })).toHaveValue(/supplied public evidence/u);
 });
 
-test("invited reviewer accepts terms and submits a private review", async ({ page }) => {
-  const assignmentId = "haas_playwright_private_01";
-  await page.route(`**/api/account/assurance/assignments/${assignmentId}/accept`, route => json(route, { ok: true }));
-  await page.route(`**/api/account/assurance/assignments/${assignmentId}/task`, route =>
+test("invited reviewer sees exact agent content and rates it directly in Discover", async ({ page }) => {
+  const assignmentId = `hpua_${"1".repeat(40)}`;
+  const source = "User asked whether the release passed its deployment checks.";
+  const agentOutput = "The agent reported that type checking, tests, and the production build all passed.";
+  let submitted = false;
+  await authenticate(page, browserState.ownerSessionToken);
+  await page.route("**/api/account/assurance/assignments?**", route =>
     json(route, {
-      assignmentId,
-      runId: "run_playwright_private_01",
-      source: "customer_invited",
-      runManifestHash: hash,
-      policyHash: hash,
-      qualificationProvenance: [],
-      rubric: {
-        prompt: "Which candidate better follows the instruction?",
-        failureTags: [{ key: "unsupported", label: "Unsupported claim" }],
-        rationale: { mode: "required", minLength: 10, maxLength: 500 },
-      },
-      cases: [
-        {
-          caseId: "case_playwright_01",
-          position: 1,
-          title: "Compare the two responses",
-          instructions: "Choose the response that is more precise and grounded.",
-          options: [
-            { key: "A", artifactId: "artifact_a", leaseId: "lease_a", expiresAt: future },
-            { key: "B", artifactId: "artifact_b", leaseId: "lease_b", expiresAt: future },
+      assignments: submitted
+        ? []
+        : [
+            {
+              assignmentId,
+              projectName: "Agent deployment check",
+              dataClassification: "confidential",
+              source: "customer_invited",
+              status: "reserved",
+              paidAssignment: false,
+              confidentialityTermsHash: hash,
+              assignmentExpiresAt: future,
+              caseCount: 1,
+            },
           ],
-          context: [],
-          objectiveReference: null,
-        },
-      ],
     }),
   );
-  await page.route(`**/api/account/assurance/assignments/${assignmentId}/responses`, route =>
+  await page.route(`**/api/account/assurance/assignments/${assignmentId}/accept?terms=*`, route =>
     json(route, {
+      assignmentId,
+      state: "ready",
+      termsAccepted: false,
+      terms: {
+        groupName: "Deployment reviewers",
+        purpose: "Review the assigned agent output without sharing it.",
+        policy: {
+          schemaVersion: "rateloop.private-group-policy.v2",
+          dataClassifications: ["confidential"],
+          exportAllowed: false,
+        },
+      },
+      responseDeadline: future,
+    }),
+  );
+  await page.route(`**/api/account/assurance/assignments/${assignmentId}/accept?includeTask=1`, route =>
+    json(route, {
+      acceptance: { accepted: true },
+      task: {
+        assignmentId,
+        runId: "run_playwright_private_01",
+        source: "customer_invited",
+        runManifestHash: hash,
+        policyHash: hash,
+        qualificationProvenance: [],
+        taskKind: "binary_review",
+        compensationMode: "unpaid",
+        forecastRequired: false,
+        settlement: null,
+        rubric: {
+          prompt: "Is this response safe and correct?",
+          failureTags: [],
+          rationale: { mode: "off", minLength: 0, maxLength: 500 },
+        },
+        cases: [
+          {
+            caseId: "case_playwright_01",
+            position: 0,
+            title: "Review the agent output",
+            instructions: "Is this response safe and correct?",
+            options: [],
+            context: [],
+            objectiveReference: null,
+            binaryReview: {
+              positiveLabel: "Approve",
+              negativeLabel: "Reject",
+              source: {
+                artifactId: "artifact_source",
+                leaseId: "lease_source",
+                expiresAt: future,
+                contentType: "text/plain",
+              },
+              suggestion: {
+                artifactId: "artifact_output",
+                leaseId: "lease_output",
+                expiresAt: future,
+                contentType: "text/plain",
+              },
+            },
+          },
+        ],
+      },
+    }),
+  );
+  await page.route(`**/api/account/assurance/assignments/${assignmentId}/artifacts/artifact_source?*`, route =>
+    route.fulfill({ status: 200, contentType: "text/plain", body: source }),
+  );
+  await page.route(`**/api/account/assurance/assignments/${assignmentId}/artifacts/artifact_output?*`, route =>
+    route.fulfill({ status: 200, contentType: "text/plain", body: agentOutput }),
+  );
+  await page.route(`**/api/account/assurance/assignments/${assignmentId}/responses`, route => {
+    submitted = true;
+    return json(route, {
       accepted: true,
       replay: false,
       responseCount: 1,
       compensation: "unpaid",
       settlementStatus: "not_applicable",
-    }),
-  );
-  await page.goto(`/human?assignment=${assignmentId}&terms=${hash}`);
-  await expect(page.getByText("Invitation details loaded")).toBeVisible();
+    });
+  });
+  await page.goto("/human?scope=private");
+  await expect(page.getByRole("heading", { name: "Agent deployment check" })).toBeVisible();
   await page.getByRole("checkbox").check();
-  await page.getByRole("button", { name: "Accept terms and open assignment" }).click();
-  await expect(page.getByRole("heading", { name: "Complete your assigned review" })).toBeVisible();
+  await page.getByRole("button", { name: "Accept terms and begin" }).click();
+  await expect(page.getByText(source)).toBeVisible();
+  await expect(page.getByText(agentOutput)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open private artifact" })).toHaveCount(0);
   await expectNoAxeViolations(page);
-  await page.keyboard.press("1");
-  await page
-    .getByLabel("Decision rationale")
-    .fill("Candidate A is more precise and stays within the supplied evidence.");
+  await page.getByRole("radio", { name: "Approve" }).check();
   await page.getByRole("button", { name: "Submit review" }).click();
-  await expect(page.getByRole("status")).toContainText("server accepted 1 assigned response");
+  await expect(page.getByRole("status")).toContainText("Review submitted");
+  await expect(page.getByText(source)).toHaveCount(0);
+  await expect(page.getByText(agentOutput)).toHaveCount(0);
+  await page.getByRole("button", { name: "Review next assignment" }).click();
+  await expect(page.getByText("No review work is available right now.")).toBeVisible();
 });
 
 test("owner approves a request and prepares its human feedback award", async ({ page }) => {

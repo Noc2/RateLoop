@@ -33,19 +33,12 @@ test("private rater queue opens one assigned task without unrelated eligibility 
   assert.doesNotMatch(html, /Tier \d|World ID|Self\.xyz|passport uniqueness|guaranteed base|on-chain payment/i);
 });
 
-test("assigned review renders blinded choices, failure tags, rationale, lease deadline, and honest draft state", async () => {
+test("assigned review keeps the content, decision, and deadline visible without internal review metadata", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
   const expiresAt = new Date("2030-01-02T03:04:05.000Z").toISOString();
   const html = renderToStaticMarkup(
     <HumanAssuranceRaterClient
-      initialServerAcceptance={{
-        accepted: true,
-        replay: false,
-        responseCount: 1,
-        compensation: "unpaid",
-        settlementStatus: "not_applicable",
-      }}
       initialTask={{
         assignmentId: "haas_assigned",
         runId: "har_test",
@@ -96,13 +89,10 @@ test("assigned review renders blinded choices, failure tags, rationale, lease de
   assert.match(html, /Failure tags/);
   assert.match(html, /Incorrect/);
   assert.match(html, /Decision rationale/);
-  assert.match(html, /customer invitation/);
-  assert.match(html, /TypeScript code review/);
-  assert.match(html, /workspace owner/);
-  assert.match(html, /No paid voucher attached/);
-  assert.match(html, /Panels may include undisclosed calibration items/i);
-  assert.match(html, /The server accepted 1 assigned response and completed the assignment/i);
-  assert.match(html, /unpaid invited review, so no settlement reference is expected/i);
+  assert.doesNotMatch(html, /customer invitation/i);
+  assert.doesNotMatch(html, /TypeScript code review/i);
+  assert.doesNotMatch(html, /workspace owner/i);
+  assert.doesNotMatch(html, /voucher|calibration|qualification/i);
   assert.match(html, /Case 1 of 1/);
   assert.match(html, /Keyboard: 1 or 2 selects/);
   assert.match(html, /Access:/);

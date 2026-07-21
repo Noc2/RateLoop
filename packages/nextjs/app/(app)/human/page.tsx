@@ -23,6 +23,7 @@ export default async function HumanPage({
     q?: string | string[];
     scope?: string | string[];
     tab?: string | string[];
+    view?: string | string[];
   }>;
 }) {
   const params = await searchParams;
@@ -48,6 +49,7 @@ export default async function HumanPage({
     const invitation = Array.isArray(params.invite) ? params.invite[0] : params.invite;
     const query = Array.isArray(params.q) ? params.q[0] : params.q;
     const requestedScope = Array.isArray(params.scope) ? params.scope[0] : params.scope;
+    const requestedView = Array.isArray(params.view) ? params.view[0] : params.view;
     const scope = ["all", "public", "private"].includes(requestedScope ?? "")
       ? (requestedScope as "all" | "public" | "private")
       : "all";
@@ -56,7 +58,12 @@ export default async function HumanPage({
         <AppPageShell contentClassName="mb-4">
           <HumanTabs active={tab} />
         </AppPageShell>
-        <AnswerPageClient initialInvitationOpen={invitation === "1"} initialQuery={query} initialScope={scope} />
+        <AnswerPageClient
+          initialInvitationOpen={invitation === "1"}
+          initialQuery={query}
+          initialScope={scope}
+          initialView={requestedView === "history" ? "history" : "active"}
+        />
       </>
     );
   }
