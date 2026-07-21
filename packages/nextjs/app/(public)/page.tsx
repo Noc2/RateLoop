@@ -68,7 +68,7 @@ const useCases = [
   },
   {
     title: "AI-assisted hiring",
-    body: "Candidate-ranking AI can be high-risk under the EU AI Act. Give an authorized recruiter oversight before it affects a candidate.",
+    body: "Hiring AI can be high-risk. Should an authorized recruiter approve it?",
     href: "/docs/use-cases#hiring-decisions",
     color: "var(--rateloop-pink)",
     icon: "hiring",

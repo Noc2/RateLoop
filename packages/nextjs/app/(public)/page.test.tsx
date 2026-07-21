@@ -139,7 +139,7 @@ test("landing page presents the tokenless human-assurance story", async () => {
     ],
     [
       "AI-assisted hiring",
-      "Candidate-ranking AI can be high-risk under the EU AI Act. Give an authorized recruiter oversight before it affects a candidate.",
+      "Hiring AI can be high-risk. Should an authorized recruiter approve it?",
       "/docs/use-cases#hiring-decisions",
     ],
   ]) {

@@ -194,8 +194,7 @@ Suggested compact copy:
 >
 > **AI-assisted hiring**
 >
-> Candidate-ranking AI can be high-risk under the EU AI Act. Give an authorized recruiter oversight of recommendations
-> before they affect candidates.
+> Hiring AI can be high-risk. Ask: “Should an authorized recruiter approve it?”
 
 The cards should be labelled `Example workflow` in accessible supporting text or on the destination page. Do not add
 customer logos, outcome numbers, or a `Case studies` navigation item.
