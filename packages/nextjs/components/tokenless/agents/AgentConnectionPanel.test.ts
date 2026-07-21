@@ -153,12 +153,12 @@ test("a connected OAuth agent has a direct targeted reconnect path", () => {
   assert.match(source, /activeConnectionIntents\.length > 0/);
 });
 
-test("a saved agent with only a revoked OAuth integration can reconnect without being duplicated", () => {
+test("a saved agent with only an unusable OAuth integration can reconnect without being duplicated", () => {
   assert.match(source, /oauthClientId: stringField\(row, "oauthClientId"\)/);
-  assert.match(source, /const reconnectableIntegrations = integrations\.filter/);
-  assert.match(source, /integration\.status === "revoked"/);
-  assert.match(source, /Boolean\(integration\.oauthClientId\)/);
-  assert.match(source, /candidate\.agentId === integration\.agentId/);
+  assert.match(
+    source,
+    /const reconnectableIntegrations = selectReconnectableOAuthConnections\(integrations, connectionClock\)/,
+  );
   assert.match(source, /Reconnect your agent/);
   assert.match(source, /Reconnect a saved agent without changing its review settings\./);
   assert.match(source, /copyConnectionMessage\(integration\.integrationId\)/);

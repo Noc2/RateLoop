@@ -10,7 +10,7 @@ import {
 import { AgentConnectionTroubleshooting } from "./AgentConnectionTroubleshooting";
 import type { AgentConnectionHistoryEntry } from "./agentAuditHistory";
 import { buildAgentConnectionMessage, buildAgentConnectionMessageForHost } from "./agentConnectionMessage";
-import { isUsableAgentConnection } from "./agentWorkspaceState";
+import { isUsableAgentConnection, selectReconnectableOAuthConnections } from "./agentWorkspaceState";
 import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { Badge } from "~~/components/tokenless/ui/Badge";
@@ -1053,13 +1053,7 @@ export function AgentConnectionPanel({
       connectionClock,
     ),
   );
-  const reconnectableIntegrations = integrations.filter(
-    (integration, index, entries) =>
-      integration.status === "revoked" &&
-      Boolean(integration.oauthClientId) &&
-      Boolean(integration.agentId) &&
-      entries.findIndex(candidate => candidate.agentId === integration.agentId) === index,
-  );
+  const reconnectableIntegrations = selectReconnectableOAuthConnections(integrations, connectionClock);
   const showConnectionStart =
     !loading && activeConnectionIntents.length === 0 && activePairings.length === 0 && activeIntegrations.length === 0;
   const connectionHistory = useMemo<AgentConnectionHistoryEntry[]>(

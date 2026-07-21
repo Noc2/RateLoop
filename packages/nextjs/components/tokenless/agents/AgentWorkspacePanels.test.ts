@@ -5,6 +5,7 @@ import {
   nextAgentTabIndex,
   resolveAgentTabParam,
   resolveAvailableAgentTab,
+  selectReconnectableOAuthConnections,
   selectRequestedWorkspace,
 } from "./agentWorkspaceState";
 import assert from "node:assert/strict";
@@ -41,6 +42,54 @@ test("only active, connected, unexpired integrations complete onboarding", () =>
     ),
     false,
   );
+});
+
+test("unusable OAuth integrations reconnect their saved agent unless another usable binding exists", () => {
+  const now = Date.parse("2026-07-15T12:00:00.000Z");
+  const connection = (
+    overrides: Partial<{
+      agentId: string;
+      connectionStatus: string;
+      expiresAt: string | null;
+      integrationId: string;
+      oauthClientId: string;
+      status: string;
+    }> = {},
+  ) => ({
+    agentId: "agent-a",
+    connectionStatus: "connected",
+    expiresAt: "2026-07-15T13:00:00.000Z",
+    integrationId: "integration-a",
+    oauthClientId: "oauth-client",
+    status: "active",
+    ...overrides,
+  });
+
+  assert.deepEqual(
+    selectReconnectableOAuthConnections([connection({ connectionStatus: "expired" })], now).map(
+      item => item.integrationId,
+    ),
+    ["integration-a"],
+  );
+  assert.deepEqual(
+    selectReconnectableOAuthConnections([connection({ connectionStatus: "cancelled" })], now).map(
+      item => item.integrationId,
+    ),
+    ["integration-a"],
+  );
+  assert.deepEqual(
+    selectReconnectableOAuthConnections([connection({ expiresAt: "2026-07-15T11:59:59.000Z" })], now).map(
+      item => item.integrationId,
+    ),
+    ["integration-a"],
+  );
+  assert.deepEqual(selectReconnectableOAuthConnections([connection()], now), []);
+
+  const connections = [
+    connection({ connectionStatus: "expired", integrationId: "stale-newest" }),
+    connection({ integrationId: "usable-older" }),
+  ];
+  assert.deepEqual(selectReconnectableOAuthConnections(connections, now), []);
 });
 
 test("connected navigation splits the owner stack into URL-backed task tabs", () => {

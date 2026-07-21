@@ -7,6 +7,11 @@ type ConnectionOption = {
   expiresAt?: string | null;
 };
 
+type OAuthConnectionOption = ConnectionOption & {
+  agentId: string;
+  oauthClientId?: string | null;
+};
+
 export function selectRequestedWorkspace<T extends WorkspaceOption>(workspaces: T[], requestedWorkspaceId?: string) {
   return workspaces.find(workspace => workspace.workspaceId === requestedWorkspaceId) ?? workspaces[0] ?? null;
 }
@@ -17,6 +22,23 @@ export function isUsableAgentConnection(connection: ConnectionOption, now = Date
   if (!connection.expiresAt) return true;
   const expiresAt = new Date(connection.expiresAt).getTime();
   return Number.isFinite(expiresAt) && expiresAt > now;
+}
+
+export function selectReconnectableOAuthConnections<T extends OAuthConnectionOption>(
+  connections: T[],
+  now = Date.now(),
+) {
+  const agentsWithUsableConnections = new Set(
+    connections.filter(connection => isUsableAgentConnection(connection, now)).map(connection => connection.agentId),
+  );
+  const selectedAgentIds = new Set<string>();
+  return connections.filter(connection => {
+    if (!connection.agentId || !connection.oauthClientId) return false;
+    if (agentsWithUsableConnections.has(connection.agentId)) return false;
+    if (isUsableAgentConnection(connection, now) || selectedAgentIds.has(connection.agentId)) return false;
+    selectedAgentIds.add(connection.agentId);
+    return true;
+  });
 }
 
 export function connectedAgentTabs({
