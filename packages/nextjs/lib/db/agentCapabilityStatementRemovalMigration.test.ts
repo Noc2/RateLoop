@@ -17,10 +17,18 @@ test("0127 removes capability-statement storage and its audit event", async () =
   assert.doesNotMatch(migration.slice(migration.lastIndexOf("ADD CONSTRAINT")), /agent\.capability_statement_updated/u);
 
   const journal = JSON.parse(readFileSync(new URL("../../drizzle/meta/_journal.json", import.meta.url), "utf8")) as {
-    entries: Array<{ idx: number; tag: string }>;
+    entries: Array<{ idx: number; version: string; when: number; tag: string; breakpoints: boolean }>;
   };
-  assert.equal(journal.entries.at(-1)?.idx, 127);
-  assert.equal(journal.entries.at(-1)?.tag, "0127_remove_agent_capability_statements");
+  assert.deepEqual(
+    journal.entries.find(entry => entry.idx === 127),
+    {
+      idx: 127,
+      version: "7",
+      when: 1784397600000,
+      tag: "0127_remove_agent_capability_statements",
+      breakpoints: true,
+    },
+  );
 
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
   const columns = await dbClient.execute(
