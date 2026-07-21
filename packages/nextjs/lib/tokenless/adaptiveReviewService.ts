@@ -10,6 +10,10 @@ import {
   decideAdaptiveReview,
   nextAdaptiveStage,
 } from "~~/lib/tokenless/adaptiveReview";
+import {
+  applyAdaptiveEvaluationTransactionTimeouts,
+  mapAdaptiveEvaluationDatabaseError,
+} from "~~/lib/tokenless/adaptiveReviewEvaluationDatabase";
 import { type AgentExecutionEvidence, projectAgentExecutionEvidence } from "~~/lib/tokenless/agentExecutionEvidence";
 import {
   AGENT_EXECUTION_PROFILE_SCHEMA_VERSION,
@@ -45,6 +49,8 @@ const ADAPTIVE_SAFETY_GATES_AVAILABLE = false;
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
 const SOURCE_REFERENCE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,239}$/;
 const RISK_TIER_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
+
+let beforeAdaptiveEvaluationWorkForTests: (() => Promise<void> | void) | null = null;
 
 type ReviewPolicyRow = {
   policyId: string;
@@ -1314,6 +1320,8 @@ export async function evaluateAdaptiveReviewRequirement(input: {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
+    await applyAdaptiveEvaluationTransactionTimeouts(client);
+    await beforeAdaptiveEvaluationWorkForTests?.();
     const policy = await loadPolicy(client, workspaceId, request);
     const binding = await loadHumanReviewBinding(client, workspaceId, request);
     const grant = await verifyIntegrationBinding(client, {
@@ -1654,7 +1662,7 @@ export async function evaluateAdaptiveReviewRequirement(input: {
     };
   } catch (error) {
     await client.query("ROLLBACK");
-    throw error;
+    throw mapAdaptiveEvaluationDatabaseError(error);
   } finally {
     client.release();
   }
@@ -1698,6 +1706,9 @@ export async function getAdaptiveAssuranceState(input: {
 export const __adaptiveReviewServiceTestUtils = {
   humanAgreementGatePassed,
   initialLifecycleDisposition,
+  setBeforeAdaptiveEvaluationWorkForTests(value: typeof beforeAdaptiveEvaluationWorkForTests) {
+    beforeAdaptiveEvaluationWorkForTests = value;
+  },
   sha256,
   verifyIntegrationBinding,
 };

@@ -32,6 +32,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  __adaptiveReviewServiceTestUtils.setBeforeAdaptiveEvaluationWorkForTests(null);
   __setDatabaseResourcesForTests(null);
   if (originalSamplerKey === undefined) delete process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY;
   else process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = originalSamplerKey;
@@ -243,6 +244,44 @@ test("persists deterministic calibration decisions and returns frozen idempotent
   assert.equal(state.completedComparableCases, 0);
   assert.equal(state.humanAgreementBps, null);
   assert.equal(state.nextReassessmentAfter, 30);
+});
+
+test("a concurrent evaluation lock fails within the database bound and the exact retry succeeds", async () => {
+  const setup = await fixture();
+  const request = opportunity(setup, "ticket-lock-retry-0001");
+  let attempts = 0;
+  __adaptiveReviewServiceTestUtils.setBeforeAdaptiveEvaluationWorkForTests(() => {
+    attempts += 1;
+    if (attempts === 1) {
+      throw Object.assign(new Error("simulated PostgreSQL lock timeout"), { code: "55P03" });
+    }
+  });
+
+  await assert.rejects(
+    evaluateAdaptiveReviewRequirement({ principal: setup.principal, request }),
+    error =>
+      error instanceof TokenlessServiceError &&
+      error.code === "review_evaluation_busy" &&
+      error.status === 503 &&
+      error.retryable,
+  );
+  const afterTimeout = await dbClient.execute({
+    // pg-mem does not emulate PostgreSQL's concurrent row-lock waits. Injecting
+    // SQLSTATE 55P03 before evaluation work deterministically models the bounded
+    // cancellation that the production transaction-local lock timeout produces.
+    sql: "SELECT COUNT(*) AS count FROM tokenless_agent_review_opportunities WHERE workspace_id=?",
+    args: [setup.workspaceId],
+  });
+  assert.equal(Number(afterTimeout.rows[0]?.count), 0);
+
+  const retried = await evaluateAdaptiveReviewRequirement({ principal: setup.principal, request });
+  assert.equal(retried.externalOpportunityId, request.externalOpportunityId);
+  assert.equal(attempts, 2);
+  const afterRetry = await dbClient.execute({
+    sql: "SELECT COUNT(*) AS count FROM tokenless_agent_review_opportunities WHERE workspace_id=?",
+    args: [setup.workspaceId],
+  });
+  assert.equal(Number(afterRetry.rows[0]?.count), 1);
 });
 
 test("replays historical v1 execution and scope profiles without rewriting them", async () => {
