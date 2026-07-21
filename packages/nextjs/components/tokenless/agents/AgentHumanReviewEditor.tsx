@@ -708,25 +708,23 @@ export function AgentHumanReviewEditor({
             <p className="text-sm text-base-content/60">
               Optional, separately funded, and awarded only by the saved human.
             </p>
-            <div className="mt-3 grid grid-cols-2 gap-2 sm:max-w-sm">
-              <Button
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:max-w-md">
+              <button
                 type="button"
-                size="sm"
-                variant={!draft.feedbackBonusEnabled ? "primary" : "secondary"}
                 aria-pressed={!draft.feedbackBonusEnabled}
+                className={`btn btn-sm ${!draft.feedbackBonusEnabled ? "btn-primary" : "btn-outline"}`}
                 onClick={() => update("feedbackBonusEnabled", false)}
               >
                 No bonus
-              </Button>
-              <Button
+              </button>
+              <button
                 type="button"
-                size="sm"
-                variant={draft.feedbackBonusEnabled ? "primary" : "secondary"}
                 aria-pressed={draft.feedbackBonusEnabled}
+                className={`btn btn-sm ${draft.feedbackBonusEnabled ? "btn-primary" : "btn-outline"}`}
                 onClick={() => update("feedbackBonusEnabled", true)}
               >
                 Add bonus
-              </Button>
+              </button>
             </div>
             {draft.feedbackBonusEnabled ? (
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
