@@ -27,7 +27,6 @@ const whyItWorksFeatures = [
       ["Human eligibility", "/docs/tech-stack#proof-of-human"],
       ["Reviewer rules", "/docs/tech-stack#audience-policies"],
       ["Sealed answers", "/docs/tech-stack#commit-reveal"],
-      ["Independent opening", "/docs/tech-stack#drand-tlock"],
     ],
   },
   {

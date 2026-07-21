@@ -75,7 +75,6 @@ test("landing page presents the tokenless human-assurance story", async () => {
     "Human eligibility",
     "Reviewer rules",
     "Sealed answers",
-    "Independent opening",
     "Quality bonus",
     "Insight bonus",
     "USDC settlement",
@@ -83,6 +82,7 @@ test("landing page presents the tokenless human-assurance story", async () => {
   ]) {
     assert.match(html, new RegExp(term.replace(/[+]/g, "\\+")));
   }
+  assert.doesNotMatch(html, /Independent opening/);
   const visibleText = html.replace(/<[^>]+>/g, " ");
   assert.doesNotMatch(visibleText, /\bx402\b|Commit-Reveal|drand\/tlock|\bRBTS\b|Fund Core/);
   for (const href of [
@@ -91,7 +91,6 @@ test("landing page presents the tokenless human-assurance story", async () => {
     "/docs/tech-stack#proof-of-human",
     "/docs/tech-stack#audience-policies",
     "/docs/tech-stack#commit-reveal",
-    "/docs/tech-stack#drand-tlock",
     "/docs/tech-stack#robust-bayesian-truth-serum",
     "/docs/tech-stack#surprisingly-popular",
     "/docs/tech-stack#base-usdc",
