@@ -481,6 +481,54 @@ test("response timeout and all-expired signals are verified against durable stat
   assert.equal(expired.state.deliveryStatus, "failed_terminal");
 });
 
+test("orphaned blocked lifecycles terminalize safely but cannot enter transient recovery", async () => {
+  const withoutWork = new RecoveryClient();
+  withoutWork.state.lifecycle = { state: "blocked", revision: 2, terminalAt: null, reasons: "[]" };
+  install(withoutWork);
+  const failed = await recordHumanReviewOpportunityFailure({
+    workspaceId: "workspace_a",
+    opportunityId: "opportunity_a",
+    transitionKey: "deadline:orphaned-blocked-empty",
+    signal: "response_deadline_elapsed",
+    occurredAt: new Date("2026-07-16T12:00:00.000Z"),
+  });
+  assert.equal(failed.fromState, "blocked");
+  assert.equal(failed.toState, "failed_terminal");
+  assert.notEqual(failed.action, "cancelled_before_commit");
+  assert.ok(failed.reasonCodes.includes("no_accepted_work"));
+
+  const withAcceptedWork = new RecoveryClient();
+  withAcceptedWork.state.lifecycle = { state: "blocked", revision: 2, terminalAt: null, reasons: "[]" };
+  withAcceptedWork.work.privateAccepted = 1;
+  install(withAcceptedWork);
+  const preserved = await recordHumanReviewOpportunityFailure({
+    workspaceId: "workspace_a",
+    opportunityId: "opportunity_a",
+    transitionKey: "deadline:orphaned-blocked-accepted",
+    signal: "response_deadline_elapsed",
+    occurredAt: new Date("2026-07-16T12:00:00.000Z"),
+  });
+  assert.equal(preserved.toState, "inconclusive");
+  assert.ok(preserved.reasonCodes.includes("accepted_work_payable"));
+  assert.ok(preserved.reasonCodes.includes("no_post_commit_cancellation"));
+  assert.equal((preserved.details.payment as { disposition: string }).disposition, "not_applicable");
+
+  const transient = new RecoveryClient();
+  transient.state.lifecycle = { state: "blocked", revision: 2, terminalAt: null, reasons: "[]" };
+  install(transient);
+  await assert.rejects(
+    recordHumanReviewOpportunityFailure({
+      workspaceId: "workspace_a",
+      opportunityId: "opportunity_a",
+      transitionKey: "failure:orphaned-blocked-transient",
+      signal: "infrastructure_failure",
+      errorCode: "queue_unavailable",
+      occurredAt: new Date("2026-07-16T10:30:00.000Z"),
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "human_review_recovery_state_conflict",
+  );
+});
+
 test("audit insertion failure rolls back lifecycle and recovery, then exact retry succeeds", async () => {
   const client = new RecoveryClient();
   client.failRecoveryEventInsert = true;

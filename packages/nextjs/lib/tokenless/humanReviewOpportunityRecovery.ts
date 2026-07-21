@@ -590,7 +590,12 @@ export async function recordHumanReviewOpportunityFailure(input: {
       return replay;
     }
     const recovery = await loadRecoveryState(client, workspaceId, opportunityId);
-    if (opportunity.state === "blocked" && (!recovery || recovery.status !== "recovery_required")) {
+    const orphanedBlockedTerminalSignal = opportunity.state === "blocked" && !recovery && !isTransient;
+    if (
+      opportunity.state === "blocked" &&
+      (!recovery || recovery.status !== "recovery_required") &&
+      !orphanedBlockedTerminalSignal
+    ) {
       throw new TokenlessServiceError(
         "Blocked human-review opportunity has no matching recovery state.",
         409,
