@@ -37,12 +37,6 @@ function assuranceStageLabel(stage: AgentAssuranceScopeSummary["stage"]) {
   return stage === "monitoring" ? "Monitoring" : "Calibrating";
 }
 
-function connectionLaneLabel(lane: string) {
-  if (lane === "plugin-with-hooks") return "Connected via RateLoop plugin · host-reported";
-  if (lane === "device-flow") return "Device-flow connection — plugin hooks not reported";
-  return "Advisory MCP connection — plugin hooks not reported";
-}
-
 type HumanReviewConfiguration = NonNullable<WorkspaceAgent["humanReview"]["configuration"]>;
 
 function reviewFrequencyLabel(selection: HumanReviewConfiguration["selection"]) {
@@ -375,12 +369,6 @@ export function AgentRegistryPanel({
                   <h2 className="font-semibold">{agent.currentVersion.displayName}</h2>
                   <Badge variant={agent.status === "active" ? "success" : "neutral"}>{agent.status}</Badge>
                 </div>
-                <p className="mt-1 text-sm text-base-content/55">Workflow v{agent.currentVersion.versionNumber}</p>
-                {view === "connection" && agent.reportedConnectionLane ? (
-                  <p className="mt-1 text-xs text-base-content/45">
-                    {connectionLaneLabel(agent.reportedConnectionLane)}
-                  </p>
-                ) : null}
               </div>
               {view === "reviews" && registry?.canManage && agent.status === "active" ? (
                 <Button

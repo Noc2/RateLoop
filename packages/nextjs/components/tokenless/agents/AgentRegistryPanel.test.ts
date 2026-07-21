@@ -58,7 +58,7 @@ test("agent details and review information render in task-focused views", () => 
   assert.match(source, /Blocked · finish review setup/);
   assert.match(source, /Blocked · reconnect the agent/);
   assert.match(source, /Blocked · automatic requests are off/);
-  assert.match(source, /Workflow v\{agent\.currentVersion\.versionNumber\}/);
+  assert.doesNotMatch(source, /Workflow v\{agent\.currentVersion\.versionNumber\}/);
   assert.doesNotMatch(source, /\{agent\.currentVersion\.declaredModel\}/);
   assert.doesNotMatch(source, />Declared provider</);
   assert.doesNotMatch(source, /Human assurance|No eligible output has reached RateLoop yet|global score/i);
@@ -97,11 +97,11 @@ test("the agent evidence card shows only labeled host-reported and observed meta
   assert.doesNotMatch(source, /capability-statement/);
 });
 
-test("the connection card labels the connection lane as host-reported and defaults to the weakest claim", () => {
+test("the agent card header omits connection implementation details", () => {
   const source = readFileSync(new URL("./AgentRegistryPanel.tsx", import.meta.url), "utf8");
-  assert.match(source, /Connected via RateLoop plugin · host-reported/);
-  assert.match(source, /Advisory MCP connection — plugin hooks not reported/);
-  assert.match(source, /Device-flow connection — plugin hooks not reported/);
-  assert.match(source, /view === "connection" && agent\.reportedConnectionLane/);
+  assert.doesNotMatch(source, /Connected via RateLoop plugin · host-reported/);
+  assert.doesNotMatch(source, /Advisory MCP connection — plugin hooks not reported/);
+  assert.doesNotMatch(source, /Device-flow connection — plugin hooks not reported/);
+  assert.doesNotMatch(source, /view === "connection" && agent\.reportedConnectionLane/);
   assert.doesNotMatch(source, /verified plugin|plugin verified/i);
 });
