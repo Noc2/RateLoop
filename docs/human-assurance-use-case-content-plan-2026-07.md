@@ -13,7 +13,7 @@ Add concrete use cases. The current public story explains RateLoop's mechanism b
 recognize their own problem. The first release should add:
 
 1. one compact, problem-led landing-page section with three example workflows;
-2. one `/docs/use-cases` page with five concrete scenarios, audience and data boundaries, example review criteria, and
+2. one `/docs/use-cases` page with three concrete scenarios, audience and data boundaries, example review criteria, and
    expected decisions; and
 3. an evidence ladder that reserves **case study** for a real customer and verified results.
 
@@ -33,7 +33,7 @@ The public surface is strong on mechanism and weak on situation:
 - [`packages/nextjs/app/(public)/docs/how-it-works/page.tsx`](<../packages/nextjs/app/(public)/docs/how-it-works/page.tsx>)
   correctly explains evidence scope, review, and settlement, but is not an application guide.
 - The docs navigation and site-search index have no use-case destination.
-- The landing-page test intentionally caps visible copy at 430 words. A use-case section therefore needs to replace
+- The landing-page test intentionally caps visible copy at 480 words. A use-case section therefore needs to replace
   redundant explanation, not simply add another long marketing block.
 
 This is a positioning problem rather than a missing-feature problem. A reader can understand that RateLoop gathers
@@ -82,7 +82,24 @@ regular evaluation, and feedback from relevant actors outside the development te
 human assurance across the lifecycle. It does **not** make RateLoop a compliance product or prove that a RateLoop panel
 satisfies a particular legal duty. Public copy should not make that leap.
 
-### 5. Borrow the communication pattern, not Humanloop's product scope
+### 5. Show one consequential EU AI Act use without overstating the law
+
+[Annex III](https://ai-act-service-desk.ec.europa.eu/en/ai-act/annex-3) lists AI used to analyse or filter job
+applications and evaluate candidates among the employment use cases that may be high-risk. The example should describe
+a ranking that materially influences who advances so it does not read like a narrow procedural or preparatory tool that
+could fall within the [Article 6](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-6) filter.
+
+For systems that qualify as high-risk, [Article 14](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-14)
+requires effective human oversight, while
+[Article 26](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-26) requires deployers to assign people with the
+necessary competence, training, and authority. The Commission currently says the employment rules apply from
+2 December 2027 in its [high-risk-system timeline](https://digital-strategy.ec.europa.eu/en/policies/guidelines-ai-high-risk-systems).
+Public copy must say RateLoop can support the review workflow and its evidence; it does not determine classification,
+perform the provider's [Article 43](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-43) conformity
+assessment, or establish compliance. It must not imply that every hiring tool is high-risk or that the Act mandates a
+panel review of every individual recommendation.
+
+### 6. Borrow the communication pattern, not Humanloop's product scope
 
 Humanloop combined prompt management, automated evaluation, observability, and human review. RateLoop does not. The
 comparison is useful for content structure, not for feature parity. RateLoop's differentiated story is:
@@ -110,15 +127,13 @@ be presented as the sole medical, legal, financial, security, or safety approval
 
 ## Recommended use-case portfolio
 
-The first three rows belong on the landing page. The full set belongs in the docs.
+All three rows belong on the landing page and in the docs.
 
 | Use case                         | Concrete operator problem                                                                                                                             | Example human check                                                                | Right audience                                                                                                                                                                  | Decision and pilot measure                                                                                                                                  |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Customer replies                 | A support response can be grounded and formatted correctly yet still be confusing, dismissive, or off-tone.                                           | `Would you send this response to the customer as written?`                         | Invite support experts when policy correctness matters. Use a general-human panel only for clarity or tone, and only with public, synthetic, or safely redacted material.       | Send, revise, or escalate. Measure human disagreement, revision rate, review time, and escaped issues.                                                      |
 | Research and client deliverables | An agent can cite sources and still overstate a conclusion, omit a decision-critical point, or deliver work the client cannot act on.                 | `Is this conclusion supported by the supplied sources?`                            | Invite domain experts for correctness. General readers can judge clarity or source credibility only when those are the frozen criteria. Apply the material boundary separately. | Deliver, revise, or escalate. Measure unsupported-claim flags, revision rate, and client acceptance.                                                        |
-| UI and public-content checks     | A screen or campaign can pass automated checks and still leave the intended audience unsure what to do or interpret.                                  | `Is the intended next action clear from this screen?`                              | Invite representative target users when that qualification matters. A general-human panel can judge broadly legible public-safe media.                                          | Publish, revise, or compare a second version. Measure clarity failures, preference, and rework before release.                                              |
-| Agent-version calibration        | A model, prompt, tool, or workflow change invalidates the team's intuitive belief that the agent still behaves the same way.                          | `Based on the supplied source, should this agent suggestion be accepted?`          | The same qualified audience and criterion used for that exact workflow scope.                                                                                                   | Begin at full review, then retain or reduce baseline coverage only from comparable evidence. Measure agreement, severe disagreement, and coverage by scope. |
-| Extraction and triage exceptions | An agent classifies a request or extracts a record, but ambiguous source material or low confidence makes the suggested structured result unreliable. | `Does the suggested classification or extracted record match the supplied source?` | Invite operations or domain reviewers qualified for the schema and source material. Apply the public/private material boundary independently.                                   | Accept, correct, or escalate. Measure exception rate, corrections, turnaround, and repeated failure categories.                                             |
+| AI-assisted hiring               | A recruiting system ranks applicants and recommends who should advance, but can overlook job-relevant evidence or reproduce discriminatory patterns. | `Does the supplied application evidence support this recommendation under the approved job criteria?` | Invite authorized recruiting or employment specialists with the competence, training, and authority required for the workflow. Keep candidate data in a private invited-review lane. | Advance, reject, override, or escalate. Record the reason and check whether the same failure affected other applicants.                                      |
 
 ### Important capability distinctions
 
@@ -130,8 +145,6 @@ The public explanation must match the implementation:
   describe that option as auditing or as an unrestricted survey builder.
 - A direct one-off panel can use a binary or head-to-head question. Repeated adaptive evidence should not mix those
   shapes silently.
-- Images and YouTube video are supported question media. A screenshot review is credible; claiming that panelists test
-  a live interactive application is not currently supported by the artifact flow.
 - RateLoop-network reviewers can supply provider-scoped proof of human uniqueness. That does not prove domain
   expertise. Use invited qualified reviewers for specialist correctness.
 - Public/network material must be public, synthetic, or owner-confirmed redacted. Private customer or client material
@@ -153,14 +166,14 @@ Insert a new section after the supported-agent row and before the current How It
 - eyebrow/number: `01`
 - title: `When Humans Matter`
 - one-sentence problem statement;
-- three cards: `Customer replies`, `Research & client work`, `Product experiences`;
+- three cards: `Customer replies`, `Research & client work`, `AI-assisted hiring`;
 - each card contains one problem sentence, one sample human question, and a link to its docs anchor;
 - one secondary link: `Explore example workflows` -> `/docs/use-cases`.
 
 Renumber the existing sections. Preserve the established rail, orb, typography, gradients, numbered sections, and card
 proportions. This is a copy and information-architecture change, not a visual redesign.
 
-Keep the current 430-word ceiling. Recover the new words by removing the `What Can I Evaluate?` FAQ, shortening the
+Keep the current 480-word ceiling. Recover the new words by removing the `What Can I Evaluate?` FAQ, shortening the
 technical `Why It Works` descriptions, and avoiding repeated explanations of the Human Assurance Loop. Do not raise the
 word budget merely to accommodate the new section.
 
@@ -179,9 +192,10 @@ Suggested compact copy:
 >
 > Citations do not make a conclusion decision-ready. Ask: “Is this conclusion supported by the supplied sources?”
 >
-> **Product experiences**
+> **AI-assisted hiring**
 >
-> A build can pass tests and still confuse users. Ask: “Is the intended next action clear?”
+> Candidate-ranking AI can be high-risk under the EU AI Act. Give an authorized recruiter oversight of recommendations
+> before they affect candidates.
 
 The cards should be labelled `Example workflow` in accessible supporting text or on the destination page. Do not add
 customer logos, outcome numbers, or a `Case studies` navigation item.
@@ -191,7 +205,7 @@ customer logos, outcome numbers, or a `Case studies` navigation item.
 Add `/docs/use-cases` under `Start Here`, between `Introduction` and `How It Works`. The page should answer:
 
 1. **When to use RateLoop:** the fit test above.
-2. **Five example workflows:** use the same structure for each:
+2. **Three example workflows:** use the same structure for each:
    - problem;
    - trigger;
    - artifact and permitted data;
@@ -266,11 +280,11 @@ negative or inconclusive pilot is still a credible worked example if its method 
 1. Create `packages/nextjs/app/(public)/docs/use-cases/page.tsx` and its rendering test.
 2. Add `Use Cases` to `packages/nextjs/constants/docsNav.ts` and update the exact navigation assertion.
 3. Add page and anchor entries to `packages/nextjs/lib/search/siteSearch.ts`; verify searches for `customer support`,
-   `research`, `UI`, `human judgment`, and `adaptive review`.
+   `research`, `candidate ranking`, `human judgment`, and `adaptive review`.
 4. Add `packages/nextjs/public/docs/use-cases.md`.
 5. Update the docs introduction with a problem-first sentence and a direct `Use Cases` path.
 6. Add the compact landing-page section and its three deep links.
-7. Remove the redundant evaluation FAQ and trim adjacent copy so the 430-word landing-page guard still passes.
+7. Remove the redundant evaluation FAQ and trim adjacent copy so the 480-word landing-page guard still passes.
 8. Keep the landing and docs commits separate so the new documentation can land independently of homepage layout.
 
 Acceptance criteria:
@@ -318,6 +332,12 @@ metadata, and related-story cards. Do not build an empty case-study management s
 - [Anthropic: Demystifying evals for AI agents](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents)
 - [Braintrust: Coursera](https://www.braintrust.dev/customers/coursera)
 - [NIST AI RMF Core](https://airc.nist.gov/airmf-resources/airmf/5-sec-core/)
+- [EU AI Act Annex III](https://ai-act-service-desk.ec.europa.eu/en/ai-act/annex-3)
+- [EU AI Act Article 6](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-6)
+- [EU AI Act Article 14](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-14)
+- [EU AI Act Article 26](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-26)
+- [EU AI Act Article 43](https://ai-act-service-desk.ec.europa.eu/en/ai-act/article-43)
+- [European Commission high-risk-system timeline](https://digital-strategy.ec.europa.eu/en/policies/guidelines-ai-high-risk-systems)
 
 ## Revision — 2026-07-18
 
@@ -329,3 +349,11 @@ permitted-material boilerplate collapsed into the shared "Choose reviewers and m
 `version-calibration` content lives in `/docs/how-it-works` (adaptive review); extraction/triage exceptions became a
 sentence in "Automate what is objective". The search index and the agent-readable `public/docs/use-cases.md` mirror
 were updated to match.
+
+## Revision — 2026-07-21
+
+`product-experiences` is replaced by `hiring-decisions`, a consequential candidate-ranking example that materially
+influences who advances. The public copy identifies the Annex III employment context, preserves the Article 6
+classification qualification, states the Commission's current 2 December 2027 timeline, and distinguishes RateLoop's
+review-workflow evidence from legal classification, provider conformity assessment, and compliance. The landing page,
+browser docs, agent-readable Markdown, search index, iconography, and focused tests must remain synchronized.
