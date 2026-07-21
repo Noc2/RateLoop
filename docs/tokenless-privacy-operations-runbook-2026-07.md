@@ -32,8 +32,8 @@ operator procedure, role, and evidence owner.
   API and OAuth access, memberships, identity/contact data, and wallet proof state, then tombstones the opaque principal.
 - Workspace deletion is owner-only and is blocked by any settled, reserved, or available funds; an active subscription;
   reserved or accepted assignments; open asks; or unsettled billing, policy, or usage reservations. On confirmation, the
-  service revokes workspace credentials and integrations, removes access, archives private groups, queues private
-  objects for deletion, and tombstones the workspace.
+  service revokes workspace credentials and integrations, removes member and reviewer access, revokes pending
+  invitations, queues private objects for deletion, and tombstones the workspace.
 - Public-chain records and records subject to accounting, payment, fraud/security, dispute, audit, or legal-hold duties
   are retained or anonymized under their applicable schedule. Each retained category must record the reason and review
   or expiry deadline; the deletion result must not describe retained evidence as erased.

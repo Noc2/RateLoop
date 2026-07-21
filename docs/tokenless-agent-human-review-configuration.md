@@ -39,7 +39,7 @@ Audience and material sensitivity are separate dimensions.
 
 | Audience | Permitted material | Compensation | Initial availability |
 | --- | --- | --- | --- |
-| Invited reviewers | Private workspace material through encrypted, assignment-bound leases; public-safe material is also allowed | Unpaid or USDC-paid | Unpaid ships first; paid stays hidden until voucher settlement is ready |
+| Workspace reviewers | Private workspace material through encrypted, assignment-bound leases; public-safe material is also allowed | Unpaid or USDC-paid | Unpaid ships first; paid stays hidden until voucher settlement is ready |
 | RateLoop network | Public, synthetic, or owner-confirmed redacted material only | USDC-paid | Available only when public paid-panel readiness passes |
 | Hybrid | Public-safe material only; invited and network cohorts remain separate and deduplicated | USDC-paid | Hidden until both lanes and aggregation pass readiness |
 
@@ -97,6 +97,11 @@ only** so an earlier hidden delegation cannot reactivate.
 Setup and management query effective hosted readiness. A recognized schema value is not evidence that a lane works. Unavailable lanes are absent from the primary path; an existing policy whose capability becomes unavailable shows the blocking reason and safe recovery action.
 
 Generic MCP and ordinary Codex plugin behavior are advisory. They may never be labelled host-enforced. Host enforcement requires a verified adapter that owns the output boundary, records signed/versioned enforcement evidence, blocks release on a required review, and resumes only from a terminal or owner-authorized result.
+
+Workspace reviewers are managed directly in **Reviews** as one workspace roster; owners do not create or select
+reviewer groups. Workspace members are managed separately in **Workspace**. Reviewer access supplies only eligibility
+for assignment-bound review leases and never grants workspace membership, project administration, or general access to
+private material.
 
 ## Owner-facing summary
 

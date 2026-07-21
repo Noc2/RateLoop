@@ -104,16 +104,21 @@ A first workspace uses one resumable setup flow:
 2. connect an agent;
 3. confirm the agent identity and declaration;
 4. choose review behavior, public/private material boundaries, and safe spending defaults; and
-5. invite people or prepare invitation codes when an invited reviewer lane is needed. Setup may create either an
+5. invite reviewers or prepare invitation codes when a workspace-reviewer lane is needed. Setup may create either an
    individually bound one-use code or a capacity-limited shared code for the currently missing reviewer seats. A
    shared code is a short-lived bearer credential, may be restricted to a verified email domain, and grants only
-   private-group membership. It never carries intended specialist areas; each member's knowledge is confirmed
-   individually after joining.
+   workspace reviewer access. It never grants workspace membership or carries intended specialist areas; each
+   reviewer's knowledge is confirmed individually after joining.
 
 The flow shows the current stage, permits backward navigation, persists progress per workspace, and hides the normal
 Agents management menu until setup is completed or the workspace is grandfathered. The global product shell remains
-available. Downstream registries, evaluation history, billing, group management, and technical identifiers appear only
-when their prerequisite exists and the user requests that capability.
+available. Downstream registries, evaluation history, billing, reviewer management, and technical identifiers appear
+only when their prerequisite exists and the user requests that capability.
+
+Workspace membership and reviewer access are independent. Owners manage workspace members and their administrative
+roles in **Workspace**. They manage reviewers, reviewer invitations, expertise, expiry, and assignment eligibility in
+**Reviews**. A workspace-member invitation never makes the recipient a reviewer, a reviewer invitation never grants
+workspace or project administration, and a person who needs both capabilities receives both grants explicitly.
 
 A basic agent connection is deliberately safe: it may read its bound context and assurance state, verify connection
 health, and record an idempotent review-requirement decision under the owner policy. It cannot publish a review, spend,
