@@ -64,6 +64,7 @@ export default async function AgentConnectionPage({ params }: { params: Promise<
     action: "Return to the agent and continue with the original connection.",
     showDeadline: true,
   };
+  const recoveryAction = intent.status === "action_required" ? intent.recoveryAction : null;
   const appOrigin = getOptionalAppUrl()?.replace(/\/$/, "") ?? "";
   const machineHandoff = {
     schemaVersion: "2026-07-17",
@@ -89,7 +90,20 @@ export default async function AgentConnectionPage({ params }: { params: Promise<
         </h1>
         <p className="mt-3 max-w-2xl text-base leading-7 text-base-content/70">{status.action}</p>
 
-        <PublicAgentConnectionStatus />
+        {recoveryAction ? (
+          <section
+            className="mt-5 rounded-xl border border-amber-300/25 bg-amber-300/[0.07] p-4"
+            aria-labelledby="connection-recovery-heading"
+            role="alert"
+          >
+            <h2 id="connection-recovery-heading" className="text-sm font-semibold text-amber-100">
+              Resolve this connection
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-amber-50/80">{recoveryAction}</p>
+          </section>
+        ) : null}
+
+        {!recoveryAction ? <PublicAgentConnectionStatus /> : null}
 
         {status.showDeadline && intent.hardExpiresAt ? (
           <p className="mt-6 border-t border-white/10 pt-5 text-sm text-base-content/55">

@@ -1174,6 +1174,7 @@ export function AgentConnectionPanel({
               .slice(0, 1)
               .map(intent => {
                 const copy = connectionIntentCopy(intent.status);
+                const recoveryAction = intent.status === "action_required" ? intent.recoveryAction : "";
                 return (
                   <article key={intent.intentId}>
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -1185,10 +1186,17 @@ export function AgentConnectionPanel({
                           <span className="badge badge-ghost font-mono text-xs">{intent.status}</span>
                         </div>
                         <p className="mt-2 text-sm leading-6 text-base-content/55">{copy.detail}</p>
-                        <p className="mt-2 text-sm text-base-content/55">You can close this page.</p>
-                        {intent.recoveryAction ? (
-                          <p className="mt-2 text-xs leading-5 text-base-content/45">{intent.recoveryAction}</p>
-                        ) : null}
+                        {recoveryAction ? (
+                          <div
+                            className="mt-4 rounded-xl border border-amber-300/25 bg-amber-300/[0.07] p-4"
+                            role="alert"
+                          >
+                            <p className="text-sm font-semibold text-amber-100">Resolve this connection</p>
+                            <p className="mt-1 text-sm leading-6 text-amber-50/80">{recoveryAction}</p>
+                          </div>
+                        ) : (
+                          <p className="mt-2 text-sm text-base-content/55">You can close this page.</p>
+                        )}
                         {(intent.clientName || intent.clientVersion) && (
                           <p className="mt-2 text-xs text-base-content/45">
                             {intent.clientName || "Agent host"}

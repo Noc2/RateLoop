@@ -1,5 +1,6 @@
 import "server-only";
 import { TOKENLESS_MCP_PROTOCOL_VERSION, TOKENLESS_MCP_PROTOCOL_VERSIONS } from "~~/lib/mcp/protocol";
+import { workspaceToolErrorPayload } from "~~/lib/mcp/workspaceConnectionError";
 import {
   createWorkspaceMcpSession,
   enqueueOwnerApprovalElicitation,
@@ -406,7 +407,7 @@ function toolResult(value: unknown) {
 }
 
 function toolError(error: TokenlessServiceError) {
-  const value = { code: error.code, message: error.message, retryable: error.retryable };
+  const value = workspaceToolErrorPayload(error);
   return { ...toolResult(value), isError: true };
 }
 

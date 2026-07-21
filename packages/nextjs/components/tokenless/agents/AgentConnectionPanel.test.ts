@@ -81,6 +81,14 @@ test("intent deadlines end pending state client-side", () => {
   );
 });
 
+test("workspace conflicts present the saved recovery action as the primary next step", () => {
+  assert.match(source, /intent\.status === "action_required" \? intent\.recoveryAction : ""/);
+  assert.match(source, /Resolve this connection/);
+  assert.match(source, /role="alert"/);
+  assert.match(source, /\{recoveryAction\}/);
+  assert.match(source, /recoveryAction \? \([\s\S]*?\) : \([\s\S]*?You can close this page\./);
+});
+
 test("legacy pairings remain manageable but cannot be issued from the default path", () => {
   assert.match(source, /Legacy connection needs attention/);
   assert.match(source, /action needed/);

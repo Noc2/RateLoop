@@ -53,6 +53,15 @@ later active turn and the host offers no native action should you uninstall ever
 `rateloop` and `rateloop-workspace`. Then resume the same task with the original connection message. Do not remove
 unrelated plugins or create a replacement link.
 
+### Codex is connected to another workspace
+
+One Codex OAuth connection can have only one active RateLoop workspace binding. When RateLoop reports a
+`workspace_conflict`, it requests one fresh authorization from the host. Use the owner-facing recovery action: **This
+Codex connection is active in another workspace. Complete the host’s OAuth action to connect this task with a separate
+credential.** Then retry the preserved connection intent. Do not identify, disconnect, or change the other workspace;
+do not expose a workspace identifier, copy the connection secret again, or change MCP configuration. Deleted and
+revoked bindings are cleared by RateLoop and should not produce this conflict.
+
 Do not put credentials in the MCP configuration. Do not create a background service or polling task to keep a connection
 alive.
 

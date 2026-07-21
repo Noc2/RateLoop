@@ -78,6 +78,10 @@ test("public connection page exposes safe human and machine handoff state", () =
   assert.doesNotMatch(publicPage, /<span className="badge[\s\S]{0,100}\{intent\.status\}/);
   assert.match(publicPage, /referrer: "no-referrer"/);
   assert.match(publicPage, /robots: \{ follow: false, index: false \}/);
+  assert.match(publicPage, /intent\.status === "action_required" \? intent\.recoveryAction : null/);
+  assert.match(publicPage, /Resolve this connection/);
+  assert.match(publicPage, /role="alert"/);
+  assert.match(publicPage, /!recoveryAction \? <PublicAgentConnectionStatus \/> : null/);
 });
 
 test("claim fragment is inspected only in the browser and never stored or sent", () => {
