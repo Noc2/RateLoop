@@ -71,6 +71,17 @@ test("private reviews require exact integration/profile bindings and reject plai
     parseHumanAssurancePrivateReviewCreateRequest(request),
     request,
   );
+  assert.deepEqual(
+    parseHumanAssurancePrivateReviewCreateRequest({
+      ...request,
+      source: { ...request.source, contentType: "Text/Plain; Charset=UTF-8" },
+      suggestion: {
+        ...request.suggestion,
+        contentType: 'text/plain; charset="utf-8"',
+      },
+    }),
+    request,
+  );
   assert.throws(
     () =>
       parseHumanAssurancePrivateReviewCreateRequest({
@@ -94,6 +105,14 @@ test("private reviews require exact integration/profile bindings and reject plai
         source: { ...request.source, bytesBase64: "" },
       }),
     /bytesBase64/u,
+  );
+  assert.throws(
+    () =>
+      parseHumanAssurancePrivateReviewCreateRequest({
+        ...request,
+        source: { ...request.source, contentType: "text/plain; charset" },
+      }),
+    /contentType/u,
   );
 });
 

@@ -8,8 +8,8 @@ import {
   createAgentPairing,
   submitAgentRegistration,
 } from "~~/lib/tokenless/agentIntegrations";
-import { __setArtifactPrivacyRuntimeForTests } from "~~/lib/tokenless/artifactPrivacy";
-import { createAssuranceProject } from "~~/lib/tokenless/humanAssurance";
+import { __setArtifactPrivacyRuntimeForTests, commitPrivateReviewArtifact } from "~~/lib/tokenless/artifactPrivacy";
+import { createAssuranceProject, hashHumanAssuranceDocument } from "~~/lib/tokenless/humanAssurance";
 import { hashHumanReviewPayload } from "~~/lib/tokenless/humanReviewPayloadCommitments";
 import { createPrivateGroup } from "~~/lib/tokenless/privateGroups";
 import {
@@ -288,6 +288,110 @@ test("private foundation encrypts separate artifacts and exact replay is idempot
   );
   assert.equal(persisted.includes("private source"), false);
   assert.equal(persisted.includes("private suggestion"), false);
+});
+
+test("MIME parameters normalize before reservation so a canonical retry remains idempotent", async () => {
+  const setup = await fixture();
+  memoryArtifactRuntime();
+  const parameterized = {
+    ...setup,
+    request: {
+      ...setup.request,
+      source: { ...setup.request.source, contentType: "Text/Plain; Charset=UTF-8" },
+      suggestion: { ...setup.request.suggestion, contentType: 'text/plain; charset="utf-8"' },
+    },
+  };
+
+  const first = await preparePrivateReviewFoundation(parameterized);
+  const retried = await preparePrivateReviewFoundation(setup);
+  assert.equal(retried.privateReviewId, first.privateReviewId);
+  const artifacts = await dbClient.execute("SELECT content_type FROM tokenless_assurance_artifacts ORDER BY role");
+  assert.deepEqual(artifacts.rows, [{ content_type: "text/plain" }, { content_type: "text/plain" }]);
+  assert.equal(
+    Number((await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_private_review_requests")).rows[0]?.count),
+    1,
+  );
+});
+
+test("invalid artifact metadata fails before reservation and does not poison an idempotent retry", async () => {
+  const setup = await fixture();
+  memoryArtifactRuntime();
+  await assert.rejects(
+    preparePrivateReviewFoundation({
+      ...setup,
+      request: {
+        ...setup.request,
+        source: { ...setup.request.source, contentType: "text/plain; charset" },
+      },
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_artifact_metadata",
+  );
+  assert.equal(
+    Number((await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_private_review_requests")).rows[0]?.count),
+    0,
+  );
+
+  const retried = await preparePrivateReviewFoundation(setup);
+  assert.equal(retried.status, "ready_for_assignment");
+  assert.equal(
+    Number((await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_private_review_requests")).rows[0]?.count),
+    1,
+  );
+});
+
+test("a pre-fix failed metadata reservation repairs its legacy hash through the same request", async () => {
+  const setup = await fixture();
+  memoryArtifactRuntime({ failFirstPut: true });
+  const request = {
+    ...setup.request,
+    source: { ...setup.request.source, contentType: "text/plain; charset=utf-8" },
+    suggestion: { ...setup.request.suggestion, contentType: "text/plain; charset=utf-8" },
+  };
+  await assert.rejects(preparePrivateReviewFoundation({ ...setup, request }), /simulated blob interruption/u);
+
+  const requestReference = `${request.integrationId}:api_key:${setup.principal.apiKeyId}:${request.idempotencyKey}`;
+  const sourceCommitment = commitPrivateReviewArtifact({
+    bytes: Buffer.from(request.source.bytesBase64, "base64"),
+    kind: "source",
+    requestReference,
+    workspaceId: setup.workspaceId,
+  });
+  const suggestionCommitment = commitPrivateReviewArtifact({
+    bytes: Buffer.from(request.suggestion.bytesBase64, "base64"),
+    kind: "suggestion",
+    requestReference,
+    workspaceId: setup.workspaceId,
+  });
+  const legacyRequestHash = hashHumanAssuranceDocument({
+    callerCredentialId: setup.principal.apiKeyId,
+    callerCredentialKind: "api_key",
+    cohortId: request.cohortId,
+    dataClassification: request.dataClassification,
+    integrationId: request.integrationId,
+    projectId: request.projectId,
+    requestProfile: request.requestProfile,
+    source: { contentType: request.source.contentType, commitment: sourceCommitment },
+    suggestion: { contentType: request.suggestion.contentType, commitment: suggestionCommitment },
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_private_review_requests
+          SET request_hash=?,last_preparation_error_code='invalid_artifact_metadata'
+          WHERE integration_id=? AND idempotency_key=?`,
+    args: [legacyRequestHash, request.integrationId, request.idempotencyKey],
+  });
+
+  const recovered = await preparePrivateReviewFoundation(setup);
+  assert.equal(recovered.status, "ready_for_assignment");
+  const stored = await dbClient.execute(
+    "SELECT request_hash,foundation_status,last_preparation_error_code,source_artifact_id,suggestion_artifact_id FROM tokenless_private_review_requests",
+  );
+  assert.equal(stored.rows[0]?.foundation_status, "ready_for_assignment");
+  assert.equal(stored.rows[0]?.last_preparation_error_code, null);
+  assert.notEqual(stored.rows[0]?.source_artifact_id, null);
+  assert.notEqual(stored.rows[0]?.suggestion_artifact_id, null);
+  assert.notEqual(stored.rows[0]?.request_hash, legacyRequestHash);
+  const parameterizedReplay = await preparePrivateReviewFoundation({ ...setup, request });
+  assert.equal(parameterizedReplay.privateReviewId, recovered.privateReviewId);
 });
 
 test("private foundation freezes caller-verifiable commitments separately from vault commitments", async () => {

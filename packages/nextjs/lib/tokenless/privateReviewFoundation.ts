@@ -2,6 +2,7 @@ import {
   HUMAN_ASSURANCE_SCHEMA_VERSION,
   type HumanAssurancePrivateReviewCreateRequest,
   type HumanAssurancePrivateReviewCreateResponse,
+  normalizeMimeContentType,
 } from "@rateloop/sdk";
 import { randomUUID } from "node:crypto";
 import "server-only";
@@ -398,18 +399,54 @@ function assertBinding(input: {
 
 async function claimExistingPreparation(input: {
   existing: QueryRow;
+  expectedIdentity: {
+    callerCredentialId: string;
+    callerCredentialKind: CallerCredentialKind;
+    cohortId: string;
+    dataClassification: string;
+    externalSourceEvidenceHash: string | null;
+    externalSuggestionCommitment: string | null;
+    profileHash: string;
+    profileId: string;
+    profileVersion: number;
+    projectId: string;
+    taskCommitment: string;
+  };
+  legacyRequestHashes: readonly string[];
   leaseId: string;
   now: Date;
   requestHash: string;
 }) {
-  if (rowString(input.existing, "request_hash") !== input.requestHash) {
+  const existingRequestHash = rowString(input.existing, "request_hash");
+  const status = rowString(input.existing, "foundation_status");
+  const matchesFrozenIdentity =
+    rowString(input.existing, "caller_credential_id") === input.expectedIdentity.callerCredentialId &&
+    rowString(input.existing, "caller_credential_kind") === input.expectedIdentity.callerCredentialKind &&
+    rowString(input.existing, "cohort_id") === input.expectedIdentity.cohortId &&
+    rowString(input.existing, "private_sensitivity") === input.expectedIdentity.dataClassification &&
+    rowString(input.existing, "external_source_evidence_hash") === input.expectedIdentity.externalSourceEvidenceHash &&
+    rowString(input.existing, "external_suggestion_commitment") ===
+      input.expectedIdentity.externalSuggestionCommitment &&
+    rowString(input.existing, "request_profile_hash") === input.expectedIdentity.profileHash &&
+    rowString(input.existing, "request_profile_id") === input.expectedIdentity.profileId &&
+    rowInteger(input.existing, "request_profile_version") === input.expectedIdentity.profileVersion &&
+    rowString(input.existing, "project_id") === input.expectedIdentity.projectId &&
+    rowString(input.existing, "task_commitment") === input.expectedIdentity.taskCommitment;
+  const repairsLegacyMetadataReservation =
+    existingRequestHash !== input.requestHash &&
+    existingRequestHash !== null &&
+    status === "failed_recoverable" &&
+    rowString(input.existing, "last_preparation_error_code") === "invalid_artifact_metadata" &&
+    rowString(input.existing, "source_artifact_id") === null &&
+    rowString(input.existing, "suggestion_artifact_id") === null &&
+    (input.legacyRequestHashes.includes(existingRequestHash) || matchesFrozenIdentity);
+  if (existingRequestHash !== input.requestHash && !repairsLegacyMetadataReservation) {
     throw new TokenlessServiceError(
       "The idempotency key is already bound to another private review.",
       409,
       "private_review_idempotency_conflict",
     );
   }
-  const status = rowString(input.existing, "foundation_status");
   if (status === "ready_for_assignment" || status === "awaiting_owner_rebind") {
     return { ownsLease: false, row: input.existing };
   }
@@ -429,19 +466,22 @@ async function claimExistingPreparation(input: {
   const uploadIds = parseArray(input.existing.preparation_upload_ids_json, "private-review preparation upload ids");
   const claimed = await dbClient.execute({
     sql: `UPDATE tokenless_private_review_requests
-          SET foundation_status = 'preparing', preparation_lease_id = ?, preparation_lease_expires_at = ?,
+          SET request_hash = ?, foundation_status = 'preparing', preparation_lease_id = ?, preparation_lease_expires_at = ?,
               preparation_attempt_count = preparation_attempt_count + 1,
               preparation_upload_ids_json = ?,
               last_preparation_error_code = NULL, updated_at = ?
           WHERE private_review_id = ?
             AND foundation_status IN ('preparing', 'failed_recoverable')
+            AND request_hash = ?
             AND (preparation_lease_expires_at IS NULL OR preparation_lease_expires_at <= ?)`,
     args: [
+      input.requestHash,
       input.leaseId,
       new Date(input.now.getTime() + PREPARATION_LEASE_MS),
       JSON.stringify([...uploadIds, input.leaseId]),
       input.now,
       rowString(input.existing, "private_review_id"),
+      existingRequestHash,
       input.now,
     ],
   });
@@ -469,6 +509,11 @@ export async function preparePrivateReviewFoundation(input: {
   now?: Date;
 }) {
   const now = input.now ?? new Date();
+  const sourceContentType = normalizeMimeContentType(input.request.source.contentType);
+  const suggestionContentType = normalizeMimeContentType(input.request.suggestion.contentType);
+  if (!sourceContentType || !suggestionContentType) {
+    throw new TokenlessServiceError("Private review artifact metadata is invalid.", 400, "invalid_artifact_metadata");
+  }
   const externalCommitments = externalContentCommitments(input.externalContentCommitments);
   const caller = await loadCallerAuthorization({
     classification: input.request.dataClassification,
@@ -510,18 +555,22 @@ export async function preparePrivateReviewFoundation(input: {
     requestReference,
     workspaceId: input.principal.workspaceId,
   });
-  const requestHash = hashHumanAssuranceDocument({
-    callerCredentialId: caller.callerCredentialId,
-    callerCredentialKind: caller.callerCredentialKind,
-    cohortId: input.request.cohortId,
-    dataClassification: input.request.dataClassification,
-    integrationId: input.request.integrationId,
-    projectId: input.request.projectId,
-    requestProfile: input.request.requestProfile,
-    source: { contentType: input.request.source.contentType, commitment: sourceCommitment },
-    suggestion: { contentType: input.request.suggestion.contentType, commitment: suggestionCommitment },
-    ...(externalCommitments ? { externalContentCommitments: externalCommitments } : {}),
-  });
+  const hashRequest = (sourceType: string, suggestionType: string) =>
+    hashHumanAssuranceDocument({
+      callerCredentialId: caller.callerCredentialId,
+      callerCredentialKind: caller.callerCredentialKind,
+      cohortId: input.request.cohortId,
+      dataClassification: input.request.dataClassification,
+      integrationId: input.request.integrationId,
+      projectId: input.request.projectId,
+      requestProfile: input.request.requestProfile,
+      source: { contentType: sourceType, commitment: sourceCommitment },
+      suggestion: { contentType: suggestionType, commitment: suggestionCommitment },
+      ...(externalCommitments ? { externalContentCommitments: externalCommitments } : {}),
+    });
+  const requestHash = hashRequest(sourceContentType, suggestionContentType);
+  const legacyRequestHash = hashRequest(input.request.source.contentType, input.request.suggestion.contentType);
+  const legacyRequestHashes = legacyRequestHash === requestHash ? [] : [legacyRequestHash];
 
   const binding = await loadBinding({
     cohortId: input.request.cohortId,
@@ -673,7 +722,26 @@ export async function preparePrivateReviewFoundation(input: {
   } catch (error) {
     const existing = await existingRequest(input.request.integrationId, input.request.idempotencyKey);
     if (!existing) throw error;
-    reservation = await claimExistingPreparation({ existing, leaseId, now, requestHash });
+    reservation = await claimExistingPreparation({
+      existing,
+      expectedIdentity: {
+        callerCredentialId: caller.callerCredentialId,
+        callerCredentialKind: caller.callerCredentialKind,
+        cohortId: input.request.cohortId,
+        dataClassification: input.request.dataClassification,
+        externalSourceEvidenceHash: externalCommitments?.sourceEvidenceHash ?? null,
+        externalSuggestionCommitment: externalCommitments?.suggestionCommitment ?? null,
+        profileHash: input.request.requestProfile.hash,
+        profileId: input.request.requestProfile.id,
+        profileVersion: input.request.requestProfile.version,
+        projectId: input.request.projectId,
+        taskCommitment,
+      },
+      legacyRequestHashes,
+      leaseId,
+      now,
+      requestHash,
+    });
   }
   if (!reservation.ownsLease) return responseFromRow(reservation.row);
 
@@ -694,8 +762,8 @@ export async function preparePrivateReviewFoundation(input: {
       projectId: input.request.projectId,
       requestReference,
       retentionDays: caller.retentionDays,
-      source: { bytes: sourceBytes, contentType: input.request.source.contentType },
-      suggestion: { bytes: suggestionBytes, contentType: input.request.suggestion.contentType },
+      source: { bytes: sourceBytes, contentType: sourceContentType },
+      suggestion: { bytes: suggestionBytes, contentType: suggestionContentType },
       uploadId: leaseId,
       workspaceId: input.principal.workspaceId,
       now,

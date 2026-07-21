@@ -1,3 +1,4 @@
+import { normalizeMimeContentType } from "@rateloop/sdk";
 import { createCipheriv, createDecipheriv, createHmac, randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
@@ -292,8 +293,8 @@ export async function storeEncryptedArtifact(input: {
     throw new TokenlessServiceError("Artifacts must be between 1 byte and 10 MB.", 400, "invalid_artifact_size");
   }
   const label = input.label.trim();
-  const contentType = input.contentType.trim().toLowerCase();
-  if (!label || label.length > 160 || !/^[a-z0-9][a-z0-9.+-]*\/[a-z0-9][a-z0-9.+-]*$/.test(contentType)) {
+  const contentType = normalizeMimeContentType(input.contentType);
+  if (!label || label.length > 160 || !contentType) {
     throw new TokenlessServiceError("Artifact metadata is invalid.", 400, "invalid_artifact_metadata");
   }
   const member = await requireProjectMember(input);
@@ -439,8 +440,8 @@ export async function storeEncryptedPrivateReviewArtifacts(input: {
         "invalid_artifact_size",
       );
     }
-    const contentType = value.contentType.trim().toLowerCase();
-    if (!/^[a-z0-9][a-z0-9.+-]*\/[a-z0-9][a-z0-9.+-]*$/.test(contentType)) {
+    const contentType = normalizeMimeContentType(value.contentType);
+    if (!contentType) {
       throw new TokenlessServiceError("Private review artifact metadata is invalid.", 400, "invalid_artifact_metadata");
     }
     return {

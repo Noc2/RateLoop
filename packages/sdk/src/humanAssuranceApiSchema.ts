@@ -9,6 +9,7 @@ import type {
   HumanAssuranceRunStatusResponse,
 } from "./humanAssuranceApiTypes";
 import { HUMAN_ASSURANCE_SCHEMA_VERSION } from "./humanAssuranceTypes";
+import { normalizeMimeContentType } from "./mimeContentType";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -200,10 +201,10 @@ export function parseHumanAssuranceProjectCreateResponse(
 function privateArtifact(value: unknown, path: string) {
   const input = record(value, path);
   exactKeys(input, ["contentType", "bytesBase64"], path);
-  const contentType = string(input.contentType, `${path}.contentType`)
-    .trim()
-    .toLowerCase();
-  if (!/^[a-z0-9][a-z0-9.+-]*\/[a-z0-9][a-z0-9.+-]*$/.test(contentType)) {
+  const contentType = normalizeMimeContentType(
+    string(input.contentType, `${path}.contentType`),
+  );
+  if (!contentType) {
     invalid(`${path}.contentType`, "a MIME content type");
   }
   const bytesBase64 = string(input.bytesBase64, `${path}.bytesBase64`).trim();

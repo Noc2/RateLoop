@@ -101,6 +101,7 @@ test("package root exposes only the tokenless client, schema, types, and generic
       "createTokenlessRateLoopClient",
       "hashTokenlessRoundAuthorization",
       "hashTokenlessRoundTerms",
+      "normalizeMimeContentType",
       "parseHumanAssuranceArtifact",
       "parseHumanAssuranceAudiencePolicy",
       "parseHumanAssuranceCase",

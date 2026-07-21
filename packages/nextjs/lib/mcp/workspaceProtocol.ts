@@ -1,3 +1,4 @@
+import { normalizeMimeContentType } from "@rateloop/sdk";
 import "server-only";
 import { TOKENLESS_MCP_PROTOCOL_VERSION, TOKENLESS_MCP_PROTOCOL_VERSIONS } from "~~/lib/mcp/protocol";
 import {
@@ -486,8 +487,16 @@ function reviewMaterial(value: unknown, origin: string) {
     if (typeof exact.sourceContentType !== "string" || typeof exact.suggestionContentType !== "string") {
       throw new TokenlessServiceError("Private review content types are required.", 400, "invalid_tool_arguments");
     }
+    const sourceContentType = normalizeMimeContentType(exact.sourceContentType);
+    const suggestionContentType = normalizeMimeContentType(exact.suggestionContentType);
+    if (!sourceContentType || !suggestionContentType) {
+      throw new TokenlessServiceError("Private review content types are invalid.", 400, "invalid_tool_arguments");
+    }
     return {
       kind: "private" as const,
+      // Preserve the caller's valid spelling until the foundation boundary.
+      // That boundary canonicalizes it and can recognize reservations created
+      // by older releases whose request hash included MIME parameters.
       sourceContentType: exact.sourceContentType,
       suggestionContentType: exact.suggestionContentType,
     };

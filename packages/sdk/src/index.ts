@@ -5,6 +5,7 @@ export * from "./humanAssuranceSchema";
 export * from "./humanAssuranceTypes";
 export * from "./humanReviewResultEnvelopeSchema";
 export * from "./humanReviewResultEnvelopeTypes";
+export * from "./mimeContentType";
 export * from "./tokenless";
 export * from "./tokenlessMedia";
 export * from "./tokenlessSchema";

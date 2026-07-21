@@ -1214,8 +1214,8 @@ test("finished automatic private setup lets the connected agent assign an eligib
     suggestionPayload,
     material: {
       kind: "private",
-      sourceContentType: "application/json",
-      suggestionContentType: "application/json",
+      sourceContentType: "application/json; charset=utf-8",
+      suggestionContentType: "Application/JSON; Charset=UTF-8",
     },
   });
   assert.equal(routed.action, "private_review_assigned");
@@ -1228,10 +1228,22 @@ test("finished automatic private setup lets the connected agent assign an eligib
     [PRIVATE_REVIEWER_A, PRIVATE_REVIEWER_B],
   );
   const stored = await dbClient.execute({
-    sql: `SELECT project_id,cohort_id FROM tokenless_private_review_requests WHERE private_review_id=?`,
+    sql: `SELECT r.project_id,r.cohort_id,source.content_type AS source_content_type,
+                 suggestion.content_type AS suggestion_content_type
+          FROM tokenless_private_review_requests r
+          JOIN tokenless_assurance_artifacts source ON source.artifact_id=r.source_artifact_id
+          JOIN tokenless_assurance_artifacts suggestion ON suggestion.artifact_id=r.suggestion_artifact_id
+          WHERE r.private_review_id=?`,
     args: [routed.foundation.privateReviewId],
   });
-  assert.deepEqual(stored.rows, [{ project_id: managedRouting.projectId, cohort_id: managedRouting.cohortId }]);
+  assert.deepEqual(stored.rows, [
+    {
+      project_id: managedRouting.projectId,
+      cohort_id: managedRouting.cohortId,
+      source_content_type: "application/json",
+      suggestion_content_type: "application/json",
+    },
+  ]);
 });
 
 test("OAuth keeps one stable tool list and fails closed for unavailable paid-network delivery", async () => {
