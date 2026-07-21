@@ -55,9 +55,9 @@ unrelated plugins or create a replacement link.
 
 ### Codex is connected to another workspace
 
-One Codex OAuth connection can have only one active RateLoop workspace binding. Reconnect an existing agent from its
-RateLoop connection screen; do not reuse an older untargeted connection message. The targeted reconnect uses two
-explicit decisions and never exposes or replaces the bearer credential:
+One Codex OAuth connection can have only one active RateLoop workspace binding. Reconnect an existing active or saved
+disconnected agent from its RateLoop connection screen; do not reuse an older untargeted connection message. The
+targeted reconnect uses two explicit decisions and never exposes or replaces the bearer credential:
 
 1. The agent reports: **Moving this Codex connection will disconnect it from its current RateLoop workspace and replace
    the selected agent’s previous connection.** The current credential holder must explicitly confirm that consequence

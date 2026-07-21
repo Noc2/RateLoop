@@ -264,18 +264,34 @@ export async function createAgentConnectionIntent(input: {
         throw new TokenlessServiceError("Agent integration is invalid.", 400, "invalid_agent_integration");
       }
       const target = await client.query(
-        `SELECT integration_id,status,activation_mode,token_family_id FROM tokenless_agent_integrations
+        `SELECT integration_id,workspace_id,agent_id,agent_version_id,status,activation_mode,token_family_id
+         FROM tokenless_agent_integrations
          WHERE integration_id=$1 AND workspace_id=$2 FOR UPDATE`,
         [input.reconnectIntegrationId, input.workspaceId],
       );
       const targetRow = target.rows[0] as Row | undefined;
-      if (
-        !targetRow ||
-        text(targetRow, "status") !== "active" ||
-        !["preauthorized_safe", "owner_approved"].includes(text(targetRow, "activation_mode") ?? "") ||
-        !text(targetRow, "token_family_id")
-      ) {
-        throw new TokenlessServiceError("Active OAuth integration not found.", 404, "agent_integration_not_found");
+      if (!targetRow || !isReconnectTargetIntegration(targetRow)) {
+        throw new TokenlessServiceError("Saved OAuth integration not found.", 404, "agent_integration_not_found");
+      }
+      if (text(targetRow, "status") === "revoked") {
+        const replacement = await client.query(
+          `SELECT integration_id FROM tokenless_agent_integrations
+           WHERE workspace_id=$1 AND agent_id=$2 AND agent_version_id=$3
+             AND status='active' AND integration_id<>$4 FOR UPDATE`,
+          [
+            input.workspaceId,
+            text(targetRow, "agent_id"),
+            text(targetRow, "agent_version_id"),
+            input.reconnectIntegrationId,
+          ],
+        );
+        if (replacement.rowCount) {
+          throw new TokenlessServiceError(
+            "This saved agent already has an active connection.",
+            409,
+            "agent_integration_already_active",
+          );
+        }
       }
       await client.query(
         `UPDATE tokenless_agent_workspace_moves
@@ -573,6 +589,12 @@ function targetBindingHash(row: Row) {
   )}`;
 }
 
+function isReconnectTargetIntegration(row: Row) {
+  if (!["preauthorized_safe", "owner_approved"].includes(text(row, "activation_mode") ?? "")) return false;
+  const status = text(row, "status");
+  return (status === "active" && Boolean(text(row, "token_family_id"))) || status === "revoked";
+}
+
 function workspaceMovePayload(row: Row) {
   return {
     status: text(row, "status")!,
@@ -619,13 +641,23 @@ async function prepareAgentWorkspaceMove(
     [targetIntegrationId, text(input.intent, "workspace_id")],
   );
   const target = targetResult.rows[0] as Row | undefined;
-  if (
-    !target ||
-    text(target, "status") !== "active" ||
-    !["preauthorized_safe", "owner_approved"].includes(text(target, "activation_mode") ?? "") ||
-    !text(target, "token_family_id")
-  ) {
-    throw new TokenlessServiceError("Active OAuth integration not found.", 404, "agent_integration_not_found");
+  if (!target || !isReconnectTargetIntegration(target)) {
+    throw new TokenlessServiceError("Saved OAuth integration not found.", 404, "agent_integration_not_found");
+  }
+  if (text(target, "status") === "revoked") {
+    const replacement = await client.query(
+      `SELECT integration_id FROM tokenless_agent_integrations
+       WHERE workspace_id=$1 AND agent_id=$2 AND agent_version_id=$3
+         AND status='active' AND integration_id<>$4 FOR UPDATE`,
+      [text(target, "workspace_id"), text(target, "agent_id"), text(target, "agent_version_id"), targetIntegrationId],
+    );
+    if (replacement.rowCount) {
+      throw new TokenlessServiceError(
+        "This saved agent already has an active connection.",
+        409,
+        "agent_integration_already_active",
+      );
+    }
   }
   const session = await client.query(
     `SELECT session_hash FROM tokenless_mcp_sessions
@@ -894,16 +926,41 @@ export async function approveAgentWorkspaceMove(input: {
       [text(move, "target_integration_id"), input.workspaceId],
     );
     const target = targetResult.rows[0] as Row | undefined;
+    const targetPriorFamilyId = text(move, "target_prior_token_family_id");
+    const targetStatus = text(target, "status");
+    const targetFamilyId = text(target, "token_family_id");
+    const targetStateMatches =
+      targetStatus === "active"
+        ? Boolean(targetPriorFamilyId) && targetFamilyId === targetPriorFamilyId
+        : targetStatus === "revoked" && (targetPriorFamilyId === null || targetFamilyId === targetPriorFamilyId);
     if (
       !target ||
-      text(target, "status") !== "active" ||
-      text(target, "token_family_id") !== text(move, "target_prior_token_family_id") ||
+      !isReconnectTargetIntegration(target) ||
+      !targetStateMatches ||
       targetBindingHash(target) !== text(move, "target_binding_hash")
     ) {
       throw new TokenlessServiceError(
         "The target connection changed. Create a new reconnect link.",
         409,
         "workspace_move_binding_changed",
+      );
+    }
+    const activeReplacement = await client.query(
+      `SELECT integration_id FROM tokenless_agent_integrations
+       WHERE workspace_id=$1 AND agent_id=$2 AND agent_version_id=$3
+         AND status='active' AND integration_id<>$4 FOR UPDATE`,
+      [
+        text(target, "workspace_id"),
+        text(target, "agent_id"),
+        text(target, "agent_version_id"),
+        text(target, "integration_id"),
+      ],
+    );
+    if (activeReplacement.rowCount) {
+      throw new TokenlessServiceError(
+        "This saved agent already has an active connection.",
+        409,
+        "agent_integration_already_active",
       );
     }
     const familyResult = await client.query(
@@ -986,8 +1043,8 @@ export async function approveAgentWorkspaceMove(input: {
         "workspace_move_work_in_progress",
       );
     }
-    const targetPriorFamilyId = text(move, "target_prior_token_family_id")!;
-    const affectedFamilies = [text(move, "source_token_family_id")!, targetPriorFamilyId];
+    const sourceFamilyId = text(move, "source_token_family_id")!;
+    const affectedFamilies = [sourceFamilyId, targetPriorFamilyId ?? sourceFamilyId];
     await client.query(
       `UPDATE tokenless_mcp_elicitation_requests SET state='expired'
        WHERE state <> 'responded' AND state <> 'expired'
@@ -1001,32 +1058,38 @@ export async function approveAgentWorkspaceMove(input: {
        WHERE status='active' AND (token_family_id=$2 OR token_family_id=$3)`,
       [now, ...affectedFamilies],
     );
-    await client.query(
-      `UPDATE tokenless_agent_oauth_authorization_codes SET revoked_at=$1
-       WHERE token_family_id=$2 AND revoked_at IS NULL`,
-      [now, targetPriorFamilyId],
-    );
-    await client.query(
-      `UPDATE tokenless_agent_oauth_refresh_tokens
-       SET revoked_at=$1,revocation_reason='workspace_connection_replaced'
-       WHERE token_family_id=$2 AND revoked_at IS NULL`,
-      [now, targetPriorFamilyId],
-    );
-    await client.query(
-      `UPDATE tokenless_agent_oauth_access_tokens
-       SET revoked_at=$1,revocation_reason='workspace_connection_replaced'
-       WHERE token_family_id=$2 AND revoked_at IS NULL`,
-      [now, targetPriorFamilyId],
-    );
-    await client.query(
-      `UPDATE tokenless_agent_oauth_token_families
-       SET status='revoked',revoked_at=$1,revoked_by=$2,revocation_reason='workspace_connection_replaced'
-       WHERE token_family_id=$3 AND status='active'`,
-      [now, actor, targetPriorFamilyId],
-    );
-    const revokedIntegrations = [
-      { integrationId: text(target, "integration_id")!, workspaceId: text(target, "workspace_id")! },
-    ];
+    if (targetPriorFamilyId) {
+      await client.query(
+        `UPDATE tokenless_agent_oauth_authorization_codes SET revoked_at=$1
+         WHERE token_family_id=$2 AND revoked_at IS NULL`,
+        [now, targetPriorFamilyId],
+      );
+      await client.query(
+        `UPDATE tokenless_agent_oauth_refresh_tokens
+         SET revoked_at=$1,revocation_reason='workspace_connection_replaced'
+         WHERE token_family_id=$2 AND revoked_at IS NULL`,
+        [now, targetPriorFamilyId],
+      );
+      await client.query(
+        `UPDATE tokenless_agent_oauth_access_tokens
+         SET revoked_at=$1,revocation_reason='workspace_connection_replaced'
+         WHERE token_family_id=$2 AND revoked_at IS NULL`,
+        [now, targetPriorFamilyId],
+      );
+      await client.query(
+        `UPDATE tokenless_agent_oauth_token_families
+         SET status='revoked',revoked_at=$1,revoked_by=$2,revocation_reason='workspace_connection_replaced'
+         WHERE token_family_id=$3 AND status='active'`,
+        [now, actor, targetPriorFamilyId],
+      );
+    }
+    const revokedIntegrations: Array<{ integrationId: string; workspaceId: string }> = [];
+    if (targetStatus === "active") {
+      revokedIntegrations.push({
+        integrationId: text(target, "integration_id")!,
+        workspaceId: text(target, "workspace_id")!,
+      });
+    }
     if (source) {
       revokedIntegrations.push({
         integrationId: text(source, "integration_id")!,
@@ -1076,7 +1139,7 @@ export async function approveAgentWorkspaceMove(input: {
       });
     }
     const targetPriorIntentId = text(move, "target_prior_connection_intent_id");
-    if (targetPriorIntentId) {
+    if (targetPriorIntentId && text(target, "connection_status") !== "superseded") {
       await client.query(
         `UPDATE tokenless_agent_connection_intents
          SET status='superseded',claimed_token_family_id=NULL,last_transition_at=$1,

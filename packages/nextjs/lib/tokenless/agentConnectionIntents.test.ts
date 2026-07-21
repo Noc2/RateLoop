@@ -454,6 +454,157 @@ test("a targeted reconnect requires source confirmation and target-owner approva
   assert.equal(retriedApproval.connection.integrationId, approved.connection.integrationId);
 });
 
+test("a disconnected saved OAuth agent reconnects from its revoked integration template", async () => {
+  const now = new Date();
+  const sourceWorkspace = await createWorkspace({ name: "Disconnected source", ownerAddress: OWNER });
+  const targetWorkspace = await createWorkspace({ name: "Saved target", ownerAddress: OWNER });
+  const sourceIntent = await createAgentConnectionIntent({
+    accountAddress: OWNER,
+    workspaceId: sourceWorkspace.workspaceId,
+    origin: "https://rateloop-tokenless.example",
+  });
+  const targetIntent = await createAgentConnectionIntent({
+    accountAddress: OWNER,
+    workspaceId: targetWorkspace.workspaceId,
+    origin: "https://rateloop-tokenless.example",
+  });
+  const sourcePrincipal = await createTokenFamily("oatf_disconnected_source");
+  const targetPrincipal = await createTokenFamily("oatf_disconnected_target");
+  const sourceClaim = await claimAgentConnectionIntent({
+    connectionUrl: sourceIntent.connectionUrl,
+    origin: "https://rateloop-tokenless.example",
+    principal: sourcePrincipal,
+  });
+  const targetClaim = await claimAgentConnectionIntent({
+    connectionUrl: targetIntent.connectionUrl,
+    origin: "https://rateloop-tokenless.example",
+    principal: targetPrincipal,
+  });
+  const savedWorkflowKeys = ["general-assistance", "saved-special"];
+  const savedGrants = [...SAFE_AGENT_CONNECTION_SCOPES, "workspace:saved-grant"];
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_integrations
+          SET status='revoked',token_family_id=NULL,allowed_workflow_keys_json=?,granted_scopes_json=?,
+              revoked_at=?,updated_at=? WHERE integration_id=?`,
+    args: [
+      JSON.stringify(savedWorkflowKeys),
+      JSON.stringify(savedGrants),
+      now,
+      now,
+      targetClaim.connection.integrationId,
+    ],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_connection_intents
+          SET status='superseded',claimed_token_family_id=NULL,last_transition_at=?,
+              last_transition_reason='fixture_disconnected' WHERE intent_id=?`,
+    args: [now, targetIntent.intent.intentId],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_oauth_token_families
+          SET status='revoked',revoked_at=?,revoked_by=?,revocation_reason='fixture_disconnected'
+          WHERE token_family_id=?`,
+    args: [now, OWNER, targetPrincipal.tokenFamilyId],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_integration_events
+          (event_id,integration_id,workspace_id,event_type,actor_type,actor_reference,details_json,created_at)
+          VALUES (?, ?, ?, 'revoked', 'account', ?, '{}', ?)`,
+    args: [`agie_${"d".repeat(32)}`, targetClaim.connection.integrationId, targetWorkspace.workspaceId, OWNER, now],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_connection_intent_events
+          (event_id,intent_id,workspace_id,from_status,to_status,actor_type,actor_reference,reason,details_json,created_at)
+          VALUES (?, ?, ?, 'testing', 'superseded', 'account', ?, 'fixture_disconnected', '{}', ?)`,
+    args: [`acie_${"e".repeat(32)}`, targetIntent.intent.intentId, targetWorkspace.workspaceId, OWNER, now],
+  });
+  const sessionHash = `sha256:${"f".repeat(64)}`;
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_mcp_sessions
+          (session_hash,workspace_id,integration_id,subject_principal_id,token_family_id,client_name,client_version,
+           protocol_version,elicitation_mode,status,created_at,last_seen_at,expires_at)
+          VALUES (?,?,?,?,?,'Test client','1.0.0','2025-06-18','form','active',?,?,?)`,
+    args: [
+      sessionHash,
+      sourceWorkspace.workspaceId,
+      sourceClaim.connection.integrationId,
+      OWNER,
+      sourcePrincipal.tokenFamilyId,
+      now,
+      now,
+      new Date(now.getTime() + 60 * 60_000),
+    ],
+  });
+
+  const reconnectIntent = await createAgentConnectionIntent({
+    accountAddress: OWNER,
+    workspaceId: targetWorkspace.workspaceId,
+    origin: "https://rateloop-tokenless.example",
+    reconnectIntegrationId: targetClaim.connection.integrationId,
+  });
+  const requested = await claimAgentConnectionIntent({
+    connectionUrl: reconnectIntent.connectionUrl,
+    origin: "https://rateloop-tokenless.example",
+    principal: sourcePrincipal,
+    mcpSessionHash: sessionHash,
+  });
+  const storedMove = await dbClient.execute({
+    sql: `SELECT target_prior_token_family_id,target_prior_connection_intent_id,status
+          FROM tokenless_agent_workspace_moves WHERE move_id=?`,
+    args: [requested.workspaceMove.transferId],
+  });
+  assert.equal(storedMove.rows[0]?.target_prior_token_family_id, null);
+  assert.equal(storedMove.rows[0]?.target_prior_connection_intent_id, targetIntent.intent.intentId);
+  assert.equal(storedMove.rows[0]?.status, "source_confirmation_required");
+  await confirmAgentWorkspaceMove({
+    principal: sourcePrincipal,
+    transferId: requested.workspaceMove.transferId,
+    origin: "https://rateloop-tokenless.example",
+  });
+  const approved = await approveAgentWorkspaceMove({
+    accountAddress: OWNER,
+    workspaceId: targetWorkspace.workspaceId,
+    transferId: requested.workspaceMove.transferId,
+  });
+  assert.equal(approved.connection.agentId, targetClaim.connection.agentId);
+  assert.equal(approved.connection.agentVersionId, targetClaim.connection.agentVersionId);
+  assert.equal(approved.connection.reviewPolicyId, targetClaim.connection.reviewPolicyId);
+  assert.notEqual(approved.connection.integrationId, targetClaim.connection.integrationId);
+
+  const replacement = await dbClient.execute({
+    sql: `SELECT status,token_family_id,allowed_workflow_keys_json,granted_scopes_json
+          FROM tokenless_agent_integrations WHERE integration_id=?`,
+    args: [approved.connection.integrationId],
+  });
+  assert.equal(replacement.rows[0]?.status, "active");
+  assert.equal(replacement.rows[0]?.token_family_id, sourcePrincipal.tokenFamilyId);
+  assert.deepEqual(JSON.parse(String(replacement.rows[0]?.allowed_workflow_keys_json)), savedWorkflowKeys);
+  assert.deepEqual(JSON.parse(String(replacement.rows[0]?.granted_scopes_json)), savedGrants);
+  const historicalEvents = await dbClient.execute({
+    sql: `SELECT COUNT(*)::integer AS count FROM tokenless_agent_integration_events
+          WHERE integration_id=? AND event_type='revoked'`,
+    args: [targetClaim.connection.integrationId],
+  });
+  assert.equal(Number(historicalEvents.rows[0]?.count), 1);
+  const supersedeEvents = await dbClient.execute({
+    sql: `SELECT COUNT(*)::integer AS count FROM tokenless_agent_connection_intent_events
+          WHERE intent_id=? AND to_status='superseded'`,
+    args: [targetIntent.intent.intentId],
+  });
+  assert.equal(Number(supersedeEvents.rows[0]?.count), 1);
+  const priorFamily = await dbClient.execute({
+    sql: "SELECT status FROM tokenless_agent_oauth_token_families WHERE token_family_id=?",
+    args: [targetPrincipal.tokenFamilyId],
+  });
+  assert.equal(priorFamily.rows[0]?.status, "revoked");
+  const sourceSession = await dbClient.execute({
+    sql: "SELECT status,integration_id FROM tokenless_mcp_sessions WHERE session_hash=?",
+    args: [sessionHash],
+  });
+  assert.equal(sourceSession.rows[0]?.status, "revoked");
+  assert.equal(sourceSession.rows[0]?.integration_id, sourceClaim.connection.integrationId);
+});
+
 test("verification fails closed after the hard connection deadline", async () => {
   const { workspaceId } = await createWorkspace({ name: "Expired verification", ownerAddress: OWNER });
   const issued = await createAgentConnectionIntent({

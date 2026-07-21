@@ -58,6 +58,7 @@ type AgentIntegration = {
   lastSeenAt: string | null;
   credentialExpiresAt: string | null;
   connectionStatus: string | null;
+  oauthClientId: string;
   oauthRecoveryAvailable: boolean;
 };
 
@@ -215,6 +216,7 @@ export function normalizeAgentIntegration(value: unknown): AgentIntegration {
     lastSeenAt: nullableStringField(row, "lastSeenAt"),
     credentialExpiresAt: nullableStringField(row, "credentialExpiresAt", "expiresAt"),
     connectionStatus: nullableStringField(row, "connectionStatus"),
+    oauthClientId: stringField(row, "oauthClientId"),
     oauthRecoveryAvailable: row.oauthRecoveryAvailable === true,
   };
 }
@@ -1051,7 +1053,14 @@ export function AgentConnectionPanel({
       connectionClock,
     ),
   );
-  const isFreshWorkspace =
+  const reconnectableIntegrations = integrations.filter(
+    (integration, index, entries) =>
+      integration.status === "revoked" &&
+      Boolean(integration.oauthClientId) &&
+      Boolean(integration.agentId) &&
+      entries.findIndex(candidate => candidate.agentId === integration.agentId) === index,
+  );
+  const showConnectionStart =
     !loading && activeConnectionIntents.length === 0 && activePairings.length === 0 && activeIntegrations.length === 0;
   const connectionHistory = useMemo<AgentConnectionHistoryEntry[]>(
     () => [
@@ -1099,22 +1108,41 @@ export function AgentConnectionPanel({
 
   return (
     <div className="space-y-5">
-      {isFreshWorkspace ? (
+      {showConnectionStart ? (
         <Card as="section" className="rounded-2xl p-6">
           <div>
-            <h2 className="text-2xl font-semibold">Connect your agent</h2>
+            <h2 className="text-2xl font-semibold">
+              {reconnectableIntegrations.length > 0 ? "Reconnect your agent" : "Connect your agent"}
+            </h2>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-base-content/60">
-              Copy one message into the agent chat you want to connect.
+              {reconnectableIntegrations.length > 0
+                ? "Reconnect a saved agent without changing its review settings."
+                : "Copy one message into the agent chat you want to connect."}
             </p>
           </div>
           <div className="mt-5 flex flex-wrap items-center gap-3">
-            <Button
-              type="button"
-              disabled={!workspaceId || loading || Boolean(busyAction) || activeConnectionIntents.length > 0}
-              onClick={() => void copyConnectionMessage()}
-            >
-              {busyAction === "create-intent" ? "Creating and copying…" : "Copy connection message"}
-            </Button>
+            {reconnectableIntegrations.length > 0 ? (
+              reconnectableIntegrations.map(integration => (
+                <Button
+                  key={integration.integrationId}
+                  type="button"
+                  disabled={!workspaceId || loading || Boolean(busyAction) || activeConnectionIntents.length > 0}
+                  onClick={() => void copyConnectionMessage(integration.integrationId)}
+                >
+                  {busyAction === "create-intent"
+                    ? "Creating and copying…"
+                    : `Reconnect ${integration.agentDisplayName || "agent"}`}
+                </Button>
+              ))
+            ) : (
+              <Button
+                type="button"
+                disabled={!workspaceId || loading || Boolean(busyAction) || activeConnectionIntents.length > 0}
+                onClick={() => void copyConnectionMessage()}
+              >
+                {busyAction === "create-intent" ? "Creating and copying…" : "Copy connection message"}
+              </Button>
+            )}
             <InfoPopover label="About safe agent access">
               This creates safe access. The agent cannot spend, publish, read private workspace content, or change
               workspace settings.
@@ -1134,12 +1162,12 @@ export function AgentConnectionPanel({
         </Card>
       ) : null}
 
-      {!isFreshWorkspace && status ? (
+      {!showConnectionStart && status ? (
         <p role="status" aria-live="polite" className="rounded-lg bg-emerald-300/10 p-3 text-sm text-emerald-100">
           {status}
         </p>
       ) : null}
-      {!isFreshWorkspace && error ? (
+      {!showConnectionStart && error ? (
         <p role="alert" className="rounded-lg bg-red-400/10 p-3 text-sm text-red-100">
           {error}
         </p>

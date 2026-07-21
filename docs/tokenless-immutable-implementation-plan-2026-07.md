@@ -133,13 +133,13 @@ operational credentials to host-controlled secure storage. Install, consent, rel
 preserve the original intent so the owner is not asked to paste again.
 
 An already connected agent can move to another workspace without an operator, database edit, deployment console, or
-host-specific OAuth recovery screen. The destination owner starts a reconnect for that workspace's existing agent. The
-currently authenticated source credential must explicitly confirm the short-lived move, after which the destination
-owner approves the consequence on the connection page. Approval creates a new destination-bound integration, preserves
-only the destination agent's existing review, publishing, and product grants, revokes the source binding and affected
-sessions plus the replaced destination credential, and never reveals the source workspace or copies its grants.
-Nonterminal assurance work or changed bindings block the move. The agent then reopens the same private intent and
-verifies the destination context.
+host-specific OAuth recovery screen. The destination owner starts a reconnect for that workspace's existing active or
+saved disconnected agent. The currently authenticated source credential must explicitly confirm the short-lived move,
+after which the destination owner approves the consequence on the connection page. Approval creates a new
+destination-bound integration, preserves only the destination agent's existing review, publishing, and product grants,
+revokes the source binding and affected sessions plus any replaced destination credential, and never reveals the source
+workspace or copies its grants. Nonterminal assurance work or changed bindings block the move. The agent then reopens
+the same private intent and verifies the destination context.
 
 The authenticated workspace MCP keeps a stable tool contract. A new connection calls
 `rateloop_get_agent_context -> rateloop_verify_connection`; verification is non-mutating and never creates a synthetic
