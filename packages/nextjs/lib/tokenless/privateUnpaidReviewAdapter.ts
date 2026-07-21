@@ -563,30 +563,50 @@ async function requestPrivateHumanReviewAssignments(input: {
     for (const reviewer of reviewers) {
       const grantResult = await client.query(
         `SELECT reviewer.status AS reviewer_status,access_grant.grant_id,access_grant.grant_hash,access_grant.project_scope,
-                access_grant.max_private_sensitivity,access_grant.valid_from,access_grant.valid_until
+                access_grant.max_private_sensitivity,access_grant.valid_from,access_grant.valid_until,
+                access_grant.source_invitation_id
          FROM tokenless_workspace_reviewers reviewer
          JOIN tokenless_principals principal
            ON principal.principal_id=reviewer.principal_address AND principal.status='active'
          JOIN tokenless_workspace_reviewer_access_grants access_grant
            ON access_grant.workspace_id=reviewer.workspace_id AND access_grant.principal_address=reviewer.principal_address
-         LEFT JOIN tokenless_workspace_reviewer_access_grant_projects grant_project
-           ON grant_project.workspace_id=access_grant.workspace_id AND grant_project.grant_id=access_grant.grant_id
-          AND grant_project.project_id=$5
-         LEFT JOIN tokenless_workspace_reviewer_invitation_redemptions redemption
-           ON redemption.workspace_id=access_grant.workspace_id AND redemption.grant_id=access_grant.grant_id
-          AND redemption.principal_address=access_grant.principal_address
-          AND redemption.invitation_id=access_grant.source_invitation_id
          WHERE reviewer.workspace_id=$1 AND reviewer.principal_address=$2 AND reviewer.status='active'
            AND access_grant.revoked_at IS NULL AND access_grant.valid_from<=$3
            AND (access_grant.valid_until IS NULL OR access_grant.valid_until>=$4)
-           AND (access_grant.project_scope='all' OR grant_project.grant_id IS NOT NULL)
-           AND (access_grant.source_invitation_id IS NULL OR redemption.grant_id IS NOT NULL)
          ORDER BY access_grant.valid_until DESC NULLS FIRST,access_grant.created_at,access_grant.grant_id
          FOR SHARE`,
-        [input.principal.workspaceId, reviewer, now, responseDeadline, text(row, "project_id")],
+        [input.principal.workspaceId, reviewer, now, responseDeadline],
       );
+      const eligibleGrants: Row[] = [];
+      for (const value of grantResult.rows as Row[]) {
+        const grantId = text(value, "grant_id");
+        const projectScope = text(value, "project_scope");
+        if (!grantId || (projectScope !== "all" && projectScope !== "selected")) continue;
+        if (projectScope === "selected") {
+          const projectGrant = await client.query(
+            `SELECT project_id
+             FROM tokenless_workspace_reviewer_access_grant_projects
+             WHERE workspace_id=$1 AND grant_id=$2 AND project_id=$3
+             LIMIT 1 FOR SHARE`,
+            [input.principal.workspaceId, grantId, text(row, "project_id")],
+          );
+          if (projectGrant.rowCount !== 1) continue;
+        }
+        const invitationId = text(value, "source_invitation_id");
+        if (invitationId) {
+          const redemption = await client.query(
+            `SELECT grant_id
+             FROM tokenless_workspace_reviewer_invitation_redemptions
+             WHERE workspace_id=$1 AND grant_id=$2 AND principal_address=$3 AND invitation_id=$4
+             LIMIT 1 FOR SHARE`,
+            [input.principal.workspaceId, grantId, reviewer, invitationId],
+          );
+          if (redemption.rowCount !== 1) continue;
+        }
+        eligibleGrants.push(value);
+      }
       const requiredSensitivity = exactPrivateSensitivity(text(row, "project_private_sensitivity"));
-      const grant = (grantResult.rows as Row[]).find(value => {
+      const grant = eligibleGrants.find(value => {
         const ceiling = exactPrivateSensitivity(text(value, "max_private_sensitivity"));
         return (
           requiredSensitivity !== null &&

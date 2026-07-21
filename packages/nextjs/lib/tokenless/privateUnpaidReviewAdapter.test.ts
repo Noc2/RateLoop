@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
@@ -56,6 +57,19 @@ const originalSamplerVersion = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY
 function hash(value: string): `sha256:${string}` {
   return `sha256:${createHash("sha256").update(value).digest("hex")}`;
 }
+
+test("assignment locks only the non-nullable reviewer grant rows", () => {
+  const source = readFileSync(new URL("./privateUnpaidReviewAdapter.ts", import.meta.url), "utf8");
+  const grantLookup = source.match(
+    /FROM tokenless_workspace_reviewers reviewer[\s\S]*?ORDER BY access_grant\.valid_until DESC NULLS FIRST,access_grant\.created_at,access_grant\.grant_id[\s\S]*?FOR SHARE`/u,
+  )?.[0];
+
+  assert.ok(grantLookup, "expected the assignment reviewer-grant lookup");
+  assert.doesNotMatch(grantLookup, /LEFT JOIN/u);
+  assert.match(grantLookup, /FOR SHARE`/u);
+  assert.match(source, /FROM tokenless_workspace_reviewer_access_grant_projects[\s\S]*?LIMIT 1 FOR SHARE`/u);
+  assert.match(source, /FROM tokenless_workspace_reviewer_invitation_redemptions[\s\S]*?LIMIT 1 FOR SHARE`/u);
+});
 
 beforeEach(() => {
   process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = "79".repeat(32);
