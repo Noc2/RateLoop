@@ -74,10 +74,20 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
     // tests pin those statements while service tests exercise the new schema.
     return null;
   }
-  if (file === "0131_workspace_reviewer_policy_acceptances.sql" && /^UPDATE\b/u.test(statement)) {
-    // pg-mem does not support the production UPDATE ... FROM backfills. Memory
-    // databases start empty, so only the structural migration is required here.
-    return null;
+  if (file === "0131_workspace_reviewer_policy_acceptances.sql") {
+    if (/^ALTER TABLE "tokenless_workspace_agent_setups"\s+DROP CONSTRAINT/u.test(statement)) {
+      // PostgreSQL generates the legacy inline FK with the `_fkey` suffix used
+      // by the production migration. pg-mem calls the same constraint `_fk`.
+      return statement.replace(
+        "tokenless_workspace_agent_setups_people_invitation_id_fkey",
+        "tokenless_workspace_agent_setups_people_invitation_id_fk",
+      );
+    }
+    if (/^UPDATE\b/u.test(statement)) {
+      // pg-mem does not support the production UPDATE ... FROM backfills. Memory
+      // databases start empty, so only the structural migration is required here.
+      return null;
+    }
   }
   if (
     file === "0123_evm_kms_signing_ledger_integrity.sql" &&
