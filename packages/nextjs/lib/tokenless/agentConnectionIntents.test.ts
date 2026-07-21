@@ -4,6 +4,11 @@ import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS } from "~~/lib/tokenless/adaptiveReviewDefaults";
 import {
+  __adaptiveReviewServiceTestUtils,
+  authenticateAdaptiveReviewPrincipal,
+  evaluateAdaptiveReviewRequirement,
+} from "~~/lib/tokenless/adaptiveReviewService";
+import {
   SAFE_AGENT_CONNECTION_SCOPES,
   approveAgentWorkspaceMove,
   claimAgentConnectionIntent,
@@ -15,14 +20,19 @@ import {
   verifyAgentConnection,
 } from "~~/lib/tokenless/agentConnectionIntents";
 import { listWorkspaceAgents } from "~~/lib/tokenless/agentRegistry";
-import { createWorkspace } from "~~/lib/tokenless/productCore";
+import { createWorkspace, createWorkspaceApiKey } from "~~/lib/tokenless/productCore";
+import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
 
 const OWNER = `rlp_${"a".repeat(24)}`;
 const OTHER_OWNER = `rlp_${"b".repeat(24)}`;
 const CLIENT_ID = "rloc_test_client";
 const RESOURCE = "https://rateloop-tokenless.example/api/agent/v1/mcp";
+const originalSamplerKey = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY;
+const originalSamplerVersion = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION;
 
 beforeEach(async () => {
+  process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = "77".repeat(32);
+  process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION = "agent-connection-intents-test-v1";
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
   const now = new Date();
   await dbClient.execute({
@@ -40,7 +50,13 @@ beforeEach(async () => {
   });
 });
 
-afterEach(() => __setDatabaseResourcesForTests(null));
+afterEach(() => {
+  __setDatabaseResourcesForTests(null);
+  if (originalSamplerKey === undefined) delete process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY;
+  else process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = originalSamplerKey;
+  if (originalSamplerVersion === undefined) delete process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION;
+  else process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION = originalSamplerVersion;
+});
 
 async function createTokenFamily(tokenFamilyId: string, subjectPrincipalId = OWNER) {
   const now = new Date();
@@ -68,6 +84,95 @@ async function createTokenFamily(tokenFamilyId: string, subjectPrincipalId = OWN
     resource: RESOURCE,
     scopes: [...SAFE_AGENT_CONNECTION_SCOPES],
   };
+}
+
+async function createReviewOpportunity(input: {
+  workspaceId: string;
+  connection: { agentId: string; agentVersionId: string; reviewPolicyId: string; reviewPolicyVersion: number };
+  externalOpportunityId: string;
+}) {
+  const binding = await dbClient.execute({
+    sql: `SELECT binding_id FROM tokenless_agent_human_review_bindings
+          WHERE workspace_id=? AND agent_id=? AND agent_version_id=?
+            AND selection_policy_id=? AND selection_policy_version=?
+            AND enabled=true AND superseded_at IS NULL`,
+    args: [
+      input.workspaceId,
+      input.connection.agentId,
+      input.connection.agentVersionId,
+      input.connection.reviewPolicyId,
+      input.connection.reviewPolicyVersion,
+    ],
+  });
+  if (binding.rowCount === 0) {
+    const ready = await seedReadyHumanReviewBinding({
+      workspaceId: input.workspaceId,
+      agentId: input.connection.agentId,
+      agentVersionId: input.connection.agentVersionId,
+      policyId: input.connection.reviewPolicyId,
+      policyVersion: input.connection.reviewPolicyVersion,
+      actor: OWNER,
+    });
+    await dbClient.execute({
+      sql: `UPDATE tokenless_agent_integrations
+            SET human_review_binding_id=?,human_review_binding_version=?
+            WHERE workspace_id=? AND agent_id=? AND agent_version_id=?`,
+      args: [
+        ready.bindingId,
+        ready.bindingVersion,
+        input.workspaceId,
+        input.connection.agentId,
+        input.connection.agentVersionId,
+      ],
+    });
+  }
+  const policy = await dbClient.execute({
+    sql: `SELECT audience_policy_json FROM tokenless_agent_review_policies
+          WHERE workspace_id=? AND policy_id=? AND version=?`,
+    args: [input.workspaceId, input.connection.reviewPolicyId, input.connection.reviewPolicyVersion],
+  });
+  const key = await createWorkspaceApiKey({
+    workspaceId: input.workspaceId,
+    name: `Reconnect lifecycle ${input.externalOpportunityId}`,
+    scopes: ["evaluation:read", "review:decide"],
+  });
+  const principal = await authenticateAdaptiveReviewPrincipal(`Bearer ${key.token}`, "review:decide");
+  const audiencePolicy = JSON.parse(String(policy.rows[0]?.audience_policy_json)) as Record<string, unknown>;
+  const decision = await evaluateAdaptiveReviewRequirement({
+    principal,
+    request: {
+      externalOpportunityId: input.externalOpportunityId,
+      agentId: input.connection.agentId,
+      agentVersionId: input.connection.agentVersionId,
+      policyId: input.connection.reviewPolicyId,
+      policyVersion: input.connection.reviewPolicyVersion,
+      workflowKey: "general-assistance",
+      riskTier: "low",
+      audiencePolicyHash: __adaptiveReviewServiceTestUtils.sha256(audiencePolicy),
+      suggestionCommitment: __adaptiveReviewServiceTestUtils.sha256({ candidate: input.externalOpportunityId }),
+      sourceEvidence: {
+        reference: `reconnect/${input.externalOpportunityId}`,
+        hash: __adaptiveReviewServiceTestUtils.sha256({ source: input.externalOpportunityId }),
+      },
+      declaredConfidenceBps: 9_000,
+      metadataComplete: true,
+      execution: {
+        externalExecutionId: `execution-${input.externalOpportunityId}`,
+        status: "completed",
+        primarySpanId: "primary",
+        generationSpans: [
+          {
+            spanId: "primary",
+            role: "primary",
+            provider: "OpenAI",
+            requestedModel: "gpt-5.6-sol",
+            reasoningEffort: "medium",
+          },
+        ],
+      },
+    },
+  });
+  return decision;
 }
 
 test("one copied fragment intent activates safe access idempotently and verifies without review evidence", async () => {
@@ -395,6 +500,58 @@ test("a targeted reconnect requires source confirmation and target-owner approva
   assert.match(confirmed.workspaceMove.approvalUrl, /tab=connect/u);
   assert.match(confirmed.workspaceMove.approvalUrl, new RegExp(requested.workspaceMove.transferId, "u"));
 
+  const activeReview = await createReviewOpportunity({
+    workspaceId: sourceWorkspace.workspaceId,
+    connection: sourceClaim.connection,
+    externalOpportunityId: "reconnect-active-review",
+  });
+  const activeContinuationId = `hrc_${"4".repeat(32)}`;
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_review_continuations
+          (continuation_id,token_hash,workspace_id,integration_id,opportunity_id,lifecycle_revision,
+           allowed_operation,caller_credential_kind,caller_credential_id,issuance_key_hash,status,
+           retry_after_ms,issued_at,expires_at)
+          VALUES (?,?,?,?,?,2,'request_review','oauth_token_family',?,?,'active',1000,?,?)`,
+    args: [
+      activeContinuationId,
+      `sha256:${"5".repeat(64)}`,
+      sourceWorkspace.workspaceId,
+      sourceClaim.connection.integrationId,
+      activeReview.opportunityId,
+      sourcePrincipal.tokenFamilyId,
+      `sha256:${"6".repeat(64)}`,
+      now,
+      new Date(now.getTime() + 60 * 60_000),
+    ],
+  });
+  await assert.rejects(
+    () =>
+      approveAgentWorkspaceMove({
+        accountAddress: OWNER,
+        workspaceId: targetWorkspace.workspaceId,
+        transferId: requested.workspaceMove.transferId,
+      }),
+    (error: unknown) =>
+      Boolean(
+        error && typeof error === "object" && "code" in error && error.code === "workspace_move_work_in_progress",
+      ),
+  );
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_continuations SET status='expired',expired_at=?
+          WHERE continuation_id=?`,
+    args: [new Date(now.getTime() + 1), activeContinuationId],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_opportunities SET created_at=?,updated_at=?
+          WHERE workspace_id=? AND opportunity_id=?`,
+    args: [
+      new Date(now.getTime() - 3 * 60 * 60_000),
+      new Date(now.getTime() - 3 * 60 * 60_000),
+      sourceWorkspace.workspaceId,
+      activeReview.opportunityId,
+    ],
+  });
+
   const approved = await approveAgentWorkspaceMove({
     accountAddress: OWNER,
     workspaceId: targetWorkspace.workspaceId,
@@ -567,6 +724,55 @@ test("a disconnected saved OAuth agent reconnects from its revoked integration t
   assert.equal(storedMove.rows[0]?.target_prior_token_family_id, null);
   assert.equal(storedMove.rows[0]?.target_prior_connection_intent_id, targetIntent.intent.intentId);
   assert.equal(storedMove.rows[0]?.status, "source_confirmation_required");
+  const expiredAt = new Date(now.getTime() - 3 * 60 * 60_000);
+  const expiredReady = await createReviewOpportunity({
+    workspaceId: sourceWorkspace.workspaceId,
+    connection: sourceClaim.connection,
+    externalOpportunityId: "reconnect-expired-ready",
+  });
+  const expiredPending = await createReviewOpportunity({
+    workspaceId: sourceWorkspace.workspaceId,
+    connection: sourceClaim.connection,
+    externalOpportunityId: "reconnect-expired-pending",
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_opportunities SET created_at=?,updated_at=?
+          WHERE workspace_id=? AND opportunity_id IN (?,?)`,
+    args: [expiredAt, expiredAt, sourceWorkspace.workspaceId, expiredReady.opportunityId, expiredPending.opportunityId],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_opportunity_lifecycles
+          SET state=CASE WHEN opportunity_id=? THEN 'request_ready' ELSE 'pending' END,
+              state_revision=3,reason_codes_json='["fixture_expired"]',state_entered_at=?,created_at=?,updated_at=?
+          WHERE workspace_id=? AND opportunity_id IN (?,?)`,
+    args: [
+      expiredReady.opportunityId,
+      expiredAt,
+      expiredAt,
+      expiredAt,
+      sourceWorkspace.workspaceId,
+      expiredReady.opportunityId,
+      expiredPending.opportunityId,
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_review_continuations
+          (continuation_id,token_hash,workspace_id,integration_id,opportunity_id,lifecycle_revision,
+           allowed_operation,caller_credential_kind,caller_credential_id,issuance_key_hash,status,
+           retry_after_ms,issued_at,expires_at)
+          VALUES (?,?,?,?,?,3,'wait_for_review','oauth_token_family',?,?,'active',1000,?,?)`,
+    args: [
+      `hrc_${"1".repeat(32)}`,
+      `sha256:${"2".repeat(64)}`,
+      sourceWorkspace.workspaceId,
+      sourceClaim.connection.integrationId,
+      expiredPending.opportunityId,
+      sourcePrincipal.tokenFamilyId,
+      `sha256:${"3".repeat(64)}`,
+      new Date(expiredAt.getTime() - 60_000),
+      expiredAt,
+    ],
+  });
   await confirmAgentWorkspaceMove({
     principal: sourcePrincipal,
     transferId: requested.workspaceMove.transferId,
@@ -614,6 +820,16 @@ test("a disconnected saved OAuth agent reconnects from its revoked integration t
   });
   assert.equal(sourceSession.rows[0]?.status, "revoked");
   assert.equal(sourceSession.rows[0]?.integration_id, sourceClaim.connection.integrationId);
+  const recovered = await dbClient.execute({
+    sql: `SELECT opportunity_id,state,terminal_at FROM tokenless_agent_review_opportunity_lifecycles
+          WHERE workspace_id=? AND opportunity_id IN (?,?) ORDER BY opportunity_id`,
+    args: [sourceWorkspace.workspaceId, expiredReady.opportunityId, expiredPending.opportunityId],
+  });
+  assert.deepEqual(Object.fromEntries(recovered.rows.map(row => [String(row.opportunity_id), String(row.state)])), {
+    [expiredPending.opportunityId]: "failed_terminal",
+    [expiredReady.opportunityId]: "cancelled_before_commit",
+  });
+  assert.ok(recovered.rows.every(row => row.terminal_at !== null));
 });
 
 test("verification fails closed after the hard connection deadline", async () => {

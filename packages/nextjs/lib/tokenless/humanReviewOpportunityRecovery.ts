@@ -203,6 +203,28 @@ async function loadOpportunitySnapshot(
   workspaceId: string,
   opportunityId: string,
 ): Promise<OpportunitySnapshot> {
+  const lockedLifecycle = await client.query(
+    `SELECT state,state_revision,terminal_at
+     FROM tokenless_agent_review_opportunity_lifecycles
+     WHERE workspace_id = $1 AND opportunity_id = $2
+     FOR UPDATE`,
+    [workspaceId, opportunityId],
+  );
+  const lockedRow = lockedLifecycle.rows[0] as Row | undefined;
+  if (!lockedRow) {
+    throw new TokenlessServiceError(
+      "Human-review opportunity lifecycle not found.",
+      404,
+      "human_review_lifecycle_not_found",
+    );
+  }
+  if (lockedRow.terminal_at !== null && lockedRow.terminal_at !== undefined) {
+    throw new TokenlessServiceError(
+      "Human-review opportunity is already terminal.",
+      409,
+      "human_review_lifecycle_terminal",
+    );
+  }
   const result = await client.query(
     `SELECT l.state, l.state_revision, l.terminal_at,
             o.operation_key, o.run_id, o.created_at AS opportunity_created_at,
@@ -210,8 +232,7 @@ async function loadOpportunitySnapshot(
             policy.enabled AS policy_enabled, policy.superseded_at AS policy_superseded_at,
             binding.enabled AS binding_enabled, binding.superseded_at AS binding_superseded_at,
             private_request.response_deadline AS private_response_deadline,
-            private_delivery.response_deadline AS private_delivery_deadline,
-            approval.expires_at AS approval_deadline
+            private_delivery.response_deadline AS private_delivery_deadline
      FROM tokenless_agent_review_opportunity_lifecycles l
      JOIN tokenless_agent_review_opportunities o
        ON o.workspace_id = l.workspace_id AND o.opportunity_id = l.opportunity_id
@@ -233,37 +254,25 @@ async function loadOpportunitySnapshot(
      LEFT JOIN tokenless_private_review_requests private_request
        ON private_request.workspace_id = o.workspace_id
       AND private_request.private_review_id = private_delivery.private_review_id
-     LEFT JOIN LATERAL (
-       SELECT expires_at
-       FROM tokenless_agent_review_approval_requests value
-       WHERE value.workspace_id = o.workspace_id AND value.opportunity_id = o.opportunity_id
-         AND value.status IN ('approved', 'consumed')
-       ORDER BY value.revision DESC LIMIT 1
-     ) approval ON true
-     WHERE l.workspace_id = $1 AND l.opportunity_id = $2
-     FOR UPDATE OF l`,
+     WHERE l.workspace_id = $1 AND l.opportunity_id = $2`,
     [workspaceId, opportunityId],
   );
   const row = result.rows[0] as Row | undefined;
-  if (!row) {
-    throw new TokenlessServiceError(
-      "Human-review opportunity lifecycle not found.",
-      404,
-      "human_review_lifecycle_not_found",
-    );
-  }
-  if (row.terminal_at !== null && row.terminal_at !== undefined) {
-    throw new TokenlessServiceError(
-      "Human-review opportunity is already terminal.",
-      409,
-      "human_review_lifecycle_terminal",
-    );
-  }
+  if (!row) throw new Error("Locked human-review opportunity snapshot could not be loaded.");
+  const approvalResult = await client.query(
+    `SELECT expires_at
+     FROM tokenless_agent_review_approval_requests
+     WHERE workspace_id = $1 AND opportunity_id = $2
+       AND status IN ('approved', 'consumed')
+     ORDER BY revision DESC LIMIT 1`,
+    [workspaceId, opportunityId],
+  );
+  const approvalDeadline = (approvalResult.rows[0] as Row | undefined)?.expires_at ?? null;
   const currentState = state(row.state);
   const frozenDeadline =
     row.private_delivery_deadline ??
     row.private_response_deadline ??
-    row.approval_deadline ??
+    approvalDeadline ??
     new Date(
       date(row.opportunity_created_at, "opportunity creation time").getTime() +
         integer(row, "response_window_seconds", 1) * 1_000,
@@ -286,72 +295,88 @@ async function loadWorkSnapshot(
   client: QueryableClient,
   input: { workspaceId: string; opportunityId: string; operationKey: string | null; runId: string | null },
 ): Promise<WorkSnapshot> {
-  const result = await client.query(
+  const privateResult = await client.query(
     `SELECT
-       (SELECT COUNT(*) FROM tokenless_private_unpaid_review_assignments assignment
-          JOIN tokenless_private_unpaid_review_deliveries delivery
-            ON delivery.delivery_id = assignment.delivery_id
-         WHERE delivery.workspace_id = $1 AND delivery.opportunity_id = $2
-           AND (assignment.accepted_at IS NOT NULL OR assignment.status IN ('accepted','completed'))) AS private_accepted,
-       (SELECT COUNT(*) FROM tokenless_assurance_assignments assignment
-          JOIN tokenless_agent_review_opportunities opportunity ON opportunity.run_id = assignment.run_id
-         WHERE opportunity.workspace_id = $1 AND opportunity.opportunity_id = $2
-           AND (assignment.accepted_at IS NOT NULL OR assignment.status IN ('accepted','completed'))) AS assurance_accepted,
-       (SELECT COUNT(*) FROM tokenless_public_rater_responses response
-         WHERE $3::text IS NOT NULL AND response.operation_key = $3) AS public_responses,
-       (SELECT COUNT(*) FROM tokenless_public_rater_responses response
-         WHERE $3::text IS NOT NULL AND response.operation_key = $3
-           AND response.hash_verified_at IS NOT NULL) AS public_paid_payable,
-       (SELECT COUNT(*) FROM tokenless_assurance_responses response
-         WHERE $4::text IS NOT NULL AND response.run_id = $4) AS assurance_responses,
-       (SELECT COUNT(*) FROM tokenless_assurance_assignments assignment
-         WHERE $4::text IS NOT NULL AND assignment.run_id = $4
-           AND assignment.paid_assignment = true
-           AND (assignment.accepted_at IS NOT NULL OR assignment.status IN ('accepted','completed'))) AS assurance_paid_accepted,
-       (SELECT COUNT(*) FROM tokenless_assurance_assignments assignment
-         WHERE $4::text IS NOT NULL AND assignment.run_id = $4
-           AND assignment.paid_assignment = true AND assignment.status = 'completed'
-           AND EXISTS (SELECT 1 FROM tokenless_assurance_responses response
-                        WHERE response.run_id = assignment.run_id)) AS assurance_paid_payable,
-       (SELECT COUNT(*) FROM tokenless_rater_commits commit_record
-          JOIN tokenless_public_rater_responses response ON response.voucher_id = commit_record.voucher_id
-         WHERE $3::text IS NOT NULL AND response.operation_key = $3) AS public_commits,
-       (SELECT COUNT(*) FROM tokenless_paid_vouchers voucher
-          JOIN tokenless_agent_asks ask ON ask.operation_key = $3
-         WHERE $3::text IS NOT NULL AND ask.round_id IS NOT NULL
-           AND voucher.round_id = CAST(ask.round_id AS numeric)
-           AND (voucher.committed_at IS NOT NULL OR voucher.status = 'committed')) AS paid_commits,
-       (SELECT COUNT(*) FROM tokenless_private_unpaid_review_assignments assignment
-          JOIN tokenless_private_unpaid_review_deliveries delivery ON delivery.delivery_id = assignment.delivery_id
-         WHERE delivery.workspace_id = $1 AND delivery.opportunity_id = $2) +
-       (SELECT COUNT(*) FROM tokenless_assurance_assignments assignment
-         WHERE $4::text IS NOT NULL AND assignment.run_id = $4) AS assignment_count,
-       (SELECT COUNT(*) FROM tokenless_private_unpaid_review_assignments assignment
-          JOIN tokenless_private_unpaid_review_deliveries delivery ON delivery.delivery_id = assignment.delivery_id
-         WHERE delivery.workspace_id = $1 AND delivery.opportunity_id = $2
-           AND assignment.status IN ('reserved','accepted')) +
-       (SELECT COUNT(*) FROM tokenless_assurance_assignments assignment
-         WHERE $4::text IS NOT NULL AND assignment.run_id = $4
-           AND assignment.status IN ('reserved','accepted')) AS active_assignment_count,
-       (SELECT COUNT(*) FROM tokenless_private_unpaid_review_assignments assignment
-          JOIN tokenless_private_unpaid_review_deliveries delivery ON delivery.delivery_id = assignment.delivery_id
-         WHERE delivery.workspace_id = $1 AND delivery.opportunity_id = $2 AND assignment.status = 'expired') +
-       (SELECT COUNT(*) FROM tokenless_assurance_assignments assignment
-         WHERE $4::text IS NOT NULL AND assignment.run_id = $4
-           AND assignment.status IN ('expired','released')) AS expired_assignment_count`,
-    [input.workspaceId, input.opportunityId, input.operationKey, input.runId],
+       COUNT(*) FILTER (WHERE assignment.accepted_at IS NOT NULL
+                         OR assignment.status IN ('accepted','completed')) AS accepted,
+       COUNT(*) AS assignment_count,
+       COUNT(*) FILTER (WHERE assignment.status IN ('reserved','accepted')) AS active_assignment_count,
+       COUNT(*) FILTER (WHERE assignment.status = 'expired') AS expired_assignment_count
+     FROM tokenless_private_unpaid_review_assignments assignment
+     JOIN tokenless_private_unpaid_review_deliveries delivery
+       ON delivery.delivery_id = assignment.delivery_id
+     WHERE delivery.workspace_id = $1 AND delivery.opportunity_id = $2`,
+    [input.workspaceId, input.opportunityId],
   );
-  const row = result.rows[0] as Row | undefined;
-  if (!row) throw new Error("Human-review work snapshot was not returned.");
-  const privateAccepted = integer(row, "private_accepted");
-  const assuranceAccepted = integer(row, "assurance_accepted");
-  const publicResponses = integer(row, "public_responses");
-  const assuranceResponses = integer(row, "assurance_responses");
-  const publicPayableWorkCount = integer(row, "public_paid_payable");
-  const publicCommits = integer(row, "public_commits");
-  const paidCommits = integer(row, "paid_commits");
-  const assurancePaidAccepted = integer(row, "assurance_paid_accepted");
-  const assurancePaidPayable = integer(row, "assurance_paid_payable");
+  const privateRow = privateResult.rows[0] as Row | undefined;
+  if (!privateRow) throw new Error("Private human-review work snapshot was not returned.");
+
+  let publicResponses = 0;
+  let publicPayableWorkCount = 0;
+  let publicCommits = 0;
+  let paidCommits = 0;
+  if (input.operationKey) {
+    const publicResult = await client.query(
+      `SELECT
+         (SELECT COUNT(*) FROM tokenless_public_rater_responses response
+           WHERE response.operation_key = $1) AS responses,
+         (SELECT COUNT(*) FROM tokenless_public_rater_responses response
+           WHERE response.operation_key = $1 AND response.hash_verified_at IS NOT NULL) AS paid_payable,
+         (SELECT COUNT(*) FROM tokenless_rater_commits commit_record
+            JOIN tokenless_public_rater_responses response ON response.voucher_id = commit_record.voucher_id
+           WHERE response.operation_key = $1) AS commits,
+         (SELECT COUNT(*) FROM tokenless_paid_vouchers voucher
+            JOIN tokenless_agent_asks ask ON ask.operation_key = $1
+           WHERE ask.round_id IS NOT NULL AND voucher.round_id = CAST(ask.round_id AS numeric)
+             AND (voucher.committed_at IS NOT NULL OR voucher.status = 'committed')) AS paid_commits`,
+      [input.operationKey],
+    );
+    const publicRow = publicResult.rows[0] as Row | undefined;
+    if (!publicRow) throw new Error("Public human-review work snapshot was not returned.");
+    publicResponses = integer(publicRow, "responses");
+    publicPayableWorkCount = integer(publicRow, "paid_payable");
+    publicCommits = integer(publicRow, "commits");
+    paidCommits = integer(publicRow, "paid_commits");
+  }
+
+  let assuranceAccepted = 0;
+  let assuranceResponses = 0;
+  let assurancePaidAccepted = 0;
+  let assurancePaidPayable = 0;
+  let assuranceAssignmentCount = 0;
+  let assuranceActiveAssignmentCount = 0;
+  let assuranceExpiredAssignmentCount = 0;
+  if (input.runId) {
+    const assuranceResult = await client.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE assignment.accepted_at IS NOT NULL
+                           OR assignment.status IN ('accepted','completed')) AS accepted,
+         COUNT(*) FILTER (WHERE assignment.paid_assignment = true
+                           AND (assignment.accepted_at IS NOT NULL
+                             OR assignment.status IN ('accepted','completed'))) AS paid_accepted,
+         COUNT(*) FILTER (WHERE assignment.paid_assignment = true AND assignment.status = 'completed'
+                           AND EXISTS (SELECT 1 FROM tokenless_assurance_responses response
+                                       WHERE response.run_id = assignment.run_id)) AS paid_payable,
+         COUNT(*) AS assignment_count,
+         COUNT(*) FILTER (WHERE assignment.status IN ('reserved','accepted')) AS active_assignment_count,
+         COUNT(*) FILTER (WHERE assignment.status IN ('expired','released')) AS expired_assignment_count,
+         (SELECT COUNT(*) FROM tokenless_assurance_responses response WHERE response.run_id = $1) AS responses
+       FROM tokenless_assurance_assignments assignment
+       WHERE assignment.run_id = $1`,
+      [input.runId],
+    );
+    const assuranceRow = assuranceResult.rows[0] as Row | undefined;
+    if (!assuranceRow) throw new Error("Assurance work snapshot was not returned.");
+    assuranceAccepted = integer(assuranceRow, "accepted");
+    assuranceResponses = integer(assuranceRow, "responses");
+    assurancePaidAccepted = integer(assuranceRow, "paid_accepted");
+    assurancePaidPayable = integer(assuranceRow, "paid_payable");
+    assuranceAssignmentCount = integer(assuranceRow, "assignment_count");
+    assuranceActiveAssignmentCount = integer(assuranceRow, "active_assignment_count");
+    assuranceExpiredAssignmentCount = integer(assuranceRow, "expired_assignment_count");
+  }
+
+  const privateAccepted = integer(privateRow, "accepted");
   return {
     acceptedWorkCount: privateAccepted + assuranceAccepted + paidCommits,
     committedWorkCount: publicCommits + paidCommits,
@@ -359,9 +384,9 @@ async function loadWorkSnapshot(
     publicPayableWorkCount,
     paidAcceptedWorkCount: assurancePaidAccepted + Math.max(paidCommits, publicResponses),
     paidPayableWorkCount: assurancePaidPayable + publicPayableWorkCount,
-    assignmentCount: integer(row, "assignment_count"),
-    activeAssignmentCount: integer(row, "active_assignment_count"),
-    expiredAssignmentCount: integer(row, "expired_assignment_count"),
+    assignmentCount: integer(privateRow, "assignment_count") + assuranceAssignmentCount,
+    activeAssignmentCount: integer(privateRow, "active_assignment_count") + assuranceActiveAssignmentCount,
+    expiredAssignmentCount: integer(privateRow, "expired_assignment_count") + assuranceExpiredAssignmentCount,
   };
 }
 

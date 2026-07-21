@@ -6,6 +6,7 @@ import { assertCanCreateWorkspaceAgent } from "~~/lib/billing/entitlements";
 import { dbClient, dbPool } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS } from "~~/lib/tokenless/adaptiveReviewDefaults";
+import { recordHumanReviewOpportunityFailure } from "~~/lib/tokenless/humanReviewOpportunityRecovery";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
@@ -90,6 +91,53 @@ function stableJson(value: unknown): string {
 function text(row: Row | undefined, key: string) {
   const value = row?.[key];
   return value === null || value === undefined ? null : String(value);
+}
+
+async function settleExpiredWorkspaceMoveReviews(input: { transferId: string; workspaceId: string; now: Date }) {
+  const candidates = await dbPool.query(
+    `SELECT DISTINCT o.workspace_id,o.opportunity_id
+     FROM tokenless_agent_workspace_moves m
+     JOIN tokenless_agent_integrations target
+       ON target.integration_id=m.target_integration_id
+      AND target.workspace_id=m.target_workspace_id
+     LEFT JOIN tokenless_agent_integrations source
+       ON source.integration_id=m.source_integration_id
+      AND source.workspace_id=m.source_workspace_id
+     JOIN tokenless_agent_review_opportunities o
+       ON ((source.integration_id IS NOT NULL
+              AND o.workspace_id=source.workspace_id
+              AND o.agent_id=source.agent_id
+              AND o.agent_version_id=source.agent_version_id)
+           OR (o.workspace_id=target.workspace_id
+              AND o.agent_id=target.agent_id
+              AND o.agent_version_id=target.agent_version_id))
+     JOIN tokenless_agent_review_opportunity_lifecycles lifecycle
+       ON lifecycle.workspace_id=o.workspace_id
+      AND lifecycle.opportunity_id=o.opportunity_id
+     WHERE m.move_id=$1 AND m.target_workspace_id=$2
+       AND m.status='owner_approval_required'
+       AND lifecycle.state IN ('approval_required','request_ready','pending','blocked')
+     ORDER BY o.workspace_id,o.opportunity_id`,
+    [input.transferId, input.workspaceId],
+  );
+  for (const row of candidates.rows as Row[]) {
+    const workspaceId = text(row, "workspace_id")!;
+    const opportunityId = text(row, "opportunity_id")!;
+    try {
+      await recordHumanReviewOpportunityFailure({
+        workspaceId,
+        opportunityId,
+        transitionKey: `workspace-move:${input.transferId}:${opportunityId}`,
+        signal: "response_deadline_elapsed",
+        occurredAt: input.now,
+      });
+    } catch (error) {
+      if (error instanceof TokenlessServiceError && error.code === "human_review_response_deadline_active") {
+        continue;
+      }
+      throw error;
+    }
+  }
 }
 
 function iso(value: unknown) {
@@ -891,6 +939,11 @@ export async function approveAgentWorkspaceMove(input: {
     throw new TokenlessServiceError("Workspace move not found.", 404, "workspace_move_not_found");
   }
   const now = new Date();
+  await settleExpiredWorkspaceMoveReviews({
+    transferId: input.transferId,
+    workspaceId: input.workspaceId,
+    now,
+  });
   const client = await dbPool.connect();
   let connection: Awaited<ReturnType<typeof completedWorkspaceMoveConnection>> | null = null;
   let idempotent = false;
@@ -1022,8 +1075,9 @@ export async function approveAgentWorkspaceMove(input: {
     }
     const inFlight = await client.query(
       `SELECT 1 FROM tokenless_agent_review_continuations
-       WHERE status='active' AND (integration_id=$1 OR integration_id=$2) LIMIT 1`,
-      [sourceIntegrationId, text(move, "target_integration_id")],
+       WHERE status='active' AND expires_at>$3
+         AND (integration_id=$1 OR integration_id=$2) LIMIT 1`,
+      [sourceIntegrationId, text(move, "target_integration_id"), now],
     );
     if (inFlight.rowCount) {
       throw new TokenlessServiceError(

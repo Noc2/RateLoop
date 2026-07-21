@@ -85,6 +85,18 @@ class RecoveryClient {
       this.rollbacks += 1;
       return { rows: [], rowCount: null };
     }
+    if (normalized.startsWith("SELECT state,state_revision,terminal_at")) {
+      return {
+        rows: [
+          {
+            state: this.state.lifecycle.state,
+            state_revision: this.state.lifecycle.revision,
+            terminal_at: this.state.lifecycle.terminalAt,
+          },
+        ],
+        rowCount: 1,
+      };
+    }
     if (
       normalized.includes("FROM tokenless_agent_review_opportunity_lifecycles l") &&
       normalized.includes("JOIN tokenless_agent_review_opportunities o")
@@ -96,7 +108,7 @@ class RecoveryClient {
             state_revision: this.state.lifecycle.revision,
             terminal_at: this.state.lifecycle.terminalAt,
             operation_key: "operation_a",
-            run_id: null,
+            run_id: Object.keys(this.work).some(key => key.startsWith("assurance")) ? "run_a" : null,
             opportunity_created_at: new Date("2026-07-16T10:00:00.000Z"),
             response_window_seconds: 7_200,
             policy_enabled: !this.policyDisabled,
@@ -111,6 +123,9 @@ class RecoveryClient {
         rowCount: 1,
       };
     }
+    if (normalized.startsWith("SELECT expires_at\n     FROM tokenless_agent_review_approval_requests")) {
+      return { rows: [], rowCount: 0 };
+    }
     if (normalized.startsWith("SELECT * FROM tokenless_agent_review_opportunity_recovery_events")) {
       const row = this.state.recoveryEvents.get(String(values[2]));
       return { rows: row ? [row] : [], rowCount: row ? 1 : 0 };
@@ -118,19 +133,40 @@ class RecoveryClient {
     if (normalized.startsWith("SELECT status,resume_state,failure_count")) {
       return { rows: this.state.recovery ? [this.state.recovery] : [], rowCount: this.state.recovery ? 1 : 0 };
     }
-    if (normalized.startsWith("SELECT\n       (SELECT COUNT(*)")) {
+    if (normalized.includes("FROM tokenless_private_unpaid_review_assignments assignment")) {
       return {
         rows: [
           {
-            private_accepted: this.work.privateAccepted ?? 0,
-            assurance_accepted: this.work.assuranceAccepted ?? 0,
-            public_responses: this.work.publicResponses ?? 0,
-            public_paid_payable: this.work.publicPaidPayable ?? 0,
-            assurance_responses: this.work.assuranceResponses ?? 0,
-            assurance_paid_accepted: this.work.assurancePaidAccepted ?? 0,
-            assurance_paid_payable: this.work.assurancePaidPayable ?? 0,
-            public_commits: this.work.publicCommits ?? 0,
+            accepted: this.work.privateAccepted ?? 0,
+            assignment_count: this.work.assignmentCount ?? 0,
+            active_assignment_count: this.work.activeAssignmentCount ?? 0,
+            expired_assignment_count: this.work.expiredAssignmentCount ?? 0,
+          },
+        ],
+        rowCount: 1,
+      };
+    }
+    if (normalized.includes("FROM tokenless_public_rater_responses response")) {
+      return {
+        rows: [
+          {
+            responses: this.work.publicResponses ?? 0,
+            paid_payable: this.work.publicPaidPayable ?? 0,
+            commits: this.work.publicCommits ?? 0,
             paid_commits: this.work.paidCommits ?? 0,
+          },
+        ],
+        rowCount: 1,
+      };
+    }
+    if (normalized.includes("FROM tokenless_assurance_assignments assignment")) {
+      return {
+        rows: [
+          {
+            accepted: this.work.assuranceAccepted ?? 0,
+            responses: this.work.assuranceResponses ?? 0,
+            paid_accepted: this.work.assurancePaidAccepted ?? 0,
+            paid_payable: this.work.assurancePaidPayable ?? 0,
             assignment_count: this.work.assignmentCount ?? 0,
             active_assignment_count: this.work.activeAssignmentCount ?? 0,
             expired_assignment_count: this.work.expiredAssignmentCount ?? 0,
