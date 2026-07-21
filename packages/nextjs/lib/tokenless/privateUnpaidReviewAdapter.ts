@@ -1264,6 +1264,8 @@ export async function getPrivateUnpaidReviewAssignmentAccess(input: {
       policyVersion: integer(row, "private_group_policy_version", 1),
       policyHash: text(row, "private_group_policy_hash")!,
       principalAddress: reviewer,
+      workspaceReviewerAccessGrantId: text(row, "workspace_reviewer_access_grant_id")!,
+      workspaceReviewerAccessGrantHash: text(row, "workspace_reviewer_access_grant_hash")!,
     }),
     terms: {
       groupName: text(row, "private_group_name")!,
