@@ -10,6 +10,7 @@ import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { assertCredentialDataPolicy, assertDataIngressPolicy } from "~~/lib/privacy/dataPolicy";
 import { commitPrivateReviewArtifact, storeEncryptedPrivateReviewArtifacts } from "~~/lib/tokenless/artifactPrivacy";
 import { hashHumanAssuranceDocument } from "~~/lib/tokenless/humanAssurance";
+import { assertHumanReviewPayloadCommitments } from "~~/lib/tokenless/humanReviewPayloadCommitments";
 import type { ProductPrincipal } from "~~/lib/tokenless/productCore";
 import { authorizeProjectSubject } from "~~/lib/tokenless/projectAccess";
 import { expertiseQualificationRules, normalizeReviewerExpertiseKeys } from "~~/lib/tokenless/reviewerExpertise";
@@ -486,6 +487,16 @@ export async function preparePrivateReviewFoundation(input: {
 
   const sourceBytes = decodeArtifact(input.request.source.bytesBase64, "source.bytesBase64");
   const suggestionBytes = decodeArtifact(input.request.suggestion.bytesBase64, "suggestion.bytesBase64");
+  if (externalCommitments) {
+    assertHumanReviewPayloadCommitments({
+      sourcePayload: sourceBytes,
+      suggestionPayload: suggestionBytes,
+      commitments: {
+        source: externalCommitments.sourceEvidenceHash,
+        suggestion: externalCommitments.suggestionCommitment,
+      },
+    });
+  }
   const requestReference = `${input.request.integrationId}:${caller.callerCredentialKind}:${caller.callerCredentialId}:${input.request.idempotencyKey}`;
   const sourceCommitment = commitPrivateReviewArtifact({
     bytes: sourceBytes,

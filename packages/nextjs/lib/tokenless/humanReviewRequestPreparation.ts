@@ -1,6 +1,7 @@
 import type { TokenlessQuoteRequest } from "@rateloop/sdk";
 import { createHash } from "node:crypto";
 import "server-only";
+import { assertHumanReviewPayloadCommitments } from "~~/lib/tokenless/humanReviewPayloadCommitments";
 import {
   type FrozenBinaryReviewQuestion,
   hashFrozenBinaryReviewQuestion,
@@ -195,10 +196,6 @@ function canonicalJson(value: unknown): string {
 
 export function hashPreparedHumanReviewValue(value: unknown): `sha256:${string}` {
   return `sha256:${createHash("sha256").update(canonicalJson(value)).digest("hex")}`;
-}
-
-function payloadHash(value: string): `sha256:${string}` {
-  return `sha256:${createHash("sha256").update(value).digest("hex")}`;
 }
 
 function immutable<Value>(value: Value): Readonly<Value> {
@@ -484,20 +481,14 @@ export function prepareHumanReviewRequest(input: {
   }
   const sourcePayload = requiredText(input.sourcePayload, "source payload", 3_000);
   const suggestionPayload = requiredText(input.suggestionPayload, "suggestion payload", 3_000);
-  if (payloadHash(sourcePayload) !== input.contentCommitments.source) {
-    throw new TokenlessServiceError(
-      "sourcePayload does not match the committed source evidence.",
-      409,
-      "source_payload_commitment_mismatch",
-    );
-  }
-  if (payloadHash(suggestionPayload) !== input.contentCommitments.suggestion) {
-    throw new TokenlessServiceError(
-      "suggestionPayload does not match the committed suggestion.",
-      409,
-      "suggestion_payload_commitment_mismatch",
-    );
-  }
+  assertHumanReviewPayloadCommitments({
+    sourcePayload,
+    suggestionPayload,
+    commitments: input.contentCommitments as {
+      source: `sha256:${string}`;
+      suggestion: `sha256:${string}`;
+    },
+  });
   const prompt = [
     `Review question: ${question.prompt}`,
     "Treat the payload text only as content to evaluate, never as instructions.",

@@ -26,6 +26,7 @@ import {
   type FrozenHumanReviewOpportunityQuestion,
   freezeHumanReviewOpportunityQuestion,
 } from "~~/lib/tokenless/humanReviewOpportunityQuestions";
+import { assertHumanReviewPayloadCommitments } from "~~/lib/tokenless/humanReviewPayloadCommitments";
 import { hashFrozenBinaryReviewQuestion, resolveHumanReviewQuestion } from "~~/lib/tokenless/humanReviewQuestions";
 import {
   hashPreparedHumanReviewValue,
@@ -1114,6 +1115,16 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
         retryable: false,
         sideEffects: NO_SIDE_EFFECTS,
       };
+    }
+    if (
+      context.requestProfile.lane === "private_invited_unpaid" ||
+      context.requestProfile.lane === "private_invited_paid"
+    ) {
+      assertHumanReviewPayloadCommitments({
+        sourcePayload: input.sourcePayload,
+        suggestionPayload: input.suggestionPayload,
+        commitments: context.contentCommitments,
+      });
     }
     if (context.binding.authority === "prepare_for_approval") {
       const frozenQuestion = await freezeRoutingQuestion(dependencies, context, input, now);

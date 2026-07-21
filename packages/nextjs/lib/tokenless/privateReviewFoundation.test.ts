@@ -10,6 +10,7 @@ import {
 } from "~~/lib/tokenless/agentIntegrations";
 import { __setArtifactPrivacyRuntimeForTests } from "~~/lib/tokenless/artifactPrivacy";
 import { createAssuranceProject } from "~~/lib/tokenless/humanAssurance";
+import { hashHumanReviewPayload } from "~~/lib/tokenless/humanReviewPayloadCommitments";
 import { createPrivateGroup } from "~~/lib/tokenless/privateGroups";
 import {
   __privateReviewFoundationTestUtils,
@@ -293,8 +294,8 @@ test("private foundation freezes caller-verifiable commitments separately from v
   const setup = await fixture();
   memoryArtifactRuntime();
   const externalContentCommitments = {
-    sourceEvidenceHash: `sha256:${"a".repeat(64)}` as const,
-    suggestionCommitment: `sha256:${"b".repeat(64)}` as const,
+    sourceEvidenceHash: hashHumanReviewPayload("private source"),
+    suggestionCommitment: hashHumanReviewPayload("private suggestion"),
   };
   const first = await preparePrivateReviewFoundation({ ...setup, externalContentCommitments });
   const replay = await preparePrivateReviewFoundation({ ...setup, externalContentCommitments });
@@ -320,7 +321,28 @@ test("private foundation freezes caller-verifiable commitments separately from v
         suggestionCommitment: `sha256:${"c".repeat(64)}`,
       },
     }),
-    (error: unknown) => error instanceof TokenlessServiceError && error.code === "private_review_idempotency_conflict",
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "suggestion_payload_commitment_mismatch",
+  );
+});
+
+test("private foundation rejects external commitment drift before persisting or encrypting artifacts", async () => {
+  const setup = await fixture();
+  const objects = memoryArtifactRuntime();
+  await assert.rejects(
+    preparePrivateReviewFoundation({
+      ...setup,
+      externalContentCommitments: {
+        sourceEvidenceHash: hashHumanReviewPayload("private source changed"),
+        suggestionCommitment: hashHumanReviewPayload("private suggestion"),
+      },
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "source_payload_commitment_mismatch",
+  );
+  assert.equal(objects.size, 0);
+  assert.equal(
+    Number((await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_private_review_requests")).rows[0]?.count),
+    0,
   );
 });
 

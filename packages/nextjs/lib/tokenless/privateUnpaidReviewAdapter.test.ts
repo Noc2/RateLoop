@@ -558,8 +558,8 @@ async function fixture(
     });
   }
   const externalContentCommitments = {
-    sourceEvidenceHash: hash("private-source-evidence"),
-    suggestionCommitment: hash("private-suggestion-evidence"),
+    sourceEvidenceHash: hash("private source"),
+    suggestionCommitment: hash("private suggestion"),
   } as const;
   const prepared = await preparePrivateReviewFoundation({
     principal: integrated.principal,

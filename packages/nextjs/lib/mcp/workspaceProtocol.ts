@@ -206,7 +206,7 @@ export const workspaceMcpTools = [
     name: "rateloop_evaluate_review_requirement",
     annotations: idempotentAdditiveClosedAnnotations,
     description:
-      "Record one idempotent agent opportunity with privacy-safe task/model provenance and receive the frozen owner-policy decision. Send model identifiers, timings, usage, commitments, and an opaque evidence reference; never send prompts, outputs, tool payloads, or hidden reasoning.",
+      "Record one idempotent eligible output with privacy-safe task/model provenance and receive the frozen owner-policy decision. Commit the exact UTF-8 reviewer-visible request/context and the exact completed candidate response awaiting release. Setup messages, connection checks, tool chatter, and review-status text are not eligible outputs. Send only model identifiers, timings, usage, commitments, and an opaque evidence reference here; never send payload text, tool payloads, or hidden reasoning.",
     inputSchema: {
       additionalProperties: false,
       properties: {
@@ -214,12 +214,25 @@ export const workspaceMcpTools = [
         workflowKey: identifierSchema,
         riskTier: { pattern: "^[a-z][a-z0-9_-]{0,63}$", type: "string" },
         audiencePolicyHash: hashSchema,
-        suggestionCommitment: hashSchema,
+        suggestionCommitment: {
+          ...hashSchema,
+          description:
+            "SHA-256 of the exact UTF-8 completed candidate response awaiting release. The identical string must later be supplied as suggestionPayload.",
+        },
         sourceEvidence: {
           additionalProperties: false,
           properties: {
-            reference: { maxLength: 240, minLength: 1, type: "string" },
-            hash: hashSchema,
+            reference: {
+              description: "An opaque stable reference for the source evidence; do not place source text in it.",
+              maxLength: 240,
+              minLength: 1,
+              type: "string",
+            },
+            hash: {
+              ...hashSchema,
+              description:
+                "SHA-256 of the exact UTF-8 reviewer-visible request plus only the context needed to judge it. The identical string must later be supplied as sourcePayload.",
+            },
           },
           required: ["reference", "hash"],
           type: "object",
@@ -246,13 +259,25 @@ export const workspaceMcpTools = [
     name: "rateloop_request_review",
     annotations: consequentialOpenAnnotations,
     description:
-      "Route a required frozen opportunity using its exact owner-bound authority and lane. Check-only records the requirement without preparing, publishing, assigning, reserving, or spending. Prepare-for-approval creates only an immutable owner approval. Automatic routing requires the exact active grant. The bound profile either forbids question overrides or requires one binary agent-written question for this public-network request; RateLoop always derives the panel, response window, bounty, fee, and accepted-work reserve.",
+      "Route a required frozen opportunity using the exact reviewer-visible source and completed candidate that were committed during evaluation. Setup messages, connection checks, tool chatter, and review-status text are not reviewable outputs. Check-only records the requirement without preparing, publishing, assigning, reserving, or spending. Prepare-for-approval creates only an immutable owner approval. Automatic routing requires the exact active grant. The bound profile either forbids question overrides or requires one binary agent-written question for this public-network request; RateLoop always derives the panel, response window, bounty, fee, and accepted-work reserve.",
     inputSchema: {
       additionalProperties: false,
       properties: {
         opportunityId: identifierSchema,
-        sourcePayload: { maxLength: 3_000, minLength: 1, type: "string" },
-        suggestionPayload: { maxLength: 3_000, minLength: 1, type: "string" },
+        sourcePayload: {
+          description:
+            "The exact UTF-8 reviewer-visible request and only the context needed to judge it. It must be byte-for-byte identical to the text hashed into sourceEvidence.hash during rateloop_evaluate_review_requirement; never substitute setup, connection, tool, or review-status text.",
+          maxLength: 3_000,
+          minLength: 1,
+          type: "string",
+        },
+        suggestionPayload: {
+          description:
+            "The exact completed candidate response awaiting release. It must be byte-for-byte identical to the text hashed into suggestionCommitment during rateloop_evaluate_review_requirement; never send an example, setup response, tool message, or regenerated answer.",
+          maxLength: 3_000,
+          minLength: 1,
+          type: "string",
+        },
         question: perRequestBinaryQuestionSchema,
         material: {
           oneOf: [

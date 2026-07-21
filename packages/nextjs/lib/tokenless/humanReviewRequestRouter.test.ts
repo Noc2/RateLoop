@@ -105,6 +105,8 @@ function context(input?: {
   lane?: FrozenHumanReviewRoutingContext["requestProfile"]["lane"];
   lifecycleState?: string;
   questionAuthority?: "owner_fixed" | "agent_per_request";
+  sourcePayload?: string;
+  suggestionPayload?: string;
 }): FrozenHumanReviewRoutingContext {
   const lane = input?.lane ?? "public_paid_network";
   const privateLane = lane === "private_invited_unpaid" || lane === "private_invited_paid";
@@ -124,7 +126,10 @@ function context(input?: {
       audiencePolicyHash: frozenAudiencePolicy.policyHash,
       audiencePolicy: frozenAudiencePolicy.policy,
     },
-    contentCommitments: { source: payloadHash("private source"), suggestion: payloadHash("private suggestion") },
+    contentCommitments: {
+      source: payloadHash(input?.sourcePayload ?? "private source"),
+      suggestion: payloadHash(input?.suggestionPayload ?? "private suggestion"),
+    },
     decision: input?.decision ?? "required",
     lifecycle: { state: input?.lifecycleState ?? "approval_required", revision: 2 },
     binding: {
@@ -613,6 +618,63 @@ test("private unpaid routing blocks without changing lifecycle when exact owner 
   assert.equal(result.action, "blocked");
   assert.equal(result.action === "blocked" ? result.code : null, "private_routing_configuration_required");
   assert.deepEqual(calls.order, ["resolve_private"]);
+});
+
+test("private routing rejects changed source or suggestion bytes before every side effect", async () => {
+  for (const changed of ["source", "suggestion"] as const) {
+    const { calls, router } = dependencies(
+      context({ lane: "private_invited_unpaid", lifecycleState: "blocked", feedbackBonus: true }),
+    );
+    await assert.rejects(
+      router({
+        principal,
+        opportunityId: "opportunity_router",
+        sourcePayload: changed === "source" ? "private source " : "private source",
+        suggestionPayload: changed === "suggestion" ? "private suggestion\n" : "private suggestion",
+        material: { kind: "private", sourceContentType: "text/plain", suggestionContentType: "text/plain" },
+        now: NOW,
+      }),
+      (error: unknown) =>
+        error instanceof TokenlessServiceError && error.code === `${changed}_payload_commitment_mismatch`,
+    );
+    assert.deepEqual(calls.order, []);
+    assert.equal(calls.freeze, 0);
+    assert.equal(calls.resolvePrivate, 0);
+    assert.equal(calls.feedbackBonus, 0);
+    assert.equal(calls.activate, 0);
+    assert.equal(calls.foundation, 0);
+    assert.equal(calls.assign, 0);
+  }
+});
+
+test("private routing preserves the exact committed UTF-8 payload bytes", async () => {
+  const sourcePayload = "Customer request:\r\n  Send café hours ☕\n";
+  const suggestionPayload = "Agent response:\nOpen 08:00–17:00.\n\0End";
+  const { calls, router } = dependencies(
+    context({
+      lane: "private_invited_unpaid",
+      lifecycleState: "blocked",
+      sourcePayload,
+      suggestionPayload,
+    }),
+  );
+  const result = await router({
+    principal,
+    opportunityId: "opportunity_router",
+    sourcePayload,
+    suggestionPayload,
+    material: { kind: "private", sourceContentType: "text/plain", suggestionContentType: "text/plain" },
+    now: NOW,
+  });
+  assert.equal(result.action, "private_review_assigned");
+  const foundationInput = calls.foundationInput as {
+    request: { source: { bytesBase64: string }; suggestion: { bytesBase64: string } };
+  };
+  assert.deepEqual(Buffer.from(foundationInput.request.source.bytesBase64, "base64"), Buffer.from(sourcePayload));
+  assert.deepEqual(
+    Buffer.from(foundationInput.request.suggestion.bytesBase64, "base64"),
+    Buffer.from(suggestionPayload),
+  );
 });
 
 test("private unpaid automatic routing activates a blocked opportunity then freezes the resolved binding", async () => {
