@@ -44,11 +44,11 @@ test("manual handoff has exact copy and hides the authority field", () => {
 test("automatic request consequences distinguish unpaid private review from funded review", () => {
   assert.equal(
     reviewRoutingAuthorityDescription("ask_automatically", false),
-    "Create and send requests within the saved limits. An owner-approved publishing grant is required; funding permission is not.",
+    "After an explicit eligibility check, send required requests within the saved limits. This does not run the check. An owner-approved publishing grant is required; funding permission is not.",
   );
   assert.equal(
     reviewRoutingAuthorityDescription("ask_automatically", true),
-    "Create and send requests within the saved limits. Owner-approved publishing and funding permission are required.",
+    "After an explicit eligibility check, send required requests within the saved limits. This does not run the check. Owner-approved publishing and funding permission are required.",
   );
   assert.equal(
     reviewRoutingAuthorityDescription("prepare_for_approval", false),

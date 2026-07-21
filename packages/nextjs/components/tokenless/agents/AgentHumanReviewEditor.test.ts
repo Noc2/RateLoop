@@ -42,7 +42,7 @@ test("the contextual editor owns every human-review dimension through one canoni
   assert.match(source, /connection\?\.allowedWorkflowKeys/);
   assert.match(source, /provision: "private_invited_unpaid"/);
   assert.match(source, /privateReviewRouting\?\.ready/);
-  assert.match(source, /Automatic review requests are ready/);
+  assert.match(source, /Required reviews will send after the agent checks each eligible output/);
   assert.match(source, /unlock when enough invited reviewers join/);
   assert.match(source, /privateUnpaidBootstrapAvailable/);
   assert.match(source, /view\.configuration\?\.selection\.value \?\?/);
@@ -61,6 +61,10 @@ test("the contextual editor owns every human-review dimension through one canoni
   assert.match(source, /number\(request\.panelSize, 2\)/);
   assert.match(source, /draft\.audience === "private_invited" \? 2 : 3/);
   assert.match(source, /view\.connection\?\.connectionStatus === "connected"/);
+  assert.match(source, /view\.connection\?\.enforcementMode === "advisory"/);
+  assert.match(source, /reportedLane === "plugin-with-hooks"/);
+  assert.match(source, /Plugin connection/);
+  assert.match(source, /cannot prove\s+the host held an output until review reached a terminal result/);
   assert.match(routingSource, /disabled=\{automaticUnavailable\}/);
   assert.match(source, /mode === "manual" \? "check_only"/);
   assert.match(source, /enforcementMode: draft\.mode === "manual" \? "advisory"/);

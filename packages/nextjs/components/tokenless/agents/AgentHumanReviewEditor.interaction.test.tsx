@@ -20,7 +20,9 @@ test("the editor uses workspace reviewer readiness without exposing legacy group
         connection: {
           allowedWorkflowKeys: ["general-assistance"],
           connectionStatus: "connected",
+          enforcementMode: "advisory",
           integrationId: "integration-1",
+          reportedLane: "plugin-with-hooks",
         },
       });
     }
@@ -41,6 +43,8 @@ test("the editor uses workspace reviewer readiness without exposing legacy group
       "adaptive",
     );
     assert.equal((screen.getByRole("radio", { name: "Send automatically" }) as HTMLInputElement).disabled, false);
+    assert.ok(screen.getByText("Plugin connection: advisory."));
+    assert.ok(screen.getByText(/cannot prove the host held an output until review reached a terminal result/u));
     await userEvent.setup().click(screen.getByRole("button", { name: "Finish setup" }));
     assert.ok(
       await screen.findByText("Workspace reviewer routing is not ready. Invite reviewers in Reviews, then try again."),

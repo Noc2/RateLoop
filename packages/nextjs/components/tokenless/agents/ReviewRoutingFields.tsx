@@ -37,8 +37,8 @@ export function reviewRoutingAuthorityDescription(
   }
   if (authority === "ask_automatically") {
     return requiresFundingPermission
-      ? "Create and send requests within the saved limits. Owner-approved publishing and funding permission are required."
-      : "Create and send requests within the saved limits. An owner-approved publishing grant is required; funding permission is not.";
+      ? "After an explicit eligibility check, send required requests within the saved limits. This does not run the check. Owner-approved publishing and funding permission are required."
+      : "After an explicit eligibility check, send required requests within the saved limits. This does not run the check. An owner-approved publishing grant is required; funding permission is not.";
   }
   return "Report that review is required without creating or sending a request.";
 }

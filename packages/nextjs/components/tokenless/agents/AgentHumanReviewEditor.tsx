@@ -28,7 +28,13 @@ type OwnerView = {
     requestProfile: { value: Record<string, unknown> };
     selection: { value: Record<string, unknown> };
   } | null;
-  connection: { allowedWorkflowKeys: string[]; connectionStatus: string | null; integrationId: string } | null;
+  connection: {
+    allowedWorkflowKeys: string[];
+    connectionStatus: string | null;
+    enforcementMode: "advisory" | "host_enforced" | null;
+    integrationId: string;
+    reportedLane: string;
+  } | null;
 };
 
 type SaveResponse = {
@@ -303,7 +309,9 @@ function buildMutation(view: OwnerView, draft: Draft) {
 
 function savedStatus(response: SaveResponse, authority: Authority) {
   if (authority !== "ask_automatically") return "Human-review configuration saved.";
-  if (response.privateReviewRouting?.ready) return "Saved. Automatic review requests are ready.";
+  if (response.privateReviewRouting?.ready) {
+    return "Saved. Required reviews will send after the agent checks each eligible output.";
+  }
   if (response.privateReviewRouting?.reason === "reviewer_seats_insufficient") {
     return "Saved. Automatic requests will unlock when enough invited reviewers join.";
   }
@@ -443,6 +451,8 @@ export function AgentHumanReviewEditor({
   );
   const automaticAvailable = exactDelegationAvailable || privateUnpaidBootstrapAvailable;
   const creating = view.configuration === null;
+  const advisoryConnectionLabel =
+    view.connection?.reportedLane === "plugin-with-hooks" ? "Plugin connection" : "Connection";
 
   return (
     <Card as="section" id="agent-human-review-editor" className="rounded-2xl p-6">
@@ -454,6 +464,12 @@ export function AgentHumanReviewEditor({
           </p>
         </div>
       </div>
+      {view.connection?.enforcementMode === "advisory" ? (
+        <p className="mt-4 rounded-xl border border-warning/25 bg-warning/5 px-4 py-3 text-sm leading-6 text-base-content/75">
+          <strong>{advisoryConnectionLabel}: advisory.</strong> RateLoop can record and route reviews, but cannot prove
+          the host held an output until review reached a terminal result.
+        </p>
+      ) : null}
       <form className="mt-6 space-y-5" onSubmit={submit}>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="text-sm sm:col-span-2">

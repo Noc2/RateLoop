@@ -27,6 +27,10 @@ export const AGENT_CONNECTION_MESSAGE_CORE_BLOCK =
 export const AGENT_CONNECTION_MESSAGE_PLUGIN_REFERENCE_BLOCK =
   "[@RateLoop Workspace](plugin://rateloop-workspace@rateloop)";
 
+/** Ongoing review instructions shared by every connection path. */
+export const AGENT_CONNECTION_MESSAGE_REVIEW_LOOP_BLOCK =
+  "After RateLoop verifies the connection, use $rateloop-human-review-loop before releasing every eligible output. Connection alone does not submit or hold an output; if review is required, request it and wait for a terminal result.";
+
 /** Full install/resume/uninstall choreography for plugin hosts and the universal floor. */
 const PLUGIN_RECOVERY_BLOCK =
   "Treat the first missing RateLoop workspace-tool check as activation pending and do not ask me to uninstall then, including when this task resumes after host setup. On that first check, do not tell me to start a new task or paste the link. After I complete the action, resume through the host's Continue action when offered, check for RateLoop workspace tools on the next active turn, and continue automatically. Only if the tools are still missing on a later active turn and the host offers no action, tell me once to uninstall all existing RateLoop plugins, preserve this task, and check again after I return; never tell me to reinstall a plugin, repeat that recovery, paste the link, or approve the same action again.";
@@ -60,14 +64,30 @@ export function buildAgentConnectionMessageVariant(
         AGENT_CONNECTION_MESSAGE_PLUGIN_REFERENCE_BLOCK,
         AGENT_CONNECTION_MESSAGE_CORE_BLOCK,
         PLUGIN_RECOVERY_BLOCK,
+        AGENT_CONNECTION_MESSAGE_REVIEW_LOOP_BLOCK,
         closing,
       ].join(" ");
     case "generic-mcp":
-      return [AGENT_CONNECTION_MESSAGE_CORE_BLOCK, GENERIC_MCP_RECOVERY_BLOCK, closing].join(" ");
+      return [
+        AGENT_CONNECTION_MESSAGE_CORE_BLOCK,
+        GENERIC_MCP_RECOVERY_BLOCK,
+        AGENT_CONNECTION_MESSAGE_REVIEW_LOOP_BLOCK,
+        closing,
+      ].join(" ");
     case "settings-only":
-      return [SETTINGS_ONLY_BLOCK, AGENT_CONNECTION_MESSAGE_CORE_BLOCK, closing].join(" ");
+      return [
+        SETTINGS_ONLY_BLOCK,
+        AGENT_CONNECTION_MESSAGE_CORE_BLOCK,
+        AGENT_CONNECTION_MESSAGE_REVIEW_LOOP_BLOCK,
+        closing,
+      ].join(" ");
     case "headless":
-      return [HEADLESS_BLOCK, AGENT_CONNECTION_MESSAGE_CORE_BLOCK, closing].join(" ");
+      return [
+        HEADLESS_BLOCK,
+        AGENT_CONNECTION_MESSAGE_CORE_BLOCK,
+        AGENT_CONNECTION_MESSAGE_REVIEW_LOOP_BLOCK,
+        closing,
+      ].join(" ");
   }
 }
 

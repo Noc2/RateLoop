@@ -5,7 +5,10 @@ import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/acco
 import { dbClient, dbPool } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
-import { SAFE_AGENT_CONNECTION_SCOPES } from "~~/lib/tokenless/agentConnectionIntents";
+import {
+  SAFE_AGENT_CONNECTION_SCOPES,
+  connectionLaneFromClientCapabilitiesJson,
+} from "~~/lib/tokenless/agentConnectionIntents";
 import {
   type HumanReviewPaymentProfile,
   automaticHumanReviewGrantScopes,
@@ -1929,6 +1932,8 @@ function connectionFromRow(row: Row) {
     status: rowString(row, "status")!,
     connectionStatus: rowString(row, "connection_status"),
     activationMode: rowString(row, "activation_mode")!,
+    enforcementMode: rowString(row, "enforcement_mode"),
+    reportedLane: connectionLaneFromClientCapabilitiesJson(row.client_capabilities_json),
     publishingPolicyId: rowString(row, "publishing_policy_id"),
     publishingPolicyVersion: nullableInteger(row, "publishing_policy_version"),
     safeAccess: {
@@ -1995,7 +2000,7 @@ export async function getHumanReviewConfigurationForOwner(input: {
         [input.workspaceId, input.agentId, agent.agentVersionId],
       ),
       client.query(
-        `SELECT i.*, c.status AS connection_status
+        `SELECT i.*, c.status AS connection_status, c.client_capabilities_json
          FROM tokenless_agent_integrations i
          LEFT JOIN tokenless_agent_connection_intents c ON c.intent_id = i.connection_intent_id
          WHERE i.workspace_id = $1 AND i.agent_id = $2 AND i.agent_version_id = $3
