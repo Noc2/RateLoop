@@ -66,6 +66,15 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
     return null;
   }
   if (
+    file === "0130_workspace_reviewer_roster.sql" &&
+    (/\bDO \$\$/u.test(statement) || /^WITH "legacy_/u.test(statement))
+  ) {
+    // pg-mem does not parse the production-only legacy reviewer CTE backfills
+    // or procedural fail-closed guard. Memory databases start empty; source
+    // tests pin those statements while service tests exercise the new schema.
+    return null;
+  }
+  if (
     file === "0123_evm_kms_signing_ledger_integrity.sql" &&
     /^ALTER TABLE "tokenless_evm_kms_signing_ledger"\s+ADD CONSTRAINT/u.test(statement)
   ) {
