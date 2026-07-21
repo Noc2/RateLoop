@@ -9,16 +9,25 @@ import { hashFrozenBinaryReviewQuestion, resolveHumanReviewQuestion } from "~~/l
 import {
   type ExactPrivateReviewBinding,
   type FrozenHumanReviewRoutingContext,
+  __humanReviewRequestRouterTestUtils,
   createHumanReviewRequestRouter,
 } from "~~/lib/tokenless/humanReviewRequestRouter";
 import type { HumanReviewLaneReadiness } from "~~/lib/tokenless/reviewCapabilities";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import { workspacePrivateReviewRoutingIds } from "~~/lib/tokenless/workspacePrivateReviewRouting";
 
 type IntegrationPrincipal = Extract<AgentMcpPrincipal, { kind: "integration" }>;
 
 const NOW = new Date("2026-07-16T12:00:00.000Z");
 const HASH = `sha256:${"1a".repeat(32)}` as const;
 const POLICY = { id: "agpol_router", version: 3 };
+const PRIVATE_ROUTING_IDS = workspacePrivateReviewRoutingIds({
+  workspaceId: "workspace_router",
+  profileId: "profile_router",
+  profileVersion: 7,
+  profileHash: HASH,
+  privateGroupId: "group_router",
+});
 const payloadHash = (value: string) =>
   `sha256:${createHash("sha256").update(value).digest("hex")}` as `sha256:${string}`;
 
@@ -29,7 +38,7 @@ function audiencePolicy(privateLane: boolean) {
     version: 1,
     reviewerSource: privateLane ? ("customer_invited" as const) : ("rateloop_network" as const),
     compensation: "paid" as const,
-    cohorts: privateLane ? [{ cohortId: "cohort-router", minimumReviewers: 1, maximumReviewers: 100 }] : [],
+    cohorts: privateLane ? [{ cohortId: PRIVATE_ROUTING_IDS.cohortId, minimumReviewers: 2, maximumReviewers: 2 }] : [],
     selection: privateLane ? ("customer_named" as const) : ("randomized" as const),
     fallbacks: { allowed: false, sources: [] },
     requiredQualifications: [],
@@ -187,6 +196,17 @@ const approval = {
   schemaVersion: "rateloop.human-review-owner-approval.v1",
   action: "owner_approval_required",
 } as unknown as PreparedOwnerApproval;
+
+test("private routing selects the one cohort frozen into the admission policy", () => {
+  const frozen = context({ lane: "private_invited_unpaid" });
+  const legacy = { projectId: "hap_legacy", cohortId: "hacoh_legacy" };
+  const current = { ...PRIVATE_ROUTING_IDS };
+  assert.equal(
+    __humanReviewRequestRouterTestUtils.selectPrivatePolicyRoutingCandidate(frozen, [legacy, current]),
+    current,
+  );
+  assert.equal(__humanReviewRequestRouterTestUtils.selectPrivatePolicyRoutingCandidate(frozen, [legacy]), null);
+});
 
 const ask = {
   schemaVersion: "rateloop.tokenless.v2",

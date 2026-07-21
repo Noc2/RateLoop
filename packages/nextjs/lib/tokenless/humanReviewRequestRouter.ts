@@ -64,6 +64,7 @@ import { exactReviewerExpertiseDefinitionKey } from "~~/lib/tokenless/reviewerEx
 import { chooseExpertiseCoveredPanel } from "~~/lib/tokenless/reviewerExpertiseCoverage";
 import type { ReviewerExpertiseRequirement } from "~~/lib/tokenless/reviewerExpertiseOptions";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import { workspacePrivateReviewRoutingIds } from "~~/lib/tokenless/workspacePrivateReviewRouting";
 import { isWorkspaceStopEngaged } from "~~/lib/tokenless/workspaceStopControl";
 
 type Row = Record<string, unknown>;
@@ -794,13 +795,47 @@ async function resolveExactPrivateBinding(
       ? [{ ...candidate, reviewerAccountAddresses, paidReviewers }]
       : [];
   });
-  if (exact.length !== 1) return null;
+  const selected = selectPrivatePolicyRoutingCandidate(context, exact);
+  if (!selected) return null;
   return {
-    projectId: exact[0]!.projectId,
-    cohortId: exact[0]!.cohortId,
-    reviewerAccountAddresses: exact[0]!.reviewerAccountAddresses,
-    paidReviewers: paidIdentityRequired ? (exact[0]!.paidReviewers as PaidReviewerBinding[]) : null,
+    projectId: selected.projectId,
+    cohortId: selected.cohortId,
+    reviewerAccountAddresses: selected.reviewerAccountAddresses,
+    paidReviewers: paidIdentityRequired ? (selected.paidReviewers as PaidReviewerBinding[]) : null,
   };
+}
+
+function selectPrivatePolicyRoutingCandidate<T extends { cohortId: string; projectId: string }>(
+  context: FrozenHumanReviewRoutingContext,
+  candidates: readonly T[],
+): T | null {
+  const policy = context.selectionPolicy.audiencePolicy;
+  const cohort = policy.cohorts[0];
+  const group = context.requestProfile.privateGroup;
+  if (!group) return null;
+  const managed = workspacePrivateReviewRoutingIds({
+    workspaceId: context.workspaceId,
+    profileId: context.requestProfile.id,
+    profileVersion: context.requestProfile.version,
+    profileHash: context.requestProfile.hash,
+    privateGroupId: group.id,
+  });
+  if (
+    policy.reviewerSource !== "customer_invited" ||
+    policy.selection !== "customer_named" ||
+    policy.cohorts.length !== 1 ||
+    !cohort ||
+    cohort.cohortId !== managed.cohortId ||
+    cohort.minimumReviewers !== context.requestProfile.panelSize ||
+    cohort.maximumReviewers !== context.requestProfile.panelSize
+  ) {
+    return null;
+  }
+  return (
+    candidates.find(
+      candidate => candidate.projectId === managed.projectId && candidate.cohortId === managed.cohortId,
+    ) ?? null
+  );
 }
 
 async function activateExactAutonomousLane(
@@ -1456,5 +1491,6 @@ export const __humanReviewRequestRouterTestUtils = {
   deterministicActivationKey,
   deterministicPrivateIdempotencyKey,
   hasExactAutonomousGrant,
+  selectPrivatePolicyRoutingCandidate,
   resolveExactPrivateBinding,
 };
