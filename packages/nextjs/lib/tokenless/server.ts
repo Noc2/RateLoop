@@ -595,6 +595,9 @@ export async function createTokenlessAsk(
         "idempotency_conflict",
       );
     }
+    if (existing.status === "rejected") {
+      throw new TokenlessServiceError("The question did not pass pre-round moderation.", 410, "content_rejected");
+    }
     const existingQuote = await readQuote(existing.quoteId);
     if (!existingQuote) throw new TokenlessServiceError("Ask quote not found.", 409, "invalid_quote");
     return askResponse(existing, parseTokenlessQuoteResponse(JSON.parse(existingQuote.responseJson)), appOrigin);

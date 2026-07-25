@@ -303,6 +303,30 @@ test("pending operation waits fail closed after their continuation horizon", asy
   );
 });
 
+test("replaying a moderation-rejected ask fails closed instead of returning an unparseable status", async () => {
+  const quote = await createTokenlessQuote(quoteRequest());
+  const request = {
+    idempotencyKey: "test:ask:rejected1",
+    payment: { mode: "prepaid" as const, workspaceId: "rejected" },
+    quoteId: quote.quoteId,
+  };
+  const ask = await createTokenlessAsk(request, request.idempotencyKey, "https://tokenless.example");
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_asks SET status = 'rejected' WHERE operation_key = ?`,
+    args: [ask.operationKey],
+  });
+
+  await assert.rejects(
+    () => createTokenlessAsk(request, request.idempotencyKey, "https://tokenless.example"),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "content_rejected" && error.status === 410,
+  );
+  await assert.rejects(
+    () => waitForTokenlessAsk(ask.operationKey, "https://tokenless.example", { timeoutMs: 20 }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "content_rejected",
+  );
+});
+
 test("idempotency conflicts fail closed within a caller scope but cannot be preclaimed across scopes", async () => {
   const quote = await createTokenlessQuote(quoteRequest());
   const idempotencyKey = "test:ask:conflict1";
