@@ -1366,6 +1366,17 @@ async function fixture(
           VALUES (?,?,'Named private reviewers','customer_invited','customer_named',10,0,?,'[]','active',?,?,?)`,
     args: [cohortId, project.projectId, group.groupId, OWNER, foundationNow, foundationNow],
   });
+  // The foundation runs on the frozen fixture clock, but several tests move the response
+  // deadline with the real clock because the adaptive wait paths finalize against
+  // `Date.now()`. Reviewer access therefore has to outlive whichever clock is ahead, or the
+  // assignment membership expiry invariant (membership_expires_at >= response_deadline) and
+  // reviewer eligibility filtering start failing purely because real time moved past a
+  // hard-coded fixture date. Anchoring the invitation window to the later of the two clocks
+  // keeps the grant valid no matter when the suite runs, and keeps the invitation inside the
+  // 30 day / 2 year windows the reviewer invitation API enforces against its own `now`.
+  const invitationNow = new Date(Math.max(foundationNow.getTime(), Date.now()));
+  const invitationExpiresAt = new Date(invitationNow.getTime() + 86_400_000);
+  const reviewerAccessExpiresAt = new Date(invitationNow.getTime() + 365 * 86_400_000);
   const workspaceReviewerGrants = new Map<string, { grantId: string; grantHash: `sha256:${string}` }>();
   for (const reviewer of [REVIEWER_A, REVIEWER_B]) {
     const invitation = await createWorkspaceReviewerInvitation({
@@ -1374,9 +1385,9 @@ async function fixture(
       projectIds: [project.projectId],
       maxPrivateSensitivity: "confidential",
       intendedAccountAddress: reviewer,
-      expiresAt: new Date("2026-07-17T09:00:00.000Z"),
-      accessExpiresAt: new Date("2026-07-23T09:00:00.000Z"),
-      now: foundationNow,
+      expiresAt: invitationExpiresAt,
+      accessExpiresAt: reviewerAccessExpiresAt,
+      now: invitationNow,
     });
     const redeemed = await redeemWorkspaceReviewerInvitation({
       accountAddress: reviewer,
@@ -1403,7 +1414,7 @@ async function fixture(
         reviewer.slice(2, 18),
         JSON.stringify([project.projectId]),
         reviewer,
-        new Date("2026-07-23T09:00:00.000Z"),
+        reviewerAccessExpiresAt,
         foundationNow,
         OWNER,
         foundationNow,
@@ -1559,6 +1570,7 @@ async function fixture(
     externalContentCommitments: opportunityCommitments,
     expertiseDefinition,
     workspaceReviewerGrants,
+    reviewerAccessExpiresAt,
   };
 }
 
@@ -1849,7 +1861,7 @@ test("requires workspace access and qualifications to remain valid through the r
   await dbClient.execute({
     sql: `UPDATE tokenless_workspace_reviewer_access_grants
           SET valid_until = ? WHERE workspace_id = ? AND grant_id = ?`,
-    args: [new Date("2026-07-23T09:00:00.000Z"), setup.workspaceId, reviewerGrant.grantId],
+    args: [setup.reviewerAccessExpiresAt, setup.workspaceId, reviewerGrant.grantId],
   });
   await dbClient.execute({
     sql: `UPDATE tokenless_assurance_cohort_reviewers
