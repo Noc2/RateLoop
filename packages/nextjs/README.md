@@ -6,13 +6,31 @@ This package contains the isolated RateLoop browser product and versioned agent 
 
 ```bash
 cp packages/nextjs/.env.example packages/nextjs/.env.local
-yarn workspace @rateloop/nextjs db:push
+yarn workspace @rateloop/nextjs db:migrate
 yarn workspace @rateloop/nextjs dev
 ```
 
-Use a dedicated Postgres database and apply every migration in `drizzle/meta/_journal.json`. The application fails
-closed when persistence, chain configuration, or required production capabilities are unavailable; it never fabricates
+Use a dedicated Postgres database and point `DATABASE_URL` in `.env.local` at it. `db:migrate` applies every
+hand-authored migration in `drizzle/` in the order recorded by `drizzle/meta/_journal.json`, which is the same set of
+files the hosted runner (`scripts/migrate-hosted-database.mjs`) applies in production. The application fails closed
+when persistence, chain configuration, or required production capabilities are unavailable; it never fabricates
 review, payment, or settlement results.
+
+### Changing the database schema
+
+Migrations in this package are **hand-authored**, and drizzle-kit snapshots are intentionally absent from
+`drizzle/meta/`. `db:generate` and `db:push` are therefore disabled and exit non-zero with an explanation:
+
+- `db:generate` has no snapshot to diff against, so it would emit a CREATE-everything migration that cannot apply to
+  a migrated database, and it rewrites `drizzle/meta/_journal.json`, whose hashes are verified at deploy time.
+- `db:push` diffs the live database against `lib/db/schema.ts`, which maps only a subset of the migrated tables, so it
+  would drop every unmapped table. `drizzle.config.ts` additionally restricts `tablesFilter` to the mapped tables so a
+  direct `drizzle-kit push` cannot see the rest either. (This also scopes `db:studio` to the mapped tables.)
+
+To add a migration, write `drizzle/NNNN_name.sql` by hand, append a matching entry to `drizzle/meta/_journal.json`,
+update `lib/db/schema.ts` if the table is used through Drizzle, and run `yarn workspace @rateloop/nextjs test` to
+check `lib/db/migrationJournal.test.ts`. Declared journal gaps live in `drizzle/excised-migrations.json` (kept out of
+`drizzle/meta/`, which drizzle-kit reserves for snapshots).
 
 ## Browser authentication
 

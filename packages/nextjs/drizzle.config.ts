@@ -1,4 +1,6 @@
+import * as schema from "./lib/db/schema";
 import type { Config } from "drizzle-kit";
+import { getTableName, isTable } from "drizzle-orm";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -43,10 +45,21 @@ function readEnvFileDatabaseUrl(filePath: string): string | undefined {
 const rawDatabaseUrl = process.env.DATABASE_URL?.trim() ?? readEnvFileDatabaseUrl(path.join(projectDir, ".env.local"));
 const url = rawDatabaseUrl || defaultDatabaseUrl;
 
+// `drizzle/` migrates far more tables than `lib/db/schema.ts` maps. Any drizzle-kit command that
+// diffs the live database against the schema (`push`, `pull`, `studio`) would treat every unmapped
+// table as removed and drop it. Deriving the filter from the schema itself keeps drizzle-kit blind
+// to those tables and cannot drift as the schema changes. `db:migrate` replays the checked-in SQL
+// and is unaffected. The trade-off is that `db:studio` only browses the mapped tables.
+const mappedTables = Object.values(schema)
+  .filter(isTable)
+  .map(table => getTableName(table))
+  .sort();
+
 export default {
   schema: "./lib/db/schema.ts",
   out: "./drizzle",
   dialect: "postgresql",
+  tablesFilter: mappedTables,
   dbCredentials: {
     url,
   },

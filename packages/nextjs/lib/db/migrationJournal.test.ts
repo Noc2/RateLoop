@@ -34,7 +34,9 @@ test("Drizzle journal covers every numbered SQL migration", () => {
 test("Drizzle journal indices are contiguous except for immutable declared excisions", () => {
   const drizzleDir = join(process.cwd(), "drizzle");
   const journal = JSON.parse(readFileSync(join(drizzleDir, "meta", "_journal.json"), "utf8")) as Journal;
-  const excisions = JSON.parse(readFileSync(join(drizzleDir, "meta", "excised-migrations.json"), "utf8")) as Excisions;
+  // Kept outside `drizzle/meta/`: drizzle-kit treats every non-`_journal.json` file in `meta/` as a
+  // migration snapshot and aborts when it cannot parse one.
+  const excisions = JSON.parse(readFileSync(join(drizzleDir, "excised-migrations.json"), "utf8")) as Excisions;
 
   assert.equal(excisions.schemaVersion, "rateloop.migration-excisions.v1");
   assert.deepEqual(excisions.exclusions, [
