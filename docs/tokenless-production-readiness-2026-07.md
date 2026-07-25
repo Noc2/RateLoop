@@ -35,6 +35,9 @@ gates. The build automatically uses the isolated test-deployment checks for ever
 review-deployment flag is required. Those checks require Vercel project
 `prj_H6C2pfWKEAupFroHbLfzhquaNCLm` (`rateloop-tokenless`), the exact tokenless origin, public network panels disabled,
 and no public secret exposure. They must never authorize `rate-loop-nextjs`, `rateloop.ai`, or `www.rateloop.ai`.
+Because `validateTokenlessProductionReadiness` returns `validateTokenlessTestDeployment(env)` for any
+`VERCEL_GIT_COMMIT_REF` other than `main`, the release-capability loop and the forbidden-hosted-private-key checks never
+run on `tokenless`, so `managedSigning: false` does not block end-to-end testing on the isolated test deployment.
 
 Once this work is merged into `main`, hosted builds automatically activate the complete production preflight and must
 satisfy every release gate in this register before integration with `rateloop.ai`. A successful isolated tokenless test
