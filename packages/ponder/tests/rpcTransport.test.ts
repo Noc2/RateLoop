@@ -70,4 +70,43 @@ describe("RPC transport helpers", () => {
       { blockNumber: "0x3e9" },
     ]);
   });
+
+  it("falls back to the next RPC URL when the primary provider fails", async () => {
+    const fetchFn = vi.fn(async (url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { id: number };
+
+      if (url === "https://primary.example") {
+        return new Response("unavailable", { status: 503 });
+      }
+
+      return new Response(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: body.id,
+          result: "0x2105",
+        }),
+        {
+          headers: { "content-type": "application/json" },
+        },
+      );
+    });
+    const transport = httpWithGetLogsBlockRange(
+      ["https://primary.example", "https://fallback.example"],
+      1_000,
+      { fetchFn, retryCount: 0 },
+    )({});
+
+    await expect(
+      transport.request({
+        method: "eth_chainId",
+        params: [],
+      }),
+    ).resolves.toBe("0x2105");
+
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+    expect(fetchFn.mock.calls.map(([url]) => url)).toEqual([
+      "https://primary.example",
+      "https://fallback.example",
+    ]);
+  });
 });

@@ -20,3 +20,5 @@ watchPatterns = [
 startCommand = "yarn start:built-workspace-deps"
 healthcheckPath = "/health"
 healthcheckTimeout = 120
+restartPolicyType = "ALWAYS"
+restartPolicyMaxRetries = 1000

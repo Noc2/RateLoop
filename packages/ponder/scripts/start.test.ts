@@ -129,6 +129,60 @@ describe("Ponder production launcher", () => {
     );
   });
 
+  test("accepts a healthy fallback when the primary production RPC is unavailable", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url === "https://primary.example") {
+        throw new Error("provider unavailable");
+      }
+
+      return {
+        ok: true,
+        json: async () => ({ result: "0x2105" }),
+      };
+    });
+
+    await expect(
+      assertProductionRpcChainId({
+        env: {
+          NODE_ENV: "production",
+          PONDER_NETWORK: "base",
+          PONDER_RPC_URL_8453: "https://primary.example",
+          PONDER_RPC_FALLBACK_URLS_8453: "https://fallback.example",
+        },
+        fetchImpl,
+      }),
+    ).resolves.toBe(true);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[ponder:start] PONDER_RPC_URL_8453 eth_chainId probe failed: provider unavailable; another RPC endpoint is healthy.",
+    );
+  });
+
+  test("rejects a fallback RPC that reports the wrong production chain", async () => {
+    const fetchImpl = vi.fn(async (url: string) => ({
+      ok: true,
+      json: async () => ({
+        result: url === "https://primary.example" ? "0x2105" : "0x7a69",
+      }),
+    }));
+
+    await expect(
+      assertProductionRpcChainId({
+        env: {
+          NODE_ENV: "production",
+          PONDER_NETWORK: "base",
+          PONDER_RPC_URL_8453: "https://primary.example",
+          PONDER_RPC_FALLBACK_URLS_8453: "https://fallback.example",
+        },
+        fetchImpl,
+      }),
+    ).rejects.toThrow(
+      "PONDER_RPC_FALLBACK_URLS_8453[1] reports chainId 31337 but 8453 expected.",
+    );
+  });
+
   test("rejects malformed JSON-RPC chain id quantities", async () => {
     await expect(
       assertProductionRpcChainId({

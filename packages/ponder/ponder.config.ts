@@ -151,44 +151,64 @@ function probeRpcConnectivity(rpcUrl: string, expectedChainId: number, envKey: s
     });
 }
 
-function getRpcUrl(network: PonderNetworkName): string {
+function getRpcUrls(network: PonderNetworkName): string[] {
   const { chainId, defaultRpcUrl } = NETWORKS[network];
   const key = `PONDER_RPC_URL_${chainId}`;
-  const value = readEnv(key) ?? (!isProduction ? defaultRpcUrl : undefined);
+  const fallbackKey = `PONDER_RPC_FALLBACK_URLS_${chainId}`;
+  const primary = readEnv(key) ?? (!isProduction ? defaultRpcUrl : undefined);
 
-  if (!value) {
+  if (!primary) {
     throw new Error(`Missing ${key} for ${network}.`);
   }
 
-  try {
-    const url = new URL(value);
-    const isLocalhost =
-      url.hostname === "localhost" ||
-      url.hostname === "127.0.0.1" ||
-      url.hostname === "::1";
+  const configuredFallbacks =
+    readEnv(fallbackKey)
+      ?.split(",")
+      .map(value => value.trim())
+      .filter(Boolean) ?? [];
+  const entries = [
+    { key, value: primary },
+    ...configuredFallbacks.map((value, index) => ({
+      key: `${fallbackKey}[${index + 1}]`,
+      value,
+    })),
+  ];
+  const urls: string[] = [];
 
-    if (network !== "hardhat" && isProduction && isLocalhost) {
-      throw new Error(`${key} must not point to localhost in production.`);
-    }
-    if (network !== "hardhat" && url.protocol !== "https:") {
-      throw new Error(`${key} must use HTTPS for ${network}.`);
-    }
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("localhost")) {
-      throw error;
-    }
-    if (error instanceof Error && error.message.includes("must use HTTPS")) {
-      throw error;
+  for (const entry of entries) {
+    try {
+      const url = new URL(entry.value);
+      const isLocalhost =
+        url.hostname === "localhost" ||
+        url.hostname === "127.0.0.1" ||
+        url.hostname === "::1";
+
+      if (network !== "hardhat" && isProduction && isLocalhost) {
+        throw new Error(
+          `${entry.key} must not point to localhost in production.`,
+        );
+      }
+      if (network !== "hardhat" && url.protocol !== "https:") {
+        throw new Error(`${entry.key} must use HTTPS for ${network}.`);
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("localhost")) {
+        throw error;
+      }
+      if (error instanceof Error && error.message.includes("must use HTTPS")) {
+        throw error;
+      }
+
+      throw new Error(`${entry.key} must be a valid URL.`);
     }
 
-    throw new Error(`${key} must be a valid URL.`);
+    if (!urls.includes(entry.value)) {
+      urls.push(entry.value);
+      probeRpcConnectivity(entry.value, chainId, entry.key);
+    }
   }
 
-  // Schedule a one-shot probe; runs after the config load returns, so any failure
-  // surfaces as a warning in the same logs the indexer is about to write into.
-  probeRpcConnectivity(value, chainId, key);
-
-  return value;
+  return urls;
 }
 
 function resolveAddress(key: string, contractName: string): `0x${string}` {
@@ -486,7 +506,7 @@ export default createConfig({
     [activeNetwork]: {
       chainId: NETWORKS[activeNetwork].chainId,
       transport: httpWithGetLogsBlockRange(
-        getRpcUrl(activeNetwork),
+        getRpcUrls(activeNetwork),
         NETWORKS[activeNetwork].maxGetLogsBlockRange,
       ),
       pollingInterval: NETWORKS[activeNetwork].pollingInterval,

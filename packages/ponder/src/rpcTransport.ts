@@ -1,4 +1,5 @@
 import {
+  fallback,
   hexToNumber,
   http,
   numberToHex,
@@ -54,11 +55,19 @@ export function chunkGetLogsParams(params: GetLogsParams, maxBlockRange: number)
 }
 
 export function httpWithGetLogsBlockRange(
-  url: string,
+  url: string | readonly string[],
   maxBlockRange: number | undefined,
   config?: HttpTransportConfig,
 ): Transport {
-  const baseTransport = http(url, config);
+  const urls = typeof url === "string" ? [url] : [...url];
+  if (urls.length === 0) {
+    throw new Error("At least one RPC URL is required.");
+  }
+
+  const baseTransport =
+    urls.length === 1
+      ? http(urls[0], config)
+      : fallback(urls.map(rpcUrl => http(rpcUrl, config)));
 
   return options => {
     const transport = baseTransport(options);

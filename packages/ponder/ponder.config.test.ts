@@ -191,6 +191,42 @@ describe("ponder config", () => {
     ).rejects.toThrow("PONDER_RPC_URL_8453 must be a valid URL.");
   }, PONDER_CONFIG_TEST_TIMEOUT_MS);
 
+  it("validates and probes configured Base RPC fallbacks", async () => {
+    await loadPonderConfig({
+      PONDER_RPC_FALLBACK_URLS_8453:
+        "https://fallback-one.example, https://fallback-two.example",
+    });
+
+    await vi.waitFor(() => {
+      expect(fetch).toHaveBeenCalledTimes(3);
+    });
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      "https://mainnet.base.org",
+      expect.any(Object),
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      "https://fallback-one.example",
+      expect.any(Object),
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      3,
+      "https://fallback-two.example",
+      expect.any(Object),
+    );
+  }, PONDER_CONFIG_TEST_TIMEOUT_MS);
+
+  it("names malformed Base RPC fallback values in the startup error", async () => {
+    await expect(
+      loadPonderConfig({
+        PONDER_RPC_FALLBACK_URLS_8453: "not a url",
+      }),
+    ).rejects.toThrow(
+      "PONDER_RPC_FALLBACK_URLS_8453[1] must be a valid URL.",
+    );
+  }, PONDER_CONFIG_TEST_TIMEOUT_MS);
+
   it("warns when the RPC probe returns a malformed chain id quantity", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 

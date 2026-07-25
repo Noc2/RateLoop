@@ -35,6 +35,32 @@ function readEnv(env, key) {
   return value ? value : undefined;
 }
 
+function readProductionRpcEndpoints(env, expectedChainId) {
+  const primaryKey = `PONDER_RPC_URL_${expectedChainId}`;
+  const fallbackKey = `PONDER_RPC_FALLBACK_URLS_${expectedChainId}`;
+  const primary = readEnv(env, primaryKey);
+  if (!primary) {
+    throw new Error(`Missing ${primaryKey} for production Ponder startup.`);
+  }
+
+  const configuredFallbacks =
+    readEnv(env, fallbackKey)
+      ?.split(",")
+      .map(value => value.trim())
+      .filter(Boolean) ?? [];
+  const endpoints = [{ key: primaryKey, url: primary }];
+
+  for (const [index, url] of configuredFallbacks.entries()) {
+    if (endpoints.some(endpoint => endpoint.url === url)) continue;
+    endpoints.push({
+      key: `${fallbackKey}[${index + 1}]`,
+      url,
+    });
+  }
+
+  return endpoints;
+}
+
 export async function assertProductionRpcChainId({
   env = process.env,
   fetchImpl = globalThis.fetch,
@@ -45,50 +71,67 @@ export async function assertProductionRpcChainId({
   const expectedChainId = resolvePonderChainId(env);
   if (!expectedChainId) return false;
 
-  const key = `PONDER_RPC_URL_${expectedChainId}`;
-  const rpcUrl = readEnv(env, key);
-  if (!rpcUrl) {
-    throw new Error(`Missing ${key} for production Ponder startup.`);
-  }
   if (typeof fetchImpl !== "function") {
     throw new Error(
       "global fetch is required for production Ponder RPC chain-id validation.",
     );
   }
 
-  let response;
-  try {
-    response = await fetchImpl(rpcUrl, {
-      method: "POST",
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "eth_chainId",
-        params: [],
-      }),
-      headers: { "content-type": "application/json" },
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`${key} eth_chainId probe failed: ${message}`);
+  const endpoints = readProductionRpcEndpoints(env, expectedChainId);
+  const unavailable = [];
+  let healthyEndpointCount = 0;
+
+  for (const endpoint of endpoints) {
+    let response;
+    try {
+      response = await fetchImpl(endpoint.url, {
+        method: "POST",
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "eth_chainId",
+          params: [],
+        }),
+        headers: { "content-type": "application/json" },
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      unavailable.push(
+        `${endpoint.key} eth_chainId probe failed: ${message}`,
+      );
+      continue;
+    }
+
+    if (!response.ok) {
+      unavailable.push(
+        `${endpoint.key} returned HTTP ${response.status} on eth_chainId probe.`,
+      );
+      continue;
+    }
+
+    const body = await response.json().catch(() => null);
+    const reportedChainId = parseJsonRpcQuantityNumber(body?.result);
+    if (reportedChainId === null) {
+      unavailable.push(
+        `${endpoint.key} eth_chainId probe returned no chainId.`,
+      );
+      continue;
+    }
+    if (reportedChainId !== expectedChainId) {
+      throw new Error(
+        `${endpoint.key} reports chainId ${reportedChainId} but ${expectedChainId} expected.`,
+      );
+    }
+
+    healthyEndpointCount += 1;
   }
 
-  if (!response.ok) {
-    throw new Error(
-      `${key} returned HTTP ${response.status} on eth_chainId probe.`,
-    );
+  if (healthyEndpointCount === 0) {
+    throw new Error(unavailable.join(" "));
   }
-
-  const body = await response.json().catch(() => null);
-  const reportedChainId = parseJsonRpcQuantityNumber(body?.result);
-  if (reportedChainId === null) {
-    throw new Error(`${key} eth_chainId probe returned no chainId.`);
-  }
-  if (reportedChainId !== expectedChainId) {
-    throw new Error(
-      `${key} reports chainId ${reportedChainId} but ${expectedChainId} expected.`,
-    );
+  for (const message of unavailable) {
+    console.warn(`[ponder:start] ${message}; another RPC endpoint is healthy.`);
   }
 
   return true;
