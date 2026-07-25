@@ -33,9 +33,12 @@ On the `tokenless` branch, read
 [`docs/tokenless-immutable-implementation-plan-2026-07.md`](docs/tokenless-immutable-implementation-plan-2026-07.md)
 before changing contracts, deployment artifacts, Ponder, Keeper, the app, SDK,
 agents, MCP, E2E, or public docs. Base mainnet contracts are legacy and are not
-final. The versioned Base Sepolia artifact under
-`packages/foundry/deployments/tokenless-v1/` is stale after the current fund-core
-changes and must be freshly redeployed before live configuration. Prefer removal of obsolete consumers over any
+final. The active versioned Base Sepolia artifact is
+`packages/foundry/deployments/tokenless-v4/84532.json`, a complete deployment at
+block `44390557`; `tokenless-v1` through `tokenless-v3` are historical evidence
+only. That artifact becomes stale after any future fund-core change and must
+then be freshly redeployed before live configuration. Prefer removal of
+obsolete consumers over any
 compatibility work. Hosted tokenless work must stay in the isolated
 `rateloop-tokenless` Vercel and Railway projects and must never use
 `rateloop.ai`.
@@ -45,6 +48,7 @@ features. Better Auth is the browser authentication stack. Wallets remain option
 purpose-bound adapters: preserve existing self-custodial wallet proofs and the
 optional thirdweb-created app wallet after an authenticated user explicitly requests
 funding, payout, or recovery. Never mount a thirdweb browser connector or treat a
-wallet as identity or authorization. Treat the current checked-in deployment artifact as stale
-after fund-core changes until a fresh complete Base Sepolia deployment key is
-installed across the isolated app, Ponder, keeper, and database.
+wallet as identity or authorization. After any fund-core change, treat the
+checked-in deployment artifact as stale until a fresh complete Base Sepolia
+deployment key is installed across the isolated app, Ponder, keeper, and
+database.
