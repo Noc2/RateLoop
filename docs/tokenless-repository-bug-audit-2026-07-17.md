@@ -338,6 +338,11 @@ hosted schema mismatch. The documents do point to the journal as authoritative, 
 **Recommended fix.** Replace copied head numbers with an observed-revision note that is updated mechanically, or omit
 the number and link only to the journal.
 
+**Point-in-time note, 25 July 2026.** Every head and line range in this finding is as observed at commit `21a1b5563`
+and is not maintained. `_journal.json` is now far longer than lines 698-710 and its head is past `0101`. Read the final
+entry of [`packages/nextjs/drizzle/meta/_journal.json`](../packages/nextjs/drizzle/meta/_journal.json) for the current
+head. The finding itself stands and its remedy — link the journal, never copy the number — is the established rule.
+
 ## Verification performed
 
 | Check                 | Result                                                                                                  |

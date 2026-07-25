@@ -43,6 +43,13 @@ authenticated agent quotes now assert their bearer credential (`d8d0397de`), the
 actual `0110_scheduled_chain_recovery` journal head (`54d11966b`), and the browser draft-restoration journey expects
 the new backup-first action rather than a pre-backup submit control (`edd5eeca5`).
 
+**Superseded on 25 July 2026.** The `54d11966b` fix above copied a head number into prose, so it went stale with the
+next migration. It was replaced by the AUD-18 remedy in `3855092e2`, which made
+[`tokenless-environment-parity.md`](tokenless-environment-parity.md) head-independent: it links
+[`packages/nextjs/drizzle/meta/_journal.json`](../packages/nextjs/drizzle/meta/_journal.json) and states that the final
+entry is always the authoritative head. Do not copy a head into a document. Every head number in this record is as
+observed on 18 July.
+
 ## Verification record
 
 Focused regressions cover same-total signed-intent substitution, two principals sharing a browser, stale connector and
@@ -67,7 +74,10 @@ The final integrated verification results are:
 
 Closing these repository findings does not make the branch suitable for real users or real money.
 
-- Migrations `0108` through `0110` must be applied before their application code.
+- Migrations `0108` through `0110` must be applied before their application code. That range is this record's
+  contribution, not the current head; the authoritative head is always the final entry of
+  [`packages/nextjs/drizzle/meta/_journal.json`](../packages/nextjs/drizzle/meta/_journal.json), and later migrations
+  have landed since.
 - The contracts require a fresh v4 test deployment, a deployment-scoped Ponder reindex, and an atomic isolated-service
   configuration update; the checked-in historical artifact and hosted addresses remain stale.
 - The network-integrity producer, operational/key-management exercises, legal/tax gates, and other blockers remain

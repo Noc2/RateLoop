@@ -41,6 +41,13 @@ used for this implementation are recorded in §8.
 
 Precise stale spots, re-verified:
 
+**Point-in-time note, 25 July 2026.** The "Reality" column below is as observed in July 2026 and is not maintained.
+`0091_mcp_elicitation_sessions` is no longer the head — read the final entry of
+[`packages/nextjs/drizzle/meta/_journal.json`](../packages/nextjs/drizzle/meta/_journal.json), which is the only
+authoritative source, and do not copy a head into prose. The `tokenless-v4` row's "no v4 deployment currently exists"
+is also superseded: `packages/foundry/deployments/tokenless-v4/84532.json` is a complete Base Sepolia deployment at
+block `44390557`, released in `df58c5b01`. The prescribed fixes were applied and remain correct.
+
 | Location                       | Says                                                                                        | Reality                                                                                                                                                                                                  | Fix                                                                                                  |
 | ------------------------------ | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | implementation plan `:69`      | "two 15-case windows with at least 14 comparable agreements"                                | Wilson lower bound ≥ `DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS` (7,000) over ≥15-case windows, plus completion/latency/drift/severe-disagreement gates, ≥30 completed cases (`adaptiveReview.ts:66-117`) | Rewrite the narrative to describe the Wilson gate; keep 15/30/50/100 case counts                     |
