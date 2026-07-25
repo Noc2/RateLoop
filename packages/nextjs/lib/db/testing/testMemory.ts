@@ -119,6 +119,15 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
     return null;
   }
   if (
+    file === "0135_private_review_crowd_forecasts.sql" &&
+    /^ALTER TABLE "tokenless_private_review_responses"/u.test(statement)
+  ) {
+    // pg-mem does not implement PostgreSQL's integer modulo operator inside a
+    // CHECK constraint. Service validation and the migration source test pin
+    // the same one-percent grid while memory tests retain the new column.
+    return 'ALTER TABLE "tokenless_private_review_responses" ADD COLUMN "predicted_positive_bps" integer';
+  }
+  if (
     file === "0123_evm_kms_signing_ledger_integrity.sql" &&
     /^ALTER TABLE "tokenless_evm_kms_signing_ledger"\s+ADD CONSTRAINT/u.test(statement)
   ) {

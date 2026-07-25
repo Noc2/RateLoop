@@ -15,6 +15,7 @@ function isInteractiveTarget(target: EventTarget | null) {
 
 export function ReviewerShell({
   advanceDisabled,
+  advanceHint,
   advanceLabel,
   backDisabled = false,
   backLabel = "Previous case",
@@ -31,6 +32,7 @@ export function ReviewerShell({
   totalCases,
 }: {
   advanceDisabled: boolean;
+  advanceHint?: string | null;
   advanceLabel: string;
   backDisabled?: boolean;
   backLabel?: string;
@@ -99,6 +101,7 @@ export function ReviewerShell({
             {busyLabel ?? advanceLabel}
           </Button>
         </div>
+        {advanceHint ? <p className="mt-3 text-center text-xs text-base-content/60">{advanceHint}</p> : null}
         {shortcutsEnabled ? (
           <p className="mt-3 text-center text-xs text-base-content/55">
             Keyboard: 1 or 2 selects · R opens rationale · Enter advances

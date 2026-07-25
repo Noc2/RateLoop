@@ -365,7 +365,7 @@ export async function getDirectPrivateReviewTask(input: { accountAddress: string
     runId: text(row, "delivery_id"),
     taskKind: "binary_review" as const,
     compensationMode: "unpaid" as const,
-    forecastRequired: false as const,
+    forecastRequired: true as const,
     settlement: null,
     source: "customer_invited" as const,
     runManifestHash: text(row, "foundation_binding_hash"),
@@ -714,6 +714,7 @@ export async function submitDirectPrivateReviewResponse(input: {
     caseId: string;
     displayedOption: "A" | "B";
     selectedArtifactId: string;
+    predictedPositiveBps?: number;
     failureTagKeys: string[];
     rationale: string;
   }>;
@@ -728,6 +729,7 @@ export async function submitDirectPrivateReviewResponse(input: {
   const principal = normalizePrincipal(input.accountAddress);
   const now = input.now ?? new Date();
   const responseInput = input.responses[0]!;
+  const predictedPositiveBps = responseInput.predictedPositiveBps;
   const rationale = responseInput.rationale.trim();
   const client = await dbPool.connect();
   let terminalEnvelope: HumanReviewResultEnvelope | null = null;
@@ -826,6 +828,11 @@ export async function submitDirectPrivateReviewResponse(input: {
       responseInput.caseId !== text(row, "private_review_id") ||
       !["A", "B"].includes(responseInput.displayedOption) ||
       responseInput.selectedArtifactId !== text(row, "suggestion_artifact_id") ||
+      typeof predictedPositiveBps !== "number" ||
+      !Number.isSafeInteger(predictedPositiveBps) ||
+      predictedPositiveBps < 100 ||
+      predictedPositiveBps > 9_900 ||
+      predictedPositiveBps % 100 !== 0 ||
       !Array.isArray(responseInput.failureTagKeys) ||
       responseInput.failureTagKeys.length !== 0
     ) {
@@ -857,21 +864,43 @@ export async function submitDirectPrivateReviewResponse(input: {
       keyrings.reviewerMapping,
     );
     const responseCommitment = hashHumanAssuranceDocument({
-      schemaVersion: "rateloop.private-review-response.v1",
+      schemaVersion: "rateloop.private-review-response.v2",
       deliveryId: text(row, "delivery_id"),
       assignmentId: input.assignmentId,
       privateReviewId: text(row, "private_review_id"),
       foundationBindingHash: text(row, "foundation_binding_hash"),
       membershipSnapshotHash: text(row, "membership_snapshot_hash"),
       choice,
+      predictedPositiveBps,
       rationaleDigest: rationaleMode === "off" ? null : digest,
     });
     const existing = await client.query(
-      `SELECT response_commitment FROM tokenless_private_review_responses WHERE assignment_id=$1`,
+      `SELECT response_commitment,predicted_positive_bps
+       FROM tokenless_private_review_responses WHERE assignment_id=$1`,
       [input.assignmentId],
     );
     if (existing.rowCount) {
-      if (text(existing.rows[0] as Row, "response_commitment") !== responseCommitment) {
+      const existingRow = existing.rows[0] as Row;
+      const storedPrediction =
+        existingRow.predicted_positive_bps === null || existingRow.predicted_positive_bps === undefined
+          ? null
+          : integer(existingRow, "predicted_positive_bps", 100);
+      const legacyCommitment = hashHumanAssuranceDocument({
+        schemaVersion: "rateloop.private-review-response.v1",
+        deliveryId: text(row, "delivery_id"),
+        assignmentId: input.assignmentId,
+        privateReviewId: text(row, "private_review_id"),
+        foundationBindingHash: text(row, "foundation_binding_hash"),
+        membershipSnapshotHash: text(row, "membership_snapshot_hash"),
+        choice,
+        rationaleDigest: rationaleMode === "off" ? null : digest,
+      });
+      if (
+        (storedPrediction === null && text(existingRow, "response_commitment") !== legacyCommitment) ||
+        (storedPrediction !== null &&
+          (storedPrediction !== predictedPositiveBps ||
+            text(existingRow, "response_commitment") !== responseCommitment))
+      ) {
         throw new TokenlessServiceError(
           "This assignment already has a different response.",
           409,
@@ -900,8 +929,9 @@ export async function submitDirectPrivateReviewResponse(input: {
       await client.query(
         `INSERT INTO tokenless_private_review_responses
          (response_id,assignment_id,delivery_id,workspace_id,private_review_id,reviewer_key,choice,
-          rationale_ciphertext,rationale_key_ref,rationale_digest,response_commitment,idempotency_key,created_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+          predicted_positive_bps,rationale_ciphertext,rationale_key_ref,rationale_digest,response_commitment,
+          idempotency_key,created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
         [
           responseId,
           input.assignmentId,
@@ -910,6 +940,7 @@ export async function submitDirectPrivateReviewResponse(input: {
           text(row, "private_review_id"),
           reviewerKey,
           choice,
+          predictedPositiveBps,
           encrypted.ciphertext,
           encrypted.keyRef,
           rationaleMode === "off" ? null : digest,

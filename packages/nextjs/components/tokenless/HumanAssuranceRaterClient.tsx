@@ -72,7 +72,7 @@ export type AssignmentTask = AssignmentTaskBase &
     | {
         taskKind: "binary_review";
         compensationMode: "unpaid";
-        forecastRequired: false;
+        forecastRequired: true;
         settlement: null;
       }
   );
@@ -101,7 +101,7 @@ export function validateLoadedAssignmentTask(value: unknown): AssignmentTask {
     if (
       task.taskKind !== "binary_review" ||
       task.compensationMode !== "unpaid" ||
-      task.forecastRequired !== false ||
+      task.forecastRequired !== true ||
       task.settlement !== null
     ) {
       throw new Error("This private assignment has unsupported compensation or settlement capabilities.");
@@ -119,6 +119,7 @@ export function validateLoadedAssignmentTask(value: unknown): AssignmentTask {
 
 type ReviewDraft = {
   selectedOption: "A" | "B" | null;
+  predictionPercent: number | null;
   failureTags: string[];
   rationale: string;
 };
@@ -198,12 +199,40 @@ function artifactUrl(assignmentId: string, artifact: ArtifactLease) {
 
 function emptyDrafts(cases: ReviewCase[]) {
   return Object.fromEntries(
-    cases.map(reviewCase => [reviewCase.caseId, { selectedOption: null, failureTags: [], rationale: "" }]),
+    cases.map(reviewCase => [
+      reviewCase.caseId,
+      { selectedOption: null, predictionPercent: null, failureTags: [], rationale: "" },
+    ]),
   ) as Record<string, ReviewDraft>;
 }
 
 function requiredRationaleLength(task: AssignmentTask) {
   return task.rubric.rationale.mode === "required" ? Math.max(10, task.rubric.rationale.minLength ?? 0) : 0;
+}
+
+function caseCompletionIssue(task: AssignmentTask, draft: ReviewDraft | undefined) {
+  if (!draft?.selectedOption)
+    return task.taskKind === "binary_review" ? "Choose Approve or Reject." : "Choose an answer.";
+  if (
+    task.taskKind === "binary_review" &&
+    task.forecastRequired &&
+    (!Number.isSafeInteger(draft.predictionPercent) ||
+      draft.predictionPercent === null ||
+      draft.predictionPercent < 1 ||
+      draft.predictionPercent > 99)
+  ) {
+    return "Enter a crowd forecast from 1% to 99%.";
+  }
+  const rationaleLength = draft.rationale.trim().length;
+  const minimum = requiredRationaleLength(task);
+  const maximum = Math.min(2_000, task.rubric.rationale.maxLength);
+  if (rationaleLength < minimum) return `Add at least ${minimum} characters of decision rationale.`;
+  if (rationaleLength > maximum) return `Shorten the decision rationale to ${maximum} characters.`;
+  return null;
+}
+
+function isPrivatePredictionPercent(value: unknown): value is number | null {
+  return value === null || (typeof value === "number" && Number.isSafeInteger(value) && value >= 1 && value <= 99);
 }
 
 function isPrivateDrafts(value: unknown): value is Record<string, ReviewDraft> {
@@ -212,6 +241,7 @@ function isPrivateDrafts(value: unknown): value is Record<string, ReviewDraft> {
     draft =>
       Boolean(draft && typeof draft === "object") &&
       [null, "A", "B"].includes((draft as ReviewDraft).selectedOption) &&
+      isPrivatePredictionPercent((draft as ReviewDraft).predictionPercent) &&
       Array.isArray((draft as ReviewDraft).failureTags) &&
       (draft as ReviewDraft).failureTags.every(tag => typeof tag === "string") &&
       typeof (draft as ReviewDraft).rationale === "string",
@@ -415,23 +445,12 @@ export function HumanAssuranceRaterClient({
   const privateDraftKey = activePrincipalId && task ? `${activePrincipalId}:${task.assignmentId}` : null;
 
   const completeDraft = Boolean(
-    task?.cases.length &&
-      task.cases.every(reviewCase => {
-        const draft = drafts[reviewCase.caseId];
-        const rationaleLength = draft?.rationale.trim().length ?? 0;
-        const minimum = requiredRationaleLength(task);
-        const maximum = Math.min(2_000, task.rubric.rationale.maxLength);
-        return draft?.selectedOption && rationaleLength >= minimum && rationaleLength <= maximum;
-      }),
+    task?.cases.length && task.cases.every(reviewCase => caseCompletionIssue(task, drafts[reviewCase.caseId]) === null),
   );
   const activeCase = task?.cases[activeCaseIndex] ?? null;
-  const activeCaseComplete = Boolean(
-    task &&
-      activeCase &&
-      drafts[activeCase.caseId]?.selectedOption &&
-      (drafts[activeCase.caseId]?.rationale.trim().length ?? 0) >= requiredRationaleLength(task) &&
-      (drafts[activeCase.caseId]?.rationale.trim().length ?? 0) <= Math.min(2_000, task.rubric.rationale.maxLength),
-  );
+  const activeCaseIssue =
+    task && activeCase ? caseCompletionIssue(task, drafts[activeCase.caseId]) : "This review is unavailable.";
+  const activeCaseComplete = activeCaseIssue === null;
 
   useEffect(() => {
     if (!task || serverAcceptance) return;
@@ -574,6 +593,7 @@ export function HumanAssuranceRaterClient({
   }
 
   function updateDraft(caseId: string, update: Partial<ReviewDraft>) {
+    setError(null);
     setDrafts(current => ({
       ...current,
       [caseId]: { ...current[caseId], ...update } as ReviewDraft,
@@ -611,6 +631,10 @@ export function HumanAssuranceRaterClient({
                 caseId: reviewCase.caseId,
                 displayedOption: draft.selectedOption,
                 selectedArtifactId,
+                predictedPositiveBps:
+                  task.taskKind === "binary_review" && task.forecastRequired && draft.predictionPercent !== null
+                    ? draft.predictionPercent * 100
+                    : undefined,
                 failureTagKeys: draft.failureTags,
                 rationale: draft.rationale,
               };
@@ -646,7 +670,11 @@ export function HumanAssuranceRaterClient({
       void submitResponses();
       return;
     }
-    if (!activeCase || !activeCaseComplete) return;
+    if (!activeCase || !activeCaseComplete) {
+      setError(activeCaseIssue ?? "Complete this review before continuing.");
+      if (activeCaseIssue?.includes("rationale")) rationaleRef.current?.focus();
+      return;
+    }
     if (activeCaseIndex < task.cases.length - 1) {
       setActiveCaseIndex(index => index + 1);
       return;
@@ -916,14 +944,9 @@ export function HumanAssuranceRaterClient({
           ) : (
             <ReviewerShell
               advanceDisabled={
-                busyAction !== null ||
-                serverAcceptance !== null ||
-                (reviewingResponses
-                  ? !completeDraft
-                  : activeCaseIndex === task.cases.length - 1
-                    ? !completeDraft
-                    : !activeCaseComplete)
+                busyAction !== null || serverAcceptance !== null || (reviewingResponses ? !completeDraft : false)
               }
+              advanceHint={serverAcceptance || reviewingResponses ? null : activeCaseIssue}
               advanceLabel={
                 serverAcceptance
                   ? "Review recorded"
@@ -1009,6 +1032,7 @@ export function HumanAssuranceRaterClient({
                   const reviewCase = activeCase;
                   const draft = drafts[reviewCase.caseId] ?? {
                     selectedOption: null,
+                    predictionPercent: null,
                     failureTags: [],
                     rationale: "",
                   };
@@ -1057,7 +1081,7 @@ export function HumanAssuranceRaterClient({
                                 <label
                                   key={key}
                                   htmlFor={`choice-${reviewCase.caseId}-${key}`}
-                                  className={`rounded-lg border p-4 transition-colors ${
+                                  className={`cursor-pointer rounded-lg border p-4 transition-colors ${
                                     draft.selectedOption === key
                                       ? "border-[var(--rateloop-green)] bg-emerald-300/10"
                                       : "border-white/10 bg-black/20 hover:border-white/25"
@@ -1072,6 +1096,7 @@ export function HumanAssuranceRaterClient({
                                       value={key}
                                       checked={draft.selectedOption === key}
                                       disabled={serverAcceptance !== null}
+                                      onClick={() => updateDraft(reviewCase.caseId, { selectedOption: key })}
                                       onChange={() => updateDraft(reviewCase.caseId, { selectedOption: key })}
                                     />
                                     {label}
@@ -1079,6 +1104,48 @@ export function HumanAssuranceRaterClient({
                                 </label>
                               ))}
                             </div>
+                            {draft.selectedOption ? (
+                              <div className="mt-5 border-t border-white/10 pt-4">
+                                <p className="text-xs font-semibold">Crowd forecast</p>
+                                <label
+                                  htmlFor={`forecast-${reviewCase.caseId}`}
+                                  className="mt-2 block text-xs leading-5 text-base-content/60"
+                                >
+                                  What percentage of reviewers will choose “{reviewCase.binaryReview.positiveLabel}”?
+                                </label>
+                                <div className="mt-3 flex items-center gap-2">
+                                  <input
+                                    id={`forecast-${reviewCase.caseId}`}
+                                    aria-label="Crowd forecast"
+                                    aria-describedby={`forecast-help-${reviewCase.caseId}`}
+                                    type="number"
+                                    inputMode="numeric"
+                                    min={1}
+                                    max={99}
+                                    step={1}
+                                    required
+                                    className="input input-sm w-24 border-white/10 bg-[var(--rateloop-field)] text-right tabular-nums"
+                                    value={draft.predictionPercent ?? ""}
+                                    disabled={serverAcceptance !== null}
+                                    onChange={event => {
+                                      const value = event.currentTarget.value;
+                                      updateDraft(reviewCase.caseId, {
+                                        predictionPercent: value === "" ? null : Number(value),
+                                      });
+                                    }}
+                                  />
+                                  <span aria-hidden="true" className="text-sm text-base-content/60">
+                                    %
+                                  </span>
+                                </div>
+                                <p
+                                  id={`forecast-help-${reviewCase.caseId}`}
+                                  className="mt-2 text-[11px] leading-4 text-base-content/45"
+                                >
+                                  Enter a whole number from 1 to 99. Forecasts stay hidden until the panel closes.
+                                </p>
+                              </div>
+                            ) : null}
                           </fieldset>
                         </div>
                       ) : (
@@ -1100,7 +1167,7 @@ export function HumanAssuranceRaterClient({
                                 <label
                                   key={option.key}
                                   htmlFor={`choice-${reviewCase.caseId}-${option.key}`}
-                                  className={`rounded-lg border p-4 transition-colors ${
+                                  className={`cursor-pointer rounded-lg border p-4 transition-colors ${
                                     draft.selectedOption === option.key
                                       ? "border-[var(--rateloop-green)] bg-emerald-300/10"
                                       : "border-white/10 bg-black/20 hover:border-white/25"
@@ -1114,6 +1181,7 @@ export function HumanAssuranceRaterClient({
                                     value={option.key}
                                     checked={draft.selectedOption === option.key}
                                     disabled={serverAcceptance !== null}
+                                    onClick={() => updateDraft(reviewCase.caseId, { selectedOption: option.key })}
                                     onChange={() => updateDraft(reviewCase.caseId, { selectedOption: option.key })}
                                   />
                                   <span className="ml-3 font-semibold">Candidate {option.key}</span>

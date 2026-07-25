@@ -51,7 +51,7 @@ const binaryTask: AssignmentTask = {
   runId: "hpud_2222222222222222222222222222222222222222",
   taskKind: "binary_review",
   compensationMode: "unpaid",
-  forecastRequired: false,
+  forecastRequired: true,
   settlement: null,
   rubric: {
     prompt: "Is the agent output correct?",
@@ -89,7 +89,7 @@ const binaryTask: AssignmentTask = {
 
 test("direct private tasks fail closed unless unpaid capabilities are explicit and unambiguous", async () => {
   const { validateLoadedAssignmentTask } = await import("./HumanAssuranceRaterClient");
-  assert.equal(validateLoadedAssignmentTask(binaryTask).forecastRequired, false);
+  assert.equal(validateLoadedAssignmentTask(binaryTask).forecastRequired, true);
 
   const missingCapability = { ...binaryTask } as Record<string, unknown>;
   delete missingCapability.compensationMode;
@@ -98,7 +98,7 @@ test("direct private tasks fail closed unless unpaid capabilities are explicit a
     /unsupported compensation or settlement capabilities/u,
   );
   assert.throws(
-    () => validateLoadedAssignmentTask({ ...binaryTask, forecastRequired: true }),
+    () => validateLoadedAssignmentTask({ ...binaryTask, forecastRequired: false }),
     /unsupported compensation or settlement capabilities/u,
   );
   assert.throws(
@@ -350,13 +350,76 @@ test("an owner-fixed private task shows source and output separately and submits
     assert.ok(view.getByText("The agent answered that every required check passed."));
     assert.equal(view.queryByRole("link", { name: "Open private artifact" }), null);
     await user.click(view.getByRole("radio", { name: "Approve" }));
+    await user.type(view.getByRole("spinbutton", { name: "Crowd forecast" }), "65");
     await user.click(view.getByRole("button", { name: "Submit review" }));
     await waitFor(() => assert.ok(submission.current));
     const responses = submission.current?.responses as Array<Record<string, unknown>>;
     assert.equal(responses[0]?.displayedOption, "A");
+    assert.equal(responses[0]?.predictedPositiveBps, 6_500);
     assert.equal(responses[0]?.selectedArtifactId, "artifact_binary_suggestion");
     await user.click(view.getByRole("button", { name: "Review next assignment" }));
     assert.equal(continued, 1);
+  } finally {
+    cleanup();
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
+test("an incomplete private review explains what is missing instead of trapping the submit action", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
+  const previousFetch = globalThis.fetch;
+  let responsePosts = 0;
+  globalThis.fetch = async input => {
+    const url = String(input);
+    if (url === "/api/auth/session") return Response.json(authenticatedSession(PRINCIPAL_A));
+    const artifact = privateArtifactResponse(url);
+    if (artifact) return artifact;
+    if (url.endsWith("/responses")) {
+      responsePosts += 1;
+      return Response.json({
+        accepted: true,
+        replay: false,
+        responseCount: 1,
+        compensation: "unpaid",
+        settlementStatus: "not_applicable",
+      });
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  };
+
+  try {
+    const task: AssignmentTask = {
+      ...binaryTask,
+      rubric: {
+        ...binaryTask.rubric,
+        rationale: { mode: "required", minLength: 10, maxLength: 2_000 },
+      },
+    };
+    const view = render(<HumanAssuranceRaterClient principalId={PRINCIPAL_A} initialTask={task} />);
+    const user = userEvent.setup({ document });
+    const submit = view.getByRole("button", { name: "Submit review" });
+
+    assert.equal((submit as HTMLButtonElement).disabled, false);
+    assert.ok(view.getByText("Choose Approve or Reject."));
+    await user.click(submit);
+    assert.ok(view.getByRole("alert").textContent?.includes("Choose Approve or Reject"));
+    assert.equal(responsePosts, 0);
+
+    await user.click(view.getByText("Approve"));
+    assert.ok(view.getByText("Enter a crowd forecast from 1% to 99%."));
+    await user.type(view.getByRole("spinbutton", { name: "Crowd forecast" }), "65");
+    assert.ok(view.getByText("Add at least 10 characters of decision rationale."));
+    await user.click(submit);
+    assert.ok(view.getByRole("alert").textContent?.includes("at least 10 characters"));
+    assert.equal(responsePosts, 0);
+
+    await user.type(view.getByRole("textbox", { name: "Decision rationale" }), "Evidence is sufficient.");
+    await user.click(submit);
+    await waitFor(() => assert.equal(responsePosts, 1));
   } finally {
     cleanup();
     globalThis.fetch = previousFetch;

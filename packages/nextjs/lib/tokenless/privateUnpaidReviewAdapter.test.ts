@@ -252,6 +252,7 @@ async function submitPositivePrivateResponse(
         caseId: setup.prepared.privateReviewId,
         displayedOption: "A",
         selectedArtifactId: setup.prepared.artifacts.suggestionArtifactId,
+        predictedPositiveBps: 6_500,
         failureTagKeys: [],
         rationale: "",
       },
@@ -306,7 +307,7 @@ test("direct private assignments surface in reviewer work and produce a terminal
     });
     assert.equal(task.taskKind, "binary_review");
     assert.equal(task.compensationMode, "unpaid");
-    assert.equal(task.forecastRequired, false);
+    assert.equal(task.forecastRequired, true);
     assert.equal(task.settlement, null);
     assert.equal(task.rubric.prompt, "Is this suggestion correct and safe?");
     assert.equal(task.cases[0]?.binaryReview?.positiveLabel, "Approve");
@@ -324,6 +325,7 @@ test("direct private assignments surface in reviewer work and produce a terminal
           caseId: setup.prepared.privateReviewId,
           displayedOption: "A",
           selectedArtifactId: setup.prepared.artifacts.suggestionArtifactId,
+          predictedPositiveBps: 6_500,
           failureTagKeys: [],
           rationale: "",
         },
@@ -353,10 +355,15 @@ test("direct private assignments surface in reviewer work and produce a terminal
   });
   assert.equal("outcome" in agentResult.result ? agentResult.result.outcome : null, "positive");
   const stored = await dbClient.execute(
-    "SELECT choice,rationale_ciphertext,response_commitment FROM tokenless_private_review_responses ORDER BY response_id",
+    `SELECT choice,predicted_positive_bps,rationale_ciphertext,response_commitment
+     FROM tokenless_private_review_responses ORDER BY response_id`,
   );
   assert.equal(stored.rows.length, 2);
-  assert.ok(stored.rows.every(row => row.choice === "positive" && row.rationale_ciphertext === null));
+  assert.ok(
+    stored.rows.every(
+      row => row.choice === "positive" && row.predicted_positive_bps === 6_500 && row.rationale_ciphertext === null,
+    ),
+  );
   assert.ok(stored.rows.every(row => /^sha256:[0-9a-f]{64}$/u.test(String(row.response_commitment))));
 });
 
@@ -848,6 +855,7 @@ test("accepted workspace reviewer invitations route exact private content throug
           caseId: routed.foundation.privateReviewId,
           displayedOption: "A",
           selectedArtifactId: binary.suggestion.artifactId,
+          predictedPositiveBps: 6_500,
           failureTagKeys: [],
           rationale: "",
         },

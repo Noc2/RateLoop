@@ -11,8 +11,7 @@ const journal = JSON.parse(readFileSync(new URL("../../drizzle/meta/_journal.jso
 };
 
 test("0134 repairs only accepted seats leaked by reviewer-access revocation", () => {
-  assert.equal(journal.entries.at(-1)?.idx, 134);
-  assert.equal(journal.entries.at(-1)?.tag, "0134_expired_private_review_capacity");
+  assert.equal(journal.entries.find(entry => entry.idx === 134)?.tag, "0134_expired_private_review_capacity");
   assert.match(migration, /assignment\."status"='accepted'/u);
   assert.match(migration, /assignment\."lease_state"='expired'/u);
   assert.match(migration, /access_grant\."revoked_at" IS NOT NULL/u);

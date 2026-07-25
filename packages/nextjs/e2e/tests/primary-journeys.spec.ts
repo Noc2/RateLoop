@@ -144,7 +144,7 @@ test("invited reviewer sees exact agent content and rates it directly in Discove
         qualificationProvenance: [],
         taskKind: "binary_review",
         compensationMode: "unpaid",
-        forecastRequired: false,
+        forecastRequired: true,
         settlement: null,
         rubric: {
           prompt: "Is this response safe and correct?",
@@ -206,6 +206,7 @@ test("invited reviewer sees exact agent content and rates it directly in Discove
   await expect(page.getByRole("link", { name: "Open private artifact" })).toHaveCount(0);
   await expectNoAxeViolations(page);
   await page.getByRole("radio", { name: "Approve" }).check();
+  await page.getByRole("spinbutton", { name: "Crowd forecast" }).fill("65");
   await page.getByRole("button", { name: "Submit review" }).click();
   await expect(page.getByRole("status")).toContainText("Review submitted");
   await expect(page.getByText(source)).toHaveCount(0);
