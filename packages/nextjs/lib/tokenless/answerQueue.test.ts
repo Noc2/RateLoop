@@ -1,4 +1,4 @@
-import { loadAnswerQueues } from "./answerQueue";
+import { AnswerRequestError, loadAnswerQueues, readAccountBoundAssignments } from "./answerQueue";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -66,4 +66,22 @@ test("preserves one queue when the other queue returns an expected API error", a
     body: { assignments: [{ assignmentId: "haas_1" }] },
     error: null,
   });
+});
+
+test("private assignments fail closed when a response belongs to another browser principal", () => {
+  assert.deepEqual(
+    readAccountBoundAssignments(
+      { principalId: "rlp_current", assignments: [{ assignmentId: "hpua_current" }] },
+      "rlp_current",
+    ),
+    [{ assignmentId: "hpua_current" }],
+  );
+  assert.throws(
+    () =>
+      readAccountBoundAssignments(
+        { principalId: "rlp_previous", assignments: [{ assignmentId: "hpua_previous" }] },
+        "rlp_current",
+      ),
+    (error: unknown) => error instanceof AnswerRequestError && error.code === "account_session_changed",
+  );
 });

@@ -15,6 +15,17 @@ export type AnswerQueueResponse = {
   error: AnswerRequestError | null;
 };
 
+export function readAccountBoundAssignments(body: Record<string, unknown>, principalId: string) {
+  if (body.principalId !== principalId) {
+    throw new AnswerRequestError(
+      "Your account changed while review work was loading. Check again.",
+      409,
+      "account_session_changed",
+    );
+  }
+  return Array.isArray(body.assignments) ? body.assignments : [];
+}
+
 async function fetchJson(url: string, fetchImpl: typeof fetch) {
   const response = await fetchImpl(url, {
     cache: "no-store",

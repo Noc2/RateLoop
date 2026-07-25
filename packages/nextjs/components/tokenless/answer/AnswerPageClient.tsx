@@ -19,7 +19,7 @@ import {
 import { HumanTabs } from "~~/components/tokenless/human/HumanTabs";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { readBrowserSession, subscribeToBrowserAuthSessionChanges } from "~~/lib/auth/client";
-import { AnswerRequestError, loadAnswerQueues } from "~~/lib/tokenless/answerQueue";
+import { AnswerRequestError, loadAnswerQueues, readAccountBoundAssignments } from "~~/lib/tokenless/answerQueue";
 
 type VisibleScope = "all" | "public" | "private";
 type ReviewView = "active" | "history";
@@ -113,7 +113,9 @@ export function AnswerPageClient({
         );
         if (controller.signal.aborted || generation !== loadGenerationRef.current) return;
         setTasks((publicQueue.body.tasks ?? []) as PublicAnswerTask[]);
-        const nextAssignments = (privateQueue.body.assignments ?? []) as PrivateAnswerAssignment[];
+        const nextAssignments = (
+          privateQueue.error ? [] : readAccountBoundAssignments(privateQueue.body, browserSession.principalId)
+        ) as PrivateAnswerAssignment[];
         setAssignments(nextAssignments);
         setFocusedAssignmentId(current =>
           current && nextAssignments.some(assignment => assignment.assignmentId === current)
