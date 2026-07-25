@@ -141,10 +141,13 @@ revokes the source binding and affected sessions plus any replaced destination c
 workspace or copies its grants. Nonterminal assurance work or changed bindings block the move. The agent then reopens
 the same private intent and verifies the destination context.
 
-The authenticated workspace MCP keeps a stable tool contract. A new connection calls
-`rateloop_get_agent_context -> rateloop_verify_connection`; verification is non-mutating and never creates a synthetic
-review. The assurance workflow uses
-`evaluate_review_requirement -> skip or request_review -> wait_for_review -> get_review_result -> get_assurance_state`.
+The authenticated workspace MCP keeps a stable tool contract. On the OAuth connection-intent lane a new connection calls
+`rateloop_get_agent_context -> rateloop_verify_connection`; `rateloop_verify_connection` is registered only on that lane
+and is unreachable from the workspace API-key integration lane. Verification is idempotent but not read-only: it records
+the connection test, transitions the intent to `connected`, and appends an integration event, which is what unblocks the
+review tools. It is non-evaluative and never creates review evidence, content, spending, or publishing state. The
+assurance workflow uses `rateloop_evaluate_review_requirement -> skip or rateloop_request_review ->
+rateloop_wait_for_review -> rateloop_get_review_result -> rateloop_get_assurance_state`.
 Generic MCP is advisory; a host-enforced integration is required when the host must prove that output remained blocked.
 
 The authenticated API and SDK use `quote -> ask -> wait -> result`. The external quote endpoint accepts only explicitly
