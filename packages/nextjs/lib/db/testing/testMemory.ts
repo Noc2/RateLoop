@@ -27,6 +27,30 @@ function getMigrationDirectory() {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../drizzle");
 }
 
+export function readJournalMigrationFiles(migrationDirectory: string): string[] {
+  const journalPath = path.join(migrationDirectory, "meta", "_journal.json");
+  if (!fs.existsSync(journalPath)) {
+    throw new Error(`Drizzle journal is missing at ${journalPath}.`);
+  }
+  const journal = JSON.parse(fs.readFileSync(journalPath, "utf8")) as {
+    entries?: Array<{ tag?: unknown }>;
+  };
+  if (!Array.isArray(journal.entries)) {
+    throw new Error(`Drizzle journal at ${journalPath} declares no migration entries.`);
+  }
+
+  return journal.entries.map(entry => {
+    if (typeof entry.tag !== "string" || entry.tag.length === 0) {
+      throw new Error(`Drizzle journal at ${journalPath} has an entry without a tag.`);
+    }
+    const file = `${entry.tag}.sql`;
+    if (!fs.existsSync(path.join(migrationDirectory, file))) {
+      throw new Error(`Drizzle journal declares ${file}, but that migration file does not exist.`);
+    }
+    return file;
+  });
+}
+
 function applySqlStatements(sqlText: string, execute: (statement: string) => void) {
   for (const statement of sqlText
     .split(MIGRATION_BREAKPOINT)
@@ -278,12 +302,10 @@ export function createMemoryDatabaseResources(): DatabaseResources {
   });
 
   if (fs.existsSync(migrationDirectory)) {
-    const files = fs
-      .readdirSync(migrationDirectory)
-      .filter(file => file.endsWith(".sql"))
-      .sort((a, b) => a.localeCompare(b));
-
-    for (const file of files) {
+    // The journal is the authority on which migrations exist and in what order.
+    // A filename sort would silently execute any stray `.sql` file the journal
+    // deliberately excludes.
+    for (const file of readJournalMigrationFiles(migrationDirectory)) {
       const sqlText = fs.readFileSync(path.join(migrationDirectory, file), "utf8");
       applySqlStatements(sqlText, statement => {
         if (/^CREATE EXTENSION IF NOT EXISTS pgcrypto;?$/iu.test(statement)) return;
