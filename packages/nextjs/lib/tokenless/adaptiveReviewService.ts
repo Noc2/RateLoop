@@ -104,6 +104,15 @@ type HumanReviewBindingRow = {
 
 type IntegrationReviewGrant = { active: boolean; reason: string };
 
+export type AdaptiveReviewIntegrationBinding = {
+  integrationId: string;
+  agentId: string;
+  agentVersionId: string;
+  reviewPolicyId: string;
+  reviewPolicyVersion: number;
+  allowedWorkflowKeys: string[];
+};
+
 export type AdaptiveReviewDecisionRequest = {
   externalOpportunityId: string;
   agentId: string;
@@ -1298,6 +1307,36 @@ export async function authenticateAdaptiveReviewPrincipal(
   }
   requireProductPrincipalScope(principal, scope);
   return principal;
+}
+
+export async function resolveAdaptiveReviewIntegrationBinding(
+  principal: AdaptivePrincipal,
+): Promise<AdaptiveReviewIntegrationBinding> {
+  const result = await dbClient.execute({
+    sql: `SELECT i.integration_id, i.agent_id, i.agent_version_id,
+                 i.review_policy_id, i.review_policy_version, i.allowed_workflow_keys_json
+          FROM tokenless_agent_integrations i
+          WHERE i.workspace_id = ? AND i.status = 'active'
+            AND COALESCE(i.token_family_id, i.api_key_id) = ?
+          LIMIT 1`,
+    args: [principal.workspaceId, principal.apiKeyId],
+  });
+  const row = result.rows[0] as QueryRow | undefined;
+  const integrationId = rowString(row, "integration_id");
+  const agentId = rowString(row, "agent_id");
+  const agentVersionId = rowString(row, "agent_version_id");
+  const reviewPolicyId = rowString(row, "review_policy_id");
+  if (!row || !integrationId || !agentId || !agentVersionId || !reviewPolicyId) {
+    throw new TokenlessServiceError("Agent integration is inactive.", 401, "agent_integration_inactive");
+  }
+  return {
+    integrationId,
+    agentId,
+    agentVersionId,
+    reviewPolicyId,
+    reviewPolicyVersion: rowInteger(row, "review_policy_version"),
+    allowedWorkflowKeys: parseStringArray(row.allowed_workflow_keys_json, "integration workflows"),
+  };
 }
 
 export async function evaluateAdaptiveReviewRequirement(input: {
