@@ -69,6 +69,13 @@ links.
 
 ## Deployment consequence
 
+**Superseded on 25 July 2026.** The redeployment this section called for happened the next day: `df58c5b01` released
+the tokenless v4 bundle, `packages/foundry/deployments/tokenless-v4/84532.json` records a complete Base Sepolia
+deployment at block `44390557`, and `@rateloop/contracts` activates its five-slot key. The paragraph below is retained
+as the 19 July record; its "intentionally not deployed" and "artifact is stale" statements no longer describe the tree.
+No fund-core change has landed since (`git log df58c5b01..HEAD -- packages/foundry/contracts` is empty), so the v4
+artifact is current. The non-deployment findings and their release boundaries are unchanged.
+
 `TLRA-10` changes the fund-holding core. Under the tokenless branch implementation rules, the checked-in Base Sepolia
 artifact and every hosted address derived from the earlier bundle are now stale. The change was intentionally **not**
 deployed as part of this source remediation. A release requires a complete fresh Base Sepolia deployment key and a

@@ -6,6 +6,16 @@ against the current `tokenless` source before changing it and checked again afte
 evidence that a provider, live-operations, economics, legal, external-audit, or deployment gate has passed. The
 [production-readiness register](tokenless-production-readiness-2026-07.md) remains the release checklist.
 
+**Superseded on 25 July 2026 — deployment state only.** This record was written before the v4 bundle was released
+later the same day in `df58c5b01`. The v4 registry is no longer empty:
+`packages/foundry/deployments/tokenless-v4/84532.json`
+is a complete Base Sepolia deployment at block `44390557` with `deploymentComplete: true`, and
+`@rateloop/contracts` carries its five-slot key. The NF5 row's "no historical address is valid for this source" and the
+low-severity row's "empty v4 registry is intentional" / "paid settlement remains unavailable until the complete v4 key
+is deployed" describe the repository as of 20 July and no longer hold; the beacon verifier now has a deployed address.
+The external-review and unaudited-implementation boundaries in those same rows are unchanged. Nothing else in this
+record is revised — the findings and their source fixes are kept as written.
+
 ## New-finding disposition
 
 | Finding                                                | Source disposition                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Remaining release boundary                                                                                                                                                                                                              |

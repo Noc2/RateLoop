@@ -11,6 +11,13 @@ Verification status: the findings marked **[code-verified]** were re-checked dir
 The remainder are single-reviewer findings whose cited evidence was spot-checked but not independently re-derived; treat
 severities as provisional until triaged.
 
+**Superseded on 25 July 2026 — deployment state only.** The strengths section below praises "a deliberately empty v4
+registry instead of a relabeled stale artifact". That was true at commit `40839eb52`. The v4 bundle was released on
+20 July in `df58c5b01`: `packages/foundry/deployments/tokenless-v4/84532.json` is a complete Base Sepolia deployment at
+block `44390557` with `deploymentComplete: true`, and the registry in `@rateloop/contracts` is populated with its
+five-slot key. The complete-deployment-key fail-closed behavior the sentence was illustrating is unchanged. The rest of
+this review is left as the point-in-time record it is.
+
 ## Overall assessment
 
 The tokenless design is unusually coherent for its ambition. Its central claim — an immutable, adminless fund core
