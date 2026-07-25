@@ -331,8 +331,9 @@ export const workspaceMcpTools = [
   },
   {
     name: "rateloop_wait_for_review",
-    annotations: readOnlyClosedAnnotations,
-    description: "Wait briefly for this integration's bound human review without accepting an arbitrary operation ID.",
+    annotations: idempotentAdditiveClosedAnnotations,
+    description:
+      "Wait briefly for this integration's bound human review without accepting an arbitrary operation ID. This is not a read-only poll: when the bound response window has already elapsed, the server first finalizes that review as deadline-elapsed and records the resulting terminal envelope. Repeating the call is idempotent and never overwrites an existing result.",
     inputSchema: {
       additionalProperties: false,
       properties: {
@@ -346,8 +347,9 @@ export const workspaceMcpTools = [
   },
   {
     name: "rateloop_get_review_result",
-    annotations: readOnlyClosedAnnotations,
-    description: "Read the terminal server-stored human result for this integration's bound opportunity.",
+    annotations: idempotentAdditiveClosedAnnotations,
+    description:
+      "Return the terminal server-stored human result for this integration's bound opportunity. This is not a read-only fetch: it also finalizes that review server-side by recording the immutable evaluation observation, completing the opportunity, and reconciling an elapsed private response window. Repeating the call is idempotent.",
     inputSchema: {
       additionalProperties: false,
       properties: { opportunityId: identifierSchema },
