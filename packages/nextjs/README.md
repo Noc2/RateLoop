@@ -32,6 +32,23 @@ update `lib/db/schema.ts` if the table is used through Drizzle, and run `yarn wo
 check `lib/db/migrationJournal.test.ts`. Declared journal gaps live in `drizzle/excised-migrations.json` (kept out of
 `drizzle/meta/`, which drizzle-kit reserves for snapshots).
 
+## Browser tests
+
+```bash
+DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/rateloop_tokenless_e2e \
+  yarn workspace @rateloop/nextjs e2e
+```
+
+The Playwright journeys are the deterministic browser gate in the
+[production-readiness register](../../docs/tokenless-production-readiness-2026-07.md). They run against their own
+database and **refuse any other one**: `e2e/scripts/prepare.ts` requires the database name to match
+`rateloop(_<suffix>)?_e2e` and then drops and recreates `public` before migrating, so pointing this at a development
+database is rejected rather than destructive. The default `DATABASE_URL` in `.env.example` does not match that
+pattern, so the variable has to be set for this command.
+
+`playwright test` starts the app itself on `127.0.0.1:3100` unless `E2E_EXTERNAL_SERVER` is set; override the address
+with `E2E_BASE_URL`. Visual baselines live in `e2e/__screenshots__/`.
+
 ## Browser authentication
 
 Better Auth is the primary browser-authentication layer. Email OTP and passkeys are the initial methods; Google and
