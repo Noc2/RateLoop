@@ -17,6 +17,9 @@ test("reviewer management has one direct invitation path and states its access b
 test("reviewer management lists active reviewers and pending invitations with recovery controls", () => {
   assert.match(panel, /Active reviewers/);
   assert.match(panel, /Pending invitations/);
+  assert.match(panel, /reviewer\.displayName/);
+  assert.match(panel, /reviewer\.email/);
+  assert.match(panel, /shortPrincipal\(reviewer\.principalAddress\)/);
   assert.match(panel, /removeReviewer/);
   assert.match(panel, /revokeInvitation/);
   assert.match(panel, /method: "DELETE"/);

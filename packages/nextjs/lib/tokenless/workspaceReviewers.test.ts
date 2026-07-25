@@ -126,8 +126,25 @@ test("reviewer invitations persist only token hashes and never grant workspace m
   const reviewers = await listWorkspaceReviewers({ accountAddress: owner, workspaceId, now });
   assert.equal(reviewers.length, 1);
   assert.equal(reviewers[0]?.principalAddress, reviewer);
+  assert.equal(reviewers[0]?.displayName, "Reviewer reviewer");
+  assert.equal(reviewers[0]?.email, "reviewer@example.test");
   assert.equal(reviewers[0]?.status, "active");
   assert.equal(reviewers[0]?.grants.length, 1);
+
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_account_profiles (principal_address,display_name,created_at,updated_at)
+          VALUES (?,?,?,?)`,
+    args: [reviewer, "Saved reviewer name", now, now],
+  });
+  const profiledReviewers = await listWorkspaceReviewers({ accountAddress: owner, workspaceId, now });
+  assert.equal(profiledReviewers[0]?.displayName, "Saved reviewer name");
+
+  await dbClient.execute({
+    sql: `UPDATE tokenless_better_auth_users SET email_verified=false
+          WHERE id='better_workspace_reviewer_reviewer'`,
+  });
+  const unverifiedReviewers = await listWorkspaceReviewers({ accountAddress: owner, workspaceId, now });
+  assert.equal(unverifiedReviewers[0]?.email, null);
 });
 
 test("reviewer invitation redemption is idempotent after reaching its redemption cap", async () => {

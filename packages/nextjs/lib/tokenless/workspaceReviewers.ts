@@ -194,9 +194,26 @@ export async function listWorkspaceReviewers(input: { accountAddress: string; wo
   const now = input.now ?? new Date();
   const [reviewerResult, grantResult, projectResult] = await Promise.all([
     dbClient.execute({
-      sql: `SELECT workspace_id,principal_address,status,activated_at,ended_at,end_reason,updated_at
-            FROM tokenless_workspace_reviewers WHERE workspace_id=?
-            ORDER BY activated_at ASC,principal_address ASC`,
+      sql: `SELECT r.workspace_id,r.principal_address,r.status,r.activated_at,r.ended_at,r.end_reason,r.updated_at,
+                   COALESCE(profile.display_name,better_auth_user.name,browser_identity.display_name) AS display_name,
+                   CASE
+                     WHEN better_auth_user.email_verified=true THEN better_auth_user.email
+                     WHEN browser_identity.email_verified=true THEN browser_identity.primary_email
+                     ELSE NULL
+                   END AS email
+            FROM tokenless_workspace_reviewers r
+            LEFT JOIN tokenless_account_profiles profile
+              ON profile.principal_address=r.principal_address
+            LEFT JOIN tokenless_browser_identities browser_identity
+              ON browser_identity.principal_address=r.principal_address
+            LEFT JOIN tokenless_identity_bindings identity_binding
+              ON identity_binding.principal_id=r.principal_address
+             AND identity_binding.provider='better_auth'
+             AND identity_binding.status='active'
+            LEFT JOIN tokenless_better_auth_users better_auth_user
+              ON better_auth_user.id=identity_binding.provider_subject
+            WHERE r.workspace_id=?
+            ORDER BY r.activated_at ASC,r.principal_address ASC`,
       args: [input.workspaceId],
     }),
     dbClient.execute({
@@ -246,6 +263,8 @@ export async function listWorkspaceReviewers(input: { accountAddress: string; wo
     return {
       workspaceId: text(row, "workspace_id"),
       principalAddress,
+      displayName: text(row, "display_name"),
+      email: text(row, "email"),
       status: text(row, "status"),
       activatedAt: iso(date(row, "activated_at")),
       endedAt: iso(date(row, "ended_at")),

@@ -6,6 +6,8 @@ import { WorkspaceRequestScope } from "~~/lib/tokenless/workspaceRequestScope";
 
 type WorkspaceReviewer = {
   principalAddress: string;
+  displayName: string | null;
+  email: string | null;
   status: "active" | "removed" | "left" | "expired";
   activatedAt: string | null;
   grants: Array<{
@@ -41,6 +43,10 @@ async function readJson(response: Response) {
 
 function shortPrincipal(value: string) {
   return value.length > 22 ? `${value.slice(0, 10)}…${value.slice(-8)}` : value;
+}
+
+function reviewerLabel(reviewer: WorkspaceReviewer) {
+  return reviewer.displayName || reviewer.email || shortPrincipal(reviewer.principalAddress);
 }
 
 function dateLabel(value: string | null) {
@@ -154,7 +160,7 @@ export function WorkspaceReviewersPanel({
   }
 
   async function removeReviewer(reviewer: WorkspaceReviewer) {
-    if (!window.confirm(`Remove ${shortPrincipal(reviewer.principalAddress)} from this workspace's reviewers?`)) return;
+    if (!window.confirm(`Remove ${reviewerLabel(reviewer)} from this workspace's reviewers?`)) return;
     const request = workspaceRequests.begin(workspaceId, "reviewers:action");
     setBusyTarget(reviewer.principalAddress);
     setError(null);
@@ -270,7 +276,15 @@ export function WorkspaceReviewersPanel({
                 key={reviewer.principalAddress}
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">{shortPrincipal(reviewer.principalAddress)}</p>
+                  <p className="truncate text-sm font-semibold">{reviewerLabel(reviewer)}</p>
+                  {reviewer.displayName && reviewer.email ? (
+                    <p className="mt-1 truncate text-xs text-base-content/60">{reviewer.email}</p>
+                  ) : null}
+                  {reviewer.displayName || reviewer.email ? (
+                    <p className="mt-1 truncate font-mono text-xs text-base-content/40">
+                      {shortPrincipal(reviewer.principalAddress)}
+                    </p>
+                  ) : null}
                   {reviewer.grants
                     .filter(grant => grant.status === "active")
                     .map(grant => (
