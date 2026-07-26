@@ -40,4 +40,9 @@ test("privacy notice explains subscription processor data and retention", async 
   assert.match(html, /does not load audience analytics/i);
   assert.match(html, /inviting workspace must expressly warrant that the invitee is at least 18/i);
   assert.match(html, /Sanctions screening is a separate first-party manual decision/i);
+  assert.match(html, /does not create a new per-round forecast history/i);
+  assert.match(html, /separate identity spaces/i);
+  assert.match(html, /never reduces or withholds pay already earned/i);
+  assert.match(html, /assignment consequence is suspended while that appeal is open/i);
+  assert.match(html, /forecast accumulators, pair records, findings, and appeals.*erased/i);
 });

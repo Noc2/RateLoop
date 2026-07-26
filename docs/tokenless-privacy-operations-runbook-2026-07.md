@@ -57,8 +57,9 @@ principal and console are available.
   terminal notification-delivery telemetry according to the public retention notice. Statutory, settlement,
   legal-hold, deletion-receipt, backup, and public-chain categories are deliberately outside this operational purge.
 - Subject exports contain the authenticated principal&apos;s account, membership, reviewer-access, eligibility-status,
-  and request-lifecycle categories. They do not contain vault ciphertext, encryption material, session credentials, or
-  raw provider evidence. Cross-principal and expired downloads return not found.
+  crowd-forecast integrity counters and findings, and request-lifecycle categories. They do not contain another
+  reviewer&apos;s pair identity, vault ciphertext, encryption material, session credentials, or raw provider evidence.
+  Cross-principal and expired downloads return not found.
 - Notification email attempts dead-letter after the bounded retry window. A dead letter is automatically reopened after
   an increasing recovery delay, resetting only the attempt counter and preserving a bounded recovery count. After six
   failed recovery cycles it remains a visible terminal dead letter for operator action; a transient provider outage can

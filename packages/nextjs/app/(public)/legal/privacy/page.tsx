@@ -123,6 +123,24 @@ export default function PrivacyPage() {
         raw identity details minimized where possible. A reviewer may contact RateLoop to contest or correct an
         eligibility record.
       </p>
+      <h2>Reviewer forecast integrity</h2>
+      <p>
+        When a terminal review includes a crowd forecast, RateLoop uses aggregate forecast counters to detect repeated
+        low-effort or lockstep reporting and protect the availability and integrity of future assignments. The service
+        keeps running sums for calibration, variance, outcome and vote discrimination, plus workspace-level forecast
+        histograms and pair-distance sums. It does not create a new per-round forecast history. After a private result
+        is aggregated, the individual forecast is removed from the private response row. Forecasts published through a
+        paid public-chain commit remain subject to the on-chain disclosure described above.
+      </p>
+      <p>
+        Invited-review counters use a server-keyed reference scoped to the principal and workspace. Network-review
+        counters use the restricted RateLoop rater identifier. These are deliberately separate identity spaces:
+        invited-review history is not used for network admission. This processing is based on RateLoop&apos;s legitimate
+        interests in abuse prevention, service security, and reliable reviewer assignment. It never reduces or withholds
+        pay already earned. A hard aggregate finding can pause new assignments; the reviewer dashboard shows the
+        applicable reason codes and counters. A reviewer can open an appeal, and the assignment consequence is suspended
+        while that appeal is open.
+      </p>
       <h2>Recipients, processors, and international transfers</h2>
       <p>
         RateLoop uses service providers for hosting, database/runtime operations, email, billing, and optional identity
@@ -148,8 +166,10 @@ export default function PrivacyPage() {
         35-day operational schedule; terminal notification-delivery records are purged after 90 days. Generated
         subject-access exports expire after seven days. Statutory accounting, tax, payout, fraud, dispute, and
         legal-hold records follow their documented legal schedule and can remain restricted rather than erased while
-        that duty applies. A later sign-up starts a new account. Backup copies expire under the applicable backup
-        schedule, and public blockchain records remain outside the operator&apos;s ability to erase.
+        that duty applies. Linkable off-chain forecast accumulators, pair records, findings, and appeals are retained
+        during the account or workspace lifetime while they are needed for assignment integrity; eligible rows are
+        erased with account or workspace deletion. A later sign-up starts a new account. Backup copies expire under the
+        applicable backup schedule, and public blockchain records remain outside the operator&apos;s ability to erase.
       </p>
       <p>
         You may request access, correction, deletion where available, restriction, portability, or object to processing,

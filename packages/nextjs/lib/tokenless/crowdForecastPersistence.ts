@@ -839,26 +839,33 @@ export async function assertPrincipalForecastAssignmentEligibleInTransaction(
 export async function listPrincipalForecastIntegrity(principalId: string) {
   const client = await dbPool.connect();
   try {
-    const subjects = await subjectsForPrincipal(client, principalId);
-    const items = [];
-    for (const subject of subjects) {
-      const accumulatorResult = await client.query(
-        `SELECT * FROM tokenless_forecast_calibration_accumulators
+    return await listPrincipalForecastIntegrityInTransaction(client, principalId);
+  } finally {
+    client.release();
+  }
+}
+
+export async function listPrincipalForecastIntegrityInTransaction(client: PoolClient, principalId: string) {
+  const subjects = await subjectsForPrincipal(client, principalId);
+  const items = [];
+  for (const subject of subjects) {
+    const accumulatorResult = await client.query(
+      `SELECT * FROM tokenless_forecast_calibration_accumulators
          WHERE subject_space=$1 AND subject_key=$2 LIMIT 1`,
-        [subject.subjectSpace, subject.subjectKey],
-      );
-      const row = accumulatorResult.rows[0] as Row | undefined;
-      if (!row) continue;
-      const accumulator = calibrationFromRow(row);
-      const evaluation = evaluateForecastCalibration(accumulator);
-      const pairRows = await client.query(
-        `SELECT current_reason_codes_json FROM tokenless_forecast_pair_accumulators
+      [subject.subjectSpace, subject.subjectKey],
+    );
+    const row = accumulatorResult.rows[0] as Row | undefined;
+    if (!row) continue;
+    const accumulator = calibrationFromRow(row);
+    const evaluation = evaluateForecastCalibration(accumulator);
+    const pairRows = await client.query(
+      `SELECT current_reason_codes_json FROM tokenless_forecast_pair_accumulators
          WHERE subject_space=$1 AND (left_subject_key=$2 OR right_subject_key=$2)`,
-        [subject.subjectSpace, subject.subjectKey],
-      );
-      const pairReasons = (pairRows.rows as Row[]).flatMap(value => reasonCodes(value.current_reason_codes_json));
-      const findings = await client.query(
-        `SELECT finding.finding_id,finding.reason_code,finding.severity,finding.source_observation_count,
+      [subject.subjectSpace, subject.subjectKey],
+    );
+    const pairReasons = (pairRows.rows as Row[]).flatMap(value => reasonCodes(value.current_reason_codes_json));
+    const findings = await client.query(
+      `SELECT finding.finding_id,finding.reason_code,finding.severity,finding.source_observation_count,
                 finding.payout_effect,finding.consequence,finding.created_at,
                 CASE WHEN appeal.appeal_id IS NULL THEN false ELSE true END AS appeal_open
          FROM tokenless_forecast_integrity_findings finding
@@ -866,38 +873,35 @@ export async function listPrincipalForecastIntegrity(principalId: string) {
            ON appeal.finding_id=finding.finding_id AND appeal.status='open'
          WHERE finding.subject_space=$1 AND finding.subject_key=$2
          ORDER BY finding.created_at DESC,finding.finding_id DESC LIMIT 50`,
-        [subject.subjectSpace, subject.subjectKey],
-      );
-      const openAppeal = (findings.rows as Row[]).some(value => value.appeal_open === true);
-      const currentReasonCodes = [...new Set([...evaluation.reasonCodes, ...pairReasons])];
-      items.push({
-        subjectSpace: subject.subjectSpace,
-        workspaceId: subject.workspaceId,
-        observationCount: evaluation.observationCount,
-        brierSkillScoreBps: evaluation.brierSkillScoreBps,
-        forecastVarianceBpsSquared: evaluation.forecastVarianceBpsSquared,
-        outcomeDiscriminationBps: evaluation.outcomeDiscriminationBps,
-        voteDiscriminationBps: evaluation.voteDiscriminationBps,
-        reasonCodes: currentReasonCodes,
-        limitationCodes: [],
+      [subject.subjectSpace, subject.subjectKey],
+    );
+    const openAppeal = (findings.rows as Row[]).some(value => value.appeal_open === true);
+    const currentReasonCodes = [...new Set([...evaluation.reasonCodes, ...pairReasons])];
+    items.push({
+      subjectSpace: subject.subjectSpace,
+      workspaceId: subject.workspaceId,
+      observationCount: evaluation.observationCount,
+      brierSkillScoreBps: evaluation.brierSkillScoreBps,
+      forecastVarianceBpsSquared: evaluation.forecastVarianceBpsSquared,
+      outcomeDiscriminationBps: evaluation.outcomeDiscriminationBps,
+      voteDiscriminationBps: evaluation.voteDiscriminationBps,
+      reasonCodes: currentReasonCodes,
+      limitationCodes: [],
+      payoutEffect: "none" as const,
+      consequence: forecastConsequence({ reasonCodes: currentReasonCodes, hasOpenAppeal: openAppeal }),
+      findings: (findings.rows as Row[]).map(value => ({
+        findingId: text(value, "finding_id")!,
+        reasonCode: text(value, "reason_code")!,
+        severity: text(value, "severity")!,
+        sourceObservationCount: text(value, "source_observation_count")!,
         payoutEffect: "none" as const,
-        consequence: forecastConsequence({ reasonCodes: currentReasonCodes, hasOpenAppeal: openAppeal }),
-        findings: (findings.rows as Row[]).map(value => ({
-          findingId: text(value, "finding_id")!,
-          reasonCode: text(value, "reason_code")!,
-          severity: text(value, "severity")!,
-          sourceObservationCount: text(value, "source_observation_count")!,
-          payoutEffect: "none" as const,
-          consequence: text(value, "consequence")!,
-          appealOpen: value.appeal_open === true,
-          createdAt: new Date(String(value.created_at)).toISOString(),
-        })),
-      });
-    }
-    return { schemaVersion: "rateloop.reviewer-forecast-integrity.v1" as const, items };
-  } finally {
-    client.release();
+        consequence: text(value, "consequence")!,
+        appealOpen: value.appeal_open === true,
+        createdAt: new Date(String(value.created_at)).toISOString(),
+      })),
+    });
   }
+  return { schemaVersion: "rateloop.reviewer-forecast-integrity.v1" as const, items };
 }
 
 export async function openPrincipalForecastAppeal(input: {

@@ -4,6 +4,7 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { dbClient, dbPool } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
+import { listPrincipalForecastIntegrityInTransaction } from "~~/lib/tokenless/crowdForecastPersistence";
 import { authorizeProjectAccount } from "~~/lib/tokenless/projectAccess";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -296,7 +297,7 @@ export async function listSubjectRequests(principalId: string, now = new Date())
   });
 }
 
-async function buildSubjectExport(client: Pick<PoolClient, "query">, principalId: string) {
+async function buildSubjectExport(client: PoolClient, principalId: string) {
   const [account, workspaces, reviewerAccess, rater, requests] = await Promise.all([
     client.query(
       `SELECT principal.principal_id,principal.status,principal.created_at,
@@ -347,6 +348,7 @@ async function buildSubjectExport(client: Pick<PoolClient, "query">, principalId
       [principalId],
     ),
   ]);
+  const forecastIntegrity = await listPrincipalForecastIntegrityInTransaction(client, principalId);
   return {
     schemaVersion: "rateloop.subject-export.v1",
     generatedFor: principalId,
@@ -354,6 +356,7 @@ async function buildSubjectExport(client: Pick<PoolClient, "query">, principalId
     workspaceMemberships: workspaces.rows,
     workspaceReviewerAccess: reviewerAccess.rows,
     paidReviewerProfile: rater.rows[0] ?? null,
+    forecastIntegrity,
     subjectRequests: requests.rows,
     exclusions: [
       "Authentication secrets, recovery material, encrypted tax payloads, provider evidence, and other users' data are excluded.",

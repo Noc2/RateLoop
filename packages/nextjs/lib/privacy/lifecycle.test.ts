@@ -220,6 +220,10 @@ test("access and export requests produce a bounded authenticated download instea
 
   const exported = await readSubjectRequestExport({ principalId: OWNER, requestId: created.requestId, now });
   assert.equal(exported.data.schemaVersion, "rateloop.subject-export.v1");
+  assert.deepEqual(exported.data.forecastIntegrity, {
+    schemaVersion: "rateloop.reviewer-forecast-integrity.v1",
+    items: [],
+  });
   assert.match(String(exported.payloadHash), /^sha256:[0-9a-f]{64}$/u);
   assert.doesNotMatch(
     JSON.stringify(exported.data),
