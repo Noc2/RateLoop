@@ -77,8 +77,8 @@ project assignment, and reviewer lease rather than wallet ownership.
 ## Evidence boundary
 
 Private artifacts are encrypted and access-controlled. Each artifact has its own random data-encryption key. Hosted
-releases derive workspace/project wrapping keys from a versioned root held in Vercel's server-only secret store and
-bind authenticated encryption context; authorized RateLoop workloads can still decrypt the tenant's artifacts to
+releases derive tenant-scoped workspace/project wrapping keys from a versioned root held in Vercel's server-only secret
+store and bind authenticated encryption context; authorized RateLoop workloads can still decrypt that tenant's artifacts to
 provide the service. This is application-managed encryption, not customer-held or non-exportable HSM custody. Key
 inventory, rotation/rewrap, recovery, and access exercises are release gates. Paid settlement inputs and outputs are
 independently recomputable on Base. A paid commit schedules public

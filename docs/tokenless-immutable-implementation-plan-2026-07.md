@@ -206,8 +206,9 @@ finish before the first paid voucher. Browsing and advisory calibration require 
 Private artifacts are encrypted before storage and released only through workspace membership, project assignment, and
 short reviewer leases. Public, private, and sensitive-material decisions are separate policy dimensions. Each customer
 artifact has a random data-encryption key. Hosted wrapping uses a versioned root keyring in Vercel's server-only secret
-store and HKDF-derived workspace/project wrapping keys with authenticated context for every artifact DEK. Authorized
-RateLoop workloads can therefore decrypt artifacts within their application permissions: platform secrets are not an
+store and HKDF-derived, tenant-scoped workspace/project wrapping keys with authenticated context for every artifact DEK.
+Authorized RateLoop workloads can therefore decrypt that tenant's artifacts within their application permissions:
+platform secrets are not an
 HSM boundary. Railway holds only its separate service signing keys. This avoids any RateLoop AWS, KMS, IAM, or AWS OIDC
 dependency, but accepts a weaker custody boundary than non-exportable hardware-backed keys. Provider inventory,
 strict role separation, address and key-version pinning, rewrap/rotation and recovery drills, minimal balances and

@@ -17,11 +17,11 @@ function normalized(disclosure: string) {
   return disclosure.replace(/\s+/gu, " ");
 }
 
-test("artifact-key docs disclose tenant-scoped managed wrapping and workload authority", () => {
+test("artifact-key docs disclose tenant-scoped platform-secret wrapping and workload authority", () => {
   for (const disclosure of [design, legalReference, artifactBoundary, publicHowItWorks].map(normalized)) {
     assert.match(disclosure, /Each (?:customer )?artifact (?:has|gets) (?:its own|a) random/iu);
-    assert.match(disclosure, /workspace\/project-scoped|tenant-scoped/iu);
-    assert.match(disclosure, /workload role/iu);
+    assert.match(disclosure, /workspace\/project(?:-scoped)?|tenant-scoped/iu);
+    assert.match(disclosure, /RateLoop (?:application )?workloads?|workload role/iu);
     assert.match(disclosure, /decrypt (?:that tenant's|the tenant's|that tenant’s) (?:customer )?artifacts/iu);
     assert.match(disclosure, /provision|inventory/iu);
     assert.match(disclosure, /release gate/iu);
@@ -35,6 +35,6 @@ test("artifact-key claims do not generalize the tlock reveal-key property to cus
   assert.match(legalReference, /statement does not describe the customer-artifact vault/iu);
   assert.match(
     normalized(artifactBoundary),
-    /hosted operation must use the configured managed-KMS adapter and tenant-scoped alias template/isu,
+    /hosted operation uses the configured platform-secret keyring and tenant-scoped derived wrapping keys/isu,
   );
 });

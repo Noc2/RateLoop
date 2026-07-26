@@ -33,8 +33,7 @@ test("subprocessor notice distinguishes core, conditional, and independent servi
   assert.match(html, /Railway Corp/i);
   assert.match(html, /Resend, Inc/i);
   assert.match(html, /Stripe Payments Europe/i);
-  assert.match(html, /Amazon Web Services EMEA/i);
-  assert.match(html, /source-code support alone does not enable processing/i);
+  assert.doesNotMatch(html, /Amazon Web Services EMEA/i);
   assert.match(html, /Services that may be independent recipients/i);
   assert.match(html, /object within 14 days/i);
 });
