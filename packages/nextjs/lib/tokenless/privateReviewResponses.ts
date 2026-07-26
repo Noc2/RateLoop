@@ -706,6 +706,43 @@ export async function reconcileDirectPrivateReviewDeadline(input: {
   return envelope;
 }
 
+export async function reconcileDueDirectPrivateReviewDeadlines(input: { now?: Date; limit?: number } = {}) {
+  const now = input.now ?? new Date();
+  const limit = input.limit ?? 20;
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+    throw new Error("Direct private review reconciliation limit is invalid.");
+  }
+  const due = await dbPool.query(
+    `SELECT workspace_id,opportunity_id
+     FROM tokenless_private_unpaid_review_deliveries
+     WHERE result_envelope_json IS NULL AND response_deadline <= $1
+     ORDER BY response_deadline ASC,delivery_id ASC
+     LIMIT $2`,
+    [now, limit],
+  );
+  const summary = {
+    scanned: due.rows.length,
+    finalized: 0,
+    pending: 0,
+    retry: 0,
+    retryOpportunityIds: [] as string[],
+  };
+  for (const value of due.rows) {
+    const row = value as Row;
+    const workspaceId = text(row, "workspace_id")!;
+    const opportunityId = text(row, "opportunity_id")!;
+    try {
+      const envelope = await reconcileDirectPrivateReviewDeadline({ workspaceId, opportunityId, now });
+      if (envelope) summary.finalized += 1;
+      else summary.pending += 1;
+    } catch {
+      summary.retry += 1;
+      summary.retryOpportunityIds.push(opportunityId);
+    }
+  }
+  return summary;
+}
+
 export async function submitDirectPrivateReviewResponse(input: {
   accountAddress: string;
   assignmentId: string;

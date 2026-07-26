@@ -20,10 +20,13 @@ import {
 } from "~~/lib/tokenless/assuranceEventStreaming";
 import { processDueGrcReconciliations } from "~~/lib/tokenless/assuranceGrcConnectors";
 import { processDueAssuranceWormExports } from "~~/lib/tokenless/assuranceWormExports";
+import { expireAudienceAssignments } from "~~/lib/tokenless/audienceAssignments";
 import { reconcileChainPayment } from "~~/lib/tokenless/chain/payments";
 import { processDueEvidenceRetentionEnforcement } from "~~/lib/tokenless/evidenceRetentionEnforcement";
 import { refreshCompletedAssuranceMechanismHealth } from "~~/lib/tokenless/mechanismHealth";
 import { sweepManagedEvmNonceDrift, unresolvedManagedEvmNonceFindings } from "~~/lib/tokenless/nonceRecovery";
+import { reconcileDueDirectPrivateReviewDeadlines } from "~~/lib/tokenless/privateReviewResponses";
+import { expirePrivateUnpaidReviewReservations } from "~~/lib/tokenless/privateUnpaidReviewAdapter";
 import { processPublicQuestionMediaDeletionByAssetId } from "~~/lib/tokenless/publicQuestionMedia";
 import { reconcilePaidRaterCommit } from "~~/lib/tokenless/raterService";
 import { TokenlessServiceError, sweepExpiredTokenlessQuotes } from "~~/lib/tokenless/server";
@@ -242,6 +245,9 @@ type MaintenanceProcessors = {
   refreshMechanismHealth: typeof refreshCompletedAssuranceMechanismHealth;
   sweepNonceDrift: typeof sweepManagedEvmNonceDrift;
   sweepExpiredQuotes: typeof sweepExpiredTokenlessQuotes;
+  reconcileDirectPrivateReviewDeadlines: typeof reconcileDueDirectPrivateReviewDeadlines;
+  expireAudienceAssignments: typeof expireAudienceAssignments;
+  expirePrivateReviewReservations: typeof expirePrivateUnpaidReviewReservations;
 };
 
 type MaintenanceProcessorFailure = {
@@ -304,6 +310,9 @@ const defaultProcessors: MaintenanceProcessors = {
   refreshMechanismHealth: refreshCompletedAssuranceMechanismHealth,
   sweepNonceDrift: sweepManagedEvmNonceDrift,
   sweepExpiredQuotes: sweepExpiredTokenlessQuotes,
+  reconcileDirectPrivateReviewDeadlines: reconcileDueDirectPrivateReviewDeadlines,
+  expireAudienceAssignments,
+  expirePrivateReviewReservations: expirePrivateUnpaidReviewReservations,
 };
 
 async function claimDueWork(now: Date, limit: number) {
@@ -520,6 +529,26 @@ export async function runTokenlessScheduledMaintenance(input: {
       processor: "sweepExpiredQuotes",
       run: () => processors.sweepExpiredQuotes({ now, limit: workLimit }),
       fallback: { deleted: 0, scanned: 0 } as Awaited<ReturnType<MaintenanceProcessors["sweepExpiredQuotes"]>>,
+    });
+    const directPrivateReviewDeadlines = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "reconcileDirectPrivateReviewDeadlines",
+      run: () => processors.reconcileDirectPrivateReviewDeadlines({ now, limit: workLimit }),
+      fallback: { scanned: 0, finalized: 0, pending: 0, retry: 0, retryOpportunityIds: [] } as Awaited<
+        ReturnType<MaintenanceProcessors["reconcileDirectPrivateReviewDeadlines"]>
+      >,
+    });
+    const expiredAudienceAssignments = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "expireAudienceAssignments",
+      run: () => processors.expireAudienceAssignments(now),
+      fallback: { expired: 0 } as Awaited<ReturnType<MaintenanceProcessors["expireAudienceAssignments"]>>,
+    });
+    const expiredPrivateReviewReservations = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "expirePrivateReviewReservations",
+      run: () => processors.expirePrivateReviewReservations(now),
+      fallback: 0 as Awaited<ReturnType<MaintenanceProcessors["expirePrivateReviewReservations"]>>,
     });
     const evidenceRetention = await runIsolatedMaintenanceProcessor({
       failures: processorFailures,
@@ -748,7 +777,8 @@ export async function runTokenlessScheduledMaintenance(input: {
       assuranceEvents.delivery.dead > 0 ||
       prepaidTopups.failed > 0 ||
       prepaidTopupAudit.attempted > prepaidTopupAudit.delivered ||
-      enterpriseIdentityAudit.retry > 0
+      enterpriseIdentityAudit.retry > 0 ||
+      directPrivateReviewDeadlines.retry > 0
         ? "degraded"
         : "healthy";
     const summary = {
@@ -773,6 +803,9 @@ export async function runTokenlessScheduledMaintenance(input: {
       mechanismHealth,
       expiredQuotes,
       processorFailures,
+      directPrivateReviewDeadlines,
+      expiredAudienceAssignments,
+      expiredPrivateReviewReservations,
       adaptiveRollups: "not_scheduled_until_a_persisted_rollup_processor_exists",
     };
     await dbClient.execute({

@@ -212,8 +212,52 @@ function processors(
         retryRunIds: [],
       };
     },
+    async reconcileDirectPrivateReviewDeadlines() {
+      return { scanned: 0, finalized: 0, pending: 0, retry: 0, retryOpportunityIds: [] };
+    },
+    async expireAudienceAssignments() {
+      return { expired: 0 };
+    },
+    async expirePrivateReviewReservations() {
+      return 0;
+    },
   };
 }
+
+test("scheduled maintenance finalizes due private reviews before expiring assignment reservations", async () => {
+  const calls: string[] = [];
+  const result = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    processors: {
+      ...processors(async () => undefined),
+      async reconcileDirectPrivateReviewDeadlines() {
+        calls.push("reconcile");
+        return { scanned: 1, finalized: 1, pending: 0, retry: 0, retryOpportunityIds: [] };
+      },
+      async expireAudienceAssignments() {
+        calls.push("audience-expiry");
+        return { expired: 2 };
+      },
+      async expirePrivateReviewReservations() {
+        calls.push("private-expiry");
+        return 3;
+      },
+    },
+  });
+  if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.equal(result.status, "healthy");
+  assert.deepEqual(calls.slice(0, 3), ["reconcile", "audience-expiry", "private-expiry"]);
+  assert.deepEqual(result.summary.directPrivateReviewDeadlines, {
+    scanned: 1,
+    finalized: 1,
+    pending: 0,
+    retry: 0,
+    retryOpportunityIds: [],
+  });
+  assert.deepEqual(result.summary.expiredAudienceAssignments, { expired: 2 });
+  assert.equal(result.summary.expiredPrivateReviewReservations, 3);
+});
 
 test("scheduled maintenance publishes each due round once and deduplicates a cron bucket", async () => {
   await seedConfirmedExecution("operation_due_1");

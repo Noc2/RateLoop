@@ -527,24 +527,31 @@ test("terminal failures project as review.failed or review.expired with gate-tra
   );
 
   const fixture = await seedLifecycleEventSources();
-  const insertTerminal = async (opportunityId: string, eventId: string, reasonCodes: string[], commitment: string) => {
+  const insertTerminal = async (
+    opportunityId: string,
+    eventId: string,
+    reasonCodes: string[],
+    commitment: string,
+    terminalState: "failed_terminal" | "inconclusive" = "failed_terminal",
+  ) => {
     await dbClient.execute({
       sql: `INSERT INTO tokenless_agent_review_opportunity_lifecycles
             (workspace_id,opportunity_id,state,state_revision,reason_codes_json,state_entered_at,terminal_at,
              created_at,updated_at)
-            VALUES (?,?,'failed_terminal',3,?,?,?,?,?)`,
-      args: [fixture.workspaceId, opportunityId, JSON.stringify(reasonCodes), NOW, NOW, NOW, NOW],
+            VALUES (?,?,?,3,?,?,?,?,?)`,
+      args: [fixture.workspaceId, opportunityId, terminalState, JSON.stringify(reasonCodes), NOW, NOW, NOW, NOW],
     });
     await dbClient.execute({
       sql: `INSERT INTO tokenless_agent_review_opportunity_transition_events
             (event_id,workspace_id,opportunity_id,transition_key,from_state,to_state,from_revision,to_revision,
              reason_codes_json,actor_kind,actor_reference,details_json,transition_commitment,occurred_at)
-            VALUES (?,?,?,?,'pending','failed_terminal',2,3,?,'service','stream-test','{}',?,?)`,
+            VALUES (?,?,?,?,'pending',?,2,3,?,'service','stream-test','{}',?,?)`,
       args: [
         eventId,
         fixture.workspaceId,
         opportunityId,
         `terminal:${opportunityId}`,
+        terminalState,
         JSON.stringify(reasonCodes),
         commitment,
         NOW,
@@ -554,6 +561,7 @@ test("terminal failures project as review.failed or review.expired with gate-tra
   // The seeded opportunities already project; add two fresh terminal failures.
   const failedOpportunity = "aop_lifecycle_stream_failed";
   const expiredOpportunity = "aop_lifecycle_stream_expired";
+  const inconclusiveExpiredOpportunity = "aop_lifecycle_stream_inconclusive_expired";
   const seedOpportunity = async (opportunityId: string, externalId: string) => {
     const template = await dbClient.execute({
       sql: `SELECT * FROM tokenless_agent_review_opportunities WHERE workspace_id=? LIMIT 1`,
@@ -592,10 +600,19 @@ test("terminal failures project as review.failed or review.expired with gate-tra
   };
   await seedOpportunity(failedOpportunity, "external-lifecycle-failed");
   await seedOpportunity(expiredOpportunity, "external-lifecycle-expired");
+  await seedOpportunity(inconclusiveExpiredOpportunity, "external-lifecycle-inconclusive-expired");
   const failedEventId = `hrtr_${"7".repeat(40)}`;
   const expiredEventId = `hrtr_${"8".repeat(40)}`;
+  const inconclusiveExpiredEventId = `hrtr_${"9".repeat(40)}`;
   await insertTerminal(failedOpportunity, failedEventId, ["adapter_failure"], HASH("7"));
   await insertTerminal(expiredOpportunity, expiredEventId, ["all_assignments_expired"], HASH("8"));
+  await insertTerminal(
+    inconclusiveExpiredOpportunity,
+    inconclusiveExpiredEventId,
+    ["response_deadline_elapsed", "private_panel_under_quorum"],
+    HASH("9"),
+    "inconclusive",
+  );
 
   await projectAssuranceLifecycleEvents({ now: NOW, limit: 20 });
   const stored = await dbClient.execute({
@@ -605,12 +622,14 @@ test("terminal failures project as review.failed or review.expired with gate-tra
           ORDER BY event_type ASC`,
     args: [fixture.workspaceId],
   });
-  assert.equal(stored.rows.length, 2);
-  const byType = new Map(stored.rows.map(row => [String(row.event_type), row]));
-  assert.equal(String(byType.get("ai.rateloop.review.failed")?.source_event_id), failedEventId);
-  assert.equal(String(byType.get("ai.rateloop.review.failed")?.evidence_reference_digest), HASH("7"));
-  assert.equal(String(byType.get("ai.rateloop.review.expired")?.source_event_id), expiredEventId);
-  assert.equal(String(byType.get("ai.rateloop.review.expired")?.evidence_reference_digest), HASH("8"));
+  assert.equal(stored.rows.length, 3);
+  const bySource = new Map(stored.rows.map(row => [String(row.source_event_id), row]));
+  assert.equal(String(bySource.get(failedEventId)?.event_type), "ai.rateloop.review.failed");
+  assert.equal(String(bySource.get(failedEventId)?.evidence_reference_digest), HASH("7"));
+  assert.equal(String(bySource.get(expiredEventId)?.event_type), "ai.rateloop.review.expired");
+  assert.equal(String(bySource.get(expiredEventId)?.evidence_reference_digest), HASH("8"));
+  assert.equal(String(bySource.get(inconclusiveExpiredEventId)?.event_type), "ai.rateloop.review.expired");
+  assert.equal(String(bySource.get(inconclusiveExpiredEventId)?.evidence_reference_digest), HASH("9"));
   for (const row of stored.rows) {
     assert.equal(row.evidence_reference_kind, "gate_transition");
     assert.equal(row.packet_hash, null);
