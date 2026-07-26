@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { HumanInboxBadge } from "~~/components/tokenless/human/HumanInboxBadge";
 
 export type HumanTab = "discover" | "profile" | "settings";
 type HumanNavigation = HumanTab | "history";
@@ -24,7 +25,10 @@ export function HumanTabs({ active, endAction }: { active: HumanNavigation; endA
               active === tab.value ? "pill-active" : "pill-inactive"
             }`}
           >
-            {tab.label}
+            <span className="inline-flex items-center gap-2">
+              {tab.label}
+              {tab.value === "discover" ? <HumanInboxBadge /> : null}
+            </span>
           </Link>
         ))}
       </nav>

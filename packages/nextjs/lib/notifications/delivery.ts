@@ -79,7 +79,7 @@ function rowsToCandidates(rows: readonly Row[], template: Omit<LifecycleCandidat
 
 async function loadLifecycleCandidates(now: Date, limit: number) {
   const perSource = Math.max(1, Math.ceil(limit / 4));
-  const [available, completed, payments, directResults, workspaceResults] = await Promise.all([
+  const [available, directAvailable, completed, payments, directResults, workspaceResults] = await Promise.all([
     dbClient.execute({
       sql: `SELECT b.principal_address, a.assignment_id AS source_key
             FROM tokenless_assurance_assignments a
@@ -107,6 +107,55 @@ async function loadLifecycleCandidates(now: Date, limit: number) {
               )
             ORDER BY a.created_at ASC LIMIT ?`,
       args: [now, now, perSource],
+    }),
+    dbClient.execute({
+      sql: `SELECT b.principal_address, a.assignment_id AS source_key
+            FROM tokenless_private_unpaid_review_assignments a
+            JOIN tokenless_private_unpaid_review_deliveries d ON d.delivery_id = a.delivery_id
+            JOIN tokenless_agent_review_request_profiles rp
+              ON rp.workspace_id = d.workspace_id AND rp.profile_id = d.request_profile_id
+             AND rp.version = d.request_profile_version AND rp.profile_hash = d.request_profile_hash
+            JOIN tokenless_browser_identities b
+              ON b.principal_address = lower(a.reviewer_account_address)
+            JOIN tokenless_private_groups g
+              ON g.group_id = a.private_group_id AND g.workspace_id = a.workspace_id AND g.status = 'active'
+            JOIN tokenless_workspace_reviewers reviewer
+              ON reviewer.workspace_id = a.workspace_id
+             AND reviewer.principal_address = a.reviewer_account_address
+             AND reviewer.status = 'active'
+            JOIN tokenless_principals principal
+              ON principal.principal_id = reviewer.principal_address AND principal.status = 'active'
+            JOIN tokenless_workspace_reviewer_access_grants access_grant
+              ON access_grant.workspace_id = a.workspace_id
+             AND access_grant.principal_address = a.reviewer_account_address
+             AND access_grant.grant_id = a.workspace_reviewer_access_grant_id
+             AND access_grant.grant_hash = a.workspace_reviewer_access_grant_hash
+            LEFT JOIN tokenless_workspace_reviewer_access_grant_projects grant_project
+              ON grant_project.workspace_id = a.workspace_id AND grant_project.grant_id = access_grant.grant_id
+             AND grant_project.project_id = a.project_id
+            LEFT JOIN tokenless_notifications n
+              ON n.principal_address = b.principal_address
+             AND n.source_type = 'assignment.available' AND n.source_key = a.assignment_id
+            WHERE rp.compensation_mode = 'unpaid'
+              AND a.status = 'reserved' AND a.reservation_expires_at > ? AND a.response_deadline > ?
+              AND (a.membership_expires_at IS NULL OR a.membership_expires_at >= a.response_deadline)
+              AND access_grant.revoked_at IS NULL AND access_grant.valid_from <= ?
+              AND (access_grant.valid_until IS NULL OR access_grant.valid_until >= a.response_deadline)
+              AND (
+                access_grant.project_scope = 'all'
+                OR (access_grant.project_scope = 'selected' AND grant_project.project_id = a.project_id)
+              )
+              AND CASE rp.private_sensitivity
+                    WHEN 'internal' THEN 1 WHEN 'confidential' THEN 2
+                    WHEN 'restricted' THEN 3 WHEN 'regulated' THEN 4 ELSE 99
+                  END
+                  <= CASE access_grant.max_private_sensitivity
+                    WHEN 'internal' THEN 1 WHEN 'confidential' THEN 2
+                    WHEN 'restricted' THEN 3 WHEN 'regulated' THEN 4 ELSE 0
+                  END
+              AND n.notification_id IS NULL
+            ORDER BY a.created_at ASC LIMIT ?`,
+      args: [now, now, now, perSource],
     }),
     dbClient.execute({
       sql: `SELECT b.principal_address, a.assignment_id AS source_key
@@ -172,7 +221,7 @@ async function loadLifecycleCandidates(now: Date, limit: number) {
 
   return interleave(
     [
-      rowsToCandidates(available.rows as Row[], {
+      rowsToCandidates([...available.rows, ...directAvailable.rows] as Row[], {
         body: "A human-assurance assignment is ready for review.",
         href: "/human?tab=discover",
         preferenceKey: "assignmentAvailable",
