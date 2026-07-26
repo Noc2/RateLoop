@@ -83,9 +83,9 @@ const reviewerSources = [
   ...(configuredReviewLanes.hybridPublicSafe.available ? ["separate hybrid panels"] : []),
 ];
 const reviewerSourcesAnswer =
-  reviewerSources.length === 1
+  (reviewerSources.length === 1
     ? "Your invited reviewers."
-    : `${reviewerSources.slice(0, -1).join(", ")}, or ${reviewerSources.at(-1)}.`;
+    : `${reviewerSources.slice(0, -1).join(", ")}, or ${reviewerSources.at(-1)}.`) + " Hybrid is unavailable.";
 
 const questions = [
   ["Who Reviews the Work?", reviewerSourcesAnswer],
