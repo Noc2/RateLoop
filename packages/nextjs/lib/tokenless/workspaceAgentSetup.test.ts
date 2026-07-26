@@ -25,6 +25,7 @@ import { replacePrivateGroupMemberExpertise } from "~~/lib/tokenless/reviewerExp
 import { createWorkspaceReviewerExpertiseDefinition } from "~~/lib/tokenless/reviewerExpertiseDefinitions";
 import type { ReviewerExpertiseRequirement } from "~~/lib/tokenless/reviewerExpertiseOptions";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import { persistCurrentIntegrityEpochFixture } from "~~/lib/tokenless/testing/integrityEpochFixture";
 import {
   agentSetupUrl,
   clampAgentSetupStep,
@@ -143,6 +144,9 @@ async function saveSetupReviewConfiguration(input: {
 }) {
   const audience = input.audience ?? "private_invited";
   const questionAuthority = input.questionAuthority ?? "owner_fixed";
+  if (audience === "public_network") {
+    await persistCurrentIntegrityEpochFixture("integrity:workspace-setup-test");
+  }
   return putHumanReviewConfigurationForOwner({
     accountAddress: OWNER,
     workspaceId: input.workspaceId,
@@ -1001,6 +1005,7 @@ test("automatic setup atomically binds the exact owner-approved workflows and sp
       allowedWorkflowKeys: ["general-assistance"],
     },
   };
+  await persistCurrentIntegrityEpochFixture("integrity:workspace-setup-automatic-test");
   const saved = await putHumanReviewConfigurationForOwner({
     accountAddress: OWNER,
     workspaceId,

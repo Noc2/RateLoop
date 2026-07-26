@@ -50,6 +50,7 @@ import {
 } from "~~/lib/tokenless/privateGroups";
 import { createAgentPublishingPolicy, createWorkspace } from "~~/lib/tokenless/productCore";
 import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
+import { persistCurrentIntegrityEpochFixture } from "~~/lib/tokenless/testing/integrityEpochFixture";
 import {
   configureWorkspaceSetupReviews,
   confirmWorkspaceSetupAgent,
@@ -1760,6 +1761,7 @@ test("OAuth keeps one stable tool list and fails closed for unavailable paid-net
   assert.equal(upgradedContext.safeAccess.canSpend, false);
   assert.equal(upgradedContext.safeAccess.canPublish, false);
 
+  await persistCurrentIntegrityEpochFixture("integrity:mcp-route-test");
   const configured = await putHumanReviewConfigurationForOwner({
     accountAddress: principalId,
     workspaceId,
