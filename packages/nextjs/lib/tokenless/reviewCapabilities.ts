@@ -73,15 +73,14 @@ export function humanReviewLaneImplementation(
     activationBound &&
     env.TOKENLESS_NETWORK_PANELS_ENABLED?.trim() === "true" &&
     env.NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED?.trim() === "true";
-  const hybridRequested =
-    activationBound &&
-    env.TOKENLESS_HYBRID_REVIEWS_ENABLED?.trim() === "true" &&
-    env.NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED?.trim() === "true";
   return {
     privateInvitedUnpaid: true,
     privateInvitedPaid,
     publicPaidNetwork,
-    hybridPublicSafe: hybridRequested && privateInvitedPaid && publicPaidNetwork,
+    // Hybrid remains an intentionally unavailable schema value. The current
+    // adapter has no production release, child-terminal, expiry, or refund
+    // producer, so no environment flag may expose a fund-locking path.
+    hybridPublicSafe: false,
   };
 }
 
@@ -108,7 +107,7 @@ const HUMAN_REVIEW_LANE_UNAVAILABLE_MESSAGES: Record<HumanReviewLaneImplementati
   publicPaidNetwork:
     "Paid RateLoop network review is implemented but unavailable until identity, funding, deployment, and compliance activation are validated.",
   hybridPublicSafe:
-    "Hybrid review is implemented but unavailable until both paid child paths pass their provider, funding, deployment, and compliance activation checks.",
+    "Hybrid review is unavailable in this release until both child paths have durable release, terminal, expiry, and refund processing.",
 };
 
 export function configuredHumanReviewLaneMessage(lane: HumanReviewLaneImplementationKey) {

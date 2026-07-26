@@ -52,8 +52,10 @@ export default function HowTokenlessWorksPage() {
         reviewer-selected payout address.
       </p>
       <p>
-        Invited panels use an explicit <Link href="/docs/tech-stack#audience-policies">audience policy</Link> that binds
-        membership and qualification requirements before work is assigned.
+        A network panel uses <Link href="/docs/tech-stack#proof-of-human">Proof of Human</Link> for provider-scoped
+        uniqueness. Invited panels use their own explicit{" "}
+        <Link href="/docs/tech-stack#audience-policies">audience policies</Link>. Hybrid panels are not available in
+        this release.
       </p>
       <ReviewerFlowDiagram />
 

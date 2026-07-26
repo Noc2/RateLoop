@@ -132,8 +132,8 @@ function validFixture() {
     NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "true",
     TOKENLESS_NETWORK_PANELS_ENABLED: "true",
     NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED: "true",
-    TOKENLESS_HYBRID_REVIEWS_ENABLED: "true",
-    NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED: "true",
+    TOKENLESS_HYBRID_REVIEWS_ENABLED: "false",
+    NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED: "false",
     TOKENLESS_PAID_LANES_DPIA_APPROVAL_REFERENCE: `sha256:${"a".repeat(64)}`,
     TOKENLESS_PAID_LANES_TRANSFER_INVENTORY_APPROVAL_REFERENCE: `sha256:${"b".repeat(64)}`,
     TOKENLESS_PAID_LANES_FUNDING_VALIDATION_REFERENCE: `sha256:${"c".repeat(64)}`,
@@ -347,8 +347,8 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
     NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "true",
     TOKENLESS_NETWORK_PANELS_ENABLED: "true",
     NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED: "true",
-    TOKENLESS_HYBRID_REVIEWS_ENABLED: "true",
-    NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED: "true",
+    TOKENLESS_HYBRID_REVIEWS_ENABLED: "false",
+    NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED: "false",
     TOKENLESS_PAID_LANES_DPIA_APPROVAL_REFERENCE: `sha256:${"a".repeat(64)}`,
     TOKENLESS_PAID_LANES_TRANSFER_INVENTORY_APPROVAL_REFERENCE: `sha256:${"b".repeat(64)}`,
     TOKENLESS_PAID_LANES_FUNDING_VALIDATION_REFERENCE: `sha256:${"c".repeat(64)}`,
@@ -369,6 +369,17 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
   assert.match(
     validateTokenlessProductionReadiness({ env: publicOnlyActivation, activeRegistry: {} }).join("\n"),
     /TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED and NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED must match/u,
+  );
+  const hybridActivated = {
+    ...activated,
+    TOKENLESS_HYBRID_REVIEWS_ENABLED: "true",
+    NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED: "true",
+  };
+  hybridActivated.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE =
+    derivePaidLaneActivationReference(hybridActivated);
+  assert.match(
+    validateTokenlessProductionReadiness({ env: hybridActivated, activeRegistry: {} }).join("\n"),
+    /hybrid_public_safe is unavailable/u,
   );
   assert.match(
     validateTokenlessProductionReadiness({

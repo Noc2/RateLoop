@@ -102,7 +102,7 @@ test("review setup resolves frequency before reviewer terms and authority", () =
 });
 
 test("review setup controls audience and shows only the relevant material boundary", () => {
-  for (const label of ["Public network", "Invited reviewers", "Hybrid", "private workspace material"]) {
+  for (const label of ["Public network", "Invited reviewers", "private workspace material"]) {
     assert.match(flowSource, new RegExp(label));
   }
   assert.match(flowSource, /checked=\{reviewAudience\.audience === value\}/);

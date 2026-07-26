@@ -7,9 +7,10 @@ It is an engineering control record, not legal advice or a certification of GDPR
 ## Release position
 
 - Private invited, unpaid review is available by default.
-- Paid private, public-network, and hybrid code paths are implemented but default off. They become reachable only when
-  the exact server and public activation flags, evidence-bound activation reference, deployment funding, provider, and
-  compliance gates agree.
+- Paid private and public-network code paths are implemented but default off. They become reachable only when the exact
+  server and public activation flags, evidence-bound activation reference, deployment funding, provider, and compliance
+  gates agree. Hybrid remains a reserved schema/foundation path and is deliberately non-activatable until production
+  release, child-terminal, expiry, and refund producers exist.
 - Production paid processing also requires immutable references to an approved blockchain DPIA and provider-transfer
   inventory. Missing or malformed references stop the request before assignment, publication, reservation, or spend.
 - Public-chain processing must follow the necessity, minimisation, off-chain-data, rights, and DPIA controls in the
@@ -62,7 +63,7 @@ It is an engineering control record, not legal advice or a certification of GDPR
 | 4 rating/receipt/copy/mobile | `94b08bd8f`, `119fdb081`, `8d9ac5cd4`, `a3d95cd54`, `a38d37023`, `ab54aa1e6`, `279dd7986`, `126862ee6`, `a82368591`, `d873ce4a7`, `aa7b413ff`, and `5839328d9`; the desktop and Pixel 7 journeys exercise funded-task acceptance, real private routing provenance, exact private artifacts, accessible heading order, responsive media, failed mobile sharing, successful recovery confirmation, and current visual baselines. |
 | 5.1 recovery | `60ad10013` provides authenticated self-reveal/claim status and recovery transaction material without accepting preimages server-side. |
 | 5.2 earnings | `d36fa992d`. |
-| 5.3 paid/network/hybrid foundations | Eligibility, terminal settlement, frozen network selection, integrity epochs, durable public-network bindings, two-round hybrid orchestration, invited-wins exclusions, and retention/erasure are in the Phase 5 commits above. Paid lanes default false, but `abeda238c`, `3c07579f5`, `47533760a`, and `01faf36c1` provide an exact evidence-bound activation path after the external gates below pass. `a0f1f33d0` and `7a610b8ce` prove the ask/foundation ordering and no-specialist network path in the reachable adaptive flow. |
+| 5.3 paid/network/hybrid foundations | Eligibility, terminal settlement, frozen network selection, integrity epochs, durable public-network bindings, two-round hybrid foundations, invited-wins exclusions, and retention/erasure are in the Phase 5 commits above. Private-paid and public-network lanes default false and have evidence-bound activation gates. Hybrid is not activatable because its production release, child-terminal, expiry, and refund producers are incomplete. `a0f1f33d0` and `7a610b8ce` prove the ask/foundation ordering and no-specialist network path in the reachable adaptive flow. |
 | 6 adaptive ladder | `9a93fe10d` ships the 25% floor/cap, periodic recalibration, corrected reset ordering, observed agreement, and the honest default/recommended labeling. |
 
 ## GDPR-by-design controls
@@ -115,13 +116,13 @@ The following are release inputs, not unfinished repository work:
 
 Paid-lane deployment activation uses these exact controls:
 
-- `TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED`, `TOKENLESS_NETWORK_PANELS_ENABLED`, and
-  `TOKENLESS_HYBRID_REVIEWS_ENABLED`, with matching `NEXT_PUBLIC_` flags.
+- `TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED` and `TOKENLESS_NETWORK_PANELS_ENABLED`, with matching `NEXT_PUBLIC_`
+  flags. Hybrid server/public flags must remain false.
 - `TOKENLESS_PAID_LANES_DPIA_APPROVAL_REFERENCE`,
   `TOKENLESS_PAID_LANES_TRANSFER_INVENTORY_APPROVAL_REFERENCE`,
   `TOKENLESS_PAID_LANES_FUNDING_VALIDATION_REFERENCE`, and
   `TOKENLESS_PAID_LANES_COMPLIANCE_APPROVED_AT`.
-- `TOKENLESS_INVITED_PAID_ADULTHOOD_APPROVAL_REFERENCE` for private and hybrid activation.
+- `TOKENLESS_INVITED_PAID_ADULTHOOD_APPROVAL_REFERENCE` for private-paid activation.
 - `NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE`, derived from the exact server-side bundle.
 
 ## Verification

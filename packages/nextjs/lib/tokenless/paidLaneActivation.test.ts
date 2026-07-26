@@ -26,12 +26,12 @@ function activeEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
-test("exact external evidence and matching flags activate all implemented paid lanes", () => {
+test("exact external evidence activates the supported paid lanes but never hybrid", () => {
   const env = activeEnv();
   const now = new Date("2026-07-26T12:00:00.000Z");
   assert.deepEqual(validatePaidLaneActivation("private_invited_paid", env, now), []);
   assert.deepEqual(validatePaidLaneActivation("public_paid_network", env, now), []);
-  assert.deepEqual(validatePaidLaneActivation("hybrid_public_safe", env, now), []);
+  assert.match(validatePaidLaneActivation("hybrid_public_safe", env, now).join("\n"), /unavailable.*terminal.*refund/u);
 });
 
 test("public flags cannot activate a server lane or counterfeit its evidence reference", () => {
@@ -50,21 +50,8 @@ test("public flags cannot activate a server lane or counterfeit its evidence ref
   );
 });
 
-test("hybrid activation requires both child lanes and their provider and adulthood gates", () => {
-  const noPrivate = activeEnv();
-  noPrivate.TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED = "false";
-  noPrivate.NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED = "false";
-  noPrivate.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE = derivePaidLaneActivationReference(noPrivate);
-  assert.match(validatePaidLaneActivation("hybrid_public_safe", noPrivate).join("\n"), /must be true/u);
-
-  const noWorldId = activeEnv();
-  delete noWorldId.WORLD_ID_APP_ID;
-  noWorldId.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE = derivePaidLaneActivationReference(noWorldId);
-  assert.match(validatePaidLaneActivation("hybrid_public_safe", noWorldId).join("\n"), /WORLD_ID_APP_ID/u);
-
-  const noAdulthoodDecision = activeEnv();
-  delete noAdulthoodDecision.TOKENLESS_INVITED_PAID_ADULTHOOD_APPROVAL_REFERENCE;
-  noAdulthoodDecision.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE =
-    derivePaidLaneActivationReference(noAdulthoodDecision);
-  assert.match(validatePaidLaneActivation("hybrid_public_safe", noAdulthoodDecision).join("\n"), /adulthood decision/u);
+test("hybrid activation fails closed even when every legacy flag and child dependency is enabled", () => {
+  assert.deepEqual(validatePaidLaneActivation("hybrid_public_safe", activeEnv()), [
+    "hybrid_public_safe is unavailable until both child paths have production release, terminal, expiry, and refund processing.",
+  ]);
 });

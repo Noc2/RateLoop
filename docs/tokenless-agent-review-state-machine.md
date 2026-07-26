@@ -65,7 +65,9 @@ All adapters consume the same frozen opportunity and return the same bounded res
 - `public_paid_network` uses quote, funding, immutable public round, rater queue, settlement, and public result.
 - `private_invited_unpaid` uses encrypted assurance artifacts, an exact invited-group snapshot, assignment leases, response aggregation, and private result.
 - `private_invited_paid` adds pre-assignment eligibility and voucher-bound settlement.
-- `hybrid_public_safe` creates separate invited and network subpanels, prevents reviewer duplication, preserves cohort evidence, and aggregates only after both subpanels reach specified terminal states.
+- `hybrid_public_safe` is a reserved, unavailable state. Activation remains fail-closed until separate invited and
+  network children have production release, terminal, expiry, and refund processing; only then may aggregation proceed
+  after both children reach specified terminal states.
 
 Capability readiness chooses whether an adapter can be entered. Schema support alone is insufficient.
 

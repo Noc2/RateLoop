@@ -102,7 +102,7 @@ test("deployed implementation readiness is shared without overstating hybrid del
   });
 });
 
-test("paid lanes default off and become reachable only through an evidence-bound public activation", () => {
+test("supported paid lanes require evidence-bound activation while hybrid stays unavailable", () => {
   assert.deepEqual(humanReviewLaneImplementation({}), {
     privateInvitedUnpaid: true,
     privateInvitedPaid: false,
@@ -131,7 +131,7 @@ test("paid lanes default off and become reachable only through an evidence-bound
     privateInvitedUnpaid: true,
     privateInvitedPaid: true,
     publicPaidNetwork: true,
-    hybridPublicSafe: true,
+    hybridPublicSafe: false,
   });
   assert.equal(
     humanReviewLaneImplementation({
@@ -162,7 +162,6 @@ test("capability defaults bind the public projection to exact server activation 
     "NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE",
     "NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED",
     "NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED",
-    "NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED",
   ]) {
     assert.match(source, new RegExp(`process\\.env\\.${name}`, "u"));
   }
@@ -186,7 +185,7 @@ test("configured lane descriptions use the same implementation truth", () => {
     hybridPublicSafe: {
       available: false,
       message:
-        "Hybrid review is implemented but unavailable until both paid child paths pass their provider, funding, deployment, and compliance activation checks.",
+        "Hybrid review is unavailable in this release until both child paths have durable release, terminal, expiry, and refund processing.",
     },
   });
   assert.deepEqual(configuredHumanReviewAudienceSources(), ["customer_invited"]);

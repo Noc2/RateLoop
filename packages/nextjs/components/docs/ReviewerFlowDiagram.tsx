@@ -9,7 +9,7 @@ const steps: readonly DocsFlowStep[] = [
   },
   {
     title: "Assignment",
-    detail: "Receive a blinded item under the round's invited, network, or hybrid audience policy.",
+    detail: "Receive a blinded item under the round's invited or network audience policy.",
     accent: "green",
   },
   {

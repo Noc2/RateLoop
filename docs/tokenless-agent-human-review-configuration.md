@@ -41,9 +41,14 @@ Audience and material sensitivity are separate dimensions.
 | --- | --- | --- | --- |
 | Workspace reviewers | Private workspace material through encrypted, assignment-bound leases; public-safe material is also allowed | Unpaid or USDC-paid | Unpaid ships first; paid stays hidden until voucher settlement is ready |
 | RateLoop network | Public, synthetic, or owner-confirmed redacted material only | USDC-paid | Available only when public paid-panel readiness passes |
-| Hybrid | Public-safe material only; invited and network cohorts remain separate and deduplicated | USDC-paid | Hidden until both lanes and aggregation pass readiness |
+| Hybrid | Public-safe material only; invited and network cohorts remain separate and deduplicated | USDC-paid | Unavailable in this release |
 
 `private`, `internal`, `confidential`, `restricted`, and `regulated` artifacts never enter public question records. Hybrid review cannot autonomously derive a public projection from private material.
+
+Hybrid remains a reserved schema value, not an activatable capability. Its current adapter has no production producer
+for invited-child release, child liability and terminal transitions, or expiry/refund recovery. Server and public flags
+must remain false, the setup flow does not offer the lane, and routing stops with no publication, assignment,
+reservation, or spend. Activation requires those durable paths and behavioral fund-recovery tests first.
 
 ## Question authority and rationale
 

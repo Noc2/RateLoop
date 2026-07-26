@@ -101,7 +101,6 @@ const ACTIVE_CONNECTION_STATES = new Set([
 const REVIEW_AUDIENCE_OPTIONS = [
   ["public_network", "Public network", "RateLoop network reviewers."],
   ["private_invited", "Invited reviewers", "Only people you invite can review private workspace material."],
-  ["hybrid", "Hybrid", "Invited and RateLoop network reviewers."],
 ] as const;
 
 const CONFIGURED_HUMAN_REVIEW_LANES = configuredHumanReviewLanes();

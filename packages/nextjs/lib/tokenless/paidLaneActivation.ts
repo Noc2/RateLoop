@@ -50,9 +50,14 @@ function requireFlagPair(
 }
 
 export function validatePaidLaneActivation(lane: PaidLane, env: PaidLaneActivationEnv, now = new Date()): string[] {
+  if (lane === "hybrid_public_safe") {
+    return [
+      "hybrid_public_safe is unavailable until both child paths have production release, terminal, expiry, and refund processing.",
+    ];
+  }
   const errors: string[] = [];
-  const privateRequired = lane === "private_invited_paid" || lane === "hybrid_public_safe";
-  const networkRequired = lane === "public_paid_network" || lane === "hybrid_public_safe";
+  const privateRequired = lane === "private_invited_paid";
+  const networkRequired = lane === "public_paid_network";
   requireFlagPair(
     errors,
     env,
@@ -72,7 +77,7 @@ export function validatePaidLaneActivation(lane: PaidLane, env: PaidLaneActivati
     env,
     "TOKENLESS_HYBRID_REVIEWS_ENABLED",
     "NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED",
-    lane === "hybrid_public_safe",
+    false,
   );
 
   for (const name of [

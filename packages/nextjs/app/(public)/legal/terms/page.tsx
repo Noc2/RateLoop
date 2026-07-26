@@ -23,8 +23,8 @@ export default function TermsPage() {
       <p>
         Customers must have the right to submit evaluation material, minimize and redact personal or confidential data,
         choose appropriate reviewers, and provide any required notices. A one-time invitation proves project access, not
-        unique humanity, expertise, legal residence, or paid-work eligibility. Customer-invited, RateLoop-network, and
-        hybrid results are labeled separately.
+        unique humanity, expertise, legal residence, or paid-work eligibility. Customer-invited and RateLoop-network
+        results are labeled separately. Hybrid review is not offered in this release.
       </p>
       <p>
         Where RateLoop processes personal data in private customer material on the customer&apos;s behalf, the{" "}

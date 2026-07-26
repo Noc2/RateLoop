@@ -47,9 +47,10 @@ export default function TokenlessTechStackPage() {
 
       <h2 id="audience-policies">Audience Policies</h2>
       <p>
-        Every ask freezes one content-hashed audience policy for customer-invited reviewers. The policy binds reviewer
-        source, eligibility, panel size, economics, and publication rules so the audience cannot change midway through a
-        review.
+        Every ask freezes one content-hashed audience policy for customer-invited reviewers or the RateLoop network. The
+        policy binds reviewer source, eligibility, panel size, economics, and publication rules so the audience cannot
+        change midway through a round. The schema reserves separate hybrid subpanels, but that lane is unavailable until
+        both children have durable release, terminal, expiry, and refund processing.
       </p>
 
       <h2 id="correlation-diversified-assignment">Correlation-Diversified Assignment</h2>
