@@ -194,7 +194,7 @@ test("hybrid owner selection emits distinct invited and network subpanel cohorts
         privateGroupId: setup.group.groupId,
         requiredExpertiseKeys: [],
         responseWindowSeconds: setup.profileInput.responseWindowSeconds,
-        panelSize: 3,
+        panelSize: 4,
         compensationMode: "usdc",
         bountyPerSeatAtomic: "1000000",
         feedbackBonusEnabled: false,
@@ -224,11 +224,11 @@ test("hybrid owner selection emits distinct invited and network subpanel cohorts
   assert.ok(policy.cohorts.some(cohort => cohort.cohortId.startsWith("hacoh_network_")));
   assert.equal(
     policy.cohorts.reduce((sum, cohort) => sum + cohort.minimumReviewers, 0),
-    3,
+    4,
   );
   assert.equal(
     policy.cohorts.reduce((sum, cohort) => sum + cohort.maximumReviewers, 0),
-    3,
+    4,
   );
 });
 

@@ -1023,6 +1023,13 @@
       "when": 1785150000000,
       "tag": "0146_hybrid_review_parent_settlement",
       "breakpoints": true
+    },
+    {
+      "idx": 147,
+      "version": "7",
+      "when": 1785153600000,
+      "tag": "0147_hybrid_request_profile_semantics",
+      "breakpoints": true
     }
   ]
 }

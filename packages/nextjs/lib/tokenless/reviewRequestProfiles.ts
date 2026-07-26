@@ -44,7 +44,7 @@ export const MAXIMUM_FEEDBACK_BONUS_AWARD_WINDOW_SECONDS = 31_536_000;
 export const DEFAULT_FEEDBACK_BONUS_AWARD_WINDOW_SECONDS = 604_800;
 
 export type FeedbackBonusAwarderKind = "requester" | "designated";
-export type ReviewRequestProfileSemanticSchemaVersion = 1 | 2 | 3;
+export type ReviewRequestProfileSemanticSchemaVersion = 1 | 2 | 3 | 4;
 
 type QueryRow = Record<string, unknown>;
 
@@ -318,7 +318,23 @@ export function normalizeReviewRequestProfileInput(value: unknown): NormalizedRe
   }
   if (expertiseRequirements.length > 0) {
     if (audience === "hybrid") {
-      invalid("Hybrid specialist requirements need separately frozen invited and network seat classes.");
+      const invitedPanelSize = Math.ceil(panelSize / 2);
+      const networkPanelSize = panelSize - invitedPanelSize;
+      if (expertiseRequirements.some(requirement => requirement.sourceScope === "any")) {
+        invalid("Hybrid specialist requirements must name the invited or network cohort.");
+      }
+      try {
+        normalizeReviewerExpertiseRequirementsSelection(
+          expertiseRequirements.filter(requirement => requirement.sourceScope === "customer_invited"),
+          invitedPanelSize,
+        );
+        normalizeReviewerExpertiseRequirementsSelection(
+          expertiseRequirements.filter(requirement => requirement.sourceScope === "rateloop_network"),
+          networkPanelSize,
+        );
+      } catch {
+        invalid("Hybrid specialist requirements exceed their exact cohort size.");
+      }
     }
     if (
       audience === "private_invited" &&
@@ -336,10 +352,13 @@ export function normalizeReviewRequestProfileInput(value: unknown): NormalizedRe
     }
   }
   const semanticSchemaVersion: ReviewRequestProfileSemanticSchemaVersion =
-    expertiseRequirements.length > 0 ? 3 : questionAuthority === "owner_fixed" ? 1 : 2;
+    audience === "hybrid" ? 4 : expertiseRequirements.length > 0 ? 3 : questionAuthority === "owner_fixed" ? 1 : 2;
 
-  if ((audience === "public_network" || audience === "hybrid") && panelSize < 3) {
-    invalid("Public-network and hybrid review require a panel size of at least 3.");
+  if (audience === "public_network" && panelSize < 3) {
+    invalid("Public-network review requires a panel size of at least 3.");
+  }
+  if (audience === "hybrid" && panelSize < 4) {
+    invalid("Hybrid review requires at least two invited and two network reviewers.");
   }
   if (audience !== "private_invited" && compensationMode !== "usdc") {
     invalid("Public-network and hybrid review must be paid with a guaranteed USDC bounty.");
@@ -627,6 +646,21 @@ function profileFromRow(row: QueryRow): ReviewRequestProfile {
     if (error instanceof TokenlessServiceError) throw new Error("Database returned invalid reviewer expertise.");
     throw error;
   }
+  if (audience === "hybrid" && panelSize !== null) {
+    const invitedPanelSize = Math.ceil(panelSize / 2);
+    try {
+      normalizeReviewerExpertiseRequirementsSelection(
+        expertiseRequirements.filter(requirement => requirement.sourceScope === "customer_invited"),
+        invitedPanelSize,
+      );
+      normalizeReviewerExpertiseRequirementsSelection(
+        expertiseRequirements.filter(requirement => requirement.sourceScope === "rateloop_network"),
+        panelSize - invitedPanelSize,
+      );
+    } catch {
+      throw new Error("Database returned invalid hybrid reviewer expertise.");
+    }
+  }
   if (
     !profileId ||
     !workspaceId ||
@@ -641,7 +675,7 @@ function profileFromRow(row: QueryRow): ReviewRequestProfile {
     !configurationStatus ||
     !profileHash ||
     !createdBy ||
-    ![1, 2, 3].includes(semanticSchemaVersion) ||
+    ![1, 2, 3, 4].includes(semanticSchemaVersion) ||
     !REVIEW_REQUEST_QUESTION_AUTHORITIES.includes(questionAuthority) ||
     !REVIEW_REQUEST_RESULT_SEMANTICS.includes(resultSemantics) ||
     (questionAuthority === "owner_fixed" &&
@@ -662,8 +696,13 @@ function profileFromRow(row: QueryRow): ReviewRequestProfile {
     (semanticSchemaVersion === 1 && questionAuthority !== "owner_fixed") ||
     (semanticSchemaVersion === 2 && questionAuthority !== "agent_per_request") ||
     (semanticSchemaVersion === 3 && expertiseRequirements.length === 0) ||
-    (semanticSchemaVersion !== 3 && expertiseRequirements.length > 0) ||
+    (semanticSchemaVersion !== 3 && semanticSchemaVersion !== 4 && expertiseRequirements.length > 0) ||
     (semanticSchemaVersion === 3 && requiredExpertiseKeys.length > 0) ||
+    (semanticSchemaVersion === 4 && audience !== "hybrid") ||
+    (audience === "hybrid" && semanticSchemaVersion !== 4) ||
+    (semanticSchemaVersion === 4 &&
+      (requiredExpertiseKeys.length > 0 ||
+        expertiseRequirements.some(requirement => requirement.sourceScope === "any"))) ||
     (configurationStatus === "ready" && (responseWindowSeconds === null || panelSize === null))
   ) {
     throw new Error("Database returned an invalid review request profile.");

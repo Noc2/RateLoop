@@ -87,6 +87,7 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
       "0144_forecast_appeal_resolution.sql",
       "0145_public_network_review_reachability.sql",
       "0146_hybrid_review_parent_settlement.sql",
+      "0147_hybrid_request_profile_semantics.sql",
     ].includes(file) &&
     (/\bDO \$\$/u.test(statement) ||
       /\bCREATE OR REPLACE FUNCTION\b/u.test(statement) ||
@@ -226,6 +227,18 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
         /FOREIGN KEY \("project_id","run_id"\)\s+REFERENCES "tokenless_assurance_runs" \("project_id","run_id"\)/u,
         'FOREIGN KEY ("run_id") REFERENCES "tokenless_assurance_runs" ("run_id")',
       );
+  }
+  if (
+    file === "0147_hybrid_request_profile_semantics.sql" &&
+    /^ALTER TABLE "tokenless_agent_review_request_profiles"\s+ADD CONSTRAINT/u.test(statement)
+  ) {
+    // pg-mem's SQL parser does not implement PostgreSQL's JSONPath `@?`
+    // operator. Production retains the source-scope CHECK; application and
+    // migration tests exercise the same exact v4 source partition.
+    return statement.replace(
+      /\s+AND NOT \(\s*"expertise_requirements_json"::jsonb @\? '[^']+'\s*\)/u,
+      "",
+    );
   }
   if (file !== "0058_human_review_binding_backfill.sql") return statement;
 
