@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { formatEvidenceDeliveryDate, readEvidenceDeliveryJson } from "./evidenceDeliveryClient";
+import { Field } from "~~/components/tokenless/forms/Field";
+import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 
 type Provider = "drata" | "vanta";
 type ControlMapping = {
@@ -56,6 +58,7 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
   const [showForm, setShowForm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const { capture, clear, fieldErrors, formError } = useFormErrors();
 
   const load = useCallback(async () => {
     const body = await readEvidenceDeliveryJson<{ connectors: GrcConnector[] }>(
@@ -65,12 +68,13 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
   }, [endpoint]);
 
   useEffect(() => {
-    void load().catch(error => setMessage(error instanceof Error ? error.message : "Unable to load GRC connectors."));
-  }, [load]);
+    void load().catch(error => capture(error, "Unable to load GRC connectors."));
+  }, [capture, load]);
 
   const changeStatus = async (connector: GrcConnector) => {
     setBusy(true);
     setMessage(null);
+    clear();
     try {
       const url = `${endpoint}/${encodeURIComponent(connector.connectorId)}`;
       const response =
@@ -86,7 +90,7 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
       await load();
       setMessage(connector.status === "enabled" ? "Connector paused." : "Connector resumed.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to update GRC connector.");
+      capture(error, "Unable to update GRC connector.");
     } finally {
       setBusy(false);
     }
@@ -177,6 +181,7 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
             event.preventDefault();
             setBusy(true);
             setMessage(null);
+            clear();
             const providerConfig =
               form.provider === "drata"
                 ? { connectionId: form.connectionId, resourceId: form.resourceId }
@@ -210,7 +215,7 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
                 setShowForm(false);
                 setMessage("GRC connector added. Reconciliation runs daily.");
               })
-              .catch(error => setMessage(error instanceof Error ? error.message : "Unable to add GRC connector."))
+              .catch(error => capture(error, "Unable to add GRC connector."))
               .finally(() => setBusy(false));
           }}
         >
@@ -225,16 +230,17 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
               <option value="drata">Drata</option>
             </select>
           </label>
-          <label className="text-sm text-base-content/65">
-            Name
-            <input
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={form.displayName}
-              onChange={event => setForm(current => ({ ...current, displayName: event.target.value }))}
-              required
-              maxLength={100}
-            />
-          </label>
+          <Field
+            label="Name"
+            value={form.displayName}
+            error={fieldErrors.displayName}
+            onChange={event => {
+              clear("displayName");
+              setForm(current => ({ ...current, displayName: event.target.value }));
+            }}
+            required
+            maxLength={100}
+          />
           {form.provider === "vanta" ? (
             <label className="text-sm text-base-content/65 sm:col-span-2">
               Vanta document ID
@@ -269,21 +275,23 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
               </label>
             </>
           )}
-          <label className="text-sm text-base-content/65 sm:col-span-2">
-            Server credential reference
-            <input
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)] font-mono"
+          <div className="sm:col-span-2">
+            <Field
+              label="Server credential reference"
+              className="font-mono"
               value={form.credentialReference}
-              onChange={event => setForm(current => ({ ...current, credentialReference: event.target.value }))}
+              error={fieldErrors.credentialReference}
+              format="grcCredentialReference"
+              hint="Use a RateLoop vault, KMS, or secret reference. Provider tokens never pass through this form."
+              onChange={event => {
+                clear("credentialReference");
+                setForm(current => ({ ...current, credentialReference: event.target.value }));
+              }}
               placeholder="vault://rateloop/grc/…"
-              pattern="(?:vault|kms|secret)://rateloop/grc/.{3,300}"
               autoComplete="off"
               required
             />
-            <span className="mt-1 block text-xs text-base-content/45">
-              Use a RateLoop vault, KMS, or secret reference. Provider tokens never pass through this form.
-            </span>
-          </label>
+          </div>
           <label className="text-sm text-base-content/65">
             Mapping ID
             <input
@@ -354,6 +362,11 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
       {message ? (
         <p className="mt-4 text-xs text-base-content/60" role="status">
           {message}
+        </p>
+      ) : null}
+      {formError ? (
+        <p className="mt-4 text-sm text-red-100" role="alert">
+          {formError}
         </p>
       ) : null}
     </section>

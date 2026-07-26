@@ -5,7 +5,12 @@ import Link from "next/link";
 import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { WorkspaceDangerZone } from "~~/components/tokenless/WorkspaceDangerZone";
 import { WorkspaceMembersPanel } from "~~/components/tokenless/WorkspaceMembersPanel";
+import { Field } from "~~/components/tokenless/forms/Field";
+import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { WorkspaceRequestScope } from "~~/lib/tokenless/workspaceRequestScope";
+import { fieldFormat } from "~~/lib/validation/fieldFormats";
+
+const USD_INVOICE_AMOUNT_FORMAT = fieldFormat("usdInvoiceAmount");
 
 type Workspace = {
   workspaceId: string;
@@ -86,11 +91,13 @@ type WorkspaceIdentity = {
 
 class RequestFailure extends Error {
   code: string | null;
+  field: string | null;
 
-  constructor(message: string, code: string | null) {
+  constructor(message: string, code: string | null, field: string | null) {
     super(message);
     this.name = "RequestFailure";
     this.code = code;
+    this.field = field;
   }
 }
 
@@ -100,6 +107,7 @@ async function readJson(response: Response) {
     throw new RequestFailure(
       typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : "Request failed.",
       typeof body.code === "string" ? body.code : null,
+      typeof body.field === "string" ? body.field : null,
     );
   }
   return body;
@@ -140,6 +148,12 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
   const [showBillingProfile, setShowBillingProfile] = useState(false);
   const [billingProfileBusy, setBillingProfileBusy] = useState(false);
   const [billingProfileSaved, setBillingProfileSaved] = useState(false);
+  const {
+    capture: captureBillingProfileError,
+    clear: clearBillingProfileErrors,
+    fieldErrors: billingProfileFieldErrors,
+    formError: billingProfileFormError,
+  } = useFormErrors();
   const [billingProfile, setBillingProfile] = useState({
     legalName: "",
     registrationNumber: "",
@@ -450,6 +464,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
     setBillingProfileBusy(true);
     setBillingProfileSaved(false);
     setBillingError(null);
+    clearBillingProfileErrors();
     try {
       const body = (await readJson(
         await fetch(`/api/account/workspaces/${encodeURIComponent(selectedId)}/billing/profile`, {
@@ -486,7 +501,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
       });
       setBillingProfileSaved(true);
     } catch (cause) {
-      setBillingError(cause instanceof Error ? cause.message : "Unable to save billing details.");
+      captureBillingProfileError(cause, "Unable to save billing details.");
     } finally {
       setBillingProfileBusy(false);
     }
@@ -897,160 +912,184 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                         ) : null}
                       </div>
                       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                        <label className="text-xs text-base-content/55 sm:col-span-2">
-                          Legal business name
-                          <input
-                            className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                        <div className="sm:col-span-2">
+                          <Field
+                            label="Legal business name"
+                            className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
                             value={billingProfile.legalName}
-                            onChange={event =>
-                              setBillingProfile(current => ({ ...current, legalName: event.target.value }))
-                            }
+                            error={billingProfileFieldErrors.legalName}
+                            onChange={event => {
+                              clearBillingProfileErrors("legalName");
+                              setBillingProfile(current => ({ ...current, legalName: event.target.value }));
+                            }}
                             maxLength={200}
                             autoComplete="organization"
                             required
                           />
-                        </label>
-                        <label className="text-xs text-base-content/55 sm:col-span-2">
-                          Registration number <span className="text-base-content/35">(optional)</span>
-                          <input
-                            className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                        </div>
+                        <div className="sm:col-span-2">
+                          <Field
+                            label="Registration number (optional)"
+                            className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
                             value={billingProfile.registrationNumber}
-                            onChange={event =>
-                              setBillingProfile(current => ({ ...current, registrationNumber: event.target.value }))
-                            }
+                            error={billingProfileFieldErrors.registrationNumber}
+                            onChange={event => {
+                              clearBillingProfileErrors("registrationNumber");
+                              setBillingProfile(current => ({ ...current, registrationNumber: event.target.value }));
+                            }}
                             maxLength={120}
                           />
-                        </label>
+                        </div>
                         <label className="text-xs text-base-content/55 sm:col-span-2">
                           Registered address
                           <textarea
                             className="textarea mt-1.5 min-h-20 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
                             value={billingProfile.registeredAddress}
-                            onChange={event =>
-                              setBillingProfile(current => ({ ...current, registeredAddress: event.target.value }))
+                            aria-invalid={billingProfileFieldErrors.registeredAddress ? true : undefined}
+                            aria-describedby={
+                              billingProfileFieldErrors.registeredAddress
+                                ? "billing-registered-address-error"
+                                : undefined
                             }
+                            onChange={event => {
+                              clearBillingProfileErrors("registeredAddress");
+                              setBillingProfile(current => ({ ...current, registeredAddress: event.target.value }));
+                            }}
                             maxLength={500}
                             autoComplete="street-address"
                             required
                           />
+                          {billingProfileFieldErrors.registeredAddress ? (
+                            <span
+                              id="billing-registered-address-error"
+                              className="mt-2 block text-sm text-error"
+                              role="alert"
+                            >
+                              {billingProfileFieldErrors.registeredAddress}
+                            </span>
+                          ) : null}
                         </label>
                         <p className="text-xs font-semibold text-base-content/65 sm:col-span-2">
                           Invoice funding address <span className="font-normal text-base-content/35">(optional)</span>
                         </p>
-                        <label className="text-xs text-base-content/55">
-                          Country
-                          <input
-                            className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)] uppercase"
-                            value={billingProfile.billingCountryCode}
-                            onChange={event =>
-                              setBillingProfile(current => ({
-                                ...current,
-                                billingCountryCode: event.target.value.toUpperCase(),
-                              }))
-                            }
-                            placeholder="US"
-                            pattern="[A-Za-z]{2}"
-                            maxLength={2}
-                            required={hasInvoiceFundingAddress}
-                          />
-                        </label>
-                        <label className="text-xs text-base-content/55">
-                          Postal code
-                          <input
-                            className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                            value={billingProfile.billingPostalCode}
-                            onChange={event =>
-                              setBillingProfile(current => ({ ...current, billingPostalCode: event.target.value }))
-                            }
-                            maxLength={32}
-                            autoComplete="postal-code"
-                            required={hasInvoiceFundingAddress}
-                          />
-                        </label>
-                        <label className="text-xs text-base-content/55 sm:col-span-2">
-                          Address line 1
-                          <input
-                            className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                        <Field
+                          label="Country"
+                          className="rounded-lg border-white/10 bg-[var(--rateloop-field)] uppercase"
+                          value={billingProfile.billingCountryCode}
+                          error={billingProfileFieldErrors.billingCountryCode}
+                          format="countryCode"
+                          onChange={event => {
+                            clearBillingProfileErrors("billingCountryCode");
+                            setBillingProfile(current => ({
+                              ...current,
+                              billingCountryCode: event.target.value.toUpperCase(),
+                            }));
+                          }}
+                          placeholder="US"
+                          required={hasInvoiceFundingAddress}
+                        />
+                        <Field
+                          label="Postal code"
+                          className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                          value={billingProfile.billingPostalCode}
+                          error={billingProfileFieldErrors.billingPostalCode}
+                          onChange={event => {
+                            clearBillingProfileErrors("billingPostalCode");
+                            setBillingProfile(current => ({ ...current, billingPostalCode: event.target.value }));
+                          }}
+                          maxLength={32}
+                          autoComplete="postal-code"
+                          required={hasInvoiceFundingAddress}
+                        />
+                        <div className="sm:col-span-2">
+                          <Field
+                            label="Address line 1"
+                            className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
                             value={billingProfile.billingAddressLine1}
-                            onChange={event =>
-                              setBillingProfile(current => ({ ...current, billingAddressLine1: event.target.value }))
-                            }
+                            error={billingProfileFieldErrors.billingAddressLine1}
+                            onChange={event => {
+                              clearBillingProfileErrors("billingAddressLine1");
+                              setBillingProfile(current => ({ ...current, billingAddressLine1: event.target.value }));
+                            }}
                             maxLength={200}
                             autoComplete="address-line1"
                             required={hasInvoiceFundingAddress}
                           />
-                        </label>
-                        <label className="text-xs text-base-content/55 sm:col-span-2">
-                          Address line 2 <span className="text-base-content/35">(optional)</span>
-                          <input
-                            className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                        </div>
+                        <div className="sm:col-span-2">
+                          <Field
+                            label="Address line 2 (optional)"
+                            className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
                             value={billingProfile.billingAddressLine2}
-                            onChange={event =>
-                              setBillingProfile(current => ({ ...current, billingAddressLine2: event.target.value }))
-                            }
+                            error={billingProfileFieldErrors.billingAddressLine2}
+                            onChange={event => {
+                              clearBillingProfileErrors("billingAddressLine2");
+                              setBillingProfile(current => ({ ...current, billingAddressLine2: event.target.value }));
+                            }}
                             maxLength={200}
                             autoComplete="address-line2"
                           />
-                        </label>
-                        <label className="text-xs text-base-content/55">
-                          City
-                          <input
-                            className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                            value={billingProfile.billingCity}
-                            onChange={event =>
-                              setBillingProfile(current => ({ ...current, billingCity: event.target.value }))
-                            }
-                            maxLength={120}
-                            autoComplete="address-level2"
-                            required={hasInvoiceFundingAddress}
-                          />
-                        </label>
-                        <label className="text-xs text-base-content/55">
-                          State or region <span className="text-base-content/35">(optional)</span>
-                          <input
-                            className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                            value={billingProfile.billingState}
-                            onChange={event =>
-                              setBillingProfile(current => ({ ...current, billingState: event.target.value }))
-                            }
-                            maxLength={120}
-                            autoComplete="address-level1"
-                          />
-                        </label>
-                        <label className="text-xs text-base-content/55">
-                          VAT country <span className="text-base-content/35">(optional)</span>
-                          <input
-                            className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)] uppercase"
-                            value={billingProfile.vatCountryCode}
-                            onChange={event =>
-                              setBillingProfile(current => ({
-                                ...current,
-                                vatCountryCode: event.target.value.toUpperCase(),
-                              }))
-                            }
-                            placeholder="DE"
-                            aria-describedby="vat-pair-hint"
-                            pattern="[A-Za-z]{2}"
-                            maxLength={2}
-                          />
-                        </label>
-                        <label className="text-xs text-base-content/55">
-                          VAT ID <span className="text-base-content/35">(optional)</span>
-                          <input
-                            className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                            value={billingProfile.vatId}
-                            onChange={event =>
-                              setBillingProfile(current => ({ ...current, vatId: event.target.value }))
-                            }
-                            placeholder="DE123456789"
-                            aria-describedby="vat-pair-hint"
-                            maxLength={80}
-                          />
-                        </label>
+                        </div>
+                        <Field
+                          label="City"
+                          className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                          value={billingProfile.billingCity}
+                          error={billingProfileFieldErrors.billingCity}
+                          onChange={event => {
+                            clearBillingProfileErrors("billingCity");
+                            setBillingProfile(current => ({ ...current, billingCity: event.target.value }));
+                          }}
+                          maxLength={120}
+                          autoComplete="address-level2"
+                          required={hasInvoiceFundingAddress}
+                        />
+                        <Field
+                          label="State or region (optional)"
+                          className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                          value={billingProfile.billingState}
+                          error={billingProfileFieldErrors.billingState}
+                          onChange={event => {
+                            clearBillingProfileErrors("billingState");
+                            setBillingProfile(current => ({ ...current, billingState: event.target.value }));
+                          }}
+                          maxLength={120}
+                          autoComplete="address-level1"
+                        />
+                        <Field
+                          label="VAT country (optional)"
+                          className="rounded-lg border-white/10 bg-[var(--rateloop-field)] uppercase"
+                          value={billingProfile.vatCountryCode}
+                          error={billingProfileFieldErrors.vatCountryCode}
+                          format="countryCode"
+                          hint="Provide both VAT country and VAT ID, or leave both empty."
+                          onChange={event => {
+                            clearBillingProfileErrors("vatCountryCode");
+                            setBillingProfile(current => ({
+                              ...current,
+                              vatCountryCode: event.target.value.toUpperCase(),
+                            }));
+                          }}
+                          placeholder="DE"
+                        />
+                        <Field
+                          label="VAT ID (optional)"
+                          className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                          value={billingProfile.vatId}
+                          error={billingProfileFieldErrors.vatId}
+                          format="vatIdentifier"
+                          hint="Provide both VAT country and VAT ID, or leave both empty."
+                          onChange={event => {
+                            clearBillingProfileErrors("vatId");
+                            setBillingProfile(current => ({ ...current, vatId: event.target.value }));
+                          }}
+                          placeholder="DE123456789"
+                        />
                       </div>
-                      <p id="vat-pair-hint" className="mt-2 text-xs text-base-content/40">
-                        Provide both VAT country and VAT ID, or leave both empty.
-                      </p>
+                      {billingProfileFormError ? (
+                        <p className="mt-3 text-sm text-error" role="alert">
+                          {billingProfileFormError}
+                        </p>
+                      ) : null}
                       <button
                         type="submit"
                         className="rateloop-gradient-action mt-4 min-h-10 px-4"
@@ -1135,7 +1174,9 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                           value={topupAmount}
                           onChange={event => setTopupAmount(event.target.value)}
                           inputMode="decimal"
-                          pattern="\d{1,6}(\.\d{1,2})?"
+                          pattern={USD_INVOICE_AMOUNT_FORMAT.pattern}
+                          maxLength={USD_INVOICE_AMOUNT_FORMAT.maxLength}
+                          title={USD_INVOICE_AMOUNT_FORMAT.title}
                           placeholder="500.00"
                           required
                         />

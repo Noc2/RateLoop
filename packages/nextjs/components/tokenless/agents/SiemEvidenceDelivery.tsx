@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { OneTimeSecretNotice } from "./OneTimeSecretNotice";
 import { formatEvidenceDeliveryDate, readEvidenceDeliveryJson } from "./evidenceDeliveryClient";
+import { Field } from "~~/components/tokenless/forms/Field";
+import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 
 const EVENT_TYPES = [
   ["ai.rateloop.review.completed", "Review completed"],
@@ -39,6 +41,7 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [oneTimeSecret, setOneTimeSecret] = useState<{ label: string; value: string } | null>(null);
+  const { capture, clear, fieldErrors, formError } = useFormErrors();
 
   const load = useCallback(async () => {
     const body = await readEvidenceDeliveryJson<{ streams: EventStream[] }>(
@@ -48,12 +51,13 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
   }, [endpoint]);
 
   useEffect(() => {
-    void load().catch(error => setMessage(error instanceof Error ? error.message : "Unable to load SIEM streams."));
-  }, [load]);
+    void load().catch(error => capture(error, "Unable to load event streams."));
+  }, [capture, load]);
 
   const deactivate = async (stream: EventStream) => {
     setBusy(true);
     setMessage(null);
+    clear();
     try {
       const response = await fetch(`${endpoint}/${encodeURIComponent(stream.endpointId)}`, {
         method: "DELETE",
@@ -63,7 +67,7 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
       await load();
       setMessage("Event stream disabled.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to disable event stream.");
+      capture(error, "Unable to disable event stream.");
     } finally {
       setBusy(false);
     }
@@ -143,6 +147,7 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
             event.preventDefault();
             setBusy(true);
             setMessage(null);
+            clear();
             void fetch(endpoint, {
               method: "POST",
               credentials: "same-origin",
@@ -160,21 +165,22 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
                 setShowForm(false);
                 setMessage("Event stream created.");
               })
-              .catch(error => setMessage(error instanceof Error ? error.message : "Unable to create event stream."))
+              .catch(error => capture(error, "Unable to create event stream."))
               .finally(() => setBusy(false));
           }}
         >
-          <label className="text-sm text-base-content/65">
-            Receiver URL
-            <input
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              type="url"
-              value={url}
-              onChange={event => setUrl(event.target.value)}
-              placeholder="https://events.example.com/rateloop"
-              required
-            />
-          </label>
+          <Field
+            label="Receiver URL"
+            type="url"
+            value={url}
+            error={fieldErrors.url}
+            onChange={event => {
+              clear("url");
+              setUrl(event.target.value);
+            }}
+            placeholder="https://events.example.com/rateloop"
+            required
+          />
           <fieldset>
             <legend className="text-sm text-base-content/65">Events</legend>
             <div className="mt-2 grid gap-2 sm:grid-cols-3">
@@ -221,6 +227,11 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
       {message ? (
         <p className="mt-4 text-xs text-base-content/60" role="status">
           {message}
+        </p>
+      ) : null}
+      {formError ? (
+        <p className="mt-4 text-sm text-red-100" role="alert">
+          {formError}
         </p>
       ) : null}
     </section>

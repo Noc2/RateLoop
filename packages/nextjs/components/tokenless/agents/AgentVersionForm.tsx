@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { Field } from "~~/components/tokenless/forms/Field";
 import type { AgentEnvironment, AgentVersionInput, AgentVersionSnapshot } from "~~/lib/tokenless/agentRegistry";
 
 type AgentVersionFormProps = {
@@ -44,18 +45,15 @@ export function AgentVersionForm({
     <form className="space-y-4" onSubmit={submit}>
       <div className="grid gap-4 sm:grid-cols-2">
         {externalIdRequired ? (
-          <label className="text-sm text-base-content/65">
-            Stable external ID
-            <input
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)] font-mono text-sm"
-              value={externalId}
-              onChange={event => setExternalId(event.target.value)}
-              placeholder="support-agent-prod"
-              pattern="[A-Za-z0-9][A-Za-z0-9._:-]{0,159}"
-              maxLength={160}
-              required
-            />
-          </label>
+          <Field
+            label="Stable external ID"
+            className="border-white/10 bg-[var(--rateloop-field)] font-mono text-sm"
+            value={externalId}
+            onChange={event => setExternalId(event.target.value)}
+            placeholder="support-agent-prod"
+            format="agentVersion"
+            required
+          />
         ) : null}
         <label className="text-sm text-base-content/65">
           Workflow name

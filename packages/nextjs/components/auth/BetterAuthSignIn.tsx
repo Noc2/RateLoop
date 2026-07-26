@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { normalizeSignInReturnPath } from "./signInReturnPath";
+import { Field } from "~~/components/tokenless/forms/Field";
 import { betterAuthClient, exchangeBetterAuthSession, readBrowserAuthConfiguration } from "~~/lib/auth/client";
 
 export async function runBetterAuthAction({
@@ -206,18 +207,19 @@ export function BetterAuthSignIn() {
         </div>
       ) : otpSent ? (
         <form className="space-y-4" onSubmit={verifyCode}>
-          <label className="block text-sm font-medium" htmlFor="rateloop-otp">
-            Six-digit code
-          </label>
-          <input
+          <Field
             id="rateloop-otp"
-            className="input input-bordered w-full font-mono tracking-[0.25em]"
+            label="Six-digit code"
+            className="font-mono tracking-[0.25em]"
             inputMode="numeric"
             autoComplete="one-time-code"
             maxLength={6}
             required
             value={otp}
-            onChange={event => setOtp(event.target.value.replace(/\D/g, ""))}
+            onChange={event => {
+              setError(null);
+              setOtp(event.target.value.replace(/\D/g, ""));
+            }}
           />
           <button className="rateloop-gradient-action min-h-11 w-full px-4" disabled={busy || otp.length !== 6}>
             Verify code
@@ -225,17 +227,17 @@ export function BetterAuthSignIn() {
         </form>
       ) : (
         <form className="space-y-4" onSubmit={sendCode}>
-          <label className="block text-sm font-medium" htmlFor="rateloop-email">
-            Work email
-          </label>
-          <input
+          <Field
             id="rateloop-email"
-            className="input input-bordered w-full"
+            label="Work email"
             type="email"
             autoComplete="email"
             required
             value={email}
-            onChange={event => setEmail(event.target.value)}
+            onChange={event => {
+              setError(null);
+              setEmail(event.target.value);
+            }}
           />
           <button
             className="rateloop-gradient-action min-h-11 w-full px-4"

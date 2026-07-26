@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { formatEvidenceDeliveryDate, readEvidenceDeliveryJson } from "./evidenceDeliveryClient";
+import { Field } from "~~/components/tokenless/forms/Field";
+import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 
 type WormDestination = {
   destinationId: string;
@@ -57,6 +59,7 @@ export function WormEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
   const [showForm, setShowForm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const { capture, clear, fieldErrors, formError } = useFormErrors();
 
   const load = useCallback(async () => {
     const [destinationBody, exportBody] = await Promise.all([
@@ -72,17 +75,18 @@ export function WormEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
   }, [base]);
 
   useEffect(() => {
-    void load().catch(error => setMessage(error instanceof Error ? error.message : "Unable to load WORM delivery."));
-  }, [load]);
+    void load().catch(error => capture(error, "Unable to load immutable archive delivery."));
+  }, [capture, load]);
 
   const mutate = async (work: () => Promise<void>) => {
     setBusy(true);
     setMessage(null);
+    clear();
     try {
       await work();
       await load();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "WORM delivery request failed.");
+      capture(error, "Immutable archive request failed.");
     } finally {
       setBusy(false);
     }
@@ -211,80 +215,88 @@ export function WormEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
             });
           }}
         >
-          <label className="text-sm text-base-content/65">
-            Name
-            <input
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={form.label}
-              onChange={event => setForm(current => ({ ...current, label: event.target.value }))}
-              required
-              maxLength={120}
-            />
-          </label>
-          <label className="text-sm text-base-content/65">
-            HTTPS endpoint origin
-            <input
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              type="url"
-              value={form.endpointOrigin}
-              onChange={event => setForm(current => ({ ...current, endpointOrigin: event.target.value }))}
-              required
-            />
-          </label>
-          <label className="text-sm text-base-content/65">
-            Bucket
-            <input
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={form.bucketName}
-              onChange={event => setForm(current => ({ ...current, bucketName: event.target.value }))}
-              required
-            />
-          </label>
-          <label className="text-sm text-base-content/65">
-            Object prefix
-            <input
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={form.keyPrefix}
-              onChange={event => setForm(current => ({ ...current, keyPrefix: event.target.value }))}
-              required
-            />
-          </label>
-          <label className="text-sm text-base-content/65">
-            Region
-            <input
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={form.region}
-              onChange={event => setForm(current => ({ ...current, region: event.target.value }))}
-              required
-            />
-          </label>
-          <label className="text-sm text-base-content/65">
-            Retention (days)
-            <input
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              type="number"
-              min={183}
-              max={3650}
-              value={form.retentionDays}
-              onChange={event => setForm(current => ({ ...current, retentionDays: event.target.value }))}
-              required
-            />
-          </label>
-          <label className="text-sm text-base-content/65 sm:col-span-2">
-            Server credential reference
-            <input
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)] font-mono"
+          <Field
+            label="Name"
+            value={form.label}
+            error={fieldErrors.label}
+            onChange={event => {
+              clear("label");
+              setForm(current => ({ ...current, label: event.target.value }));
+            }}
+            required
+            maxLength={120}
+          />
+          <Field
+            label="HTTPS endpoint origin"
+            type="url"
+            value={form.endpointOrigin}
+            error={fieldErrors.endpointOrigin}
+            onChange={event => {
+              clear("endpointOrigin");
+              setForm(current => ({ ...current, endpointOrigin: event.target.value }));
+            }}
+            required
+          />
+          <Field
+            label="Bucket"
+            value={form.bucketName}
+            error={fieldErrors.bucketName}
+            onChange={event => {
+              clear("bucketName");
+              setForm(current => ({ ...current, bucketName: event.target.value }));
+            }}
+            required
+          />
+          <Field
+            label="Object prefix"
+            value={form.keyPrefix}
+            error={fieldErrors.keyPrefix}
+            onChange={event => {
+              clear("keyPrefix");
+              setForm(current => ({ ...current, keyPrefix: event.target.value }));
+            }}
+            required
+          />
+          <Field
+            label="Region"
+            value={form.region}
+            error={fieldErrors.region}
+            onChange={event => {
+              clear("region");
+              setForm(current => ({ ...current, region: event.target.value }));
+            }}
+            required
+          />
+          <Field
+            label="Retention (days)"
+            type="number"
+            min={183}
+            max={3650}
+            value={form.retentionDays}
+            error={fieldErrors.retentionDays}
+            onChange={event => {
+              clear("retentionDays");
+              setForm(current => ({ ...current, retentionDays: event.target.value }));
+            }}
+            required
+          />
+          <div className="sm:col-span-2">
+            <Field
+              label="Server credential reference"
+              className="font-mono"
               value={form.credentialReference}
-              onChange={event => setForm(current => ({ ...current, credentialReference: event.target.value }))}
+              error={fieldErrors.credentialReference}
+              format="wormCredentialReference"
+              hint="Enter an opaque reference. Access keys never pass through this form."
+              onChange={event => {
+                clear("credentialReference");
+                setForm(current => ({ ...current, credentialReference: event.target.value }));
+              }}
               placeholder="sec_…"
-              pattern="sec_[0-9a-f]{48}"
               autoComplete="off"
               required
             />
-            <span className="mt-1 block text-xs text-base-content/45">
-              Enter an opaque reference. Access keys never pass through this form.
-            </span>
-          </label>
+          </div>
           <div className="flex flex-wrap gap-2 sm:col-span-2">
             <button type="submit" className="btn btn-sm rateloop-gradient-action" disabled={busy}>
               {busy ? "Checking…" : "Verify and save"}
@@ -323,6 +335,11 @@ export function WormEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
       {message ? (
         <p className="mt-4 text-xs text-base-content/60" role="status">
           {message}
+        </p>
+      ) : null}
+      {formError ? (
+        <p className="mt-4 text-sm text-red-100" role="alert">
+          {formError}
         </p>
       ) : null}
     </section>

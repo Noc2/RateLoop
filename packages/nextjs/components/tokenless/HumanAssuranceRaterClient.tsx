@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { Field } from "~~/components/tokenless/forms/Field";
 import { CrowdForecastField } from "~~/components/tokenless/review/CrowdForecastField";
 import { DeadlineChip } from "~~/components/tokenless/review/DeadlineChip";
 import { PrivateArtifactPreview } from "~~/components/tokenless/review/PrivateArtifactPreview";
@@ -838,17 +839,15 @@ export function HumanAssuranceRaterClient({
                             required
                           />
                         </label>
-                        <label className="block text-sm text-base-content/60">
-                          Confidentiality terms hash
-                          <input
-                            className="input mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)] font-mono text-sm"
-                            value={termsHash}
-                            onChange={event => setTermsHash(event.target.value)}
-                            placeholder="sha256:…"
-                            pattern="sha256:[0-9a-f]{64}"
-                            required
-                          />
-                        </label>
+                        <Field
+                          label="Confidentiality terms hash"
+                          className="rounded-lg border-white/10 bg-[var(--rateloop-field)] font-mono text-sm"
+                          value={termsHash}
+                          onChange={event => setTermsHash(event.target.value)}
+                          placeholder="sha256:…"
+                          format="sha256Digest"
+                          required
+                        />
                       </div>
                     ) : (
                       <div className="rounded-lg border border-white/10 bg-white/[0.02] p-4">

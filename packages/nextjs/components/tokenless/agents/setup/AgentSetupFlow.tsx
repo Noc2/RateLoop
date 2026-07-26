@@ -63,6 +63,7 @@ import {
 import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
 import { humanReviewConfirmationMessage } from "~~/components/tokenless/agents/humanReviewConfirmation";
+import { Field } from "~~/components/tokenless/forms/Field";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { DurationInput } from "~~/components/ui/DurationInput";
 import { type AgentSetupScreenStep, agentSetupUrl } from "~~/lib/tokenless/agentSetupNavigation";
@@ -1865,13 +1866,13 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     </p>
                   ) : null}
                   {reviewCompensation.compensationMode === "usdc" ? (
-                    <label className="mt-4 block text-sm">
-                      USDC per reviewer
-                      <input
-                        className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                    <div className="mt-4">
+                      <Field
+                        label="USDC per reviewer"
+                        className="border-white/10 bg-[var(--rateloop-field)]"
                         type="text"
                         inputMode="decimal"
-                        pattern="[0-9]+([.][0-9]{1,6})?"
+                        format="usdcAmount"
                         maxLength={REVIEW_USDC_DECIMAL_MAX_LENGTH}
                         value={reviewCompensation.usdcPerReviewer}
                         onChange={event =>
@@ -1879,7 +1880,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                         }
                         required
                       />
-                    </label>
+                    </div>
                   ) : null}
                 </fieldset>
                 <fieldset className="mt-6 border-t border-white/10 pt-5">
@@ -1912,24 +1913,19 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   </div>
                   {reviewCompensation.feedbackBonusEnabled ? (
                     <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                      <label className="text-sm">
-                        Bonus pool
-                        <div className="input mt-2 flex w-full items-center gap-2 border-white/10 bg-[var(--rateloop-field)]">
-                          <input
-                            className="min-w-0 grow bg-transparent outline-none"
-                            type="text"
-                            inputMode="decimal"
-                            pattern="[0-9]+([.][0-9]{1,6})?"
-                            maxLength={REVIEW_USDC_DECIMAL_MAX_LENGTH}
-                            value={reviewCompensation.feedbackBonusUsdc}
-                            onChange={event =>
-                              setReviewCompensation(current => ({ ...current, feedbackBonusUsdc: event.target.value }))
-                            }
-                            required
-                          />
-                          <span className="text-base-content/50">USDC</span>
-                        </div>
-                      </label>
+                      <Field
+                        label="Bonus pool (USDC)"
+                        className="border-white/10 bg-[var(--rateloop-field)]"
+                        type="text"
+                        inputMode="decimal"
+                        format="usdcAmount"
+                        maxLength={REVIEW_USDC_DECIMAL_MAX_LENGTH}
+                        value={reviewCompensation.feedbackBonusUsdc}
+                        onChange={event =>
+                          setReviewCompensation(current => ({ ...current, feedbackBonusUsdc: event.target.value }))
+                        }
+                        required
+                      />
                       <label className="text-sm">
                         Human awarder
                         <select
