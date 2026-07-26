@@ -37,6 +37,11 @@ import { sweepManagedEvmNonceDrift, unresolvedManagedEvmNonceFindings } from "~~
 import { reconcilePaidAssignmentSettlements } from "~~/lib/tokenless/paidAssignmentSettlementReconciler";
 import { reconcileDueDirectPrivateReviewDeadlines } from "~~/lib/tokenless/privateReviewResponses";
 import { expirePrivateUnpaidReviewReservations } from "~~/lib/tokenless/privateUnpaidReviewAdapter";
+import {
+  PUBLIC_NETWORK_FOUNDATION_ORPHAN_TTL_MS,
+  abandonStalePublicNetworkFoundation,
+  preparePublicNetworkAudienceForBinding,
+} from "~~/lib/tokenless/publicNetworkReviewReachability";
 import { processPublicQuestionMediaDeletionByAssetId } from "~~/lib/tokenless/publicQuestionMedia";
 import { reconcilePaidRaterCommit } from "~~/lib/tokenless/raterService";
 import { TokenlessServiceError, sweepExpiredTokenlessQuotes } from "~~/lib/tokenless/server";
@@ -53,7 +58,9 @@ type WorkKind =
   | "recover_chain_execution"
   | "recover_rater_commit"
   | "delete_artifact"
-  | "delete_public_media";
+  | "delete_public_media"
+  | "prepare_public_network_audience"
+  | "cleanup_public_network_foundation";
 
 const RUN_BUCKET_MS = 5 * 60_000;
 const STALE_CLAIM_MS = 10 * 60_000;
@@ -152,7 +159,15 @@ async function hasFreshReservedNonce(kind: WorkKind, subjectKey: string) {
 
 export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 100) {
   const limit = bounded(scanLimit, 100, 200);
-  const [settlements, chainRecoveries, raterCommitRecoveries, deletions, publicMediaDeletions] = await Promise.all([
+  const [
+    settlements,
+    chainRecoveries,
+    raterCommitRecoveries,
+    deletions,
+    publicMediaDeletions,
+    publicNetworkAudiences,
+    publicNetworkFoundations,
+  ] = await Promise.all([
     dbClient.execute({
       sql: `SELECT e.operation_key
             FROM tokenless_chain_executions e
@@ -198,6 +213,29 @@ export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 1
             ORDER BY deletion_requested_at ASC LIMIT ?`,
       args: [now, limit],
     }),
+    dbClient.execute({
+      sql: `SELECT binding.binding_id
+            FROM tokenless_public_network_review_bindings binding
+            JOIN tokenless_chain_executions execution
+              ON execution.operation_key = binding.operation_key
+            WHERE binding.state IN ('ask_bound','round_bound')
+              AND binding.worker_next_attempt_at <= ?
+              AND (
+                binding.state = 'round_bound'
+                OR (execution.state = 'confirmed' AND execution.round_id IS NOT NULL)
+              )
+            ORDER BY binding.worker_next_attempt_at ASC,binding.created_at ASC,binding.binding_id ASC
+            LIMIT ?`,
+      args: [now, limit],
+    }),
+    dbClient.execute({
+      sql: `SELECT binding_id
+            FROM tokenless_public_network_review_bindings
+            WHERE state IN ('foundation_preparing','foundation_ready')
+              AND operation_key IS NULL AND created_at <= ?
+            ORDER BY created_at ASC,binding_id ASC LIMIT ?`,
+      args: [new Date(now.getTime() - PUBLIC_NETWORK_FOUNDATION_ORPHAN_TTL_MS), limit],
+    }),
   ]);
   for (const row of settlements.rows) {
     await insertWorkItem("publish_finalized_round", rowString(row as Row, "operation_key")!, now);
@@ -221,9 +259,24 @@ export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 1
   for (const row of publicMediaDeletions.rows) {
     await insertWorkItem("delete_public_media", rowString(row as Row, "asset_id")!, now);
   }
+  for (const row of publicNetworkAudiences.rows) {
+    const bindingId = rowString(row as Row, "binding_id")!;
+    await insertWorkItem("prepare_public_network_audience", bindingId, now);
+    await dbClient.execute({
+      sql: `UPDATE tokenless_scheduled_work_items
+            SET state='pending',next_attempt_at=?,completed_at=NULL,updated_at=?
+            WHERE kind='prepare_public_network_audience' AND subject_key=? AND state='completed'`,
+      args: [now, now, bindingId],
+    });
+  }
+  for (const row of publicNetworkFoundations.rows) {
+    await insertWorkItem("cleanup_public_network_foundation", rowString(row as Row, "binding_id")!, now);
+  }
   return {
     chainRecoveries: chainRecoveries.rows.length,
     deletions: deletions.rows.length,
+    publicNetworkAudiences: publicNetworkAudiences.rows.length,
+    publicNetworkFoundations: publicNetworkFoundations.rows.length,
     publicMediaDeletions: publicMediaDeletions.rows.length,
     raterCommitRecoveries: raterCommitRecoveries.rows.length,
     settlements: settlements.rows.length,
@@ -233,6 +286,8 @@ export async function seedTokenlessScheduledWork(now = new Date(), scanLimit = 1
 type MaintenanceProcessors = {
   deleteArtifact: typeof processArtifactDeletionByObjectId;
   deletePublicMedia: typeof processPublicQuestionMediaDeletionByAssetId;
+  preparePublicNetworkAudience: typeof preparePublicNetworkAudienceForBinding;
+  cleanupPublicNetworkFoundation: typeof abandonStalePublicNetworkFoundation;
   publishFinalizedRound: (input: { operationKey: string; appOrigin: string; now: Date }) => Promise<void>;
   recoverChainExecution: (input: { operationKey: string }) => Promise<{ paymentState: string } | null>;
   recoverRaterCommit: (commitId: string) => Promise<{ state: string | null } | null>;
@@ -301,6 +356,8 @@ async function runIsolatedMaintenanceProcessor<T>(input: {
 const defaultProcessors: MaintenanceProcessors = {
   deleteArtifact: processArtifactDeletionByObjectId,
   deletePublicMedia: processPublicQuestionMediaDeletionByAssetId,
+  preparePublicNetworkAudience: preparePublicNetworkAudienceForBinding,
+  cleanupPublicNetworkFoundation: abandonStalePublicNetworkFoundation,
   async publishFinalizedRound({ operationKey, appOrigin, now }) {
     await appendFinalizedRoundEvidence({ operationKey });
     await reviewAndPublishResult({ operationKey, appOrigin, now });
@@ -421,6 +478,10 @@ async function processClaimedWork(input: {
         if (!deleted) {
           throw new TokenlessServiceError("Public media deletion is still pending.", 409, "deletion_not_due", true);
         }
+      } else if (kind === "prepare_public_network_audience") {
+        await input.processors.preparePublicNetworkAudience(subjectKey, input.now);
+      } else if (kind === "cleanup_public_network_foundation") {
+        await input.processors.cleanupPublicNetworkFoundation(subjectKey, input.now);
       } else {
         throw new Error(`Unsupported scheduled work kind: ${String(kind)}`);
       }

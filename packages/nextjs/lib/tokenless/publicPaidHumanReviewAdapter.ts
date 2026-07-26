@@ -32,13 +32,23 @@ import {
   releasePreparedProductAsk,
   requireProductPrincipalScope,
 } from "~~/lib/tokenless/productCore";
+import {
+  type PublicNetworkFoundation,
+  bindPublicNetworkReviewOperation,
+  ensurePublicNetworkReviewFoundation,
+  readReadyPublicNetworkReviewChild,
+  releasePublicNetworkReviewBinding,
+} from "~~/lib/tokenless/publicNetworkReviewReachability";
 import { hashReviewRequestProfile } from "~~/lib/tokenless/reviewRequestProfiles";
 import { countEligibleNetworkExpertisePool } from "~~/lib/tokenless/reviewerExpertise";
 import {
   countEligibleNetworkExactExpertisePool,
   exactReviewerExpertiseDefinitionKey,
 } from "~~/lib/tokenless/reviewerExpertiseAssignments";
-import { normalizeReviewerExpertiseRequirementsSelection } from "~~/lib/tokenless/reviewerExpertiseOptions";
+import {
+  type ReviewerExpertiseRequirement,
+  normalizeReviewerExpertiseRequirementsSelection,
+} from "~~/lib/tokenless/reviewerExpertiseOptions";
 import {
   expertiseQualificationRules,
   normalizeReviewerExpertiseKeys,
@@ -78,6 +88,47 @@ export type PublicPaidHumanReviewRequest = {
   effectiveQuestion?: FrozenBinaryReviewQuestion;
   effectiveQuestionHash?: `sha256:${string}`;
 };
+
+export type HybridChildParentBinding = {
+  hybridOperationId: string;
+  cohortBindingHash: `sha256:${string}`;
+  economicsHash: `sha256:${string}`;
+  expertiseHash: `sha256:${string}`;
+  requestedCount: number;
+  admissionPolicyHash: `sha256:${string}`;
+  expertiseRequirements?: ReviewerExpertiseRequirement[];
+};
+
+export type PublicPaidNetworkChildPreparation = {
+  subpanelReference: string;
+  bindingHash: `sha256:${string}`;
+  sourceOperationReference: string;
+  sourceRunId: string;
+  chainAdmissionPolicyHash: `0x${string}`;
+  selectedSeatEvidenceHash: `sha256:${string}`;
+  voucherPreparationHash: `sha256:${string}`;
+  settlementBindingHash: `sha256:${string}`;
+  round: {
+    deploymentKey: string;
+    chainId: number;
+    panelAddress: string;
+    roundId: string;
+    admissionPolicyHash: `sha256:${string}`;
+  };
+  status: "ready";
+  replayed: boolean;
+};
+
+export async function releasePublicPaidNetworkChild(
+  preparation: Pick<PublicPaidNetworkChildPreparation, "subpanelReference" | "sourceOperationReference">,
+  now = new Date(),
+) {
+  return releasePublicNetworkReviewBinding({
+    bindingId: preparation.subpanelReference,
+    operationKey: preparation.sourceOperationReference,
+    now,
+  });
+}
 
 type FrozenOpportunity = {
   opportunityId: string;
@@ -588,7 +639,11 @@ async function loadFrozenApproval(workspaceId: string, opportunityId: string): P
   };
 }
 
-function assertRequestable(opportunity: FrozenOpportunity, principal: PublicPaidHumanReviewPrincipal) {
+function assertRequestable(
+  opportunity: FrozenOpportunity,
+  principal: PublicPaidHumanReviewPrincipal,
+  expectedAudience: "public_network" | "hybrid" = "public_network",
+) {
   const now = Date.now();
   if (opportunity.decision !== "required") {
     throw new TokenlessServiceError("This opportunity does not require human review.", 409, "review_not_required");
@@ -617,10 +672,10 @@ function assertRequestable(opportunity: FrozenOpportunity, principal: PublicPaid
     throw new TokenlessServiceError("The bound publishing policy is not active.", 409, "publishing_policy_inactive");
   }
   if (
-    opportunity.requestProfile.audience !== "public_network" ||
+    opportunity.requestProfile.audience !== expectedAudience ||
     opportunity.requestProfile.contentBoundary !== "public_or_test" ||
-    opportunity.requestProfile.privateGroupId !== null ||
-    opportunity.requestProfile.privateSensitivity !== null ||
+    (expectedAudience === "public_network" &&
+      (opportunity.requestProfile.privateGroupId !== null || opportunity.requestProfile.privateSensitivity !== null)) ||
     opportunity.requestProfile.compensationMode !== "usdc"
   ) {
     throw new TokenlessServiceError("This is not a public paid review opportunity.", 409, "review_lane_mismatch");
@@ -696,6 +751,7 @@ function prepareExactRequest(input: {
   sourcePayload: string;
   suggestionPayload: string;
   publication: PublicPaidHumanReviewPublication;
+  skipApprovalTupleValidation?: boolean;
 }) {
   const { opportunity, approval } = input;
   if (
@@ -753,7 +809,7 @@ function prepareExactRequest(input: {
         }
       : {}),
   });
-  if (approval) {
+  if (approval && !input.skipApprovalTupleValidation) {
     const tupleMatches =
       approval.requestProfileId === opportunity.requestProfile.id &&
       approval.requestProfileVersion === opportunity.requestProfile.version &&
@@ -797,6 +853,121 @@ function deterministicAdapterKey(opportunity: FrozenOpportunity, preparation: Pr
   return `adaptive-public-paid:${hash.slice("sha256:".length)}`;
 }
 
+function assertHybridParentBinding(input: HybridChildParentBinding) {
+  if (
+    !input.hybridOperationId ||
+    !HASH_PATTERN.test(input.cohortBindingHash) ||
+    !HASH_PATTERN.test(input.economicsHash) ||
+    !HASH_PATTERN.test(input.expertiseHash) ||
+    !HASH_PATTERN.test(input.admissionPolicyHash) ||
+    !Number.isSafeInteger(input.requestedCount) ||
+    input.requestedCount < 1
+  ) {
+    throw new TokenlessServiceError("Hybrid network child binding is invalid.", 409, "hybrid_review_binding_invalid");
+  }
+}
+
+function hybridExpertiseHash(profile: BoundHumanReviewRequestProfile) {
+  return hashPreparedHumanReviewValue({
+    schemaVersion: "rateloop.hybrid-child-expertise.v1",
+    cohort: "network",
+    requirements: profile.expertiseRequirements ?? [],
+  });
+}
+
+function hybridNetworkAdapterKey(
+  opportunity: FrozenOpportunity,
+  preparation: PreparedHumanReviewRequest,
+  parent: HybridChildParentBinding,
+) {
+  const hash = hashPreparedHumanReviewValue({
+    schemaVersion: "rateloop.hybrid-network-child-adapter-key.v1",
+    hybridOperationId: parent.hybridOperationId,
+    opportunityId: opportunity.opportunityId,
+    cohort: "network",
+    cohortBindingHash: parent.cohortBindingHash,
+    economicsHash: parent.economicsHash,
+    expertiseHash: parent.expertiseHash,
+    admissionPolicyHash: parent.admissionPolicyHash,
+    requestedCount: parent.requestedCount,
+    expertiseRequirements: parent.expertiseRequirements ?? [],
+    preparedRequestHash: preparation.preparedRequestHash,
+    derivedEconomicsHash: preparation.derivedEconomicsHash,
+    sourceEvidenceHash: opportunity.sourceEvidenceHash,
+    suggestionCommitment: opportunity.suggestionCommitment,
+  });
+  return `adaptive-hybrid-network:${hash.slice("sha256:".length)}`;
+}
+
+async function finalizeHybridNetworkChildAsk(input: {
+  principal: PublicPaidHumanReviewPrincipal;
+  opportunity: FrozenOpportunity;
+  parent: HybridChildParentBinding;
+  foundation: PublicNetworkFoundation;
+  operationKey: string;
+  expectedAmountAtomic: string;
+  now: Date;
+}) {
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const exact = await client.query(
+      `SELECT parent.workspace_id,parent.opportunity_id,parent.state AS parent_state,
+              child.child_binding_hash,child.economics_hash,child.expertise_hash,
+              child.admission_policy_hash,child.expected_amount_atomic,
+              child.assignment_count,child.state AS child_state,
+              opportunity.status AS opportunity_status,lifecycle.state AS lifecycle_state
+       FROM tokenless_hybrid_review_operations parent
+       JOIN tokenless_hybrid_review_children child
+         ON child.hybrid_operation_id=parent.hybrid_operation_id AND child.cohort='network'
+       JOIN tokenless_agent_review_opportunities opportunity
+         ON opportunity.workspace_id=parent.workspace_id
+        AND opportunity.opportunity_id=parent.opportunity_id
+       JOIN tokenless_agent_review_opportunity_lifecycles lifecycle
+         ON lifecycle.workspace_id=opportunity.workspace_id
+        AND lifecycle.opportunity_id=opportunity.opportunity_id
+       WHERE parent.hybrid_operation_id=$1
+       LIMIT 1 FOR UPDATE OF parent,child,opportunity,lifecycle`,
+      [input.parent.hybridOperationId],
+    );
+    const row = exact.rows[0] as Row | undefined;
+    if (
+      !row ||
+      text(row, "workspace_id") !== input.principal.integration.workspaceId ||
+      text(row, "opportunity_id") !== input.opportunity.opportunityId ||
+      text(row, "child_binding_hash") !== input.parent.cohortBindingHash ||
+      text(row, "economics_hash") !== input.parent.economicsHash ||
+      text(row, "expertise_hash") !== input.parent.expertiseHash ||
+      text(row, "admission_policy_hash") !== input.parent.admissionPolicyHash ||
+      text(row, "expected_amount_atomic") !== input.expectedAmountAtomic ||
+      integer(row, "assignment_count") !== input.parent.requestedCount ||
+      !["preparing", "ready"].includes(text(row, "child_state") ?? "") ||
+      !["preparing", "ready"].includes(text(row, "parent_state") ?? "") ||
+      !["decided", "review_requested"].includes(text(row, "opportunity_status") ?? "") ||
+      !["request_ready", "pending"].includes(text(row, "lifecycle_state") ?? "")
+    ) {
+      throw new TokenlessServiceError(
+        "Hybrid network child no longer matches its frozen parent tuple.",
+        409,
+        "hybrid_review_child_conflict",
+      );
+    }
+    await bindPublicNetworkReviewOperation(client, {
+      bindingId: input.foundation.bindingId,
+      workspaceId: input.principal.integration.workspaceId,
+      opportunityId: input.opportunity.opportunityId,
+      operationKey: input.operationKey,
+      now: input.now,
+    });
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function finalizePublicPaidAsk(input: {
   principal: PublicPaidHumanReviewPrincipal;
   opportunity: FrozenOpportunity;
@@ -804,6 +975,7 @@ async function finalizePublicPaidAsk(input: {
   preparation: PreparedHumanReviewRequest;
   idempotencyKey: string;
   operationKey: string;
+  foundation: PublicNetworkFoundation;
 }) {
   const workspaceId = input.principal.integration.workspaceId;
   const client = await dbPool.connect();
@@ -951,6 +1123,38 @@ async function finalizePublicPaidAsk(input: {
         "review_binding_conflict",
       );
     }
+    const exactFoundation = await bindPublicNetworkReviewOperation(client, {
+      bindingId: input.foundation.bindingId,
+      workspaceId,
+      opportunityId: input.opportunity.opportunityId,
+      operationKey: input.operationKey,
+      now,
+    });
+    if (
+      text(exactFoundation, "project_id") !== input.foundation.projectId ||
+      text(exactFoundation, "run_id") !== input.foundation.runId ||
+      text(exactFoundation, "case_id") !== input.foundation.caseId
+    ) {
+      throw new TokenlessServiceError(
+        "The public-review operation no longer matches its exact assurance run.",
+        409,
+        "public_network_operation_binding_conflict",
+      );
+    }
+    const runBound = await client.query(
+      `UPDATE tokenless_agent_review_opportunities
+       SET run_id=$1,updated_at=$2
+       WHERE workspace_id=$3 AND opportunity_id=$4
+         AND operation_key=$5 AND (run_id IS NULL OR run_id=$1)`,
+      [input.foundation.runId, now, workspaceId, input.opportunity.opportunityId, input.operationKey],
+    );
+    if (runBound.rowCount !== 1) {
+      throw new TokenlessServiceError(
+        "The review opportunity could not bind its assurance run.",
+        409,
+        "public_network_operation_binding_conflict",
+      );
+    }
     if (!transition.replayed) {
       await client.query(
         `UPDATE tokenless_agent_integrations
@@ -1039,26 +1243,21 @@ export async function requestPublicPaidHumanReview(
     suggestionPayload,
     publication,
   });
-  const requiresExpertise =
-    (opportunity.requestProfile.requiredExpertiseKeys?.length ?? 0) > 0 ||
-    (opportunity.requestProfile.expertiseRequirements?.length ?? 0) > 0;
-  if (requiresExpertise) {
-    const expertisePool = opportunity.requestProfile.expertiseRequirements?.length
-      ? await countEligibleNetworkExactExpertisePool({
-          requirements: opportunity.requestProfile.expertiseRequirements,
-          panelSize: opportunity.requestProfile.panelSize,
-          responseDeadline: preparation.preparedRequest.timing.expiresAt,
-        })
-      : await countEligibleNetworkExpertisePool({
-          expertiseKeys: opportunity.requestProfile.requiredExpertiseKeys,
-        });
-    if (!expertisePool.ready || expertisePool.eligible < opportunity.requestProfile.panelSize) {
-      throw new TokenlessServiceError(
-        "The RateLoop network does not currently have enough reviewers with every required expertise qualification.",
-        409,
-        "expertise_reviewer_pool_unavailable",
-      );
-    }
+  const expertisePool = opportunity.requestProfile.expertiseRequirements?.length
+    ? await countEligibleNetworkExactExpertisePool({
+        requirements: opportunity.requestProfile.expertiseRequirements,
+        panelSize: opportunity.requestProfile.panelSize,
+        responseDeadline: preparation.preparedRequest.timing.expiresAt,
+      })
+    : await countEligibleNetworkExpertisePool({
+        expertiseKeys: opportunity.requestProfile.requiredExpertiseKeys,
+      });
+  if (!expertisePool.ready || expertisePool.eligible < opportunity.requestProfile.panelSize) {
+    throw new TokenlessServiceError(
+      "The RateLoop network does not currently have enough eligible reviewers for the funded panel.",
+      409,
+      "expertise_reviewer_pool_unavailable",
+    );
   }
   await ensureFeedbackBonusPoolForDelivery({
     workspaceId: input.principal.integration.workspaceId,
@@ -1110,10 +1309,31 @@ export async function requestPublicPaidHumanReview(
     );
   }
   let prepared: PreparedProductAsk | null = null;
+  let foundation: PublicNetworkFoundation | null = null;
   let askCreated = false;
   let opportunityBound = false;
   try {
     prepared = await prepareProductAsk({ principal: input.principal.principal, request: askRequest });
+    foundation = await ensurePublicNetworkReviewFoundation({
+      workspaceId: input.principal.integration.workspaceId,
+      integrationId: input.principal.integration.integrationId,
+      opportunityId: opportunity.opportunityId,
+      idempotencyKey,
+      sourcePayload,
+      suggestionPayload,
+      sourceEvidenceHash: opportunity.sourceEvidenceHash as `sha256:${string}`,
+      suggestionCommitment: opportunity.suggestionCommitment as `sha256:${string}`,
+      requestProfile: {
+        id: opportunity.requestProfile.id,
+        version: opportunity.requestProfile.version,
+        hash: opportunity.requestProfile.hash,
+        panelSize: opportunity.requestProfile.panelSize,
+      },
+      effectiveQuestion: opportunity.effectiveQuestion,
+      preparation,
+      preparedProductAsk: prepared,
+      publication,
+    });
     const ask = await createTokenlessAsk(askRequest, idempotencyKey, input.appOrigin, prepared.idempotencyScope);
     askCreated = true;
     await finalizePublicPaidAsk({
@@ -1123,6 +1343,7 @@ export async function requestPublicPaidHumanReview(
       preparation,
       idempotencyKey,
       operationKey: ask.operationKey,
+      foundation,
     });
     opportunityBound = true;
     await beforePublicPaidActivationForTests?.({
@@ -1134,6 +1355,239 @@ export async function requestPublicPaidHumanReview(
     return { schemaVersion: "rateloop.adaptive-review-request.v1", opportunityId: opportunity.opportunityId, ask };
   } catch (error) {
     if (prepared && (!askCreated || !opportunityBound)) await releasePreparedProductAsk(prepared);
+    throw error;
+  }
+}
+
+/**
+ * Internal hybrid-router seam. The parent opportunity remains a hybrid
+ * opportunity; this function derives one deterministic public-network child
+ * and never mutates the parent into a public-only lane.
+ */
+export async function requestPublicPaidNetworkChild(
+  input: PublicPaidHumanReviewRequest & { hybridParent: HybridChildParentBinding },
+): Promise<PublicPaidNetworkChildPreparation> {
+  requirePaidLaneComplianceApproval("public_paid_network");
+  requireProductPrincipalScope(input.principal.principal, "panel:publish");
+  requireProductPrincipalScope(input.principal.principal, "payment:submit");
+  assertHybridParentBinding(input.hybridParent);
+  const publication = normalizePublicPaidReviewPublication(input.publication);
+  const sourcePayload = exactPayload(input.sourcePayload, "sourcePayload");
+  const suggestionPayload = exactPayload(input.suggestionPayload, "suggestionPayload");
+  const parentOpportunity = await loadFrozenOpportunity(
+    input.principal,
+    input.opportunityId,
+    input.effectiveQuestion,
+    input.effectiveQuestionHash,
+  );
+  assertRequestable(parentOpportunity, input.principal, "hybrid");
+  if (
+    sha256(sourcePayload) !== parentOpportunity.sourceEvidenceHash ||
+    sha256(suggestionPayload) !== parentOpportunity.suggestionCommitment
+  ) {
+    throw new TokenlessServiceError(
+      "Hybrid network child payloads do not match the parent commitments.",
+      409,
+      "hybrid_review_binding_invalid",
+    );
+  }
+  const childProfile: BoundHumanReviewRequestProfile = {
+    ...parentOpportunity.requestProfile,
+    id: `${parentOpportunity.requestProfile.id}:network`,
+    hash: input.hybridParent.cohortBindingHash,
+    audience: "public_network",
+    privateGroupId: null,
+    privateSensitivity: null,
+    panelSize: input.hybridParent.requestedCount,
+    expertiseRequirements: normalizeReviewerExpertiseRequirementsSelection(
+      input.hybridParent.expertiseRequirements ?? parentOpportunity.requestProfile.expertiseRequirements ?? [],
+      input.hybridParent.requestedCount,
+    ),
+  };
+  if (hybridExpertiseHash(childProfile) !== input.hybridParent.expertiseHash) {
+    throw new TokenlessServiceError(
+      "Hybrid network expertise does not match the frozen child tuple.",
+      409,
+      "hybrid_review_child_conflict",
+    );
+  }
+  const childOpportunity: FrozenOpportunity = {
+    ...parentOpportunity,
+    requestProfile: childProfile,
+    admissionPolicyHash: `0x${input.hybridParent.admissionPolicyHash.slice("sha256:".length)}`,
+  };
+  const admissionPolicy = await loadExactAdmissionPolicy(childOpportunity);
+  const approval = await loadFrozenApproval(input.principal.integration.workspaceId, parentOpportunity.opportunityId);
+  if (
+    publication.dataClassification === "redacted" &&
+    parentOpportunity.binding.authority === "ask_automatically" &&
+    !approval
+  ) {
+    await prepareHumanReviewForOwnerApproval({
+      principal: input.principal,
+      opportunityId: parentOpportunity.opportunityId,
+      sourcePayload,
+      suggestionPayload,
+      effectiveQuestion: parentOpportunity.effectiveQuestion,
+      effectiveQuestionHash: parentOpportunity.effectiveQuestionHash,
+      publicationApproval: {
+        visibility: "public",
+        dataClassification: "redacted",
+        confirmedNoSensitiveData: true,
+        redactionSummary: publication.redactionSummary!,
+      },
+    });
+    throw new TokenlessServiceError(
+      "Owner approval is required before publishing redacted hybrid review material.",
+      409,
+      "approval_required",
+    );
+  }
+  const preparation = prepareExactRequest({
+    opportunity: childOpportunity,
+    approval,
+    sourcePayload,
+    suggestionPayload,
+    publication,
+    skipApprovalTupleValidation: true,
+  });
+  if (
+    preparation.derivedEconomicsHash !== input.hybridParent.economicsHash ||
+    preparation.maximumChargeAtomic === "0"
+  ) {
+    throw new TokenlessServiceError(
+      "Hybrid network economics do not match the frozen child tuple.",
+      409,
+      "hybrid_review_child_conflict",
+    );
+  }
+  await ensureFeedbackBonusPoolForDelivery({
+    workspaceId: input.principal.integration.workspaceId,
+    agentId: input.principal.integration.agentId,
+    opportunityId: parentOpportunity.opportunityId,
+    admissionPolicyHash: childOpportunity.admissionPolicyHash,
+    preparation,
+    feedbackDeadline: new Date(preparation.preparedRequest.timing.expiresAt),
+  });
+  const pool = childProfile.expertiseRequirements?.length
+    ? await countEligibleNetworkExactExpertisePool({
+        requirements: childProfile.expertiseRequirements,
+        panelSize: childProfile.panelSize,
+        responseDeadline: preparation.preparedRequest.timing.expiresAt,
+      })
+    : await countEligibleNetworkExpertisePool({ expertiseKeys: childProfile.requiredExpertiseKeys });
+  if (!pool.ready || pool.eligible < childProfile.panelSize) {
+    throw new TokenlessServiceError(
+      "The network child cannot satisfy the frozen eligible cohort.",
+      409,
+      "expertise_reviewer_pool_unavailable",
+    );
+  }
+  const idempotencyKey = hybridNetworkAdapterKey(childOpportunity, preparation, input.hybridParent);
+  const quoteRequest: TokenlessQuoteRequest = {
+    audience: { admissionPolicyHash: childOpportunity.admissionPolicyHash, source: "rateloop_network" },
+    audiencePolicy: admissionPolicy,
+    ...preparation.quoteTerms,
+    confirmedNoSensitiveData: publication.confirmedNoSensitiveData,
+    dataClassification: publication.dataClassification,
+    ...(publication.redactionSummary ? { redactionSummary: publication.redactionSummary } : {}),
+    visibility: publication.visibility,
+  };
+  const idempotencyScope = `workspace:${input.principal.integration.workspaceId}:api_key:${input.principal.principal.apiKeyId}`;
+  const replay = await getTokenlessAskReplay(idempotencyScope, idempotencyKey);
+  if (replay && replay.quoteRequestHash !== hashTokenlessQuoteRequest(quoteRequest)) {
+    throw new TokenlessServiceError(
+      "The existing hybrid network child uses different frozen terms.",
+      409,
+      "hybrid_review_child_conflict",
+    );
+  }
+  const askRequest = replay?.request ?? {
+    idempotencyKey,
+    payment: { mode: "prepaid" as const, workspaceId: input.principal.integration.workspaceId },
+    quoteId: (await createTokenlessQuote(quoteRequest)).quoteId,
+  };
+  if (
+    askRequest.payment.mode !== "prepaid" ||
+    askRequest.payment.workspaceId !== input.principal.integration.workspaceId
+  ) {
+    throw new TokenlessServiceError(
+      "The existing hybrid network child uses a different payment binding.",
+      409,
+      "hybrid_review_child_conflict",
+    );
+  }
+  let prepared: PreparedProductAsk | null = null;
+  let askCreated = false;
+  let childBound = false;
+  let foundation: PublicNetworkFoundation | null = null;
+  try {
+    prepared = await prepareProductAsk({ principal: input.principal.principal, request: askRequest });
+    foundation = await ensurePublicNetworkReviewFoundation({
+      workspaceId: input.principal.integration.workspaceId,
+      integrationId: input.principal.integration.integrationId,
+      opportunityId: parentOpportunity.opportunityId,
+      idempotencyKey,
+      sourcePayload,
+      suggestionPayload,
+      sourceEvidenceHash: parentOpportunity.sourceEvidenceHash as `sha256:${string}`,
+      suggestionCommitment: parentOpportunity.suggestionCommitment as `sha256:${string}`,
+      requestProfile: {
+        id: childProfile.id,
+        version: childProfile.version,
+        hash: childProfile.hash,
+        panelSize: childProfile.panelSize,
+      },
+      effectiveQuestion: childOpportunity.effectiveQuestion,
+      preparation,
+      preparedProductAsk: prepared,
+      publication,
+    });
+    const ask = await createTokenlessAsk(askRequest, idempotencyKey, input.appOrigin, prepared.idempotencyScope);
+    askCreated = true;
+    await finalizeHybridNetworkChildAsk({
+      principal: input.principal,
+      opportunity: parentOpportunity,
+      parent: input.hybridParent,
+      foundation,
+      operationKey: ask.operationKey,
+      expectedAmountAtomic: preparation.maximumChargeAtomic,
+      now: new Date(),
+    });
+    childBound = true;
+    await attachProductAsk(prepared, ask);
+    let ready: Awaited<ReturnType<typeof readReadyPublicNetworkReviewChild>>;
+    try {
+      ready = await readReadyPublicNetworkReviewChild(foundation.bindingId);
+    } catch (error) {
+      if (error instanceof TokenlessServiceError && error.code === "public_network_audience_projection_pending") {
+        throw new TokenlessServiceError(
+          "The funded hybrid network child is waiting for scheduled audience preparation.",
+          409,
+          "hybrid_network_child_pending",
+          true,
+        );
+      }
+      throw error;
+    }
+    return {
+      subpanelReference: foundation.bindingId,
+      bindingHash: input.hybridParent.cohortBindingHash,
+      sourceOperationReference: ready.operationKey,
+      sourceRunId: ready.runId,
+      chainAdmissionPolicyHash: ready.round.admissionPolicyHash,
+      selectedSeatEvidenceHash: ready.assignmentEvidenceHash,
+      voucherPreparationHash: ready.voucherPreparationHash,
+      settlementBindingHash: ready.settlementBindingHash,
+      round: {
+        ...ready.round,
+        admissionPolicyHash: input.hybridParent.admissionPolicyHash,
+      },
+      status: "ready",
+      replayed: Boolean(replay),
+    };
+  } catch (error) {
+    if (prepared && (!askCreated || !childBound)) await releasePreparedProductAsk(prepared);
     throw error;
   }
 }

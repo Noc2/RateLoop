@@ -675,7 +675,35 @@ function contentId(value: unknown): `0x${string}` {
   return `0x${createHash("sha256").update(canonicalizeHumanAssuranceDocument(value)).digest("hex")}`;
 }
 
-export async function freezeAssuranceRunOrchestration(input: { principal: AssurancePrincipal; runId: string }) {
+type ProductContentBridgeInput = {
+  caseId: string;
+  productContentId: `0x${string}`;
+};
+
+function orchestrationContentId(input: {
+  runId: string;
+  caseId: string;
+  suiteManifestHash: string;
+  admissionPolicyHash: string;
+  blindingCommitment: string;
+  deterministicChecksHash: string;
+}) {
+  return contentId({
+    schemaVersion: ASSURANCE_RUN_ORCHESTRATION_VERSION,
+    runId: input.runId,
+    caseId: input.caseId,
+    suiteManifestHash: input.suiteManifestHash,
+    admissionPolicyHash: input.admissionPolicyHash,
+    blindingCommitment: input.blindingCommitment,
+    deterministicChecksHash: input.deterministicChecksHash,
+  });
+}
+
+export async function freezeAssuranceRunOrchestration(input: {
+  principal: AssurancePrincipal;
+  runId: string;
+  productContentBridge?: ProductContentBridgeInput;
+}) {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
@@ -694,8 +722,48 @@ export async function freezeAssuranceRunOrchestration(input: { principal: Assura
       if (hashHumanAssuranceDocument(manifest) !== rowString(run, "manifest_hash")) {
         throw new Error("Frozen run orchestration manifest hash does not match its content.");
       }
+      let contentBridge:
+        | { caseId: string; productContentId: `0x${string}`; orchestrationContentId: `0x${string}` }
+        | undefined;
+      if (input.productContentBridge) {
+        const bridged = await client.query(
+          `SELECT case_id,content_id,admission_policy_hash,blinding_commitment,deterministic_checks_hash
+           FROM tokenless_assurance_run_cases WHERE run_id=$1 AND case_id=$2 LIMIT 1`,
+          [input.runId, input.productContentBridge.caseId],
+        );
+        const row = bridged.rows[0] as QueryRow | undefined;
+        if (
+          bridged.rowCount !== 1 ||
+          rowString(row, "content_id")?.toLowerCase() !== input.productContentBridge.productContentId.toLowerCase() ||
+          manifest.cases.length !== 1 ||
+          manifest.cases[0]?.caseId !== input.productContentBridge.caseId
+        ) {
+          serviceError(
+            "The frozen run no longer matches its product content bridge.",
+            "assurance_product_content_bridge_conflict",
+            409,
+          );
+        }
+        contentBridge = {
+          caseId: input.productContentBridge.caseId,
+          productContentId: input.productContentBridge.productContentId.toLowerCase() as `0x${string}`,
+          orchestrationContentId: orchestrationContentId({
+            runId: input.runId,
+            caseId: input.productContentBridge.caseId,
+            suiteManifestHash: manifest.suite.manifestHash,
+            admissionPolicyHash: rowString(row, "admission_policy_hash")!,
+            blindingCommitment: rowString(row, "blinding_commitment")!,
+            deterministicChecksHash: rowString(row, "deterministic_checks_hash")!,
+          }),
+        };
+      }
       await client.query("COMMIT");
-      return { manifest, manifestHash: rowString(run, "manifest_hash")!, status: "frozen" as const };
+      return {
+        manifest,
+        manifestHash: rowString(run, "manifest_hash")!,
+        status: "frozen" as const,
+        ...(contentBridge ? { contentBridge } : {}),
+      };
     }
     if (rowString(run, "status") !== "draft") {
       serviceError("Only draft runs can be orchestrated.", "invalid_assurance_run_transition", 409);
@@ -762,12 +830,20 @@ export async function freezeAssuranceRunOrchestration(input: { principal: Assura
       baseCaseIds: baseCases.map(value => rowString(value, "case_id")!),
       policyHash: rowString(run, "policy_hash")!,
     });
+    if (input.productContentBridge && goldCases.length > 0) {
+      serviceError(
+        "Product-bound public runs cannot inject cases without separately funded rounds.",
+        "assurance_product_content_bridge_gold_conflict",
+        409,
+      );
+    }
     const maximumBasePosition = Math.max(...baseCases.map(value => rowNumber(value, "position") ?? 0));
     const plannedCases: Array<QueryRow & { gold_item_id?: string; selection_seed_hash?: string }> = [
       ...baseCases,
       ...goldCases.map((value, index) => ({ ...value, position: maximumBasePosition + index + 1 })),
     ];
     const casePlans = [];
+    const orchestrationContentIds = new Map<string, `0x${string}`>();
     for (const rawCase of plannedCases) {
       const assuranceCase = rawCase as QueryRow;
       const caseId = rowString(assuranceCase, "case_id")!;
@@ -780,8 +856,7 @@ export async function freezeAssuranceRunOrchestration(input: { principal: Assura
         entropy: randomBytes(32),
       });
       const deterministicChecksHash = hashHumanAssuranceDocument(checks);
-      const caseContentId = contentId({
-        schemaVersion: ASSURANCE_RUN_ORCHESTRATION_VERSION,
+      const derivedOrchestrationContentId = orchestrationContentId({
         runId: input.runId,
         caseId,
         suiteManifestHash,
@@ -789,6 +864,11 @@ export async function freezeAssuranceRunOrchestration(input: { principal: Assura
         blindingCommitment: variants.blindingCommitment,
         deterministicChecksHash,
       });
+      const caseContentId =
+        input.productContentBridge?.caseId === caseId
+          ? (input.productContentBridge.productContentId.toLowerCase() as `0x${string}`)
+          : derivedOrchestrationContentId;
+      orchestrationContentIds.set(caseId, derivedOrchestrationContentId);
       const position = rowNumber(assuranceCase, "position")!;
       await client.query(
         `INSERT INTO tokenless_assurance_run_cases
@@ -905,7 +985,31 @@ export async function freezeAssuranceRunOrchestration(input: { principal: Assura
     if (updated.rowCount !== 1)
       serviceError("Run changed while orchestration was freezing.", "assurance_run_conflict", 409);
     await client.query("COMMIT");
-    return { manifest, manifestHash, status: "frozen" as const };
+    const bridgedPlan = input.productContentBridge
+      ? casePlans.find(plan => plan.caseId === input.productContentBridge?.caseId)
+      : undefined;
+    if (
+      input.productContentBridge &&
+      (casePlans.length !== 1 ||
+        !bridgedPlan ||
+        bridgedPlan.contentId.toLowerCase() !== input.productContentBridge.productContentId.toLowerCase())
+    ) {
+      throw new Error("Product content bridge did not resolve to exactly one assurance case.");
+    }
+    return {
+      manifest,
+      manifestHash,
+      status: "frozen" as const,
+      ...(input.productContentBridge && bridgedPlan
+        ? {
+            contentBridge: {
+              caseId: bridgedPlan.caseId,
+              productContentId: input.productContentBridge.productContentId.toLowerCase() as `0x${string}`,
+              orchestrationContentId: orchestrationContentIds.get(bridgedPlan.caseId)!,
+            },
+          }
+        : {}),
+    };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -961,10 +1065,15 @@ export async function bindAssuranceCaseRound(input: {
   roundId: string;
   status: Exclude<AssuranceCaseRoundStatus, "planned">;
   exactNetworkRound?: {
+    bindingId: string;
     operationKey: string;
     deploymentKey: string;
     chainId: number;
     panelAddress: string;
+    roundTermsHash: `sha256:${string}`;
+    totalFundedAtomic: string;
+    maximumCommits: number;
+    now: Date;
   };
 }) {
   if (!ROUND_ID_PATTERN.test(input.roundId)) serviceError("roundId must be an unsigned base-10 integer string.");
@@ -1016,27 +1125,47 @@ export async function bindAssuranceCaseRound(input: {
       const panelAddress = getAddress(input.exactNetworkRound.panelAddress).toLowerCase();
       if (
         !IDENTIFIER_PATTERN.test(input.exactNetworkRound.operationKey) ||
+        !IDENTIFIER_PATTERN.test(input.exactNetworkRound.bindingId) ||
         !input.exactNetworkRound.deploymentKey ||
         !Number.isSafeInteger(input.exactNetworkRound.chainId) ||
-        input.exactNetworkRound.chainId <= 0
+        input.exactNetworkRound.chainId <= 0 ||
+        !HASH_PATTERN.test(input.exactNetworkRound.roundTermsHash) ||
+        !/^[1-9][0-9]*$/u.test(input.exactNetworkRound.totalFundedAtomic) ||
+        !Number.isSafeInteger(input.exactNetworkRound.maximumCommits) ||
+        input.exactNetworkRound.maximumCommits <= 0 ||
+        !Number.isFinite(input.exactNetworkRound.now.getTime())
       ) {
         serviceError("Exact network round identity is invalid.", "assurance_round_binding_conflict", 409);
       }
       const exact = await client.query(
-        `SELECT execution.operation_key
+        `SELECT execution.operation_key,execution.round_terms_json,execution.total_funded_atomic,
+                voucher.status AS voucher_status,voucher.voucher_deadline,voucher.maximum_commits,
+                binding.state AS binding_state,
+                opportunity.status AS opportunity_status,opportunity.run_id AS opportunity_run_id,
+                lifecycle.state AS opportunity_lifecycle_state
          FROM tokenless_chain_executions execution
          JOIN tokenless_ask_ownership ownership ON ownership.operation_key=execution.operation_key
          JOIN tokenless_voucher_rounds voucher
            ON voucher.chain_id=execution.chain_id
           AND lower(voucher.panel_address)=lower(execution.panel_address)
           AND voucher.round_id=execution.round_id
+         JOIN tokenless_public_network_review_bindings binding
+           ON binding.binding_id=$9
+          AND binding.operation_key=execution.operation_key
+          AND binding.run_id=$10 AND binding.case_id=$11
+         JOIN tokenless_agent_review_opportunities opportunity
+           ON opportunity.workspace_id=binding.workspace_id
+          AND opportunity.opportunity_id=binding.opportunity_id
+         JOIN tokenless_agent_review_opportunity_lifecycles lifecycle
+           ON lifecycle.workspace_id=opportunity.workspace_id
+          AND lifecycle.opportunity_id=opportunity.opportunity_id
          WHERE execution.operation_key=$1 AND execution.deployment_key=$2
            AND execution.chain_id=$3 AND lower(execution.panel_address)=lower($4)
            AND execution.round_id=$5 AND lower(execution.content_id)=lower($6)
            AND lower(voucher.content_id)=lower($6)
            AND lower(voucher.admission_policy_hash)=lower($7)
            AND execution.state='confirmed' AND ownership.workspace_id=$8
-         LIMIT 1 FOR UPDATE OF execution,voucher`,
+         LIMIT 1 FOR UPDATE OF execution,voucher,binding,opportunity,lifecycle`,
         [
           input.exactNetworkRound.operationKey,
           input.exactNetworkRound.deploymentKey,
@@ -1046,9 +1175,31 @@ export async function bindAssuranceCaseRound(input: {
           rowString(row, "content_id"),
           rowString(row, "admission_policy_hash"),
           rowString(run, "workspace_id"),
+          input.exactNetworkRound.bindingId,
+          input.runId,
+          input.caseId,
         ],
       );
-      if (exact.rowCount !== 1) {
+      const exactRow = exact.rows[0] as QueryRow | undefined;
+      let exactTerms: unknown = null;
+      try {
+        exactTerms = JSON.parse(rowString(exactRow, "round_terms_json") ?? "null");
+      } catch {
+        exactTerms = null;
+      }
+      if (
+        exact.rowCount !== 1 ||
+        !exactTerms ||
+        hashHumanAssuranceDocument(exactTerms) !== input.exactNetworkRound.roundTermsHash ||
+        rowString(exactRow, "total_funded_atomic") !== input.exactNetworkRound.totalFundedAtomic ||
+        rowNumber(exactRow, "maximum_commits") !== input.exactNetworkRound.maximumCommits ||
+        rowString(exactRow, "voucher_status") !== "open" ||
+        new Date(String(exactRow?.voucher_deadline)).getTime() <= input.exactNetworkRound.now.getTime() ||
+        !["ask_bound", "round_bound"].includes(rowString(exactRow, "binding_state") ?? "") ||
+        rowString(exactRow, "opportunity_status") !== "review_requested" ||
+        rowString(exactRow, "opportunity_run_id") !== input.runId ||
+        rowString(exactRow, "opportunity_lifecycle_state") !== "pending"
+      ) {
         serviceError("Exact confirmed network round is unavailable.", "assurance_round_binding_conflict", 409);
       }
       const existingExact = [
