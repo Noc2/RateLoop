@@ -32,10 +32,12 @@ export function PrivateArtifactPreview({
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const openerRef = useRef<HTMLButtonElement>(null);
+  const textPreviewRef = useRef<HTMLPreElement>(null);
   const [preview, setPreview] = useState<PreviewValue | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [textOverflowing, setTextOverflowing] = useState(false);
   const [reloadGeneration, setReloadGeneration] = useState(0);
 
   useEffect(() => {
@@ -116,6 +118,24 @@ export function PrivateArtifactPreview({
       : preview?.kind === "text"
         ? preview.text
         : "";
+  const textCanExpand = longText || textOverflowing;
+
+  useEffect(() => {
+    const element = textPreviewRef.current;
+    if (preview?.kind !== "text" || !element) {
+      setTextOverflowing(false);
+      return;
+    }
+    const measure = () => setTextOverflowing(element.scrollHeight > element.clientHeight + 1);
+    measure();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(element);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [preview, visibleText]);
 
   return (
     <section className="rounded-xl border border-white/10 bg-black/25 p-4" aria-labelledby={titleId}>
@@ -150,10 +170,13 @@ export function PrivateArtifactPreview({
       ) : null}
       {preview?.kind === "text" ? (
         <div className="mt-4">
-          <pre className="max-h-72 overflow-hidden whitespace-pre-wrap break-words font-sans text-sm leading-6 text-base-content/80">
+          <pre
+            ref={textPreviewRef}
+            className="max-h-72 overflow-hidden whitespace-pre-wrap break-words font-sans text-sm leading-6 text-base-content/80"
+          >
             {visibleText || "No text was provided."}
           </pre>
-          {longText ? (
+          {textCanExpand ? (
             <button
               ref={openerRef}
               type="button"

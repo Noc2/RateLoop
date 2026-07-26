@@ -70,3 +70,32 @@ test("expired preview access renews and refetches without losing the review page
     restoreDom();
   }
 });
+
+test("wrapped mobile text can expand even below the character threshold", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, render, waitFor } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const { PrivateArtifactPreview } = await import("./PrivateArtifactPreview");
+  const previousFetch = globalThis.fetch;
+  const content = Array.from({ length: 24 }, (_, index) => `Line ${index + 1}: exact review evidence`).join("\n");
+  globalThis.fetch = async () => new Response(content, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+
+  try {
+    const view = render(
+      <PrivateArtifactPreview artifactUrl="/private/wrapped" label="Wrapped source" onRefreshAccess={() => {}} />,
+    );
+    const preview = await waitFor(() => view.getByText(/Line 1: exact review evidence/u));
+    Object.defineProperties(preview, {
+      clientHeight: { configurable: true, value: 288 },
+      scrollHeight: { configurable: true, value: 480 },
+    });
+    act(() => window.dispatchEvent(new Event("resize")));
+    const button = await waitFor(() => view.getByRole("button", { name: "Show more" }));
+    await userEvent.setup({ document }).click(button);
+    assert.ok(view.getByRole("dialog", { name: "Wrapped source" }).textContent?.includes(content));
+  } finally {
+    cleanup();
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
