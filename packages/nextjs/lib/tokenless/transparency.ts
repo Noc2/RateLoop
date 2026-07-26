@@ -97,7 +97,7 @@ export type IndexedFinalizedEvidence = {
 
 export type AnalyticsMetrics = {
   answerFingerprintRiskBps: number;
-  correlationRiskBps: number;
+  assignmentProvenanceGapBps: number;
   issuedVoucherCount: number;
   verifiedIdentityCount: number;
 };
@@ -843,7 +843,7 @@ function validateFinalizedEvidence(value: IndexedFinalizedEvidence) {
     throw new TokenlessServiceError("Frozen round terms are malformed.", 400, "invalid_round_evidence");
   }
   bps(value.analytics.answerFingerprintRiskBps, "answerFingerprintRiskBps");
-  bps(value.analytics.correlationRiskBps, "correlationRiskBps");
+  bps(value.analytics.assignmentProvenanceGapBps, "assignmentProvenanceGapBps");
   if (
     !Number.isSafeInteger(value.analytics.issuedVoucherCount) ||
     value.analytics.issuedVoucherCount < 0 ||
@@ -962,7 +962,7 @@ async function assuranceProvenance(input: {
       assignmentCount: 0,
       matchedAssignmentCount: 0,
       validResponseCount: 0,
-      correlationRiskBps: 0,
+      assignmentProvenanceGapBps: 0,
       integrityInput: {
         schemaVersion: "rateloop.post-round-integrity-input.v1",
         policy: defaultPolicy,
@@ -1050,7 +1050,7 @@ async function assuranceProvenance(input: {
     assignmentCount: assignments.rows.length,
     matchedAssignmentCount,
     validResponseCount: reports.length,
-    correlationRiskBps: ratioBps(Math.min(mismatch, input.revealCount), input.revealCount),
+    assignmentProvenanceGapBps: ratioBps(Math.min(mismatch, input.revealCount), input.revealCount),
     integrityInput: {
       schemaVersion: "rateloop.post-round-integrity-input.v1",
       policy: policy ?? defaultPolicy,
@@ -1414,7 +1414,7 @@ async function deriveFinalizedRoundEvidenceBundle(input: {
     },
     analytics: {
       answerFingerprintRiskBps: duplicateRiskBps(responseHashes),
-      correlationRiskBps: assurance.correlationRiskBps,
+      assignmentProvenanceGapBps: assurance.assignmentProvenanceGapBps,
       issuedVoucherCount: vouchersResult.rows.length,
       verifiedIdentityCount: issuedIdentities.size,
     },
@@ -1470,14 +1470,29 @@ export async function deriveFinalizedRoundEvidence(input: {
 
 function immutableFinalizedEvidenceIdentity(evidence: IndexedFinalizedEvidence) {
   return {
-    ...evidence,
-    analytics: { ...evidence.analytics, correlationRiskBps: 0 },
+    deploymentKey: evidence.deploymentKey,
+    roundId: evidence.roundId,
+    revealCount: evidence.revealCount,
+    upVotes: evidence.upVotes,
+    economics: evidence.economics,
+    tierMix: evidence.tierMix,
+    diversity: evidence.diversity,
+    analytics: {
+      answerFingerprintRiskBps: evidence.analytics.answerFingerprintRiskBps,
+      assignmentProvenanceGapBps: 0,
+      issuedVoucherCount: evidence.analytics.issuedVoucherCount,
+      verifiedIdentityCount: evidence.analytics.verifiedIdentityCount,
+    },
     provenance: {
-      ...evidence.provenance,
+      issuedVoucherCount: evidence.provenance.issuedVoucherCount,
+      verifiedIdentityCount: evidence.provenance.verifiedIdentityCount,
       assignmentCount: 0,
       matchedAssignmentCount: 0,
       validResponseCount: 0,
     },
+    scoring: evidence.scoring,
+    roundTerms: evidence.roundTerms,
+    chain: evidence.chain,
   };
 }
 

@@ -35,7 +35,7 @@ test("pipeline requires its server-only bearer credential", async () => {
 test("pipeline rejects caller-supplied evidence, metrics, and timestamps", async () => {
   for (const extra of [
     { evidence: { roundId: "42" } },
-    { metrics: { correlationRiskBps: 0 } },
+    { metrics: { assignmentProvenanceGapBps: 0 } },
     { occurredAt: "2026-07-12T18:00:00.000Z" },
   ]) {
     const response = await POST(

@@ -1093,7 +1093,7 @@ test("finalized evidence publishes once and webhook retries preserve idempotency
   const storedEvidence = inspection.events[0]?.evidence_json as Record<string, unknown>;
   assert.deepEqual(storedEvidence.analytics, {
     answerFingerprintRiskBps: 0,
-    correlationRiskBps: 0,
+    assignmentProvenanceGapBps: 0,
     issuedVoucherCount: 5,
     verifiedIdentityCount: 5,
   });
