@@ -11,6 +11,13 @@ export default function PrivacyPage() {
         Hawig Ventures UG (haftungsbeschränkt), Herzogin-Juliana-Straße 7, 55469 Simmern, Germany. Contact:
         hawigxyz@proton.me.
       </p>
+      <p>
+        RateLoop acts as controller for accounts, security, billing, service operations, paid-reviewer eligibility and
+        settlement. For personal data in private material that a business customer submits and controls, RateLoop
+        generally acts as that customer&apos;s processor under the{" "}
+        <Link href="/legal/dpa">Data Processing Addendum</Link>. The role depends on the actual purpose and means of
+        each processing activity.
+      </p>
       <h2>Service data</h2>
       <p>
         The isolated service stores workspaces, projects, frozen evaluation manifests, reviewer policies, assignments,
@@ -20,10 +27,21 @@ export default function PrivacyPage() {
         cross-site profiling.
       </p>
       <p>
-        Each customer artifact has its own random data-encryption key. Hosted releases require workspace/project-scoped
-        AWS KMS aliases and authenticated encryption context. Authorized RateLoop workload roles permitted on those
-        tenant keys can still decrypt that tenant&apos;s artifacts to provide the service. Provider key provisioning,
-        inventory, rotation, and access exercises remain release gates.
+        Each customer artifact has its own random data-encryption key. In the current isolated deployment, designated
+        private fields and artifact keys are protected by purpose-separated, server-only application keyrings and an
+        authenticated envelope-encryption boundary. Authorized RateLoop workloads can decrypt covered data when needed
+        to provide the service. The source code supports workspace/project-scoped AWS KMS wrapping, but RateLoop does
+        not claim that managed KMS is active unless the deployed environment has provisioned and exercised it.
+        Provisioning, key inventory, rotation, least-privilege access tests, and the DPIA remain release gates before
+        real customer material is accepted in a hosted release.
+      </p>
+      <h2>Purposes and legal bases</h2>
+      <p>
+        RateLoop processes account, workspace, assignment, response, and delivery data to perform the service and the
+        applicable contract; security and abuse signals to protect accounts, reviewers, customers, and the service on
+        the basis of legitimate interests; and billing, tax, sanctions, dispute, and statutory records where a legal
+        obligation applies. Optional notification email is enabled at the user&apos;s request and can be disabled or
+        unsubscribed. RateLoop does not use personal data for advertising or cross-site profiling.
       </p>
       <h2>Agent and browser handoffs</h2>
       <p>
@@ -86,6 +104,23 @@ export default function PrivacyPage() {
         reviewer, voucher, vote key, and nullifier for eligibility, abuse control, and payment operations; RateLoop does
         not claim database-level anonymity.
       </p>
+      <p>
+        In the customer-invited paid lane, the inviting workspace must expressly warrant that the invitee is at least
+        18. That customer attestation is not government-document age verification. Sanctions screening is a separate
+        first-party manual decision and may delay eligibility; an invitation alone never approves paid work. The
+        RateLoop-network lane may use a configured identity provider for minimum-age or unique-human predicates, with
+        raw identity details minimized where possible. A reviewer may contact RateLoop to contest or correct an
+        eligibility record.
+      </p>
+      <h2>Recipients, processors, and international transfers</h2>
+      <p>
+        RateLoop uses service providers for hosting, database/runtime operations, email, billing, and optional identity
+        or wallet features. The current categories, named providers, feature conditions, and change-notice process are
+        listed on the <Link href="/legal/subprocessors">subprocessor page</Link>. Where covered data is transferred
+        outside the EEA, RateLoop uses an applicable adequacy decision or contractual transfer safeguards and
+        supplementary measures as required. Public blockchain publication is a separate, user-visible replication
+        boundary and not a private processor copy.
+      </p>
       <h2>Retention and rights</h2>
       <p>
         Workspace and project retention settings control private artifact deletion and access logging. Subscription
@@ -98,10 +133,32 @@ export default function PrivacyPage() {
       </p>
       <p>
         RateLoop temporarily retains a revoked sign-in binding for 35 days to prevent an in-flight sign-in from
-        recreating a deleted account. A later sign-up starts a new account. Backup copies expire under the applicable
-        backup schedule, and public blockchain records remain outside the operator&apos;s ability to erase. You may also
-        request access, correction, deletion where available, restriction, or object to processing by contacting the
-        address above.
+        recreating a deleted account. Expired or revoked session and sign-in security telemetry is purged on a rolling
+        35-day operational schedule; terminal notification-delivery records are purged after 90 days. Generated
+        subject-access exports expire after seven days. Statutory accounting, tax, payout, fraud, dispute, and
+        legal-hold records follow their documented legal schedule and can remain restricted rather than erased while
+        that duty applies. A later sign-up starts a new account. Backup copies expire under the applicable backup
+        schedule, and public blockchain records remain outside the operator&apos;s ability to erase.
+      </p>
+      <p>
+        You may request access, correction, deletion where available, restriction, portability, or object to processing,
+        and may withdraw consent for future processing where consent is the basis. Signed-in access and export requests
+        enter an authenticated queue; completed exports are available only to the requesting principal for seven days.
+        Other requests and questions may be sent to the controller address above. RateLoop normally responds within one
+        month, subject to lawful extensions, identity verification, legal holds, and retention duties. You may complain
+        to the{" "}
+        <a href="https://www.datenschutz.rlp.de/service/kontakt">
+          Landesbeauftragte für den Datenschutz und die Informationsfreiheit Rheinland-Pfalz
+        </a>{" "}
+        or another competent supervisory authority.
+      </p>
+      <h2>Cookies and local storage</h2>
+      <p>
+        RateLoop does not load audience analytics and does not set advertising cookies. It uses first-party
+        authentication cookies and limited browser storage for requested functions such as drafts, device recovery,
+        provider handoff state, and a remembered integration choice. Details and lifetimes are in the{" "}
+        <Link href="/legal/cookies">cookies and browser storage policy</Link>. The privacy-enhanced YouTube player is
+        contacted only after a user chooses to play an attached video.
       </p>
     </article>
   );

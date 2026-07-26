@@ -26,7 +26,12 @@ test("privacy notice explains subscription processor data and retention", async 
   assert.match(html, /configured drand beacon after the commit deadline/i);
   assert.match(html, /whether or not the reviewer or keeper submits a reveal or claim/i);
   assert.match(html, /there is no post-commit abort/i);
-  assert.match(html, /workspace\/project-scoped AWS KMS aliases/i);
-  assert.match(html, /Authorized RateLoop workload roles permitted on those tenant keys/i);
-  assert.match(html, /Provider key provisioning, inventory, rotation, and access exercises remain release gates/i);
+  assert.match(html, /current isolated deployment.*server-only application keyrings/i);
+  assert.match(html, /does not claim that managed KMS is active/i);
+  assert.match(html, /DPIA remain release gates before real customer material/i);
+  assert.match(html, /subject-access exports expire after seven days/i);
+  assert.match(html, /terminal notification-delivery records are purged after 90 days/i);
+  assert.match(html, /does not load audience analytics/i);
+  assert.match(html, /inviting workspace must expressly warrant that the invitee is at least 18/i);
+  assert.match(html, /Sanctions screening is a separate first-party manual decision/i);
 });

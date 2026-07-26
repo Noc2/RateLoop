@@ -19,6 +19,8 @@ test("terms state service limits and accepted-work protection", async () => {
   assert.match(html, /at least 60 days/);
   assert.match(html, /participant bounty, attempt reserve/i);
   assert.match(html, /Stripe processes subscription payment details/i);
+  assert.match(html, /Data Processing Addendum.*forms part of the business service agreement/i);
+  assert.match(html, /roles follow the actual processing activity/i);
   assert.match(html, /not financial, legal, medical, or investment advice/i);
   assert.match(
     html,

@@ -12,8 +12,11 @@ const PUBLIC_COPY_FILES = [
   "./docs/smart-contracts/page.tsx",
   "./docs/tech-stack/page.tsx",
   "./legal/page.tsx",
+  "./legal/cookies/page.tsx",
+  "./legal/dpa/page.tsx",
   "./legal/imprint/page.tsx",
   "./legal/privacy/page.tsx",
+  "./legal/subprocessors/page.tsx",
   "./legal/terms/page.tsx",
 ] as const;
 

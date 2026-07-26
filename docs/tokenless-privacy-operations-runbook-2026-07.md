@@ -11,8 +11,8 @@ replace a controller/processor determination, statutory retention schedule, tran
   `POST /api/account/privacy/subject-requests`. The server binds the request to the RateLoop principal in the HttpOnly
   session; it does not accept an email address or wallet as proof of account authority.
 - Workspace owners and administrators export the covered tenant audit chain through
-  `GET /api/account/workspaces/{workspaceId}/audit/export`. Export is authorization-checked, marked `no-store`, and is
-  itself added to the workspace audit chain after the returned snapshot boundary.
+  `GET /api/account/workspaces/{workspaceId}/audit/export`. Export is authorization-checked, marked `no-store`, and
+  read-only: browser prefetch or repeated downloads do not grow the audit chain or attestation queue.
 - Workspace owners and administrators create or release project legal holds through the project-scoped legal-hold
   routes. Same-origin and service-layer workspace/project authorization are required.
 - A signed-in user previews and confirms account deletion through `GET` and `POST /api/account/deletion`. Confirmation
@@ -21,19 +21,25 @@ replace a controller/processor determination, statutory retention schedule, tran
   `GET` and `POST /api/account/workspaces/{workspaceId}/deletion`; confirmation requires the current workspace name.
 
 The self-service account and workspace paths implement their own authorization, blockers, request transitions, and
-category-level completion evidence and may process real requests. A production operator console and authenticated
-operator principal are not yet available, so other request types and manual overrides still require an approved
-operator procedure, role, and evidence owner.
+category-level completion evidence and may process real requests. Authenticated access and export requests are consumed
+by scheduled maintenance, produce a category-level lifecycle, and expose a principal-bound download for seven days.
+Correction, restriction, objection, exceptional deletion, and manual overrides still require an approved operator
+procedure, role, and evidence owner. Compliance actions use a separate operator secret until a production operator
+principal and console are available.
 
 ## Self-service deletion
 
 - Account deletion is blocked while the principal owns a workspace, has accepted work that has not reached its terminal
   path, or has an active managed wallet. Reserved but unaccepted assignments are released. The service revokes sessions,
-  API and OAuth access, memberships, identity/contact data, and wallet proof state, then tombstones the opaque principal.
-- Workspace deletion is owner-only and is blocked by any settled, reserved, or available funds; an active subscription;
-  reserved or accepted assignments; open asks; or unsettled billing, policy, or usage reservations. On confirmation, the
-  service revokes workspace credentials and integrations, removes member and reviewer access, revokes pending
-  invitations, queues private objects for deletion, and tombstones the workspace.
+  API and OAuth access, memberships, workspace reviewer and enterprise SSO links, identity/contact data, rater
+  eligibility, and wallet proof state, then tombstones the opaque principal. Settlement- and quality-linked rater rows
+  are enumerated honestly as retained rather than described as erased.
+- Workspace deletion is owner-only and is blocked by an active subscription; reserved or accepted assignments; open
+  asks; or unsettled billing, policy, or usage reservations. If settled, reserved, or available funds remain, confirming
+  deletion creates a `blocked_by_funds` subject request and a manual refund-resolution item without changing the ledger
+  or forfeiting funds. An authorized compliance operator records an external refund/reference; the same deletion request
+  then resumes. On completion, the service revokes workspace credentials and integrations, removes member and reviewer
+  access, revokes pending invitations, queues private objects for deletion, and tombstones the workspace.
 - Public-chain records and records subject to accounting, payment, fraud/security, dispute, audit, or legal-hold duties
   are retained or anonymized under their applicable schedule. Each retained category must record the reason and review
   or expiry deadline; the deletion result must not describe retained evidence as erased.
@@ -43,6 +49,20 @@ operator procedure, role, and evidence owner.
 - Private object and public-question-media workers delete the blob before tombstoning its database reference. Legal
   holds and not-yet-due retention deadlines keep work retryable. Reconciliation completes the deletion job and subject
   request only after all queued media is gone and records category-level evidence exactly once.
+
+## Operational retention and delivery recovery
+
+- Scheduled maintenance deletes expired subject-request exports, expired one-time-code verification rows, expired or
+  long-revoked Better Auth and RateLoop sessions, stale eligibility handoffs/scopes and orphaned screening work, and
+  terminal notification-delivery telemetry according to the public retention notice. Statutory, settlement,
+  legal-hold, deletion-receipt, backup, and public-chain categories are deliberately outside this operational purge.
+- Subject exports contain the authenticated principal&apos;s account, membership, reviewer-access, eligibility-status,
+  and request-lifecycle categories. They do not contain vault ciphertext, encryption material, session credentials, or
+  raw provider evidence. Cross-principal and expired downloads return not found.
+- Notification email attempts dead-letter after the bounded retry window. A dead letter is automatically reopened after
+  an increasing recovery delay, resetting only the attempt counter and preserving a bounded recovery count. After six
+  failed recovery cycles it remains a visible terminal dead letter for operator action; a transient provider outage can
+  no longer strand the first queue permanently.
 
 ## Request procedure
 

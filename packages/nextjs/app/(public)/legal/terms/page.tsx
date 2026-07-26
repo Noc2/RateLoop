@@ -26,6 +26,13 @@ export default function TermsPage() {
         unique humanity, expertise, legal residence, or paid-work eligibility. Customer-invited, RateLoop-network, and
         hybrid results are labeled separately.
       </p>
+      <p>
+        Where RateLoop processes personal data in private customer material on the customer&apos;s behalf, the{" "}
+        <Link href="/legal/dpa">Data Processing Addendum</Link> forms part of the business service agreement. RateLoop
+        remains an independent controller for its own account security, billing, legal compliance, paid-reviewer
+        eligibility, fraud prevention, and public-chain settlement purposes. The parties&apos; roles follow the actual
+        processing activity, not a blanket label.
+      </p>
       <h2>Funding and accepted work</h2>
       <p>
         The protocol itemizes bounty, platform fee, and maximum attempt reserve before funding. Once the first paid
