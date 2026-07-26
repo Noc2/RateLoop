@@ -26,6 +26,10 @@ import { expireAudienceAssignments } from "~~/lib/tokenless/audienceAssignments"
 import { reconcileChainPayment } from "~~/lib/tokenless/chain/payments";
 import { projectDueDirectPrivateReviewDecisionEvidence } from "~~/lib/tokenless/directPrivateReviewEvidence";
 import { processDueEvidenceRetentionEnforcement } from "~~/lib/tokenless/evidenceRetentionEnforcement";
+import {
+  produceScheduledIntegrityEpoch,
+  purgeExpiredIntegrityEpochPrivateFeatures,
+} from "~~/lib/tokenless/integrityEpochProducer";
 import { refreshCompletedAssuranceMechanismHealth } from "~~/lib/tokenless/mechanismHealth";
 import { sweepManagedEvmNonceDrift, unresolvedManagedEvmNonceFindings } from "~~/lib/tokenless/nonceRecovery";
 import { reconcilePaidAssignmentSettlements } from "~~/lib/tokenless/paidAssignmentSettlementReconciler";
@@ -256,6 +260,8 @@ type MaintenanceProcessors = {
   projectDirectPrivateReviewEvidence: typeof projectDueDirectPrivateReviewDecisionEvidence;
   expireAudienceAssignments: typeof expireAudienceAssignments;
   expirePrivateReviewReservations: typeof expirePrivateUnpaidReviewReservations;
+  produceIntegrityEpoch: typeof produceScheduledIntegrityEpoch;
+  purgeIntegrityPrivateFeatures: typeof purgeExpiredIntegrityEpochPrivateFeatures;
 };
 
 type MaintenanceProcessorFailure = {
@@ -325,6 +331,8 @@ const defaultProcessors: MaintenanceProcessors = {
   projectDirectPrivateReviewEvidence: projectDueDirectPrivateReviewDecisionEvidence,
   expireAudienceAssignments,
   expirePrivateReviewReservations: expirePrivateUnpaidReviewReservations,
+  produceIntegrityEpoch: produceScheduledIntegrityEpoch,
+  purgeIntegrityPrivateFeatures: purgeExpiredIntegrityEpochPrivateFeatures,
 };
 
 async function claimDueWork(now: Date, limit: number) {
@@ -603,6 +611,23 @@ export async function runTokenlessScheduledMaintenance(input: {
       run: () => processors.expirePrivateReviewReservations(now),
       fallback: 0 as Awaited<ReturnType<MaintenanceProcessors["expirePrivateReviewReservations"]>>,
     });
+    const integrityEpoch = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "produceIntegrityEpoch",
+      run: () => processors.produceIntegrityEpoch({ now }),
+      fallback: {
+        status: "failed" as const,
+        epochId: `integrity:${now.toISOString().slice(0, 10)}`,
+        manifestHash: null,
+        observations: 0,
+      },
+    });
+    const integrityPrivateFeatureRetention = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "purgeIntegrityPrivateFeatures",
+      run: () => processors.purgeIntegrityPrivateFeatures({ now, limit: workLimit * 100 }),
+      fallback: { purged: 0 },
+    });
     const evidenceRetention = await runIsolatedMaintenanceProcessor({
       failures: processorFailures,
       processor: "processEvidenceRetention",
@@ -863,6 +888,8 @@ export async function runTokenlessScheduledMaintenance(input: {
       directPrivateReviewEvidence,
       expiredAudienceAssignments,
       expiredPrivateReviewReservations,
+      integrityEpoch,
+      integrityPrivateFeatureRetention,
       subjectRequests,
       privacyRetention,
       adaptiveRollups: "not_scheduled_until_a_persisted_rollup_processor_exists",

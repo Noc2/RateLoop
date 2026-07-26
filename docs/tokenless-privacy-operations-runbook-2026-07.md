@@ -65,6 +65,25 @@ principal and console are available.
   failed recovery cycles it remains a visible terminal dead letter for operator action; a transient provider outage can
   no longer strand the first queue permanently.
 
+## Paid-lane integrity epochs
+
+- Public-network and hybrid paid lanes remain disabled unless production has approval-record hashes for the blockchain
+  DPIA and provider-transfer inventory. An approval hash records governance evidence; it is not a substitute for the
+  underlying signed assessment, transfer mechanism, processor terms, or pre-work transparency.
+- The scheduled producer samples only current paid-scope, payout-ownership, provider-subject, and unique-human state.
+  It persists HMAC reviewer lookups, HMAC hard-link values, encrypted private feature vectors, and aggregate signed
+  manifests. Raw principal IDs, provider subjects, payout accounts, device history, network history, and protected
+  attributes are not written to an epoch. Behavioral scoring stays disabled pending a separately approved DPIA.
+- Private feature rows have a configured 1–365 day expiry and scheduled deletion; aggregate signed manifests remain as
+  integrity evidence. Account deletion removes the reviewer from every unexpired epoch before the rater profile is
+  tombstoned. Operators must keep every still-referenced lookup-key version in
+  `TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEYS_JSON`; missing historical erasure keys block completion rather than issuing
+  a false deletion receipt.
+- Rotate lookup, pseudonym, vault, and Ed25519 signing keys under the approved key procedure. Retired lookup keys may be
+  removed only after no private epoch member references their version. Vault-key removal crypto-shreds any remaining
+  ciphertext and must be recorded against the retention schedule. Never put any private key or reviewer identifier in
+  an approval record, manifest, log, alert, or public-chain field.
+
 ## Request procedure
 
 1. Confirm the request is tied to the authenticated principal and record the request ID, type, receipt time, applicable

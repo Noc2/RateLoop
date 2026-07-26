@@ -8,6 +8,7 @@ import {
   erasePaidAssignmentSeatIdentities,
 } from "~~/lib/privacy/paidAssignmentSeatIdentityErasure";
 import { erasePrincipalForecastIntegrityInTransaction } from "~~/lib/tokenless/crowdForecastPersistence";
+import { eraseIntegrityEpochReviewerMemberships } from "~~/lib/tokenless/integrityEpochProducer";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const DELETION_DUE_MS = 30 * 86_400_000;
@@ -36,6 +37,7 @@ type RaterErasureEvidence = {
     payoutEligibility: number;
     assuranceAssertions: number;
     providerSubjectBindings: number;
+    integrityEpochMemberships: number;
   };
   remainingRows: {
     legalEligibility: number;
@@ -48,6 +50,7 @@ type RaterErasureEvidence = {
     assuranceAssertions: number;
     providerSubjectBindings: number;
     principalProfileLinks: number;
+    integrityEpochMemberships: number;
   };
   retainedRaterRows: {
     assuranceAssignments: number;
@@ -560,6 +563,7 @@ async function eraseRaterIdentity(
       paidEligibilityScopes: 0,
       payoutEligibility: 0,
       providerSubjectBindings: 0,
+      integrityEpochMemberships: 0,
       reviewerQualifications: 0,
       sanctionsScreenings: 0,
       worldIdContextLimits: 0,
@@ -572,6 +576,7 @@ async function eraseRaterIdentity(
       payoutEligibility: 0,
       principalProfileLinks: 0,
       providerSubjectBindings: 0,
+      integrityEpochMemberships: 0,
       reviewerQualifications: 0,
       sanctionsScreenings: 0,
       worldIdContextLimits: 0,
@@ -590,11 +595,15 @@ async function eraseRaterIdentity(
     tombstoneWritten: false,
   };
   const rater = await client.query(
-    `SELECT rater_id FROM tokenless_rater_profiles WHERE principal_id = $1 LIMIT 1 FOR UPDATE`,
+    `SELECT rater_id,account_address FROM tokenless_rater_profiles WHERE principal_id = $1 LIMIT 1 FOR UPDATE`,
     [principalId],
   );
-  const raterId = String((rater.rows[0] as { rater_id?: unknown } | undefined)?.rater_id ?? "");
+  const raterRow = rater.rows[0] as { rater_id?: unknown; account_address?: unknown } | undefined;
+  const raterId = String(raterRow?.rater_id ?? "");
   if (!raterId) return emptyEvidence;
+  const integrityErasure = await eraseIntegrityEpochReviewerMemberships(client, {
+    reviewerId: String(raterRow?.account_address ?? ""),
+  });
 
   const worldIdRequests = await client.query(
     `DELETE FROM tokenless_world_id_requests WHERE rater_id = $1 OR principal_id = $2`,
@@ -692,6 +701,7 @@ async function eraseRaterIdentity(
       paidEligibilityScopes: paidEligibilityScopes.rowCount ?? 0,
       payoutEligibility: payoutEligibility.rowCount ?? 0,
       providerSubjectBindings: providerSubjectBindings.rowCount ?? 0,
+      integrityEpochMemberships: integrityErasure.erased,
       reviewerQualifications: reviewerQualifications.rowCount ?? 0,
       sanctionsScreenings: sanctionsScreenings.rowCount ?? 0,
       worldIdContextLimits: worldIdContextLimits.rowCount ?? 0,
@@ -704,6 +714,7 @@ async function eraseRaterIdentity(
       payoutEligibility: rowNumber(row, "payout_eligibility"),
       principalProfileLinks: rowNumber(row, "principal_profile_links"),
       providerSubjectBindings: rowNumber(row, "provider_subject_bindings"),
+      integrityEpochMemberships: integrityErasure.remaining,
       reviewerQualifications: rowNumber(row, "reviewer_qualifications"),
       sanctionsScreenings: rowNumber(row, "sanctions_screenings"),
       worldIdContextLimits: rowNumber(row, "world_id_context_limits"),
