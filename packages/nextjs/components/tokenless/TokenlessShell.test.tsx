@@ -18,6 +18,9 @@ test("tokenless shell exposes Humans, Agents, and Docs without the legacy produc
   assert.match(source, /w-52/);
   assert.match(source, /border-t[^\n]+px-2\.5 pt-4/);
   assert.match(source, /import \{ SiteSearch \}/);
+  assert.match(source, /import \{ Suspense \} from "react"/);
+  assert.match(source, /<Suspense fallback=.*?>\s*<SiteSearch mobile \/>/s);
+  assert.match(source, /<Suspense fallback=.*?>\s*<SiteSearch \/>/s);
   assert.match(source, /<SiteSearch mobile \/>/);
   assert.match(source, /<SiteSearch \/>/);
   assert.doesNotMatch(source, /href: "\/(rate|ask|settings)"|Validate|Earn|Start a validation/);

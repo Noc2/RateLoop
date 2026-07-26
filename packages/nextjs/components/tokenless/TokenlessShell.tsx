@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -223,7 +224,9 @@ export function TokenlessShell({ children }: { children: React.ReactNode }) {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
           <Brand compact />
           <div className="flex min-w-0 flex-1 items-center justify-end gap-1">
-            <SiteSearch mobile />
+            <Suspense fallback={<div aria-hidden="true" className="h-9 w-[min(10rem,38vw)] sm:w-52" />}>
+              <SiteSearch mobile />
+            </Suspense>
             <details className="dropdown dropdown-end">
               <summary className="btn btn-ghost btn-sm list-none px-2" aria-label="Open navigation">
                 <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -242,7 +245,9 @@ export function TokenlessShell({ children }: { children: React.ReactNode }) {
         <div className="mb-4 px-4">
           <Brand />
         </div>
-        <SiteSearch />
+        <Suspense fallback={<div aria-hidden="true" className="mx-2.5 mb-4 h-9" />}>
+          <SiteSearch />
+        </Suspense>
         <nav aria-label="Primary" className="flex flex-1 flex-col gap-1 overflow-y-auto px-2.5 pb-4">
           <NavLinks />
         </nav>
