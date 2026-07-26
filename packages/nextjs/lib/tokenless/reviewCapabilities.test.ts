@@ -104,15 +104,18 @@ test("configured lane descriptions use the same implementation truth", () => {
     privateInvitedUnpaid: { available: true, message: "Implemented on this deployment." },
     privateInvitedPaid: {
       available: false,
-      message: "Invited-review USDC settlement is not implemented yet.",
+      message:
+        "Invited-review USDC settlement is implemented but unavailable until deployment funding and compliance approval are validated.",
     },
     publicPaidNetwork: {
       available: false,
-      message: "Paid RateLoop reviewer network delivery is not implemented yet.",
+      message:
+        "Paid RateLoop network review is implemented but unavailable until identity, funding, deployment, and compliance activation are validated.",
     },
     hybridPublicSafe: {
       available: false,
-      message: "Hybrid invited and public delivery is not implemented yet.",
+      message:
+        "Hybrid review is implemented but unavailable until both paid child paths pass their provider, funding, deployment, and compliance activation checks.",
     },
   });
   assert.deepEqual(configuredHumanReviewAudienceSources(), ["customer_invited"]);

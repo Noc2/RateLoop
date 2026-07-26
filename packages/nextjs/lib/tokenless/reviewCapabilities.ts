@@ -33,18 +33,18 @@ export type HumanReviewLaneReadiness = Pick<
 
 export const HUMAN_REVIEW_LANE_IMPLEMENTATION = {
   privateInvitedUnpaid: true,
-  // The private adapter and reconciler now preserve terminal settlement
+  // The paid private path is implemented, including terminal settlement
   // evidence. Release still requires funded deployment validation and the
-  // configured production DPIA/transfer approval, so it remains unadvertised.
+  // configured production DPIA/transfer approval, so it remains unavailable.
   privateInvitedPaid: false,
-  // Epoch production and frozen selection are wired, but selected network
-  // seats are still stopped before mutation until vouchers bind the exact
-  // selection batch to paid operations. World ID registration and funded
-  // deployment validation are also external release gates.
+  // The public-network path is implemented behind exact frozen-selection,
+  // voucher, identity, settlement, and compliance bindings. World ID
+  // registration and funded deployment validation remain external release
+  // gates, so the path remains unavailable.
   publicPaidNetwork: false,
-  // V4 cohort semantics require two distinct paid rounds. The default adapter
-  // is intentionally fail-closed until both round settlement preparations are
-  // deployed and verified end to end.
+  // The hybrid path is implemented with two distinct paid child rounds. It
+  // remains unavailable until both paid paths pass their deployment, provider,
+  // funding, and compliance activation checks.
   hybridPublicSafe: false,
 } as const satisfies HumanReviewLaneReadiness;
 
@@ -60,10 +60,13 @@ type HumanReviewLaneImplementationKey = keyof typeof HUMAN_REVIEW_LANE_IMPLEMENT
 export type HumanReviewAudienceSource = "customer_invited" | "rateloop_network" | "hybrid";
 
 const HUMAN_REVIEW_LANE_UNAVAILABLE_MESSAGES: Record<HumanReviewLaneImplementationKey, string> = {
-  privateInvitedUnpaid: "Invited unpaid review delivery is not implemented yet.",
-  privateInvitedPaid: "Invited-review USDC settlement is not implemented yet.",
-  publicPaidNetwork: "Paid RateLoop reviewer network delivery is not implemented yet.",
-  hybridPublicSafe: "Hybrid invited and public delivery is not implemented yet.",
+  privateInvitedUnpaid: "Invited unpaid review is unavailable on this deployment.",
+  privateInvitedPaid:
+    "Invited-review USDC settlement is implemented but unavailable until deployment funding and compliance approval are validated.",
+  publicPaidNetwork:
+    "Paid RateLoop network review is implemented but unavailable until identity, funding, deployment, and compliance activation are validated.",
+  hybridPublicSafe:
+    "Hybrid review is implemented but unavailable until both paid child paths pass their provider, funding, deployment, and compliance activation checks.",
 };
 
 export function configuredHumanReviewLaneMessage(lane: HumanReviewLaneImplementationKey) {
