@@ -164,11 +164,7 @@ test("preflights the server-derived invited set and defers network selection to 
   const events: string[] = [];
   const adapter = createHybridHumanReviewAdapter(dependencies(events));
   const result = await adapter(hybridRequestForTest(split(), [A]));
-  assert.deepEqual(events, [
-    `preflight:customer_invited:${candidate(A).principalId}`,
-    `invited:${A}`,
-    "network:",
-  ]);
+  assert.deepEqual(events, [`preflight:customer_invited:${candidate(A).principalId}`, `invited:${A}`, "network:"]);
   assert.equal(result.invited.reviewerCount, 1);
   assert.equal(result.network.reviewerCount, 1);
   assert.notEqual(result.invited.round.roundId, result.network.round.roundId);

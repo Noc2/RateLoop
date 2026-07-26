@@ -69,7 +69,9 @@ function hybridPruneDigest(rows: Row[]) {
   return `sha256:${digest(
     JSON.stringify(
       rows.map(row =>
-        Object.fromEntries(Object.entries(row).map(([key, value]) => [key, value instanceof Date ? value.toISOString() : value])),
+        Object.fromEntries(
+          Object.entries(row).map(([key, value]) => [key, value instanceof Date ? value.toISOString() : value]),
+        ),
       ),
     ),
   )}`;
@@ -466,14 +468,12 @@ async function pruneRun(row: Row, now: Date, itemLimit: number) {
       ]);
       await client.query("SELECT set_config('rateloop.retention_erasure','on',true)");
       for (const hybridOperationId of hybridIds) {
-        await client.query(
-          `DELETE FROM tokenless_hybrid_review_receipts WHERE hybrid_operation_id=$1`,
-          [hybridOperationId],
-        );
-        await client.query(
-          `DELETE FROM tokenless_hybrid_review_children WHERE hybrid_operation_id=$1`,
-          [hybridOperationId],
-        );
+        await client.query(`DELETE FROM tokenless_hybrid_review_receipts WHERE hybrid_operation_id=$1`, [
+          hybridOperationId,
+        ]);
+        await client.query(`DELETE FROM tokenless_hybrid_review_children WHERE hybrid_operation_id=$1`, [
+          hybridOperationId,
+        ]);
         const deleted = await client.query(
           `DELETE FROM tokenless_hybrid_review_operations
            WHERE hybrid_operation_id=$1 RETURNING hybrid_operation_id`,

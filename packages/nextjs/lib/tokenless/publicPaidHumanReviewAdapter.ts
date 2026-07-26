@@ -12,10 +12,6 @@ import {
 import { hashHumanReviewConfiguration } from "~~/lib/tokenless/humanReviewConfiguration";
 import { transitionHumanReviewOpportunityLifecycleInTransaction } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
 import {
-  hashHybridCohortExpertise,
-  type HybridChildParentBinding,
-} from "~~/lib/tokenless/hybridReviewChildBindings";
-import {
   BINARY_REVIEW_QUESTION_SCHEMA_VERSION,
   type FrozenBinaryReviewQuestion,
   hashFrozenBinaryReviewQuestion,
@@ -28,6 +24,7 @@ import {
   hashPreparedHumanReviewValue,
   prepareHumanReviewRequest,
 } from "~~/lib/tokenless/humanReviewRequestPreparation";
+import { type HybridChildParentBinding, hashHybridCohortExpertise } from "~~/lib/tokenless/hybridReviewChildBindings";
 import { requirePaidLaneComplianceApproval } from "~~/lib/tokenless/paidLaneCompliance";
 import {
   type PreparedProductAsk,
@@ -862,9 +859,7 @@ function assertHybridParentBinding(input: HybridChildParentBinding) {
     excludedPrincipals.size !== input.excludedReviewers.length ||
     excludedAccounts.size !== input.excludedReviewers.length ||
     input.excludedReviewers.some(
-      value =>
-        !/^rlp_[A-Za-z0-9_-]{8,160}$/u.test(value.principalId) ||
-        !/^0x[0-9a-f]{40}$/u.test(value.payoutAccount),
+      value => !/^rlp_[A-Za-z0-9_-]{8,160}$/u.test(value.principalId) || !/^0x[0-9a-f]{40}$/u.test(value.payoutAccount),
     )
   ) {
     throw new TokenlessServiceError("Hybrid network child binding is invalid.", 409, "hybrid_review_binding_invalid");
@@ -1461,8 +1456,7 @@ export async function requestPublicPaidNetworkChild(
     ),
   };
   if (
-    hashHybridCohortExpertise("network", childProfile.expertiseRequirements ?? []) !==
-    input.hybridParent.expertiseHash
+    hashHybridCohortExpertise("network", childProfile.expertiseRequirements ?? []) !== input.hybridParent.expertiseHash
   ) {
     throw new TokenlessServiceError(
       "Hybrid network expertise does not match the frozen child tuple.",

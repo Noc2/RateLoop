@@ -283,10 +283,7 @@ async function loadProfile(
     expertiseRequirements.filter(requirement => requirement.sourceScope === "customer_invited"),
     panelSize,
   );
-  if (
-    audience === "private_invited" &&
-    invitedExpertiseRequirements.length !== expertiseRequirements.length
-  ) {
+  if (audience === "private_invited" && invitedExpertiseRequirements.length !== expertiseRequirements.length) {
     throw new Error("Stored private review expertise scope is invalid.");
   }
   const groupPolicy = json<{ worldIdRequired?: unknown }>(row.policy_json, "private-group policy");

@@ -35,10 +35,10 @@ import {
 } from "~~/lib/tokenless/humanReviewRequestPreparation";
 import {
   type FrozenHybridReviewSplit,
-  hashHybridInvitedPrivateBinding,
   type HybridHumanReviewRequest,
   type HybridHumanReviewResult,
   type HybridInvitedPrivateBinding,
+  hashHybridInvitedPrivateBinding,
   requestHybridHumanReview,
 } from "~~/lib/tokenless/hybridHumanReviewAdapter";
 import {
@@ -1064,7 +1064,9 @@ function childHybridAdmissionPolicy(
   return freezeAdmissionPolicy(common).policy;
 }
 
-function exactHybridSemanticProfile(context: FrozenHumanReviewRoutingContext): FrozenHybridReviewSplit["semanticProfile"] {
+function exactHybridSemanticProfile(
+  context: FrozenHumanReviewRoutingContext,
+): FrozenHybridReviewSplit["semanticProfile"] {
   const profile = context.requestProfile;
   const policy = context.selectionPolicy.audiencePolicy;
   const invitedCohort = policy.cohorts[0];
@@ -1105,14 +1107,8 @@ function exactHybridSemanticProfile(context: FrozenHumanReviewRoutingContext): F
       "hybrid_review_binding_invalid",
     );
   }
-  const invitedEconomics = deriveHybridCohortEconomics(
-    profile.bountyPerSeatAtomic,
-    invitedCohort.maximumReviewers,
-  );
-  const networkEconomics = deriveHybridCohortEconomics(
-    profile.bountyPerSeatAtomic,
-    networkCohort.maximumReviewers,
-  );
+  const invitedEconomics = deriveHybridCohortEconomics(profile.bountyPerSeatAtomic, invitedCohort.maximumReviewers);
+  const networkEconomics = deriveHybridCohortEconomics(profile.bountyPerSeatAtomic, networkCohort.maximumReviewers);
   const frozenExpertise = profile.expertiseRequirements ?? [];
   if (frozenExpertise.some(requirement => requirement.sourceScope === "any")) {
     throw new TokenlessServiceError(
@@ -1139,18 +1135,8 @@ function exactHybridSemanticProfile(context: FrozenHumanReviewRoutingContext): F
       "hybrid_review_binding_invalid",
     );
   }
-  const invitedPolicy = childHybridAdmissionPolicy(
-    policy,
-    invitedCohort,
-    "customer_invited",
-    invitedExpertise,
-  );
-  const networkPolicy = childHybridAdmissionPolicy(
-    policy,
-    networkCohort,
-    "rateloop_network",
-    networkExpertise,
-  );
+  const invitedPolicy = childHybridAdmissionPolicy(policy, invitedCohort, "customer_invited", invitedExpertise);
+  const networkPolicy = childHybridAdmissionPolicy(policy, networkCohort, "rateloop_network", networkExpertise);
   return {
     schemaVersion: "rateloop.review-request-profile.v4",
     audience: "hybrid",
@@ -1598,14 +1584,7 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
           now,
         });
       }
-      await ensureRoutingFeedbackBonus(
-        dependencies,
-        context,
-        input,
-        frozenQuestion,
-        now,
-        privateBinding.paidReviewers,
-      );
+      await ensureRoutingFeedbackBonus(dependencies, context, input, frozenQuestion, now, privateBinding.paidReviewers);
       const foundationRequest: HumanAssurancePrivateReviewCreateRequest = {
         idempotencyKey: deterministicPrivateIdempotencyKey(context, privateBinding, frozenQuestion.questionHash),
         integrationId: context.integrationId,

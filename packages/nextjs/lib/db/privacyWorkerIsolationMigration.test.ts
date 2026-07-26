@@ -6,10 +6,7 @@ const migration = readFileSync(
   new URL("../../drizzle/0141_privacy_worker_failure_isolation.sql", import.meta.url),
   "utf8",
 );
-const retentionWorker = readFileSync(
-  new URL("../privacy/workspaceDeletionRetention.ts", import.meta.url),
-  "utf8",
-);
+const retentionWorker = readFileSync(new URL("../privacy/workspaceDeletionRetention.ts", import.meta.url), "utf8");
 
 test("privacy workers persist bounded retry and unresolved operator-alert evidence", () => {
   assert.match(migration, /tokenless_privacy_worker_failures/u);

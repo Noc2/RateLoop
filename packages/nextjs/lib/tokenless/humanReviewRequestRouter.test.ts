@@ -183,8 +183,7 @@ function context(input?: {
       audience: lane === "hybrid_public_safe" ? "hybrid" : privateLane ? "private_invited" : "public_network",
       contentBoundary: privateLane ? "private_workspace" : "public_or_test",
       privateSensitivity: privateLane ? "confidential" : null,
-      privateGroup:
-        privateLane || hybridLane ? { id: "group_router", policyVersion: 2, policyHash: HASH } : null,
+      privateGroup: privateLane || hybridLane ? { id: "group_router", policyVersion: 2, policyHash: HASH } : null,
       requiredExpertiseKeys: input?.requiredExpertiseKeys ?? [],
       responseWindowSeconds: 3_600,
       panelSize: privateLane ? 2 : hybridLane ? 4 : 3,

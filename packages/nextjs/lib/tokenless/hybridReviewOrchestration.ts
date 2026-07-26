@@ -689,7 +689,8 @@ export async function recordHybridReviewChildTerminal(input: {
     if (
       !["ready", "active"].includes(child.state) ||
       input.terminalCount !== child.assignmentCount ||
-      (input.parentResultEvidenceHash && operation.children.some(value => value.cohort !== input.cohort && value.state !== "terminal"))
+      (input.parentResultEvidenceHash &&
+        operation.children.some(value => value.cohort !== input.cohort && value.state !== "terminal"))
     ) {
       throw new TokenlessServiceError(
         "Hybrid child terminal transition is incomplete.",
@@ -751,7 +752,11 @@ export async function cancelHybridReviewBeforeLiability(input: {
   now?: Date;
 }) {
   if (!/^[a-z0-9_]{1,128}$/u.test(input.reasonCode)) {
-    throw new TokenlessServiceError("Hybrid cancellation reason is invalid.", 400, "hybrid_review_cancellation_invalid");
+    throw new TokenlessServiceError(
+      "Hybrid cancellation reason is invalid.",
+      400,
+      "hybrid_review_cancellation_invalid",
+    );
   }
   const now = input.now ?? new Date();
   return transaction(async client => {

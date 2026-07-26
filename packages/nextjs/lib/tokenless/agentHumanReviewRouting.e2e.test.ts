@@ -10,9 +10,9 @@ import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import type { PreparedOwnerApproval } from "~~/lib/tokenless/humanReviewApprovalPreparation";
 import {
-  __humanReviewRequestRouterTestUtils,
   type FrozenHumanReviewRoutingContext,
   type HumanReviewRoutingMaterial,
+  __humanReviewRequestRouterTestUtils,
   createHumanReviewRequestRouter,
 } from "~~/lib/tokenless/humanReviewRequestRouter";
 import type { FrozenHybridReviewSplit, HybridHumanReviewResult } from "~~/lib/tokenless/hybridHumanReviewAdapter";
@@ -351,9 +351,7 @@ function routeFixture(frozen: FrozenHumanReviewRoutingContext) {
           suggestionArtifactId: "artifact_suggestion_agent_flow_e2e",
         },
         responseWindowSeconds: frozen.requestProfile.responseWindowSeconds,
-        responseDeadline: new Date(
-          NOW.getTime() + frozen.requestProfile.responseWindowSeconds * 1_000,
-        ).toISOString(),
+        responseDeadline: new Date(NOW.getTime() + frozen.requestProfile.responseWindowSeconds * 1_000).toISOString(),
       } satisfies HumanAssurancePrivateReviewCreateResponse;
     },
     assignPrivateUnpaid: async () => {

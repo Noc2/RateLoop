@@ -235,10 +235,7 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
     // pg-mem's SQL parser does not implement PostgreSQL's JSONPath `@?`
     // operator. Production retains the source-scope CHECK; application and
     // migration tests exercise the same exact v4 source partition.
-    return statement.replace(
-      /\s+AND NOT \(\s*"expertise_requirements_json"::jsonb @\? '[^']+'\s*\)/u,
-      "",
-    );
+    return statement.replace(/\s+AND NOT \(\s*"expertise_requirements_json"::jsonb @\? '[^']+'\s*\)/u, "");
   }
   if (file !== "0058_human_review_binding_backfill.sql") return statement;
 

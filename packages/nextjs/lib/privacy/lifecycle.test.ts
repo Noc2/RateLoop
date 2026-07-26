@@ -1,7 +1,7 @@
 import {
+  __hybridSubjectExportSqlForTests,
   createLegalHold,
   createSubjectRequest,
-  __hybridSubjectExportSqlForTests,
   listSubjectRequests,
   processSubjectRequestQueue,
   readSubjectRequestExport,
@@ -440,7 +440,10 @@ test("hybrid subject export reveals both cohorts to owners but only the exact as
   assert.equal(Number(ownerRows[0]?.append_only_receipt_count), 3);
 
   const invitedRows = await query("principal_invited");
-  assert.deepEqual(invitedRows.map(row => row.cohort), ["invited"]);
+  assert.deepEqual(
+    invitedRows.map(row => row.cohort),
+    ["invited"],
+  );
   assert.equal(invitedRows[0]?.workspace_id, null);
   assert.equal(invitedRows[0]?.opportunity_id, null);
   assert.equal(invitedRows[0]?.preparation_evidence_hash, null);
@@ -448,7 +451,10 @@ test("hybrid subject export reveals both cohorts to owners but only the exact as
   assert.equal(Number(invitedRows[0]?.append_only_receipt_count), 1);
 
   const networkRows = await query("principal_network");
-  assert.deepEqual(networkRows.map(row => row.cohort), ["network"]);
+  assert.deepEqual(
+    networkRows.map(row => row.cohort),
+    ["network"],
+  );
   assert.equal(networkRows[0]?.workspace_id, null);
   assert.equal(Number(networkRows[0]?.append_only_receipt_count), 1);
 

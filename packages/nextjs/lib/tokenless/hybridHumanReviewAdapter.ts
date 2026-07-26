@@ -11,11 +11,20 @@ import {
   prepareHumanReviewRequest,
 } from "~~/lib/tokenless/humanReviewRequestPreparation";
 import {
+  type HybridChildParentBinding,
   deriveHybridCohortEconomics,
   hashHybridCohortEconomics,
   hashHybridCohortExpertise,
-  type HybridChildParentBinding,
 } from "~~/lib/tokenless/hybridReviewChildBindings";
+import {
+  type HybridReviewChildSeed,
+  type HybridReviewParentSeed,
+  type PersistedHybridReviewChild,
+  cancelHybridReviewBeforeLiability,
+  completeHybridReviewPreparation,
+  ensureHybridReviewOperation,
+  recordHybridReviewChildReady,
+} from "~~/lib/tokenless/hybridReviewOrchestration";
 import { requirePaidLaneComplianceApproval } from "~~/lib/tokenless/paidLaneCompliance";
 import {
   type PaidReviewEligibilityPreflight,
@@ -34,15 +43,6 @@ import {
   type ReviewerExpertiseRequirement,
   normalizeReviewerExpertiseRequirementsSelection,
 } from "~~/lib/tokenless/reviewerExpertiseOptions";
-import {
-  cancelHybridReviewBeforeLiability,
-  completeHybridReviewPreparation,
-  ensureHybridReviewOperation,
-  recordHybridReviewChildReady,
-  type HybridReviewChildSeed,
-  type HybridReviewParentSeed,
-  type PersistedHybridReviewChild,
-} from "~~/lib/tokenless/hybridReviewOrchestration";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Hash = `sha256:${string}`;
@@ -161,7 +161,9 @@ export type HybridInvitedPrivateBinding = {
 
 export type HybridHumanReviewOrchestrationDependencies = {
   ensure(seed: HybridReviewParentSeed, now: Date): ReturnType<typeof ensureHybridReviewOperation>;
-  recordReady(input: Parameters<typeof recordHybridReviewChildReady>[0]): ReturnType<typeof recordHybridReviewChildReady>;
+  recordReady(
+    input: Parameters<typeof recordHybridReviewChildReady>[0],
+  ): ReturnType<typeof recordHybridReviewChildReady>;
   complete(
     input: Parameters<typeof completeHybridReviewPreparation>[0],
   ): ReturnType<typeof completeHybridReviewPreparation>;
@@ -222,9 +224,7 @@ function sha256(value: unknown): Hash {
   return `sha256:${createHash("sha256").update(stableJson(value)).digest("hex")}`;
 }
 
-export function hashHybridInvitedPrivateBinding(
-  value: Omit<HybridInvitedPrivateBinding, "bindingHash">,
-): Hash {
+export function hashHybridInvitedPrivateBinding(value: Omit<HybridInvitedPrivateBinding, "bindingHash">): Hash {
   return sha256({
     schemaVersion: "rateloop.hybrid-invited-private-binding.v1",
     integrationId: value.integrationId,

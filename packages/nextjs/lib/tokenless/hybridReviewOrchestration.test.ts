@@ -6,20 +6,20 @@ import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { createWorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
 import { processDueEvidenceRetentionEnforcement } from "~~/lib/tokenless/evidenceRetentionEnforcement";
 import {
+  type FrozenHybridReviewSplit,
+  type HybridSubpanelPreparation,
+  createHybridHumanReviewAdapter,
+} from "~~/lib/tokenless/hybridHumanReviewAdapter";
+import { hybridRequestForTest } from "~~/lib/tokenless/hybridHumanReviewTestFixtures";
+import {
+  type HybridReviewParentSeed,
   cancelHybridReviewBeforeLiability,
   completeHybridReviewPreparation,
   ensureHybridReviewOperation,
   recordHybridReviewChildLiability,
   recordHybridReviewChildReady,
   recordHybridReviewChildTerminal,
-  type HybridReviewParentSeed,
 } from "~~/lib/tokenless/hybridReviewOrchestration";
-import {
-  createHybridHumanReviewAdapter,
-  type FrozenHybridReviewSplit,
-  type HybridSubpanelPreparation,
-} from "~~/lib/tokenless/hybridHumanReviewAdapter";
-import { hybridRequestForTest } from "~~/lib/tokenless/hybridHumanReviewTestFixtures";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
@@ -363,8 +363,7 @@ test("any accepted child permanently fences parent cancellation and both childre
       releaseChildren: async () => undefined,
       now: NOW,
     }),
-    (error: unknown) =>
-      error instanceof TokenlessServiceError && error.code === "hybrid_review_cancellation_blocked",
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "hybrid_review_cancellation_blocked",
   );
   await recordHybridReviewChildTerminal({
     hybridOperationId: parent.operation.hybridOperationId,
@@ -438,10 +437,7 @@ test("the adapter persists two child rounds end to end and retry cannot duplicat
   const actualSpend = new Set<string>();
   let networkProjectionPending = true;
   let releases = 0;
-  const preparation = (
-    cohort: "invited" | "network",
-    hybridOperationId: string,
-  ): HybridSubpanelPreparation => {
+  const preparation = (cohort: "invited" | "network", hybridOperationId: string): HybridSubpanelPreparation => {
     const spendKey = `${hybridOperationId}:${cohort}`;
     const replayed = actualSpend.has(spendKey);
     actualSpend.add(spendKey);
