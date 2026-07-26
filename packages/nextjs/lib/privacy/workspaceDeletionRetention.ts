@@ -191,7 +191,7 @@ export async function expireWorkspaceDeletionRetentionCategories(now = new Date(
          WHERE workspace_id=$1 AND status='active' LIMIT 1 FOR SHARE`,
         [workspaceId],
       );
-      if (hold.rowCount > 0) {
+      if ((hold.rowCount ?? 0) > 0) {
         await client.query(
           `UPDATE tokenless_deletion_job_categories
            SET retention_deadline=$1 WHERE job_id=$2 AND category=$3`,
