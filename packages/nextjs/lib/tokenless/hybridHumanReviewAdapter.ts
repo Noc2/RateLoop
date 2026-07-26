@@ -11,6 +11,15 @@ import {
   type ReviewerExpertiseRequirement,
   normalizeReviewerExpertiseRequirementsSelection,
 } from "~~/lib/tokenless/reviewerExpertiseOptions";
+import {
+  cancelHybridReviewBeforeLiability,
+  completeHybridReviewPreparation,
+  ensureHybridReviewOperation,
+  recordHybridReviewChildReady,
+  type HybridReviewChildSeed,
+  type HybridReviewParentSeed,
+  type PersistedHybridReviewChild,
+} from "~~/lib/tokenless/hybridReviewOrchestration";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Hash = `sha256:${string}`;
@@ -74,6 +83,12 @@ export type HybridRoundIdentity = {
 export type HybridSubpanelPreparation = {
   subpanelReference: string;
   bindingHash: Hash;
+  sourceOperationReference: string;
+  sourceRunId: string;
+  chainAdmissionPolicyHash: `0x${string}`;
+  selectedSeatEvidenceHash: Hash;
+  voucherPreparationHash: Hash;
+  settlementBindingHash: Hash;
   round: HybridRoundIdentity;
   status: "ready";
   replayed: boolean;
@@ -81,12 +96,36 @@ export type HybridSubpanelPreparation = {
 
 export type HybridHumanReviewResult = {
   schemaVersion: "rateloop.hybrid-human-review.v1";
+  hybridOperationId: string;
   opportunityId: string;
   lane: "hybrid_public_safe";
   deduplicationRule: "invited_wins";
   invited: HybridSubpanelPreparation & { reviewerCount: number };
   network: HybridSubpanelPreparation & { reviewerCount: number; removedDuplicateCount: number };
   splitBindingHash: Hash;
+};
+
+export type HybridChildParentBinding = {
+  hybridOperationId: string;
+  cohortBindingHash: Hash;
+  economicsHash: Hash;
+  expertiseHash: Hash;
+  requestedCount: number;
+  admissionPolicyHash: Hash;
+};
+
+export type HybridHumanReviewOrchestrationDependencies = {
+  ensure(seed: HybridReviewParentSeed, now: Date): ReturnType<typeof ensureHybridReviewOperation>;
+  recordReady(input: Parameters<typeof recordHybridReviewChildReady>[0]): ReturnType<typeof recordHybridReviewChildReady>;
+  complete(
+    input: Parameters<typeof completeHybridReviewPreparation>[0],
+  ): ReturnType<typeof completeHybridReviewPreparation>;
+  cancel(input: {
+    hybridOperationId: string;
+    reasonCode: string;
+    releaseChildren: (children: readonly PersistedHybridReviewChild[]) => Promise<void>;
+    now?: Date;
+  }): ReturnType<typeof cancelHybridReviewBeforeLiability>;
 };
 
 export type HybridHumanReviewDependencies = {
@@ -99,12 +138,18 @@ export type HybridHumanReviewDependencies = {
     split: FrozenHybridReviewSplit;
     candidates: readonly HybridReviewCandidate[];
     preflights: readonly PaidReviewEligibilityPreflight[];
+    hybridParent: HybridChildParentBinding;
   }): Promise<HybridSubpanelPreparation>;
   prepareNetwork(input: {
     split: FrozenHybridReviewSplit;
     candidates: readonly HybridReviewCandidate[];
     preflights: readonly PaidReviewEligibilityPreflight[];
+    hybridParent: HybridChildParentBinding;
   }): Promise<HybridSubpanelPreparation>;
+  releaseInvited(preparation: HybridSubpanelPreparation): Promise<void>;
+  releaseNetwork(preparation: HybridSubpanelPreparation): Promise<void>;
+  orchestration: HybridHumanReviewOrchestrationDependencies;
+  clock?: () => Date;
 };
 
 const HASH = /^sha256:[0-9a-f]{64}$/u;
@@ -258,25 +303,42 @@ function validate(split: FrozenHybridReviewSplit) {
   }
 }
 
-function exactPreparation(value: HybridSubpanelPreparation, field: string, admissionPolicyHash: Hash) {
+function exactPreparation(
+  value: HybridSubpanelPreparation,
+  input: {
+    field: string;
+    admissionPolicyHash: Hash;
+    sourceKind: "private_paid_assignment" | "public_network_assignment";
+  },
+) {
   let panelAddress: string;
   try {
     panelAddress = getAddress(value.round.panelAddress).toLowerCase();
   } catch {
-    throw new TokenlessServiceError(`${field} round identity is invalid.`, 409, "hybrid_subpanel_not_ready");
+    throw new TokenlessServiceError(`${input.field} round identity is invalid.`, 409, "hybrid_subpanel_not_ready");
   }
   if (
     !value.round ||
     !value.subpanelReference ||
+    !value.sourceOperationReference ||
+    !value.sourceRunId ||
     !HASH.test(value.bindingHash) ||
+    !/^0x[0-9a-f]{64}$/u.test(value.chainAdmissionPolicyHash) ||
+    !HASH.test(value.selectedSeatEvidenceHash) ||
+    !HASH.test(value.voucherPreparationHash) ||
+    !HASH.test(value.settlementBindingHash) ||
     value.status !== "ready" ||
     !value.round.deploymentKey ||
     !Number.isSafeInteger(value.round.chainId) ||
     value.round.chainId < 1 ||
     !ROUND_ID.test(value.round.roundId) ||
-    value.round.admissionPolicyHash !== admissionPolicyHash
+    value.round.admissionPolicyHash !== input.admissionPolicyHash
   ) {
-    throw new TokenlessServiceError(`${field} did not reach an exact ready state.`, 409, "hybrid_subpanel_not_ready");
+    throw new TokenlessServiceError(
+      `${input.field} did not reach an exact ready state.`,
+      409,
+      "hybrid_subpanel_not_ready",
+    );
   }
   return { ...value, round: { ...value.round, panelAddress } };
 }
@@ -344,6 +406,70 @@ function canonicalSplit(split: FrozenHybridReviewSplit): FrozenHybridReviewSplit
   };
 }
 
+function childSeed(
+  cohort: "invited" | "network",
+  split: FrozenHybridReviewSplit,
+  candidates: readonly HybridReviewCandidate[],
+): HybridReviewChildSeed {
+  const profile = split.semanticProfile[cohort];
+  return {
+    cohort,
+    childBindingHash: sha256({
+      schemaVersion: "rateloop.hybrid-child-binding.v1",
+      workspaceId: split.workspaceId,
+      opportunityId: split.opportunityId,
+      cohort,
+      candidates,
+      admissionPolicyHash: profile.admissionPolicyHash,
+      economics: profile.economics,
+      expertiseRequirements: profile.expertiseRequirements,
+    }),
+    economicsHash: sha256({
+      schemaVersion: "rateloop.hybrid-child-economics.v1",
+      cohort,
+      economics: profile.economics,
+    }),
+    expertiseHash: sha256({
+      schemaVersion: "rateloop.hybrid-child-expertise.v1",
+      cohort,
+      requirements: profile.expertiseRequirements,
+    }),
+    admissionPolicyHash: profile.admissionPolicyHash,
+    expectedAmountAtomic: profile.economics.maximumChargeAtomic,
+    assignmentCount: candidates.length,
+  };
+}
+
+function parentBinding(child: HybridReviewChildSeed, hybridOperationId: string): HybridChildParentBinding {
+  return {
+    hybridOperationId,
+    cohortBindingHash: child.childBindingHash,
+    economicsHash: child.economicsHash,
+    expertiseHash: child.expertiseHash,
+    requestedCount: child.assignmentCount,
+    admissionPolicyHash: child.admissionPolicyHash,
+  };
+}
+
+function retryable(error: unknown) {
+  return error instanceof TokenlessServiceError && error.retryable;
+}
+
+function preparationBinding(preparation: HybridSubpanelPreparation) {
+  return {
+    subpanelReference: preparation.subpanelReference,
+    bindingHash: preparation.bindingHash,
+    sourceOperationReference: preparation.sourceOperationReference,
+    sourceRunId: preparation.sourceRunId,
+    chainAdmissionPolicyHash: preparation.chainAdmissionPolicyHash,
+    selectedSeatEvidenceHash: preparation.selectedSeatEvidenceHash,
+    voucherPreparationHash: preparation.voucherPreparationHash,
+    settlementBindingHash: preparation.settlementBindingHash,
+    round: preparation.round,
+    status: preparation.status,
+  };
+}
+
 export function createHybridHumanReviewAdapter(dependencies: HybridHumanReviewDependencies) {
   return async function requestHybridHumanReview(split: FrozenHybridReviewSplit): Promise<HybridHumanReviewResult> {
     requirePaidLaneComplianceApproval("hybrid_public_safe");
@@ -391,40 +517,133 @@ export function createHybridHumanReviewAdapter(dependencies: HybridHumanReviewDe
         }),
     );
     const preflightByPrincipal = new Map(preflightEntries);
-    const invitedPreparation = exactPreparation(
-      await dependencies.prepareInvited({
+    const invitedSeed = childSeed("invited", frozenSplit, invited);
+    const networkSeed = childSeed("network", frozenSplit, network);
+    const now = dependencies.clock?.() ?? new Date();
+    const parentSeed: HybridReviewParentSeed = {
+      workspaceId: frozenSplit.workspaceId,
+      opportunityId: frozenSplit.opportunityId,
+      parentBindingHash: sha256({
+        schemaVersion: "rateloop.hybrid-parent-binding.v1",
         split: frozenSplit,
-        candidates: invited,
-        preflights: invited.map(value => preflightByPrincipal.get(value.principalId)!),
+        deduplicationRule: "invited_wins",
+        invited: invitedSeed,
+        network: networkSeed,
       }),
-      "Invited subpanel",
-      frozenSplit.semanticProfile.invited.admissionPolicyHash,
-    );
-    const networkPreparation = exactPreparation(
-      await dependencies.prepareNetwork({
-        split: frozenSplit,
-        candidates: network,
-        preflights: network.map(value => preflightByPrincipal.get(value.principalId)!),
-      }),
-      "Network subpanel",
-      frozenSplit.semanticProfile.network.admissionPolicyHash,
-    );
+      requestProfileHash: frozenSplit.requestProfileHash,
+      audiencePolicyHash: frozenSplit.audiencePolicyHash,
+      sourceCommitment: frozenSplit.contentCommitments.source,
+      suggestionCommitment: frozenSplit.contentCommitments.suggestion,
+      children: [invitedSeed, networkSeed],
+    };
+    const ensured = await dependencies.orchestration.ensure(parentSeed, now);
+    let invitedPreparation: HybridSubpanelPreparation | undefined;
+    let networkPreparation: HybridSubpanelPreparation | undefined;
+    const cancelPrepared = (reasonCode: string) =>
+      dependencies.orchestration.cancel({
+        hybridOperationId: ensured.operation.hybridOperationId,
+        reasonCode,
+        releaseChildren: async () => {
+          await Promise.all([
+            ...(invitedPreparation ? [dependencies.releaseInvited(invitedPreparation)] : []),
+            ...(networkPreparation ? [dependencies.releaseNetwork(networkPreparation)] : []),
+          ]);
+        },
+        now,
+      });
+    try {
+      invitedPreparation = exactPreparation(
+        await dependencies.prepareInvited({
+          split: frozenSplit,
+          candidates: invited,
+          preflights: invited.map(value => preflightByPrincipal.get(value.principalId)!),
+          hybridParent: parentBinding(invitedSeed, ensured.operation.hybridOperationId),
+        }),
+        {
+          field: "Invited subpanel",
+          admissionPolicyHash: frozenSplit.semanticProfile.invited.admissionPolicyHash,
+          sourceKind: "private_paid_assignment",
+        },
+      );
+      await dependencies.orchestration.recordReady({
+        hybridOperationId: ensured.operation.hybridOperationId,
+        cohort: "invited",
+        evidence: {
+          sourceKind: "private_paid_assignment",
+          sourceOperationReference: invitedPreparation.sourceOperationReference,
+          sourceRunId: invitedPreparation.sourceRunId,
+          deploymentKey: invitedPreparation.round.deploymentKey,
+          chainId: invitedPreparation.round.chainId,
+          panelAddress: invitedPreparation.round.panelAddress,
+          roundId: invitedPreparation.round.roundId,
+          chainAdmissionPolicyHash: invitedPreparation.chainAdmissionPolicyHash,
+          assignmentEvidenceHash: invitedPreparation.selectedSeatEvidenceHash,
+          voucherPreparationHash: invitedPreparation.voucherPreparationHash,
+          settlementBindingHash: invitedPreparation.settlementBindingHash,
+        },
+        now,
+      });
+      networkPreparation = exactPreparation(
+        await dependencies.prepareNetwork({
+          split: frozenSplit,
+          candidates: network,
+          preflights: network.map(value => preflightByPrincipal.get(value.principalId)!),
+          hybridParent: parentBinding(networkSeed, ensured.operation.hybridOperationId),
+        }),
+        {
+          field: "Network subpanel",
+          admissionPolicyHash: frozenSplit.semanticProfile.network.admissionPolicyHash,
+          sourceKind: "public_network_assignment",
+        },
+      );
+      await dependencies.orchestration.recordReady({
+        hybridOperationId: ensured.operation.hybridOperationId,
+        cohort: "network",
+        evidence: {
+          sourceKind: "public_network_assignment",
+          sourceOperationReference: networkPreparation.sourceOperationReference,
+          sourceRunId: networkPreparation.sourceRunId,
+          deploymentKey: networkPreparation.round.deploymentKey,
+          chainId: networkPreparation.round.chainId,
+          panelAddress: networkPreparation.round.panelAddress,
+          roundId: networkPreparation.round.roundId,
+          chainAdmissionPolicyHash: networkPreparation.chainAdmissionPolicyHash,
+          assignmentEvidenceHash: networkPreparation.selectedSeatEvidenceHash,
+          voucherPreparationHash: networkPreparation.voucherPreparationHash,
+          settlementBindingHash: networkPreparation.settlementBindingHash,
+        },
+        now,
+      });
+    } catch (error) {
+      if (!retryable(error)) await cancelPrepared("child_preparation_failed");
+      throw error;
+    }
+    if (!invitedPreparation || !networkPreparation) {
+      throw new Error("Hybrid child preparation completed without exact child evidence.");
+    }
     if (
+      invitedPreparation.round.deploymentKey === networkPreparation.round.deploymentKey &&
       invitedPreparation.round.chainId === networkPreparation.round.chainId &&
       invitedPreparation.round.panelAddress === networkPreparation.round.panelAddress &&
       invitedPreparation.round.roundId === networkPreparation.round.roundId
     ) {
-      throw new TokenlessServiceError(
+      const error = new TokenlessServiceError(
         "Hybrid cohorts must bind two distinct paid rounds.",
         409,
         "hybrid_round_identity_conflict",
       );
+      await cancelPrepared("round_identity_conflict");
+      throw error;
     }
     const splitBindingHash = sha256({
       split: frozenSplit,
       deduplicationRule: "invited_wins",
-      invited: { candidates: invited, preparation: invitedPreparation },
-      network: { candidates: network, preparation: networkPreparation, removedDuplicateCount: duplicateCount },
+      invited: { candidates: invited, preparation: preparationBinding(invitedPreparation) },
+      network: {
+        candidates: network,
+        preparation: preparationBinding(networkPreparation),
+        removedDuplicateCount: duplicateCount,
+      },
       eligibility: preflightEntries.map(([principalId, value]) => ({
         principalId,
         payoutAccount: value.payoutAccount,
@@ -432,8 +651,14 @@ export function createHybridHumanReviewAdapter(dependencies: HybridHumanReviewDe
         commitment: value.eligibilityCommitment,
       })),
     });
+    await dependencies.orchestration.complete({
+      hybridOperationId: ensured.operation.hybridOperationId,
+      preparationEvidenceHash: splitBindingHash,
+      now,
+    });
     return {
       schemaVersion: "rateloop.hybrid-human-review.v1",
+      hybridOperationId: ensured.operation.hybridOperationId,
       opportunityId: split.opportunityId,
       lane: "hybrid_public_safe",
       deduplicationRule: "invited_wins",
@@ -465,6 +690,14 @@ const DEFAULT_DEPENDENCIES: HybridHumanReviewDependencies = {
       "hybrid_two_round_settlement_unavailable",
       true,
     );
+  },
+  async releaseInvited() {},
+  async releaseNetwork() {},
+  orchestration: {
+    ensure: ensureHybridReviewOperation,
+    recordReady: recordHybridReviewChildReady,
+    complete: completeHybridReviewPreparation,
+    cancel: cancelHybridReviewBeforeLiability,
   },
 };
 

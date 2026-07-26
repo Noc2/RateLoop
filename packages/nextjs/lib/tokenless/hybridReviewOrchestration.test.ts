@@ -13,6 +13,11 @@ import {
   recordHybridReviewChildTerminal,
   type HybridReviewParentSeed,
 } from "~~/lib/tokenless/hybridReviewOrchestration";
+import {
+  createHybridHumanReviewAdapter,
+  type FrozenHybridReviewSplit,
+  type HybridSubpanelPreparation,
+} from "~~/lib/tokenless/hybridHumanReviewAdapter";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
@@ -379,4 +384,147 @@ test("any accepted child permanently fences parent cancellation and both childre
     terminal.operation.children.map(child => child.settlementEvidenceHash),
     [hash(["terminal", "invited"]), hash(["terminal", "network"])],
   );
+});
+
+test("the adapter persists two child rounds end to end and retry cannot duplicate child spend", async () => {
+  const seeded = await fixture();
+  const INVITED = "0x4444444444444444444444444444444444444444";
+  const NETWORK = "0x5555555555555555555555555555555555555555";
+  const principal = (account: string) => `rlp_${account.slice(2, 26)}`;
+  const split: FrozenHybridReviewSplit = {
+    schemaVersion: "rateloop.hybrid-review-split.v2",
+    workspaceId: seeded.workspaceId,
+    opportunityId: seeded.opportunityId,
+    audiencePolicyHash: seeded.audiencePolicyHash,
+    requestProfileHash: seeded.requestProfileHash,
+    semanticProfile: {
+      schemaVersion: "rateloop.review-request-profile.v4",
+      audience: "hybrid",
+      audiencePolicyHash: seeded.audiencePolicyHash,
+      execution: "two_distinct_rounds",
+      invited: {
+        reviewerSource: "customer_invited",
+        panelSize: 1,
+        admissionPolicyHash: seeded.children[0].admissionPolicyHash,
+        economics: { asset: "USDC", bountyPerSeatAtomic: "200", maximumChargeAtomic: "200" },
+        expertiseRequirements: [],
+      },
+      network: {
+        reviewerSource: "rateloop_network",
+        panelSize: 1,
+        admissionPolicyHash: seeded.children[1].admissionPolicyHash,
+        economics: { asset: "USDC", bountyPerSeatAtomic: "300", maximumChargeAtomic: "300" },
+        expertiseRequirements: [],
+      },
+    },
+    contentCommitments: { source: seeded.sourceCommitment, suggestion: seeded.suggestionCommitment },
+    publication: {
+      visibility: "public",
+      dataClassification: "synthetic",
+      confirmedNoSensitiveData: true,
+    },
+    economics: { asset: "USDC", invitedMaximumChargeAtomic: "200", networkMaximumChargeAtomic: "300" },
+    invited: {
+      requestedCount: 1,
+      candidates: [
+        {
+          principalId: principal(INVITED),
+          payoutAccount: INVITED,
+          assignmentReference: "invited:selected-seat",
+          assignmentHash: hash(["selected-seat", "invited"]),
+        },
+      ],
+    },
+    network: {
+      requestedCount: 1,
+      candidates: [
+        {
+          principalId: principal(NETWORK),
+          payoutAccount: NETWORK,
+          assignmentReference: "network:selected-seat",
+          assignmentHash: hash(["selected-seat", "network"]),
+        },
+      ],
+    },
+  };
+  const actualSpend = new Set<string>();
+  const preparation = (
+    cohort: "invited" | "network",
+    hybridOperationId: string,
+  ): HybridSubpanelPreparation => {
+    const spendKey = `${hybridOperationId}:${cohort}`;
+    const replayed = actualSpend.has(spendKey);
+    actualSpend.add(spendKey);
+    return {
+      subpanelReference: `${cohort}:child`,
+      bindingHash: hash(["binding", cohort]),
+      sourceOperationReference: `${cohort}:operation`,
+      sourceRunId: `${cohort}:run`,
+      chainAdmissionPolicyHash: `0x${(cohort === "invited" ? "c" : "d").repeat(64)}`,
+      selectedSeatEvidenceHash: hash(["selected-seats", cohort]),
+      voucherPreparationHash: hash(["voucher-preparation", cohort]),
+      settlementBindingHash: hash(["settlement-binding", cohort]),
+      round: {
+        deploymentKey: "tokenless:test",
+        chainId: 84532,
+        panelAddress:
+          cohort === "invited"
+            ? "0x6666666666666666666666666666666666666666"
+            : "0x7777777777777777777777777777777777777777",
+        roundId: cohort === "invited" ? "501" : "502",
+        admissionPolicyHash:
+          cohort === "invited"
+            ? split.semanticProfile.invited.admissionPolicyHash
+            : split.semanticProfile.network.admissionPolicyHash,
+      },
+      status: "ready",
+      replayed,
+    };
+  };
+  const adapter = createHybridHumanReviewAdapter({
+    clock: () => NOW,
+    requireEligibility: async ({ principalId, reviewerSource }) => {
+      const payoutAccount = reviewerSource === "customer_invited" ? INVITED : NETWORK;
+      return {
+        schemaVersion: "rateloop.paid-review-eligibility-preflight.v1",
+        preflightId: `pef_${payoutAccount.slice(2)}`,
+        raterId: `rater_${payoutAccount.slice(2)}`,
+        principalId,
+        accountAddress: payoutAccount,
+        payoutAccount,
+        identityAssertions: [],
+        checkedAt: NOW.toISOString(),
+        validUntil: new Date(NOW.getTime() + 3_600_000).toISOString(),
+        eligibilityCommitment: hash(["eligibility", principalId]),
+      };
+    },
+    prepareInvited: async ({ hybridParent }) => preparation("invited", hybridParent.hybridOperationId),
+    prepareNetwork: async ({ hybridParent }) => preparation("network", hybridParent.hybridOperationId),
+    releaseInvited: async () => undefined,
+    releaseNetwork: async () => undefined,
+    orchestration: {
+      ensure: ensureHybridReviewOperation,
+      recordReady: recordHybridReviewChildReady,
+      complete: completeHybridReviewPreparation,
+      cancel: cancelHybridReviewBeforeLiability,
+    },
+  });
+  const first = await adapter(split);
+  const replay = await adapter(split);
+  assert.equal(first.hybridOperationId, replay.hybridOperationId);
+  assert.equal(first.splitBindingHash, replay.splitBindingHash);
+  assert.equal(actualSpend.size, 2);
+  assert.equal(replay.invited.replayed, true);
+  assert.equal(replay.network.replayed, true);
+  const persisted = await dbClient.execute({
+    sql: `SELECT
+            (SELECT count(*) FROM tokenless_hybrid_review_operations WHERE opportunity_id=?) AS parents,
+            (SELECT count(*) FROM tokenless_hybrid_review_children child
+             JOIN tokenless_hybrid_review_operations parent
+               ON parent.hybrid_operation_id=child.hybrid_operation_id
+             WHERE parent.opportunity_id=?) AS children`,
+    args: [seeded.opportunityId, seeded.opportunityId],
+  });
+  assert.equal(Number(persisted.rows[0]?.parents), 1);
+  assert.equal(Number(persisted.rows[0]?.children), 2);
 });

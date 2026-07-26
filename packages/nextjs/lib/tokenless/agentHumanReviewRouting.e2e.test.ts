@@ -320,12 +320,19 @@ function routeFixture(frozen: FrozenHumanReviewRoutingContext) {
       calls.hybrid += 1;
       return {
         schemaVersion: "rateloop.hybrid-human-review.v1",
+        hybridOperationId: "hybrid_agent_flow_e2e",
         opportunityId: frozen.opportunityId,
         lane: "hybrid_public_safe",
         deduplicationRule: "invited_wins",
         invited: {
           subpanelReference: "invited/1",
           bindingHash: HASH,
+          sourceOperationReference: "invited:operation",
+          sourceRunId: "invited:run",
+          chainAdmissionPolicyHash: `0x${"1".repeat(64)}`,
+          selectedSeatEvidenceHash: HASH,
+          voucherPreparationHash: HASH,
+          settlementBindingHash: HASH,
           round: {
             deploymentKey: "base-sepolia",
             chainId: 84532,
@@ -340,6 +347,12 @@ function routeFixture(frozen: FrozenHumanReviewRoutingContext) {
         network: {
           subpanelReference: "network/1",
           bindingHash: HASH,
+          sourceOperationReference: "network:operation",
+          sourceRunId: "network:run",
+          chainAdmissionPolicyHash: `0x${"2".repeat(64)}`,
+          selectedSeatEvidenceHash: HASH,
+          voucherPreparationHash: HASH,
+          settlementBindingHash: HASH,
           round: {
             deploymentKey: "base-sepolia",
             chainId: 84532,

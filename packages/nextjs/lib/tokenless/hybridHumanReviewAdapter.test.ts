@@ -21,6 +21,17 @@ function candidate(accountAddress: string) {
   };
 }
 
+function preparationEvidence(cohort: "invited" | "network") {
+  return {
+    sourceOperationReference: `${cohort}:operation`,
+    sourceRunId: `${cohort}:run`,
+    chainAdmissionPolicyHash: `0x${(cohort === "invited" ? "1" : "2").repeat(64)}` as `0x${string}`,
+    selectedSeatEvidenceHash: HASH,
+    voucherPreparationHash: HASH,
+    settlementBindingHash: HASH,
+  };
+}
+
 function split(): FrozenHybridReviewSplit {
   return {
     schemaVersion: "rateloop.hybrid-review-split.v2",
@@ -84,6 +95,7 @@ function dependencies(events: string[]): HybridHumanReviewDependencies {
       return {
         subpanelReference: "hybrid:invited",
         bindingHash: HASH,
+        ...preparationEvidence("invited"),
         round: {
           deploymentKey: "base-sepolia",
           chainId: 84532,
@@ -100,6 +112,7 @@ function dependencies(events: string[]): HybridHumanReviewDependencies {
       return {
         subpanelReference: "hybrid:network",
         bindingHash: HASH,
+        ...preparationEvidence("network"),
         round: {
           deploymentKey: "base-sepolia",
           chainId: 84532,
@@ -111,6 +124,26 @@ function dependencies(events: string[]): HybridHumanReviewDependencies {
         replayed: false,
       };
     },
+    releaseInvited: async () => {
+      events.push("release:invited");
+    },
+    releaseNetwork: async () => {
+      events.push("release:network");
+    },
+    orchestration: {
+      ensure: async () =>
+        ({
+          operation: { hybridOperationId: "hybrid_test" },
+          replayed: false,
+        }) as any,
+      recordReady: async () => ({ replayed: false }) as any,
+      complete: async () => ({ replayed: false }) as any,
+      cancel: async input => {
+        await input.releaseChildren([]);
+        return { replayed: false } as any;
+      },
+    },
+    clock: () => new Date("2026-07-16T12:00:00.000Z"),
   };
 }
 

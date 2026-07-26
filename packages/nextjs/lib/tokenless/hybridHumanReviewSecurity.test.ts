@@ -20,6 +20,33 @@ function candidate(payoutAccount: string, assignmentReference: string) {
   };
 }
 
+function preparationEvidence(cohort: "invited" | "network") {
+  return {
+    sourceOperationReference: `${cohort}:operation`,
+    sourceRunId: `${cohort}:run`,
+    chainAdmissionPolicyHash: `0x${(cohort === "invited" ? "1" : "2").repeat(64)}` as `0x${string}`,
+    selectedSeatEvidenceHash: HASH,
+    voucherPreparationHash: HASH,
+    settlementBindingHash: HASH,
+  };
+}
+
+function orchestration() {
+  return {
+    ensure: async () =>
+      ({
+        operation: { hybridOperationId: "hybrid_security_test" },
+        replayed: false,
+      }) as any,
+    recordReady: async () => ({ replayed: false }) as any,
+    complete: async () => ({ replayed: false }) as any,
+    cancel: async (input: any) => {
+      await input.releaseChildren([]);
+      return { replayed: false } as any;
+    },
+  };
+}
+
 function split(): FrozenHybridReviewSplit {
   return {
     schemaVersion: "rateloop.hybrid-review-split.v2",
@@ -102,6 +129,7 @@ test("hybrid callbacks receive only the canonical public-safe split and candidat
       return {
         subpanelReference: "hybrid:invited",
         bindingHash: HASH,
+        ...preparationEvidence("invited"),
         round: {
           deploymentKey: "base-sepolia",
           chainId: 84532,
@@ -118,6 +146,7 @@ test("hybrid callbacks receive only the canonical public-safe split and candidat
       return {
         subpanelReference: "hybrid:network",
         bindingHash: HASH,
+        ...preparationEvidence("network"),
         round: {
           deploymentKey: "base-sepolia",
           chainId: 84532,
@@ -129,6 +158,9 @@ test("hybrid callbacks receive only the canonical public-safe split and candidat
         replayed: false,
       };
     },
+    releaseInvited: async () => undefined,
+    releaseNetwork: async () => undefined,
+    orchestration: orchestration(),
   };
 
   const result = await createHybridHumanReviewAdapter(dependencies)(input as FrozenHybridReviewSplit);
@@ -173,6 +205,9 @@ test("hybrid publication still fails closed for a private declaration before any
       sideEffects += 1;
       throw new Error("must not run");
     },
+    releaseInvited: async () => undefined,
+    releaseNetwork: async () => undefined,
+    orchestration: orchestration(),
   };
   const input = structuredClone(split()) as unknown as Record<string, any>;
   input.publication.visibility = "private";
