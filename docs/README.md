@@ -30,6 +30,7 @@ implementation plans; current readers should not need that history to understand
 - [EU deployment](tokenless-eu-deployment-runbook.md)
 - [Identity and optional wallets](tokenless-identity-and-wallet-runbook-2026-07.md)
 - [Privacy operations](tokenless-privacy-operations-runbook-2026-07.md)
+- [Public-chain GDPR/DPIA release gate](tokenless-gdpr-blockchain-dpia-gate-2026-07.md)
 - [Supply-chain controls](tokenless-supply-chain-controls.md)
 
 Supporting marketing and social assets remain outside this authority chain. When a supporting document conflicts with
