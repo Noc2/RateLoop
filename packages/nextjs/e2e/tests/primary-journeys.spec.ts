@@ -31,7 +31,10 @@ test("workspace owner configures human review", async ({ page }) => {
   await expect(page.getByText("Review configuration", { exact: true })).toHaveCount(0);
   const frequency = page.getByRole("combobox", { name: "When should RateLoop require human review?" });
   await expect(frequency).toBeVisible();
-  await frequency.selectOption({ label: "Every output" });
+  await frequency.selectOption("always");
+  await page.getByRole("combobox", { name: /^Reviewers/u }).selectOption("private_invited");
+  await page.getByRole("combobox", { name: /^Guaranteed bounty/u }).selectOption("unpaid");
+  await page.getByRole("radio", { name: "Check only" }).check();
   page.once("dialog", dialog => dialog.accept());
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByRole("status")).toContainText("configuration saved");
@@ -40,6 +43,7 @@ test("workspace owner configures human review", async ({ page }) => {
 });
 
 test("reviewer answers a public task and restores the draft", async ({ page }) => {
+  let networkAssignmentAccepted = false;
   await authenticate(page, browserState.ownerSessionToken);
   await page.route("**/api/rater/tasks?**", route =>
     json(route, {
@@ -52,6 +56,11 @@ test("reviewer answers a public task and restores the draft", async ({ page }) =
           roundId: "42",
           contentId: `0x${"2".repeat(64)}`,
           reviewerSource: "rateloop_network",
+          assignmentId: "network_assignment_playwright_01",
+          assignmentStatus: networkAssignmentAccepted ? "accepted" : "reserved",
+          assignmentExpiresAt: future,
+          confidentialityTermsHash: hash,
+          selectionBindingHash: hash,
           question: {
             kind: "binary",
             prompt: "Is this response ready to publish?",
@@ -76,7 +85,19 @@ test("reviewer answers a public task and restores the draft", async ({ page }) =
   await page.route("**/api/account/assurance/assignments?**", route =>
     json(route, { principalId: browserState.ownerPrincipalId, assignments: [] }),
   );
+  await page.route("**/api/account/assurance/assignments/network_assignment_playwright_01/accept", route => {
+    networkAssignmentAccepted = true;
+    return json(route, {
+      assignmentId: "network_assignment_playwright_01",
+      accepted: true,
+      replay: false,
+      leases: [],
+    });
+  });
   await page.goto("/human?scope=public");
+  await expect(page.getByRole("heading", { name: "Accept this funded review before opening it" })).toBeVisible();
+  await page.getByRole("checkbox", { name: /accept the exact public paid-review terms/iu }).check();
+  await page.getByRole("button", { name: "Accept and open review" }).click();
   await expect(page.getByRole("heading", { name: "Is this response ready to publish?" })).toBeVisible();
   await expectNoAxeViolations(page);
   await page.getByRole("button", { name: "Approve" }).click();
@@ -118,6 +139,7 @@ test("invited reviewer sees exact agent content and rates it directly in Discove
           ],
     }),
   );
+  await page.route("**/api/rater/tasks?**", route => json(route, { paidAccess: { state: "ready" }, tasks: [] }));
   await page.route(`**/api/account/assurance/assignments/${assignmentId}/accept?terms=*`, route =>
     json(route, {
       assignmentId,
