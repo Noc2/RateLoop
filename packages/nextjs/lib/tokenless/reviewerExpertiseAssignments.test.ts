@@ -482,6 +482,30 @@ test("network exact expertise counts only credentials valid through the response
       await countEligibleNetworkExactExpertisePool({
         requirements: [requirement],
         panelSize: 1,
+        responseDeadline: new Date(now.getTime() + 5 * 86_400_000),
+        excludedPrincipalIds: [REVIEWER],
+        now,
+      })
+    ).eligible,
+    0,
+  );
+  assert.equal(
+    (
+      await countEligibleNetworkExactExpertisePool({
+        requirements: [requirement],
+        panelSize: 1,
+        responseDeadline: new Date(now.getTime() + 5 * 86_400_000),
+        excludedPayoutAccounts: [REVIEWER.toUpperCase().replace("0X", "0x")],
+        now,
+      })
+    ).eligible,
+    0,
+  );
+  assert.equal(
+    (
+      await countEligibleNetworkExactExpertisePool({
+        requirements: [requirement],
+        panelSize: 1,
         responseDeadline: new Date(now.getTime() + 11 * 86_400_000),
         now,
       })

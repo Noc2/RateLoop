@@ -848,6 +848,8 @@ function deterministicAdapterKey(opportunity: FrozenOpportunity, preparation: Pr
 }
 
 function assertHybridParentBinding(input: HybridChildParentBinding) {
+  const excludedPrincipals = new Set(input.excludedReviewers.map(value => value.principalId));
+  const excludedAccounts = new Set(input.excludedReviewers.map(value => value.payoutAccount.toLowerCase()));
   if (
     !input.hybridOperationId ||
     !HASH_PATTERN.test(input.cohortBindingHash) ||
@@ -855,7 +857,15 @@ function assertHybridParentBinding(input: HybridChildParentBinding) {
     !HASH_PATTERN.test(input.expertiseHash) ||
     !HASH_PATTERN.test(input.admissionPolicyHash) ||
     !Number.isSafeInteger(input.requestedCount) ||
-    input.requestedCount < 1
+    input.requestedCount < 1 ||
+    input.excludedReviewers.length === 0 ||
+    excludedPrincipals.size !== input.excludedReviewers.length ||
+    excludedAccounts.size !== input.excludedReviewers.length ||
+    input.excludedReviewers.some(
+      value =>
+        !/^rlp_[A-Za-z0-9_-]{8,160}$/u.test(value.principalId) ||
+        !/^0x[0-9a-f]{40}$/u.test(value.payoutAccount),
+    )
   ) {
     throw new TokenlessServiceError("Hybrid network child binding is invalid.", 409, "hybrid_review_binding_invalid");
   }
@@ -877,6 +887,7 @@ function hybridNetworkAdapterKey(
     admissionPolicyHash: parent.admissionPolicyHash,
     requestedCount: parent.requestedCount,
     expertiseRequirements: parent.expertiseRequirements,
+    excludedReviewers: parent.excludedReviewers,
     preparedRequestHash: preparation.preparedRequestHash,
     derivedEconomicsHash: preparation.derivedEconomicsHash,
     sourceEvidenceHash: opportunity.sourceEvidenceHash,
@@ -885,12 +896,12 @@ function hybridNetworkAdapterKey(
   return `adaptive-hybrid-network:${hash.slice("sha256:".length)}`;
 }
 
-async function finalizeHybridNetworkChildAsk(input: {
+async function persistHybridNetworkChildState(input: {
   principal: PublicPaidHumanReviewPrincipal;
   opportunity: FrozenOpportunity;
   parent: HybridChildParentBinding;
   foundation: PublicNetworkFoundation;
-  operationKey: string;
+  operationKey?: string;
   expectedAmountAtomic: string;
   now: Date;
 }) {
@@ -938,13 +949,72 @@ async function finalizeHybridNetworkChildAsk(input: {
         "hybrid_review_child_conflict",
       );
     }
-    await bindPublicNetworkReviewOperation(client, {
-      bindingId: input.foundation.bindingId,
-      workspaceId: input.principal.integration.workspaceId,
-      opportunityId: input.opportunity.opportunityId,
-      operationKey: input.operationKey,
-      now: input.now,
-    });
+    const exclusions = input.parent.excludedReviewers
+      .map(value => ({
+        principalId: value.principalId,
+        payoutAccount: value.payoutAccount.toLowerCase(),
+        exclusionHash: hashPreparedHumanReviewValue({
+          schemaVersion: "rateloop.hybrid-network-reviewer-exclusion.v1",
+          hybridOperationId: input.parent.hybridOperationId,
+          bindingId: input.foundation.bindingId,
+          principalId: value.principalId,
+          payoutAccount: value.payoutAccount.toLowerCase(),
+        }),
+      }))
+      .sort((left, right) => left.principalId.localeCompare(right.principalId));
+    for (const exclusion of exclusions) {
+      await client.query(
+        `INSERT INTO tokenless_hybrid_network_reviewer_exclusions
+           (hybrid_operation_id,binding_id,reviewer_principal_id,payout_account,exclusion_hash,created_at)
+         VALUES ($1,$2,$3,$4,$5,$6)
+         ON CONFLICT (hybrid_operation_id,reviewer_principal_id) DO NOTHING`,
+        [
+          input.parent.hybridOperationId,
+          input.foundation.bindingId,
+          exclusion.principalId,
+          exclusion.payoutAccount,
+          exclusion.exclusionHash,
+          input.now,
+        ],
+      );
+    }
+    const storedExclusions = await client.query(
+      `SELECT reviewer_principal_id,payout_account,exclusion_hash
+       FROM tokenless_hybrid_network_reviewer_exclusions
+       WHERE hybrid_operation_id=$1 AND binding_id=$2
+       ORDER BY reviewer_principal_id`,
+      [input.parent.hybridOperationId, input.foundation.bindingId],
+    );
+    const exactExclusions = storedExclusions.rows.map(value => ({
+      principalId: text(value, "reviewer_principal_id"),
+      payoutAccount: text(value, "payout_account"),
+      exclusionHash: text(value, "exclusion_hash"),
+    }));
+    if (
+      hashPreparedHumanReviewValue(exactExclusions) !==
+      hashPreparedHumanReviewValue(
+        exclusions.map(value => ({
+          principalId: value.principalId,
+          payoutAccount: value.payoutAccount,
+          exclusionHash: value.exclusionHash,
+        })),
+      )
+    ) {
+      throw new TokenlessServiceError(
+        "Hybrid network reviewer exclusions conflict with the frozen invited child.",
+        409,
+        "hybrid_review_child_conflict",
+      );
+    }
+    if (input.operationKey) {
+      await bindPublicNetworkReviewOperation(client, {
+        bindingId: input.foundation.bindingId,
+        workspaceId: input.principal.integration.workspaceId,
+        opportunityId: input.opportunity.opportunityId,
+        operationKey: input.operationKey,
+        now: input.now,
+      });
+    }
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
@@ -1450,6 +1520,26 @@ export async function requestPublicPaidNetworkChild(
       "hybrid_review_child_conflict",
     );
   }
+  const pool = childProfile.expertiseRequirements?.length
+    ? await countEligibleNetworkExactExpertisePool({
+        requirements: childProfile.expertiseRequirements,
+        panelSize: childProfile.panelSize,
+        responseDeadline: preparation.preparedRequest.timing.expiresAt,
+        excludedPrincipalIds: input.hybridParent.excludedReviewers.map(value => value.principalId),
+        excludedPayoutAccounts: input.hybridParent.excludedReviewers.map(value => value.payoutAccount),
+      })
+    : await countEligibleNetworkExpertisePool({
+        expertiseKeys: childProfile.requiredExpertiseKeys,
+        excludedPrincipalIds: input.hybridParent.excludedReviewers.map(value => value.principalId),
+        excludedPayoutAccounts: input.hybridParent.excludedReviewers.map(value => value.payoutAccount),
+      });
+  if (!pool.ready || pool.eligible < childProfile.panelSize) {
+    throw new TokenlessServiceError(
+      "The network child cannot satisfy the frozen eligible cohort.",
+      409,
+      "expertise_reviewer_pool_unavailable",
+    );
+  }
   await ensureFeedbackBonusPoolForDelivery({
     workspaceId: input.principal.integration.workspaceId,
     agentId: input.principal.integration.agentId,
@@ -1458,20 +1548,6 @@ export async function requestPublicPaidNetworkChild(
     preparation,
     feedbackDeadline: new Date(preparation.preparedRequest.timing.expiresAt),
   });
-  const pool = childProfile.expertiseRequirements?.length
-    ? await countEligibleNetworkExactExpertisePool({
-        requirements: childProfile.expertiseRequirements,
-        panelSize: childProfile.panelSize,
-        responseDeadline: preparation.preparedRequest.timing.expiresAt,
-      })
-    : await countEligibleNetworkExpertisePool({ expertiseKeys: childProfile.requiredExpertiseKeys });
-  if (!pool.ready || pool.eligible < childProfile.panelSize) {
-    throw new TokenlessServiceError(
-      "The network child cannot satisfy the frozen eligible cohort.",
-      409,
-      "expertise_reviewer_pool_unavailable",
-    );
-  }
   const idempotencyKey = hybridNetworkAdapterKey(childOpportunity, preparation, input.hybridParent);
   const quoteRequest: TokenlessQuoteRequest = {
     audience: { admissionPolicyHash: childOpportunity.admissionPolicyHash, source: "rateloop_network" },
@@ -1532,9 +1608,17 @@ export async function requestPublicPaidNetworkChild(
       preparedProductAsk: prepared,
       publication,
     });
+    await persistHybridNetworkChildState({
+      principal: input.principal,
+      opportunity: parentOpportunity,
+      parent: input.hybridParent,
+      foundation,
+      expectedAmountAtomic: preparation.maximumChargeAtomic,
+      now: new Date(),
+    });
     const ask = await createTokenlessAsk(askRequest, idempotencyKey, input.appOrigin, prepared.idempotencyScope);
     askCreated = true;
-    await finalizeHybridNetworkChildAsk({
+    await persistHybridNetworkChildState({
       principal: input.principal,
       opportunity: parentOpportunity,
       parent: input.hybridParent,

@@ -463,6 +463,8 @@ export async function countEligibleNetworkExactExpertisePool(input: {
   requirements: unknown;
   panelSize: number;
   responseDeadline: unknown;
+  excludedPrincipalIds?: readonly string[];
+  excludedPayoutAccounts?: readonly string[];
   now?: Date;
 }) {
   let requirements: ReviewerExpertiseRequirement[];
@@ -485,16 +487,26 @@ export async function countEligibleNetworkExactExpertisePool(input: {
   const now = input.now ?? new Date();
   const responseDeadline = parseFutureDate(input.responseDeadline, "Response deadline", now);
   const result = await dbPool.query(
-    `SELECT rater_id,expertise_definition_id,expertise_definition_version,expertise_definition_hash
-     FROM tokenless_reviewer_qualifications
-     WHERE reviewer_source='rateloop_network' AND qualification_kind='expertise'
-       AND expertise_record_schema_version=2 AND evidence_kind='platform_verified_credential'
-       AND workspace_id IS NULL AND status='active' AND expires_at>=$1
-     ORDER BY rater_id,expertise_definition_id,expertise_definition_version`,
+    `SELECT q.rater_id,q.expertise_definition_id,q.expertise_definition_version,q.expertise_definition_hash,
+            p.principal_id,p.account_address
+     FROM tokenless_reviewer_qualifications q
+     JOIN tokenless_rater_profiles p ON p.rater_id=q.rater_id
+     WHERE q.reviewer_source='rateloop_network' AND q.qualification_kind='expertise'
+       AND q.expertise_record_schema_version=2 AND q.evidence_kind='platform_verified_credential'
+       AND q.workspace_id IS NULL AND q.status='active' AND q.expires_at>=$1
+     ORDER BY q.rater_id,q.expertise_definition_id,q.expertise_definition_version`,
     [responseDeadline],
   );
   const keysByRater = new Map<string, Set<string>>();
+  const excludedPrincipals = new Set(input.excludedPrincipalIds ?? []);
+  const excludedAccounts = new Set((input.excludedPayoutAccounts ?? []).map(value => value.toLowerCase()));
   for (const row of result.rows as Row[]) {
+    if (
+      excludedPrincipals.has(text(row, "principal_id") ?? "") ||
+      excludedAccounts.has((text(row, "account_address") ?? "").toLowerCase())
+    ) {
+      continue;
+    }
     const raterId = text(row, "rater_id");
     const definitionId = text(row, "expertise_definition_id");
     const definitionVersion = integer(row, "expertise_definition_version");

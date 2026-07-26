@@ -1296,6 +1296,28 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
         "public_network_audience_projection_conflict",
       );
     }
+    const liveBindingId = rowString(liveReachability.rows[0] as QueryRow, "binding_id")!;
+    const excludedSelection = await client.query(
+      `SELECT 1
+       FROM tokenless_assurance_assignments assignment
+       JOIN tokenless_rater_profiles profile ON profile.rater_id=assignment.rater_id
+       JOIN tokenless_hybrid_network_reviewer_exclusions exclusion
+         ON exclusion.binding_id=$1
+        AND (
+          exclusion.reviewer_principal_id=profile.principal_id
+          OR exclusion.payout_account=lower(profile.account_address)
+        )
+       WHERE assignment.run_id=$2 AND assignment.source='rateloop_network'
+       LIMIT 1`,
+      [liveBindingId, input.runId],
+    );
+    if (excludedSelection.rowCount !== 0) {
+      throw new TokenlessServiceError(
+        "The network selection contains a reviewer reserved for the invited hybrid cohort.",
+        409,
+        "hybrid_network_reviewer_exclusion_conflict",
+      );
+    }
     const locked = await client.query(
       `SELECT sp.*, c.qualification_rules_json, r.status AS run_status, r.manifest_hash AS current_run_manifest_hash,
               r.policy_hash AS current_policy_hash, p.policy_json, e.lookup_key_version,
@@ -1450,6 +1472,14 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
                OR (active.status='accepted' AND active.assignment_expires_at>$4)
              )
          )
+         AND NOT EXISTS (
+           SELECT 1 FROM tokenless_hybrid_network_reviewer_exclusions exclusion
+           WHERE exclusion.binding_id=$5
+             AND (
+               exclusion.reviewer_principal_id=profile.principal_id
+               OR exclusion.payout_account=lower(profile.account_address)
+             )
+         )
          AND (
            membership.reviewer_account_address IS NULL
            OR (
@@ -1458,7 +1488,7 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
            )
          )
        ORDER BY profile.created_at ASC,profile.rater_id ASC`,
-      [input.runId, input.projectId, rowString(subpanel, "cohort_id"), now],
+      [input.runId, input.projectId, rowString(subpanel, "cohort_id"), now, liveBindingId],
     );
     const since = new Date(now.getTime() - policy.integrity.recentCoassignmentWindowSeconds * 1_000);
     const history = await client.query(

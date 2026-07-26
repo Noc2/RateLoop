@@ -4,6 +4,8 @@ import { resolve } from "node:path";
 import { describe, it } from "node:test";
 
 const sql = readFileSync(resolve(process.cwd(), "drizzle/0146_hybrid_review_parent_settlement.sql"), "utf8");
+const worker = readFileSync(resolve(process.cwd(), "lib/tokenless/audienceAssignments.ts"), "utf8");
+const adapter = readFileSync(resolve(process.cwd(), "lib/tokenless/publicPaidHumanReviewAdapter.ts"), "utf8");
 
 describe("hybrid review parent settlement migration", () => {
   it("persists exactly one invited child and one network child with distinct paid rounds", () => {
@@ -39,10 +41,31 @@ describe("hybrid review parent settlement migration", () => {
     assert.match(sql, /"result_evidence_hash"/u);
   });
 
-  it("stores only purpose-bound hashes rather than reviewer identities or raw receipt payloads", () => {
-    assert.doesNotMatch(sql, /"receipt_json"|"principal_id"|"reviewer_account"|"payout_account"|"email"/u);
+  it("stores receipt evidence as hashes and keeps invited exclusions purpose-bound to one hybrid public binding", () => {
+    assert.doesNotMatch(sql, /"receipt_json"|"email"/u);
     assert.match(sql, /"evidence_hash" text NOT NULL/u);
     assert.match(sql, /"voucher_preparation_hash"/u);
+    assert.match(sql, /CREATE TABLE "tokenless_hybrid_network_reviewer_exclusions"/u);
+    assert.match(
+      sql,
+      /"hybrid_operation_id" text NOT NULL[\s\S]*REFERENCES "tokenless_hybrid_review_operations"[\s\S]*ON DELETE CASCADE/u,
+    );
+    assert.match(
+      sql,
+      /"binding_id" text NOT NULL[\s\S]*REFERENCES "tokenless_public_network_review_bindings"[\s\S]*ON DELETE CASCADE/u,
+    );
+    assert.match(sql, /UNIQUE \("binding_id","reviewer_principal_id"\)/u);
+    assert.match(sql, /UNIQUE \("binding_id","payout_account"\)/u);
+    assert.match(sql, /"exclusion_hash" text NOT NULL/u);
+  });
+
+  it("persists exclusions before spend and filters actual profiles before worker selection", () => {
+    assert.match(adapter, /INSERT INTO tokenless_hybrid_network_reviewer_exclusions/u);
+    assert.match(adapter, /storedExclusions[\s\S]*exactExclusions/u);
+    assert.match(adapter, /excludedPrincipalIds:[\s\S]*countEligibleNetwork/u);
+    assert.match(worker, /NOT EXISTS \([\s\S]*tokenless_hybrid_network_reviewer_exclusions exclusion/u);
+    assert.match(worker, /exclusion\.reviewer_principal_id=profile\.principal_id/u);
+    assert.match(worker, /exclusion\.payout_account=lower\(profile\.account_address\)/u);
   });
 
   it("freezes finite retention and permits deletion only through the legal-hold-aware erasure worker", () => {
