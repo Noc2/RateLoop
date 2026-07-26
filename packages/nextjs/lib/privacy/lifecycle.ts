@@ -65,6 +65,74 @@ function required(value: string, field: string, max = 500) {
   return normalized;
 }
 
+export const __hybridSubjectExportSqlForTests = `SELECT parent.hybrid_operation_id,
+       CASE WHEN subject_member.account_address IS NOT NULL
+         THEN parent.workspace_id ELSE NULL END AS workspace_id,
+       CASE WHEN subject_member.account_address IS NOT NULL
+         THEN parent.opportunity_id ELSE NULL END AS opportunity_id,
+       parent.state,
+       CASE WHEN subject_member.account_address IS NOT NULL
+         THEN parent.preparation_evidence_hash ELSE NULL END AS preparation_evidence_hash,
+       CASE WHEN subject_member.account_address IS NOT NULL
+         THEN parent.result_evidence_hash ELSE NULL END AS result_evidence_hash,
+       parent.created_at,parent.updated_at,
+       child.cohort,child.state AS child_state,child.deployment_key,child.chain_id,
+       child.panel_address,child.round_id,child.assignment_evidence_hash,
+       child.voucher_preparation_hash,child.settlement_binding_hash,
+       child.settlement_evidence_hash,child.accepted_count,child.committed_count,child.terminal_count,
+       CASE WHEN subject_member.account_address IS NOT NULL
+         THEN 'workspace_member' ELSE 'assigned_reviewer' END AS subject_access_scope,
+       CASE WHEN subject_member.account_address IS NOT NULL
+         THEN COALESCE(parent_receipts.append_only_receipt_count,0)
+         ELSE COALESCE(child_receipts.append_only_receipt_count,0)
+       END AS append_only_receipt_count
+FROM tokenless_hybrid_review_operations parent
+JOIN tokenless_hybrid_review_children child
+  ON child.hybrid_operation_id=parent.hybrid_operation_id
+LEFT JOIN tokenless_workspace_members subject_member
+  ON subject_member.workspace_id=parent.workspace_id
+  AND subject_member.account_address=$1
+LEFT JOIN (
+  SELECT hybrid_operation_id,COUNT(*) AS append_only_receipt_count
+  FROM tokenless_hybrid_review_receipts GROUP BY hybrid_operation_id
+) parent_receipts ON parent_receipts.hybrid_operation_id=parent.hybrid_operation_id
+LEFT JOIN (
+  SELECT child_id,COUNT(*) AS append_only_receipt_count
+  FROM tokenless_hybrid_review_receipts
+  WHERE child_id IS NOT NULL GROUP BY child_id
+) child_receipts ON child_receipts.child_id=child.child_id
+LEFT JOIN (
+  SELECT paid_operation.operation_id
+  FROM tokenless_paid_assignment_operations paid_operation
+  JOIN tokenless_paid_assignment_seats seat
+    ON seat.operation_id=paid_operation.operation_id
+  WHERE seat.reviewer_principal_id=$1
+  GROUP BY paid_operation.operation_id
+) invited_access ON invited_access.operation_id=child.source_operation_reference
+LEFT JOIN (
+  SELECT settlement.operation_key
+  FROM tokenless_network_assignment_settlements settlement
+  JOIN tokenless_assurance_assignments assignment
+    ON assignment.assignment_id=settlement.assignment_id
+  LEFT JOIN tokenless_rater_profiles rater
+    ON rater.rater_id=assignment.rater_id
+  WHERE assignment.reviewer_account_address=$1 OR rater.principal_id=$1
+  GROUP BY settlement.operation_key
+) network_access ON network_access.operation_key=child.source_operation_reference
+WHERE subject_member.account_address IS NOT NULL
+OR (
+  child.cohort='invited'
+  AND child.source_kind='private_paid_assignment'
+  AND invited_access.operation_id IS NOT NULL
+)
+OR (
+  child.cohort='network'
+  AND child.source_kind='public_network_assignment'
+  AND network_access.operation_key IS NOT NULL
+)
+ORDER BY parent.created_at,parent.hybrid_operation_id,
+         CASE child.cohort WHEN 'invited' THEN 1 ELSE 2 END`;
+
 export async function createLegalHold(input: {
   accountAddress: string;
   projectId: string;
@@ -374,6 +442,7 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
     mcpSessions,
     workspaceMoves,
     networkSettlements,
+    hybridReviews,
   ] = await Promise.all([
     client.query(
       `SELECT preferences.assignment_available,preferences.assignment_completed,
@@ -612,6 +681,7 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
        ORDER BY settlement.created_at,settlement.binding_id`,
       [principalId],
     ),
+    client.query(__hybridSubjectExportSqlForTests, [principalId]),
   ]);
   const securityHead = await client.query(
     `SELECT last_sequence,last_digest FROM tokenless_security_audit_heads
@@ -639,6 +709,7 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
       { category: "communications_metadata", path: "communications" },
       { category: "review_activity", path: "reviewActivity" },
       { category: "network_settlement_status", path: "reviewActivity.networkSettlements" },
+      { category: "hybrid_review_status", path: "reviewActivity.hybridReviews" },
       { category: "agent_registry_and_audit", path: "agentActivity" },
       { category: "oversight_attestations", path: "oversightAttestations" },
       { category: "public_question_media_and_quota", path: "publicQuestionMedia" },
@@ -692,6 +763,10 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
         ...row,
         reviewerLookup: "withheld_security_identifier",
         settlementReceipts: "append_only_hash_evidence_retained",
+      })),
+      hybridReviews: hybridReviews.rows.map(row => ({
+        ...row,
+        receiptPayloads: "not_stored_hash_only_evidence",
       })),
     },
     agentActivity: {

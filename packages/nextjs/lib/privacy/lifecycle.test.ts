@@ -1,6 +1,7 @@
 import {
   createLegalHold,
   createSubjectRequest,
+  __hybridSubjectExportSqlForTests,
   listSubjectRequests,
   processSubjectRequestQueue,
   readSubjectRequestExport,
@@ -10,6 +11,7 @@ import {
 } from "./lifecycle";
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
+import { newDb } from "pg-mem";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { appendSecurityAuditEvent } from "~~/lib/privacy/audit";
@@ -313,14 +315,17 @@ test("access and export requests produce a bounded authenticated download instea
   );
   const reviewActivity = exported.data.reviewActivity as {
     networkSettlements: Array<Record<string, unknown>>;
+    hybridReviews: Array<Record<string, unknown>>;
   };
   assert.deepEqual(reviewActivity.networkSettlements, []);
+  assert.deepEqual(reviewActivity.hybridReviews, []);
   const categoryManifest = exported.data.categoryManifest as {
     included: Array<{ category: string; path: string }>;
     withheld: Array<{ category: string; reason: string }>;
   };
   assert.ok(categoryManifest.included.some(item => item.category === "account_profile"));
   assert.ok(categoryManifest.included.some(item => item.category === "network_settlement_status"));
+  assert.ok(categoryManifest.included.some(item => item.category === "hybrid_review_status"));
   const networkRetention = categoryManifest.withheld.find(
     item => item.category === "network_reviewer_lookup_and_receipt_payloads",
   );
@@ -331,6 +336,124 @@ test("access and export requests produce a bounded authenticated download instea
     () => readSubjectRequestExport({ principalId: "rlp_other_subject", requestId: created.requestId, now }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "subject_export_unavailable",
   );
+});
+
+test("hybrid subject export reveals both cohorts to owners but only the exact assigned cohort to each reviewer", async () => {
+  const database = newDb();
+  database.public.none(`
+    CREATE TABLE tokenless_workspace_members (
+      workspace_id text NOT NULL,
+      account_address text NOT NULL
+    );
+    CREATE TABLE tokenless_hybrid_review_operations (
+      hybrid_operation_id text PRIMARY KEY,
+      workspace_id text NOT NULL,
+      opportunity_id text NOT NULL,
+      state text NOT NULL,
+      preparation_evidence_hash text,
+      result_evidence_hash text,
+      created_at timestamptz NOT NULL,
+      updated_at timestamptz NOT NULL
+    );
+    CREATE TABLE tokenless_hybrid_review_children (
+      child_id text PRIMARY KEY,
+      hybrid_operation_id text NOT NULL,
+      cohort text NOT NULL,
+      source_kind text,
+      source_operation_reference text,
+      state text NOT NULL,
+      deployment_key text,
+      chain_id integer,
+      panel_address text,
+      round_id numeric,
+      assignment_evidence_hash text,
+      voucher_preparation_hash text,
+      settlement_binding_hash text,
+      settlement_evidence_hash text,
+      accepted_count integer NOT NULL,
+      committed_count integer NOT NULL,
+      terminal_count integer NOT NULL
+    );
+    CREATE TABLE tokenless_hybrid_review_receipts (
+      receipt_id text PRIMARY KEY,
+      hybrid_operation_id text NOT NULL,
+      child_id text
+    );
+    CREATE TABLE tokenless_paid_assignment_operations (operation_id text PRIMARY KEY);
+    CREATE TABLE tokenless_paid_assignment_seats (
+      seat_id text PRIMARY KEY,
+      operation_id text NOT NULL,
+      reviewer_principal_id text
+    );
+    CREATE TABLE tokenless_network_assignment_settlements (
+      binding_id text PRIMARY KEY,
+      assignment_id text NOT NULL,
+      operation_key text NOT NULL
+    );
+    CREATE TABLE tokenless_assurance_assignments (
+      assignment_id text PRIMARY KEY,
+      reviewer_account_address text NOT NULL,
+      rater_id text
+    );
+    CREATE TABLE tokenless_rater_profiles (
+      rater_id text PRIMARY KEY,
+      principal_id text
+    );
+    INSERT INTO tokenless_workspace_members VALUES ('workspace_hybrid','principal_owner');
+    INSERT INTO tokenless_hybrid_review_operations VALUES (
+      'hybrid_subject','workspace_hybrid','opportunity_private','ready',
+      'sha256:parent-preparation','sha256:parent-result',
+      '2026-07-26T00:00:00Z','2026-07-26T00:00:00Z'
+    );
+    INSERT INTO tokenless_hybrid_review_children VALUES
+      ('child_invited','hybrid_subject','invited','private_paid_assignment','paid_invited','ready',
+       'deployment',84532,'0x1111111111111111111111111111111111111111',1,
+       'sha256:invited-assignment','sha256:invited-voucher','sha256:invited-settlement',NULL,0,0,0),
+      ('child_network','hybrid_subject','network','public_network_assignment','ask_network','ready',
+       'deployment',84532,'0x2222222222222222222222222222222222222222',2,
+       'sha256:network-assignment','sha256:network-voucher','sha256:network-settlement',NULL,0,0,0);
+    INSERT INTO tokenless_hybrid_review_receipts VALUES
+      ('receipt_parent','hybrid_subject',NULL),
+      ('receipt_invited','hybrid_subject','child_invited'),
+      ('receipt_network','hybrid_subject','child_network');
+    INSERT INTO tokenless_paid_assignment_operations VALUES ('paid_invited');
+    INSERT INTO tokenless_paid_assignment_seats VALUES ('seat_invited','paid_invited','principal_invited');
+    INSERT INTO tokenless_rater_profiles VALUES ('rater_network','principal_network');
+    INSERT INTO tokenless_assurance_assignments VALUES (
+      'assignment_network','non_subject_lookup','rater_network'
+    );
+    INSERT INTO tokenless_network_assignment_settlements VALUES (
+      'settlement_network','assignment_network','ask_network'
+    );
+  `);
+  const adapter = database.adapters.createPg();
+  const pool = new adapter.Pool();
+  const query = async (principalId: string) =>
+    (await pool.query(__hybridSubjectExportSqlForTests, [principalId])).rows as Array<Record<string, unknown>>;
+
+  const ownerRows = await query("principal_owner");
+  assert.deepEqual(
+    ownerRows.map(row => row.cohort),
+    ["invited", "network"],
+  );
+  assert.equal(ownerRows[0]?.workspace_id, "workspace_hybrid");
+  assert.equal(Number(ownerRows[0]?.append_only_receipt_count), 3);
+
+  const invitedRows = await query("principal_invited");
+  assert.deepEqual(invitedRows.map(row => row.cohort), ["invited"]);
+  assert.equal(invitedRows[0]?.workspace_id, null);
+  assert.equal(invitedRows[0]?.opportunity_id, null);
+  assert.equal(invitedRows[0]?.preparation_evidence_hash, null);
+  assert.equal(invitedRows[0]?.subject_access_scope, "assigned_reviewer");
+  assert.equal(Number(invitedRows[0]?.append_only_receipt_count), 1);
+
+  const networkRows = await query("principal_network");
+  assert.deepEqual(networkRows.map(row => row.cohort), ["network"]);
+  assert.equal(networkRows[0]?.workspace_id, null);
+  assert.equal(Number(networkRows[0]?.append_only_receipt_count), 1);
+
+  assert.deepEqual(await query("principal_cross_subject"), []);
+  await pool.end();
 });
 
 test("subject export includes only the principal identity audit scope and fails closed on chain corruption", async () => {

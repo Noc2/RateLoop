@@ -65,6 +65,33 @@ forecast is removed from the response row after its aggregate update.
 The mapping from a RateLoop principal to a vote key, voucher, eligibility evidence, and settlement record is
 restricted to the minimum operational and statutory purpose. It is not an anonymity boundary.
 
+### Hybrid review parent and child evidence
+
+`hybrid_public_safe` persists one parent and exactly two child settlement records: invited and network. Those records
+contain purpose-bound hashes, exact round coordinates, lifecycle counters, and append-only receipt hashes. They do not
+store reviewer principals, names, emails, payout accounts, raw customer content, raw rationales, or raw receipt JSON.
+Reviewer identity remains in the purpose-specific invited-seat or network-assignment record and is not copied into the
+hybrid parent.
+
+Authenticated subject exports apply the following minimum-disclosure rule:
+
+- a workspace member may export both child statuses and the parent evidence for that workspace;
+- an invited reviewer may export only the invited child that is bound to their exact paid-assignment seat;
+- a network reviewer may export only the network child that is bound through their exact network assignment and rater
+  principal; and
+- reviewer exports redact the workspace ID, opportunity ID, parent evidence hashes, and the other cohort's receipt
+  count. A subject with no exact membership or assignment receives no hybrid row.
+
+Account erasure irreversibly unlinks identity in the underlying seat, assignment, and rater records. The hybrid record
+does not contain a second identity copy and therefore does not block that erasure. Workspace deletion follows the
+existing restricted/tombstoned workspace workflow while settlement obligations or legal holds remain.
+
+The effective workspace evidence-retention period is frozen on the hybrid parent when preparation begins. A terminal
+or safely cancelled parent, both children, and their hash-only receipts are deleted after that deadline only when no
+workspace legal hold is active. The retention worker records counts plus one aggregate SHA-256 deletion digest in the
+restricted audit trail; it does not retain the deleted operation references or receipt payloads. An active hold defers
+the entire hybrid parent so one cohort cannot be erased while the other remains evidentially incomplete.
+
 ## Mandatory technical controls
 
 - **Pre-commit information:** before any voucher or chain commit is requested, the reviewer sees the exact public data
@@ -92,6 +119,10 @@ restricted to the minimum operational and statutory purpose. It is not an anonym
   consumed for global network admission. Network admission uses its separate rater domain.
 - **Capability truth:** an unavailable lane is absent from API/MCP/plugin claims and disabled in owner configuration.
   External registrations or credentials do not, by themselves, open a lane.
+- **Hybrid release gate:** implementation, passing tests, or a configured settlement producer does not enable
+  `hybrid_public_safe`. The capability remains false until the signed DPIA, Article 30 record, controller/processor
+  allocation, retention approval, transfer analysis, pre-commit UX evidence, and accountable release approval all
+  match the deployed hybrid data flow.
 
 ## Approval evidence required before real-data launch
 
@@ -125,8 +156,8 @@ yarn workspace @rateloop/nextjs audit:verify
 ```
 
 The release evidence must also include the browser pre-commit disclosure test, subject export/deletion tests,
-retention purge tests, account/workspace zero-postconditions, forecast appeal suspension, chain identity checks,
-settlement receipt verification, and the production-readiness preflight. Passing tests establishes implementation
-evidence only; the accountable controller still owns the DPIA, legal bases, provider contracts, and final risk
-decision.
-
+retention purge tests (including hybrid legal-hold release and aggregate deletion digest), owner/invited/network
+subject-export non-disclosure tests, account/workspace zero-postconditions, forecast appeal suspension, chain identity
+checks, settlement receipt verification, and the production-readiness preflight. Passing tests establishes
+implementation evidence only; the accountable controller still owns the DPIA, legal bases, provider contracts, and
+final risk decision.
