@@ -1002,6 +1002,13 @@
       "when": 1785139200000,
       "tag": "0143_subject_export_schema_version",
       "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1785142800000,
+      "tag": "0144_forecast_appeal_resolution",
+      "breakpoints": true
     }
   ]
 }

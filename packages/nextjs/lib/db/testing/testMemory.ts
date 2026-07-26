@@ -84,6 +84,7 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
       "0139_paid_assignment_terminal_states.sql",
       "0140_network_assignment_settlement.sql",
       "0142_network_settlement_hardening.sql",
+      "0144_forecast_appeal_resolution.sql",
     ].includes(file) &&
     (/\bDO \$\$/u.test(statement) ||
       /\bCREATE OR REPLACE FUNCTION\b/u.test(statement) ||
@@ -101,6 +102,14 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
     // The forward migration asserts the network feature was never activated,
     // so these production backfills are guaranteed empty. pg-mem does not
     // implement PostgreSQL's aliased UPDATE ... FROM form.
+    return null;
+  }
+  if (
+    file === "0144_forecast_appeal_resolution.sql" &&
+    /^INSERT INTO "tokenless_forecast_integrity_appeal_events"/u.test(statement)
+  ) {
+    // Production backfills any pre-migration appeals. In-memory databases start
+    // empty, and pg-mem does not provide PostgreSQL's built-in md5 function.
     return null;
   }
   if (
