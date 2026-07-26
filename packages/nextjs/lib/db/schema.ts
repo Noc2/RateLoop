@@ -641,6 +641,7 @@ export const tokenlessNotificationEmailDeliveries = pgTable(
     lastError: text("last_error"),
     deliveredAt: timestamp("delivered_at", { mode: "date", withTimezone: true }),
     suppressedAt: timestamp("suppressed_at", { mode: "date", withTimezone: true }),
+    parkedAt: timestamp("parked_at", { mode: "date", withTimezone: true }),
     deadAt: timestamp("dead_at", { mode: "date", withTimezone: true }),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true }).notNull(),
     updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true }).notNull(),

@@ -27,7 +27,7 @@ export function HumanTabs({ active, endAction }: { active: HumanNavigation; endA
           >
             <span className="inline-flex items-center gap-2">
               {tab.label}
-              {tab.value === "discover" ? <HumanInboxBadge /> : null}
+              {tab.value === "discover" ? <HumanInboxBadge markAssignmentsRead={active === "discover"} /> : null}
             </span>
           </Link>
         ))}

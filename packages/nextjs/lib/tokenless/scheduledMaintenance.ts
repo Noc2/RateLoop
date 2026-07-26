@@ -905,9 +905,15 @@ export async function runTokenlessScheduledMaintenance(input: {
           now,
           limit: notificationLimit,
         }),
-      fallback: { dead: 0, delivered: 0, enqueued: 0, materialized: 0, retry: 0, suppressed: 0 } as Awaited<
-        ReturnType<MaintenanceProcessors["processNotifications"]>
-      >,
+      fallback: {
+        dead: 0,
+        delivered: 0,
+        enqueued: 0,
+        materialized: 0,
+        parked: 0,
+        retry: 0,
+        suppressed: 0,
+      } as Awaited<ReturnType<MaintenanceProcessors["processNotifications"]>>,
     });
     const status =
       processorFailures.length > 0 ||
@@ -919,6 +925,7 @@ export async function runTokenlessScheduledMaintenance(input: {
       webhooks.dead > 0 ||
       webhooks.retry > 0 ||
       notifications.dead > 0 ||
+      notifications.parked > 0 ||
       notifications.retry > 0 ||
       surpriseBounties.retry > 0 ||
       surpriseBounties.reconciliationRequired > 0 ||

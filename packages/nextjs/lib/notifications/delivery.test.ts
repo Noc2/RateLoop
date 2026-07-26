@@ -383,6 +383,75 @@ test("private assignment notices require the exact current active group-membersh
   assert.deepEqual(await materializeTokenlessLifecycleNotifications({ now: NOW }), { candidates: 1, inserted: 1 });
 });
 
+test("one notification cycle materializes a full twenty-reviewer assignment panel", async () => {
+  await seedPrivateAssignment();
+  await dbClient.execute({
+    sql: `UPDATE tokenless_assurance_assignments SET private_group_membership_joined_at=?
+          WHERE assignment_id='assignment-private'`,
+    args: [NOW],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_private_group_memberships SET membership_expires_at = ?, updated_at = ?
+          WHERE group_id = 'group-private-assignment' AND principal_address = ?`,
+    args: [new Date(NOW.getTime() + 60_000), NOW, PRINCIPAL],
+  });
+  for (let index = 2; index <= 20; index += 1) {
+    const reviewer = `0x${(index + 16).toString(16).padStart(40, "0")}`;
+    await seedBrowserIdentity(reviewer);
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_private_group_memberships
+            (group_id,principal_address,role,status,joined_at,membership_expires_at,created_by,updated_at)
+            VALUES ('group-private-assignment',?,'reviewer','active',?,?,?,?)`,
+      args: [reviewer, NOW, new Date(NOW.getTime() + 60_000), PRINCIPAL, NOW],
+    });
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_assurance_cohort_reviewers
+            (project_id,cohort_id,reviewer_account_address,qualification_provenance_json,
+             maximum_active_assignments,active_reservations,status,created_by,created_at,updated_at)
+            VALUES ('project-private-assignment','cohort-private-assignment',?,'[]',1,1,'active',?,?,?)`,
+      args: [reviewer, PRINCIPAL, NOW, NOW],
+    });
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_assurance_assignments
+            (assignment_id, workspace_id, project_id, run_id, subpanel_id, cohort_id, reviewer_account_address,
+             source, selection, status, confidentiality_terms_hash, qualification_provenance_json, blinding_json,
+             assurance_snapshot_json, assurance_snapshot_hash, paid_assignment, reservation_expires_at,
+             lease_issuer_account_address, lease_state, recovery_count, created_at, updated_at, private_group_id,
+             private_group_policy_version, private_group_policy_hash, private_group_membership_joined_at)
+            SELECT ?,workspace_id,project_id,run_id,subpanel_id,cohort_id,?,
+                   source,selection,status,confidentiality_terms_hash,qualification_provenance_json,blinding_json,
+                   assurance_snapshot_json,assurance_snapshot_hash,paid_assignment,reservation_expires_at,
+                   lease_issuer_account_address,lease_state,recovery_count,created_at,updated_at,private_group_id,
+                   private_group_policy_version,private_group_policy_hash,private_group_membership_joined_at
+            FROM tokenless_assurance_assignments WHERE assignment_id='assignment-private'`,
+      args: [`assignment-private-${index}`, reviewer],
+    });
+  }
+
+  assert.deepEqual(await materializeTokenlessLifecycleNotifications({ now: NOW, limit: 20 }), {
+    candidates: 20,
+    inserted: 20,
+  });
+});
+
+test("an accepted live assignment remains eligible for its missed availability notification", async () => {
+  await seedPrivateAssignment();
+  await dbClient.execute({
+    sql: `UPDATE tokenless_private_group_memberships SET membership_expires_at = ?, updated_at = ?
+          WHERE group_id = 'group-private-assignment' AND principal_address = ?`,
+    args: [new Date(NOW.getTime() + 60_000), NOW, PRINCIPAL],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_assurance_assignments
+          SET status='accepted',reservation_expires_at=?,assignment_expires_at=?,
+              private_group_membership_joined_at=?,updated_at=?
+          WHERE assignment_id='assignment-private'`,
+    args: [new Date(NOW.getTime() - 1), new Date(NOW.getTime() + 60_000), NOW, NOW],
+  });
+
+  assert.deepEqual(await materializeTokenlessLifecycleNotifications({ now: NOW }), { candidates: 1, inserted: 1 });
+});
+
 test("API-key ask results fan out only to active workspace owners and admins", async () => {
   await seedBrowserIdentity(SECOND_PRINCIPAL);
   await seedBrowserIdentity(MEMBER_PRINCIPAL);
@@ -525,6 +594,81 @@ test("delivery rechecks preferences and suppresses mail disabled after enqueue",
   assert.equal(delivery.rows[0]?.state, "suppressed");
   assert.equal(Number(delivery.rows[0]?.attempt_count), 0);
   assert.ok(delivery.rows[0]?.suppressed_at);
+});
+
+test("configuration failures park delivery without consuming attempts and resume after repair", async () => {
+  await seedVerifiedSubscription();
+  await insertGenericLifecycleNotification();
+  await enqueueTokenlessNotificationEmails({ now: NOW });
+  let sends = 0;
+  const parked = await deliverPendingTokenlessNotificationEmails({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    unsubscribeSecret: "too-short",
+    async send() {
+      sends += 1;
+      return { id: "must-not-send" };
+    },
+  });
+  assert.deepEqual(
+    parked.map(value => value.state),
+    ["parked"],
+  );
+  assert.equal(sends, 0);
+  let delivery = await dbClient.execute(
+    "SELECT state,attempt_count,parked_at,last_error FROM tokenless_notification_email_deliveries",
+  );
+  assert.equal(delivery.rows[0]?.state, "parked");
+  assert.equal(Number(delivery.rows[0]?.attempt_count), 0);
+  assert.ok(delivery.rows[0]?.parked_at);
+  assert.match(String(delivery.rows[0]?.last_error), /UNSUBSCRIBE_SECRET/u);
+
+  const repairedAt = new Date(NOW.getTime() + 1_000);
+  const delivered = await deliverPendingTokenlessNotificationEmails({
+    appOrigin: "https://tokenless.example.test",
+    now: repairedAt,
+    unsubscribeSecret: SECRET,
+    async send() {
+      sends += 1;
+      return { id: "resend-after-config-repair" };
+    },
+  });
+  assert.deepEqual(
+    delivered.map(value => value.state),
+    ["delivered"],
+  );
+  assert.equal(sends, 1);
+  delivery = await dbClient.execute(
+    "SELECT state,attempt_count,parked_at,provider_message_id FROM tokenless_notification_email_deliveries",
+  );
+  assert.equal(delivery.rows[0]?.state, "delivered");
+  assert.equal(Number(delivery.rows[0]?.attempt_count), 1);
+  assert.equal(delivery.rows[0]?.parked_at, null);
+  assert.equal(delivery.rows[0]?.provider_message_id, "resend-after-config-repair");
+});
+
+test("provider credential rejection parks instead of retrying", async () => {
+  await seedVerifiedSubscription();
+  await insertGenericLifecycleNotification();
+  await enqueueTokenlessNotificationEmails({ now: NOW });
+  const outcomes = await deliverPendingTokenlessNotificationEmails({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    unsubscribeSecret: SECRET,
+    async send() {
+      throw new Error("Resend request failed: 401 invalid API key");
+    },
+  });
+  assert.deepEqual(
+    outcomes.map(value => value.state),
+    ["parked"],
+  );
+  const delivery = await dbClient.execute(
+    "SELECT state,attempt_count,parked_at FROM tokenless_notification_email_deliveries",
+  );
+  assert.equal(delivery.rows[0]?.state, "parked");
+  assert.equal(Number(delivery.rows[0]?.attempt_count), 0);
+  assert.ok(delivery.rows[0]?.parked_at);
 });
 
 test("bounded delivery retries end in a visible dead letter", async () => {

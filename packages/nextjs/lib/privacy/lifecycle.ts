@@ -526,7 +526,7 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
       `SELECT notification.notification_id,notification.kind,notification.preference_key,
               notification.read_at,notification.created_at,
               delivery.state AS email_delivery_state,delivery.delivered_at,delivery.suppressed_at,
-              delivery.dead_at
+              delivery.parked_at,delivery.dead_at
        FROM tokenless_notifications notification
        LEFT JOIN tokenless_notification_email_deliveries delivery
          ON delivery.notification_id=notification.notification_id

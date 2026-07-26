@@ -162,7 +162,7 @@ function deferred() {
 
 function processors(
   publish: (operationKey: string) => Promise<void>,
-  notifications = { dead: 0, delivered: 0, enqueued: 0, materialized: 0, retry: 0, suppressed: 0 },
+  notifications = { dead: 0, delivered: 0, enqueued: 0, materialized: 0, parked: 0, retry: 0, suppressed: 0 },
 ) {
   return {
     async deleteArtifact() {
@@ -359,7 +359,15 @@ test("one processor failure degrades the run without skipping later processors o
       },
       async processNotifications() {
         notificationsRan = true;
-        return { dead: 0, delivered: 0, enqueued: 0, materialized: 0, retry: 0, suppressed: 0 };
+        return {
+          dead: 0,
+          delivered: 0,
+          enqueued: 0,
+          materialized: 0,
+          parked: 0,
+          retry: 0,
+          suppressed: 0,
+        };
       },
     },
   });
@@ -1053,7 +1061,15 @@ test("persistent worker failures become visible dead-letter health evidence", as
 });
 
 test("scheduled maintenance reports notification retries as degraded health evidence", async () => {
-  const notificationSummary = { dead: 0, delivered: 1, enqueued: 2, materialized: 2, retry: 1, suppressed: 0 };
+  const notificationSummary = {
+    dead: 0,
+    delivered: 1,
+    enqueued: 2,
+    materialized: 2,
+    parked: 0,
+    retry: 1,
+    suppressed: 0,
+  };
   const result = await runTokenlessScheduledMaintenance({
     appOrigin: "https://tokenless.example.test",
     now: NOW,

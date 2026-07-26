@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import "server-only";
 import { dbClient } from "~~/lib/db";
-import { sendTokenlessNotificationEmail } from "~~/lib/notifications/resend";
+import { isResendConfigured, sendTokenlessNotificationEmail } from "~~/lib/notifications/resend";
 import { type TokenlessNotificationKey, buildTokenlessSignedUnsubscribeToken } from "~~/lib/notifications/tokenless";
 import { materializeOversightAlertNotifications } from "~~/lib/tokenless/oversightAlerts";
 import { listRaterSettlementNotificationCandidates } from "~~/lib/tokenless/raterSettlementService";
@@ -18,7 +18,7 @@ type LifecycleCandidate = {
   title: string;
 };
 
-type DeliveryState = "dead" | "delivered" | "retry" | "suppressed";
+type DeliveryState = "dead" | "delivered" | "parked" | "retry" | "suppressed";
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
@@ -89,7 +89,10 @@ async function loadLifecycleCandidates(
   limit: number,
   settlementSource: { fetchImpl?: typeof fetch; ponderUrl?: string } = {},
 ) {
-  const perSource = Math.max(1, Math.ceil(limit / 6));
+  // Each source may fill the whole bounded batch. The final interleave still
+  // enforces fairness without limiting assignment production to a fraction
+  // of the worker capacity.
+  const perSource = limit;
   const settlementCandidates = listRaterSettlementNotificationCandidates({
     fetchImpl: settlementSource.fetchImpl,
     limit: perSource,
@@ -115,7 +118,11 @@ async function loadLifecycleCandidates(
             LEFT JOIN tokenless_notifications n
               ON n.principal_address = b.principal_address
                 AND n.source_type = 'assignment.available' AND n.source_key = a.assignment_id
-            WHERE a.status = 'reserved' AND a.reservation_expires_at > ? AND n.notification_id IS NULL
+            WHERE (
+                (a.status = 'reserved' AND a.reservation_expires_at > ?)
+                OR (a.status = 'accepted' AND a.assignment_expires_at > ?)
+              )
+              AND n.notification_id IS NULL
               AND (
                 a.private_group_id IS NULL
                 OR (
@@ -126,7 +133,7 @@ async function loadLifecycleCandidates(
                 )
               )
             ORDER BY a.created_at ASC LIMIT ?`,
-      args: [now, now, perSource],
+      args: [now, now, now, perSource],
     }),
     dbClient.execute({
       sql: `SELECT b.principal_address, a.assignment_id AS source_key
@@ -157,7 +164,11 @@ async function loadLifecycleCandidates(
               ON n.principal_address = b.principal_address
              AND n.source_type = 'assignment.available' AND n.source_key = a.assignment_id
             WHERE rp.compensation_mode = 'unpaid'
-              AND a.status = 'reserved' AND a.reservation_expires_at > ? AND a.response_deadline > ?
+              AND (
+                (a.status = 'reserved' AND a.reservation_expires_at > ?)
+                OR (a.status = 'accepted' AND a.assignment_expires_at > ?)
+              )
+              AND a.response_deadline > ?
               AND (a.membership_expires_at IS NULL OR a.membership_expires_at >= a.response_deadline)
               AND access_grant.revoked_at IS NULL AND access_grant.valid_from <= ?
               AND (access_grant.valid_until IS NULL OR access_grant.valid_until >= a.response_deadline)
@@ -175,7 +186,7 @@ async function loadLifecycleCandidates(
                   END
               AND n.notification_id IS NULL
             ORDER BY a.created_at ASC LIMIT ?`,
-      args: [now, now, now, perSource],
+      args: [now, now, now, now, perSource],
     }),
     dbClient.execute({
       sql: `SELECT b.principal_address, a.assignment_id AS source_key
@@ -409,6 +420,37 @@ function actionUrl(origin: string, href: string | null) {
   return target.toString();
 }
 
+function deliveryConfiguration(input: {
+  appOrigin: string;
+  send?: typeof sendTokenlessNotificationEmail;
+  unsubscribeSecret?: string;
+}) {
+  let origin: string | null = null;
+  let error: string | null = null;
+  try {
+    origin = appOrigin(input.appOrigin);
+  } catch (cause) {
+    error = cause instanceof Error ? cause.message : "Notification app origin is invalid.";
+  }
+  const unsubscribeSecret = input.unsubscribeSecret ?? process.env.TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET;
+  if (!unsubscribeSecret?.trim() || unsubscribeSecret.trim().length < 32) {
+    error = "TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET must contain at least 32 characters.";
+  } else if (!input.send && !isResendConfigured()) {
+    error = "Resend is not configured";
+  }
+  return { error, origin };
+}
+
+function isDeliveryConfigurationError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message === "Resend is not configured" ||
+    message.startsWith("TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET ") ||
+    message === "Notification app origin is invalid." ||
+    /^Resend request failed: (400|401|403)\b/u.test(message)
+  );
+}
+
 export async function deliverPendingTokenlessNotificationEmails(input: {
   appOrigin: string;
   limit?: number;
@@ -417,15 +459,23 @@ export async function deliverPendingTokenlessNotificationEmails(input: {
   unsubscribeSecret?: string;
 }) {
   const now = input.now ?? new Date();
-  const origin = appOrigin(input.appOrigin);
   const limit = bounded(input.limit);
-  await dbClient.execute({
-    sql: `UPDATE tokenless_notification_email_deliveries
-          SET state = 'retry', attempt_count = 0, recovery_count = recovery_count + 1,
-              next_attempt_at = ?, next_recovery_at = NULL, dead_at = NULL, updated_at = ?
-          WHERE state = 'dead' AND recovery_count < ? AND next_recovery_at <= ?`,
-    args: [now, now, MAX_RECOVERIES, now],
-  });
+  const configuration = deliveryConfiguration(input);
+  if (!configuration.error) {
+    await dbClient.execute({
+      sql: `UPDATE tokenless_notification_email_deliveries
+            SET state = 'retry', next_attempt_at = ?, last_error = NULL, parked_at = NULL, updated_at = ?
+            WHERE state = 'parked'`,
+      args: [now, now],
+    });
+    await dbClient.execute({
+      sql: `UPDATE tokenless_notification_email_deliveries
+            SET state = 'retry', attempt_count = 0, recovery_count = recovery_count + 1,
+                next_attempt_at = ?, next_recovery_at = NULL, dead_at = NULL, updated_at = ?
+            WHERE state = 'dead' AND recovery_count < ? AND next_recovery_at <= ?`,
+      args: [now, now, MAX_RECOVERIES, now],
+    });
+  }
   await dbClient.execute({
     sql: `UPDATE tokenless_notification_email_deliveries
           SET state = 'retry', next_attempt_at = ?, last_error = 'stale email claim recovered', updated_at = ?
@@ -467,6 +517,16 @@ export async function deliverPendingTokenlessNotificationEmails(input: {
       outcomes.push({ deliveryId: id, state: "suppressed" });
       continue;
     }
+    if (configuration.error) {
+      await dbClient.execute({
+        sql: `UPDATE tokenless_notification_email_deliveries
+              SET state = 'parked', last_error = ?, parked_at = ?, updated_at = ?
+              WHERE delivery_id = ? AND state = 'delivering'`,
+        args: [configuration.error.slice(0, 500), now, now, id],
+      });
+      outcomes.push({ deliveryId: id, state: "parked" });
+      continue;
+    }
 
     const attempt = Number(row.attempt_count) + 1;
     try {
@@ -477,10 +537,10 @@ export async function deliverPendingTokenlessNotificationEmails(input: {
         },
         input.unsubscribeSecret,
       );
-      const unsubscribeUrl = new URL("/api/notifications/email/unsubscribe", origin);
+      const unsubscribeUrl = new URL("/api/notifications/email/unsubscribe", configuration.origin!);
       unsubscribeUrl.searchParams.set("token", token);
       const sent = await (input.send ?? sendTokenlessNotificationEmail)({
-        actionUrl: actionUrl(origin, rowString(row, "href")),
+        actionUrl: actionUrl(configuration.origin!, rowString(row, "href")),
         body: rowString(row, "body") ?? "A RateLoop update is ready.",
         email: rowString(row, "email")!,
         idempotencyKey: id,
@@ -495,6 +555,17 @@ export async function deliverPendingTokenlessNotificationEmails(input: {
       });
       outcomes.push({ deliveryId: id, state: "delivered" });
     } catch (error) {
+      if (isDeliveryConfigurationError(error)) {
+        const message = error instanceof Error ? error.message.slice(0, 500) : "Email delivery is not configured.";
+        await dbClient.execute({
+          sql: `UPDATE tokenless_notification_email_deliveries
+                SET state = 'parked', last_error = ?, parked_at = ?, updated_at = ?
+                WHERE delivery_id = ? AND state = 'delivering'`,
+          args: [message, now, now, id],
+        });
+        outcomes.push({ deliveryId: id, state: "parked" });
+        continue;
+      }
       const dead = attempt >= MAX_ATTEMPTS;
       const recoveryCount = Number(row.recovery_count);
       const nextRecoveryAt = dead && recoveryCount < MAX_RECOVERIES ? recoveryAt(now, recoveryCount) : null;
@@ -534,6 +605,7 @@ export async function runTokenlessNotificationCycle(input: { appOrigin: string; 
     delivered: outcomes.filter(value => value.state === "delivered").length,
     enqueued: enqueued.inserted,
     materialized: materialized.inserted + alerts.inserted,
+    parked: outcomes.filter(value => value.state === "parked").length,
     retry: outcomes.filter(value => value.state === "retry").length,
     suppressed: outcomes.filter(value => value.state === "suppressed").length,
   };
@@ -541,7 +613,9 @@ export async function runTokenlessNotificationCycle(input: { appOrigin: string; 
 
 export const __notificationDeliveryTestUtils = {
   actionUrl,
+  deliveryConfiguration,
   insertLifecycleCandidates,
+  isDeliveryConfigurationError,
   notificationId,
   recoveryAt,
   retryAt,

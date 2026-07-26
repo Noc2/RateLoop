@@ -3,17 +3,17 @@
 import { useCallback, useEffect, useState } from "react";
 
 type InboxResponse = {
-  notifications?: Array<{ readAt?: string | null; sourceType?: string | null }>;
+  notifications?: Array<{ notificationId?: string; readAt?: string | null; sourceType?: string | null }>;
 };
 
-function assignmentUnreadCount(value: InboxResponse) {
-  if (!Array.isArray(value.notifications)) return 0;
+function unreadAssignmentNotifications(value: InboxResponse) {
+  if (!Array.isArray(value.notifications)) return [];
   return value.notifications.filter(
     notification => notification.sourceType === "assignment.available" && !notification.readAt,
-  ).length;
+  );
 }
 
-export function HumanInboxBadge() {
+export function HumanInboxBadge({ markAssignmentsRead = false }: { markAssignmentsRead?: boolean }) {
   const [unread, setUnread] = useState(0);
   const refresh = useCallback(async () => {
     try {
@@ -22,11 +22,27 @@ export function HumanInboxBadge() {
         credentials: "same-origin",
       });
       if (!response.ok) return;
-      setUnread(assignmentUnreadCount((await response.json()) as InboxResponse));
+      const assignments = unreadAssignmentNotifications((await response.json()) as InboxResponse);
+      const notificationIds = assignments.flatMap(notification =>
+        typeof notification.notificationId === "string" ? [notification.notificationId] : [],
+      );
+      if (markAssignmentsRead && notificationIds.length > 0) {
+        const marked = await fetch("/api/notifications/inbox", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ notificationIds }),
+        });
+        if (marked.ok) {
+          setUnread(0);
+          return;
+        }
+      }
+      setUnread(assignments.length);
     } catch {
       // Navigation remains usable when the optional inbox request is unavailable.
     }
-  }, []);
+  }, [markAssignmentsRead]);
 
   useEffect(() => {
     void refresh();

@@ -46,3 +46,42 @@ test("Human inbox badge fails quietly for signed-out visitors", async () => {
     restoreDom();
   }
 });
+
+test("opening the review inbox marks assignment notifications read and clears the badge", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const previousFetch = globalThis.fetch;
+  const requests: Array<{ body?: string; method: string; url: string }> = [];
+  globalThis.fetch = async (input, init) => {
+    requests.push({
+      body: init?.body ? String(init.body) : undefined,
+      method: init?.method ?? "GET",
+      url: String(input),
+    });
+    if (init?.method === "POST") return Response.json({ marked: 2 });
+    return Response.json({
+      notifications: [
+        { notificationId: "tn_assignment_1", sourceType: "assignment.available", readAt: null },
+        { notificationId: "tn_assignment_2", sourceType: "assignment.available", readAt: null },
+        { notificationId: "tn_result", sourceType: "ask.result", readAt: null },
+      ],
+    });
+  };
+  try {
+    const view = render(<HumanInboxBadge markAssignmentsRead />);
+    await waitFor(() => assert.equal(requests.length, 2));
+    assert.deepEqual(requests, [
+      { body: undefined, method: "GET", url: "/api/notifications/inbox?limit=100" },
+      {
+        body: JSON.stringify({ notificationIds: ["tn_assignment_1", "tn_assignment_2"] }),
+        method: "POST",
+        url: "/api/notifications/inbox",
+      },
+    ]);
+    assert.equal(view.container.textContent, "");
+  } finally {
+    globalThis.fetch = previousFetch;
+    cleanup();
+    restoreDom();
+  }
+});
