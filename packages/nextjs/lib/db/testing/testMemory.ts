@@ -80,6 +80,7 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
       "0122_evm_kms_signing_ledger.sql",
       "0123_evm_kms_signing_ledger_integrity.sql",
       "0126_evm_transaction_fee_replacements.sql",
+      "0138_crowd_forecast_integrity.sql",
     ].includes(file) &&
     (/^DO \$\$/u.test(statement) ||
       /\bCREATE OR REPLACE FUNCTION\b/u.test(statement) ||
@@ -194,6 +195,12 @@ export function createMemoryDatabaseResources(): DatabaseResources {
     args: [DataType.text],
     returns: DataType.integer,
     implementation: value => [...value].reduce((hash, character) => (hash * 31 + character.charCodeAt(0)) | 0, 0),
+  });
+  memoryDb.public.registerFunction({
+    name: "set_config",
+    args: [DataType.text, DataType.text, DataType.bool],
+    returns: DataType.text,
+    implementation: (_name, value) => value,
   });
   memoryDb.public.registerFunction({
     name: "mod",

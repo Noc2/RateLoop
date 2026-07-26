@@ -31,6 +31,22 @@ test("Brier skill rejects a constant reporter even when the base rate looks cali
   assert.deepEqual(evaluation.limitationCodes, []);
 });
 
+test("inconclusive rounds still advance invariant and vote counters without manufacturing an outcome", () => {
+  let accumulator = emptyForecastCalibrationAccumulator();
+  for (let index = 0; index < 12; index += 1) {
+    accumulator = appendForecastCalibration(accumulator, {
+      predictedPositiveBps: 5_000,
+      outcome: null,
+      vote: index % 2 === 0 ? 1 : 0,
+    });
+  }
+  const evaluation = evaluateForecastCalibration(accumulator);
+  assert.equal(accumulator.outcomeObservationCount, 0n);
+  assert.equal(evaluation.brierSkillScoreBps, null);
+  assert.ok(evaluation.reasonCodes.includes("forecast_invariant"));
+  assert.ok(!evaluation.reasonCodes.includes("forecast_discrimination_absent"));
+});
+
 test("an outcome-discriminating reporter has positive skill without false invariant flags", () => {
   let accumulator = emptyForecastCalibrationAccumulator();
   for (let index = 0; index < 20; index += 1) {

@@ -4,6 +4,7 @@ const BPS_SQUARED = BPS * BPS;
 
 export type ForecastCalibrationAccumulator = {
   observationCount: bigint;
+  outcomeObservationCount: bigint;
   forecastSumBps: bigint;
   forecastSquareSum: bigint;
   squaredErrorSum: bigint;
@@ -51,6 +52,7 @@ export type ForecastPairEvaluation = {
 export function emptyForecastCalibrationAccumulator(): ForecastCalibrationAccumulator {
   return {
     observationCount: 0n,
+    outcomeObservationCount: 0n,
     forecastSumBps: 0n,
     forecastSquareSum: 0n,
     squaredErrorSum: 0n,
@@ -105,22 +107,23 @@ function meanDifference(leftSum: bigint, leftCount: bigint, rightSum: bigint, ri
 
 export function appendForecastCalibration(
   accumulator: ForecastCalibrationAccumulator,
-  observation: { predictedPositiveBps: number; outcome: 0 | 1; vote: 0 | 1 },
+  observation: { predictedPositiveBps: number; outcome: 0 | 1 | null; vote: 0 | 1 },
 ): ForecastCalibrationAccumulator {
   const predicted = forecast(observation.predictedPositiveBps);
-  const outcome = binary(observation.outcome, "Forecast outcome");
   const vote = binary(observation.vote, "Reviewer vote");
-  const error = predicted - outcome * BPS;
+  const outcome = observation.outcome === null ? null : binary(observation.outcome, "Forecast outcome");
+  const error = outcome === null ? 0n : predicted - outcome * BPS;
   return {
     observationCount: accumulator.observationCount + 1n,
+    outcomeObservationCount: accumulator.outcomeObservationCount + (outcome === null ? 0n : 1n),
     forecastSumBps: accumulator.forecastSumBps + predicted,
     forecastSquareSum: accumulator.forecastSquareSum + predicted * predicted,
     squaredErrorSum: accumulator.squaredErrorSum + error * error,
-    outcomePositiveCount: accumulator.outcomePositiveCount + outcome,
+    outcomePositiveCount: accumulator.outcomePositiveCount + (outcome ?? 0n),
     positiveOutcomeForecastSumBps: accumulator.positiveOutcomeForecastSumBps + (outcome === 1n ? predicted : 0n),
-    positiveOutcomeCount: accumulator.positiveOutcomeCount + outcome,
+    positiveOutcomeCount: accumulator.positiveOutcomeCount + (outcome ?? 0n),
     negativeOutcomeForecastSumBps: accumulator.negativeOutcomeForecastSumBps + (outcome === 0n ? predicted : 0n),
-    negativeOutcomeCount: accumulator.negativeOutcomeCount + (1n - outcome),
+    negativeOutcomeCount: accumulator.negativeOutcomeCount + (outcome === 0n ? 1n : 0n),
     positiveVoteForecastSumBps: accumulator.positiveVoteForecastSumBps + (vote === 1n ? predicted : 0n),
     positiveVoteCount: accumulator.positiveVoteCount + vote,
     negativeVoteForecastSumBps: accumulator.negativeVoteForecastSumBps + (vote === 0n ? predicted : 0n),
@@ -130,7 +133,9 @@ export function appendForecastCalibration(
 
 export function evaluateForecastCalibration(accumulator: ForecastCalibrationAccumulator): ForecastIntegrityEvaluation {
   const n = accumulator.observationCount;
+  const outcomeN = accumulator.outcomeObservationCount;
   if (n < 0n) throw new Error("Forecast observation count is invalid.");
+  if (outcomeN < 0n || outcomeN > n) throw new Error("Forecast outcome observation count is invalid.");
   const variance =
     n === 0n
       ? 0n
@@ -148,7 +153,8 @@ export function evaluateForecastCalibration(accumulator: ForecastCalibrationAccu
     accumulator.negativeVoteCount,
   );
   const positive = accumulator.outcomePositiveCount;
-  const baselineSquaredError = n === 0n ? 0n : positive * BPS_SQUARED - (positive * BPS * (positive * BPS)) / n;
+  const baselineSquaredError =
+    outcomeN === 0n ? 0n : positive * BPS_SQUARED - (positive * BPS * (positive * BPS)) / outcomeN;
   const brierSkillScoreBps =
     baselineSquaredError === 0n
       ? null
