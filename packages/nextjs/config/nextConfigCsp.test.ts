@@ -37,7 +37,7 @@ async function getGlobalHeaderValue(key: string) {
   return globalHeaders.find(header => header.key === key)?.value;
 }
 
-test("connect-src includes only the tokenless app, Base RPC, auth, World ID bridge, and analytics", async () => {
+test("connect-src includes only the tokenless app, Base RPC, auth, and World ID bridge", async () => {
   const csp = await getContentSecurityPolicy();
   const connectSrc = csp
     .split(";")
@@ -46,7 +46,7 @@ test("connect-src includes only the tokenless app, Base RPC, auth, World ID brid
 
   assert.ok(connectSrc);
   assert.match(connectSrc, /(?:^|\s)'self'(?:\s|$)/);
-  assert.match(connectSrc, /(?:^|\s)https:\/\/queue\.simpleanalyticscdn\.com(?:\s|$)/);
+  assert.doesNotMatch(csp, /simpleanalyticscdn/u);
   assert.match(connectSrc, /(?:^|\s)https:\/\/sepolia\.base\.org(?:\s|$)/);
   assert.match(connectSrc, /(?:^|\s)https:\/\/\*\.thirdweb\.com(?:\s|$)/);
   assert.match(connectSrc, /(?:^|\s)wss:\/\/\*\.walletconnect\.com(?:\s|$)/);

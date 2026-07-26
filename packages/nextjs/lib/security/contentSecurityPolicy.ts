@@ -76,13 +76,11 @@ export function buildContentSecurityPolicy(options: ContentSecurityPolicyOptions
   const scriptSources = unique([
     "'self'",
     options.nonce ? `'nonce-${options.nonce}'` : undefined,
-    "https://scripts.simpleanalyticscdn.com",
     options.isDev ? "'unsafe-eval'" : undefined,
     ...vercelLive,
   ]);
   const connectSources = unique([
     "'self'",
-    "https://queue.simpleanalyticscdn.com",
     "https://sepolia.base.org",
     "https://mainnet.base.org",
     "https://*.thirdweb.com",
