@@ -73,7 +73,7 @@ function assertNoRecoveryMaterial(storage: Storage) {
 
 test("a reserved network seat must be accepted with its exact terms before public task material opens", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
+  const { cleanup, render, waitFor, within } = await import("@testing-library/react");
   const userEvent = (await import("@testing-library/user-event")).default;
   const { PublicQuestionCard } = await import("./PublicQuestionCard");
   const previousFetch = globalThis.fetch;

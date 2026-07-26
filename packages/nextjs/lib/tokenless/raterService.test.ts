@@ -570,6 +570,14 @@ test("network task discovery stays hidden until an exact selected seat exists", 
   assert.deepEqual(tasks, []);
 });
 
+test("paid task discovery never exposes private question material through a public network round", async () => {
+  await seedTask();
+  await dbClient.execute(
+    "UPDATE tokenless_question_records SET visibility='private',data_classification='confidential',confirmed_no_sensitive_data=false WHERE question_id='qst_tasks'",
+  );
+  assert.deepEqual(await listPaidRaterTasks(PRINCIPAL, NOW), []);
+});
+
 test("public voucher requests carry the exact network assignment binding", () => {
   assert.deepEqual(
     buildPublicVoucherRequest(

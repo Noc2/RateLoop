@@ -2,7 +2,7 @@ import { HUMAN_ASSURANCE_SCHEMA_VERSION, type HumanAssuranceAudiencePolicy } fro
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import type { PoolClient } from "pg";
-import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
+import { type DatabaseResources, __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { type PrivateArtifactStore, __setArtifactPrivacyRuntimeForTests } from "~~/lib/tokenless/artifactPrivacy";
@@ -22,6 +22,7 @@ import {
   reserveAudienceAssignment,
   reserveDiversifiedNetworkSubpanel,
 } from "~~/lib/tokenless/audienceAssignments";
+import { requirePaidReviewEligibilityInTransaction } from "~~/lib/tokenless/paidReviewEligibilityPreflight";
 import {
   createPrivateGroup,
   createPrivateGroupInvitation,
@@ -43,6 +44,18 @@ const TERMS_HASH = `sha256:${"c".repeat(64)}`;
 const POLICY_HASH = `sha256:${"d".repeat(64)}`;
 const RUN_HASH = `sha256:${"e".repeat(64)}`;
 
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .filter(([, entry]) => entry !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
 class MemoryPrivateStore implements PrivateArtifactStore {
   async delete() {}
 
@@ -55,8 +68,11 @@ class MemoryPrivateStore implements PrivateArtifactStore {
   }
 }
 
+let memoryResources: DatabaseResources;
+
 beforeEach(() => {
-  __setDatabaseResourcesForTests(createMemoryDatabaseResources());
+  memoryResources = createMemoryDatabaseResources();
+  __setDatabaseResourcesForTests(memoryResources);
   process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY = Buffer.alloc(32, 7).toString("base64url");
   process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION = "lookup-v1";
   __setArtifactPrivacyRuntimeForTests({
@@ -518,14 +534,18 @@ test("paid network audiences require an exact epoch and exact funded rounds befo
     capacity: 1,
     qualificationRules: [{ key: "support_years", operator: "at_least", value: 3 }],
   });
-  await registerProjectCohortReviewer({
-    accountAddress: OWNER,
-    workspaceId: project.workspaceId,
-    projectId: project.projectId,
-    cohortId: cohort.cohortId,
-    reviewerAccountAddress: REVIEWER,
-    qualificationProvenance: [qualification("support_years", 5, now)],
-  });
+  await assert.rejects(
+    () =>
+      registerProjectCohortReviewer({
+        accountAddress: OWNER,
+        workspaceId: project.workspaceId,
+        projectId: project.projectId,
+        cohortId: cohort.cohortId,
+        reviewerAccountAddress: REVIEWER,
+        qualificationProvenance: [qualification("support_years", 5, now)],
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "network_cohort_platform_managed",
+  );
   const policy = audiencePolicy([{ ...cohort, source: "rateloop_network" }], {
     reviewerSource: "rateloop_network",
     compensation: "paid",
@@ -575,6 +595,26 @@ test("paid network audiences require an exact epoch and exact funded rounds befo
     runId,
   });
   assert.equal(subpanel?.integrity?.epochId, "integrity:2026-07-13:001");
+  let reachabilityChecked = false;
+  __setDatabaseResourcesForTests({
+    ...memoryResources,
+    pool: {
+      async connect() {
+        const client = await memoryResources.pool.connect();
+        return {
+          ...client,
+          async query(sql: string, values?: readonly unknown[]) {
+            if (sql.includes("FROM tokenless_public_network_review_bindings binding")) {
+              reachabilityChecked = true;
+              return { rowCount: 1, rows: [{ binding_id: "pnrb_round_fixture" }] };
+            }
+            return values ? client.query(sql, [...values]) : client.query(sql);
+          },
+          release: () => client.release(),
+        } as PoolClient;
+      },
+    },
+  } as unknown as DatabaseResources);
   await assert.rejects(
     () =>
       reserveDiversifiedNetworkSubpanel({
@@ -588,10 +628,390 @@ test("paid network audiences require an exact epoch and exact funded rounds befo
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "network_round_binding_pending",
   );
+  assert.equal(reachabilityChecked, true);
   assert.equal(
     Number((await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_assurance_assignments")).rows[0]?.count),
     0,
   );
+});
+
+test("network selection rejects manual collisions before spend and replays one exact reserved batch", async () => {
+  const now = new Date("2026-07-26T12:00:00.000Z");
+  const basePolicy = audiencePolicy(
+    [{ cohortId: "cohort_global", source: "rateloop_network", minimumReviewers: 2, maximumReviewers: 2 }],
+    {
+      reviewerSource: "rateloop_network",
+      compensation: "paid",
+      requiredQualifications: [{ key: "support_cert", operator: "attested", value: true }],
+    },
+  );
+  const policy = {
+    ...basePolicy,
+  } satisfies HumanAssuranceAudiencePolicy;
+  const frozen = freezeAdmissionPolicy(policy);
+  const roundTerms = {
+    bountyAmount: "100",
+    feeAmount: "10",
+    attemptReserve: "15",
+    maximumCommits: 2,
+  };
+  const exactRound = {
+    case_id: "case_network",
+    content_id: `0x${"3".repeat(64)}`,
+    admission_policy_hash: frozen.admissionPolicyHash,
+    round_id: "42",
+    round_status: "open",
+    network_operation_key: "op_network",
+    network_deployment_key: "deployment_network",
+    network_chain_id: 84532,
+    network_panel_address: "0x1111111111111111111111111111111111111111",
+    network_round_id: "42",
+    operation_key: "op_network",
+    deployment_key: "deployment_network",
+    chain_id: 84532,
+    panel_address: "0x1111111111111111111111111111111111111111",
+    round_terms_json: JSON.stringify(roundTerms),
+    total_funded_atomic: "125",
+    execution_state: "confirmed",
+    confirmed_at: now,
+    operation_workspace_id: "ws_network",
+    terms_json: JSON.stringify({
+      audiencePolicy: frozen.policy,
+      economics: {
+        bounty: { fundedAtomic: "100" },
+        fee: { fundedAtomic: "10" },
+        attemptReserve: { fundedAtomic: "15" },
+        totalFundedAtomic: "125",
+      },
+      panel: { requestedSize: 2 },
+    }),
+    voucher_content_id: `0x${"3".repeat(64)}`,
+    voucher_admission_policy_hash: frozen.admissionPolicyHash,
+    maximum_commits: 2,
+    voucher_deadline: new Date(now.getTime() + 60_000),
+    voucher_status: "open",
+  };
+  const subpanel = {
+    subpanel_id: "subpanel_network",
+    cohort_id: "cohort_global",
+    source: "rateloop_network",
+    selection: "randomized",
+    selection_status: "pending",
+    target_count: 2,
+    run_status: "frozen",
+    run_manifest_hash: RUN_HASH,
+    current_run_manifest_hash: RUN_HASH,
+    policy_hash: frozen.policyHash,
+    current_policy_hash: frozen.policyHash,
+    policy_json: frozen.policyJson,
+    integrity_epoch_id: policy.integrity!.epochId,
+    integrity_manifest_hash: policy.integrity!.epochManifestHash,
+    integrity_constraints_json: canonicalJson(policy.integrity),
+    lookup_key_version: "lookup-v1",
+    private_features_expire_at: new Date(now.getTime() + 60_000),
+    qualification_rules_json: "[]",
+  };
+
+  async function run(
+    mode: "collision" | "integrity_conflict" | "locked_conflict" | "no_capacity" | "qualification_conflict" | "replay",
+  ) {
+    const writes: string[] = [];
+    let eligibilityReads = 0;
+    const clusterByLookup = new Map<string, string>();
+    const identity = {
+      assertion_id: "assertion_age",
+      binding_id: "binding_age",
+      provider_id: "world:poh",
+      provider_namespace: "world:poh",
+      subject_reference_hash: `hmac-sha256:v1:${"9".repeat(64)}`,
+      capabilities_json: JSON.stringify(["minimum_age", "unique_human"]),
+      assertion_minimum_age_verified: 18,
+      provider_evidence_ciphertext: "ciphertext",
+      provider_evidence_key_version: "v1",
+      provider_evidence_key_domain: "provider_evidence",
+      evidence_verified_at: new Date(now.getTime() - 60_000),
+      evidence_expires_at: new Date(now.getTime() + 86_400_000),
+      assurance_validity_model: "durable_enrollment",
+      assertion_status: "active",
+      binding_status: "active",
+      last_verified_at: new Date(now.getTime() - 60_000),
+      assertion_updated_at: now,
+      binding_updated_at: now,
+    };
+    const client = {
+      async query(sql: string, values?: readonly unknown[]) {
+        if (["BEGIN", "COMMIT", "ROLLBACK"].includes(sql)) return { rowCount: null, rows: [] };
+        if (sql.includes("FROM tokenless_workspaces")) return { rowCount: 1, rows: [{ workspace_id: "ws_network" }] };
+        if (sql.includes("FROM tokenless_public_network_review_bindings binding")) {
+          return { rowCount: 1, rows: [{ binding_id: "pnrb_network" }] };
+        }
+        if (sql.includes("FROM tokenless_assurance_run_subpanels sp")) {
+          return {
+            rowCount: 1,
+            rows: [
+              mode === "replay"
+                ? {
+                    ...subpanel,
+                    selection_status: "reserved",
+                    selection_batch_id: "hasb_replay",
+                    selection_commitment: POLICY_HASH,
+                  }
+                : subpanel,
+            ],
+          };
+        }
+        if (sql.includes("FROM tokenless_assurance_run_cases rc")) return { rowCount: 1, rows: [exactRound] };
+        if (sql.includes("FROM tokenless_assurance_assignments a") && sql.includes("settlement_count")) {
+          return {
+            rowCount: 2,
+            rows: [
+              {
+                assignment_id: "haas_replay",
+                status: "reserved",
+                reservation_expires_at: new Date(now.getTime() + 60_000),
+                assignment_expires_at: null,
+                integrity_cluster_pseudonym: "cluster_replay",
+                integrity_risk_band: "low",
+                selection_batch_id: "hasb_replay",
+                voucher_marker: `selection:hasb_replay:${"1".repeat(64)}`,
+                settlement_count: 1,
+              },
+              {
+                assignment_id: "haas_replay_second",
+                status: "reserved",
+                reservation_expires_at: new Date(now.getTime() + 60_000),
+                assignment_expires_at: null,
+                integrity_cluster_pseudonym: "cluster_replay_second",
+                integrity_risk_band: "low",
+                selection_batch_id: "hasb_replay",
+                voucher_marker: `selection:hasb_replay:${"2".repeat(64)}`,
+                settlement_count: 1,
+              },
+            ],
+          };
+        }
+        if (sql.includes("WHERE cr.project_id=$1") && sql.includes("network_managed=false")) {
+          return mode === "collision"
+            ? { rowCount: 1, rows: [{ reviewer_account_address: REVIEWER }] }
+            : { rowCount: 0, rows: [] };
+        }
+        if (sql.includes("SELECT profile.account_address AS reviewer_account_address")) {
+          assert.match(sql, /NOT EXISTS \([\s\S]*FROM tokenless_assurance_assignments active/u);
+          return mode === "locked_conflict" || mode === "integrity_conflict" || mode === "qualification_conflict"
+            ? {
+                rowCount: 2,
+                rows: [
+                  { reviewer_account_address: REVIEWER, rater_id: "rater_network" },
+                  { reviewer_account_address: SECOND_REVIEWER, rater_id: "rater_network_second" },
+                ],
+              }
+            : { rowCount: 0, rows: [] };
+        }
+        if (sql.includes("FROM tokenless_integrity_assignment_history")) return { rowCount: 0, rows: [] };
+        if (sql.includes("FROM tokenless_integrity_epoch_members") && sql.includes("reviewer_lookup=ANY")) {
+          const reviewerLookups = (values?.[1] as string[] | undefined) ?? [];
+          return {
+            rowCount: reviewerLookups.length,
+            rows: reviewerLookups.map((reviewerLookup, index) => ({
+              reviewer_lookup: reviewerLookup,
+              cluster_pseudonym:
+                mode === "integrity_conflict" && index === 0 ? "cluster_changed" : clusterByLookup.get(reviewerLookup),
+              risk_band: "low",
+              eligibility_status: "eligible",
+            })),
+          };
+        }
+        if (sql.includes("FROM tokenless_integrity_epoch_members")) {
+          const reviewerLookup = String(values?.[1]);
+          const cluster = `cluster_${clusterByLookup.size + 1}`;
+          clusterByLookup.set(reviewerLookup, cluster);
+          return { rowCount: 1, rows: [{ cluster_pseudonym: cluster, risk_band: "low" }] };
+        }
+        if (sql.includes("SELECT qualification_id FROM tokenless_reviewer_qualifications")) {
+          assert.match(sql, /ORDER BY qualification_id ASC FOR UPDATE/u);
+          return mode === "qualification_conflict"
+            ? { rowCount: 0, rows: [] }
+            : { rowCount: 1, rows: [{ qualification_id: "qualification_support" }] };
+        }
+        if (sql.includes("FROM tokenless_reviewer_qualifications")) {
+          return {
+            rowCount: 1,
+            rows: [
+              {
+                qualification_id: "qualification_support",
+                cohort_ids_json: "[]",
+                qualification_keys_json: JSON.stringify(["support_cert"]),
+                verified_at: new Date(now.getTime() - 60_000),
+                expires_at: new Date(now.getTime() + 86_400_000),
+              },
+            ],
+          };
+        }
+        if (sql.includes("SELECT principal_id FROM tokenless_rater_profiles")) {
+          return {
+            rowCount: 1,
+            rows: [
+              {
+                principal_id:
+                  String(values?.[0]).toLowerCase() === REVIEWER.toLowerCase()
+                    ? "rlp_network_reviewer"
+                    : "rlp_network_reviewer_second",
+              },
+            ],
+          };
+        }
+        if (sql.includes("FROM tokenless_rater_profiles p") && sql.includes("tokenless_legal_eligibility")) {
+          eligibilityReads += 1;
+          const principalId = String(values?.[0]);
+          const expectedPayout = principalId === "rlp_network_reviewer" ? REVIEWER : SECOND_REVIEWER;
+          const payout = mode === "locked_conflict" && eligibilityReads > 2 ? OTHER_OWNER : expectedPayout;
+          const raterId = principalId === "rlp_network_reviewer" ? "rater_network" : "rater_network_second";
+          return {
+            rowCount: 1,
+            rows: [
+              {
+                rater_id: raterId,
+                principal_id: principalId,
+                account_address: payout,
+                active_payout_account: payout,
+                nullifier_seed_ciphertext: "ciphertext",
+                nullifier_key_version: "v1",
+                nullifier_key_domain: "vote_mapping",
+                profile_updated_at: now,
+                minimum_age_verified: 18,
+                age_evidence_verified_at: new Date(now.getTime() - 60_000),
+                age_evidence_expires_at: new Date(now.getTime() + 86_400_000),
+                verified_residence_country: "DE",
+                declared_residence_country: "DE",
+                tax_residence_country: "DE",
+                residence_tax_status: "consistent",
+                tax_profile_status: "complete",
+                dac7_status: "not_required",
+                sanctions_consent_at: new Date(now.getTime() - 60_000),
+                sanctions_status: "clear",
+                sanctions_reference_hash: "8".repeat(64),
+                sanctions_screened_at: new Date(now.getTime() - 60_000),
+                sanctions_expires_at: new Date(now.getTime() + 86_400_000),
+                legal_eligibility_status: "eligible",
+                legal_updated_at: now,
+                payout_account: payout,
+                payout_ownership_method: "siwe_base_account_session",
+                payout_verified_at: new Date(now.getTime() - 60_000),
+                payout_expires_at: new Date(now.getTime() + 86_400_000),
+                payout_eligibility_status: "ready",
+                payout_updated_at: now,
+                scope_id: "scope_network",
+                scope_reviewer_source: "rateloop_network",
+                scope_workspace_id: null,
+                adulthood_basis: "provider_assertion",
+                adulthood_assertion_id: "assertion_age",
+                invitation_qualification_id: null,
+                sanctions_screening_id: "screening_network",
+                scope_status: "eligible",
+                scope_valid_until: new Date(now.getTime() + 86_400_000),
+                scope_updated_at: now,
+              },
+            ],
+          };
+        }
+        if (sql.includes("a.minimum_age_verified AS assertion_minimum_age_verified")) {
+          return { rowCount: 1, rows: [identity] };
+        }
+        if (sql.includes("b.subject_reference_hash")) {
+          const raterId = String(values?.[0]);
+          return {
+            rowCount: 1,
+            rows: [
+              {
+                ...identity,
+                subject_reference_hash: `hmac-sha256:v1:${(raterId === "rater_network" ? "9" : "7").repeat(64)}`,
+                status: "active",
+                capabilities_json: JSON.stringify(["minimum_age", "unique_human"]),
+              },
+            ],
+          };
+        }
+        if (
+          sql.includes("FROM tokenless_forecast_calibration_accumulators") ||
+          sql.includes("FROM tokenless_forecast_pair_accumulators")
+        ) {
+          return { rowCount: 0, rows: [] };
+        }
+        if (sql.includes("FROM tokenless_rater_profiles") && sql.includes("rater_id=ANY")) {
+          return {
+            rowCount: 2,
+            rows: [
+              {
+                rater_id: "rater_network",
+                account_address: REVIEWER,
+                principal_id: "rlp_network_reviewer",
+                deleted_at: null,
+              },
+              {
+                rater_id: "rater_network_second",
+                account_address: SECOND_REVIEWER,
+                principal_id: "rlp_network_reviewer_second",
+                deleted_at: null,
+              },
+            ],
+          };
+        }
+        if (sql.includes("COUNT(*) AS active_count")) return { rowCount: 0, rows: [] };
+        if (/^(INSERT|UPDATE|DELETE)/u.test(sql.trim())) writes.push(sql);
+        throw new Error(`Unexpected ${mode} network reservation query: ${sql}`);
+      },
+      release() {},
+    } as unknown as PoolClient;
+    if (mode === "integrity_conflict" || mode === "locked_conflict" || mode === "qualification_conflict") {
+      const eligible = await requirePaidReviewEligibilityInTransaction(client, "rlp_network_reviewer", now);
+      assert.equal(eligible.raterId, "rater_network");
+      assert.equal(eligible.payoutAccount, REVIEWER);
+      eligibilityReads = 0;
+    }
+    __setDatabaseResourcesForTests({
+      client: { execute: async () => ({ rowCount: 1, rows: [{ project_id: "project_network" }] }) },
+      database: {},
+      pool: { connect: async () => client },
+    } as unknown as DatabaseResources);
+    const request = {
+      accountAddress: OWNER,
+      workspaceId: "ws_network",
+      projectId: "project_network",
+      runId: "run_network",
+      subpanelId: "subpanel_network",
+      confidentialityTermsHash: TERMS_HASH,
+      now,
+    };
+    if (mode !== "replay") {
+      await assert.rejects(
+        () => reserveDiversifiedNetworkSubpanel(request),
+        (error: unknown) =>
+          mode === "collision"
+            ? error instanceof TokenlessServiceError && error.code === "network_cohort_membership_conflict"
+            : mode === "integrity_conflict"
+              ? error instanceof TokenlessServiceError && error.code === "network_reviewer_integrity_conflict"
+              : mode === "locked_conflict"
+                ? error instanceof TokenlessServiceError && error.code === "network_reviewer_eligibility_conflict"
+                : mode === "qualification_conflict"
+                  ? error instanceof TokenlessServiceError && error.code === "network_reviewer_qualification_conflict"
+                  : error instanceof Error && /eligible supply/iu.test(error.message),
+      );
+      assert.deepEqual(writes, []);
+      if (mode === "locked_conflict") assert.equal(eligibilityReads, 3);
+      return;
+    }
+    const replay = await reserveDiversifiedNetworkSubpanel(request);
+    assert.equal(replay.selectedCount, 2);
+    assert.equal(replay.selectionCommitment, POLICY_HASH);
+    assert.deepEqual(writes, []);
+  }
+
+  await run("collision");
+  await run("no_capacity");
+  await run("integrity_conflict");
+  await run("locked_conflict");
+  await run("qualification_conflict");
+  await run("replay");
 });
 
 test("confidentiality acceptance unlocks only the assigned blinded task and short artifact leases", async () => {

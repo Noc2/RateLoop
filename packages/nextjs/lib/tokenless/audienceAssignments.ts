@@ -1639,6 +1639,38 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
         true,
       );
     }
+    const selectedReviewerLookups = selection.selected.map(value => value.reviewerLookup).sort();
+    const lockedEpochMembers = await client.query(
+      `SELECT reviewer_lookup,cluster_pseudonym,risk_band,eligibility_status
+       FROM tokenless_integrity_epoch_members
+       WHERE epoch_id=$1 AND reviewer_lookup=ANY($2::text[])
+       ORDER BY reviewer_lookup ASC FOR UPDATE`,
+      [policy.integrity.epochId, selectedReviewerLookups],
+    );
+    const lockedEpochByLookup = new Map(
+      lockedEpochMembers.rows.map(
+        value => [rowString(value as QueryRow, "reviewer_lookup"), value as QueryRow] as const,
+      ),
+    );
+    if (
+      lockedEpochMembers.rowCount !== selectedReviewerLookups.length ||
+      selection.selected.some(chosen => {
+        const locked = lockedEpochByLookup.get(chosen.reviewerLookup);
+        return (
+          !locked ||
+          rowString(locked, "eligibility_status") !== "eligible" ||
+          rowString(locked, "cluster_pseudonym") !== chosen.clusterPseudonym ||
+          rowString(locked, "risk_band") !== chosen.riskBand
+        );
+      })
+    ) {
+      throw new TokenlessServiceError(
+        "A selected network reviewer changed integrity eligibility during selection.",
+        409,
+        "network_reviewer_integrity_conflict",
+        true,
+      );
+    }
     const crossWorkspaceCapacity = await client.query(
       `SELECT rater_id,COUNT(*) AS active_count
        FROM tokenless_assurance_assignments
@@ -1678,7 +1710,8 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
       const currentQualifications = await client.query(
         `SELECT qualification_id FROM tokenless_reviewer_qualifications
          WHERE rater_id=$1 AND reviewer_source='rateloop_network' AND status='active'
-           AND (expires_at IS NULL OR expires_at>$2)`,
+           AND (expires_at IS NULL OR expires_at>$2)
+         ORDER BY qualification_id ASC FOR UPDATE`,
         [chosen.raterId, now],
       );
       const currentQualificationIds = new Set(
