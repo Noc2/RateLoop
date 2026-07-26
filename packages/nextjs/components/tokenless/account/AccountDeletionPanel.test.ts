@@ -26,5 +26,8 @@ test("account deletion requires a literal confirmation and clears client authent
 });
 
 test("human settings render account deletion after notifications", () => {
-  assert.match(settingsPageSource, /<NotificationSettingsPanel \/>\s*<AccountDeletionPanel \/>/);
+  assert.match(
+    settingsPageSource,
+    /<NotificationSettingsPanel \/>\s*<SubjectDataExportPanel \/>\s*<AccountDeletionPanel \/>/,
+  );
 });
