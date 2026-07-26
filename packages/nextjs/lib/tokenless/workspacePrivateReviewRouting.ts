@@ -599,10 +599,28 @@ async function loadMembers(
   const result = await client.query(
     `SELECT reviewer.principal_address,access_grant.grant_id,access_grant.grant_hash,access_grant.project_scope,
             access_grant.max_private_sensitivity,access_grant.valid_from,access_grant.valid_until,access_grant.created_by,
-            access_grant.source_invitation_id
+            access_grant.source_invitation_id,
+            membership.allowed_project_ids_json AS membership_allowed_project_ids_json,
+            membership.membership_expires_at AS group_membership_expires_at,
+            membership.joined_at AS group_membership_joined_at,
+            membership.created_by AS group_membership_created_by,
+            membership.source_invitation_id AS group_membership_source_invitation_id,
+            membership_invitation.token_hash AS group_membership_invitation_token_hash
      FROM tokenless_workspace_reviewers reviewer
      JOIN tokenless_principals principal
        ON principal.principal_id=reviewer.principal_address AND principal.status='active'
+     JOIN tokenless_private_group_memberships membership
+       ON membership.group_id=$3 AND membership.principal_address=reviewer.principal_address
+      AND membership.status='active' AND membership.joined_at<=$2
+      AND (membership.membership_expires_at IS NULL OR membership.membership_expires_at>$2)
+     JOIN tokenless_private_group_invitations membership_invitation
+       ON membership_invitation.invitation_id=membership.source_invitation_id
+      AND membership_invitation.workspace_id=reviewer.workspace_id
+      AND membership_invitation.group_id=membership.group_id
+     JOIN tokenless_private_group_invitation_redemptions membership_redemption
+       ON membership_redemption.invitation_id=membership_invitation.invitation_id
+      AND membership_redemption.group_id=membership.group_id
+      AND membership_redemption.principal_address=membership.principal_address
      JOIN tokenless_workspace_reviewer_access_grants access_grant
        ON access_grant.workspace_id=reviewer.workspace_id AND access_grant.principal_address=reviewer.principal_address
       AND access_grant.revoked_at IS NULL AND access_grant.valid_from<=$2
@@ -610,7 +628,7 @@ async function loadMembers(
      WHERE reviewer.workspace_id=$1 AND reviewer.status='active'
      ORDER BY reviewer.principal_address,access_grant.valid_until DESC NULLS FIRST,access_grant.created_at,access_grant.grant_id
      FOR SHARE`,
-    [input.workspaceId, input.now],
+    [input.workspaceId, input.now, input.privateGroupId],
   );
   const members: Member[] = [];
   const selectedReviewers = new Set<string>();
@@ -619,7 +637,20 @@ async function loadMembers(
     const createdBy = text(value, "created_by");
     const grantId = text(value, "grant_id");
     const grantHash = text(value, "grant_hash");
-    if (!accountAddress || !createdBy || !grantId || !grantHash || !HASH_PATTERN.test(grantHash)) {
+    const membershipCreatedBy = text(value, "group_membership_created_by");
+    const membershipSourceInvitationId = text(value, "group_membership_source_invitation_id");
+    const membershipInvitationTokenHash = text(value, "group_membership_invitation_token_hash");
+    if (
+      !accountAddress ||
+      !createdBy ||
+      !grantId ||
+      !grantHash ||
+      !HASH_PATTERN.test(grantHash) ||
+      !membershipCreatedBy ||
+      !membershipSourceInvitationId ||
+      !membershipInvitationTokenHash ||
+      !/^[0-9a-f]{64}$/u.test(membershipInvitationTokenHash)
+    ) {
       throw new Error("Stored workspace-reviewer grant is invalid.");
     }
     if (selectedReviewers.has(accountAddress)) continue;
@@ -635,6 +666,17 @@ async function loadMembers(
       );
       if (allowedProject.rowCount !== 1) continue;
     }
+    const membershipProjects = json<string[]>(
+      value.membership_allowed_project_ids_json,
+      "private-group membership projects",
+    );
+    if (
+      !Array.isArray(membershipProjects) ||
+      membershipProjects.some(projectId => typeof projectId !== "string" || !projectId)
+    ) {
+      throw new Error("Stored private-group membership projects are invalid.");
+    }
+    if (membershipProjects.length > 0 && !membershipProjects.includes(input.projectId)) continue;
     const sourceInvitationId = text(value, "source_invitation_id");
     if (sourceInvitationId) {
       const redemption = await client.query(
@@ -662,26 +704,36 @@ async function loadMembers(
       );
       if (worldId.rowCount !== 1) continue;
     }
-    const joinedAt = date(value.valid_from, "workspace-reviewer grant start");
-    const membershipExpiresAt = optionalDate(value.valid_until, "workspace-reviewer grant expiry");
+    const grantJoinedAt = date(value.valid_from, "workspace-reviewer grant start");
+    const groupJoinedAt = date(value.group_membership_joined_at, "private-group membership start");
+    const joinedAt = grantJoinedAt > groupJoinedAt ? grantJoinedAt : groupJoinedAt;
+    const grantExpiresAt = optionalDate(value.valid_until, "workspace-reviewer grant expiry");
+    const groupExpiresAt = optionalDate(value.group_membership_expires_at, "private-group membership expiry");
+    const membershipExpiresAt =
+      grantExpiresAt && groupExpiresAt
+        ? grantExpiresAt < groupExpiresAt
+          ? grantExpiresAt
+          : groupExpiresAt
+        : (grantExpiresAt ?? groupExpiresAt);
     const provenance: Array<Record<string, unknown>> = [
       {
         key: "customer_invitation",
         value: true,
         source: "workspace_reviewer_access_grant",
         assertedBy: createdBy,
-        verifiedAt: joinedAt.toISOString(),
+        verifiedAt: grantJoinedAt.toISOString(),
         evidenceReferenceHash: grantHash,
-        ...(membershipExpiresAt ? { expiresAt: membershipExpiresAt.toISOString() } : {}),
+        ...(grantExpiresAt ? { expiresAt: grantExpiresAt.toISOString() } : {}),
       },
       {
         key: "private_review_policy_group",
         value: input.privateGroupId,
-        source: "workspace_reviewer_access_grant",
-        assertedBy: createdBy,
-        verifiedAt: joinedAt.toISOString(),
-        evidenceReferenceHash: grantHash,
-        ...(membershipExpiresAt ? { expiresAt: membershipExpiresAt.toISOString() } : {}),
+        source: "private_group_membership",
+        assertedBy: membershipCreatedBy,
+        verifiedAt: groupJoinedAt.toISOString(),
+        evidenceReferenceHash: `sha256:${membershipInvitationTokenHash}`,
+        sourceInvitationId: membershipSourceInvitationId,
+        ...(groupExpiresAt ? { expiresAt: groupExpiresAt.toISOString() } : {}),
       },
       {
         key: "workspace_reviewer_access_grant",

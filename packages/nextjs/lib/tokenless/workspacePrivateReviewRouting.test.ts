@@ -122,28 +122,30 @@ async function fixture(expertiseRequirements: ReviewerExpertiseRequirement[] = [
 }
 
 async function addMember(input: { workspaceId: string; groupId: string; reviewer: string; now: Date }) {
+  const membershipExpiresAt = new Date(input.now.getTime() + 30 * 86_400_000);
+  const groupInvitation = await createPrivateGroupInvitation({
+    accountAddress: OWNER,
+    workspaceId: input.workspaceId,
+    groupId: input.groupId,
+    intendedAccountAddress: input.reviewer,
+    membershipExpiresAt,
+    now: input.now,
+  });
+  await redeemPrivateGroupInvitation({
+    accountAddress: input.reviewer,
+    token: groupInvitation.token,
+    now: input.now,
+  });
   const invitation = await createWorkspaceReviewerInvitation({
     accountAddress: OWNER,
     workspaceId: input.workspaceId,
     maxPrivateSensitivity: "confidential",
     intendedAccountAddress: input.reviewer,
-    accessExpiresAt: new Date(input.now.getTime() + 30 * 86_400_000),
+    accessExpiresAt: membershipExpiresAt,
     now: input.now,
   });
   await redeemWorkspaceReviewerInvitation({ accountAddress: input.reviewer, token: invitation.token, now: input.now });
   return invitation;
-}
-
-async function addLegacyExpertiseBinding(input: { workspaceId: string; groupId: string; reviewer: string; now: Date }) {
-  const invitation = await createPrivateGroupInvitation({
-    accountAddress: OWNER,
-    workspaceId: input.workspaceId,
-    groupId: input.groupId,
-    intendedAccountAddress: input.reviewer,
-    membershipExpiresAt: new Date(input.now.getTime() + 30 * 86_400_000),
-    now: input.now,
-  });
-  await redeemPrivateGroupInvitation({ accountAddress: input.reviewer, token: invitation.token, now: input.now });
 }
 
 function provision(input: { workspaceId: string; now: Date; profileVersion?: number; profileHash?: string }) {
@@ -244,6 +246,68 @@ test("managed private routing is idempotent and stays unready until the exact re
       ["customer_invitation", "private_review_policy_group", "workspace_reviewer_access_grant"],
     );
   }
+});
+
+test("standalone reviewer access and unrelated group membership cannot enter the selected private group", async () => {
+  const setup = await fixture();
+  await dbClient.execute({
+    sql: `UPDATE tokenless_workspace_subscriptions
+          SET plan_key='early_access',price_version='early_access_usd_29_2026_07',
+              provider_status='active',current_period_start=?,current_period_end=?,updated_at=?
+          WHERE workspace_id=?`,
+    args: [
+      new Date(setup.now.getTime() - 60_000),
+      new Date(setup.now.getTime() + 365 * 86_400_000),
+      setup.now,
+      setup.workspaceId,
+    ],
+  });
+  const unrelatedGroup = await createPrivateGroup({
+    accountAddress: OWNER,
+    workspaceId: setup.workspaceId,
+    name: "Unrelated reviewers",
+    purpose: "Must not satisfy the selected review profile.",
+  });
+  const unrelatedInvitation = await createPrivateGroupInvitation({
+    accountAddress: OWNER,
+    workspaceId: setup.workspaceId,
+    groupId: unrelatedGroup.groupId,
+    intendedAccountAddress: REVIEWER_A,
+    membershipExpiresAt: new Date(setup.now.getTime() + 30 * 86_400_000),
+    now: setup.now,
+  });
+  await redeemPrivateGroupInvitation({
+    accountAddress: REVIEWER_A,
+    token: unrelatedInvitation.token,
+    now: setup.now,
+  });
+  const standaloneInvitation = await createWorkspaceReviewerInvitation({
+    accountAddress: OWNER,
+    workspaceId: setup.workspaceId,
+    intendedAccountAddress: REVIEWER_A,
+    maxPrivateSensitivity: "confidential",
+    accessExpiresAt: new Date(setup.now.getTime() + 30 * 86_400_000),
+    now: setup.now,
+  });
+  await redeemWorkspaceReviewerInvitation({
+    accountAddress: REVIEWER_A,
+    token: standaloneInvitation.token,
+    now: setup.now,
+  });
+
+  const readiness = await provision(setup);
+  assert.equal(readiness.ready, false);
+  assert.equal(readiness.reason, "reviewer_seats_insufficient");
+  assert.equal(readiness.syncedReviewerCount, 0);
+  const memberships = await dbClient.execute({
+    sql: `SELECT group_id FROM tokenless_private_group_memberships
+          WHERE principal_address=? AND status='active'`,
+    args: [REVIEWER_A],
+  });
+  assert.deepEqual(
+    memberships.rows.map(row => row.group_id),
+    [unrelatedGroup.groupId],
+  );
 });
 
 test("frozen request reconciliation admits a newly redeemed reviewer after the prior panel expires", async () => {
@@ -397,8 +461,6 @@ test("exact expertise and cohort capacity both fail closed", async () => {
   const setup = await fixture([requirement]);
   await addMember({ ...setup, reviewer: REVIEWER_A });
   await addMember({ ...setup, reviewer: REVIEWER_B });
-  await addLegacyExpertiseBinding({ ...setup, reviewer: REVIEWER_A });
-  await addLegacyExpertiseBinding({ ...setup, reviewer: REVIEWER_B });
   const expertiseExpiresAt = new Date(setup.now.getTime() + 10 * 86_400_000);
   await replacePrivateGroupMemberExpertise({
     accountAddress: OWNER,

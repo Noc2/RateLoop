@@ -684,6 +684,7 @@ async function resolveExactPrivateBinding(
                  cr.reviewer_account_address,cr.qualification_provenance_json,
                  reviewer_grant.grant_id,reviewer_grant.grant_hash,
                  reviewer_grant.max_private_sensitivity,
+                 group_membership.allowed_project_ids_json AS group_membership_allowed_project_ids_json,
                  q.expertise_definition_id,q.expertise_definition_version,q.expertise_definition_hash,
                  wb.principal_id AS reviewer_principal_id,wb.wallet_address AS reviewer_payout_account
           FROM tokenless_assurance_projects p
@@ -704,6 +705,19 @@ async function resolveExactPrivateBinding(
            AND reviewer.status='active'
           JOIN tokenless_principals reviewer_principal
             ON reviewer_principal.principal_id=reviewer.principal_address AND reviewer_principal.status='active'
+          JOIN tokenless_private_group_memberships group_membership
+            ON group_membership.group_id=g.group_id
+           AND group_membership.principal_address=reviewer.principal_address
+           AND group_membership.status='active' AND group_membership.joined_at<=?
+           AND (group_membership.membership_expires_at IS NULL OR group_membership.membership_expires_at>?)
+          JOIN tokenless_private_group_invitations group_invitation
+            ON group_invitation.invitation_id=group_membership.source_invitation_id
+           AND group_invitation.workspace_id=p.workspace_id
+           AND group_invitation.group_id=group_membership.group_id
+          JOIN tokenless_private_group_invitation_redemptions group_redemption
+            ON group_redemption.invitation_id=group_invitation.invitation_id
+           AND group_redemption.group_id=group_membership.group_id
+           AND group_redemption.principal_address=group_membership.principal_address
           JOIN tokenless_workspace_reviewer_access_grants reviewer_grant
             ON reviewer_grant.workspace_id=p.workspace_id
            AND reviewer_grant.principal_address=reviewer.principal_address
@@ -738,6 +752,8 @@ async function resolveExactPrivateBinding(
       responseDeadline,
       now,
       responseDeadline,
+      now,
+      responseDeadline,
       responseDeadline,
       context.workspaceId,
       deliverySensitivity,
@@ -761,6 +777,11 @@ async function resolveExactPrivateBinding(
     const cohortId = text(row, "cohort_id");
     const reviewer = text(row, "reviewer_account_address");
     if (!projectId || !cohortId || !reviewer) continue;
+    const groupMembershipProjects = stringArray(
+      row.group_membership_allowed_project_ids_json,
+      "private-group membership projects",
+    );
+    if (groupMembershipProjects.length > 0 && !groupMembershipProjects.includes(projectId)) continue;
     const grantSensitivity = exactPrivateSensitivity(text(row, "max_private_sensitivity"));
     if (
       !grantSensitivity ||
