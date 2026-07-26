@@ -77,9 +77,10 @@ project assignment, and reviewer lease rather than wallet ownership.
 ## Evidence boundary
 
 Private artifacts are encrypted and access-controlled. Each artifact has its own random data-encryption key. Hosted
-releases require workspace/project-scoped AWS KMS aliases and authenticated encryption context; authorized RateLoop
-workload roles permitted on those tenant keys can still decrypt the tenant's artifacts to provide the service. Provider
-key provisioning, inventory, rotation, and access exercises are release gates. Paid settlement inputs and outputs are
+releases derive workspace/project wrapping keys from a versioned root held in Vercel's server-only secret store and
+bind authenticated encryption context; authorized RateLoop workloads can still decrypt the tenant's artifacts to
+provide the service. This is application-managed encryption, not customer-held or non-exportable HSM custody. Key
+inventory, rotation/rewrap, recovery, and access exercises are release gates. Paid settlement inputs and outputs are
 independently recomputable on Base. A paid commit schedules public
 decryptability of its vote-key-to-payout link at the configured drand round after the commit deadline, independent of a
 later reveal or claim, while the customer's private artifacts and decision record remain outside the public chain.

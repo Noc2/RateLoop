@@ -33,7 +33,8 @@ test("privacy notice explains subscription processor data and retention", async 
   assert.match(html, /current provider, subprocessor, and international-transfer inventory/i);
   assert.match(html, /does not claim launch-level GDPR compliance/i);
   assert.match(html, /current isolated deployment.*server-only application keyrings/i);
-  assert.match(html, /does not claim that managed KMS is active/i);
+  assert.match(html, /application-managed encryption/i);
+  assert.match(html, /not a customer-held-key or non-exportable hardware-security-module boundary/i);
   assert.match(html, /DPIA remain release gates before real customer material/i);
   assert.match(html, /subject-access exports expire after seven days/i);
   assert.match(html, /terminal notification-delivery records are purged after 90 days/i);

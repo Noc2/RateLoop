@@ -30,10 +30,11 @@ export default function PrivacyPage() {
         Each customer artifact has its own random data-encryption key. In the current isolated deployment, designated
         private fields and artifact keys are protected by purpose-separated, server-only application keyrings and an
         authenticated envelope-encryption boundary. Authorized RateLoop workloads can decrypt covered data when needed
-        to provide the service. The source code supports workspace/project-scoped AWS KMS wrapping, but RateLoop does
-        not claim that managed KMS is active unless the deployed environment has provisioned and exercised it.
-        Provisioning, key inventory, rotation, least-privilege access tests, and the DPIA remain release gates before
-        real customer material is accepted in a hosted release.
+        to provide the service. Hosted artifact wrapping derives workspace/project keys from a versioned root in
+        Vercel&apos;s server-only secret store. This is application-managed encryption, not a customer-held-key or
+        non-exportable hardware-security-module boundary. Key inventory, rotation and rewrapping, recovery,
+        least-privilege access tests, and the DPIA remain release gates before real customer material is accepted in a
+        hosted release.
       </p>
       <h2>Purposes and legal bases</h2>
       <p>

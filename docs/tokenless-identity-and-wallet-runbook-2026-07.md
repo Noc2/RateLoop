@@ -55,7 +55,8 @@ remain available.
 
 Repository completion does not establish EU hosting or compliance. Before production, separately record:
 
-- the live EU Postgres, compute, object-store, KMS, log, backup, email, Better Auth, and support-access resource IDs;
+- the live EU Postgres, compute, object-store, platform-secret inventory, log, backup, email, Better Auth, and
+  support-access resource IDs;
 - processor agreements and transfer assessments for Resend, Google, Apple, thirdweb, RPC, billing, and support tools;
 - the thirdweb recovery/export behavior shown to users;
 - key-generation, recovery, and rotation evidence; and

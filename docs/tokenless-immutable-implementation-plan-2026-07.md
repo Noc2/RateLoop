@@ -205,10 +205,14 @@ finish before the first paid voucher. Browsing and advisory calibration require 
 
 Private artifacts are encrypted before storage and released only through workspace membership, project assignment, and
 short reviewer leases. Public, private, and sensitive-material decisions are separate policy dimensions. Each customer
-artifact has a random data-encryption key; hosted wrapping requires workspace/project-scoped AWS KMS alias templates and
-authenticated encryption context for every artifact DEK. Authorized RateLoop workload roles permitted on those keys can
-still decrypt that tenant's artifacts. Provider inventory, key provisioning, rotation/rewrap, and live exercises remain
-release gates.
+artifact has a random data-encryption key. Hosted wrapping uses a versioned root keyring in Vercel's server-only secret
+store and HKDF-derived workspace/project wrapping keys with authenticated context for every artifact DEK. Authorized
+RateLoop workloads can therefore decrypt artifacts within their application permissions: platform secrets are not an
+HSM boundary. Railway holds only its separate service signing keys. This avoids any RateLoop AWS, KMS, IAM, or AWS OIDC
+dependency, but accepts a weaker custody boundary than non-exportable hardware-backed keys. Provider inventory,
+strict role separation, address and key-version pinning, rewrap/rotation and recovery drills, minimal balances and
+allowances, transaction and rolling-window spend ceilings, and live exercises remain release gates. Retired wrapping
+roots remain available only until all dependent envelopes are rewrapped and verified.
 
 On-chain data contains commitments and settlement evidence, never private customer payloads or plaintext URLs. A paid
 commit publishes tlock ciphertext containing the vote, prediction, response hash, payout address, and salt. Committing

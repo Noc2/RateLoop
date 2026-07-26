@@ -336,7 +336,8 @@ Round two surfaced a distinct class that no earlier pass covered, and several ar
   forever; session rows with IP and user-agent are never deleted.
 - **Undisclosed analytics** — Simple Analytics loads on every production page with no processor named in the notice.
 - **No DPA, subprocessor list, or cookie policy**, while the Terms position RateLoop as a processor.
-- **The privacy notice claims KMS-scoped vault wrapping** that the deployment serving it does not use.
+- **The privacy notice must describe application-managed, platform-secret vault wrapping accurately** and must not
+  imply an HSM or customer-held-key boundary.
 - **`GET /audit/export` mutates state** — behind a download link, so every prefetch grows the chain.
 - **Notification emails permanently dead-letter** after ~2h of misconfiguration, so the first queue dies before Resend
   is ever configured.

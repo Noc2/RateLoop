@@ -25,11 +25,6 @@ const conditionalProviders = [
     condition: "Only when a customer uses Stripe billing or invoice funding.",
   },
   {
-    provider: "Amazon Web Services EMEA SARL and AWS affiliates",
-    purpose: "Managed key operations, private object storage, locked evidence exports, or attestation services.",
-    condition: "Only for a provisioned managed AWS feature; source-code support alone does not enable processing.",
-  },
-  {
     provider: "thirdweb, Inc. and its service providers",
     purpose: "Optional app-scoped wallet creation, recovery, and wallet infrastructure.",
     condition: "Only after a signed-in user explicitly chooses the optional managed-wallet feature.",

@@ -14,7 +14,7 @@ records the concrete work that must pass once `tokenless` is integrated into `ma
 | Application data    | Ordered Drizzle journal from `0000` through the current head, whose authoritative value is the final entry of `packages/nextjs/drizzle/meta/_journal.json`                                                                              | Every migration must be applied and verified before hosted smoke testing                                                                                                                                    |
 | Hosted isolation    | Dedicated Vercel project `rateloop-tokenless`; dedicated Railway project with Postgres, Ponder, and keeper; no `rateloop.ai` alias                                                                                                      | The currently served preview is not a release candidate and must not be promoted as production-ready                                                                                                        |
 | Identity            | Better Auth supplies browser authentication and opaque RateLoop principals; wallets are purpose-bound adapters                                                                                                                          | Hosted OTP/passkey verification, optional provider allowlists, self-custodial wallet client verification, and account-recovery testing remain release gates                                                 |
-| Release preflight   | Deployment identity, region, secret-role separation, schema checks, and managed-signing code paths fail closed                                                                                                                          | The `managedSigning` release capability remains `false` until independent remediation review, signed IAM-policy evidence, and a live provider exercise pass; `paidAssignmentSettlement` remains unavailable |
+| Release preflight   | Deployment identity, region, secret-role separation, schema checks, and platform-secret signing paths fail closed                                                                                                                          | The `platformSecretSigning` release capability remains `false` until independent remediation review, approved rotation/recovery/spend-limit records, and a live exercise pass; `paidAssignmentSettlement` remains unavailable |
 
 ## Hosted-environment invariant
 
@@ -36,12 +36,12 @@ review-deployment flag is required. Those checks require Vercel project
 `prj_H6C2pfWKEAupFroHbLfzhquaNCLm` (`rateloop-tokenless`), the exact tokenless origin, public network panels disabled,
 and no public secret exposure. They must never authorize `rate-loop-nextjs`, `rateloop.ai`, or `www.rateloop.ai`.
 Because `validateTokenlessProductionReadiness` returns `validateTokenlessTestDeployment(env)` for any
-`VERCEL_GIT_COMMIT_REF` other than `main`, the release-capability loop and the forbidden-hosted-private-key checks never
-run on `tokenless`, so `managedSigning: false` does not block end-to-end testing on the isolated test deployment.
+`VERCEL_GIT_COMMIT_REF` other than `main`, the release-capability loop and explicit production key-version checks never
+run on `tokenless`, so `platformSecretSigning: false` does not block end-to-end testing on the isolated test deployment.
 
 Once this work is merged into `main`, hosted builds automatically activate the complete production preflight and must
 satisfy every release gate in this register before integration with `rateloop.ai`. A successful isolated tokenless test
-deployment is not evidence that managed-signer provisioning and exercises, paid assignment settlement, EU infrastructure, migration verification,
+deployment is not evidence that platform-secret inventory and exercises, paid assignment settlement, EU infrastructure, migration verification,
 or end-to-end paid-path testing is complete.
 
 ## Completed in this branch
@@ -52,10 +52,11 @@ or end-to-end paid-path testing is complete.
   and production deployments now require the same persisted workflow and complete resource evidence.
 - Removed the public limitations page and registry. Customer-facing copy now explains the product mechanisms and links
   technical terms to their detailed documentation; engineering blockers remain in this internal register.
-- Implemented production-gated workload-identity AWS KMS code paths for every enabled application and keeper role, and
-  tenant-scoped KMS wrapping for private artifacts. The isolated deployment is not managed-custody evidence; KMS
-  provisioning and live exercises remain open. Optional managed app-wallet creation remains disabled until externally
-  verifiable export and recovery exist.
+- Implemented production-gated, role-separated platform-secret signing for every enabled application and keeper role,
+  plus derived workspace/project wrapping for private artifacts. RateLoop has no AWS, KMS, IAM, or AWS OIDC dependency.
+  The isolated deployment is not a completed custody exercise; inventory, rotation/rewrap, recovery, spend-limit, and
+  incident exercises remain open. Optional managed app-wallet creation remains disabled until externally verifiable
+  export and recovery exist.
 - Made private quote identifiers opaque and owner-bound, with migration-time invalidation of legacy unbound private
   capabilities and retention-aware deletion handling.
 - Kept private-paid, public-network, and hybrid review lanes unavailable while their complete settlement and
@@ -92,7 +93,7 @@ passed.
 Cross-cutting fixes also enforce immutable migration history (including the declared journal excision), default-deny
 browser mutation origins, shared Better Auth cookie names, conditional enterprise identity plugins, exact owner approval
 for redacted publication, open-review rediscovery, conservative evidence
-finality, ordered server-side RPC failover, exact managed-KMS inventory, a non-root keeper image, and a normative
+finality, ordered server-side RPC failover, exact platform-secret inventory, a non-root keeper image, and a normative
 500-seat settlement gas benchmark.
 
 The source now includes Feedback Bonus remainder pull credits, immutable verifier-bound post-reveal beacon entropy
@@ -100,7 +101,7 @@ separate from the earlier tlock disclosure round, a bounded base-only fallback, 
 assignment. These fund-core changes remain release gates until an
 audited verifier and complete v4 contract/service bundle are deployed atomically and exercised. Other gates include
 a multisig or equivalent hardened issuer-rotation authority for any real-value deployment;
-per-tenant KMS wrapping authorities; managed custody and rotation
+workspace/project-derived wrapping authorities; platform-secret custody and rotation
 for every hosted signer; named-host verification; live alert, backup, deletion, and incident exercises; and the full
 economics/gold/correlation acceptance package. None may be inferred from the isolated Vercel deployment.
 
@@ -110,20 +111,21 @@ is an explicit L1-liveness assumption, not an unconditional wall-clock guarantee
 post-closure assurance claim if the condition is not met while preserving keeper progression to the paid base-only fallback.
 
 The public Vercel review deployment may retain its existing isolated, persisted test-vault key only when the immutable
-tokenless project ID, review origin, production target, and tokenless Git ref all match. It cannot claim managed-KMS
-residency, cannot share that key with another role, and cannot satisfy the main release gate. The next hosted staging
-release must use the signed managed-KMS inventory below; no placeholder resource identifier counts as provisioning.
+tokenless project ID, review origin, production target, and tokenless Git ref all match. It cannot claim HSM custody,
+cannot share that key with another role, and cannot satisfy the main release gate. The next hosted staging release must
+use the signed platform-secret inventory below; no placeholder resource identifier counts as provisioning.
 
 ## Gates before the next hosted staging release
 
-1. **Provision and exercise managed signing.** The source now requires workload-identity AWS KMS signing for the
-   credential issuer, gas-only relayer, prepaid funder, surprise-bonus funder, and evidence signer, with distinct roles
-   and keys. Provision the exact EU resources, validate their public identities, and run
-   rotation/failure exercises; source implementation alone is not provider evidence.
+1. **Provision and exercise platform-secret signing.** Create distinct Vercel/Railway keys for the credential issuer,
+   gas-only relayer, prepaid funder, surprise-bonus funder, evidence signer, artifact wrapper, and keeper. Derive and
+   pin every public address/key ID and version. Exercise one-role-at-a-time rotation, rewrap, recovery, missing-secret
+   failure, and incident revocation. Enforce minimal balances and allowances plus per-transaction and rolling-window
+   spend ceilings. Attach approved SHA-256 runbook references; source implementation alone is not operational evidence.
 2. **Connect paid assignment to settlement.** A paid run must reserve assignments against the exact policy snapshot,
    issue the bound voucher, commit and settle on a fresh complete v4 deployment, produce terminal receipts, and publish a
    source-derived result. Network and hybrid work must remain unavailable until this path passes.
-3. **Provision the signed EU bundle.** Supply matching EU Postgres, private Blob, managed KMS, log, backup, auth,
+3. **Provision the signed EU bundle.** Supply matching EU Postgres, private Blob, platform-secret inventory, log, backup, auth,
    support-access, Ponder, keeper, and external-processor evidence. Validate actual provider IDs and runtime regions;
    setting expected strings is not evidence.
 4. **Apply and verify migrations.** Run every journal entry through the current head — the final entry of
@@ -140,7 +142,8 @@ release must use the signed managed-KMS inventory below; no placeholder resource
    settlement, recovery, and mobile evidence attached to this gate before enabling real users or real money.
 7. **Add operational evidence.** Record alerting, key rotation, backup restore, deletion, legal hold, incident response,
    founder continuity, worker liveness, and deployment rollback exercises for the isolated services. Exercise the
-   configured KMS/Rekor/TSA witness, S3 Object Lock destination, SIEM webhook, OTLP ingest, and each enabled GRC
+   configured platform-secret/Rekor/TSA witness, optional customer-controlled S3-compatible Object Lock destination,
+   SIEM webhook, OTLP ingest, and each enabled GRC
    connector before enabling its public capability flag. Drata additionally requires the customer's Custom Connection
    entitlement/schema/monitor/control association. The current Vanta path requires a customer-owned Manage Vanta
    credential and pre-existing document/control workflow; a public Vanta marketplace app remains blocked on vendor
@@ -155,8 +158,9 @@ release must use the signed managed-KMS inventory below; no placeholder resource
   paid eligibility, tax, sanctions, wallet, and job qualification.
 - Complete multi-case buyer workflows, reviewer notifications and receipts, appeals, failure recovery, and evidence
   packet verification with deployment-pinned source data.
-- Complete external contract and privacy review, assert-no-funds-admin verification, gas/code-size reporting, KMS and
-  circuit-breaker operations, rate limiting, reconciliation, monitoring, and security testing.
+- Complete external contract and privacy review, assert-no-funds-admin verification, gas/code-size reporting,
+  platform-secret rotation/recovery, circuit-breaker operations, rate limiting, reconciliation, monitoring, and
+  security testing.
 - Complete B2B trader/VAT handling, sanctions and geographic controls, invoices and reconciliation, notice-and-action,
   DAC7 operations, retention/deletion, processor agreements, and German legal review.
 - Redeploy the complete stack atomically after any later fund-core change. No historical-address continuity or
