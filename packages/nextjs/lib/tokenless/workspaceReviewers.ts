@@ -74,7 +74,13 @@ function normalizeEmail(value: string) {
   const normalized = value.trim().toLowerCase();
   const match = EMAIL_PATTERN.exec(normalized);
   if (!match || normalized.length > 320 || !DOMAIN_PATTERN.test(match[1]!)) {
-    throw new TokenlessServiceError("Reviewer email is invalid.", 400, "invalid_workspace_reviewer");
+    throw new TokenlessServiceError(
+      "Reviewer email is invalid.",
+      400,
+      "invalid_workspace_reviewer",
+      false,
+      "intendedEmail",
+    );
   }
   return normalized;
 }
@@ -89,7 +95,13 @@ function normalizeDomain(value: string) {
 
 function sensitivity(value: string): Sensitivity {
   if (!SENSITIVITIES.includes(value as Sensitivity)) {
-    throw new TokenlessServiceError("Private-material sensitivity is unsupported.", 400, "invalid_workspace_reviewer");
+    throw new TokenlessServiceError(
+      "Private-material sensitivity is unsupported.",
+      400,
+      "invalid_workspace_reviewer",
+      false,
+      "maxPrivateSensitivity",
+    );
   }
   return value as Sensitivity;
 }
@@ -586,6 +598,8 @@ async function validateRecipient(client: PoolClient, row: Row, principalAddress:
       "Reviewer invitation is bound to another account.",
       403,
       "reviewer_invitation_account_mismatch",
+      false,
+      "token",
     );
   }
   const intendedEmailHash = text(row, "intended_email_hash");
@@ -601,13 +615,23 @@ async function validateRecipient(client: PoolClient, row: Row, principalAddress:
       "Reviewer invitation is bound to another verified email.",
       403,
       "reviewer_invitation_email_mismatch",
+      false,
+      "token",
     );
   }
 }
 
 async function invitationByToken(client: PoolClient, token: string, lock: boolean) {
   const match = INVITATION_PATTERN.exec(token);
-  if (!match) throw new TokenlessServiceError("Reviewer invitation not found.", 404, "reviewer_invitation_not_found");
+  if (!match) {
+    throw new TokenlessServiceError(
+      "Reviewer invitation not found.",
+      404,
+      "reviewer_invitation_not_found",
+      false,
+      "token",
+    );
+  }
   const result = await client.query(
     `SELECT i.*,w.name AS workspace_name,w.status AS workspace_status
      FROM tokenless_workspace_reviewer_invitations i
@@ -616,7 +640,15 @@ async function invitationByToken(client: PoolClient, token: string, lock: boolea
     [digest(token), match[1]],
   );
   const row = result.rows[0] as Row | undefined;
-  if (!row) throw new TokenlessServiceError("Reviewer invitation not found.", 404, "reviewer_invitation_not_found");
+  if (!row) {
+    throw new TokenlessServiceError(
+      "Reviewer invitation not found.",
+      404,
+      "reviewer_invitation_not_found",
+      false,
+      "token",
+    );
+  }
   return row;
 }
 
@@ -632,6 +664,8 @@ function assertInvitationAvailable(row: Row, now: Date) {
       "Reviewer invitation is no longer available.",
       410,
       "reviewer_invitation_unavailable",
+      false,
+      "token",
     );
   }
 }

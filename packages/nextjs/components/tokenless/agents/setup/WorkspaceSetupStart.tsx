@@ -4,7 +4,10 @@ import { type FormEvent, useState } from "react";
 import { AgentSetupProgress } from "./AgentSetupProgress";
 import { SetupActionBar } from "./SetupActionBar";
 import { SetupStageHeader } from "./SetupStageHeader";
+import { Field } from "~~/components/tokenless/forms/Field";
+import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { Button } from "~~/components/tokenless/ui/Button";
+import { readJson } from "~~/lib/tokenless/http";
 
 const INITIAL_STAGES = [
   { key: "workspace" as const, status: "current" as const },
@@ -14,21 +17,15 @@ const INITIAL_STAGES = [
   { key: "people" as const, status: "not_started" as const },
 ];
 
-async function readJson(response: Response) {
-  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : "Unable to create the workspace.");
-  return body;
-}
-
 export function WorkspaceSetupStart() {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { capture, clear, fieldErrors, formError } = useFormErrors();
 
   async function createWorkspace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
-    setError(null);
+    clear();
     try {
       const body = await readJson(
         await fetch("/api/account/workspaces", {
@@ -41,7 +38,7 @@ export function WorkspaceSetupStart() {
       if (typeof body.workspaceId !== "string") throw new Error("RateLoop did not return the new workspace.");
       window.location.assign(`/agents?workspace=${encodeURIComponent(body.workspaceId)}&step=connect`);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to create the workspace.");
+      capture(cause, "Unable to create the workspace.");
       setBusy(false);
     }
   }
@@ -56,31 +53,34 @@ export function WorkspaceSetupStart() {
       />
       <form className="mt-8 w-full" onSubmit={createWorkspace} aria-busy={busy}>
         <SetupStageHeader title="Name your workspace" />
-        <label className="mt-8 block text-sm font-medium" htmlFor="setup-workspace-name">
-          Workspace name
-        </label>
-        <input
-          id="setup-workspace-name"
-          className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-          value={name}
-          onChange={event => setName(event.target.value)}
-          maxLength={120}
-          autoComplete="organization"
-          required
-          aria-describedby={error ? "workspace-setup-error" : undefined}
-        />
+        <div className="mt-8">
+          <Field
+            id="setup-workspace-name"
+            label="Workspace name"
+            className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+            value={name}
+            onChange={event => {
+              setName(event.target.value);
+              clear("name");
+            }}
+            maxLength={120}
+            autoComplete="organization"
+            required
+            error={fieldErrors.name}
+          />
+        </div>
         <SetupActionBar>
           <Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={busy}>
             {busy ? "Creating…" : "Create workspace"}
           </Button>
         </SetupActionBar>
-        {error ? (
+        {formError ? (
           <p
             id="workspace-setup-error"
             role="alert"
             className="mt-4 rounded-lg border border-error/20 bg-error/10 px-4 py-3 text-sm text-error"
           >
-            {error}
+            {formError}
           </p>
         ) : null}
       </form>

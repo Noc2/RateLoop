@@ -487,7 +487,7 @@ export async function redeemReviewerInvitationWithBaseAccount(input: {
 }) {
   const reviewer = normalizeAddress(input.baseAccountAddress, "baseAccountAddress");
   if (!INVITE_TOKEN_PATTERN.test(input.token)) {
-    throw new TokenlessServiceError("Invitation not found.", 404, "invite_not_found");
+    throw new TokenlessServiceError("Invitation not found.", 404, "invite_not_found", false, "token");
   }
   const now = input.now ?? new Date();
   const client = await dbPool.connect();
@@ -507,7 +507,7 @@ export async function redeemReviewerInvitationWithBaseAccount(input: {
     const cohortId = rowString(row, "cohort_id");
     const expiresAt = rowDate(row, "expires_at");
     if (!invitationId || !projectId || !cohortId || !expiresAt) {
-      throw new TokenlessServiceError("Invitation not found.", 404, "invite_not_found");
+      throw new TokenlessServiceError("Invitation not found.", 404, "invite_not_found", false, "token");
     }
     if (
       rowString(row, "project_status") !== "active" ||
@@ -516,7 +516,7 @@ export async function redeemReviewerInvitationWithBaseAccount(input: {
       rowDate(row, "revoked_at") ||
       expiresAt <= now
     ) {
-      throw new TokenlessServiceError("Invitation is no longer available.", 410, "invite_unavailable");
+      throw new TokenlessServiceError("Invitation is no longer available.", 410, "invite_unavailable", false, "token");
     }
     const intended = rowString(row, "intended_account_address");
     if (intended && intended !== reviewer) {
@@ -524,6 +524,8 @@ export async function redeemReviewerInvitationWithBaseAccount(input: {
         "Invitation is bound to another signed-in account.",
         403,
         "invite_account_mismatch",
+        false,
+        "token",
       );
     }
     await client.query(

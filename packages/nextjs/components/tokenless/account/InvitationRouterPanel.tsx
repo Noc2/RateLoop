@@ -1,6 +1,9 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { Field } from "~~/components/tokenless/forms/Field";
+import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { readJson } from "~~/lib/tokenless/http";
 
 type ReviewerInvitationPreview = {
   workspaceName: string;
@@ -15,29 +18,19 @@ function formatDate(value: string | null) {
   return value ? new Date(value).toLocaleString() : "No expiry";
 }
 
-async function readJson(response: Response) {
-  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!response.ok) {
-    throw new Error(
-      typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : "Request failed.",
-    );
-  }
-  return body;
-}
-
 export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: InvitationKind) => void }) {
   const [token, setToken] = useState("");
   const [preview, setPreview] = useState<ReviewerInvitationPreview | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const fragmentLoaded = useRef(false);
+  const { capture, clear, fieldErrors, formError } = useFormErrors();
 
   const inspectInvitation = useCallback(
     async (normalized: string) => {
       setBusy(true);
       setStatus(null);
-      setError(null);
+      clear();
       setPreview(null);
       try {
         if (normalized.startsWith("rlwi_")) {
@@ -80,14 +73,17 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
           setPreview(body.invitation as ReviewerInvitationPreview);
           return;
         }
-        throw new Error("Enter a valid RateLoop invitation code.");
+        capture(
+          { field: "token", message: "Enter a valid RateLoop invitation code." },
+          "Unable to check the invitation.",
+        );
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "Unable to check the invitation.");
+        capture(cause, "Unable to check the invitation.");
       } finally {
         setBusy(false);
       }
     },
-    [onAccepted],
+    [capture, clear, onAccepted],
   );
 
   useEffect(() => {
@@ -111,7 +107,7 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
     if (!preview) return;
     setBusy(true);
     setStatus(null);
-    setError(null);
+    clear();
     try {
       await readJson(
         await fetch("/api/account/reviewer-invitations/redeem", {
@@ -126,7 +122,7 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
       setStatus("Reviewer invitation accepted.");
       onAccepted?.("reviewer");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to accept the invitation.");
+      capture(cause, "Unable to accept the invitation.");
     } finally {
       setBusy(false);
     }
@@ -137,8 +133,9 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
       <h2 className="text-2xl font-semibold">Add invitation</h2>
       <form className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={checkInvitation}>
         <div className="grow">
-          <input
-            aria-label="Invitation code"
+          <Field
+            id="invitation-code"
+            label="Invitation code"
             type="password"
             autoComplete="off"
             value={token}
@@ -146,10 +143,11 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
               setToken(event.target.value);
               setPreview(null);
               setStatus(null);
-              setError(null);
+              clear("token");
             }}
             className="input w-full border-white/10 bg-[var(--rateloop-field)] font-mono text-sm"
             placeholder="Paste invitation code"
+            error={fieldErrors.token}
             required
           />
         </div>
@@ -200,9 +198,9 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
           {status}
         </p>
       ) : null}
-      {error ? (
+      {formError ? (
         <p role="alert" className="mt-5 rounded-lg bg-red-400/10 p-3 text-sm text-red-100">
-          {error}
+          {formError}
         </p>
       ) : null}
     </section>

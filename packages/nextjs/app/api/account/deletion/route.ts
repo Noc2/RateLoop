@@ -34,7 +34,13 @@ export async function POST(request: NextRequest) {
     }
     const confirmation = String((body as Record<string, unknown>).confirmation ?? "");
     if (confirmation !== "DELETE") {
-      throw new TokenlessServiceError("Type DELETE to confirm account deletion.", 400, "account_deletion_unconfirmed");
+      throw new TokenlessServiceError(
+        "Type DELETE to confirm account deletion.",
+        400,
+        "account_deletion_unconfirmed",
+        false,
+        "confirmation",
+      );
     }
     const result = await deleteAccount({
       confirmation,

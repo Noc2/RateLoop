@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Field } from "~~/components/tokenless/forms/Field";
+import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { readJson } from "~~/lib/tokenless/http";
 
 const notificationOptions = [
   {
@@ -59,14 +62,6 @@ const defaultEmailSettings: EmailSettings = {
   deliveryConfigured: false,
 };
 
-async function readJson(response: Response) {
-  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!response.ok) {
-    throw new Error(typeof body.error === "string" ? body.error : "Notification request failed.");
-  }
-  return body;
-}
-
 function PreferenceToggle({
   option,
   checked,
@@ -106,6 +101,7 @@ export function NotificationSettingsPanel() {
   const [savingEmail, setSavingEmail] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { capture, clear, fieldErrors, formError } = useFormErrors();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -182,6 +178,7 @@ export function NotificationSettingsPanel() {
   async function saveEmailSettings() {
     setSavingEmail(true);
     setError(null);
+    clear();
     setStatus(null);
     try {
       const body = await readJson(
@@ -199,7 +196,7 @@ export function NotificationSettingsPanel() {
         body.verificationSent ? "Check your inbox to verify this notification email." : "Email settings updated.",
       );
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to update email notification settings.");
+      capture(cause, "Unable to update email notification settings.");
     } finally {
       setSavingEmail(false);
     }
@@ -283,18 +280,22 @@ export function NotificationSettingsPanel() {
                   : "Verification required"}
           </span>
         </div>
-        <label className="mt-5 block text-sm text-base-content/70" htmlFor="tokenless-notification-email">
-          Delivery email
-          <input
+        <div className="mt-5">
+          <Field
             id="tokenless-notification-email"
+            label="Delivery email"
             type="email"
             value={emailDraft}
-            onChange={event => setEmailDraft(event.target.value)}
+            onChange={event => {
+              setEmailDraft(event.target.value);
+              clear("email");
+            }}
             className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
             placeholder="you@example.com"
             autoComplete="email"
+            error={fieldErrors.email}
           />
-        </label>
+        </div>
         <button
           type="button"
           className="rateloop-gradient-action mt-4 px-5"
@@ -313,6 +314,11 @@ export function NotificationSettingsPanel() {
       {error ? (
         <p role="alert" className="rounded-lg bg-red-400/10 p-3 text-sm text-red-100">
           {error}
+        </p>
+      ) : null}
+      {formError ? (
+        <p role="alert" className="rounded-lg bg-red-400/10 p-3 text-sm text-red-100">
+          {formError}
         </p>
       ) : null}
     </section>

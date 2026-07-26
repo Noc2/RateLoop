@@ -44,7 +44,7 @@ export async function PUT(request: NextRequest) {
 
     if (requiresVerification && (!isResendConfigured() || !getOptionalAppUrl())) {
       return NextResponse.json(
-        { error: "Email notifications are not configured on this deployment." },
+        { field: "email", message: "Email notifications are not configured on this deployment." },
         { status: 503, headers: noStore },
       );
     }
@@ -59,7 +59,7 @@ export async function PUT(request: NextRequest) {
       } catch (error) {
         console.error("Failed to send tokenless notification verification email:", error);
         return NextResponse.json(
-          { error: "Email notifications are not configured on this deployment." },
+          { field: "email", message: "Email notifications are not configured on this deployment." },
           { status: 503, headers: noStore },
         );
       }
@@ -75,7 +75,13 @@ export async function PUT(request: NextRequest) {
     );
   } catch (error) {
     if (error instanceof Error && error.message === "EMAIL_IN_USE") {
-      return NextResponse.json({ error: "That email address cannot be used." }, { status: 409, headers: noStore });
+      return NextResponse.json(
+        { field: "email", message: "That email address cannot be used." },
+        { status: 409, headers: noStore },
+      );
+    }
+    if (error instanceof Error && ["Email must be text.", "Enter a valid email address."].includes(error.message)) {
+      return NextResponse.json({ field: "email", message: error.message }, { status: 400, headers: noStore });
     }
     const response = tokenlessErrorResponse(error);
     const status = response.status === 500 && error instanceof Error ? 400 : response.status;

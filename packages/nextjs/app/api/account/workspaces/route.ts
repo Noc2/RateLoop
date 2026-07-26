@@ -21,7 +21,13 @@ export async function POST(request: NextRequest) {
     const session = await requireBrowserSession(request, { mutation: true });
     const body = (await request.json()) as { name?: unknown };
     if (typeof body.name !== "string" || !body.name.trim() || body.name.trim().length > 120) {
-      throw new TokenlessServiceError("Workspace name must be 1-120 characters.", 400, "invalid_workspace");
+      throw new TokenlessServiceError(
+        "Workspace name must be 1-120 characters.",
+        400,
+        "invalid_workspace",
+        false,
+        "name",
+      );
     }
     const workspace = await createWorkspace({ name: body.name, ownerAddress: session.principalId });
     return NextResponse.json(workspace, { status: 201 });

@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     const session = await requireBrowserSession(request, { mutation: true });
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
     if (!body || Array.isArray(body) || typeof body.token !== "string") {
-      throw new TokenlessServiceError("Invitation token is required.", 400, "invalid_invite");
+      throw new TokenlessServiceError("Invitation token is required.", 400, "invalid_invite", false, "token");
     }
     return NextResponse.json(
       await redeemWorkspaceMemberInvite({ token: body.token, accountAddress: session.principalId }),

@@ -566,7 +566,7 @@ export async function redeemWorkspaceMemberInvite(input: { token: string; accoun
   const accountAddress = normalizeAddress(input.accountAddress, "accountAddress");
   const tokenMatch = INVITE_TOKEN_PATTERN.exec(input.token);
   if (!tokenMatch) {
-    throw new TokenlessServiceError("Invitation not found.", 404, "invite_not_found");
+    throw new TokenlessServiceError("Invitation not found.", 404, "invite_not_found", false, "token");
   }
   const tokenHash = hashToken(input.token);
   const client = await dbPool.connect();
@@ -590,7 +590,7 @@ export async function redeemWorkspaceMemberInvite(input: { token: string; accoun
     const governanceRole = rowString(row, "governance_role") as WorkspaceGovernanceRole | null;
     const expiresAt = rowDate(row, "expires_at");
     if (!inviteId || !workspaceId || !accessRole || !expiresAt || rowString(row, "token_prefix") !== tokenMatch[1]) {
-      throw new TokenlessServiceError("Invitation not found.", 404, "invite_not_found");
+      throw new TokenlessServiceError("Invitation not found.", 404, "invite_not_found", false, "token");
     }
     if (
       rowString(row, "workspace_status") !== "active" ||
@@ -598,13 +598,15 @@ export async function redeemWorkspaceMemberInvite(input: { token: string; accoun
       rowDate(row, "revoked_at") ||
       expiresAt.getTime() <= Date.now()
     ) {
-      throw new TokenlessServiceError("Invitation is no longer available.", 410, "invite_unavailable");
+      throw new TokenlessServiceError("Invitation is no longer available.", 410, "invite_unavailable", false, "token");
     }
     if (intendedAccountAddress && intendedAccountAddress !== accountAddress) {
       throw new TokenlessServiceError(
         "Invitation is bound to a different signed-in account.",
         403,
         "invite_account_mismatch",
+        false,
+        "token",
       );
     }
     if (intendedEmailHash) {
@@ -627,6 +629,8 @@ export async function redeemWorkspaceMemberInvite(input: { token: string; accoun
           "Invitation is bound to a different verified email.",
           403,
           "invite_email_mismatch",
+          false,
+          "token",
         );
       }
     }

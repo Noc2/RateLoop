@@ -1,27 +1,20 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-
-async function readJson(response: Response) {
-  const body = (await response.json()) as Record<string, unknown>;
-  if (!response.ok) {
-    throw new Error(
-      typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : "Request failed.",
-    );
-  }
-  return body;
-}
+import { Field } from "~~/components/tokenless/forms/Field";
+import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { readJson } from "~~/lib/tokenless/http";
 
 export function InvitationRedemption({ onRedeemed }: { onRedeemed: () => void }) {
   const [token, setToken] = useState("");
   const [status, setStatus] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { capture, clear, fieldErrors, formError } = useFormErrors();
 
   async function redeem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
-    setError(null);
+    clear();
     setStatus(null);
     try {
       const body = await readJson(
@@ -36,7 +29,7 @@ export function InvitationRedemption({ onRedeemed }: { onRedeemed: () => void })
       setStatus(`Invitation accepted for cohort ${String(body.cohortId ?? "your customer cohort")}.`);
       onRedeemed();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to redeem the invitation.");
+      capture(cause, "Unable to redeem the invitation.");
     } finally {
       setBusy(false);
     }
@@ -56,18 +49,23 @@ export function InvitationRedemption({ onRedeemed }: { onRedeemed: () => void })
         redeemed only by the intended signed-in account.
       </p>
       <form className="mt-5 flex flex-col gap-3 sm:flex-row" onSubmit={redeem}>
-        <label className="grow text-sm text-base-content/60">
-          Invitation token
-          <input
+        <div className="grow">
+          <Field
+            id="reviewer-invitation-token"
+            label="Invitation token"
             type="password"
             autoComplete="off"
             value={token}
-            onChange={event => setToken(event.target.value)}
+            onChange={event => {
+              setToken(event.target.value);
+              clear("token");
+            }}
             className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)] font-mono text-sm"
             placeholder="rli_…"
+            error={fieldErrors.token}
             required
           />
-        </label>
+        </div>
         <button
           type="submit"
           className="rateloop-gradient-action self-end px-5 sm:mb-0"
@@ -77,9 +75,9 @@ export function InvitationRedemption({ onRedeemed }: { onRedeemed: () => void })
         </button>
       </form>
       {status ? <p className="mt-4 rounded-lg bg-emerald-300/10 p-3 text-sm text-emerald-100">{status}</p> : null}
-      {error ? (
+      {formError ? (
         <p role="alert" className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100">
-          {error}
+          {formError}
         </p>
       ) : null}
     </section>

@@ -45,6 +45,8 @@ async function invitationBody(request: NextRequest) {
       "Choose the maximum private-material sensitivity.",
       400,
       "invalid_workspace_reviewer",
+      false,
+      "maxPrivateSensitivity",
     );
   }
   return body;

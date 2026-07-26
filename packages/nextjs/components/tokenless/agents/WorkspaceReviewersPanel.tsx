@@ -2,6 +2,9 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { OneTimeSecretNotice } from "~~/components/tokenless/agents/OneTimeSecretNotice";
+import { Field } from "~~/components/tokenless/forms/Field";
+import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { readJson } from "~~/lib/tokenless/http";
 import { WorkspaceRequestScope } from "~~/lib/tokenless/workspaceRequestScope";
 
 type WorkspaceReviewer = {
@@ -30,16 +33,6 @@ type ReviewerInvitation = {
   redemptionCount: number;
   revokedAt: string | null;
 };
-
-async function readJson(response: Response) {
-  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!response.ok) {
-    throw new Error(
-      typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : "Request failed.",
-    );
-  }
-  return body;
-}
 
 function shortPrincipal(value: string) {
   return value.length > 22 ? `${value.slice(0, 10)}…${value.slice(-8)}` : value;
@@ -81,6 +74,7 @@ export function WorkspaceReviewersPanel({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [workspaceRequests] = useState(() => new WorkspaceRequestScope());
+  const { capture, clear, fieldErrors, formError } = useFormErrors();
 
   const load = useCallback(async () => {
     if (!workspaceId || !canManage) return;
@@ -136,6 +130,7 @@ export function WorkspaceReviewersPanel({
     const request = workspaceRequests.begin(workspaceId, "reviewers:action");
     setBusyTarget("invite");
     setError(null);
+    clear();
     try {
       const body = await readJson(
         await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/reviewer-invitations`, {
@@ -157,7 +152,7 @@ export function WorkspaceReviewersPanel({
       setEmail("");
       await load();
     } catch (cause) {
-      if (request.isCurrent()) setError(cause instanceof Error ? cause.message : "Unable to invite the reviewer.");
+      if (request.isCurrent()) capture(cause, "Unable to invite the reviewer.");
     } finally {
       if (request.isCurrent()) setBusyTarget(null);
       request.finish();
@@ -223,17 +218,22 @@ export function WorkspaceReviewersPanel({
       </div>
 
       <form className="mt-5 grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem_auto] sm:items-end" onSubmit={inviteReviewer}>
-        <label className="min-w-0 flex-1 text-xs text-base-content/55">
-          Email (optional)
-          <input
+        <div className="min-w-0 flex-1">
+          <Field
+            id="workspace-reviewer-email"
+            label="Email (optional)"
             className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
             type="email"
             autoComplete="email"
             value={email}
-            onChange={event => setEmail(event.target.value)}
+            onChange={event => {
+              setEmail(event.target.value);
+              clear("intendedEmail");
+            }}
             placeholder="name@company.com"
+            error={fieldErrors.intendedEmail}
           />
-        </label>
+        </div>
         <label className="text-xs text-base-content/55">
           Private material limit
           <select
@@ -272,6 +272,11 @@ export function WorkspaceReviewersPanel({
       {error ? (
         <p className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100" role="alert">
           {error}
+        </p>
+      ) : null}
+      {formError ? (
+        <p className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100" role="alert">
+          {formError}
         </p>
       ) : null}
 

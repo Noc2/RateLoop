@@ -1274,7 +1274,13 @@ export async function deleteAccount(input: {
   now?: Date;
 }) {
   if (input.confirmation !== "DELETE") {
-    throw new TokenlessServiceError("Type DELETE to confirm account deletion.", 400, "account_deletion_unconfirmed");
+    throw new TokenlessServiceError(
+      "Type DELETE to confirm account deletion.",
+      400,
+      "account_deletion_unconfirmed",
+      false,
+      "confirmation",
+    );
   }
   const now = input.now ?? new Date();
   const requestId = id("dsr");

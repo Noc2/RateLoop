@@ -17,7 +17,13 @@ export async function POST(request: NextRequest) {
       Object.keys(body).some(key => key !== "token") ||
       typeof body.token !== "string"
     ) {
-      throw new TokenlessServiceError("Reviewer invitation token is required.", 400, "invalid_workspace_reviewer");
+      throw new TokenlessServiceError(
+        "Reviewer invitation token is required.",
+        400,
+        "invalid_workspace_reviewer",
+        false,
+        "token",
+      );
     }
     const reviewer = await redeemWorkspaceReviewerInvitation({
       accountAddress: session.principalId,

@@ -1,7 +1,10 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
+import { Field } from "~~/components/tokenless/forms/Field";
+import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { betterAuthClient, issueAccountDeletionProof, readBrowserAuthConfiguration } from "~~/lib/auth/client";
+import { readJson } from "~~/lib/tokenless/http";
 
 type DeletionBlocker = {
   code: string;
@@ -20,18 +23,14 @@ type DeletionPreview = {
   warnings: string[];
 };
 
-async function readJson<T>(response: Response): Promise<T> {
-  const body = (await response.json().catch(() => ({}))) as T & { error?: unknown; message?: unknown };
-  if (!response.ok) {
-    throw new Error(
-      typeof body.message === "string"
-        ? body.message
-        : typeof body.error === "string"
-          ? body.error
-          : "Unable to process account deletion.",
-    );
+class DeletionFieldError extends Error {
+  field: string;
+
+  constructor(message: string, field: string) {
+    super(message);
+    this.name = "DeletionFieldError";
+    this.field = field;
   }
-  return body;
 }
 
 function itemCount(count: number, singular: string, plural = `${singular}s`) {
@@ -53,6 +52,7 @@ export function AccountDeletionPanel() {
   const [reauthOtp, setReauthOtp] = useState("");
   const [reauthOtpSent, setReauthOtpSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { capture, clear, fieldErrors, formError } = useFormErrors();
 
   async function loadPreview() {
     setLoading(true);
@@ -82,6 +82,7 @@ export function AccountDeletionPanel() {
     setReauthOtp("");
     setReauthOtpSent(false);
     setError(null);
+    clear();
   }
 
   async function deleteAccount(recentAuthProof: string) {
@@ -106,11 +107,12 @@ export function AccountDeletionPanel() {
   async function runRecentAuthentication(action: () => Promise<void>, fallback: string) {
     setReauthenticating(true);
     setError(null);
+    clear();
     try {
       await action();
     } catch (cause) {
       await betterAuthClient.signOut().catch(() => undefined);
-      setError(cause instanceof Error ? cause.message : fallback);
+      capture(cause, fallback);
       setSubmitting(false);
     } finally {
       setReauthenticating(false);
@@ -130,7 +132,9 @@ export function AccountDeletionPanel() {
     event.preventDefault();
     await runRecentAuthentication(async () => {
       const response = await betterAuthClient.emailOtp.sendVerificationOtp({ email: reauthEmail, type: "sign-in" });
-      if (response.error) throw new Error(response.error.message || "Unable to send the sign-in code.");
+      if (response.error) {
+        throw new DeletionFieldError(response.error.message || "Unable to send the sign-in code.", "email");
+      }
       setReauthOtpSent(true);
     }, "Unable to send the sign-in code.");
   }
@@ -139,7 +143,9 @@ export function AccountDeletionPanel() {
     event.preventDefault();
     await runRecentAuthentication(async () => {
       const response = await betterAuthClient.signIn.emailOtp({ email: reauthEmail, otp: reauthOtp });
-      if (response.error) throw new Error(response.error.message || "The sign-in code is invalid or expired.");
+      if (response.error) {
+        throw new DeletionFieldError(response.error.message || "The sign-in code is invalid or expired.", "otp");
+      }
       await finishRecentAuthentication();
     }, "Unable to verify the sign-in code.");
   }
@@ -230,18 +236,22 @@ export function AccountDeletionPanel() {
                   </ul>
                 </div>
               ) : (
-                <label className="block text-sm text-base-content/70" htmlFor="account-deletion-confirmation">
-                  Type DELETE to confirm
-                  <input
+                <div className="max-w-sm">
+                  <Field
                     id="account-deletion-confirmation"
+                    label="Type DELETE to confirm"
                     type="text"
                     value={confirmation}
-                    onChange={event => setConfirmation(event.target.value)}
+                    onChange={event => {
+                      setConfirmation(event.target.value);
+                      clear("confirmation");
+                    }}
                     className="input mt-2 w-full max-w-sm border-error/30 bg-[var(--rateloop-field)]"
                     autoComplete="off"
                     spellCheck={false}
+                    error={fieldErrors.confirmation}
                   />
-                </label>
+                </div>
               )}
 
               <div className="flex flex-wrap gap-2">
@@ -277,18 +287,20 @@ export function AccountDeletionPanel() {
                     </p>
                   ) : reauthOtpSent ? (
                     <form className="mt-4 space-y-3" onSubmit={verifyReauthCode}>
-                      <label className="block text-sm font-medium" htmlFor="account-deletion-otp">
-                        Six-digit code
-                      </label>
-                      <input
+                      <Field
                         id="account-deletion-otp"
                         className="input input-bordered w-full font-mono tracking-[0.25em]"
+                        label="Six-digit code"
+                        format="oneTimeCode"
                         inputMode="numeric"
                         autoComplete="one-time-code"
-                        maxLength={6}
                         required
                         value={reauthOtp}
-                        onChange={event => setReauthOtp(event.target.value.replace(/\D/g, ""))}
+                        error={fieldErrors.otp}
+                        onChange={event => {
+                          setReauthOtp(event.target.value.replace(/\D/g, ""));
+                          clear("otp");
+                        }}
                       />
                       <button
                         className="btn btn-error min-h-11 w-full"
@@ -300,17 +312,19 @@ export function AccountDeletionPanel() {
                   ) : (
                     <>
                       <form className="mt-4 space-y-3" onSubmit={sendReauthCode}>
-                        <label className="block text-sm font-medium" htmlFor="account-deletion-email">
-                          Account email
-                        </label>
-                        <input
+                        <Field
                           id="account-deletion-email"
                           className="input input-bordered w-full"
+                          label="Account email"
                           type="email"
                           autoComplete="email"
                           required
                           value={reauthEmail}
-                          onChange={event => setReauthEmail(event.target.value)}
+                          error={fieldErrors.email}
+                          onChange={event => {
+                            setReauthEmail(event.target.value);
+                            clear("email");
+                          }}
                         />
                         <button
                           className="btn btn-error min-h-11 w-full"
@@ -339,6 +353,11 @@ export function AccountDeletionPanel() {
           {error ? (
             <p className="mt-4 rounded-lg bg-error/10 p-3 text-sm text-error" role="alert">
               {error}
+            </p>
+          ) : null}
+          {formError ? (
+            <p className="mt-4 rounded-lg bg-error/10 p-3 text-sm text-error" role="alert">
+              {formError}
             </p>
           ) : null}
         </div>
