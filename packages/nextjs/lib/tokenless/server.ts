@@ -70,13 +70,15 @@ type StoredAsk = {
 
 export class TokenlessServiceError extends Error {
   readonly code: string;
+  readonly field?: string;
   readonly retryable: boolean;
   readonly status: number;
 
-  constructor(message: string, status: number, code: string, retryable = false) {
+  constructor(message: string, status: number, code: string, retryable = false, field?: string) {
     super(message);
     this.name = "TokenlessServiceError";
     this.code = code;
+    this.field = field;
     this.retryable = retryable;
     this.status = status;
   }
@@ -761,7 +763,12 @@ export async function getTokenlessResult(operationKey: string): Promise<Tokenles
 export function tokenlessErrorResponse(error: unknown) {
   if (error instanceof TokenlessServiceError) {
     return {
-      body: { code: error.code, message: error.message, retryable: error.retryable },
+      body: {
+        code: error.code,
+        message: error.message,
+        retryable: error.retryable,
+        ...(error.field ? { field: error.field } : {}),
+      },
       status: error.status,
     };
   }

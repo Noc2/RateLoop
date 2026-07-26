@@ -10,6 +10,7 @@ import {
   getTokenlessAskByIdempotencyKey,
   getTokenlessResult,
   sweepExpiredTokenlessQuotes,
+  tokenlessErrorResponse,
   waitForTokenlessAsk,
 } from "~~/lib/tokenless/server";
 
@@ -19,6 +20,21 @@ beforeEach(() => {
 
 afterEach(() => {
   __setDatabaseResourcesForTests(null);
+});
+
+test("tokenless errors preserve an optional field for accessible form feedback", () => {
+  const response = tokenlessErrorResponse(
+    new TokenlessServiceError("Enter a valid tax identifier.", 400, "invalid_tax_identifier", false, "taxIdentifier"),
+  );
+  assert.deepEqual(response, {
+    body: {
+      code: "invalid_tax_identifier",
+      message: "Enter a valid tax identifier.",
+      retryable: false,
+      field: "taxIdentifier",
+    },
+    status: 400,
+  });
 });
 
 function audiencePolicy() {
