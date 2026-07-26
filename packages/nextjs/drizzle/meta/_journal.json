@@ -995,6 +995,13 @@
       "when": 1785135600000,
       "tag": "0142_network_settlement_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 143,
+      "version": "7",
+      "when": 1785139200000,
+      "tag": "0143_subject_export_schema_version",
+      "breakpoints": true
     }
   ]
 }

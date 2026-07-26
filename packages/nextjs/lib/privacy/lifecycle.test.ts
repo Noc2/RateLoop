@@ -247,6 +247,11 @@ test("access and export requests produce a bounded authenticated download instea
   assert.equal(listed[0]?.requestId, created.requestId);
   assert.equal(listed[0]?.status, "completed");
   assert.equal(listed[0]?.exportReady, true);
+  const persistedExport = await dbClient.execute({
+    sql: "SELECT schema_version FROM tokenless_subject_request_exports WHERE request_id=?",
+    args: [created.requestId],
+  });
+  assert.equal(Number(persistedExport.rows[0]?.schema_version), 3);
 
   const exported = await readSubjectRequestExport({ principalId: OWNER, requestId: created.requestId, now });
   assert.equal(exported.data.schemaVersion, "rateloop.subject-export.v3");

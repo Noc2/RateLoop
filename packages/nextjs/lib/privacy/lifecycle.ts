@@ -772,7 +772,7 @@ export async function processSubjectRequestQueue(now = new Date(), requestedLimi
       await client.query(
         `INSERT INTO tokenless_subject_request_exports
          (request_id,principal_id,schema_version,payload_json,payload_hash,generated_at,delete_after)
-         VALUES ($1,$2,1,$3,$4,$5,$6)
+         VALUES ($1,$2,3,$3,$4,$5,$6)
          ON CONFLICT (request_id) DO NOTHING`,
         [requestId, principalId, payloadJson, payloadHash, now, deleteAfter],
       );
