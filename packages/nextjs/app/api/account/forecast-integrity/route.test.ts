@@ -190,7 +190,7 @@ test("forecast appeal routes enforce exact-finding scope, ownership, terminal re
     }),
   );
   assert.equal(withdrawn.status, 200);
-  assert.equal((await withdrawn.json()).consequence, "future_assignment_restriction");
+  assert.equal((await withdrawn.json()).consequence, "none");
 
   const reopened = await openAppeal(
     request("/api/account/forecast-integrity", {
