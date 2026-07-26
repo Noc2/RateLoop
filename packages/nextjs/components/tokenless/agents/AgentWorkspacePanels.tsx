@@ -14,6 +14,7 @@ import { EvidenceWorkspacePanel } from "./EvidenceWorkspacePanel";
 import { FeedbackBonusAwardInbox } from "./FeedbackBonusAwardInbox";
 import { HumanReviewApprovalInbox } from "./HumanReviewApprovalInbox";
 import { OversightAlertsPanel } from "./OversightAlertsPanel";
+import { ScheduledWorkerHealthPanel } from "./ScheduledWorkerHealthPanel";
 import type { AgentConnectionHistoryEntry } from "./agentAuditHistory";
 import { connectedAgentTabs, resolveAvailableAgentTab } from "./agentWorkspaceState";
 import { AgentSetupFlow } from "./setup/AgentSetupFlow";
@@ -101,6 +102,7 @@ export function AgentWorkspacePanels({
                 </Link>
               </div>
             ) : null}
+            {canManage ? <ScheduledWorkerHealthPanel workspaceId={workspaceId} /> : null}
             <WorkspaceSettingsClient initialWorkspaceId={workspaceId} />
           </>
         ) : null}
