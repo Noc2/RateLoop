@@ -4,6 +4,11 @@ import { getAddress } from "viem";
 import { isRateLoopPrincipalId } from "~~/lib/auth/accountSubject";
 import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import type { FrozenBinaryReviewQuestion } from "~~/lib/tokenless/humanReviewQuestions";
+import {
+  deriveHybridCohortEconomics,
+  hashHybridCohortEconomics,
+  hashHybridCohortExpertise,
+} from "~~/lib/tokenless/hybridReviewChildBindings";
 import { requirePaidLaneComplianceApproval } from "~~/lib/tokenless/paidLaneCompliance";
 import {
   type PaidReviewEligibilityPreflight,
@@ -225,14 +230,23 @@ function semanticCohort(
       "hybrid_review_binding_invalid",
     );
   }
+  let derivedEconomics;
+  try {
+    derivedEconomics = deriveHybridCohortEconomics(value.economics.bountyPerSeatAtomic, input.requestedCount);
+  } catch {
+    throw new TokenlessServiceError(
+      `${input.field} economics or expertise do not bind its exact reviewer cohort.`,
+      409,
+      "hybrid_review_binding_invalid",
+    );
+  }
   if (
     value.panelSize !== input.requestedCount ||
     !HASH.test(value.admissionPolicyHash) ||
     value.economics.asset !== "USDC" ||
     !POSITIVE_ATOMIC.test(value.economics.bountyPerSeatAtomic) ||
     !POSITIVE_ATOMIC.test(value.economics.maximumChargeAtomic) ||
-    BigInt(value.economics.maximumChargeAtomic) !==
-      BigInt(value.economics.bountyPerSeatAtomic) * BigInt(input.requestedCount) ||
+    value.economics.maximumChargeAtomic !== derivedEconomics.maximumChargeAtomic ||
     expertiseRequirements.some(
       requirement =>
         requirement.sourceScope !== input.reviewerSource ||
@@ -440,16 +454,8 @@ function childSeed(
       economics: profile.economics,
       expertiseRequirements: profile.expertiseRequirements,
     }),
-    economicsHash: sha256({
-      schemaVersion: "rateloop.hybrid-child-economics.v1",
-      cohort,
-      economics: profile.economics,
-    }),
-    expertiseHash: sha256({
-      schemaVersion: "rateloop.hybrid-child-expertise.v1",
-      cohort,
-      requirements: profile.expertiseRequirements,
-    }),
+    economicsHash: hashHybridCohortEconomics(profile.economics.bountyPerSeatAtomic, profile.panelSize),
+    expertiseHash: hashHybridCohortExpertise(cohort, profile.expertiseRequirements),
     admissionPolicyHash: profile.admissionPolicyHash,
     expectedAmountAtomic: profile.economics.maximumChargeAtomic,
     assignmentCount: candidates.length,

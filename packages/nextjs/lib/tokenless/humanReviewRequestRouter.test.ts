@@ -1012,14 +1012,14 @@ test("hybrid routing activates only with an exact frozen split and the dedicated
             reviewerSource: "customer_invited",
             panelSize: 1,
             admissionPolicyHash: HASH,
-            economics: { asset: "USDC", bountyPerSeatAtomic: "1000000", maximumChargeAtomic: "1000000" },
+            economics: { asset: "USDC", bountyPerSeatAtomic: "1000000", maximumChargeAtomic: "1900000" },
             expertiseRequirements: [],
           },
           network: {
             reviewerSource: "rateloop_network",
             panelSize: 1,
             admissionPolicyHash: HASH,
-            economics: { asset: "USDC", bountyPerSeatAtomic: "2000000", maximumChargeAtomic: "2000000" },
+            economics: { asset: "USDC", bountyPerSeatAtomic: "2000000", maximumChargeAtomic: "3800000" },
             expertiseRequirements: [],
           },
         },
@@ -1027,8 +1027,8 @@ test("hybrid routing activates only with an exact frozen split and the dedicated
         publication: publicMaterial.publication,
         economics: {
           asset: "USDC",
-          invitedMaximumChargeAtomic: "1000000",
-          networkMaximumChargeAtomic: "2000000",
+          invitedMaximumChargeAtomic: "1900000",
+          networkMaximumChargeAtomic: "3800000",
         },
         invited: {
           requestedCount: 1,

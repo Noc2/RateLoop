@@ -406,14 +406,14 @@ test("the adapter persists two child rounds end to end and retry cannot duplicat
         reviewerSource: "customer_invited",
         panelSize: 1,
         admissionPolicyHash: seeded.children[0].admissionPolicyHash,
-        economics: { asset: "USDC", bountyPerSeatAtomic: "200", maximumChargeAtomic: "200" },
+        economics: { asset: "USDC", bountyPerSeatAtomic: "200", maximumChargeAtomic: "380" },
         expertiseRequirements: [],
       },
       network: {
         reviewerSource: "rateloop_network",
         panelSize: 1,
         admissionPolicyHash: seeded.children[1].admissionPolicyHash,
-        economics: { asset: "USDC", bountyPerSeatAtomic: "300", maximumChargeAtomic: "300" },
+        economics: { asset: "USDC", bountyPerSeatAtomic: "300", maximumChargeAtomic: "570" },
         expertiseRequirements: [],
       },
     },
@@ -423,7 +423,7 @@ test("the adapter persists two child rounds end to end and retry cannot duplicat
       dataClassification: "synthetic",
       confirmedNoSensitiveData: true,
     },
-    economics: { asset: "USDC", invitedMaximumChargeAtomic: "200", networkMaximumChargeAtomic: "300" },
+    economics: { asset: "USDC", invitedMaximumChargeAtomic: "380", networkMaximumChargeAtomic: "570" },
     invited: {
       requestedCount: 1,
       candidates: [
@@ -448,6 +448,8 @@ test("the adapter persists two child rounds end to end and retry cannot duplicat
     },
   };
   const actualSpend = new Set<string>();
+  let networkProjectionPending = true;
+  let releases = 0;
   const preparation = (
     cohort: "invited" | "network",
     hybridOperationId: string,
@@ -499,9 +501,25 @@ test("the adapter persists two child rounds end to end and retry cannot duplicat
       };
     },
     prepareInvited: async ({ hybridParent }) => preparation("invited", hybridParent.hybridOperationId),
-    prepareNetwork: async ({ hybridParent }) => preparation("network", hybridParent.hybridOperationId),
-    releaseInvited: async () => undefined,
-    releaseNetwork: async () => undefined,
+    prepareNetwork: async ({ hybridParent }) => {
+      if (networkProjectionPending) {
+        networkProjectionPending = false;
+        actualSpend.add(`${hybridParent.hybridOperationId}:network`);
+        throw new TokenlessServiceError(
+          "The funded network child is awaiting confirmed-round projection.",
+          409,
+          "hybrid_network_child_pending",
+          true,
+        );
+      }
+      return preparation("network", hybridParent.hybridOperationId);
+    },
+    releaseInvited: async () => {
+      releases += 1;
+    },
+    releaseNetwork: async () => {
+      releases += 1;
+    },
     orchestration: {
       ensure: ensureHybridReviewOperation,
       recordReady: recordHybridReviewChildReady,
@@ -509,11 +527,17 @@ test("the adapter persists two child rounds end to end and retry cannot duplicat
       cancel: cancelHybridReviewBeforeLiability,
     },
   });
+  await assert.rejects(
+    adapter(split),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "hybrid_network_child_pending" && error.retryable,
+  );
   const first = await adapter(split);
   const replay = await adapter(split);
   assert.equal(first.hybridOperationId, replay.hybridOperationId);
   assert.equal(first.splitBindingHash, replay.splitBindingHash);
   assert.equal(actualSpend.size, 2);
+  assert.equal(releases, 0);
   assert.equal(replay.invited.replayed, true);
   assert.equal(replay.network.replayed, true);
   const persisted = await dbClient.execute({
