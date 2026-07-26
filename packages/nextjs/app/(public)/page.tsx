@@ -6,6 +6,7 @@ import { TokenlessOrb } from "~~/components/home/TokenlessOrb";
 import { WorkspacePlanCards } from "~~/components/pricing/WorkspacePlanCards";
 import type { LandingSocialProofItem } from "~~/lib/home/socialProof";
 import { getLandingPageSocialProofItems } from "~~/lib/home/socialProofServer";
+import { configuredHumanReviewLanes } from "~~/lib/tokenless/reviewCapabilities";
 
 export const revalidate = 300;
 
@@ -30,8 +31,8 @@ const whyItWorksFeatures = [
     ],
   },
   {
-    title: "Useful signal, auditable pay",
-    body: "Published scoring and Base USDC settlement make panel pay recomputable.",
+    title: "Useful signal, auditable evidence",
+    body: "Published scoring and settlement rules make review results recomputable.",
     color: "#EF476F",
     links: [
       ["Quality bonus", "/docs/tech-stack#robust-bayesian-truth-serum"],
@@ -75,11 +76,19 @@ const useCases = [
   },
 ] as const;
 
+const configuredReviewLanes = configuredHumanReviewLanes();
+const reviewerSources = [
+  "your invited reviewers",
+  ...(configuredReviewLanes.publicPaidNetwork.available ? ["RateLoop network reviewers"] : []),
+  ...(configuredReviewLanes.hybridPublicSafe.available ? ["separate hybrid panels"] : []),
+];
+const reviewerSourcesAnswer =
+  reviewerSources.length === 1
+    ? "Your invited reviewers."
+    : `${reviewerSources.slice(0, -1).join(", ")}, or ${reviewerSources.at(-1)}.`;
+
 const questions = [
-  [
-    "Who Reviews the Work?",
-    "Your invited reviewers, RateLoop's World ID-backed network, or clearly separated hybrid panels.",
-  ],
+  ["Who Reviews the Work?", reviewerSourcesAnswer],
   [
     "Can an Agent Run Reviews Automatically?",
     "Connection alone does not intercept outputs. An active agent can call RateLoop for each eligible output; only a verified host adapter that controls delivery can enforce waiting before release. Ordinary Codex integrations are advisory.",
@@ -267,7 +276,7 @@ export function TokenlessLandingPage({
             Pricing, Kept
           </SectionTitle>
           <p className="mb-8 max-w-3xl text-lg leading-8 text-base-content/65 sm:mb-10 sm:text-xl">
-            Plans cover RateLoop decisions. Reviewer pay is separate.
+            Plans cover RateLoop decisions. Reviewer compensation is separate where an activated paid lane applies.
           </p>
           <WorkspacePlanCards subscriptionsEnabled={subscriptionsEnabled} />
         </section>

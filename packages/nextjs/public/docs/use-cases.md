@@ -62,9 +62,8 @@ structured result unreliable, route that case to reviewers who can read the sour
 automated evaluators; they do not turn a subjective judgment into an objective fact.
 
 Reviewer qualifications determine who can answer the criterion. Data sensitivity independently determines what each
-configured audience may receive. Private material belongs with authorized invited reviewers. A RateLoop network or
-hybrid panel receives only public, synthetic, or safely redacted material. Proof of Human can provide a provider-scoped
-uniqueness signal; it does not prove professional expertise.
+configured audience may receive. Private material belongs with authorized invited reviewers. A provider-scoped
+uniqueness signal does not prove professional expertise, independence, residence, or suitability for every task.
 
 After a model, prompt, tool, or workflow change, review starts again at full coverage for the changed scope; see
 `how-it-works.md` for that calibration and the review lifecycle.

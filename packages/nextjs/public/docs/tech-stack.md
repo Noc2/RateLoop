@@ -34,9 +34,9 @@ honesty, independence, nationality, tax residence, or continuing liveness.
 
 ## Audience policies
 
-A versioned policy defines whether a panel uses customer-invited reviewers, the RateLoop network, or separate hybrid
-subpanels. It also freezes qualifications, quotas, selection rules, fallbacks, and privacy-safe reporting. Its canonical
-hash is bound into paid round terms and every admission voucher.
+A versioned policy defines a panel of customer-invited reviewers. It freezes qualifications, quotas, selection rules,
+fallbacks, and privacy-safe reporting. Its canonical hash is bound into the review record and, where compensation is
+enabled, the round terms and admission voucher.
 
 <a id="commit-reveal"></a>
 

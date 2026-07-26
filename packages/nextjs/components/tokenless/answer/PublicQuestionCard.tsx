@@ -791,9 +791,8 @@ export function PublicQuestionCard({
         <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Public paid review</p>
         <h2 className="mt-3 text-xl font-semibold">Accept this funded review before opening it</h2>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-base-content/65">
-          This reserves one exact seat in a public RateLoop network round. The question contains only public, synthetic,
-          or safely redacted material. Your sealed rating is linked to the immutable assignment and settlement terms
-          identified below.
+          This reserves your assigned seat. The question contains only public, synthetic, or safely redacted material.
+          Your sealed rating is linked to the immutable assignment and settlement terms identified below.
         </p>
         <dl className="mt-4 grid gap-2 text-xs text-base-content/60">
           <div>

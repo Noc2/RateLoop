@@ -63,13 +63,16 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.match(html, /Why It/);
   assert.match(html, /Agent-native/);
   assert.match(html, /Verified and blind/);
-  assert.match(html, /Useful signal, auditable pay/);
+  assert.match(html, /Useful signal, auditable evidence/);
   assert.match(html, /Human oversight, supported/);
   assert.doesNotMatch(html, /Evidence your auditors can check|Trace review policy/i);
   assert.match(
     html,
     /Your people provide oversight\. RateLoop supports configured review and records the resulting evidence\./,
   );
+  assert.match(html, /Who Reviews the Work\?/);
+  assert.match(html, /Your invited reviewers\./);
+  assert.doesNotMatch(html, /World ID-backed network|hybrid panels/);
   assert.doesNotMatch(html, /RateLoop provides the instrument — and the proof/i);
   assert.match(html, /href="\/docs\/human-oversight"[^>]*>Human Oversight<\/a>/i);
   assert.match(html, /href="\/docs\/evidence"[^>]*>Evidence guide<\/a>/i);

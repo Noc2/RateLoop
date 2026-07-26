@@ -8,6 +8,7 @@ import {
   PUBLIC_EVIDENCE_CAPABILITY_STATE,
   PUBLIC_EVIDENCE_CLAIMS_MATRIX,
   type PublicEvidenceCapabilityState,
+  derivePublicEvidenceCapabilityState,
   findPublicEvidenceClaimViolations,
 } from "~~/lib/tokenless/publicEvidenceClaims";
 
@@ -101,6 +102,18 @@ test("the public evidence claims matrix is fail-closed and has explicit prerequi
   );
 });
 
+test("public paid-lane claims are derived from the routing capability projection", () => {
+  const state = derivePublicEvidenceCapabilityState({
+    privateInvitedUnpaid: true,
+    privateInvitedPaid: true,
+    publicPaidNetwork: false,
+    hybridPublicSafe: false,
+  });
+  assert.equal(state.paid_private_review_lane, true);
+  assert.equal(state.public_network_review_lane, false);
+  assert.equal(state.hybrid_review_lane, false);
+});
+
 test("gated evidence phrases require every capability named by the matrix", () => {
   for (const rule of PUBLIC_EVIDENCE_CLAIMS_MATRIX) {
     if (rule.policy === "gated") {
@@ -184,6 +197,14 @@ test("paid/public lanes and launch GDPR claims require their exact shipped capab
       capabilitiesEnabled("public_network_review_lane"),
     ).length,
     0,
+  );
+  assert.equal(
+    findPublicEvidenceClaimViolations("Your invited reviewers, RateLoop's World ID-backed network.")[0]?.claimId,
+    "public_network_review",
+  );
+  assert.equal(
+    findPublicEvidenceClaimViolations("Use invited reviewers or clearly separated hybrid panels.")[0]?.claimId,
+    "hybrid_review",
   );
   assert.deepEqual(findPublicEvidenceClaimViolations("RateLoop is GDPR-compliant.")[0]?.missingCapabilities, [
     "gdpr_blockchain_dpia",

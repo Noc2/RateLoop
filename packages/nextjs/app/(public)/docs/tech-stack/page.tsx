@@ -40,16 +40,16 @@ export default function TokenlessTechStackPage() {
 
       <h2 id="proof-of-human">Proof of Human</h2>
       <p>
-        RateLoop-network reviewers enroll with World ID 4. The server maps a successful proof to the narrow{" "}
-        <code>unique_human</code> capability used for network admission, giving the assignment system a provider-scoped
-        uniqueness signal before paid work is issued.
+        Reviewer identity evidence is purpose-bound. A provider-scoped uniqueness signal does not establish expertise,
+        independence, residence, or suitability for a task; invited-review admission follows the owner&apos;s frozen
+        membership and qualification policy.
       </p>
 
       <h2 id="audience-policies">Audience Policies</h2>
       <p>
-        Every ask freezes one content-hashed audience policy: customer-invited reviewers, the RateLoop network, or
-        separate hybrid subpanels. The policy binds reviewer source, eligibility, panel size, economics, and publication
-        rules so the audience cannot change midway through a round.
+        Every ask freezes one content-hashed audience policy for customer-invited reviewers. The policy binds reviewer
+        source, eligibility, panel size, economics, and publication rules so the audience cannot change midway through a
+        review.
       </p>
 
       <h2 id="correlation-diversified-assignment">Correlation-Diversified Assignment</h2>

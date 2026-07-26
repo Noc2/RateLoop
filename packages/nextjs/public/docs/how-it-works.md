@@ -28,8 +28,8 @@ audience cannot silently lower review.
    panel size, and the complete USDC economics. RateLoop derives the round deadlines from the selected panel terms.
 2. **Fund the panel.** A prepaid workspace or a self-funded agent authorizes the bounty, platform fee, and bounded
    accepted-work reserve. The immutable round terms prevent the funder from changing the deal after the first commit.
-3. **Select eligible humans.** Customer-invited, RateLoop-network, and hybrid panels remain distinct. Network admission
-   can require World ID Proof of Human plus task-specific eligibility; the exact policy hash is bound into the round.
+3. **Select eligible humans.** Customer-invited panels use workspace-scoped membership and qualifications frozen before
+   assignment; the exact policy hash is bound into the review.
 4. **Collect blind judgments.** Reviewers answer through one-time vote keys. Commit-reveal and drand/tlock sealing keep
    early answers hidden, while short assignment leases protect private material. A paid commit publishes tlock
    ciphertext containing the vote, prediction, response hash, payout address, and salt. The commit irrevocably

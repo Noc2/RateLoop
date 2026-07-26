@@ -1,3 +1,5 @@
+import { type HumanReviewLaneReadiness, humanReviewLaneImplementation } from "~~/lib/tokenless/reviewCapabilities";
+
 export const PUBLIC_EVIDENCE_CAPABILITIES = [
   "managed_evidence_signing",
   "published_evidence_signing_key_history",
@@ -21,27 +23,34 @@ export const PUBLIC_EVIDENCE_CAPABILITIES = [
 export type PublicEvidenceCapability = (typeof PUBLIC_EVIDENCE_CAPABILITIES)[number];
 export type PublicEvidenceCapabilityState = Readonly<Record<PublicEvidenceCapability, boolean>>;
 
-// These flags mean "deployed and exercised for public claims", not merely "code exists".
-// They stay fail-closed until the production-readiness evidence for the capability is complete.
-export const PUBLIC_EVIDENCE_CAPABILITY_STATE: PublicEvidenceCapabilityState = Object.freeze({
-  managed_evidence_signing: false,
-  published_evidence_signing_key_history: false,
-  offline_evidence_packet_verifier: false,
-  evidence_packet_compliance_fields: false,
-  adaptive_coverage_export: false,
-  offline_audit_export_verifier: false,
-  rekor_attestation: false,
-  rfc3161_timestamping: false,
-  siem_delivery_exercised: false,
-  vanta_delivery_exercised: false,
-  drata_delivery_exercised: false,
-  otel_genai_ingest: false,
-  paid_private_review_lane: false,
-  public_network_review_lane: false,
-  hybrid_review_lane: false,
-  gdpr_blockchain_dpia: false,
-  provider_transfer_inventory: false,
-});
+// These flags mean "deployed and exercised for public claims", not merely
+// "code exists". Paid-lane claims use the same activation-bound projection as
+// routing so public copy cannot drift from the lanes the deployment can serve.
+export function derivePublicEvidenceCapabilityState(
+  lanes: HumanReviewLaneReadiness = humanReviewLaneImplementation(),
+): PublicEvidenceCapabilityState {
+  return Object.freeze({
+    managed_evidence_signing: false,
+    published_evidence_signing_key_history: false,
+    offline_evidence_packet_verifier: false,
+    evidence_packet_compliance_fields: false,
+    adaptive_coverage_export: false,
+    offline_audit_export_verifier: false,
+    rekor_attestation: false,
+    rfc3161_timestamping: false,
+    siem_delivery_exercised: false,
+    vanta_delivery_exercised: false,
+    drata_delivery_exercised: false,
+    otel_genai_ingest: false,
+    paid_private_review_lane: lanes.privateInvitedPaid,
+    public_network_review_lane: lanes.publicPaidNetwork,
+    hybrid_review_lane: lanes.hybridPublicSafe,
+    gdpr_blockchain_dpia: false,
+    provider_transfer_inventory: false,
+  });
+}
+
+export const PUBLIC_EVIDENCE_CAPABILITY_STATE = derivePublicEvidenceCapabilityState();
 
 type PublicEvidenceClaimGate = {
   id: string;
@@ -142,6 +151,9 @@ export const PUBLIC_EVIDENCE_CLAIMS_MATRIX = [
     patterns: [
       /\bpublic RateLoop network review (?:is|remains|runs as) USDC[- ]paid\b/iu,
       /\bUSDC[- ]paid public RateLoop network review (?:is|remains) available\b/iu,
+      /\byour invited reviewers.{0,120}\bRateLoop(?:'s)? World ID[- ]backed network\b/isu,
+      /\bcustomer[- ]invited reviewers.{0,120}\bthe RateLoop network\b/isu,
+      /\bA RateLoop network or hybrid panel\b/iu,
     ],
     requiredCapabilities: ["public_network_review_lane"],
     policy: "gated",
@@ -149,7 +161,13 @@ export const PUBLIC_EVIDENCE_CLAIMS_MATRIX = [
   {
     id: "hybrid_review",
     phrase: "Hybrid review is available",
-    patterns: [/\bhybrid review (?:is|remains) (?:active|available|enabled|live)\b/iu],
+    patterns: [
+      /\bhybrid review (?:is|remains) (?:active|available|enabled|live)\b/iu,
+      /\b(?:or|and) clearly separated hybrid panels\b/iu,
+      /\bthe RateLoop network, or separate hybrid subpanels\b/iu,
+      /\bInvited and hybrid panels\b/iu,
+      /\bA RateLoop network or hybrid panel\b/iu,
+    ],
     requiredCapabilities: ["hybrid_review_lane"],
     policy: "gated",
   },

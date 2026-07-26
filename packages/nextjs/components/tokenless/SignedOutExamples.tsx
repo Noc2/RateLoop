@@ -3,9 +3,7 @@ export function HumanReviewExample() {
     <section className="surface-card-nested rounded-xl p-4 text-left" aria-labelledby="example-review-title">
       <div className="flex items-center justify-between gap-3">
         <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">Example review</p>
-        <span className="rounded-md bg-white/[0.06] px-2 py-1 text-xs text-base-content/70">
-          Example pay · $3–$7 USDC
-        </span>
+        <span className="rounded-md bg-white/[0.06] px-2 py-1 text-xs text-base-content/70">Invited panel</span>
       </div>
       <h3 id="example-review-title" className="mt-3 font-semibold">
         Would you send this reply?

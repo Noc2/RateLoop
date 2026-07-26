@@ -19,7 +19,8 @@ test("signed-out samples are clearly illustrative and contain no real workspace 
   );
 
   assert.match(html, /Example review/);
-  assert.match(html, /Example pay/);
+  assert.match(html, /Invited panel/);
+  assert.doesNotMatch(html, /USDC|Example pay/);
   assert.match(html, /Example workspace/);
   assert.match(html, /100% at first/);
   assert.doesNotMatch(html, /workspaceId|assignmentId|roundId/);
