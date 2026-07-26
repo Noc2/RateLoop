@@ -678,9 +678,15 @@ export async function runTokenlessScheduledMaintenance(input: {
       failures: processorFailures,
       processor: "projectDirectPrivateReviewEvidence",
       run: () => processors.projectDirectPrivateReviewEvidence({ now, limit: workLimit }),
-      fallback: { scanned: 0, projected: 0, packetsReady: 0, retry: 0, retryDeliveryIds: [] } as Awaited<
-        ReturnType<MaintenanceProcessors["projectDirectPrivateReviewEvidence"]>
-      >,
+      fallback: {
+        scanned: 0,
+        projected: 0,
+        packetsReady: 0,
+        retry: 0,
+        retryDeliveryIds: [],
+        dead: 0,
+        deadDeliveryIds: [],
+      } as Awaited<ReturnType<MaintenanceProcessors["projectDirectPrivateReviewEvidence"]>>,
     });
     const expiredAudienceAssignments = await runIsolatedMaintenanceProcessor({
       failures: processorFailures,
@@ -949,6 +955,7 @@ export async function runTokenlessScheduledMaintenance(input: {
       directPrivateReviewDeadlines.retry > 0 ||
       paidAssignmentSettlements.retry > 0 ||
       networkAssignmentSettlements.retry > 0 ||
+      directPrivateReviewEvidence.dead > 0 ||
       directPrivateReviewEvidence.retry > 0
         ? "degraded"
         : "healthy";

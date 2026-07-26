@@ -217,7 +217,15 @@ function processors(
       return { scanned: 0, finalized: 0, pending: 0, retry: 0, retryOpportunityIds: [] };
     },
     async projectDirectPrivateReviewEvidence() {
-      return { scanned: 0, projected: 0, packetsReady: 0, retry: 0, retryDeliveryIds: [] };
+      return {
+        scanned: 0,
+        projected: 0,
+        packetsReady: 0,
+        retry: 0,
+        retryDeliveryIds: [],
+        dead: 0,
+        deadDeliveryIds: [],
+      };
     },
     async expireAudienceAssignments() {
       return { expired: 0 };
@@ -241,7 +249,15 @@ test("scheduled maintenance finalizes due private reviews before expiring assign
       },
       async projectDirectPrivateReviewEvidence() {
         calls.push("evidence");
-        return { scanned: 1, projected: 1, packetsReady: 1, retry: 0, retryDeliveryIds: [] };
+        return {
+          scanned: 1,
+          projected: 1,
+          packetsReady: 1,
+          retry: 0,
+          retryDeliveryIds: [],
+          dead: 0,
+          deadDeliveryIds: [],
+        };
       },
       async expireAudienceAssignments() {
         calls.push("audience-expiry");
@@ -269,6 +285,8 @@ test("scheduled maintenance finalizes due private reviews before expiring assign
     packetsReady: 1,
     retry: 0,
     retryDeliveryIds: [],
+    dead: 0,
+    deadDeliveryIds: [],
   });
   assert.deepEqual(result.summary.expiredAudienceAssignments, { expired: 2 });
   assert.equal(result.summary.expiredPrivateReviewReservations, 3);

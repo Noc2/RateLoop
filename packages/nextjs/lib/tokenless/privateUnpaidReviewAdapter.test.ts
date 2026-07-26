@@ -19,7 +19,10 @@ import {
 } from "~~/lib/tokenless/agentIntegrations";
 import { __setArtifactPrivacyRuntimeForTests, readEncryptedArtifact } from "~~/lib/tokenless/artifactPrivacy";
 import { __setAssuranceResponseKeyringsForTests } from "~~/lib/tokenless/assuranceResponses";
-import { projectDirectPrivateReviewDecisionEvidence } from "~~/lib/tokenless/directPrivateReviewEvidence";
+import {
+  projectDirectPrivateReviewDecisionEvidence,
+  projectDueDirectPrivateReviewDecisionEvidence,
+} from "~~/lib/tokenless/directPrivateReviewEvidence";
 import { generateAssuranceEvidencePacket } from "~~/lib/tokenless/evidencePackets";
 import { createAssuranceProject } from "~~/lib/tokenless/humanAssurance";
 import {
@@ -447,6 +450,84 @@ test("direct private assignments surface in reviewer work and produce a terminal
     "SELECT aggregated_forecast_count FROM tokenless_forecast_integrity_terminal_receipts",
   );
   assert.equal(Number(forecastReceipt.rows[0]?.aggregated_forecast_count), 2);
+});
+
+test("private evidence projection backs off poison rows and dead-letters them after bounded attempts", async () => {
+  const setup = await fixture();
+  const delivered = await deliverPrivateFixture(setup);
+  await submitPositivePrivateResponse(setup, delivered, 0);
+  await submitPositivePrivateResponse(setup, delivered, 1);
+  const terminal = await getDirectPrivateReviewState(setup);
+  const deliveryId = terminal!.deliveryId;
+  const now = new Date("2026-07-16T10:00:00.000Z");
+  await dbClient.execute({
+    sql: `DELETE FROM tokenless_assurance_evidence_packets
+          WHERE run_id=(
+            SELECT run_id FROM tokenless_agent_review_opportunities
+            WHERE workspace_id=? AND opportunity_id=?
+          )`,
+    args: [setup.workspaceId, setup.opportunityId],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_private_unpaid_review_deliveries
+          SET evidence_projection_state='pending',evidence_projection_next_attempt_at=?
+          WHERE delivery_id=?`,
+    args: [now, deliveryId],
+  });
+  const retryingProjector = async () => ({
+    runId: "hau_poison_projection",
+    projected: false,
+    packet: "retry" as const,
+    error: "poison packet",
+  });
+
+  const first = await projectDueDirectPrivateReviewDecisionEvidence({
+    now,
+    projector: retryingProjector,
+  });
+  assert.deepEqual(first, {
+    scanned: 1,
+    projected: 0,
+    packetsReady: 0,
+    retry: 1,
+    retryDeliveryIds: [deliveryId],
+    dead: 0,
+    deadDeliveryIds: [],
+  });
+  let stored = await dbClient.execute({
+    sql: `SELECT evidence_projection_state,evidence_projection_attempt_count,
+                 evidence_projection_next_attempt_at,evidence_projection_last_error
+          FROM tokenless_private_unpaid_review_deliveries WHERE delivery_id=?`,
+    args: [deliveryId],
+  });
+  assert.equal(stored.rows[0]?.evidence_projection_state, "retry");
+  assert.equal(Number(stored.rows[0]?.evidence_projection_attempt_count), 1);
+  assert.ok(new Date(String(stored.rows[0]?.evidence_projection_next_attempt_at)) > now);
+  assert.equal(stored.rows[0]?.evidence_projection_last_error, "poison packet");
+  assert.equal((await projectDueDirectPrivateReviewDecisionEvidence({ now, projector: retryingProjector })).scanned, 0);
+
+  await dbClient.execute({
+    sql: `UPDATE tokenless_private_unpaid_review_deliveries
+          SET evidence_projection_attempt_count=7,evidence_projection_next_attempt_at=?
+          WHERE delivery_id=?`,
+    args: [now, deliveryId],
+  });
+  const terminalAttempt = await projectDueDirectPrivateReviewDecisionEvidence({
+    now,
+    projector: retryingProjector,
+  });
+  assert.equal(terminalAttempt.dead, 1);
+  assert.deepEqual(terminalAttempt.deadDeliveryIds, [deliveryId]);
+  stored = await dbClient.execute({
+    sql: `SELECT evidence_projection_state,evidence_projection_attempt_count,
+                 evidence_projection_next_attempt_at,evidence_projection_dead_at
+          FROM tokenless_private_unpaid_review_deliveries WHERE delivery_id=?`,
+    args: [deliveryId],
+  });
+  assert.equal(stored.rows[0]?.evidence_projection_state, "dead");
+  assert.equal(Number(stored.rows[0]?.evidence_projection_attempt_count), 8);
+  assert.equal(stored.rows[0]?.evidence_projection_next_attempt_at, null);
+  assert.ok(stored.rows[0]?.evidence_projection_dead_at);
 });
 
 test("private review wait returns a pending continuation after its bounded timeout", async () => {

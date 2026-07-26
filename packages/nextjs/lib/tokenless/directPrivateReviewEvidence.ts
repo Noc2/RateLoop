@@ -9,6 +9,8 @@ type Row = Record<string, unknown>;
 type PacketGenerator = typeof generateAssuranceEvidencePacket;
 
 const DEADLINE_TERMINAL_REQUIREMENT = "deadline_terminal_inconclusive_allowed";
+const MAX_PROJECTION_ATTEMPTS = 8;
+const STALE_PROJECTION_CLAIM_MS = 10 * 60_000;
 
 function text(row: Row | undefined, key: string) {
   const value = row?.[key];
@@ -41,6 +43,11 @@ function digest(value: string) {
 
 function projectedId(prefix: string, deliveryId: string, suffix = "") {
   return `${prefix}_${digest(`${deliveryId}\0${suffix}`).slice(0, 40)}`;
+}
+
+function projectionRetryAt(now: Date, attempt: number) {
+  const delayMs = Math.min(30_000 * 2 ** Math.min(Math.max(attempt - 1, 0), 7), 3_600_000);
+  return new Date(now.getTime() + delayMs);
 }
 
 function bytes32(value: unknown) {
@@ -608,12 +615,28 @@ export async function projectDirectPrivateReviewDecisionEvidence(input: {
   }
 }
 
-export async function projectDueDirectPrivateReviewDecisionEvidence(input: { now?: Date; limit?: number } = {}) {
+export async function projectDueDirectPrivateReviewDecisionEvidence(
+  input: {
+    now?: Date;
+    limit?: number;
+    projector?: typeof projectDirectPrivateReviewDecisionEvidence;
+  } = {},
+) {
   const now = input.now ?? new Date();
   const limit = input.limit ?? 20;
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
     throw new Error("Direct private review evidence projection limit is invalid.");
   }
+  await dbPool.query(
+    `UPDATE tokenless_private_unpaid_review_deliveries
+     SET evidence_projection_state='retry',
+         evidence_projection_next_attempt_at=$1,
+         evidence_projection_last_error='stale projection claim recovered',
+         evidence_projection_claimed_at=NULL
+     WHERE evidence_projection_state='processing'
+       AND evidence_projection_claimed_at <= $2`,
+    [now, new Date(now.getTime() - STALE_PROJECTION_CLAIM_MS)],
+  );
   const due = await dbPool.query(
     `SELECT d.delivery_id
      FROM tokenless_private_unpaid_review_deliveries d
@@ -622,10 +645,12 @@ export async function projectDueDirectPrivateReviewDecisionEvidence(input: { now
      LEFT JOIN tokenless_assurance_evidence_packets packet ON packet.run_id=o.run_id
      WHERE d.result_envelope_json IS NOT NULL
        AND d.status IN ('completed','inconclusive')
+       AND d.evidence_projection_state IN ('pending','retry')
+       AND d.evidence_projection_next_attempt_at <= $1
        AND (o.run_id IS NULL OR packet.packet_id IS NULL)
-     ORDER BY d.completed_at ASC,d.delivery_id ASC
-     LIMIT $1`,
-    [limit],
+     ORDER BY d.evidence_projection_next_attempt_at ASC,d.completed_at ASC,d.delivery_id ASC
+     LIMIT $2`,
+    [now, limit],
   );
   const summary = {
     scanned: due.rows.length,
@@ -633,20 +658,78 @@ export async function projectDueDirectPrivateReviewDecisionEvidence(input: { now
     packetsReady: 0,
     retry: 0,
     retryDeliveryIds: [] as string[],
+    dead: 0,
+    deadDeliveryIds: [] as string[],
   };
   for (const value of due.rows) {
     const deliveryId = text(value as Row, "delivery_id")!;
+    const claim = await dbPool.query(
+      `UPDATE tokenless_private_unpaid_review_deliveries
+       SET evidence_projection_state='processing',
+           evidence_projection_next_attempt_at=NULL,
+           evidence_projection_claimed_at=$1,
+           evidence_projection_claim_generation=evidence_projection_claim_generation + 1
+       WHERE delivery_id=$2
+         AND evidence_projection_state IN ('pending','retry')
+         AND evidence_projection_next_attempt_at <= $1
+       RETURNING evidence_projection_attempt_count,evidence_projection_claim_generation`,
+      [now, deliveryId],
+    );
+    const claimed = claim.rows[0] as Row | undefined;
+    if (!claimed) continue;
+    const attempt = integer(claimed, "evidence_projection_attempt_count") + 1;
+    const generation = integer(claimed, "evidence_projection_claim_generation", 1);
+    let failure: string | null = null;
     try {
-      const result = await projectDirectPrivateReviewDecisionEvidence({ deliveryId, now });
+      const result = await (input.projector ?? projectDirectPrivateReviewDecisionEvidence)({ deliveryId, now });
       if (result.projected) summary.projected += 1;
-      if (result.packet === "ready") summary.packetsReady += 1;
-      else {
-        summary.retry += 1;
-        summary.retryDeliveryIds.push(deliveryId);
+      if (result.packet === "ready") {
+        const completed = await dbPool.query(
+          `UPDATE tokenless_private_unpaid_review_deliveries
+           SET evidence_projection_state='completed',
+               evidence_projection_next_attempt_at=NULL,
+               evidence_projection_last_error=NULL,
+               evidence_projection_claimed_at=NULL,
+               evidence_projection_dead_at=NULL
+           WHERE delivery_id=$1
+             AND evidence_projection_state='processing'
+             AND evidence_projection_claim_generation=$2`,
+          [deliveryId, generation],
+        );
+        if (completed.rowCount === 1) summary.packetsReady += 1;
+      } else {
+        failure = result.error;
       }
-    } catch {
-      summary.retry += 1;
-      summary.retryDeliveryIds.push(deliveryId);
+    } catch (error) {
+      failure = error instanceof Error ? error.message : "Direct private evidence projection failed.";
+    }
+    if (failure !== null) {
+      const dead = attempt >= MAX_PROJECTION_ATTEMPTS;
+      const failed = await dbPool.query(
+        `UPDATE tokenless_private_unpaid_review_deliveries
+         SET evidence_projection_state=$1,
+             evidence_projection_attempt_count=$2,
+             evidence_projection_next_attempt_at=$3,
+             evidence_projection_last_error=$4,
+             evidence_projection_claimed_at=NULL,
+             evidence_projection_dead_at=$5
+         WHERE delivery_id=$6
+           AND evidence_projection_state='processing'
+           AND evidence_projection_claim_generation=$7`,
+        [
+          dead ? "dead" : "retry",
+          attempt,
+          dead ? null : projectionRetryAt(now, attempt),
+          failure.slice(0, 500),
+          dead ? now : null,
+          deliveryId,
+          generation,
+        ],
+      );
+      if (failed.rowCount === 1) {
+        summary[dead ? "dead" : "retry"] += 1;
+        summary[dead ? "deadDeliveryIds" : "retryDeliveryIds"].push(deliveryId);
+      }
     }
   }
   return summary;
@@ -654,6 +737,7 @@ export async function projectDueDirectPrivateReviewDecisionEvidence(input: { now
 
 export const __directPrivateReviewEvidenceTestUtils = {
   DEADLINE_TERMINAL_REQUIREMENT,
+  projectionRetryAt,
   projectedId,
   qualificationKeys,
 };
