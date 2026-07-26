@@ -72,7 +72,7 @@ test("workspace prepaid funding shows the balance, invoice link, and signed ledg
   assert.match(source, /Balance ledger/);
   assert.match(source, /signedUsdc\(entry\.amountAtomic\)/);
   assert.match(source, /initialWorkspaceId/);
-  assert.match(source, /htmlFor="workspace-prepaid-topup-amount"/);
+  assert.match(source, /<Field[\s\S]*id="workspace-prepaid-topup-amount"[\s\S]*format="usdInvoiceAmount"/);
   assert.match(source, /Workspace owners and billing members can add prepaid balance/);
   assert.match(source, /Loading prepaid funding/);
 });

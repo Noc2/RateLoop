@@ -5,6 +5,7 @@ import Link from "next/link";
 import { shouldInspectReservedVoucher } from "./publicSubmissionReceipt";
 import type { Hex } from "viem";
 import { type PublicQuestionMedia, QuestionMedia } from "~~/components/tokenless/answer/QuestionMedia";
+import { ChoiceInput, Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { CrowdForecastField, isCrowdForecastPercent } from "~~/components/tokenless/review/CrowdForecastField";
 import { DeadlineChip } from "~~/components/tokenless/review/DeadlineChip";
 import { ReviewerShell } from "~~/components/tokenless/review/ReviewerShell";
@@ -796,7 +797,7 @@ export function PublicQuestionCard({
           </div>
         </dl>
         <label className="mt-5 flex items-start gap-3 text-sm">
-          <input
+          <ChoiceInput
             type="checkbox"
             className="checkbox checkbox-sm mt-0.5"
             checked={networkTermsAccepted}
@@ -939,9 +940,11 @@ export function PublicQuestionCard({
                   <legend className="text-xs font-semibold">
                     {task.question.rationale?.mode === "required" ? "Feedback required" : "Optional feedback"}
                   </legend>
-                  <select
-                    aria-label="Feedback category"
-                    className="select select-sm mt-3 w-full border-white/10 bg-[var(--rateloop-field)]"
+                  <SelectField
+                    containerClassName="mt-3"
+                    className="select-sm border-white/10 bg-[var(--rateloop-field)]"
+                    label="Feedback category"
+                    labelClassName="sr-only"
                     value={feedbackCategory}
                     onChange={event => setFeedbackCategory(event.target.value as PublicRaterResponseCategory)}
                   >
@@ -950,11 +953,14 @@ export function PublicQuestionCard({
                         {category.replace("_", " ")}
                       </option>
                     ))}
-                  </select>
-                  <textarea
+                  </SelectField>
+                  <TextareaField
                     ref={rationaleRef}
-                    aria-label="Feedback"
-                    className="textarea mt-2 min-h-28 w-full border-white/10 bg-[var(--rateloop-field)]"
+                    containerClassName="mt-2"
+                    className="min-h-28 border-white/10 bg-[var(--rateloop-field)]"
+                    label="Feedback"
+                    labelClassName="sr-only"
+                    error={feedbackIssue}
                     value={feedbackBody}
                     onChange={event => setFeedbackBody(event.target.value)}
                     minLength={
@@ -966,25 +972,18 @@ export function PublicQuestionCard({
                   <div className="text-right text-[11px] text-base-content/55">
                     {feedbackBody.length}/{feedbackMaximum}
                   </div>
-                  {feedbackIssue ? (
-                    <p className="mt-1 text-xs text-red-100" role="alert">
-                      {feedbackIssue}
-                    </p>
-                  ) : null}
-                  <input
+                  <Field
                     type="url"
-                    aria-label="Source URL"
-                    className="input input-sm mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                    containerClassName="mt-2"
+                    className="input-sm border-white/10 bg-[var(--rateloop-field)]"
+                    label="Source URL"
+                    labelClassName="sr-only"
+                    error={sourceUrlIssue}
                     value={sourceUrl}
                     onChange={event => setSourceUrl(event.target.value)}
                     maxLength={2_048}
                     placeholder="HTTPS source, optional"
                   />
-                  {sourceUrlIssue ? (
-                    <p className="mt-1 text-xs text-red-100" role="alert">
-                      {sourceUrlIssue}
-                    </p>
-                  ) : null}
                 </fieldset>
               ) : null}
               <section
@@ -1024,7 +1023,7 @@ export function PublicQuestionCard({
                     Download recovery backup
                   </a>
                   <label className="mt-3 flex items-start gap-2 text-xs leading-5">
-                    <input
+                    <ChoiceInput
                       type="checkbox"
                       className="checkbox checkbox-xs mt-0.5"
                       checked={recoveryConfirmed}

@@ -6,12 +6,9 @@ import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { WorkspaceApiKeysPanel } from "~~/components/tokenless/WorkspaceApiKeysPanel";
 import { WorkspaceDangerZone } from "~~/components/tokenless/WorkspaceDangerZone";
 import { WorkspaceMembersPanel } from "~~/components/tokenless/WorkspaceMembersPanel";
-import { Field } from "~~/components/tokenless/forms/Field";
+import { ChoiceInput, Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { WorkspaceRequestScope } from "~~/lib/tokenless/workspaceRequestScope";
-import { fieldFormat } from "~~/lib/validation/fieldFormats";
-
-const USD_INVOICE_AMOUNT_FORMAT = fieldFormat("usdInvoiceAmount");
 
 type Workspace = {
   workspaceId: string;
@@ -712,12 +709,11 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
 
   const workspaceForm = (
     <form className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start" onSubmit={createWorkspace}>
-      <label className="sr-only" htmlFor="workspace-name">
-        Workspace name
-      </label>
-      <input
+      <Field
         id="workspace-name"
-        className="input w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+        className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+        label="Workspace name"
+        labelClassName="sr-only"
         value={workspaceName}
         onChange={event => setWorkspaceName(event.target.value)}
         placeholder="Team or project name"
@@ -944,35 +940,21 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                             maxLength={120}
                           />
                         </div>
-                        <label className="text-xs text-base-content/55 sm:col-span-2">
-                          Registered address
-                          <textarea
-                            className="textarea mt-1.5 min-h-20 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                            value={billingProfile.registeredAddress}
-                            aria-invalid={billingProfileFieldErrors.registeredAddress ? true : undefined}
-                            aria-describedby={
-                              billingProfileFieldErrors.registeredAddress
-                                ? "billing-registered-address-error"
-                                : undefined
-                            }
-                            onChange={event => {
-                              clearBillingProfileErrors("registeredAddress");
-                              setBillingProfile(current => ({ ...current, registeredAddress: event.target.value }));
-                            }}
-                            maxLength={500}
-                            autoComplete="street-address"
-                            required
-                          />
-                          {billingProfileFieldErrors.registeredAddress ? (
-                            <span
-                              id="billing-registered-address-error"
-                              className="mt-2 block text-sm text-error"
-                              role="alert"
-                            >
-                              {billingProfileFieldErrors.registeredAddress}
-                            </span>
-                          ) : null}
-                        </label>
+                        <TextareaField
+                          containerClassName="sm:col-span-2"
+                          className="min-h-20 rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                          label="Registered address"
+                          labelClassName="text-xs text-base-content/55"
+                          error={billingProfileFieldErrors.registeredAddress}
+                          value={billingProfile.registeredAddress}
+                          onChange={event => {
+                            clearBillingProfileErrors("registeredAddress");
+                            setBillingProfile(current => ({ ...current, registeredAddress: event.target.value }));
+                          }}
+                          maxLength={500}
+                          autoComplete="street-address"
+                          required
+                        />
                         <p className="text-xs font-semibold text-base-content/65 sm:col-span-2">
                           Invoice funding address <span className="font-normal text-base-content/55">(optional)</span>
                         </p>
@@ -1168,24 +1150,19 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                     className="mt-5 flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row"
                     onSubmit={createTopup}
                   >
-                    <div className="grow text-xs text-base-content/55">
-                      <label htmlFor="workspace-prepaid-topup-amount">Add prepaid balance by USD invoice</label>
-                      <div className="mt-1.5 flex rounded-lg border border-white/10 bg-[var(--rateloop-field)]">
-                        <span className="px-3 py-2.5 text-base-content/55">$</span>
-                        <input
-                          id="workspace-prepaid-topup-amount"
-                          className="min-w-0 grow bg-transparent px-1 py-2.5 outline-none"
-                          value={topupAmount}
-                          onChange={event => setTopupAmount(event.target.value)}
-                          inputMode="decimal"
-                          pattern={USD_INVOICE_AMOUNT_FORMAT.pattern}
-                          maxLength={USD_INVOICE_AMOUNT_FORMAT.maxLength}
-                          title={USD_INVOICE_AMOUNT_FORMAT.title}
-                          placeholder="500.00"
-                          required
-                        />
-                      </div>
-                    </div>
+                    <Field
+                      containerClassName="grow"
+                      className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                      id="workspace-prepaid-topup-amount"
+                      label="Add prepaid balance by USD invoice (USD)"
+                      labelClassName="text-xs text-base-content/55"
+                      value={topupAmount}
+                      onChange={event => setTopupAmount(event.target.value)}
+                      inputMode="decimal"
+                      format="usdInvoiceAmount"
+                      placeholder="500.00"
+                      required
+                    />
                     <button className="rateloop-gradient-action min-h-10 self-end px-4" disabled={topupBusy}>
                       {topupBusy ? "Creating invoice…" : "Create invoice"}
                     </button>
@@ -1324,7 +1301,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                                 </p>
                               </div>
                               <label className="flex items-center gap-2 text-xs text-base-content/65">
-                                <input
+                                <ChoiceInput
                                   type="checkbox"
                                   className="toggle toggle-sm"
                                   checked={provider.enforceSso}
@@ -1394,100 +1371,96 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                             {identityForm.providerId ? "Update identity provider" : "Add identity provider"}
                           </h3>
                           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                            <label className="text-xs text-base-content/55">
-                              Protocol
-                              <select
-                                className="select mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                                value={identityForm.protocol}
-                                disabled={Boolean(identityForm.providerId)}
-                                onChange={event =>
-                                  setIdentityForm(current => ({
-                                    ...current,
-                                    protocol: event.target.value as "oidc" | "saml",
-                                  }))
-                                }
-                              >
-                                <option value="oidc">OpenID Connect</option>
-                                <option value="saml">SAML 2.0</option>
-                              </select>
-                            </label>
-                            <label className="text-xs text-base-content/55">
-                              Email domain
-                              <input
-                                className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                                value={identityForm.domain}
-                                onChange={event =>
-                                  setIdentityForm(current => ({ ...current, domain: event.target.value }))
-                                }
-                                placeholder="company.example"
-                                required
-                              />
-                            </label>
-                            <label className="text-xs text-base-content/55 sm:col-span-2">
-                              Issuer URL
-                              <input
-                                className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                                type="url"
-                                value={identityForm.issuer}
-                                onChange={event =>
-                                  setIdentityForm(current => ({ ...current, issuer: event.target.value }))
-                                }
-                                placeholder="https://id.company.example"
-                                required={!identityForm.providerId}
-                              />
-                            </label>
+                            <SelectField
+                              className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                              label="Protocol"
+                              labelClassName="text-xs text-base-content/55"
+                              value={identityForm.protocol}
+                              disabled={Boolean(identityForm.providerId)}
+                              onChange={event =>
+                                setIdentityForm(current => ({
+                                  ...current,
+                                  protocol: event.target.value as "oidc" | "saml",
+                                }))
+                              }
+                            >
+                              <option value="oidc">OpenID Connect</option>
+                              <option value="saml">SAML 2.0</option>
+                            </SelectField>
+                            <Field
+                              className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                              label="Email domain"
+                              labelClassName="text-xs text-base-content/55"
+                              value={identityForm.domain}
+                              onChange={event =>
+                                setIdentityForm(current => ({ ...current, domain: event.target.value }))
+                              }
+                              placeholder="company.example"
+                              required
+                            />
+                            <Field
+                              containerClassName="sm:col-span-2"
+                              className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                              label="Issuer URL"
+                              labelClassName="text-xs text-base-content/55"
+                              type="url"
+                              value={identityForm.issuer}
+                              onChange={event =>
+                                setIdentityForm(current => ({ ...current, issuer: event.target.value }))
+                              }
+                              placeholder="https://id.company.example"
+                              required={!identityForm.providerId}
+                            />
                             {identityForm.protocol === "oidc" ? (
                               <>
-                                <label className="text-xs text-base-content/55">
-                                  Client ID
-                                  <input
-                                    className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                                    value={identityForm.clientId}
-                                    onChange={event =>
-                                      setIdentityForm(current => ({ ...current, clientId: event.target.value }))
-                                    }
-                                    required={!identityForm.providerId}
-                                  />
-                                </label>
-                                <label className="text-xs text-base-content/55">
-                                  Client secret
-                                  <input
-                                    className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                                    type="password"
-                                    autoComplete="new-password"
-                                    value={identityForm.clientSecret}
-                                    onChange={event =>
-                                      setIdentityForm(current => ({ ...current, clientSecret: event.target.value }))
-                                    }
-                                    required={!identityForm.providerId}
-                                  />
-                                </label>
+                                <Field
+                                  className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                                  label="Client ID"
+                                  labelClassName="text-xs text-base-content/55"
+                                  value={identityForm.clientId}
+                                  onChange={event =>
+                                    setIdentityForm(current => ({ ...current, clientId: event.target.value }))
+                                  }
+                                  required={!identityForm.providerId}
+                                />
+                                <Field
+                                  className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                                  label="Client secret"
+                                  labelClassName="text-xs text-base-content/55"
+                                  type="password"
+                                  autoComplete="new-password"
+                                  value={identityForm.clientSecret}
+                                  onChange={event =>
+                                    setIdentityForm(current => ({ ...current, clientSecret: event.target.value }))
+                                  }
+                                  required={!identityForm.providerId}
+                                />
                               </>
                             ) : (
                               <>
-                                <label className="text-xs text-base-content/55 sm:col-span-2">
-                                  SSO entry point
-                                  <input
-                                    className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                                    type="url"
-                                    value={identityForm.entryPoint}
-                                    onChange={event =>
-                                      setIdentityForm(current => ({ ...current, entryPoint: event.target.value }))
-                                    }
-                                    required={!identityForm.providerId}
-                                  />
-                                </label>
-                                <label className="text-xs text-base-content/55 sm:col-span-2">
-                                  Signing certificate
-                                  <textarea
-                                    className="textarea mt-1.5 min-h-24 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)] font-mono text-xs"
-                                    value={identityForm.certificate}
-                                    onChange={event =>
-                                      setIdentityForm(current => ({ ...current, certificate: event.target.value }))
-                                    }
-                                    required={!identityForm.providerId}
-                                  />
-                                </label>
+                                <Field
+                                  containerClassName="sm:col-span-2"
+                                  className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                                  label="SSO entry point"
+                                  labelClassName="text-xs text-base-content/55"
+                                  type="url"
+                                  value={identityForm.entryPoint}
+                                  onChange={event =>
+                                    setIdentityForm(current => ({ ...current, entryPoint: event.target.value }))
+                                  }
+                                  required={!identityForm.providerId}
+                                />
+                                <TextareaField
+                                  containerClassName="sm:col-span-2"
+                                  className="min-h-24 rounded-lg border-white/10 bg-[var(--rateloop-field)] font-mono text-xs"
+                                  label="Signing certificate"
+                                  labelClassName="text-xs text-base-content/55"
+                                  value={identityForm.certificate}
+                                  onChange={event =>
+                                    setIdentityForm(current => ({ ...current, certificate: event.target.value }))
+                                  }
+                                  required={!identityForm.providerId}
+                                />
                               </>
                             )}
                           </div>

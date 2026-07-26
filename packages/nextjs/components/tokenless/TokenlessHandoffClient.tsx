@@ -20,6 +20,7 @@ import {
   type QuestionMediaPreviewCapability,
   type QuestionMediaReviewState,
 } from "~~/components/tokenless/answer/QuestionMedia";
+import { ChoiceInput, Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { subscribeToBrowserAuthSessionChanges } from "~~/lib/auth/client";
 
 const HANDOFF_VERSION = "rateloop.handoff.v1" as const;
@@ -946,12 +947,12 @@ export function TokenlessHandoffClient() {
             </span>
           </div>
 
-          <label className="mt-6 block text-sm font-medium" htmlFor="handoff-prompt">
-            Exact prompt
-          </label>
-          <textarea
+          <TextareaField
             id="handoff-prompt"
-            className="textarea mt-2 min-h-36 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)] text-base leading-7"
+            containerClassName="mt-6"
+            className="min-h-36 rounded-lg border-white/10 bg-[var(--rateloop-field)] text-base leading-7"
+            label="Exact prompt"
+            labelClassName="text-sm font-medium"
             maxLength={MAX_PROMPT_LENGTH}
             disabled={formDisabled}
             value={request.question.prompt}
@@ -966,54 +967,46 @@ export function TokenlessHandoffClient() {
           {request.question.kind === "binary" ? (
             <fieldset className="mt-5 grid gap-4 sm:grid-cols-2" disabled={formDisabled}>
               <legend className="sr-only">Binary answer labels</legend>
-              <label className="text-sm text-base-content/65">
-                Negative label
-                <input
-                  className="input mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                  maxLength={200}
-                  placeholder="No"
-                  value={request.question.negativeLabel ?? ""}
-                  onChange={event => changeBinaryLabel("negativeLabel", event.target.value)}
-                />
-              </label>
-              <label className="text-sm text-base-content/65">
-                Positive label
-                <input
-                  className="input mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                  maxLength={200}
-                  placeholder="Yes"
-                  value={request.question.positiveLabel ?? ""}
-                  onChange={event => changeBinaryLabel("positiveLabel", event.target.value)}
-                />
-              </label>
+              <Field
+                className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                label="Negative label"
+                labelClassName="text-sm text-base-content/65"
+                maxLength={200}
+                placeholder="No"
+                value={request.question.negativeLabel ?? ""}
+                onChange={event => changeBinaryLabel("negativeLabel", event.target.value)}
+              />
+              <Field
+                className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                label="Positive label"
+                labelClassName="text-sm text-base-content/65"
+                maxLength={200}
+                placeholder="Yes"
+                value={request.question.positiveLabel ?? ""}
+                onChange={event => changeBinaryLabel("positiveLabel", event.target.value)}
+              />
             </fieldset>
           ) : (
             <fieldset className="mt-5 grid gap-4 sm:grid-cols-2" disabled={formDisabled}>
               <legend className="sr-only">Head-to-head options</legend>
-              <label className="text-sm text-base-content/65">
-                Option A
-                <input
-                  className="input mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                  maxLength={200}
-                  value={request.question.optionA.label}
-                  onChange={event => changeComparisonLabel("optionA", event.target.value)}
-                />
-                <span className="mt-1 block font-mono text-xs text-base-content/55">
-                  Key: {request.question.optionA.key}
-                </span>
-              </label>
-              <label className="text-sm text-base-content/65">
-                Option B
-                <input
-                  className="input mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                  maxLength={200}
-                  value={request.question.optionB.label}
-                  onChange={event => changeComparisonLabel("optionB", event.target.value)}
-                />
-                <span className="mt-1 block font-mono text-xs text-base-content/55">
-                  Key: {request.question.optionB.key}
-                </span>
-              </label>
+              <Field
+                className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                label="Option A"
+                labelClassName="text-sm text-base-content/65"
+                hint={<span className="font-mono">Key: {request.question.optionA.key}</span>}
+                maxLength={200}
+                value={request.question.optionA.label}
+                onChange={event => changeComparisonLabel("optionA", event.target.value)}
+              />
+              <Field
+                className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                label="Option B"
+                labelClassName="text-sm text-base-content/65"
+                hint={<span className="font-mono">Key: {request.question.optionB.key}</span>}
+                maxLength={200}
+                value={request.question.optionB.label}
+                onChange={event => changeComparisonLabel("optionB", event.target.value)}
+              />
             </fieldset>
           )}
 
@@ -1057,7 +1050,7 @@ export function TokenlessHandoffClient() {
               />
             </dl>
             <label className="flex items-start gap-3 text-sm leading-6 text-base-content/80">
-              <input
+              <ChoiceInput
                 type="checkbox"
                 className="checkbox checkbox-sm mt-1 border-white/30"
                 checked={privacyConfirmed}
@@ -1204,9 +1197,12 @@ export function TokenlessHandoffClient() {
                 </p>
               ) : workspaces.length ? (
                 <>
-                  <select
+                  <SelectField
                     id="handoff-workspace"
-                    className="select mt-2 w-full max-w-xl rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                    containerClassName="max-w-xl"
+                    className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                    label="Prepaid workspace"
+                    labelClassName="sr-only"
                     disabled={busy !== null || submitted}
                     value={selectedWorkspaceId}
                     onChange={event => setSelectedWorkspaceId(event.target.value)}
@@ -1216,7 +1212,7 @@ export function TokenlessHandoffClient() {
                         {workspace.name} · {formatUsdcAtomic(workspace.prepaid.availableAtomic)} available
                       </option>
                     ))}
-                  </select>
+                  </SelectField>
                   {insufficientPrepaid ? (
                     <div className="mt-2 text-sm text-error" role="alert">
                       <p>This workspace has less available prepaid USDC than the quoted total.</p>
