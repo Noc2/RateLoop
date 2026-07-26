@@ -5,9 +5,15 @@ import Link from "next/link";
 import { Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { readBrowserSession } from "~~/lib/auth/client";
+import {
+  type PaidEligibilityFormValues,
+  buildPaidEligibilityFormPayload,
+  collectsDac7Details,
+  normalizedResidenceCountry,
+} from "~~/lib/tokenless/paidEligibilityForm";
 
 type EligibilityState = {
-  status: "not_started" | "eligible" | "review" | "blocked" | "expired";
+  status: "not_started" | "declined" | "eligible" | "review" | "blocked" | "expired";
   blockedReason?: string | null;
   capabilities?: string[];
   assuranceProviders?: string[];
@@ -17,29 +23,18 @@ type EligibilityState = {
   payoutAccount?: string;
 };
 
-type UnlockForm = {
-  declaredResidenceCountry: string;
-  taxResidenceCountry: string;
-  fullName: string;
-  birthDate: string;
-  streetAddress: string;
-  city: string;
-  postalCode: string;
-  tin: string;
-  noTinReason: string;
-  sanctionsConsent: boolean;
-};
-
-const initialForm: UnlockForm = {
-  declaredResidenceCountry: "DE",
-  taxResidenceCountry: "DE",
+const initialForm: PaidEligibilityFormValues = {
+  declaredResidenceCountry: "",
+  taxResidenceCountry: "",
   fullName: "",
   birthDate: "",
   streetAddress: "",
   city: "",
   postalCode: "",
+  taxIdentificationKind: "tin",
   tin: "",
-  noTinReason: "",
+  placeOfBirthCity: "",
+  placeOfBirthCountry: "",
   sanctionsConsent: false,
 };
 
@@ -70,6 +65,7 @@ async function readJson(response: Response) {
 function statusLabel(state: EligibilityState | null) {
   if (!state) return "Checking…";
   if (state.status === "eligible") return "Paid tasks unlocked";
+  if (state.status === "declined") return "Advisory-only selected";
   if (state.status === "review") return "Eligibility review";
   if (state.status === "blocked") return "Paid tasks unavailable";
   if (state.status === "expired") return "Verification expired";
@@ -84,7 +80,7 @@ export function PaidEligibilityClient() {
   const [state, setState] = useState<EligibilityState | null>(null);
   const [accountAddress, setAccountAddress] = useState<string | null>(null);
   const [providerState, setProviderState] = useState<string | null>(null);
-  const [form, setForm] = useState<UnlockForm>(initialForm);
+  const [form, setForm] = useState<PaidEligibilityFormValues>(initialForm);
   const [reviewerSource, setReviewerSource] = useState<"customer_invited" | "rateloop_network">("customer_invited");
   const [workspaceId, setWorkspaceId] = useState("");
   const [busy, setBusy] = useState(false);
@@ -133,7 +129,7 @@ export function PaidEligibilityClient() {
     }
   }
 
-  function update<K extends keyof UnlockForm>(key: K, value: UnlockForm[K]) {
+  function update<K extends keyof PaidEligibilityFormValues>(key: K, value: PaidEligibilityFormValues[K]) {
     setForm(current => ({ ...current, [key]: value }));
     clear(key);
   }
@@ -150,24 +146,15 @@ export function PaidEligibilityClient() {
           method: "POST",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            providerState,
-            reviewerSource,
-            ...(reviewerSource === "customer_invited" ? { workspaceId: workspaceId.trim() } : {}),
-            sanctionsConsent: form.sanctionsConsent,
-            declaredResidenceCountry: form.declaredResidenceCountry.toUpperCase(),
-            taxResidenceCountry: form.taxResidenceCountry.toUpperCase(),
-            payoutAccount: accountAddress,
-            dac7: {
-              fullName: form.fullName,
-              birthDate: form.birthDate,
-              streetAddress: form.streetAddress,
-              city: form.city,
-              postalCode: form.postalCode,
-              ...(form.tin ? { tin: form.tin } : { noTinReason: form.noTinReason }),
-            },
-            screeningSubject: { fullName: form.fullName, birthDate: form.birthDate },
-          }),
+          body: JSON.stringify(
+            buildPaidEligibilityFormPayload({
+              form,
+              payoutAccount: accountAddress,
+              providerState,
+              reviewerSource,
+              workspaceId,
+            }),
+          ),
         }),
       );
       sessionStorage.removeItem("rateloop:eligibility-provider-state");
@@ -181,7 +168,43 @@ export function PaidEligibilityClient() {
     }
   }
 
+  async function keepAdvisoryOnly() {
+    if (reviewerSource === "customer_invited" && !workspaceId.trim()) {
+      capture(
+        new EligibilityRequestError("Enter the inviting workspace before selecting advisory-only.", "workspaceId"),
+        "Unable to record the advisory-only choice.",
+      );
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    clear();
+    try {
+      await readJson(
+        await fetch("/api/rater/eligibility", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            decision: "declined_paid_data_collection",
+            reviewerSource,
+            ...(reviewerSource === "customer_invited" ? { workspaceId: workspaceId.trim() } : {}),
+          }),
+        }),
+      );
+      sessionStorage.removeItem("rateloop:eligibility-provider-state");
+      setProviderState(null);
+      await refresh();
+    } catch (cause) {
+      capture(cause, "Unable to record the advisory-only choice.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const eligible = state?.status === "eligible";
+  const residenceComplete = normalizedResidenceCountry(form.declaredResidenceCountry) !== null;
+  const collectDac7 = collectsDac7Details(form.declaredResidenceCountry);
 
   return (
     <div className="space-y-5">
@@ -225,6 +248,20 @@ export function PaidEligibilityClient() {
               </strong>
             </div>
           </div>
+        ) : state?.status === "declined" ? (
+          <div className="mt-6 space-y-4">
+            <p className="text-sm leading-6 text-base-content/65">
+              Your decision to keep this account advisory-only was recorded. You can still browse, calibrate, and do
+              unpaid reviews without providing paid-work tax data.
+            </p>
+            <button
+              type="button"
+              className="rounded-lg border border-white/15 px-4 py-2 text-sm"
+              onClick={() => setState({ status: "not_started" })}
+            >
+              Reconsider paid work
+            </button>
+          </div>
         ) : accountAddress && (providerState || reviewerSource === "customer_invited") ? (
           <form className="mt-6 space-y-5" onSubmit={submitUnlock}>
             <p className="text-sm leading-6 text-base-content/60">
@@ -266,97 +303,148 @@ export function PaidEligibilityClient() {
                 required
                 error={fieldErrors.declaredResidenceCountry}
               />
-              <Field
-                label="Tax residence country"
-                className="uppercase"
-                format="countryCode"
-                value={form.taxResidenceCountry}
-                onChange={event => update("taxResidenceCountry", event.target.value)}
-                required
-                error={fieldErrors.taxResidenceCountry}
-              />
-              <Field
-                label="Legal name"
-                value={form.fullName}
-                onChange={event => update("fullName", event.target.value)}
-                maxLength={300}
-                autoComplete="name"
-                required
-                error={fieldErrors.fullName}
-              />
-              <Field
-                label="Birth date"
-                type="date"
-                value={form.birthDate}
-                onChange={event => update("birthDate", event.target.value)}
-                autoComplete="bday"
-                required
-                error={fieldErrors.birthDate}
-              />
-              <Field
-                label="Street address"
-                value={form.streetAddress}
-                onChange={event => update("streetAddress", event.target.value)}
-                maxLength={300}
-                autoComplete="street-address"
-                required
-                error={fieldErrors.streetAddress}
-              />
-              <Field
-                label="City"
-                value={form.city}
-                onChange={event => update("city", event.target.value)}
-                maxLength={300}
-                autoComplete="address-level2"
-                required
-                error={fieldErrors.city}
-              />
-              <Field
-                label="Postal code"
-                value={form.postalCode}
-                onChange={event => update("postalCode", event.target.value)}
-                maxLength={40}
-                autoComplete="postal-code"
-                required
-                error={fieldErrors.postalCode}
-              />
-              <Field
-                label="Tax identification number"
-                value={form.tin}
-                onChange={event => update("tin", event.target.value)}
-                maxLength={120}
-                autoComplete="off"
-                error={fieldErrors.tin}
-              />
-              <Field
-                label="If no TIN, reason"
-                value={form.noTinReason}
-                onChange={event => update("noTinReason", event.target.value)}
-                maxLength={300}
-                error={fieldErrors.noTinReason}
-              />
+              {!residenceComplete ? (
+                <p className="self-end pb-3 text-xs leading-5 text-base-content/55">
+                  Enter the two-letter residence country first. Only EU residents are asked for the DAC7 dataset.
+                </p>
+              ) : (
+                <>
+                  <Field
+                    label="Legal name"
+                    value={form.fullName}
+                    onChange={event => update("fullName", event.target.value)}
+                    maxLength={300}
+                    autoComplete="name"
+                    required
+                    error={fieldErrors.fullName}
+                  />
+                  <Field
+                    label="Birth date"
+                    type="date"
+                    value={form.birthDate}
+                    onChange={event => update("birthDate", event.target.value)}
+                    autoComplete="bday"
+                    required
+                    error={fieldErrors.birthDate}
+                  />
+                  {collectDac7 ? (
+                    <>
+                      <Field
+                        label="Tax residence country"
+                        className="uppercase"
+                        format="countryCode"
+                        value={form.taxResidenceCountry}
+                        onChange={event => update("taxResidenceCountry", event.target.value)}
+                        required
+                        error={fieldErrors.taxResidenceCountry}
+                      />
+                      <Field
+                        label="Street address"
+                        value={form.streetAddress}
+                        onChange={event => update("streetAddress", event.target.value)}
+                        maxLength={300}
+                        autoComplete="street-address"
+                        required
+                        error={fieldErrors.streetAddress}
+                      />
+                      <Field
+                        label="City"
+                        value={form.city}
+                        onChange={event => update("city", event.target.value)}
+                        maxLength={300}
+                        autoComplete="address-level2"
+                        required
+                        error={fieldErrors.city}
+                      />
+                      <Field
+                        label="Postal code"
+                        value={form.postalCode}
+                        onChange={event => update("postalCode", event.target.value)}
+                        maxLength={40}
+                        autoComplete="postal-code"
+                        required
+                        error={fieldErrors.postalCode}
+                      />
+                      <label className="text-sm text-base-content/70">
+                        Tax identifier type
+                        <select
+                          className="select select-bordered mt-1 w-full"
+                          value={form.taxIdentificationKind}
+                          onChange={event =>
+                            update("taxIdentificationKind", event.target.value as "tin" | "place_of_birth")
+                          }
+                        >
+                          <option value="tin">Tax identification number</option>
+                          <option value="place_of_birth">Place of birth (when no TIN is issued)</option>
+                        </select>
+                      </label>
+                      {form.taxIdentificationKind === "tin" ? (
+                        <Field
+                          label="Tax identification number"
+                          value={form.tin}
+                          onChange={event => update("tin", event.target.value)}
+                          maxLength={120}
+                          autoComplete="off"
+                          required
+                          error={fieldErrors.tin}
+                        />
+                      ) : (
+                        <>
+                          <Field
+                            label="Place of birth city"
+                            value={form.placeOfBirthCity}
+                            onChange={event => update("placeOfBirthCity", event.target.value)}
+                            maxLength={300}
+                            required
+                            error={fieldErrors.placeOfBirthCity}
+                          />
+                          <Field
+                            label="Place of birth country"
+                            className="uppercase"
+                            format="countryCode"
+                            value={form.placeOfBirthCountry}
+                            onChange={event => update("placeOfBirthCountry", event.target.value)}
+                            required
+                            error={fieldErrors.placeOfBirthCountry}
+                          />
+                        </>
+                      )}
+                    </>
+                  ) : null}
+                </>
+              )}
             </div>
-            <label className="flex items-start gap-3 text-sm leading-6 text-base-content/65">
-              <input
-                type="checkbox"
-                className="checkbox checkbox-sm mt-1"
-                checked={form.sanctionsConsent}
-                onChange={event => update("sanctionsConsent", event.target.checked)}
-                aria-invalid={fieldErrors.sanctionsConsent ? true : undefined}
-                required
-              />
-              <span>
-                I consent to eligibility and sanctions screening for paid work. Screening affects future vouchers only
-                and never an already accepted payment.
-              </span>
-            </label>
+            {residenceComplete ? (
+              <label className="flex items-start gap-3 text-sm leading-6 text-base-content/65">
+                <input
+                  type="checkbox"
+                  className="checkbox checkbox-sm mt-1"
+                  checked={form.sanctionsConsent}
+                  onChange={event => update("sanctionsConsent", event.target.checked)}
+                  aria-invalid={fieldErrors.sanctionsConsent ? true : undefined}
+                  required
+                />
+                <span>
+                  I consent to eligibility and sanctions screening for paid work. Screening affects future vouchers only
+                  and never an already accepted payment.
+                </span>
+              </label>
+            ) : null}
             {fieldErrors.sanctionsConsent ? (
               <p className="text-sm text-error" role="alert">
                 {fieldErrors.sanctionsConsent}
               </p>
             ) : null}
-            <button className="rateloop-gradient-action w-full px-6" disabled={busy}>
+            <button className="rateloop-gradient-action w-full px-6" disabled={busy || !residenceComplete}>
               {busy ? "Completing…" : "Unlock paid tasks"}
+            </button>
+            <button
+              type="button"
+              className="w-full rounded-lg border border-white/15 px-6 py-3 text-sm"
+              disabled={busy}
+              onClick={() => void keepAdvisoryOnly()}
+            >
+              Keep advisory-only
             </button>
             {formError ? (
               <p className="rounded-lg bg-red-400/10 p-3 text-sm text-red-100" role="alert">
@@ -369,7 +457,7 @@ export function PaidEligibilityClient() {
             <p className="text-sm leading-6 text-base-content/60">
               {state && !accountAddress
                 ? "Add a payout wallet before starting paid-work verification. Private assignments remain available without one."
-                : "Choose invited paid work without an identity vendor, or network paid work with proof-of-human assurance. Both require tax details and sanctions screening before a voucher."}
+                : "Choose invited paid work without an identity vendor, or network paid work with proof-of-human assurance. Residence is asked first; only EU residents provide the full DAC7 dataset."}
             </p>
             <div className="mt-5 grid gap-2 sm:grid-cols-2">
               <button
@@ -398,14 +486,24 @@ export function PaidEligibilityClient() {
                 Add payout wallet
               </Link>
             ) : reviewerSource === "rateloop_network" ? (
-              <button
-                type="button"
-                className="rateloop-gradient-action mt-5 px-6"
-                disabled={busy || !accountAddress}
-                onClick={() => void startProvider()}
-              >
-                {busy ? "Opening provider…" : accountAddress ? "Verify identity" : "Checking account…"}
-              </button>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  className="rateloop-gradient-action px-6"
+                  disabled={busy || !accountAddress}
+                  onClick={() => void startProvider()}
+                >
+                  {busy ? "Opening provider…" : accountAddress ? "Verify identity" : "Checking account…"}
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border border-white/15 px-6 py-3 text-sm"
+                  disabled={busy || !accountAddress}
+                  onClick={() => void keepAdvisoryOnly()}
+                >
+                  Keep advisory-only
+                </button>
+              </div>
             ) : null}
           </div>
         )}
