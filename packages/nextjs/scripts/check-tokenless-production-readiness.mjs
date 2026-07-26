@@ -6,7 +6,7 @@ import {
   tokenlessDeployedContracts,
   tokenlessDeploymentSchema,
 } from "../../contracts/src/tokenless/deployedContracts.ts";
-import paidLaneActivation from "../lib/tokenless/paidLaneActivation.ts";
+import * as paidLaneActivationModule from "../lib/tokenless/paidLaneActivation.ts";
 import { TOKENLESS_VERCEL_PROJECT } from "./check-identity-deployment.mjs";
 import { validateHostedDatabaseIdentity } from "./migrate-hosted-database.mjs";
 import { createHash, createPublicKey } from "node:crypto";
@@ -14,7 +14,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isAddress, zeroAddress } from "viem";
 
-const { validatePaidLaneActivation } = paidLaneActivation;
+const { validatePaidLaneActivation } = paidLaneActivationModule.default ?? paidLaneActivationModule;
 
 const BASE_SEPOLIA_CHAIN_ID = 84_532;
 const DEPLOYMENT_SCHEMA = "rateloop-tokenless-deployment-v4";

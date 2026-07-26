@@ -1,5 +1,5 @@
 import { manifestDigest, tokenlessEuDeploymentManifest } from "../../../scripts/validate-tokenless-eu-deployment.mjs";
-import paidLaneActivation from "../lib/tokenless/paidLaneActivation.ts";
+import * as paidLaneActivationModule from "../lib/tokenless/paidLaneActivation.ts";
 import {
   DEFAULT_HOSTED_RELEASE_CAPABILITIES,
   REQUIRED_TOKENLESS_PRODUCTION_VARIABLES,
@@ -11,7 +11,6 @@ import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const { derivePaidLaneActivationReference } = paidLaneActivation;
 const address = index => `0x${index.toString(16).padStart(40, "0")}`;
 const encodedKey = index => Buffer.alloc(32, index).toString("base64url");
 const tokenlessGoldKeyring = (index = 16) => ({
@@ -940,3 +939,4 @@ test("enterprise identity requires explicit HTTPS OIDC issuer origins", () => {
   valid.env.TOKENLESS_SSO_TRUSTED_ISSUERS = "https://login.example.com";
   assert.deepEqual(validateTokenlessProductionReadiness(valid), []);
 });
+const { derivePaidLaneActivationReference } = paidLaneActivationModule.default ?? paidLaneActivationModule;
