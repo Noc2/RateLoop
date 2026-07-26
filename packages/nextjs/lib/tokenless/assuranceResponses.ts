@@ -450,7 +450,14 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
               sp.private_group_id AS subpanel_private_group_id,
               sp.private_group_policy_version AS subpanel_private_group_policy_version,
               sp.private_group_policy_hash AS subpanel_private_group_policy_hash,
-              ap.policy_hash AS frozen_policy_hash, ap.policy_json AS frozen_policy_json
+              ap.policy_hash AS frozen_policy_hash, ap.policy_json AS frozen_policy_json,
+              (SELECT COUNT(*) FROM tokenless_assurance_run_cases run_case
+                WHERE run_case.run_id=a.run_id) AS network_case_count,
+              (SELECT COUNT(*) FROM tokenless_network_assignment_settlements settlement
+                WHERE settlement.assignment_id=a.assignment_id) AS network_binding_count,
+              (SELECT COUNT(*) FROM tokenless_network_assignment_settlements settlement
+                WHERE settlement.assignment_id=a.assignment_id
+                  AND settlement.state IN ('committed','terminal')) AS network_committed_count
        FROM tokenless_assurance_assignments a
        JOIN tokenless_assurance_runs r ON r.run_id = a.run_id AND r.project_id = a.project_id
        JOIN tokenless_assurance_suites s ON s.suite_id = r.suite_id AND s.version = r.suite_version
@@ -472,6 +479,10 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
       paidAssignment: rowBoolean(assignment, "paid_assignment"),
       policy: parseJson<HumanAssuranceAudiencePolicy>(assignment.frozen_policy_json, "audience policy"),
       source: rowString(assignment, "source") as CohortSource,
+      networkSettlementReady:
+        Number(assignment.network_case_count) > 0 &&
+        Number(assignment.network_binding_count) === Number(assignment.network_case_count) &&
+        Number(assignment.network_committed_count) === Number(assignment.network_case_count),
     });
     assertMatchingPrivateGroupSnapshot(assignment);
     const assignmentStatus = rowString(assignment, "status");
@@ -567,8 +578,10 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
         accepted: true as const,
         replay: true,
         responseCount: existing.length,
-        compensation: "unpaid" as const,
-        settlementStatus: "not_applicable" as const,
+        compensation: rowBoolean(assignment, "paid_assignment") ? ("paid" as const) : ("unpaid" as const),
+        settlementStatus: rowBoolean(assignment, "paid_assignment")
+          ? ("pending" as const)
+          : ("not_applicable" as const),
       };
     }
     if (completedReplay) {
@@ -644,8 +657,8 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
       accepted: true as const,
       replay: false,
       responseCount: records.length,
-      compensation: "unpaid" as const,
-      settlementStatus: "not_applicable" as const,
+      compensation: rowBoolean(assignment, "paid_assignment") ? ("paid" as const) : ("unpaid" as const),
+      settlementStatus: rowBoolean(assignment, "paid_assignment") ? ("pending" as const) : ("not_applicable" as const),
     };
   } catch (error) {
     await client.query("ROLLBACK");

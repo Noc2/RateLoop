@@ -974,6 +974,13 @@
       "when": 1785114000000,
       "tag": "0139_paid_assignment_terminal_states",
       "breakpoints": true
+    },
+    {
+      "idx": 140,
+      "version": "7",
+      "when": 1785128400000,
+      "tag": "0140_network_assignment_settlement",
+      "breakpoints": true
     }
   ]
 }

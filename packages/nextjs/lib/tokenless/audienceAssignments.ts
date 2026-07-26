@@ -13,6 +13,10 @@ import { issueArtifactLease } from "~~/lib/tokenless/artifactPrivacy";
 import { isForecastAssignmentRestricted, networkForecastSubject } from "~~/lib/tokenless/crowdForecastPersistence";
 import { selectDiversifiedIntegrityPanel } from "~~/lib/tokenless/integrityAssignment";
 import { integrityReviewerLookup } from "~~/lib/tokenless/integrityEpochs";
+import {
+  bindSelectedNetworkAssignment,
+  loadExactNetworkRoundBindings,
+} from "~~/lib/tokenless/networkAssignmentSettlement";
 import { requirePaidLaneComplianceApproval } from "~~/lib/tokenless/paidLaneCompliance";
 import { requirePaidReviewEligibilityInTransaction } from "~~/lib/tokenless/paidReviewEligibilityPreflight";
 import { exactReviewerExpertiseDefinitionKey } from "~~/lib/tokenless/reviewerExpertiseAssignments";
@@ -50,6 +54,7 @@ export function assertAssuranceAssignmentSettlementAvailable(input: {
   policy: Pick<HumanAssuranceAudiencePolicy, "compensation" | "reviewerSource">;
   source?: CohortSource;
   paidAssignment?: boolean;
+  networkSettlementReady?: boolean;
 }) {
   const invitedUnpaid =
     input.policy.reviewerSource === "customer_invited" &&
@@ -57,8 +62,15 @@ export function assertAssuranceAssignmentSettlementAvailable(input: {
     (!input.source || input.source === "customer_invited") &&
     input.paidAssignment !== true;
   if (invitedUnpaid) return;
+  const boundNetwork =
+    input.policy.reviewerSource === "rateloop_network" &&
+    input.policy.compensation === "paid" &&
+    input.source === "rateloop_network" &&
+    input.paidAssignment === true &&
+    input.networkSettlementReady === true;
+  if (boundNetwork) return;
   throw new TokenlessServiceError(
-    "Paid, hybrid, and network assurance assignments are unavailable until assignment policy snapshots are bound through settlement and receipts.",
+    "This paid assurance assignment has no exact voucher and settlement binding.",
     409,
     ASSURANCE_ASSIGNMENT_SETTLEMENT_UNAVAILABLE_CODE,
   );
@@ -1228,10 +1240,9 @@ async function beginIntegrityAssignmentTransaction(client: PoolClient, workspace
 export const __integrityAssignmentConcurrencyTestUtils = { beginIntegrityAssignmentTransaction };
 
 /**
- * Complete, hidden, epoch-diversified network-panel reservation. The current
- * product deliberately calls the settlement guard before any mutation: this
- * routine becomes reachable only after vouchers and receipts bind this exact
- * batch/provenance commitment end to end.
+ * Complete, hidden, epoch-diversified network-panel reservation. Every
+ * selected assignment is bound to each exact confirmed funded case round in
+ * the same transaction, before the reservation becomes visible to a rater.
  */
 export async function reserveDiversifiedNetworkSubpanel(input: {
   accountAddress: string;
@@ -1255,13 +1266,6 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
     60_000,
     MAX_RESERVATION_TTL_MS,
   );
-  // This is intentionally before BEGIN: paid work must not be reserved until
-  // its voucher and receipt carry selectionBatchId + integrityProvenanceHash.
-  assertAssuranceAssignmentSettlementAvailable({
-    paidAssignment: true,
-    policy: { compensation: "paid", reviewerSource: "rateloop_network" },
-    source: "rateloop_network",
-  });
   const lookup = integrityLookupRuntime();
   const client = await dbPool.connect();
   try {
@@ -1300,6 +1304,14 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
       throw new TokenlessServiceError("Frozen network subpanel is unavailable.", 409, "integrity_subpanel_unavailable");
     }
     const targetCount = rowNumber(subpanel, "target_count")!;
+    const exactRounds = await loadExactNetworkRoundBindings(client, {
+      workspaceId: input.workspaceId,
+      runId: input.runId,
+      audiencePolicyHash: rowString(subpanel, "policy_hash") as `sha256:${string}`,
+      audiencePolicyJson: rowString(subpanel, "policy_json")!,
+      targetCount,
+      now,
+    });
     const reviewers = await client.query(
       `SELECT * FROM tokenless_assurance_cohort_reviewers
        WHERE project_id = $1 AND cohort_id = $2 AND status = 'active'
@@ -1503,6 +1515,22 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
           batchId,
           now,
         ],
+      );
+      const networkBinding = await bindSelectedNetworkAssignment(client, {
+        assignmentId,
+        runId: input.runId,
+        subpanelId: input.subpanelId,
+        selectionBatchId: batchId,
+        integrityProvenanceHash: integrityHash as `sha256:${string}`,
+        integrityReviewerLookup: chosen.reviewerLookup,
+        rounds: exactRounds,
+        now,
+      });
+      await client.query(
+        `UPDATE tokenless_assurance_assignments
+         SET voucher_marker=$1,updated_at=$2
+         WHERE assignment_id=$3 AND voucher_marker IS NULL`,
+        [networkBinding.marker, now, assignmentId],
       );
       await client.query(
         `INSERT INTO tokenless_integrity_assignment_history
@@ -1932,6 +1960,7 @@ export async function recoverExpiredAudienceAssignment(input: {
       paidAssignment: row.paid_assignment === true,
       policy: parseJson<HumanAssuranceAudiencePolicy>(row.policy_json, "audience policy"),
       source: rowString(row, "source") as CohortSource,
+      networkSettlementReady: rowString(row, "voucher_marker")?.startsWith("selection:") === true,
     });
     assertMatchingPrivateGroupSnapshot(row);
     await requireCurrentPrivateGroupAssignmentMembership(client, row, reviewer, now);
@@ -2036,6 +2065,7 @@ async function issueAssignmentArtifactLeases(
     paidAssignment: row.paid_assignment === true,
     policy: parseJson<HumanAssuranceAudiencePolicy>(row.policy_json, "audience policy"),
     source: rowString(row, "source") as CohortSource,
+    networkSettlementReady: rowString(row, "voucher_marker")?.startsWith("selection:") === true,
   });
   assertMatchingPrivateGroupSnapshot(row);
   if ((rowDate(row, "assignment_expires_at")?.getTime() ?? 0) <= now.getTime()) {
@@ -2168,6 +2198,7 @@ export async function acceptAudienceAssignment(input: {
       paidAssignment: row.paid_assignment === true,
       policy: parseJson<HumanAssuranceAudiencePolicy>(row.policy_json, "audience policy"),
       source: rowString(row, "source") as CohortSource,
+      networkSettlementReady: rowString(row, "voucher_marker")?.startsWith("selection:") === true,
     });
     assertMatchingPrivateGroupSnapshot(row);
     await requireCurrentPrivateGroupAssignmentMembership(client, row, reviewer, now);
@@ -2257,6 +2288,7 @@ export async function getAssignmentOnlyTask(input: { baseAccountAddress: string;
     paidAssignment: assignment.paid_assignment === true,
     policy: parseJson<HumanAssuranceAudiencePolicy>(assignment.policy_json, "audience policy"),
     source: rowString(assignment, "source") as CohortSource,
+    networkSettlementReady: rowString(assignment, "voucher_marker")?.startsWith("selection:") === true,
   });
   assertMatchingPrivateGroupSnapshot(assignment);
   const caseResult = await dbClient.execute({

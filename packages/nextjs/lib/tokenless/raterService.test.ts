@@ -564,35 +564,37 @@ test("task discovery fails closed until the real chain execution is confirmed", 
   assert.deepEqual(await listPaidRaterTasks(PRINCIPAL, NOW), []);
 });
 
-test("task discovery exposes exact compensation for confirmed public work", async () => {
-  const frozenPolicy = await seedTask();
+test("network task discovery stays hidden until an exact selected seat exists", async () => {
+  await seedTask();
   const tasks = await listPaidRaterTasks(PRINCIPAL, NOW);
-  assert.equal(tasks[0]?.question.prompt, "Ship it?");
-  assert.deepEqual(tasks[0]?.question.media, { kind: "youtube", videoId: "dQw4w9WgXcQ" });
-  assert.equal(tasks[0]?.admissionPolicyHash, frozenPolicy.admissionPolicyHash);
-  assert.equal(tasks[0]?.reviewerSource, "rateloop_network");
-  assert.deepEqual(tasks[0]?.disclosureBeacon, { network: "quicknet-t", round: 123 });
-  assert.deepEqual(tasks[0]?.scoringBeacon, { network: "quicknet-t", round: 163 });
+  assert.deepEqual(tasks, []);
+});
+
+test("public voucher requests carry the exact network assignment binding", () => {
   assert.deepEqual(
-    buildPublicVoucherRequest(tasks[0]!, {
-      idempotencyKey: "voucher:web:42",
-      voteKey: ACCOUNT,
-    }),
+    buildPublicVoucherRequest(
+      {
+        roundId: "42",
+        contentId: `0x${"11".repeat(32)}`,
+        reviewerSource: "rateloop_network",
+        assignmentId: "assignment_exact",
+        selectionBindingHash: `sha256:${"a".repeat(64)}`,
+      },
+      {
+        idempotencyKey: "voucher:web:42",
+        voteKey: ACCOUNT,
+      },
+    ),
     {
       idempotencyKey: "voucher:web:42",
       roundId: "42",
       contentId: `0x${"11".repeat(32)}`,
       voteKey: ACCOUNT,
       reviewerSource: "rateloop_network",
+      assignmentId: "assignment_exact",
+      selectionBindingHash: `sha256:${"a".repeat(64)}`,
     },
   );
-  assert.deepEqual(tasks[0]?.earnings, {
-    guaranteedBaseAtomic: "1333333",
-    possibleBonusAtomic: "333333",
-    possibleSurpriseBonusAtomic: "166666",
-    attemptCompensationAtomic: "333333",
-  });
-  assert.equal("votePrivateKey" in tasks[0]!, false);
 });
 
 test("task discovery fails closed when the persisted reviewer source no longer matches its frozen hash", async () => {
@@ -611,9 +613,8 @@ test("task discovery fails closed when the persisted reviewer source no longer m
   assert.deepEqual(await listPaidRaterTasks(PRINCIPAL, NOW), []);
 });
 
-test("public task browsing does not require a payout wallet", async () => {
+test("anonymous browsing cannot discover principal-bound network seats", async () => {
   await seedTask();
   const tasks = await listPaidRaterTasks(null, NOW);
-  assert.equal(tasks[0]?.question.prompt, "Ship it?");
-  assert.equal(tasks[0]?.alreadyVouchered, false);
+  assert.deepEqual(tasks, []);
 });

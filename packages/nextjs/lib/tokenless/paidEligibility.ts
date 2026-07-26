@@ -32,6 +32,11 @@ import {
   loadAwsKmsEthereumAccountConfiguration,
 } from "~~/lib/tokenless/chain/awsKmsAccount";
 import { assertPrincipalForecastAssignmentEligible } from "~~/lib/tokenless/crowdForecastPersistence";
+import {
+  type NetworkVoucherSelection,
+  attachIssuedNetworkVoucher,
+  loadExactNetworkVoucherSelection,
+} from "~~/lib/tokenless/networkAssignmentSettlement";
 import { isOpaqueSubjectReference } from "~~/lib/tokenless/opaqueReferences";
 import {
   requirePaidReviewEligibility,
@@ -43,6 +48,7 @@ const COUNTRY = /^[A-Z]{2}$/;
 const BYTES32 = /^0x[0-9a-fA-F]{64}$/;
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9_.:-]{8,160}$/;
+const SHA256 = /^sha256:[0-9a-f]{64}$/;
 const PROVIDER_CLOCK_SKEW_MS = 5 * 60_000;
 const MAX_PROVIDER_LIFETIME_MS = 370 * 24 * 60 * 60_000;
 const MAX_VOUCHER_LIFETIME_MS = 10 * 60_000;
@@ -108,6 +114,8 @@ export type VoucherRequest = {
   contentId: Hex;
   voteKey: Address;
   reviewerSource: Exclude<HumanAssuranceReviewerSource, "hybrid">;
+  assignmentId?: string;
+  selectionBindingHash?: `sha256:${string}`;
 };
 
 type VaultConfig = { currentVersion: string; keys: Map<string, Buffer> };
@@ -1902,41 +1910,44 @@ async function loadVoucherEligibility(
 }
 
 async function loadVoucherIntegrityEvidence(input: {
+  principalId: string;
   accountAddress: Address;
+  assignmentId: string;
+  selectionBindingHash: `sha256:${string}`;
+  roundId: string;
   contentId: Hex;
+  admissionPolicyHash: string;
   policy: HumanAssuranceAudiencePolicy;
   now: Date;
-}): Promise<CapabilityAdmissionEvidence["integrity"] | null> {
-  if (integrityEvidenceOverride) return integrityEvidenceOverride(input);
+}): Promise<{
+  evidence: CapabilityAdmissionEvidence["integrity"];
+  selection: NetworkVoucherSelection | null;
+} | null> {
+  if (integrityEvidenceOverride) {
+    const evidence = await integrityEvidenceOverride({
+      accountAddress: input.accountAddress,
+      contentId: input.contentId,
+      policy: input.policy,
+      now: input.now,
+    });
+    return evidence ? { evidence, selection: null } : null;
+  }
   const constraint = input.policy.integrity;
   if (!constraint) return null;
-  const result = await dbClient.execute({
-    sql: `SELECT a.integrity_provenance_json
-          FROM tokenless_assurance_assignments a
-          JOIN tokenless_assurance_run_subpanels sp ON sp.subpanel_id = a.subpanel_id
-          JOIN tokenless_assurance_run_cases rc ON rc.run_id = a.run_id
-          WHERE a.reviewer_account_address = ? AND a.source = 'rateloop_network'
-            AND a.paid_assignment = true AND a.status IN ('reserved', 'accepted')
-            AND rc.content_id = ? AND sp.policy_hash = ?
-            AND a.integrity_epoch_id = ? AND a.integrity_manifest_hash = ?
-            AND a.integrity_provenance_json IS NOT NULL
-            AND ((a.status = 'reserved' AND a.reservation_expires_at > ?)
-              OR (a.status = 'accepted' AND a.assignment_expires_at > ?))
-          ORDER BY a.created_at DESC LIMIT 1`,
-    args: [
-      input.accountAddress.toLowerCase(),
-      input.contentId.toLowerCase(),
-      freezeAdmissionPolicy(input.policy).policyHash,
-      constraint.epochId,
-      constraint.epochManifestHash,
-      input.now,
-      input.now,
-    ],
-  });
-  const row = result.rows[0] as QueryRow | undefined;
-  if (!row) return null;
+  const client = await dbPool.connect();
   try {
-    const provenance = JSON.parse(String(row.integrity_provenance_json)) as Record<string, unknown>;
+    await client.query("BEGIN");
+    const selection = await loadExactNetworkVoucherSelection(client, {
+      principalId: input.principalId,
+      assignmentId: input.assignmentId,
+      selectionBindingHash: input.selectionBindingHash,
+      roundId: input.roundId,
+      contentId: input.contentId,
+      admissionPolicyHash: input.admissionPolicyHash,
+      now: input.now,
+    });
+    await client.query("COMMIT");
+    const provenance = selection.integrity;
     const providerSubjectHashes = Array.isArray(provenance.providerSubjectHashes)
       ? provenance.providerSubjectHashes.map(String)
       : [];
@@ -1959,17 +1970,24 @@ async function loadVoucherIntegrityEvidence(input: {
       return null;
     }
     return {
-      epochId: constraint.epochId,
-      epochManifestHash: constraint.epochManifestHash,
-      reviewerLookup: provenance.reviewerLookup,
-      clusterPseudonym: provenance.clusterPseudonym,
-      riskBand: riskBand as "low" | "medium" | "high",
-      providerSubjectHashes,
-      recentCoassignments,
-      activeCustomerAssignments,
+      selection,
+      evidence: {
+        epochId: constraint.epochId,
+        epochManifestHash: constraint.epochManifestHash,
+        reviewerLookup: provenance.reviewerLookup,
+        clusterPseudonym: provenance.clusterPseudonym,
+        riskBand: riskBand as "low" | "medium" | "high",
+        providerSubjectHashes,
+        recentCoassignments,
+        activeCustomerAssignments,
+      },
     };
-  } catch {
+  } catch (error) {
+    await client.query("ROLLBACK");
+    if (error instanceof TokenlessServiceError) throw error;
     return null;
+  } finally {
+    client.release();
   }
 }
 
@@ -2054,11 +2072,19 @@ function voucherResponse(row: QueryRow) {
 
 export async function issuePaidVoucher(input: { principalId: string; request: VoucherRequest; now?: Date }) {
   const now = input.now ?? new Date();
+  const networkSelectionRequired =
+    input.request.reviewerSource === "rateloop_network" && integrityEvidenceOverride === null;
   if (
     !IDEMPOTENCY_KEY.test(input.request.idempotencyKey) ||
     !/^\d+$/.test(input.request.roundId) ||
     !BYTES32.test(input.request.contentId) ||
-    !["customer_invited", "rateloop_network"].includes(input.request.reviewerSource)
+    !["customer_invited", "rateloop_network"].includes(input.request.reviewerSource) ||
+    (networkSelectionRequired &&
+      (!input.request.assignmentId ||
+        input.request.assignmentId.length > 256 ||
+        !SHA256.test(input.request.selectionBindingHash ?? ""))) ||
+    (input.request.reviewerSource === "customer_invited" &&
+      (input.request.assignmentId !== undefined || input.request.selectionBindingHash !== undefined))
   ) {
     throw new TokenlessServiceError("Voucher request is invalid.", 400, "invalid_voucher_request");
   }
@@ -2148,6 +2174,21 @@ export async function issuePaidVoucher(input: { principalId: string; request: Vo
   ) {
     throw new TokenlessServiceError("This round is not accepting vouchers.", 409, "round_not_open");
   }
+  const networkIntegrity =
+    eligibility.reviewerSource === "rateloop_network"
+      ? await loadVoucherIntegrityEvidence({
+          principalId: input.principalId,
+          accountAddress: getAddress(eligibility.preflight.payoutAccount),
+          assignmentId: input.request.assignmentId ?? "test-injected-assignment",
+          selectionBindingHash:
+            input.request.selectionBindingHash ?? (`sha256:${"0".repeat(64)}` as `sha256:${string}`),
+          roundId: input.request.roundId,
+          contentId: input.request.contentId,
+          admissionPolicyHash: frozenPolicy.admissionPolicyHash,
+          policy: frozenPolicy.policy,
+          now,
+        })
+      : null;
   const admission = evaluateFrozenAdmissionPolicy({
     policy: frozenPolicy.policy,
     evidence: {
@@ -2155,15 +2196,7 @@ export async function issuePaidVoucher(input: { principalId: string; request: Vo
       reviewerSource: eligibility.reviewerSource,
       cohortIds: eligibility.cohortIds,
       qualifications: eligibility.qualifications,
-      integrity:
-        eligibility.reviewerSource === "rateloop_network"
-          ? ((await loadVoucherIntegrityEvidence({
-              accountAddress: getAddress(eligibility.preflight.payoutAccount),
-              contentId: input.request.contentId,
-              policy: frozenPolicy.policy,
-              now,
-            })) ?? undefined)
-          : undefined,
+      integrity: networkIntegrity?.evidence ?? undefined,
     },
     maximumCommits: Number(round.maximum_commits),
     now,
@@ -2207,6 +2240,14 @@ export async function issuePaidVoucher(input: { principalId: string; request: Vo
       .filter(value => value.qualifications.length > 0)
       .sort((left, right) => left.qualificationId.localeCompare(right.qualificationId)),
     cohortIds: eligibility.cohortIds,
+    ...(networkIntegrity?.selection
+      ? {
+          networkSelection: {
+            assignmentId: networkIntegrity.selection.assignmentId,
+            bindingHash: networkIntegrity.selection.selectionBindingHash,
+          },
+        }
+      : {}),
     capturedAt: now.toISOString(),
   };
   const assuranceSnapshotJson = stableJson(assuranceSnapshot);
@@ -2279,13 +2320,26 @@ export async function issuePaidVoucher(input: { principalId: string; request: Vo
         "paid_eligibility_changed",
       );
     }
+    const finalNetworkSelection =
+      input.request.reviewerSource === "rateloop_network" && networkIntegrity?.selection
+        ? await loadExactNetworkVoucherSelection(insertClient, {
+            principalId: input.principalId,
+            assignmentId: input.request.assignmentId!,
+            selectionBindingHash: input.request.selectionBindingHash!,
+            roundId: input.request.roundId,
+            contentId: input.request.contentId,
+            admissionPolicyHash: frozenPolicy.admissionPolicyHash,
+            now,
+          })
+        : null;
     await insertClient.query(
       `INSERT INTO tokenless_paid_vouchers
             (voucher_id, rater_id, request_idempotency_key, request_hash, chain_id,
              panel_address, issuer_address, issuer_epoch, signer_address, round_id, content_id, vote_key,
              nullifier, admission_policy_hash, assurance_snapshot_hash, expires_at,
-             payout_account_snapshot, voucher_json, voucher_signature, status, issued_at)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'issued',$20)`,
+             payout_account_snapshot, voucher_json, voucher_signature,
+             network_assignment_id,network_selection_binding_hash,status, issued_at)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,'issued',$22)`,
       [
         voucherId,
         raterId,
@@ -2306,9 +2360,18 @@ export async function issuePaidVoucher(input: { principalId: string; request: Vo
         finalPreflight.payoutAccount.toLowerCase(),
         voucherJson,
         voucherSignature,
+        finalNetworkSelection?.assignmentId ?? null,
+        finalNetworkSelection?.selectionBindingHash ?? null,
         now,
       ],
     );
+    if (finalNetworkSelection) {
+      await attachIssuedNetworkVoucher(insertClient, {
+        ...finalNetworkSelection,
+        voucherId,
+        issuedAt: now,
+      });
+    }
     await insertClient.query(
       `INSERT INTO tokenless_voucher_assurance_snapshots
        (voucher_id, rater_id, reviewer_source, snapshot_json, snapshot_hash, created_at)

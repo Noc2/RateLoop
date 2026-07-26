@@ -35,6 +35,7 @@ import {
 import { baseSepolia } from "viem/chains";
 import { dbClient, dbPool } from "~~/lib/db";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
+import { markNetworkVoucherConsumed } from "~~/lib/tokenless/networkAssignmentSettlement";
 import { preparePublicRaterResponse } from "~~/lib/tokenless/publicRaterResponses";
 import type { PublicRaterResponseInput } from "~~/lib/tokenless/rater/publicResponse";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -122,6 +123,8 @@ export async function listPaidRaterTasks(
     sql: `SELECT vr.chain_id, vr.panel_address, vr.round_id, vr.content_id,
                  vr.admission_policy_hash, vr.admission_policy_json, vr.voucher_deadline,
                  c.content_json, e.round_terms_json, e.operation_key,
+                 network_assignment.assignment_id AS network_assignment_id,
+                 network_settlement.selection_binding_hash AS network_selection_binding_hash,
                  CASE WHEN v.voucher_id IS NULL THEN false ELSE true END AS already_vouchered
           FROM tokenless_voucher_rounds vr
           JOIN tokenless_chain_executions e ON e.chain_id = vr.chain_id AND e.panel_address = vr.panel_address
@@ -131,18 +134,31 @@ export async function listPaidRaterTasks(
           JOIN tokenless_question_records q ON q.question_id = o.question_id
           JOIN tokenless_content_records c ON c.content_id = q.content_id
           LEFT JOIN tokenless_rater_profiles p ON p.principal_id = ?
+          LEFT JOIN tokenless_assurance_assignments network_assignment
+            ON network_assignment.rater_id=p.rater_id
+           AND network_assignment.source='rateloop_network'
+           AND (
+             (network_assignment.status='reserved' AND network_assignment.reservation_expires_at > ?)
+             OR (network_assignment.status='accepted' AND network_assignment.assignment_expires_at > ?)
+           )
+          LEFT JOIN tokenless_network_assignment_settlements network_settlement
+            ON network_settlement.assignment_id=network_assignment.assignment_id
+           AND network_settlement.operation_key=e.operation_key
+           AND network_settlement.round_id=vr.round_id
+           AND network_settlement.state IN ('selected','voucher_issued','committed','terminal')
           LEFT JOIN tokenless_paid_vouchers v ON v.rater_id = p.rater_id AND v.round_id = vr.round_id
              AND v.panel_address = vr.panel_address
           WHERE vr.status = 'open' AND vr.voucher_deadline > ? AND c.moderation_status = 'approved'
             AND q.visibility = 'public' AND q.data_classification IN ('public', 'synthetic', 'redacted')
             AND (? = '' OR c.content_json ILIKE ?)
           ORDER BY vr.voucher_deadline ASC LIMIT 50`,
-    args: [principalId, now, query, `%${query}%`],
+    args: [principalId, now, now, now, query, `%${query}%`],
   });
   return result.rows.flatMap(value => {
     const row = value as Row;
     const reviewerSource = boundTaskReviewerSource(row);
     if (!reviewerSource) return [];
+    if (reviewerSource === "rateloop_network" && !rowString(row, "network_assignment_id")) return [];
     const terms = JSON.parse(rowString(row, "round_terms_json")!) as Record<string, string | number>;
     const maximumCommits = Number(terms.maximumCommits);
     const disclosureBeaconRound = Number(terms.beaconRound);
@@ -166,6 +182,12 @@ export async function listPaidRaterTasks(
         question: JSON.parse(rowString(row, "content_json")!),
         admissionPolicyHash: rowString(row, "admission_policy_hash"),
         reviewerSource,
+        ...(reviewerSource === "rateloop_network"
+          ? {
+              assignmentId: rowString(row, "network_assignment_id")!,
+              selectionBindingHash: rowString(row, "network_selection_binding_hash") as `sha256:${string}`,
+            }
+          : {}),
         voucherDeadline: new Date(String(row.voucher_deadline)).toISOString(),
         alreadyVouchered: Boolean(row.already_vouchered),
         earnings: {
@@ -514,34 +536,50 @@ async function reconcileSubmittedRaterCommitReceipt(row: Row, publicClient: Toke
 
   const success = receipt.status === "success";
   const now = new Date();
-  const settled = await dbClient.execute({
-    sql: `UPDATE tokenless_rater_commits
-          SET state = ?, failure_code = ?, confirmed_at = ?, updated_at = ?
-          WHERE commit_id = ? AND transaction_hash = ? AND state = 'submitted'
-          RETURNING *`,
-    args: [
-      success ? "confirmed" : "failed",
-      success ? null : "transaction_reverted",
-      success ? now : null,
-      now,
-      commitId,
-      hash,
-    ],
-  });
-  const settledRow = settled.rows[0] as Row | undefined;
-  if (settledRow && success) {
-    await dbClient.execute({
-      sql: "UPDATE tokenless_paid_vouchers SET status = 'committed', committed_at = ? WHERE voucher_id = ?",
-      args: [now, rowString(settledRow, "voucher_id")],
-    });
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const settled = await client.query(
+      `UPDATE tokenless_rater_commits
+       SET state=$1,failure_code=$2,confirmed_at=$3,updated_at=$4
+       WHERE commit_id=$5 AND transaction_hash=$6 AND state='submitted'
+       RETURNING *`,
+      [
+        success ? "confirmed" : "failed",
+        success ? null : "transaction_reverted",
+        success ? now : null,
+        now,
+        commitId,
+        hash,
+      ],
+    );
+    const settledRow = settled.rows[0] as Row | undefined;
+    if (settledRow && success) {
+      const voucherId = rowString(settledRow, "voucher_id")!;
+      await client.query("UPDATE tokenless_paid_vouchers SET status='committed',committed_at=$1 WHERE voucher_id=$2", [
+        now,
+        voucherId,
+      ]);
+      await markNetworkVoucherConsumed(client, {
+        voucherId,
+        commitId,
+        transactionHash: hash,
+        committedAt: now,
+      });
+    }
+    if (settledRow) {
+      await client.query("COMMIT");
+      return settledRow;
+    }
+    const current = await client.query("SELECT * FROM tokenless_rater_commits WHERE commit_id=$1 LIMIT 1", [commitId]);
+    await client.query("COMMIT");
+    return (current.rows[0] as Row | undefined) ?? row;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
   }
-  if (settledRow) return settledRow;
-
-  const current = await dbClient.execute({
-    sql: "SELECT * FROM tokenless_rater_commits WHERE commit_id = ? LIMIT 1",
-    args: [commitId],
-  });
-  return (current.rows[0] as Row | undefined) ?? row;
 }
 
 function assertIsolatedCommitRelayer(runtime: TokenlessChainRuntime) {

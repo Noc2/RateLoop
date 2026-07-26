@@ -9,6 +9,7 @@ import {
 } from "~~/lib/privacy/paidAssignmentSeatIdentityErasure";
 import { erasePrincipalForecastIntegrityInTransaction } from "~~/lib/tokenless/crowdForecastPersistence";
 import { eraseIntegrityEpochReviewerMemberships } from "~~/lib/tokenless/integrityEpochProducer";
+import { releaseSelectedNetworkAssignmentsForAccountDeletion } from "~~/lib/tokenless/networkAssignmentSettlement";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const DELETION_DUE_MS = 30 * 86_400_000;
@@ -177,13 +178,22 @@ async function loadPreview(client: PoolClient, principalId: string, lock = false
             SELECT quote_id FROM tokenless_paid_assignment_operations WHERE quote_id IS NOT NULL
           )) AS retained_private_quotes,
        (SELECT COUNT(*) FROM tokenless_paid_assignment_seats
-        WHERE reviewer_principal_id = $1) AS paid_assignment_seats`,
+        WHERE reviewer_principal_id = $1) AS paid_assignment_seats,
+       (SELECT COUNT(*) FROM tokenless_network_assignment_settlements settlement
+        JOIN tokenless_assurance_assignments assignment
+          ON assignment.assignment_id=settlement.assignment_id
+        JOIN tokenless_rater_profiles profile ON profile.rater_id=assignment.rater_id
+        WHERE profile.principal_id=$1 AND settlement.state IN ('voucher_issued','committed')
+          AND assignment.status <> 'accepted') AS active_network_settlements`,
     [principalId],
   );
   const row = result.rows[0] as Row | undefined;
   const ownedWorkspaces = rowNumber(row, "owned_workspaces");
   const sharedWorkspaces = rowNumber(row, "shared_workspaces");
-  const acceptedAssignments = rowNumber(row, "accepted_assignments") + rowNumber(row, "accepted_private_assignments");
+  const acceptedAssignments =
+    rowNumber(row, "accepted_assignments") +
+    rowNumber(row, "accepted_private_assignments") +
+    rowNumber(row, "active_network_settlements");
   const managedWallets = rowNumber(row, "managed_wallets");
   const retainedRecords: string[] = [];
   if (
@@ -961,7 +971,12 @@ async function collectDeletionCategoryEvidence(
        (SELECT COUNT(*) FROM tokenless_wallet_bindings WHERE principal_id = $1) AS wallet_bindings,
        (SELECT COUNT(*) FROM tokenless_payout_wallet_ownership WHERE principal_id = $1) AS payout_wallet_ownership,
        (SELECT COUNT(*) FROM tokenless_paid_assignment_seats WHERE reviewer_principal_id = $1)
-         AS paid_assignment_seat_direct_identities`,
+         AS paid_assignment_seat_direct_identities,
+       (SELECT COUNT(*) FROM tokenless_network_assignment_settlements settlement
+        JOIN tokenless_assurance_assignments assignment
+          ON assignment.assignment_id=settlement.assignment_id
+        JOIN tokenless_rater_profiles profile ON profile.rater_id=assignment.rater_id
+        WHERE profile.principal_id=$1) AS network_settlement_principal_links`,
     [input.principalId, input.betterAuthUserId],
   );
   const row = postconditions.rows[0] as Row | undefined;
@@ -1065,6 +1080,7 @@ async function collectDeletionCategoryEvidence(
     managedWalletJtis: rowNumber(row, "managed_wallet_jtis"),
     payoutWalletOwnership: rowNumber(row, "payout_wallet_ownership"),
     paidAssignmentSeatDirectIdentities: rowNumber(row, "paid_assignment_seat_direct_identities"),
+    networkSettlementPrincipalLinks: rowNumber(row, "network_settlement_principal_links"),
     passkeyActionProofs: rowNumber(row, "passkey_action_proofs"),
     recentAccountActionProofs: rowNumber(row, "recent_account_action_proofs"),
     privateQuoteOwnerLinks: input.privateQuoteErasure.remainingDirectOwnerLinks,
@@ -1133,6 +1149,11 @@ export async function deleteAccount(input: {
       .trim()
       .toLowerCase();
     const releasedReservations = await releaseReservedAssignments(client, input.principalId, now);
+    await releaseSelectedNetworkAssignmentsForAccountDeletion(client, {
+      principalId: input.principalId,
+      receiptDigest,
+      now,
+    });
 
     await client.query(
       `UPDATE tokenless_principals

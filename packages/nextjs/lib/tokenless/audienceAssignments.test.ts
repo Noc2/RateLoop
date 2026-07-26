@@ -4,6 +4,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import type { PoolClient } from "pg";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { type PrivateArtifactStore, __setArtifactPrivacyRuntimeForTests } from "~~/lib/tokenless/artifactPrivacy";
 import {
   type CohortSource,
@@ -56,6 +57,8 @@ class MemoryPrivateStore implements PrivateArtifactStore {
 
 beforeEach(() => {
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
+  process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY = Buffer.alloc(32, 7).toString("base64url");
+  process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION = "lookup-v1";
   __setArtifactPrivacyRuntimeForTests({
     keyVersion: "artifact-test-v1",
     masterKey: Buffer.alloc(32, 9),
@@ -64,6 +67,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  delete process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY;
+  delete process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION;
   __setArtifactPrivacyRuntimeForTests(null);
   __setDatabaseResourcesForTests(null);
 });
@@ -505,7 +510,7 @@ test("hybrid audiences freeze separate epoch-bound network and invited subpanels
   );
 });
 
-test("paid network audiences require an exact epoch and stay closed before voucher/receipt-bound assignment", async () => {
+test("paid network audiences require an exact epoch and exact funded rounds before selection", async () => {
   const project = await seedProject();
   const now = new Date();
   const cohort = await createCohort(project, {
@@ -527,6 +532,23 @@ test("paid network audiences require an exact epoch and stay closed before vouch
     requiredQualifications: [{ key: "support_years", operator: "at_least", value: 4 }],
   });
   const { runId } = await seedRun(project, policy);
+  const exactPolicy = freezeAdmissionPolicy({
+    ...policy,
+    policyId: `${policy.policyId}_${project.projectId}`,
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_assurance_audience_policies SET policy_hash=?,policy_json=?
+          WHERE policy_id=?`,
+    args: [exactPolicy.policyHash, exactPolicy.policyJson, exactPolicy.policy.policyId],
+  });
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_runs SET policy_hash=? WHERE run_id=?",
+    args: [exactPolicy.policyHash, runId],
+  });
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_run_cases SET admission_policy_hash=? WHERE run_id=?",
+    args: [exactPolicy.admissionPolicyHash, runId],
+  });
   await assert.rejects(
     () =>
       prepareRunAudience({
@@ -564,8 +586,7 @@ test("paid network audiences require an exact epoch and stay closed before vouch
         confidentialityTermsHash: TERMS_HASH,
         now,
       }),
-    (error: unknown) =>
-      error instanceof TokenlessServiceError && error.code === "assurance_assignment_settlement_unavailable",
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "network_round_binding_pending",
   );
   assert.equal(
     Number((await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_assurance_assignments")).rows[0]?.count),

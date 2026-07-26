@@ -33,6 +33,8 @@ export async function POST(request: NextRequest) {
         contentId: body.contentId,
         voteKey: body.voteKey,
         reviewerSource: body.reviewerSource!,
+        ...(body.assignmentId ? { assignmentId: body.assignmentId } : {}),
+        ...(body.selectionBindingHash ? { selectionBindingHash: body.selectionBindingHash } : {}),
       },
     });
     return NextResponse.json(result, { status: 201, headers: { "Cache-Control": "no-store" } });
