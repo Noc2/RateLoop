@@ -86,7 +86,12 @@ const config = {
 
 function keeperWorkResponse(
   now: bigint,
-  work: Array<{ action: string; roundId: string; cursor: number | null }>,
+  work: Array<{
+    action: string;
+    roundId: string;
+    createdBlock?: string;
+    cursor: number | null;
+  }>,
   overrides: Record<string, unknown> = {},
 ) {
   return {
@@ -96,7 +101,7 @@ function keeperWorkResponse(
     now: now.toString(),
     direction: "desc",
     nextCursor: null,
-    work,
+    work: work.map((item) => ({ createdBlock: "100", ...item })),
     ...overrides,
   };
 }
@@ -518,6 +523,49 @@ describe("tokenless keeper orchestration", () => {
       decrypt,
     );
     expect(readRoundIds).toEqual([3n, 10_000n]);
+  });
+
+  it("bounds commit log reads at the indexed round creation block", async () => {
+    const commitLogQueries: Array<{
+      fromBlock?: bigint;
+      toBlock?: bigint;
+    }> = [];
+    const instance = clients({
+      currentRound: round({
+        state: TokenlessRoundState.Revealable,
+        commitCount: 1,
+      }),
+      now: 150n,
+      currentBlock: 1_000n,
+      nextRoundId: 2n,
+      commitLogQueries,
+    });
+    instance.keeperWorkFeed = async () =>
+      keeperWorkResponse(150n, [
+        {
+          action: "service_commits",
+          roundId: "1",
+          createdBlock: "900",
+          cursor: null,
+        },
+      ]);
+
+    await runTokenlessKeeper(
+      instance,
+      {
+        ...config,
+        maxRoundsPerTick: 1,
+        ponderWorkFeed: { baseUrl: "https://ponder.example", token: "secret" },
+      },
+      logger,
+      decrypt,
+    );
+
+    expect(commitLogQueries).toHaveLength(1);
+    expect(commitLogQueries[0]).toMatchObject({
+      fromBlock: 900n,
+      toBlock: 1_000n,
+    });
   });
 
   it("reserves scan capacity when actionable feed work remains continuously full", () => {

@@ -97,11 +97,18 @@ export function keeperAction(round: KeeperRound, now: bigint) {
   // that transition has no event. Neither reveal nor settlement requires an
   // explicit openReveal call, so the indexed work feed deliberately omits it
   // instead of emitting stale, reverting work.
+  const openOrRevealable =
+    round.state === ROUND_STATE.OPEN || round.state === ROUND_STATE.REVEALABLE;
   if (
-    (round.state === ROUND_STATE.OPEN ||
-      round.state === ROUND_STATE.REVEALABLE) &&
-    now > round.revealDeadline
+    openOrRevealable &&
+    round.commitCount > 0 &&
+    now > round.commitDeadline &&
+    now <= round.beaconFailureDeadline &&
+    (now <= round.revealDeadline || round.revealCount < round.minimumReveals)
   ) {
+    return "service_commits";
+  }
+  if (openOrRevealable && now > round.revealDeadline) {
     if (
       round.commitCount > 0 &&
       round.revealCount < round.minimumReveals &&
@@ -117,15 +124,14 @@ export function keeperAction(round: KeeperRound, now: bigint) {
       ? "process_scores"
       : "finalize_settlement";
   }
-  if (
-    (round.state === ROUND_STATE.FINALIZED ||
-      round.state === ROUND_STATE.UNDER_QUORUM_COMPENSATION ||
-      round.state === ROUND_STATE.BEACON_FAILURE_COMPENSATION) &&
-    !round.staleReturned &&
-    round.claimDeadline > 0n &&
-    now > round.claimDeadline
-  ) {
-    return "return_stale_shares";
+  const terminal =
+    round.state === ROUND_STATE.FINALIZED ||
+    round.state === ROUND_STATE.UNDER_QUORUM_COMPENSATION ||
+    round.state === ROUND_STATE.BEACON_FAILURE_COMPENSATION;
+  if (terminal && !round.staleReturned && round.claimDeadline > 0n) {
+    return now <= round.claimDeadline
+      ? "service_commits"
+      : "return_stale_shares";
   }
   return null;
 }

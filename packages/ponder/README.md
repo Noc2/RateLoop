@@ -49,8 +49,9 @@ Round creation and commit handlers read the immutable contract record at the eve
 - `GET /issuer/epochs`
 - `GET /keeper/work?now=<unix-seconds>&direction=<asc|desc>&cursor=<round-id>&limit=<1-500>`
 
-`/keeper/work` filters due rows before applying a bounded page and returns `nextCursor` for keyset pagination. It emits
-only event-derived permissionless panel actions: begin settlement, process aggregation, process scores, finalize, and
-return stale shares. Reveal-window opening is deliberately absent because `openReveal` has no event and is unnecessary
-for either reveal or settlement; the direct-chain keeper handles automatic reveal submission. The feed never asks a
-keeper to publish a payout root or exercise an operator fund-control path.
+`/keeper/work` filters due rows before applying a bounded page and returns `nextCursor` for keyset pagination. Every
+item includes the round's indexed `createdBlock`, which bounds the keeper's `CommitAccepted` log reads. It emits only
+event-derived permissionless panel actions: service reveal or claim commits, begin settlement, process aggregation,
+process scores, finalize, and return stale shares. Reveal-window opening remains implicit because `openReveal` has no
+event and is unnecessary for either reveal or settlement. The feed never asks a keeper to publish a payout root or
+exercise an operator fund-control path.

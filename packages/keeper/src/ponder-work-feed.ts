@@ -1,6 +1,7 @@
 import { isAddress, isAddressEqual, type Address } from "viem";
 
 const ACTIONS = new Set([
+  "service_commits",
   "begin_settlement",
   "process_aggregate",
   "finalize_scoring_seed",
@@ -12,6 +13,7 @@ const ACTIONS = new Set([
 export type KeeperWorkItem = {
   action: string;
   roundId: string;
+  createdBlock: string;
   cursor: number | null;
 };
 export type KeeperWorkResponse = {
@@ -60,7 +62,7 @@ export function createPonderWorkFeed(input: {
   };
 }
 
-export function prioritizedKeeperWorkRoundIds(
+export function prioritizedKeeperWorkItems(
   value: unknown,
   expected: {
     deploymentKey: string;
@@ -92,17 +94,36 @@ export function prioritizedKeeperWorkRoundIds(
       typeof item !== "object" ||
       !ACTIONS.has(item.action) ||
       !/^[1-9]\d*$/u.test(item.roundId) ||
+      !/^(?:0|[1-9]\d*)$/u.test(item.createdBlock) ||
       (item.cursor !== null &&
         (!Number.isSafeInteger(item.cursor) || Number(item.cursor) < 0))
     ) {
       throw new Error("Ponder keeper work contains an invalid item.");
     }
-    return { action: item.action, roundId: BigInt(item.roundId) };
+    return {
+      action: item.action,
+      roundId: BigInt(item.roundId),
+      createdBlock: BigInt(item.createdBlock),
+    };
   });
   items.sort(
     (left, right) =>
       Number(right.action === "finalize_scoring_seed") -
       Number(left.action === "finalize_scoring_seed"),
   );
-  return items.map((item) => item.roundId);
+  return items;
+}
+
+export function prioritizedKeeperWorkRoundIds(
+  value: unknown,
+  expected: {
+    deploymentKey: string;
+    chainId: number;
+    panelAddress: Address;
+    now: bigint;
+  },
+) {
+  return prioritizedKeeperWorkItems(value, expected).map(
+    (item) => item.roundId,
+  );
 }

@@ -109,6 +109,20 @@ function keeperWorkPredicate(now: bigint) {
   return or(
     and(
       openOrRevealable,
+      gt(tokenlessRound.commitCount, 0),
+      lt(tokenlessRound.commitDeadline, now),
+      or(
+        gt(tokenlessRound.beaconFailureDeadline, now),
+        eq(tokenlessRound.beaconFailureDeadline, now),
+      ),
+      or(
+        gt(tokenlessRound.revealDeadline, now),
+        eq(tokenlessRound.revealDeadline, now),
+        lt(tokenlessRound.revealCount, tokenlessRound.minimumReveals),
+      ),
+    ),
+    and(
+      openOrRevealable,
       lt(tokenlessRound.revealDeadline, now),
       or(
         eq(tokenlessRound.commitCount, 0),
@@ -125,7 +139,6 @@ function keeperWorkPredicate(now: bigint) {
       terminal,
       eq(tokenlessRound.staleReturned, false),
       gt(tokenlessRound.claimDeadline, 0n),
-      lt(tokenlessRound.claimDeadline, now),
     ),
   );
 }
@@ -653,6 +666,7 @@ app.get("/keeper/work", async (c) => {
       {
         action,
         roundId: row.roundId.toString(),
+        createdBlock: row.createdBlock.toString(),
         cursor:
           action === "process_aggregate"
             ? row.aggregateCursor

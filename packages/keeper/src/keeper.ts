@@ -23,7 +23,7 @@ import type { Logger } from "./logger.js";
 import {
   createPonderWorkFeed,
   PonderWorkFeedIdentityMismatchError,
-  prioritizedKeeperWorkRoundIds,
+  prioritizedKeeperWorkItems,
   type KeeperWorkFeed,
 } from "./ponder-work-feed.js";
 import { resetRoundScanStateForTests, scanRoundIds } from "./round-scan.js";
@@ -118,7 +118,9 @@ export function selectRoundIdsForTick(
 ) {
   if (maxRoundsPerTick <= 0) return [];
   const eligibleFeedRoundIds = [
-    ...new Set(feedRoundIds.filter((roundId) => roundId > 0n && roundId < nextRoundId)),
+    ...new Set(
+      feedRoundIds.filter((roundId) => roundId > 0n && roundId < nextRoundId),
+    ),
   ];
 
   if (maxRoundsPerTick === 1 && eligibleFeedRoundIds.length > 0) {
@@ -131,9 +133,7 @@ export function selectRoundIdsForTick(
   }
 
   const feedQuota =
-    maxRoundsPerTick === 1
-      ? 0
-      : Math.max(1, Math.floor(maxRoundsPerTick / 2));
+    maxRoundsPerTick === 1 ? 0 : Math.max(1, Math.floor(maxRoundsPerTick / 2));
   const selectedFeedRoundIds = eligibleFeedRoundIds.slice(0, feedQuota);
   const scanBudget = maxRoundsPerTick - selectedFeedRoundIds.length;
   const scanRoundIdCandidates = scanRoundIds(nextRoundId, scanBudget);
@@ -309,11 +309,19 @@ async function commitLogsForRound(
   config: KeeperConfig,
   roundId: bigint,
   expectedCommitCount: number,
+  createdBlock?: bigint,
 ) {
   if (expectedCommitCount <= 0) return [];
   const toBlock = await publicClient.getBlockNumber();
+  const fromBlock =
+    createdBlock === undefined || createdBlock < config.deployment.blockNumber
+      ? config.deployment.blockNumber
+      : createdBlock;
+  if (fromBlock > toBlock) {
+    throw new Error("Indexed round creation block is ahead of the chain head.");
+  }
   return getLogsInBlockChunks({
-    fromBlock: config.deployment.blockNumber,
+    fromBlock,
     toBlock,
     stopAfterCount: expectedCommitCount,
     getLogs: ({ fromBlock, toBlock }) =>
@@ -413,6 +421,7 @@ async function revealAndClaimRound(params: {
   round: TokenlessRound;
   now: bigint;
   result: TokenlessKeeperResult;
+  createdBlock?: bigint;
 }) {
   let revealedAny = false;
   const logs = await commitLogsForRound(
@@ -420,6 +429,7 @@ async function revealAndClaimRound(params: {
     params.config,
     params.roundId,
     params.round.commitCount,
+    params.createdBlock,
   );
   for (const log of logs) {
     const commitKey = log.args?.commitKey;
@@ -525,6 +535,7 @@ async function advanceRound(params: {
   roundId: bigint;
   now: bigint;
   result: TokenlessKeeperResult;
+  createdBlock?: bigint;
 }) {
   let round = await readRound(
     params.clients.publicClient,
@@ -974,6 +985,7 @@ export async function runTokenlessKeeper(
   const nextRoundId = BigInt(nextRoundIdRaw as bigint);
   const result = emptyResult();
   let feedRoundIds: bigint[] = [];
+  const feedCreatedBlocks = new Map<bigint, bigint>();
   if (config.ponderWorkFeed) {
     try {
       const feed =
@@ -983,12 +995,16 @@ export async function runTokenlessKeeper(
           token: config.ponderWorkFeed.token,
         });
       const response = await feed({ now: block.timestamp, limit: 500 });
-      feedRoundIds = prioritizedKeeperWorkRoundIds(response, {
+      const feedWork = prioritizedKeeperWorkItems(response, {
         deploymentKey: config.deployment.key,
         chainId: config.chainId,
         panelAddress: config.deployment.panel,
         now: block.timestamp,
-      }).filter((roundId) => roundId < nextRoundId);
+      }).filter((item) => item.roundId < nextRoundId);
+      feedRoundIds = feedWork.map((item) => item.roundId);
+      for (const item of feedWork) {
+        feedCreatedBlocks.set(item.roundId, item.createdBlock);
+      }
     } catch (error) {
       if (error instanceof PonderWorkFeedIdentityMismatchError) throw error;
       logger.warn(
@@ -1013,6 +1029,7 @@ export async function runTokenlessKeeper(
       logger,
       decrypt,
       roundId,
+      createdBlock: feedCreatedBlocks.get(roundId),
       now: block.timestamp,
       result,
     });

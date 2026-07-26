@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createPonderWorkFeed,
   PonderWorkFeedIdentityMismatchError,
+  prioritizedKeeperWorkItems,
   prioritizedKeeperWorkRoundIds,
 } from "../ponder-work-feed.js";
 
@@ -21,7 +22,12 @@ describe("Ponder keeper work feed", () => {
           panelAddress: PANEL,
           now: "300",
           work: [
-            { action: "finalize_scoring_seed", roundId: "7", cursor: null },
+            {
+              action: "finalize_scoring_seed",
+              roundId: "7",
+              createdBlock: "123",
+              cursor: null,
+            },
           ],
         }),
         { status: 200, headers: { "content-type": "application/json" } },
@@ -47,6 +53,20 @@ describe("Ponder keeper work feed", () => {
         now: 300n,
       }),
     ).toEqual([7n]);
+    expect(
+      prioritizedKeeperWorkItems(response, {
+        deploymentKey: "deployment-key",
+        chainId: 84_532,
+        panelAddress: PANEL,
+        now: 300n,
+      }),
+    ).toEqual([
+      {
+        action: "finalize_scoring_seed",
+        roundId: 7n,
+        createdBlock: 123n,
+      },
+    ]);
   });
 
   it("uses a distinct fail-closed error for a mismatched deployment identity", () => {

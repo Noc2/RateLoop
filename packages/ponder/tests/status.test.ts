@@ -35,11 +35,35 @@ describe("tokenless public and keeper state", () => {
     expect(keeperAction(round(), 101n)).toBeNull();
   });
 
+  it("emits commit service work throughout reveal and claim windows", () => {
+    expect(keeperAction(round({ commitCount: 2 }), 101n)).toBe(
+      "service_commits",
+    );
+    expect(
+      keeperAction(
+        round({
+          state: ROUND_STATE.REVEALABLE,
+          commitCount: 2,
+          revealCount: 1,
+        }),
+        250n,
+      ),
+    ).toBe("service_commits");
+    expect(
+      keeperAction(
+        round({ state: ROUND_STATE.FINALIZED, claimDeadline: 400n }),
+        400n,
+      ),
+    ).toBe("service_commits");
+  });
+
   it("waits for the beacon failure deadline when no reveal exists", () => {
     const value = round({ state: ROUND_STATE.REVEALABLE, commitCount: 2 });
-    expect(keeperAction(value, 201n)).toBeNull();
+    expect(keeperAction(value, 201n)).toBe("service_commits");
     expect(keeperAction(value, 301n)).toBe("begin_settlement");
-    expect(keeperAction(round({ commitCount: 2 }), 201n)).toBeNull();
+    expect(keeperAction(round({ commitCount: 2 }), 201n)).toBe(
+      "service_commits",
+    );
     expect(
       keeperAction(
         round({
@@ -50,13 +74,13 @@ describe("tokenless public and keeper state", () => {
         }),
         201n,
       ),
-    ).toBeNull();
+    ).toBe("service_commits");
     expect(
       keeperAction(
         round({ commitCount: 3, revealCount: 1, minimumReveals: 2 }),
         201n,
       ),
-    ).toBeNull();
+    ).toBe("service_commits");
     expect(
       keeperAction(
         round({ commitCount: 3, revealCount: 2, minimumReveals: 2 }),
