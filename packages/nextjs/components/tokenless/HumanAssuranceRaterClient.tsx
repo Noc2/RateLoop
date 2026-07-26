@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { CrowdForecastField } from "~~/components/tokenless/review/CrowdForecastField";
 import { DeadlineChip } from "~~/components/tokenless/review/DeadlineChip";
 import { PrivateArtifactPreview } from "~~/components/tokenless/review/PrivateArtifactPreview";
 import { ReviewerShell } from "~~/components/tokenless/review/ReviewerShell";
@@ -1105,46 +1106,12 @@ export function HumanAssuranceRaterClient({
                               ))}
                             </div>
                             {draft.selectedOption ? (
-                              <div className="mt-5 border-t border-white/10 pt-4">
-                                <p className="text-xs font-semibold">Crowd forecast</p>
-                                <label
-                                  htmlFor={`forecast-${reviewCase.caseId}`}
-                                  className="mt-2 block text-xs leading-5 text-base-content/60"
-                                >
-                                  What percentage of reviewers will choose “{reviewCase.binaryReview.positiveLabel}”?
-                                </label>
-                                <div className="mt-3 flex items-center gap-2">
-                                  <input
-                                    id={`forecast-${reviewCase.caseId}`}
-                                    aria-label="Crowd forecast"
-                                    aria-describedby={`forecast-help-${reviewCase.caseId}`}
-                                    type="number"
-                                    inputMode="numeric"
-                                    min={1}
-                                    max={99}
-                                    step={1}
-                                    required
-                                    className="input input-sm w-24 border-white/10 bg-[var(--rateloop-field)] text-right tabular-nums"
-                                    value={draft.predictionPercent ?? ""}
-                                    disabled={serverAcceptance !== null}
-                                    onChange={event => {
-                                      const value = event.currentTarget.value;
-                                      updateDraft(reviewCase.caseId, {
-                                        predictionPercent: value === "" ? null : Number(value),
-                                      });
-                                    }}
-                                  />
-                                  <span aria-hidden="true" className="text-sm text-base-content/60">
-                                    %
-                                  </span>
-                                </div>
-                                <p
-                                  id={`forecast-help-${reviewCase.caseId}`}
-                                  className="mt-2 text-[11px] leading-4 text-base-content/45"
-                                >
-                                  Enter a whole number from 1 to 99. Forecasts stay hidden until the panel closes.
-                                </p>
-                              </div>
+                              <CrowdForecastField
+                                positiveLabel={reviewCase.binaryReview.positiveLabel}
+                                value={draft.predictionPercent}
+                                disabled={serverAcceptance !== null}
+                                onChange={predictionPercent => updateDraft(reviewCase.caseId, { predictionPercent })}
+                              />
                             ) : null}
                           </fieldset>
                         </div>

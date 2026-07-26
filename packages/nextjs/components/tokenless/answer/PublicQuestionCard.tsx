@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { Hex } from "viem";
 import { type PublicQuestionMedia, QuestionMedia } from "~~/components/tokenless/answer/QuestionMedia";
+import { CrowdForecastField, isCrowdForecastPercent } from "~~/components/tokenless/review/CrowdForecastField";
 import { DeadlineChip } from "~~/components/tokenless/review/DeadlineChip";
 import { ReviewerShell } from "~~/components/tokenless/review/ReviewerShell";
 import { Card } from "~~/components/tokenless/ui/Card";
@@ -154,7 +155,7 @@ function isPublicReviewDraft(value: unknown): value is PublicReviewDraft {
 }
 
 function isPublicPredictionPercent(value: number | null | undefined): value is number {
-  return typeof value === "number" && Number.isSafeInteger(value) && isTokenlessPredictionBps(value * 100);
+  return isCrowdForecastPercent(value) && isTokenlessPredictionBps(value * 100);
 }
 
 export function PublicQuestionCard({
@@ -189,8 +190,6 @@ export function PublicQuestionCard({
   const [retryClock, setRetryClock] = useState(() => Date.now());
   const [draftRestored, setDraftRestored] = useState(false);
   const rationaleRef = useRef<HTMLTextAreaElement>(null);
-  const predictionInputId = useId();
-  const predictionHelpId = `${predictionInputId}-help`;
   const feedbackEnabled = task.question.rationale?.mode !== "off";
   const preparationBinding = publicSubmissionBinding(task, {
     answer,
@@ -387,7 +386,13 @@ export function PublicQuestionCard({
   }
 
   async function prepareRecoveryBackup() {
-    if (paidAccess.state !== "ready" || !answer || !isPublicPredictionPercent(prediction) || task.alreadyVouchered) {
+    if (
+      paidAccess.state !== "ready" ||
+      !answer ||
+      !isPublicPredictionPercent(prediction) ||
+      publicResponseIssue ||
+      task.alreadyVouchered
+    ) {
       return;
     }
     setBusy(true);
@@ -442,7 +447,7 @@ export function PublicQuestionCard({
       setPreparedSubmission(null);
       setRecoveryDownloaded(false);
       setRecoveryConfirmed(false);
-      setError("We couldn’t create your recovery backup. Try again.");
+      setError(cause instanceof Error ? cause.message : "We couldn’t create your recovery backup. Try again.");
       setStatus(null);
       setTechnicalStatus(cause instanceof Error ? cause.message : "Unable to prepare recovery material.");
     } finally {
@@ -476,6 +481,44 @@ export function PublicQuestionCard({
     } finally {
       setBusy(false);
       setBusyLabel(null);
+    }
+  }
+
+  async function saveRecoveryBackup() {
+    if (!activePreparedSubmission || !recoveryUrl) return;
+    const fileName = `rateloop-review-${task.roundId}-backup.json`;
+    const file = new File([activePreparedSubmission.recoveryBackup], fileName, { type: "application/json" });
+    try {
+      const savePicker = (
+        window as typeof window & {
+          showSaveFilePicker?: (options: {
+            suggestedName: string;
+            types: Array<{ description: string; accept: Record<string, string[]> }>;
+          }) => Promise<{ createWritable(): Promise<{ write(value: File): Promise<void>; close(): Promise<void> }> }>;
+        }
+      ).showSaveFilePicker;
+      if (savePicker) {
+        const handle = await savePicker({
+          suggestedName: fileName,
+          types: [{ description: "RateLoop recovery backup", accept: { "application/json": [".json"] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(file);
+        await writable.close();
+      } else if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: "RateLoop recovery backup" });
+      } else {
+        const fallback = document.createElement("a");
+        fallback.href = recoveryUrl;
+        fallback.download = fileName;
+        fallback.rel = "noopener";
+        fallback.click();
+      }
+      setRecoveryDownloaded(true);
+      setTechnicalStatus("Recovery backup saved or handed to your device’s share sheet.");
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === "AbortError") return;
+      setError(cause instanceof Error ? cause.message : "The recovery backup could not be saved.");
     }
   }
 
@@ -595,7 +638,7 @@ export function PublicQuestionCard({
         await scheduleRetry(queuedCommit, "confirmation_pending");
       }
     } catch (cause) {
-      setError("We couldn’t record your rating. Try again.");
+      setError(cause instanceof Error ? cause.message : "We couldn’t record your rating. Try again.");
       if (preparedForRetry) {
         try {
           const queued = await createIndexedDbTokenlessCommitQueue().list(principalId);
@@ -625,6 +668,30 @@ export function PublicQuestionCard({
       : undefined) ?? PUBLIC_RATER_RESPONSE_BODY_MAX_LENGTH,
     PUBLIC_RATER_RESPONSE_BODY_MAX_LENGTH,
   );
+  const feedbackMinimum =
+    task.question.rationale?.mode === "required" ? Math.max(1, task.question.rationale.minLength ?? 1) : 0;
+  const feedbackIssue =
+    task.question.rationale?.mode === "required" && feedbackBody.trim().length < feedbackMinimum
+      ? `Feedback must contain at least ${feedbackMinimum} character${feedbackMinimum === 1 ? "" : "s"}.`
+      : feedbackBody.length > feedbackMaximum
+        ? `Feedback must contain at most ${feedbackMaximum} characters.`
+        : null;
+  let sourceUrlIssue: string | null = null;
+  if (sourceUrl.trim()) {
+    if (!feedbackBody.trim()) {
+      sourceUrlIssue = "Add feedback before adding a source URL.";
+    } else {
+      try {
+        const parsed = new URL(sourceUrl.trim());
+        if (parsed.protocol !== "https:" || parsed.username || parsed.password) {
+          sourceUrlIssue = "Source URL must use HTTPS and must not contain credentials.";
+        }
+      } catch {
+        sourceUrlIssue = "Source URL must be a valid HTTPS URL.";
+      }
+    }
+  }
+  const publicResponseIssue = feedbackIssue ?? sourceUrlIssue;
 
   return (
     <ReviewerShell
@@ -635,6 +702,7 @@ export function PublicQuestionCard({
         (!savedCommit &&
           (!answer ||
             !isPublicPredictionPercent(prediction) ||
+            Boolean(publicResponseIssue) ||
             task.alreadyVouchered ||
             (Boolean(activePreparedSubmission) && !recoveryConfirmed)))
       }
@@ -690,7 +758,7 @@ export function PublicQuestionCard({
           <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 border-t border-white/10 pt-4 text-xs text-base-content/45">
             <span>Guaranteed ${usdc(task.earnings.guaranteedBaseAtomic)}</span>
             <span>Quality bonus up to ${usdc(task.earnings.possibleBonusAtomic)}</span>
-            <span>Insight bonus up to ${usdc(task.earnings.possibleSurpriseBonusAtomic)}</span>
+            <span>Conditional surprise bonus up to ${usdc(task.earnings.possibleSurpriseBonusAtomic)}</span>
             <span>Attempt ${usdc(task.earnings.attemptCompensationAtomic)}</span>
           </div>
         </Card>
@@ -721,46 +789,12 @@ export function PublicQuestionCard({
                 ))}
               </div>
               {answer ? (
-                <fieldset className="mt-5 border-t border-white/10 pt-4">
-                  <legend className="text-xs font-semibold">Crowd forecast</legend>
-                  <label htmlFor={predictionInputId} className="mt-2 block text-xs leading-5 text-base-content/60">
-                    What percentage of reviewers do you expect to choose “{options[0]}”?
-                  </label>
-                  <div className="mt-3 flex items-center gap-2">
-                    <input
-                      id={predictionInputId}
-                      type="number"
-                      inputMode="numeric"
-                      min={1}
-                      max={99}
-                      step={1}
-                      required
-                      aria-describedby={predictionHelpId}
-                      className="input input-sm w-24 border-white/10 bg-[var(--rateloop-field)] text-right tabular-nums"
-                      value={prediction ?? ""}
-                      onChange={event => {
-                        const nextValue = event.currentTarget.value;
-                        setPrediction(nextValue === "" ? null : Number(nextValue));
-                      }}
-                    />
-                    <span aria-hidden="true" className="text-sm text-base-content/60">
-                      %
-                    </span>
-                  </div>
-                  <p
-                    id={predictionHelpId}
-                    role={prediction !== null && !isPublicPredictionPercent(prediction) ? "alert" : undefined}
-                    className={`mt-2 text-[11px] leading-4 ${
-                      prediction !== null && !isPublicPredictionPercent(prediction)
-                        ? "text-red-100"
-                        : "text-base-content/45"
-                    }`}
-                  >
-                    {prediction !== null && !isPublicPredictionPercent(prediction)
-                      ? "Enter a whole number from 1 to 99."
-                      : "Enter a whole number from 1 to 99. Your forecast stays hidden until settlement."}
-                  </p>
-                </fieldset>
+                <CrowdForecastField
+                  accessibleLabel={`What percentage of reviewers do you expect to choose “${options[0]}”?`}
+                  positiveLabel={options[0]}
+                  value={prediction}
+                  onChange={setPrediction}
+                />
               ) : null}
               {feedbackEnabled && answer && !feedbackOpen ? (
                 <button
@@ -803,6 +837,11 @@ export function PublicQuestionCard({
                   <div className="text-right text-[11px] text-base-content/45">
                     {feedbackBody.length}/{feedbackMaximum}
                   </div>
+                  {feedbackIssue ? (
+                    <p className="mt-1 text-xs text-red-100" role="alert">
+                      {feedbackIssue}
+                    </p>
+                  ) : null}
                   <input
                     type="url"
                     aria-label="Source URL"
@@ -812,6 +851,11 @@ export function PublicQuestionCard({
                     maxLength={2_048}
                     placeholder="HTTPS source, optional"
                   />
+                  {sourceUrlIssue ? (
+                    <p className="mt-1 text-xs text-red-100" role="alert">
+                      {sourceUrlIssue}
+                    </p>
+                  ) : null}
                 </fieldset>
               ) : null}
               {recoveryUrl && activePreparedSubmission ? (
@@ -826,7 +870,10 @@ export function PublicQuestionCard({
                     href={recoveryUrl}
                     download={`rateloop-review-${task.roundId}-backup.json`}
                     className="mt-3 block text-center text-xs font-medium underline underline-offset-4"
-                    onClick={() => setRecoveryDownloaded(true)}
+                    onClick={event => {
+                      event.preventDefault();
+                      void saveRecoveryBackup();
+                    }}
                   >
                     Download recovery backup
                   </a>

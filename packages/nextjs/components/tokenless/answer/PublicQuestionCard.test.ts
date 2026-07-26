@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 const source = readFileSync(new URL("./PublicQuestionCard.tsx", import.meta.url), "utf8");
+const crowdForecastSource = readFileSync(new URL("../review/CrowdForecastField.tsx", import.meta.url), "utf8");
 
 test("public rating progressively collects feedback without LREP and hides the aggregate until settlement", () => {
   assert.match(source, /Rating hidden until settlement\./);
@@ -15,7 +16,7 @@ test("public rating progressively collects feedback without LREP and hides the a
   assert.match(source, /\{feedbackEnabled &&/);
   assert.doesNotMatch(source, /\bLREP\b/);
   assert.match(source, /Quality bonus up to/);
-  assert.match(source, /Insight bonus up to/);
+  assert.match(source, /Conditional surprise bonus up to/);
   assert.doesNotMatch(source, /RBTS up to|Surprise up to/);
 });
 
@@ -61,13 +62,16 @@ test("binary review instructions stay neutral for feedback questions", () => {
 });
 
 test("the blind crowd forecast accepts the full one-percent RBTS grid without a default", () => {
-  assert.match(source, /Crowd forecast/);
-  assert.match(source, /What percentage of reviewers do you expect to choose “\{options\[0\]\}”\?/);
-  assert.match(source, /min=\{1\}/);
-  assert.match(source, /max=\{99\}/);
-  assert.match(source, /step=\{1\}/);
-  assert.match(source, /value=\{prediction \?\? ""\}/);
-  assert.match(source, /Your forecast stays hidden until settlement/);
+  assert.match(source, /<CrowdForecastField/);
+  assert.match(source, /positiveLabel=\{options\[0\]\}/);
+  assert.match(crowdForecastSource, /Crowd forecast/);
+  assert.match(crowdForecastSource, /What percentage of reviewers do you expect to choose “\{positiveLabel\}”\?/);
+  assert.match(crowdForecastSource, /min=\{1\}/);
+  assert.match(crowdForecastSource, /max=\{99\}/);
+  assert.match(crowdForecastSource, /step=\{1\}/);
+  assert.match(crowdForecastSource, /value=\{value \?\? ""\}/);
+  assert.match(crowdForecastSource, /No forecast is preselected/);
+  assert.match(crowdForecastSource, /Your forecast stays hidden until settlement/);
   assert.match(source, /predictedUpBps: prediction \* 100/);
-  assert.doesNotMatch(source, /\[10, 30, 50, 70, 90\]/);
+  assert.doesNotMatch(crowdForecastSource, /\[10, 30, 50, 70, 90\]/);
 });
