@@ -5,6 +5,7 @@ import {
   type HybridHumanReviewDependencies,
   createHybridHumanReviewAdapter,
 } from "~~/lib/tokenless/hybridHumanReviewAdapter";
+import { hybridRequestForTest } from "~~/lib/tokenless/hybridHumanReviewTestFixtures";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const HASH = `sha256:${"7".repeat(64)}` as const;
@@ -49,7 +50,7 @@ function orchestration() {
 
 function split(): FrozenHybridReviewSplit {
   return {
-    schemaVersion: "rateloop.hybrid-review-split.v2",
+    schemaVersion: "rateloop.hybrid-review-split.v3",
     workspaceId: "ws_hybrid_security",
     opportunityId: "opportunity_hybrid_security",
     audiencePolicyHash: HASH,
@@ -84,11 +85,11 @@ function split(): FrozenHybridReviewSplit {
     economics: { asset: "USDC", invitedMaximumChargeAtomic: "1900000", networkMaximumChargeAtomic: "1900000" },
     invited: {
       requestedCount: 1,
-      candidates: [candidate(INVITED, "assignment:invited")],
+      candidates: [],
     },
     network: {
       requestedCount: 1,
-      candidates: [candidate(NETWORK, "assignment:network")],
+      candidates: [],
     },
   };
 }
@@ -117,9 +118,7 @@ test("hybrid callbacks receive only the canonical public-safe split and candidat
   input.publication.privateSuggestionPayload = leakedSecret;
   input.economics.privateBillingNote = leakedSecret;
   input.invited.privateAssignmentPayload = leakedSecret;
-  input.invited.candidates[0].privateReviewerNote = leakedSecret;
   input.network.privatePublicationPayload = leakedSecret;
-  input.network.candidates[0].privateReviewerNote = leakedSecret;
 
   const callbackInputs: unknown[] = [];
   const dependencies: HybridHumanReviewDependencies = {
@@ -135,7 +134,7 @@ test("hybrid callbacks receive only the canonical public-safe split and candidat
           chainId: 84532,
           panelAddress: "0x4444444444444444444444444444444444444444",
           roundId: "1",
-          admissionPolicyHash: HASH,
+          admissionPolicyHash: value.hybridParent.admissionPolicyHash,
         },
         status: "ready",
         replayed: false,
@@ -152,7 +151,7 @@ test("hybrid callbacks receive only the canonical public-safe split and candidat
           chainId: 84532,
           panelAddress: "0x4444444444444444444444444444444444444444",
           roundId: "2",
-          admissionPolicyHash: HASH,
+          admissionPolicyHash: value.hybridParent.admissionPolicyHash,
         },
         status: "ready",
         replayed: false,
@@ -163,11 +162,14 @@ test("hybrid callbacks receive only the canonical public-safe split and candidat
     orchestration: orchestration(),
   };
 
-  const result = await createHybridHumanReviewAdapter(dependencies)(input as FrozenHybridReviewSplit);
+  const result = await createHybridHumanReviewAdapter(dependencies)(
+    hybridRequestForTest(input as FrozenHybridReviewSplit, [INVITED]),
+  );
   assert.equal(callbackInputs.length, 2);
   assert.equal(JSON.stringify(callbackInputs).includes(leakedSecret), false);
   assert.equal(JSON.stringify(result).includes(leakedSecret), false);
-  for (const callback of callbackInputs as Array<Record<string, any>>) {
+  const callbacks = callbackInputs as Array<Record<string, any>>;
+  for (const callback of callbacks) {
     assert.deepEqual(Object.keys(callback.split).sort(), [
       "audiencePolicyHash",
       "contentCommitments",
@@ -181,13 +183,74 @@ test("hybrid callbacks receive only the canonical public-safe split and candidat
       "semanticProfile",
       "workspaceId",
     ]);
-    assert.deepEqual(Object.keys(callback.candidates[0]).sort(), [
-      "assignmentHash",
-      "assignmentReference",
-      "payoutAccount",
-      "principalId",
-    ]);
   }
+  assert.deepEqual(Object.keys(callbacks[0]!.candidates[0]).sort(), [
+    "assignmentHash",
+    "assignmentReference",
+    "payoutAccount",
+    "principalId",
+  ]);
+  assert.deepEqual(callbacks[1]!.candidates, []);
+  assert.deepEqual(callbacks[1]!.preflights, []);
+  assert.deepEqual(callbacks[1]!.hybridParent.excludedReviewers, [
+    { principalId: candidate(INVITED, "unused").principalId, payoutAccount: INVITED.toLowerCase() },
+  ]);
+});
+
+test("v3 rejects caller-supplied invited candidates before any callback", async () => {
+  let sideEffects = 0;
+  const dependencies: HybridHumanReviewDependencies = {
+    requireEligibility: async ({ principalId }) => {
+      sideEffects += 1;
+      return preflight(principalId);
+    },
+    prepareInvited: async () => {
+      sideEffects += 1;
+      throw new Error("must not run");
+    },
+    prepareNetwork: async () => {
+      sideEffects += 1;
+      throw new Error("must not run");
+    },
+    releaseInvited: async () => undefined,
+    releaseNetwork: async () => undefined,
+    orchestration: orchestration(),
+  };
+  const input = split();
+  input.invited.candidates = [candidate(INVITED, "caller-injected")];
+  await assert.rejects(
+    createHybridHumanReviewAdapter(dependencies)(input),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "hybrid_review_binding_invalid",
+  );
+  assert.equal(sideEffects, 0);
+});
+
+test("v3 rejects caller-supplied network candidates before any callback", async () => {
+  let sideEffects = 0;
+  const dependencies: HybridHumanReviewDependencies = {
+    requireEligibility: async ({ principalId }) => {
+      sideEffects += 1;
+      return preflight(principalId);
+    },
+    prepareInvited: async () => {
+      sideEffects += 1;
+      throw new Error("must not run");
+    },
+    prepareNetwork: async () => {
+      sideEffects += 1;
+      throw new Error("must not run");
+    },
+    releaseInvited: async () => undefined,
+    releaseNetwork: async () => undefined,
+    orchestration: orchestration(),
+  };
+  const input = split();
+  input.network.candidates = [candidate(NETWORK, "caller-injected")];
+  await assert.rejects(
+    createHybridHumanReviewAdapter(dependencies)(input),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "hybrid_review_binding_invalid",
+  );
+  assert.equal(sideEffects, 0);
 });
 
 test("hybrid publication still fails closed for a private declaration before any callback", async () => {

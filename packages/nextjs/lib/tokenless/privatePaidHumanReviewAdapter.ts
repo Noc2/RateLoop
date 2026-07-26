@@ -83,7 +83,17 @@ export type PrivatePaidHumanReviewDelivery = {
   opportunityId: string;
   privateReviewId: string;
   lane: "private_invited_paid";
-  funding: PrivatePaidFundingReservation & { operationReference: string };
+  funding: PrivatePaidFundingReservation & {
+    operationId: string;
+    operationReference: string;
+    round: {
+      deploymentKey: string;
+      chainId: number;
+      panelAddress: string;
+      roundId: string;
+      admissionPolicyHash: Hash;
+    };
+  };
   encryptedDelivery: PrivatePaidDelivery;
   vouchers: PrivatePaidVoucherPreparation[];
   acceptedWorkLiability: "reserved_until_assignment_acceptance";
@@ -375,6 +385,14 @@ export function createPrivatePaidHumanReviewAdapter(
       );
     }
     const operationReference = activated.askOperationKey!;
+    const round = activated.round;
+    if (!round) {
+      throw new TokenlessServiceError(
+        "The private paid operation has no exact confirmed round.",
+        409,
+        "private_paid_funding_conflict",
+      );
+    }
     const vouchers: PrivatePaidVoucherPreparation[] = [];
     for (const assignment of encryptedDelivery.assignments) {
       const reviewer = assignment.reviewerAccountAddress.toLowerCase();
@@ -460,7 +478,18 @@ export function createPrivatePaidHumanReviewAdapter(
       opportunityId: input.opportunityId,
       privateReviewId: input.privateReviewId,
       lane: "private_invited_paid",
-      funding: { ...funding, operationReference },
+      funding: {
+        ...funding,
+        operationId: activated.operationId,
+        operationReference,
+        round: {
+          deploymentKey: round.deploymentKey,
+          chainId: round.chainId,
+          panelAddress: round.panelAddress,
+          roundId: round.roundId,
+          admissionPolicyHash: activated.audiencePolicyHash,
+        },
+      },
       encryptedDelivery,
       vouchers,
       acceptedWorkLiability: "reserved_until_assignment_acceptance",

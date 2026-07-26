@@ -19,6 +19,7 @@ import {
   type FrozenHybridReviewSplit,
   type HybridSubpanelPreparation,
 } from "~~/lib/tokenless/hybridHumanReviewAdapter";
+import { hybridRequestForTest } from "~~/lib/tokenless/hybridHumanReviewTestFixtures";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
@@ -393,7 +394,7 @@ test("the adapter persists two child rounds end to end and retry cannot duplicat
   const NETWORK = "0x5555555555555555555555555555555555555555";
   const principal = (account: string) => `rlp_${account.slice(2, 26)}`;
   const split: FrozenHybridReviewSplit = {
-    schemaVersion: "rateloop.hybrid-review-split.v2",
+    schemaVersion: "rateloop.hybrid-review-split.v3",
     workspaceId: seeded.workspaceId,
     opportunityId: seeded.opportunityId,
     audiencePolicyHash: seeded.audiencePolicyHash,
@@ -427,25 +428,11 @@ test("the adapter persists two child rounds end to end and retry cannot duplicat
     economics: { asset: "USDC", invitedMaximumChargeAtomic: "380", networkMaximumChargeAtomic: "570" },
     invited: {
       requestedCount: 1,
-      candidates: [
-        {
-          principalId: principal(INVITED),
-          payoutAccount: INVITED,
-          assignmentReference: "invited:selected-seat",
-          assignmentHash: hash(["selected-seat", "invited"]),
-        },
-      ],
+      candidates: [],
     },
     network: {
       requestedCount: 1,
-      candidates: [
-        {
-          principalId: principal(NETWORK),
-          payoutAccount: NETWORK,
-          assignmentReference: "network:selected-seat",
-          assignmentHash: hash(["selected-seat", "network"]),
-        },
-      ],
+      candidates: [],
     },
   };
   const actualSpend = new Set<string>();
@@ -529,12 +516,12 @@ test("the adapter persists two child rounds end to end and retry cannot duplicat
     },
   });
   await assert.rejects(
-    adapter(split),
+    adapter(hybridRequestForTest(split, [INVITED])),
     (error: unknown) =>
-      error instanceof TokenlessServiceError && error.code === "hybrid_network_child_pending" && error.retryable,
+      error instanceof TokenlessServiceError && error.code === "hybrid_child_preparation_pending" && error.retryable,
   );
-  const first = await adapter(split);
-  const replay = await adapter(split);
+  const first = await adapter(hybridRequestForTest(split, [INVITED]));
+  const replay = await adapter(hybridRequestForTest(split, [INVITED]));
   assert.equal(first.hybridOperationId, replay.hybridOperationId);
   assert.equal(first.splitBindingHash, replay.splitBindingHash);
   assert.equal(actualSpend.size, 2);

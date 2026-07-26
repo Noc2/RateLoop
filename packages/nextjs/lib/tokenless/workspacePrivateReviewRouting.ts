@@ -237,13 +237,17 @@ async function loadProfile(
     );
   }
   const compensationMode = text(row, "compensation_mode");
+  const audience = text(row, "audience");
+  const contentBoundary = text(row, "content_boundary");
   const bountyPerSeatAtomic =
     row.bounty_per_seat_atomic === null || row.bounty_per_seat_atomic === undefined
       ? null
       : String(row.bounty_per_seat_atomic);
   if (
-    text(row, "audience") !== "private_invited" ||
-    text(row, "content_boundary") !== "private_workspace" ||
+    !(
+      (audience === "private_invited" && contentBoundary === "private_workspace") ||
+      (audience === "hybrid" && contentBoundary === "public_or_test" && compensationMode === "usdc")
+    ) ||
     !(
       (compensationMode === "unpaid" && bountyPerSeatAtomic === null) ||
       (compensationMode === "usdc" && bountyPerSeatAtomic !== null && POSITIVE_ATOMIC_PATTERN.test(bountyPerSeatAtomic))
@@ -258,20 +262,31 @@ async function loadProfile(
       "private_review_profile_not_active",
     );
   }
-  const sensitivity = text(row, "private_sensitivity");
+  // Hybrid source material remains public-safe. The managed private project is
+  // an encrypted invited-delivery envelope, so it uses the least-sensitive
+  // private storage classification without changing the source declaration.
+  const sensitivity = audience === "hybrid" ? "internal" : text(row, "private_sensitivity");
   if (!sensitivity || !["internal", "confidential", "restricted", "regulated"].includes(sensitivity)) {
     throw new Error("Stored private review sensitivity is invalid.");
   }
-  const panelSize = integer(row, "panel_size");
+  const configuredPanelSize = integer(row, "panel_size");
+  const panelSize = audience === "hybrid" ? Math.ceil(configuredPanelSize / 2) : configuredPanelSize;
   const responseWindowSeconds = integer(row, "response_window_seconds");
   const requiredExpertiseKeys = normalizeReviewerExpertiseKeys(
     json(row.required_expertise_keys_json, "expertise keys"),
   );
   const expertiseRequirements = normalizeReviewerExpertiseRequirementsSelection(
     json(row.expertise_requirements_json, "expertise requirements"),
+    configuredPanelSize,
+  );
+  const invitedExpertiseRequirements = normalizeReviewerExpertiseRequirementsSelection(
+    expertiseRequirements.filter(requirement => requirement.sourceScope === "customer_invited"),
     panelSize,
   );
-  if (expertiseRequirements.some(requirement => requirement.sourceScope !== "customer_invited")) {
+  if (
+    audience === "private_invited" &&
+    invitedExpertiseRequirements.length !== expertiseRequirements.length
+  ) {
     throw new Error("Stored private review expertise scope is invalid.");
   }
   const groupPolicy = json<{ worldIdRequired?: unknown }>(row.policy_json, "private-group policy");
@@ -284,7 +299,7 @@ async function loadProfile(
     panelSize,
     responseWindowSeconds,
     requiredExpertiseKeys,
-    expertiseRequirements: expertiseRequirements as PrivateReviewerExpertiseRequirement[],
+    expertiseRequirements: invitedExpertiseRequirements as PrivateReviewerExpertiseRequirement[],
     privateGroupId: text(row, "private_group_id")!,
     groupPolicy,
     groupAllowedProjectIds: json<string[]>(row.allowed_project_ids_json, "private-group project IDs"),
@@ -1080,9 +1095,9 @@ export async function provisionWorkspacePrivateReviewRouting(input: {
 }
 
 /**
- * Refreshes reviewer seats for an already provisioned route using only the
- * exact approved profile frozen into a request. This path deliberately cannot
- * create projects, cohorts, access assignments, or grants.
+ * Reconciles the deterministic managed route for an exact approved profile.
+ * Creation is limited to IDs derived from that frozen revision and the stored
+ * approval actor; request material cannot choose a project or cohort.
  */
 export async function reconcileWorkspacePrivateReviewRoutingForFrozenRequest(input: {
   workspaceId: string;
@@ -1129,17 +1144,24 @@ export async function reconcileWorkspacePrivateReviewRoutingForFrozenRequest(inp
     }
     let cohort: { cohortId: string; activeReservations: number };
     try {
-      await requireManagedProject(client, {
-        projectId,
+      const ensuredProjectId = await ensureManagedProject(client, {
+        actor,
         workspaceId: input.workspaceId,
+        profileId: input.profileId,
+        profileVersion,
+        profileHash,
         sensitivity: profile.sensitivity,
+        now,
       });
-      cohort = await requireManagedCohort(client, {
-        cohortId,
-        projectId,
+      if (ensuredProjectId !== projectId) throw new Error("Managed private review project derivation changed.");
+      cohort = await ensureManagedCohort(client, {
+        actor,
+        projectId: ensuredProjectId,
+        profileHash,
         privateGroupId: profile.privateGroupId,
         panelSize: profile.panelSize,
         qualificationRules: expertiseQualificationRules(profile.requiredExpertiseKeys),
+        now,
       });
     } catch (error) {
       if (

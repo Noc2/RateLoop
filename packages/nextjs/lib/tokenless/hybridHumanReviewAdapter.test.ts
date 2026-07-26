@@ -5,6 +5,7 @@ import {
   type HybridHumanReviewDependencies,
   createHybridHumanReviewAdapter,
 } from "~~/lib/tokenless/hybridHumanReviewAdapter";
+import { hybridRequestForTest } from "~~/lib/tokenless/hybridHumanReviewTestFixtures";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const HASH = `sha256:${"ab".repeat(32)}` as const;
@@ -34,7 +35,7 @@ function preparationEvidence(cohort: "invited" | "network") {
 
 function split(): FrozenHybridReviewSplit {
   return {
-    schemaVersion: "rateloop.hybrid-review-split.v2",
+    schemaVersion: "rateloop.hybrid-review-split.v3",
     workspaceId: "ws_hybrid",
     opportunityId: "opportunity_hybrid",
     audiencePolicyHash: HASH,
@@ -67,8 +68,8 @@ function split(): FrozenHybridReviewSplit {
       redactionSummary: "Customer identifiers were removed from the public review copy.",
     },
     economics: { asset: "USDC", invitedMaximumChargeAtomic: "1900000", networkMaximumChargeAtomic: "3800000" },
-    invited: { requestedCount: 1, candidates: [candidate(A)] },
-    network: { requestedCount: 1, candidates: [candidate(B)] },
+    invited: { requestedCount: 1, candidates: [] },
+    network: { requestedCount: 1, candidates: [] },
   };
 }
 
@@ -101,7 +102,7 @@ function dependencies(events: string[]): HybridHumanReviewDependencies {
           chainId: 84532,
           panelAddress: "0x4444444444444444444444444444444444444444",
           roundId: "1",
-          admissionPolicyHash: HASH,
+          admissionPolicyHash: input.hybridParent.admissionPolicyHash,
         },
         status: "ready",
         replayed: false,
@@ -118,7 +119,7 @@ function dependencies(events: string[]): HybridHumanReviewDependencies {
           chainId: 84532,
           panelAddress: "0x4444444444444444444444444444444444444444",
           roundId: "2",
-          admissionPolicyHash: HASH,
+          admissionPolicyHash: input.hybridParent.admissionPolicyHash,
         },
         status: "ready",
         replayed: false,
@@ -159,15 +160,14 @@ test("rejects private or unpaid hybrid material before any side effect", async (
   assert.deepEqual(events, []);
 });
 
-test("preflights the final deterministic reviewer set before preparing either subpanel", async () => {
+test("preflights the server-derived invited set and defers network selection to the worker", async () => {
   const events: string[] = [];
   const adapter = createHybridHumanReviewAdapter(dependencies(events));
-  const result = await adapter(split());
+  const result = await adapter(hybridRequestForTest(split(), [A]));
   assert.deepEqual(events, [
     `preflight:customer_invited:${candidate(A).principalId}`,
-    `preflight:rateloop_network:${candidate(B).principalId}`,
     `invited:${A}`,
-    `network:${B}`,
+    "network:",
   ]);
   assert.equal(result.invited.reviewerCount, 1);
   assert.equal(result.network.reviewerCount, 1);
@@ -175,14 +175,14 @@ test("preflights the final deterministic reviewer set before preparing either su
   assert.match(result.splitBindingHash, /^sha256:[0-9a-f]{64}$/u);
 });
 
-test("invited reviewers win deduplication and an underfilled network panel fails closed", async () => {
+test("v3 rejects caller-supplied network candidates before any side effect", async () => {
   const events: string[] = [];
   const adapter = createHybridHumanReviewAdapter(dependencies(events));
   const input = split();
   input.network.candidates = [candidate(A)];
   await assert.rejects(
-    adapter(input),
-    (error: unknown) => error instanceof TokenlessServiceError && error.code === "hybrid_subpanel_underfilled",
+    adapter(hybridRequestForTest(input, [A])),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "hybrid_review_binding_invalid",
   );
   assert.deepEqual(events, []);
 });
@@ -201,20 +201,24 @@ test("a partial subpanel failure returns no hybrid success and retries exact ide
     return original(input);
   };
   const adapter = createHybridHumanReviewAdapter(deps);
-  await assert.rejects(adapter(split()), /interrupted/u);
-  const recovered = await adapter(split());
+  await assert.rejects(
+    adapter(hybridRequestForTest(split(), [A])),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "hybrid_child_preparation_pending" && error.retryable,
+  );
+  const recovered = await adapter(hybridRequestForTest(split(), [A]));
   assert.equal(recovered.lane, "hybrid_public_safe");
   assert.equal(events.filter(value => value === `invited:${A}`).length, 2);
-  assert.equal(events.at(-1), `network:${B}`);
+  assert.equal(events.at(-1), "network:");
 });
 
 test("hybrid preparation rejects one reused round and mismatched cohort economics", async () => {
   const events: string[] = [];
   const deps = dependencies(events);
   const invited = deps.prepareInvited;
-  deps.prepareNetwork = async input => invited({ ...input, candidates: input.candidates });
+  deps.prepareNetwork = async input => invited({ ...input, candidates: input.candidates, request: undefined });
   await assert.rejects(
-    createHybridHumanReviewAdapter(deps)(split()),
+    createHybridHumanReviewAdapter(deps)(hybridRequestForTest(split(), [A])),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "hybrid_round_identity_conflict",
   );
 
@@ -222,7 +226,7 @@ test("hybrid preparation rejects one reused round and mismatched cohort economic
   invalid.semanticProfile.network.economics.bountyPerSeatAtomic = "1";
   const sideEffects: string[] = [];
   await assert.rejects(
-    createHybridHumanReviewAdapter(dependencies(sideEffects))(invalid),
+    createHybridHumanReviewAdapter(dependencies(sideEffects))(hybridRequestForTest(invalid, [A])),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "hybrid_review_binding_invalid",
   );
   assert.deepEqual(sideEffects, []);

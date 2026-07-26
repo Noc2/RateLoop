@@ -356,6 +356,15 @@ function assertBinding(input: {
   workspaceId: string;
 }) {
   const row = input.row;
+  const privateProfile =
+    rowString(row, "audience") === "private_invited" &&
+    rowString(row, "content_boundary") === "private_workspace" &&
+    rowString(row, "profile_private_sensitivity") === input.classification;
+  const hybridInvitedDelivery =
+    input.classification === "internal" &&
+    rowString(row, "audience") === "hybrid" &&
+    rowString(row, "content_boundary") === "public_or_test" &&
+    rowString(row, "profile_private_sensitivity") === null;
   if (
     rowString(row, "project_status") !== "active" ||
     rowString(row, "visibility") !== "private" ||
@@ -364,9 +373,7 @@ function assertBinding(input: {
     rowString(row, "configuration_status") !== "ready" ||
     !row.approved_at ||
     row.superseded_at ||
-    rowString(row, "audience") !== "private_invited" ||
-    rowString(row, "content_boundary") !== "private_workspace" ||
-    rowString(row, "profile_private_sensitivity") !== input.classification ||
+    (!privateProfile && !hybridInvitedDelivery) ||
     rowString(row, "agent_id") !== input.agentId ||
     rowString(row, "agent_version_id") !== input.agentVersionId ||
     rowString(row, "group_workspace_id") !== input.workspaceId ||

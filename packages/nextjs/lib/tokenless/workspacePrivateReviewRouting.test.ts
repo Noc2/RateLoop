@@ -336,7 +336,7 @@ test("frozen request reconciliation admits a newly redeemed reviewer after the p
   await assert.rejects(reconcile(new Date(setup.now.getTime() + 25 * 60_000), `sha256:${"b".repeat(64)}`));
 });
 
-test("frozen request reconciliation cannot provision a missing routing foundation", async () => {
+test("frozen request reconciliation provisions only its deterministic approved routing foundation", async () => {
   const setup = await fixture();
   await addMember({ ...setup, reviewer: REVIEWER_A });
   await addMember({ ...setup, reviewer: REVIEWER_B });
@@ -347,8 +347,8 @@ test("frozen request reconciliation cannot provision a missing routing foundatio
     profileHash: PROFILE_HASH,
     now: setup.now,
   });
-  assert.equal(readiness.ready, false);
-  assert.equal(readiness.reason, "managed_foundation_unavailable");
+  assert.equal(readiness.ready, true);
+  assert.equal(readiness.reason, "ready");
   const resources = await dbClient.execute({
     sql: `SELECT
             (SELECT COUNT(*) FROM tokenless_assurance_projects WHERE project_id LIKE 'hap_setup_%') AS projects,
@@ -361,7 +361,7 @@ test("frozen request reconciliation cannot provision a missing routing foundatio
       cohorts: Number(resources.rows[0]?.cohorts),
       access: Number(resources.rows[0]?.access),
     },
-    { projects: 0, cohorts: 0, access: 0 },
+    { projects: 1, cohorts: 1, access: 1 },
   );
 });
 

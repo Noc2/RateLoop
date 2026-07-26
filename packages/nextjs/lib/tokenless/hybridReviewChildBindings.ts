@@ -16,6 +16,7 @@ export type HybridChildParentBinding = {
   requestedCount: number;
   admissionPolicyHash: Hash;
   expertiseRequirements: ReviewerExpertiseRequirement[];
+  excludedReviewers: Array<{ principalId: string; payoutAccount: string }>;
 };
 
 export function deriveHybridCohortEconomics(bountyPerSeatAtomic: string, panelSize: number) {

@@ -151,6 +151,13 @@ function dependencies(options?: { failReviewer?: string; activateOperation?: "pe
         prepaidReservationId: "res_private_paid",
         policyReservationId: "agres_private_paid",
         expectedAmountAtomic: "2550000",
+        audiencePolicyHash: HASH,
+        round: {
+          deploymentKey: "tokenless:test",
+          chainId: 84532,
+          panelAddress: "0x4444444444444444444444444444444444444444",
+          roundId: "17",
+        },
         readyForAssignment: options?.activateOperation !== "pending",
         replayed: false,
       } as never;
@@ -412,6 +419,13 @@ test("a partial voucher-preparation interruption returns no success and an idemp
         prepaidReservationId: "res_retry",
         policyReservationId: "agres_retry",
         expectedAmountAtomic: "2550000",
+        audiencePolicyHash: HASH,
+        round: {
+          deploymentKey: "tokenless:test",
+          chainId: 84532,
+          panelAddress: "0x4444444444444444444444444444444444444444",
+          roundId: "19",
+        },
         readyForAssignment: true,
         replayed: voucherCalls > 0,
       }) as never,

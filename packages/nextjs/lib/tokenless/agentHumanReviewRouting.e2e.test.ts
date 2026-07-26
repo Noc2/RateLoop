@@ -1,4 +1,8 @@
-import type { HumanAssurancePrivateReviewCreateResponse, TokenlessAskResponse } from "@rateloop/sdk";
+import type {
+  HumanAssuranceAudiencePolicy,
+  HumanAssurancePrivateReviewCreateResponse,
+  TokenlessAskResponse,
+} from "@rateloop/sdk";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { test } from "node:test";
@@ -6,12 +10,14 @@ import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import type { PreparedOwnerApproval } from "~~/lib/tokenless/humanReviewApprovalPreparation";
 import {
+  __humanReviewRequestRouterTestUtils,
   type FrozenHumanReviewRoutingContext,
   type HumanReviewRoutingMaterial,
   createHumanReviewRequestRouter,
 } from "~~/lib/tokenless/humanReviewRequestRouter";
 import type { FrozenHybridReviewSplit, HybridHumanReviewResult } from "~~/lib/tokenless/hybridHumanReviewAdapter";
 import type { HumanReviewAuthorityLevel, HumanReviewLane } from "~~/lib/tokenless/reviewCapabilities";
+import { workspacePrivateReviewRoutingIds } from "~~/lib/tokenless/workspacePrivateReviewRouting";
 
 type IntegrationPrincipal = Extract<AgentMcpPrincipal, { kind: "integration" }>;
 
@@ -107,7 +113,42 @@ function context(input: {
   responseWindowSeconds: number;
 }): FrozenHumanReviewRoutingContext {
   const privateLane = input.lane === "private_invited_unpaid" || input.lane === "private_invited_paid";
-  const frozenAudiencePolicy = freezeAdmissionPolicy(audiencePolicy(privateLane));
+  const hybridLane = input.lane === "hybrid_public_safe";
+  const hybridRouting = workspacePrivateReviewRoutingIds({
+    workspaceId: "workspace_agent_flow_e2e",
+    profileId: "profile_agent_flow_e2e",
+    profileVersion: 1,
+    profileHash: HASH,
+    privateGroupId: "group_agent_flow_e2e",
+  });
+  const baseAudiencePolicy = audiencePolicy(privateLane);
+  const frozenAudiencePolicy = freezeAdmissionPolicy(
+    hybridLane
+      ? ({
+          ...baseAudiencePolicy,
+          reviewerSource: "hybrid",
+          cohorts: [
+            { cohortId: hybridRouting.cohortId, minimumReviewers: 2, maximumReviewers: 2 },
+            { cohortId: "cohort_agent_flow_network", minimumReviewers: 2, maximumReviewers: 2 },
+          ],
+          selection: "randomized",
+          assurance: {
+            requirements: [
+              {
+                capability: "customer_invitation",
+                reviewerSources: ["customer_invited"],
+                allowedProviders: ["workspace-invitation"],
+              },
+              {
+                capability: "unique_human",
+                reviewerSources: ["rateloop_network"],
+                allowedProviders: ["world:poh"],
+              },
+            ],
+          },
+        } satisfies HumanAssuranceAudiencePolicy)
+      : baseAudiencePolicy,
+  );
   return {
     workspaceId: "workspace_agent_flow_e2e",
     integrationId: "integration_agent_flow_e2e",
@@ -133,9 +174,10 @@ function context(input: {
       audience: input.lane === "hybrid_public_safe" ? "hybrid" : privateLane ? "private_invited" : "public_network",
       contentBoundary: privateLane ? "private_workspace" : "public_or_test",
       privateSensitivity: privateLane ? "confidential" : null,
-      privateGroup: privateLane ? { id: "group_agent_flow_e2e", policyVersion: 1, policyHash: HASH } : null,
+      privateGroup:
+        privateLane || hybridLane ? { id: "group_agent_flow_e2e", policyVersion: 1, policyHash: HASH } : null,
       responseWindowSeconds: input.responseWindowSeconds,
-      panelSize: privateLane ? 2 : 3,
+      panelSize: privateLane ? 2 : hybridLane ? 4 : 3,
       compensationMode: input.lane === "private_invited_unpaid" ? "unpaid" : "usdc",
       bountyPerSeatAtomic: input.lane === "private_invited_unpaid" ? null : "1000000",
       feedbackBonusEnabled: false,
@@ -167,42 +209,28 @@ function context(input: {
 }
 
 function hybridSplit(context: FrozenHumanReviewRoutingContext): FrozenHybridReviewSplit {
+  const semanticProfile = __humanReviewRequestRouterTestUtils.exactHybridSemanticProfile(context);
   return {
-    schemaVersion: "rateloop.hybrid-review-split.v2",
+    schemaVersion: "rateloop.hybrid-review-split.v3",
     workspaceId: context.workspaceId,
     opportunityId: context.opportunityId,
     audiencePolicyHash: context.selectionPolicy.audiencePolicyHash,
     requestProfileHash: context.requestProfile.hash,
-    semanticProfile: {
-      schemaVersion: "rateloop.review-request-profile.v4",
-      audience: "hybrid",
-      audiencePolicyHash: context.selectionPolicy.audiencePolicyHash,
-      execution: "two_distinct_rounds",
-      invited: {
-        reviewerSource: "customer_invited",
-        panelSize: 1,
-        admissionPolicyHash: HASH,
-        economics: { asset: "USDC", bountyPerSeatAtomic: "1000000", maximumChargeAtomic: "1900000" },
-        expertiseRequirements: [],
-      },
-      network: {
-        reviewerSource: "rateloop_network",
-        panelSize: 1,
-        admissionPolicyHash: HASH,
-        economics: { asset: "USDC", bountyPerSeatAtomic: "1000000", maximumChargeAtomic: "1900000" },
-        expertiseRequirements: [],
-      },
-    },
+    semanticProfile,
     contentCommitments: context.contentCommitments,
     publication: { visibility: "public", dataClassification: "public", confirmedNoSensitiveData: true },
-    economics: { asset: "USDC", invitedMaximumChargeAtomic: "1900000", networkMaximumChargeAtomic: "1900000" },
+    economics: {
+      asset: "USDC",
+      invitedMaximumChargeAtomic: semanticProfile.invited.economics.maximumChargeAtomic,
+      networkMaximumChargeAtomic: semanticProfile.network.economics.maximumChargeAtomic,
+    },
     invited: {
-      requestedCount: 1,
-      candidates: [{ ...PAID_REVIEWERS[0]!, assignmentReference: "invited/1", assignmentHash: HASH }],
+      requestedCount: semanticProfile.invited.panelSize,
+      candidates: [],
     },
     network: {
-      requestedCount: 1,
-      candidates: [{ ...PAID_REVIEWERS[1]!, assignmentReference: "network/1", assignmentHash: HASH }],
+      requestedCount: semanticProfile.network.panelSize,
+      candidates: [],
     },
   };
 }
@@ -303,7 +331,30 @@ function routeFixture(frozen: FrozenHumanReviewRoutingContext) {
         schemaVersion: "rateloop.human-assurance.v2",
         privateReviewId: "private_review_agent_flow_e2e",
         status: "ready_for_assignment",
-      } as unknown as HumanAssurancePrivateReviewCreateResponse;
+        lane: "private",
+        task: { kind: "binary_review", commitment: HASH },
+        bindings: {
+          bindingHash: HASH,
+          project: { projectId: "project_agent_flow_e2e", hash: HASH },
+          requestProfile: { id: frozen.requestProfile.id, version: frozen.requestProfile.version, hash: HASH },
+          privateGroup: {
+            groupId: "group_agent_flow_e2e",
+            policyVersion: 1,
+            policyHash: HASH,
+            allowlistHash: HASH,
+            allowlistStatus: "allowed",
+          },
+          cohort: { cohortId: "cohort_agent_flow_e2e", hash: HASH },
+        },
+        artifacts: {
+          sourceArtifactId: "artifact_source_agent_flow_e2e",
+          suggestionArtifactId: "artifact_suggestion_agent_flow_e2e",
+        },
+        responseWindowSeconds: frozen.requestProfile.responseWindowSeconds,
+        responseDeadline: new Date(
+          NOW.getTime() + frozen.requestProfile.responseWindowSeconds * 1_000,
+        ).toISOString(),
+      } satisfies HumanAssurancePrivateReviewCreateResponse;
     },
     assignPrivateUnpaid: async () => {
       calls.unpaid += 1;

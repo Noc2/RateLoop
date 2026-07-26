@@ -1,9 +1,15 @@
+import type { HumanAssuranceAudiencePolicy, HumanAssurancePrivateReviewCreateResponse } from "@rateloop/sdk";
 import { createHash } from "node:crypto";
 import "server-only";
 import { getAddress } from "viem";
 import { isRateLoopPrincipalId } from "~~/lib/auth/accountSubject";
+import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
 import type { FrozenBinaryReviewQuestion } from "~~/lib/tokenless/humanReviewQuestions";
+import {
+  hashPreparedHumanReviewValue,
+  prepareHumanReviewRequest,
+} from "~~/lib/tokenless/humanReviewRequestPreparation";
 import {
   deriveHybridCohortEconomics,
   hashHybridCohortEconomics,
@@ -13,8 +19,13 @@ import {
 import { requirePaidLaneComplianceApproval } from "~~/lib/tokenless/paidLaneCompliance";
 import {
   type PaidReviewEligibilityPreflight,
+  type PaidReviewerBinding,
   requirePaidReviewEligibility,
 } from "~~/lib/tokenless/paidReviewEligibilityPreflight";
+import {
+  type PrivatePaidHumanReviewDelivery,
+  requestPrivatePaidHumanReview,
+} from "~~/lib/tokenless/privatePaidHumanReviewAdapter";
 import {
   releasePublicPaidNetworkChild,
   requestPublicPaidNetworkChild,
@@ -45,7 +56,7 @@ export type HybridReviewCandidate = {
 };
 
 export type FrozenHybridReviewSplit = {
-  schemaVersion: "rateloop.hybrid-review-split.v2";
+  schemaVersion: "rateloop.hybrid-review-split.v3";
   workspaceId: string;
   opportunityId: string;
   audiencePolicyHash: Hash;
@@ -126,7 +137,26 @@ export type HybridHumanReviewRequest = {
   suggestionPayload: string;
   effectiveQuestion: FrozenBinaryReviewQuestion;
   effectiveQuestionHash: Hash;
+  invitedBinding: HybridInvitedPrivateBinding;
   now?: Date;
+};
+
+export type HybridInvitedPrivateBinding = {
+  schemaVersion: "rateloop.hybrid-invited-private-binding.v1";
+  bindingHash: Hash;
+  integrationId: string;
+  workflowKey: string;
+  projectId: string;
+  cohortId: string;
+  privateGroup: { id: string; policyVersion: number; policyHash: Hash };
+  reviewers: readonly PaidReviewerBinding[];
+  foundation: HumanAssurancePrivateReviewCreateResponse;
+  admissionPolicy: HumanAssuranceAudiencePolicy;
+  selectionPolicy: { id: string; version: number };
+  publishingPolicy: { id: string; version: number };
+  requestProfile: { id: string; version: number; hash: Hash };
+  agent: { id: string; versionId: string };
+  responseWindowSeconds: number;
 };
 
 export type HybridHumanReviewOrchestrationDependencies = {
@@ -161,7 +191,7 @@ export type HybridHumanReviewDependencies = {
     candidates: readonly HybridReviewCandidate[];
     preflights: readonly PaidReviewEligibilityPreflight[];
     hybridParent: HybridChildParentBinding;
-    request?: Omit<HybridHumanReviewRequest, "split">;
+    request?: Omit<HybridHumanReviewRequest, "split" | "invitedBinding">;
   }): Promise<HybridSubpanelPreparation>;
   releaseInvited(preparation: HybridSubpanelPreparation): Promise<void>;
   releaseNetwork(preparation: HybridSubpanelPreparation): Promise<void>;
@@ -178,6 +208,7 @@ function stableJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
   if (value && typeof value === "object") {
     return `{${Object.entries(value as Record<string, unknown>)
+      .filter(([, entry]) => entry !== undefined)
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([key, entry]) => `${JSON.stringify(key)}:${stableJson(entry)}`)
       .join(",")}}`;
@@ -189,6 +220,121 @@ function stableJson(value: unknown): string {
 
 function sha256(value: unknown): Hash {
   return `sha256:${createHash("sha256").update(stableJson(value)).digest("hex")}`;
+}
+
+export function hashHybridInvitedPrivateBinding(
+  value: Omit<HybridInvitedPrivateBinding, "bindingHash">,
+): Hash {
+  return sha256({
+    schemaVersion: "rateloop.hybrid-invited-private-binding.v1",
+    integrationId: value.integrationId,
+    workflowKey: value.workflowKey,
+    projectId: value.projectId,
+    cohortId: value.cohortId,
+    privateGroup: value.privateGroup,
+    reviewers: value.reviewers,
+    foundation: {
+      privateReviewId: value.foundation.privateReviewId,
+      taskCommitment: value.foundation.task.commitment,
+      bindingHash: value.foundation.bindings.bindingHash,
+      project: value.foundation.bindings.project,
+      requestProfile: value.foundation.bindings.requestProfile,
+      privateGroup: value.foundation.bindings.privateGroup,
+      cohort: value.foundation.bindings.cohort,
+      artifacts: value.foundation.artifacts,
+      responseDeadline: value.foundation.responseDeadline,
+    },
+    admissionPolicy: value.admissionPolicy,
+    selectionPolicy: value.selectionPolicy,
+    publishingPolicy: value.publishingPolicy,
+    requestProfile: value.requestProfile,
+    agent: value.agent,
+    responseWindowSeconds: value.responseWindowSeconds,
+  });
+}
+
+function exactInvitedBinding(
+  split: FrozenHybridReviewSplit,
+  request: HybridHumanReviewRequest | undefined,
+): {
+  binding: HybridInvitedPrivateBinding;
+  candidates: HybridReviewCandidate[];
+} {
+  const binding = request?.invitedBinding;
+  if (!binding) {
+    throw new TokenlessServiceError(
+      "Hybrid invited review requires a server-derived private binding.",
+      409,
+      "hybrid_review_binding_invalid",
+    );
+  }
+  const foundation = binding.foundation;
+  const frozen = freezeAdmissionPolicy(binding.admissionPolicy);
+  const { bindingHash: _bindingHash, ...hashInput } = binding;
+  if (
+    binding.schemaVersion !== "rateloop.hybrid-invited-private-binding.v1" ||
+    binding.bindingHash !== hashHybridInvitedPrivateBinding(hashInput) ||
+    binding.integrationId !== request.principal.integration.integrationId ||
+    binding.reviewers.length !== split.invited.requestedCount ||
+    foundation.status !== "ready_for_assignment" ||
+    foundation.bindings.project.projectId !== binding.projectId ||
+    foundation.bindings.cohort.cohortId !== binding.cohortId ||
+    foundation.bindings.privateGroup.groupId !== binding.privateGroup.id ||
+    foundation.bindings.privateGroup.policyVersion !== binding.privateGroup.policyVersion ||
+    foundation.bindings.privateGroup.policyHash !== binding.privateGroup.policyHash ||
+    foundation.bindings.requestProfile.id !== binding.requestProfile.id ||
+    foundation.bindings.requestProfile.version !== binding.requestProfile.version ||
+    foundation.bindings.requestProfile.hash !== binding.requestProfile.hash ||
+    frozen.policyHash !== split.semanticProfile.invited.admissionPolicyHash ||
+    binding.responseWindowSeconds < 1
+  ) {
+    throw new TokenlessServiceError(
+      "Hybrid invited review does not match its exact server-derived private foundation.",
+      409,
+      "hybrid_review_binding_invalid",
+    );
+  }
+  const normalized = binding.reviewers
+    .map((reviewer, index) => {
+      let payoutAccount: string;
+      try {
+        payoutAccount = getAddress(reviewer.payoutAccount).toLowerCase();
+      } catch {
+        throw new TokenlessServiceError(
+          `Invited reviewer ${index + 1} is invalid.`,
+          409,
+          "hybrid_review_binding_invalid",
+        );
+      }
+      if (!isRateLoopPrincipalId(reviewer.principalId)) {
+        throw new TokenlessServiceError(
+          `Invited reviewer ${index + 1} is invalid.`,
+          409,
+          "hybrid_review_binding_invalid",
+        );
+      }
+      return { principalId: reviewer.principalId, payoutAccount };
+    })
+    .sort((left, right) => left.payoutAccount.localeCompare(right.payoutAccount));
+  if (
+    new Set(normalized.map(value => value.principalId)).size !== normalized.length ||
+    new Set(normalized.map(value => value.payoutAccount)).size !== normalized.length
+  ) {
+    throw new TokenlessServiceError("Hybrid invited reviewers must be unique.", 409, "hybrid_review_binding_invalid");
+  }
+  return {
+    binding,
+    candidates: normalized.map(reviewer => ({
+      ...reviewer,
+      assignmentReference: `${foundation.privateReviewId}:${reviewer.principalId}`,
+      assignmentHash: sha256({
+        schemaVersion: "rateloop.hybrid-invited-reviewer.v1",
+        bindingHash: binding.bindingHash,
+        principalId: reviewer.principalId,
+        payoutAccount: reviewer.payoutAccount,
+      }),
+    })),
+  };
 }
 
 function candidate(value: HybridReviewCandidate, field: string): HybridReviewCandidate {
@@ -260,7 +406,7 @@ function semanticCohort(
 
 function validate(split: FrozenHybridReviewSplit) {
   if (
-    split.schemaVersion !== "rateloop.hybrid-review-split.v2" ||
+    split.schemaVersion !== "rateloop.hybrid-review-split.v3" ||
     !split.workspaceId ||
     !split.opportunityId ||
     !HASH.test(split.audiencePolicyHash) ||
@@ -284,7 +430,8 @@ function validate(split: FrozenHybridReviewSplit) {
     !Number.isSafeInteger(split.network.requestedCount) ||
     split.invited.requestedCount < 1 ||
     split.network.requestedCount < 1 ||
-    split.invited.candidates.length !== split.invited.requestedCount
+    split.invited.candidates.length !== 0 ||
+    split.network.candidates.length !== 0
   ) {
     throw new TokenlessServiceError(
       "Hybrid review requires an exact public-safe, USDC-paid two-subpanel split.",
@@ -369,9 +516,12 @@ function exactPreparation(
   return { ...value, round: { ...value.round, panelAddress } };
 }
 
-function canonicalSplit(split: FrozenHybridReviewSplit): FrozenHybridReviewSplit {
+function canonicalSplit(
+  split: FrozenHybridReviewSplit,
+  invitedCandidates: readonly HybridReviewCandidate[],
+): FrozenHybridReviewSplit {
   return {
-    schemaVersion: "rateloop.hybrid-review-split.v2",
+    schemaVersion: "rateloop.hybrid-review-split.v3",
     workspaceId: split.workspaceId,
     opportunityId: split.opportunityId,
     audiencePolicyHash: split.audiencePolicyHash,
@@ -423,7 +573,7 @@ function canonicalSplit(split: FrozenHybridReviewSplit): FrozenHybridReviewSplit
     },
     invited: {
       requestedCount: split.invited.requestedCount,
-      candidates: split.invited.candidates.map((value, index) => candidate(value, `Invited candidate ${index + 1}`)),
+      candidates: invitedCandidates.map((value, index) => candidate(value, `Invited candidate ${index + 1}`)),
     },
     network: {
       requestedCount: split.network.requestedCount,
@@ -436,6 +586,7 @@ function childSeed(
   cohort: "invited" | "network",
   split: FrozenHybridReviewSplit,
   candidates: readonly HybridReviewCandidate[],
+  excludedReviewers: readonly HybridReviewCandidate[] = [],
 ): HybridReviewChildSeed {
   const profile = split.semanticProfile[cohort];
   return {
@@ -446,6 +597,10 @@ function childSeed(
       opportunityId: split.opportunityId,
       cohort,
       candidates,
+      excludedReviewers: excludedReviewers.map(value => ({
+        principalId: value.principalId,
+        payoutAccount: value.payoutAccount,
+      })),
       admissionPolicyHash: profile.admissionPolicyHash,
       economics: profile.economics,
       expertiseRequirements: profile.expertiseRequirements,
@@ -454,7 +609,7 @@ function childSeed(
     expertiseHash: hashHybridCohortExpertise(cohort, profile.expertiseRequirements),
     admissionPolicyHash: profile.admissionPolicyHash,
     expectedAmountAtomic: profile.economics.maximumChargeAtomic,
-    assignmentCount: candidates.length,
+    assignmentCount: profile.panelSize,
   };
 }
 
@@ -462,6 +617,7 @@ function parentBinding(
   child: HybridReviewChildSeed,
   hybridOperationId: string,
   profile: HybridCohortSemanticProfile,
+  excludedReviewers: readonly HybridReviewCandidate[] = [],
 ): HybridChildParentBinding {
   return {
     hybridOperationId,
@@ -471,6 +627,10 @@ function parentBinding(
     requestedCount: child.assignmentCount,
     admissionPolicyHash: child.admissionPolicyHash,
     expertiseRequirements: profile.expertiseRequirements,
+    excludedReviewers: excludedReviewers.map(value => ({
+      principalId: value.principalId,
+      payoutAccount: value.payoutAccount,
+    })),
   };
 }
 
@@ -493,9 +653,77 @@ function preparationBinding(preparation: HybridSubpanelPreparation) {
   };
 }
 
+function invitedPreparation(
+  delivery: PrivatePaidHumanReviewDelivery,
+  parent: HybridChildParentBinding,
+): HybridSubpanelPreparation {
+  const assignmentEvidence = delivery.encryptedDelivery.assignments.map(assignment => ({
+    assignmentId: assignment.assignmentId,
+    reviewerAccountAddress: assignment.reviewerAccountAddress.toLowerCase(),
+    reservationExpiresAt: assignment.reservationExpiresAt,
+  }));
+  const vouchers = delivery.vouchers.map(value => ({
+    assignmentId: value.assignmentId,
+    reviewerAccountAddress: value.reviewerAccountAddress.toLowerCase(),
+    issuanceId: value.issuance.issuanceId,
+    eligibilitySnapshotHash: value.issuance.frozen.eligibilitySnapshotHash,
+    audienceBindingHash: value.issuance.frozen.audienceBindingHash,
+  }));
+  return {
+    subpanelReference: delivery.encryptedDelivery.deliveryId,
+    bindingHash: parent.cohortBindingHash,
+    sourceOperationReference: delivery.funding.operationId,
+    sourceRunId: delivery.encryptedDelivery.deliveryId,
+    chainAdmissionPolicyHash: `0x${parent.admissionPolicyHash.slice("sha256:".length)}`,
+    selectedSeatEvidenceHash: sha256({
+      schemaVersion: "rateloop.hybrid-invited-seat-evidence.v1",
+      privateReviewId: delivery.privateReviewId,
+      deliveryId: delivery.encryptedDelivery.deliveryId,
+      membershipSnapshotHash: delivery.encryptedDelivery.membershipSnapshotHash,
+      assignments: assignmentEvidence,
+    }),
+    voucherPreparationHash: sha256({
+      schemaVersion: "rateloop.hybrid-invited-voucher-evidence.v1",
+      operationId: delivery.funding.operationId,
+      vouchers,
+    }),
+    settlementBindingHash: sha256({
+      schemaVersion: "rateloop.hybrid-invited-settlement-binding.v1",
+      operationId: delivery.funding.operationId,
+      operationReference: delivery.funding.operationReference,
+      funding: {
+        prepaidReservationId: delivery.funding.prepaidReservationId,
+        policyReservationId: delivery.funding.policyReservationId,
+        amountAtomic: delivery.funding.amountAtomic,
+      },
+      deliveryId: delivery.encryptedDelivery.deliveryId,
+      assignments: assignmentEvidence,
+      vouchers,
+    }),
+    round: {
+      ...delivery.funding.round,
+      admissionPolicyHash: parent.admissionPolicyHash,
+    },
+    status: "ready",
+    replayed: delivery.funding.replayed,
+  };
+}
+
 function adapterInput(input: FrozenHybridReviewSplit | HybridHumanReviewRequest) {
   if ("split" in input) return { split: input.split, request: input };
   return { split: input, request: undefined };
+}
+
+function publicChildRequest(
+  request: HybridHumanReviewRequest,
+): Omit<HybridHumanReviewRequest, "split" | "invitedBinding"> {
+  const { split: _split, invitedBinding: _invitedBinding, ...publicRequest } = request;
+  return publicRequest;
+}
+
+function privateChildRequest(request: HybridHumanReviewRequest): Omit<HybridHumanReviewRequest, "split"> {
+  const { split: _split, ...privateRequest } = request;
+  return privateRequest;
 }
 
 export function createHybridHumanReviewAdapter(dependencies: HybridHumanReviewDependencies) {
@@ -505,20 +733,13 @@ export function createHybridHumanReviewAdapter(dependencies: HybridHumanReviewDe
     const { split, request } = adapterInput(input);
     requirePaidLaneComplianceApproval("hybrid_public_safe");
     validate(split);
-    const frozenSplit = canonicalSplit(split);
+    const exactInvited = exactInvitedBinding(split, request);
+    const frozenSplit = canonicalSplit(split, exactInvited.candidates);
     const invited = frozenSplit.invited.candidates;
     const invitedPrincipals = new Set(invited.map(value => value.principalId));
-    const normalizedNetwork = frozenSplit.network.candidates;
-    const network = normalizedNetwork.filter(value => !invitedPrincipals.has(value.principalId));
-    const duplicateCount = normalizedNetwork.length - network.length;
-    if (network.length !== split.network.requestedCount) {
-      throw new TokenlessServiceError(
-        "The frozen network subpanel has too few unique reviewers after invited-first deduplication.",
-        409,
-        "hybrid_subpanel_underfilled",
-      );
-    }
-    const finalCandidates = [...invited, ...network];
+    const network: HybridReviewCandidate[] = [];
+    const duplicateCount = 0;
+    const finalCandidates = invited;
     const principalSet = new Set(finalCandidates.map(value => value.principalId));
     const payoutSet = new Set(finalCandidates.map(value => value.payoutAccount));
     if (principalSet.size !== finalCandidates.length || payoutSet.size !== finalCandidates.length) {
@@ -549,7 +770,7 @@ export function createHybridHumanReviewAdapter(dependencies: HybridHumanReviewDe
     );
     const preflightByPrincipal = new Map(preflightEntries);
     const invitedSeed = childSeed("invited", frozenSplit, invited);
-    const networkSeed = childSeed("network", frozenSplit, network);
+    const networkSeed = childSeed("network", frozenSplit, network, invited);
     const now = request?.now ?? dependencies.clock?.() ?? new Date();
     const parentSeed: HybridReviewParentSeed = {
       workspaceId: frozenSplit.workspaceId,
@@ -593,7 +814,7 @@ export function createHybridHumanReviewAdapter(dependencies: HybridHumanReviewDe
             ensured.operation.hybridOperationId,
             frozenSplit.semanticProfile.invited,
           ),
-          ...(request ? { request } : {}),
+          ...(request ? { request: privateChildRequest(request) } : {}),
         }),
         {
           field: "Invited subpanel",
@@ -628,8 +849,9 @@ export function createHybridHumanReviewAdapter(dependencies: HybridHumanReviewDe
             networkSeed,
             ensured.operation.hybridOperationId,
             frozenSplit.semanticProfile.network,
+            invited,
           ),
-          ...(request ? { request } : {}),
+          ...(request ? { request: publicChildRequest(request) } : {}),
         }),
         {
           field: "Network subpanel",
@@ -656,6 +878,14 @@ export function createHybridHumanReviewAdapter(dependencies: HybridHumanReviewDe
         now,
       });
     } catch (error) {
+      if (invitedPreparation || networkPreparation) {
+        throw new TokenlessServiceError(
+          "A funded hybrid child is waiting for exact retryable sibling preparation.",
+          409,
+          "hybrid_child_preparation_pending",
+          true,
+        );
+      }
       if (!retryable(error)) await cancelPrepared("child_preparation_failed");
       throw error;
     }
@@ -704,7 +934,11 @@ export function createHybridHumanReviewAdapter(dependencies: HybridHumanReviewDe
       lane: "hybrid_public_safe",
       deduplicationRule: "invited_wins",
       invited: { ...invitedPreparation, reviewerCount: invited.length },
-      network: { ...networkPreparation, reviewerCount: network.length, removedDuplicateCount: duplicateCount },
+      network: {
+        ...networkPreparation,
+        reviewerCount: frozenSplit.network.requestedCount,
+        removedDuplicateCount: duplicateCount,
+      },
       splitBindingHash,
     };
   };
@@ -716,12 +950,83 @@ const DEFAULT_DEPENDENCIES: HybridHumanReviewDependencies = {
       reviewerSource: input.reviewerSource,
       ...(input.reviewerSource === "customer_invited" ? { workspaceId: input.workspaceId } : {}),
     }),
-  async prepareInvited() {
-    throw new TokenlessServiceError(
-      "Hybrid invited-round settlement is not deployed.",
-      503,
-      "hybrid_two_round_settlement_unavailable",
-      true,
+  async prepareInvited({ split, hybridParent, request }) {
+    const binding = request?.invitedBinding;
+    if (!request || !binding) {
+      throw new TokenlessServiceError(
+        "Hybrid invited-round request context is unavailable.",
+        503,
+        "hybrid_two_round_settlement_unavailable",
+        true,
+      );
+    }
+    const preparedAt = request.now ?? new Date();
+    const prepared = prepareHumanReviewRequest({
+      opportunityId: split.opportunityId,
+      workflowKey: binding.workflowKey,
+      requestProfile: {
+        id: binding.requestProfile.id,
+        version: binding.requestProfile.version,
+        hash: binding.requestProfile.hash,
+        agentId: binding.agent.id,
+        agentVersionId: binding.agent.versionId,
+        questionAuthority: request.effectiveQuestion.questionAuthority,
+        resultSemantics: request.effectiveQuestion.resultSemantics,
+        criterion: request.effectiveQuestion.prompt,
+        positiveLabel: request.effectiveQuestion.positiveLabel,
+        negativeLabel: request.effectiveQuestion.negativeLabel,
+        rationaleMode: request.effectiveQuestion.rationaleMode,
+        audience: "private_invited",
+        contentBoundary: "private_workspace",
+        privateSensitivity: "internal",
+        privateGroupId: binding.privateGroup.id,
+        requiredExpertiseKeys: [],
+        expertiseRequirements: hybridParent.expertiseRequirements,
+        responseWindowSeconds: binding.responseWindowSeconds,
+        panelSize: hybridParent.requestedCount,
+        compensationMode: "usdc",
+        bountyPerSeatAtomic: split.semanticProfile.invited.economics.bountyPerSeatAtomic,
+      },
+      selectionPolicy: binding.selectionPolicy,
+      contentCommitments: split.contentCommitments,
+      preparedAt,
+      expiresAt: new Date(preparedAt.getTime() + binding.responseWindowSeconds * 1_000),
+      sourcePayload: request.sourcePayload,
+      suggestionPayload: request.suggestionPayload,
+      effectiveQuestion: request.effectiveQuestion,
+      effectiveQuestionHash: request.effectiveQuestionHash,
+    });
+    if (
+      prepared.preparedRequestHash !== hashPreparedHumanReviewValue(prepared.preparedRequest) ||
+      prepared.derivedEconomicsHash !== hybridParent.economicsHash
+    ) {
+      throw new TokenlessServiceError(
+        "Hybrid invited economics do not match the frozen child tuple.",
+        409,
+        "hybrid_review_child_conflict",
+      );
+    }
+    return invitedPreparation(
+      await requestPrivatePaidHumanReview({
+        principal: request.principal.principal,
+        appOrigin: request.appOrigin,
+        integrationId: binding.integrationId,
+        opportunityId: split.opportunityId,
+        privateReviewId: binding.foundation.privateReviewId,
+        projectId: binding.projectId,
+        cohortId: binding.cohortId,
+        privateGroup: binding.privateGroup,
+        reviewers: binding.reviewers,
+        audiencePolicyHash: hybridParent.admissionPolicyHash,
+        admissionPolicy: binding.admissionPolicy,
+        publishingPolicy: binding.publishingPolicy,
+        preparedRequest: prepared.preparedRequest,
+        preparedRequestHash: prepared.preparedRequestHash,
+        economics: prepared.derivedEconomics,
+        economicsHash: prepared.derivedEconomicsHash,
+        now: preparedAt,
+      }),
+      hybridParent,
     );
   },
   async prepareNetwork({ split, hybridParent, request }) {
@@ -745,7 +1050,14 @@ const DEFAULT_DEPENDENCIES: HybridHumanReviewDependencies = {
       hybridParent,
     });
   },
-  async releaseInvited() {},
+  async releaseInvited() {
+    throw new TokenlessServiceError(
+      "A funded invited child remains pending until its protocol round reaches a terminal settlement.",
+      409,
+      "hybrid_invited_child_release_pending",
+      true,
+    );
+  },
   async releaseNetwork(preparation) {
     await releasePublicPaidNetworkChild(preparation);
   },

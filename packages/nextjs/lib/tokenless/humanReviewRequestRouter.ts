@@ -35,10 +35,17 @@ import {
 } from "~~/lib/tokenless/humanReviewRequestPreparation";
 import {
   type FrozenHybridReviewSplit,
+  hashHybridInvitedPrivateBinding,
   type HybridHumanReviewRequest,
   type HybridHumanReviewResult,
+  type HybridInvitedPrivateBinding,
   requestHybridHumanReview,
 } from "~~/lib/tokenless/hybridHumanReviewAdapter";
+import {
+  deriveHybridCohortEconomics,
+  hashHybridCohortEconomics,
+  hashHybridCohortExpertise,
+} from "~~/lib/tokenless/hybridReviewChildBindings";
 import {
   type PaidReviewerBinding,
   requirePaidReviewEligibility,
@@ -68,7 +75,10 @@ import {
 } from "~~/lib/tokenless/reviewerExpertise";
 import { exactReviewerExpertiseDefinitionKey } from "~~/lib/tokenless/reviewerExpertiseAssignments";
 import { chooseExpertiseCoveredPanel } from "~~/lib/tokenless/reviewerExpertiseCoverage";
-import type { ReviewerExpertiseRequirement } from "~~/lib/tokenless/reviewerExpertiseOptions";
+import {
+  type ReviewerExpertiseRequirement,
+  normalizeReviewerExpertiseRequirementsSelection,
+} from "~~/lib/tokenless/reviewerExpertiseOptions";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
   reconcileWorkspacePrivateReviewRoutingForFrozenRequest,
@@ -274,6 +284,11 @@ type RouterDependencies = {
     principal: IntegrationPrincipal,
     context: FrozenHumanReviewRoutingContext,
     now: Date,
+    exactHybridInvited?: {
+      panelSize: number;
+      expertiseRequirements: ReviewerExpertiseRequirement[];
+      deliverySensitivity: "internal";
+    },
   ) => Promise<ExactPrivateReviewBinding | null>;
   activateAutonomousLane: (
     context: FrozenHumanReviewRoutingContext,
@@ -622,15 +637,29 @@ async function resolveExactPrivateBinding(
   _principal: IntegrationPrincipal,
   context: FrozenHumanReviewRoutingContext,
   now: Date,
+  exactHybridInvited?: {
+    panelSize: number;
+    expertiseRequirements: ReviewerExpertiseRequirement[];
+    deliverySensitivity: "internal";
+  },
 ): Promise<ExactPrivateReviewBinding | null> {
   const profile = context.requestProfile;
   const group = profile.privateGroup;
   const caps = context.grant.policyCaps;
+  const hybrid = profile.lane === "hybrid_public_safe";
+  const panelSize = exactHybridInvited?.panelSize ?? profile.panelSize;
+  const deliverySensitivity = exactHybridInvited?.deliverySensitivity ?? profile.privateSensitivity;
   if (
-    (profile.lane !== "private_invited_unpaid" && profile.lane !== "private_invited_paid") ||
-    profile.audience !== "private_invited" ||
-    profile.contentBoundary !== "private_workspace" ||
-    profile.privateSensitivity === null ||
+    (!hybrid && profile.lane !== "private_invited_unpaid" && profile.lane !== "private_invited_paid") ||
+    (hybrid
+      ? profile.audience !== "hybrid" ||
+        profile.contentBoundary !== "public_or_test" ||
+        profile.privateSensitivity !== null ||
+        !exactHybridInvited
+      : profile.audience !== "private_invited" ||
+        profile.contentBoundary !== "private_workspace" ||
+        profile.privateSensitivity === null) ||
+    deliverySensitivity === null ||
     !group ||
     (profile.lane === "private_invited_unpaid"
       ? profile.compensationMode !== "unpaid" || profile.bountyPerSeatAtomic !== null
@@ -639,16 +668,17 @@ async function resolveExactPrivateBinding(
         !/^[1-9][0-9]*$/u.test(profile.bountyPerSeatAtomic)) ||
     !caps ||
     !caps.allowedReviewerSources.includes("customer_invited") ||
-    (caps.allowedDataClassifications.length > 0 &&
-      !caps.allowedDataClassifications.includes(profile.privateSensitivity))
+    (!hybrid &&
+      caps.allowedDataClassifications.length > 0 &&
+      !caps.allowedDataClassifications.includes(deliverySensitivity))
   ) {
     return null;
   }
   await expirePrivateUnpaidReviewReservations(now);
   const responseDeadline = new Date(now.getTime() + profile.responseWindowSeconds * 1_000);
   const requiredExpertise = profile.requiredExpertiseKeys ?? [];
-  const exactExpertiseRequirements = profile.expertiseRequirements ?? [];
-  const paidIdentityRequired = profile.lane === "private_invited_paid" || profile.feedbackBonusEnabled;
+  const exactExpertiseRequirements = exactHybridInvited?.expertiseRequirements ?? profile.expertiseRequirements ?? [];
+  const paidIdentityRequired = hybrid || profile.lane === "private_invited_paid" || profile.feedbackBonusEnabled;
   const result = await dbClient.execute({
     sql: `SELECT p.project_id,p.retention_days,c.cohort_id,c.capacity,c.active_reservations,
                  cr.reviewer_account_address,cr.qualification_provenance_json,
@@ -710,8 +740,8 @@ async function resolveExactPrivateBinding(
       responseDeadline,
       responseDeadline,
       context.workspaceId,
-      profile.privateSensitivity,
-      profile.privateSensitivity,
+      deliverySensitivity,
+      deliverySensitivity,
     ],
   });
   const candidates = new Map<
@@ -734,7 +764,7 @@ async function resolveExactPrivateBinding(
     const grantSensitivity = exactPrivateSensitivity(text(row, "max_private_sensitivity"));
     if (
       !grantSensitivity ||
-      PRIVATE_SENSITIVITIES.indexOf(grantSensitivity) < PRIVATE_SENSITIVITIES.indexOf(profile.privateSensitivity)
+      PRIVATE_SENSITIVITIES.indexOf(grantSensitivity) < PRIVATE_SENSITIVITIES.indexOf(deliverySensitivity)
     ) {
       continue;
     }
@@ -790,8 +820,8 @@ async function resolveExactPrivateBinding(
     if (
       !projectAllowed ||
       !retentionAllowed ||
-      candidate.reviewers.size < profile.panelSize ||
-      candidate.capacity - candidate.reservations < profile.panelSize
+      candidate.reviewers.size < panelSize ||
+      candidate.capacity - candidate.reservations < panelSize
     ) {
       return [];
     }
@@ -801,19 +831,19 @@ async function resolveExactPrivateBinding(
             id,
             expertiseKeys: [...reviewer.expertiseKeys],
           })),
-          profile.panelSize,
+          panelSize,
           exactExpertiseRequirements.map(requirement => ({
             key: exactReviewerExpertiseDefinitionKey(requirement),
             minimumSeats: requirement.minimumSeats,
           })),
         )
-      : selectDeterministicReviewerPanel([...candidate.reviewers.keys()], profile.panelSize);
+      : selectDeterministicReviewerPanel([...candidate.reviewers.keys()], panelSize);
     const paidReviewers = reviewerAccountAddresses?.map(address => candidate.reviewers.get(address)?.paidReviewer);
     return reviewerAccountAddresses && (!paidIdentityRequired || paidReviewers?.every(Boolean))
       ? [{ ...candidate, reviewerAccountAddresses, paidReviewers }]
       : [];
   });
-  const selected = selectPrivatePolicyRoutingCandidate(context, exact);
+  const selected = selectPrivatePolicyRoutingCandidate(context, exact, panelSize);
   if (!selected) return null;
   return {
     projectId: selected.projectId,
@@ -834,6 +864,7 @@ function selectDeterministicReviewerPanel(
 function selectPrivatePolicyRoutingCandidate<T extends { cohortId: string; projectId: string }>(
   context: FrozenHumanReviewRoutingContext,
   candidates: readonly T[],
+  panelSize = context.requestProfile.panelSize,
 ): T | null {
   const policy = context.selectionPolicy.audiencePolicy;
   const cohort = policy.cohorts[0];
@@ -847,13 +878,14 @@ function selectPrivatePolicyRoutingCandidate<T extends { cohortId: string; proje
     privateGroupId: group.id,
   });
   if (
-    policy.reviewerSource !== "customer_invited" ||
-    policy.selection !== "customer_named" ||
-    policy.cohorts.length !== 1 ||
+    (policy.reviewerSource !== "customer_invited" && policy.reviewerSource !== "hybrid") ||
+    (policy.reviewerSource === "customer_invited"
+      ? policy.selection !== "customer_named" || policy.cohorts.length !== 1
+      : policy.selection !== "randomized" || policy.cohorts.length !== 2) ||
     !cohort ||
     cohort.cohortId !== managed.cohortId ||
-    cohort.minimumReviewers !== context.requestProfile.panelSize ||
-    cohort.maximumReviewers !== context.requestProfile.panelSize
+    cohort.minimumReviewers !== panelSize ||
+    cohort.maximumReviewers !== panelSize
   ) {
     return null;
   }
@@ -971,7 +1003,9 @@ function assertExactHybridMaterial(
   split: FrozenHybridReviewSplit,
 ) {
   const publication = material.publication;
+  const semanticProfile = exactHybridSemanticProfile(context);
   if (
+    split.schemaVersion !== "rateloop.hybrid-review-split.v3" ||
     split.opportunityId !== context.opportunityId ||
     split.audiencePolicyHash !== context.selectionPolicy.audiencePolicyHash ||
     split.requestProfileHash !== context.requestProfile.hash ||
@@ -980,7 +1014,13 @@ function assertExactHybridMaterial(
     split.publication.visibility !== publication.visibility ||
     split.publication.dataClassification !== publication.dataClassification ||
     split.publication.confirmedNoSensitiveData !== publication.confirmedNoSensitiveData ||
-    (split.publication.redactionSummary?.trim() ?? null) !== (publication.redactionSummary?.trim() ?? null)
+    (split.publication.redactionSummary?.trim() ?? null) !== (publication.redactionSummary?.trim() ?? null) ||
+    split.invited.candidates.length !== 0 ||
+    hashPreparedHumanReviewValue(split.semanticProfile) !== hashPreparedHumanReviewValue(semanticProfile) ||
+    split.invited.requestedCount !== semanticProfile.invited.panelSize ||
+    split.network.requestedCount !== semanticProfile.network.panelSize ||
+    split.economics.invitedMaximumChargeAtomic !== semanticProfile.invited.economics.maximumChargeAtomic ||
+    split.economics.networkMaximumChargeAtomic !== semanticProfile.network.economics.maximumChargeAtomic
   ) {
     throw new TokenlessServiceError(
       "The hybrid split does not match the exact frozen review material.",
@@ -988,6 +1028,157 @@ function assertExactHybridMaterial(
       "hybrid_review_binding_invalid",
     );
   }
+}
+
+function childHybridAdmissionPolicy(
+  policy: HumanAssuranceAudiencePolicy,
+  cohort: HumanAssuranceAudiencePolicy["cohorts"][number],
+  reviewerSource: "customer_invited" | "rateloop_network",
+  expertiseRequirements: readonly ReviewerExpertiseRequirement[],
+): HumanAssuranceAudiencePolicy {
+  const requirements = policy.assurance.requirements
+    .filter(requirement => requirement.reviewerSources.includes(reviewerSource))
+    .map(requirement => ({ ...requirement, reviewerSources: [reviewerSource] }));
+  const common = {
+    ...policy,
+    reviewerSource,
+    selection: reviewerSource === "customer_invited" ? ("customer_named" as const) : ("randomized" as const),
+    cohorts: [cohort],
+    fallbacks: { allowed: false as const, sources: [] },
+    assurance: { requirements },
+    requiredQualifications: policy.requiredQualifications.filter(qualification => {
+      if (!qualification.key.startsWith("expertise:")) return true;
+      return expertiseRequirements.some(
+        requirement => exactReviewerExpertiseDefinitionKey(requirement) === qualification.key,
+      );
+    }),
+    buyerPrivacy: {
+      ...policy.buyerPrivacy,
+      minimumAggregationSize: Math.max(2, cohort.maximumReviewers),
+    },
+  };
+  if (reviewerSource === "customer_invited") {
+    const { integrity: _integrity, ...invited } = common;
+    return freezeAdmissionPolicy(invited).policy;
+  }
+  return freezeAdmissionPolicy(common).policy;
+}
+
+function exactHybridSemanticProfile(context: FrozenHumanReviewRoutingContext): FrozenHybridReviewSplit["semanticProfile"] {
+  const profile = context.requestProfile;
+  const policy = context.selectionPolicy.audiencePolicy;
+  const invitedCohort = policy.cohorts[0];
+  const networkCohort = policy.cohorts[1];
+  if (
+    profile.lane !== "hybrid_public_safe" ||
+    profile.audience !== "hybrid" ||
+    profile.contentBoundary !== "public_or_test" ||
+    profile.compensationMode !== "usdc" ||
+    !profile.bountyPerSeatAtomic ||
+    !profile.privateGroup ||
+    policy.reviewerSource !== "hybrid" ||
+    policy.cohorts.length !== 2 ||
+    !invitedCohort ||
+    !networkCohort
+  ) {
+    throw new TokenlessServiceError(
+      "The stored hybrid profile does not contain an exact two-cohort policy.",
+      409,
+      "hybrid_review_binding_invalid",
+    );
+  }
+  const managed = workspacePrivateReviewRoutingIds({
+    workspaceId: context.workspaceId,
+    profileId: profile.id,
+    profileVersion: profile.version,
+    profileHash: profile.hash,
+    privateGroupId: profile.privateGroup.id,
+  });
+  if (
+    invitedCohort.cohortId !== managed.cohortId ||
+    invitedCohort.minimumReviewers !== invitedCohort.maximumReviewers ||
+    networkCohort.minimumReviewers !== networkCohort.maximumReviewers
+  ) {
+    throw new TokenlessServiceError(
+      "The stored hybrid policy does not bind its exact invited and network seat counts.",
+      409,
+      "hybrid_review_binding_invalid",
+    );
+  }
+  const invitedEconomics = deriveHybridCohortEconomics(
+    profile.bountyPerSeatAtomic,
+    invitedCohort.maximumReviewers,
+  );
+  const networkEconomics = deriveHybridCohortEconomics(
+    profile.bountyPerSeatAtomic,
+    networkCohort.maximumReviewers,
+  );
+  const frozenExpertise = profile.expertiseRequirements ?? [];
+  if (frozenExpertise.some(requirement => requirement.sourceScope === "any")) {
+    throw new TokenlessServiceError(
+      "The stored hybrid specialist requirements are not bound to an exact cohort.",
+      409,
+      "hybrid_review_binding_invalid",
+    );
+  }
+  let invitedExpertise: ReviewerExpertiseRequirement[];
+  let networkExpertise: ReviewerExpertiseRequirement[];
+  try {
+    invitedExpertise = normalizeReviewerExpertiseRequirementsSelection(
+      frozenExpertise.filter(requirement => requirement.sourceScope === "customer_invited"),
+      invitedCohort.maximumReviewers,
+    );
+    networkExpertise = normalizeReviewerExpertiseRequirementsSelection(
+      frozenExpertise.filter(requirement => requirement.sourceScope === "rateloop_network"),
+      networkCohort.maximumReviewers,
+    );
+  } catch {
+    throw new TokenlessServiceError(
+      "The stored hybrid specialist requirements exceed their exact cohort.",
+      409,
+      "hybrid_review_binding_invalid",
+    );
+  }
+  const invitedPolicy = childHybridAdmissionPolicy(
+    policy,
+    invitedCohort,
+    "customer_invited",
+    invitedExpertise,
+  );
+  const networkPolicy = childHybridAdmissionPolicy(
+    policy,
+    networkCohort,
+    "rateloop_network",
+    networkExpertise,
+  );
+  return {
+    schemaVersion: "rateloop.review-request-profile.v4",
+    audience: "hybrid",
+    audiencePolicyHash: context.selectionPolicy.audiencePolicyHash,
+    execution: "two_distinct_rounds",
+    invited: {
+      reviewerSource: "customer_invited",
+      panelSize: invitedCohort.maximumReviewers,
+      admissionPolicyHash: freezeAdmissionPolicy(invitedPolicy).policyHash,
+      economics: {
+        asset: "USDC",
+        bountyPerSeatAtomic: profile.bountyPerSeatAtomic,
+        maximumChargeAtomic: invitedEconomics.maximumChargeAtomic,
+      },
+      expertiseRequirements: invitedExpertise,
+    },
+    network: {
+      reviewerSource: "rateloop_network",
+      panelSize: networkCohort.maximumReviewers,
+      admissionPolicyHash: freezeAdmissionPolicy(networkPolicy).policyHash,
+      economics: {
+        asset: "USDC",
+        bountyPerSeatAtomic: profile.bountyPerSeatAtomic,
+        maximumChargeAtomic: networkEconomics.maximumChargeAtomic,
+      },
+      expertiseRequirements: networkExpertise,
+    },
+  };
 }
 
 function hasExactAutonomousGrant(context: FrozenHumanReviewRoutingContext) {
@@ -1357,6 +1548,25 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
       if (material?.kind !== "public") throw new Error("Hybrid material was checked before routing.");
       const split = material.hybridSplit;
       if (!dependencies.assignHybrid || !split) throw new Error("Hybrid material was checked before routing.");
+      const semanticProfile = exactHybridSemanticProfile(context);
+      const privateRouting = await dependencies.reconcilePrivateRouting({
+        workspaceId: context.workspaceId,
+        profileId: context.requestProfile.id,
+        profileVersion: context.requestProfile.version,
+        profileHash: context.requestProfile.hash,
+        now,
+      });
+      if (!privateRouting.ready) {
+        return retryableBlocked("private_routing_configuration_required");
+      }
+      const privateBinding = await dependencies.resolvePrivateBinding(input.principal, context, now, {
+        panelSize: semanticProfile.invited.panelSize,
+        expertiseRequirements: semanticProfile.invited.expertiseRequirements,
+        deliverySensitivity: "internal",
+      });
+      if (!privateBinding?.paidReviewers) {
+        return retryableBlocked("private_routing_configuration_required");
+      }
       if (material.publication.dataClassification === "redacted") {
         if (!dependencies.consumePublicationApproval) {
           throw new TokenlessServiceError(
@@ -1394,12 +1604,75 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
         input,
         frozenQuestion,
         now,
-        [...split.invited.candidates, ...split.network.candidates].map(candidate => ({
-          principalId: candidate.principalId,
-          payoutAccount: candidate.payoutAccount,
-        })),
+        privateBinding.paidReviewers,
       );
-      await dependencies.activateAutonomousLane(context, null, frozenQuestion, now);
+      const foundationRequest: HumanAssurancePrivateReviewCreateRequest = {
+        idempotencyKey: deterministicPrivateIdempotencyKey(context, privateBinding, frozenQuestion.questionHash),
+        integrationId: context.integrationId,
+        projectId: privateBinding.projectId,
+        requestProfile: {
+          id: context.requestProfile.id,
+          version: context.requestProfile.version,
+          hash: context.requestProfile.hash,
+        },
+        cohortId: privateBinding.cohortId,
+        dataClassification: "internal",
+        source: {
+          contentType: "text/plain; charset=utf-8",
+          bytesBase64: Buffer.from(input.sourcePayload, "utf8").toString("base64"),
+        },
+        suggestion: {
+          contentType: "text/plain; charset=utf-8",
+          bytesBase64: Buffer.from(input.suggestionPayload, "utf8").toString("base64"),
+        },
+      };
+      const foundation = await dependencies.preparePrivateFoundation({
+        principal: input.principal.principal,
+        request: foundationRequest,
+        externalContentCommitments: {
+          sourceEvidenceHash: context.contentCommitments.source,
+          suggestionCommitment: context.contentCommitments.suggestion,
+        },
+        now,
+      });
+      if (foundation.status !== "ready_for_assignment") {
+        return retryableBlocked("private_routing_configuration_required");
+      }
+      const invitedCohort = context.selectionPolicy.audiencePolicy.cohorts[0]!;
+      const admissionPolicy = childHybridAdmissionPolicy(
+        context.selectionPolicy.audiencePolicy,
+        invitedCohort,
+        "customer_invited",
+        semanticProfile.invited.expertiseRequirements,
+      );
+      const invitedBindingSeed: Omit<HybridInvitedPrivateBinding, "bindingHash"> = {
+        schemaVersion: "rateloop.hybrid-invited-private-binding.v1",
+        integrationId: context.integrationId,
+        workflowKey: context.workflowKey,
+        projectId: privateBinding.projectId,
+        cohortId: privateBinding.cohortId,
+        privateGroup: context.requestProfile.privateGroup!,
+        reviewers: privateBinding.paidReviewers,
+        foundation,
+        admissionPolicy,
+        selectionPolicy: {
+          id: context.selectionPolicy.id,
+          version: context.selectionPolicy.version,
+        },
+        publishingPolicy: context.grant.configuredPolicy!,
+        requestProfile: {
+          id: context.requestProfile.id,
+          version: context.requestProfile.version,
+          hash: context.requestProfile.hash,
+        },
+        agent: context.agent,
+        responseWindowSeconds: context.requestProfile.responseWindowSeconds,
+      };
+      const invitedBinding: HybridInvitedPrivateBinding = {
+        ...invitedBindingSeed,
+        bindingHash: hashHybridInvitedPrivateBinding(invitedBindingSeed),
+      };
+      await dependencies.activateAutonomousLane(context, privateBinding, frozenQuestion, now);
       return {
         schemaVersion: "rateloop.human-review-route.v1",
         action: "hybrid_review_requested",
@@ -1414,6 +1687,7 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
           suggestionPayload: input.suggestionPayload,
           effectiveQuestion: frozenQuestion.question,
           effectiveQuestionHash: frozenQuestion.questionHash,
+          invitedBinding,
           now,
         }),
       };
@@ -1575,6 +1849,7 @@ export const routeHumanReviewRequest = createHumanReviewRequestRouter();
 export const __humanReviewRequestRouterTestUtils = {
   deterministicActivationKey,
   deterministicPrivateIdempotencyKey,
+  exactHybridSemanticProfile,
   hasExactAutonomousGrant,
   selectDeterministicReviewerPanel,
   selectPrivatePolicyRoutingCandidate,
