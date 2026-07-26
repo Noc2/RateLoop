@@ -16,7 +16,11 @@ import {
   deleteAccount,
   getAccountDeletionPreview,
 } from "~~/lib/privacy/accountDeletion";
-import { __setPaidEligibilityOverridesForTests, ensureAssuranceRaterProfile } from "~~/lib/tokenless/paidEligibility";
+import {
+  __setPaidEligibilityOverridesForTests,
+  ensureAssuranceRaterProfile,
+  recordPaidEligibilityDecline,
+} from "~~/lib/tokenless/paidEligibility";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -239,6 +243,11 @@ test("account deletion revokes authentication, removes shared access, and permit
       args: [`verification-${type}`, `${type}-otp-delete@example.test`, new Date(now.getTime() + 60_000), now, now],
     });
   }
+  await recordPaidEligibilityDecline({
+    principalId: oldIdentity.principalId,
+    reviewerSource: "rateloop_network",
+    now,
+  });
 
   const preview = await getAccountDeletionPreview(oldIdentity.principalId);
   assert.equal(preview.impact.sharedWorkspaces, 1);
@@ -262,8 +271,11 @@ test("account deletion revokes authentication, removes shared access, and permit
             (SELECT COUNT(*) FROM tokenless_browser_identities WHERE principal_address = ?) AS browser_identities,
             (SELECT COUNT(*) FROM tokenless_workspace_members WHERE account_address = ?) AS memberships,
             (SELECT COUNT(*) FROM tokenless_wallet_bindings WHERE principal_id = ?) AS wallet_bindings,
+            (SELECT COUNT(*) FROM tokenless_paid_eligibility_decisions WHERE principal_id = ?)
+              AS paid_eligibility_decisions,
             (SELECT COUNT(*) FROM tokenless_deletion_job_categories WHERE job_id = ?) AS categories`,
     args: [
+      oldIdentity.principalId,
       oldIdentity.principalId,
       oldIdentity.principalId,
       oldIdentity.principalId,
@@ -283,6 +295,7 @@ test("account deletion revokes authentication, removes shared access, and permit
     browser_identities: 0,
     memberships: 0,
     wallet_bindings: 0,
+    paid_eligibility_decisions: 0,
     categories: 12,
   });
 

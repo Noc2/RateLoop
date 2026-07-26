@@ -15,6 +15,7 @@ import {
   createEligibilityProviderHandoff,
   getPaidEligibility,
   issuePaidVoucher,
+  recordPaidEligibilityDecline,
   recordSanctionsScreening,
   registerVoucherRound,
   submitPaidEligibility,
@@ -405,6 +406,46 @@ test("DAC7 accepts a structured place of birth instead of free-text no-TIN reaso
         now: new Date(NOW.getTime() + 1_000),
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "dac7_incomplete",
+  );
+});
+
+test("declining paid data collection records the advisory-only election without creating a rater", async () => {
+  const decision = await recordPaidEligibilityDecline({
+    principalId: PRINCIPAL,
+    reviewerSource: "rateloop_network",
+    now: NOW,
+  });
+  assert.equal(decision.status, "declined");
+  assert.equal((await getPaidEligibility(PRINCIPAL, NOW)).status, "declined");
+
+  const rows = await dbClient.execute({
+    sql: `SELECT decision,notice_version,decided_at,delete_after
+          FROM tokenless_paid_eligibility_decisions WHERE principal_id=?`,
+    args: [PRINCIPAL],
+  });
+  assert.equal(rows.rows[0]?.decision, "declined_paid_data_collection");
+  assert.equal(rows.rows[0]?.notice_version, "paid-eligibility-v2");
+  assert.equal(
+    new Date(String(rows.rows[0]?.delete_after)).getTime() - new Date(String(rows.rows[0]?.decided_at)).getTime(),
+    365 * 86_400_000,
+  );
+  const profiles = await dbClient.execute({
+    sql: "SELECT COUNT(*) AS count FROM tokenless_rater_profiles WHERE principal_id=?",
+    args: [PRINCIPAL],
+  });
+  assert.equal(Number(profiles.rows[0]?.count), 0);
+
+  await assert.rejects(
+    () =>
+      recordPaidEligibilityDecline({
+        principalId: PRINCIPAL,
+        reviewerSource: "customer_invited",
+        now: NOW,
+      }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError &&
+      error.code === "invalid_paid_eligibility_decision" &&
+      error.field === "workspaceId",
   );
 });
 

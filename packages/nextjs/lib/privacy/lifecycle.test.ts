@@ -452,6 +452,14 @@ test("access and export requests produce a bounded authenticated download instea
                   'assignmentAvailable','assignment','private-source',?)`,
     args: [OWNER, now],
   });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_paid_eligibility_decisions
+          (decision_id,principal_id,reviewer_source,workspace_id,decision,notice_version,
+           decided_at,delete_after)
+          VALUES ('ped_11111111111111111111111111111111',?,'rateloop_network',NULL,
+                  'declined_paid_data_collection','paid-eligibility-v2',?,?)`,
+    args: [OWNER, now, new Date(now.getTime() + 365 * 86_400_000)],
+  });
   await seedNetworkSubjectExportRecords(workspaceId, now);
   const created = await createSubjectRequest({
     identityAssurance: "better_auth:passkey",
@@ -485,6 +493,17 @@ test("access and export requests produce a bounded authenticated download instea
   const accountProfile = exported.data.accountProfile as Record<string, unknown>;
   assert.equal(accountProfile.primary_email, "subject@example.test");
   assert.equal(accountProfile.display_name, "Subject");
+  assert.deepEqual(exported.data.paidEligibilityDecisions, [
+    {
+      decision_id: "ped_11111111111111111111111111111111",
+      reviewer_source: "rateloop_network",
+      workspace_id: null,
+      decision: "declined_paid_data_collection",
+      notice_version: "paid-eligibility-v2",
+      decided_at: now.toISOString(),
+      delete_after: new Date(now.getTime() + 365 * 86_400_000).toISOString(),
+    },
+  ]);
   assert.deepEqual(exported.data.forecastIntegrity, {
     schemaVersion: "rateloop.reviewer-forecast-integrity.v1",
     items: [],

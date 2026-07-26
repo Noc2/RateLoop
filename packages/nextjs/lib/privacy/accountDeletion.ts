@@ -1410,6 +1410,8 @@ async function collectDeletionCategoryEvidence(
          AS active_project_access,
        (SELECT COUNT(*) FROM tokenless_eligibility_provider_handoffs WHERE principal_id = $1)
          AS eligibility_handoffs,
+       (SELECT COUNT(*) FROM tokenless_paid_eligibility_decisions WHERE principal_id = $1)
+         AS paid_eligibility_decisions,
        (SELECT COUNT(*) FROM tokenless_wallet_binding_challenges WHERE principal_id = $1)
          AS wallet_challenges,
        (SELECT COUNT(*) FROM tokenless_thirdweb_wallet_jtis WHERE principal_id = $1) AS managed_wallet_jtis,
@@ -1486,6 +1488,7 @@ async function collectDeletionCategoryEvidence(
     oauth_authorization_records: input.oauthAuthorizationErasure,
     eligibility_handoffs: {
       eligibilityHandoffs: rowNumber(row, "eligibility_handoffs"),
+      paidEligibilityDecisions: rowNumber(row, "paid_eligibility_decisions"),
       managedWalletJtis: rowNumber(row, "managed_wallet_jtis"),
       payoutWalletOwnership: rowNumber(row, "payout_wallet_ownership"),
       passkeyActionProofs: rowNumber(row, "passkey_action_proofs"),
@@ -1563,6 +1566,7 @@ async function collectDeletionCategoryEvidence(
     browserIdentities: rowNumber(row, "browser_identities"),
     connectionIntentIdentityLinks: rowNumber(row, "connection_intent_identity_links"),
     eligibilityHandoffs: rowNumber(row, "eligibility_handoffs"),
+    paidEligibilityDecisions: rowNumber(row, "paid_eligibility_decisions"),
     managedWalletJtis: rowNumber(row, "managed_wallet_jtis"),
     payoutWalletOwnership: rowNumber(row, "payout_wallet_ownership"),
     paidAssignmentSeatDirectIdentities: rowNumber(row, "paid_assignment_seat_direct_identities"),
@@ -1763,6 +1767,7 @@ export async function deleteAccount(input: {
     await client.query(`DELETE FROM tokenless_eligibility_provider_handoffs WHERE principal_id = $1`, [
       input.principalId,
     ]);
+    await client.query(`DELETE FROM tokenless_paid_eligibility_decisions WHERE principal_id = $1`, [input.principalId]);
     const forecastIntegrityErasure = await erasePrincipalForecastIntegrityInTransaction(client, {
       principalId: input.principalId,
     });

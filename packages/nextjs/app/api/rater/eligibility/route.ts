@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import {
   type EligibilitySubmission,
   getPaidEligibility,
+  recordPaidEligibilityDecline,
   submitPaidEligibility,
 } from "~~/lib/tokenless/paidEligibility";
 import { requireRaterSession } from "~~/lib/tokenless/raterSession";
@@ -25,16 +26,34 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await requireRaterSession(request, true);
-    let submission: EligibilitySubmission;
+    let submission: Record<string, unknown>;
     try {
-      submission = (await request.json()) as EligibilitySubmission;
+      submission = (await request.json()) as Record<string, unknown>;
     } catch {
       throw new TokenlessServiceError("Eligibility request must be valid JSON.", 400, "invalid_eligibility_request");
+    }
+    if (submission.decision === "declined_paid_data_collection") {
+      const reviewerSource = submission.reviewerSource;
+      if (reviewerSource !== "customer_invited" && reviewerSource !== "rateloop_network") {
+        throw new TokenlessServiceError(
+          "Choose the paid-work lane to keep advisory-only.",
+          400,
+          "invalid_paid_eligibility_decision",
+          false,
+          "reviewerSource",
+        );
+      }
+      const result = await recordPaidEligibilityDecline({
+        principalId: session.principalId,
+        reviewerSource,
+        workspaceId: typeof submission.workspaceId === "string" ? submission.workspaceId : undefined,
+      });
+      return NextResponse.json(result, { status: 201, headers: { "Cache-Control": "no-store" } });
     }
     const result = await submitPaidEligibility({
       principalId: session.principalId,
       payoutAccount: session.payoutAddress,
-      submission,
+      submission: submission as EligibilitySubmission,
     });
     return NextResponse.json(result, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {

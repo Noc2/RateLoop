@@ -414,7 +414,7 @@ export async function listSubjectRequests(principalId: string, now = new Date())
 }
 
 async function buildSubjectExport(client: PoolClient, principalId: string) {
-  const [account, workspaces, reviewerAccess, rater, requests] = await Promise.all([
+  const [account, workspaces, reviewerAccess, rater, eligibilityDecisions, requests] = await Promise.all([
     client.query(
       `SELECT principal.principal_id,principal.status,principal.created_at,
               browser.primary_email,browser.email_verified,browser.display_name,
@@ -462,6 +462,12 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
        LEFT JOIN tokenless_payout_eligibility payout ON payout.rater_id=profile.rater_id
        WHERE profile.principal_id=$1
        ORDER BY legal.updated_at DESC NULLS LAST,legal.scope_id ASC`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT decision_id,reviewer_source,workspace_id,decision,notice_version,decided_at,delete_after
+       FROM tokenless_paid_eligibility_decisions
+       WHERE principal_id=$1 ORDER BY decided_at,decision_id`,
       [principalId],
     ),
     client.query(
@@ -827,7 +833,7 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
       { category: "workspace_access", path: "workspaceMemberships" },
       {
         category: "reviewer_and_paid_profile",
-        path: "workspaceReviewerAccess, paidReviewerProfile, paidEligibilityScopes",
+        path: "workspaceReviewerAccess, paidReviewerProfile, paidEligibilityScopes, paidEligibilityDecisions",
       },
       { category: "communications_metadata", path: "communications" },
       { category: "review_activity", path: "reviewActivity" },
@@ -890,6 +896,7 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
     workspaceReviewerAccess: reviewerAccess.rows,
     paidReviewerProfile: rater.rows[0] ?? null,
     paidEligibilityScopes: rater.rows,
+    paidEligibilityDecisions: eligibilityDecisions.rows,
     communications: {
       preferences: notificationPreferences.rows[0] ?? null,
       notifications: notifications.rows,

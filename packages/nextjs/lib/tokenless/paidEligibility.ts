@@ -1645,7 +1645,25 @@ export async function getPaidEligibility(principalId: string, now = new Date()) 
     args: [principalId],
   });
   const row = result.rows[0] as QueryRow | undefined;
-  if (!row) return { status: "not_started" };
+  if (!row) {
+    const declined = await dbClient.execute({
+      sql: `SELECT decision_id,reviewer_source,workspace_id,notice_version,decided_at
+            FROM tokenless_paid_eligibility_decisions
+            WHERE principal_id=? AND decision='declined_paid_data_collection' AND delete_after>?
+            ORDER BY decided_at DESC,decision_id DESC LIMIT 1`,
+      args: [principalId, now],
+    });
+    const decision = declined.rows[0] as QueryRow | undefined;
+    if (!decision) return { status: "not_started" };
+    return {
+      status: "declined",
+      decisionId: stringValue(decision, "decision_id"),
+      reviewerSource: stringValue(decision, "reviewer_source"),
+      workspaceId: stringValue(decision, "workspace_id"),
+      noticeVersion: stringValue(decision, "notice_version"),
+      decidedAt: new Date(String(decision.decided_at)),
+    };
+  }
   const assertionsResult = await dbClient.execute({
     sql: `SELECT provider_id, provider_namespace, capabilities_json, evidence_expires_at,
                  assurance_validity_model, document_issuing_country,
@@ -1706,6 +1724,48 @@ export async function getPaidEligibility(principalId: string, now = new Date()) 
     payoutAccount: getAddress(String(row.payout_account)),
     payoutOwnershipMethod: stringValue(row, "payout_ownership_method"),
     updatedAt: new Date(String(row.updated_at)),
+  };
+}
+
+export async function recordPaidEligibilityDecline(input: {
+  principalId: string;
+  reviewerSource: "customer_invited" | "rateloop_network";
+  workspaceId?: string;
+  now?: Date;
+}) {
+  const principalId = input.principalId.trim().toLowerCase();
+  if (!principalId || principalId.length > 160) {
+    throw new TokenlessServiceError("Paid eligibility session is invalid.", 401, "invalid_paid_eligibility_session");
+  }
+  const workspaceId = input.workspaceId?.trim() || null;
+  if (
+    (input.reviewerSource === "customer_invited" && !workspaceId) ||
+    (input.reviewerSource === "rateloop_network" && workspaceId)
+  ) {
+    throw new TokenlessServiceError(
+      "The advisory-only decision must identify the selected paid-work lane.",
+      400,
+      "invalid_paid_eligibility_decision",
+      false,
+      input.reviewerSource === "customer_invited" ? "workspaceId" : "reviewerSource",
+    );
+  }
+  const now = input.now ?? new Date();
+  const decisionId = `ped_${randomUUID().replaceAll("-", "")}`;
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_paid_eligibility_decisions
+          (decision_id,principal_id,reviewer_source,workspace_id,decision,notice_version,
+           decided_at,delete_after)
+          VALUES (?,?,?,?, 'declined_paid_data_collection','paid-eligibility-v2',?,?)`,
+    args: [decisionId, principalId, input.reviewerSource, workspaceId, now, new Date(now.getTime() + 365 * 86_400_000)],
+  });
+  return {
+    status: "declined" as const,
+    decisionId,
+    reviewerSource: input.reviewerSource,
+    workspaceId,
+    noticeVersion: "paid-eligibility-v2" as const,
+    decidedAt: now,
   };
 }
 
