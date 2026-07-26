@@ -1,5 +1,6 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
+import type { PoolClient } from "pg";
 import "server-only";
 import { dbClient, dbPool } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
@@ -20,6 +21,7 @@ export const SUBJECT_REQUEST_STATUSES = [
   "identity_verified",
   "in_progress",
   "blocked_by_hold",
+  "blocked_by_funds",
   "completed",
   "denied",
 ] as const;
@@ -28,13 +30,22 @@ export type SubjectRequestStatus = (typeof SUBJECT_REQUEST_STATUSES)[number];
 const TRANSITIONS = new Map<SubjectRequestStatus, ReadonlySet<SubjectRequestStatus>>([
   ["received", new Set(["identity_verified", "denied"])],
   ["identity_verified", new Set(["in_progress", "denied"])],
-  ["in_progress", new Set(["blocked_by_hold", "completed", "denied"])],
+  ["in_progress", new Set(["blocked_by_hold", "blocked_by_funds", "completed", "denied"])],
   ["blocked_by_hold", new Set(["in_progress", "completed", "denied"])],
+  ["blocked_by_funds", new Set(["in_progress", "completed", "denied"])],
   ["completed", new Set()],
   ["denied", new Set()],
 ]);
+const SUBJECT_EXPORT_RETENTION_MS = 7 * 86_400_000;
 
 type QueryRow = Record<string, unknown>;
+
+function rowDate(row: QueryRow | undefined, key: string) {
+  const value = row?.[key];
+  if (value === null || value === undefined) return null;
+  const parsed = value instanceof Date ? value : new Date(String(value));
+  return Number.isFinite(parsed.getTime()) ? parsed : null;
+}
 
 function rowString(row: QueryRow | undefined, key: string) {
   const value = row?.[key];
@@ -255,6 +266,201 @@ export async function createSubjectRequest(input: {
     });
   }
   return { dueAt: dueAt.toISOString(), requestId };
+}
+
+export async function listSubjectRequests(principalId: string, now = new Date()) {
+  const result = await dbClient.execute({
+    sql: `SELECT requests.request_id,requests.workspace_id,requests.request_type,requests.status,
+                 requests.received_at,requests.due_at,requests.completed_at,
+                 exports.payload_hash,exports.delete_after
+          FROM tokenless_subject_requests requests
+          LEFT JOIN tokenless_subject_request_exports exports ON exports.request_id=requests.request_id
+          WHERE requests.principal_id=?
+          ORDER BY requests.received_at DESC,requests.request_id DESC`,
+    args: [required(principalId, "Principal", 120)],
+  });
+  return result.rows.map(value => {
+    const row = value as QueryRow;
+    const deleteAfter = rowDate(row, "delete_after");
+    return {
+      requestId: rowString(row, "request_id"),
+      workspaceId: rowString(row, "workspace_id"),
+      requestType: rowString(row, "request_type"),
+      status: rowString(row, "status"),
+      receivedAt: rowDate(row, "received_at")?.toISOString(),
+      dueAt: rowDate(row, "due_at")?.toISOString(),
+      completedAt: rowDate(row, "completed_at")?.toISOString(),
+      exportReady: Boolean(rowString(row, "payload_hash")) && Boolean(deleteAfter && deleteAfter > now),
+      exportDeleteAfter: deleteAfter?.toISOString() ?? null,
+    };
+  });
+}
+
+async function buildSubjectExport(client: Pick<PoolClient, "query">, principalId: string) {
+  const [account, workspaces, reviewerAccess, rater, requests] = await Promise.all([
+    client.query(
+      `SELECT principal.principal_id,principal.status,principal.created_at,
+              browser.primary_email,browser.email_verified,browser.display_name,
+              better.name AS account_name,better.email AS account_email
+       FROM tokenless_principals principal
+       LEFT JOIN tokenless_browser_identities browser ON browser.principal_address=principal.principal_id
+       LEFT JOIN tokenless_identity_bindings binding
+         ON binding.principal_id=principal.principal_id
+        AND binding.provider='better_auth' AND binding.status='active'
+       LEFT JOIN tokenless_better_auth_users better ON better.id=binding.provider_subject
+       WHERE principal.principal_id=$1 LIMIT 1`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT membership.workspace_id,workspace.name,membership.role,membership.created_at
+       FROM tokenless_workspace_members membership
+       JOIN tokenless_workspaces workspace ON workspace.workspace_id=membership.workspace_id
+       WHERE membership.account_address=$1 ORDER BY membership.workspace_id`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT reviewer.workspace_id,workspace.name AS workspace_name,reviewer.status,
+              reviewer.activated_at,reviewer.ended_at,access_grant.max_private_sensitivity,
+              access_grant.valid_until,access_grant.revoked_at
+       FROM tokenless_workspace_reviewers reviewer
+       JOIN tokenless_workspaces workspace ON workspace.workspace_id=reviewer.workspace_id
+       LEFT JOIN tokenless_workspace_reviewer_access_grants access_grant
+         ON access_grant.workspace_id=reviewer.workspace_id
+        AND access_grant.principal_address=reviewer.principal_address
+       WHERE reviewer.principal_address=$1 ORDER BY reviewer.workspace_id,access_grant.grant_id`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT profile.rater_id,profile.created_at,legal.declared_residence_country,
+              legal.tax_residence_country,legal.tax_profile_status,legal.dac7_status,
+              legal.sanctions_status,legal.eligibility_status,payout.payout_account,
+              payout.eligibility_status AS payout_status
+       FROM tokenless_rater_profiles profile
+       LEFT JOIN tokenless_legal_eligibility legal ON legal.rater_id=profile.rater_id
+       LEFT JOIN tokenless_payout_eligibility payout ON payout.rater_id=profile.rater_id
+       WHERE profile.principal_id=$1 LIMIT 1`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT request_id,workspace_id,request_type,status,received_at,due_at,completed_at
+       FROM tokenless_subject_requests WHERE principal_id=$1 ORDER BY received_at,request_id`,
+      [principalId],
+    ),
+  ]);
+  return {
+    schemaVersion: "rateloop.subject-export.v1",
+    generatedFor: principalId,
+    account: account.rows[0] ?? null,
+    workspaceMemberships: workspaces.rows,
+    workspaceReviewerAccess: reviewerAccess.rows,
+    paidReviewerProfile: rater.rows[0] ?? null,
+    subjectRequests: requests.rows,
+    exclusions: [
+      "Authentication secrets, recovery material, encrypted tax payloads, provider evidence, and other users' data are excluded.",
+      "Public-chain records are referenced by the product but are not copied into this export.",
+    ],
+  };
+}
+
+export async function processSubjectRequestQueue(now = new Date(), requestedLimit = 25) {
+  const limit = Math.min(Math.max(Math.trunc(requestedLimit), 1), 100);
+  const queued = await dbPool.query(
+    `SELECT request_id FROM tokenless_subject_requests
+     WHERE request_type IN ('access','export') AND status='received'
+     ORDER BY received_at,request_id LIMIT $1`,
+    [limit],
+  );
+  let completed = 0;
+  for (const queuedRow of queued.rows) {
+    const requestId = rowString(queuedRow as QueryRow, "request_id")!;
+    const client = await dbPool.connect();
+    try {
+      await client.query("BEGIN");
+      const request = await client.query(
+        `SELECT principal_id,status FROM tokenless_subject_requests
+         WHERE request_id=$1 LIMIT 1 FOR UPDATE`,
+        [requestId],
+      );
+      const row = request.rows[0] as QueryRow | undefined;
+      if (rowString(row, "status") !== "received") {
+        await client.query("COMMIT");
+        continue;
+      }
+      const principalId = rowString(row, "principal_id")!;
+      const exportValue = await buildSubjectExport(client, principalId);
+      const payloadJson = JSON.stringify(exportValue);
+      const payloadHash = `sha256:${createHash("sha256").update(payloadJson).digest("hex")}`;
+      const deleteAfter = new Date(now.getTime() + SUBJECT_EXPORT_RETENTION_MS);
+      await client.query(
+        `INSERT INTO tokenless_subject_request_exports
+         (request_id,principal_id,schema_version,payload_json,payload_hash,generated_at,delete_after)
+         VALUES ($1,$2,1,$3,$4,$5,$6)
+         ON CONFLICT (request_id) DO NOTHING`,
+        [requestId, principalId, payloadJson, payloadHash, now, deleteAfter],
+      );
+      await client.query(
+        `UPDATE tokenless_subject_requests SET status='completed',completed_at=$1 WHERE request_id=$2`,
+        [now, requestId],
+      );
+      for (const [fromStatus, toStatus, reason] of [
+        ["received", "identity_verified", "authenticated_intake_identity"],
+        ["identity_verified", "in_progress", "subject_export_generated"],
+        ["in_progress", "completed", "subject_export_ready"],
+      ] as const) {
+        await client.query(
+          `INSERT INTO tokenless_subject_request_events
+           (event_id,request_id,from_status,to_status,actor_reference,reason,created_at)
+           VALUES ($1,$2,$3,$4,'system:subject_request_worker',$5,$6)`,
+          [`dsre_${randomUUID().replaceAll("-", "")}`, requestId, fromStatus, toStatus, reason, now],
+        );
+      }
+      await client.query(
+        `INSERT INTO tokenless_subject_request_completions
+         (completion_id,request_id,deleted_categories_json,anonymized_categories_json,
+          retained_categories_json,pending_backup_expiry_json,public_chain_exceptions_json,
+          evidence_json,completed_by,completed_at)
+         VALUES ($1,$2,'[]','[]','[]','[]','[]',$3,'system:subject_request_worker',$4)
+         ON CONFLICT (request_id) DO NOTHING`,
+        [
+          `dsrc_${randomUUID().replaceAll("-", "")}`,
+          requestId,
+          JSON.stringify({ exportDeleteAfter: deleteAfter.toISOString(), payloadHash }),
+          now,
+        ],
+      );
+      await client.query("COMMIT");
+      completed += 1;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+  return { completed, queued: queued.rowCount ?? 0 };
+}
+
+export async function readSubjectRequestExport(input: { principalId: string; requestId: string; now?: Date }) {
+  const now = input.now ?? new Date();
+  const result = await dbClient.execute({
+    sql: `SELECT exports.payload_json,exports.payload_hash,exports.generated_at,exports.delete_after
+          FROM tokenless_subject_request_exports exports
+          JOIN tokenless_subject_requests requests ON requests.request_id=exports.request_id
+          WHERE exports.request_id=? AND requests.principal_id=? AND requests.status='completed'
+          LIMIT 1`,
+    args: [input.requestId, required(input.principalId, "Principal", 120)],
+  });
+  const row = result.rows[0] as QueryRow | undefined;
+  const deleteAfter = rowDate(row, "delete_after");
+  if (!row || !deleteAfter || deleteAfter <= now) {
+    throw new TokenlessServiceError("Subject export is unavailable.", 404, "subject_export_unavailable");
+  }
+  return {
+    data: JSON.parse(String(row.payload_json)) as Record<string, unknown>,
+    generatedAt: rowDate(row, "generated_at")!.toISOString(),
+    payloadHash: rowString(row, "payload_hash"),
+    deleteAfter: deleteAfter.toISOString(),
+  };
 }
 
 export async function transitionSubjectRequest(input: {

@@ -1,6 +1,9 @@
 import {
   createLegalHold,
   createSubjectRequest,
+  listSubjectRequests,
+  processSubjectRequestQueue,
+  readSubjectRequestExport,
   recordSubjectRequestCompletion,
   releaseLegalHold,
   transitionSubjectRequest,
@@ -197,4 +200,33 @@ test("invalid completion transitions roll back their evidence insert", async () 
   assert.equal(String(result.rows[0]?.status), "received");
   assert.equal(Number(completionCounts.rows[0]?.completion_count), 0);
   assert.equal(Number(completionCounts.rows[0]?.completion_event_count), 0);
+});
+
+test("access and export requests produce a bounded authenticated download instead of a dead-end intake row", async () => {
+  await createWorkspace({ name: "Subject export", ownerAddress: OWNER });
+  const now = new Date("2026-07-15T12:00:00.000Z");
+  const created = await createSubjectRequest({
+    identityAssurance: "better_auth:passkey",
+    now,
+    principalId: OWNER,
+    requestType: "export",
+    scope: { principal: true },
+  });
+  assert.deepEqual(await processSubjectRequestQueue(now), { completed: 1, queued: 1 });
+  const listed = await listSubjectRequests(OWNER, now);
+  assert.equal(listed[0]?.requestId, created.requestId);
+  assert.equal(listed[0]?.status, "completed");
+  assert.equal(listed[0]?.exportReady, true);
+
+  const exported = await readSubjectRequestExport({ principalId: OWNER, requestId: created.requestId, now });
+  assert.equal(exported.data.schemaVersion, "rateloop.subject-export.v1");
+  assert.match(String(exported.payloadHash), /^sha256:[0-9a-f]{64}$/u);
+  assert.doesNotMatch(
+    JSON.stringify(exported.data),
+    /tax_vault_ciphertext|provider_evidence_ciphertext|nullifier_seed_ciphertext/iu,
+  );
+  await assert.rejects(
+    () => readSubjectRequestExport({ principalId: "rlp_other_subject", requestId: created.requestId, now }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "subject_export_unavailable",
+  );
 });

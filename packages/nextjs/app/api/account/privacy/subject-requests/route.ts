@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
 import { dbClient } from "~~/lib/db";
-import { SUBJECT_REQUEST_TYPES, type SubjectRequestType, createSubjectRequest } from "~~/lib/privacy/lifecycle";
+import {
+  SUBJECT_REQUEST_TYPES,
+  type SubjectRequestType,
+  createSubjectRequest,
+  listSubjectRequests,
+} from "~~/lib/privacy/lifecycle";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +31,16 @@ async function requireWorkspaceMembership(principalId: string, workspaceId: stri
   });
   if (membership.rowCount !== 1) {
     throw new TokenlessServiceError("Workspace not found.", 404, "workspace_not_found");
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const session = await requireBrowserSession(request);
+    return NextResponse.json({ requests: await listSubjectRequests(session.principalId) }, { headers: NO_STORE });
+  } catch (error) {
+    const response = tokenlessErrorResponse(error);
+    return NextResponse.json(response.body, { headers: NO_STORE, status: response.status });
   }
 }
 

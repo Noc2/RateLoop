@@ -12,6 +12,8 @@ import {
   reconcileDeletedAccountPaidAssignmentSeats,
   reconcileWorkspaceDeletionJobs,
 } from "~~/lib/privacy/deletionReconciliation";
+import { processSubjectRequestQueue } from "~~/lib/privacy/lifecycle";
+import { purgeExpiredPrivacyOperations } from "~~/lib/privacy/privacyRetention";
 import { processArtifactDeletionByObjectId } from "~~/lib/tokenless/artifactPrivacy";
 import { processDueAssuranceAttestations } from "~~/lib/tokenless/assuranceAttestationRuntime";
 import {
@@ -239,6 +241,8 @@ type MaintenanceProcessors = {
   reconcileDeletionJobs: typeof reconcileWorkspaceDeletionJobs;
   reconcileDeletedAccountPaidAssignmentSeats: typeof reconcileDeletedAccountPaidAssignmentSeats;
   expireDeletedAuthGuards: typeof expireDeletedAuthSubjectGuards;
+  processSubjectRequests: typeof processSubjectRequestQueue;
+  purgePrivacyOperations: typeof purgeExpiredPrivacyOperations;
   reconcilePrepaidTopups: typeof reconcilePrepaidTopups;
   drainPrepaidTopupAudit: typeof drainPrepaidTopupAuditOutbox;
   drainEnterpriseIdentityAudit: typeof drainEnterpriseIdentityAuditOutbox;
@@ -305,6 +309,8 @@ const defaultProcessors: MaintenanceProcessors = {
   reconcileDeletionJobs: reconcileWorkspaceDeletionJobs,
   reconcileDeletedAccountPaidAssignmentSeats,
   expireDeletedAuthGuards: expireDeletedAuthSubjectGuards,
+  processSubjectRequests: processSubjectRequestQueue,
+  purgePrivacyOperations: purgeExpiredPrivacyOperations,
   reconcilePrepaidTopups,
   drainPrepaidTopupAudit: drainPrepaidTopupAuditOutbox,
   drainEnterpriseIdentityAudit: drainEnterpriseIdentityAuditOutbox,
@@ -532,6 +538,27 @@ export async function runTokenlessScheduledMaintenance(input: {
       processor: "sweepExpiredQuotes",
       run: () => processors.sweepExpiredQuotes({ now, limit: workLimit }),
       fallback: { deleted: 0, scanned: 0 } as Awaited<ReturnType<MaintenanceProcessors["sweepExpiredQuotes"]>>,
+    });
+    const subjectRequests = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "processSubjectRequests",
+      run: () => processors.processSubjectRequests(now, workLimit),
+      fallback: { completed: 0, queued: 0 } as Awaited<ReturnType<MaintenanceProcessors["processSubjectRequests"]>>,
+    });
+    const privacyRetention = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "purgePrivacyOperations",
+      run: () => processors.purgePrivacyOperations(now),
+      fallback: {
+        betterAuthSessions: 0,
+        eligibilityHandoffs: 0,
+        notificationDeliveries: 0,
+        orphanedScreenings: 0,
+        productSessions: 0,
+        staleEligibilityScopes: 0,
+        subjectExports: 0,
+        verifications: 0,
+      } as Awaited<ReturnType<MaintenanceProcessors["purgePrivacyOperations"]>>,
     });
     const directPrivateReviewDeadlines = await runIsolatedMaintenanceProcessor({
       failures: processorFailures,
@@ -819,6 +846,8 @@ export async function runTokenlessScheduledMaintenance(input: {
       directPrivateReviewEvidence,
       expiredAudienceAssignments,
       expiredPrivateReviewReservations,
+      subjectRequests,
+      privacyRetention,
       adaptiveRollups: "not_scheduled_until_a_persisted_rollup_processor_exists",
     };
     await dbClient.execute({
