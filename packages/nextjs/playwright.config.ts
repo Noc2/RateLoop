@@ -13,8 +13,19 @@ export default defineConfig({
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
   outputDir: "./test-results",
   snapshotPathTemplate: "{testDir}/../__screenshots__/{arg}{ext}",
+  projects: [
+    {
+      name: "desktop-chromium",
+      testIgnore: /.*mobile.*\.spec\.ts/u,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "mobile-chromium",
+      testMatch: /.*mobile.*\.spec\.ts/u,
+      use: { ...devices["Pixel 7"] },
+    },
+  ],
   use: {
-    ...devices["Desktop Chrome"],
     baseURL,
     colorScheme: "dark",
     screenshot: "only-on-failure",

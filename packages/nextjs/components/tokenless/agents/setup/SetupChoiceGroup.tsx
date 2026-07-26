@@ -18,7 +18,7 @@ export function SetupRadioChoice({
 }: {
   badge?: string;
   checked: boolean;
-  description: ReactNode;
+  description?: ReactNode;
   disabled?: boolean;
   id: string;
   label: string;
@@ -55,7 +55,7 @@ export function SetupRadioChoice({
             </span>
           ) : null}
         </span>
-        <span className="mt-1 block text-sm leading-6 text-base-content/60">{description}</span>
+        {description ? <span className="mt-1 block text-sm leading-6 text-base-content/60">{description}</span> : null}
       </span>
     </label>
   );

@@ -118,7 +118,7 @@ export function QuestionMedia({
 
   return (
     <>
-      <div className={`mt-6 grid gap-2 ${media.items.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
+      <div className={`mt-6 grid gap-2 ${media.items.length === 1 ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2"}`}>
         {media.items.map((image, index) => (
           <button
             key={image.assetId}
@@ -127,7 +127,7 @@ export function QuestionMedia({
             }}
             type="button"
             className={`overflow-hidden rounded-xl border border-white/10 bg-black/30 text-left transition-colors hover:border-white/25 ${
-              media.items.length === 3 && index === 0 ? "col-span-2" : ""
+              media.items.length === 3 && index === 0 ? "sm:col-span-2" : ""
             }`}
             onClick={() => setSelectedImage(index)}
             aria-label={`Open image ${index + 1}: ${image.alt}`}
