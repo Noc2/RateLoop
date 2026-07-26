@@ -7,6 +7,39 @@ import {
   verifyIntegrityEpochSnapshot,
 } from "~~/lib/tokenless/integrityEpochs";
 
+type Row = Record<string, unknown>;
+
+function text(row: Row | undefined, key: string) {
+  const value = row?.[key];
+  return value === null || value === undefined ? null : String(value);
+}
+
+export async function currentIntegrityEpochAssignment(client: Pick<PoolClient, "query">, input: { now?: Date } = {}) {
+  const now = input.now ?? new Date();
+  if (!Number.isFinite(now.getTime())) {
+    throw new Error("Integrity epoch selection time is invalid.");
+  }
+  const result = await client.query(
+    `SELECT epoch_id,manifest_hash,cutoff_at,private_features_expire_at,eligible_reviewer_count
+     FROM tokenless_integrity_epochs
+     WHERE cutoff_at<=$1 AND private_features_expire_at>$1 AND eligible_reviewer_count>0
+     ORDER BY cutoff_at DESC,created_at DESC,epoch_id DESC
+     LIMIT 1`,
+    [now],
+  );
+  const row = result.rows[0] as Row | undefined;
+  const epochId = text(row, "epoch_id");
+  const manifestHash = text(row, "manifest_hash");
+  if (!epochId || !manifestHash) return null;
+  return {
+    epochId,
+    manifestHash,
+    cutoffAt: new Date(String(row!.cutoff_at)).toISOString(),
+    privateFeaturesExpireAt: new Date(String(row!.private_features_expire_at)).toISOString(),
+    eligibleReviewerCount: Number(row!.eligible_reviewer_count),
+  };
+}
+
 export async function persistIntegrityEpochSnapshotWithClient(client: PoolClient, snapshot: IntegrityEpochSnapshot) {
   const verification = verifyIntegrityEpochSnapshot(snapshot);
   if (!verification.valid) {

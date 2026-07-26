@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { generateKeyPairSync } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient, dbPool } from "~~/lib/db";
@@ -11,6 +12,8 @@ import {
   saveHumanReviewConfiguration,
   saveHumanReviewConfigurationInTransaction,
 } from "~~/lib/tokenless/humanReviewConfiguration";
+import { persistIntegrityEpochSnapshot } from "~~/lib/tokenless/integrityEpochPersistence";
+import { buildIntegrityEpoch, hashIntegrityValue } from "~~/lib/tokenless/integrityEpochs";
 import { createPrivateGroup } from "~~/lib/tokenless/privateGroups";
 import { createAgentPublishingPolicy, createWorkspace } from "~~/lib/tokenless/productCore";
 import { createManagedReviewPolicy, updateManagedReviewPolicy } from "~~/lib/tokenless/reviewPolicyManagement";
@@ -32,6 +35,40 @@ test("automatic grant locking is valid PostgreSQL for optional OAuth relations",
 
 beforeEach(() => __setDatabaseResourcesForTests(createMemoryDatabaseResources()));
 afterEach(() => __setDatabaseResourcesForTests(null));
+
+async function persistCurrentTestIntegrityEpoch() {
+  const now = new Date();
+  const signingPrivateKey = generateKeyPairSync("ed25519").privateKey;
+  const snapshot = buildIntegrityEpoch({
+    epochId: "integrity:configuration-test",
+    cutoffAt: new Date(now.getTime() - 60_000).toISOString(),
+    sourceWindowStartedAt: new Date(now.getTime() - 24 * 60 * 60 * 1_000).toISOString(),
+    privateFeaturesExpireAt: new Date(now.getTime() + 24 * 60 * 60 * 1_000).toISOString(),
+    createdAt: new Date(now.getTime() - 60_000).toISOString(),
+    scorerBuildHash: hashIntegrityValue({
+      build: "human-review-configuration-test",
+    }),
+    observations: [
+      {
+        reviewerId: "rater_configuration_test",
+        observedAt: new Date(now.getTime() - 60_000).toISOString(),
+        sourceRecordCommitments: [hashIntegrityValue({ source: "configuration-test" })],
+        eligible: true,
+      },
+    ],
+    keys: {
+      lookupKey: Buffer.alloc(32, 1),
+      lookupKeyVersion: "lookup-test",
+      pseudonymKey: Buffer.alloc(32, 2),
+      pseudonymKeyVersion: "pseudonym-test",
+      vaultKey: Buffer.alloc(32, 3),
+      vaultKeyVersion: "vault-test",
+      signingPrivateKey,
+    },
+  });
+  await persistIntegrityEpochSnapshot(snapshot);
+  return snapshot;
+}
 
 async function fixture(
   options: {
@@ -164,43 +201,55 @@ test("manual handoff normalizes owner mutations and rejects contradictory direct
 
 test("hybrid owner selection emits distinct invited and network subpanel cohorts", async () => {
   const setup = await fixture();
+  const body = {
+    expectedBindingVersion: null,
+    selection: {
+      mode: "adaptive",
+      enforcementMode: "advisory",
+      agreementThresholdBps: 8_000,
+      productionFloorBps: 1_000,
+      fixedRateBps: null,
+      maximumUnreviewedGap: 20,
+      requiredRiskTiers: [],
+      criticalRiskTiers: ["critical"],
+      minimumConfidenceBps: null,
+      maximumLatencyMs: null,
+    },
+    requestProfile: {
+      questionAuthority: "owner_fixed",
+      criterion: setup.profileInput.criterion,
+      positiveLabel: setup.profileInput.positiveLabel,
+      negativeLabel: setup.profileInput.negativeLabel,
+      rationaleMode: setup.profileInput.rationaleMode,
+      audience: "hybrid",
+      contentBoundary: "public_or_test",
+      privateSensitivity: null,
+      privateGroupId: setup.group.groupId,
+      requiredExpertiseKeys: [],
+      responseWindowSeconds: setup.profileInput.responseWindowSeconds,
+      panelSize: 4,
+      compensationMode: "usdc",
+      bountyPerSeatAtomic: "1000000",
+      feedbackBonusEnabled: false,
+    },
+    authority: "check_only",
+  } as const;
+  await assert.rejects(
+    () =>
+      putHumanReviewConfigurationForOwner({
+        accountAddress: OWNER,
+        workspaceId: setup.workspaceId,
+        agentId: setup.agent.agentId,
+        body,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "integrity_epoch_unavailable",
+  );
+  const epoch = await persistCurrentTestIntegrityEpoch();
   const saved = await putHumanReviewConfigurationForOwner({
     accountAddress: OWNER,
     workspaceId: setup.workspaceId,
     agentId: setup.agent.agentId,
-    body: {
-      expectedBindingVersion: null,
-      selection: {
-        mode: "adaptive",
-        enforcementMode: "advisory",
-        agreementThresholdBps: 8_000,
-        productionFloorBps: 1_000,
-        fixedRateBps: null,
-        maximumUnreviewedGap: 20,
-        requiredRiskTiers: [],
-        criticalRiskTiers: ["critical"],
-        minimumConfidenceBps: null,
-        maximumLatencyMs: null,
-      },
-      requestProfile: {
-        questionAuthority: "owner_fixed",
-        criterion: setup.profileInput.criterion,
-        positiveLabel: setup.profileInput.positiveLabel,
-        negativeLabel: setup.profileInput.negativeLabel,
-        rationaleMode: setup.profileInput.rationaleMode,
-        audience: "hybrid",
-        contentBoundary: "public_or_test",
-        privateSensitivity: null,
-        privateGroupId: setup.group.groupId,
-        requiredExpertiseKeys: [],
-        responseWindowSeconds: setup.profileInput.responseWindowSeconds,
-        panelSize: 4,
-        compensationMode: "usdc",
-        bountyPerSeatAtomic: "1000000",
-        feedbackBonusEnabled: false,
-      },
-      authority: "check_only",
-    },
+    body,
   });
   const stored = await dbClient.execute({
     sql: `SELECT audience_policy_json FROM tokenless_agent_review_policies
@@ -215,9 +264,15 @@ test("hybrid owner selection emits distinct invited and network subpanel cohorts
       minimumReviewers: number;
       maximumReviewers: number;
     }>;
+    integrity: {
+      epochId: string;
+      epochManifestHash: string;
+    };
   };
   assert.equal(policy.reviewerSource, "hybrid");
   assert.equal(policy.selection, "randomized");
+  assert.equal(policy.integrity.epochId, epoch.manifest.epochId);
+  assert.equal(policy.integrity.epochManifestHash, epoch.manifestHash);
   assert.equal(policy.cohorts.length, 2);
   assert.equal(new Set(policy.cohorts.map(cohort => cohort.cohortId)).size, 2);
   assert.ok(policy.cohorts.some(cohort => cohort.cohortId.startsWith("hacoh_setup_")));

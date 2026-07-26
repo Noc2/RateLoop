@@ -15,6 +15,7 @@ import {
   humanReviewRequiresPayment,
   sameAutomaticHumanReviewGrantScopes,
 } from "~~/lib/tokenless/humanReviewGrantScopes";
+import { currentIntegrityEpochAssignment } from "~~/lib/tokenless/integrityEpochPersistence";
 import {
   HUMAN_REVIEW_AUTHORITY_LEVELS,
   type HumanReviewAuthorityLevel,
@@ -1393,6 +1394,16 @@ async function versionOwnerSelection(
   const currentRow = currentResult.rows[0] as Row | undefined;
   const policyId = currentRow ? rowString(currentRow, "policy_id")! : `rpol_${randomUUID().replaceAll("-", "")}`;
   const currentVersion = currentRow ? rowInteger(currentRow, "version") : null;
+  const networkSupply = input.profile.audience !== "private_invited";
+  const integrityEpoch = networkSupply ? await currentIntegrityEpochAssignment(client, { now: input.now }) : null;
+  if (networkSupply && integrityEpoch === null) {
+    throw new TokenlessServiceError(
+      "The RateLoop reviewer network is unavailable until a current integrity epoch is published.",
+      503,
+      "integrity_epoch_unavailable",
+      true,
+    );
+  }
   const admissionPolicyJson = (version: number) => {
     const profile = input.profile;
     const reviewerSource =
@@ -1425,16 +1436,8 @@ async function versionOwnerSelection(
             profileHash: input.requestProfile.hash,
             privateGroupId: profile.privateGroupId,
           });
-    const networkSupply = reviewerSource !== "customer_invited";
     const invitedReviewers = reviewerSource === "hybrid" ? Math.ceil(profile.panelSize / 2) : profile.panelSize;
     const networkReviewers = profile.panelSize - invitedReviewers;
-    const disabledIntegrityManifest = sha256(
-      stableJson({
-        schemaVersion: "rateloop.disabled-network-integrity.v1",
-        policyId,
-        version,
-      }),
-    );
     return freezeAdmissionPolicy({
       schemaVersion: "rateloop.human-assurance.v2",
       policyId,
@@ -1497,8 +1500,8 @@ async function versionOwnerSelection(
         ? {
             integrity: {
               schemaVersion: "rateloop.integrity-assignment.v1",
-              epochId: `unavailable:${policyId}:${version}`,
-              epochManifestHash: disabledIntegrityManifest,
+              epochId: integrityEpoch!.epochId,
+              epochManifestHash: integrityEpoch!.manifestHash,
               maxClusterShareBps: 2_000,
               allowedRiskBands: ["low"],
               recentCoassignmentWindowSeconds: 86_400,
