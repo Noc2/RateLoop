@@ -31,6 +31,9 @@ import {
   seedLegacyAgentIntegration,
   seedReadyHumanReviewBinding,
 } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
+import { configurePaidLaneTestEnvironment } from "~~/test/helpers/paidLaneEnvironment";
+
+configurePaidLaneTestEnvironment();
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const SOURCE_PAYLOAD = "The customer was charged twice for invoice 42.";

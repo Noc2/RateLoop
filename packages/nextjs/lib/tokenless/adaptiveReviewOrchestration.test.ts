@@ -29,6 +29,9 @@ import {
   seedLegacyAgentIntegration,
   seedReadyHumanReviewBinding,
 } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
+import { configurePaidLaneTestEnvironment } from "~~/test/helpers/paidLaneEnvironment";
+
+configurePaidLaneTestEnvironment();
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const APP_ORIGIN = "https://rateloop-tokenless.example";
@@ -766,8 +769,8 @@ test("preserves the hosted RateLoop-network feature gate", async () => {
       }),
     (error: unknown) =>
       error instanceof TokenlessServiceError &&
-      error.code === "network_panels_disabled" &&
-      error.message.includes("TOKENLESS_NETWORK_PANELS_ENABLED"),
+      error.code === "paid_lane_activation_required" &&
+      error.message.includes("public_paid_network"),
   );
   const mutations = await dbClient.execute(
     "SELECT (SELECT COUNT(*) FROM tokenless_agent_asks) AS asks, (SELECT COUNT(*) FROM tokenless_prepaid_reservations) AS reservations",

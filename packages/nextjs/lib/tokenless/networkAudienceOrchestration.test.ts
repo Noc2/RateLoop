@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createNetworkAudienceOrchestration } from "~~/lib/tokenless/networkAudienceOrchestration";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import { configurePaidLaneTestEnvironment } from "~~/test/helpers/paidLaneEnvironment";
+
+configurePaidLaneTestEnvironment();
 
 const HASH = `sha256:${"1".repeat(64)}` as `sha256:${string}`;
 

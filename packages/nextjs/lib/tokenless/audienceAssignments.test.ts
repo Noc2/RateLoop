@@ -34,6 +34,9 @@ import { createProjectOwnerAssignment } from "~~/lib/tokenless/projectAccess";
 import { listReviewerAssignments } from "~~/lib/tokenless/reviewerAssignments";
 import { attestInvitedReviewerExpertise } from "~~/lib/tokenless/reviewerExpertise";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import { configurePaidLaneTestEnvironment } from "~~/test/helpers/paidLaneEnvironment";
+
+configurePaidLaneTestEnvironment();
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const REVIEWER = "0x2222222222222222222222222222222222222222";
@@ -923,6 +926,10 @@ test("network selection rejects manual collisions and invited-only supply before
                 scope_status: "eligible",
                 scope_valid_until: new Date(now.getTime() + 86_400_000),
                 scope_updated_at: now,
+                risk_geoblock_status: "clear",
+                risk_plausibility_status: "pass",
+                wallet_screening_status: "clear",
+                risk_expires_at: new Date(now.getTime() + 86_400_000),
               },
             ],
           };
