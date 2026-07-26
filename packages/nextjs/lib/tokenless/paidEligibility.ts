@@ -81,9 +81,15 @@ export type EligibilitySubmission = {
   /** Development/test injection only. Production clients use providerState from the handoff. */
   providerResult?: { provider: string; payload: string; signature: string };
   sanctionsConsent: true;
+  reviewerSource?: "customer_invited" | "rateloop_network";
+  workspaceId?: string;
   declaredResidenceCountry: string;
   taxResidenceCountry: string;
   payoutAccount: string;
+  screeningSubject?: {
+    fullName: string;
+    birthDate: string;
+  };
   dac7?: {
     fullName: string;
     birthDate: string;
@@ -720,6 +726,273 @@ function validateDac7(value: EligibilitySubmission["dac7"]) {
   }
 }
 
+function validateScreeningSubject(submission: EligibilitySubmission, now: Date) {
+  const value = submission.screeningSubject ?? submission.dac7;
+  const fullName = value?.fullName?.trim();
+  const birthDate = value?.birthDate;
+  if (!fullName || fullName.length > 300 || !birthDate || !/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) {
+    throw new TokenlessServiceError(
+      "Legal name and birth date are required for sanctions screening.",
+      400,
+      "sanctions_subject_required",
+    );
+  }
+  const parsedBirthDate = new Date(`${birthDate}T00:00:00.000Z`);
+  if (!Number.isFinite(parsedBirthDate.getTime()) || parsedBirthDate > now) {
+    throw new TokenlessServiceError("Birth date is invalid.", 400, "tax_profile_invalid");
+  }
+  return { birthDate, fullName };
+}
+
+function declaredAge(subject: { birthDate: string }, now: Date) {
+  const [year, month, day] = subject.birthDate.split("-").map(Number);
+  let age = now.getUTCFullYear() - year!;
+  if (now.getUTCMonth() + 1 < month! || (now.getUTCMonth() + 1 === month && now.getUTCDate() < day!)) age -= 1;
+  return age;
+}
+
+async function submitInvitedPaidEligibility(input: {
+  principalId: string;
+  payoutAddress: Address;
+  submission: EligibilitySubmission;
+  declaredResidenceCountry: string;
+  taxCountry: string;
+  now: Date;
+}) {
+  const workspaceId = input.submission.workspaceId?.trim();
+  if (!workspaceId) {
+    throw new TokenlessServiceError(
+      "Choose the workspace whose paid invitation you are using.",
+      400,
+      "invitation_workspace_required",
+    );
+  }
+  const screeningSubject = validateScreeningSubject(input.submission, input.now);
+  if (declaredAge(screeningSubject, input.now) < 18) {
+    throw new TokenlessServiceError("Paid work is available only to adults.", 403, "minimum_age_not_met");
+  }
+  const dac7Required = requiresDac7(input.taxCountry);
+  if (dac7Required) validateDac7(input.submission.dac7);
+  const dac7Vault =
+    dac7Required && input.submission.dac7
+      ? encryptVaultValue("tax_records", {
+          ...input.submission.dac7,
+          declaredResidenceCountry: input.declaredResidenceCountry,
+          taxResidenceCountry: input.taxCountry,
+        })
+      : null;
+  const subjectVault = encryptVaultValue("provider_evidence", {
+    ...screeningSubject,
+    declaredResidenceCountry: input.declaredResidenceCountry,
+    taxResidenceCountry: input.taxCountry,
+  });
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const activePayout = await client.query(
+      `SELECT binding_id FROM tokenless_wallet_bindings
+       WHERE principal_id=$1 AND purpose='payout' AND lower(wallet_address)=$2
+         AND revoked_at IS NULL LIMIT 1 FOR UPDATE`,
+      [input.principalId, input.payoutAddress.toLowerCase()],
+    );
+    if (activePayout.rowCount !== 1) {
+      throw new TokenlessServiceError("The payout wallet changed. Retry.", 409, "payout_wallet_changed");
+    }
+    const invitation = await client.query(
+      `SELECT q.qualification_id,q.verified_at,q.expires_at,q.evidence_reference_hash,
+              i.invitation_id,i.paid_adulthood_attested_by,i.paid_adulthood_attested_at,
+              g.grant_id,g.valid_until
+       FROM tokenless_reviewer_qualifications q
+       JOIN tokenless_workspace_reviewer_access_grants g
+         ON g.workspace_id=q.workspace_id AND g.principal_address=q.reviewer_account_address
+        AND g.grant_hash=q.evidence_reference_hash
+       JOIN tokenless_workspace_reviewer_invitation_redemptions redemption
+         ON redemption.workspace_id=g.workspace_id AND redemption.grant_id=g.grant_id
+        AND redemption.principal_address=g.principal_address
+       JOIN tokenless_workspace_reviewer_invitations i
+         ON i.workspace_id=redemption.workspace_id AND i.invitation_id=redemption.invitation_id
+       JOIN tokenless_workspace_reviewers reviewer
+         ON reviewer.workspace_id=g.workspace_id AND reviewer.principal_address=g.principal_address
+       WHERE q.workspace_id=$1 AND q.reviewer_account_address=$2
+         AND q.reviewer_source='customer_invited' AND q.qualification_kind='invitation'
+         AND q.status='active' AND q.qualification_keys_json LIKE '%customer_attested_adult%'
+         AND i.paid_adulthood_attested=true AND i.revoked_at IS NULL
+         AND reviewer.status='active' AND g.revoked_at IS NULL
+         AND (q.expires_at IS NULL OR q.expires_at>$3)
+         AND (g.valid_until IS NULL OR g.valid_until>$3)
+       ORDER BY q.verified_at DESC,q.qualification_id ASC LIMIT 1 FOR SHARE`,
+      [workspaceId, input.principalId, input.now],
+    );
+    const invitationRow = invitation.rows[0] as QueryRow | undefined;
+    if (!invitationRow) {
+      throw new TokenlessServiceError(
+        "This workspace has not attested that its paid invitee is an adult.",
+        403,
+        "customer_adulthood_attestation_required",
+      );
+    }
+    const raterId = await ensureAssuranceRaterProfile(
+      client,
+      { principalId: input.principalId, payoutAccount: input.payoutAddress },
+      input.now,
+    );
+    const referenceKeyring = getProviderReferenceKeyring();
+    const providerId = "rateloop:invitation";
+    const providerNamespace = `workspace:v1:${workspaceId}`;
+    const subjectReference = keyedProviderReference(
+      referenceKeyring,
+      referenceKeyring.currentVersion,
+      providerId,
+      "subject",
+      `${workspaceId}\0${input.principalId}`,
+    );
+    const qualificationId = stringValue(invitationRow, "qualification_id")!;
+    const assertionReference = keyedProviderReference(
+      referenceKeyring,
+      referenceKeyring.currentVersion,
+      providerId,
+      "assertion-id",
+      qualificationId,
+    );
+    const bindingId = `bind_inv_${hash(`${workspaceId}\0${input.principalId}`).slice(0, 40)}`;
+    await client.query(
+      `INSERT INTO tokenless_provider_subject_bindings
+       (binding_id,rater_id,provider_id,provider_namespace,subject_reference_hash,
+        subject_reference_scheme,subject_reference_key_version,status,bound_at,last_verified_at,created_at,updated_at)
+       VALUES ($1,$2,$3,$4,$5,'hmac-sha256-v1',$6,'active',$7,$7,$7,$7)
+       ON CONFLICT (rater_id,provider_id,provider_namespace) DO UPDATE SET
+         subject_reference_hash=EXCLUDED.subject_reference_hash,
+         subject_reference_key_version=EXCLUDED.subject_reference_key_version,
+         status='active',revoked_at=NULL,last_verified_at=EXCLUDED.last_verified_at,updated_at=EXCLUDED.updated_at`,
+      [bindingId, raterId, providerId, providerNamespace, subjectReference, referenceKeyring.currentVersion, input.now],
+    );
+    const assertionId = `assert_inv_${hash(qualificationId).slice(0, 40)}`;
+    const assertionExpiry =
+      (invitationRow.valid_until ? new Date(String(invitationRow.valid_until)) : null) ??
+      new Date(input.now.getTime() + 2 * 365 * 86_400_000);
+    const invitationEvidence = encryptVaultValue("provider_evidence", {
+      adulthoodBasis: "customer_attested",
+      assertedAt: new Date(String(invitationRow.paid_adulthood_attested_at)).toISOString(),
+      assertedBy: stringValue(invitationRow, "paid_adulthood_attested_by"),
+      grantId: stringValue(invitationRow, "grant_id"),
+      invitationId: stringValue(invitationRow, "invitation_id"),
+      qualificationId,
+      workspaceId,
+    });
+    await client.query(
+      `INSERT INTO tokenless_assurance_assertions
+       (assertion_id,rater_id,binding_id,provider_id,provider_namespace,provider_assertion_hash,
+        provider_assertion_id_hash,provider_assertion_reference_scheme,provider_assertion_key_version,
+        capabilities_json,provider_evidence_ciphertext,provider_evidence_key_version,
+        provider_evidence_key_domain,evidence_verified_at,evidence_expires_at,minimum_age_verified,
+        status,created_at,updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'hmac-sha256-v1',$8,$9,$10,$11,$12,$13,$14,18,'active',$13,$13)
+       ON CONFLICT (assertion_id) DO UPDATE SET status='active',revoked_at=NULL,
+         evidence_expires_at=EXCLUDED.evidence_expires_at,provider_evidence_ciphertext=EXCLUDED.provider_evidence_ciphertext,
+         provider_evidence_key_version=EXCLUDED.provider_evidence_key_version,updated_at=EXCLUDED.updated_at`,
+      [
+        assertionId,
+        raterId,
+        bindingId,
+        providerId,
+        providerNamespace,
+        `sha256:${hash(stableJson({ qualificationId, workspaceId }))}`,
+        assertionReference,
+        referenceKeyring.currentVersion,
+        JSON.stringify(["customer_invitation", "minimum_age"]),
+        invitationEvidence.ciphertext,
+        invitationEvidence.keyVersion,
+        invitationEvidence.keyDomain,
+        input.now,
+        assertionExpiry,
+      ],
+    );
+    const screeningId = `san_${randomUUID().replaceAll("-", "")}`;
+    await client.query(
+      `INSERT INTO tokenless_sanctions_screenings
+       (screening_id,rater_id,source,status,subject_ciphertext,subject_key_version,
+        subject_key_domain,requested_at,updated_at)
+       VALUES ($1,$2,'manual:v1','pending',$3,$4,$5,$6,$6)`,
+      [screeningId, raterId, subjectVault.ciphertext, subjectVault.keyVersion, subjectVault.keyDomain, input.now],
+    );
+    const residenceTaxStatus = input.declaredResidenceCountry === input.taxCountry ? "consistent" : "review";
+    await client.query(
+      `INSERT INTO tokenless_legal_eligibility
+       (rater_id,minimum_age_verified,age_evidence_verified_at,age_evidence_expires_at,
+        verified_residence_country,declared_residence_country,tax_residence_country,residence_tax_status,
+        tax_profile_status,dac7_status,tax_vault_ciphertext,tax_vault_key_version,tax_vault_key_domain,
+        sanctions_consent_at,sanctions_status,sanctions_reference_hash,sanctions_screened_at,
+        sanctions_expires_at,eligibility_status,blocked_reason,created_at,updated_at)
+       VALUES ($1,18,$2,$3,NULL,$4,$5,$6,'complete',$7,$8,$9,$10,$2,'pending',$11,$2,$12,
+               'review','sanctions_pending',$2,$2)
+       ON CONFLICT (rater_id) DO UPDATE SET
+         minimum_age_verified=18,age_evidence_verified_at=EXCLUDED.age_evidence_verified_at,
+         age_evidence_expires_at=EXCLUDED.age_evidence_expires_at,verified_residence_country=NULL,
+         declared_residence_country=EXCLUDED.declared_residence_country,
+         tax_residence_country=EXCLUDED.tax_residence_country,residence_tax_status=EXCLUDED.residence_tax_status,
+         tax_profile_status='complete',dac7_status=EXCLUDED.dac7_status,
+         tax_vault_ciphertext=EXCLUDED.tax_vault_ciphertext,tax_vault_key_version=EXCLUDED.tax_vault_key_version,
+         tax_vault_key_domain=EXCLUDED.tax_vault_key_domain,sanctions_consent_at=EXCLUDED.sanctions_consent_at,
+         sanctions_status='pending',sanctions_reference_hash=EXCLUDED.sanctions_reference_hash,
+         sanctions_screened_at=EXCLUDED.sanctions_screened_at,sanctions_expires_at=EXCLUDED.sanctions_expires_at,
+         eligibility_status='review',blocked_reason='sanctions_pending',updated_at=EXCLUDED.updated_at`,
+      [
+        raterId,
+        input.now,
+        assertionExpiry,
+        input.declaredResidenceCountry,
+        input.taxCountry,
+        residenceTaxStatus,
+        dac7Required ? "complete" : "not_required",
+        dac7Vault?.ciphertext ?? null,
+        dac7Vault?.keyVersion ?? null,
+        dac7Vault?.keyDomain ?? null,
+        hash(screeningId),
+        new Date(input.now.getTime() + 30 * 86_400_000),
+      ],
+    );
+    await client.query(
+      `INSERT INTO tokenless_payout_eligibility
+       (rater_id,payout_account,payout_ownership_method,payout_verified_at,payout_expires_at,
+        eligibility_status,blocked_reason,created_at,updated_at)
+       VALUES ($1,$2,'siwe_base_account_session',$3,NULL,'ready',NULL,$3,$3)
+       ON CONFLICT (rater_id) DO UPDATE SET payout_account=EXCLUDED.payout_account,
+        payout_verified_at=EXCLUDED.payout_verified_at,payout_expires_at=NULL,
+        eligibility_status='ready',blocked_reason=NULL,updated_at=EXCLUDED.updated_at`,
+      [raterId, input.payoutAddress.toLowerCase(), input.now],
+    );
+    const scopeId = `pes_${hash(`${raterId}\0customer_invited\0${workspaceId}`).slice(0, 40)}`;
+    await client.query(
+      `INSERT INTO tokenless_paid_eligibility_scopes
+       (scope_id,rater_id,reviewer_source,workspace_id,compensation_mode,adulthood_basis,
+        adulthood_assertion_id,invitation_qualification_id,sanctions_screening_id,status,
+        blocked_reason,valid_until,created_at,updated_at)
+       VALUES ($1,$2,'customer_invited',$3,'usdc','customer_attested',$4,$5,$6,'pending',
+               'sanctions_pending',NULL,$7,$7)
+       ON CONFLICT (scope_id) DO UPDATE SET
+         adulthood_assertion_id=EXCLUDED.adulthood_assertion_id,
+         invitation_qualification_id=EXCLUDED.invitation_qualification_id,
+         sanctions_screening_id=EXCLUDED.sanctions_screening_id,status='pending',
+         blocked_reason='sanctions_pending',valid_until=NULL,updated_at=EXCLUDED.updated_at`,
+      [scopeId, raterId, workspaceId, assertionId, qualificationId, screeningId, input.now],
+    );
+    await client.query("COMMIT");
+    return {
+      status: "review" as const,
+      blockedReason: "sanctions_screening_pending",
+      screeningId,
+      screeningSource: "manual:v1" as const,
+      adulthoodBasis: "customer_attested" as const,
+      capabilities: ["customer_invitation", "minimum_age"] as HumanAssuranceCapability[],
+    };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 function eligibilityState(
   assertion: VerifiedEligibilityAssertion,
   declaredResidenceCountry: string,
@@ -731,12 +1004,6 @@ function eligibilityState(
     assertion.minimumAgeVerified < 18
   ) {
     return { status: "blocked", reason: "minimum_age_not_verified", residenceTaxStatus: "unreviewed" };
-  }
-  if (assertion.sanctionsStatus === "match") {
-    return { status: "blocked", reason: "sanctions_match", residenceTaxStatus: "unreviewed" };
-  }
-  if (assertion.sanctionsStatus === "review") {
-    return { status: "review", reason: "sanctions_review", residenceTaxStatus: "unreviewed" };
   }
   if (assertion.verifiedResidenceCountry && assertion.verifiedResidenceCountry !== declaredResidenceCountry) {
     return { status: "review", reason: "verified_residence_mismatch", residenceTaxStatus: "review" };
@@ -779,6 +1046,17 @@ export async function submitPaidEligibility(input: {
   if (!COUNTRY.test(taxCountry) || !COUNTRY.test(declaredResidenceCountry)) {
     throw new TokenlessServiceError("Residence and tax countries are invalid.", 400, "tax_profile_invalid");
   }
+  if ((input.submission.reviewerSource ?? "rateloop_network") === "customer_invited") {
+    return submitInvitedPaidEligibility({
+      principalId: input.principalId,
+      payoutAddress,
+      submission: input.submission,
+      declaredResidenceCountry,
+      taxCountry,
+      now,
+    });
+  }
+  const screeningSubject = validateScreeningSubject(input.submission, now);
   const resolvedAssertion = await resolveEligibilityAssertion(input.submission, input.principalId, payoutAddress, now);
   const assertion = resolvedAssertion.assertion;
   if (assertion.accountAddress !== payoutAddress) {
@@ -811,6 +1089,11 @@ export async function submitPaidEligibility(input: {
     evidenceVerifiedAt: assertion.evidenceVerifiedAt.toISOString(),
     evidenceExpiresAt: assertion.evidenceExpiresAt.toISOString(),
   });
+  const screeningSubjectVault = encryptVaultValue("provider_evidence", {
+    ...screeningSubject,
+    declaredResidenceCountry,
+    taxResidenceCountry: taxCountry,
+  });
   const referenceKeyring = getProviderReferenceKeyring();
   const subjectReferences = allProviderReferences(
     referenceKeyring,
@@ -832,7 +1115,11 @@ export async function submitPaidEligibility(input: {
   )!;
   const providerNamespace = "generic:v3";
   const capabilities = [...new Set<HumanAssuranceCapability>(["account_control", ...assertion.capabilities])].sort();
-  const state = eligibilityState(assertion, declaredResidenceCountry, taxCountry);
+  const preliminaryState = eligibilityState(assertion, declaredResidenceCountry, taxCountry);
+  const state =
+    preliminaryState.status === "eligible"
+      ? { ...preliminaryState, status: "review", reason: "sanctions_pending" }
+      : preliminaryState;
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
@@ -1020,6 +1307,22 @@ export async function submitPaidEligibility(input: {
         "identity_already_bound",
       );
     }
+    const persistedAssuranceAssertionId = stringValue(assertionResult.rows[0] as QueryRow, "assertion_id")!;
+    const screeningId = `san_${randomUUID().replaceAll("-", "")}`;
+    await client.query(
+      `INSERT INTO tokenless_sanctions_screenings
+       (screening_id,rater_id,source,status,subject_ciphertext,subject_key_version,
+        subject_key_domain,requested_at,updated_at)
+       VALUES ($1,$2,'manual:v1','pending',$3,$4,$5,$6,$6)`,
+      [
+        screeningId,
+        raterId,
+        screeningSubjectVault.ciphertext,
+        screeningSubjectVault.keyVersion,
+        screeningSubjectVault.keyDomain,
+        now,
+      ],
+    );
     await client.query(
       `INSERT INTO tokenless_legal_eligibility
        (rater_id, minimum_age_verified, age_evidence_verified_at, age_evidence_expires_at,
@@ -1062,16 +1365,10 @@ export async function submitPaidEligibility(input: {
         dac7Vault?.keyVersion ?? null,
         dac7Vault?.keyDomain ?? null,
         now,
-        assertion.sanctionsStatus,
-        keyedProviderReference(
-          referenceKeyring,
-          referenceKeyring.currentVersion,
-          assertion.providerId,
-          "sanctions",
-          assertion.sanctionsReference,
-        ).split(":")[2],
-        assertion.sanctionsScreenedAt,
-        assertion.sanctionsExpiresAt,
+        "pending",
+        hash(screeningId),
+        now,
+        new Date(now.getTime() + 30 * 86_400_000),
         state.status,
         state.reason,
         now,
@@ -1097,6 +1394,19 @@ export async function submitPaidEligibility(input: {
         expires_at = EXCLUDED.expires_at, status = 'active', revoked_at = NULL, updated_at = EXCLUDED.updated_at`,
       [`qual_legacy_${raterId}`, raterId, assertion.evidenceVerifiedAt, assertion.evidenceExpiresAt, now],
     );
+    const scopeId = `pes_${hash(`${raterId}\0rateloop_network`).slice(0, 40)}`;
+    await client.query(
+      `INSERT INTO tokenless_paid_eligibility_scopes
+       (scope_id,rater_id,reviewer_source,workspace_id,compensation_mode,adulthood_basis,
+        adulthood_assertion_id,invitation_qualification_id,sanctions_screening_id,status,
+        blocked_reason,valid_until,created_at,updated_at)
+       VALUES ($1,$2,'rateloop_network',NULL,'usdc','provider_attested',$3,NULL,$4,$5,$6,NULL,$7,$7)
+       ON CONFLICT (scope_id) DO UPDATE SET
+         adulthood_assertion_id=EXCLUDED.adulthood_assertion_id,
+         sanctions_screening_id=EXCLUDED.sanctions_screening_id,status=EXCLUDED.status,
+         blocked_reason=EXCLUDED.blocked_reason,valid_until=NULL,updated_at=EXCLUDED.updated_at`,
+      [scopeId, raterId, persistedAssuranceAssertionId, screeningId, state.status, state.reason, now],
+    );
     if (resolvedAssertion.stateHash) {
       const consumed = await client.query(
         `UPDATE tokenless_eligibility_provider_handoffs SET status = 'consumed', consumed_at = $1
@@ -1110,7 +1420,11 @@ export async function submitPaidEligibility(input: {
     await client.query("COMMIT");
     return {
       status: state.status,
-      blockedReason: publicBlockedReason(state.reason),
+      blockedReason:
+        state.reason === "sanctions_pending" ? "sanctions_screening_pending" : publicBlockedReason(state.reason),
+      screeningId,
+      screeningSource: "manual:v1" as const,
+      adulthoodBasis: "provider_attested" as const,
       capabilities,
     };
   } catch (error) {
@@ -1209,6 +1523,184 @@ export async function getPaidEligibility(principalId: string, now = new Date()) 
   };
 }
 
+export async function listPendingSanctionsScreenings(input: { limit?: number } = {}) {
+  const limit = input.limit ?? 50;
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+    throw new TokenlessServiceError("Screening limit is invalid.", 400, "invalid_screening_request");
+  }
+  const result = await dbClient.execute({
+    sql: `SELECT screening_id,rater_id,source,subject_ciphertext,subject_key_version,
+                 subject_key_domain,requested_at
+          FROM tokenless_sanctions_screenings
+          WHERE status='pending' ORDER BY requested_at ASC,screening_id ASC LIMIT ?`,
+    args: [limit],
+  });
+  return result.rows.map(value => {
+    const row = value as QueryRow;
+    if (stringValue(row, "subject_key_domain") !== "provider_evidence") {
+      throw new Error("Sanctions screening subject used the wrong vault domain.");
+    }
+    const subject = JSON.parse(
+      decryptVaultValue(String(row.subject_ciphertext), String(row.subject_key_version), "provider_evidence").toString(
+        "utf8",
+      ),
+    ) as Record<string, unknown>;
+    return {
+      screeningId: stringValue(row, "screening_id"),
+      raterId: stringValue(row, "rater_id"),
+      source: stringValue(row, "source"),
+      requestedAt: new Date(String(row.requested_at)).toISOString(),
+      subject,
+    };
+  });
+}
+
+export async function recordSanctionsScreening(input: {
+  screeningId: string;
+  status: "clear" | "review" | "match";
+  listSnapshotHash: `sha256:${string}`;
+  screenedBy: string;
+  expiresAt: Date;
+  now?: Date;
+}) {
+  const now = input.now ?? new Date();
+  if (
+    !/^san_[a-f0-9]{32}$/u.test(input.screeningId) ||
+    !/^sha256:[0-9a-f]{64}$/u.test(input.listSnapshotHash) ||
+    !input.screenedBy.trim() ||
+    input.screenedBy.length > 160 ||
+    input.expiresAt <= now ||
+    input.expiresAt.getTime() - now.getTime() > 370 * 86_400_000
+  ) {
+    throw new TokenlessServiceError("Screening decision is invalid.", 400, "invalid_screening_request");
+  }
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const current = await client.query(
+      `SELECT rater_id,status FROM tokenless_sanctions_screenings
+       WHERE screening_id=$1 LIMIT 1 FOR UPDATE`,
+      [input.screeningId],
+    );
+    const row = current.rows[0] as QueryRow | undefined;
+    if (!row) throw new TokenlessServiceError("Screening was not found.", 404, "screening_not_found");
+    const currentStatus = stringValue(row, "status");
+    if (currentStatus !== "pending") {
+      const existing = await client.query(
+        `SELECT status,list_snapshot_hash,screened_by,screened_at,expires_at
+         FROM tokenless_sanctions_screenings WHERE screening_id=$1`,
+        [input.screeningId],
+      );
+      const existingRow = existing.rows[0] as QueryRow;
+      if (
+        stringValue(existingRow, "status") !== input.status ||
+        stringValue(existingRow, "list_snapshot_hash") !== input.listSnapshotHash ||
+        stringValue(existingRow, "screened_by") !== input.screenedBy.trim() ||
+        new Date(String(existingRow.expires_at)).getTime() !== input.expiresAt.getTime()
+      ) {
+        throw new TokenlessServiceError("Screening decision is already recorded.", 409, "screening_decision_conflict");
+      }
+      await client.query("COMMIT");
+      return { screeningId: input.screeningId, status: input.status, replay: true as const };
+    }
+    await client.query(
+      `UPDATE tokenless_sanctions_screenings
+       SET status=$1,list_snapshot_hash=$2,screened_by=$3,screened_at=$4,expires_at=$5,updated_at=$4
+       WHERE screening_id=$6 AND status='pending'`,
+      [input.status, input.listSnapshotHash, input.screenedBy.trim(), now, input.expiresAt, input.screeningId],
+    );
+    const raterId = stringValue(row, "rater_id")!;
+    const legal = await client.query(
+      `SELECT residence_tax_status FROM tokenless_legal_eligibility WHERE rater_id=$1 FOR UPDATE`,
+      [raterId],
+    );
+    const residenceConsistent =
+      stringValue(legal.rows[0] as QueryRow | undefined, "residence_tax_status") === "consistent";
+    const eligibilityStatus =
+      input.status === "match" ? "blocked" : input.status === "clear" && residenceConsistent ? "eligible" : "review";
+    const blockedReason =
+      input.status === "match"
+        ? "sanctions_match"
+        : input.status === "review"
+          ? "sanctions_review"
+          : residenceConsistent
+            ? null
+            : "residence_tax_review";
+    const scopeEvidence = await client.query(
+      `SELECT scope.scope_id,assertion.evidence_expires_at,
+              qualification.expires_at AS qualification_expires_at
+       FROM tokenless_paid_eligibility_scopes scope
+       LEFT JOIN tokenless_assurance_assertions assertion
+         ON assertion.assertion_id=scope.adulthood_assertion_id
+       LEFT JOIN tokenless_reviewer_qualifications qualification
+         ON qualification.qualification_id=scope.invitation_qualification_id
+       WHERE scope.sanctions_screening_id=$1 FOR UPDATE`,
+      [input.screeningId],
+    );
+    const scopeValidUntil =
+      eligibilityStatus === "eligible"
+        ? new Date(
+            Math.min(
+              input.expiresAt.getTime(),
+              ...scopeEvidence.rows.flatMap(value => {
+                const evidence = value as QueryRow;
+                return [
+                  evidence.evidence_expires_at ? new Date(String(evidence.evidence_expires_at)).getTime() : null,
+                  evidence.qualification_expires_at
+                    ? new Date(String(evidence.qualification_expires_at)).getTime()
+                    : null,
+                ].filter((expiry): expiry is number => expiry !== null);
+              }),
+            ),
+          )
+        : null;
+    await client.query(
+      `UPDATE tokenless_legal_eligibility
+       SET sanctions_status=$1,sanctions_reference_hash=$2,sanctions_screened_at=$3,
+           sanctions_expires_at=$4,eligibility_status=$5,blocked_reason=$6,updated_at=$3
+       WHERE rater_id=$7`,
+      [
+        input.status,
+        input.listSnapshotHash.slice("sha256:".length),
+        now,
+        input.expiresAt,
+        eligibilityStatus,
+        blockedReason,
+        raterId,
+      ],
+    );
+    await client.query(
+      `UPDATE tokenless_paid_eligibility_scopes
+       SET status=$1,blocked_reason=$2,valid_until=$3,updated_at=$4
+       WHERE sanctions_screening_id=$5`,
+      [eligibilityStatus, blockedReason, scopeValidUntil, now, input.screeningId],
+    );
+    await client.query("COMMIT");
+    return { screeningId: input.screeningId, status: input.status, replay: false as const };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export function authorizeComplianceOperator(
+  authorization: string | null,
+  secret = process.env.TOKENLESS_COMPLIANCE_OPERATOR_SECRET,
+) {
+  const configured = secret?.trim();
+  if (!configured) {
+    throw new TokenlessServiceError("Compliance operations are unavailable.", 503, "compliance_unavailable");
+  }
+  const supplied = authorization?.startsWith("Bearer ") ? authorization.slice(7) : "";
+  const left = Buffer.from(supplied);
+  const right = Buffer.from(configured);
+  if (left.length !== right.length || !timingSafeEqual(left, right)) {
+    throw new TokenlessServiceError("Compliance operator credential is invalid.", 401, "invalid_operator_credential");
+  }
+}
+
 function getIssuerConfig(): IssuerConfig {
   if (issuerConfigOverride) return issuerConfigOverride;
   if (process.env.NEXT_PUBLIC_TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY) {
@@ -1279,9 +1771,10 @@ const verifyLiveIssuerState: IssuerStateVerifier = async config => {
 async function loadVoucherEligibility(
   principalId: string,
   reviewerSource: VoucherRequest["reviewerSource"],
+  workspaceId: string | null,
   now: Date,
 ) {
-  const preflight = await requirePaidReviewEligibility(principalId, now);
+  const preflight = await requirePaidReviewEligibility(principalId, now, { reviewerSource, workspaceId });
   const result = await dbClient.execute({
     sql: `SELECT rater_id, nullifier_seed_ciphertext, nullifier_key_version, nullifier_key_domain
           FROM tokenless_rater_profiles WHERE rater_id = ? AND principal_id = ? LIMIT 1`,
@@ -1321,10 +1814,11 @@ async function loadVoucherEligibility(
     sql: `SELECT qualification_id, reviewer_source, qualification_kind, cohort_ids_json,
                  qualification_keys_json, verified_at, expires_at
           FROM tokenless_reviewer_qualifications
-          WHERE rater_id = ? AND reviewer_source = ? AND status = 'active'
+          WHERE (rater_id = ? OR reviewer_account_address = ?) AND reviewer_source = ? AND status = 'active'
+            AND (? IS NULL OR workspace_id = ?)
             AND (expires_at IS NULL OR expires_at > ?)
           ORDER BY verified_at DESC, qualification_id ASC`,
-    args: [raterId, reviewerSource, now],
+    args: [raterId, principalId, reviewerSource, workspaceId, workspaceId, now],
   });
   const qualificationRows = qualificationsResult.rows as QueryRow[];
   const qualificationRecords = qualificationRows.map(value => {
@@ -1435,6 +1929,7 @@ export async function registerVoucherRound(input: {
   voucherNotBefore: Date;
   voucherDeadline: Date;
   status?: "open" | "closed" | "takedown";
+  workspaceId?: string | null;
 }) {
   if (
     !/^\d+$/.test(input.roundId) ||
@@ -1446,6 +1941,12 @@ export async function registerVoucherRound(input: {
     throw new Error("Invalid voucher round.");
   }
   const frozenPolicy = freezeAdmissionPolicy(input.admissionPolicy);
+  if (frozenPolicy.policy.reviewerSource === "customer_invited" && !input.workspaceId) {
+    throw new Error("Invited voucher rounds require an exact workspace.");
+  }
+  if (frozenPolicy.policy.reviewerSource !== "customer_invited" && input.workspaceId) {
+    throw new Error("Only invited voucher rounds may carry a workspace.");
+  }
   const minimumQuota = frozenPolicy.policy.cohorts.reduce((sum, cohort) => sum + cohort.minimumReviewers, 0);
   if (
     frozenPolicy.policy.compensation === "unpaid" ||
@@ -1460,13 +1961,14 @@ export async function registerVoucherRound(input: {
     sql: `INSERT INTO tokenless_voucher_rounds
           (chain_id, panel_address, round_id, content_id, admission_policy_hash,
            admission_policy_json, maximum_commits, voucher_not_before, voucher_deadline,
-           status, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           status, workspace_id, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT (chain_id, panel_address, round_id) DO UPDATE SET content_id = EXCLUDED.content_id,
           admission_policy_hash = EXCLUDED.admission_policy_hash,
           admission_policy_json = EXCLUDED.admission_policy_json,
           maximum_commits = EXCLUDED.maximum_commits, voucher_not_before = EXCLUDED.voucher_not_before,
-          voucher_deadline = EXCLUDED.voucher_deadline, status = EXCLUDED.status, updated_at = EXCLUDED.updated_at`,
+          voucher_deadline = EXCLUDED.voucher_deadline, status = EXCLUDED.status,
+          workspace_id = EXCLUDED.workspace_id, updated_at = EXCLUDED.updated_at`,
     args: [
       input.chainId,
       getAddress(input.panelAddress).toLowerCase(),
@@ -1478,6 +1980,7 @@ export async function registerVoucherRound(input: {
       input.voucherNotBefore,
       input.voucherDeadline,
       input.status ?? "open",
+      input.workspaceId ?? null,
       now,
       now,
     ],
@@ -1511,7 +2014,7 @@ export async function issuePaidVoucher(input: { principalId: string; request: Vo
   );
   const issuer = getIssuerConfig();
   const roundResult = await dbClient.execute({
-    sql: `SELECT content_id, admission_policy_hash, admission_policy_json, maximum_commits,
+    sql: `SELECT content_id, admission_policy_hash, admission_policy_json, maximum_commits, workspace_id,
                  voucher_not_before, voucher_deadline, status
           FROM tokenless_voucher_rounds WHERE chain_id = ? AND panel_address = ? AND round_id = ? LIMIT 1`,
     args: [issuer.chainId, issuer.panelAddress.toLowerCase(), input.request.roundId],
@@ -1567,7 +2070,13 @@ export async function issuePaidVoucher(input: { principalId: string; request: Vo
     }
     return voucherResponse(priorRow);
   }
-  const eligibility = await loadVoucherEligibility(input.principalId, input.request.reviewerSource, now);
+  const roundWorkspaceId = stringValue(round, "workspace_id");
+  const eligibility = await loadVoucherEligibility(
+    input.principalId,
+    input.request.reviewerSource,
+    roundWorkspaceId,
+    now,
+  );
   const raterId = stringValue(eligibility.row, "rater_id")!;
   if (
     stringValue(round, "status") !== "open" ||
@@ -1693,7 +2202,10 @@ export async function issuePaidVoucher(input: { principalId: string; request: Vo
   const insertClient = await dbPool.connect();
   try {
     await insertClient.query("BEGIN");
-    const finalPreflight = await requirePaidReviewEligibilityInTransaction(insertClient, input.principalId, now);
+    const finalPreflight = await requirePaidReviewEligibilityInTransaction(insertClient, input.principalId, now, {
+      reviewerSource: input.request.reviewerSource,
+      workspaceId: roundWorkspaceId,
+    });
     if (
       finalPreflight.raterId !== raterId ||
       finalPreflight.eligibilityCommitment !== eligibility.preflight.eligibilityCommitment

@@ -42,6 +42,11 @@ export type PaidReviewEligibilityRequirement = {
   feedbackBonusMode: "off" | "usdc";
 };
 
+export type PaidReviewEligibilityScope = {
+  reviewerSource: "customer_invited" | "rateloop_network";
+  workspaceId?: string | null;
+};
+
 /**
  * Eligibility follows money, not audience visibility. Either independent USDC
  * switch requires the paid preflight; an unpaid ask with no bonus stays wallet-free.
@@ -116,8 +121,6 @@ function isOwnerProofCurrent(row: Row, accountAddress: string, now: Date) {
 }
 
 function isLegalEligibilityCurrent(row: Row, now: Date) {
-  const ageVerifiedAt = date(row, "age_evidence_verified_at");
-  const ageExpiresAt = date(row, "age_evidence_expires_at");
   const sanctionsConsentAt = date(row, "sanctions_consent_at");
   const sanctionsScreenedAt = date(row, "sanctions_screened_at");
   const sanctionsExpiresAt = date(row, "sanctions_expires_at");
@@ -133,11 +136,6 @@ function isLegalEligibilityCurrent(row: Row, now: Date) {
     text(row, "tax_vault_key_domain") === "tax_records";
   return (
     text(row, "legal_eligibility_status") === "eligible" &&
-    Number(row.minimum_age_verified) >= 18 &&
-    ageVerifiedAt !== null &&
-    ageVerifiedAt.getTime() <= now.getTime() + MAX_CLOCK_SKEW_MS &&
-    ageExpiresAt !== null &&
-    ageExpiresAt > now &&
     declaredResidence !== null &&
     COUNTRY.test(declaredResidence) &&
     taxResidence !== null &&
@@ -171,7 +169,12 @@ function compareIdentityRows(left: Row, right: Row) {
   return 0;
 }
 
-function selectCurrentIdentityAssertions(rows: Row[], now: Date) {
+function selectCurrentIdentityAssertions(
+  rows: Row[],
+  now: Date,
+  reviewerSource: PaidReviewEligibilityScope["reviewerSource"],
+  adulthoodAssertionId: string,
+) {
   const current = rows
     .filter(row => {
       const capabilities = parseCapabilities(row.capabilities_json);
@@ -182,7 +185,7 @@ function selectCurrentIdentityAssertions(rows: Row[], now: Date) {
       return (
         text(row, "assertion_status") === "active" &&
         text(row, "binding_status") === "active" &&
-        (capabilities?.has("account_control") === true || capabilities?.has("minimum_age") === true) &&
+        capabilities?.has("minimum_age") === true &&
         verifiedAt !== null &&
         verifiedAt.getTime() <= now.getTime() + MAX_CLOCK_SKEW_MS &&
         expiresAt !== null &&
@@ -195,22 +198,14 @@ function selectCurrentIdentityAssertions(rows: Row[], now: Date) {
       );
     })
     .sort(compareIdentityRows);
-  const combined = current.find(row => {
-    const capabilities = parseCapabilities(row.capabilities_json)!;
-    return (
-      capabilities.has("account_control") &&
-      capabilities.has("minimum_age") &&
-      Number(row.assertion_minimum_age_verified) >= 18
-    );
-  });
-  if (combined) return [combined];
-  const accountControl = current.find(row => parseCapabilities(row.capabilities_json)!.has("account_control"));
   const minimumAge = current.find(
     row =>
-      parseCapabilities(row.capabilities_json)!.has("minimum_age") && Number(row.assertion_minimum_age_verified) >= 18,
+      text(row, "assertion_id") === adulthoodAssertionId &&
+      parseCapabilities(row.capabilities_json)!.has("minimum_age") &&
+      Number(row.assertion_minimum_age_verified) >= 18 &&
+      (reviewerSource !== "customer_invited" || text(row, "provider_id") === "rateloop:invitation"),
   );
-  if (!accountControl || !minimumAge) return null;
-  return [accountControl, minimumAge].sort(compareIdentityRows);
+  return minimumAge ? [minimumAge] : null;
 }
 
 function snapshot(input: { row: Row; identities: Row[]; principalId: string; checkedAt: Date; validUntil: Date }) {
@@ -239,6 +234,7 @@ export async function requirePaidReviewEligibilityInTransaction(
   client: Pick<PoolClient, "query">,
   principalId: string,
   now = new Date(),
+  requirement: PaidReviewEligibilityScope = { reviewerSource: "rateloop_network" },
 ): Promise<PaidReviewEligibilityPreflight> {
   if (!principalId) rejectEligibility();
   const result = await client.query(
@@ -254,14 +250,23 @@ export async function requirePaidReviewEligibilityInTransaction(
             l.eligibility_status AS legal_eligibility_status, l.updated_at AS legal_updated_at,
             pe.payout_account, pe.payout_ownership_method, pe.payout_verified_at,
             pe.payout_expires_at, pe.eligibility_status AS payout_eligibility_status,
-            pe.updated_at AS payout_updated_at
+            pe.updated_at AS payout_updated_at,
+            scope.scope_id, scope.reviewer_source AS scope_reviewer_source,
+            scope.workspace_id AS scope_workspace_id, scope.adulthood_basis,
+            scope.adulthood_assertion_id, scope.invitation_qualification_id,
+            scope.sanctions_screening_id, scope.status AS scope_status,
+            scope.blocked_reason AS scope_blocked_reason, scope.valid_until AS scope_valid_until,
+            scope.updated_at AS scope_updated_at
      FROM tokenless_rater_profiles p
      JOIN tokenless_legal_eligibility l ON l.rater_id = p.rater_id
      JOIN tokenless_payout_eligibility pe ON pe.rater_id = p.rater_id
      JOIN tokenless_wallet_bindings wb ON wb.principal_id = p.principal_id
        AND wb.purpose = 'payout' AND wb.revoked_at IS NULL
+     JOIN tokenless_paid_eligibility_scopes scope ON scope.rater_id=p.rater_id
+       AND scope.reviewer_source=$2
+       AND (($3::text IS NULL AND scope.workspace_id IS NULL) OR scope.workspace_id=$3)
      WHERE p.principal_id = $1 LIMIT 1 FOR UPDATE`,
-    [principalId],
+    [principalId, requirement.reviewerSource, requirement.workspaceId ?? null],
   );
   const row = result.rows[0] as Row | undefined;
   const payoutAccount = normalizeAddress(text(row, "active_payout_account"));
@@ -274,6 +279,9 @@ export async function requirePaidReviewEligibilityInTransaction(
     !text(row, "nullifier_seed_ciphertext") ||
     !text(row, "nullifier_key_version") ||
     !isLegalEligibilityCurrent(row, now) ||
+    text(row, "scope_status") !== "eligible" ||
+    date(row, "scope_valid_until") === null ||
+    date(row, "scope_valid_until")! <= now ||
     !isOwnerProofCurrent(row, payoutAccount, now)
   ) {
     rejectEligibility();
@@ -291,10 +299,15 @@ export async function requirePaidReviewEligibilityInTransaction(
      WHERE a.rater_id = $1 FOR UPDATE`,
     [text(row, "rater_id")],
   );
-  const selectedIdentities = selectCurrentIdentityAssertions(identities.rows as Row[], now);
+  const selectedIdentities = selectCurrentIdentityAssertions(
+    identities.rows as Row[],
+    now,
+    requirement.reviewerSource,
+    text(row, "adulthood_assertion_id")!,
+  );
   if (!selectedIdentities) rejectEligibility();
 
-  const expiries = [date(row, "age_evidence_expires_at")!, date(row, "sanctions_expires_at")!];
+  const expiries = [date(row, "scope_valid_until")!, date(row, "sanctions_expires_at")!];
   const payoutExpiry = date(row, "payout_expires_at");
   if (payoutExpiry) expiries.push(payoutExpiry);
   for (const identity of selectedIdentities) {
@@ -340,6 +353,18 @@ export async function requirePaidReviewEligibilityInTransaction(
       eligibilityStatus: text(row, "legal_eligibility_status"),
       updatedAt: date(row, "legal_updated_at")?.toISOString() ?? null,
     },
+    scope: {
+      scopeId: text(row, "scope_id"),
+      reviewerSource: text(row, "scope_reviewer_source"),
+      workspaceId: text(row, "scope_workspace_id"),
+      adulthoodBasis: text(row, "adulthood_basis"),
+      adulthoodAssertionId: text(row, "adulthood_assertion_id"),
+      invitationQualificationId: text(row, "invitation_qualification_id"),
+      sanctionsScreeningId: text(row, "sanctions_screening_id"),
+      status: text(row, "scope_status"),
+      validUntil: date(row, "scope_valid_until")?.toISOString() ?? null,
+      updatedAt: date(row, "scope_updated_at")?.toISOString() ?? null,
+    },
     payout: {
       account: normalizeAddress(text(row, "payout_account")),
       ownershipMethod: text(row, "payout_ownership_method"),
@@ -381,11 +406,12 @@ export async function requirePaidReviewEligibilityInTransaction(
 export async function requirePaidReviewEligibility(
   principalId: string,
   now = new Date(),
+  requirement: PaidReviewEligibilityScope = { reviewerSource: "rateloop_network" },
 ): Promise<PaidReviewEligibilityPreflight> {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
-    const result = await requirePaidReviewEligibilityInTransaction(client, principalId, now);
+    const result = await requirePaidReviewEligibilityInTransaction(client, principalId, now, requirement);
     await client.query("COMMIT");
     return result;
   } catch (error) {

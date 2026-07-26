@@ -880,7 +880,14 @@ export async function prepareRunAudience(input: {
   }
 }
 
-async function paidEligibility(client: PoolClient, accountAddress: string, now: Date) {
+async function paidEligibility(
+  client: PoolClient,
+  accountAddress: string,
+  now: Date,
+  scope: { reviewerSource: "customer_invited" | "rateloop_network"; workspaceId?: string | null } = {
+    reviewerSource: "rateloop_network",
+  },
+) {
   const profile = await client.query(
     `SELECT principal_id FROM tokenless_rater_profiles
      WHERE lower(account_address) = lower($1) LIMIT 1`,
@@ -894,7 +901,7 @@ async function paidEligibility(client: PoolClient, accountAddress: string, now: 
       "paid_eligibility_required",
     );
   }
-  const preflight = await requirePaidReviewEligibilityInTransaction(client, principalId, now);
+  const preflight = await requirePaidReviewEligibilityInTransaction(client, principalId, now, scope);
   const raterId = preflight.raterId;
   const assertions = await client.query(
     `SELECT a.assertion_id, a.binding_id, a.provider_id, a.provider_namespace,
@@ -1683,6 +1690,10 @@ export async function reserveAudienceAssignment(input: {
             client,
             rowString(reviewer, "reviewer_account_address")!,
             now,
+            {
+              reviewerSource: source,
+              ...(source === "customer_invited" ? { workspaceId: input.workspaceId } : {}),
+            },
           );
         } catch (error) {
           if (namedReviewer) throw error;
@@ -1912,7 +1923,13 @@ export async function recoverExpiredAudienceAssignment(input: {
         "audience_capacity_exhausted",
       );
     }
-    if (row.paid_assignment === true) await paidEligibility(client, reviewer, now);
+    if (row.paid_assignment === true) {
+      const source = rowString(row, "source") as CohortSource;
+      await paidEligibility(client, reviewer, now, {
+        reviewerSource: source,
+        ...(source === "customer_invited" ? { workspaceId: rowString(row, "workspace_id") } : {}),
+      });
+    }
     const reservationExpiresAt = new Date(now.getTime() + ttl);
     await client.query(
       `UPDATE tokenless_assurance_assignments
@@ -2145,7 +2162,11 @@ export async function acceptAudienceAssignment(input: {
       }
       let voucherMarker: string | null = null;
       if (row.paid_assignment === true) {
-        const eligibility = await paidEligibility(client, reviewer, now);
+        const source = rowString(row, "source") as CohortSource;
+        const eligibility = await paidEligibility(client, reviewer, now, {
+          reviewerSource: source,
+          ...(source === "customer_invited" ? { workspaceId: rowString(row, "workspace_id") } : {}),
+        });
         voucherMarker = `eligibility:${eligibility.raterId}:${createHash("sha256").update(`${input.assignmentId}:${reviewer}`).digest("hex")}`;
       }
       await client.query(

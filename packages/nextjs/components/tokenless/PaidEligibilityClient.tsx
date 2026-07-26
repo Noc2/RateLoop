@@ -73,6 +73,8 @@ export function PaidEligibilityClient() {
   const [accountAddress, setAccountAddress] = useState<string | null>(null);
   const [providerState, setProviderState] = useState<string | null>(null);
   const [form, setForm] = useState<UnlockForm>(initialForm);
+  const [reviewerSource, setReviewerSource] = useState<"customer_invited" | "rateloop_network">("customer_invited");
+  const [workspaceId, setWorkspaceId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -124,7 +126,7 @@ export function PaidEligibilityClient() {
 
   async function submitUnlock(event: FormEvent) {
     event.preventDefault();
-    if (!providerState || !accountAddress) return;
+    if (!accountAddress || (reviewerSource === "rateloop_network" && !providerState)) return;
     setBusy(true);
     setError(null);
     try {
@@ -135,6 +137,8 @@ export function PaidEligibilityClient() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             providerState,
+            reviewerSource,
+            ...(reviewerSource === "customer_invited" ? { workspaceId: workspaceId.trim() } : {}),
             sanctionsConsent: form.sanctionsConsent,
             declaredResidenceCountry: form.declaredResidenceCountry.toUpperCase(),
             taxResidenceCountry: form.taxResidenceCountry.toUpperCase(),
@@ -147,6 +151,7 @@ export function PaidEligibilityClient() {
               postalCode: form.postalCode,
               ...(form.tin ? { tin: form.tin } : { noTinReason: form.noTinReason }),
             },
+            screeningSubject: { fullName: form.fullName, birthDate: form.birthDate },
           }),
         }),
       );
@@ -205,13 +210,35 @@ export function PaidEligibilityClient() {
               </strong>
             </div>
           </div>
-        ) : providerState ? (
+        ) : accountAddress && (providerState || reviewerSource === "customer_invited") ? (
           <form className="mt-6 space-y-5" onSubmit={submitUnlock}>
             <p className="text-sm leading-6 text-base-content/60">
-              Identity verification returned successfully. Complete the legal and payout fields before any paid voucher
-              can be issued.
+              {reviewerSource === "customer_invited"
+                ? "Use a paid-enabled workspace invitation. The workspace attests adulthood; RateLoop does not verify age with documents or biometrics."
+                : "Identity assurance returned successfully. Complete the legal and payout fields before any paid voucher can be issued."}
             </p>
+            {reviewerSource === "customer_invited" ? (
+              <button
+                type="button"
+                className="text-sm text-sky-200 underline underline-offset-4"
+                onClick={() => setReviewerSource("rateloop_network")}
+              >
+                Use the RateLoop network path instead
+              </button>
+            ) : null}
             <div className="grid gap-4 sm:grid-cols-2">
+              {reviewerSource === "customer_invited" ? (
+                <label className="text-sm text-base-content/60 sm:col-span-2">
+                  Inviting workspace ID
+                  <input
+                    className="input mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                    value={workspaceId}
+                    onChange={event => setWorkspaceId(event.target.value)}
+                    required
+                    maxLength={160}
+                  />
+                </label>
+              ) : null}
               <label className="text-sm text-base-content/60">
                 Residence country
                 <input
@@ -325,13 +352,35 @@ export function PaidEligibilityClient() {
             <p className="text-sm leading-6 text-base-content/60">
               {state && !accountAddress
                 ? "Add a payout wallet before starting paid-work verification. Private assignments remain available without one."
-                : "Verify identity, age, and residence with the configured provider. Tax details and sanctions consent are collected only after that handoff succeeds."}
+                : "Choose invited paid work without an identity vendor, or network paid work with proof-of-human assurance. Both require tax details and sanctions screening before a voucher."}
             </p>
+            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                className={`rounded-lg border px-4 py-3 text-left text-sm ${reviewerSource === "customer_invited" ? "border-[var(--rateloop-green)] bg-emerald-300/10" : "border-white/10 bg-white/[0.03]"}`}
+                onClick={() => setReviewerSource("customer_invited")}
+              >
+                <strong className="block">Workspace invited</strong>
+                <span className="mt-1 block text-xs text-base-content/55">
+                  Customer-attested age · no identity vendor
+                </span>
+              </button>
+              <button
+                type="button"
+                className={`rounded-lg border px-4 py-3 text-left text-sm ${reviewerSource === "rateloop_network" ? "border-[var(--rateloop-blue)] bg-sky-300/10" : "border-white/10 bg-white/[0.03]"}`}
+                onClick={() => setReviewerSource("rateloop_network")}
+              >
+                <strong className="block">RateLoop network</strong>
+                <span className="mt-1 block text-xs text-base-content/55">
+                  Proof-of-human and age assurance required
+                </span>
+              </button>
+            </div>
             {state && !accountAddress ? (
               <Link href="/settings/wallets?use=payout" className="rateloop-gradient-action mt-5 inline-flex px-6">
                 Add payout wallet
               </Link>
-            ) : (
+            ) : reviewerSource === "rateloop_network" ? (
               <button
                 type="button"
                 className="rateloop-gradient-action mt-5 px-6"
@@ -340,7 +389,7 @@ export function PaidEligibilityClient() {
               >
                 {busy ? "Opening provider…" : accountAddress ? "Verify identity" : "Checking account…"}
               </button>
-            )}
+            ) : null}
           </div>
         )}
         {state?.blockedReason ? (

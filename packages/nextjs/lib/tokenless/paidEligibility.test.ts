@@ -14,10 +14,17 @@ import {
   createEligibilityProviderHandoff,
   getPaidEligibility,
   issuePaidVoucher,
+  recordSanctionsScreening,
   registerVoucherRound,
   submitPaidEligibility,
 } from "~~/lib/tokenless/paidEligibility";
+import { requirePaidReviewEligibility } from "~~/lib/tokenless/paidReviewEligibilityPreflight";
+import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
+import {
+  createWorkspaceReviewerInvitation,
+  redeemWorkspaceReviewerInvitation,
+} from "~~/lib/tokenless/workspaceReviewers";
 
 const NOW = new Date("2026-07-12T12:00:00.000Z");
 const PRINCIPAL = `rlp_${"1".repeat(24)}`;
@@ -166,12 +173,27 @@ afterEach(() => {
 });
 
 async function unlockPaidTasks() {
-  return submitPaidEligibility({
+  const pending = await submitPaidEligibility({
     principalId: PRINCIPAL,
     payoutAccount: ACCOUNT,
     submission: submission(),
     now: NOW,
   });
+  assert.equal(pending.status, "review");
+  assert.equal(pending.blockedReason, "sanctions_screening_pending");
+  await recordSanctionsScreening({
+    screeningId: pending.screeningId,
+    status: "clear",
+    listSnapshotHash: `sha256:${"a".repeat(64)}`,
+    screenedBy: "test-compliance-operator",
+    expiresAt: new Date(NOW.getTime() + 86_400_000),
+    now: NOW,
+  });
+  return {
+    status: "eligible" as const,
+    blockedReason: null,
+    capabilities: pending.capabilities,
+  };
 }
 
 async function openRound() {
@@ -270,6 +292,64 @@ test("paid-task unlock persists every gate while vaulting DAC7 and nullifier mat
   const durableEnrollment = await getPaidEligibility(PRINCIPAL, NOW);
   assert.ok(durableEnrollment.capabilities?.includes("unique_human"));
   assert.deepEqual(durableEnrollment.assuranceProviders, ["world:poh"]);
+});
+
+test("invited paid eligibility uses the workspace adulthood warranty without calling an identity vendor", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Paid invited review", ownerAddress: OTHER_PRINCIPAL });
+  const invitation = await createWorkspaceReviewerInvitation({
+    accountAddress: OTHER_PRINCIPAL,
+    workspaceId,
+    maxPrivateSensitivity: "confidential",
+    intendedAccountAddress: PRINCIPAL,
+    paidAdulthoodAttested: true,
+    accessExpiresAt: new Date(NOW.getTime() + 2 * 86_400_000),
+    expiresAt: new Date(NOW.getTime() + 86_400_000),
+    now: NOW,
+  });
+  await redeemWorkspaceReviewerInvitation({ accountAddress: PRINCIPAL, token: invitation.token, now: NOW });
+  installOverrides({
+    async verify() {
+      throw new Error("The invited lane must not call an identity provider.");
+    },
+  });
+
+  const pending = await submitPaidEligibility({
+    principalId: PRINCIPAL,
+    payoutAccount: ACCOUNT,
+    submission: {
+      ...submission(),
+      providerResult: undefined,
+      reviewerSource: "customer_invited",
+      workspaceId,
+    },
+    now: NOW,
+  });
+  assert.equal(pending.status, "review");
+  assert.equal(pending.adulthoodBasis, "customer_attested");
+  assert.deepEqual(pending.capabilities, ["customer_invitation", "minimum_age"]);
+  await recordSanctionsScreening({
+    screeningId: pending.screeningId,
+    status: "clear",
+    listSnapshotHash: `sha256:${"d".repeat(64)}`,
+    screenedBy: "test-compliance-operator",
+    expiresAt: new Date(NOW.getTime() + 86_400_000),
+    now: NOW,
+  });
+
+  const preflight = await requirePaidReviewEligibility(PRINCIPAL, NOW, {
+    reviewerSource: "customer_invited",
+    workspaceId,
+  });
+  assert.equal(preflight.identityAssertions[0]?.providerId, "rateloop:invitation");
+  assert.equal(preflight.payoutAccount, ACCOUNT.toLowerCase());
+  const scope = await dbClient.execute({
+    sql: `SELECT adulthood_basis,workspace_id,status
+          FROM tokenless_paid_eligibility_scopes WHERE rater_id=?`,
+    args: [preflight.raterId],
+  });
+  assert.deepEqual(scope.rows, [
+    { adulthood_basis: "customer_attested", workspace_id: workspaceId, status: "eligible" },
+  ]);
 });
 
 test("generic provider identifiers use rotation-aware domain-separated HMAC references", async () => {
@@ -439,7 +519,16 @@ test("production provider results require an Ed25519 signature bound to the sign
     now: NOW,
     submission: { ...submission(), providerResult: undefined, providerState: handoff.state },
   });
-  assert.equal(result.status, "eligible");
+  assert.equal(result.status, "review");
+  await recordSanctionsScreening({
+    screeningId: result.screeningId,
+    status: "clear",
+    listSnapshotHash: `sha256:${"b".repeat(64)}`,
+    screenedBy: "test-compliance-operator",
+    expiresAt: new Date(NOW.getTime() + 86_400_000),
+    now: NOW,
+  });
+  assert.equal((await getPaidEligibility(PRINCIPAL, NOW)).status, "eligible");
 
   const invalidHandoff = await createEligibilityProviderHandoff(
     { principalId: PRINCIPAL, payoutAccount: ACCOUNT },
@@ -488,11 +577,24 @@ test("a provider assertion id cannot be replayed onto another immutable identity
   ]);
 });
 
-test("sanctions review is persisted but remains fail-closed for paid vouchers", async () => {
+test("manual sanctions review is persisted and remains fail-closed for paid vouchers", async () => {
   installOverrides(provider({ sanctionsStatus: "review" }));
-  const result = await unlockPaidTasks();
+  const result = await submitPaidEligibility({
+    principalId: PRINCIPAL,
+    payoutAccount: ACCOUNT,
+    submission: submission(),
+    now: NOW,
+  });
   assert.equal(result.status, "review");
-  assert.equal(result.blockedReason, "legal_eligibility_review");
+  assert.equal(result.blockedReason, "sanctions_screening_pending");
+  await recordSanctionsScreening({
+    screeningId: result.screeningId,
+    status: "review",
+    listSnapshotHash: `sha256:${"c".repeat(64)}`,
+    screenedBy: "test-compliance-operator",
+    expiresAt: new Date(NOW.getTime() + 86_400_000),
+    now: NOW,
+  });
   assert.equal((await getPaidEligibility(PRINCIPAL, NOW)).screeningStatus, "review_required");
   await openRound();
   await assert.rejects(
@@ -649,6 +751,10 @@ test("voucher admission composes independent provider assertions and snapshots t
                  18, 'active', created_at, updated_at
           FROM tokenless_assurance_assertions WHERE rater_id = ? LIMIT 1`,
     args: [raterId],
+  });
+  await dbClient.execute({
+    sql: "UPDATE tokenless_paid_eligibility_scopes SET adulthood_assertion_id = ? WHERE rater_id = ?",
+    args: ["assertion_age", raterId],
   });
   await registerVoucherRound({
     chainId: 84532,

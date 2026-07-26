@@ -15,6 +15,7 @@ import {
 } from "~~/lib/tokenless/paidAssignmentOperations";
 import type {
   PaidReviewEligibilityPreflight,
+  PaidReviewEligibilityScope,
   PaidReviewerBinding,
 } from "~~/lib/tokenless/paidReviewEligibilityPreflight";
 import { requirePaidReviewEligibility } from "~~/lib/tokenless/paidReviewEligibilityPreflight";
@@ -88,7 +89,11 @@ export type PrivatePaidHumanReviewDelivery = {
 
 export type PrivatePaidAdapterDependencies = {
   clock?: () => Date;
-  requireEligibility: (principalId: string, now: Date) => Promise<PaidReviewEligibilityPreflight>;
+  requireEligibility: (
+    principalId: string,
+    now: Date,
+    requirement: PaidReviewEligibilityScope,
+  ) => Promise<PaidReviewEligibilityPreflight>;
   assignEncrypted: typeof requestPrivatePaidReviewAssignments;
   prepareVoucher: typeof preparePaidReviewVoucherIssuance;
   activateOperation: typeof ensurePrivatePaidAssignmentOperation;
@@ -283,7 +288,10 @@ export function createPrivatePaidHumanReviewAdapter(
     const preflights = new Map<string, PaidReviewEligibilityPreflight>();
     for (const reviewer of reviewers) {
       const eligibilityNow = liveNow();
-      const preflight = await dependencies.requireEligibility(reviewer.principalId, eligibilityNow);
+      const preflight = await dependencies.requireEligibility(reviewer.principalId, eligibilityNow, {
+        reviewerSource: "customer_invited",
+        workspaceId: input.principal.workspaceId,
+      });
       if (
         preflight.principalId !== reviewer.principalId ||
         preflight.payoutAccount.toLowerCase() !== reviewer.payoutAccount
@@ -471,8 +479,11 @@ export async function acceptPrivatePaidReviewAssignment(input: {
 }) {
   const now = input.now ?? new Date();
   const payoutAccount = getAddress(input.payoutAccount).toLowerCase();
-  const preflight = await requirePaidReviewEligibility(input.principalId, now);
   const issuance = await getPaidReviewVoucherLifecycle(input.issuanceId);
+  const preflight = await requirePaidReviewEligibility(input.principalId, now, {
+    reviewerSource: "customer_invited",
+    workspaceId: issuance.workspaceId,
+  });
   if (
     preflight.principalId !== input.principalId ||
     preflight.payoutAccount.toLowerCase() !== payoutAccount ||

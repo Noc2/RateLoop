@@ -46,6 +46,17 @@ function eligibleRow(overrides: Record<string, unknown> = {}) {
     payout_expires_at: null,
     payout_eligibility_status: "ready",
     payout_updated_at: NOW,
+    scope_id: "pes_preflight_01",
+    scope_reviewer_source: "rateloop_network",
+    scope_workspace_id: null,
+    adulthood_basis: "provider_attested",
+    adulthood_assertion_id: "assertion_preflight_01",
+    invitation_qualification_id: null,
+    sanctions_screening_id: "san_11111111111111111111111111111111",
+    scope_status: "eligible",
+    scope_blocked_reason: null,
+    scope_valid_until: new Date(NOW.getTime() + 43_200_000),
+    scope_updated_at: NOW,
     ...overrides,
   };
 }
@@ -128,7 +139,7 @@ test("paid-review preflight freezes current identity, legal, sanctions, tax, and
   assert.equal(later.eligibilityCommitment, first.eligibilityCommitment, "check time is not frozen policy state");
 });
 
-test("paid-review preflight composes account control and minimum age from independent providers", async () => {
+test("paid-review preflight uses the current age assertion without coupling it to account-control assurance", async () => {
   const accountControl = identityRow({
     assertion_id: "assertion_control",
     binding_id: "binding_control",
@@ -145,16 +156,13 @@ test("paid-review preflight composes account control and minimum age from indepe
     capabilities_json: JSON.stringify(["minimum_age"]),
   });
   const preflight = await requirePaidReviewEligibilityInTransaction(
-    client(eligibleRow(), [accountControl, minimumAge]),
+    client(eligibleRow({ adulthood_assertion_id: "assertion_age" }), [accountControl, minimumAge]),
     PRINCIPAL,
     NOW,
   );
   assert.deepEqual(
     preflight.identityAssertions.map(value => ({ assertionId: value.assertionId, providerId: value.providerId })),
-    [
-      { assertionId: "assertion_age", providerId: "age-provider" },
-      { assertionId: "assertion_control", providerId: "world:poh" },
-    ],
+    [{ assertionId: "assertion_age", providerId: "age-provider" }],
   );
 });
 
@@ -175,12 +183,12 @@ test("paid-review preflight chooses the minimal assertion set with deterministic
     evidence_verified_at: NOW,
   });
   const first = await requirePaidReviewEligibilityInTransaction(
-    client(eligibleRow(), [competing, accountOnly, preferred, ageOnly]),
+    client(eligibleRow({ adulthood_assertion_id: "assertion_a" }), [competing, accountOnly, preferred, ageOnly]),
     PRINCIPAL,
     NOW,
   );
   const reordered = await requirePaidReviewEligibilityInTransaction(
-    client(eligibleRow(), [ageOnly, preferred, accountOnly, competing]),
+    client(eligibleRow({ adulthood_assertion_id: "assertion_a" }), [ageOnly, preferred, accountOnly, competing]),
     PRINCIPAL,
     NOW,
   );
@@ -246,8 +254,6 @@ test("paid-review preflight fails closed for every legal, tax, sanctions, payout
   await rejectsEligibility(null);
   for (const changed of [
     { legal_eligibility_status: "review" },
-    { minimum_age_verified: 17 },
-    { age_evidence_expires_at: NOW },
     { declared_residence_country: "FR" },
     { residence_tax_status: "review" },
     { tax_profile_status: "incomplete" },
@@ -271,7 +277,6 @@ test("paid-review preflight requires a live identity assertion bound to the same
     { assertion_status: "revoked" },
     { binding_status: "revoked" },
     { capabilities_json: JSON.stringify(["account_control"]) },
-    { capabilities_json: JSON.stringify(["minimum_age"]) },
     { assertion_minimum_age_verified: 17 },
     { evidence_expires_at: NOW },
     { provider_evidence_key_domain: "wrong_domain" },
