@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   tokenlessCommit,
+  tokenlessFeedbackBonusEvent,
   tokenlessFeedbackBonusPool,
   tokenlessFeedbackRecord,
   tokenlessRound,
@@ -135,6 +136,7 @@ describe("tokenless panel indexing ABI", () => {
         "FeedbackAwarded",
         "FeedbackAwardClaimed",
         "RemainderRefunded",
+        "CreditWithdrawn",
       ]),
     );
     expect(tokenlessFeedbackBonusPool.deploymentKey.columnType).toBe("PgText");
@@ -142,6 +144,7 @@ describe("tokenless panel indexing ABI", () => {
       "PgEvmBigint",
     );
     expect(tokenlessFeedbackRecord.claimed.columnType).toBe("PgBoolean");
+    expect(tokenlessFeedbackBonusEvent.poolId.notNull).toBe(false);
   });
 
   it("stores public RBTS evidence without retaining v0 weighting columns", () => {

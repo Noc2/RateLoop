@@ -252,7 +252,7 @@ export const tokenlessFeedbackBonusEvent = onchainTable(
     id: t.text().primaryKey(),
     deploymentKey: t.text().notNull(),
     eventType: t.text().notNull(),
-    poolId: t.bigint().notNull(),
+    poolId: t.bigint(),
     feedbackKey: t.hex(),
     responseHash: t.hex(),
     actor: t.hex(),

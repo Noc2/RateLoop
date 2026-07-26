@@ -311,4 +311,13 @@ export const tokenlessFeedbackBonusAbi = [
       { name: "amount", type: "uint256", indexed: false },
     ],
   },
+  {
+    type: "event",
+    name: "CreditWithdrawn",
+    inputs: [
+      { name: "recipient", type: "address", indexed: true },
+      { name: "destination", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
 ] as const satisfies Abi;

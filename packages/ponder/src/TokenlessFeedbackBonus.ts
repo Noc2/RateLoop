@@ -299,3 +299,31 @@ ponder.on(
     });
   },
 );
+
+ponder.on(
+  "TokenlessFeedbackBonus:CreditWithdrawn",
+  async ({ event, context }) => {
+    const eventId = deploymentEventKey(
+      deployment.deploymentKey,
+      event.transaction.hash,
+      event.log.logIndex,
+    );
+    if (await eventWasIndexed(context, eventId)) return;
+    const { recipient, destination, amount } = event.args;
+    await context.db.insert(tokenlessFeedbackBonusEvent).values({
+      id: eventId,
+      deploymentKey: deployment.deploymentKey,
+      eventType: "credit_withdrawn",
+      poolId: null,
+      feedbackKey: null,
+      responseHash: null,
+      actor: recipient,
+      payoutAddress: destination,
+      amount,
+      occurredAt: event.block.timestamp,
+      blockNumber: event.block.number,
+      txHash: event.transaction.hash,
+      logIndex: event.log.logIndex,
+    });
+  },
+);
