@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useReducer, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { WorkspaceSettingsClient } from "../WorkspaceSettingsClient";
 import { WorkspaceStopBanner } from "../WorkspaceStopControl";
@@ -57,7 +58,11 @@ export function AgentWorkspacePanels({
 
   const workspace = workspaces.find(entry => entry.workspaceId === workspaceId) ?? workspaces[0];
   const canManage = workspace.role === "owner" || workspace.role === "admin";
-  const visibleTabs = connectedAgentTabs({ canManage });
+  const visibleTabs = hasConnectedAgent
+    ? connectedAgentTabs({ canManage })
+    : canManage
+      ? (["overview", "connect"] as AgentTab[])
+      : (["overview"] as AgentTab[]);
   const resolvedTab = resolveAvailableAgentTab(activeTab, visibleTabs);
 
   if (initialSetup && !initialSetup.complete) {
@@ -90,19 +95,15 @@ export function AgentWorkspacePanels({
     <div className="space-y-5">
       {/* Persistent across every agents tab while the workspace stop is engaged. */}
       <WorkspaceStopBanner workspaceId={workspaceId} />
-      {hasConnectedAgent ? (
-        <AgentTabs
-          active={resolvedTab}
-          visibleTabs={visibleTabs}
-          workspaceId={workspaceId}
-          workspaces={workspaces}
-          onWorkspaceChange={nextWorkspaceId =>
-            router.push(
-              `/agents?tab=${encodeURIComponent(resolvedTab)}&workspace=${encodeURIComponent(nextWorkspaceId)}`,
-            )
-          }
-        />
-      ) : null}
+      <AgentTabs
+        active={resolvedTab}
+        visibleTabs={visibleTabs}
+        workspaceId={workspaceId}
+        workspaces={workspaces}
+        onWorkspaceChange={nextWorkspaceId =>
+          router.push(`/agents?tab=${encodeURIComponent(resolvedTab)}&workspace=${encodeURIComponent(nextWorkspaceId)}`)
+        }
+      />
 
       <div
         key={workspaceId}
@@ -112,10 +113,22 @@ export function AgentWorkspacePanels({
         tabIndex={0}
         className="space-y-5 outline-none focus-visible:ring-2 focus-visible:ring-[var(--rateloop-blue)]"
       >
-        {hasConnectedAgent && resolvedTab === "overview" ? (
-          <WorkspaceSettingsClient initialWorkspaceId={workspaceId} />
+        {resolvedTab === "overview" ? (
+          <>
+            {canManage ? (
+              <div className="flex justify-end">
+                <Link
+                  className="btn rateloop-secondary-action"
+                  href={`/agents?tab=connect&workspace=${encodeURIComponent(workspaceId)}`}
+                >
+                  {hasConnectedAgent ? "Connect another agent" : "Connect an agent"}
+                </Link>
+              </div>
+            ) : null}
+            <WorkspaceSettingsClient initialWorkspaceId={workspaceId} />
+          </>
         ) : null}
-        {hasConnectedAgent && resolvedTab === "connect" && canManage ? (
+        {resolvedTab === "connect" && canManage ? (
           <AgentConnectionPanel
             workspaceId={workspaceId}
             publishingRevision={publishingRevision}

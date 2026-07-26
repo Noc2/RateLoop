@@ -141,9 +141,9 @@ test("the server resolves onboarding before the client renders downstream panels
   assert.match(panelsSource, /return <WorkspaceSetupStart \/>/);
   assert.match(panelsSource, /initialSetup && !initialSetup\.complete/);
   assert.match(panelsSource, /<AgentSetupFlow initialSetup=\{initialSetup\} \/>/);
-  assert.match(panelsSource, /\{hasConnectedAgent \? \(/);
+  assert.match(panelsSource, /<AgentTabs/);
   assert.match(panelsSource, /workspaceId=\{workspaceId\}/);
-  assert.match(panelsSource, /hasConnectedAgent && resolvedTab === "connect"/);
+  assert.match(panelsSource, /resolvedTab === "connect" && canManage/);
   assert.match(panelsSource, /hasConnectedAgent && resolvedTab === "inbox"/);
   assert.match(panelsSource, /hasConnectedAgent && resolvedTab === "registry"/);
   assert.doesNotMatch(panelsSource, /view="connection"|view="reviews"/);
@@ -155,7 +155,7 @@ test("the server resolves onboarding before the client renders downstream panels
 test("completed read-only workspaces never render connection or policy mutations", () => {
   assert.match(panelsSource, /const canManage = workspace\.role === "owner" \|\| workspace\.role === "admin"/);
   assert.match(panelsSource, /connectedAgentTabs\(\{ canManage \}\)/);
-  assert.match(panelsSource, /hasConnectedAgent && resolvedTab === "connect" && canManage/);
+  assert.match(panelsSource, /resolvedTab === "connect" && canManage/);
   assert.match(panelsSource, /hasConnectedAgent && resolvedTab === "inbox" && canManage/);
 });
 
@@ -172,6 +172,10 @@ test("workspace managers see the human-only Feedback Bonus award inbox", () => {
 test("the overview starts with workspace settings instead of an evidence summary strip", () => {
   assert.doesNotMatch(panelsSource, /WorkspaceEvidenceSummaryStrip/);
   assert.doesNotMatch(panelsSource, /Last decision packet|Most conservative coverage stage|Latest packet anchor/);
+  assert.match(panelsSource, /<WorkspaceSettingsClient initialWorkspaceId=\{workspaceId\} \/>/);
+  assert.match(panelsSource, /Connect another agent/);
+  assert.match(panelsSource, /Connect an agent/);
+  assert.match(panelsSource, /\["overview", "connect"\]/);
 });
 
 test("the Reviews tab opens the canonical human-review editor directly", () => {
