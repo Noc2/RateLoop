@@ -1030,6 +1030,13 @@
       "when": 1785153600000,
       "tag": "0147_hybrid_request_profile_semantics",
       "breakpoints": true
+    },
+    {
+      "idx": 148,
+      "version": "7",
+      "when": 1785157200000,
+      "tag": "0148_subject_export_v4",
+      "breakpoints": true
     }
   ]
 }
