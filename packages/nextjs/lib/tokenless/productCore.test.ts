@@ -24,6 +24,7 @@ import {
   recordPrepaidLedgerEntry,
   revokeAgentPublishingPolicy,
 } from "~~/lib/tokenless/productCore";
+import { configuredHumanReviewLaneForSelection } from "~~/lib/tokenless/reviewCapabilities";
 import {
   TokenlessServiceError,
   createInternalPrivateReviewQuote,
@@ -766,30 +767,43 @@ test("policy revocation blocks the next delegated ask", async () => {
   );
 });
 
-test("a public browser handoff persists a discoverable public ask end to end", async () => {
-  // AUD-01 regression guard: the MCP handoff creator marks the ask public with a safe classification.
+test("a public browser handoff follows the deployed public-network capability", async () => {
+  // AUD-01 regression guard: once deployed, the MCP handoff creator marks the ask public with a safe classification.
   // The browser must carry that public-data contract through validation, quote, and ask so the persisted
   // question record enters the public rater queue (raterService.listPaidRaterTasks requires visibility
   // 'public' and a safe classification) instead of being silently downgraded to private/internal.
   const redactionSummary = "Names and account identifiers were replaced with synthetic values.";
-  const handoff = createMcpHandoff(
-    {
-      confirmedNoSensitiveData: true,
-      dataClassification: "synthetic",
-      redactionSummary,
-      request: {
-        audience: {
-          admissionPolicyHash: freezeAdmissionPolicy(networkAudiencePolicy()).admissionPolicyHash,
-          source: "rateloop_network",
+  const createHandoff = () =>
+    createMcpHandoff(
+      {
+        confirmedNoSensitiveData: true,
+        dataClassification: "synthetic",
+        redactionSummary,
+        request: {
+          audience: {
+            admissionPolicyHash: freezeAdmissionPolicy(networkAudiencePolicy()).admissionPolicyHash,
+            source: "rateloop_network",
+          },
+          audiencePolicy: networkAudiencePolicy(),
+          budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
+          question: { kind: "binary", prompt: "Ship the synthetic reply?", rationale: { mode: "optional" } },
+          requestedPanelSize: 15,
         },
-        audiencePolicy: networkAudiencePolicy(),
-        budget: { attemptReserveAtomic: "5000000", bountyAtomic: "25000000", feeBps: 750 },
-        question: { kind: "binary", prompt: "Ship the synthetic reply?", rationale: { mode: "optional" } },
-        requestedPanelSize: 15,
       },
-    },
-    "https://rateloop-tokenless.vercel.app",
-  );
+      "https://rateloop-tokenless.vercel.app",
+    );
+  if (!configuredHumanReviewLaneForSelection("public_network", "usdc").available) {
+    assert.throws(
+      createHandoff,
+      (error: unknown) =>
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "invalid_quote" &&
+        /audience\.source is unsupported/u.test(error.message),
+    );
+    return;
+  }
+  const handoff = createHandoff();
 
   // The browser decodes the fragment locally and re-validates the request it POSTs to /quote.
   const decoded = decodeTokenlessHandoffFragment(new URL(handoff.handoffUrl).hash);
