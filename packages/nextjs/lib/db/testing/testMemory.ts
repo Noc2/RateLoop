@@ -83,13 +83,24 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
       "0138_crowd_forecast_integrity.sql",
       "0139_paid_assignment_terminal_states.sql",
       "0140_network_assignment_settlement.sql",
+      "0142_network_settlement_hardening.sql",
     ].includes(file) &&
-    (/^DO \$\$/u.test(statement) ||
+    (/\bDO \$\$/u.test(statement) ||
       /\bCREATE OR REPLACE FUNCTION\b/u.test(statement) ||
       /\bCREATE (?:CONSTRAINT )?TRIGGER\b/u.test(statement))
   ) {
     // pg-mem does not implement PostgreSQL trigger functions. The production
     // migration installs the append-only guard; migration source tests cover it.
+    return null;
+  }
+  if (
+    file === "0142_network_settlement_hardening.sql" &&
+    /^UPDATE "tokenless_network_assignment_settlements"/u.test(statement) &&
+    /\bFROM "tokenless_assurance_assignments"/u.test(statement)
+  ) {
+    // The forward migration asserts the network feature was never activated,
+    // so these production backfills are guaranteed empty. pg-mem does not
+    // implement PostgreSQL's aliased UPDATE ... FROM form.
     return null;
   }
   if (

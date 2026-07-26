@@ -5,45 +5,64 @@ import { join } from "node:path";
 import test from "node:test";
 import { DataType, newDb } from "pg-mem";
 
-const migration = readFileSync(join(process.cwd(), "drizzle", "0140_network_assignment_settlement.sql"), "utf8");
+const baseMigration = readFileSync(join(process.cwd(), "drizzle", "0140_network_assignment_settlement.sql"), "utf8");
+const hardeningMigration = readFileSync(
+  join(process.cwd(), "drizzle", "0142_network_settlement_hardening.sql"),
+  "utf8",
+);
+const journal = JSON.parse(readFileSync(join(process.cwd(), "drizzle", "meta", "_journal.json"), "utf8")) as {
+  entries: Array<{ idx: number; tag: string }>;
+};
 
-test("network settlement migration binds vouchers to one exact assignment and round", () => {
-  assert.match(migration, /ADD COLUMN "network_assignment_id"/u);
-  assert.match(migration, /"network_operation_key" text/u);
-  assert.match(migration, /"network_deployment_key" text/u);
+test("forward hardening binds vouchers to one exact assignment and round", () => {
+  assert.match(baseMigration, /ADD COLUMN "network_assignment_id"/u);
+  assert.match(baseMigration, /UNIQUE \("network_assignment_id","round_id"\)/u);
+  assert.match(baseMigration, /"integrity_reviewer_lookup" text NOT NULL/u);
+  assert.match(hardeningMigration, /"network_operation_key" text/u);
+  assert.match(hardeningMigration, /"network_deployment_key" text/u);
+  assert.match(hardeningMigration, /FROM "tokenless_network_assignment_settlements" settlement/u);
   assert.match(
-    migration,
+    hardeningMigration,
     /UNIQUE \(\s*"network_assignment_id","network_operation_key","network_deployment_key",\s*"chain_id","panel_address","round_id"\s*\)/u,
   );
-  assert.match(migration, /UNIQUE \("assignment_id","case_id"\)/u);
-  assert.match(migration, /"selection_binding_hash" ~ '\^sha256:\[0-9a-f\]\{64\}\$'/u);
-  assert.doesNotMatch(migration, /"integrity_reviewer_lookup" text NOT NULL/u);
-  assert.match(migration, /"integrity_reviewer_commitment" ~ '\^sha256:/u);
+  assert.match(baseMigration, /UNIQUE \("assignment_id","case_id"\)/u);
+  assert.match(baseMigration, /"selection_binding_hash" ~ '\^sha256:\[0-9a-f\]\{64\}\$'/u);
+  assert.match(hardeningMigration, /"integrity_reviewer_commitment" ~ '\^sha256:/u);
+  assert.match(hardeningMigration, /DROP COLUMN "integrity_reviewer_lookup"/u);
 });
 
 test("network settlement receipts are append-only and transitions are monotonic", () => {
-  assert.match(migration, /network assignment settlement receipts are append-only/u);
-  assert.match(migration, /network assignment settlement bindings are immutable/u);
-  assert.match(migration, /network assignment settlement transitions are monotonic/u);
-  assert.match(migration, /terminal network assignment settlements are immutable/u);
-  assert.match(migration, /transition requires its append-only receipt/u);
-  assert.match(migration, /lifecycle changes require a state transition/u);
+  assert.match(baseMigration, /network assignment settlement receipts are append-only/u);
+  assert.match(hardeningMigration, /network assignment settlement bindings are immutable/u);
+  assert.match(hardeningMigration, /network assignment settlement transitions are monotonic/u);
+  assert.match(hardeningMigration, /terminal network assignment settlements are immutable/u);
+  assert.match(hardeningMigration, /transition requires its append-only receipt/u);
+  assert.match(hardeningMigration, /lifecycle changes require a state transition/u);
 });
 
 test("response settlement references require matching evidence hashes", () => {
-  assert.match(migration, /ALTER TABLE "tokenless_assurance_responses"/u);
-  assert.match(migration, /\("settlement_reference" IS NULL AND "settlement_evidence_hash" IS NULL\)/u);
-  assert.match(migration, /"settlement_evidence_hash" ~ '\^sha256:\[0-9a-f\]\{64\}\$'/u);
+  assert.match(baseMigration, /ALTER TABLE "tokenless_assurance_responses"/u);
+  assert.match(baseMigration, /\("settlement_reference" IS NULL AND "settlement_evidence_hash" IS NULL\)/u);
+  assert.match(baseMigration, /"settlement_evidence_hash" ~ '\^sha256:\[0-9a-f\]\{64\}\$'/u);
+});
+
+test("the forward migration is journaled after the privacy worker migration", () => {
+  const privacy = journal.entries.findIndex(value => value.idx === 141);
+  const hardening = journal.entries.findIndex(value => value.idx === 142);
+  assert.notEqual(privacy, -1);
+  assert.equal(hardening, privacy + 1);
+  assert.equal(journal.entries[hardening]?.tag, "0142_network_settlement_hardening");
 });
 
 test("response settlement evidence upgrade backfills legacy references before validating", () => {
-  const statements = migration
+  assert.match(baseMigration, /Narrow deployability exception/u);
+  const statements = baseMigration
     .split("--> statement-breakpoint")
     .map(value => value.trim())
     .filter(
       value =>
         value.startsWith('ALTER TABLE "tokenless_assurance_responses"') ||
-        value.startsWith('UPDATE "tokenless_assurance_responses"'),
+        value.includes('UPDATE "tokenless_assurance_responses"'),
     );
   assert.equal(statements.length, 3);
   const memory = newDb();
