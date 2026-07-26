@@ -803,33 +803,128 @@ export async function requestWorkspaceDeletion(input: {
       [reviewerTombstone, now, input.workspaceId],
     );
     const assuranceAssignmentSubjects = await client.query(
-      `SELECT assignment_id,project_id,cohort_id FROM tokenless_assurance_assignments
+      `SELECT assignment_id,project_id,cohort_id,source,paid_assignment,
+              assurance_snapshot_hash,integrity_provenance_hash
+       FROM tokenless_assurance_assignments
        WHERE workspace_id=$1 ORDER BY assignment_id FOR UPDATE`,
       [input.workspaceId],
     );
+    let networkAssignmentsAnonymized = 0;
+    let networkAssignmentHistoryAnonymized = 0;
+    let networkVoucherSnapshotsAnonymized = 0;
     for (const value of assuranceAssignmentSubjects.rows) {
       const row = value as Row;
       const assignmentId = text(row, "assignment_id")!;
+      const networkManaged = text(row, "source") === "rateloop_network";
       const assignmentTombstone = `rlp_erased_assignment_${evidenceDigest(
         jobId,
         "assurance_assignment",
         assignmentId,
       ).slice(0, 24)}`;
+      const assignmentTombstoneDigest = evidenceDigest(jobId, "network_assignment_subject", assignmentId);
+      const assignmentTombstonePayout = `0x${assignmentTombstoneDigest.slice(0, 40)}`;
+      const assignmentTombstoneRater = `rater_erased_ws_${assignmentTombstoneDigest.slice(0, 32)}`;
+      if (networkManaged) {
+        await client.query(
+          `INSERT INTO tokenless_rater_profiles
+           (rater_id,principal_id,account_address,nullifier_seed_ciphertext,
+            nullifier_key_version,nullifier_key_domain,deletion_receipt_hash,deleted_at,
+            created_at,updated_at)
+           VALUES ($1,NULL,$2,$3,'deleted-receipt-v1','vote_mapping',$4,$5,$5,$5)
+           ON CONFLICT (rater_id) DO NOTHING`,
+          [
+            assignmentTombstoneRater,
+            assignmentTombstonePayout,
+            `deleted:${assignmentTombstoneDigest}`,
+            `sha256:${assignmentTombstoneDigest}`,
+            now,
+          ],
+        );
+      }
       await client.query(
         `INSERT INTO tokenless_assurance_cohort_reviewers
          (project_id,cohort_id,reviewer_account_address,qualification_provenance_json,
           qualification_expires_at,maximum_active_assignments,active_reservations,status,
-          created_by,created_at,updated_at)
+          network_managed,created_by,created_at,updated_at)
          VALUES ($1,$2,$3,'{"subject":"deleted"}',$4,1,0,'removed',
-                 'system:workspace_deletion',$4,$4)
+                 $5,'system:workspace_deletion',$4,$4)
          ON CONFLICT (project_id,cohort_id,reviewer_account_address) DO NOTHING`,
-        [row.project_id, row.cohort_id, assignmentTombstone, now],
+        [row.project_id, row.cohort_id, assignmentTombstone, now, networkManaged],
       );
-      await client.query(
-        `UPDATE tokenless_assurance_assignments
-         SET reviewer_account_address=$1,updated_at=$2 WHERE assignment_id=$3`,
-        [assignmentTombstone, now, assignmentId],
-      );
+      if (networkManaged) {
+        const assuranceSnapshot = JSON.stringify({
+          schemaVersion: "rateloop.erased-assurance-snapshot.v1",
+          snapshotCommitment: text(row, "assurance_snapshot_hash"),
+        });
+        const integrityProvenance =
+          text(row, "integrity_provenance_hash") === null
+            ? null
+            : JSON.stringify({
+                schemaVersion: "rateloop.erased-integrity-provenance.v1",
+                provenanceCommitment: text(row, "integrity_provenance_hash"),
+              });
+        const assignment = await client.query(
+          `UPDATE tokenless_assurance_assignments
+           SET reviewer_account_address=$1,rater_id=$2,
+               payout_account_snapshot=CASE WHEN paid_assignment=true THEN $3 ELSE NULL END,
+               qualification_provenance_json='[]',assurance_snapshot_json=$4,
+               blinding_json='{"subject":"deleted"}',integrity_reviewer_lookup=NULL,
+               integrity_cluster_pseudonym=NULL,integrity_risk_band=NULL,
+               provider_subject_hashes_json=CASE
+                 WHEN provider_subject_hashes_json IS NULL THEN NULL ELSE '[]' END,
+               integrity_provenance_json=$5,updated_at=$6
+           WHERE assignment_id=$7 AND source='rateloop_network'`,
+          [
+            assignmentTombstone,
+            assignmentTombstoneRater,
+            assignmentTombstonePayout,
+            assuranceSnapshot,
+            integrityProvenance,
+            now,
+            assignmentId,
+          ],
+        );
+        networkAssignmentsAnonymized += assignment.rowCount ?? 0;
+        const history = await client.query(
+          `UPDATE tokenless_integrity_assignment_history
+           SET reviewer_lookup=$1,cluster_pseudonym=$2,provider_subject_hashes_json='[]'
+           WHERE assignment_id=$3`,
+          [
+            `deleted-reviewer:${assignmentTombstoneDigest.slice(0, 48)}`,
+            `deleted-cluster:${evidenceDigest(jobId, "network_assignment_cluster", assignmentId).slice(0, 48)}`,
+            assignmentId,
+          ],
+        );
+        networkAssignmentHistoryAnonymized += history.rowCount ?? 0;
+        const voucherSnapshots = await client.query(
+          `SELECT snapshot.voucher_id,snapshot.snapshot_hash
+           FROM tokenless_voucher_assurance_snapshots snapshot
+           JOIN tokenless_paid_vouchers voucher ON voucher.voucher_id=snapshot.voucher_id
+           WHERE voucher.network_assignment_id=$1 FOR UPDATE`,
+          [assignmentId],
+        );
+        for (const snapshotValue of voucherSnapshots.rows) {
+          const snapshot = snapshotValue as Row;
+          const updated = await client.query(
+            `UPDATE tokenless_voucher_assurance_snapshots SET snapshot_json=$1
+             WHERE voucher_id=$2`,
+            [
+              JSON.stringify({
+                schemaVersion: "rateloop.erased-voucher-assurance-snapshot.v1",
+                snapshotCommitment: text(snapshot, "snapshot_hash"),
+              }),
+              snapshot.voucher_id,
+            ],
+          );
+          networkVoucherSnapshotsAnonymized += updated.rowCount ?? 0;
+        }
+      } else {
+        await client.query(
+          `UPDATE tokenless_assurance_assignments
+           SET reviewer_account_address=$1,updated_at=$2 WHERE assignment_id=$3`,
+          [assignmentTombstone, now, assignmentId],
+        );
+      }
     }
     const directAssignmentSubjects = await client.query(
       `SELECT assignment_id,project_id,cohort_id FROM tokenless_private_unpaid_review_assignments
@@ -846,11 +941,11 @@ export async function requestWorkspaceDeletion(input: {
       ).slice(0, 24)}`;
       await client.query(
         `INSERT INTO tokenless_assurance_cohort_reviewers
-         (project_id,cohort_id,reviewer_account_address,qualification_provenance_json,
-          qualification_expires_at,maximum_active_assignments,active_reservations,status,
-          created_by,created_at,updated_at)
-         VALUES ($1,$2,$3,'{"subject":"deleted"}',$4,1,0,'removed',
-                 'system:workspace_deletion',$4,$4)
+       (project_id,cohort_id,reviewer_account_address,qualification_provenance_json,
+        qualification_expires_at,maximum_active_assignments,active_reservations,status,
+        network_managed,created_by,created_at,updated_at)
+       VALUES ($1,$2,$3,'{"subject":"deleted"}',$4,1,0,'removed',
+               false,'system:workspace_deletion',$4,$4)
          ON CONFLICT (project_id,cohort_id,reviewer_account_address) DO NOTHING`,
         [row.project_id, row.cohort_id, assignmentTombstone, now],
       );
@@ -860,10 +955,9 @@ export async function requestWorkspaceDeletion(input: {
         [assignmentTombstone, now, assignmentId],
       );
     }
-    await client.query(
-      `DELETE FROM tokenless_private_group_policy_acceptances WHERE workspace_id=$1`,
-      [input.workspaceId],
-    );
+    await client.query(`DELETE FROM tokenless_private_group_policy_acceptances WHERE workspace_id=$1`, [
+      input.workspaceId,
+    ]);
     await client.query(
       `DELETE FROM tokenless_assurance_cohort_reviewers
        WHERE project_id IN (
@@ -1024,6 +1118,41 @@ export async function requestWorkspaceDeletion(input: {
          (SELECT COUNT(*) FROM tokenless_assurance_assignments
           WHERE workspace_id=$1 AND reviewer_account_address NOT LIKE 'rlp_erased_assignment_%')
           AS assurance_assignment_direct_subjects,
+         (SELECT COUNT(*) FROM tokenless_assurance_assignments assignment
+          LEFT JOIN tokenless_rater_profiles profile ON profile.rater_id=assignment.rater_id
+          WHERE assignment.workspace_id=$1 AND assignment.source='rateloop_network'
+            AND (assignment.reviewer_account_address NOT LIKE 'rlp_erased_assignment_%'
+              OR profile.principal_id IS NOT NULL OR profile.deleted_at IS NULL
+              OR (assignment.paid_assignment=true
+                AND assignment.payout_account_snapshot<>profile.account_address)
+              OR assignment.qualification_provenance_json<>'[]'
+              OR assignment.assurance_snapshot_json
+                NOT LIKE '%rateloop.erased-assurance-snapshot.v1%'
+              OR assignment.blinding_json<>'{"subject":"deleted"}'
+              OR assignment.integrity_reviewer_lookup IS NOT NULL
+              OR assignment.integrity_cluster_pseudonym IS NOT NULL
+              OR assignment.integrity_risk_band IS NOT NULL
+              OR COALESCE(assignment.provider_subject_hashes_json,'[]')<>'[]'
+              OR (assignment.integrity_provenance_hash IS NOT NULL
+                AND COALESCE(assignment.integrity_provenance_json,'')
+                  NOT LIKE '%rateloop.erased-integrity-provenance.v1%')))
+          AS network_assignment_personal_copies,
+         (SELECT COUNT(*) FROM tokenless_integrity_assignment_history history
+          JOIN tokenless_assurance_assignments assignment
+            ON assignment.assignment_id=history.assignment_id
+          WHERE assignment.workspace_id=$1 AND assignment.source='rateloop_network'
+            AND (history.reviewer_lookup NOT LIKE 'deleted-reviewer:%'
+              OR history.cluster_pseudonym NOT LIKE 'deleted-cluster:%'
+              OR history.provider_subject_hashes_json<>'[]'))
+          AS network_history_personal_copies,
+         (SELECT COUNT(*) FROM tokenless_voucher_assurance_snapshots snapshot
+          JOIN tokenless_paid_vouchers voucher ON voucher.voucher_id=snapshot.voucher_id
+          JOIN tokenless_assurance_assignments assignment
+            ON assignment.assignment_id=voucher.network_assignment_id
+          WHERE assignment.workspace_id=$1
+            AND snapshot.snapshot_json
+              NOT LIKE '%rateloop.erased-voucher-assurance-snapshot.v1%')
+          AS network_voucher_snapshot_personal_copies,
          (SELECT COUNT(*) FROM tokenless_private_unpaid_review_assignments
           WHERE workspace_id=$1 AND reviewer_account_address NOT LIKE 'rlp_erased_assignment_%')
           AS direct_private_assignment_subjects,
@@ -1036,6 +1165,47 @@ export async function requestWorkspaceDeletion(input: {
     if (incompleteAccess) {
       throw new Error(`Workspace deletion postcondition failed: ${incompleteAccess[0]}.`);
     }
+    const retainedNetworkEvidence = await client.query(
+      `SELECT
+         (SELECT COUNT(*) FROM tokenless_paid_vouchers voucher
+          JOIN tokenless_assurance_assignments assignment
+            ON assignment.assignment_id=voucher.network_assignment_id
+          JOIN tokenless_rater_profiles profile ON profile.rater_id=voucher.rater_id
+          WHERE assignment.workspace_id=$1 AND profile.principal_id IS NOT NULL)
+          AS voucher_rater_links,
+         (SELECT COUNT(*) FROM tokenless_voucher_assurance_snapshots snapshot
+          JOIN tokenless_paid_vouchers voucher ON voucher.voucher_id=snapshot.voucher_id
+          JOIN tokenless_assurance_assignments assignment
+            ON assignment.assignment_id=voucher.network_assignment_id
+          JOIN tokenless_rater_profiles profile ON profile.rater_id=snapshot.rater_id
+          WHERE assignment.workspace_id=$1 AND profile.principal_id IS NOT NULL
+            AND snapshot.snapshot_json
+              LIKE '%rateloop.erased-voucher-assurance-snapshot.v1%')
+          AS voucher_snapshot_rater_links,
+         (SELECT COUNT(*) FROM tokenless_network_assignment_settlements settlement
+          JOIN tokenless_assurance_assignments assignment
+            ON assignment.assignment_id=settlement.assignment_id
+          WHERE assignment.workspace_id=$1) AS settlement_commitments,
+         (SELECT COUNT(*) FROM tokenless_network_assignment_settlement_receipts receipt
+          JOIN tokenless_network_assignment_settlements settlement
+            ON settlement.binding_id=receipt.binding_id
+          JOIN tokenless_assurance_assignments assignment
+            ON assignment.assignment_id=settlement.assignment_id
+          WHERE assignment.workspace_id=$1) AS settlement_receipt_commitments,
+         (SELECT COUNT(*) FROM tokenless_public_network_review_bindings
+          WHERE workspace_id=$1) AS public_network_bindings`,
+      [input.workspaceId],
+    );
+    const retainedNetworkRow = retainedNetworkEvidence.rows[0] as Row | undefined;
+    const networkEvidenceRetention = {
+      basis: "settlement_and_audit",
+      form: "restricted_claim_links_and_commitment_only_receipts",
+      publicNetworkBindings: integer(retainedNetworkRow, "public_network_bindings"),
+      settlementCommitments: integer(retainedNetworkRow, "settlement_commitments"),
+      settlementReceiptCommitments: integer(retainedNetworkRow, "settlement_receipt_commitments"),
+      voucherRaterLinks: integer(retainedNetworkRow, "voucher_rater_links"),
+      voucherSnapshotRaterLinks: integer(retainedNetworkRow, "voucher_snapshot_rater_links"),
+    };
 
     await insertCategory(client, {
       category: "workspace_access",
@@ -1049,7 +1219,10 @@ export async function requestWorkspaceDeletion(input: {
       disposition: "anonymize",
       jobId,
       now,
-      outcome: "tombstoned",
+      outcome:
+        `tombstoned:network_assignments:${networkAssignmentsAnonymized}` +
+        `:network_history:${networkAssignmentHistoryAnonymized}` +
+        `:network_voucher_snapshots:${networkVoucherSnapshotsAnonymized}`,
     });
     await insertCategory(client, {
       category: "private_objects",
@@ -1090,7 +1263,13 @@ export async function requestWorkspaceDeletion(input: {
       disposition: "retain",
       jobId,
       now,
-      outcome: `retained_restricted:private_quote_commitments:${privateQuoteErasure.retainedReferencedCommitmentOnly}`,
+      outcome:
+        `retained_restricted:private_quote_commitments:${privateQuoteErasure.retainedReferencedCommitmentOnly}` +
+        `:network_voucher_rater_links:${networkEvidenceRetention.voucherRaterLinks}` +
+        `:network_snapshot_rater_links:${networkEvidenceRetention.voucherSnapshotRaterLinks}` +
+        `:network_settlement_commitments:${networkEvidenceRetention.settlementCommitments}` +
+        `:network_settlement_receipts:${networkEvidenceRetention.settlementReceiptCommitments}` +
+        `:public_network_bindings:${networkEvidenceRetention.publicNetworkBindings}`,
       retentionDeadline: new Date(now.getTime() + AUDIT_RETENTION_MS),
     });
     if (preview.impact.publicRecords > 0) {
@@ -1147,6 +1326,7 @@ export async function requestWorkspaceDeletion(input: {
               erasedReferencedContent: privateQuoteErasure.erasedReferencedContent,
               retainedReferencedCommitmentOnly: privateQuoteErasure.retainedReferencedCommitmentOnly,
             },
+            networkEvidenceRetention,
             receiptDigest,
           }),
           now,

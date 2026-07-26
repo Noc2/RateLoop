@@ -25,6 +25,184 @@ async function storedRow(sql: string, args: unknown[] = []) {
   );
 }
 
+async function seedWorkspaceNetworkAssignment(workspaceId: string) {
+  const reviewerPrincipal = "rlp_workspace_network_reviewer_0001";
+  const reviewerAccount = "0x3333333333333333333333333333333333333333";
+  const raterId = "rater_workspace_network_reviewer";
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_principals (principal_id,status,created_at,updated_at)
+          VALUES (?,'active',?,?);
+          INSERT INTO tokenless_rater_profiles
+          (rater_id,principal_id,account_address,nullifier_seed_ciphertext,
+           nullifier_key_version,nullifier_key_domain,created_at,updated_at)
+          VALUES (?,?,?,'encrypted-nullifier','test-v1','vote_mapping',?,?);
+          INSERT INTO tokenless_assurance_projects
+          (project_id,workspace_id,name,data_classification,status,retention_days,created_by,created_at,updated_at)
+          VALUES ('project_workspace_network_delete',?,'Network','confidential','active',30,?,?,?);
+          INSERT INTO tokenless_assurance_rubrics
+          (rubric_id,project_id,version,prompt,failure_tags_json,rationale_json,
+           pass_rule_json,rubric_json,created_at)
+          VALUES ('rubric_workspace_network_delete','project_workspace_network_delete',1,
+                  'Delete','[]','{}','{}','{}',?);
+          INSERT INTO tokenless_assurance_suites
+          (suite_id,project_id,name,version,status,rubric_id,rubric_version,manifest_hash,
+           manifest_json,frozen_at,created_at,updated_at)
+          VALUES ('suite_workspace_network_delete','project_workspace_network_delete','Delete',1,
+                  'frozen','rubric_workspace_network_delete',1,?,'{}',?,?,?);
+          INSERT INTO tokenless_assurance_audience_policies
+          (policy_id,project_id,version,reviewer_source,compensation,cohorts_json,selection,
+           fallbacks_json,required_qualifications_json,assurance_json,buyer_privacy_json,
+           legal_eligibility_required,policy_hash,policy_json,created_at)
+          VALUES ('policy_workspace_network_delete','project_workspace_network_delete',1,
+                  'rateloop_network','paid','[]','randomized',
+                  '{"allowed":false,"sources":[]}','[]','{"requirements":[]}','{}',true,?,'{}',?);
+          INSERT INTO tokenless_assurance_runs
+          (run_id,project_id,suite_id,suite_version,audience_policy_id,audience_policy_version,
+           status,policy_hash,manifest_hash,manifest_json,created_by,created_at,updated_at,frozen_at,
+           completed_at)
+          VALUES ('run_workspace_network_delete','project_workspace_network_delete',
+                  'suite_workspace_network_delete',1,'policy_workspace_network_delete',1,
+                  'completed',?,?,'{}',?,?,?,?,?);
+          INSERT INTO tokenless_assurance_cohorts
+          (cohort_id,project_id,name,source,selection,capacity,active_reservations,
+           qualification_rules_json,status,created_by,created_at,updated_at)
+          VALUES ('cohort_workspace_network_delete','project_workspace_network_delete','Network',
+                  'rateloop_network','randomized',1,0,'[]','active',?,?,?);
+          INSERT INTO tokenless_assurance_run_subpanels
+          (subpanel_id,workspace_id,project_id,run_id,cohort_id,source,selection,target_count,
+           active_reservations,policy_id,policy_version,policy_hash,run_manifest_hash,created_at)
+          VALUES ('subpanel_workspace_network_delete',?,'project_workspace_network_delete',
+                  'run_workspace_network_delete','cohort_workspace_network_delete',
+                  'rateloop_network','randomized',1,0,'policy_workspace_network_delete',1,?,?,?);
+          INSERT INTO tokenless_assurance_cohort_reviewers
+          (project_id,cohort_id,reviewer_account_address,qualification_provenance_json,
+           maximum_active_assignments,active_reservations,status,network_managed,
+           created_by,created_at,updated_at)
+          VALUES ('project_workspace_network_delete','cohort_workspace_network_delete',?,
+                  '[{"privateQualification":"workspace-delete-me"}]',1,0,'active',true,?,?,?);
+          INSERT INTO tokenless_assurance_assignments
+          (assignment_id,workspace_id,project_id,run_id,subpanel_id,cohort_id,
+           reviewer_account_address,rater_id,payout_account_snapshot,source,selection,status,
+           confidentiality_terms_hash,qualification_provenance_json,assurance_snapshot_json,
+           assurance_snapshot_hash,blinding_json,paid_assignment,paid_eligibility_checked_at,
+           reservation_expires_at,lease_issuer_account_address,lease_state,created_at,updated_at,
+           integrity_reviewer_lookup,integrity_cluster_pseudonym,integrity_risk_band,
+           provider_subject_hashes_json,integrity_provenance_json,integrity_provenance_hash,
+           selection_batch_id)
+          VALUES ('assignment_workspace_network_delete',?,'project_workspace_network_delete',
+                  'run_workspace_network_delete','subpanel_workspace_network_delete',
+                  'cohort_workspace_network_delete',?,?,?,'rateloop_network','randomized','expired',
+                  ?,'[{"privateQualification":"workspace-delete-me"}]',
+                  '{"assertions":[{"privateAssertion":"workspace-delete-me"}]}',?,
+                  '{"privateBlind":"workspace-delete-me"}',true,?,?,?,'expired',?,?,?,
+                  'private-cluster-workspace-delete','high',
+                  '["private-provider-workspace-delete"]',
+                  '{"reviewerLookup":"private-lookup-workspace-delete"}',?,?)`,
+    args: [
+      reviewerPrincipal,
+      NOW,
+      NOW,
+      raterId,
+      reviewerPrincipal,
+      reviewerAccount,
+      NOW,
+      NOW,
+      workspaceId,
+      OWNER,
+      NOW,
+      NOW,
+      NOW,
+      `sha256:${"1".repeat(64)}`,
+      NOW,
+      NOW,
+      NOW,
+      `sha256:${"2".repeat(64)}`,
+      NOW,
+      `sha256:${"2".repeat(64)}`,
+      `sha256:${"3".repeat(64)}`,
+      OWNER,
+      NOW,
+      NOW,
+      NOW,
+      NOW,
+      OWNER,
+      NOW,
+      NOW,
+      workspaceId,
+      `sha256:${"2".repeat(64)}`,
+      `sha256:${"3".repeat(64)}`,
+      NOW,
+      reviewerAccount,
+      OWNER,
+      NOW,
+      NOW,
+      workspaceId,
+      reviewerAccount,
+      raterId,
+      reviewerAccount,
+      `sha256:${"4".repeat(64)}`,
+      `sha256:${"5".repeat(64)}`,
+      NOW,
+      new Date(NOW.getTime() - 60_000),
+      OWNER,
+      NOW,
+      NOW,
+      "private-lookup-workspace-delete",
+      `sha256:${"6".repeat(64)}`,
+      "batch_workspace_network_delete",
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_quotes
+          (quote_id,request_hash,request_json,response_json,expires_at,created_at)
+          VALUES ('quote_workspace_network_delete','request-workspace-network-delete',
+                  '{"visibility":"public"}','{}',?,?);
+          INSERT INTO tokenless_agent_asks
+          (operation_key,idempotency_key,request_hash,quote_id,request_json,economics_json,
+           status,created_at,updated_at)
+          VALUES ('operation_workspace_network_delete','workspace-network-delete',
+                  'request-workspace-network-delete','quote_workspace_network_delete','{}','{}',
+                  'completed',?,?);
+          INSERT INTO tokenless_paid_vouchers
+          (voucher_id,rater_id,request_idempotency_key,request_hash,chain_id,panel_address,
+           issuer_address,issuer_epoch,signer_address,round_id,content_id,vote_key,nullifier,
+           admission_policy_hash,assurance_snapshot_hash,expires_at,payout_account_snapshot,
+           voucher_json,voucher_signature,status,issued_at,network_assignment_id,
+           network_selection_binding_hash,network_operation_key,network_deployment_key)
+          VALUES ('voucher_workspace_network_delete',?,'voucher:workspace-network-delete',
+                  'request-workspace-network-delete',84532,
+                  '0x4444444444444444444444444444444444444444',
+                  '0x5555555555555555555555555555555555555555',1,
+                  '0x5555555555555555555555555555555555555555',42,?,?,?,?,
+                  ?,?,?,'{}','0x12','issued',?,'assignment_workspace_network_delete',?,
+                  'operation_workspace_network_delete','deployment-workspace-network-delete');
+          INSERT INTO tokenless_voucher_assurance_snapshots
+          (voucher_id,rater_id,reviewer_source,snapshot_json,snapshot_hash,created_at)
+          VALUES ('voucher_workspace_network_delete',?,'rateloop_network',
+                  '{"privateVoucherAssertion":"workspace-delete-me"}',?,?)`,
+    args: [
+      new Date(NOW.getTime() + 3_600_000),
+      NOW,
+      NOW,
+      NOW,
+      raterId,
+      `0x${"1".repeat(64)}`,
+      reviewerAccount,
+      `0x${"2".repeat(64)}`,
+      `0x${"3".repeat(64)}`,
+      `sha256:${"7".repeat(64)}`,
+      new Date(NOW.getTime() + 3_600_000),
+      reviewerAccount,
+      NOW,
+      `sha256:${"8".repeat(64)}`,
+      raterId,
+      `sha256:${"9".repeat(64)}`,
+      NOW,
+    ],
+  });
+  return { raterId, reviewerAccount, reviewerPrincipal };
+}
+
 test("workspace deletion preview is owner-only and masks unauthorized workspaces", async () => {
   const { workspaceId } = await createWorkspace({ name: "Private workspace", ownerAddress: OWNER });
   await dbClient.execute({
@@ -528,18 +706,148 @@ test("workspace deletion marks private media for worker reconciliation and keeps
   );
 });
 
+test("workspace deletion tombstones copied network reviewer data without deleting the global rater", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Network copy workspace", ownerAddress: OWNER });
+  const seeded = await seedWorkspaceNetworkAssignment(workspaceId);
+
+  const deleted = await requestWorkspaceDeletion({
+    accountAddress: OWNER,
+    confirmationName: "Network copy workspace",
+    identityAssurance: "better_auth:passkey",
+    now: NOW,
+    workspaceId,
+  });
+  assert.equal(deleted.deleted, true);
+
+  const assignment = await dbClient.execute({
+    sql: `SELECT assignment.reviewer_account_address,assignment.payout_account_snapshot,
+                 assignment.rater_id,assignment.qualification_provenance_json,
+                 assignment.assurance_snapshot_json,assignment.assurance_snapshot_hash,
+                 assignment.blinding_json,assignment.integrity_reviewer_lookup,
+                 assignment.integrity_cluster_pseudonym,assignment.integrity_risk_band,
+                 assignment.provider_subject_hashes_json,assignment.integrity_provenance_json,
+                 assignment.integrity_provenance_hash,
+                 profile.principal_id AS tombstone_principal_id,
+                 profile.account_address AS tombstone_account_address,
+                 profile.deletion_receipt_hash,profile.deleted_at,
+                 reviewer.network_managed,reviewer.status AS reviewer_status
+          FROM tokenless_assurance_assignments assignment
+          JOIN tokenless_rater_profiles profile ON profile.rater_id=assignment.rater_id
+          JOIN tokenless_assurance_cohort_reviewers reviewer
+            ON reviewer.project_id=assignment.project_id
+           AND reviewer.cohort_id=assignment.cohort_id
+           AND reviewer.reviewer_account_address=assignment.reviewer_account_address
+          WHERE assignment.assignment_id='assignment_workspace_network_delete'`,
+  });
+  assert.equal(assignment.rowCount, 1);
+  const row = assignment.rows[0] as Record<string, unknown>;
+  assert.match(String(row.reviewer_account_address), /^rlp_erased_assignment_/u);
+  assert.match(String(row.rater_id), /^rater_erased_ws_/u);
+  assert.equal(row.tombstone_principal_id, null);
+  assert.equal(new Date(String(row.deleted_at)).toISOString(), NOW.toISOString());
+  assert.match(String(row.deletion_receipt_hash), /^sha256:[0-9a-f]{64}$/u);
+  assert.equal(row.payout_account_snapshot, row.tombstone_account_address);
+  assert.equal(row.qualification_provenance_json, "[]");
+  assert.match(String(row.assurance_snapshot_json), /rateloop\.erased-assurance-snapshot\.v1/u);
+  assert.match(String(row.assurance_snapshot_json), new RegExp(String(row.assurance_snapshot_hash), "u"));
+  assert.equal(row.blinding_json, '{"subject":"deleted"}');
+  assert.equal(row.integrity_reviewer_lookup, null);
+  assert.equal(row.integrity_cluster_pseudonym, null);
+  assert.equal(row.integrity_risk_band, null);
+  assert.equal(row.provider_subject_hashes_json, "[]");
+  assert.match(String(row.integrity_provenance_json), /rateloop\.erased-integrity-provenance\.v1/u);
+  assert.equal(row.network_managed, true);
+  assert.equal(row.reviewer_status, "removed");
+  assert.doesNotMatch(JSON.stringify(row), /workspace-delete-me|private-lookup|private-cluster|private-provider/u);
+  const retainedVoucherEvidence = await dbClient.execute({
+    sql: `SELECT voucher.rater_id AS voucher_rater_id,
+                 snapshot.rater_id AS snapshot_rater_id,snapshot.snapshot_json,snapshot.snapshot_hash
+          FROM tokenless_paid_vouchers voucher
+          JOIN tokenless_voucher_assurance_snapshots snapshot ON snapshot.voucher_id=voucher.voucher_id
+          WHERE voucher.voucher_id='voucher_workspace_network_delete'`,
+  });
+  assert.deepEqual(
+    {
+      snapshotRaterId: retainedVoucherEvidence.rows[0]?.snapshot_rater_id,
+      voucherRaterId: retainedVoucherEvidence.rows[0]?.voucher_rater_id,
+    },
+    { snapshotRaterId: seeded.raterId, voucherRaterId: seeded.raterId },
+  );
+  assert.match(
+    String(retainedVoucherEvidence.rows[0]?.snapshot_json),
+    /rateloop\.erased-voucher-assurance-snapshot\.v1/u,
+  );
+  assert.match(
+    String(retainedVoucherEvidence.rows[0]?.snapshot_json),
+    new RegExp(String(retainedVoucherEvidence.rows[0]?.snapshot_hash), "u"),
+  );
+  assert.doesNotMatch(String(retainedVoucherEvidence.rows[0]?.snapshot_json), /workspace-delete-me/u);
+
+  assert.deepEqual(
+    await storedRow(
+      `SELECT principal_id,account_address,deleted_at FROM tokenless_rater_profiles
+       WHERE rater_id=?`,
+      [seeded.raterId],
+    ),
+    {
+      account_address: seeded.reviewerAccount,
+      deleted_at: null,
+      principal_id: seeded.reviewerPrincipal,
+    },
+  );
+  assert.equal(
+    (
+      await storedRow(
+        `SELECT COUNT(*) AS count FROM tokenless_assurance_cohort_reviewers
+         WHERE reviewer_account_address=? AND network_managed=true`,
+        [seeded.reviewerAccount],
+      )
+    ).count,
+    0,
+  );
+  const deletionReceipt = await dbClient.execute({
+    sql: `SELECT completion.evidence_json,category.disposition,category.status,
+                 category.basis_code,category.retention_deadline
+          FROM tokenless_subject_request_completions completion
+          JOIN tokenless_deletion_jobs job ON job.subject_request_id=completion.request_id
+          JOIN tokenless_deletion_job_categories category
+            ON category.job_id=job.job_id AND category.category='settlement_audit'
+          WHERE completion.request_id=?`,
+    args: [deleted.requestId],
+  });
+  const evidence = JSON.parse(String(deletionReceipt.rows[0]?.evidence_json)) as {
+    networkEvidenceRetention: Record<string, unknown>;
+  };
+  assert.deepEqual(evidence.networkEvidenceRetention, {
+    basis: "settlement_and_audit",
+    form: "restricted_claim_links_and_commitment_only_receipts",
+    publicNetworkBindings: 0,
+    settlementCommitments: 0,
+    settlementReceiptCommitments: 0,
+    voucherRaterLinks: 1,
+    voucherSnapshotRaterLinks: 1,
+  });
+  assert.equal(deletionReceipt.rows[0]?.disposition, "retain");
+  assert.equal(deletionReceipt.rows[0]?.status, "retained");
+  assert.equal(deletionReceipt.rows[0]?.basis_code, "settlement_and_audit");
+  assert.equal(
+    new Date(String(deletionReceipt.rows[0]?.retention_deadline)).toISOString(),
+    new Date(NOW.getTime() + 365 * 86_400_000).toISOString(),
+  );
+});
+
 test("workspace deletion anonymizes terminal review subjects and removes private access links", () => {
   const source = readFileSync(new URL("./workspaceDeletion.ts", import.meta.url), "utf8");
   assert.match(source, /rlp_erased_assignment_/u);
   assert.match(source, /UPDATE tokenless_assurance_assignments[\s\S]*reviewer_account_address=\$1/u);
-  assert.match(
-    source,
-    /UPDATE tokenless_private_unpaid_review_assignments[\s\S]*reviewer_account_address=\$1/u,
-  );
+  assert.match(source, /UPDATE tokenless_private_unpaid_review_assignments[\s\S]*reviewer_account_address=\$1/u);
   assert.match(source, /DELETE FROM tokenless_private_group_policy_acceptances WHERE workspace_id=\$1/u);
   assert.match(source, /DELETE FROM tokenless_private_group_memberships/u);
   assert.match(source, /DELETE FROM tokenless_workspace_members WHERE workspace_id = \$1/u);
   assert.match(source, /assurance_assignment_direct_subjects/u);
+  assert.match(source, /network_assignment_personal_copies/u);
+  assert.match(source, /network_history_personal_copies/u);
+  assert.match(source, /network_voucher_snapshot_personal_copies/u);
   assert.match(source, /direct_private_assignment_subjects/u);
   assert.match(source, /workspace_memberships/u);
 });
