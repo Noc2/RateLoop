@@ -11,8 +11,15 @@ type ChainIdentity = {
   panelAddress: Address;
   deploymentKey: string;
 };
+export type RaterSettlementNotificationKind = "claim_expiring" | "reveal_required";
+export type RaterSettlementNotificationCandidate = {
+  kind: RaterSettlementNotificationKind;
+  principalAddress: string;
+  sourceKey: string;
+};
 const COMMIT_KEY_PARAMETERS = parseAbiParameters("uint256 roundId,address voteKey");
 const UNSIGNED = /^(?:0|[1-9][0-9]*)$/u;
+const CLAIM_EXPIRY_NOTICE_SECONDS = 24n * 60n * 60n;
 
 function rowString(row: Row | undefined, key: string) {
   const value = row?.[key];
@@ -56,6 +63,38 @@ function indexedCommitCanReveal(input: { commit: Row; round: Row; nowSeconds: bi
     input.nowSeconds <= beaconFailureDeadline &&
     !lateRevealBlocked
   );
+}
+
+export function deriveRaterSettlementNotificationKinds(input: {
+  commit: unknown;
+  round: unknown;
+  nowSeconds: bigint;
+}): RaterSettlementNotificationKind[] {
+  const commit = record(input.commit, "Indexed commit");
+  const round = record(input.round, "Indexed round");
+  const kinds: RaterSettlementNotificationKind[] = [];
+  if (indexedCommitCanReveal({ commit, round, nowSeconds: input.nowSeconds })) {
+    kinds.push("reveal_required");
+  }
+  const state = integer(round.state, "Indexed round state");
+  const claimDeadline = BigInt(unsigned(round.claimDeadline, "Indexed claim deadline"));
+  const claimAmount =
+    state === 5
+      ? BigInt(unsigned(commit.finalizedPayout, "Indexed finalized payout"))
+      : state === 7 || state === 8
+        ? BigInt(unsigned(round.compensationPerRecipient, "Indexed compensation"))
+        : 0n;
+  if (
+    commit.revealed === true &&
+    commit.claimed !== true &&
+    claimAmount > 0n &&
+    claimDeadline >= input.nowSeconds &&
+    claimDeadline <= input.nowSeconds + CLAIM_EXPIRY_NOTICE_SECONDS &&
+    round.staleReturned !== true
+  ) {
+    kinds.push("claim_expiring");
+  }
+  return kinds;
 }
 
 function configuredPonderUrl(raw = process.env.TOKENLESS_PONDER_URL ?? process.env.NEXT_PUBLIC_PONDER_URL) {
@@ -267,6 +306,110 @@ export async function getRaterSettlementSnapshot(input: {
     commits,
     nowSeconds: BigInt(Math.floor((input.now ?? new Date()).getTime() / 1_000)),
   });
+}
+
+export async function listRaterSettlementNotificationCandidates(
+  input: {
+    fetchImpl?: typeof fetch;
+    limit?: number;
+    now?: Date;
+    ponderUrl?: string;
+  } = {},
+): Promise<RaterSettlementNotificationCandidate[]> {
+  const rawLimit = input.limit ?? 20;
+  if (!Number.isSafeInteger(rawLimit) || rawLimit < 1) {
+    throw new Error("Settlement notification limit is invalid.");
+  }
+  const limit = Math.min(rawLimit, 100);
+  const localResult = await dbClient.execute({
+    sql: `SELECT c.commit_id, c.round_id, c.vote_key, c.deployment_key,
+                 v.chain_id, v.panel_address, p.principal_id AS principal_address,
+                 reveal_notice.notification_id AS reveal_notice_id,
+                 claim_notice.notification_id AS claim_notice_id
+          FROM tokenless_rater_commits c
+          JOIN tokenless_paid_vouchers v ON v.voucher_id = c.voucher_id
+          JOIN tokenless_rater_profiles p ON p.rater_id = v.rater_id
+          JOIN tokenless_browser_identities b ON b.principal_address = p.principal_id
+          LEFT JOIN tokenless_notifications reveal_notice
+            ON reveal_notice.principal_address = p.principal_id
+           AND reveal_notice.source_type = 'settlement.reveal_required'
+           AND reveal_notice.source_key = c.commit_id
+          LEFT JOIN tokenless_notifications claim_notice
+            ON claim_notice.principal_address = p.principal_id
+           AND claim_notice.source_type = 'settlement.claim_expiring'
+           AND claim_notice.source_key = c.commit_id
+          WHERE c.state = 'confirmed' AND p.principal_id IS NOT NULL
+            AND (reveal_notice.notification_id IS NULL OR claim_notice.notification_id IS NULL)
+          ORDER BY c.updated_at ASC, c.commit_id ASC LIMIT ?`,
+    args: [limit],
+  });
+  const local = localResult.rows.map(value => value as Row);
+  if (local.length === 0) return [];
+  const localByCommitKey = new Map(
+    local.map(row => {
+      const roundId = unsigned(row.round_id, "Stored round ID");
+      const voteKey = String(row.vote_key ?? "");
+      if (!isAddress(voteKey)) {
+        throw new TokenlessServiceError(
+          "Stored settlement identity is malformed.",
+          409,
+          "settlement_identity_mismatch",
+        );
+      }
+      return [tokenlessCommitKey(BigInt(roundId), getAddress(voteKey)).toLowerCase(), row] as const;
+    }),
+  );
+  const settlementsUrl = endpoint(configuredPonderUrl(input.ponderUrl), "/settlements");
+  settlementsUrl.searchParams.set("commitKeys", [...localByCommitKey.keys()].join(","));
+  const indexed = record(
+    await fetchJson(input.fetchImpl ?? fetch, settlementsUrl, "Indexed settlements"),
+    "Indexed settlements",
+  );
+  if (
+    indexed.schemaVersion !== "rateloop.indexed-settlements.v1" ||
+    !Number.isSafeInteger(Number(indexed.chainId)) ||
+    !isAddress(String(indexed.panelAddress ?? "")) ||
+    !Array.isArray(indexed.items)
+  ) {
+    throw new TokenlessServiceError("Indexed settlements are malformed.", 409, "indexed_settlement_invalid");
+  }
+  const nowSeconds = BigInt(Math.floor((input.now ?? new Date()).getTime() / 1_000));
+  const candidates: RaterSettlementNotificationCandidate[] = [];
+  for (const [index, value] of indexed.items.entries()) {
+    const item = record(value, `Indexed settlement ${index}`);
+    const commit = record(item.commit, `Indexed settlement ${index} commit`);
+    const commitKey = String(commit.commitKey ?? "").toLowerCase();
+    const row = localByCommitKey.get(commitKey);
+    if (!isHash(commitKey) || !row || !item.round) continue;
+    const round = record(item.round, `Indexed settlement ${index} round`);
+    if (
+      String(indexed.deploymentKey ?? "") !== rowString(row, "deployment_key") ||
+      Number(indexed.chainId) !== Number(row.chain_id) ||
+      getAddress(String(indexed.panelAddress)) !== getAddress(String(row.panel_address)) ||
+      unsigned(commit.roundId, "Indexed commit round ID") !== rowString(row, "round_id") ||
+      unsigned(round.roundId, "Indexed round ID") !== rowString(row, "round_id")
+    ) {
+      throw new TokenlessServiceError(
+        "Indexed settlements do not match the committed deployment.",
+        409,
+        "settlement_identity_mismatch",
+      );
+    }
+    for (const kind of deriveRaterSettlementNotificationKinds({ commit, round, nowSeconds })) {
+      if (
+        (kind === "reveal_required" && rowString(row, "reveal_notice_id")) ||
+        (kind === "claim_expiring" && rowString(row, "claim_notice_id"))
+      ) {
+        continue;
+      }
+      candidates.push({
+        kind,
+        principalAddress: rowString(row, "principal_address")!,
+        sourceKey: rowString(row, "commit_id")!,
+      });
+    }
+  }
+  return candidates.slice(0, limit);
 }
 
 export type ReviewerEarning = {

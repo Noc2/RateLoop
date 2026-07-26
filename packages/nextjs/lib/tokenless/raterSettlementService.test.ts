@@ -1,5 +1,5 @@
 import { tokenlessCommitKey } from "./rater/settlementRecovery";
-import { deriveRaterSettlementSnapshot } from "./raterSettlementService";
+import { deriveRaterSettlementNotificationKinds, deriveRaterSettlementSnapshot } from "./raterSettlementService";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -75,6 +75,54 @@ test("models the contract late-reveal eligibility before offering a transaction"
       round: { ...(base.round as Record<string, unknown>), revealCount: 1 },
     }).canReveal,
     true,
+  );
+});
+
+test("derives reveal and claim-expiry notices only while the action remains possible", () => {
+  const base = source();
+  assert.deepEqual(
+    deriveRaterSettlementNotificationKinds({
+      commit: (base.commits as Array<Record<string, unknown>>)[0],
+      round: base.round,
+      nowSeconds: 150n,
+    }),
+    ["reveal_required"],
+  );
+  assert.deepEqual(
+    deriveRaterSettlementNotificationKinds({
+      commit: (base.commits as Array<Record<string, unknown>>)[0],
+      round: base.round,
+      nowSeconds: 250n,
+    }),
+    [],
+  );
+
+  const finalizedCommit = {
+    ...(base.commits as Array<Record<string, unknown>>)[0],
+    revealed: true,
+    finalizedPayout: "1200000",
+  };
+  const finalizedRound = {
+    ...(base.round as Record<string, unknown>),
+    state: 5,
+    status: "finalized",
+    claimDeadline: String(1_000n + 23n * 60n * 60n),
+  };
+  assert.deepEqual(
+    deriveRaterSettlementNotificationKinds({
+      commit: finalizedCommit,
+      round: finalizedRound,
+      nowSeconds: 1_000n,
+    }),
+    ["claim_expiring"],
+  );
+  assert.deepEqual(
+    deriveRaterSettlementNotificationKinds({
+      commit: finalizedCommit,
+      round: { ...finalizedRound, claimDeadline: String(1_000n + 25n * 60n * 60n) },
+      nowSeconds: 1_000n,
+    }),
+    [],
   );
 });
 

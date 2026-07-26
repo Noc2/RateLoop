@@ -10,6 +10,7 @@ import {
   materializeTokenlessLifecycleNotifications,
 } from "~~/lib/notifications/delivery";
 import { unsubscribeTokenlessEmailNotificationToken } from "~~/lib/notifications/tokenless";
+import { tokenlessCommitKey } from "~~/lib/tokenless/rater/settlementRecovery";
 
 const NOW = new Date("2026-07-14T16:00:00.000Z");
 const PRINCIPAL = "0x1111111111111111111111111111111111111111";
@@ -17,6 +18,9 @@ const SECOND_PRINCIPAL = "0x2222222222222222222222222222222222222222";
 const MEMBER_PRINCIPAL = "0x3333333333333333333333333333333333333333";
 const SECRET = "notification-unsubscribe-test-secret-0001";
 const UNSUBSCRIBE_HASH = createHash("sha256").update("unsubscribe-seed").digest("hex");
+const PANEL = "0x2222222222222222222222222222222222222222";
+const VOTE_KEY = "0x3333333333333333333333333333333333333333";
+const SETTLEMENT_DEPLOYMENT = "deployment:notification-test";
 
 beforeEach(async () => {
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
@@ -66,6 +70,61 @@ async function seedBrowserIdentity(principal: string) {
           (principal_address, auth_provider, email_verified, created_at, updated_at, last_login_at)
           VALUES (?, 'email', true, ?, ?, ?)`,
     args: [principal, NOW, NOW, NOW],
+  });
+}
+
+async function seedConfirmedRaterCommit() {
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_principals (principal_id, status, created_at, updated_at)
+          VALUES (?, 'active', ?, ?)`,
+    args: [PRINCIPAL, NOW, NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_rater_profiles
+          (rater_id, principal_id, account_address, nullifier_seed_ciphertext, nullifier_key_version,
+           nullifier_key_domain, created_at, updated_at)
+          VALUES ('rater-notification', ?, ?, 'ciphertext', 'v1', 'vote_mapping', ?, ?)`,
+    args: [PRINCIPAL, VOTE_KEY, NOW, NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_paid_vouchers
+          (voucher_id, rater_id, request_idempotency_key, request_hash, chain_id,
+           panel_address, issuer_address, issuer_epoch, signer_address, round_id, content_id, vote_key,
+           nullifier, admission_policy_hash, assurance_snapshot_hash, expires_at, payout_account_snapshot, voucher_json,
+           voucher_signature, status, issued_at)
+          VALUES ('voucher-notification', 'rater-notification', 'voucher:notification:1', 'request-hash', 84532,
+                  ?, '0x4444444444444444444444444444444444444444', 1,
+                  '0x4444444444444444444444444444444444444444', 42,
+                  ?, ?, ?, ?, ?, ?, ?, '{}', '0x12', 'issued', ?)`,
+    args: [
+      PANEL,
+      `0x${"11".repeat(32)}`,
+      VOTE_KEY,
+      `0x${"22".repeat(32)}`,
+      `0x${"33".repeat(32)}`,
+      `sha256:${"44".repeat(32)}`,
+      new Date(NOW.getTime() + 60_000),
+      VOTE_KEY,
+      NOW,
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_rater_commits
+          (commit_id, voucher_id, request_idempotency_key, request_hash, deployment_key, round_id,
+           vote_key, sealed_commitment, sealed_payload_hash, payout_commitment, relay_payload_json,
+           state, created_at, updated_at, confirmed_at)
+          VALUES ('commit-notification', 'voucher-notification', 'commit:notification:1', 'request-hash', ?, 42,
+                  ?, ?, ?, ?, '{}', 'confirmed', ?, ?, ?)`,
+    args: [
+      SETTLEMENT_DEPLOYMENT,
+      VOTE_KEY,
+      `0x${"55".repeat(32)}`,
+      `0x${"66".repeat(32)}`,
+      `0x${"77".repeat(32)}`,
+      NOW,
+      NOW,
+      NOW,
+    ],
   });
 }
 
@@ -218,6 +277,93 @@ test("settled lifecycle evidence creates one privacy-minimal in-app notification
     source_key: "ledger-sensitive-source",
   });
   assert.doesNotMatch(JSON.stringify(stored.rows), /999999999|Highly Sensitive Customer|private-bank-reference/u);
+});
+
+test("indexed settlement actions create idempotent reveal and claim-expiry notifications", async () => {
+  await seedConfirmedRaterCommit();
+  const commitKey = tokenlessCommitKey(42n, VOTE_KEY);
+  const nowSeconds = BigInt(Math.floor(NOW.getTime() / 1_000));
+  let phase: "claim" | "reveal" = "reveal";
+  const fetchImpl = async () =>
+    Response.json({
+      schemaVersion: "rateloop.indexed-settlements.v1",
+      deploymentKey: SETTLEMENT_DEPLOYMENT,
+      chainId: 84532,
+      panelAddress: PANEL,
+      items: [
+        {
+          commit: {
+            roundId: "42",
+            voteKey: VOTE_KEY,
+            commitKey,
+            revealed: phase === "claim",
+            claimed: false,
+            scoringEligible: phase === "claim",
+            finalizedPayout: phase === "claim" ? "1200000" : "0",
+          },
+          round: {
+            roundId: "42",
+            state: phase === "claim" ? 5 : 0,
+            status: phase === "claim" ? "finalized" : "revealable",
+            revealDeadline: String(nowSeconds + 60n),
+            beaconFailureDeadline: String(nowSeconds + 3_600n),
+            minimumReveals: 2,
+            revealCount: 1,
+            compensationPerRecipient: "0",
+            claimDeadline: phase === "claim" ? String(nowSeconds + 3_600n) : "0",
+            staleReturned: false,
+          },
+          claim: null,
+        },
+      ],
+    });
+
+  assert.deepEqual(
+    await materializeTokenlessLifecycleNotifications({
+      fetchImpl: fetchImpl as typeof fetch,
+      now: NOW,
+      ponderUrl: "http://ponder.test",
+    }),
+    { candidates: 1, inserted: 1 },
+  );
+  assert.deepEqual(
+    await materializeTokenlessLifecycleNotifications({
+      fetchImpl: fetchImpl as typeof fetch,
+      now: NOW,
+      ponderUrl: "http://ponder.test",
+    }),
+    { candidates: 0, inserted: 0 },
+  );
+
+  phase = "claim";
+  assert.deepEqual(
+    await materializeTokenlessLifecycleNotifications({
+      fetchImpl: fetchImpl as typeof fetch,
+      now: NOW,
+      ponderUrl: "http://ponder.test",
+    }),
+    { candidates: 1, inserted: 1 },
+  );
+  const notifications = await dbClient.execute({
+    sql: `SELECT source_type, title, body, href, preference_key
+          FROM tokenless_notifications WHERE source_key = 'commit-notification' ORDER BY source_type`,
+  });
+  assert.deepEqual(notifications.rows, [
+    {
+      source_type: "settlement.claim_expiring",
+      title: "Review payment expiring",
+      body: "A review payment is nearing its claim deadline.",
+      href: "/human?tab=earnings",
+      preference_key: "paymentUpdates",
+    },
+    {
+      source_type: "settlement.reveal_required",
+      title: "Review reveal required",
+      body: "Your committed review needs a self-reveal before its recovery deadline.",
+      href: "/human?tab=earnings",
+      preference_key: "paymentUpdates",
+    },
+  ]);
 });
 
 test("private assignment notices require the exact current active group-membership snapshot", async () => {

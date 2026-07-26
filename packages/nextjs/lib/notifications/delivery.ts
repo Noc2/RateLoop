@@ -4,6 +4,7 @@ import { dbClient } from "~~/lib/db";
 import { sendTokenlessNotificationEmail } from "~~/lib/notifications/resend";
 import { type TokenlessNotificationKey, buildTokenlessSignedUnsubscribeToken } from "~~/lib/notifications/tokenless";
 import { materializeOversightAlertNotifications } from "~~/lib/tokenless/oversightAlerts";
+import { listRaterSettlementNotificationCandidates } from "~~/lib/tokenless/raterSettlementService";
 
 type Row = Record<string, unknown>;
 
@@ -83,8 +84,21 @@ function rowsToCandidates(rows: readonly Row[], template: Omit<LifecycleCandidat
   });
 }
 
-async function loadLifecycleCandidates(now: Date, limit: number) {
-  const perSource = Math.max(1, Math.ceil(limit / 4));
+async function loadLifecycleCandidates(
+  now: Date,
+  limit: number,
+  settlementSource: { fetchImpl?: typeof fetch; ponderUrl?: string } = {},
+) {
+  const perSource = Math.max(1, Math.ceil(limit / 6));
+  const settlementCandidates = listRaterSettlementNotificationCandidates({
+    fetchImpl: settlementSource.fetchImpl,
+    limit: perSource,
+    now,
+    ponderUrl: settlementSource.ponderUrl,
+  }).catch(error => {
+    console.error("[tokenless-notifications] Settlement notices deferred.", error);
+    return [];
+  });
   const [available, directAvailable, completed, payments, directResults, workspaceResults] = await Promise.all([
     dbClient.execute({
       sql: `SELECT b.principal_address, a.assignment_id AS source_key
@@ -224,6 +238,9 @@ async function loadLifecycleCandidates(now: Date, limit: number) {
     const key = `${rowString(row, "principal_address")}:${rowString(row, "source_key")}`;
     resultRows.set(key, row);
   }
+  const settlements = await settlementCandidates;
+  const revealNotices = settlements.filter(candidate => candidate.kind === "reveal_required");
+  const claimNotices = settlements.filter(candidate => candidate.kind === "claim_expiring");
 
   return interleave(
     [
@@ -255,6 +272,24 @@ async function loadLifecycleCandidates(now: Date, limit: number) {
         sourceType: "ask.result",
         title: "Agent result ready",
       }),
+      revealNotices.map(candidate => ({
+        body: "Your committed review needs a self-reveal before its recovery deadline.",
+        href: "/human?tab=earnings",
+        preferenceKey: "paymentUpdates" as const,
+        principalAddress: candidate.principalAddress,
+        sourceKey: candidate.sourceKey,
+        sourceType: "settlement.reveal_required",
+        title: "Review reveal required",
+      })),
+      claimNotices.map(candidate => ({
+        body: "A review payment is nearing its claim deadline.",
+        href: "/human?tab=earnings",
+        preferenceKey: "paymentUpdates" as const,
+        principalAddress: candidate.principalAddress,
+        sourceKey: candidate.sourceKey,
+        sourceType: "settlement.claim_expiring",
+        title: "Review payment expiring",
+      })),
     ],
     limit,
   );
@@ -287,9 +322,14 @@ async function insertLifecycleCandidates(candidates: readonly LifecycleCandidate
   return inserted;
 }
 
-export async function materializeTokenlessLifecycleNotifications(input: { limit?: number; now?: Date } = {}) {
+export async function materializeTokenlessLifecycleNotifications(
+  input: { fetchImpl?: typeof fetch; limit?: number; now?: Date; ponderUrl?: string } = {},
+) {
   const now = input.now ?? new Date();
-  const candidates = await loadLifecycleCandidates(now, bounded(input.limit));
+  const candidates = await loadLifecycleCandidates(now, bounded(input.limit), {
+    fetchImpl: input.fetchImpl,
+    ponderUrl: input.ponderUrl,
+  });
   return { candidates: candidates.length, inserted: await insertLifecycleCandidates(candidates, now) };
 }
 
