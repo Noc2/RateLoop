@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
 import { acceptAudienceAssignment, getAssignmentOnlyTask } from "~~/lib/tokenless/audienceAssignments";
-import { getDirectPrivateReviewTask, isDirectPrivateReviewAssignmentId } from "~~/lib/tokenless/privateReviewResponses";
 import {
-  acceptPrivateUnpaidReviewAssignment,
-  getPrivateUnpaidReviewAssignmentAccess,
-} from "~~/lib/tokenless/privateUnpaidReviewAdapter";
+  acceptDirectPrivateReviewAssignment,
+  getDirectPrivateReviewAssignmentAccess,
+  getDirectPrivateReviewTaskReviewerAccount,
+} from "~~/lib/tokenless/privatePaidHumanReviewAdapter";
+import { getDirectPrivateReviewTask, isDirectPrivateReviewAssignmentId } from "~~/lib/tokenless/privateReviewResponses";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
@@ -21,9 +22,9 @@ export async function GET(request: NextRequest, context: Context) {
       throw new TokenlessServiceError("Assignment access status is unavailable.", 404, "assignment_not_found");
     }
     return NextResponse.json(
-      await getPrivateUnpaidReviewAssignmentAccess({
+      await getDirectPrivateReviewAssignmentAccess({
         assignmentId,
-        reviewerAccountAddress: session.principalId,
+        principalId: session.principalId,
         confidentialityTermsHash: request.nextUrl.searchParams.get("terms") ?? "",
       }),
       { headers: { "Cache-Control": "private, no-store, max-age=0" } },
@@ -47,9 +48,9 @@ export async function POST(request: NextRequest, context: Context) {
     };
     const directAssignment = isDirectPrivateReviewAssignmentId(assignmentId);
     const acceptance = directAssignment
-      ? await acceptPrivateUnpaidReviewAssignment({
+      ? await acceptDirectPrivateReviewAssignment({
           assignmentId,
-          reviewerAccountAddress: session.principalId,
+          principalId: session.principalId,
           confidentialityTermsAccepted: body.confidentialityTermsAccepted === true,
           confidentialityTermsHash: body.confidentialityTermsHash ?? "",
         })
@@ -63,7 +64,13 @@ export async function POST(request: NextRequest, context: Context) {
       return NextResponse.json(acceptance, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
     }
     const task = directAssignment
-      ? await getDirectPrivateReviewTask({ assignmentId, accountAddress: session.principalId })
+      ? await getDirectPrivateReviewTask({
+          assignmentId,
+          accountAddress: await getDirectPrivateReviewTaskReviewerAccount({
+            assignmentId,
+            principalId: session.principalId,
+          }),
+        })
       : await getAssignmentOnlyTask({ assignmentId, baseAccountAddress: session.principalId });
     return NextResponse.json({ acceptance, task }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
   } catch (error) {

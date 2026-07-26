@@ -4,6 +4,7 @@ import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import {
   type PrivatePaidHumanReviewRequest,
   __privatePaidHumanReviewAdapterTestUtils,
+  createDirectPrivateReviewAssignmentAcceptor,
   createPrivatePaidHumanReviewAdapter,
 } from "~~/lib/tokenless/privatePaidHumanReviewAdapter";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -233,6 +234,83 @@ test("preflights every named human before funding, assignment, or voucher prepar
       integrityProvenanceHash: null,
     });
   }
+});
+
+test("direct assignment acceptance routes paid seats through their exact voucher binding", async () => {
+  const calls: Array<{ kind: string; input: Record<string, unknown> }> = [];
+  const accept = createDirectPrivateReviewAssignmentAcceptor({
+    async resolveContext() {
+      return {
+        compensationMode: "usdc",
+        reviewerAccountAddress: REVIEWERS[0],
+        issuanceId: "issuance_private_paid_1",
+      };
+    },
+    async acceptPaid(input: Record<string, unknown>) {
+      calls.push({ kind: "paid", input });
+      return { accepted: true };
+    },
+    async acceptUnpaid(input: Record<string, unknown>) {
+      calls.push({ kind: "unpaid", input });
+      return { accepted: true };
+    },
+  } as never);
+  await accept({
+    assignmentId: "assignment_private_paid_1",
+    principalId: REVIEWER_BINDINGS[0]!.principalId,
+    confidentialityTermsAccepted: true,
+    confidentialityTermsHash: HASH,
+    now: NOW,
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.kind, "paid");
+  assert.deepEqual(calls[0]?.input, {
+    assignmentId: "assignment_private_paid_1",
+    principalId: REVIEWER_BINDINGS[0]!.principalId,
+    payoutAccount: REVIEWERS[0],
+    issuanceId: "issuance_private_paid_1",
+    confidentialityTermsAccepted: true,
+    confidentialityTermsHash: HASH,
+    now: NOW,
+  });
+});
+
+test("direct assignment acceptance preserves the unpaid principal path", async () => {
+  const calls: Array<{ kind: string; input: Record<string, unknown> }> = [];
+  const accept = createDirectPrivateReviewAssignmentAcceptor({
+    async resolveContext() {
+      return {
+        compensationMode: "unpaid",
+        reviewerAccountAddress: REVIEWER_BINDINGS[0]!.principalId,
+      };
+    },
+    async acceptPaid(input: Record<string, unknown>) {
+      calls.push({ kind: "paid", input });
+      return { accepted: true };
+    },
+    async acceptUnpaid(input: Record<string, unknown>) {
+      calls.push({ kind: "unpaid", input });
+      return { accepted: true };
+    },
+  } as never);
+  await accept({
+    assignmentId: "assignment_private_unpaid_1",
+    principalId: REVIEWER_BINDINGS[0]!.principalId,
+    confidentialityTermsAccepted: true,
+    confidentialityTermsHash: HASH,
+    now: NOW,
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.kind, "unpaid");
+  assert.deepEqual(calls[0]?.input, {
+    assignmentId: "assignment_private_unpaid_1",
+    reviewerAccountAddress: REVIEWER_BINDINGS[0]!.principalId,
+    confidentialityTermsAccepted: true,
+    confidentialityTermsHash: HASH,
+    now: NOW,
+  });
 });
 
 test("one ineligible invited human fails closed before any paid or private side effect", async () => {

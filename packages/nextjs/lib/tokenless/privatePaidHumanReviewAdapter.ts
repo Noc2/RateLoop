@@ -25,6 +25,7 @@ import {
 } from "~~/lib/tokenless/paidReviewVoucherReceipts";
 import {
   acceptPrivateUnpaidReviewAssignment,
+  getPrivateUnpaidReviewAssignmentAccess,
   requestPrivatePaidReviewAssignments,
 } from "~~/lib/tokenless/privateUnpaidReviewAdapter";
 import type { ProductPrincipal } from "~~/lib/tokenless/productCore";
@@ -461,6 +462,8 @@ export const requestPrivatePaidHumanReview = createPrivatePaidHumanReviewAdapter
 
 export async function acceptPrivatePaidReviewAssignment(input: {
   assignmentId: string;
+  confidentialityTermsAccepted?: boolean;
+  confidentialityTermsHash?: string;
   issuanceId: string;
   principalId: string;
   payoutAccount: string;
@@ -526,6 +529,8 @@ export async function acceptPrivatePaidReviewAssignment(input: {
   const accepted = await acceptPrivateUnpaidReviewAssignment({
     assignmentId: input.assignmentId,
     reviewerAccountAddress: payoutAccount,
+    confidentialityTermsAccepted: input.confidentialityTermsAccepted,
+    confidentialityTermsHash: input.confidentialityTermsHash,
     now,
   });
   return {
@@ -535,6 +540,130 @@ export async function acceptPrivatePaidReviewAssignment(input: {
     fundingOperationReference: text(row, "operation_key")!,
     acceptedWorkLiability: "locked" as const,
   };
+}
+
+type DirectPrivateAssignmentAcceptanceContext =
+  | {
+      compensationMode: "unpaid";
+      reviewerAccountAddress: string;
+    }
+  | {
+      compensationMode: "usdc";
+      reviewerAccountAddress: string;
+      issuanceId: string;
+    };
+
+async function resolveDirectPrivateAssignmentAcceptanceContext(input: {
+  assignmentId: string;
+  principalId: string;
+}): Promise<DirectPrivateAssignmentAcceptanceContext> {
+  const result = await dbPool.query(
+    `SELECT profile.compensation_mode,
+            seat.reviewer_principal_id,seat.payout_account,seat.voucher_issuance_id,seat.state AS seat_state
+     FROM tokenless_private_unpaid_review_assignments assignment
+     JOIN tokenless_private_unpaid_review_deliveries delivery
+       ON delivery.delivery_id=assignment.delivery_id
+     JOIN tokenless_agent_review_request_profiles profile
+       ON profile.workspace_id=delivery.workspace_id
+      AND profile.profile_id=delivery.request_profile_id
+      AND profile.version=delivery.request_profile_version
+      AND profile.profile_hash=delivery.request_profile_hash
+     LEFT JOIN tokenless_paid_assignment_seats seat
+       ON seat.assignment_id=assignment.assignment_id
+      AND seat.reviewer_principal_id=$2
+     WHERE assignment.assignment_id=$1 LIMIT 1`,
+    [input.assignmentId, input.principalId],
+  );
+  const row = result.rows[0] as Row | undefined;
+  if (!row) {
+    throw new TokenlessServiceError("Assignment not found.", 404, "assignment_not_found");
+  }
+  const compensationMode = text(row, "compensation_mode");
+  if (compensationMode === "unpaid") {
+    return {
+      compensationMode,
+      reviewerAccountAddress: input.principalId,
+    };
+  }
+  if (
+    compensationMode !== "usdc" ||
+    !isRateLoopPrincipalId(input.principalId) ||
+    text(row, "reviewer_principal_id") !== input.principalId ||
+    text(row, "seat_state") !== "voucher_prepared" ||
+    !text(row, "payout_account") ||
+    !text(row, "voucher_issuance_id")
+  ) {
+    throw new TokenlessServiceError("Assignment not found.", 404, "assignment_not_found");
+  }
+  return {
+    compensationMode,
+    reviewerAccountAddress: getAddress(text(row, "payout_account")!).toLowerCase(),
+    issuanceId: text(row, "voucher_issuance_id")!,
+  };
+}
+
+type DirectPrivateAssignmentAcceptanceDependencies = {
+  resolveContext: typeof resolveDirectPrivateAssignmentAcceptanceContext;
+  acceptPaid: typeof acceptPrivatePaidReviewAssignment;
+  acceptUnpaid: typeof acceptPrivateUnpaidReviewAssignment;
+};
+
+export function createDirectPrivateReviewAssignmentAcceptor(
+  dependencies: DirectPrivateAssignmentAcceptanceDependencies = {
+    resolveContext: resolveDirectPrivateAssignmentAcceptanceContext,
+    acceptPaid: acceptPrivatePaidReviewAssignment,
+    acceptUnpaid: acceptPrivateUnpaidReviewAssignment,
+  },
+) {
+  return async function acceptDirectPrivateReviewAssignment(input: {
+    assignmentId: string;
+    confidentialityTermsAccepted?: boolean;
+    confidentialityTermsHash?: string;
+    principalId: string;
+    now?: Date;
+  }) {
+    const context = await dependencies.resolveContext(input);
+    if (context.compensationMode === "usdc") {
+      return dependencies.acceptPaid({
+        assignmentId: input.assignmentId,
+        confidentialityTermsAccepted: input.confidentialityTermsAccepted,
+        confidentialityTermsHash: input.confidentialityTermsHash,
+        issuanceId: context.issuanceId,
+        principalId: input.principalId,
+        payoutAccount: context.reviewerAccountAddress,
+        now: input.now,
+      });
+    }
+    return dependencies.acceptUnpaid({
+      assignmentId: input.assignmentId,
+      confidentialityTermsAccepted: input.confidentialityTermsAccepted,
+      confidentialityTermsHash: input.confidentialityTermsHash,
+      reviewerAccountAddress: context.reviewerAccountAddress,
+      now: input.now,
+    });
+  };
+}
+
+export const acceptDirectPrivateReviewAssignment = createDirectPrivateReviewAssignmentAcceptor();
+
+export async function getDirectPrivateReviewAssignmentAccess(input: {
+  assignmentId: string;
+  confidentialityTermsHash: string;
+  principalId: string;
+  now?: Date;
+}) {
+  const context = await resolveDirectPrivateAssignmentAcceptanceContext(input);
+  return getPrivateUnpaidReviewAssignmentAccess({
+    assignmentId: input.assignmentId,
+    confidentialityTermsHash: input.confidentialityTermsHash,
+    reviewerAccountAddress: context.reviewerAccountAddress,
+    now: input.now,
+  });
+}
+
+export async function getDirectPrivateReviewTaskReviewerAccount(input: { assignmentId: string; principalId: string }) {
+  const context = await resolveDirectPrivateAssignmentAcceptanceContext(input);
+  return context.reviewerAccountAddress;
 }
 
 export const __privatePaidHumanReviewAdapterTestUtils = {
