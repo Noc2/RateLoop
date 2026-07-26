@@ -77,7 +77,8 @@ async function loadProjectionSource(client: PoolClient, deliveryId: string) {
     `SELECT d.*, f.source_artifact_id, f.suggestion_artifact_id,
             f.workspace_reviewer_terms_version AS request_reviewer_terms_version,
             f.workspace_reviewer_terms_hash AS request_reviewer_terms_hash,
-            rp.criterion, rp.rationale_mode, p.data_classification,
+            rp.criterion, rp.rationale_mode, rp.compensation_mode, rp.bounty_per_seat_atomic,
+            rp.feedback_bonus_enabled, rp.feedback_bonus_pool_atomic, p.data_classification,
             o.run_id, l.state AS lifecycle_state
      FROM tokenless_private_unpaid_review_deliveries d
      JOIN tokenless_private_review_requests f ON f.private_review_id=d.private_review_id
@@ -128,25 +129,58 @@ async function insertProjection(client: PoolClient, source: Row, now: Date) {
   if (existingRunId) return existingRunId;
 
   const assignments = await client.query(
-    `SELECT a.*, cr.qualification_provenance_json
+    `SELECT a.*, cr.qualification_provenance_json,
+            seat.rater_id AS paid_rater_id,seat.state AS paid_seat_state,
+            seat.settlement_reference AS paid_settlement_reference,
+            seat.settlement_evidence_hash AS paid_settlement_evidence_hash,
+            operation.round_id AS paid_round_id,operation.state AS paid_operation_state,
+            operation.chain_admission_policy_hash AS paid_admission_policy_hash,
+            issuance.snapshot_id AS paid_eligibility_snapshot_id
      FROM tokenless_private_unpaid_review_assignments a
      JOIN tokenless_assurance_cohort_reviewers cr
        ON cr.project_id=a.project_id AND cr.cohort_id=a.cohort_id
       AND cr.reviewer_account_address=a.reviewer_account_address
+     LEFT JOIN tokenless_paid_assignment_seats seat ON seat.assignment_id=a.assignment_id
+     LEFT JOIN tokenless_paid_assignment_operations operation ON operation.operation_id=seat.operation_id
+     LEFT JOIN tokenless_paid_review_voucher_issuances issuance
+       ON issuance.issuance_id=seat.voucher_issuance_id
      WHERE a.delivery_id=$1 ORDER BY a.assignment_id`,
     [deliveryId],
   );
   const responses = await client.query(
-    `SELECT response.*, assignment.qualification_snapshot_json
+    `SELECT response.*, assignment.qualification_snapshot_json,
+            seat.settlement_reference AS paid_settlement_reference,
+            seat.settlement_evidence_hash AS paid_settlement_evidence_hash
      FROM tokenless_private_review_responses response
      JOIN tokenless_private_unpaid_review_assignments assignment
        ON assignment.assignment_id=response.assignment_id
+     LEFT JOIN tokenless_paid_assignment_seats seat ON seat.assignment_id=assignment.assignment_id
      WHERE response.delivery_id=$1 ORDER BY response.response_id`,
     [deliveryId],
   );
   const panelSize = integer(source, "panel_size", 1);
   if (assignments.rows.length !== panelSize) {
     throw new Error("The terminal private review assignment panel is incomplete.");
+  }
+  const paid = text(source, "compensation_mode") === "usdc";
+  if (
+    paid &&
+    (assignments.rows.some(
+      value =>
+        text(value as Row, "paid_seat_state") !== "terminal" ||
+        text(value as Row, "paid_operation_state") !== "terminal" ||
+        !text(value as Row, "paid_settlement_reference") ||
+        !text(value as Row, "paid_settlement_evidence_hash") ||
+        !text(value as Row, "paid_round_id") ||
+        !text(value as Row, "paid_admission_policy_hash"),
+    ) ||
+      responses.rows.length !== panelSize ||
+      responses.rows.some(
+        value =>
+          !text(value as Row, "paid_settlement_reference") || !text(value as Row, "paid_settlement_evidence_hash"),
+      ))
+  ) {
+    throw new Error("Paid private review settlement evidence is not terminal yet.");
   }
 
   const projectId = text(source, "project_id")!;
@@ -191,7 +225,7 @@ async function insertProjection(client: PoolClient, source: Row, now: Date) {
     policyId,
     version: 1,
     reviewerSource: "customer_invited",
-    compensation: "unpaid",
+    compensation: paid ? "paid" : "unpaid",
     cohorts: [{ cohortId: text(source, "cohort_id"), minimumReviewers: panelSize }],
     selection: "customer_named",
     fallbacks: { allowed: false, sources: [] },
@@ -202,17 +236,34 @@ async function insertProjection(client: PoolClient, source: Row, now: Date) {
       minimumAggregationSize: 3,
       suppressSmallCells: true,
     },
-    legalEligibilityRequired: false,
+    legalEligibilityRequired: paid,
   };
   const policyHash = hashHumanAssuranceDocument(policy);
-  const admissionPolicyHash = bytes32({
-    kind: "direct_private_review_admission",
-    deliveryId,
-    cohortId: text(source, "cohort_id"),
-    cohortBindingHash: text(source, "cohort_binding_hash"),
-    privateGroupPolicyHash: text(source, "private_group_policy_hash"),
-    membershipSnapshotHash: text(source, "membership_snapshot_hash"),
-  });
+  const paidAdmissionPolicyHashes = [
+    ...new Set(assignments.rows.map(value => text(value as Row, "paid_admission_policy_hash")).filter(Boolean)),
+  ];
+  const admissionPolicyHash = paid
+    ? paidAdmissionPolicyHashes.length === 1
+      ? paidAdmissionPolicyHashes[0]!
+      : (() => {
+          throw new Error("Paid private review admission policy binding is inconsistent.");
+        })()
+    : bytes32({
+        kind: "direct_private_review_admission",
+        deliveryId,
+        cohortId: text(source, "cohort_id"),
+        cohortBindingHash: text(source, "cohort_binding_hash"),
+        privateGroupPolicyHash: text(source, "private_group_policy_hash"),
+        membershipSnapshotHash: text(source, "membership_snapshot_hash"),
+      });
+  const paidRoundIds = [...new Set(assignments.rows.map(value => text(value as Row, "paid_round_id")).filter(Boolean))];
+  const paidRoundId = paid
+    ? paidRoundIds.length === 1
+      ? paidRoundIds[0]!
+      : (() => {
+          throw new Error("Paid private review round binding is inconsistent.");
+        })()
+    : null;
   const runManifest = {
     schemaVersion: "human-assurance-run-orchestration-v1",
     kind: "run_orchestration_manifest",
@@ -293,15 +344,17 @@ async function insertProjection(client: PoolClient, source: Row, now: Date) {
      (policy_id,project_id,version,reviewer_source,compensation,cohorts_json,selection,fallbacks_json,
       required_qualifications_json,assurance_json,buyer_privacy_json,legal_eligibility_required,
       policy_hash,policy_json,created_at)
-     VALUES ($1,$2,1,'customer_invited','unpaid',$3,'customer_named',$4,'[]',$5,$6,false,$7,$8,$9)
+     VALUES ($1,$2,1,'customer_invited',$3,$4,'customer_named',$5,'[]',$6,$7,$8,$9,$10,$11)
      ON CONFLICT (policy_id,version) DO NOTHING`,
     [
       policyId,
       projectId,
+      policy.compensation,
       JSON.stringify(policy.cohorts),
       JSON.stringify(policy.fallbacks),
       JSON.stringify(policy.assurance),
       JSON.stringify(policy.buyerPrivacy),
+      policy.legalEligibilityRequired,
       policyHash,
       canonicalizeHumanAssuranceDocument(policy),
       createdAt,
@@ -331,7 +384,7 @@ async function insertProjection(client: PoolClient, source: Row, now: Date) {
      (run_id,case_id,position,variant_a_artifact_id,variant_b_artifact_id,blinding_commitment,
       blinding_secret_json,deterministic_checks_json,deterministic_checks_hash,
       deterministic_checks_status,content_id,admission_policy_hash,round_id,round_status,created_at,updated_at)
-     VALUES ($1,$2,1,$3,$4,$5,$6,'[]',$7,'not_applicable',$8,$9,NULL,'offchain_complete',$10,$11)
+     VALUES ($1,$2,1,$3,$4,$5,$6,'[]',$7,'not_applicable',$8,$9,$10,$11,$12,$13)
      ON CONFLICT (run_id,case_id) DO NOTHING`,
     [
       runId,
@@ -343,6 +396,8 @@ async function insertProjection(client: PoolClient, source: Row, now: Date) {
       checksHash,
       bytes32({ deliveryId, privateReviewId }),
       admissionPolicyHash,
+      paidRoundId,
+      paid ? "terminal" : "offchain_complete",
       createdAt,
       completedAt,
     ],
@@ -390,13 +445,14 @@ async function insertProjection(client: PoolClient, source: Row, now: Date) {
        (assignment_id,workspace_id,project_id,run_id,subpanel_id,cohort_id,reviewer_account_address,
         source,selection,status,confidentiality_terms_hash,confidentiality_accepted_at,
         qualification_provenance_json,assurance_snapshot_json,assurance_snapshot_hash,blinding_json,
-        paid_assignment,paid_eligibility_checked_at,reservation_expires_at,assignment_expires_at,
+        paid_assignment,paid_eligibility_checked_at,voucher_marker,rater_id,
+        reservation_expires_at,assignment_expires_at,
         lease_issuer_account_address,lease_state,created_at,accepted_at,updated_at,
         private_group_id,private_group_policy_version,private_group_policy_hash,
         private_group_membership_joined_at,workspace_reviewer_access_grant_id,
         workspace_reviewer_access_grant_hash,workspace_reviewer_terms_version,workspace_reviewer_terms_hash)
        VALUES ($1,$2,$3,$4,$5,$6,$7,'customer_invited','customer_named',$8,$9,$10,$11,$12,$13,$14,
-               false,NULL,$15,$16,$17,'expired',$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
+               $15,$16,$17,$18,$19,$20,$21,'expired',$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)
        ON CONFLICT (assignment_id) DO NOTHING`,
       [
         projectedId("haa", deliveryId, originalAssignmentId),
@@ -413,6 +469,10 @@ async function insertProjection(client: PoolClient, source: Row, now: Date) {
         canonicalizeHumanAssuranceDocument(snapshot),
         hashHumanAssuranceDocument(snapshot),
         canonicalizeHumanAssuranceDocument(blinding),
+        paid,
+        paid ? completedAt : null,
+        paid ? text(assignment, "paid_eligibility_snapshot_id") : null,
+        paid ? text(assignment, "paid_rater_id") : null,
         assignment.reservation_expires_at,
         assignment.assignment_expires_at ?? null,
         owner,
@@ -438,7 +498,7 @@ async function insertProjection(client: PoolClient, source: Row, now: Date) {
        (response_id,run_id,case_id,reviewer_key,reviewer_source,choice,failure_tag_keys_json,
         rationale_ciphertext,rationale_key_ref,qualification_keys_json,assurance_capabilities_json,
         response_digest,settlement_reference,validity,submitted_at,updated_at)
-       VALUES ($1,$2,$3,$4,'customer_invited',$5,'[]',$6,$7,$8,'[]',$9,NULL,'valid',$10,$10)
+       VALUES ($1,$2,$3,$4,'customer_invited',$5,'[]',$6,$7,$8,'[]',$9,$10,'valid',$11,$11)
        ON CONFLICT (response_id) DO NOTHING`,
       [
         projectedId("harp", deliveryId, text(response, "response_id")!),
@@ -450,6 +510,7 @@ async function insertProjection(client: PoolClient, source: Row, now: Date) {
         response.rationale_key_ref ?? null,
         JSON.stringify(qualificationKeys(response.qualification_snapshot_json)),
         text(response, "response_commitment"),
+        paid ? text(response, "paid_settlement_reference") : null,
         response.created_at,
       ],
     );

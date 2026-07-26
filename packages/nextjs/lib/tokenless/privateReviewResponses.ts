@@ -209,8 +209,24 @@ export async function listDirectPrivateReviewAssignments(input: {
           LEFT JOIN tokenless_workspace_reviewer_access_grant_projects grant_project
             ON grant_project.workspace_id=a.workspace_id AND grant_project.grant_id=access_grant.grant_id
            AND grant_project.project_id=a.project_id
-          WHERE a.reviewer_account_address=?
-            AND rp.compensation_mode='unpaid'
+          WHERE (
+              a.reviewer_account_address=?
+              OR a.assignment_id IN (
+                SELECT paid_seat.assignment_id FROM tokenless_paid_assignment_seats paid_seat
+                WHERE paid_seat.reviewer_principal_id=?
+              )
+            )
+            AND (
+              rp.compensation_mode='unpaid'
+              OR (
+                rp.compensation_mode='usdc'
+                AND a.assignment_id IN (
+                  SELECT paid_seat.assignment_id FROM tokenless_paid_assignment_seats paid_seat
+                  WHERE paid_seat.reviewer_principal_id=?
+                    AND paid_seat.state IN ('voucher_prepared','accepted','committed','revealed','terminal')
+                )
+              )
+            )
             AND (
               a.status='completed'
               OR (
@@ -242,6 +258,8 @@ export async function listDirectPrivateReviewAssignments(input: {
           ORDER BY a.created_at DESC,a.assignment_id DESC LIMIT ?`,
     args: [
       principal,
+      principal,
+      principal,
       now,
       state,
       state,
@@ -269,7 +287,7 @@ export async function listDirectPrivateReviewAssignments(input: {
       dataClassification: text(row, "data_classification"),
       source: "customer_invited",
       status: text(row, "status"),
-      paidAssignment: false,
+      paidAssignment: text(row, "compensation_mode") === "usdc",
       confidentialityTermsHash: text(row, "private_group_policy_hash"),
       privateGroup: null,
       reservationExpiresAt: date(row, "reservation_expires_at").toISOString(),
@@ -288,6 +306,12 @@ async function loadAcceptedAssignment(accountAddress: string, assignmentId: stri
     sql: `SELECT a.*,d.private_group_policy_hash,d.foundation_binding_hash,d.operation_hash,
                  f.source_artifact_id,f.suggestion_artifact_id,
                  rp.criterion,rp.positive_label,rp.negative_label,rp.rationale_mode,rp.private_sensitivity,
+                 rp.compensation_mode,rp.bounty_per_seat_atomic,
+                 seat.state AS paid_seat_state,seat.reviewer_principal_id,seat.voucher_issuance_id,
+                 seat.settlement_reference,seat.settlement_evidence_hash,
+                 issuance.status AS voucher_issuance_status,issuance.voucher_id,
+                 operation.round_id AS paid_round_id,operation.panel_address AS paid_panel_address,
+                 operation.chain_id AS paid_chain_id,operation.commit_deadline AS paid_commit_deadline,
                  source.content_type AS source_content_type,
                  suggestion.content_type AS suggestion_content_type,
                  private_group.status AS current_private_group_status,
@@ -307,6 +331,10 @@ async function loadAcceptedAssignment(accountAddress: string, assignmentId: stri
           JOIN tokenless_agent_review_request_profiles rp
             ON rp.workspace_id=d.workspace_id AND rp.profile_id=d.request_profile_id
            AND rp.version=d.request_profile_version AND rp.profile_hash=d.request_profile_hash
+          LEFT JOIN tokenless_paid_assignment_seats seat ON seat.assignment_id=a.assignment_id
+          LEFT JOIN tokenless_paid_review_voucher_issuances issuance
+            ON issuance.issuance_id=seat.voucher_issuance_id
+          LEFT JOIN tokenless_paid_assignment_operations operation ON operation.operation_id=seat.operation_id
           JOIN tokenless_assurance_artifacts source ON source.artifact_id=f.source_artifact_id
           JOIN tokenless_assurance_artifacts suggestion ON suggestion.artifact_id=f.suggestion_artifact_id
           JOIN tokenless_private_groups private_group
@@ -325,9 +353,32 @@ async function loadAcceptedAssignment(accountAddress: string, assignmentId: stri
             ON workspace_grant_project.workspace_id=a.workspace_id
            AND workspace_grant_project.grant_id=workspace_grant.grant_id
            AND workspace_grant_project.project_id=a.project_id
-          WHERE a.assignment_id=? AND a.reviewer_account_address=?
+          WHERE a.assignment_id=?
+            AND (
+              a.reviewer_account_address=?
+              OR a.assignment_id IN (
+                SELECT paid_seat.assignment_id FROM tokenless_paid_assignment_seats paid_seat
+                WHERE paid_seat.reviewer_principal_id=?
+              )
+            )
+            AND (
+              rp.compensation_mode='unpaid'
+              OR (
+                rp.compensation_mode='usdc'
+                AND a.assignment_id IN (
+                  SELECT paid_seat.assignment_id FROM tokenless_paid_assignment_seats paid_seat
+                  WHERE paid_seat.reviewer_principal_id=?
+                )
+              )
+            )
             AND a.status='accepted' AND a.lease_state='issued' AND a.response_deadline>? LIMIT 1`,
-    args: [assignmentId, normalizePrincipal(accountAddress), now],
+    args: [
+      assignmentId,
+      normalizePrincipal(accountAddress),
+      normalizePrincipal(accountAddress),
+      normalizePrincipal(accountAddress),
+      now,
+    ],
   });
   const row = result.rows[0] as Row | undefined;
   if (!row) throw new TokenlessServiceError("Assignment not found.", 404, "assignment_not_found");
@@ -338,6 +389,7 @@ async function loadAcceptedAssignment(accountAddress: string, assignmentId: stri
 export async function getDirectPrivateReviewTask(input: { accountAddress: string; assignmentId: string; now?: Date }) {
   const row = await loadAcceptedAssignment(input.accountAddress, input.assignmentId, input.now ?? new Date());
   const rationaleMode = text(row, "rationale_mode");
+  const compensationMode = text(row, "compensation_mode");
   if (rationaleMode !== "off" && rationaleMode !== "optional" && rationaleMode !== "required") {
     throw new Error("Stored rationale mode is invalid.");
   }
@@ -366,9 +418,23 @@ export async function getDirectPrivateReviewTask(input: { accountAddress: string
     assignmentId: input.assignmentId,
     runId: text(row, "delivery_id"),
     taskKind: "binary_review" as const,
-    compensationMode: "unpaid" as const,
+    compensationMode: compensationMode === "usdc" ? ("usdc" as const) : ("unpaid" as const),
     forecastRequired: true as const,
-    settlement: null,
+    settlement:
+      compensationMode === "usdc"
+        ? {
+            issuanceId: text(row, "voucher_issuance_id"),
+            voucherId: text(row, "voucher_id"),
+            issuanceStatus: text(row, "voucher_issuance_status"),
+            seatState: text(row, "paid_seat_state"),
+            chainId: Number(row.paid_chain_id),
+            panelAddress: text(row, "paid_panel_address"),
+            roundId: text(row, "paid_round_id"),
+            commitDeadline: date(row, "paid_commit_deadline").toISOString(),
+            settlementReference: text(row, "settlement_reference"),
+            settlementEvidenceHash: text(row, "settlement_evidence_hash"),
+          }
+        : null,
     source: "customer_invited" as const,
     runManifestHash: text(row, "foundation_binding_hash"),
     policyHash: text(row, "private_group_policy_hash"),
@@ -486,6 +552,7 @@ async function terminalEnvelopeForDelivery(
             p.mode AS policy_mode,p.agreement_threshold_bps,p.production_floor_bps,p.fixed_rate_bps,
             p.maximum_unreviewed_gap,p.rules_json,p.audience_policy_json,
             p.publishing_policy_id AS review_publishing_policy_id,
+            rp.compensation_mode,rp.bounty_per_seat_atomic,
             b.canonical_hash AS binding_hash
      FROM tokenless_private_unpaid_review_deliveries d
      JOIN tokenless_private_review_requests f ON f.private_review_id=d.private_review_id
@@ -497,6 +564,9 @@ async function terminalEnvelopeForDelivery(
        ON l.workspace_id=d.workspace_id AND l.opportunity_id=d.opportunity_id
      JOIN tokenless_agent_review_policies p
        ON p.workspace_id=o.workspace_id AND p.policy_id=o.policy_id AND p.version=o.policy_version
+     JOIN tokenless_agent_review_request_profiles rp
+       ON rp.workspace_id=d.workspace_id AND rp.profile_id=d.request_profile_id
+      AND rp.version=d.request_profile_version AND rp.profile_hash=d.request_profile_hash
      JOIN tokenless_agent_human_review_bindings b
        ON b.workspace_id=o.workspace_id AND b.binding_id=o.human_review_binding_id
       AND b.version=o.human_review_binding_version
@@ -522,6 +592,7 @@ async function terminalEnvelopeForDelivery(
     [deliveryId],
   );
   const panelSize = integer(row, "panel_size", 1);
+  const paid = text(row, "compensation_mode") === "usdc";
   const responseCount = responses.rowCount ?? responses.rows.length;
   const panelComplete = responseCount === panelSize;
   const responseDeadline = date(row, "response_deadline");
@@ -579,7 +650,7 @@ async function terminalEnvelopeForDelivery(
       expectedRevision: integer(row, "state_revision", 1),
       toState,
       reasonCodes,
-      actor: { kind: "lane_adapter", reference: "private-unpaid-v1" },
+      actor: { kind: "lane_adapter", reference: paid ? "private-paid-v1" : "private-unpaid-v1" },
       details: { deliveryId, responseCount, responseSet, outcome },
       occurredAt: now,
     });
@@ -602,7 +673,7 @@ async function terminalEnvelopeForDelivery(
     workspaceId: text(row, "workspace_id")!,
     integrationId: text(row, "integration_id")!,
     opportunityId: text(row, "opportunity_id")!,
-    lane: "private_unpaid",
+    lane: paid ? "private_paid" : "private_unpaid",
     lifecycle: {
       state: toState,
       terminal: true,
@@ -648,7 +719,14 @@ async function terminalEnvelopeForDelivery(
     economics: {
       asset: "USDC",
       decimals: 6,
-      guaranteedBase: { mode: "off", fundedAtomic: "0", paidAtomic: "0", refundedAtomic: "0" },
+      guaranteedBase: paid
+        ? {
+            mode: "usdc",
+            fundedAtomic: (BigInt(text(row, "bounty_per_seat_atomic") ?? "0") * BigInt(panelSize)).toString(10),
+            paidAtomic: "0",
+            refundedAtomic: "0",
+          }
+        : { mode: "off", fundedAtomic: "0", paidAtomic: "0", refundedAtomic: "0" },
       automaticQualityAllocation: { mode: "off", availableAtomic: "0", awardedAtomic: "0", refundedAtomic: "0" },
       feedbackBonus: { mode: "off", fundedAtomic: "0", awardedAtomic: "0", refundedAtomic: "0", awards: [] },
     },
@@ -795,6 +873,7 @@ export async function submitDirectPrivateReviewResponse(input: {
   let terminalDeliveryId: string | null = null;
   let responseCount = 0;
   let replay = false;
+  let paidAssignment = false;
   try {
     await client.query("BEGIN");
     await client.query(
@@ -816,7 +895,24 @@ export async function submitDirectPrivateReviewResponse(input: {
         AND workspace_grant.principal_address=a.reviewer_account_address
         AND workspace_grant.grant_id=a.workspace_reviewer_access_grant_id
         AND workspace_grant.grant_hash=a.workspace_reviewer_access_grant_hash
-       WHERE a.assignment_id=$1 AND a.reviewer_account_address=$2
+       WHERE a.assignment_id=$1
+         AND (
+           a.reviewer_account_address=$2
+           OR a.assignment_id IN (
+             SELECT paid_seat.assignment_id FROM tokenless_paid_assignment_seats paid_seat
+             WHERE paid_seat.reviewer_principal_id=$2
+           )
+         )
+         AND (
+           rp.compensation_mode='unpaid'
+           OR (
+             rp.compensation_mode='usdc'
+             AND a.assignment_id IN (
+               SELECT paid_seat.assignment_id FROM tokenless_paid_assignment_seats paid_seat
+               WHERE paid_seat.reviewer_principal_id=$2
+             )
+           )
+         )
        LIMIT 1 FOR UPDATE`,
       [input.assignmentId, principal],
     );
@@ -824,6 +920,8 @@ export async function submitDirectPrivateReviewResponse(input: {
       `SELECT a.*,d.private_group_policy_hash,d.foundation_binding_hash,d.operation_hash,d.status AS delivery_status,
               f.suggestion_artifact_id,rp.rationale_mode,rp.compensation_mode,rp.feedback_bonus_enabled,
               rp.private_sensitivity,
+              seat.state AS paid_seat_state,seat.reviewer_principal_id,seat.voucher_issuance_id,
+              issuance.status AS paid_issuance_status,issuance.voucher_id,
               private_group.status AS current_private_group_status,
               workspace_reviewer.status AS current_workspace_reviewer_status,
               workspace_principal.status AS current_workspace_principal_status,
@@ -841,6 +939,9 @@ export async function submitDirectPrivateReviewResponse(input: {
        JOIN tokenless_agent_review_request_profiles rp
          ON rp.workspace_id=d.workspace_id AND rp.profile_id=d.request_profile_id
         AND rp.version=d.request_profile_version AND rp.profile_hash=d.request_profile_hash
+       LEFT JOIN tokenless_paid_assignment_seats seat ON seat.assignment_id=a.assignment_id
+       LEFT JOIN tokenless_paid_review_voucher_issuances issuance
+         ON issuance.issuance_id=seat.voucher_issuance_id
        JOIN tokenless_private_groups private_group ON private_group.group_id=a.private_group_id
        JOIN tokenless_workspace_reviewers workspace_reviewer
          ON workspace_reviewer.workspace_id=a.workspace_id
@@ -856,7 +957,25 @@ export async function submitDirectPrivateReviewResponse(input: {
          ON workspace_grant_project.workspace_id=a.workspace_id
         AND workspace_grant_project.grant_id=workspace_grant.grant_id
         AND workspace_grant_project.project_id=a.project_id
-       WHERE a.assignment_id=$1 AND a.reviewer_account_address=$2 LIMIT 1`,
+       WHERE a.assignment_id=$1
+         AND (
+           a.reviewer_account_address=$2
+           OR a.assignment_id IN (
+             SELECT paid_seat.assignment_id FROM tokenless_paid_assignment_seats paid_seat
+             WHERE paid_seat.reviewer_principal_id=$2
+           )
+         )
+         AND (
+           rp.compensation_mode='unpaid'
+           OR (
+             rp.compensation_mode='usdc'
+             AND a.assignment_id IN (
+               SELECT paid_seat.assignment_id FROM tokenless_paid_assignment_seats paid_seat
+               WHERE paid_seat.reviewer_principal_id=$2
+             )
+           )
+         )
+       LIMIT 1`,
       [input.assignmentId, principal],
     );
     const row = loaded.rows[0] as Row | undefined;
@@ -864,11 +983,19 @@ export async function submitDirectPrivateReviewResponse(input: {
       throw new TokenlessServiceError("Assignment not found.", 404, "assignment_not_found");
     }
     terminalDeliveryId = text(row, "delivery_id");
-    if (text(row, "compensation_mode") !== "unpaid") {
+    const paid = text(row, "compensation_mode") === "usdc";
+    paidAssignment = paid;
+    if (
+      paid &&
+      (text(row, "reviewer_principal_id") !== principal ||
+        !["accepted", "committed", "revealed", "terminal"].includes(text(row, "paid_seat_state") ?? "") ||
+        text(row, "paid_issuance_status") !== "consumed" ||
+        !text(row, "voucher_id"))
+    ) {
       throw new TokenlessServiceError(
-        "This response requires the paid private-review flow.",
+        "The paid review must have an exact confirmed voucher commit before its response is accepted.",
         409,
-        "review_binding_conflict",
+        "paid_review_commit_required",
       );
     }
     if (boolean(row, "feedback_bonus_enabled")) {
@@ -1019,7 +1146,7 @@ export async function submitDirectPrivateReviewResponse(input: {
       await client.query(
         `UPDATE tokenless_assurance_cohort_reviewers SET active_reservations=active_reservations - 1,updated_at=$1
          WHERE project_id=$2 AND cohort_id=$3 AND reviewer_account_address=$4 AND active_reservations>0`,
-        [now, text(row, "project_id"), text(row, "cohort_id"), principal],
+        [now, text(row, "project_id"), text(row, "cohort_id"), text(row, "reviewer_account_address")],
       );
       await client.query(
         `UPDATE tokenless_assurance_cohorts SET active_reservations=active_reservations - 1,updated_at=$1
@@ -1059,8 +1186,8 @@ export async function submitDirectPrivateReviewResponse(input: {
     accepted: true as const,
     replay,
     responseCount,
-    compensation: "unpaid" as const,
-    settlementStatus: "not_applicable" as const,
+    compensation: paidAssignment ? ("usdc" as const) : ("unpaid" as const),
+    settlementStatus: paidAssignment ? ("pending" as const) : ("not_applicable" as const),
   };
 }
 

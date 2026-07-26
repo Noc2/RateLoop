@@ -24,6 +24,7 @@ import {
   hashPreparedHumanReviewValue,
   prepareHumanReviewRequest,
 } from "~~/lib/tokenless/humanReviewRequestPreparation";
+import { requirePaidLaneComplianceApproval } from "~~/lib/tokenless/paidLaneCompliance";
 import {
   type PreparedProductAsk,
   attachProductAsk,
@@ -977,6 +978,7 @@ async function finalizePublicPaidAsk(input: {
 export async function requestPublicPaidHumanReview(
   input: PublicPaidHumanReviewRequest,
 ): Promise<{ schemaVersion: "rateloop.adaptive-review-request.v1"; opportunityId: string; ask: TokenlessAskResponse }> {
+  requirePaidLaneComplianceApproval("public_paid_network");
   requireProductPrincipalScope(input.principal.principal, "panel:publish");
   requireProductPrincipalScope(input.principal.principal, "payment:submit");
   const publication = normalizePublicPaidReviewPublication(input.publication);

@@ -13,6 +13,8 @@ import {
   ensurePrivatePaidAssignmentOperation,
   revalidatePrivatePaidAssignmentOperation,
 } from "~~/lib/tokenless/paidAssignmentOperations";
+import { recordPaidAssignmentSeatAcceptance } from "~~/lib/tokenless/paidAssignmentSettlementReconciler";
+import { requirePaidLaneComplianceApproval } from "~~/lib/tokenless/paidLaneCompliance";
 import type {
   PaidReviewEligibilityPreflight,
   PaidReviewEligibilityScope,
@@ -466,7 +468,12 @@ export function createPrivatePaidHumanReviewAdapter(
   };
 }
 
-export const requestPrivatePaidHumanReview = createPrivatePaidHumanReviewAdapter();
+const privatePaidHumanReviewAdapter = createPrivatePaidHumanReviewAdapter();
+
+export async function requestPrivatePaidHumanReview(input: PrivatePaidHumanReviewRequest) {
+  requirePaidLaneComplianceApproval("private_invited_paid");
+  return privatePaidHumanReviewAdapter(input);
+}
 
 export async function acceptPrivatePaidReviewAssignment(input: {
   assignmentId: string;
@@ -543,6 +550,11 @@ export async function acceptPrivatePaidReviewAssignment(input: {
     confidentialityTermsAccepted: input.confidentialityTermsAccepted,
     confidentialityTermsHash: input.confidentialityTermsHash,
     now,
+  });
+  await recordPaidAssignmentSeatAcceptance({
+    assignmentId: input.assignmentId,
+    issuanceId: input.issuanceId,
+    acceptedAt: now,
   });
   return {
     schemaVersion: "rateloop.private-paid-assignment-acceptance.v1" as const,
