@@ -18,6 +18,7 @@ describe("tokenless keeper liveness metrics", () => {
   it("publishes pending self-reveals and rounds waiting for beacon failure", () => {
     const result: TokenlessKeeperResult = {
       roundsScanned: 4,
+      roundFailures: 0,
       revealWindowsOpened: 0,
       votesRevealed: 0,
       settlementsBegun: 0,
@@ -60,6 +61,7 @@ describe("tokenless keeper liveness metrics", () => {
     recordRun(
       {
         roundsScanned: 0,
+        roundFailures: 0,
         revealWindowsOpened: 0,
         votesRevealed: 0,
         settlementsBegun: 0,

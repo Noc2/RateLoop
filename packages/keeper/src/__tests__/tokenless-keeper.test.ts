@@ -10,7 +10,8 @@ import {
 import { QUICKNET_T_CHAIN_HASH } from "../drand.js";
 import {
   getConsecutiveErrors,
-  recordError,
+  operationalHealthSnapshot,
+  recordRun,
   renderMetrics,
 } from "../metrics.js";
 import type { Logger } from "../logger.js";
@@ -568,6 +569,107 @@ describe("tokenless keeper orchestration", () => {
     });
   });
 
+  it("defers a feed round whose indexed creation block is ahead of the RPC head", async () => {
+    const writes: string[] = [];
+    const commitLogQueries: unknown[] = [];
+    const instance = clients({
+      currentRound: round({
+        state: TokenlessRoundState.Revealable,
+        commitCount: 1,
+      }),
+      now: 150n,
+      currentBlock: 899n,
+      nextRoundId: 2n,
+      writes,
+      commitLogQueries,
+    });
+    instance.keeperWorkFeed = async () =>
+      keeperWorkResponse(150n, [
+        {
+          action: "service_commits",
+          roundId: "1",
+          createdBlock: "900",
+          cursor: null,
+        },
+      ]);
+
+    const result = await runTokenlessKeeper(
+      instance,
+      {
+        ...config,
+        maxRoundsPerTick: 1,
+        ponderWorkFeed: { baseUrl: "https://ponder.example", token: "secret" },
+      },
+      logger,
+      decrypt,
+    );
+
+    expect(result.roundsScanned).toBe(1);
+    expect(commitLogQueries).toEqual([]);
+    expect(writes).toEqual([]);
+  });
+
+  it("isolates a failed round and continues the tick plus bonus reconciliation", async () => {
+    const writes: string[] = [];
+    const readRoundIds: bigint[] = [];
+    const errors: Array<[string, Record<string, unknown> | undefined]> = [];
+    const instance = clients({
+      currentRound: round({
+        state: TokenlessRoundState.Open,
+        commitCount: 0,
+      }),
+      now: 300n,
+      nextRoundId: 3n,
+      writes,
+      readRoundIds,
+      feedbackBonusPool: {
+        depositedAmount: 100n,
+        awardedAmount: 25n,
+        awardDeadline: 200n,
+        refunded: false,
+      },
+    });
+    const originalReadContract = instance.publicClient.readContract.bind(
+      instance.publicClient,
+    );
+    instance.publicClient.readContract = async (args) => {
+      if (
+        args.functionName === "getRound" &&
+        BigInt((args.args as readonly bigint[])[0]!) === 2n
+      ) {
+        readRoundIds.push(2n);
+        throw new Error("round-specific RPC failure");
+      }
+      return originalReadContract(args);
+    };
+    const isolatedLogger: Logger = {
+      ...logger,
+      error(message, context) {
+        errors.push([message, context]);
+      },
+    };
+
+    const result = await runTokenlessKeeper(
+      instance,
+      { ...config, maxRoundsPerTick: 2 },
+      isolatedLogger,
+      decrypt,
+    );
+
+    expect(readRoundIds).toEqual([2n, 1n]);
+    expect(writes).toContain("beginSettlement");
+    expect(writes).toContain("refundRemainder");
+    expect(result.roundsScanned).toBe(1);
+    expect(result.roundFailures).toBe(1);
+    expect(result.feedbackBonusRefundsExecuted).toBe(1);
+    expect(errors).toEqual([
+      [
+        "Tokenless keeper round failed",
+        { roundId: "2", error: "round-specific RPC failure" },
+      ],
+    ]);
+  });
+
   it("reserves scan capacity when actionable feed work remains continuously full", () => {
     const selected = Array.from({ length: 4 }, () =>
       selectRoundIdsForTick([3n, 5n, 7n, 9n], 10_001n, 2),
@@ -771,8 +873,7 @@ describe("tokenless keeper orchestration", () => {
         renderMetrics().match(new RegExp(`^${name} (\\d+)$`, "mu"))?.[1] ?? 0,
       );
     const writes: string[] = [];
-    await expect(
-      runTokenlessKeeper(
+    const result = await runTokenlessKeeper(
         clients({
           currentRound: round(),
           writes,
@@ -782,22 +883,20 @@ describe("tokenless keeper orchestration", () => {
         config,
         logger,
         decrypt,
-      ),
-    ).rejects.toThrow(/reverted on-chain/u);
+      );
     // The write was submitted, but its mined receipt reverted, so the keeper
     // never confirms the reveal and never records a successful run.
     expect(writes).toEqual(["openReveal"]);
 
     const revealsBefore = counter("keeper_votes_revealed_total");
     const errorsBefore = counter("keeper_errors_total");
-    // index.ts records an error (and no run) for a tick that throws.
-    recordError();
-    recordError();
-    recordError();
+    expect(result.roundFailures).toBe(1);
+    recordRun(result, 1);
     expect(counter("keeper_votes_revealed_total")).toBe(revealsBefore);
-    expect(counter("keeper_errors_total")).toBe(errorsBefore + 3);
-    // Three consecutive errors trips the /health degraded threshold.
-    expect(getConsecutiveErrors()).toBeGreaterThanOrEqual(3);
+    expect(counter("keeper_errors_total")).toBe(errorsBefore + 1);
+    expect(counter("keeper_round_failures_total")).toBeGreaterThanOrEqual(1);
+    expect(getConsecutiveErrors()).toBeGreaterThanOrEqual(1);
+    expect(operationalHealthSnapshot().reasons).toContain("round_failures");
   });
 
   it("does not count a reverted feedback bonus refund as executed", async () => {
@@ -1239,18 +1338,25 @@ describe("tokenless keeper orchestration", () => {
     },
   ])("fails closed for a $label", async ({ overrides, expected }) => {
     const beaconFetches: Array<[Hex, bigint]> = [];
-    await expect(
-      runTokenlessKeeper(
+    const errors: string[] = [];
+    const result = await runTokenlessKeeper(
         clients({
           currentRound: awaitingSeedRound(overrides),
           beaconFetches,
           now: VALID_SCORING_TIMESTAMP,
         }),
         config,
-        logger,
+        {
+          ...logger,
+          error(_message, context) {
+            errors.push(String(context?.error));
+          },
+        },
         decrypt,
-      ),
-    ).rejects.toThrow(expected);
+      );
+    expect(result.roundFailures).toBe(1);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatch(expected);
     expect(beaconFetches).toEqual([]);
   });
 

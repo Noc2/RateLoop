@@ -91,6 +91,7 @@ export interface TokenlessRevealMaterial {
 
 export interface TokenlessKeeperResult {
   roundsScanned: number;
+  roundFailures: number;
   revealWindowsOpened: number;
   votesRevealed: number;
   settlementsBegun: number;

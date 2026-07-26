@@ -143,6 +143,7 @@ export function selectRoundIdsForTick(
 function emptyResult(): TokenlessKeeperResult {
   return {
     roundsScanned: 0,
+    roundFailures: 0,
     revealWindowsOpened: 0,
     votesRevealed: 0,
     settlementsBegun: 0,
@@ -317,9 +318,10 @@ async function commitLogsForRound(
     createdBlock === undefined || createdBlock < config.deployment.blockNumber
       ? config.deployment.blockNumber
       : createdBlock;
-  if (fromBlock > toBlock) {
-    throw new Error("Indexed round creation block is ahead of the chain head.");
-  }
+  // Ponder and the keeper may briefly observe different RPC heads. A future
+  // indexed block is not actionable on this provider yet, but it is not a
+  // malformed round and must not prevent other rounds from advancing.
+  if (fromBlock > toBlock) return [];
   return getLogsInBlockChunks({
     fromBlock,
     toBlock,
@@ -1023,16 +1025,24 @@ export async function runTokenlessKeeper(
   for (const roundId of roundIds) {
     // Feed entries are only priority hints. advanceRound reads the canonical
     // on-chain round and derives the permitted action again before any write.
-    await advanceRound({
-      clients,
-      config,
-      logger,
-      decrypt,
-      roundId,
-      createdBlock: feedCreatedBlocks.get(roundId),
-      now: block.timestamp,
-      result,
-    });
+    try {
+      await advanceRound({
+        clients,
+        config,
+        logger,
+        decrypt,
+        roundId,
+        createdBlock: feedCreatedBlocks.get(roundId),
+        now: block.timestamp,
+        result,
+      });
+    } catch (error) {
+      result.roundFailures += 1;
+      logger.error("Tokenless keeper round failed", {
+        roundId: roundId.toString(),
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
   await reconcileFeedbackBonusRemainders({
     clients,

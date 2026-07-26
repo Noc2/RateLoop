@@ -5,6 +5,7 @@ import type { TokenlessKeeperResult } from "./tokenless-types.js";
 const counters: Record<string, number> = {
   keeper_runs_total: 0,
   keeper_errors_total: 0,
+  keeper_round_failures_total: 0,
   keeper_drand_relay_failovers_total: 0,
   keeper_reveal_windows_opened_total: 0,
   keeper_votes_revealed_total: 0,
@@ -33,6 +34,7 @@ const gauges: Record<string, number> = {
   keeper_wallet_balance_wei: 0,
   keeper_minimum_wallet_balance_wei: 0,
   keeper_rounds_scanned: 0,
+  keeper_round_failures: 0,
   keeper_self_reveal_fallbacks_pending: 0,
   keeper_rounds_awaiting_beacon_failure: 0,
   keeper_rounds_awaiting_scoring_entropy: 0,
@@ -85,6 +87,13 @@ export function recordKmsSigningFailure(errorClass: EvmKmsSigningFailureClass) {
 
 export function recordRun(result: TokenlessKeeperResult, durationMs: number) {
   counters.keeper_runs_total += 1;
+  counters.keeper_round_failures_total += result.roundFailures;
+  if (result.roundFailures > 0) {
+    counters.keeper_errors_total += 1;
+    consecutiveErrors += 1;
+  } else {
+    consecutiveErrors = 0;
+  }
   counters.keeper_reveal_windows_opened_total += result.revealWindowsOpened;
   counters.keeper_votes_revealed_total += result.votesRevealed;
   counters.keeper_settlements_begun_total += result.settlementsBegun;
@@ -103,6 +112,7 @@ export function recordRun(result: TokenlessKeeperResult, durationMs: number) {
   gauges.keeper_last_run_duration_seconds = durationMs / 1000;
   gauges.keeper_last_successful_run_timestamp = completedAt.getTime() / 1000;
   gauges.keeper_rounds_scanned = result.roundsScanned;
+  gauges.keeper_round_failures = result.roundFailures;
   gauges.keeper_self_reveal_fallbacks_pending =
     result.selfRevealFallbacksPending;
   gauges.keeper_rounds_awaiting_beacon_failure =
@@ -129,7 +139,6 @@ export function recordRun(result: TokenlessKeeperResult, durationMs: number) {
     lastWorkObservedAt = completedAt;
     gauges.keeper_last_work_observed_timestamp = completedAt.getTime() / 1000;
   }
-  consecutiveErrors = 0;
   lastRunAt = completedAt;
 }
 
@@ -139,6 +148,7 @@ export function operationalHealthSnapshot(now = new Date()) {
   if (runAgeMs === null || runAgeMs > healthThresholdMs)
     reasons.push("keeper_run_stale");
   if (consecutiveErrors >= 3) reasons.push("consecutive_errors");
+  if (gauges.keeper_round_failures > 0) reasons.push("round_failures");
   if (minimumWalletBalanceWei > 0n && walletBalanceWei === null)
     reasons.push("wallet_balance_unknown");
   if (walletBalanceWei !== null && walletBalanceWei < minimumWalletBalanceWei) {
