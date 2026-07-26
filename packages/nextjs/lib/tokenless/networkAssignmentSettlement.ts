@@ -1092,24 +1092,24 @@ export async function reconcileNetworkAssignmentSettlements(
      JOIN tokenless_paid_vouchers voucher ON voucher.voucher_id=settlement.voucher_id
      LEFT JOIN tokenless_network_settlement_failures failure
        ON failure.binding_id=settlement.binding_id
+     LEFT JOIN (
+       SELECT commit.voucher_id
+       FROM tokenless_rater_commits commit
+       LEFT JOIN tokenless_scheduled_work_items recovery
+         ON recovery.kind='recover_rater_commit' AND recovery.subject_key=commit.commit_id
+       WHERE commit.state=ANY($3::text[])
+          OR (
+            commit.state=ANY($5::text[])
+            AND (commit.updated_at > $4 OR recovery.state=ANY($6::text[]))
+          )
+       GROUP BY commit.voucher_id
+     ) recoverable ON recoverable.voucher_id=settlement.voucher_id
      WHERE settlement.state='voucher_issued' AND voucher.expires_at <= $1
        AND (
          failure.binding_id IS NULL OR failure.status='resolved'
          OR (failure.status='retrying' AND failure.next_retry_at <= $1)
        )
-       AND NOT EXISTS (
-         SELECT 1 FROM tokenless_rater_commits commit
-         LEFT JOIN tokenless_scheduled_work_items recovery
-           ON recovery.kind='recover_rater_commit' AND recovery.subject_key=commit.commit_id
-         WHERE commit.voucher_id=voucher.voucher_id
-           AND (
-             commit.state=ANY($3::text[])
-             OR (
-               commit.state=ANY($5::text[])
-               AND (commit.updated_at > $4 OR recovery.state=ANY($6::text[]))
-             )
-           )
-       )
+       AND recoverable.voucher_id IS NULL
      ORDER BY settlement.updated_at ASC,settlement.binding_id ASC LIMIT $2`,
     [
       now,

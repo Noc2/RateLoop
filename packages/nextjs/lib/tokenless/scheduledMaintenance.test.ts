@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { reconcileNetworkAssignmentSettlements } from "~~/lib/tokenless/networkAssignmentSettlement";
 import { sweepManagedEvmNonceDrift, unresolvedManagedEvmNonceFindings } from "~~/lib/tokenless/nonceRecovery";
 import {
   authorizeTokenlessCron,
@@ -271,6 +272,14 @@ test("scheduled maintenance finalizes due private reviews before expiring assign
   });
   assert.deepEqual(result.summary.expiredAudienceAssignments, { expired: 2 });
   assert.equal(result.summary.expiredPrivateReviewReservations, 3);
+});
+
+test("empty network settlement reconciliation is memory-compatible", async () => {
+  assert.deepEqual(await reconcileNetworkAssignmentSettlements({ now: NOW, limit: 20 }), {
+    scanned: 0,
+    terminal: 0,
+    retry: 0,
+  });
 });
 
 test("scheduled maintenance publishes each due round once and deduplicates a cron bucket", async () => {

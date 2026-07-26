@@ -3,7 +3,11 @@ import { createDecipheriv, createHash } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
-import { __setAssuranceResponseKeyringsForTests, submitAssuranceResponses } from "~~/lib/tokenless/assuranceResponses";
+import {
+  __assuranceResponsesTestUtils,
+  __setAssuranceResponseKeyringsForTests,
+  submitAssuranceResponses,
+} from "~~/lib/tokenless/assuranceResponses";
 import { freezeAssuranceRunOrchestration } from "~~/lib/tokenless/assuranceRunOrchestration";
 import {
   createProjectCohort,
@@ -472,4 +476,13 @@ test("paid assurance responses fail closed before assignments can claim a termin
     ).rows[0]?.status,
     "accepted",
   );
+});
+
+test("network response readiness excludes non-financial terminal assignments", () => {
+  const predicate = __assuranceResponsesTestUtils.networkResponseReadySql;
+  assert.match(predicate, /state='committed'/u);
+  assert.match(predicate, /committed_at IS NOT NULL/u);
+  assert.match(predicate, /terminal_outcome IN \('paid','compensated','no_payout','claim_expired'\)/u);
+  assert.doesNotMatch(predicate, /state IN \('committed','terminal'\)/u);
+  assert.doesNotMatch(predicate, /not_accepted|not_submitted/u);
 });

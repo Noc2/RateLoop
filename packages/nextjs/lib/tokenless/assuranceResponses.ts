@@ -18,6 +18,11 @@ const RESPONSE_SCHEMA_VERSION = "rateloop-assurance-response-v1";
 const RATIONALE_KEY_DOMAIN = "assurance_rationale";
 const REVIEWER_MAPPING_KEY_DOMAIN = "assurance_reviewer_mapping";
 const ACTIVE_RUN_STATUSES = new Set(["frozen", "recruiting", "collecting"]);
+const NETWORK_RESPONSE_READY_SQL = `state='committed'
+                  OR (
+                    state='terminal' AND committed_at IS NOT NULL
+                    AND terminal_outcome IN ('paid','compensated','no_payout','claim_expired')
+                  )`;
 
 type QueryRow = Record<string, unknown>;
 export type AssuranceResponseKeyring = { currentVersion: string; keys: Map<string, Buffer> };
@@ -539,7 +544,7 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
     ) {
       const networkSettlementResult = await client.query(
         `SELECT COUNT(*) AS binding_count,
-                COUNT(*) FILTER (WHERE state IN ('committed','terminal')) AS committed_count
+                COUNT(*) FILTER (WHERE ${NETWORK_RESPONSE_READY_SQL}) AS committed_count
          FROM tokenless_network_assignment_settlements WHERE assignment_id=$1`,
         [assignmentId],
       );
@@ -730,3 +735,7 @@ export function decryptWorkspaceOwnedRationale(row: QueryRow) {
 export function __setAssuranceResponseKeyringsForTests(value: AssuranceResponseKeyrings | null) {
   keyringsOverride = value;
 }
+
+export const __assuranceResponsesTestUtils = {
+  networkResponseReadySql: NETWORK_RESPONSE_READY_SQL,
+};
