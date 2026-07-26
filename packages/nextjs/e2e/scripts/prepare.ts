@@ -193,6 +193,7 @@ async function main() {
     `${JSON.stringify(
       {
         baseURL,
+        ownerPrincipalId: owner.identity.principalId,
         setupSessionToken: setup.session.token,
         ownerSessionToken: owner.session.token,
         ...workspace,

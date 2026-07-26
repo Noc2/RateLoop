@@ -73,7 +73,9 @@ test("reviewer answers a public task and restores the draft", async ({ page }) =
       ],
     }),
   );
-  await page.route("**/api/account/assurance/assignments?**", route => json(route, { assignments: [] }));
+  await page.route("**/api/account/assurance/assignments?**", route =>
+    json(route, { principalId: browserState.ownerPrincipalId, assignments: [] }),
+  );
   await page.goto("/human?scope=public");
   await expect(page.getByRole("heading", { name: "Is this response ready to publish?" })).toBeVisible();
   await expectNoAxeViolations(page);
@@ -98,6 +100,7 @@ test("invited reviewer sees exact agent content and rates it directly in Discove
   await authenticate(page, browserState.ownerSessionToken);
   await page.route("**/api/account/assurance/assignments?**", route =>
     json(route, {
+      principalId: browserState.ownerPrincipalId,
       assignments: submitted
         ? []
         : [

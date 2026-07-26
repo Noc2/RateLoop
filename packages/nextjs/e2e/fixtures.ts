@@ -6,6 +6,7 @@ import path from "node:path";
 export type BrowserState = {
   agentId: string;
   baseURL: string;
+  ownerPrincipalId: string;
   ownerSessionToken: string;
   setupSessionToken: string;
   workspaceId: string;
