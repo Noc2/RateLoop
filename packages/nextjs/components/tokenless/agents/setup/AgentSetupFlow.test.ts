@@ -284,10 +284,21 @@ test("workflow setup preserves the connected environment without asking the user
 });
 
 test("workspace step remains editable when revisited", () => {
-  assert.match(flowSource, /htmlFor="agent-setup-workspace-name"/);
+  assert.match(flowSource, /id="agent-setup-workspace-name"/);
+  assert.match(flowSource, /label="Workspace name"/);
   assert.match(flowSource, /value=\{workspaceName\}/);
   assert.match(flowSource, /agent-setup\/workspace/);
   assert.match(flowSource, /Save and continue/);
+});
+
+test("setup applies shared fields and preserves server field errors across editable stages", () => {
+  assert.ok((flowSource.match(/<Field/g)?.length ?? 0) >= 12);
+  assert.match(flowSource, /const \{ capture: captureFormError, clear: clearFormErrors, fieldErrors, formError \}/);
+  assert.match(flowSource, /typeof body\.field === "string" \? body\.field : null/);
+  assert.match(flowSource, /error=\{fieldErrors\.displayName\}/);
+  assert.match(flowSource, /error=\{fieldErrors\.panelSize\}/);
+  assert.match(flowSource, /error=\{fieldErrors\.intendedEmail\}/);
+  assert.match(flowSource, /captureFormError\(cause, "Unable to save review behavior\."\)/);
 });
 
 test("setup uses one stage header aligned to the progress width without repeating progress metadata", () => {

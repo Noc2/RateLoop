@@ -196,10 +196,16 @@ function requiredRevision(value: unknown) {
   return revision;
 }
 
-function bounded(value: unknown, field: string, maximum: number, optional = false) {
+function bounded(value: unknown, field: string, maximum: number, optional = false, errorField?: string) {
   if (optional && (value === null || value === undefined || value === "")) return null;
   if (typeof value !== "string" || !value.trim() || value.trim().length > maximum) {
-    throw new TokenlessServiceError(`${field} must contain 1-${maximum} characters.`, 400, "invalid_agent_setup");
+    throw new TokenlessServiceError(
+      `${field} must contain 1-${maximum} characters.`,
+      400,
+      "invalid_agent_setup",
+      false,
+      errorField,
+    );
   }
   return value.trim();
 }
@@ -213,8 +219,8 @@ function normalizeIdentity(input: AgentIdentityInput) {
     throw new TokenlessServiceError("Agent environment is invalid.", 400, "invalid_agent_setup");
   }
   const normalized = {
-    displayName: bounded(input.displayName, "Agent name", 120)!,
-    description: bounded(input.description, "Agent description", 1_000, true),
+    displayName: bounded(input.displayName, "Agent name", 120, false, "displayName")!,
+    description: bounded(input.description, "Agent description", 1_000, true, "description"),
     provider: bounded(input.provider ?? "unknown", "Provider", 120)!,
     model: bounded(input.model ?? "unknown", "Model", 160)!,
     modelVersion: bounded(input.modelVersion, "Model version", 160, true),
@@ -575,7 +581,7 @@ export async function updateWorkspaceSetupName(input: {
 }) {
   await requireManager(input.accountAddress, input.workspaceId);
   const expectedRevision = requiredRevision(input.revision);
-  const name = bounded(input.name, "Workspace name", 120)!;
+  const name = bounded(input.name, "Workspace name", 120, false, "name")!;
   const now = new Date();
   const client = await dbPool.connect();
   let revision = expectedRevision;
@@ -971,7 +977,7 @@ export async function configureWorkspaceSetupPeople(input: {
     const intendedEmail =
       input.intendedEmail === undefined || input.intendedEmail === null || input.intendedEmail === ""
         ? null
-        : bounded(input.intendedEmail, "Recipient email", 320);
+        : bounded(input.intendedEmail, "Recipient email", 320, false, "intendedEmail");
     const expertiseDefinitionIds = input.expertiseDefinitionIds ?? [];
     if (
       !Array.isArray(expertiseDefinitionIds) ||
@@ -1268,11 +1274,13 @@ function setupFinalizationRequest(input: {
   const intendedEmail =
     input.intendedEmail === undefined || input.intendedEmail === null || input.intendedEmail === ""
       ? null
-      : bounded(input.intendedEmail, "Recipient email", 320)!.toLowerCase();
+      : bounded(input.intendedEmail, "Recipient email", 320, false, "intendedEmail")!.toLowerCase();
   const intendedEmailDomain =
     input.intendedEmailDomain === undefined || input.intendedEmailDomain === null || input.intendedEmailDomain === ""
       ? null
-      : bounded(input.intendedEmailDomain, "Verified email domain", 253)!.toLowerCase().replace(/\.$/u, "");
+      : bounded(input.intendedEmailDomain, "Verified email domain", 253, false, "intendedEmailDomain")!
+          .toLowerCase()
+          .replace(/\.$/u, "");
   const maximumRedemptions = input.maximumRedemptions ?? 1;
   if (
     typeof maximumRedemptions !== "number" ||

@@ -64,6 +64,7 @@ import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
 import { humanReviewConfirmationMessage } from "~~/components/tokenless/agents/humanReviewConfirmation";
 import { Field } from "~~/components/tokenless/forms/Field";
+import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { DurationInput } from "~~/components/ui/DurationInput";
 import { type AgentSetupScreenStep, agentSetupUrl } from "~~/lib/tokenless/agentSetupNavigation";
@@ -197,9 +198,27 @@ function savedAutomaticAuthorityNeedsFallback(
     .changed;
 }
 
+class SetupRequestError extends Error {
+  field: string | null;
+
+  constructor(message: string, field: string | null) {
+    super(message);
+    this.field = field;
+  }
+}
+
 async function readJson(response: Response) {
   const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : "The setup request failed.");
+  if (!response.ok) {
+    throw new SetupRequestError(
+      typeof body.message === "string"
+        ? body.message
+        : typeof body.error === "string"
+          ? body.error
+          : "The setup request failed.",
+      typeof body.field === "string" ? body.field : null,
+    );
+  }
   return body;
 }
 
@@ -217,6 +236,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   const [setup, setSetup] = useState(initialSetup);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { capture: captureFormError, clear: clearFormErrors, fieldErrors, formError } = useFormErrors();
   const [announcement, setAnnouncement] = useState("");
   const [connectionMessage, setConnectionMessage] = useState<string | null>(null);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
@@ -363,6 +383,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     focusOnNavigation.current = false;
     headingRef.current?.focus();
   }, [currentStep]);
+
+  useEffect(() => clearFormErrors(), [clearFormErrors, currentStep]);
 
   useEffect(() => setWorkspaceName(setup.workspaceName), [setup.workspaceName]);
 
@@ -848,6 +870,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     const name = workspaceName.trim();
     setBusy(true);
     setError(null);
+    clearFormErrors();
     try {
       if (name !== setup.workspaceName) {
         await readJson(
@@ -861,7 +884,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       }
       await loadStep("connect");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to save the workspace name.");
+      captureFormError(cause, "Unable to save the workspace name.");
     } finally {
       setBusy(false);
     }
@@ -877,6 +900,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     const form = new FormData(event.currentTarget);
     setBusy(true);
     setError(null);
+    clearFormErrors();
     try {
       await readJson(
         await fetch(`/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/agent-setup/confirm-agent`, {
@@ -898,7 +922,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       );
       await loadStep("reviews");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to confirm the agent.");
+      captureFormError(cause, "Unable to confirm the agent.");
     } finally {
       setBusy(false);
     }
@@ -921,6 +945,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       return;
     }
     setError(null);
+    clearFormErrors();
     try {
       const draft = setup.reviewDraft;
       if (!draft) throw new Error("Review behavior is unavailable. Reload setup and try again.");
@@ -1069,7 +1094,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       });
       await loadStep("people");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to save review behavior.");
+      captureFormError(cause, "Unable to save review behavior.");
     } finally {
       setBusy(false);
     }
@@ -1081,6 +1106,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     const decision = form.get("decision");
     setBusy(true);
     setError(null);
+    clearFormErrors();
     setInviteToken(null);
     setIssuedInvitationCapacity(1);
     try {
@@ -1129,7 +1155,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         window.location.assign(destination);
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to save the people step.");
+      captureFormError(cause, "Unable to save the people step.");
     } finally {
       setBusy(false);
     }
@@ -1185,18 +1211,22 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         {currentStep === "workspace" ? (
           <form onSubmit={saveWorkspace} aria-busy={busy}>
             <SetupStageHeader headingRef={headingRef} title="Name your workspace" />
-            <label className="mt-8 block text-sm font-medium" htmlFor="agent-setup-workspace-name">
-              Workspace name
-            </label>
-            <input
-              id="agent-setup-workspace-name"
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={workspaceName}
-              onChange={event => setWorkspaceName(event.target.value)}
-              autoComplete="organization"
-              maxLength={120}
-              required
-            />
+            <div className="mt-8">
+              <Field
+                id="agent-setup-workspace-name"
+                label="Workspace name"
+                className="border-white/10 bg-[var(--rateloop-field)]"
+                value={workspaceName}
+                onChange={event => {
+                  setWorkspaceName(event.target.value);
+                  clearFormErrors("name");
+                }}
+                autoComplete="organization"
+                maxLength={120}
+                required
+                error={fieldErrors.name}
+              />
+            </div>
             <SetupActionBar>
               {backButton}
               <Button className="min-h-11 w-full sm:w-auto" type="submit" disabled={busy || !workspaceName.trim()}>
@@ -1274,16 +1304,16 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
           <form onSubmit={confirmAgent} aria-busy={busy}>
             <SetupStageHeader headingRef={headingRef} title="Name this workflow" />
             <div className="mt-8 grid gap-4">
-              <label className="text-sm">
-                Workflow name
-                <input
-                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  name="displayName"
-                  defaultValue={setup.agent.displayName}
-                  maxLength={120}
-                  required
-                />
-              </label>
+              <Field
+                label="Workflow name"
+                className="border-white/10 bg-[var(--rateloop-field)]"
+                name="displayName"
+                defaultValue={setup.agent.displayName}
+                onChange={() => clearFormErrors("displayName")}
+                maxLength={120}
+                required
+                error={fieldErrors.displayName}
+              />
               <label className="text-sm">
                 Description <span className="text-base-content/55">(optional)</span>
                 <textarea
@@ -1366,30 +1396,30 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               <div className="grid gap-4 sm:grid-cols-3">
                 {reviewCriterion.questionAuthority === "owner_fixed" ? (
                   <>
-                    <label className="text-sm">
-                      Positive label
-                      <input
-                        className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                        value={reviewCriterion.positiveLabel}
-                        onChange={event =>
-                          setReviewCriterion(current => ({ ...current, positiveLabel: event.target.value }))
-                        }
-                        maxLength={REVIEW_ANSWER_LABEL_MAX_LENGTH}
-                        required
-                      />
-                    </label>
-                    <label className="text-sm">
-                      Negative label
-                      <input
-                        className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                        value={reviewCriterion.negativeLabel}
-                        onChange={event =>
-                          setReviewCriterion(current => ({ ...current, negativeLabel: event.target.value }))
-                        }
-                        maxLength={REVIEW_ANSWER_LABEL_MAX_LENGTH}
-                        required
-                      />
-                    </label>
+                    <Field
+                      label="Positive label"
+                      className="border-white/10 bg-[var(--rateloop-field)]"
+                      value={reviewCriterion.positiveLabel}
+                      onChange={event => {
+                        setReviewCriterion(current => ({ ...current, positiveLabel: event.target.value }));
+                        clearFormErrors("positiveLabel");
+                      }}
+                      maxLength={REVIEW_ANSWER_LABEL_MAX_LENGTH}
+                      required
+                      error={fieldErrors.positiveLabel}
+                    />
+                    <Field
+                      label="Negative label"
+                      className="border-white/10 bg-[var(--rateloop-field)]"
+                      value={reviewCriterion.negativeLabel}
+                      onChange={event => {
+                        setReviewCriterion(current => ({ ...current, negativeLabel: event.target.value }));
+                        clearFormErrors("negativeLabel");
+                      }}
+                      maxLength={REVIEW_ANSWER_LABEL_MAX_LENGTH}
+                      required
+                      error={fieldErrors.negativeLabel}
+                    />
                   </>
                 ) : null}
                 <label className="text-sm">
@@ -1422,50 +1452,50 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             {reviewFrequency.mode === "adaptive" || reviewFrequency.mode === "fixed" ? (
               <div className="mt-4 border-l-2 border-l-[var(--rateloop-pink)] bg-black/10 px-4 py-4">
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <label className="text-sm">
-                    {reviewFrequency.mode === "adaptive" ? "Minimum review rate (%)" : "Outputs reviewed (%)"}
-                    <input
-                      className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                      type="number"
-                      min={reviewFrequency.mode === "adaptive" ? 25 : 0.01}
-                      max={100}
-                      step={0.01}
-                      inputMode="decimal"
-                      value={
-                        reviewFrequency.mode === "adaptive"
-                          ? reviewFrequency.adaptiveFloorPercent
-                          : reviewFrequency.fixedPercent
-                      }
-                      onChange={event =>
-                        setReviewFrequency(current => ({
-                          ...current,
-                          [reviewFrequency.mode === "adaptive" ? "adaptiveFloorPercent" : "fixedPercent"]:
-                            event.target.value,
-                        }))
-                      }
-                      required
-                      disabled={reviewFrequency.mode === "adaptive"}
-                    />
-                  </label>
-                  <label className="text-sm">
-                    Maximum outputs between reviews
-                    <input
-                      className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                      type="number"
-                      min={1}
-                      max={10_000}
-                      step={1}
-                      inputMode="numeric"
-                      value={reviewFrequency.maximumUnreviewedGap}
-                      onChange={event =>
-                        setReviewFrequency(current => ({
-                          ...current,
-                          maximumUnreviewedGap: event.target.value,
-                        }))
-                      }
-                      required
-                    />
-                  </label>
+                  <Field
+                    label={reviewFrequency.mode === "adaptive" ? "Minimum review rate (%)" : "Outputs reviewed (%)"}
+                    className="border-white/10 bg-[var(--rateloop-field)]"
+                    type="number"
+                    min={reviewFrequency.mode === "adaptive" ? 25 : 0.01}
+                    max={100}
+                    step={0.01}
+                    inputMode="decimal"
+                    value={
+                      reviewFrequency.mode === "adaptive"
+                        ? reviewFrequency.adaptiveFloorPercent
+                        : reviewFrequency.fixedPercent
+                    }
+                    onChange={event => {
+                      setReviewFrequency(current => ({
+                        ...current,
+                        [reviewFrequency.mode === "adaptive" ? "adaptiveFloorPercent" : "fixedPercent"]:
+                          event.target.value,
+                      }));
+                      clearFormErrors(reviewFrequency.mode === "adaptive" ? "adaptiveFloorPercent" : "fixedPercent");
+                    }}
+                    required
+                    disabled={reviewFrequency.mode === "adaptive"}
+                    error={fieldErrors[reviewFrequency.mode === "adaptive" ? "adaptiveFloorPercent" : "fixedPercent"]}
+                  />
+                  <Field
+                    label="Maximum outputs between reviews"
+                    className="border-white/10 bg-[var(--rateloop-field)]"
+                    type="number"
+                    min={1}
+                    max={10_000}
+                    step={1}
+                    inputMode="numeric"
+                    value={reviewFrequency.maximumUnreviewedGap}
+                    onChange={event => {
+                      setReviewFrequency(current => ({
+                        ...current,
+                        maximumUnreviewedGap: event.target.value,
+                      }));
+                      clearFormErrors("maximumUnreviewedGap");
+                    }}
+                    required
+                    error={fieldErrors.maximumUnreviewedGap}
+                  />
                 </div>
                 <p className="mt-3 text-xs leading-5 text-base-content/55">
                   {reviewFrequency.mode === "adaptive"
@@ -1478,39 +1508,43 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             {reviewFrequency.mode === "rules" ? (
               <div className="mt-4 border-l-2 border-l-[var(--rateloop-pink)] bg-black/10 px-4 py-4">
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <label className="text-sm">
-                    Review these risk levels
-                    <input
-                      className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                      value={reviewFrequency.requiredRiskTiers}
-                      onChange={event =>
-                        setReviewFrequency(current => ({
-                          ...current,
-                          requiredRiskTiers: event.target.value,
-                        }))
-                      }
-                      placeholder="high, legal"
-                      maxLength={320}
-                    />
-                  </label>
-                  <label className="text-sm">
-                    Review below confidence (%) <span className="text-base-content/55">(optional)</span>
-                    <input
-                      className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                      type="number"
-                      min={0}
-                      max={100}
-                      step={0.01}
-                      inputMode="decimal"
-                      value={reviewFrequency.minimumConfidencePercent}
-                      onChange={event =>
-                        setReviewFrequency(current => ({
-                          ...current,
-                          minimumConfidencePercent: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
+                  <Field
+                    label="Review these risk levels"
+                    className="border-white/10 bg-[var(--rateloop-field)]"
+                    value={reviewFrequency.requiredRiskTiers}
+                    onChange={event => {
+                      setReviewFrequency(current => ({
+                        ...current,
+                        requiredRiskTiers: event.target.value,
+                      }));
+                      clearFormErrors("requiredRiskTiers");
+                    }}
+                    placeholder="high, legal"
+                    maxLength={320}
+                    error={fieldErrors.requiredRiskTiers}
+                  />
+                  <Field
+                    label={
+                      <>
+                        Review below confidence (%) <span className="text-base-content/55">(optional)</span>
+                      </>
+                    }
+                    className="border-white/10 bg-[var(--rateloop-field)]"
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.01}
+                    inputMode="decimal"
+                    value={reviewFrequency.minimumConfidencePercent}
+                    onChange={event => {
+                      setReviewFrequency(current => ({
+                        ...current,
+                        minimumConfidencePercent: event.target.value,
+                      }));
+                      clearFormErrors("minimumConfidencePercent");
+                    }}
+                    error={fieldErrors.minimumConfidencePercent}
+                  />
                 </div>
                 <p className="mt-3 text-xs leading-5 text-base-content/55">
                   Separate risk levels with commas. Critical or incomplete outputs always require review.
@@ -1802,32 +1836,32 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                         }
                       />
                     </div>
-                    <label className="text-sm">
-                      Reviewers per request
-                      <input
-                        className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                        type="number"
-                        inputMode="numeric"
-                        min={reviewAudience.audience === "private_invited" ? MIN_REVIEW_PANEL_SIZE : 3}
-                        max={MAX_REVIEW_PANEL_SIZE}
-                        step={1}
-                        value={reviewTiming.panelSize}
-                        onChange={event => {
-                          const nextPanelSize = event.target.value;
-                          setReviewTiming(current => ({ ...current, panelSize: nextPanelSize }));
-                          setReviewExpertise(current => ({
-                            ...current,
-                            requirements: requirementsForAudience({
-                              audience: reviewAudience.audience,
-                              definitions: expertiseDefinitions,
-                              panelSize: nextPanelSize,
-                              requirements: current.requirements,
-                            }),
-                          }));
-                        }}
-                        required
-                      />
-                    </label>
+                    <Field
+                      label="Reviewers per request"
+                      className="border-white/10 bg-[var(--rateloop-field)]"
+                      type="number"
+                      inputMode="numeric"
+                      min={reviewAudience.audience === "private_invited" ? MIN_REVIEW_PANEL_SIZE : 3}
+                      max={MAX_REVIEW_PANEL_SIZE}
+                      step={1}
+                      value={reviewTiming.panelSize}
+                      onChange={event => {
+                        const nextPanelSize = event.target.value;
+                        setReviewTiming(current => ({ ...current, panelSize: nextPanelSize }));
+                        setReviewExpertise(current => ({
+                          ...current,
+                          requirements: requirementsForAudience({
+                            audience: reviewAudience.audience,
+                            definitions: expertiseDefinitions,
+                            panelSize: nextPanelSize,
+                            requirements: current.requirements,
+                          }),
+                        }));
+                        clearFormErrors("panelSize");
+                      }}
+                      required
+                      error={fieldErrors.panelSize}
+                    />
                   </div>
                 </fieldset>
                 <fieldset className="mt-6 border-t border-white/10 pt-5">
@@ -1875,10 +1909,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                         format="usdcAmount"
                         maxLength={REVIEW_USDC_DECIMAL_MAX_LENGTH}
                         value={reviewCompensation.usdcPerReviewer}
-                        onChange={event =>
-                          setReviewCompensation(current => ({ ...current, usdcPerReviewer: event.target.value }))
-                        }
+                        onChange={event => {
+                          setReviewCompensation(current => ({ ...current, usdcPerReviewer: event.target.value }));
+                          clearFormErrors("usdcPerReviewer");
+                        }}
                         required
+                        error={fieldErrors.usdcPerReviewer}
                       />
                     </div>
                   ) : null}
@@ -1921,10 +1957,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                         format="usdcAmount"
                         maxLength={REVIEW_USDC_DECIMAL_MAX_LENGTH}
                         value={reviewCompensation.feedbackBonusUsdc}
-                        onChange={event =>
-                          setReviewCompensation(current => ({ ...current, feedbackBonusUsdc: event.target.value }))
-                        }
+                        onChange={event => {
+                          setReviewCompensation(current => ({ ...current, feedbackBonusUsdc: event.target.value }));
+                          clearFormErrors("feedbackBonusUsdc");
+                        }}
                         required
+                        error={fieldErrors.feedbackBonusUsdc}
                       />
                       <label className="text-sm">
                         Human awarder
@@ -1943,22 +1981,24 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                         </select>
                       </label>
                       {reviewCompensation.feedbackBonusAwarderKind === "designated" ? (
-                        <label className="text-sm sm:col-span-2">
-                          Awarder account
-                          <input
-                            className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                        <div className="sm:col-span-2">
+                          <Field
+                            label="Awarder account"
+                            className="border-white/10 bg-[var(--rateloop-field)]"
                             value={reviewCompensation.feedbackBonusAwarderAccount}
-                            onChange={event =>
+                            onChange={event => {
                               setReviewCompensation(current => ({
                                 ...current,
                                 feedbackBonusAwarderAccount: event.target.value,
-                              }))
-                            }
+                              }));
+                              clearFormErrors("feedbackBonusAwarderAccount");
+                            }}
                             placeholder="Authenticated RateLoop account"
                             maxLength={320}
                             required
+                            error={fieldErrors.feedbackBonusAwarderAccount}
                           />
-                        </label>
+                        </div>
                       ) : null}
                       <p className="text-xs text-base-content/55 sm:col-span-2">
                         {
@@ -2151,32 +2191,36 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                         {sharedInvitation ? (
                           <>
                             <div className="grid gap-4 sm:grid-cols-2">
-                              <label className="block text-sm">
-                                Number of people
-                                <input
-                                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                                  type="number"
-                                  name="maximumRedemptions"
-                                  min={2}
-                                  max={missingReviewerSeats}
-                                  value={sharedInvitationCapacity}
-                                  onChange={event => {
-                                    sharedInvitationCapacityTouched.current = true;
-                                    setSharedInvitationCapacity(Number(event.target.value));
-                                  }}
-                                  required
-                                />
-                              </label>
-                              <label className="block text-sm">
-                                Verified email domain <span className="text-base-content/55">(optional)</span>
-                                <input
-                                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                                  type="text"
-                                  name="intendedEmailDomain"
-                                  maxLength={253}
-                                  placeholder="company.com"
-                                />
-                              </label>
+                              <Field
+                                label="Number of people"
+                                className="border-white/10 bg-[var(--rateloop-field)]"
+                                type="number"
+                                name="maximumRedemptions"
+                                min={2}
+                                max={missingReviewerSeats}
+                                value={sharedInvitationCapacity}
+                                onChange={event => {
+                                  sharedInvitationCapacityTouched.current = true;
+                                  setSharedInvitationCapacity(Number(event.target.value));
+                                  clearFormErrors("maximumRedemptions");
+                                }}
+                                required
+                                error={fieldErrors.maximumRedemptions}
+                              />
+                              <Field
+                                label={
+                                  <>
+                                    Verified email domain <span className="text-base-content/55">(optional)</span>
+                                  </>
+                                }
+                                className="border-white/10 bg-[var(--rateloop-field)]"
+                                type="text"
+                                name="intendedEmailDomain"
+                                maxLength={253}
+                                placeholder="company.com"
+                                onChange={() => clearFormErrors("intendedEmailDomain")}
+                                error={fieldErrors.intendedEmailDomain}
+                              />
                             </div>
                             <div className="surface-card-nested p-4 text-sm">
                               <p>
@@ -2197,23 +2241,24 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                           </>
                         ) : (
                           <>
-                            <label className="block text-sm">
-                              Bind code to recipient email{" "}
-                              {invitationExpertiseIds.length === 0 ? (
-                                <span className="text-base-content/55">(optional)</span>
-                              ) : null}
-                              <input
-                                className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                                type="email"
-                                name="intendedEmail"
-                                maxLength={320}
-                                required={invitationExpertiseIds.length > 0}
-                              />
-                              <span className="mt-1 block text-xs text-base-content/55">
-                                RateLoop sends the personal invitation link to this address. The recipient must sign in
-                                with that verified address.
-                              </span>
-                            </label>
+                            <Field
+                              label={
+                                <>
+                                  Bind code to recipient email{" "}
+                                  {invitationExpertiseIds.length === 0 ? (
+                                    <span className="text-base-content/55">(optional)</span>
+                                  ) : null}
+                                </>
+                              }
+                              className="border-white/10 bg-[var(--rateloop-field)]"
+                              type="email"
+                              name="intendedEmail"
+                              maxLength={320}
+                              required={invitationExpertiseIds.length > 0}
+                              onChange={() => clearFormErrors("intendedEmail")}
+                              error={fieldErrors.intendedEmail}
+                              hint="RateLoop sends the personal invitation link to this address. The recipient must sign in with that verified address."
+                            />
                             {privateExpertiseRequirements.length > 0 ? (
                               <fieldset className="rounded-lg border border-white/10 p-4">
                                 <legend className="px-1 text-sm font-medium">Intended specialist areas</legend>
@@ -2370,6 +2415,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             className="mt-5 rounded-lg border border-error/20 bg-error/10 px-4 py-3 text-sm text-error"
           >
             {error}
+          </p>
+        ) : null}
+        {formError ? (
+          <p
+            id="agent-setup-form-error"
+            role="alert"
+            className="mt-5 rounded-lg border border-error/20 bg-error/10 px-4 py-3 text-sm text-error"
+          >
+            {formError}
           </p>
         ) : null}
       </div>
