@@ -452,11 +452,7 @@ function validateTokenlessTestDeployment(env) {
     }
     if (secret) addSecretRole(testSecretRoles, name, Buffer.from(secret, "utf8"));
   }
-  for (const name of [
-    "TOKENLESS_PIPELINE_TOKEN",
-    "TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET",
-    "BETTER_AUTH_SECRET",
-  ]) {
+  for (const name of ["TOKENLESS_PIPELINE_TOKEN", "TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET", "BETTER_AUTH_SECRET"]) {
     if (value(env, name)) addSecretRole(testSecretRoles, name, Buffer.from(value(env, name), "utf8"));
   }
   validateRpcFallbacks(env, errors);
