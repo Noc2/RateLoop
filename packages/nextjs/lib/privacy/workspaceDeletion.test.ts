@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
-import { getWorkspaceDeletionPreview, requestWorkspaceDeletion } from "~~/lib/privacy/workspaceDeletion";
+import {
+  getWorkspaceDeletionPreview,
+  recordWorkspaceFundResolution,
+  requestWorkspaceDeletion,
+} from "~~/lib/privacy/workspaceDeletion";
 import { createWorkspace, createWorkspaceApiKey } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -141,6 +145,58 @@ test("workspace deletion blocks nonzero funds, active subscriptions, and reserva
   assert.equal(
     (await storedRow("SELECT status FROM tokenless_prepaid_reservations WHERE workspace_id = ?", [workspaceId])).status,
     "reserved",
+  );
+});
+
+test("funded workspace erasure queues a refund and resumes the same subject request after verification", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Refund before erase", ownerAddress: OWNER });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_prepaid_ledger_entries
+          (entry_id,workspace_id,delta_atomic,settlement_status,source,created_at,settled_at)
+          VALUES ('ledger_refund_before_erase',?,11,'settled','invoice',?,?)`,
+    args: [workspaceId, NOW, NOW],
+  });
+  const blocked = await requestWorkspaceDeletion({
+    accountAddress: OWNER,
+    confirmationName: "Refund before erase",
+    identityAssurance: "better_auth:passkey",
+    now: NOW,
+    workspaceId,
+  });
+  assert.equal(blocked.deleted, false);
+  assert.equal(blocked.status, "blocked_by_funds");
+  assert.match(blocked.resolutionId, /^wfr_[0-9a-f]{32}$/u);
+  assert.equal(
+    (await storedRow("SELECT status FROM tokenless_workspaces WHERE workspace_id=?", [workspaceId])).status,
+    "active",
+  );
+
+  await recordWorkspaceFundResolution({
+    resolutionId: blocked.resolutionId,
+    status: "refunded",
+    resolutionReference: "refund:provider:verified-001",
+    resolvedBy: "operator@example.test",
+    now: new Date(NOW.getTime() + 60_000),
+  });
+  assert.deepEqual((await getWorkspaceDeletionPreview({ accountAddress: OWNER, workspaceId })).blockers, []);
+  const completed = await requestWorkspaceDeletion({
+    accountAddress: OWNER,
+    confirmationName: "Refund before erase",
+    identityAssurance: "better_auth:passkey",
+    now: new Date(NOW.getTime() + 120_000),
+    workspaceId,
+  });
+  assert.equal(completed.deleted, true);
+  assert.equal(completed.requestId, blocked.requestId);
+  assert.deepEqual(
+    await storedRow(
+      `SELECT requests.status AS request_status,resolution.status AS resolution_status
+       FROM tokenless_subject_requests requests
+       JOIN tokenless_workspace_fund_resolution_requests resolution ON resolution.request_id=requests.request_id
+       WHERE requests.request_id=?`,
+      [blocked.requestId],
+    ),
+    { request_status: "completed", resolution_status: "refunded" },
   );
 });
 

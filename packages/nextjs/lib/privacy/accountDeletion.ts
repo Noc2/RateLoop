@@ -16,10 +16,20 @@ const LEGAL_RECORD_RETENTION_MS = 3_650 * 86_400_000;
 type Row = Record<string, unknown>;
 type DeletionBlocker = { code: string; message: string };
 type DeletionCategoryEvidence = Record<string, unknown>;
+type DirectAccessErasureEvidence = {
+  enterpriseMembersUnlinked: number;
+  reviewerAccessRowsAnonymized: number;
+  reviewerAcceptancesDeleted: number;
+  tombstonePrincipalId: string;
+};
 
 type RaterErasureEvidence = {
   profileFound: boolean;
   deletedRows: {
+    legalEligibility: number;
+    paidEligibilityScopes: number;
+    reviewerQualifications: number;
+    sanctionsScreenings: number;
     worldIdRequests: number;
     worldIdContextLimits: number;
     payoutEligibility: number;
@@ -27,12 +37,24 @@ type RaterErasureEvidence = {
     providerSubjectBindings: number;
   };
   remainingRows: {
+    legalEligibility: number;
+    paidEligibilityScopes: number;
+    reviewerQualifications: number;
+    sanctionsScreenings: number;
     worldIdRequests: number;
     worldIdContextLimits: number;
     payoutEligibility: number;
     assuranceAssertions: number;
     providerSubjectBindings: number;
     principalProfileLinks: number;
+  };
+  retainedRaterRows: {
+    assuranceAssignments: number;
+    expertiseVerificationRequests: number;
+    goldOutcomes: number;
+    paidReviewEligibilitySnapshots: number;
+    paidReviewVoucherIssuances: number;
+    voucherAssuranceSnapshots: number;
   };
   retainedPaidVouchers: number;
   tombstoneWritten: boolean;
@@ -231,6 +253,148 @@ async function releaseReservedAssignments(client: PoolClient, principalId: strin
   return released.rowCount ?? 0;
 }
 
+async function eraseDirectWorkspaceAccess(
+  client: PoolClient,
+  input: { betterAuthUserId: string; now: Date; principalId: string; receiptDigest: string },
+): Promise<DirectAccessErasureEvidence> {
+  const tombstonePrincipalId = `rlp_erased_${digest(`workspace-access:${input.receiptDigest}`).slice(0, 24)}`;
+  const systemBetterAuthUserId = "rateloop_deleted_enterprise_config_owner";
+  await client.query(
+    `INSERT INTO tokenless_principals (principal_id,status,created_at,updated_at,disabled_at)
+     VALUES ($1,'deleted',$2,$2,$2) ON CONFLICT (principal_id) DO NOTHING`,
+    [tombstonePrincipalId, input.now],
+  );
+  const enterpriseOwner = await client.query(
+    `SELECT COUNT(*) AS count FROM tokenless_better_auth_sso_providers WHERE user_id=$1
+     UNION ALL
+     SELECT COUNT(*) AS count FROM tokenless_better_auth_scim_providers WHERE user_id=$1`,
+    [input.betterAuthUserId],
+  );
+  if (enterpriseOwner.rows.some(value => rowNumber(value as Row, "count") > 0)) {
+    await client.query(
+      `INSERT INTO tokenless_better_auth_users
+       (id,name,email,email_verified,created_at,updated_at)
+       VALUES ($1,'Deleted enterprise configuration owner',
+               'deleted-enterprise-config-owner@invalid.rateloop',false,$2,$2)
+       ON CONFLICT (id) DO NOTHING`,
+      [systemBetterAuthUserId, input.now],
+    );
+    await client.query(`UPDATE tokenless_better_auth_sso_providers SET user_id=$1 WHERE user_id=$2`, [
+      systemBetterAuthUserId,
+      input.betterAuthUserId,
+    ]);
+    await client.query(`UPDATE tokenless_better_auth_scim_providers SET user_id=$1 WHERE user_id=$2`, [
+      systemBetterAuthUserId,
+      input.betterAuthUserId,
+    ]);
+  }
+  await client.query(
+    `UPDATE tokenless_enterprise_identity_providers SET created_by=$1,updated_at=$2 WHERE created_by=$3`,
+    [tombstonePrincipalId, input.now, input.principalId],
+  );
+  await client.query(
+    `UPDATE tokenless_enterprise_scim_connections SET created_by=$1,updated_at=$2 WHERE created_by=$3`,
+    [tombstonePrincipalId, input.now, input.principalId],
+  );
+  const enterpriseMembers = await client.query(
+    `UPDATE tokenless_enterprise_managed_members
+     SET better_auth_user_id=$1,principal_id=$2,status='deactivated',
+         deactivated_at=COALESCE(deactivated_at,$3),last_synced_at=$3
+     WHERE better_auth_user_id=$4 OR principal_id=$5`,
+    [
+      `deleted-member:${digest(`enterprise-member:${input.receiptDigest}`)}`,
+      tombstonePrincipalId,
+      input.now,
+      input.betterAuthUserId,
+      input.principalId,
+    ],
+  );
+  await client.query(
+    `UPDATE tokenless_enterprise_identity_audit_outbox
+     SET actor_reference=CASE WHEN actor_reference IN ($1,$2) THEN 'system:deleted-principal' ELSE actor_reference END,
+         target_id=CASE WHEN target_id IN ($1,$2) THEN 'deleted-subject' ELSE target_id END
+     WHERE actor_reference IN ($1,$2) OR target_id IN ($1,$2)`,
+    [input.principalId, input.betterAuthUserId],
+  );
+
+  await client.query(
+    `INSERT INTO tokenless_workspace_reviewers
+     (workspace_id,principal_address,status,activated_at,ended_at,end_reason,created_by,updated_at)
+     SELECT workspace_id,$1,'removed',activated_at,$2::timestamptz,
+            'account_deleted','system:account_deletion',$2::timestamptz
+     FROM tokenless_workspace_reviewers WHERE principal_address=$3
+     ON CONFLICT (workspace_id,principal_address) DO NOTHING`,
+    [tombstonePrincipalId, input.now, input.principalId],
+  );
+  const grants = await client.query(
+    `UPDATE tokenless_workspace_reviewer_access_grants
+     SET principal_address=$1,revoked_at=COALESCE(revoked_at,$2),
+         revoked_by=COALESCE(revoked_by,'system:account_deletion'),
+         created_by=CASE WHEN created_by=$3 THEN 'system:deleted-principal' ELSE created_by END
+     WHERE principal_address=$3`,
+    [tombstonePrincipalId, input.now, input.principalId],
+  );
+  const redemptions = await client.query(
+    `UPDATE tokenless_workspace_reviewer_invitation_redemptions
+     SET principal_address=$1 WHERE principal_address=$2`,
+    [tombstonePrincipalId, input.principalId],
+  );
+  const acceptances = await client.query(
+    `DELETE FROM tokenless_workspace_reviewer_terms_acceptances WHERE principal_address=$1`,
+    [input.principalId],
+  );
+  await client.query(
+    `UPDATE tokenless_workspace_reviewer_events
+     SET principal_address=NULL,
+         actor_reference=CASE WHEN actor_reference=$1 THEN 'system:deleted-principal' ELSE actor_reference END,
+         details_json=CASE WHEN principal_address=$1 THEN '{"subject":"deleted"}' ELSE details_json END
+     WHERE principal_address=$1 OR actor_reference=$1`,
+    [input.principalId],
+  );
+  await client.query(
+    `UPDATE tokenless_workspace_reviewer_invitations
+     SET intended_account_address=NULL,
+         paid_adulthood_attested_by=CASE WHEN paid_adulthood_attested_by=$1
+           THEN 'system:deleted-principal' ELSE paid_adulthood_attested_by END,
+         created_by=CASE WHEN created_by=$1 THEN 'system:deleted-principal' ELSE created_by END,
+         revoked_by=CASE WHEN revoked_by=$1 THEN 'system:deleted-principal' ELSE revoked_by END
+     WHERE intended_account_address=$1 OR paid_adulthood_attested_by=$1
+        OR created_by=$1 OR revoked_by=$1`,
+    [input.principalId],
+  );
+  await client.query(`DELETE FROM tokenless_workspace_reviewers WHERE principal_address=$1`, [input.principalId]);
+  await client.query(
+    `UPDATE tokenless_private_group_events
+     SET principal_address=NULL,
+         actor_reference=CASE WHEN actor_reference=$1 THEN 'system:deleted-principal' ELSE actor_reference END,
+         details_json=CASE WHEN principal_address=$1 THEN '{"subject":"deleted"}' ELSE details_json END
+     WHERE principal_address=$1 OR actor_reference=$1`,
+    [input.principalId],
+  );
+  const remaining = await client.query(
+    `SELECT
+       (SELECT COUNT(*) FROM tokenless_workspace_reviewers WHERE principal_address=$1) AS reviewers,
+       (SELECT COUNT(*) FROM tokenless_workspace_reviewer_access_grants WHERE principal_address=$1) AS grants,
+       (SELECT COUNT(*) FROM tokenless_workspace_reviewer_invitation_redemptions
+        WHERE principal_address=$1) AS redemptions,
+       (SELECT COUNT(*) FROM tokenless_workspace_reviewer_terms_acceptances
+        WHERE principal_address=$1) AS acceptances,
+       (SELECT COUNT(*) FROM tokenless_workspace_reviewer_events WHERE principal_address=$1) AS reviewer_events,
+       (SELECT COUNT(*) FROM tokenless_enterprise_managed_members
+        WHERE principal_id=$1 OR better_auth_user_id=$2) AS enterprise_members`,
+    [input.principalId, input.betterAuthUserId],
+  );
+  const remainingRow = remaining.rows[0] as Row;
+  const incomplete = Object.entries(remainingRow).find(([, value]) => Number(value) !== 0);
+  if (incomplete) throw new Error(`Account deletion postcondition failed: ${incomplete[0]}.`);
+  return {
+    enterpriseMembersUnlinked: enterpriseMembers.rowCount ?? 0,
+    reviewerAccessRowsAnonymized: (grants.rowCount ?? 0) + (redemptions.rowCount ?? 0),
+    reviewerAcceptancesDeleted: acceptances.rowCount ?? 0,
+    tombstonePrincipalId,
+  };
+}
+
 async function insertSubjectRequest(
   client: PoolClient,
   input: {
@@ -391,18 +555,34 @@ async function eraseRaterIdentity(
     profileFound: false,
     deletedRows: {
       assuranceAssertions: 0,
+      legalEligibility: 0,
+      paidEligibilityScopes: 0,
       payoutEligibility: 0,
       providerSubjectBindings: 0,
+      reviewerQualifications: 0,
+      sanctionsScreenings: 0,
       worldIdContextLimits: 0,
       worldIdRequests: 0,
     },
     remainingRows: {
       assuranceAssertions: 0,
+      legalEligibility: 0,
+      paidEligibilityScopes: 0,
       payoutEligibility: 0,
       principalProfileLinks: 0,
       providerSubjectBindings: 0,
+      reviewerQualifications: 0,
+      sanctionsScreenings: 0,
       worldIdContextLimits: 0,
       worldIdRequests: 0,
+    },
+    retainedRaterRows: {
+      assuranceAssignments: 0,
+      expertiseVerificationRequests: 0,
+      goldOutcomes: 0,
+      paidReviewEligibilitySnapshots: 0,
+      paidReviewVoucherIssuances: 0,
+      voucherAssuranceSnapshots: 0,
     },
     retainedPaidVouchers: 0,
     tombstoneReceiptHash: null,
@@ -425,6 +605,27 @@ async function eraseRaterIdentity(
   const payoutEligibility = await client.query(`DELETE FROM tokenless_payout_eligibility WHERE rater_id = $1`, [
     raterId,
   ]);
+  const paidEligibilityScopes = await client.query(
+    `DELETE FROM tokenless_paid_eligibility_scopes WHERE rater_id = $1`,
+    [raterId],
+  );
+  const sanctionsScreenings = await client.query(`DELETE FROM tokenless_sanctions_screenings WHERE rater_id = $1`, [
+    raterId,
+  ]);
+  const legalEligibility = await client.query(`DELETE FROM tokenless_legal_eligibility WHERE rater_id = $1`, [raterId]);
+  await client.query(
+    `DELETE FROM tokenless_private_group_invitation_expertise_attestations
+     WHERE materialized_qualification_id IN (
+       SELECT qualification_id FROM tokenless_reviewer_qualifications
+       WHERE rater_id = $1 OR reviewer_account_address = $2
+     )`,
+    [raterId, principalId],
+  );
+  const reviewerQualifications = await client.query(
+    `DELETE FROM tokenless_reviewer_qualifications
+     WHERE rater_id = $1 OR reviewer_account_address = $2`,
+    [raterId, principalId],
+  );
   const assuranceAssertions = await client.query(`DELETE FROM tokenless_assurance_assertions WHERE rater_id = $1`, [
     raterId,
   ]);
@@ -451,6 +652,14 @@ async function eraseRaterIdentity(
          AS world_id_context_limits,
        (SELECT COUNT(*) FROM tokenless_payout_eligibility WHERE rater_id = $1)
          AS payout_eligibility,
+       (SELECT COUNT(*) FROM tokenless_legal_eligibility WHERE rater_id = $1)
+         AS legal_eligibility,
+       (SELECT COUNT(*) FROM tokenless_paid_eligibility_scopes WHERE rater_id = $1)
+         AS paid_eligibility_scopes,
+       (SELECT COUNT(*) FROM tokenless_sanctions_screenings WHERE rater_id = $1)
+         AS sanctions_screenings,
+       (SELECT COUNT(*) FROM tokenless_reviewer_qualifications
+        WHERE rater_id = $1 OR reviewer_account_address = $2) AS reviewer_qualifications,
        (SELECT COUNT(*) FROM tokenless_assurance_assertions WHERE rater_id = $1)
          AS assurance_assertions,
        (SELECT COUNT(*) FROM tokenless_provider_subject_bindings WHERE rater_id = $1)
@@ -458,7 +667,19 @@ async function eraseRaterIdentity(
        (SELECT COUNT(*) FROM tokenless_rater_profiles WHERE principal_id = $2)
          AS principal_profile_links,
        (SELECT COUNT(*) FROM tokenless_paid_vouchers WHERE rater_id = $1)
-         AS retained_paid_vouchers`,
+         AS retained_paid_vouchers,
+       (SELECT COUNT(*) FROM tokenless_assurance_assignments WHERE rater_id = $1)
+         AS retained_assurance_assignments,
+       (SELECT COUNT(*) FROM tokenless_expertise_verification_requests WHERE rater_id = $1)
+         AS retained_expertise_verification_requests,
+       (SELECT COUNT(*) FROM tokenless_assurance_gold_outcomes WHERE rater_id = $1)
+         AS retained_gold_outcomes,
+       (SELECT COUNT(*) FROM tokenless_paid_review_eligibility_snapshots WHERE rater_id = $1)
+         AS retained_paid_review_eligibility_snapshots,
+       (SELECT COUNT(*) FROM tokenless_paid_review_voucher_issuances WHERE rater_id = $1)
+         AS retained_paid_review_voucher_issuances,
+       (SELECT COUNT(*) FROM tokenless_voucher_assurance_snapshots WHERE rater_id = $1)
+         AS retained_voucher_assurance_snapshots`,
     [raterId, principalId],
   );
   const row = remaining.rows[0] as Row | undefined;
@@ -466,18 +687,34 @@ async function eraseRaterIdentity(
     profileFound: true,
     deletedRows: {
       assuranceAssertions: assuranceAssertions.rowCount ?? 0,
+      legalEligibility: legalEligibility.rowCount ?? 0,
+      paidEligibilityScopes: paidEligibilityScopes.rowCount ?? 0,
       payoutEligibility: payoutEligibility.rowCount ?? 0,
       providerSubjectBindings: providerSubjectBindings.rowCount ?? 0,
+      reviewerQualifications: reviewerQualifications.rowCount ?? 0,
+      sanctionsScreenings: sanctionsScreenings.rowCount ?? 0,
       worldIdContextLimits: worldIdContextLimits.rowCount ?? 0,
       worldIdRequests: worldIdRequests.rowCount ?? 0,
     },
     remainingRows: {
       assuranceAssertions: rowNumber(row, "assurance_assertions"),
+      legalEligibility: rowNumber(row, "legal_eligibility"),
+      paidEligibilityScopes: rowNumber(row, "paid_eligibility_scopes"),
       payoutEligibility: rowNumber(row, "payout_eligibility"),
       principalProfileLinks: rowNumber(row, "principal_profile_links"),
       providerSubjectBindings: rowNumber(row, "provider_subject_bindings"),
+      reviewerQualifications: rowNumber(row, "reviewer_qualifications"),
+      sanctionsScreenings: rowNumber(row, "sanctions_screenings"),
       worldIdContextLimits: rowNumber(row, "world_id_context_limits"),
       worldIdRequests: rowNumber(row, "world_id_requests"),
+    },
+    retainedRaterRows: {
+      assuranceAssignments: rowNumber(row, "retained_assurance_assignments"),
+      expertiseVerificationRequests: rowNumber(row, "retained_expertise_verification_requests"),
+      goldOutcomes: rowNumber(row, "retained_gold_outcomes"),
+      paidReviewEligibilitySnapshots: rowNumber(row, "retained_paid_review_eligibility_snapshots"),
+      paidReviewVoucherIssuances: rowNumber(row, "retained_paid_review_voucher_issuances"),
+      voucherAssuranceSnapshots: rowNumber(row, "retained_voucher_assurance_snapshots"),
     },
     retainedPaidVouchers: rowNumber(row, "retained_paid_vouchers"),
     tombstoneReceiptHash: `sha256:${receiptDigest}`,
@@ -556,6 +793,7 @@ async function collectDeletionCategoryEvidence(
     privateQuoteErasure: PrivateQuoteErasureEvidence;
     paidAssignmentSeatErasure: PaidAssignmentSeatIdentityErasureEvidence;
     raterErasure: RaterErasureEvidence;
+    directAccessErasure: DirectAccessErasureEvidence;
     releasedReservations: number;
   },
 ) {
@@ -635,6 +873,7 @@ async function collectDeletionCategoryEvidence(
       workspaceClients: rowNumber(row, "workspace_clients"),
       workspaceGovernance: rowNumber(row, "workspace_governance"),
       workspaceMemberships: rowNumber(row, "workspace_memberships"),
+      directAccessErasure: input.directAccessErasure,
     },
     eligibility_handoffs: {
       eligibilityHandoffs: rowNumber(row, "eligibility_handoffs"),
@@ -677,6 +916,7 @@ async function collectDeletionCategoryEvidence(
       paidAssignmentSeatIdentityCommitmentsRetained: input.paidAssignmentSeatErasure.retainedIdentityCommitments,
       retainedPrivateQuoteCommitments: input.privateQuoteErasure.retainedReferencedCommitmentOnly,
       retainedPaidVouchers: input.raterErasure.retainedPaidVouchers,
+      retainedRaterLinkedSettlementAndQualityRows: input.raterErasure.retainedRaterRows,
       raterTombstoneRetained: input.raterErasure.tombstoneWritten,
       tombstoneReceiptHash: input.raterErasure.tombstoneReceiptHash,
     },
@@ -777,6 +1017,12 @@ export async function deleteAccount(input: {
     );
     const privateQuoteErasure = await erasePrivateQuoteOwnership(client, input.principalId, receiptDigest);
     const paidAssignmentSeatErasure = await erasePaidAssignmentSeatIdentities(client, {
+      now,
+      principalId: input.principalId,
+      receiptDigest,
+    });
+    const directAccessErasure = await eraseDirectWorkspaceAccess(client, {
+      betterAuthUserId: actionProof.betterAuthUserId,
       now,
       principalId: input.principalId,
       receiptDigest,
@@ -911,6 +1157,7 @@ export async function deleteAccount(input: {
       paidAssignmentSeatErasure,
       privateQuoteErasure,
       raterErasure,
+      directAccessErasure,
       releasedReservations,
     });
     const completedAt = new Date(Math.max(Date.now(), now.getTime()));

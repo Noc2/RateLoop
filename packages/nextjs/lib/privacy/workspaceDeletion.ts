@@ -141,7 +141,10 @@ async function loadPreviewRow(
        (SELECT COALESCE(SUM(delta_atomic), 0)::text FROM tokenless_prepaid_ledger_entries
         WHERE workspace_id = $1 AND settlement_status = 'settled') AS settled_atomic,
        (SELECT COALESCE(SUM(amount_atomic), 0)::text FROM tokenless_prepaid_reservations
-        WHERE workspace_id = $1 AND status = 'reserved') AS reserved_atomic`,
+        WHERE workspace_id = $1 AND status = 'reserved') AS reserved_atomic,
+       (SELECT status FROM tokenless_workspace_fund_resolution_requests
+        WHERE workspace_id=$1 ORDER BY requested_at DESC,resolution_id DESC LIMIT 1)
+        AS fund_resolution_status`,
     [input.workspaceId],
   );
   return {
@@ -182,10 +185,12 @@ function previewFromRow(row: Row): WorkspaceDeletionPreview {
   const subscriptionStatus = text(row, "provider_status") ?? "free";
   const subscriptionId = text(row, "provider_subscription_id");
 
-  if (settled !== 0n || reserved !== 0n || settled - reserved !== 0n) {
+  const fundResolutionStatus = text(row, "fund_resolution_status");
+  if ((settled !== 0n || reserved !== 0n || settled - reserved !== 0n) && fundResolutionStatus !== "refunded") {
     blockers.push({
       code: "workspace_funds_active",
-      message: "Settle or withdraw all workspace funds before deleting this workspace.",
+      message:
+        "Workspace funds require a verified refund before deletion. Confirming deletion queues a manual fund-resolution request without forfeiting the balance.",
     });
   }
   if (!TERMINAL_SUBSCRIPTION_STATUSES.has(subscriptionStatus) || (subscriptionStatus === "free" && subscriptionId)) {
@@ -223,6 +228,8 @@ function previewFromRow(row: Row): WorkspaceDeletionPreview {
     warnings.push("Referenced private quotes will be anonymized and retained as restricted settlement evidence.");
   if (publicRecords > 0) warnings.push("Public-chain settlement records cannot be erased by RateLoop.");
   if (legalHolds > 0) warnings.push("Records covered by an active legal hold remain restricted until the hold ends.");
+  if (fundResolutionStatus === "refunded")
+    warnings.push("A compliance operator recorded the external workspace refund; billing evidence remains retained.");
 
   return {
     workspace: { workspaceId, name },
@@ -248,6 +255,111 @@ export async function getWorkspaceDeletionPreview(input: { accountAddress: strin
   const client = await dbPool.connect();
   try {
     return previewFromRow(await loadPreviewRow(client, input));
+  } finally {
+    client.release();
+  }
+}
+
+export async function listWorkspaceFundResolutionRequests(input: { limit?: number } = {}) {
+  const limit = input.limit ?? 50;
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+    throw new TokenlessServiceError("Fund-resolution limit is invalid.", 400, "invalid_fund_resolution");
+  }
+  const result = await dbPool.query(
+    `SELECT resolution_id,request_id,workspace_id,settled_atomic_snapshot,
+            reserved_atomic_snapshot,available_atomic_snapshot,status,requested_at,updated_at
+     FROM tokenless_workspace_fund_resolution_requests
+     WHERE status IN ('pending','manual_review')
+     ORDER BY requested_at ASC,resolution_id ASC LIMIT $1`,
+    [limit],
+  );
+  return result.rows.map(value => {
+    const row = value as Row;
+    return {
+      resolutionId: text(row, "resolution_id"),
+      requestId: text(row, "request_id"),
+      workspaceId: text(row, "workspace_id"),
+      settledAtomic: text(row, "settled_atomic_snapshot"),
+      reservedAtomic: text(row, "reserved_atomic_snapshot"),
+      availableAtomic: text(row, "available_atomic_snapshot"),
+      status: text(row, "status"),
+      requestedAt: new Date(String(row.requested_at)).toISOString(),
+    };
+  });
+}
+
+export async function recordWorkspaceFundResolution(input: {
+  resolutionId: string;
+  status: "refunded" | "manual_review";
+  resolutionReference: string;
+  resolvedBy: string;
+  now?: Date;
+}) {
+  const now = input.now ?? new Date();
+  const reference = input.resolutionReference.trim();
+  const resolvedBy = input.resolvedBy.trim();
+  if (
+    !/^wfr_[0-9a-f]{32}$/u.test(input.resolutionId) ||
+    !reference ||
+    reference.length > 500 ||
+    !resolvedBy ||
+    resolvedBy.length > 160
+  ) {
+    throw new TokenlessServiceError("Fund-resolution decision is invalid.", 400, "invalid_fund_resolution");
+  }
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const current = await client.query(
+      `SELECT request_id,status,resolution_reference,resolved_by,resolved_at
+       FROM tokenless_workspace_fund_resolution_requests
+       WHERE resolution_id=$1 LIMIT 1 FOR UPDATE`,
+      [input.resolutionId],
+    );
+    const row = current.rows[0] as Row | undefined;
+    if (!row)
+      throw new TokenlessServiceError("Fund-resolution request was not found.", 404, "fund_resolution_not_found");
+    const currentStatus = text(row, "status");
+    if (currentStatus !== "pending" && currentStatus !== "manual_review") {
+      if (
+        currentStatus !== input.status ||
+        text(row, "resolution_reference") !== reference ||
+        text(row, "resolved_by") !== resolvedBy
+      ) {
+        throw new TokenlessServiceError(
+          "Fund-resolution decision is already recorded.",
+          409,
+          "fund_resolution_conflict",
+        );
+      }
+      await client.query("COMMIT");
+      return { resolutionId: input.resolutionId, status: input.status, replay: true as const };
+    }
+    await client.query(
+      `UPDATE tokenless_workspace_fund_resolution_requests
+       SET status=$1,resolution_reference=$2,resolved_by=$3,resolved_at=$4,updated_at=$4
+       WHERE resolution_id=$5`,
+      [input.status, reference, resolvedBy, now, input.resolutionId],
+    );
+    const requestId = text(row, "request_id")!;
+    if (input.status === "refunded") {
+      await client.query(
+        `UPDATE tokenless_subject_requests SET status='in_progress'
+         WHERE request_id=$1 AND status='blocked_by_funds'`,
+        [requestId],
+      );
+      await client.query(
+        `INSERT INTO tokenless_subject_request_events
+         (event_id,request_id,from_status,to_status,actor_reference,reason,created_at)
+         VALUES ($1,$2,'blocked_by_funds','in_progress',$3,'external_refund_verified',$4)`,
+        [`dsre_${randomUUID().replaceAll("-", "")}`, requestId, `compliance:${resolvedBy}`, now],
+      );
+    }
+    await client.query("COMMIT");
+    return { resolutionId: input.resolutionId, status: input.status, replay: false as const };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
   } finally {
     client.release();
   }
@@ -364,7 +476,6 @@ export async function requestWorkspaceDeletion(input: {
   }
   const requester = accountReference(input.accountAddress);
   const now = input.now ?? new Date();
-  const dueAt = new Date(now.getTime() + DELETION_DUE_MS);
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
@@ -382,11 +493,100 @@ export async function requestWorkspaceDeletion(input: {
       );
     }
     if (preview.blockers.length > 0) {
+      if (preview.blockers.length === 1 && preview.blockers[0]?.code === "workspace_funds_active") {
+        const existing = await client.query(
+          `SELECT resolution.resolution_id,requests.request_id,requests.due_at
+           FROM tokenless_workspace_fund_resolution_requests resolution
+           JOIN tokenless_subject_requests requests ON requests.request_id=resolution.request_id
+           WHERE resolution.workspace_id=$1 AND resolution.status IN ('pending','manual_review')
+             AND requests.status='blocked_by_funds'
+           ORDER BY resolution.requested_at DESC LIMIT 1 FOR UPDATE`,
+          [input.workspaceId],
+        );
+        const existingRow = existing.rows[0] as Row | undefined;
+        if (existingRow) {
+          await client.query("COMMIT");
+          return {
+            deleted: false as const,
+            immediate: false,
+            requestId: text(existingRow, "request_id")!,
+            resolutionId: text(existingRow, "resolution_id")!,
+            status: "blocked_by_funds" as const,
+          };
+        }
+        const requestId = `dsr_${randomUUID().replaceAll("-", "")}`;
+        const resolutionId = `wfr_${randomUUID().replaceAll("-", "")}`;
+        const dueAt = new Date(now.getTime() + DELETION_DUE_MS);
+        await client.query(
+          `INSERT INTO tokenless_subject_requests
+           (request_id,principal_id,workspace_id,request_type,status,scope_json,
+            identity_assurance,received_at,due_at,completed_at)
+           VALUES ($1,$2,$3,'deletion','blocked_by_funds',$4,$5,$6,$7,NULL)`,
+          [
+            requestId,
+            requester,
+            input.workspaceId,
+            JSON.stringify({ workspaceDeletion: true, workspaceId: input.workspaceId, fundResolutionRequired: true }),
+            input.identityAssurance,
+            now,
+            dueAt,
+          ],
+        );
+        for (const [fromStatus, toStatus, reason] of [
+          [null, "received", "authenticated_workspace_deletion_request"],
+          ["received", "identity_verified", "active_browser_session"],
+          ["identity_verified", "in_progress", "workspace_deletion_started"],
+          ["in_progress", "blocked_by_funds", "verified_refund_required"],
+        ] as const) {
+          await client.query(
+            `INSERT INTO tokenless_subject_request_events
+             (event_id,request_id,from_status,to_status,actor_reference,reason,created_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+            [`dsre_${randomUUID().replaceAll("-", "")}`, requestId, fromStatus, toStatus, requester, reason, now],
+          );
+        }
+        await client.query(
+          `INSERT INTO tokenless_workspace_fund_resolution_requests
+           (resolution_id,request_id,workspace_id,requested_by,settled_atomic_snapshot,
+            reserved_atomic_snapshot,available_atomic_snapshot,status,requested_at,updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',$8,$8)`,
+          [
+            resolutionId,
+            requestId,
+            input.workspaceId,
+            requester,
+            preview.impact.settledAtomic,
+            preview.impact.reservedAtomic,
+            preview.impact.availableAtomic,
+            now,
+          ],
+        );
+        await client.query("COMMIT");
+        return {
+          deleted: false as const,
+          immediate: false,
+          requestId,
+          resolutionId,
+          status: "blocked_by_funds" as const,
+        };
+      }
       const blocker = preview.blockers[0];
       throw new TokenlessServiceError(blocker.message, 409, blocker.code);
     }
 
-    const requestId = `dsr_${randomUUID().replaceAll("-", "")}`;
+    const resumable = await client.query(
+      `SELECT requests.request_id,requests.due_at
+       FROM tokenless_subject_requests requests
+       JOIN tokenless_workspace_fund_resolution_requests resolution
+         ON resolution.request_id=requests.request_id
+       WHERE requests.workspace_id=$1 AND requests.request_type='deletion'
+         AND requests.status='in_progress' AND resolution.status='refunded'
+       ORDER BY requests.received_at DESC LIMIT 1 FOR UPDATE`,
+      [input.workspaceId],
+    );
+    const resumableRow = resumable.rows[0] as Row | undefined;
+    const requestId = text(resumableRow, "request_id") ?? `dsr_${randomUUID().replaceAll("-", "")}`;
+    const dueAt = resumableRow ? new Date(String(resumableRow.due_at)) : new Date(now.getTime() + DELETION_DUE_MS);
     const jobId = `del_${randomUUID().replaceAll("-", "")}`;
     const hasPendingObjects = integer(previewRow, "active_artifacts") + integer(previewRow, "active_media") > 0;
     const receiptDigest = hasPendingObjects ? null : evidenceDigest(jobId, "receipt", "completed");
@@ -395,43 +595,67 @@ export async function requestWorkspaceDeletion(input: {
       throw new Error("Workspace deletion postcondition failed: privateQuoteOwnerLinks.");
     }
 
-    await client.query(
-      `INSERT INTO tokenless_subject_requests
+    if (!resumableRow) {
+      await client.query(
+        `INSERT INTO tokenless_subject_requests
        (request_id, principal_id, workspace_id, request_type, status, scope_json,
         identity_assurance, received_at, due_at, completed_at)
        VALUES ($1, $2, $3, 'deletion', $4, $5, $6, $7, $8, $9)`,
-      [
-        requestId,
-        requester,
-        input.workspaceId,
-        hasPendingObjects ? "in_progress" : "completed",
-        JSON.stringify({
-          privateQuotes: {
-            deletedUnreferenced: privateQuoteErasure.deletedUnreferenced,
-            erasedReferencedContent: privateQuoteErasure.erasedReferencedContent,
-            ownerTombstone:
-              privateQuoteErasure.retainedReferencedCommitmentOnly > 0 ? privateQuoteErasure.ownerTombstone : null,
-            retainedReferencedCommitmentOnly: privateQuoteErasure.retainedReferencedCommitmentOnly,
-          },
-          workspaceDeletion: true,
-          workspaceId: input.workspaceId,
-        }),
-        input.identityAssurance,
-        now,
-        dueAt,
-        hasPendingObjects ? null : now,
-      ],
-    );
-    for (const [fromStatus, toStatus, reason] of [
-      [null, "received", "authenticated_workspace_deletion_request"],
-      ["received", "identity_verified", "active_browser_session"],
-      ["identity_verified", "in_progress", "workspace_deletion_started"],
-    ] as const) {
-      await client.query(
-        `INSERT INTO tokenless_subject_request_events
+        [
+          requestId,
+          requester,
+          input.workspaceId,
+          hasPendingObjects ? "in_progress" : "completed",
+          JSON.stringify({
+            privateQuotes: {
+              deletedUnreferenced: privateQuoteErasure.deletedUnreferenced,
+              erasedReferencedContent: privateQuoteErasure.erasedReferencedContent,
+              ownerTombstone:
+                privateQuoteErasure.retainedReferencedCommitmentOnly > 0 ? privateQuoteErasure.ownerTombstone : null,
+              retainedReferencedCommitmentOnly: privateQuoteErasure.retainedReferencedCommitmentOnly,
+            },
+            workspaceDeletion: true,
+            workspaceId: input.workspaceId,
+          }),
+          input.identityAssurance,
+          now,
+          dueAt,
+          hasPendingObjects ? null : now,
+        ],
+      );
+      for (const [fromStatus, toStatus, reason] of [
+        [null, "received", "authenticated_workspace_deletion_request"],
+        ["received", "identity_verified", "active_browser_session"],
+        ["identity_verified", "in_progress", "workspace_deletion_started"],
+      ] as const) {
+        await client.query(
+          `INSERT INTO tokenless_subject_request_events
          (event_id, request_id, from_status, to_status, actor_reference, reason, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [`dsre_${randomUUID().replaceAll("-", "")}`, requestId, fromStatus, toStatus, requester, reason, now],
+          [`dsre_${randomUUID().replaceAll("-", "")}`, requestId, fromStatus, toStatus, requester, reason, now],
+        );
+      }
+    } else {
+      await client.query(
+        `UPDATE tokenless_subject_requests
+         SET status=$1,scope_json=$2,completed_at=$3 WHERE request_id=$4`,
+        [
+          hasPendingObjects ? "in_progress" : "completed",
+          JSON.stringify({
+            fundResolutionCompleted: true,
+            privateQuotes: {
+              deletedUnreferenced: privateQuoteErasure.deletedUnreferenced,
+              erasedReferencedContent: privateQuoteErasure.erasedReferencedContent,
+              ownerTombstone:
+                privateQuoteErasure.retainedReferencedCommitmentOnly > 0 ? privateQuoteErasure.ownerTombstone : null,
+              retainedReferencedCommitmentOnly: privateQuoteErasure.retainedReferencedCommitmentOnly,
+            },
+            workspaceDeletion: true,
+            workspaceId: input.workspaceId,
+          }),
+          hasPendingObjects ? null : now,
+          requestId,
+        ],
       );
     }
 
@@ -537,6 +761,82 @@ export async function requestWorkspaceDeletion(input: {
        WHERE workspace_id = $2`,
       [now, input.workspaceId],
     );
+    const workspaceScreenings = await client.query(
+      `SELECT sanctions_screening_id FROM tokenless_paid_eligibility_scopes WHERE workspace_id=$1`,
+      [input.workspaceId],
+    );
+    await client.query(`DELETE FROM tokenless_paid_eligibility_scopes WHERE workspace_id=$1`, [input.workspaceId]);
+    const workspaceScreeningIds = workspaceScreenings.rows
+      .map(value => text(value as Row, "sanctions_screening_id"))
+      .filter((value): value is string => value !== null);
+    if (workspaceScreeningIds.length) {
+      await client.query(`DELETE FROM tokenless_sanctions_screenings WHERE screening_id=ANY($1::text[])`, [
+        workspaceScreeningIds,
+      ]);
+    }
+    await client.query(
+      `DELETE FROM tokenless_private_group_invitation_expertise_attestations
+       WHERE materialized_qualification_id IN (
+         SELECT qualification_id FROM tokenless_reviewer_qualifications
+         WHERE workspace_id=$1 AND reviewer_source='customer_invited'
+       )`,
+      [input.workspaceId],
+    );
+    await client.query(
+      `DELETE FROM tokenless_reviewer_qualifications
+       WHERE workspace_id=$1 AND reviewer_source='customer_invited'`,
+      [input.workspaceId],
+    );
+    const reviewerTombstone = `rlp_erased_ws_${evidenceDigest(jobId, "reviewer_roster", "anonymized").slice(0, 24)}`;
+    await client.query(
+      `INSERT INTO tokenless_principals (principal_id,status,created_at,updated_at,disabled_at)
+       VALUES ($1,'deleted',$2,$2,$2) ON CONFLICT (principal_id) DO NOTHING`,
+      [reviewerTombstone, now],
+    );
+    await client.query(
+      `INSERT INTO tokenless_workspace_reviewers
+       (workspace_id,principal_address,status,activated_at,ended_at,end_reason,created_by,updated_at)
+       SELECT workspace_id,$1,'removed',MIN(activated_at),$2::timestamptz,
+              'workspace_deleted','system:workspace_deletion',$2::timestamptz
+       FROM tokenless_workspace_reviewers WHERE workspace_id=$3 GROUP BY workspace_id
+       ON CONFLICT (workspace_id,principal_address) DO NOTHING`,
+      [reviewerTombstone, now, input.workspaceId],
+    );
+    await client.query(`DELETE FROM tokenless_workspace_reviewer_terms_acceptances WHERE workspace_id=$1`, [
+      input.workspaceId,
+    ]);
+    await client.query(`DELETE FROM tokenless_workspace_reviewer_invitation_redemptions WHERE workspace_id=$1`, [
+      input.workspaceId,
+    ]);
+    await client.query(
+      `UPDATE tokenless_workspace_reviewer_access_grants
+       SET principal_address=$1,revoked_at=COALESCE(revoked_at,$2),
+           revoked_by=COALESCE(revoked_by,'system:workspace_deletion'),
+           created_by='system:workspace_deletion'
+       WHERE workspace_id=$3`,
+      [reviewerTombstone, now, input.workspaceId],
+    );
+    await client.query(
+      `DELETE FROM tokenless_workspace_reviewers
+       WHERE workspace_id=$1 AND principal_address<>$2`,
+      [input.workspaceId, reviewerTombstone],
+    );
+    await client.query(
+      `UPDATE tokenless_workspace_reviewer_events
+       SET principal_address=NULL,actor_reference='system:workspace_deletion',
+           details_json='{"workspaceSubject":"deleted"}'
+       WHERE workspace_id=$1`,
+      [input.workspaceId],
+    );
+    await client.query(
+      `UPDATE tokenless_workspace_reviewer_invitations
+       SET intended_account_address=NULL,intended_email_hash=NULL,intended_email_domain=NULL,
+           paid_adulthood_attested=false,paid_adulthood_attested_by=NULL,paid_adulthood_attested_at=NULL,
+           revoked_at=COALESCE(revoked_at,$1),revoked_by='system:workspace_deletion',
+           created_by='system:workspace_deletion'
+       WHERE workspace_id=$2`,
+      [now, input.workspaceId],
+    );
     await client.query(
       `UPDATE tokenless_private_group_invitations
        SET revoked_at = COALESCE(revoked_at, $1), revoked_by = COALESCE(revoked_by, $2)
@@ -602,6 +902,25 @@ export async function requestWorkspaceDeletion(input: {
        WHERE workspace_id = $3`,
       [TOMBSTONED_WORKSPACE_NAME, now, input.workspaceId],
     );
+    const accessPostconditions = await client.query(
+      `SELECT
+         (SELECT COUNT(*) FROM tokenless_workspace_reviewers
+          WHERE workspace_id=$1 AND status='active') AS active_reviewers,
+         (SELECT COUNT(*) FROM tokenless_workspace_reviewer_access_grants
+          WHERE workspace_id=$1 AND revoked_at IS NULL) AS active_grants,
+         (SELECT COUNT(*) FROM tokenless_workspace_reviewer_terms_acceptances
+          WHERE workspace_id=$1) AS terms_acceptances,
+         (SELECT COUNT(*) FROM tokenless_workspace_reviewer_invitation_redemptions
+          WHERE workspace_id=$1) AS invitation_redemptions,
+         (SELECT COUNT(*) FROM tokenless_paid_eligibility_scopes
+          WHERE workspace_id=$1) AS paid_eligibility_scopes`,
+      [input.workspaceId],
+    );
+    const accessRow = accessPostconditions.rows[0] as Row;
+    const incompleteAccess = Object.entries(accessRow).find(([, value]) => Number(value) !== 0);
+    if (incompleteAccess) {
+      throw new Error(`Workspace deletion postcondition failed: ${incompleteAccess[0]}.`);
+    }
 
     await insertCategory(client, {
       category: "workspace_access",

@@ -409,8 +409,12 @@ test("account deletion receipts the rater identity, erases World ID state, and p
   assert.deepEqual(completionEvidence.categoryEvidence.world_id_and_rater_linkage, {
     deletedRows: {
       assuranceAssertions: 1,
+      legalEligibility: 0,
+      paidEligibilityScopes: 0,
       payoutEligibility: 0,
       providerSubjectBindings: 1,
+      reviewerQualifications: 0,
+      sanctionsScreenings: 0,
       worldIdContextLimits: 1,
       worldIdRequests: 1,
     },
@@ -419,9 +423,13 @@ test("account deletion receipts the rater identity, erases World ID state, and p
     remainingPaidAssignmentSeatDirectIdentities: 0,
     remainingRows: {
       assuranceAssertions: 0,
+      legalEligibility: 0,
+      paidEligibilityScopes: 0,
       payoutEligibility: 0,
       principalProfileLinks: 0,
       providerSubjectBindings: 0,
+      reviewerQualifications: 0,
+      sanctionsScreenings: 0,
       worldIdContextLimits: 0,
       worldIdRequests: 0,
     },
@@ -434,6 +442,14 @@ test("account deletion receipts the rater identity, erases World ID state, and p
     raterTombstoneRetained: true,
     retainedPrivateQuoteCommitments: 0,
     retainedPaidVouchers: 1,
+    retainedRaterLinkedSettlementAndQualityRows: {
+      assuranceAssignments: 0,
+      expertiseVerificationRequests: 0,
+      goldOutcomes: 0,
+      paidReviewEligibilitySnapshots: 0,
+      paidReviewVoucherIssuances: 0,
+      voucherAssuranceSnapshots: 0,
+    },
     tombstoneReceiptHash: `sha256:${deleted.receiptDigest}`,
   });
   const events = await dbClient.execute({
