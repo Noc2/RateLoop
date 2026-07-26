@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, generateKeyPairSync } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
@@ -19,6 +19,8 @@ import {
 } from "~~/lib/tokenless/agentIntegrations";
 import { __setArtifactPrivacyRuntimeForTests, readEncryptedArtifact } from "~~/lib/tokenless/artifactPrivacy";
 import { __setAssuranceResponseKeyringsForTests } from "~~/lib/tokenless/assuranceResponses";
+import { projectDirectPrivateReviewDecisionEvidence } from "~~/lib/tokenless/directPrivateReviewEvidence";
+import { generateAssuranceEvidencePacket } from "~~/lib/tokenless/evidencePackets";
 import { createAssuranceProject } from "~~/lib/tokenless/humanAssurance";
 import {
   type FrozenHumanReviewRoutingContext,
@@ -343,6 +345,53 @@ test("direct private assignments surface in reviewer work and produce a terminal
   assert.equal(terminal?.lifecycle.state, "completed");
   assert.equal(terminal?.envelope?.panel.responseCount, 2);
   assert.equal(terminal?.envelope?.economics.guaranteedBase.mode, "off");
+  await projectDirectPrivateReviewDecisionEvidence({
+    deliveryId: terminal!.deliveryId,
+    packetGenerator: async () => ({}) as Awaited<ReturnType<typeof generateAssuranceEvidencePacket>>,
+  });
+  const projected = await dbClient.execute({
+    sql: `SELECT o.run_id,r.status,r.manifest_json,p.policy_json
+          FROM tokenless_agent_review_opportunities o
+          JOIN tokenless_assurance_runs r ON r.run_id=o.run_id
+          JOIN tokenless_assurance_audience_policies p
+            ON p.policy_id=r.audience_policy_id AND p.version=r.audience_policy_version
+          WHERE o.workspace_id=? AND o.opportunity_id=?`,
+    args: [setup.workspaceId, setup.opportunityId],
+  });
+  assert.equal(projected.rows.length, 1);
+  assert.equal(projected.rows[0]?.status, "completed");
+  const projectedCounts = await dbClient.execute({
+    sql: `SELECT
+            (SELECT COUNT(*) FROM tokenless_assurance_assignments WHERE run_id=?) AS assignment_count,
+            (SELECT COUNT(*) FROM tokenless_assurance_responses WHERE run_id=?) AS response_count`,
+    args: [projected.rows[0]?.run_id, projected.rows[0]?.run_id],
+  });
+  assert.equal(Number(projectedCounts.rows[0]?.assignment_count), 2);
+  assert.equal(Number(projectedCounts.rows[0]?.response_count), 2);
+  assert.match(String(projected.rows[0]?.policy_json), /deadline_terminal_inconclusive_allowed/u);
+  assert.doesNotMatch(String(projected.rows[0]?.manifest_json), new RegExp(REVIEWER_A, "u"));
+  assert.doesNotMatch(String(projected.rows[0]?.manifest_json), new RegExp(REVIEWER_B, "u"));
+  const { privateKey } = generateKeyPairSync("ed25519");
+  const packet = await generateAssuranceEvidencePacket({
+    accountAddress: OWNER,
+    workspaceId: setup.workspaceId,
+    runId: String(projected.rows[0]?.run_id),
+    signer: { kind: "local-test", privateKey },
+    tenantCommitmentKey: Buffer.alloc(32, 4),
+  });
+  assert.equal(packet.payload.settlement.mode, "no_onchain_settlement_unpaid_invited");
+  assert.equal(packet.payload.privacy.reviewerIdentitiesIncluded, false);
+  assert.equal(packet.payload.privacy.rawRationaleIncluded, false);
+  assert.deepEqual(packet.payload.recomputation.reviewerSources, [
+    {
+      source: "customer_invited",
+      targetReviewerCount: 2,
+      assignedReviewerCount: 2,
+      paidReviewerCount: 0,
+      respondingReviewerCount: 2,
+      completeJudgmentSetReviewerCount: 2,
+    },
+  ]);
   const readyWait = await waitForAdaptiveHumanReview({
     principal: setup.integrationPrincipal,
     opportunityId: setup.opportunityId,
@@ -533,6 +582,28 @@ test("an elapsed partial-response private review returns an under-quorum envelop
   });
   assert.equal("outcome" in result.result ? result.result.outcome : null, "inconclusive");
   assert.equal("panel" in result.result ? result.result.panel.responseCount : null, 1);
+  const terminal = await getDirectPrivateReviewState(setup);
+  await projectDirectPrivateReviewDecisionEvidence({
+    deliveryId: terminal!.deliveryId,
+    packetGenerator: async () => ({}) as Awaited<ReturnType<typeof generateAssuranceEvidencePacket>>,
+  });
+  const projected = await dbClient.execute({
+    sql: `SELECT run_id FROM tokenless_agent_review_opportunities
+          WHERE workspace_id=? AND opportunity_id=?`,
+    args: [setup.workspaceId, setup.opportunityId],
+  });
+  const { privateKey } = generateKeyPairSync("ed25519");
+  const packet = await generateAssuranceEvidencePacket({
+    accountAddress: OWNER,
+    workspaceId: setup.workspaceId,
+    runId: String(projected.rows[0]?.run_id),
+    signer: { kind: "local-test", privateKey },
+    tenantCommitmentKey: Buffer.alloc(32, 5),
+  });
+  assert.equal(packet.payload.aggregation.suite.outcome, "insufficient");
+  assert.equal(packet.payload.aggregation.judgmentCoverage.missingTargetJudgmentCount, 1);
+  assert.equal(packet.payload.settlement.mode, "no_onchain_settlement_unpaid_invited");
+  assert.ok(packet.payload.limitations.some((entry: { code: string }) => entry.code === "incomplete_or_invalid_work"));
 });
 
 test("accepted workspace reviewer invitations route exact private content through completion end to end", async () => {

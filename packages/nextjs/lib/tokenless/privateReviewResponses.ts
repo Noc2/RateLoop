@@ -10,6 +10,7 @@ import {
   encryptAssuranceRationale,
   getAssuranceResponseKeyrings,
 } from "~~/lib/tokenless/assuranceResponses";
+import { projectDirectPrivateReviewDecisionEvidence } from "~~/lib/tokenless/directPrivateReviewEvidence";
 import { hashHumanAssuranceDocument } from "~~/lib/tokenless/humanAssurance";
 import { transitionHumanReviewOpportunityLifecycleInTransaction } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
 import {
@@ -684,6 +685,7 @@ export async function reconcileDirectPrivateReviewDeadline(input: {
   const now = input.now ?? new Date();
   const client = await dbPool.connect();
   let envelope: HumanReviewResultEnvelope | null = null;
+  let terminalDeliveryId: string | null = null;
   try {
     await client.query("BEGIN");
     const delivery = await client.query(
@@ -693,6 +695,7 @@ export async function reconcileDirectPrivateReviewDeadline(input: {
     );
     const deliveryId = text(delivery.rows[0] as Row | undefined, "delivery_id");
     if (deliveryId) {
+      terminalDeliveryId = deliveryId;
       envelope = await terminalEnvelopeForDelivery(client, deliveryId, now, "response_deadline_elapsed");
     }
     await client.query("COMMIT");
@@ -703,6 +706,9 @@ export async function reconcileDirectPrivateReviewDeadline(input: {
     client.release();
   }
   if (envelope) await observeHumanReviewResult({ envelope });
+  if (envelope && terminalDeliveryId) {
+    await projectDirectPrivateReviewDecisionEvidence({ deliveryId: terminalDeliveryId, now }).catch(() => undefined);
+  }
   return envelope;
 }
 
@@ -770,6 +776,7 @@ export async function submitDirectPrivateReviewResponse(input: {
   const rationale = responseInput.rationale.trim();
   const client = await dbPool.connect();
   let terminalEnvelope: HumanReviewResultEnvelope | null = null;
+  let terminalDeliveryId: string | null = null;
   let responseCount = 0;
   let replay = false;
   try {
@@ -840,6 +847,7 @@ export async function submitDirectPrivateReviewResponse(input: {
     if (!row || !["accepted", "completed"].includes(text(row, "status") ?? "")) {
       throw new TokenlessServiceError("Assignment not found.", 404, "assignment_not_found");
     }
+    terminalDeliveryId = text(row, "delivery_id");
     if (text(row, "compensation_mode") !== "unpaid") {
       throw new TokenlessServiceError(
         "This response requires the paid private-review flow.",
@@ -1027,6 +1035,9 @@ export async function submitDirectPrivateReviewResponse(input: {
     client.release();
   }
   if (terminalEnvelope) await observeHumanReviewResult({ envelope: terminalEnvelope });
+  if (terminalEnvelope && terminalDeliveryId) {
+    await projectDirectPrivateReviewDecisionEvidence({ deliveryId: terminalDeliveryId, now }).catch(() => undefined);
+  }
   return {
     assignmentId: input.assignmentId,
     accepted: true as const,

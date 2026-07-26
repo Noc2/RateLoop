@@ -215,6 +215,9 @@ function processors(
     async reconcileDirectPrivateReviewDeadlines() {
       return { scanned: 0, finalized: 0, pending: 0, retry: 0, retryOpportunityIds: [] };
     },
+    async projectDirectPrivateReviewEvidence() {
+      return { scanned: 0, projected: 0, packetsReady: 0, retry: 0, retryDeliveryIds: [] };
+    },
     async expireAudienceAssignments() {
       return { expired: 0 };
     },
@@ -235,6 +238,10 @@ test("scheduled maintenance finalizes due private reviews before expiring assign
         calls.push("reconcile");
         return { scanned: 1, finalized: 1, pending: 0, retry: 0, retryOpportunityIds: [] };
       },
+      async projectDirectPrivateReviewEvidence() {
+        calls.push("evidence");
+        return { scanned: 1, projected: 1, packetsReady: 1, retry: 0, retryDeliveryIds: [] };
+      },
       async expireAudienceAssignments() {
         calls.push("audience-expiry");
         return { expired: 2 };
@@ -247,13 +254,20 @@ test("scheduled maintenance finalizes due private reviews before expiring assign
   });
   if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
   assert.equal(result.status, "healthy");
-  assert.deepEqual(calls.slice(0, 3), ["reconcile", "audience-expiry", "private-expiry"]);
+  assert.deepEqual(calls.slice(0, 4), ["reconcile", "evidence", "audience-expiry", "private-expiry"]);
   assert.deepEqual(result.summary.directPrivateReviewDeadlines, {
     scanned: 1,
     finalized: 1,
     pending: 0,
     retry: 0,
     retryOpportunityIds: [],
+  });
+  assert.deepEqual(result.summary.directPrivateReviewEvidence, {
+    scanned: 1,
+    projected: 1,
+    packetsReady: 1,
+    retry: 0,
+    retryDeliveryIds: [],
   });
   assert.deepEqual(result.summary.expiredAudienceAssignments, { expired: 2 });
   assert.equal(result.summary.expiredPrivateReviewReservations, 3);

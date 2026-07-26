@@ -26,6 +26,11 @@ test("the evidence workspace keeps verification and export state explicit", () =
   assert.match(source, /Anchor details restricted/);
   assert.match(source, /Receipt details restricted/);
   assert.match(source, /anchorLabel\(attestation, canManage\)/);
+  assert.match(source, /Settlement evidence/);
+  assert.match(source, /Reviewer provenance/);
+  assert.match(source, /paidReviewerCount/);
+  assert.match(source, /minimumAggregationSize/);
+  assert.match(source, /safeExternalEvidenceLink/);
 });
 
 test("workspace compliance controls expose only browser-safe endpoints", () => {

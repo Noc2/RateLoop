@@ -887,30 +887,39 @@ function assertTerminalPacket(input: {
   runCases: QueryRow[];
 }) {
   const reviewerCoverage = input.aggregation.reviewerCoverage;
-  if (
-    reviewerCoverage.assignedReviewerCount !== reviewerCoverage.targetReviewerCount ||
-    reviewerCoverage.respondingReviewerCount !== reviewerCoverage.targetReviewerCount ||
-    reviewerCoverage.completeJudgmentSetReviewerCount !== reviewerCoverage.targetReviewerCount
-  ) {
+  if (reviewerCoverage.assignedReviewerCount !== reviewerCoverage.targetReviewerCount) {
     evidenceError(
-      "The frozen reviewer target and complete reviewer count must match before evidence is generated.",
+      "The frozen reviewer target and assigned reviewer count must match before evidence is generated.",
       "assurance_run_not_terminal",
     );
   }
   const judgmentCoverage = input.aggregation.judgmentCoverage;
-  if (
-    judgmentCoverage.submittedJudgmentCount !== judgmentCoverage.targetExpectedJudgmentCount ||
-    judgmentCoverage.validJudgmentCount !== judgmentCoverage.targetExpectedJudgmentCount ||
-    judgmentCoverage.invalidJudgmentCount !== 0 ||
-    judgmentCoverage.missingTargetJudgmentCount !== 0 ||
-    judgmentCoverage.pendingJudgmentCount !== 0
-  ) {
+  const complete =
+    reviewerCoverage.respondingReviewerCount === reviewerCoverage.targetReviewerCount &&
+    reviewerCoverage.completeJudgmentSetReviewerCount === reviewerCoverage.targetReviewerCount &&
+    judgmentCoverage.submittedJudgmentCount === judgmentCoverage.targetExpectedJudgmentCount &&
+    judgmentCoverage.validJudgmentCount === judgmentCoverage.targetExpectedJudgmentCount &&
+    judgmentCoverage.invalidJudgmentCount === 0 &&
+    judgmentCoverage.missingTargetJudgmentCount === 0 &&
+    judgmentCoverage.pendingJudgmentCount === 0;
+  const sourceSubpanels = reviewerCoverage.sourceSubpanels as Record<string, any>[];
+  const requirements = Array.isArray(input.policy.assurance?.requirements) ? input.policy.assurance.requirements : [];
+  const deadlineTerminalInconclusive =
+    requirements.includes("deadline_terminal_inconclusive_allowed") &&
+    input.policy.compensation === "unpaid" &&
+    sourceSubpanels.length > 0 &&
+    sourceSubpanels.every(entry => entry.source === "customer_invited") &&
+    input.aggregation.suite.outcome === "insufficient" &&
+    judgmentCoverage.submittedJudgmentCount === judgmentCoverage.validJudgmentCount &&
+    judgmentCoverage.invalidJudgmentCount === 0 &&
+    judgmentCoverage.pendingJudgmentCount === 0 &&
+    judgmentCoverage.missingTargetJudgmentCount > 0;
+  if (!complete && !deadlineTerminalInconclusive) {
     evidenceError(
       "Every targeted reviewer must submit one valid terminal judgment for every frozen case.",
       "assurance_run_not_terminal",
     );
   }
-  const sourceSubpanels = reviewerCoverage.sourceSubpanels as Record<string, any>[];
   const paidSourceSubpanels = sourceSubpanels.filter(entry => entry.paidReviewerCount > 0);
   const paidReviewerCount = sourceSubpanels.reduce((total, entry) => total + entry.paidReviewerCount, 0);
   if (

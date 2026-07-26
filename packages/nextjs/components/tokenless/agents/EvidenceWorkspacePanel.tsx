@@ -14,8 +14,29 @@ type EvidencePacket = {
     packetId: string;
     runId: string;
     generatedAt: string;
-    aggregation: { suite: { outcome: "pass" | "fail" | "insufficient" } };
-    reviewContext?: { selectionTrigger?: { kind?: string }; gate?: { type?: string } };
+    aggregation: {
+      suite: { outcome: "pass" | "fail" | "insufficient" };
+      reviewerCoverage?: {
+        sourceSubpanels?: Array<{
+          source: string;
+          targetReviewerCount: number;
+          assignedReviewerCount: number;
+          paidReviewerCount: number;
+          respondingReviewerCount: number;
+          completeJudgmentSetReviewerCount: number;
+        }>;
+      };
+    };
+    reviewContext?: {
+      selectionTrigger?: { kind?: string };
+      gate?: { type?: string };
+      reviewerQualifications?: {
+        minimumAggregationSize: number;
+        categories: Array<{ key: string; reviewerCount?: number; suppressed: boolean }>;
+        unqualified: { reviewerCount?: number; suppressed: boolean };
+      };
+    };
+    settlement?: { mode: string; statement: string; links: string[] };
   };
   signing: { algorithm: "Ed25519"; keyId: string; publicKey: string };
 };
@@ -78,6 +99,15 @@ function anchorLabel(attestation: Attestation | undefined, canViewAttestations: 
 
 function downloadName(prefix: string, value: string) {
   return `${prefix}-${value.replace(/[^A-Za-z0-9._-]/gu, "-")}.json`;
+}
+
+function safeExternalEvidenceLink(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
 }
 
 async function downloadJson(url: string, filename: string) {
@@ -383,6 +413,9 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
           {packets.map(({ packet, projectName, suiteName }) => {
             const outcome = packet.payload.aggregation.suite.outcome;
             const attestation = attestationByDigest.get(packet.packetDigest);
+            const settlementLinks = (packet.payload.settlement?.links ?? [])
+              .map(safeExternalEvidenceLink)
+              .filter((link): link is string => link !== null);
             return (
               <article key={packet.payload.packetId} className="surface-card rounded-2xl p-5">
                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -436,6 +469,51 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                     <dd className="mt-1 break-all font-mono text-xs">{packet.signing.keyId}</dd>
                   </div>
                 </dl>
+                <div className="mt-4 grid gap-4 border-t border-white/10 pt-4 lg:grid-cols-2">
+                  <section aria-label="Settlement evidence">
+                    <h4 className="text-sm font-semibold">Settlement evidence</h4>
+                    <p className="mt-2 text-sm leading-6 text-base-content/65">
+                      {packet.payload.settlement?.statement ?? "Settlement evidence was not recorded in this packet."}
+                    </p>
+                    {settlementLinks.length > 0 ? (
+                      <ul className="mt-2 space-y-1 text-xs">
+                        {settlementLinks.map(link => (
+                          <li key={link}>
+                            <a className="link break-all" href={link} rel="noreferrer">
+                              {link}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </section>
+                  <section aria-label="Reviewer provenance">
+                    <h4 className="text-sm font-semibold">Reviewer provenance</h4>
+                    <div className="mt-2 space-y-2 text-sm text-base-content/65">
+                      {(packet.payload.aggregation.reviewerCoverage?.sourceSubpanels ?? []).map(source => (
+                        <p key={source.source}>
+                          <span className="capitalize">{source.source.replaceAll("_", " ")}</span>:{" "}
+                          {source.assignedReviewerCount} of {source.targetReviewerCount} assigned;{" "}
+                          {source.respondingReviewerCount} responded; {source.completeJudgmentSetReviewerCount}{" "}
+                          complete; {source.paidReviewerCount} paid.
+                        </p>
+                      ))}
+                      {packet.payload.reviewContext?.reviewerQualifications ? (
+                        <p>
+                          Qualification categories:{" "}
+                          {packet.payload.reviewContext.reviewerQualifications.categories.length > 0
+                            ? packet.payload.reviewContext.reviewerQualifications.categories
+                                .map(category => `${category.key} (${category.reviewerCount ?? "suppressed"})`)
+                                .join(", ")
+                            : `suppressed below the ${packet.payload.reviewContext.reviewerQualifications.minimumAggregationSize}-reviewer privacy threshold`}
+                          .
+                        </p>
+                      ) : (
+                        <p>Qualification provenance was not recorded.</p>
+                      )}
+                    </div>
+                  </section>
+                </div>
                 <details className="mt-4 border-t border-white/10 pt-4">
                   <summary className="cursor-pointer text-sm font-semibold text-base-content/65">
                     Anchor details

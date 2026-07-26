@@ -96,7 +96,7 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
     const fragmentToken = new URLSearchParams(window.location.hash.slice(1)).get("invite")?.trim();
     if (!fragmentToken?.startsWith("rlri_")) return;
     setToken(fragmentToken);
-    window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}`);
+    window.history.replaceState(window.history.state, "", window.location.pathname);
     void inspectInvitation(fragmentToken);
   }, [inspectInvitation]);
 
