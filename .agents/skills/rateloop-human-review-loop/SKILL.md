@@ -65,9 +65,12 @@ calling them agent agreement, correctness, approval, audit evidence, or calibrat
 
 Use only the audience and material boundary in the frozen request profile:
 
-- **Public RateLoop network** review accepts only public, synthetic, or owner-confirmed safely redacted material and is USDC-paid.
-- **Private invited** review uses encrypted source and suggestion artifacts with assignment-bound leases. It may be unpaid or USDC-paid when that exact lane is available.
-- **Hybrid** review is public-safe only. RateLoop keeps invited and network cohorts separate and deduplicated; the agent must never derive or publish a public projection from private material.
+- **Private invited, unpaid** review is the currently available lane in the isolated deployment. It uses encrypted
+  source and suggestion artifacts with assignment-bound leases.
+- Do not claim or request public-network, paid-private, or hybrid review unless the current `safeAccess` and exact
+  continuation explicitly say that lane is available. An absent capability means unavailable, not pending.
+- If a future continuation enables a public audience, it may accept only public, synthetic, or owner-confirmed safely
+  redacted material. Never derive or publish a public projection from private material.
 
 Never send secrets, credentials, hidden reasoning, raw prompts, tool payloads, private source code, personal data, confidential customer material, or private/internal/confidential/restricted/regulated artifacts to a public question. Minimize private inputs too: include only what the assigned reviewers need. Do not switch audiences, redact on the fly, or weaken a classification to recover from an unavailable lane.
 

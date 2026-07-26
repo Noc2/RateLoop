@@ -346,13 +346,13 @@ describe("RateLoop agent host assets", () => {
     ]) {
       expect(skill).toContain(`**${authority}**`);
     }
-    for (const audience of [
-      "Public RateLoop network",
-      "Private invited",
-      "Hybrid",
-    ]) {
-      expect(skill).toContain(`**${audience}**`);
-    }
+    expect(skill).toContain("**Private invited, unpaid**");
+    expect(skill).toContain(
+      "Do not claim or request public-network, paid-private, or hybrid review",
+    );
+    expect(skill).toContain(
+      "An absent capability means unavailable, not pending",
+    );
 
     expect(skill).toContain("does not create a background process");
     expect(skill).toContain("never create an unbounded polling loop");
