@@ -635,7 +635,7 @@ test("paid network audiences require an exact epoch and exact funded rounds befo
   );
 });
 
-test("network selection rejects manual collisions before spend and replays one exact reserved batch", async () => {
+test("network selection rejects manual collisions and invited-only supply before spend, then replays exact batches", async () => {
   const now = new Date("2026-07-26T12:00:00.000Z");
   const basePolicy = audiencePolicy(
     [{ cohortId: "cohort_global", source: "rateloop_network", minimumReviewers: 2, maximumReviewers: 2 }],
@@ -713,7 +713,14 @@ test("network selection rejects manual collisions before spend and replays one e
   };
 
   async function run(
-    mode: "collision" | "integrity_conflict" | "locked_conflict" | "no_capacity" | "qualification_conflict" | "replay",
+    mode:
+      | "collision"
+      | "excluded"
+      | "integrity_conflict"
+      | "locked_conflict"
+      | "no_capacity"
+      | "qualification_conflict"
+      | "replay",
   ) {
     const writes: string[] = [];
     let eligibilityReads = 0;
@@ -744,6 +751,10 @@ test("network selection rejects manual collisions before spend and replays one e
         if (sql.includes("FROM tokenless_workspaces")) return { rowCount: 1, rows: [{ workspace_id: "ws_network" }] };
         if (sql.includes("FROM tokenless_public_network_review_bindings binding")) {
           return { rowCount: 1, rows: [{ binding_id: "pnrb_network" }] };
+        }
+        if (sql.includes("JOIN tokenless_hybrid_network_reviewer_exclusions exclusion")) {
+          assert.deepEqual(values, ["pnrb_network", "run_network"]);
+          return { rowCount: 0, rows: [] };
         }
         if (sql.includes("FROM tokenless_assurance_run_subpanels sp")) {
           return {
@@ -797,6 +808,8 @@ test("network selection rejects manual collisions before spend and replays one e
         }
         if (sql.includes("SELECT profile.account_address AS reviewer_account_address")) {
           assert.match(sql, /NOT EXISTS \([\s\S]*FROM tokenless_assurance_assignments active/u);
+          assert.match(sql, /NOT EXISTS \([\s\S]*tokenless_hybrid_network_reviewer_exclusions exclusion/u);
+          assert.equal(values?.[4], "pnrb_network");
           return mode === "locked_conflict" || mode === "integrity_conflict" || mode === "qualification_conflict"
             ? {
                 rowCount: 2,
@@ -1007,6 +1020,7 @@ test("network selection rejects manual collisions before spend and replays one e
   }
 
   await run("collision");
+  await run("excluded");
   await run("no_capacity");
   await run("integrity_conflict");
   await run("locked_conflict");
