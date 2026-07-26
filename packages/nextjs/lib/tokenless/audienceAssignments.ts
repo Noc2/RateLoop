@@ -13,6 +13,7 @@ import { issueArtifactLease } from "~~/lib/tokenless/artifactPrivacy";
 import { isForecastAssignmentRestricted, networkForecastSubject } from "~~/lib/tokenless/crowdForecastPersistence";
 import { selectDiversifiedIntegrityPanel } from "~~/lib/tokenless/integrityAssignment";
 import { integrityReviewerLookup } from "~~/lib/tokenless/integrityEpochs";
+import { requirePaidLaneComplianceApproval } from "~~/lib/tokenless/paidLaneCompliance";
 import { requirePaidReviewEligibilityInTransaction } from "~~/lib/tokenless/paidReviewEligibilityPreflight";
 import { exactReviewerExpertiseDefinitionKey } from "~~/lib/tokenless/reviewerExpertiseAssignments";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -643,6 +644,7 @@ export async function prepareRunAudience(input: {
   workspaceId: string;
   projectId: string;
   runId: string;
+  requiredSource?: CohortSource;
 }) {
   await requireProjectManager(input);
   const client = await dbPool.connect();
@@ -702,6 +704,7 @@ export async function prepareRunAudience(input: {
                 rowString(row, "integrity_manifest_hash") !== policy.integrity?.epochManifestHash ||
                 rowString(row, "integrity_constraints_json") !== canonicalJson(policy.integrity))) ||
             (rowString(row, "source") !== "rateloop_network" && rowString(row, "integrity_epoch_id") !== null) ||
+            (input.requiredSource !== undefined && rowString(row, "source") !== input.requiredSource) ||
             !expectedCohorts.delete(rowString(row, "cohort_id") ?? "")
           );
         }) ||
@@ -796,6 +799,16 @@ export async function prepareRunAudience(input: {
       cohorts.push(cohort);
     }
     validatePolicySourceRules(policy, cohorts);
+    if (
+      input.requiredSource !== undefined &&
+      cohorts.some(cohort => rowString(cohort, "source") !== input.requiredSource)
+    ) {
+      throw new TokenlessServiceError(
+        `This operation requires an exact ${input.requiredSource} audience policy.`,
+        409,
+        "audience_source_mismatch",
+      );
+    }
     const now = new Date();
     if (policy.integrity) {
       const epoch = await client.query(
@@ -1231,6 +1244,7 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
   now?: Date;
 }) {
   const manager = await requireProjectManager(input);
+  requirePaidLaneComplianceApproval("public_paid_network");
   if (!HASH_PATTERN.test(input.confidentialityTermsHash)) {
     throw new TokenlessServiceError("Confidentiality terms hash is invalid.", 400, "invalid_confidentiality_terms");
   }
