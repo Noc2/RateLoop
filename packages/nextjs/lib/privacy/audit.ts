@@ -433,23 +433,42 @@ export async function verifyWorkspaceAuditChain(workspaceId: string) {
   return verifyWorkspaceAuditRows(workspaceId, result.rows as Record<string, unknown>[], headResult.rows[0]);
 }
 
-export async function verifySecurityAuditChain(input: Pick<SecurityAuditEventInput, "scopeId" | "scopeKind">) {
+export async function verifySecurityAuditChain(
+  input: Pick<SecurityAuditEventInput, "scopeId" | "scopeKind">,
+  transactionClient?: PoolClient,
+) {
   const scope = securityScope(input);
-  const [result, headResult] = await Promise.all([
-    dbClient.execute({
-      sql: `SELECT event_id, sequence, previous_digest, event_digest, home_region, actor_kind, actor_reference,
-                   assurance_method, action, target_kind, target_id, purpose, reason, request_correlation,
-                   result, metadata_json, occurred_at
-            FROM tokenless_security_audit_events
-            WHERE scope_kind = ? AND scope_id = ? ORDER BY sequence ASC`,
-      args: [scope.scopeKind, scope.scopeId],
-    }),
-    dbClient.execute({
-      sql: `SELECT last_sequence, last_digest FROM tokenless_security_audit_heads
-            WHERE scope_kind = ? AND scope_id = ? LIMIT 1`,
-      args: [scope.scopeKind, scope.scopeId],
-    }),
-  ]);
+  const [result, headResult] = transactionClient
+    ? await Promise.all([
+        transactionClient.query(
+          `SELECT event_id, sequence, previous_digest, event_digest, home_region, actor_kind, actor_reference,
+                  assurance_method, action, target_kind, target_id, purpose, reason, request_correlation,
+                  result, metadata_json, occurred_at
+           FROM tokenless_security_audit_events
+           WHERE scope_kind = $1 AND scope_id = $2 ORDER BY sequence ASC`,
+          [scope.scopeKind, scope.scopeId],
+        ),
+        transactionClient.query(
+          `SELECT last_sequence, last_digest FROM tokenless_security_audit_heads
+           WHERE scope_kind = $1 AND scope_id = $2 LIMIT 1`,
+          [scope.scopeKind, scope.scopeId],
+        ),
+      ])
+    : await Promise.all([
+        dbClient.execute({
+          sql: `SELECT event_id, sequence, previous_digest, event_digest, home_region, actor_kind, actor_reference,
+                       assurance_method, action, target_kind, target_id, purpose, reason, request_correlation,
+                       result, metadata_json, occurred_at
+                FROM tokenless_security_audit_events
+                WHERE scope_kind = ? AND scope_id = ? ORDER BY sequence ASC`,
+          args: [scope.scopeKind, scope.scopeId],
+        }),
+        dbClient.execute({
+          sql: `SELECT last_sequence, last_digest FROM tokenless_security_audit_heads
+                WHERE scope_kind = ? AND scope_id = ? LIMIT 1`,
+          args: [scope.scopeKind, scope.scopeId],
+        }),
+      ]);
   let previousDigest = GENESIS_DIGEST;
   let expectedSequence = 1;
   for (const value of result.rows) {

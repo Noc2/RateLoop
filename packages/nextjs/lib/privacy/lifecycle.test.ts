@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { appendSecurityAuditEvent } from "~~/lib/privacy/audit";
 import {
   type PrivateArtifactStore,
   __setArtifactPrivacyRuntimeForTests,
@@ -272,5 +273,74 @@ test("access and export requests produce a bounded authenticated download instea
   await assert.rejects(
     () => readSubjectRequestExport({ principalId: "rlp_other_subject", requestId: created.requestId, now }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "subject_export_unavailable",
+  );
+});
+
+test("subject export includes only the principal identity audit scope and fails closed on chain corruption", async () => {
+  const principalId = "rlp_subject_security_export_0001";
+  const now = new Date("2026-07-15T13:00:00.000Z");
+  const appended = await appendSecurityAuditEvent({
+    scopeKind: "identity",
+    scopeId: principalId,
+    actorKind: "principal",
+    actorReference: principalId,
+    assuranceMethod: "passkey",
+    action: "account.passkey_verified",
+    targetKind: "account",
+    targetId: principalId,
+    purpose: "account_access",
+    reason: "subject_sign_in",
+    result: "success",
+    metadata: { deviceClass: "platform" },
+    occurredAt: now,
+  });
+  await appendSecurityAuditEvent({
+    scopeKind: "system",
+    scopeId: "authentication",
+    actorKind: "system",
+    actorReference: "system:auth",
+    assuranceMethod: "service_configuration",
+    action: "auth.configuration_checked",
+    targetKind: "identity_provider",
+    targetId: "better_auth",
+    purpose: "account_access",
+    reason: "scheduled_check",
+    result: "success",
+    occurredAt: now,
+  });
+  const first = await createSubjectRequest({
+    identityAssurance: "better_auth:passkey",
+    now,
+    principalId,
+    requestType: "export",
+    scope: { principal: true },
+  });
+  await processSubjectRequestQueue(now);
+  const exported = await readSubjectRequestExport({ principalId, requestId: first.requestId, now });
+  const audit = (exported.data.auditAndSecurityActivity as Record<string, unknown>).identitySecurity as {
+    integrity: { eventCount: number; headDigest: string; valid: boolean };
+    events: Array<Record<string, unknown>>;
+  };
+  assert.deepEqual(audit.integrity, { eventCount: 1, headDigest: appended.eventDigest, valid: true });
+  assert.equal(audit.events.length, 1);
+  assert.equal(audit.events[0]?.action, "account.passkey_verified");
+  assert.equal(JSON.stringify(audit).includes("auth.configuration_checked"), false);
+  assert.equal(JSON.stringify(audit).includes("deviceClass"), false);
+
+  await dbClient.execute({
+    sql: `UPDATE tokenless_security_audit_events SET action='account.tampered'
+          WHERE scope_kind='identity' AND scope_id=?`,
+    args: [principalId],
+  });
+  await createSubjectRequest({
+    identityAssurance: "better_auth:passkey",
+    now: new Date(now.getTime() + 1_000),
+    principalId,
+    requestType: "export",
+    scope: { principal: true },
+  });
+  await assert.rejects(
+    () => processSubjectRequestQueue(new Date(now.getTime() + 1_000)),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "security_audit_integrity_invalid",
   );
 });

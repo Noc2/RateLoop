@@ -3,6 +3,7 @@ import { isDeepStrictEqual } from "node:util";
 import type { PoolClient } from "pg";
 import "server-only";
 import { dbClient, dbPool } from "~~/lib/db";
+import { verifySecurityAuditChain } from "~~/lib/privacy/audit";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { listPrincipalForecastIntegrityInTransaction } from "~~/lib/tokenless/crowdForecastPersistence";
 import { authorizeProjectAccount } from "~~/lib/tokenless/projectAccess";
@@ -501,6 +502,23 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
       [principalId],
     ),
   ]);
+  const securityHead = await client.query(
+    `SELECT last_sequence,last_digest FROM tokenless_security_audit_heads
+     WHERE scope_kind='identity' AND scope_id=$1 LIMIT 1`,
+    [principalId],
+  );
+  const securityAuditIntegrity =
+    securityEvents.rowCount === 0 && securityHead.rowCount === 0
+      ? { eventCount: 0, headDigest: `sha256:${"0".repeat(64)}`, valid: true as const }
+      : await verifySecurityAuditChain({ scopeKind: "identity", scopeId: principalId }, client);
+  if (!securityAuditIntegrity.valid) {
+    throw new TokenlessServiceError(
+      "Subject export is unavailable because the identity security audit chain failed verification.",
+      503,
+      "security_audit_integrity_invalid",
+      true,
+    );
+  }
   const forecastIntegrity = await listPrincipalForecastIntegrityInTransaction(client, principalId);
   return {
     schemaVersion: "rateloop.subject-export.v2",
@@ -519,7 +537,10 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
     },
     auditAndSecurityActivity: {
       workspaceEventsAsActor: workspaceAuditEvents.rows,
-      identitySecurityEvents: securityEvents.rows,
+      identitySecurity: {
+        integrity: securityAuditIntegrity,
+        events: securityEvents.rows,
+      },
     },
     connectedAutomation: {
       oauthAuthorizations: oauthAuthorizations.rows,
