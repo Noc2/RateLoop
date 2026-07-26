@@ -27,7 +27,11 @@ import {
   __humanReviewRequestRouterTestUtils,
   routeHumanReviewRequest,
 } from "~~/lib/tokenless/humanReviewRequestRouter";
-import { createPrivateGroup } from "~~/lib/tokenless/privateGroups";
+import {
+  createPrivateGroup,
+  createPrivateGroupInvitation,
+  redeemPrivateGroupInvitation,
+} from "~~/lib/tokenless/privateGroups";
 import { preparePrivateReviewFoundation } from "~~/lib/tokenless/privateReviewFoundation";
 import {
   directPrivateArtifactAccess,
@@ -631,18 +635,14 @@ test("an elapsed partial-response private review returns an under-quorum envelop
   assert.ok(packet.payload.limitations.some((entry: { code: string }) => entry.code === "incomplete_or_invalid_work"));
 });
 
-test("accepted workspace reviewer invitations route exact private content through completion end to end", async () => {
+test("accepted workspace and private-group reviewer invitations route exact private content through completion end to end", async () => {
   const setup = await fixture();
-  await dbClient.execute({
-    sql: `DELETE FROM tokenless_private_group_memberships
-          WHERE group_id=? AND principal_address IN (?,?)`,
+  const invitationMemberships = await dbClient.execute({
+    sql: `SELECT COUNT(*) AS count FROM tokenless_private_group_memberships
+          WHERE group_id=? AND principal_address IN (?,?) AND source_invitation_id IS NOT NULL`,
     args: [setup.groupId, REVIEWER_A, REVIEWER_B],
   });
-  const legacyMemberships = await dbClient.execute({
-    sql: "SELECT COUNT(*) AS count FROM tokenless_private_group_memberships WHERE group_id=?",
-    args: [setup.groupId],
-  });
-  assert.equal(Number(legacyMemberships.rows[0]?.count), 0);
+  assert.equal(Number(invitationMemberships.rows[0]?.count), 2);
   const grantNow = new Date();
   const managedRouting = await provisionManagedFixtureRouting(setup, grantNow);
   const admissionPolicy = freezeAdmissionPolicy({
@@ -1503,46 +1503,19 @@ async function fixture(
       grantId: redeemed.grantId!,
       grantHash: redeemed.grantHash as `sha256:${string}`,
     });
-    const invitationId = `pgi_private_${reviewer.slice(2, 10)}`;
-    await dbClient.execute({
-      sql: `INSERT INTO tokenless_private_group_invitations
-            (invitation_id,workspace_id,group_id,token_hash,token_prefix,role,
-             allowed_project_ids_json,intended_account_address,expires_at,maximum_redemptions,
-             redemption_count,last_used_at,created_by,created_at)
-            VALUES (?,?,?, ?,?,'reviewer',?,?,?,1,1,?,?,?)`,
-      args: [
-        invitationId,
-        workspaceId,
-        group.groupId,
-        hash(`token:${reviewer}`),
-        reviewer.slice(2, 18),
-        JSON.stringify([project.projectId]),
-        reviewer,
-        reviewerAccessExpiresAt,
-        foundationNow,
-        OWNER,
-        foundationNow,
-      ],
+    const groupInvitation = await createPrivateGroupInvitation({
+      accountAddress: OWNER,
+      workspaceId,
+      groupId: group.groupId,
+      expiresAt: new Date(foundationNow.getTime() + 86_400_000),
+      membershipExpiresAt: reviewerAccessExpiresAt,
+      intendedAccountAddress: reviewer,
+      now: foundationNow,
     });
-    await dbClient.execute({
-      sql: `INSERT INTO tokenless_private_group_invitation_redemptions
-            (invitation_id,principal_address,group_id,redeemed_at) VALUES (?,?,?,?)`,
-      args: [invitationId, reviewer, group.groupId, foundationNow],
-    });
-    await dbClient.execute({
-      sql: `INSERT INTO tokenless_private_group_memberships
-            (group_id,principal_address,role,status,allowed_project_ids_json,source_invitation_id,membership_expires_at,
-             joined_at,created_by,updated_at)
-            VALUES (?,?,'reviewer','active',?,?,NULL,?,?,?)`,
-      args: [
-        group.groupId,
-        reviewer,
-        JSON.stringify([project.projectId]),
-        invitationId,
-        foundationNow,
-        OWNER,
-        foundationNow,
-      ],
+    await redeemPrivateGroupInvitation({
+      accountAddress: reviewer,
+      token: groupInvitation.token,
+      now: foundationNow,
     });
     await dbClient.execute({
       sql: `INSERT INTO tokenless_assurance_cohort_reviewers
