@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { privateKeyToAccount } from "viem/accounts";
 
 const address = index => `0x${index.toString(16).padStart(40, "0")}`;
 const encodedKey = index => Buffer.alloc(32, index).toString("base64url");
@@ -57,12 +58,14 @@ const tokenlessTestRpc = () => {
     TOKENLESS_USDC_EIP712_VERSION: "2",
   };
 };
-const tokenlessTestKms = () => {
-  const kms = tokenlessEuDeploymentManifest.resources.kms;
+const tokenlessTestPlatformSecrets = () => {
+  const platformSecrets = tokenlessEuDeploymentManifest.resources.platformSecrets;
   return {
-    [kms.providerEnv]: kms.allowedProviders[0],
-    [kms.regionEnv]: kms.region,
-    [kms.resourceIdEnv]: "projects/rateloop-tokenless/locations/europe-west4/keyRings/tokenless",
+    [platformSecrets.providerEnv]: platformSecrets.allowedProviders[0],
+    [platformSecrets.regionEnv]: platformSecrets.region,
+    [platformSecrets.resourceIdEnv]: "platform-secret-inventory-v1",
+    TOKENLESS_ARTIFACT_WRAPPING_KEY_VERSION: "artifact-v1",
+    TOKENLESS_ARTIFACT_WRAPPING_KEYS: JSON.stringify({ "artifact-v1": encodedKey(19) }),
   };
 };
 
@@ -75,9 +78,9 @@ function validFixture() {
   const beaconVerifier = address(7);
   const deploymentKey = `tokenless-v4:84532:${panel}:${issuer}:${adapter}:${feedbackBonus}`;
   const provider = generateKeyPairSync("ed25519");
-  const evidence = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  const evidence = generateKeyPairSync("ed25519");
   const evidencePublicKey = evidence.publicKey.export({ format: "der", type: "spki" });
-  const evidenceKeyId = `p256:${createHash("sha256").update(evidencePublicKey).digest("hex").slice(0, 24)}`;
+  const evidenceKeyId = `ed25519:${createHash("sha256").update(evidencePublicKey).digest("hex").slice(0, 24)}`;
   const deploymentManifestSigner = generateKeyPairSync("ed25519");
   const euManifestDigest = manifestDigest();
   const env = Object.fromEntries(REQUIRED_TOKENLESS_PRODUCTION_VARIABLES.map(name => [name, `configured-${name}`]));
@@ -157,22 +160,20 @@ function validFixture() {
     TOKENLESS_WEBHOOK_ENCRYPTION_KEY: encodedKey(11),
     TOKENLESS_ELIGIBILITY_HANDOFF_SECRET: Buffer.alloc(32, 12).toString("base64"),
     TOKENLESS_EVIDENCE_SIGNING_KEY_ID: evidenceKeyId,
+    TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY: evidence.privateKey
+      .export({ format: "der", type: "pkcs8" })
+      .toString("base64url"),
     TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS: JSON.stringify([
       {
-        algorithm: "ECDSA-SHA256",
+        algorithm: "Ed25519",
         keyId: evidenceKeyId,
         publicKey: evidencePublicKey.toString("base64url"),
         status: "current",
       },
     ]),
-    TOKENLESS_EVIDENCE_KMS_KEY_RESOURCE:
-      "arn:aws:kms:eu-central-1:123456789012:key/55555555-5555-5555-5555-555555555555",
-    TOKENLESS_EVIDENCE_KMS_REGION: "eu-central-1",
-    TOKENLESS_EVIDENCE_KMS_ROLE_ARN: "arn:aws:iam::123456789012:role/rateloop-evidence",
-    TOKENLESS_KEEPER_KMS_KEY_RESOURCE: "arn:aws:kms:eu-central-1:123456789012:key/77777777-7777-7777-7777-777777777777",
-    TOKENLESS_KEEPER_KMS_EXPECTED_ADDRESS: address(27),
-    TOKENLESS_KEEPER_KMS_REGION: "eu-central-1",
-    TOKENLESS_KEEPER_KMS_ROLE_ARN: "arn:aws:iam::123456789012:role/rateloop-keeper",
+    TOKENLESS_PLATFORM_SECRET_ROTATION_RUNBOOK_REFERENCE: `sha256:${"e".repeat(64)}`,
+    TOKENLESS_PLATFORM_SECRET_RECOVERY_RUNBOOK_REFERENCE: `sha256:${"f".repeat(64)}`,
+    TOKENLESS_SIGNER_SPEND_LIMITS_REFERENCE: `sha256:${"1".repeat(64)}`,
     TOKENLESS_ELIGIBILITY_PROVIDER_PUBLIC_KEY: provider.publicKey.export({ format: "pem", type: "spki" }),
     TOKENLESS_MCP_RATE_LIMIT_SECRET: "m".repeat(32),
     TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
@@ -192,26 +193,37 @@ function validFixture() {
     env[processor.evidenceEnv] = `approved-${name}-evidence`;
     if (processor.deliveryRegionEnv) env[processor.deliveryRegionEnv] = processor.deliveryRegion;
   }
-  Object.assign(env, {
-    TOKENLESS_KMS_PROVIDER: "aws-kms",
-    TOKENLESS_KMS_KEY_RESOURCE: "arn:aws:kms:eu-central-1:123456789012:alias/rateloop/{workspaceId}/{projectId}",
-    TOKENLESS_AWS_KMS_REGION: "eu-central-1",
-    TOKENLESS_AWS_KMS_ROLE_ARN: "arn:aws:iam::123456789012:role/rateloop-tokenless-kms",
-  });
-  for (const [index, role] of [
-    "CREDENTIAL_ISSUER",
-    "X402_RELAYER",
-    "PREPAID_FUNDER",
-    "SURPRISE_BONUS_FUNDER",
+  for (const [index, names] of [
+    [
+      "TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY",
+      "TOKENLESS_CREDENTIAL_ISSUER_SIGNER_EXPECTED_ADDRESS",
+      "TOKENLESS_CREDENTIAL_ISSUER_SIGNER_KEY_VERSION",
+    ],
+    [
+      "TOKENLESS_X402_RELAYER_PRIVATE_KEY",
+      "TOKENLESS_X402_RELAYER_EXPECTED_ADDRESS",
+      "TOKENLESS_X402_RELAYER_KEY_VERSION",
+    ],
+    [
+      "TOKENLESS_PREPAID_FUNDER_PRIVATE_KEY",
+      "TOKENLESS_PREPAID_FUNDER_EXPECTED_ADDRESS",
+      "TOKENLESS_PREPAID_FUNDER_KEY_VERSION",
+    ],
+    [
+      "TOKENLESS_SURPRISE_BONUS_FUNDER_PRIVATE_KEY",
+      "TOKENLESS_SURPRISE_BONUS_FUNDER_EXPECTED_ADDRESS",
+      "TOKENLESS_SURPRISE_BONUS_FUNDER_KEY_VERSION",
+    ],
+    ["TOKENLESS_KEEPER_PRIVATE_KEY", "TOKENLESS_KEEPER_EXPECTED_ADDRESS", "TOKENLESS_KEEPER_KEY_VERSION"],
   ].entries()) {
-    const ordinal = index + 1;
-    env[`TOKENLESS_${role}_KMS_KEY_RESOURCE`] =
-      `arn:aws:kms:eu-central-1:123456789012:key/${String(ordinal).repeat(8)}-${String(ordinal).repeat(4)}-${String(ordinal).repeat(4)}-${String(ordinal).repeat(4)}-${String(ordinal).repeat(12)}`;
-    env[`TOKENLESS_${role}_KMS_EXPECTED_ADDRESS`] = address(20 + ordinal);
-    env[`TOKENLESS_${role}_KMS_REGION`] = "eu-central-1";
-    env[`TOKENLESS_${role}_KMS_ROLE_ARN`] =
-      `arn:aws:iam::123456789012:role/rateloop-${role.toLowerCase().replaceAll("_", "-")}`;
+    const [privateKeyName, addressName, versionName] = names;
+    const privateKey = `0x${(index + 21).toString(16).padStart(64, "0")}`;
+    env[privateKeyName] = privateKey;
+    env[addressName] = privateKeyToAccount(privateKey).address;
+    env[versionName] = `platform-v${index + 1}`;
   }
+  env.TOKENLESS_ARTIFACT_WRAPPING_KEY_VERSION = "artifact-v1";
+  env.TOKENLESS_ARTIFACT_WRAPPING_KEYS = JSON.stringify({ "artifact-v1": encodedKey(19) });
   const keyrings = [
     ["TOKENLESS_ASSURANCE_RATIONALE_VAULT", 2, "base64url"],
     ["TOKENLESS_ASSURANCE_REVIEWER_MAPPING", 3, "base64url"],
@@ -282,24 +294,24 @@ test("production chain execution enforces the immutable five-minute reveal windo
   assert.match(validateTokenlessProductionReadiness(belowMinimum).join("\n"), /must be at least 300 seconds/i);
 });
 
-test("managed signer keys, addresses, and IAM principals are distinct across web and keeper workloads", () => {
-  const reusedWebRole = validFixture();
-  reusedWebRole.env.TOKENLESS_X402_RELAYER_KMS_ROLE_ARN = reusedWebRole.env.TOKENLESS_CREDENTIAL_ISSUER_KMS_ROLE_ARN;
-  assert.match(validateTokenlessProductionReadiness(reusedWebRole).join("\n"), /IAM role ARNs must be distinct/iu);
+test("platform-secret signer keys, addresses, and versions are pinned and distinct", () => {
+  const mismatched = validFixture();
+  mismatched.env.TOKENLESS_X402_RELAYER_EXPECTED_ADDRESS =
+    mismatched.env.TOKENLESS_PREPAID_FUNDER_EXPECTED_ADDRESS;
+  const mismatchOutput = validateTokenlessProductionReadiness(mismatched).join("\n");
+  assert.match(mismatchOutput, /Platform signer EVM addresses must be distinct/iu);
+  assert.match(mismatchOutput, /must match the address derived/iu);
 
-  const reusedKeeper = validFixture();
-  reusedKeeper.env.TOKENLESS_KEEPER_KMS_KEY_RESOURCE = reusedKeeper.env.TOKENLESS_PREPAID_FUNDER_KMS_KEY_RESOURCE;
-  reusedKeeper.env.TOKENLESS_KEEPER_KMS_EXPECTED_ADDRESS =
-    reusedKeeper.env.TOKENLESS_PREPAID_FUNDER_KMS_EXPECTED_ADDRESS;
-  reusedKeeper.env.TOKENLESS_KEEPER_KMS_ROLE_ARN = reusedKeeper.env.TOKENLESS_PREPAID_FUNDER_KMS_ROLE_ARN;
-  const output = validateTokenlessProductionReadiness(reusedKeeper).join("\n");
-  assert.match(output, /KMS key resources must be distinct/iu);
-  assert.match(output, /EVM addresses must be distinct/iu);
-  assert.match(output, /IAM role ARNs must be distinct/iu);
+  const reusedKey = validFixture();
+  reusedKey.env.TOKENLESS_KEEPER_PRIVATE_KEY = reusedKey.env.TOKENLESS_PREPAID_FUNDER_PRIVATE_KEY;
+  reusedKey.env.TOKENLESS_KEEPER_EXPECTED_ADDRESS = reusedKey.env.TOKENLESS_PREPAID_FUNDER_EXPECTED_ADDRESS;
+  const reusedOutput = validateTokenlessProductionReadiness(reusedKey).join("\n");
+  assert.match(reusedOutput, /Platform signer EVM addresses must be distinct/iu);
+  assert.match(reusedOutput, /Production key roles must be distinct/iu);
 
-  const reusedVaultRole = validFixture();
-  reusedVaultRole.env.TOKENLESS_AWS_KMS_ROLE_ARN = reusedVaultRole.env.TOKENLESS_EVIDENCE_KMS_ROLE_ARN;
-  assert.match(validateTokenlessProductionReadiness(reusedVaultRole).join("\n"), /IAM role ARNs must be distinct/iu);
+  const invalidVersion = validFixture();
+  invalidVersion.env.TOKENLESS_CREDENTIAL_ISSUER_SIGNER_KEY_VERSION = "contains spaces";
+  assert.match(validateTokenlessProductionReadiness(invalidVersion).join("\n"), /stable version label/iu);
 });
 
 test("production evidence publication requires exactly one conservative finality policy", () => {
@@ -341,7 +353,7 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
     ...tokenlessTestRpc(),
-    ...tokenlessTestKms(),
+    ...tokenlessTestPlatformSecrets(),
     ...tokenlessTestDatabase(),
     TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
     ...tokenlessGoldKeyring(),
@@ -477,8 +489,8 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
   assert.match(mainErrors, /APP_URL is required for a hosted release|TOKENLESS_DATA_PLANE_MODE/u);
 });
 
-test("the tokenless hosted gate pins KMS inventory to the signed EU manifest", () => {
-  const kms = tokenlessEuDeploymentManifest.resources.kms;
+test("the tokenless hosted gate pins platform-secret custody to the signed EU manifest", () => {
+  const platformSecrets = tokenlessEuDeploymentManifest.resources.platformSecrets;
   const env = {
     VERCEL: "1",
     VERCEL_ENV: "production",
@@ -489,35 +501,35 @@ test("the tokenless hosted gate pins KMS inventory to the signed EU manifest", (
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
     ...tokenlessTestRpc(),
-    ...tokenlessTestKms(),
+    ...tokenlessTestPlatformSecrets(),
     ...tokenlessTestDatabase(),
     TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
     ...tokenlessGoldKeyring(),
     ...tokenlessTestOperationalSecrets(),
   };
   const missingResource = { ...env };
-  delete missingResource[kms.resourceIdEnv];
+  delete missingResource[platformSecrets.resourceIdEnv];
   assert.match(
     validateTokenlessProductionReadiness({ env: missingResource, activeRegistry: {} }).join("\n"),
-    new RegExp(`${kms.resourceIdEnv} is required`),
+    new RegExp(`${platformSecrets.resourceIdEnv} is required`),
   );
   assert.match(
     validateTokenlessProductionReadiness({
-      env: { ...env, [kms.providerEnv]: "local" },
+      env: { ...env, [platformSecrets.providerEnv]: "local" },
       activeRegistry: {},
     }).join("\n"),
-    new RegExp(`${kms.providerEnv} must select an approved managed provider`),
+    new RegExp(`${platformSecrets.providerEnv} must select Vercel and Railway platform-secret custody`),
   );
   assert.match(
     validateTokenlessProductionReadiness({
       env: {
         ...env,
-        [kms.regionEnv]: "us",
-        [kms.resourceIdEnv]: "projects/eu-tenant/locations/us/keyRings/tokenless",
+        [platformSecrets.regionEnv]: "us",
+        [platformSecrets.resourceIdEnv]: "platform-secret-inventory-us",
       },
       activeRegistry: {},
     }).join("\n"),
-    new RegExp(`${kms.regionEnv} must be ${kms.region}`),
+    new RegExp(`${platformSecrets.regionEnv} must be ${platformSecrets.region}`),
   );
 });
 
@@ -540,15 +552,15 @@ test("the isolated review deployment may retain its existing local vault without
   };
   assert.deepEqual(validateTokenlessProductionReadiness({ env, activeRegistry: {} }), []);
   assert.match(
-    validateTokenlessProductionReadiness({ env: { ...env, ...tokenlessTestKms() }, activeRegistry: {} }).join("\n"),
-    /Configure exactly one tokenless test vault/,
+    validateTokenlessProductionReadiness({ env: { ...env, ...tokenlessTestPlatformSecrets() }, activeRegistry: {} }).join("\n"),
+    /Configure exactly one tokenless test vault key source/,
   );
   assert.match(
     validateTokenlessProductionReadiness({
       env: { ...env, VERCEL_GIT_COMMIT_REF: "main" },
       activeRegistry: {},
     }).join("\n"),
-    /TOKENLESS_ARTIFACT_MASTER_KEY is forbidden/,
+    /TOKENLESS_ARTIFACT_MASTER_KEY is migration-only/,
   );
 });
 
@@ -563,7 +575,7 @@ test("the tokenless test deployment still rejects browser-exposed secrets", () =
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
     ...tokenlessTestRpc(),
-    ...tokenlessTestKms(),
+    ...tokenlessTestPlatformSecrets(),
     ...tokenlessTestDatabase(),
     TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
     ...tokenlessGoldKeyring(),
@@ -596,7 +608,7 @@ test("the tokenless test deployment requires a dedicated server-only media previ
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
     ...tokenlessTestRpc(),
-    ...tokenlessTestKms(),
+    ...tokenlessTestPlatformSecrets(),
     ...tokenlessTestDatabase(),
     ...tokenlessGoldKeyring(),
     ...tokenlessTestOperationalSecrets(),
@@ -663,7 +675,7 @@ test("the tokenless test deployment validates the active gold-injection keyring 
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
     ...tokenlessTestRpc(),
-    ...tokenlessTestKms(),
+    ...tokenlessTestPlatformSecrets(),
     ...tokenlessTestDatabase(),
     TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
     ...tokenlessTestOperationalSecrets(),
@@ -710,7 +722,7 @@ test("test and production deployments refuse server-held Feedback Bonus award au
     NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
     TOKENLESS_NETWORK_PANELS_ENABLED: "false",
     ...tokenlessTestRpc(),
-    ...tokenlessTestKms(),
+    ...tokenlessTestPlatformSecrets(),
     ...tokenlessTestDatabase(),
     ...tokenlessGoldKeyring(),
     ...tokenlessTestOperationalSecrets(),
@@ -792,8 +804,8 @@ test("hosted release remains blocked while required product capabilities are inc
   const fixture = validFixture();
   delete fixture.releaseCapabilities;
   const errors = validateTokenlessProductionReadiness(fixture);
-  assert.equal(DEFAULT_HOSTED_RELEASE_CAPABILITIES.managedSigning, false);
-  assert.match(errors.join("\n"), /managed signing for credential issuance/i);
+  assert.equal(DEFAULT_HOSTED_RELEASE_CAPABILITIES.platformSecretSigning, false);
+  assert.match(errors.join("\n"), /platform-secret signing for credential issuance/i);
   assert.match(errors.join("\n"), /paid assignment reservation/i);
   assert.match(errors.join("\n"), /Feedback Bonus USDC and credential-issuer immutable wiring/i);
   assert.match(errors.join("\n"), /human-signed Feedback Bonus award execution/i);
@@ -862,7 +874,9 @@ test("hosted release rejects public secrets, reused roles, and mixed deployment 
   fixture.env.NEXT_PUBLIC_TOKENLESS_GRC_CREDENTIALS_JSON = "grc-do-not-print-this";
   fixture.env.NEXT_PUBLIC_TOKENLESS_ATTESTATION_AWS_CREDENTIALS_JSON = "attestation-do-not-print-this";
   fixture.env.NEXT_PUBLIC_STRIPE_WEBHOOK_SECRET = "whsec_do-not-print-this";
-  fixture.env.TOKENLESS_X402_RELAYER_KMS_KEY_RESOURCE = fixture.env.TOKENLESS_CREDENTIAL_ISSUER_KMS_KEY_RESOURCE;
+  fixture.env.TOKENLESS_X402_RELAYER_PRIVATE_KEY = fixture.env.TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY;
+  fixture.env.TOKENLESS_X402_RELAYER_EXPECTED_ADDRESS =
+    fixture.env.TOKENLESS_CREDENTIAL_ISSUER_SIGNER_EXPECTED_ADDRESS;
   fixture.env.TOKENLESS_DEPLOYMENT_BLOCK = "124";
   const errors = validateTokenlessProductionReadiness(fixture);
   const output = errors.join("\n");
@@ -876,7 +890,8 @@ test("hosted release rejects public secrets, reused roles, and mixed deployment 
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_GRC_CREDENTIALS_JSON is forbidden/);
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_ATTESTATION_AWS_CREDENTIALS_JSON is forbidden/);
   assert.match(output, /NEXT_PUBLIC_STRIPE_WEBHOOK_SECRET is forbidden/);
-  assert.match(output, /Managed signer KMS key resources must be distinct/);
+  assert.match(output, /Platform signer EVM addresses must be distinct/);
+  assert.match(output, /Production key roles must be distinct/);
   assert.match(output, /complete active tokenless v4 registry/);
   assert.doesNotMatch(output, /do-not-print-this/);
   assert.doesNotMatch(output, /also-do-not-print-this/);
@@ -890,16 +905,16 @@ test("hosted release rejects public secrets, reused roles, and mixed deployment 
   assert.doesNotMatch(output, /0x11111111/);
 });
 
-test("hosted release rejects local artifact keys and non-managed vault providers", () => {
+test("hosted release rejects migration-only artifact keys and AWS provider configuration", () => {
   const fixture = validFixture();
   fixture.env.TOKENLESS_ARTIFACT_MASTER_KEY = encodedKey(1);
-  fixture.env.TOKENLESS_KMS_PROVIDER = "local";
+  fixture.env.TOKENLESS_KMS_PROVIDER = "aws-kms";
   const output = validateTokenlessProductionReadiness(fixture).join("\n");
-  assert.match(output, /TOKENLESS_ARTIFACT_MASTER_KEY is forbidden/);
-  assert.match(output, /TOKENLESS_KMS_PROVIDER must select an approved managed provider/);
+  assert.match(output, /TOKENLESS_ARTIFACT_MASTER_KEY is migration-only/);
+  assert.match(output, /TOKENLESS_KMS_PROVIDER is forbidden/);
 });
 
-test("hosted release requires a dedicated pseudonym key at the managed-vault boundary", () => {
+test("hosted release requires a dedicated pseudonym key at the platform-secret vault boundary", () => {
   const fixture = validFixture();
   fixture.env.TOKENLESS_PSEUDONYM_KEY = "too-short";
   assert.match(validateTokenlessProductionReadiness(fixture).join("\n"), /PSEUDONYM_KEY must encode exactly 32 bytes/);
@@ -913,8 +928,8 @@ test("hosted thirdweb wallet issuance is refused until export recovery is verifi
     /must remain false.*externally verifiable wallet export and recovery/i,
   );
 
-  const enabled = validFixture();
-  Object.assign(enabled.env, {
+  const enabledWithLegacyAws = validFixture();
+  Object.assign(enabledWithLegacyAws.env, {
     TOKENLESS_THIRDWEB_WALLET_ENABLED: "true",
     NEXT_PUBLIC_THIRDWEB_CLIENT_ID: "public-client-id",
     TOKENLESS_THIRDWEB_WALLET_AUDIENCE: "thirdweb-project-audience",
@@ -924,10 +939,9 @@ test("hosted thirdweb wallet issuance is refused until export recovery is verifi
     TOKENLESS_THIRDWEB_WALLET_KMS_REGION: "eu-central-1",
     TOKENLESS_THIRDWEB_WALLET_KMS_ROLE_ARN: "arn:aws:iam::123456789012:role/rateloop-wallet-jwt",
   });
-  assert.match(
-    validateTokenlessProductionReadiness(enabled).join("\n"),
-    /must remain false.*externally verifiable wallet export and recovery/i,
-  );
+  const output = validateTokenlessProductionReadiness(enabledWithLegacyAws).join("\n");
+  assert.match(output, /must remain false.*externally verifiable wallet export and recovery/i);
+  assert.match(output, /TOKENLESS_THIRDWEB_WALLET_KMS_KEY_RESOURCE is forbidden/i);
 });
 
 test("hosted release requires a thirdweb client ID while managed wallet issuance remains disabled", () => {

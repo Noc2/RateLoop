@@ -36,14 +36,14 @@
       "accessEnv": "TOKENLESS_BLOB_ACCESS",
       "expectedAccess": "private"
     },
-    "kms": {
-      "provider": "managed-kms",
-      "providerEnv": "TOKENLESS_KMS_PROVIDER",
-      "allowedProviders": ["aws-kms", "gcp-kms", "azure-key-vault"],
-      "dataScope": "wrapping-keys",
+    "platformSecrets": {
+      "provider": "vercel-and-railway",
+      "providerEnv": "TOKENLESS_PLATFORM_SECRET_PROVIDER",
+      "allowedProviders": ["vercel-and-railway"],
+      "dataScope": "server-only-signing-and-wrapping-keys",
       "region": "eu",
-      "regionEnv": "TOKENLESS_KMS_REGION",
-      "resourceIdEnv": "TOKENLESS_KMS_KEY_RESOURCE"
+      "regionEnv": "TOKENLESS_PLATFORM_SECRET_RUNTIME_REGION",
+      "resourceIdEnv": "TOKENLESS_PLATFORM_SECRET_INVENTORY_ID"
     },
     "keeperWorker": {
       "provider": "railway",
@@ -125,6 +125,6 @@
   },
   "integrity": {
     "algorithm": "SHA-256",
-    "canonicalContentSha256": "492ffaeb3a27b58c3692e600679496796830d1299ec38016c14458358fad0184"
+    "canonicalContentSha256": "e224fc76d88ed1dde576f8b1ecec9e5ec1ba82bbe748995124cb7eb23ae92263"
   }
 }

@@ -127,7 +127,7 @@ test("static configuration rejects unpinned or mixed compute regions", async () 
 
 test("the manifest cannot omit governed resources, processors, or public-chain limits", async () => {
   const manifest = structuredClone(tokenlessEuDeploymentManifest);
-  delete manifest.resources.kms;
+  delete manifest.resources.platformSecrets;
   delete manifest.externalProcessors.email;
   manifest.publicChainExceptions[0].customerContentAllowed = true;
   const output = (
@@ -137,7 +137,7 @@ test("the manifest cannot omit governed resources, processors, or public-chain l
       ...staticConfigs(),
     })
   ).join("\n");
-  assert.match(output, /kms region must be eu/);
+  assert.match(output, /platformSecrets region must be eu/);
   assert.match(output, /inventory the email processor/);
   assert.match(output, /exact Base Sepolia public-chain exception/);
 });

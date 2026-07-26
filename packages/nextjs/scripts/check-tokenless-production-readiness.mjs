@@ -9,10 +9,11 @@ import {
 import * as paidLaneActivationModule from "../lib/tokenless/paidLaneActivation.ts";
 import { TOKENLESS_VERCEL_PROJECT } from "./check-identity-deployment.mjs";
 import { validateHostedDatabaseIdentity } from "./migrate-hosted-database.mjs";
-import { createHash, createPublicKey } from "node:crypto";
+import { createHash, createPrivateKey, createPublicKey } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isAddress, zeroAddress } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 
 const { validatePaidLaneActivation } = paidLaneActivationModule.default ?? paidLaneActivationModule;
 
@@ -20,17 +21,70 @@ const BASE_SEPOLIA_CHAIN_ID = 84_532;
 const DEPLOYMENT_SCHEMA = "rateloop-tokenless-deployment-v4";
 const MINIMUM_REVEAL_WINDOW_SECONDS = 300;
 const TOKENLESS_REVIEW_ORIGIN = "https://rateloop-tokenless.vercel.app";
-const MANAGED_EVM_SIGNER_ROLES = ["CREDENTIAL_ISSUER", "X402_RELAYER", "PREPAID_FUNDER", "SURPRISE_BONUS_FUNDER"];
-const FORBIDDEN_HOSTED_PRIVATE_KEYS = [
-  "TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY",
-  "TOKENLESS_X402_RELAYER_PRIVATE_KEY",
-  "TOKENLESS_PREPAID_FUNDER_PRIVATE_KEY",
-  "TOKENLESS_SURPRISE_BONUS_FUNDER_PRIVATE_KEY",
-  "TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY",
+const PLATFORM_EVM_SIGNERS = [
+  {
+    role: "CREDENTIAL_ISSUER",
+    privateKey: "TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY",
+    expectedAddress: "TOKENLESS_CREDENTIAL_ISSUER_SIGNER_EXPECTED_ADDRESS",
+    keyVersion: "TOKENLESS_CREDENTIAL_ISSUER_SIGNER_KEY_VERSION",
+  },
+  {
+    role: "X402_RELAYER",
+    privateKey: "TOKENLESS_X402_RELAYER_PRIVATE_KEY",
+    expectedAddress: "TOKENLESS_X402_RELAYER_EXPECTED_ADDRESS",
+    keyVersion: "TOKENLESS_X402_RELAYER_KEY_VERSION",
+  },
+  {
+    role: "PREPAID_FUNDER",
+    privateKey: "TOKENLESS_PREPAID_FUNDER_PRIVATE_KEY",
+    expectedAddress: "TOKENLESS_PREPAID_FUNDER_EXPECTED_ADDRESS",
+    keyVersion: "TOKENLESS_PREPAID_FUNDER_KEY_VERSION",
+  },
+  {
+    role: "SURPRISE_BONUS_FUNDER",
+    privateKey: "TOKENLESS_SURPRISE_BONUS_FUNDER_PRIVATE_KEY",
+    expectedAddress: "TOKENLESS_SURPRISE_BONUS_FUNDER_EXPECTED_ADDRESS",
+    keyVersion: "TOKENLESS_SURPRISE_BONUS_FUNDER_KEY_VERSION",
+  },
+  {
+    role: "KEEPER",
+    privateKey: "TOKENLESS_KEEPER_PRIVATE_KEY",
+    expectedAddress: "TOKENLESS_KEEPER_EXPECTED_ADDRESS",
+    keyVersion: "TOKENLESS_KEEPER_KEY_VERSION",
+  },
+];
+const FORBIDDEN_AWS_CONFIGURATION = [
+  "TOKENLESS_KMS_PROVIDER",
+  "TOKENLESS_KMS_KEY_RESOURCE",
+  "TOKENLESS_KMS_REGION",
+  "TOKENLESS_AWS_KMS_REGION",
+  "TOKENLESS_AWS_KMS_ROLE_ARN",
+  "TOKENLESS_AWS_OIDC_AUDIENCE",
+  "TOKENLESS_EVIDENCE_KMS_KEY_RESOURCE",
+  "TOKENLESS_EVIDENCE_KMS_REGION",
+  "TOKENLESS_EVIDENCE_KMS_ROLE_ARN",
+  "TOKENLESS_EVIDENCE_KMS_OIDC_AUDIENCE",
+  "TOKENLESS_ATTESTATION_KMS_KEY_ARN",
+  "TOKENLESS_ATTESTATION_KMS_REGION",
+  "TOKENLESS_ATTESTATION_AWS_CREDENTIAL_REFERENCE",
+  "TOKENLESS_ATTESTATION_AWS_CREDENTIALS_JSON",
+  "TOKENLESS_THIRDWEB_WALLET_KMS_KEY_RESOURCE",
+  "TOKENLESS_THIRDWEB_WALLET_KMS_REGION",
+  "TOKENLESS_THIRDWEB_WALLET_KMS_ROLE_ARN",
+  "TOKENLESS_THIRDWEB_WALLET_KMS_OIDC_AUDIENCE",
+  ...["CREDENTIAL_ISSUER", "X402_RELAYER", "PREPAID_FUNDER", "SURPRISE_BONUS_FUNDER", "KEEPER"].flatMap(
+    role => [
+      `TOKENLESS_${role}_KMS_KEY_RESOURCE`,
+      `TOKENLESS_${role}_KMS_EXPECTED_ADDRESS`,
+      `TOKENLESS_${role}_KMS_REGION`,
+      `TOKENLESS_${role}_KMS_ROLE_ARN`,
+      `TOKENLESS_${role}_KMS_OIDC_AUDIENCE`,
+    ],
+  ),
 ];
 
 export const DEFAULT_HOSTED_RELEASE_CAPABILITIES = Object.freeze({
-  managedSigning: false,
+  platformSecretSigning: false,
   paidAssignmentSettlement: false,
   feedbackBonusLiveWiringVerification: false,
   feedbackBonusHumanAwardExecution: false,
@@ -38,7 +92,7 @@ export const DEFAULT_HOSTED_RELEASE_CAPABILITIES = Object.freeze({
 });
 
 const HOSTED_RELEASE_CAPABILITY_LABELS = Object.freeze({
-  managedSigning: "managed signing for credential issuance and chain transactions",
+  platformSecretSigning: "platform-secret signing for credential issuance and chain transactions",
   paidAssignmentSettlement: "paid assignment reservation, voucher, commit, and settlement orchestration",
   feedbackBonusLiveWiringVerification: "live Feedback Bonus USDC and credential-issuer immutable wiring verification",
   feedbackBonusHumanAwardExecution: "human-signed Feedback Bonus award execution without a server-held awarder key",
@@ -58,11 +112,14 @@ export const REQUIRED_TOKENLESS_PRODUCTION_VARIABLES = [
   "BETTER_AUTH_PASSKEY_RP_ID",
   "TOKENLESS_THIRDWEB_WALLET_ENABLED",
   "BLOB_READ_WRITE_TOKEN",
-  "TOKENLESS_KMS_PROVIDER",
-  "TOKENLESS_KMS_KEY_RESOURCE",
-  "TOKENLESS_AWS_KMS_REGION",
-  "TOKENLESS_AWS_KMS_ROLE_ARN",
-  "TOKENLESS_ARTIFACT_KEY_VERSION",
+  "TOKENLESS_PLATFORM_SECRET_PROVIDER",
+  "TOKENLESS_PLATFORM_SECRET_RUNTIME_REGION",
+  "TOKENLESS_PLATFORM_SECRET_INVENTORY_ID",
+  "TOKENLESS_ARTIFACT_WRAPPING_KEY_VERSION",
+  "TOKENLESS_ARTIFACT_WRAPPING_KEYS",
+  "TOKENLESS_PLATFORM_SECRET_ROTATION_RUNBOOK_REFERENCE",
+  "TOKENLESS_PLATFORM_SECRET_RECOVERY_RUNBOOK_REFERENCE",
+  "TOKENLESS_SIGNER_SPEND_LIMITS_REFERENCE",
   "TOKENLESS_PSEUDONYM_KEY",
   "TOKENLESS_ASSURANCE_RATIONALE_VAULT_KEY_VERSION",
   "TOKENLESS_ASSURANCE_RATIONALE_VAULT_KEYS",
@@ -71,10 +128,8 @@ export const REQUIRED_TOKENLESS_PRODUCTION_VARIABLES = [
   "TOKENLESS_PUBLIC_RATER_RESPONSE_VAULT_KEY_VERSION",
   "TOKENLESS_PUBLIC_RATER_RESPONSE_VAULT_KEYS",
   "TOKENLESS_EVIDENCE_SIGNING_KEY_ID",
+  "TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY",
   "TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS",
-  "TOKENLESS_EVIDENCE_KMS_KEY_RESOURCE",
-  "TOKENLESS_EVIDENCE_KMS_REGION",
-  "TOKENLESS_EVIDENCE_KMS_ROLE_ARN",
   "TOKENLESS_EVIDENCE_TENANT_COMMITMENT_KEY",
   "TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY",
   "TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION",
@@ -109,16 +164,7 @@ export const REQUIRED_TOKENLESS_PRODUCTION_VARIABLES = [
   "BASE_SEPOLIA_RPC_URL",
   "BASE_SEPOLIA_RPC_FALLBACK_URLS",
   "NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL",
-  ...MANAGED_EVM_SIGNER_ROLES.flatMap(role => [
-    `TOKENLESS_${role}_KMS_KEY_RESOURCE`,
-    `TOKENLESS_${role}_KMS_EXPECTED_ADDRESS`,
-    `TOKENLESS_${role}_KMS_REGION`,
-    `TOKENLESS_${role}_KMS_ROLE_ARN`,
-  ]),
-  "TOKENLESS_KEEPER_KMS_KEY_RESOURCE",
-  "TOKENLESS_KEEPER_KMS_EXPECTED_ADDRESS",
-  "TOKENLESS_KEEPER_KMS_REGION",
-  "TOKENLESS_KEEPER_KMS_ROLE_ARN",
+  ...PLATFORM_EVM_SIGNERS.flatMap(signer => [signer.privateKey, signer.expectedAddress, signer.keyVersion]),
   "TOKENLESS_VOUCHER_ISSUER_EPOCH",
   "TOKENLESS_ELIGIBILITY_PROVIDER_ID",
   "TOKENLESS_ELIGIBILITY_PROVIDER_START_URL",
@@ -169,6 +215,8 @@ const FORBIDDEN_PUBLIC_SECRETS = [
   "NEXT_PUBLIC_BETTER_AUTH_APPLE_CLIENT_SECRET",
   "NEXT_PUBLIC_TOKENLESS_THIRDWEB_WALLET_PRIVATE_JWK",
   "NEXT_PUBLIC_TOKENLESS_ARTIFACT_MASTER_KEY",
+  "NEXT_PUBLIC_TOKENLESS_ARTIFACT_WRAPPING_KEY_VERSION",
+  "NEXT_PUBLIC_TOKENLESS_ARTIFACT_WRAPPING_KEYS",
   "NEXT_PUBLIC_TOKENLESS_KMS_KEY_RESOURCE",
   "NEXT_PUBLIC_TOKENLESS_PSEUDONYM_KEY",
   "NEXT_PUBLIC_TOKENLESS_ASSURANCE_RATIONALE_VAULT_KEYS",
@@ -188,6 +236,7 @@ const FORBIDDEN_PUBLIC_SECRETS = [
   "NEXT_PUBLIC_TOKENLESS_X402_RELAYER_PRIVATE_KEY",
   "NEXT_PUBLIC_TOKENLESS_PREPAID_FUNDER_PRIVATE_KEY",
   "NEXT_PUBLIC_TOKENLESS_SURPRISE_BONUS_FUNDER_PRIVATE_KEY",
+  "NEXT_PUBLIC_TOKENLESS_KEEPER_PRIVATE_KEY",
   "NEXT_PUBLIC_TOKENLESS_FEEDBACK_BONUS_AWARDER_PRIVATE_KEY",
   "NEXT_PUBLIC_TOKENLESS_FEEDBACK_BONUS_AWARD_WORKER_PRIVATE_KEY",
   "NEXT_PUBLIC_TOKENLESS_ELIGIBILITY_HANDOFF_SECRET",
@@ -204,6 +253,7 @@ const FORBIDDEN_PUBLIC_SECRETS = [
   "NEXT_PUBLIC_TOKENLESS_WORM_S3_CREDENTIALS_JSON",
   "NEXT_PUBLIC_TOKENLESS_GRC_CREDENTIALS_JSON",
   "NEXT_PUBLIC_TOKENLESS_ATTESTATION_AWS_CREDENTIALS_JSON",
+  "NEXT_PUBLIC_TOKENLESS_ATTESTATION_SIGNING_PRIVATE_KEY",
   "NEXT_PUBLIC_STRIPE_SECRET_KEY",
   "NEXT_PUBLIC_STRIPE_WEBHOOK_SECRET",
   "NEXT_PUBLIC_STRIPE_EARLY_ACCESS_MONTHLY_PRICE_ID",
@@ -328,35 +378,36 @@ function addSecretRole(roles, name, secret) {
   else roles.set(fingerprint, [name]);
 }
 
-function validateManagedKmsInventory(env, errors) {
-  const kms = tokenlessEuDeploymentManifest.resources.kms;
-  if (!value(env, kms.resourceIdEnv)) {
-    errors.push(`${kms.resourceIdEnv} is required for a hosted deployment.`);
+function validatePlatformSecretInventory(env, errors) {
+  const inventory = tokenlessEuDeploymentManifest.resources.platformSecrets;
+  if (!value(env, inventory.resourceIdEnv)) {
+    errors.push(`${inventory.resourceIdEnv} is required for a hosted deployment.`);
   }
-  if (!kms.allowedProviders.includes(value(env, kms.providerEnv))) {
-    errors.push(`${kms.providerEnv} must select an approved managed provider.`);
+  if (!inventory.allowedProviders.includes(value(env, inventory.providerEnv))) {
+    errors.push(`${inventory.providerEnv} must select Vercel and Railway platform-secret custody.`);
   }
-  if (value(env, kms.regionEnv) !== kms.region) {
-    errors.push(`${kms.regionEnv} must be ${kms.region}.`);
+  if (value(env, inventory.regionEnv) !== inventory.region) {
+    errors.push(`${inventory.regionEnv} must be ${inventory.region}.`);
   }
 }
 
 function validateTokenlessTestVault(env, errors) {
-  const kms = tokenlessEuDeploymentManifest.resources.kms;
-  const localKeyRaw = value(env, "TOKENLESS_ARTIFACT_MASTER_KEY");
-  const managedValues = [kms.providerEnv, kms.regionEnv, kms.resourceIdEnv].map(name => value(env, name));
-  if (localKeyRaw && managedValues.some(Boolean)) {
-    errors.push("Configure exactly one tokenless test vault: the isolated review key or the managed KMS inventory.");
+  const legacyKeyRaw = value(env, "TOKENLESS_ARTIFACT_MASTER_KEY");
+  const wrappingVersion = value(env, "TOKENLESS_ARTIFACT_WRAPPING_KEY_VERSION");
+  const wrappingKeys = value(env, "TOKENLESS_ARTIFACT_WRAPPING_KEYS");
+  if (legacyKeyRaw && (wrappingVersion || wrappingKeys)) {
+    errors.push("Configure exactly one tokenless test vault key source during the platform-secret migration.");
     return null;
   }
-  if (localKeyRaw) {
-    const localKey = decode32(localKeyRaw);
-    if (!localKey)
-      errors.push("TOKENLESS_ARTIFACT_MASTER_KEY must encode exactly 32 bytes for the isolated review vault.");
-    return localKey;
+  if (legacyKeyRaw) {
+    const legacyKey = decode32(legacyKeyRaw);
+    if (!legacyKey) errors.push("TOKENLESS_ARTIFACT_MASTER_KEY must encode exactly 32 bytes during migration.");
+    return legacyKey;
   }
-  validateManagedKmsInventory(env, errors);
-  return null;
+  validatePlatformSecretInventory(env, errors);
+  if (!wrappingVersion) errors.push("TOKENLESS_ARTIFACT_WRAPPING_KEY_VERSION is required for the test vault.");
+  if (!wrappingKeys) errors.push("TOKENLESS_ARTIFACT_WRAPPING_KEYS is required for the test vault.");
+  return wrappingVersion && wrappingKeys ? currentKey(env, "TOKENLESS_ARTIFACT_WRAPPING", "base64url", errors) : null;
 }
 
 function validateTokenlessTestDeployment(env) {
@@ -588,26 +639,19 @@ export function validateTokenlessProductionReadiness({
       errors.push(`${name} is forbidden because Feedback Bonus award authority must remain with the configured human.`);
     }
   }
-  for (const name of FORBIDDEN_HOSTED_PRIVATE_KEYS) {
-    if (value(env, name)) errors.push(`${name} is forbidden; hosted signing keys must remain inside managed KMS.`);
+  for (const name of FORBIDDEN_AWS_CONFIGURATION) {
+    if (value(env, name)) errors.push(`${name} is forbidden; RateLoop production has no AWS, KMS, IAM, or AWS OIDC dependency.`);
   }
   if (value(env, "DATABASE_URL") && !hostedPostgresUrl(value(env, "DATABASE_URL"))) {
     errors.push("DATABASE_URL must identify a non-local hosted Postgres database.");
   }
   if (value(env, "TOKENLESS_ARTIFACT_MASTER_KEY")) {
-    errors.push("TOKENLESS_ARTIFACT_MASTER_KEY is forbidden; hosted releases must use the managed KMS vault boundary.");
+    errors.push(
+      "TOKENLESS_ARTIFACT_MASTER_KEY is migration-only; hosted releases must use the versioned platform-secret wrapping keyring.",
+    );
   }
-  if (value(env, "TOKENLESS_KMS_PROVIDER") !== "aws-kms") {
-    errors.push("TOKENLESS_KMS_PROVIDER must select the implemented aws-kms production adapter.");
-  }
-  if (!/\{(?:workspaceId|projectId)\}/u.test(value(env, "TOKENLESS_KMS_KEY_RESOURCE"))) {
-    errors.push("TOKENLESS_KMS_KEY_RESOURCE must use a workspace- or project-scoped key alias template.");
-  }
-  if (!/^eu-[a-z]+-\d+$/u.test(value(env, "TOKENLESS_AWS_KMS_REGION"))) {
-    errors.push("TOKENLESS_AWS_KMS_REGION must be a concrete EU AWS region.");
-  }
-  if (!/^arn:aws:iam::\d{12}:role\/[A-Za-z0-9+=,.@_\/-]{1,512}$/u.test(value(env, "TOKENLESS_AWS_KMS_ROLE_ARN"))) {
-    errors.push("TOKENLESS_AWS_KMS_ROLE_ARN must identify the workload-identity KMS role.");
+  if (value(env, "TOKENLESS_PLATFORM_SECRET_PROVIDER") !== "vercel-and-railway") {
+    errors.push("TOKENLESS_PLATFORM_SECRET_PROVIDER must be vercel-and-railway.");
   }
   const subscriptionsEnabled = value(env, "TOKENLESS_SUBSCRIPTIONS_ENABLED");
   if (subscriptionsEnabled !== "true" && subscriptionsEnabled !== "false") {
@@ -847,96 +891,73 @@ export function validateTokenlessProductionReadiness({
   }
 
   const secretRoles = new Map();
-  const managedSignerResources = new Map();
-  const managedSignerAddresses = new Map();
-  const managedSignerRoleArns = new Map();
-  const addDistinctManagedSignerValue = (kind, role, identifier, inventory) => {
-    if (!identifier) return;
-    const roles = inventory.get(identifier) ?? [];
-    roles.push(role);
-    inventory.set(identifier, roles);
-    if (roles.length > 1) errors.push(`Managed signer ${kind} must be distinct: ${roles.join(", ")}.`);
-  };
-  for (const role of MANAGED_EVM_SIGNER_ROLES) {
-    const prefix = `TOKENLESS_${role}_KMS`;
-    const keyResource = value(env, `${prefix}_KEY_RESOURCE`);
-    const expectedAddress = value(env, `${prefix}_EXPECTED_ADDRESS`).toLowerCase();
-    const region = value(env, `${prefix}_REGION`);
-    const roleArn = value(env, `${prefix}_ROLE_ARN`);
-    if (!/^arn:aws:kms:eu-[a-z]+-\d+:\d{12}:(?:key\/[0-9a-f-]{36}|alias\/[A-Za-z0-9/_+=,.@-]+)$/u.test(keyResource)) {
-      errors.push(`${prefix}_KEY_RESOURCE must identify a dedicated AWS KMS key or alias in an EU region.`);
+  const signerAddresses = new Map();
+  for (const signer of PLATFORM_EVM_SIGNERS) {
+    const raw = value(env, signer.privateKey).replace(/^0x/u, "");
+    const expectedAddress = value(env, signer.expectedAddress);
+    const keyVersion = value(env, signer.keyVersion);
+    let derivedAddress = "";
+    if (!/^[0-9a-fA-F]{64}$/u.test(raw)) {
+      errors.push(`${signer.privateKey} must be a 32-byte secp256k1 private key.`);
+    } else {
+      try {
+        derivedAddress = privateKeyToAccount(`0x${raw}`).address;
+        addSecretRole(secretRoles, signer.privateKey, raw);
+      } catch {
+        errors.push(`${signer.privateKey} must be a valid secp256k1 private key.`);
+      }
     }
     if (!nonZeroEvmAddress(expectedAddress)) {
-      errors.push(`${prefix}_EXPECTED_ADDRESS must be a non-zero EVM address.`);
+      errors.push(`${signer.expectedAddress} must be a non-zero EVM address.`);
+    } else {
+      const normalized = expectedAddress.toLowerCase();
+      const roles = signerAddresses.get(normalized) ?? [];
+      roles.push(signer.role);
+      signerAddresses.set(normalized, roles);
+      if (roles.length > 1) errors.push(`Platform signer EVM addresses must be distinct: ${roles.join(", ")}.`);
+      if (derivedAddress && derivedAddress.toLowerCase() !== normalized) {
+        errors.push(`${signer.expectedAddress} must match the address derived from ${signer.privateKey}.`);
+      }
     }
-    if (!/^eu-[a-z]+-\d+$/u.test(region)) {
-      errors.push(`${prefix}_REGION must be a concrete EU AWS region.`);
-    }
-    if (!/^arn:aws:iam::\d{12}:role\/[A-Za-z0-9+=,.@_\/-]{1,512}$/u.test(roleArn)) {
-      errors.push(`${prefix}_ROLE_ARN must identify the role-specific workload-identity signer role.`);
-    }
-    for (const [kind, identifier, inventory] of [
-      ["KMS key resources", keyResource.toLowerCase(), managedSignerResources],
-      ["EVM addresses", expectedAddress, managedSignerAddresses],
-      ["IAM role ARNs", roleArn.toLowerCase(), managedSignerRoleArns],
-    ]) {
-      addDistinctManagedSignerValue(kind, role, identifier, inventory);
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/u.test(keyVersion)) {
+      errors.push(`${signer.keyVersion} must be a stable version label of at most 80 characters.`);
     }
   }
-  const evidenceKeyResource = value(env, "TOKENLESS_EVIDENCE_KMS_KEY_RESOURCE");
-  if (
-    !/^arn:aws:kms:eu-[a-z]+-\d+:\d{12}:(?:key\/[0-9a-f-]{36}|alias\/[A-Za-z0-9/_+=,.@-]+)$/u.test(evidenceKeyResource)
-  ) {
-    errors.push("TOKENLESS_EVIDENCE_KMS_KEY_RESOURCE must identify a dedicated AWS KMS key or alias in an EU region.");
+  for (const name of [
+    "TOKENLESS_PLATFORM_SECRET_ROTATION_RUNBOOK_REFERENCE",
+    "TOKENLESS_PLATFORM_SECRET_RECOVERY_RUNBOOK_REFERENCE",
+    "TOKENLESS_SIGNER_SPEND_LIMITS_REFERENCE",
+  ]) {
+    if (!/^sha256:[0-9a-f]{64}$/u.test(value(env, name))) {
+      errors.push(`${name} must be a sha256 reference to an approved operational record.`);
+    }
   }
-  if (managedSignerResources.has(evidenceKeyResource.toLowerCase())) {
-    errors.push("TOKENLESS_EVIDENCE_KMS_KEY_RESOURCE must be distinct from every EVM signer key.");
+  const artifactWrappingKey = currentKey(env, "TOKENLESS_ARTIFACT_WRAPPING", "base64url", errors);
+  addSecretRole(secretRoles, "TOKENLESS_ARTIFACT_WRAPPING", artifactWrappingKey);
+  let evidencePrivateKey;
+  let evidencePublicKey;
+  try {
+    const encoded = value(env, "TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY");
+    evidencePrivateKey = createPrivateKey(
+      encoded.includes("BEGIN PRIVATE KEY")
+        ? encoded.replaceAll("\\n", "\n")
+        : { key: Buffer.from(encoded, "base64url"), format: "der", type: "pkcs8" },
+    );
+    if (evidencePrivateKey.asymmetricKeyType !== "ed25519") throw new Error("wrong key type");
+    evidencePublicKey = createPublicKey(evidencePrivateKey).export({ format: "der", type: "spki" });
+    addSecretRole(
+      secretRoles,
+      "TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY",
+      createHash("sha256").update(evidencePrivateKey.export({ format: "der", type: "pkcs8" })).digest(),
+    );
+  } catch {
+    errors.push("TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY must be a dedicated Ed25519 PKCS#8 private key.");
   }
-  if (!/^eu-[a-z]+-\d+$/u.test(value(env, "TOKENLESS_EVIDENCE_KMS_REGION"))) {
-    errors.push("TOKENLESS_EVIDENCE_KMS_REGION must be a concrete EU AWS region.");
-  }
-  if (!/^arn:aws:iam::\d{12}:role\/[A-Za-z0-9+=,.@_\/-]{1,512}$/u.test(value(env, "TOKENLESS_EVIDENCE_KMS_ROLE_ARN"))) {
-    errors.push("TOKENLESS_EVIDENCE_KMS_ROLE_ARN must identify the evidence workload-identity signer role.");
-  }
-  addDistinctManagedSignerValue(
-    "KMS key resources",
-    "EVIDENCE",
-    evidenceKeyResource.toLowerCase(),
-    managedSignerResources,
-  );
-  addDistinctManagedSignerValue(
-    "IAM role ARNs",
-    "EVIDENCE",
-    value(env, "TOKENLESS_EVIDENCE_KMS_ROLE_ARN").toLowerCase(),
-    managedSignerRoleArns,
-  );
-  const keeperKeyResource = value(env, "TOKENLESS_KEEPER_KMS_KEY_RESOURCE");
-  const keeperExpectedAddress = value(env, "TOKENLESS_KEEPER_KMS_EXPECTED_ADDRESS").toLowerCase();
-  const keeperRegion = value(env, "TOKENLESS_KEEPER_KMS_REGION");
-  const keeperRoleArn = value(env, "TOKENLESS_KEEPER_KMS_ROLE_ARN");
-  if (!/^arn:aws:kms:eu-[a-z]+-\d+:\d{12}:key\/[0-9a-f-]{36}$/u.test(keeperKeyResource)) {
-    errors.push("TOKENLESS_KEEPER_KMS_KEY_RESOURCE must identify the keeper's exact AWS KMS key in an EU region.");
-  }
-  if (!nonZeroEvmAddress(keeperExpectedAddress)) {
-    errors.push("TOKENLESS_KEEPER_KMS_EXPECTED_ADDRESS must be a non-zero EVM address.");
-  }
-  if (!/^eu-[a-z]+-\d+$/u.test(keeperRegion)) {
-    errors.push("TOKENLESS_KEEPER_KMS_REGION must be a concrete EU AWS region.");
-  }
-  if (!/^arn:aws:iam::\d{12}:role\/[A-Za-z0-9+=,.@_\/-]{1,512}$/u.test(keeperRoleArn)) {
-    errors.push("TOKENLESS_KEEPER_KMS_ROLE_ARN must identify the keeper workload-identity signer role.");
-  }
-  addDistinctManagedSignerValue("KMS key resources", "KEEPER", keeperKeyResource.toLowerCase(), managedSignerResources);
-  addDistinctManagedSignerValue("EVM addresses", "KEEPER", keeperExpectedAddress, managedSignerAddresses);
-  addDistinctManagedSignerValue("IAM role ARNs", "KEEPER", keeperRoleArn.toLowerCase(), managedSignerRoleArns);
-  addDistinctManagedSignerValue(
-    "IAM role ARNs",
-    "ARTIFACT_VAULT",
-    value(env, "TOKENLESS_AWS_KMS_ROLE_ARN").toLowerCase(),
-    managedSignerRoleArns,
-  );
-  if (!/^p256:[0-9a-f]{24}$/u.test(value(env, "TOKENLESS_EVIDENCE_SIGNING_KEY_ID"))) {
-    errors.push("TOKENLESS_EVIDENCE_SIGNING_KEY_ID must be the configured P-256 KMS public-key fingerprint.");
+  const evidenceKeyId = evidencePublicKey
+    ? `ed25519:${createHash("sha256").update(evidencePublicKey).digest("hex").slice(0, 24)}`
+    : "";
+  if (value(env, "TOKENLESS_EVIDENCE_SIGNING_KEY_ID") !== evidenceKeyId) {
+    errors.push("TOKENLESS_EVIDENCE_SIGNING_KEY_ID must match the configured Ed25519 public-key fingerprint.");
   }
   try {
     const entries = JSON.parse(value(env, "TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS"));
@@ -947,7 +968,7 @@ export function validateTokenlessProductionReadiness({
           entry &&
           typeof entry === "object" &&
           !Array.isArray(entry) &&
-          entry.algorithm === "ECDSA-SHA256" &&
+          entry.algorithm === "Ed25519" &&
           entry.status === "current" &&
           entry.keyId === value(env, "TOKENLESS_EVIDENCE_SIGNING_KEY_ID") &&
           typeof entry.publicKey === "string",
@@ -958,16 +979,18 @@ export function validateTokenlessProductionReadiness({
       format: "der",
       type: "spki",
     });
-    if (publicKey.asymmetricKeyType !== "ec" || publicKey.asymmetricKeyDetails?.namedCurve !== "prime256v1") {
-      throw new Error("wrong key type");
+    if (publicKey.asymmetricKeyType !== "ed25519") throw new Error("wrong key type");
+    const canonical = publicKey.export({ format: "der", type: "spki" });
+    const fingerprint = `ed25519:${createHash("sha256").update(canonical).digest("hex").slice(0, 24)}`;
+    if (
+      fingerprint !== current[0].keyId ||
+      canonical.toString("base64url") !== current[0].publicKey ||
+      (evidencePublicKey && !canonical.equals(evidencePublicKey))
+    ) {
+      throw new Error("wrong fingerprint");
     }
-    const fingerprint = `p256:${createHash("sha256")
-      .update(publicKey.export({ format: "der", type: "spki" }))
-      .digest("hex")
-      .slice(0, 24)}`;
-    if (fingerprint !== current[0].keyId) throw new Error("wrong fingerprint");
   } catch {
-    errors.push("TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS must publish exactly one current P-256 KMS evidence key.");
+    errors.push("TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS must publish exactly one current Ed25519 evidence key.");
   }
   const worldSigningKey = value(env, "WORLD_ID_RP_SIGNING_KEY").replace(/^0x/u, "");
   if (!/^[0-9a-fA-F]{64}$/u.test(worldSigningKey)) errors.push("WORLD_ID_RP_SIGNING_KEY must be a 32-byte hex key.");
