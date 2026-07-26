@@ -91,6 +91,7 @@ const revealCache = new BoundedLruMap<string, RevealCacheEntry>(
   MAX_REVEAL_CACHE_ENTRIES,
 );
 let nextScanFeedbackBonusPoolId = 1n;
+let singleSlotFeedTurn = true;
 
 class InvalidRevealMaterialError extends Error {
   constructor(message: string) {
@@ -103,6 +104,36 @@ export function resetTokenlessKeeperStateForTests() {
   revealCache.clear();
   resetRoundScanStateForTests();
   nextScanFeedbackBonusPoolId = 1n;
+  singleSlotFeedTurn = true;
+}
+
+export function selectRoundIdsForTick(
+  feedRoundIds: readonly bigint[],
+  nextRoundId: bigint,
+  maxRoundsPerTick: number,
+) {
+  if (maxRoundsPerTick <= 0) return [];
+  const eligibleFeedRoundIds = [
+    ...new Set(feedRoundIds.filter((roundId) => roundId > 0n && roundId < nextRoundId)),
+  ];
+
+  if (maxRoundsPerTick === 1 && eligibleFeedRoundIds.length > 0) {
+    if (singleSlotFeedTurn) {
+      singleSlotFeedTurn = false;
+      return eligibleFeedRoundIds.slice(0, 1);
+    }
+    singleSlotFeedTurn = true;
+    return scanRoundIds(nextRoundId, 1);
+  }
+
+  const feedQuota =
+    maxRoundsPerTick === 1
+      ? 0
+      : Math.max(1, Math.floor(maxRoundsPerTick / 2));
+  const selectedFeedRoundIds = eligibleFeedRoundIds.slice(0, feedQuota);
+  const scanBudget = maxRoundsPerTick - selectedFeedRoundIds.length;
+  const scanRoundIdCandidates = scanRoundIds(nextRoundId, scanBudget);
+  return [...new Set([...selectedFeedRoundIds, ...scanRoundIdCandidates])];
 }
 
 function emptyResult(): TokenlessKeeperResult {
@@ -965,13 +996,11 @@ export async function runTokenlessKeeper(
       );
     }
   }
-  const scanRoundIdCandidates = scanRoundIds(
+  const roundIds = selectRoundIdsForTick(
+    feedRoundIds,
     nextRoundId,
     config.maxRoundsPerTick,
   );
-  const roundIds = [
-    ...new Set([...feedRoundIds, ...scanRoundIdCandidates]),
-  ].slice(0, config.maxRoundsPerTick);
   for (const roundId of roundIds) {
     // Feed entries are only priority hints. advanceRound reads the canonical
     // on-chain round and derives the permitted action again before any write.

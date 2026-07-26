@@ -3,6 +3,7 @@ import type { Address, Hex } from "viem";
 import {
   resetTokenlessKeeperStateForTests,
   runTokenlessKeeper,
+  selectRoundIdsForTick,
   validateTokenlessKeeperDeployment,
   type TokenlessKeeperClients,
 } from "../keeper.js";
@@ -516,7 +517,26 @@ describe("tokenless keeper orchestration", () => {
       logger,
       decrypt,
     );
-    expect(readRoundIds).toEqual([3n, 5n]);
+    expect(readRoundIds).toEqual([3n, 10_000n]);
+  });
+
+  it("reserves scan capacity when actionable feed work remains continuously full", () => {
+    const selected = Array.from({ length: 4 }, () =>
+      selectRoundIdsForTick([3n, 5n, 7n, 9n], 10_001n, 2),
+    );
+    expect(selected).toEqual([
+      [3n, 10_000n],
+      [3n, 9_999n],
+      [3n, 9_998n],
+      [3n, 9_997n],
+    ]);
+  });
+
+  it("alternates feed and scan work when the tick has a single slot", () => {
+    const selected = Array.from({ length: 4 }, () =>
+      selectRoundIdsForTick([3n], 101n, 1),
+    );
+    expect(selected).toEqual([[3n], [100n], [3n], [99n]]);
   });
 
   it("revalidates stale feed actions on-chain without executing the indexed action", async () => {
