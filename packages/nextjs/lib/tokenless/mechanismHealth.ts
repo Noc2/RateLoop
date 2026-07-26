@@ -138,7 +138,7 @@ export async function recordAssuranceMechanismHealth(client: PoolClient, runId: 
      FROM tokenless_assurance_run_cases rc
      LEFT JOIN tokenless_assurance_run_gold_items gold ON gold.run_id=rc.run_id AND gold.case_id=rc.case_id
      JOIN tokenless_chain_executions ce ON ce.content_id=rc.content_id AND CAST(ce.round_id AS text)=rc.round_id
-     JOIN tokenless_transparency_events te ON te.operation_key=ce.operation_key AND te.event_type='finalized'
+     JOIN tokenless_transparency_events te ON te.operation_key=ce.operation_key AND te.event_type='round.finalized'
      WHERE rc.run_id=$1 AND gold.case_id IS NULL
        AND rc.round_status IN ('finalized','terminal')
      ORDER BY rc.case_id,te.sequence DESC`,
@@ -230,7 +230,7 @@ const REFRESH_COMPLETED_MECHANISM_HEALTH_SQL = `WITH current_counts AS (
          LEFT JOIN tokenless_chain_executions ce
            ON ce.content_id=rc.content_id AND CAST(ce.round_id AS text)=rc.round_id
          LEFT JOIN tokenless_transparency_events te
-           ON te.operation_key=ce.operation_key AND te.event_type='finalized'
+           ON te.operation_key=ce.operation_key AND te.event_type='round.finalized'
          WHERE r.status='completed'
          GROUP BY r.run_id,r.completed_at
        )

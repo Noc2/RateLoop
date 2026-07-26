@@ -6,7 +6,8 @@ test("late partial transparency evidence keeps a completed run refreshable", () 
   const sql = __mechanismHealthTestUtils.refreshSelectionSql;
   assert.match(sql, /mh\.indexed_chain_case_count<>current_counts\.indexed_chain_case_count/u);
   assert.match(sql, /COUNT\(DISTINCT CASE/u);
-  assert.match(sql, /te\.event_type='finalized'/u);
+  assert.match(sql, /te\.event_type='round\.finalized'/u);
+  assert.doesNotMatch(sql, /te\.event_type='finalized'/u);
   assert.match(sql, /gold\.case_id IS NULL/u);
   assert.doesNotMatch(sql, /mh\.rbts_score_count=0/u);
 });
