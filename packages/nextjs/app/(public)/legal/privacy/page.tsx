@@ -82,7 +82,7 @@ export default function PrivacyPage() {
         allocations. RateLoop does not store full card details. Subscription records remain separate from prepaid USDC,
         public-panel funding, participant payout, and settlement records.
       </p>
-      <h2>On-chain data</h2>
+      <h2 id="on-chain-data">On-chain data</h2>
       <p>
         Public-chain interactions publish transaction addresses, commitments, round terms, settlement data, claims, and
         each paid commit&apos;s timelock ciphertext. That ciphertext contains the vote, prediction, response hash,
@@ -91,6 +91,17 @@ export default function PrivacyPage() {
         claim; there is no post-commit abort. Reveal transactions also publish their plaintext calldata. These records
         are visible to third parties and generally cannot be erased by the interface operator. Reusing a funding or
         payout address can link paid activity across rounds even though the RateLoop account principal itself is opaque.
+      </p>
+      <p>
+        RateLoop presents the public-record disclosure before a reviewer can create a recovery backup or request a paid
+        commit. The blockchain assessment follows data-protection-by-design principles and considers the European Data
+        Protection Board&apos;s final{" "}
+        <a href="https://www.edpb.europa.eu/documents/guideline/guidelines-on-processing-of-personal-data-through-blockchain-technologies_en">
+          Guidelines 02/2025 on processing personal data through blockchain technologies, version 2.0
+        </a>{" "}
+        of 7 July 2026. Before a hosted launch accepts real customer material, RateLoop must complete and approve a
+        blockchain-specific DPIA and a current provider, subprocessor, and international-transfer inventory. Until both
+        release gates are complete, RateLoop does not claim launch-level GDPR compliance.
       </p>
       <h2>Paid eligibility</h2>
       <p>

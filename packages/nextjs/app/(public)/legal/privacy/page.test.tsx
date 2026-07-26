@@ -26,6 +26,12 @@ test("privacy notice explains subscription processor data and retention", async 
   assert.match(html, /configured drand beacon after the commit deadline/i);
   assert.match(html, /whether or not the reviewer or keeper submits a reveal or claim/i);
   assert.match(html, /there is no post-commit abort/i);
+  assert.match(html, /public-record disclosure before a reviewer can create a recovery backup/i);
+  assert.match(html, /Guidelines 02\/2025.*version 2\.0/i);
+  assert.match(html, /7 July 2026/i);
+  assert.match(html, /blockchain-specific DPIA/i);
+  assert.match(html, /current provider, subprocessor, and international-transfer inventory/i);
+  assert.match(html, /does not claim launch-level GDPR compliance/i);
   assert.match(html, /current isolated deployment.*server-only application keyrings/i);
   assert.match(html, /does not claim that managed KMS is active/i);
   assert.match(html, /DPIA remain release gates before real customer material/i);

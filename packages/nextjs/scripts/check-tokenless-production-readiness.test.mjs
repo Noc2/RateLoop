@@ -328,6 +328,20 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
     ...tokenlessTestOperationalSecrets(),
   };
   assert.deepEqual(validateTokenlessProductionReadiness({ env, activeRegistry: {} }), []);
+  assert.match(
+    validateTokenlessProductionReadiness({
+      env: { ...env, STRIPE_SECRET_KEY: `sk_live_${"a".repeat(32)}` },
+      activeRegistry: {},
+    }).join("\n"),
+    /must not use Stripe live mode on the Base Sepolia tokenless test deployment/i,
+  );
+  assert.match(
+    validateTokenlessProductionReadiness({
+      env: { ...env, STRIPE_SECRET_KEY: `rk_live_${"a".repeat(32)}` },
+      activeRegistry: {},
+    }).join("\n"),
+    /must not use Stripe live mode on the Base Sepolia tokenless test deployment/i,
+  );
   const cliDeploymentEnv = { ...env };
   delete cliDeploymentEnv.VERCEL_GIT_COMMIT_REF;
   assert.deepEqual(validateTokenlessProductionReadiness({ env: cliDeploymentEnv, activeRegistry: {} }), []);

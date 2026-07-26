@@ -416,6 +416,9 @@ function validateTokenlessTestDeployment(env) {
   if (value(env, "TOKENLESS_NETWORK_PANELS_ENABLED") !== "false") {
     errors.push("TOKENLESS_NETWORK_PANELS_ENABLED must remain false for a tokenless test deployment.");
   }
+  if (/^(?:sk|rk)_live_/u.test(value(env, "STRIPE_SECRET_KEY"))) {
+    errors.push("STRIPE_SECRET_KEY must not use Stripe live mode on the Base Sepolia tokenless test deployment.");
+  }
   for (const name of FORBIDDEN_PUBLIC_SECRETS) {
     if (value(env, name)) errors.push(`${name} is forbidden because secrets must remain server-only.`);
   }
