@@ -237,17 +237,27 @@ export function WorkspaceReviewersPanel({
         <label className="text-xs text-base-content/55">
           Private material limit
           <select
-            className="select mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+            className={`select mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)] ${
+              fieldErrors.maxPrivateSensitivity ? "select-error" : ""
+            }`}
             value={maxPrivateSensitivity}
-            onChange={event =>
-              setMaxPrivateSensitivity(event.target.value as "internal" | "confidential" | "restricted" | "regulated")
-            }
+            aria-describedby={fieldErrors.maxPrivateSensitivity ? "workspace-reviewer-sensitivity-error" : undefined}
+            aria-invalid={fieldErrors.maxPrivateSensitivity ? true : undefined}
+            onChange={event => {
+              setMaxPrivateSensitivity(event.target.value as "internal" | "confidential" | "restricted" | "regulated");
+              clear("maxPrivateSensitivity");
+            }}
           >
             <option value="internal">Internal</option>
             <option value="confidential">Confidential</option>
             <option value="restricted">Restricted</option>
             <option value="regulated">Regulated</option>
           </select>
+          {fieldErrors.maxPrivateSensitivity ? (
+            <span id="workspace-reviewer-sensitivity-error" className="mt-2 block text-sm text-error" role="alert">
+              {fieldErrors.maxPrivateSensitivity}
+            </span>
+          ) : null}
         </label>
         <button className="rateloop-gradient-action min-h-12 px-5" disabled={busyTarget === "invite"}>
           {busyTarget === "invite" ? "Creating…" : "Invite reviewer"}
