@@ -403,6 +403,13 @@ function dependencies(
         invited: {
           subpanelReference: "hybrid:invited",
           bindingHash: HASH,
+          round: {
+            deploymentKey: "base-sepolia",
+            chainId: 84532,
+            panelAddress: "0x4444444444444444444444444444444444444444",
+            roundId: "1",
+            admissionPolicyHash: HASH,
+          },
           status: "ready",
           replayed: false,
           reviewerCount: 1,
@@ -410,6 +417,13 @@ function dependencies(
         network: {
           subpanelReference: "hybrid:network",
           bindingHash: HASH,
+          round: {
+            deploymentKey: "base-sepolia",
+            chainId: 84532,
+            panelAddress: "0x4444444444444444444444444444444444444444",
+            roundId: "2",
+            admissionPolicyHash: HASH,
+          },
           status: "ready",
           replayed: false,
           reviewerCount: 2,
@@ -984,10 +998,31 @@ test("hybrid routing activates only with an exact frozen split and the dedicated
     material: {
       ...publicMaterial,
       hybridSplit: {
-        schemaVersion: "rateloop.hybrid-review-split.v1",
+        schemaVersion: "rateloop.hybrid-review-split.v2",
+        workspaceId: hybridContext.workspaceId,
         opportunityId: "opportunity_router",
         audiencePolicyHash: hybridContext.selectionPolicy.audiencePolicyHash,
         requestProfileHash: hybridContext.requestProfile.hash,
+        semanticProfile: {
+          schemaVersion: "rateloop.review-request-profile.v4",
+          audience: "hybrid",
+          audiencePolicyHash: hybridContext.selectionPolicy.audiencePolicyHash,
+          execution: "two_distinct_rounds",
+          invited: {
+            reviewerSource: "customer_invited",
+            panelSize: 1,
+            admissionPolicyHash: HASH,
+            economics: { asset: "USDC", bountyPerSeatAtomic: "1000000", maximumChargeAtomic: "1000000" },
+            expertiseRequirements: [],
+          },
+          network: {
+            reviewerSource: "rateloop_network",
+            panelSize: 1,
+            admissionPolicyHash: HASH,
+            economics: { asset: "USDC", bountyPerSeatAtomic: "2000000", maximumChargeAtomic: "2000000" },
+            expertiseRequirements: [],
+          },
+        },
         contentCommitments: hybridContext.contentCommitments,
         publication: publicMaterial.publication,
         economics: {

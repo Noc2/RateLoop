@@ -33,17 +33,18 @@ export type HumanReviewLaneReadiness = Pick<
 
 export const HUMAN_REVIEW_LANE_IMPLEMENTATION = {
   privateInvitedUnpaid: true,
-  // The private adapter currently freezes eligibility, funding reservations,
-  // encrypted delivery, and voucher-preparation evidence. It does not yet bind
-  // those assignments to an opened TokenlessPanel round, issue/consume the
-  // resulting voucher, or reconcile a terminal settlement receipt. Keep the
-  // lane unavailable until that complete persisted path exists.
+  // The private adapter and reconciler now preserve terminal settlement
+  // evidence. Release still requires funded deployment validation and the
+  // configured production DPIA/transfer approval, so it remains unadvertised.
   privateInvitedPaid: false,
-  // The network adapter has a settlement implementation, but production
-  // admission also requires a source-derived, frozen integrity epoch. The
-  // repository does not yet have a non-test epoch producer, so advertising
-  // this lane would strand real requests at assignment time.
+  // Epoch production and frozen selection are wired, but selected network
+  // seats are still stopped before mutation until vouchers bind the exact
+  // selection batch to paid operations. World ID registration and funded
+  // deployment validation are also external release gates.
   publicPaidNetwork: false,
+  // V4 cohort semantics require two distinct paid rounds. The default adapter
+  // is intentionally fail-closed until both round settlement preparations are
+  // deployed and verified end to end.
   hybridPublicSafe: false,
 } as const satisfies HumanReviewLaneReadiness;
 

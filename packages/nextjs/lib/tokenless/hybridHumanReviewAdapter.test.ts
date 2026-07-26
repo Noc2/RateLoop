@@ -23,10 +23,31 @@ function candidate(accountAddress: string) {
 
 function split(): FrozenHybridReviewSplit {
   return {
-    schemaVersion: "rateloop.hybrid-review-split.v1",
+    schemaVersion: "rateloop.hybrid-review-split.v2",
+    workspaceId: "ws_hybrid",
     opportunityId: "opportunity_hybrid",
     audiencePolicyHash: HASH,
     requestProfileHash: HASH,
+    semanticProfile: {
+      schemaVersion: "rateloop.review-request-profile.v4",
+      audience: "hybrid",
+      audiencePolicyHash: HASH,
+      execution: "two_distinct_rounds",
+      invited: {
+        reviewerSource: "customer_invited",
+        panelSize: 1,
+        admissionPolicyHash: HASH,
+        economics: { asset: "USDC", bountyPerSeatAtomic: "1000000", maximumChargeAtomic: "1000000" },
+        expertiseRequirements: [],
+      },
+      network: {
+        reviewerSource: "rateloop_network",
+        panelSize: 1,
+        admissionPolicyHash: HASH,
+        economics: { asset: "USDC", bountyPerSeatAtomic: "2000000", maximumChargeAtomic: "2000000" },
+        expertiseRequirements: [],
+      },
+    },
     contentCommitments: { source: HASH, suggestion: HASH },
     publication: {
       visibility: "public",
@@ -42,9 +63,9 @@ function split(): FrozenHybridReviewSplit {
 
 function dependencies(events: string[]): HybridHumanReviewDependencies {
   return {
-    requireEligibility: async principalId => {
+    requireEligibility: async ({ principalId, reviewerSource }) => {
       const payoutAccount = [A, B, C].find(account => candidate(account).principalId === principalId)!;
-      events.push(`preflight:${principalId}`);
+      events.push(`preflight:${reviewerSource}:${principalId}`);
       return {
         schemaVersion: "rateloop.paid-review-eligibility-preflight.v1",
         preflightId: `pef_${payoutAccount.slice(2)}`,
@@ -60,11 +81,35 @@ function dependencies(events: string[]): HybridHumanReviewDependencies {
     },
     prepareInvited: async input => {
       events.push(`invited:${input.candidates.map(value => value.payoutAccount).join(",")}`);
-      return { subpanelReference: "hybrid:invited", bindingHash: HASH, status: "ready", replayed: false };
+      return {
+        subpanelReference: "hybrid:invited",
+        bindingHash: HASH,
+        round: {
+          deploymentKey: "base-sepolia",
+          chainId: 84532,
+          panelAddress: "0x4444444444444444444444444444444444444444",
+          roundId: "1",
+          admissionPolicyHash: HASH,
+        },
+        status: "ready",
+        replayed: false,
+      };
     },
     prepareNetwork: async input => {
       events.push(`network:${input.candidates.map(value => value.payoutAccount).join(",")}`);
-      return { subpanelReference: "hybrid:network", bindingHash: HASH, status: "ready", replayed: false };
+      return {
+        subpanelReference: "hybrid:network",
+        bindingHash: HASH,
+        round: {
+          deploymentKey: "base-sepolia",
+          chainId: 84532,
+          panelAddress: "0x4444444444444444444444444444444444444444",
+          roundId: "2",
+          admissionPolicyHash: HASH,
+        },
+        status: "ready",
+        replayed: false,
+      };
     },
   };
 }
@@ -86,13 +131,14 @@ test("preflights the final deterministic reviewer set before preparing either su
   const adapter = createHybridHumanReviewAdapter(dependencies(events));
   const result = await adapter(split());
   assert.deepEqual(events, [
-    `preflight:${candidate(A).principalId}`,
-    `preflight:${candidate(B).principalId}`,
+    `preflight:customer_invited:${candidate(A).principalId}`,
+    `preflight:rateloop_network:${candidate(B).principalId}`,
     `invited:${A}`,
     `network:${B}`,
   ]);
   assert.equal(result.invited.reviewerCount, 1);
   assert.equal(result.network.reviewerCount, 1);
+  assert.notEqual(result.invited.round.roundId, result.network.round.roundId);
   assert.match(result.splitBindingHash, /^sha256:[0-9a-f]{64}$/u);
 });
 
@@ -127,6 +173,26 @@ test("a partial subpanel failure returns no hybrid success and retries exact ide
   assert.equal(recovered.lane, "hybrid_public_safe");
   assert.equal(events.filter(value => value === `invited:${A}`).length, 2);
   assert.equal(events.at(-1), `network:${B}`);
+});
+
+test("hybrid preparation rejects one reused round and mismatched cohort economics", async () => {
+  const events: string[] = [];
+  const deps = dependencies(events);
+  const invited = deps.prepareInvited;
+  deps.prepareNetwork = async input => invited({ ...input, candidates: input.candidates });
+  await assert.rejects(
+    createHybridHumanReviewAdapter(deps)(split()),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "hybrid_round_identity_conflict",
+  );
+
+  const invalid = split();
+  invalid.semanticProfile.network.economics.bountyPerSeatAtomic = "1";
+  const sideEffects: string[] = [];
+  await assert.rejects(
+    createHybridHumanReviewAdapter(dependencies(sideEffects))(invalid),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "hybrid_review_binding_invalid",
+  );
+  assert.deepEqual(sideEffects, []);
 });
 
 void C;

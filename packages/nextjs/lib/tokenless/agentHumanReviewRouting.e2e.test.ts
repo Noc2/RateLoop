@@ -168,10 +168,31 @@ function context(input: {
 
 function hybridSplit(context: FrozenHumanReviewRoutingContext): FrozenHybridReviewSplit {
   return {
-    schemaVersion: "rateloop.hybrid-review-split.v1",
+    schemaVersion: "rateloop.hybrid-review-split.v2",
+    workspaceId: context.workspaceId,
     opportunityId: context.opportunityId,
     audiencePolicyHash: context.selectionPolicy.audiencePolicyHash,
     requestProfileHash: context.requestProfile.hash,
+    semanticProfile: {
+      schemaVersion: "rateloop.review-request-profile.v4",
+      audience: "hybrid",
+      audiencePolicyHash: context.selectionPolicy.audiencePolicyHash,
+      execution: "two_distinct_rounds",
+      invited: {
+        reviewerSource: "customer_invited",
+        panelSize: 1,
+        admissionPolicyHash: HASH,
+        economics: { asset: "USDC", bountyPerSeatAtomic: "1000000", maximumChargeAtomic: "1000000" },
+        expertiseRequirements: [],
+      },
+      network: {
+        reviewerSource: "rateloop_network",
+        panelSize: 1,
+        admissionPolicyHash: HASH,
+        economics: { asset: "USDC", bountyPerSeatAtomic: "1000000", maximumChargeAtomic: "1000000" },
+        expertiseRequirements: [],
+      },
+    },
     contentCommitments: context.contentCommitments,
     publication: { visibility: "public", dataClassification: "public", confirmedNoSensitiveData: true },
     economics: { asset: "USDC", invitedMaximumChargeAtomic: "1000000", networkMaximumChargeAtomic: "1000000" },
@@ -305,6 +326,13 @@ function routeFixture(frozen: FrozenHumanReviewRoutingContext) {
         invited: {
           subpanelReference: "invited/1",
           bindingHash: HASH,
+          round: {
+            deploymentKey: "base-sepolia",
+            chainId: 84532,
+            panelAddress: "0x4444444444444444444444444444444444444444",
+            roundId: "1",
+            admissionPolicyHash: HASH,
+          },
           status: "ready",
           replayed: false,
           reviewerCount: 1,
@@ -312,6 +340,13 @@ function routeFixture(frozen: FrozenHumanReviewRoutingContext) {
         network: {
           subpanelReference: "network/1",
           bindingHash: HASH,
+          round: {
+            deploymentKey: "base-sepolia",
+            chainId: 84532,
+            panelAddress: "0x4444444444444444444444444444444444444444",
+            roundId: "2",
+            admissionPolicyHash: HASH,
+          },
           status: "ready",
           replayed: false,
           reviewerCount: 1,

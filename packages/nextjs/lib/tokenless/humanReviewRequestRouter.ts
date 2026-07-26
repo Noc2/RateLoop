@@ -33,7 +33,11 @@ import {
   hashPreparedHumanReviewValue,
   prepareHumanReviewRequest,
 } from "~~/lib/tokenless/humanReviewRequestPreparation";
-import type { FrozenHybridReviewSplit, HybridHumanReviewResult } from "~~/lib/tokenless/hybridHumanReviewAdapter";
+import {
+  type FrozenHybridReviewSplit,
+  type HybridHumanReviewResult,
+  requestHybridHumanReview,
+} from "~~/lib/tokenless/hybridHumanReviewAdapter";
 import {
   type PaidReviewerBinding,
   requirePaidReviewEligibility,
@@ -1178,6 +1182,7 @@ const DEFAULT_DEPENDENCIES: RouterDependencies = {
   preparePrivateFoundation: preparePrivateReviewFoundation,
   assignPrivateUnpaid: requestPrivateUnpaidHumanReview,
   assignPrivatePaid: requestPrivatePaidHumanReview,
+  assignHybrid: requestHybridHumanReview,
   laneImplementation: HUMAN_REVIEW_LANE_IMPLEMENTATION,
   ensureFeedbackBonus: ensureFeedbackBonusPoolForDelivery,
   requireFeedbackBonusEligibility: requirePaidReviewEligibility,

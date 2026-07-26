@@ -22,10 +22,31 @@ function candidate(payoutAccount: string, assignmentReference: string) {
 
 function split(): FrozenHybridReviewSplit {
   return {
-    schemaVersion: "rateloop.hybrid-review-split.v1",
+    schemaVersion: "rateloop.hybrid-review-split.v2",
+    workspaceId: "ws_hybrid_security",
     opportunityId: "opportunity_hybrid_security",
     audiencePolicyHash: HASH,
     requestProfileHash: HASH,
+    semanticProfile: {
+      schemaVersion: "rateloop.review-request-profile.v4",
+      audience: "hybrid",
+      audiencePolicyHash: HASH,
+      execution: "two_distinct_rounds",
+      invited: {
+        reviewerSource: "customer_invited",
+        panelSize: 1,
+        admissionPolicyHash: HASH,
+        economics: { asset: "USDC", bountyPerSeatAtomic: "1000000", maximumChargeAtomic: "1000000" },
+        expertiseRequirements: [],
+      },
+      network: {
+        reviewerSource: "rateloop_network",
+        panelSize: 1,
+        admissionPolicyHash: HASH,
+        economics: { asset: "USDC", bountyPerSeatAtomic: "1000000", maximumChargeAtomic: "1000000" },
+        expertiseRequirements: [],
+      },
+    },
     contentCommitments: { source: HASH, suggestion: HASH },
     publication: {
       visibility: "public",
@@ -75,14 +96,38 @@ test("hybrid callbacks receive only the canonical public-safe split and candidat
 
   const callbackInputs: unknown[] = [];
   const dependencies: HybridHumanReviewDependencies = {
-    requireEligibility: async principalId => preflight(principalId),
+    requireEligibility: async ({ principalId }) => preflight(principalId),
     prepareInvited: async value => {
       callbackInputs.push(value);
-      return { subpanelReference: "hybrid:invited", bindingHash: HASH, status: "ready", replayed: false };
+      return {
+        subpanelReference: "hybrid:invited",
+        bindingHash: HASH,
+        round: {
+          deploymentKey: "base-sepolia",
+          chainId: 84532,
+          panelAddress: "0x4444444444444444444444444444444444444444",
+          roundId: "1",
+          admissionPolicyHash: HASH,
+        },
+        status: "ready",
+        replayed: false,
+      };
     },
     prepareNetwork: async value => {
       callbackInputs.push(value);
-      return { subpanelReference: "hybrid:network", bindingHash: HASH, status: "ready", replayed: false };
+      return {
+        subpanelReference: "hybrid:network",
+        bindingHash: HASH,
+        round: {
+          deploymentKey: "base-sepolia",
+          chainId: 84532,
+          panelAddress: "0x4444444444444444444444444444444444444444",
+          roundId: "2",
+          admissionPolicyHash: HASH,
+        },
+        status: "ready",
+        replayed: false,
+      };
     },
   };
 
@@ -101,6 +146,8 @@ test("hybrid callbacks receive only the canonical public-safe split and candidat
       "publication",
       "requestProfileHash",
       "schemaVersion",
+      "semanticProfile",
+      "workspaceId",
     ]);
     assert.deepEqual(Object.keys(callback.candidates[0]).sort(), [
       "assignmentHash",
@@ -114,7 +161,7 @@ test("hybrid callbacks receive only the canonical public-safe split and candidat
 test("hybrid publication still fails closed for a private declaration before any callback", async () => {
   let sideEffects = 0;
   const dependencies: HybridHumanReviewDependencies = {
-    requireEligibility: async principalId => {
+    requireEligibility: async ({ principalId }) => {
       sideEffects += 1;
       return preflight(principalId);
     },
