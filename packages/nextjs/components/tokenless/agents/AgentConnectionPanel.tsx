@@ -10,7 +10,11 @@ import {
 import { AgentConnectionTroubleshooting } from "./AgentConnectionTroubleshooting";
 import type { AgentConnectionHistoryEntry } from "./agentAuditHistory";
 import { buildAgentConnectionMessage, buildAgentConnectionMessageForHost } from "./agentConnectionMessage";
-import { isUsableAgentConnection, selectReconnectableOAuthConnections } from "./agentWorkspaceState";
+import {
+  canStartAgentConnection,
+  isUsableAgentConnection,
+  selectReconnectableOAuthConnections,
+} from "./agentWorkspaceState";
 import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
 import { Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
@@ -1075,8 +1079,11 @@ export function AgentConnectionPanel({
     ),
   );
   const reconnectableIntegrations = selectReconnectableOAuthConnections(integrations, connectionClock);
-  const showConnectionStart =
-    !loading && activeConnectionIntents.length === 0 && activePairings.length === 0 && activeIntegrations.length === 0;
+  const showConnectionStart = canStartAgentConnection({
+    loading,
+    activeConnectionIntentCount: activeConnectionIntents.length,
+    activePairingCount: activePairings.length,
+  });
   const connectionHistory = useMemo<AgentConnectionHistoryEntry[]>(
     () => [
       ...connectionIntents
@@ -1127,12 +1134,18 @@ export function AgentConnectionPanel({
         <Card as="section" className="rounded-2xl p-6">
           <div>
             <h2 className="text-2xl font-semibold">
-              {reconnectableIntegrations.length > 0 ? "Reconnect your agent" : "Connect your agent"}
+              {reconnectableIntegrations.length > 0
+                ? "Reconnect your agent"
+                : activeIntegrations.length > 0
+                  ? "Connect another agent"
+                  : "Connect your agent"}
             </h2>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-base-content/60">
               {reconnectableIntegrations.length > 0
                 ? "Reconnect a saved agent without changing its review settings."
-                : "Copy one message into the agent chat you want to connect."}
+                : activeIntegrations.length > 0
+                  ? "Copy one message into the additional agent chat you want to connect."
+                  : "Copy one message into the agent chat you want to connect."}
             </p>
           </div>
           <div className="mt-5 flex flex-wrap items-center gap-3">

@@ -1,5 +1,6 @@
 import {
   agentTabHref,
+  canStartAgentConnection,
   connectedAgentTabs,
   isUsableAgentConnection,
   nextAgentTabIndex,
@@ -40,6 +41,25 @@ test("only active, connected, unexpired integrations complete onboarding", () =>
       { status: "active", connectionStatus: "connected", expiresAt: "2026-07-15T11:59:59.000Z" },
       now,
     ),
+    false,
+  );
+});
+
+test("connected workspaces can start another connection when no attempt is pending", () => {
+  assert.equal(
+    canStartAgentConnection({ loading: false, activeConnectionIntentCount: 0, activePairingCount: 0 }),
+    true,
+  );
+  assert.equal(
+    canStartAgentConnection({ loading: false, activeConnectionIntentCount: 1, activePairingCount: 0 }),
+    false,
+  );
+  assert.equal(
+    canStartAgentConnection({ loading: false, activeConnectionIntentCount: 0, activePairingCount: 1 }),
+    false,
+  );
+  assert.equal(
+    canStartAgentConnection({ loading: true, activeConnectionIntentCount: 0, activePairingCount: 0 }),
     false,
   );
 });

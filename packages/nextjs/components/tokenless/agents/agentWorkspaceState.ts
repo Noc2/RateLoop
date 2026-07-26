@@ -41,6 +41,14 @@ export function selectReconnectableOAuthConnections<T extends OAuthConnectionOpt
   });
 }
 
+export function canStartAgentConnection(input: {
+  loading: boolean;
+  activeConnectionIntentCount: number;
+  activePairingCount: number;
+}) {
+  return !input.loading && input.activeConnectionIntentCount === 0 && input.activePairingCount === 0;
+}
+
 export function connectedAgentTabs({
   canManage = true,
 }: {

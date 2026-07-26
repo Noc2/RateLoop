@@ -15,6 +15,8 @@ test("default connection UI creates and copies one safe connection intent", () =
   assert.match(source, /JSON\.stringify\(\{ event: "connection_message_copied" \}\)/);
   assert.doesNotMatch(source, /JSON\.stringify\(\{[^}]*connectionUrl/);
   assert.match(source, /Connect your agent/);
+  assert.match(source, /Connect another agent/);
+  assert.match(source, /canStartAgentConnection/);
   assert.match(source, /Copy one message into the agent chat you want to connect/);
   assert.match(source, /cannot spend, publish, read private workspace content, or change/);
   assert.doesNotMatch(source, /No connection is currently in progress/);
