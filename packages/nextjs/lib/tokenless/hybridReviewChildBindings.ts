@@ -6,6 +6,18 @@ import {
 } from "~~/lib/tokenless/humanReviewRequestPreparation";
 import type { ReviewerExpertiseRequirement } from "~~/lib/tokenless/reviewerExpertiseOptions";
 
+type Hash = `sha256:${string}`;
+
+export type HybridChildParentBinding = {
+  hybridOperationId: string;
+  cohortBindingHash: Hash;
+  economicsHash: Hash;
+  expertiseHash: Hash;
+  requestedCount: number;
+  admissionPolicyHash: Hash;
+  expertiseRequirements: ReviewerExpertiseRequirement[];
+};
+
 export function deriveHybridCohortEconomics(bountyPerSeatAtomic: string, panelSize: number) {
   const bountyPerSeat = BigInt(bountyPerSeatAtomic);
   const baseBounty = bountyPerSeat * BigInt(panelSize);

@@ -12,6 +12,10 @@ import {
 import { hashHumanReviewConfiguration } from "~~/lib/tokenless/humanReviewConfiguration";
 import { transitionHumanReviewOpportunityLifecycleInTransaction } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
 import {
+  hashHybridCohortExpertise,
+  type HybridChildParentBinding,
+} from "~~/lib/tokenless/hybridReviewChildBindings";
+import {
   BINARY_REVIEW_QUESTION_SCHEMA_VERSION,
   type FrozenBinaryReviewQuestion,
   hashFrozenBinaryReviewQuestion,
@@ -87,16 +91,6 @@ export type PublicPaidHumanReviewRequest = {
   appOrigin: string;
   effectiveQuestion?: FrozenBinaryReviewQuestion;
   effectiveQuestionHash?: `sha256:${string}`;
-};
-
-export type HybridChildParentBinding = {
-  hybridOperationId: string;
-  cohortBindingHash: `sha256:${string}`;
-  economicsHash: `sha256:${string}`;
-  expertiseHash: `sha256:${string}`;
-  requestedCount: number;
-  admissionPolicyHash: `sha256:${string}`;
-  expertiseRequirements?: ReviewerExpertiseRequirement[];
 };
 
 export type PublicPaidNetworkChildPreparation = {
@@ -867,14 +861,6 @@ function assertHybridParentBinding(input: HybridChildParentBinding) {
   }
 }
 
-function hybridExpertiseHash(profile: BoundHumanReviewRequestProfile) {
-  return hashPreparedHumanReviewValue({
-    schemaVersion: "rateloop.hybrid-child-expertise.v1",
-    cohort: "network",
-    requirements: profile.expertiseRequirements ?? [],
-  });
-}
-
 function hybridNetworkAdapterKey(
   opportunity: FrozenOpportunity,
   preparation: PreparedHumanReviewRequest,
@@ -890,7 +876,7 @@ function hybridNetworkAdapterKey(
     expertiseHash: parent.expertiseHash,
     admissionPolicyHash: parent.admissionPolicyHash,
     requestedCount: parent.requestedCount,
-    expertiseRequirements: parent.expertiseRequirements ?? [],
+    expertiseRequirements: parent.expertiseRequirements,
     preparedRequestHash: preparation.preparedRequestHash,
     derivedEconomicsHash: preparation.derivedEconomicsHash,
     sourceEvidenceHash: opportunity.sourceEvidenceHash,
@@ -1400,11 +1386,14 @@ export async function requestPublicPaidNetworkChild(
     privateSensitivity: null,
     panelSize: input.hybridParent.requestedCount,
     expertiseRequirements: normalizeReviewerExpertiseRequirementsSelection(
-      input.hybridParent.expertiseRequirements ?? parentOpportunity.requestProfile.expertiseRequirements ?? [],
+      input.hybridParent.expertiseRequirements,
       input.hybridParent.requestedCount,
     ),
   };
-  if (hybridExpertiseHash(childProfile) !== input.hybridParent.expertiseHash) {
+  if (
+    hashHybridCohortExpertise("network", childProfile.expertiseRequirements ?? []) !==
+    input.hybridParent.expertiseHash
+  ) {
     throw new TokenlessServiceError(
       "Hybrid network expertise does not match the frozen child tuple.",
       409,

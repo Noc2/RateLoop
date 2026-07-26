@@ -8,12 +8,17 @@ import {
   deriveHybridCohortEconomics,
   hashHybridCohortEconomics,
   hashHybridCohortExpertise,
+  type HybridChildParentBinding,
 } from "~~/lib/tokenless/hybridReviewChildBindings";
 import { requirePaidLaneComplianceApproval } from "~~/lib/tokenless/paidLaneCompliance";
 import {
   type PaidReviewEligibilityPreflight,
   requirePaidReviewEligibility,
 } from "~~/lib/tokenless/paidReviewEligibilityPreflight";
+import {
+  releasePublicPaidNetworkChild,
+  requestPublicPaidNetworkChild,
+} from "~~/lib/tokenless/publicPaidHumanReviewAdapter";
 import {
   type ReviewerExpertiseRequirement,
   normalizeReviewerExpertiseRequirementsSelection,
@@ -122,15 +127,6 @@ export type HybridHumanReviewRequest = {
   effectiveQuestion: FrozenBinaryReviewQuestion;
   effectiveQuestionHash: Hash;
   now?: Date;
-};
-
-export type HybridChildParentBinding = {
-  hybridOperationId: string;
-  cohortBindingHash: Hash;
-  economicsHash: Hash;
-  expertiseHash: Hash;
-  requestedCount: number;
-  admissionPolicyHash: Hash;
 };
 
 export type HybridHumanReviewOrchestrationDependencies = {
@@ -462,7 +458,11 @@ function childSeed(
   };
 }
 
-function parentBinding(child: HybridReviewChildSeed, hybridOperationId: string): HybridChildParentBinding {
+function parentBinding(
+  child: HybridReviewChildSeed,
+  hybridOperationId: string,
+  profile: HybridCohortSemanticProfile,
+): HybridChildParentBinding {
   return {
     hybridOperationId,
     cohortBindingHash: child.childBindingHash,
@@ -470,6 +470,7 @@ function parentBinding(child: HybridReviewChildSeed, hybridOperationId: string):
     expertiseHash: child.expertiseHash,
     requestedCount: child.assignmentCount,
     admissionPolicyHash: child.admissionPolicyHash,
+    expertiseRequirements: profile.expertiseRequirements,
   };
 }
 
@@ -587,7 +588,11 @@ export function createHybridHumanReviewAdapter(dependencies: HybridHumanReviewDe
           split: frozenSplit,
           candidates: invited,
           preflights: invited.map(value => preflightByPrincipal.get(value.principalId)!),
-          hybridParent: parentBinding(invitedSeed, ensured.operation.hybridOperationId),
+          hybridParent: parentBinding(
+            invitedSeed,
+            ensured.operation.hybridOperationId,
+            frozenSplit.semanticProfile.invited,
+          ),
           ...(request ? { request } : {}),
         }),
         {
@@ -619,7 +624,11 @@ export function createHybridHumanReviewAdapter(dependencies: HybridHumanReviewDe
           split: frozenSplit,
           candidates: network,
           preflights: network.map(value => preflightByPrincipal.get(value.principalId)!),
-          hybridParent: parentBinding(networkSeed, ensured.operation.hybridOperationId),
+          hybridParent: parentBinding(
+            networkSeed,
+            ensured.operation.hybridOperationId,
+            frozenSplit.semanticProfile.network,
+          ),
           ...(request ? { request } : {}),
         }),
         {
@@ -715,16 +724,31 @@ const DEFAULT_DEPENDENCIES: HybridHumanReviewDependencies = {
       true,
     );
   },
-  async prepareNetwork() {
-    throw new TokenlessServiceError(
-      "Hybrid network-round settlement is not deployed.",
-      503,
-      "hybrid_two_round_settlement_unavailable",
-      true,
-    );
+  async prepareNetwork({ split, hybridParent, request }) {
+    if (!request) {
+      throw new TokenlessServiceError(
+        "Hybrid network-round request context is unavailable.",
+        503,
+        "hybrid_two_round_settlement_unavailable",
+        true,
+      );
+    }
+    return requestPublicPaidNetworkChild({
+      principal: request.principal,
+      opportunityId: split.opportunityId,
+      sourcePayload: request.sourcePayload,
+      suggestionPayload: request.suggestionPayload,
+      publication: split.publication,
+      appOrigin: request.appOrigin,
+      effectiveQuestion: request.effectiveQuestion,
+      effectiveQuestionHash: request.effectiveQuestionHash,
+      hybridParent,
+    });
   },
   async releaseInvited() {},
-  async releaseNetwork() {},
+  async releaseNetwork(preparation) {
+    await releasePublicPaidNetworkChild(preparation);
+  },
   orchestration: {
     ensure: ensureHybridReviewOperation,
     recordReady: recordHybridReviewChildReady,
