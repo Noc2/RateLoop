@@ -21,12 +21,15 @@ export type KeeperWorkResponse = {
   chainId: number;
   panelAddress: string;
   now: string;
+  direction: "desc";
+  nextCursor: string | null;
   work: KeeperWorkItem[];
 };
 
 export type KeeperWorkFeed = (input: {
   now: bigint;
   limit: number;
+  cursor?: bigint;
 }) => Promise<unknown>;
 
 export class PonderWorkFeedIdentityMismatchError extends Error {
@@ -48,6 +51,9 @@ export function createPonderWorkFeed(input: {
     url.searchParams.set("now", request.now.toString());
     url.searchParams.set("direction", "desc");
     url.searchParams.set("limit", String(request.limit));
+    if (request.cursor !== undefined) {
+      url.searchParams.set("cursor", request.cursor.toString());
+    }
     const response = await (input.fetchImpl ?? fetch)(url, {
       headers: {
         accept: "application/json",
@@ -62,13 +68,14 @@ export function createPonderWorkFeed(input: {
   };
 }
 
-export function prioritizedKeeperWorkItems(
+export function prioritizedKeeperWorkPage(
   value: unknown,
   expected: {
     deploymentKey: string;
     chainId: number;
     panelAddress: Address;
     now: bigint;
+    cursor?: bigint;
   },
 ) {
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -84,7 +91,23 @@ export function prioritizedKeeperWorkItems(
   }
   if (
     response.now !== expected.now.toString() ||
+    response.direction !== "desc" ||
     !Array.isArray(response.work)
+  ) {
+    throw new Error("Ponder keeper work is invalid.");
+  }
+  const nextCursor =
+    response.nextCursor === null
+      ? null
+      : typeof response.nextCursor === "string" &&
+          /^[1-9]\d*$/u.test(response.nextCursor)
+        ? BigInt(response.nextCursor)
+        : undefined;
+  if (
+    nextCursor === undefined ||
+    (expected.cursor !== undefined &&
+      nextCursor !== null &&
+      nextCursor >= expected.cursor)
   ) {
     throw new Error("Ponder keeper work is invalid.");
   }
@@ -111,7 +134,23 @@ export function prioritizedKeeperWorkItems(
       Number(right.action === "finalize_scoring_seed") -
       Number(left.action === "finalize_scoring_seed"),
   );
-  return items;
+  return {
+    items,
+    nextCursor,
+  };
+}
+
+export function prioritizedKeeperWorkItems(
+  value: unknown,
+  expected: {
+    deploymentKey: string;
+    chainId: number;
+    panelAddress: Address;
+    now: bigint;
+    cursor?: bigint;
+  },
+) {
+  return prioritizedKeeperWorkPage(value, expected).items;
 }
 
 export function prioritizedKeeperWorkRoundIds(

@@ -526,6 +526,52 @@ describe("tokenless keeper orchestration", () => {
     expect(readRoundIds).toEqual([3n, 10_000n]);
   });
 
+  it("walks the descending work feed without dropping older actionable rounds", async () => {
+    const readRoundIds: bigint[] = [];
+    const feedRequests: Array<{
+      now: bigint;
+      limit: number;
+      cursor?: bigint;
+    }> = [];
+    const instance = clients({
+      currentRound: round({
+        state: TokenlessRoundState.Finalized,
+        staleReturned: true,
+      }),
+      now: 300n,
+      nextRoundId: 101n,
+      readRoundIds,
+    });
+    instance.keeperWorkFeed = async (request) => {
+      feedRequests.push(request);
+      return request.cursor === undefined
+        ? keeperWorkResponse(
+            300n,
+            [{ action: "return_stale_shares", roundId: "9", cursor: null }],
+            { nextCursor: "9" },
+          )
+        : keeperWorkResponse(
+            300n,
+            [{ action: "return_stale_shares", roundId: "8", cursor: null }],
+            { nextCursor: null },
+          );
+    };
+    const boundedConfig = {
+      ...config,
+      maxRoundsPerTick: 2,
+      ponderWorkFeed: { baseUrl: "https://ponder.example", token: "secret" },
+    };
+
+    await runTokenlessKeeper(instance, boundedConfig, logger, decrypt);
+    await runTokenlessKeeper(instance, boundedConfig, logger, decrypt);
+
+    expect(feedRequests).toEqual([
+      { now: 300n, limit: 1, cursor: undefined },
+      { now: 300n, limit: 1, cursor: 9n },
+    ]);
+    expect(readRoundIds).toEqual([9n, 100n, 8n, 99n]);
+  });
+
   it("bounds commit log reads at the indexed round creation block", async () => {
     const commitLogQueries: Array<{
       fromBlock?: bigint;

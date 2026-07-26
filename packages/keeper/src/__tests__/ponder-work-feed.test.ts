@@ -3,6 +3,7 @@ import {
   createPonderWorkFeed,
   PonderWorkFeedIdentityMismatchError,
   prioritizedKeeperWorkItems,
+  prioritizedKeeperWorkPage,
   prioritizedKeeperWorkRoundIds,
 } from "../ponder-work-feed.js";
 
@@ -21,6 +22,8 @@ describe("Ponder keeper work feed", () => {
           chainId: 84_532,
           panelAddress: PANEL,
           now: "300",
+          direction: "desc",
+          nextCursor: "7",
           work: [
             {
               action: "finalize_scoring_seed",
@@ -67,6 +70,32 @@ describe("Ponder keeper work feed", () => {
         createdBlock: 123n,
       },
     ]);
+    expect(
+      prioritizedKeeperWorkPage(response, {
+        deploymentKey: "deployment-key",
+        chainId: 84_532,
+        panelAddress: PANEL,
+        now: 300n,
+      }).nextCursor,
+    ).toBe(7n);
+  });
+
+  it("requests the next descending page with the round cursor", async () => {
+    let requestedUrl = "";
+    const feed = createPonderWorkFeed({
+      baseUrl: "https://ponder.example",
+      token: "keeper-secret",
+      fetchImpl: (async (input: RequestInfo | URL) => {
+        requestedUrl = String(input);
+        return new Response("{}", { status: 200 });
+      }) as typeof fetch,
+    });
+
+    await feed({ now: 300n, limit: 25, cursor: 501n });
+
+    expect(requestedUrl).toBe(
+      "https://ponder.example/keeper/work?now=300&direction=desc&limit=25&cursor=501",
+    );
   });
 
   it("uses a distinct fail-closed error for a mismatched deployment identity", () => {
@@ -77,6 +106,8 @@ describe("Ponder keeper work feed", () => {
           chainId: 84_532,
           panelAddress: PANEL,
           now: "300",
+          direction: "desc",
+          nextCursor: null,
           work: [],
         },
         {

@@ -23,7 +23,7 @@ import type { Logger } from "./logger.js";
 import {
   createPonderWorkFeed,
   PonderWorkFeedIdentityMismatchError,
-  prioritizedKeeperWorkItems,
+  prioritizedKeeperWorkPage,
   type KeeperWorkFeed,
 } from "./ponder-work-feed.js";
 import { resetRoundScanStateForTests, scanRoundIds } from "./round-scan.js";
@@ -95,6 +95,7 @@ const revealCache = new BoundedLruMap<string, RevealCacheEntry>(
   MAX_REVEAL_CACHE_ENTRIES,
 );
 let nextScanFeedbackBonusPoolId = 1n;
+let nextPonderWorkFeedCursor: bigint | undefined;
 let singleSlotFeedTurn = true;
 
 class InvalidRevealMaterialError extends Error {
@@ -108,6 +109,7 @@ export function resetTokenlessKeeperStateForTests() {
   revealCache.clear();
   resetRoundScanStateForTests();
   nextScanFeedbackBonusPoolId = 1n;
+  nextPonderWorkFeedCursor = undefined;
   singleSlotFeedTurn = true;
 }
 
@@ -987,6 +989,7 @@ export async function runTokenlessKeeper(
   const nextRoundId = BigInt(nextRoundIdRaw as bigint);
   const result = emptyResult();
   let feedRoundIds: bigint[] = [];
+  let feedNextCursor: bigint | null | undefined;
   const feedCreatedBlocks = new Map<bigint, bigint>();
   if (config.ponderWorkFeed) {
     try {
@@ -996,13 +999,25 @@ export async function runTokenlessKeeper(
           baseUrl: config.ponderWorkFeed.baseUrl,
           token: config.ponderWorkFeed.token,
         });
-      const response = await feed({ now: block.timestamp, limit: 500 });
-      const feedWork = prioritizedKeeperWorkItems(response, {
+      const response = await feed({
+        now: block.timestamp,
+        limit:
+          config.maxRoundsPerTick === 1
+            ? 1
+            : Math.max(1, Math.floor(config.maxRoundsPerTick / 2)),
+        cursor: nextPonderWorkFeedCursor,
+      });
+      const page = prioritizedKeeperWorkPage(response, {
         deploymentKey: config.deployment.key,
         chainId: config.chainId,
         panelAddress: config.deployment.panel,
         now: block.timestamp,
-      }).filter((item) => item.roundId < nextRoundId);
+        cursor: nextPonderWorkFeedCursor,
+      });
+      feedNextCursor = page.nextCursor;
+      const feedWork = page.items.filter(
+        (item) => item.roundId < nextRoundId,
+      );
       feedRoundIds = feedWork.map((item) => item.roundId);
       for (const item of feedWork) {
         feedCreatedBlocks.set(item.roundId, item.createdBlock);
@@ -1043,6 +1058,12 @@ export async function runTokenlessKeeper(
         error: error instanceof Error ? error.message : String(error),
       });
     }
+  }
+  if (
+    feedNextCursor !== undefined &&
+    feedRoundIds.every((roundId) => roundIds.includes(roundId))
+  ) {
+    nextPonderWorkFeedCursor = feedNextCursor ?? undefined;
   }
   await reconcileFeedbackBonusRemainders({
     clients,
