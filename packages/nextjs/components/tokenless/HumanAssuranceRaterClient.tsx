@@ -14,6 +14,7 @@ import { PageHeading } from "~~/components/tokenless/ui/PageHeading";
 import { readBrowserSession, subscribeToBrowserAuthSessionChanges } from "~~/lib/auth/client";
 import { HttpJsonError, readJson } from "~~/lib/tokenless/http";
 import { clearReviewDraft, loadReviewDraft, saveReviewDraft } from "~~/lib/tokenless/reviewDrafts";
+import { loadReviewReceipt, saveReviewReceipt } from "~~/lib/tokenless/reviewReceipts";
 
 type QualificationProvenance = {
   key: string;
@@ -148,6 +149,18 @@ export type AssuranceServerAcceptance = {
   compensation: "unpaid";
   settlementStatus: "not_applicable";
 };
+
+function isAssuranceServerAcceptance(value: unknown): value is AssuranceServerAcceptance {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const acceptance = value as Record<string, unknown>;
+  return (
+    acceptance.accepted === true &&
+    typeof acceptance.replay === "boolean" &&
+    Number.isSafeInteger(acceptance.responseCount) &&
+    acceptance.compensation === "unpaid" &&
+    acceptance.settlementStatus === "not_applicable"
+  );
+}
 
 function firstValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
@@ -309,6 +322,14 @@ export function HumanAssuranceRaterClient({
   const openAssignmentRef = useRef<(event?: FormEvent<HTMLFormElement>, afterRecovery?: boolean) => Promise<void>>(
     async () => {},
   );
+
+  useEffect(() => {
+    if (!task || !activePrincipalId || serverAcceptance) return;
+    const receipt = loadReviewReceipt("private", task.assignmentId, isAssuranceServerAcceptance, {
+      principalId: activePrincipalId,
+    });
+    if (receipt) setServerAcceptance(receipt);
+  }, [activePrincipalId, serverAcceptance, task]);
 
   useEffect(() => {
     taskRef.current = task;
@@ -667,7 +688,9 @@ export function HumanAssuranceRaterClient({
       ) {
         throw new Error("The response acceptance was incomplete.");
       }
-      setServerAcceptance(body as AssuranceServerAcceptance);
+      const acceptance = body as AssuranceServerAcceptance;
+      saveReviewReceipt("private", task.assignmentId, acceptance, { principalId: activePrincipalId! });
+      setServerAcceptance(acceptance);
       clearReviewDraft("private", task.assignmentId, privateDraftStorage);
     } catch (cause) {
       if (privateStateEpoch !== privateStateEpochRef.current) return;

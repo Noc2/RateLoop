@@ -39,6 +39,7 @@ import {
 import { buildPublicVoucherRequest } from "~~/lib/tokenless/rater/publicVoucherRequest";
 import type { TokenlessQueuedCommit } from "~~/lib/tokenless/rater/queue";
 import { clearReviewDraft, loadReviewDraft, saveReviewDraft } from "~~/lib/tokenless/reviewDrafts";
+import { loadReviewReceipt, saveReviewReceipt } from "~~/lib/tokenless/reviewReceipts";
 import { formatUsdcAtomic } from "~~/lib/tokenless/usdc";
 
 type PublicAnswerTaskBase = {
@@ -177,6 +178,16 @@ function isPublicPredictionPercent(value: number | null | undefined): value is n
   return isCrowdForecastPercent(value) && isTokenlessPredictionBps(value * 100);
 }
 
+function isPublicSubmissionReceipt(value: unknown): value is PublicSubmissionReceipt {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const receipt = value as Record<string, unknown>;
+  return (
+    typeof receipt.commitId === "string" &&
+    (receipt.confirmedAt === null || typeof receipt.confirmedAt === "string") &&
+    (receipt.transactionHash === null || typeof receipt.transactionHash === "string")
+  );
+}
+
 export function PublicQuestionCard({
   task,
   paidAccess,
@@ -238,6 +249,15 @@ export function PublicQuestionCard({
         }
       : null;
   const networkAssignmentReady = networkAssignment === null || networkAssignmentStatus === "accepted";
+
+  useEffect(() => {
+    const receipt = loadReviewReceipt("public", task.roundId, isPublicSubmissionReceipt, { principalId });
+    setSubmissionReceipt(receipt);
+    if (receipt) {
+      setStatus("Recorded");
+      setError(null);
+    }
+  }, [principalId, task.roundId]);
 
   useEffect(() => {
     setNetworkAssignmentStatus(task.reviewerSource === "rateloop_network" ? task.assignmentStatus : "accepted");
@@ -426,11 +446,13 @@ export function PublicQuestionCard({
         setSavedCommit(null);
         clearReviewDraft("public", task.roundId, publicDraftStorage);
         setStatus("Recorded");
-        setSubmissionReceipt({
+        const receipt = {
           commitId,
           confirmedAt: typeof committed.confirmedAt === "string" ? committed.confirmedAt : null,
           transactionHash: typeof committed.transactionHash === "string" ? committed.transactionHash : null,
-        });
+        };
+        saveReviewReceipt("public", task.roundId, receipt, { principalId });
+        setSubmissionReceipt(receipt);
         onSubmitted();
       } else if (committed.state === "failed") {
         throw new Error("The sponsored transaction failed. The prepared submission remains saved for retry.");
@@ -683,11 +705,13 @@ export function PublicQuestionCard({
         setSavedCommit(null);
         clearReviewDraft("public", task.roundId, publicDraftStorage);
         setStatus("Recorded");
-        setSubmissionReceipt({
+        const receipt = {
           commitId: committed.commitId,
           confirmedAt: typeof current.confirmedAt === "string" ? current.confirmedAt : null,
           transactionHash: typeof current.transactionHash === "string" ? current.transactionHash : null,
-        });
+        };
+        saveReviewReceipt("public", task.roundId, receipt, { principalId });
+        setSubmissionReceipt(receipt);
         onSubmitted();
       } else if (current.state === "failed") {
         throw new Error(
