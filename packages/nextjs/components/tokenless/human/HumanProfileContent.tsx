@@ -5,6 +5,7 @@ import { PaidEligibilityClient } from "~~/components/tokenless/PaidEligibilityCl
 import { InvitationRouterPanel } from "~~/components/tokenless/account/InvitationRouterPanel";
 import { ProfileClient } from "~~/components/tokenless/account/ProfileClient";
 import { FeedbackBonusClaimsClient } from "~~/components/tokenless/human/FeedbackBonusClaimsClient";
+import { RaterSettlementRecoveryClient } from "~~/components/tokenless/human/RaterSettlementRecoveryClient";
 import { ReviewerAccessPanel } from "~~/components/tokenless/human/ReviewerAccessPanel";
 import { WorldIdProfilePanel } from "~~/components/tokenless/human/WorldIdProfilePanel";
 
@@ -22,6 +23,9 @@ export function HumanProfileContent({ worldIdEnabled }: { worldIdEnabled: boolea
       {worldIdEnabled ? <WorldIdProfilePanel /> : null}
       <section id="paid-work" className="scroll-mt-24">
         <PaidEligibilityClient />
+      </section>
+      <section id="paid-settlement" className="scroll-mt-24">
+        <RaterSettlementRecoveryClient />
       </section>
       <section id="feedback-bonus-claims" className="scroll-mt-24">
         <FeedbackBonusClaimsClient />
