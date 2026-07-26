@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import "server-only";
 import { getAddress } from "viem";
 import { isRateLoopPrincipalId } from "~~/lib/auth/accountSubject";
+import type { AgentMcpPrincipal } from "~~/lib/tokenless/agentIntegrations";
+import type { FrozenBinaryReviewQuestion } from "~~/lib/tokenless/humanReviewQuestions";
 import { requirePaidLaneComplianceApproval } from "~~/lib/tokenless/paidLaneCompliance";
 import {
   type PaidReviewEligibilityPreflight,
@@ -23,6 +25,7 @@ import {
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Hash = `sha256:${string}`;
+type IntegrationPrincipal = Extract<AgentMcpPrincipal, { kind: "integration" }>;
 
 export type HybridReviewCandidate = {
   principalId: string;
@@ -105,6 +108,17 @@ export type HybridHumanReviewResult = {
   splitBindingHash: Hash;
 };
 
+export type HybridHumanReviewRequest = {
+  split: FrozenHybridReviewSplit;
+  principal: IntegrationPrincipal;
+  appOrigin: string;
+  sourcePayload: string;
+  suggestionPayload: string;
+  effectiveQuestion: FrozenBinaryReviewQuestion;
+  effectiveQuestionHash: Hash;
+  now?: Date;
+};
+
 export type HybridChildParentBinding = {
   hybridOperationId: string;
   cohortBindingHash: Hash;
@@ -139,12 +153,14 @@ export type HybridHumanReviewDependencies = {
     candidates: readonly HybridReviewCandidate[];
     preflights: readonly PaidReviewEligibilityPreflight[];
     hybridParent: HybridChildParentBinding;
+    request?: Omit<HybridHumanReviewRequest, "split">;
   }): Promise<HybridSubpanelPreparation>;
   prepareNetwork(input: {
     split: FrozenHybridReviewSplit;
     candidates: readonly HybridReviewCandidate[];
     preflights: readonly PaidReviewEligibilityPreflight[];
     hybridParent: HybridChildParentBinding;
+    request?: Omit<HybridHumanReviewRequest, "split">;
   }): Promise<HybridSubpanelPreparation>;
   releaseInvited(preparation: HybridSubpanelPreparation): Promise<void>;
   releaseNetwork(preparation: HybridSubpanelPreparation): Promise<void>;
@@ -470,8 +486,16 @@ function preparationBinding(preparation: HybridSubpanelPreparation) {
   };
 }
 
+function adapterInput(input: FrozenHybridReviewSplit | HybridHumanReviewRequest) {
+  if ("split" in input) return { split: input.split, request: input };
+  return { split: input, request: undefined };
+}
+
 export function createHybridHumanReviewAdapter(dependencies: HybridHumanReviewDependencies) {
-  return async function requestHybridHumanReview(split: FrozenHybridReviewSplit): Promise<HybridHumanReviewResult> {
+  return async function requestHybridHumanReview(
+    input: FrozenHybridReviewSplit | HybridHumanReviewRequest,
+  ): Promise<HybridHumanReviewResult> {
+    const { split, request } = adapterInput(input);
     requirePaidLaneComplianceApproval("hybrid_public_safe");
     validate(split);
     const frozenSplit = canonicalSplit(split);
@@ -519,7 +543,7 @@ export function createHybridHumanReviewAdapter(dependencies: HybridHumanReviewDe
     const preflightByPrincipal = new Map(preflightEntries);
     const invitedSeed = childSeed("invited", frozenSplit, invited);
     const networkSeed = childSeed("network", frozenSplit, network);
-    const now = dependencies.clock?.() ?? new Date();
+    const now = request?.now ?? dependencies.clock?.() ?? new Date();
     const parentSeed: HybridReviewParentSeed = {
       workspaceId: frozenSplit.workspaceId,
       opportunityId: frozenSplit.opportunityId,
@@ -558,6 +582,7 @@ export function createHybridHumanReviewAdapter(dependencies: HybridHumanReviewDe
           candidates: invited,
           preflights: invited.map(value => preflightByPrincipal.get(value.principalId)!),
           hybridParent: parentBinding(invitedSeed, ensured.operation.hybridOperationId),
+          ...(request ? { request } : {}),
         }),
         {
           field: "Invited subpanel",
@@ -589,6 +614,7 @@ export function createHybridHumanReviewAdapter(dependencies: HybridHumanReviewDe
           candidates: network,
           preflights: network.map(value => preflightByPrincipal.get(value.principalId)!),
           hybridParent: parentBinding(networkSeed, ensured.operation.hybridOperationId),
+          ...(request ? { request } : {}),
         }),
         {
           field: "Network subpanel",
@@ -701,6 +727,10 @@ const DEFAULT_DEPENDENCIES: HybridHumanReviewDependencies = {
   },
 };
 
-export const requestHybridHumanReview = createHybridHumanReviewAdapter(DEFAULT_DEPENDENCIES);
+const hybridHumanReviewAdapter = createHybridHumanReviewAdapter(DEFAULT_DEPENDENCIES);
+
+export function requestHybridHumanReview(input: HybridHumanReviewRequest) {
+  return hybridHumanReviewAdapter(input);
+}
 
 export const __hybridHumanReviewAdapterTestUtils = { sha256 };

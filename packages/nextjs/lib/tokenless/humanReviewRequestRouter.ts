@@ -35,6 +35,7 @@ import {
 } from "~~/lib/tokenless/humanReviewRequestPreparation";
 import {
   type FrozenHybridReviewSplit,
+  type HybridHumanReviewRequest,
   type HybridHumanReviewResult,
   requestHybridHumanReview,
 } from "~~/lib/tokenless/hybridHumanReviewAdapter";
@@ -288,7 +289,7 @@ type RouterDependencies = {
   preparePrivateFoundation: typeof preparePrivateReviewFoundation;
   assignPrivateUnpaid: typeof requestPrivateUnpaidHumanReview;
   assignPrivatePaid: typeof requestPrivatePaidHumanReview;
-  assignHybrid?: (split: FrozenHybridReviewSplit) => Promise<HybridHumanReviewResult>;
+  assignHybrid?: (request: HybridHumanReviewRequest) => Promise<HybridHumanReviewResult>;
   /**
    * A dependency bundle may explicitly enable a lane only when its adapters
    * provide the full durable assignment-to-terminal-settlement path. Omission
@@ -1405,7 +1406,16 @@ export function createHumanReviewRequestRouter(dependencies: RouterDependencies 
         opportunityId: context.opportunityId,
         authority: "ask_automatically",
         lane: "hybrid_public_safe",
-        delivery: await dependencies.assignHybrid(split),
+        delivery: await dependencies.assignHybrid({
+          split,
+          principal: input.principal,
+          appOrigin: material.appOrigin,
+          sourcePayload: input.sourcePayload,
+          suggestionPayload: input.suggestionPayload,
+          effectiveQuestion: frozenQuestion.question,
+          effectiveQuestionHash: frozenQuestion.questionHash,
+          now,
+        }),
       };
     }
     if (context.requestProfile.lane === "public_paid_network") {
