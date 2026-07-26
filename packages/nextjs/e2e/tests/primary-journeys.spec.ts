@@ -334,3 +334,165 @@ test("owner approves a request and prepares its human feedback award", async ({ 
   await page.getByRole("button", { name: "Award this feedback" }).click();
   await expect(page.getByText("No feedback bonuses need an award.")).toBeVisible();
 });
+
+test("workspace owner inspects and exports a signed decision packet", async ({ page }) => {
+  const runId = "run_playwright_evidence_01";
+  const packetId = "packet_playwright_evidence_01";
+  const keyId = "evidence-key-playwright-01";
+  const packetDigest = `sha256:${"6".repeat(64)}`;
+  const packet = {
+    packetDigest,
+    payload: {
+      packetId,
+      runId,
+      generatedAt: "2026-07-17T12:00:00.000Z",
+      aggregation: {
+        suite: { outcome: "pass" },
+        reviewerCoverage: {
+          sourceSubpanels: [
+            {
+              source: "customer_invited",
+              targetReviewerCount: 3,
+              assignedReviewerCount: 3,
+              paidReviewerCount: 0,
+              respondingReviewerCount: 3,
+              completeJudgmentSetReviewerCount: 3,
+            },
+          ],
+        },
+      },
+      reviewContext: {
+        selectionTrigger: { kind: "release_gate" },
+        gate: { type: "blocking" },
+        reviewerQualifications: {
+          minimumAggregationSize: 2,
+          categories: [{ key: "release-engineering", reviewerCount: 3, suppressed: false }],
+          unqualified: { reviewerCount: 0, suppressed: true },
+        },
+      },
+      settlement: {
+        mode: "unpaid",
+        statement: "No reviewer compensation was due for this invited private panel.",
+        links: [],
+      },
+    },
+    signing: {
+      algorithm: "Ed25519",
+      keyId,
+      publicKey: "MCowBQYDK2VwAyEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    },
+  };
+
+  await authenticate(page, browserState.ownerSessionToken);
+  await page.route("**/evaluations", route =>
+    json(route, {
+      workspaceId: browserState.workspaceId,
+      callerRole: "owner",
+      canViewPublishingPolicies: true,
+      attributionReady: false,
+      summary: { totalRuns: 1, completedRuns: 1, evidenceBackedRuns: 1, validResponses: 3, attributedRuns: 0 },
+      agents: [],
+      modelProfiles: [],
+      deciderTrend: { clientDecisions: { total: 0, goCount: 0 }, overrides: { total: 0, acceptedCount: 0 } },
+      publishingPolicies: [],
+      runs: [
+        {
+          runId,
+          projectId: "project_playwright_evidence_01",
+          projectName: "Release controls",
+          suiteName: "Production readiness",
+          status: "completed",
+          reviewerSource: "customer_invited",
+          compensation: "unpaid",
+          caseCount: 1,
+          calibrationCaseCount: 0,
+          mechanismHealth: null,
+          validResponses: 3,
+          distinctReviewers: 3,
+          minimumAggregationSize: 2,
+          sampleStatus: "sufficient",
+          candidateSelectionShareBps: 10_000,
+          candidateSelectionIntervalBps: { lower: 4_383, upper: 10_000 },
+          choices: { baseline: 0, candidate: 3, tie: 0 },
+          clientDecision: "go",
+          evidencePacketAvailable: true,
+          evidencePacketDigest: packetDigest,
+          explanationRequired: false,
+          createdAt: "2026-07-17T11:00:00.000Z",
+          completedAt: "2026-07-17T12:00:00.000Z",
+          attribution: { status: "unattributed", agentId: null, versionId: null },
+        },
+      ],
+    }),
+  );
+  await page.route(`**/assurance/runs/${runId}/evidence`, route => json(route, packet));
+  await page.route("**/assurance/attestations?**", route =>
+    json(route, {
+      attestations: [
+        {
+          jobId: "attestation_playwright_01",
+          artifactKind: "evidence_packet",
+          artifactDigest: packetDigest,
+          state: "completed",
+          signerKeyId: "attestation-signer-playwright-01",
+          rekor: { entryUuid: "rekor-playwright-01", logIndex: "42" },
+          rfc3161TimestampPresent: true,
+          boundaryAt: "2026-07-17T12:01:00.000Z",
+          lastError: null,
+        },
+      ],
+    }),
+  );
+  await page.route("**/assurance/retention", route =>
+    json(route, {
+      version: 1,
+      evidenceRetentionMonths: 36,
+      auditRetentionMonths: 36,
+      minimumRetentionMonths: 12,
+      effectiveAt: "2026-07-17T12:00:00.000Z",
+      basis: { reasons: ["workspace_policy"] },
+    }),
+  );
+  await page.route("**/assurance/trusted-keys", route =>
+    json(route, {
+      keys: [
+        {
+          keyId,
+          status: "current",
+          publicKeyJwk: { kty: "OKP", crv: "Ed25519", x: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" },
+          publicKeySpki: "MCowBQYDK2VwAyEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+          uses: ["evidence_packet"],
+          firstPacketAt: "2026-07-17T12:00:00.000Z",
+          lastPacketAt: "2026-07-17T12:00:00.000Z",
+          packetCount: 1,
+        },
+      ],
+      untrustedPacketKeyCount: 0,
+    }),
+  );
+  await page.route("**/assurance/worm/destination", route => json(route, { active: null }));
+  await page.route("**/assurance/worm/exports", route => json(route, { jobs: [] }));
+  await page.route("**/assurance/event-streams", route => json(route, { streams: [] }));
+  await page.route("**/assurance/grc-connectors", route => json(route, { connectors: [] }));
+  await page.route("**/assurance/metrics/credentials", route => json(route, { credentials: [] }));
+
+  await page.goto(`/agents?tab=evidence&workspace=${browserState.workspaceId}`);
+  await expect(page.getByRole("heading", { name: "Decision records and exports" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Production readiness" })).toBeVisible();
+  await expect(page.getByText("release gate")).toBeVisible();
+  await expect(page.getByText("blocking")).toBeVisible();
+  await expect(page.getByText(/3 of 3 assigned; 3 responded; 3 complete; 0 paid/iu)).toBeVisible();
+  await expect(page.getByText(/release-engineering \(3\)/u)).toBeVisible();
+  await expect(page.getByText(/No reviewer compensation was due/iu)).toBeVisible();
+  await expect(page.getByText("Transparency receipt recorded")).toBeVisible();
+  await expect(page.getByText("rekor-playwright-01")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Audit log" })).toHaveAttribute(
+    "href",
+    `/api/account/workspaces/${browserState.workspaceId}/audit/export`,
+  );
+  await expectNoAxeViolations(page);
+
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export packet" }).click();
+  await expect((await download).suggestedFilename()).toBe(`rateloop-evidence-${packetId}.json`);
+});
