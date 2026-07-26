@@ -6,6 +6,7 @@ import {
   configuredHumanReviewLaneForSelection,
   configuredHumanReviewLanes,
   deployedHumanReviewReadiness,
+  humanReviewLaneImplementation,
   resolveHumanReviewCapability,
 } from "./reviewCapabilities";
 import assert from "node:assert/strict";
@@ -97,6 +98,41 @@ test("deployed implementation readiness is shared without overstating hybrid del
     autonomousPublishing: false,
     ...HUMAN_REVIEW_IMPLEMENTATION_READINESS,
   });
+});
+
+test("paid lanes default off and become reachable only through an evidence-bound public activation", () => {
+  assert.deepEqual(humanReviewLaneImplementation({}), {
+    privateInvitedUnpaid: true,
+    privateInvitedPaid: false,
+    publicPaidNetwork: false,
+    hybridPublicSafe: false,
+  });
+  const activation = {
+    NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE: `sha256:${"a".repeat(64)}`,
+    NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "true",
+    NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED: "true",
+    NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED: "true",
+  };
+  assert.deepEqual(humanReviewLaneImplementation(activation), {
+    privateInvitedUnpaid: true,
+    privateInvitedPaid: true,
+    publicPaidNetwork: true,
+    hybridPublicSafe: true,
+  });
+  assert.equal(
+    humanReviewLaneImplementation({
+      ...activation,
+      NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "false",
+    }).hybridPublicSafe,
+    false,
+  );
+  assert.equal(
+    humanReviewLaneImplementation({
+      ...activation,
+      NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE: "operator-said-ready",
+    }).publicPaidNetwork,
+    false,
+  );
 });
 
 test("configured lane descriptions use the same implementation truth", () => {

@@ -31,22 +31,34 @@ export type HumanReviewLaneReadiness = Pick<
   "privateInvitedUnpaid" | "privateInvitedPaid" | "publicPaidNetwork" | "hybridPublicSafe"
 >;
 
-export const HUMAN_REVIEW_LANE_IMPLEMENTATION = {
-  privateInvitedUnpaid: true,
-  // The paid private path is implemented, including terminal settlement
-  // evidence. Release still requires funded deployment validation and the
-  // configured production DPIA/transfer approval, so it remains unavailable.
-  privateInvitedPaid: false,
-  // The public-network path is implemented behind exact frozen-selection,
-  // voucher, identity, settlement, and compliance bindings. World ID
-  // registration and funded deployment validation remain external release
-  // gates, so the path remains unavailable.
-  publicPaidNetwork: false,
-  // The hybrid path is implemented with two distinct paid child rounds. It
-  // remains unavailable until both paid paths pass their deployment, provider,
-  // funding, and compliance activation checks.
-  hybridPublicSafe: false,
-} as const satisfies HumanReviewLaneReadiness;
+type HumanReviewActivationEnv = Record<string, string | undefined>;
+
+const HASH = /^sha256:[0-9a-f]{64}$/u;
+
+/**
+ * Public configuration is deliberately only an availability projection. The
+ * server independently verifies the matching signed-off activation evidence
+ * before any paid reservation, voucher, round, or spend can be created.
+ */
+export function humanReviewLaneImplementation(env: HumanReviewActivationEnv = process.env): HumanReviewLaneReadiness {
+  const activationReference = env.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE?.trim() ?? "";
+  const activationBound = HASH.test(activationReference);
+  const privateInvitedPaid =
+    activationBound && env.NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED?.trim() === "true";
+  const publicPaidNetwork = activationBound && env.NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED?.trim() === "true";
+  const hybridRequested = activationBound && env.NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED?.trim() === "true";
+  return {
+    privateInvitedUnpaid: true,
+    privateInvitedPaid,
+    publicPaidNetwork,
+    hybridPublicSafe: hybridRequested && privateInvitedPaid && publicPaidNetwork,
+  };
+}
+
+// Paid lanes are implemented but default to unavailable. Hosted deployment
+// preflight is the only supported way to publish matching activation flags and
+// their evidence-bound reference.
+export const HUMAN_REVIEW_LANE_IMPLEMENTATION = humanReviewLaneImplementation();
 
 export const HUMAN_REVIEW_IMPLEMENTATION_READINESS = {
   ownerApproval: true,
