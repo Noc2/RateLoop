@@ -550,3 +550,27 @@ $$;--> statement-breakpoint
 CREATE TRIGGER "tokenless_hybrid_review_operations_guard"
   BEFORE UPDATE ON "tokenless_hybrid_review_operations"
   FOR EACH ROW EXECUTE FUNCTION "tokenless_guard_hybrid_review_parent_transition"();--> statement-breakpoint
+
+CREATE TABLE "tokenless_hybrid_network_reviewer_exclusions" (
+  "hybrid_operation_id" text NOT NULL
+    REFERENCES "tokenless_hybrid_review_operations" ("hybrid_operation_id") ON DELETE CASCADE,
+  "binding_id" text NOT NULL
+    REFERENCES "tokenless_public_network_review_bindings" ("binding_id") ON DELETE CASCADE,
+  "reviewer_principal_id" text NOT NULL,
+  "payout_account" text NOT NULL,
+  "exclusion_hash" text NOT NULL,
+  "created_at" timestamp with time zone NOT NULL,
+  PRIMARY KEY ("hybrid_operation_id","reviewer_principal_id"),
+  CONSTRAINT "tokenless_hybrid_network_reviewer_exclusions_binding_principal_unique"
+    UNIQUE ("binding_id","reviewer_principal_id"),
+  CONSTRAINT "tokenless_hybrid_network_reviewer_exclusions_binding_payout_unique"
+    UNIQUE ("binding_id","payout_account"),
+  CONSTRAINT "tokenless_hybrid_network_reviewer_exclusions_values_check" CHECK (
+    "reviewer_principal_id" ~ '^rlp_[A-Za-z0-9_-]{8,160}$'
+    AND "payout_account" ~ '^0x[0-9a-f]{40}$'
+    AND "exclusion_hash" ~ '^sha256:[0-9a-f]{64}$'
+  )
+);--> statement-breakpoint
+
+CREATE INDEX "tokenless_hybrid_network_reviewer_exclusions_binding_idx"
+  ON "tokenless_hybrid_network_reviewer_exclusions" ("binding_id","reviewer_principal_id","payout_account");
