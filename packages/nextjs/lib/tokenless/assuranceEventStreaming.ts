@@ -695,7 +695,16 @@ export async function projectAssuranceLifecycleEvents(
             LEFT JOIN tokenless_assurance_event_outbox e
               ON e.workspace_id=t.workspace_id AND e.source_event_id=t.event_id
              AND e.event_type IN ('ai.rateloop.review.failed','ai.rateloop.review.expired')
-            WHERE t.to_state IN ('failed_terminal','inconclusive')
+            WHERE (
+                t.to_state='failed_terminal'
+                OR (
+                  t.to_state='inconclusive'
+                  AND (
+                    t.reason_codes_json LIKE '%"response_deadline_elapsed"%'
+                    OR t.reason_codes_json LIKE '%"all_assignments_expired"%'
+                  )
+                )
+              )
               AND e.event_id IS NULL ${workspaceFilter}
             ORDER BY t.occurred_at ASC,t.event_id ASC LIMIT ?`,
       args: [...(input.workspaceId ? [input.workspaceId] : []), limit],

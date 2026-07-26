@@ -562,6 +562,7 @@ test("terminal failures project as review.failed or review.expired with gate-tra
   const failedOpportunity = "aop_lifecycle_stream_failed";
   const expiredOpportunity = "aop_lifecycle_stream_expired";
   const inconclusiveExpiredOpportunity = "aop_lifecycle_stream_inconclusive_expired";
+  const tiedOpportunity = "aop_lifecycle_stream_tied";
   const seedOpportunity = async (opportunityId: string, externalId: string) => {
     const template = await dbClient.execute({
       sql: `SELECT * FROM tokenless_agent_review_opportunities WHERE workspace_id=? LIMIT 1`,
@@ -601,9 +602,11 @@ test("terminal failures project as review.failed or review.expired with gate-tra
   await seedOpportunity(failedOpportunity, "external-lifecycle-failed");
   await seedOpportunity(expiredOpportunity, "external-lifecycle-expired");
   await seedOpportunity(inconclusiveExpiredOpportunity, "external-lifecycle-inconclusive-expired");
+  await seedOpportunity(tiedOpportunity, "external-lifecycle-tied");
   const failedEventId = `hrtr_${"7".repeat(40)}`;
   const expiredEventId = `hrtr_${"8".repeat(40)}`;
   const inconclusiveExpiredEventId = `hrtr_${"9".repeat(40)}`;
+  const tiedEventId = `hrtr_${"6".repeat(40)}`;
   await insertTerminal(failedOpportunity, failedEventId, ["adapter_failure"], HASH("7"));
   await insertTerminal(expiredOpportunity, expiredEventId, ["all_assignments_expired"], HASH("8"));
   await insertTerminal(
@@ -613,6 +616,7 @@ test("terminal failures project as review.failed or review.expired with gate-tra
     HASH("9"),
     "inconclusive",
   );
+  await insertTerminal(tiedOpportunity, tiedEventId, ["complete_panel_tied"], HASH("6"), "inconclusive");
 
   await projectAssuranceLifecycleEvents({ now: NOW, limit: 20 });
   const stored = await dbClient.execute({
@@ -630,6 +634,7 @@ test("terminal failures project as review.failed or review.expired with gate-tra
   assert.equal(String(bySource.get(expiredEventId)?.evidence_reference_digest), HASH("8"));
   assert.equal(String(bySource.get(inconclusiveExpiredEventId)?.event_type), "ai.rateloop.review.expired");
   assert.equal(String(bySource.get(inconclusiveExpiredEventId)?.evidence_reference_digest), HASH("9"));
+  assert.equal(bySource.has(tiedEventId), false);
   for (const row of stored.rows) {
     assert.equal(row.evidence_reference_kind, "gate_transition");
     assert.equal(row.packet_hash, null);
