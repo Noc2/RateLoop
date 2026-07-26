@@ -11,6 +11,11 @@ export const PUBLIC_EVIDENCE_CAPABILITIES = [
   "vanta_delivery_exercised",
   "drata_delivery_exercised",
   "otel_genai_ingest",
+  "paid_private_review_lane",
+  "public_network_review_lane",
+  "hybrid_review_lane",
+  "gdpr_blockchain_dpia",
+  "provider_transfer_inventory",
 ] as const;
 
 export type PublicEvidenceCapability = (typeof PUBLIC_EVIDENCE_CAPABILITIES)[number];
@@ -31,6 +36,11 @@ export const PUBLIC_EVIDENCE_CAPABILITY_STATE: PublicEvidenceCapabilityState = O
   vanta_delivery_exercised: false,
   drata_delivery_exercised: false,
   otel_genai_ingest: false,
+  paid_private_review_lane: false,
+  public_network_review_lane: false,
+  hybrid_review_lane: false,
+  gdpr_blockchain_dpia: false,
+  provider_transfer_inventory: false,
 });
 
 type PublicEvidenceClaimGate = {
@@ -114,6 +124,43 @@ export const PUBLIC_EVIDENCE_CLAIMS_MATRIX = [
     phrase: "Works with your OpenTelemetry instrumentation",
     patterns: [/works? with (?:your )?OpenTelemetry instrumentation/iu],
     requiredCapabilities: ["otel_genai_ingest"],
+    policy: "gated",
+  },
+  {
+    id: "paid_private_review",
+    phrase: "Private invited review is USDC-paid",
+    patterns: [
+      /\bprivate invited review (?:is|remains) (?:available )?(?:with )?USDC[- ]paid\b/iu,
+      /\bUSDC[- ]paid private invited review (?:is|remains) available\b/iu,
+    ],
+    requiredCapabilities: ["paid_private_review_lane"],
+    policy: "gated",
+  },
+  {
+    id: "public_network_review",
+    phrase: "Public RateLoop network review is USDC-paid",
+    patterns: [
+      /\bpublic RateLoop network review (?:is|remains|runs as) USDC[- ]paid\b/iu,
+      /\bUSDC[- ]paid public RateLoop network review (?:is|remains) available\b/iu,
+    ],
+    requiredCapabilities: ["public_network_review_lane"],
+    policy: "gated",
+  },
+  {
+    id: "hybrid_review",
+    phrase: "Hybrid review is available",
+    patterns: [/\bhybrid review (?:is|remains) (?:active|available|enabled|live)\b/iu],
+    requiredCapabilities: ["hybrid_review_lane"],
+    policy: "gated",
+  },
+  {
+    id: "gdpr_launch_compliance",
+    phrase: "RateLoop is GDPR-compliant",
+    patterns: [
+      /\bRateLoop (?:is|remains) GDPR[- ]compliant\b/iu,
+      /\bGDPR[- ]compliant RateLoop (?:service|platform|deployment)\b/iu,
+    ],
+    requiredCapabilities: ["gdpr_blockchain_dpia", "provider_transfer_inventory"],
     policy: "gated",
   },
   {

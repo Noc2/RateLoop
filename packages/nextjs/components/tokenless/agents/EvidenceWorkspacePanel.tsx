@@ -214,8 +214,8 @@ function VerificationInstructions({
         <p className="text-xs leading-5 text-base-content/45">
           Select the attestation signer, Rekor log key, and TSA certificate chain through an independent trust process;
           none is trusted merely because it appears in a witness. A completed external-attestation job records a Rekor
-          UUID. Export-boundary jobs additionally require an RFC 3161 token; absence is shown as a pending or failed
-          anchor, never as verified evidence.
+          UUID. Export-boundary jobs separately report their timestamp-token status; absence is shown as pending or
+          failed, never complete.
         </p>
       </div>
     </details>

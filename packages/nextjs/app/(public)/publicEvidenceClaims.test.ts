@@ -15,6 +15,9 @@ const PUBLIC_APP_DIRECTORY = fileURLToPath(new URL(".", import.meta.url));
 const NEXTJS_DIRECTORY = path.resolve(PUBLIC_APP_DIRECTORY, "../..");
 const MACHINE_DOCS_DIRECTORY = path.resolve(PUBLIC_APP_DIRECTORY, "../../public/docs");
 const COMPONENTS_DIRECTORY = path.resolve(PUBLIC_APP_DIRECTORY, "../../components");
+const TOKENLESS_COMPONENTS_DIRECTORY = path.join(COMPONENTS_DIRECTORY, "tokenless");
+const REPOSITORY_DIRECTORY = path.resolve(NEXTJS_DIRECTORY, "../..");
+const PLUGINS_DIRECTORY = path.join(REPOSITORY_DIRECTORY, "plugins");
 
 function filesBelow(directory: string, extension: ".md" | ".tsx"): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
@@ -90,6 +93,10 @@ test("the public evidence claims matrix is fail-closed and has explicit prerequi
       independent_witnessing: ["managed_evidence_signing", "rekor_attestation", "rfc3161_timestamping"],
       grc_and_siem_delivery: ["vanta_delivery_exercised", "drata_delivery_exercised", "siem_delivery_exercised"],
       otel_instrumentation: ["otel_genai_ingest"],
+      paid_private_review: ["paid_private_review_lane"],
+      public_network_review: ["public_network_review_lane"],
+      hybrid_review: ["hybrid_review_lane"],
+      gdpr_launch_compliance: ["gdpr_blockchain_dpia", "provider_transfer_inventory"],
     },
   );
 });
@@ -166,16 +173,45 @@ test("forbidden compliance and provenance claims cannot be enabled by capability
   assert.deepEqual(findPublicEvidenceClaimViolations("RateLoop is not ISO/IEC 42001-certified."), []);
 });
 
-test("all public TSX and machine-doc markdown obey the current evidence claim gates", () => {
+test("paid/public lanes and launch GDPR claims require their exact shipped capabilities", () => {
+  assert.equal(
+    findPublicEvidenceClaimViolations("Public RateLoop network review is USDC-paid.")[0]?.claimId,
+    "public_network_review",
+  );
+  assert.equal(
+    findPublicEvidenceClaimViolations(
+      "Public RateLoop network review is USDC-paid.",
+      capabilitiesEnabled("public_network_review_lane"),
+    ).length,
+    0,
+  );
+  assert.deepEqual(findPublicEvidenceClaimViolations("RateLoop is GDPR-compliant.")[0]?.missingCapabilities, [
+    "gdpr_blockchain_dpia",
+    "provider_transfer_inventory",
+  ]);
+  assert.equal(
+    findPublicEvidenceClaimViolations(
+      "RateLoop is GDPR-compliant.",
+      capabilitiesEnabled("gdpr_blockchain_dpia", "provider_transfer_inventory"),
+    ).length,
+    0,
+  );
+  assert.deepEqual(findPublicEvidenceClaimViolations("RateLoop does not claim launch-level GDPR compliance."), []);
+});
+
+test("all public TSX, tokenless components, machine docs, and plugin copy obey capability gates", () => {
   const publicAppFiles = filesBelow(PUBLIC_APP_DIRECTORY, ".tsx");
   const publicFiles = [
     ...publicAppFiles,
     ...publicComponentDependencies(publicAppFiles),
+    ...filesBelow(TOKENLESS_COMPONENTS_DIRECTORY, ".tsx"),
     ...filesBelow(MACHINE_DOCS_DIRECTORY, ".md"),
+    ...filesBelow(PLUGINS_DIRECTORY, ".md"),
   ];
   assert.ok(publicFiles.some(file => file.endsWith("/docs/sdk/page.tsx")));
   assert.ok(publicFiles.some(file => file.endsWith("/components/shared/AppPageShell.tsx")));
   assert.ok(publicFiles.some(file => file.endsWith("/public/docs/sdk.md")));
+  assert.ok(publicFiles.some(file => file.endsWith("/rateloop-human-review-loop/SKILL.md")));
 
   const failures = publicFiles.flatMap(file =>
     findPublicEvidenceClaimViolations(readFileSync(file, "utf8")).map(violation => ({
