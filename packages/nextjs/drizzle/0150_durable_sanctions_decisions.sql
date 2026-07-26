@@ -1,3 +1,4 @@
+-- Persist sanctions decisions independently from retryable screening work.
 CREATE TABLE "tokenless_sanctions_blocks" (
   "rater_id" text PRIMARY KEY NOT NULL
     REFERENCES "tokenless_rater_profiles"("rater_id") ON DELETE RESTRICT,

@@ -116,7 +116,7 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
     return null;
   }
   if (
-    file === "0154_dac7_statutory_records.sql" &&
+    file === "0151_dac7_statutory_records.sql" &&
     (/^INSERT INTO "tokenless_dac7_records"/u.test(statement) ||
       /^UPDATE "tokenless_legal_eligibility"/u.test(statement))
   ) {

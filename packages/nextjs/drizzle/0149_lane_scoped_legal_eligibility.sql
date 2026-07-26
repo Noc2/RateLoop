@@ -1,3 +1,4 @@
+-- Keep lane-specific legal state independent before adding later compliance evidence.
 DROP INDEX "tokenless_legal_eligibility_status_expiry_idx";--> statement-breakpoint
 ALTER TABLE "tokenless_legal_eligibility" RENAME TO "tokenless_legal_eligibility_legacy";--> statement-breakpoint
 ALTER TABLE "tokenless_legal_eligibility_legacy"

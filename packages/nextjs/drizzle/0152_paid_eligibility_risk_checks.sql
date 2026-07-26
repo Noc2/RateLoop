@@ -1,3 +1,4 @@
+-- Record bounded, minimized risk-provider evidence used by paid eligibility.
 CREATE TABLE "tokenless_paid_eligibility_risk_checks" (
   "risk_check_id" text PRIMARY KEY NOT NULL,
   "rater_id" text NOT NULL REFERENCES "tokenless_rater_profiles"("rater_id") ON DELETE RESTRICT,

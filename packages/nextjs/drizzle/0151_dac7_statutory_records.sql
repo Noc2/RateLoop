@@ -1,3 +1,4 @@
+-- Retain the statutory DAC7 record separately from the operational profile.
 CREATE TABLE "tokenless_dac7_records" (
   "record_id" text PRIMARY KEY NOT NULL,
   "rater_id" text NOT NULL REFERENCES "tokenless_rater_profiles"("rater_id") ON DELETE RESTRICT,
