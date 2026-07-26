@@ -8,6 +8,7 @@ import {
   recordWorkspaceFundResolution,
   requestWorkspaceDeletion,
 } from "~~/lib/privacy/workspaceDeletion";
+import { expireWorkspaceDeletionRetentionCategories } from "~~/lib/privacy/workspaceDeletionRetention";
 import { createWorkspace, createWorkspaceApiKey } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -833,6 +834,199 @@ test("workspace deletion tombstones copied network reviewer data without deletin
   assert.equal(
     new Date(String(deletionReceipt.rows[0]?.retention_deadline)).toISOString(),
     new Date(NOW.getTime() + 365 * 86_400_000).toISOString(),
+  );
+});
+
+test("network evidence expiry rebinds retained voucher copies to the assignment tombstone", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Network expiry workspace", ownerAddress: OWNER });
+  const seeded = await seedWorkspaceNetworkAssignment(workspaceId);
+  const deleted = await requestWorkspaceDeletion({
+    accountAddress: OWNER,
+    confirmationName: "Network expiry workspace",
+    identityAssurance: "better_auth:passkey",
+    now: NOW,
+    workspaceId,
+  });
+  const expiresAt = new Date(NOW.getTime() + 86_400_000);
+  const categoryBefore = await dbClient.execute({
+    sql: `SELECT evidence_digest FROM tokenless_deletion_job_categories
+          WHERE job_id=? AND category='settlement_audit'`,
+    args: [deleted.jobId],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_deletion_job_categories SET retention_deadline=?
+          WHERE job_id=? AND category='settlement_audit'`,
+    args: [new Date(expiresAt.getTime() - 1), deleted.jobId],
+  });
+
+  assert.deepEqual(await expireWorkspaceDeletionRetentionCategories(expiresAt), {
+    completed: 1,
+    deferredByHold: 0,
+    releasedHoldSchedules: 0,
+  });
+  const retained = await dbClient.execute({
+    sql: `SELECT assignment.rater_id AS assignment_rater_id,
+                 profile.account_address AS tombstone_payout,profile.principal_id,
+                 voucher.rater_id AS voucher_rater_id,
+                 voucher.payout_account_snapshot AS voucher_payout,
+                 snapshot.rater_id AS snapshot_rater_id,snapshot.snapshot_json,
+                 category.disposition,category.status,category.basis_code,
+                 category.retention_deadline,category.evidence_digest
+          FROM tokenless_assurance_assignments assignment
+          JOIN tokenless_rater_profiles profile ON profile.rater_id=assignment.rater_id
+          JOIN tokenless_paid_vouchers voucher
+            ON voucher.network_assignment_id=assignment.assignment_id
+          JOIN tokenless_voucher_assurance_snapshots snapshot
+            ON snapshot.voucher_id=voucher.voucher_id
+          JOIN tokenless_deletion_job_categories category
+            ON category.job_id=? AND category.category='settlement_audit'
+          WHERE assignment.assignment_id='assignment_workspace_network_delete'`,
+    args: [deleted.jobId],
+  });
+  assert.equal(retained.rowCount, 1);
+  const row = retained.rows[0] as Record<string, unknown>;
+  assert.match(String(row.assignment_rater_id), /^rater_erased_ws_/u);
+  assert.equal(row.voucher_rater_id, row.assignment_rater_id);
+  assert.equal(row.snapshot_rater_id, row.assignment_rater_id);
+  assert.equal(row.voucher_payout, row.tombstone_payout);
+  assert.equal(row.principal_id, null);
+  assert.match(String(row.snapshot_json), /rateloop\.erased-voucher-assurance-snapshot\.v1/u);
+  assert.equal(row.disposition, "anonymize");
+  assert.equal(row.status, "completed");
+  assert.equal(row.basis_code, null);
+  assert.equal(row.retention_deadline, null);
+  assert.notEqual(row.evidence_digest, categoryBefore.rows[0]?.evidence_digest);
+  assert.deepEqual(
+    await storedRow(
+      `SELECT principal_id,account_address,deleted_at FROM tokenless_rater_profiles
+       WHERE rater_id=?`,
+      [seeded.raterId],
+    ),
+    {
+      account_address: seeded.reviewerAccount,
+      deleted_at: null,
+      principal_id: seeded.reviewerPrincipal,
+    },
+  );
+  assert.deepEqual(
+    await storedRow(
+      `SELECT
+         (SELECT COUNT(*) FROM tokenless_paid_vouchers voucher
+          JOIN tokenless_assurance_assignments assignment
+            ON assignment.assignment_id=voucher.network_assignment_id
+          JOIN tokenless_rater_profiles profile ON profile.rater_id=voucher.rater_id
+          WHERE assignment.workspace_id=? AND profile.principal_id IS NOT NULL)
+         AS live_voucher_links,
+         (SELECT COUNT(*) FROM tokenless_voucher_assurance_snapshots snapshot
+          JOIN tokenless_paid_vouchers voucher ON voucher.voucher_id=snapshot.voucher_id
+          JOIN tokenless_assurance_assignments assignment
+            ON assignment.assignment_id=voucher.network_assignment_id
+          JOIN tokenless_rater_profiles profile ON profile.rater_id=snapshot.rater_id
+          WHERE assignment.workspace_id=? AND profile.principal_id IS NOT NULL)
+         AS live_snapshot_links,
+         (SELECT COUNT(*) FROM tokenless_public_network_review_bindings WHERE workspace_id=?)
+         AS public_bindings`,
+      [workspaceId, workspaceId, workspaceId],
+    ),
+    { live_snapshot_links: 0, live_voucher_links: 0, public_bindings: 0 },
+  );
+});
+
+test("legal holds defer network evidence expiry without rebinding retained reviewer claims", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Network hold workspace", ownerAddress: OWNER });
+  const seeded = await seedWorkspaceNetworkAssignment(workspaceId);
+  const deleted = await requestWorkspaceDeletion({
+    accountAddress: OWNER,
+    confirmationName: "Network hold workspace",
+    identityAssurance: "better_auth:passkey",
+    now: NOW,
+    workspaceId,
+  });
+  const expiresAt = new Date(NOW.getTime() + 86_400_000);
+  await dbClient.execute({
+    sql: `UPDATE tokenless_deletion_job_categories SET retention_deadline=?
+          WHERE job_id=? AND category='settlement_audit';
+          INSERT INTO tokenless_legal_holds
+          (hold_id,workspace_id,project_id,scope,reason,status,created_by,created_at,review_at)
+          VALUES ('hold_network_retention',?,NULL,'workspace','litigation','active',
+                  'privacy:operator',?,?)`,
+    args: [
+      new Date(expiresAt.getTime() - 1),
+      deleted.jobId,
+      workspaceId,
+      NOW,
+      new Date(expiresAt.getTime() + 86_400_000),
+    ],
+  });
+
+  assert.deepEqual(await expireWorkspaceDeletionRetentionCategories(expiresAt), {
+    completed: 0,
+    deferredByHold: 1,
+    releasedHoldSchedules: 0,
+  });
+  assert.deepEqual(
+    await storedRow(
+      `SELECT voucher.rater_id AS voucher_rater_id,snapshot.rater_id AS snapshot_rater_id,
+              category.status,category.disposition
+       FROM tokenless_paid_vouchers voucher
+       JOIN tokenless_voucher_assurance_snapshots snapshot ON snapshot.voucher_id=voucher.voucher_id
+       JOIN tokenless_deletion_job_categories category
+         ON category.job_id=? AND category.category='settlement_audit'
+       WHERE voucher.voucher_id='voucher_workspace_network_delete'`,
+      [deleted.jobId],
+    ),
+    {
+      disposition: "retain",
+      snapshot_rater_id: seeded.raterId,
+      status: "retained",
+      voucher_rater_id: seeded.raterId,
+    },
+  );
+});
+
+test("network evidence expiry preserves a still-payable voucher and remains retryable", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Network payable workspace", ownerAddress: OWNER });
+  const seeded = await seedWorkspaceNetworkAssignment(workspaceId);
+  const deleted = await requestWorkspaceDeletion({
+    accountAddress: OWNER,
+    confirmationName: "Network payable workspace",
+    identityAssurance: "better_auth:passkey",
+    now: NOW,
+    workspaceId,
+  });
+  const prematureExpiry = new Date(NOW.getTime() + 30 * 60_000);
+  await dbClient.execute({
+    sql: `UPDATE tokenless_deletion_job_categories SET retention_deadline=?
+          WHERE job_id=? AND category='settlement_audit'`,
+    args: [new Date(prematureExpiry.getTime() - 1), deleted.jobId],
+  });
+
+  assert.deepEqual(await expireWorkspaceDeletionRetentionCategories(prematureExpiry), {
+    completed: 0,
+    deferredByHold: 0,
+    releasedHoldSchedules: 0,
+  });
+  assert.deepEqual(
+    await storedRow(
+      `SELECT voucher.rater_id AS voucher_rater_id,snapshot.rater_id AS snapshot_rater_id,
+              category.status,category.disposition,failure.status AS failure_status
+       FROM tokenless_paid_vouchers voucher
+       JOIN tokenless_voucher_assurance_snapshots snapshot ON snapshot.voucher_id=voucher.voucher_id
+       JOIN tokenless_deletion_job_categories category
+         ON category.job_id=? AND category.category='settlement_audit'
+       JOIN tokenless_privacy_worker_failures failure
+         ON failure.worker_kind='workspace_retention'
+        AND failure.work_item_key=? || ':settlement_audit'
+       WHERE voucher.voucher_id='voucher_workspace_network_delete'`,
+      [deleted.jobId, deleted.jobId],
+    ),
+    {
+      disposition: "retain",
+      failure_status: "retrying",
+      snapshot_rater_id: seeded.raterId,
+      status: "retained",
+      voucher_rater_id: seeded.raterId,
+    },
   );
 });
 
