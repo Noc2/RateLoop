@@ -1067,7 +1067,7 @@ export function HumanAssuranceRaterClient({
                       <p className="font-mono text-xs uppercase tracking-widest text-base-content/55">
                         Case {String(activeCaseIndex + 1).padStart(2, "0")}
                       </p>
-                      <h3 className="mt-2 text-2xl font-semibold">{reviewCase.title}</h3>
+                      <h2 className="mt-2 text-2xl font-semibold">{reviewCase.title}</h2>
                       {reviewCase.instructions.trim() &&
                       reviewCase.instructions.trim() !== task.rubric.prompt.trim() ? (
                         <p className="mt-3 text-sm leading-6 text-base-content/60">{reviewCase.instructions}</p>

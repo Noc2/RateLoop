@@ -140,9 +140,9 @@ export function PrivateArtifactPreview({
   return (
     <section className="rounded-xl border border-white/10 bg-black/25 p-4" aria-labelledby={titleId}>
       <div className="flex items-center justify-between gap-3">
-        <h4 id={titleId} className="text-sm font-semibold">
+        <h3 id={titleId} className="text-sm font-semibold">
           {label}
-        </h4>
+        </h3>
         {preview?.kind === "unsupported" ? (
           <a className="text-xs font-semibold underline underline-offset-4" href={artifactUrl} download>
             Download
