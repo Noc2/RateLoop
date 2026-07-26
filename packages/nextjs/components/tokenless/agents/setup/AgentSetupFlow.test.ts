@@ -81,7 +81,8 @@ test("review setup resolves frequency before reviewer terms and authority", () =
   assert.match(flowSource, /<ReviewFrequencyFields/);
   assert.match(flowSource, /<ReviewAuthorityFields/);
   assert.doesNotMatch(flowSource, /<ReviewRoutingFields/);
-  assert.match(routingSource, /<select/);
+  assert.match(routingSource, /<SelectField/);
+  assert.doesNotMatch(routingSource, /<select\b/);
   assert.match(routingSource, /sm:grid-cols-2/);
   assert.match(flowSource, /reviewFrequency\.mode === "adaptive" \|\| reviewFrequency\.mode === "fixed"/);
   assert.match(flowSource, /reviewFrequency\.mode === "rules"/);

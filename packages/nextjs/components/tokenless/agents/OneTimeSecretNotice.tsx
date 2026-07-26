@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { Field } from "~~/components/tokenless/forms/Field";
 
 export function OneTimeSecretNotice({
   label,
@@ -40,10 +41,12 @@ export function OneTimeSecretNotice({
         This value is shown once. It cannot be recovered after you dismiss it, reload, or leave this page.
       </p>
       <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-        <input
+        <Field
           ref={inputRef}
-          className="input min-w-0 flex-1 border-amber-300/20 bg-black/35 font-mono text-xs"
-          aria-label={label}
+          containerClassName="min-w-0 flex-1"
+          className="border-amber-300/20 bg-black/35 font-mono text-xs"
+          label={label}
+          labelClassName="sr-only"
           aria-describedby={guidanceId}
           value={value}
           readOnly

@@ -3,6 +3,7 @@
 import { type KeyboardEvent, useRef } from "react";
 import Link from "next/link";
 import { agentTabHref, nextAgentTabIndex } from "./agentWorkspaceState";
+import { SelectField } from "~~/components/tokenless/forms/Field";
 
 export type AgentTab = "overview" | "connect" | "inbox" | "registry" | "evaluations" | "evidence";
 
@@ -70,20 +71,20 @@ export function AgentTabs({
           ))}
         </div>
       </nav>
-      <label className="ml-auto w-56 max-w-full shrink-0">
-        <span className="sr-only">Active workspace</span>
-        <select
-          className="select h-11 min-h-11 w-full rounded-xl border-white/10 bg-[var(--rateloop-field)] text-sm font-medium"
-          value={workspaceId}
-          onChange={event => onWorkspaceChange(event.target.value)}
-        >
-          {workspaces.map(workspace => (
-            <option key={workspace.workspaceId} value={workspace.workspaceId}>
-              {workspace.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <SelectField
+        containerClassName="ml-auto w-56 max-w-full shrink-0"
+        className="h-11 min-h-11 rounded-xl border-white/10 bg-[var(--rateloop-field)] text-sm font-medium"
+        label="Active workspace"
+        labelClassName="sr-only"
+        value={workspaceId}
+        onChange={event => onWorkspaceChange(event.target.value)}
+      >
+        {workspaces.map(workspace => (
+          <option key={workspace.workspaceId} value={workspace.workspaceId}>
+            {workspace.name}
+          </option>
+        ))}
+      </SelectField>
     </div>
   );
 }

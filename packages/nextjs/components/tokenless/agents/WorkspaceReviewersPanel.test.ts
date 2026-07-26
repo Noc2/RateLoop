@@ -37,13 +37,8 @@ test("reviewer requests are aborted when the workspace changes", () => {
 });
 
 test("private-material sensitivity errors stay attached to the select", () => {
-  assert.match(panel, /fieldErrors\.maxPrivateSensitivity \? "workspace-reviewer-sensitivity-error"/u);
-  assert.match(panel, /aria-invalid=\{fieldErrors\.maxPrivateSensitivity \? true : undefined\}/u);
+  assert.match(panel, /<SelectField[\s\S]*error=\{fieldErrors\.maxPrivateSensitivity\}/u);
   assert.match(panel, /clear\("maxPrivateSensitivity"\)/u);
-  assert.match(
-    panel,
-    /id="workspace-reviewer-sensitivity-error"[\s\S]*role="alert"[\s\S]*fieldErrors\.maxPrivateSensitivity/u,
-  );
 });
 
 test("owners can materialize exact specialist records for active invited reviewers", () => {

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AgentHumanReviewEditor } from "./AgentHumanReviewEditor";
 import { WorkspaceReviewersPanel } from "./WorkspaceReviewersPanel";
 import { agentTabHref } from "./agentWorkspaceState";
+import { SelectField } from "~~/components/tokenless/forms/Field";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { Card } from "~~/components/tokenless/ui/Card";
 import type { AgentRegistry, WorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
@@ -87,20 +88,20 @@ export function AgentReviewsPanel({ canManage, workspaceId }: { canManage: boole
         <div className="space-y-5">
           {currentRegistry.agents.length > 1 ? (
             <div className="flex justify-end">
-              <label className="w-56 max-w-full text-sm text-base-content/60">
-                Agent
-                <select
-                  className="select mt-2 w-full rounded-xl border-white/10 bg-[var(--rateloop-field)]"
-                  value={selectedAgentId}
-                  onChange={event => setSelection({ workspaceId, agentId: event.target.value })}
-                >
-                  {currentRegistry.agents.map(agent => (
-                    <option key={agent.agentId} value={agent.agentId}>
-                      {agent.currentVersion.displayName}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <SelectField
+                containerClassName="w-56 max-w-full"
+                className="rounded-xl border-white/10 bg-[var(--rateloop-field)]"
+                label="Agent"
+                labelClassName="text-sm text-base-content/60"
+                value={selectedAgentId}
+                onChange={event => setSelection({ workspaceId, agentId: event.target.value })}
+              >
+                {currentRegistry.agents.map(agent => (
+                  <option key={agent.agentId} value={agent.agentId}>
+                    {agent.currentVersion.displayName}
+                  </option>
+                ))}
+              </SelectField>
             </div>
           ) : null}
           <AgentHumanReviewEditor

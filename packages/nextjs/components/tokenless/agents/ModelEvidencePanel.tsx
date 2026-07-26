@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { SelectField } from "~~/components/tokenless/forms/Field";
 import type {
   EvaluationModelExecution,
   EvaluationModelProfile,
@@ -298,20 +299,20 @@ export function ModelEvidencePanel({ profiles }: { profiles: EvaluationModelProf
           <p className="mt-1 text-sm text-base-content/60">Execution evidence from eligible outputs.</p>
         </div>
         {profiles.length > 1 ? (
-          <label className="text-sm text-base-content/65 lg:min-w-80">
-            Model profile
-            <select
-              className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={selected.profileHash}
-              onChange={event => setSelectedProfileHash(event.target.value)}
-            >
-              {profiles.map(profile => (
-                <option key={profile.profileHash} value={profile.profileHash}>
-                  {profileLabel(profile)}
-                </option>
-              ))}
-            </select>
-          </label>
+          <SelectField
+            containerClassName="lg:min-w-80"
+            className="border-white/10 bg-[var(--rateloop-field)]"
+            label="Model profile"
+            labelClassName="text-sm text-base-content/65"
+            value={selected.profileHash}
+            onChange={event => setSelectedProfileHash(event.target.value)}
+          >
+            {profiles.map(profile => (
+              <option key={profile.profileHash} value={profile.profileHash}>
+                {profileLabel(profile)}
+              </option>
+            ))}
+          </SelectField>
         ) : null}
       </div>
 

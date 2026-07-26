@@ -63,7 +63,7 @@ import {
 import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
 import { humanReviewConfirmationMessage } from "~~/components/tokenless/agents/humanReviewConfirmation";
-import { Field } from "~~/components/tokenless/forms/Field";
+import { ChoiceInput, Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { DurationInput } from "~~/components/ui/DurationInput";
@@ -1275,13 +1275,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             </SetupActionBar>
             {connectionMessage ? (
               <div className="mt-5">
-                <label className="block text-sm font-medium" htmlFor="agent-setup-connection-message">
-                  Connection message
-                </label>
-                <textarea
+                <TextareaField
                   ref={connectionMessageRef}
                   id="agent-setup-connection-message"
-                  className="textarea mt-2 min-h-40 w-full border-white/10 bg-[var(--rateloop-field)] font-mono text-xs leading-5"
+                  className="min-h-40 border-white/10 bg-[var(--rateloop-field)] font-mono text-xs leading-5"
+                  label="Connection message"
+                  labelClassName="text-sm font-medium"
                   value={connectionMessage}
                   readOnly
                   onFocus={event => event.currentTarget.select()}
@@ -1313,15 +1312,18 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 required
                 error={fieldErrors.displayName}
               />
-              <label className="text-sm">
-                Description <span className="text-base-content/55">(optional)</span>
-                <textarea
-                  className="textarea mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  name="description"
-                  defaultValue={setup.agent.description ?? ""}
-                  maxLength={1000}
-                />
-              </label>
+              <TextareaField
+                className="border-white/10 bg-[var(--rateloop-field)]"
+                label={
+                  <>
+                    Description <span className="text-base-content/55">(optional)</span>
+                  </>
+                }
+                labelClassName="text-sm"
+                name="description"
+                defaultValue={setup.agent.description ?? ""}
+                maxLength={1000}
+              />
             </div>
             <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm">
               <p className="font-medium">Observed connection</p>
@@ -1371,17 +1373,17 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               </SetupChoiceGroup>
             </fieldset>
             {reviewCriterion.questionAuthority === "owner_fixed" ? (
-              <label className="mt-6 block text-sm font-medium">
-                Review question
-                <textarea
-                  className="textarea mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  rows={3}
-                  value={reviewCriterion.criterion}
-                  onChange={event => setReviewCriterion(current => ({ ...current, criterion: event.target.value }))}
-                  maxLength={REVIEW_CRITERION_MAX_LENGTH}
-                  required
-                />
-              </label>
+              <TextareaField
+                containerClassName="mt-6"
+                className="border-white/10 bg-[var(--rateloop-field)]"
+                label="Review question"
+                labelClassName="text-sm font-medium"
+                rows={3}
+                value={reviewCriterion.criterion}
+                onChange={event => setReviewCriterion(current => ({ ...current, criterion: event.target.value }))}
+                maxLength={REVIEW_CRITERION_MAX_LENGTH}
+                required
+              />
             ) : (
               <p className="mt-5 border-l-2 border-l-[var(--rateloop-yellow)] pl-4 text-sm leading-6 text-base-content/65">
                 Agent-written questions collect feedback only. They use RateLoop network reviewers and never change
@@ -1421,23 +1423,22 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     />
                   </>
                 ) : null}
-                <label className="text-sm">
-                  Rationale
-                  <select
-                    className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                    value={reviewCriterion.rationaleMode}
-                    onChange={event =>
-                      setReviewCriterion(current => ({
-                        ...current,
-                        rationaleMode: event.target.value as ReviewCriterionFormValues["rationaleMode"],
-                      }))
-                    }
-                  >
-                    <option value="off">Off</option>
-                    <option value="optional">Optional</option>
-                    <option value="required">Required</option>
-                  </select>
-                </label>
+                <SelectField
+                  className="border-white/10 bg-[var(--rateloop-field)]"
+                  label="Rationale"
+                  labelClassName="text-sm"
+                  value={reviewCriterion.rationaleMode}
+                  onChange={event =>
+                    setReviewCriterion(current => ({
+                      ...current,
+                      rationaleMode: event.target.value as ReviewCriterionFormValues["rationaleMode"],
+                    }))
+                  }
+                >
+                  <option value="off">Off</option>
+                  <option value="optional">Optional</option>
+                  <option value="required">Required</option>
+                </SelectField>
               </div>
             </fieldset>
             <fieldset className="surface-card-nested mt-7 p-4 sm:p-5">
@@ -1662,29 +1663,29 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                                 </button>
                               </div>
                               {reviewAudience.audience === "private_invited" ? (
-                                <label className="mt-3 block max-w-48 text-sm">
-                                  Reviewers needed
-                                  <input
-                                    className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                                    type="number"
-                                    min={1}
-                                    max={Math.max(1, Number(reviewTiming.panelSize) || 1)}
-                                    step={1}
-                                    inputMode="numeric"
-                                    value={requirement.minimumSeats}
-                                    onChange={event =>
-                                      setReviewExpertise(current => ({
-                                        ...current,
-                                        requirements: current.requirements.map(candidate =>
-                                          candidate.definitionId === requirement.definitionId
-                                            ? { ...candidate, minimumSeats: Number(event.target.value) }
-                                            : candidate,
-                                        ),
-                                      }))
-                                    }
-                                    required
-                                  />
-                                </label>
+                                <Field
+                                  containerClassName="mt-3 max-w-48"
+                                  className="border-white/10 bg-[var(--rateloop-field)]"
+                                  label="Reviewers needed"
+                                  labelClassName="text-sm"
+                                  type="number"
+                                  min={1}
+                                  max={Math.max(1, Number(reviewTiming.panelSize) || 1)}
+                                  step={1}
+                                  inputMode="numeric"
+                                  value={requirement.minimumSeats}
+                                  onChange={event =>
+                                    setReviewExpertise(current => ({
+                                      ...current,
+                                      requirements: current.requirements.map(candidate =>
+                                        candidate.definitionId === requirement.definitionId
+                                          ? { ...candidate, minimumSeats: Number(event.target.value) }
+                                          : candidate,
+                                      ),
+                                    }))
+                                  }
+                                  required
+                                />
                               ) : (
                                 <p className="mt-3 text-sm text-base-content/60">
                                   Required for all {reviewTiming.panelSize || "—"} network reviewers.
@@ -1767,27 +1768,25 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                           <div className="surface-card-nested rounded-xl p-4">
                             <p className="font-medium">New workspace specialist area</p>
                             <div className="mt-3 grid gap-3">
-                              <label className="text-sm">
-                                Name
-                                <input
-                                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                                  value={customExpertiseLabel}
-                                  onChange={event => setCustomExpertiseLabel(event.target.value)}
-                                  maxLength={80}
-                                  placeholder="German employment law"
-                                />
-                              </label>
-                              <label className="text-sm">
-                                What qualifies someone?
-                                <textarea
-                                  className="textarea mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                                  rows={2}
-                                  value={customExpertiseDescription}
-                                  onChange={event => setCustomExpertiseDescription(event.target.value)}
-                                  maxLength={320}
-                                  placeholder="Experience reviewing German employment contracts"
-                                />
-                              </label>
+                              <Field
+                                className="border-white/10 bg-[var(--rateloop-field)]"
+                                label="Name"
+                                labelClassName="text-sm"
+                                value={customExpertiseLabel}
+                                onChange={event => setCustomExpertiseLabel(event.target.value)}
+                                maxLength={80}
+                                placeholder="German employment law"
+                              />
+                              <TextareaField
+                                className="border-white/10 bg-[var(--rateloop-field)]"
+                                label="What qualifies someone?"
+                                labelClassName="text-sm"
+                                rows={2}
+                                value={customExpertiseDescription}
+                                onChange={event => setCustomExpertiseDescription(event.target.value)}
+                                maxLength={320}
+                                placeholder="Experience reviewing German employment contracts"
+                              />
                             </div>
                             <div className="mt-3 flex flex-wrap gap-2">
                               <button
@@ -1963,22 +1962,21 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                         required
                         error={fieldErrors.feedbackBonusUsdc}
                       />
-                      <label className="text-sm">
-                        Human awarder
-                        <select
-                          className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                          value={reviewCompensation.feedbackBonusAwarderKind}
-                          onChange={event =>
-                            setReviewCompensation(current => ({
-                              ...current,
-                              feedbackBonusAwarderKind: event.target.value as "requester" | "designated",
-                            }))
-                          }
-                        >
-                          <option value="requester">Me (requester)</option>
-                          <option value="designated">Designated authenticated human</option>
-                        </select>
-                      </label>
+                      <SelectField
+                        className="border-white/10 bg-[var(--rateloop-field)]"
+                        label="Human awarder"
+                        labelClassName="text-sm"
+                        value={reviewCompensation.feedbackBonusAwarderKind}
+                        onChange={event =>
+                          setReviewCompensation(current => ({
+                            ...current,
+                            feedbackBonusAwarderKind: event.target.value as "requester" | "designated",
+                          }))
+                        }
+                      >
+                        <option value="requester">Me (requester)</option>
+                        <option value="designated">Designated authenticated human</option>
+                      </SelectField>
                       {reviewCompensation.feedbackBonusAwarderKind === "designated" ? (
                         <div className="sm:col-span-2">
                           <Field
@@ -2271,7 +2269,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                                       key={`${requirement.definitionId}:${requirement.definitionVersion}:${requirement.definitionHash}`}
                                       className="flex cursor-pointer items-start gap-2 rounded-lg border border-white/10 p-3 text-sm"
                                     >
-                                      <input
+                                      <ChoiceInput
                                         type="checkbox"
                                         className="checkbox checkbox-sm mt-0.5"
                                         checked={invitationExpertiseIds.includes(requirement.definitionId)}

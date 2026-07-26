@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { OneTimeSecretNotice } from "./OneTimeSecretNotice";
 import { formatEvidenceDeliveryDate, readEvidenceDeliveryJson } from "./evidenceDeliveryClient";
-import { Field } from "~~/components/tokenless/forms/Field";
+import { ChoiceInput, Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 
 const EVENT_TYPES = [
@@ -186,7 +186,7 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
             <div className="mt-2 grid gap-2 sm:grid-cols-3">
               {EVENT_TYPES.map(([value, label]) => (
                 <label key={value} className="flex items-center gap-2 text-sm text-base-content/65">
-                  <input
+                  <ChoiceInput
                     className="checkbox checkbox-sm"
                     type="checkbox"
                     checked={selectedTypes.includes(value)}

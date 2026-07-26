@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { prepareTransaction, sendTransaction } from "thirdweb";
 import { baseSepolia } from "thirdweb/chains";
 import { ConnectButton, ThirdwebProvider, useActiveAccount } from "thirdweb/react";
+import { Field } from "~~/components/tokenless/forms/Field";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { Badge } from "~~/components/tokenless/ui/Badge";
 import { Button } from "~~/components/tokenless/ui/Button";
@@ -118,19 +119,14 @@ function AwardCard({ item, onAwarded }: { item: FeedbackBonusAwardInboxItem; onA
         {item.feedbackBody}
       </blockquote>
       <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-        <label className="text-sm">
-          Award amount
-          <div className="input mt-2 flex w-full items-center gap-2 border-white/10 bg-[var(--rateloop-field)]">
-            <input
-              className="min-w-0 grow bg-transparent outline-none"
-              inputMode="decimal"
-              value={amount}
-              onChange={event => setAmount(event.target.value)}
-              aria-label="Feedback Bonus award amount"
-            />
-            <span className="text-base-content/55">USDC</span>
-          </div>
-        </label>
+        <Field
+          className="border-white/10 bg-[var(--rateloop-field)]"
+          label="Award amount (USDC)"
+          labelClassName="text-sm"
+          inputMode="decimal"
+          value={amount}
+          onChange={event => setAmount(event.target.value)}
+        />
         <Button type="button" disabled={busy} onClick={() => void award()}>
           {busy ? "Confirming…" : "Award this feedback"}
         </Button>

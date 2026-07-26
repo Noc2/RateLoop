@@ -2,6 +2,7 @@
 
 import { useId } from "react";
 import { InfoPopover } from "~~/components/tokenless/InfoPopover";
+import { ChoiceInput, SelectField } from "~~/components/tokenless/forms/Field";
 
 export type ReviewRoutingMode = "adaptive" | "always" | "manual" | "rules" | "fixed";
 export type ReviewRoutingAuthority = "check_only" | "prepare_for_approval" | "ask_automatically";
@@ -75,8 +76,10 @@ export function ReviewFrequencyFields({
           Decides when an eligible output requires human review. It does not authorize sending or funding a request.
         </InfoPopover>
       </div>
-      <select
+      <SelectField
         className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+        label="When should RateLoop require human review?"
+        labelClassName="sr-only"
         value={mode}
         aria-labelledby={frequencyLabelId}
         aria-describedby={frequencyDescriptionId}
@@ -87,7 +90,7 @@ export function ReviewFrequencyFields({
             {label}
           </option>
         ))}
-      </select>
+      </SelectField>
       <p id={frequencyDescriptionId} className="mt-2 text-sm leading-6 text-base-content/65">
         {reviewRoutingModeDescription(mode)}
       </p>
@@ -142,7 +145,7 @@ export function ReviewAuthorityFields({
                 authority === value ? "border-primary/40 bg-primary/10" : "border-white/10 bg-[var(--rateloop-field)]"
               } ${automaticUnavailable ? "cursor-not-allowed opacity-65" : "cursor-pointer"}`}
             >
-              <input
+              <ChoiceInput
                 id={inputId}
                 className="radio radio-primary radio-sm mt-0.5 shrink-0"
                 type="radio"

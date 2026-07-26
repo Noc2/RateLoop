@@ -1209,9 +1209,12 @@ export function AgentConnectionPanel({
           <p id="manual-agent-message-help" className="mt-2 text-sm leading-6 text-base-content/60">
             Review or copy the complete message below, then paste it once into the intended agent chat.
           </p>
-          <textarea
+          <TextareaField
             ref={manualMessageRef}
-            className="textarea mt-4 min-h-32 w-full border-white/10 bg-[var(--rateloop-field)] font-mono text-xs leading-5"
+            containerClassName="mt-4"
+            className="min-h-32 border-white/10 bg-[var(--rateloop-field)] font-mono text-xs leading-5"
+            label="Connection message"
+            labelClassName="sr-only"
             aria-describedby="manual-agent-message-help"
             readOnly
             value={manualConnectionMessage}

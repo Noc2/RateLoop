@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { OneTimeSecretNotice } from "~~/components/tokenless/agents/OneTimeSecretNotice";
-import { Field } from "~~/components/tokenless/forms/Field";
+import { ChoiceInput, Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { readJson } from "~~/lib/tokenless/http";
 import { WorkspaceRequestScope } from "~~/lib/tokenless/workspaceRequestScope";
@@ -364,36 +364,27 @@ export function WorkspaceReviewersPanel({
             error={fieldErrors.intendedEmail}
           />
         </div>
-        <label className="text-xs text-base-content/55">
-          Private material limit
-          <select
-            className={`select mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)] ${
-              fieldErrors.maxPrivateSensitivity ? "select-error" : ""
-            }`}
-            value={maxPrivateSensitivity}
-            aria-describedby={fieldErrors.maxPrivateSensitivity ? "workspace-reviewer-sensitivity-error" : undefined}
-            aria-invalid={fieldErrors.maxPrivateSensitivity ? true : undefined}
-            onChange={event => {
-              setMaxPrivateSensitivity(event.target.value as "internal" | "confidential" | "restricted" | "regulated");
-              clear("maxPrivateSensitivity");
-            }}
-          >
-            <option value="internal">Internal</option>
-            <option value="confidential">Confidential</option>
-            <option value="restricted">Restricted</option>
-            <option value="regulated">Regulated</option>
-          </select>
-          {fieldErrors.maxPrivateSensitivity ? (
-            <span id="workspace-reviewer-sensitivity-error" className="mt-2 block text-sm text-error" role="alert">
-              {fieldErrors.maxPrivateSensitivity}
-            </span>
-          ) : null}
-        </label>
+        <SelectField
+          className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+          label="Private material limit"
+          labelClassName="text-xs text-base-content/55"
+          error={fieldErrors.maxPrivateSensitivity}
+          value={maxPrivateSensitivity}
+          onChange={event => {
+            setMaxPrivateSensitivity(event.target.value as "internal" | "confidential" | "restricted" | "regulated");
+            clear("maxPrivateSensitivity");
+          }}
+        >
+          <option value="internal">Internal</option>
+          <option value="confidential">Confidential</option>
+          <option value="restricted">Restricted</option>
+          <option value="regulated">Regulated</option>
+        </SelectField>
         <button className="rateloop-gradient-action min-h-12 px-5" disabled={busyTarget === "invite"}>
           {busyTarget === "invite" ? "Creating…" : "Invite reviewer"}
         </button>
         <label className="flex items-start gap-2 text-xs leading-5 text-base-content/65 sm:col-span-3">
-          <input
+          <ChoiceInput
             type="checkbox"
             className="checkbox checkbox-sm mt-0.5"
             checked={paidAdulthoodAttested}

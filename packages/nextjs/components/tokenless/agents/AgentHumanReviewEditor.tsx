@@ -8,7 +8,7 @@ import {
   ReviewRoutingFields,
   reviewRoutingStateForMode,
 } from "~~/components/tokenless/agents/ReviewRoutingFields";
-import { Field, TextareaField } from "~~/components/tokenless/forms/Field";
+import { Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
@@ -520,19 +520,18 @@ export function AgentHumanReviewEditor({
       ) : null}
       <form className="mt-6 space-y-5" onSubmit={submit}>
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="text-sm sm:col-span-2">
-            Who writes the question?
-            <select
-              className="select mt-2 w-full"
-              value={draft.questionAuthority}
-              onChange={event => changeQuestionAuthority(event.target.value as QuestionAuthority)}
-            >
-              <option value="owner_fixed">Use one question</option>
-              <option value="agent_per_request" disabled={!CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.available}>
-                Let the agent ask each time (unavailable)
-              </option>
-            </select>
-          </label>
+          <SelectField
+            containerClassName="sm:col-span-2"
+            label="Who writes the question?"
+            labelClassName="text-sm"
+            value={draft.questionAuthority}
+            onChange={event => changeQuestionAuthority(event.target.value as QuestionAuthority)}
+          >
+            <option value="owner_fixed">Use one question</option>
+            <option value="agent_per_request" disabled={!CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.available}>
+              Let the agent ask each time (unavailable)
+            </option>
+          </SelectField>
           {draft.questionAuthority === "owner_fixed" ? (
             <>
               <div className="sm:col-span-2">
@@ -567,18 +566,16 @@ export function AgentHumanReviewEditor({
               adaptive review coverage.
             </p>
           )}
-          <label className="text-sm">
-            Rationale
-            <select
-              className="select mt-2 w-full"
-              value={draft.rationaleMode}
-              onChange={event => update("rationaleMode", event.target.value as Draft["rationaleMode"])}
-            >
-              <option value="off">Off</option>
-              <option value="optional">Optional</option>
-              <option value="required">Required</option>
-            </select>
-          </label>
+          <SelectField
+            label="Rationale"
+            labelClassName="text-sm"
+            value={draft.rationaleMode}
+            onChange={event => update("rationaleMode", event.target.value as Draft["rationaleMode"])}
+          >
+            <option value="off">Off</option>
+            <option value="optional">Optional</option>
+            <option value="required">Required</option>
+          </SelectField>
           <ReviewRoutingFields
             className="sm:col-span-2"
             mode={draft.mode}
@@ -639,44 +636,40 @@ export function AgentHumanReviewEditor({
               />
             </>
           ) : null}
-          <label className="text-sm">
-            Reviewers
-            <select
-              className="select mt-2 w-full"
-              value={draft.audience}
-              onChange={event => {
-                const audience = event.target.value as Audience;
-                setDraft(current =>
-                  current
-                    ? {
-                        ...current,
-                        audience,
-                        compensationMode: audience === "private_invited" ? current.compensationMode : "usdc",
-                      }
-                    : current,
-                );
-              }}
+          <SelectField
+            label="Reviewers"
+            labelClassName="text-sm"
+            hint="This deployment currently supports invited reviewers without a guaranteed bounty."
+            value={draft.audience}
+            onChange={event => {
+              const audience = event.target.value as Audience;
+              setDraft(current =>
+                current
+                  ? {
+                      ...current,
+                      audience,
+                      compensationMode: audience === "private_invited" ? current.compensationMode : "usdc",
+                    }
+                  : current,
+              );
+            }}
+          >
+            <option value="private_invited" disabled={draft.questionAuthority === "agent_per_request"}>
+              Invited reviewers
+            </option>
+            <option value="public_network" disabled={!CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.available}>
+              RateLoop network (unavailable)
+            </option>
+            <option
+              value="hybrid"
+              disabled={
+                draft.questionAuthority === "agent_per_request" ||
+                !CONFIGURED_HUMAN_REVIEW_LANES.hybridPublicSafe.available
+              }
             >
-              <option value="private_invited" disabled={draft.questionAuthority === "agent_per_request"}>
-                Invited reviewers
-              </option>
-              <option value="public_network" disabled={!CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.available}>
-                RateLoop network (unavailable)
-              </option>
-              <option
-                value="hybrid"
-                disabled={
-                  draft.questionAuthority === "agent_per_request" ||
-                  !CONFIGURED_HUMAN_REVIEW_LANES.hybridPublicSafe.available
-                }
-              >
-                Invited and RateLoop network (unavailable)
-              </option>
-            </select>
-            <span className="mt-1 block text-xs text-base-content/55">
-              This deployment currently supports invited reviewers without a guaranteed bounty.
-            </span>
-          </label>
+              Invited and RateLoop network (unavailable)
+            </option>
+          </SelectField>
           <Field
             label="Response window (seconds)"
             type="number"
@@ -697,33 +690,29 @@ export function AgentHumanReviewEditor({
             onChange={event => update("panelSize", event.target.value)}
             required
           />
-          <label className="text-sm">
-            Guaranteed bounty
-            <select
-              className="select mt-2 w-full"
-              value={draft.compensationMode}
-              onChange={event => update("compensationMode", event.target.value as Draft["compensationMode"])}
+          <SelectField
+            label="Guaranteed bounty"
+            labelClassName="text-sm"
+            hint={
+              draft.audience !== "private_invited" ? "Network assignments currently require a guaranteed bounty." : null
+            }
+            value={draft.compensationMode}
+            onChange={event => update("compensationMode", event.target.value as Draft["compensationMode"])}
+          >
+            <option value="unpaid" disabled={draft.audience !== "private_invited"}>
+              No bounty
+            </option>
+            <option
+              value="usdc"
+              disabled={
+                draft.audience === "private_invited"
+                  ? !CONFIGURED_HUMAN_REVIEW_LANES.privateInvitedPaid.available
+                  : true
+              }
             >
-              <option value="unpaid" disabled={draft.audience !== "private_invited"}>
-                No bounty
-              </option>
-              <option
-                value="usdc"
-                disabled={
-                  draft.audience === "private_invited"
-                    ? !CONFIGURED_HUMAN_REVIEW_LANES.privateInvitedPaid.available
-                    : true
-                }
-              >
-                Add USDC bounty (unavailable)
-              </option>
-            </select>
-            {draft.audience !== "private_invited" ? (
-              <span className="mt-1 block text-xs text-base-content/55">
-                Network assignments currently require a guaranteed bounty.
-              </span>
-            ) : null}
-          </label>
+              Add USDC bounty (unavailable)
+            </option>
+          </SelectField>
           {draft.compensationMode === "usdc" ? (
             <Field
               label="USDC per accepted reviewer"
@@ -767,19 +756,17 @@ export function AgentHumanReviewEditor({
                   onChange={event => update("feedbackBonusUsdc", event.target.value)}
                   required
                 />
-                <label className="text-sm">
-                  Human awarder
-                  <select
-                    className="select mt-2 w-full"
-                    value={draft.feedbackBonusAwarderKind}
-                    onChange={event =>
-                      update("feedbackBonusAwarderKind", event.target.value as Draft["feedbackBonusAwarderKind"])
-                    }
-                  >
-                    <option value="requester">Requester</option>
-                    <option value="designated">Designated authenticated human</option>
-                  </select>
-                </label>
+                <SelectField
+                  label="Human awarder"
+                  labelClassName="text-sm"
+                  value={draft.feedbackBonusAwarderKind}
+                  onChange={event =>
+                    update("feedbackBonusAwarderKind", event.target.value as Draft["feedbackBonusAwarderKind"])
+                  }
+                >
+                  <option value="requester">Requester</option>
+                  <option value="designated">Designated authenticated human</option>
+                </SelectField>
                 {draft.feedbackBonusAwarderKind === "designated" ? (
                   <div className="sm:col-span-2">
                     <Field

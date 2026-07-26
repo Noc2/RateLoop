@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { formatEvidenceDeliveryDate, readEvidenceDeliveryJson } from "./evidenceDeliveryClient";
-import { Field } from "~~/components/tokenless/forms/Field";
+import { ChoiceInput, Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 
 type Provider = "drata" | "vanta";
@@ -219,17 +219,16 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
               .finally(() => setBusy(false));
           }}
         >
-          <label className="text-sm text-base-content/65">
-            Provider
-            <select
-              className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={form.provider}
-              onChange={event => setForm(current => ({ ...current, provider: event.target.value as Provider }))}
-            >
-              <option value="vanta">Vanta</option>
-              <option value="drata">Drata</option>
-            </select>
-          </label>
+          <SelectField
+            className="border-white/10 bg-[var(--rateloop-field)]"
+            label="Provider"
+            labelClassName="text-sm text-base-content/65"
+            value={form.provider}
+            onChange={event => setForm(current => ({ ...current, provider: event.target.value as Provider }))}
+          >
+            <option value="vanta">Vanta</option>
+            <option value="drata">Drata</option>
+          </SelectField>
           <Field
             label="Name"
             value={form.displayName}
@@ -242,37 +241,35 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
             maxLength={100}
           />
           {form.provider === "vanta" ? (
-            <label className="text-sm text-base-content/65 sm:col-span-2">
-              Vanta document ID
-              <input
-                className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                value={form.documentId}
-                onChange={event => setForm(current => ({ ...current, documentId: event.target.value }))}
-                required
-              />
-            </label>
+            <Field
+              containerClassName="sm:col-span-2"
+              className="border-white/10 bg-[var(--rateloop-field)]"
+              label="Vanta document ID"
+              labelClassName="text-sm text-base-content/65"
+              value={form.documentId}
+              onChange={event => setForm(current => ({ ...current, documentId: event.target.value }))}
+              required
+            />
           ) : (
             <>
-              <label className="text-sm text-base-content/65">
-                Drata connection ID
-                <input
-                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  inputMode="numeric"
-                  value={form.connectionId}
-                  onChange={event => setForm(current => ({ ...current, connectionId: event.target.value }))}
-                  required
-                />
-              </label>
-              <label className="text-sm text-base-content/65">
-                Drata resource ID
-                <input
-                  className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                  inputMode="numeric"
-                  value={form.resourceId}
-                  onChange={event => setForm(current => ({ ...current, resourceId: event.target.value }))}
-                  required
-                />
-              </label>
+              <Field
+                className="border-white/10 bg-[var(--rateloop-field)]"
+                label="Drata connection ID"
+                labelClassName="text-sm text-base-content/65"
+                inputMode="numeric"
+                value={form.connectionId}
+                onChange={event => setForm(current => ({ ...current, connectionId: event.target.value }))}
+                required
+              />
+              <Field
+                className="border-white/10 bg-[var(--rateloop-field)]"
+                label="Drata resource ID"
+                labelClassName="text-sm text-base-content/65"
+                inputMode="numeric"
+                value={form.resourceId}
+                onChange={event => setForm(current => ({ ...current, resourceId: event.target.value }))}
+                required
+              />
             </>
           )}
           <div className="sm:col-span-2">
@@ -292,48 +289,48 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
               required
             />
           </div>
-          <label className="text-sm text-base-content/65">
-            Mapping ID
-            <input
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={form.mappingId}
-              onChange={event => setForm(current => ({ ...current, mappingId: event.target.value }))}
-              required
-            />
-          </label>
-          <label className="text-sm text-base-content/65">
-            Control ID
-            <input
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={form.controlId}
-              onChange={event => setForm(current => ({ ...current, controlId: event.target.value }))}
-              required
-            />
-          </label>
-          <label className="text-sm text-base-content/65">
-            Scope ID <span className="text-base-content/55">(optional)</span>
-            <input
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={form.scopeId}
-              onChange={event => setForm(current => ({ ...current, scopeId: event.target.value }))}
-            />
-          </label>
-          <label className="text-sm text-base-content/65">
-            Minimum coverage
-            <input
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              type="number"
-              min={0}
-              max={100}
-              step="0.1"
-              value={form.minimumCoveragePercent}
-              onChange={event => setForm(current => ({ ...current, minimumCoveragePercent: event.target.value }))}
-              required
-            />
-            <span className="mt-1 block text-xs text-base-content/55">Percent of eligible evidence.</span>
-          </label>
+          <Field
+            className="border-white/10 bg-[var(--rateloop-field)]"
+            label="Mapping ID"
+            labelClassName="text-sm text-base-content/65"
+            value={form.mappingId}
+            onChange={event => setForm(current => ({ ...current, mappingId: event.target.value }))}
+            required
+          />
+          <Field
+            className="border-white/10 bg-[var(--rateloop-field)]"
+            label="Control ID"
+            labelClassName="text-sm text-base-content/65"
+            value={form.controlId}
+            onChange={event => setForm(current => ({ ...current, controlId: event.target.value }))}
+            required
+          />
+          <Field
+            className="border-white/10 bg-[var(--rateloop-field)]"
+            label={
+              <>
+                Scope ID <span className="text-base-content/55">(optional)</span>
+              </>
+            }
+            labelClassName="text-sm text-base-content/65"
+            value={form.scopeId}
+            onChange={event => setForm(current => ({ ...current, scopeId: event.target.value }))}
+          />
+          <Field
+            className="border-white/10 bg-[var(--rateloop-field)]"
+            label="Minimum coverage"
+            labelClassName="text-sm text-base-content/65"
+            type="number"
+            min={0}
+            max={100}
+            step="0.1"
+            value={form.minimumCoveragePercent}
+            onChange={event => setForm(current => ({ ...current, minimumCoveragePercent: event.target.value }))}
+            hint="Percent of eligible evidence."
+            required
+          />
           <label className="flex items-center gap-2 text-sm text-base-content/65 sm:col-span-2">
-            <input
+            <ChoiceInput
               className="checkbox checkbox-sm"
               type="checkbox"
               checked={form.requireSignedPacket}

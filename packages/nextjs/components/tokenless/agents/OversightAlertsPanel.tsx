@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ChoiceInput, Field } from "~~/components/tokenless/forms/Field";
 import { Badge } from "~~/components/tokenless/ui/Badge";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
@@ -136,7 +137,7 @@ function AlertSettings({ workspaceId }: { workspaceId: string }) {
             <span className="block text-sm font-semibold">{option.label}</span>
             <span className="mt-1 block text-xs leading-5 text-base-content/55">{option.description}</span>
           </span>
-          <input
+          <ChoiceInput
             type="checkbox"
             aria-label={option.label}
             className="toggle toggle-sm toggle-primary mt-1"
@@ -146,22 +147,24 @@ function AlertSettings({ workspaceId }: { workspaceId: string }) {
           />
         </label>
       ))}
-      <label className="flex items-start justify-between gap-4 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+      <div className="flex items-start justify-between gap-4 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
         <span>
           <span className="block text-sm font-semibold">Disagreement spike threshold</span>
           <span className="mt-1 block text-xs leading-5 text-base-content/55">
             Alert when 30-day reviewer disagreement reaches this share of comparable cases. Clear to disable.
           </span>
         </span>
-        <input
+        <Field
+          containerClassName="w-24 shrink-0"
+          label="Disagreement spike threshold percent"
+          labelClassName="sr-only"
           type="number"
-          className="input input-sm w-24 border-white/10 bg-[var(--rateloop-field)] text-right"
+          className="input-sm border-white/10 bg-[var(--rateloop-field)] text-right"
           min={0.01}
           max={100}
           step={0.01}
           value={preferences.disagreementSpikeBps === null ? "" : preferences.disagreementSpikeBps / 100}
           disabled={saving}
-          aria-label="Disagreement spike threshold percent"
           onChange={event => {
             const raw = event.target.value.trim();
             const bps = raw === "" ? null : Math.round(Number(raw) * 100);
@@ -169,7 +172,7 @@ function AlertSettings({ workspaceId }: { workspaceId: string }) {
             void save({ ...preferences, disagreementSpikeBps: bps });
           }}
         />
-      </label>
+      </div>
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
         <span>
           <span className="block text-sm font-semibold">Browser notifications</span>

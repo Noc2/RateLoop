@@ -3,7 +3,7 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { AdaptiveCoverageSummary } from "~~/components/tokenless/agents/AdaptiveCoverageSummary";
 import { ModelEvidencePanel } from "~~/components/tokenless/agents/ModelEvidencePanel";
-import { Field, TextareaField } from "~~/components/tokenless/forms/Field";
+import { Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import type { AssuranceMetricsSnapshot } from "~~/lib/tokenless/assuranceMetrics";
@@ -713,21 +713,21 @@ export function EvaluationDashboardPanel({
             <p className="mt-2 text-sm text-base-content/55">Decisions and evidence from your agent workflows.</p>
           </div>
           {showWorkspaceSelector && workspaces.length > 1 ? (
-            <label className="min-w-56 text-sm text-base-content/60">
-              Workspace
-              <select
-                className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                value={workspaceId}
-                onChange={event => selectWorkspace(event.target.value)}
-                disabled={loading}
-              >
-                {workspaces.map(workspace => (
-                  <option key={workspace.workspaceId} value={workspace.workspaceId}>
-                    {workspace.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <SelectField
+              containerClassName="min-w-56"
+              className="border-white/10 bg-[var(--rateloop-field)]"
+              label="Workspace"
+              labelClassName="text-sm text-base-content/60"
+              value={workspaceId}
+              onChange={event => selectWorkspace(event.target.value)}
+              disabled={loading}
+            >
+              {workspaces.map(workspace => (
+                <option key={workspace.workspaceId} value={workspace.workspaceId}>
+                  {workspace.name}
+                </option>
+              ))}
+            </SelectField>
           ) : null}
         </div>
       </section>
