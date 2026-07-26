@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { shouldInspectReservedVoucher } from "./publicSubmissionReceipt";
 import type { Hex } from "viem";
 import { type PublicQuestionMedia, QuestionMedia } from "~~/components/tokenless/answer/QuestionMedia";
 import { CrowdForecastField, isCrowdForecastPercent } from "~~/components/tokenless/review/CrowdForecastField";
@@ -285,7 +286,14 @@ export function PublicQuestionCard({
   }, [activePreparedSubmission]);
 
   useEffect(() => {
-    if (!task.alreadyVouchered) return;
+    if (
+      !shouldInspectReservedVoucher({
+        alreadyVouchered: task.alreadyVouchered,
+        hasLocalReceipt: submissionReceipt !== null,
+      })
+    ) {
+      return;
+    }
     let active = true;
     const queue = createIndexedDbTokenlessCommitQueue();
     void dueTokenlessCommits(queue, principalId).then(async dueRecords => {
@@ -309,7 +317,7 @@ export function PublicQuestionCard({
     return () => {
       active = false;
     };
-  }, [principalId, task.alreadyVouchered, task.roundId, task.voucherDeadline]);
+  }, [principalId, submissionReceipt, task.alreadyVouchered, task.roundId, task.voucherDeadline]);
 
   useEffect(() => {
     if (!savedCommit || retryAvailable) return;
