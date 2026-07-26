@@ -443,10 +443,17 @@ function validateTokenlessTestDeployment(env) {
   }
   const goldKey = goldVersion && goldKeys ? currentKey(env, "TOKENLESS_GOLD_INJECTION", "base64url", errors) : null;
   addSecretRole(testSecretRoles, "TOKENLESS_GOLD_INJECTION", goldKey);
+  for (const name of ["TOKENLESS_MCP_RATE_LIMIT_SECRET", "CRON_SECRET"]) {
+    const secret = value(env, name);
+    if (!secret) {
+      errors.push(`${name} is required for the tokenless test deployment.`);
+    } else if (secret.length < 32) {
+      errors.push(`${name} must contain at least 32 characters.`);
+    }
+    if (secret) addSecretRole(testSecretRoles, name, Buffer.from(secret, "utf8"));
+  }
   for (const name of [
-    "TOKENLESS_MCP_RATE_LIMIT_SECRET",
     "TOKENLESS_PIPELINE_TOKEN",
-    "CRON_SECRET",
     "TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET",
     "BETTER_AUTH_SECRET",
   ]) {

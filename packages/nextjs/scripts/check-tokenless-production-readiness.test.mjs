@@ -16,6 +16,10 @@ const tokenlessGoldKeyring = (index = 16) => ({
   TOKENLESS_GOLD_INJECTION_KEY_VERSION: "v1",
   TOKENLESS_GOLD_INJECTION_KEYS: JSON.stringify({ v1: encodedKey(index) }),
 });
+const tokenlessTestOperationalSecrets = () => ({
+  TOKENLESS_MCP_RATE_LIMIT_SECRET: "m".repeat(32),
+  CRON_SECRET: "c".repeat(32),
+});
 const tokenlessTestDatabase = () => {
   const DATABASE_URL = "postgresql://rateloop:secret@tokenless-db.example/tokenless?sslmode=require";
   return { DATABASE_URL, TOKENLESS_DATABASE_IDENTITY: deriveHostedDatabaseIdentity(DATABASE_URL) };
@@ -321,6 +325,7 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
     ...tokenlessTestDatabase(),
     TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
     ...tokenlessGoldKeyring(),
+    ...tokenlessTestOperationalSecrets(),
   };
   assert.deepEqual(validateTokenlessProductionReadiness({ env, activeRegistry: {} }), []);
   const cliDeploymentEnv = { ...env };
@@ -357,6 +362,18 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
     }).join("\n"),
     /TOKENLESS_FEEDBACK_BONUS_ADDRESS must be a non-zero EVM address/,
   );
+  for (const name of ["TOKENLESS_MCP_RATE_LIMIT_SECRET", "CRON_SECRET"]) {
+    const missingSecret = { ...env };
+    delete missingSecret[name];
+    assert.match(
+      validateTokenlessProductionReadiness({ env: missingSecret, activeRegistry: {} }).join("\n"),
+      new RegExp(`${name} is required`),
+    );
+    assert.match(
+      validateTokenlessProductionReadiness({ env: { ...env, [name]: "too-short" }, activeRegistry: {} }).join("\n"),
+      new RegExp(`${name} must contain at least 32 characters`),
+    );
+  }
 
   const mainErrors = validateTokenlessProductionReadiness({
     env: { ...env, VERCEL_GIT_COMMIT_REF: "main" },
@@ -382,6 +399,7 @@ test("the tokenless hosted gate pins KMS inventory to the signed EU manifest", (
     ...tokenlessTestDatabase(),
     TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
     ...tokenlessGoldKeyring(),
+    ...tokenlessTestOperationalSecrets(),
   };
   const missingResource = { ...env };
   delete missingResource[kms.resourceIdEnv];
@@ -424,6 +442,7 @@ test("the isolated review deployment may retain its existing local vault without
     ...tokenlessTestDatabase(),
     TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
     ...tokenlessGoldKeyring(),
+    ...tokenlessTestOperationalSecrets(),
   };
   assert.deepEqual(validateTokenlessProductionReadiness({ env, activeRegistry: {} }), []);
   assert.match(
@@ -454,6 +473,7 @@ test("the tokenless test deployment still rejects browser-exposed secrets", () =
     ...tokenlessTestDatabase(),
     TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
     ...tokenlessGoldKeyring(),
+    ...tokenlessTestOperationalSecrets(),
     NEXT_PUBLIC_TOKENLESS_PIPELINE_TOKEN: "must-not-ship",
     NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEY_VERSION: "must-not-ship-version",
     NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEYS: "must-not-ship-keys",
@@ -483,6 +503,7 @@ test("the tokenless test deployment requires a dedicated server-only media previ
     ...tokenlessTestKms(),
     ...tokenlessTestDatabase(),
     ...tokenlessGoldKeyring(),
+    ...tokenlessTestOperationalSecrets(),
   };
   assert.match(
     validateTokenlessProductionReadiness({ env: base, activeRegistry: {} }).join("\n"),
@@ -549,6 +570,7 @@ test("the tokenless test deployment validates the active gold-injection keyring 
     ...tokenlessTestKms(),
     ...tokenlessTestDatabase(),
     TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
+    ...tokenlessTestOperationalSecrets(),
   };
   const missing = validateTokenlessProductionReadiness({ env: base, activeRegistry: {} }).join("\n");
   assert.match(missing, /TOKENLESS_GOLD_INJECTION_KEY_VERSION is required/u);
@@ -595,6 +617,7 @@ test("test and production deployments refuse server-held Feedback Bonus award au
     ...tokenlessTestKms(),
     ...tokenlessTestDatabase(),
     ...tokenlessGoldKeyring(),
+    ...tokenlessTestOperationalSecrets(),
     TOKENLESS_FEEDBACK_BONUS_AWARDER_PRIVATE_KEY: "server-must-not-custody-human-awarder",
     NEXT_PUBLIC_TOKENLESS_FEEDBACK_BONUS_AWARD_WORKER_PRIVATE_KEY: "browser-must-not-see-worker-secret",
   };
