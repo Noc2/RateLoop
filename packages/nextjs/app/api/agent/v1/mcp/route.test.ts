@@ -43,7 +43,11 @@ import {
   hashHumanReviewSelectionPolicySnapshot,
   observeHumanReviewResult,
 } from "~~/lib/tokenless/humanReviewResultObservation";
-import { createPrivateGroup } from "~~/lib/tokenless/privateGroups";
+import {
+  createPrivateGroup,
+  createPrivateGroupInvitation,
+  redeemPrivateGroupInvitation,
+} from "~~/lib/tokenless/privateGroups";
 import { createAgentPublishingPolicy, createWorkspace } from "~~/lib/tokenless/productCore";
 import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
 import {
@@ -308,9 +312,11 @@ async function addRedeemedPrivateReviewer(input: {
   accountAddress: string;
   email: string;
   ownerAddress: string;
+  privateGroupId: string;
   workspaceId: string;
 }) {
   const now = new Date();
+  const accessExpiresAt = new Date(now.getTime() + 30 * 86_400_000);
   await dbClient.execute({
     sql: `INSERT INTO tokenless_principals (principal_id,status,created_at,updated_at)
           VALUES (?,'active',?,?)`,
@@ -328,10 +334,23 @@ async function addRedeemedPrivateReviewer(input: {
     workspaceId: input.workspaceId,
     maxPrivateSensitivity: "confidential",
     intendedAccountAddress: input.accountAddress,
-    accessExpiresAt: new Date(now.getTime() + 30 * 86_400_000),
+    accessExpiresAt,
     now,
   });
   await redeemWorkspaceReviewerInvitation({ accountAddress: input.accountAddress, token: invitation.token, now });
+  const groupInvitation = await createPrivateGroupInvitation({
+    accountAddress: input.ownerAddress,
+    workspaceId: input.workspaceId,
+    groupId: input.privateGroupId,
+    intendedAccountAddress: input.accountAddress,
+    membershipExpiresAt: accessExpiresAt,
+    now,
+  });
+  await redeemPrivateGroupInvitation({
+    accountAddress: input.accountAddress,
+    token: groupInvitation.token,
+    now,
+  });
 }
 
 test("pairing initialization describes the owner-initiated registration flow without instruction overrides", async () => {
@@ -1090,12 +1109,14 @@ test("finished automatic private setup lets the connected agent assign an eligib
     accountAddress: PRIVATE_REVIEWER_A,
     email: "setup-reviewer-a@example.test",
     ownerAddress: principalId,
+    privateGroupId: group.groupId,
     workspaceId,
   });
   await addRedeemedPrivateReviewer({
     accountAddress: PRIVATE_REVIEWER_B,
     email: "setup-reviewer-b@example.test",
     ownerAddress: principalId,
+    privateGroupId: group.groupId,
     workspaceId,
   });
   const saved = await putHumanReviewConfigurationForOwner({
