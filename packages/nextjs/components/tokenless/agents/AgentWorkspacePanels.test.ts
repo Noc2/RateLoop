@@ -126,7 +126,7 @@ test("the active workspace selector shares the tab header and preserves the curr
     panelsSource,
     /`\/agents\?tab=\$\{encodeURIComponent\(resolvedTab\)\}&workspace=\$\{encodeURIComponent\(nextWorkspaceId\)\}`/,
   );
-  assert.equal(panelsSource.match(/<select/g)?.length, 1);
+  assert.equal(tabsSource.match(/<select/g)?.length, 1);
 });
 
 test("the server resolves onboarding before the client renders downstream panels", () => {
@@ -137,10 +137,11 @@ test("the server resolves onboarding before the client renders downstream panels
   assert.doesNotMatch(pageSource, /listPrivateGroups\(/);
   assert.doesNotMatch(pageSource, /getWorkspaceEvaluationDashboard\(/);
   assert.doesNotMatch(panelsSource, /fetch\("\/api\/account\/workspaces"/);
-  assert.match(panelsSource, /workspaces\.length > 1/);
+  assert.match(tabsSource, /workspaces\.map\(workspace =>/);
   assert.match(panelsSource, /return <WorkspaceSetupStart \/>/);
-  assert.match(panelsSource, /initialSetup && !initialSetup\.complete/);
+  assert.match(panelsSource, /const setupIncomplete = Boolean\(initialSetup && !initialSetup\.complete\)/);
   assert.match(panelsSource, /<AgentSetupFlow initialSetup=\{initialSetup\} \/>/);
+  assert.ok(panelsSource.indexOf("<AgentSetupFlow") < panelsSource.indexOf("<AgentTabs"));
   assert.match(panelsSource, /<AgentTabs/);
   assert.match(panelsSource, /workspaceId=\{workspaceId\}/);
   assert.match(panelsSource, /resolvedTab === "connect" && canManage/);
@@ -176,6 +177,13 @@ test("the overview starts with workspace settings instead of an evidence summary
   assert.match(panelsSource, /Connect another agent/);
   assert.match(panelsSource, /Connect an agent/);
   assert.match(panelsSource, /\["overview", "connect"\]/);
+});
+
+test("incomplete setup keeps workspace management reachable beside guided setup", () => {
+  assert.doesNotMatch(panelsSource, /if \(initialSetup && !initialSetup\.complete\) \{\s*return/);
+  assert.match(panelsSource, /setupIncomplete && initialSetup \? <AgentSetupFlow/);
+  assert.match(panelsSource, /resolvedTab === "overview"/);
+  assert.match(panelsSource, /<WorkspaceSettingsClient initialWorkspaceId=\{workspaceId\} \/>/);
 });
 
 test("the Reviews tab opens the canonical human-review editor directly", () => {

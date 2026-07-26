@@ -58,6 +58,7 @@ export function AgentWorkspacePanels({
 
   const workspace = workspaces.find(entry => entry.workspaceId === workspaceId) ?? workspaces[0];
   const canManage = workspace.role === "owner" || workspace.role === "admin";
+  const setupIncomplete = Boolean(initialSetup && !initialSetup.complete);
   const visibleTabs = hasConnectedAgent
     ? connectedAgentTabs({ canManage })
     : canManage
@@ -65,36 +66,11 @@ export function AgentWorkspacePanels({
       : (["overview"] as AgentTab[]);
   const resolvedTab = resolveAvailableAgentTab(activeTab, visibleTabs);
 
-  if (initialSetup && !initialSetup.complete) {
-    return (
-      <div className="space-y-5">
-        {workspaces.length > 1 ? (
-          <div className="flex justify-end">
-            <label className="min-w-56 text-sm text-base-content/60">
-              Workspace
-              <select
-                className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-                value={workspaceId}
-                onChange={event => router.push(`/agents?workspace=${encodeURIComponent(event.target.value)}`)}
-              >
-                {workspaces.map(entry => (
-                  <option key={entry.workspaceId} value={entry.workspaceId}>
-                    {entry.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        ) : null}
-        <AgentSetupFlow initialSetup={initialSetup} />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-5">
       {/* Persistent across every agents tab while the workspace stop is engaged. */}
       <WorkspaceStopBanner workspaceId={workspaceId} />
+      {setupIncomplete && initialSetup ? <AgentSetupFlow initialSetup={initialSetup} /> : null}
       <AgentTabs
         active={resolvedTab}
         visibleTabs={visibleTabs}
