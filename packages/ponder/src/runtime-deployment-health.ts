@@ -2,9 +2,9 @@ import { createPublicClient } from "viem";
 import {
   validateTokenlessDeploymentOnChain,
   type ValidatedTokenlessDeploymentHealth,
-} from "./deployment-health";
-import { resolveTokenlessDeployment } from "./protocol-deployment";
-import { createPonderRpcTransport, resolvePonderRpcUrls } from "./rpc";
+} from "./deployment-health.ts";
+import { resolveTokenlessDeployment } from "./protocol-deployment.ts";
+import { createPonderRpcTransport, resolvePonderRpcUrls } from "./rpc.ts";
 
 const VALIDATION_TTL_MS = 30_000;
 

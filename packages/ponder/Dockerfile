@@ -27,6 +27,17 @@ WORKDIR /app
 
 RUN YARN_ENABLE_IMMUTABLE_INSTALLS=true yarn workspaces focus @rateloop/ponder --production
 
+# Exercise the native Node 24 TypeScript import path used by scripts/start.mjs.
+# Vite resolves extensionless imports during tests, but production loads this
+# preflight directly before Ponder starts.
+RUN NODE_ENV=test \
+  PONDER_NETWORK=hardhat \
+  PONDER_TOKENLESS_PANEL_ADDRESS=0x1000000000000000000000000000000000000001 \
+  PONDER_CREDENTIAL_ISSUER_ADDRESS=0x1000000000000000000000000000000000000002 \
+  PONDER_FEEDBACK_BONUS_ADDRESS=0x1000000000000000000000000000000000000003 \
+  PONDER_BEACON_VERIFIER_ADDRESS=0x1000000000000000000000000000000000000004 \
+  node --input-type=module -e "await import('./packages/ponder/src/runtime-deployment-health.ts')"
+
 # The runtime starts through Yarn and does not need npm or npx. Remove npm's bundled
 # dependency tree so build-only tooling cannot add vulnerabilities to the shipped image.
 RUN rm -rf /usr/local/lib/node_modules/npm \
