@@ -93,7 +93,7 @@ export function MetricsEvidenceAccess({ workspaceId }: { workspaceId: string }) 
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="font-semibold">{credential.label}</p>
-                  <p className="mt-1 font-mono text-xs text-base-content/45">{credential.credentialId}</p>
+                  <p className="mt-1 font-mono text-xs text-base-content/55">{credential.credentialId}</p>
                 </div>
                 <span
                   className={`badge border-0 capitalize ${credential.status === "active" ? "bg-emerald-300/10 text-emerald-100" : "bg-white/[0.06] text-base-content/55"}`}
@@ -101,7 +101,7 @@ export function MetricsEvidenceAccess({ workspaceId }: { workspaceId: string }) 
                   {credential.status}
                 </span>
               </div>
-              <p className="mt-3 text-xs text-base-content/45">
+              <p className="mt-3 text-xs text-base-content/55">
                 Last used: {formatEvidenceDeliveryDate(credential.lastUsedAt)}
               </p>
               {credential.status === "active" ? (
@@ -128,7 +128,7 @@ export function MetricsEvidenceAccess({ workspaceId }: { workspaceId: string }) 
           ))}
         </div>
       ) : (
-        <p className="mt-4 text-sm text-base-content/50">No metrics credential has been issued.</p>
+        <p className="mt-4 text-sm text-base-content/55">No metrics credential has been issued.</p>
       )}
       {oneTimeToken ? (
         <OneTimeSecretNotice

@@ -18,7 +18,6 @@ test("private rater queue opens one assigned task without unrelated eligibility 
     />,
   ).replace(/\s+/g, " ");
 
-  assert.match(html, /Private assignment/);
   assert.match(html, /Open your assigned review/);
   assert.match(html, /Assignment details/);
   assert.match(html, /Invitation details loaded/);

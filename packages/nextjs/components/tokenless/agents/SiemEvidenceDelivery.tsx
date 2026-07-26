@@ -94,7 +94,7 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="break-all text-sm font-semibold">{eventStreamOrigin(stream.url)}</p>
-                  <p className="mt-1 text-xs text-base-content/45">
+                  <p className="mt-1 text-xs text-base-content/55">
                     {stream.eventTypes.length} event types · added {formatEvidenceDeliveryDate(stream.createdAt)}
                   </p>
                 </div>
@@ -118,7 +118,7 @@ export function SiemEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
           ))}
         </div>
       ) : (
-        <p className="mt-4 text-sm text-base-content/50">No SIEM stream is configured.</p>
+        <p className="mt-4 text-sm text-base-content/55">No SIEM stream is configured.</p>
       )}
 
       {oneTimeSecret ? (

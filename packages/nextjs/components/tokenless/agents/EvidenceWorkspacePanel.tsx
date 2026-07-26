@@ -211,7 +211,7 @@ function VerificationInstructions({
         >
           {copied ? "Copied" : "Copy commands"}
         </button>
-        <p className="text-xs leading-5 text-base-content/45">
+        <p className="text-xs leading-5 text-base-content/55">
           Select the attestation signer, Rekor log key, and TSA certificate chain through an independent trust process;
           none is trusted merely because it appears in a witness. A completed external-attestation job records a Rekor
           UUID. Export-boundary jobs separately report their timestamp-token status; absence is shown as pending or
@@ -451,21 +451,21 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                 </div>
                 <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
                   <div>
-                    <dt className="text-xs text-base-content/45">Generated</dt>
+                    <dt className="text-xs text-base-content/55">Generated</dt>
                     <dd className="mt-1">{new Date(packet.payload.generatedAt).toLocaleString()}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-base-content/45">Trigger</dt>
+                    <dt className="text-xs text-base-content/55">Trigger</dt>
                     <dd className="mt-1 capitalize">
                       {packet.payload.reviewContext?.selectionTrigger?.kind?.replaceAll("_", " ") ?? "Not recorded"}
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-base-content/45">Gate</dt>
+                    <dt className="text-xs text-base-content/55">Gate</dt>
                     <dd className="mt-1 capitalize">{packet.payload.reviewContext?.gate?.type ?? "Not recorded"}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-base-content/45">Signing key</dt>
+                    <dt className="text-xs text-base-content/55">Signing key</dt>
                     <dd className="mt-1 break-all font-mono text-xs">{packet.signing.keyId}</dd>
                   </div>
                 </dl>
@@ -520,11 +520,11 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                   </summary>
                   <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
                     <div>
-                      <dt className="text-xs text-base-content/45">Packet digest</dt>
+                      <dt className="text-xs text-base-content/55">Packet digest</dt>
                       <dd className="mt-1 break-all font-mono text-xs">{packet.packetDigest}</dd>
                     </div>
                     <div>
-                      <dt className="text-xs text-base-content/45">Rekor entry</dt>
+                      <dt className="text-xs text-base-content/55">Rekor entry</dt>
                       <dd className="mt-1 break-all font-mono text-xs">
                         {attestation?.rekor?.entryUuid ??
                           (canManage ? "No receipt recorded" : "Receipt details restricted")}
@@ -585,7 +585,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
             </p>
           ) : null}
           {keys.length === 0 ? (
-            <p className="mt-4 text-sm text-base-content/50">No key history is available.</p>
+            <p className="mt-4 text-sm text-base-content/55">No key history is available.</p>
           ) : (
             <div className="mt-4 space-y-3">
               {keys.map(key => (
@@ -594,10 +594,10 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                     <code className="break-all text-xs text-base-content/75">{key.keyId}</code>
                     <span className="badge border-white/10 bg-white/[0.04] text-xs capitalize">{key.status}</span>
                   </div>
-                  <p className="mt-2 break-all font-mono text-[11px] text-base-content/45">
+                  <p className="mt-2 break-all font-mono text-[11px] text-base-content/55">
                     Ed25519 SPKI DER (base64url): {key.publicKeySpki}
                   </p>
-                  <p className="mt-2 text-xs text-base-content/45">
+                  <p className="mt-2 text-xs text-base-content/55">
                     {key.packetCount} {key.packetCount === 1 ? "packet" : "packets"}
                     {key.lastPacketAt ? ` · last used ${new Date(key.lastPacketAt).toLocaleString()}` : ""}
                   </p>

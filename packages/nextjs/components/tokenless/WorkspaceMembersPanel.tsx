@@ -218,7 +218,7 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
       </div>
 
       <h3 className="mt-5 text-sm font-semibold">Invite member</h3>
-      <p className="mt-1 text-xs leading-5 text-base-content/45">
+      <p className="mt-1 text-xs leading-5 text-base-content/55">
         Create a one-time code bound to their verified email, then send it to them privately.
       </p>
       <form
@@ -270,7 +270,7 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
       <div className="mt-6 border-t border-white/10 pt-5">
         <h3 className="text-sm font-semibold">People with workspace access</h3>
         {loading ? (
-          <p className="mt-3 text-sm text-base-content/50" role="status">
+          <p className="mt-3 text-sm text-base-content/55" role="status">
             Loading members…
           </p>
         ) : (
@@ -287,7 +287,7 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
                     <p className="truncate text-sm font-semibold">
                       {member.displayName ?? member.email ?? shortPrincipal(member.principalId)}
                     </p>
-                    <p className="mt-1 text-xs text-base-content/45">
+                    <p className="mt-1 text-xs text-base-content/55">
                       {member.displayName && member.email ? `${member.email} · ` : ""}
                       {member.managedBy
                         ? `Managed by ${member.managedBy.toUpperCase()}`

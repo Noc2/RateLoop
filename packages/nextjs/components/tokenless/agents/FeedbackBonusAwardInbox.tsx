@@ -128,14 +128,14 @@ function AwardCard({ item, onAwarded }: { item: FeedbackBonusAwardInboxItem; onA
               onChange={event => setAmount(event.target.value)}
               aria-label="Feedback Bonus award amount"
             />
-            <span className="text-base-content/50">USDC</span>
+            <span className="text-base-content/55">USDC</span>
           </div>
         </label>
         <Button type="button" disabled={busy} onClick={() => void award()}>
           {busy ? "Confirming…" : "Award this feedback"}
         </Button>
       </div>
-      <p className="mt-3 text-xs text-base-content/50">
+      <p className="mt-3 text-xs text-base-content/55">
         Award by {new Date(item.awardDeadline).toLocaleString()}. Awards are final and use the feedback&apos;s immutable
         payout commitment.
       </p>

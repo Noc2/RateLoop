@@ -762,7 +762,7 @@ export function PublicQuestionCard({
     >
       <article className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_17.25rem] xl:items-start">
         <Card as="section" className="min-h-72 rounded-lg p-5 sm:p-6">
-          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-base-content/45">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-base-content/55">
             <span>Public panel</span>
             <span>Round {task.roundId}</span>
           </div>
@@ -772,7 +772,7 @@ export function PublicQuestionCard({
             Choose one answer, then estimate how the panel will respond. Public questions contain only public,
             synthetic, or safely redacted material.
           </p>
-          <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 border-t border-white/10 pt-4 text-xs text-base-content/45">
+          <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 border-t border-white/10 pt-4 text-xs text-base-content/55">
             <span>Guaranteed ${usdc(task.earnings.guaranteedBaseAtomic)}</span>
             <span>Quality bonus up to ${usdc(task.earnings.possibleBonusAtomic)}</span>
             <span>Conditional surprise bonus up to ${usdc(task.earnings.possibleSurpriseBonusAtomic)}</span>
@@ -784,7 +784,7 @@ export function PublicQuestionCard({
           {paidAccess.state === "ready" ? (
             <>
               <p className="text-sm font-semibold">Your rating</p>
-              <p className="mt-1 text-xs text-base-content/50">Rating hidden until settlement.</p>
+              <p className="mt-1 text-xs text-base-content/55">Rating hidden until settlement.</p>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 {(["yes", "no"] as const).map((value, index) => (
                   <button
@@ -851,7 +851,7 @@ export function PublicQuestionCard({
                     maxLength={feedbackMaximum}
                     placeholder="Opinion, evidence, ambiguity, or concerns…"
                   />
-                  <div className="text-right text-[11px] text-base-content/45">
+                  <div className="text-right text-[11px] text-base-content/55">
                     {feedbackBody.length}/{feedbackMaximum}
                   </div>
                   {feedbackIssue ? (
@@ -926,7 +926,7 @@ export function PublicQuestionCard({
                       Step 2 of 2 · Submit rating
                     </p>
                   ) : (
-                    <p className="mt-2 text-[11px] leading-4 text-base-content/45">
+                    <p className="mt-2 text-[11px] leading-4 text-base-content/55">
                       No voucher or commit is requested until you confirm the backup.
                     </p>
                   )}

@@ -101,7 +101,7 @@ export function AgentSetupProgress({
               </span>
               <span
                 className={`mt-3 hidden font-mono text-xs sm:block ${
-                  stage.status === "not_started" ? "text-base-content/45" : "text-base-content"
+                  stage.status === "not_started" ? "text-base-content/55" : "text-base-content"
                 }`}
               >
                 <span style={stage.status === "not_started" ? undefined : { color: visual.color }}>

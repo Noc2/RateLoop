@@ -812,12 +812,12 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                   <div className="mt-5 flex items-end justify-between gap-4 text-sm">
                     <div>
                       <span className="text-2xl font-semibold">{billing.usage.completed}</span>
-                      <span className="text-base-content/45"> completed</span>
+                      <span className="text-base-content/55"> completed</span>
                       {billing.usage.reserved ? (
-                        <span className="text-base-content/45"> · {billing.usage.reserved} reserved</span>
+                        <span className="text-base-content/55"> · {billing.usage.reserved} reserved</span>
                       ) : null}
                     </div>
-                    <span className="text-base-content/50">{billing.usage.limit} limit</span>
+                    <span className="text-base-content/55">{billing.usage.limit} limit</span>
                   </div>
                   <div
                     role="progressbar"
@@ -832,14 +832,14 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                       style={{ width: `${usagePercent}%` }}
                     />
                   </div>
-                  <div className="mt-4 grid gap-2 text-xs text-base-content/50 sm:grid-cols-2">
+                  <div className="mt-4 grid gap-2 text-xs text-base-content/55 sm:grid-cols-2">
                     <span>
                       {billing.limits.activeAgents} active {billing.limits.activeAgents === 1 ? "agent" : "agents"}
                     </span>
                     <span>{billing.limits.paidPanels ? "Paid panels available" : "Private unpaid reviews"}</span>
                   </div>
                   {billing.periodEnd ? (
-                    <p className="mt-3 text-xs text-base-content/40">
+                    <p className="mt-3 text-xs text-base-content/55">
                       Current usage period ends {dateLabel(billing.periodEnd)}.
                     </p>
                   ) : null}
@@ -900,7 +900,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <h3 className="font-semibold">Business billing details</h3>
-                          <p className="mt-1 text-xs leading-5 text-base-content/45">
+                          <p className="mt-1 text-xs leading-5 text-base-content/55">
                             Self-declared details used for Checkout, invoices, and tax handling. This is not an external
                             identity or company verification.
                           </p>
@@ -970,7 +970,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                           ) : null}
                         </label>
                         <p className="text-xs font-semibold text-base-content/65 sm:col-span-2">
-                          Invoice funding address <span className="font-normal text-base-content/35">(optional)</span>
+                          Invoice funding address <span className="font-normal text-base-content/55">(optional)</span>
                         </p>
                         <Field
                           label="Country"
@@ -1100,13 +1100,13 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                     </form>
                   ) : null}
                   {!billing.canManageBilling ? (
-                    <p className="mt-4 text-xs leading-5 text-base-content/45">
+                    <p className="mt-4 text-xs leading-5 text-base-content/55">
                       Workspace owners and billing members can change the subscription.
                     </p>
                   ) : null}
                 </>
               ) : (
-                <p className="mt-4 text-sm text-base-content/50">{billingError ?? "Loading subscription and usage…"}</p>
+                <p className="mt-4 text-sm text-base-content/55">{billingError ?? "Loading subscription and usage…"}</p>
               )}
               {billingError && billing ? <p className="mt-4 text-sm text-red-100">{billingError}</p> : null}
             </section>
@@ -1126,14 +1126,14 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                       Panel funding
                     </h2>
                   </div>
-                  <Link href="/pricing" className="text-xs text-base-content/45 underline underline-offset-4">
+                  <Link href="/pricing" className="text-xs text-base-content/55 underline underline-offset-4">
                     How panel costs work
                   </Link>
                 </div>
                 <div className="mt-5 grid gap-3 border-t border-white/10 pt-4 text-center sm:grid-cols-3">
                   <div>
                     <span className="block text-lg font-semibold">${usdc(selected.prepaid.settledAtomic)}</span>
-                    <span className="inline-flex items-center gap-1 text-xs text-base-content/45">
+                    <span className="inline-flex items-center gap-1 text-xs text-base-content/55">
                       Settled USDC
                       <InfoPopover label="About settled USDC">
                         Funds credited to this workspace after payment settlement.
@@ -1142,7 +1142,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                   </div>
                   <div>
                     <span className="block text-lg font-semibold">${usdc(selected.prepaid.reservedAtomic)}</span>
-                    <span className="inline-flex items-center gap-1 text-xs text-base-content/45">
+                    <span className="inline-flex items-center gap-1 text-xs text-base-content/55">
                       Reserved USDC
                       <InfoPopover label="About reserved USDC">
                         Funds committed to review work that has not reached its paid terminal state.
@@ -1151,7 +1151,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                   </div>
                   <div>
                     <span className="block text-lg font-semibold">${usdc(selected.prepaid.availableAtomic)}</span>
-                    <span className="inline-flex items-center gap-1 text-xs text-base-content/45">
+                    <span className="inline-flex items-center gap-1 text-xs text-base-content/55">
                       Available USDC
                       <InfoPopover label="About available USDC">
                         Settled funds that are not reserved and can fund new review work.
@@ -1167,7 +1167,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                     <div className="grow text-xs text-base-content/55">
                       <label htmlFor="workspace-prepaid-topup-amount">Add prepaid balance by USD invoice</label>
                       <div className="mt-1.5 flex rounded-lg border border-white/10 bg-[var(--rateloop-field)]">
-                        <span className="px-3 py-2.5 text-base-content/45">$</span>
+                        <span className="px-3 py-2.5 text-base-content/55">$</span>
                         <input
                           id="workspace-prepaid-topup-amount"
                           className="min-w-0 grow bg-transparent px-1 py-2.5 outline-none"
@@ -1187,15 +1187,15 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                     </button>
                   </form>
                 ) : canManageTopups && topups ? (
-                  <p className="mt-4 text-xs leading-5 text-base-content/45">
+                  <p className="mt-4 text-xs leading-5 text-base-content/55">
                     USD invoice funding is not enabled for this deployment.
                   </p>
                 ) : canManageTopups && !topupError ? (
-                  <p className="mt-4 text-xs leading-5 text-base-content/45" role="status">
+                  <p className="mt-4 text-xs leading-5 text-base-content/55" role="status">
                     Loading prepaid funding…
                   </p>
                 ) : !canManageTopups ? (
-                  <p className="mt-4 text-xs leading-5 text-base-content/45">
+                  <p className="mt-4 text-xs leading-5 text-base-content/55">
                     Workspace owners and billing members can add prepaid balance.
                   </p>
                 ) : null}
@@ -1298,12 +1298,12 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                                 <p className="mt-2 break-all text-xs text-base-content/60">
                                   SCIM Users endpoint: <code>{identityEndpoint}</code>
                                 </p>
-                                <p className="mt-2 text-xs text-base-content/50">
+                                <p className="mt-2 text-xs text-base-content/55">
                                   This bearer token is shown only once.
                                 </p>
                               </>
                             ) : (
-                              <p className="mt-2 text-xs text-base-content/50">
+                              <p className="mt-2 text-xs text-base-content/55">
                                 Add this value to the DNS TXT record requested by your identity provider.
                               </p>
                             )}
@@ -1314,7 +1314,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                             <div className="flex flex-wrap items-start justify-between gap-3">
                               <div>
                                 <h3 className="font-semibold">{provider.domain}</h3>
-                                <p className="mt-1 text-xs uppercase tracking-wide text-base-content/45">
+                                <p className="mt-1 text-xs uppercase tracking-wide text-base-content/55">
                                   {provider.protocol} ·{" "}
                                   {provider.domainVerified ? "domain verified" : "verification required"}
                                 </p>
@@ -1520,7 +1520,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>
                               <h3 className="font-semibold">SCIM user provisioning</h3>
-                              <p className="mt-1 text-xs leading-5 text-base-content/45">
+                              <p className="mt-1 text-xs leading-5 text-base-content/55">
                                 Users are provisioned into this workspace only. SCIM Groups are not supported.
                               </p>
                             </div>
@@ -1558,7 +1558,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                       </>
                     ) : null}
                     {identityBusy ? (
-                      <p className="text-sm text-base-content/50" role="status">
+                      <p className="text-sm text-base-content/55" role="status">
                         Updating enterprise identity…
                       </p>
                     ) : null}

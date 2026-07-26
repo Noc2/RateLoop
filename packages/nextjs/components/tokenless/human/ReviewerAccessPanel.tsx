@@ -95,7 +95,7 @@ export function ReviewerAccessPanel({ refreshKey }: { refreshKey: number }) {
       </div>
       <div className="mt-5">
         {loading ? (
-          <p className="text-sm text-base-content/50" role="status">
+          <p className="text-sm text-base-content/55" role="status">
             <span className="loading loading-spinner loading-sm mr-2" /> Loading reviewer access…
           </p>
         ) : activeAccess.length ? (
@@ -108,7 +108,7 @@ export function ReviewerAccessPanel({ refreshKey }: { refreshKey: number }) {
                     {item.grants
                       .filter(grant => grant.status === "active")
                       .map(grant => (
-                        <p className="mt-2 text-xs text-base-content/50" key={grant.grantId}>
+                        <p className="mt-2 text-xs text-base-content/55" key={grant.grantId}>
                           Up to {grant.maxPrivateSensitivity} material · access expires {expiryLabel(grant.validUntil)}
                         </p>
                       ))}
@@ -126,7 +126,7 @@ export function ReviewerAccessPanel({ refreshKey }: { refreshKey: number }) {
             ))}
           </ul>
         ) : (
-          <p className="rounded-lg bg-white/[0.04] p-4 text-sm text-base-content/50">
+          <p className="rounded-lg bg-white/[0.04] p-4 text-sm text-base-content/55">
             No reviewer access yet. Paste an invitation above to join a workspace reviewer roster.
           </p>
         )}

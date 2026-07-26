@@ -165,7 +165,7 @@ export function PasskeyManagementPanel() {
         </button>
       </div>
 
-      {loading ? <p className="mt-5 text-sm text-base-content/50">Loading passkeys…</p> : null}
+      {loading ? <p className="mt-5 text-sm text-base-content/55">Loading passkeys…</p> : null}
       {!loading && passkeys.length === 0 ? (
         <p className="mt-5 text-sm text-base-content/55">No passkey added yet.</p>
       ) : null}
@@ -181,7 +181,7 @@ export function PasskeyManagementPanel() {
               >
                 <div>
                   <p className="font-medium">{passkey.name}</p>
-                  <p className="mt-1 text-xs text-base-content/50">
+                  <p className="mt-1 text-xs text-base-content/55">
                     {addedLabel(passkey.createdAt)}
                     {passkey.backedUp ? " · Synced" : ""}
                   </p>

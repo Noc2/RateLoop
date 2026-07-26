@@ -456,19 +456,19 @@ function PairingApprovalCard({
             every field before activation.
           </p>
           {pairing.requestedWorkflowKeys.length > 0 ? (
-            <p className="mt-2 text-xs text-base-content/45">
+            <p className="mt-2 text-xs text-base-content/55">
               Requested workflows: {pairing.requestedWorkflowKeys.join(", ")}
             </p>
           ) : null}
         </div>
-        <time className="font-mono text-xs text-base-content/45" dateTime={pairing.expiresAt ?? undefined}>
+        <time className="font-mono text-xs text-base-content/55" dateTime={pairing.expiresAt ?? undefined}>
           Expires {formatTimestamp(pairing.expiresAt, "soon")}
         </time>
       </div>
 
       <fieldset className="mt-5">
         <legend className="text-sm font-semibold">1. Confirm the agent identity</legend>
-        <p className="mt-1 text-xs leading-5 text-base-content/50">
+        <p className="mt-1 text-xs leading-5 text-base-content/55">
           Provider and model values are agent-declared, not provider-attested. Approval records your edited declaration
           as immutable version 1.
         </p>
@@ -575,7 +575,7 @@ function PairingApprovalCard({
               placeholder="review.copy, review.code"
               required
             />
-            <span className="mt-2 block text-xs leading-5 text-base-content/45">
+            <span className="mt-2 block text-xs leading-5 text-base-content/55">
               You may remove requested workflows before approval. The credential cannot add workflows later.
             </span>
           </label>
@@ -1225,16 +1225,16 @@ export function AgentConnectionPanel({
           </div>
           <dl className="mt-4 space-y-3 rounded-lg bg-black/30 p-4 font-mono text-xs">
             <div>
-              <dt className="text-base-content/45">MCP URL</dt>
+              <dt className="text-base-content/55">MCP URL</dt>
               <dd className="mt-1 break-all">{reveal.mcpUrl}</dd>
             </div>
             <div>
-              <dt className="text-base-content/45">Legacy bearer credential</dt>
+              <dt className="text-base-content/55">Legacy bearer credential</dt>
               <dd className="mt-1 break-all">{reveal.secret}</dd>
             </div>
             {reveal.expiresAt ? (
               <div>
-                <dt className="text-base-content/45">Expires</dt>
+                <dt className="text-base-content/55">Expires</dt>
                 <dd className="mt-1">{formatTimestamp(reveal.expiresAt)}</dd>
               </div>
             ) : null}
@@ -1304,14 +1304,14 @@ export function AgentConnectionPanel({
                           <p className="mt-2 text-sm text-base-content/55">You can close this page.</p>
                         ) : null}
                         {(intent.clientName || intent.clientVersion) && (
-                          <p className="mt-2 text-xs text-base-content/45">
+                          <p className="mt-2 text-xs text-base-content/55">
                             {intent.clientName || "Agent host"}
                             {intent.clientVersion ? ` ${intent.clientVersion}` : ""}
                           </p>
                         )}
                       </div>
                       <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
-                        <time className="text-xs text-base-content/45" dateTime={intent.hardExpiresAt ?? undefined}>
+                        <time className="text-xs text-base-content/55" dateTime={intent.hardExpiresAt ?? undefined}>
                           Finishes by {formatTimestamp(intent.hardExpiresAt, "soon")}
                         </time>
                         <div className="flex flex-wrap gap-2">
@@ -1515,7 +1515,7 @@ export function AgentConnectionPanel({
                             <span className="badge badge-ghost">v{integration.agentVersionNumber}</span>
                           ) : null}
                           <span
-                            className={`badge border-0 ${active ? "bg-emerald-300/10 text-emerald-100" : "bg-white/[0.06] text-base-content/50"}`}
+                            className={`badge border-0 ${active ? "bg-emerald-300/10 text-emerald-100" : "bg-white/[0.06] text-base-content/55"}`}
                           >
                             {integration.status}
                           </span>
@@ -1565,18 +1565,18 @@ export function AgentConnectionPanel({
                         Connection details
                       </summary>
                       <div className="mt-3">
-                        <p className="font-mono text-xs text-base-content/40">{integration.integrationId}</p>
+                        <p className="font-mono text-xs text-base-content/55">{integration.integrationId}</p>
                         <p className="mt-2 text-sm text-base-content/60">
                           {integration.clientName || "Unknown client"}
                           {integration.clientVersion ? ` ${integration.clientVersion}` : ""}
                         </p>
                         <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
                           <div>
-                            <dt className="text-xs text-base-content/45">Last seen</dt>
+                            <dt className="text-xs text-base-content/55">Last seen</dt>
                             <dd className="mt-1">{formatTimestamp(integration.lastSeenAt, "Never connected")}</dd>
                           </div>
                           <div>
-                            <dt className="text-xs text-base-content/45">
+                            <dt className="text-xs text-base-content/55">
                               {legacyCredential ? "Credential expiry" : "Access"}
                             </dt>
                             <dd className="mt-1">
@@ -1586,14 +1586,14 @@ export function AgentConnectionPanel({
                             </dd>
                           </div>
                           <div>
-                            <dt className="text-xs text-base-content/45">Review policy</dt>
+                            <dt className="text-xs text-base-content/55">Review policy</dt>
                             <dd className="mt-1">
                               {integration.reviewPolicyId || "Unknown"}
                               {integration.reviewPolicyVersion ? ` · v${integration.reviewPolicyVersion}` : ""}
                             </dd>
                           </div>
                           <div>
-                            <dt className="text-xs text-base-content/45">Publishing policy</dt>
+                            <dt className="text-xs text-base-content/55">Publishing policy</dt>
                             <dd className="mt-1">
                               {integration.publishingPolicyName ||
                                 integration.publishingPolicyId ||

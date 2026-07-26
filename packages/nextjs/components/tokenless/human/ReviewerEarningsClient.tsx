@@ -101,7 +101,7 @@ export function ReviewerEarningsClient() {
               ["Ready to claim", ledger.totals.claimableAtomic],
             ].map(([label, amount]) => (
               <div key={label} className="surface-card-nested rounded-xl p-4">
-                <dt className="text-xs text-base-content/45">{label}</dt>
+                <dt className="text-xs text-base-content/55">{label}</dt>
                 <dd className="mt-1 text-lg font-semibold">{usdc(amount)}</dd>
               </div>
             ))}
@@ -113,7 +113,7 @@ export function ReviewerEarningsClient() {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <h3 className="truncate text-sm font-medium">{item.question}</h3>
-                      <p className="mt-1 font-mono text-xs text-base-content/45">
+                      <p className="mt-1 font-mono text-xs text-base-content/55">
                         Round {item.roundId} · {short(item.commitKey)}
                       </p>
                     </div>
@@ -131,19 +131,19 @@ export function ReviewerEarningsClient() {
                   </div>
                   <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-4">
                     <div>
-                      <dt className="text-base-content/40">Your vote</dt>
+                      <dt className="text-base-content/55">Your vote</dt>
                       <dd className="mt-1">{item.vote ?? "Sealed"}</dd>
                     </div>
                     <div>
-                      <dt className="text-base-content/40">Panel verdict</dt>
+                      <dt className="text-base-content/55">Panel verdict</dt>
                       <dd className="mt-1">{item.verdict ?? "Pending"}</dd>
                     </div>
                     <div>
-                      <dt className="text-base-content/40">Earned</dt>
+                      <dt className="text-base-content/55">Earned</dt>
                       <dd className="mt-1">{usdc(item.earnedAtomic)}</dd>
                     </div>
                     <div>
-                      <dt className="text-base-content/40">Claim deadline</dt>
+                      <dt className="text-base-content/55">Claim deadline</dt>
                       <dd className="mt-1">{claimDeadline(item.claimDeadline)}</dd>
                     </div>
                   </dl>

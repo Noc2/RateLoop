@@ -121,7 +121,7 @@ function AlertSettings({ workspaceId }: { workspaceId: string }) {
         {error}
       </p>
     ) : (
-      <p className="mt-3 text-xs text-base-content/45">Loading alert settings…</p>
+      <p className="mt-3 text-xs text-base-content/55">Loading alert settings…</p>
     );
   }
 
@@ -205,7 +205,7 @@ function AlertSettings({ workspaceId }: { workspaceId: string }) {
           </Button>
         )}
       </div>
-      <p className="text-xs leading-5 text-base-content/45">
+      <p className="text-xs leading-5 text-base-content/55">
         Alerts always appear here. Email delivery is separate and opt-in: add and verify a notification email in your
         account settings, then enable oversight alert emails there.
       </p>
@@ -365,7 +365,7 @@ export function OversightAlertsPanel({ workspaceId }: { workspaceId: string }) {
                   )}
                   {notification.title}
                 </p>
-                <time dateTime={notification.createdAt} className="text-xs text-base-content/45">
+                <time dateTime={notification.createdAt} className="text-xs text-base-content/55">
                   {new Date(notification.createdAt).toLocaleString()}
                 </time>
               </div>

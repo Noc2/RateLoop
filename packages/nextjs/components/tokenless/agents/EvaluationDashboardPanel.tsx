@@ -94,12 +94,12 @@ function AssuranceMetricsSummary({ snapshot }: { snapshot: AssuranceMetricsSnaps
           ["Latest evidence anchor", anchor],
         ].map(([label, value]) => (
           <div key={label} className="surface-card-nested rounded-xl p-4">
-            <dt className="text-xs text-base-content/45">{label}</dt>
+            <dt className="text-xs text-base-content/55">{label}</dt>
             <dd className="mt-2 font-mono text-sm">{value}</dd>
           </div>
         ))}
       </dl>
-      <p className="mt-3 text-xs text-base-content/45">
+      <p className="mt-3 text-xs text-base-content/55">
         {snapshot.reviewsRequested} requested · {snapshot.reviewsCompleted} completed · {snapshot.blocked} blocked ·{" "}
         {snapshot.approvalRequired} awaiting approval
       </p>
@@ -122,7 +122,7 @@ function SampleNote({ run }: { run: EvaluationRun }) {
       </p>
     );
   }
-  return <p className="mt-2 text-xs text-base-content/45">{run.validResponses} valid responses</p>;
+  return <p className="mt-2 text-xs text-base-content/55">{run.validResponses} valid responses</p>;
 }
 
 /**
@@ -165,7 +165,7 @@ function DecisionSignals({ run }: { run: EvaluationRun }) {
       <dl className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
         {signals.map(([label, value]) => (
           <div key={label}>
-            <dt className="text-base-content/40">{label}</dt>
+            <dt className="text-base-content/55">{label}</dt>
             <dd className="mt-0.5 font-mono">{value}</dd>
           </div>
         ))}
@@ -230,8 +230,8 @@ function ClientDecisionButtons({
 
   return (
     <div className="mt-3">
-      <p className="text-xs text-base-content/45">Sign off on this run — no choice is preselected.</p>
-      {trendLabel ? <p className="mt-1 text-xs text-base-content/45">{trendLabel}</p> : null}
+      <p className="text-xs text-base-content/55">Sign off on this run — no choice is preselected.</p>
+      {trendLabel ? <p className="mt-1 text-xs text-base-content/55">{trendLabel}</p> : null}
       {run.explanationRequired ? (
         <div className="mt-2 rounded-lg border border-amber-200/20 bg-amber-300/[0.06] p-3">
           <p className="text-xs font-semibold text-amber-100/90">Explain this decision</p>
@@ -321,10 +321,10 @@ function OverrideRecordForm({
   return (
     <form className="mt-4 border-t border-white/10 pt-4" onSubmit={event => event.preventDefault()}>
       <p className="text-sm font-semibold text-base-content/65">Record what you did with this output</p>
-      <p className="mt-1 text-xs text-base-content/45">
+      <p className="mt-1 text-xs text-base-content/55">
         Append-only record with mandatory reasons; a new record supersedes, never edits. No choice is preselected.
       </p>
-      {trendLabel ? <p className="mt-1 text-xs text-base-content/45">{trendLabel}</p> : null}
+      {trendLabel ? <p className="mt-1 text-xs text-base-content/55">{trendLabel}</p> : null}
       <DecisionSignals run={run} />
       {recorded ? (
         <p className="mt-2 text-xs text-emerald-100" role="status">
@@ -394,7 +394,7 @@ function OversightCaseDetail({ run, workspaceId }: { run: EvaluationRun; workspa
   return (
     <details className="mt-4 border-t border-white/10 pt-4" onToggle={event => event.currentTarget.open && void load()}>
       <summary className="cursor-pointer text-sm font-semibold text-base-content/65">Case detail (oversight)</summary>
-      {state === "loading" ? <p className="mt-3 text-xs text-base-content/45">Loading case material…</p> : null}
+      {state === "loading" ? <p className="mt-3 text-xs text-base-content/55">Loading case material…</p> : null}
       {state === "denied" ? (
         <p className="mt-3 text-xs text-base-content/55">
           Case material opens only for workspace owners, admins, and designated decision owners.
@@ -422,7 +422,7 @@ function OversightCaseDetail({ run, workspaceId }: { run: EvaluationRun; workspa
                     </span>
                   ) : null}
                 </h4>
-                <p className="text-xs text-base-content/45">
+                <p className="text-xs text-base-content/55">
                   {caseView.choiceCounts.candidate} candidate · {caseView.choiceCounts.baseline} baseline
                   {caseView.disagreementBps !== null ? ` · ${percent(caseView.disagreementBps)} dissent` : ""}
                 </p>
@@ -445,20 +445,20 @@ function OversightCaseDetail({ run, workspaceId }: { run: EvaluationRun; workspa
                 <ul className="mt-3 space-y-2">
                   {caseView.responses.map((response, index) => (
                     <li key={`${caseView.caseId}-${index}`} className="rounded-lg bg-black/20 p-3 text-xs leading-5">
-                      <p className="text-base-content/45">
+                      <p className="text-base-content/55">
                         {response.reviewerPseudonym} · chose {response.choice}
                         {response.failureTagKeys.length > 0 ? ` · ${response.failureTagKeys.join(", ")}` : ""}
                       </p>
                       {response.rationale ? (
                         <p className="mt-1 whitespace-pre-wrap text-base-content/70">{response.rationale}</p>
                       ) : (
-                        <p className="mt-1 text-base-content/40">No workspace-owned rationale for this response.</p>
+                        <p className="mt-1 text-base-content/55">No workspace-owned rationale for this response.</p>
                       )}
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="mt-3 text-xs text-base-content/40">No valid responses recorded for this case.</p>
+                <p className="mt-3 text-xs text-base-content/55">No valid responses recorded for this case.</p>
               )}
             </article>
           ))}
@@ -509,7 +509,7 @@ function RunCard({
 
       <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(14rem,0.7fr)]">
         <div>
-          <p className="text-xs text-base-content/45">{decision ? "Decision" : "Current result"}</p>
+          <p className="text-xs text-base-content/55">{decision ? "Decision" : "Current result"}</p>
           <p className="mt-1 text-2xl font-semibold">
             {decision ?? (share === null ? "Waiting for responses" : `${percent(share)} chose the candidate`)}
           </p>
@@ -523,11 +523,11 @@ function RunCard({
         </div>
         {run.candidateSelectionIntervalBps ? (
           <div className="rounded-xl border border-white/10 bg-white/[0.025] p-4 text-sm">
-            <p className="text-xs text-base-content/45">95% confidence interval</p>
+            <p className="text-xs text-base-content/55">95% confidence interval</p>
             <p className="mt-1 font-mono">
               {percent(run.candidateSelectionIntervalBps.lower)}–{percent(run.candidateSelectionIntervalBps.upper)}
             </p>
-            <p className="mt-3 text-xs text-base-content/45">{run.distinctReviewers} reviewers</p>
+            <p className="mt-3 text-xs text-base-content/55">{run.distinctReviewers} reviewers</p>
           </div>
         ) : null}
       </div>
@@ -538,58 +538,58 @@ function RunCard({
         </summary>
         <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <dt className="text-xs text-base-content/45">Cases</dt>
+            <dt className="text-xs text-base-content/55">Cases</dt>
             <dd className="mt-1 font-mono">{run.caseCount}</dd>
           </div>
           <div>
-            <dt className="text-xs text-base-content/45">Calibration items</dt>
+            <dt className="text-xs text-base-content/55">Calibration items</dt>
             <dd className="mt-1 font-mono">{run.calibrationCaseCount}</dd>
           </div>
           <div>
-            <dt className="text-xs text-base-content/45">Reviewers</dt>
+            <dt className="text-xs text-base-content/55">Reviewers</dt>
             <dd className="mt-1 font-mono">{run.distinctReviewers}</dd>
           </div>
           <div>
-            <dt className="text-xs text-base-content/45">Reviewer source</dt>
+            <dt className="text-xs text-base-content/55">Reviewer source</dt>
             <dd className="mt-1 capitalize">{run.reviewerSource}</dd>
           </div>
           <div>
-            <dt className="text-xs text-base-content/45">Compensation</dt>
+            <dt className="text-xs text-base-content/55">Compensation</dt>
             <dd className="mt-1 capitalize">{run.compensation}</dd>
           </div>
           <div>
-            <dt className="text-xs text-base-content/45">Evidence packet</dt>
+            <dt className="text-xs text-base-content/55">Evidence packet</dt>
             <dd className="mt-1">{run.evidencePacketAvailable ? "Available" : "Not generated"}</dd>
           </div>
           <div>
-            <dt className="text-xs text-base-content/45">Created</dt>
+            <dt className="text-xs text-base-content/55">Created</dt>
             <dd className="mt-1">{new Date(run.createdAt).toLocaleString()}</dd>
           </div>
           {run.mechanismHealth ? (
             <>
               <div>
-                <dt className="text-xs text-base-content/45">Quorum-case unanimity</dt>
+                <dt className="text-xs text-base-content/55">Quorum-case unanimity</dt>
                 <dd className="mt-1 font-mono">{percent(run.mechanismHealth.unanimityRateBps)}</dd>
               </div>
               <div>
-                <dt className="text-xs text-base-content/45">Calibration failure rate</dt>
+                <dt className="text-xs text-base-content/55">Calibration failure rate</dt>
                 <dd className="mt-1 font-mono">{percent(run.mechanismHealth.goldFailureRateBps)}</dd>
               </div>
               <div>
-                <dt className="text-xs text-base-content/45">Comparable-case drift</dt>
+                <dt className="text-xs text-base-content/55">Comparable-case drift</dt>
                 <dd className="mt-1 font-mono">{percent(run.mechanismHealth.comparableDriftBps)}</dd>
               </div>
               <div>
-                <dt className="text-xs text-base-content/45">Quality score variance (percentage points²)</dt>
+                <dt className="text-xs text-base-content/55">Quality score variance (percentage points²)</dt>
                 <dd className="mt-1 font-mono">{percentagePointsSquared(run.mechanismHealth.rbtsScoreVarianceBps2)}</dd>
               </div>
             </>
           ) : null}
         </dl>
-        <p className="mt-4 text-xs leading-5 text-base-content/45">
+        <p className="mt-4 text-xs leading-5 text-base-content/55">
           This run has no immutable agent-version reference, so it is excluded from per-agent comparisons.
         </p>
-        <code className="mt-3 block break-all text-[11px] text-base-content/35">{run.runId}</code>
+        <code className="mt-3 block break-all text-[11px] text-base-content/55">{run.runId}</code>
       </details>
       {run.status === "completed" ? <OversightCaseDetail run={run} workspaceId={workspaceId} /> : null}
       {run.status === "completed" ? <OverrideRecordForm run={run} workspaceId={workspaceId} trend={trend} /> : null}
@@ -791,19 +791,19 @@ export function EvaluationDashboardPanel({
                     </div>
                     <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
                       <div>
-                        <dt className="text-xs text-base-content/45">Per panel</dt>
+                        <dt className="text-xs text-base-content/55">Per panel</dt>
                         <dd className="mt-1 font-mono">{usdc(policy.maxPanelAtomic)}</dd>
                       </div>
                       <div>
-                        <dt className="text-xs text-base-content/45">Daily</dt>
+                        <dt className="text-xs text-base-content/55">Daily</dt>
                         <dd className="mt-1 font-mono">{usdc(policy.maxDailyAtomic)}</dd>
                       </div>
                       <div>
-                        <dt className="text-xs text-base-content/45">Monthly</dt>
+                        <dt className="text-xs text-base-content/55">Monthly</dt>
                         <dd className="mt-1 font-mono">{usdc(policy.maxMonthlyAtomic)}</dd>
                       </div>
                       <div>
-                        <dt className="text-xs text-base-content/45">Maximum humans</dt>
+                        <dt className="text-xs text-base-content/55">Maximum humans</dt>
                         <dd className="mt-1 font-mono">{policy.maxPanelSize}</dd>
                       </div>
                     </dl>
@@ -828,7 +828,7 @@ export function EvaluationDashboardPanel({
                     ["Valid responses", dashboard.summary.validResponses],
                   ].map(([label, value]) => (
                     <div key={label} className="surface-card-nested rounded-xl p-4">
-                      <dt className="text-xs text-base-content/45">{label}</dt>
+                      <dt className="text-xs text-base-content/55">{label}</dt>
                       <dd className="mt-2 font-mono text-xl">{value}</dd>
                     </div>
                   ))}

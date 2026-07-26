@@ -258,7 +258,7 @@ test("browser handoff keeps essential privacy and price facts visible while tech
   assert.ok(handoffSource.indexOf('label="Reviewer bounty"') < handoffSource.indexOf("Technical quote details"));
   assert.ok(handoffSource.indexOf("Platform fee") < handoffSource.indexOf("Technical quote details"));
   assert.ok(handoffSource.indexOf('label="Accepted-work reserve"') < handoffSource.indexOf("Technical quote details"));
-  assert.match(handoffSource, /Admission policy/);
+  assert.match(handoffSource, /Reviewer rules/);
   assert.match(handoffSource, /Quote ID/);
   assert.doesNotMatch(handoffSource, /Draft summary|Lock the exact economics|01 · Review|02 · Quote|03 · Submit/);
 });
@@ -370,7 +370,7 @@ test("a reloaded authenticated handoff resumes from its operation reference thro
     const view = render(<TokenlessHandoffClient />);
     await waitFor(() => assert.ok(view.getByRole("heading", { name: "Track your ask." })));
     await waitFor(() => assert.ok(calls.some(url => url.includes(`/asks/${operationKey}/wait?timeoutMs=30000`))));
-    assert.ok(view.getByText(`Operation ${operationKey}`));
+    assert.ok(view.getByText(`Request ${operationKey}`));
     assert.equal(
       calls.some(url => url.includes("/api/agent/v1/quote")),
       false,

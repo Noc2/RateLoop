@@ -119,7 +119,7 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="font-semibold">{connector.displayName}</p>
-                  <p className="mt-1 text-xs capitalize text-base-content/45">
+                  <p className="mt-1 text-xs capitalize text-base-content/55">
                     {connector.provider} · {connector.controlMappings.length} control mappings
                   </p>
                 </div>
@@ -131,16 +131,16 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
               </div>
               <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
                 <div>
-                  <dt className="text-xs text-base-content/45">Last reconciliation</dt>
+                  <dt className="text-xs text-base-content/55">Last reconciliation</dt>
                   <dd className="mt-1">{formatEvidenceDeliveryDate(connector.lastReconciledAt)}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-base-content/45">Delivery</dt>
+                  <dt className="text-xs text-base-content/55">Delivery</dt>
                   <dd className="mt-1 capitalize">{connector.lastDeliveryStatus ?? "Not delivered"}</dd>
                 </div>
                 {connector.lastReceipt ? (
                   <div className="sm:col-span-2">
-                    <dt className="text-xs text-base-content/45">Latest receipt</dt>
+                    <dt className="text-xs text-base-content/55">Latest receipt</dt>
                     <dd className="mt-1">
                       {connector.lastReceipt.recordCount} records ·{" "}
                       {formatEvidenceDeliveryDate(connector.lastReceipt.deliveredAt)}
@@ -160,7 +160,7 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
           ))}
         </div>
       ) : (
-        <p className="mt-4 text-sm text-base-content/50">No GRC connector is configured.</p>
+        <p className="mt-4 text-sm text-base-content/55">No GRC connector is configured.</p>
       )}
 
       <button
@@ -311,7 +311,7 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
             />
           </label>
           <label className="text-sm text-base-content/65">
-            Scope ID <span className="text-base-content/40">(optional)</span>
+            Scope ID <span className="text-base-content/55">(optional)</span>
             <input
               className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
               value={form.scopeId}
@@ -330,7 +330,7 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
               onChange={event => setForm(current => ({ ...current, minimumCoveragePercent: event.target.value }))}
               required
             />
-            <span className="mt-1 block text-xs text-base-content/45">Percent of eligible evidence.</span>
+            <span className="mt-1 block text-xs text-base-content/55">Percent of eligible evidence.</span>
           </label>
           <label className="flex items-center gap-2 text-sm text-base-content/65 sm:col-span-2">
             <input

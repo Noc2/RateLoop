@@ -52,13 +52,13 @@ export function WorldIdProfilePanel() {
         <div className="mt-5">
           <WorldIdAssuranceClient verified={status.verified} onVerified={refresh} />
           {status.verifiedAt ? (
-            <p className="mt-3 text-xs text-base-content/45">
+            <p className="mt-3 text-xs text-base-content/55">
               Enrolled <time dateTime={status.verifiedAt}>{new Date(status.verifiedAt).toLocaleDateString()}</time>
             </p>
           ) : null}
         </div>
       ) : (
-        <p role="status" className="mt-5 text-sm text-base-content/50">
+        <p role="status" className="mt-5 text-sm text-base-content/55">
           Loading Proof of Human status…
         </p>
       )}

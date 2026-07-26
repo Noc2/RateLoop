@@ -3,7 +3,7 @@ export function AgentConnectionTroubleshooting() {
     <details className="group mt-4 border-l border-base-content/20 py-1 pl-4 text-sm open:border-base-content/45">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-2 font-medium [&::-webkit-details-marker]:hidden">
         <span>Authentication finished, but still waiting?</span>
-        <span aria-hidden="true" className="text-lg text-base-content/50 transition-transform group-open:rotate-45">
+        <span aria-hidden="true" className="text-lg text-base-content/55 transition-transform group-open:rotate-45">
           +
         </span>
       </summary>

@@ -71,23 +71,23 @@ function ApprovalCard({
 
       <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
         <div>
-          <dt className="text-xs text-base-content/45">Reviewers</dt>
+          <dt className="text-xs text-base-content/55">Reviewers</dt>
           <dd className="mt-1">{audienceLabel(request.audience.kind)}</dd>
         </div>
         <div>
-          <dt className="text-xs text-base-content/45">Answer window</dt>
+          <dt className="text-xs text-base-content/55">Answer window</dt>
           <dd className="mt-1">{Math.round(request.timing.responseWindowSeconds / 60)} minutes</dd>
         </div>
         <div>
-          <dt className="text-xs text-base-content/45">Panel</dt>
+          <dt className="text-xs text-base-content/55">Panel</dt>
           <dd className="mt-1">{request.panel.size} people</dd>
         </div>
         <div>
-          <dt className="text-xs text-base-content/45">Maximum charge</dt>
+          <dt className="text-xs text-base-content/55">Maximum charge</dt>
           <dd className="mt-1">{formatApprovalUsdc(approval.maximumConsentAtomic)}</dd>
         </div>
         <div>
-          <dt className="text-xs text-base-content/45">Compensation</dt>
+          <dt className="text-xs text-base-content/55">Compensation</dt>
           <dd className="mt-1 capitalize">
             {economics.compensationMode === "usdc"
               ? `${formatApprovalUsdc(economics.bountyPerSeatAtomic)} each`
@@ -95,13 +95,13 @@ function ApprovalCard({
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-base-content/45">Fee</dt>
+          <dt className="text-xs text-base-content/55">Fee</dt>
           <dd className="mt-1">
             {formatApprovalUsdc(economics.feeAtomic)} ({(economics.feeBps / 100).toFixed(2)}%)
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-base-content/45">Feedback Bonus</dt>
+          <dt className="text-xs text-base-content/55">Feedback Bonus</dt>
           <dd className="mt-1">
             {approval.feedbackBonusEconomics.enabled
               ? `${formatApprovalUsdc(approval.feedbackBonusEconomics.poolAtomic)} · human-awarded`
@@ -109,14 +109,14 @@ function ApprovalCard({
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-base-content/45">Material</dt>
+          <dt className="text-xs text-base-content/55">Material</dt>
           <dd className="mt-1">
             {request.audience.contentBoundary.replaceAll("_", " ")}
             {request.audience.privateSensitivity ? ` · ${request.audience.privateSensitivity}` : ""}
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-base-content/45">Expires</dt>
+          <dt className="text-xs text-base-content/55">Expires</dt>
           <dd className="mt-1">{new Date(approval.expiresAt).toLocaleString()}</dd>
         </div>
       </dl>
@@ -127,7 +127,7 @@ function ApprovalCard({
         </summary>
         <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-2">
           <div>
-            <dt className="text-base-content/45">Answer labels</dt>
+            <dt className="text-base-content/55">Answer labels</dt>
             <dd className="mt-1">
               {request.question.positiveLabel} / {request.question.negativeLabel} · rationale{" "}
               {request.question.rationaleMode}
@@ -135,34 +135,34 @@ function ApprovalCard({
           </div>
           {request.question.questionHash ? (
             <div>
-              <dt className="text-base-content/45">Question commitment</dt>
+              <dt className="text-base-content/55">Question commitment</dt>
               <dd className="mt-1 break-all font-mono">{request.question.questionHash}</dd>
             </div>
           ) : null}
           <div>
-            <dt className="text-base-content/45">Agent version</dt>
+            <dt className="text-base-content/55">Agent version</dt>
             <dd className="mt-1 break-all font-mono">
               {request.provenance.agentId} · {request.provenance.agentVersionId}
             </dd>
           </div>
           <div>
-            <dt className="text-base-content/45">Selection policy</dt>
+            <dt className="text-base-content/55">Selection policy</dt>
             <dd className="mt-1 break-all font-mono">
               {request.provenance.selectionPolicyId} v{request.provenance.selectionPolicyVersion}
             </dd>
           </div>
           <div>
-            <dt className="text-base-content/45">Request profile</dt>
+            <dt className="text-base-content/55">Request profile</dt>
             <dd className="mt-1 break-all font-mono">
               {request.requestProfile.id} v{request.requestProfile.version}
             </dd>
           </div>
           <div>
-            <dt className="text-base-content/45">Source commitment</dt>
+            <dt className="text-base-content/55">Source commitment</dt>
             <dd className="mt-1 break-all font-mono">{request.contentCommitments.source}</dd>
           </div>
           <div>
-            <dt className="text-base-content/45">Suggestion commitment</dt>
+            <dt className="text-base-content/55">Suggestion commitment</dt>
             <dd className="mt-1 break-all font-mono">{request.contentCommitments.suggestion}</dd>
           </div>
         </dl>

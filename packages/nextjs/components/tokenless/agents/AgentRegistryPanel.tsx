@@ -189,16 +189,16 @@ export function AgentRegistryPanel({
                 <summary className="cursor-pointer text-sm font-medium text-base-content/65">Technical details</summary>
                 <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
                   <div>
-                    <dt className="text-xs text-base-content/45">External ID</dt>
+                    <dt className="text-xs text-base-content/55">External ID</dt>
                     <dd className="mt-1 break-all font-mono text-xs">{agent.externalId}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-base-content/45">Environment</dt>
+                    <dt className="text-xs text-base-content/55">Environment</dt>
                     <dd className="mt-1 capitalize">{agent.currentVersion.environment}</dd>
                   </div>
                   {agent.ownerAccountAddress ? (
                     <div>
-                      <dt className="text-xs text-base-content/45">Owner</dt>
+                      <dt className="text-xs text-base-content/55">Owner</dt>
                       <dd className="mt-1 font-mono text-xs" title={agent.ownerAccountAddress}>
                         {shortAddress(agent.ownerAccountAddress)}
                       </dd>
@@ -241,7 +241,7 @@ export function AgentRegistryPanel({
                         : `${entry.displayName} · Workflow version ${entry.versionNumber}`}
                     </strong>
                     {entry.occurredAt ? (
-                      <time dateTime={entry.occurredAt} className="text-xs text-base-content/45">
+                      <time dateTime={entry.occurredAt} className="text-xs text-base-content/55">
                         {new Date(entry.occurredAt).toLocaleString()}
                       </time>
                     ) : null}
@@ -255,7 +255,7 @@ export function AgentRegistryPanel({
                   ) : (
                     <>
                       <p className="mt-2 capitalize text-base-content/60">{entry.environment}</p>
-                      <code className="mt-2 block break-all text-[11px] text-base-content/40">
+                      <code className="mt-2 block break-all text-[11px] text-base-content/55">
                         sha256:{entry.configurationCommitment}
                       </code>
                     </>

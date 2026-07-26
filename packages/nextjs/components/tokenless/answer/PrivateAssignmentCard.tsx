@@ -24,16 +24,16 @@ export function PrivateAssignmentCard({ assignment }: { assignment: PrivateAnswe
       </div>
       <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2">
         <div>
-          <dt className="text-xs text-base-content/45">Data handling</dt>
+          <dt className="text-xs text-base-content/55">Data handling</dt>
           <dd className="mt-1">{assignment.dataClassification ?? "Private"}</dd>
         </div>
         <div>
-          <dt className="text-xs text-base-content/45">Cases</dt>
+          <dt className="text-xs text-base-content/55">Cases</dt>
           <dd className="mt-1">{assignment.caseCount}</dd>
         </div>
       </dl>
       {assignment.assignmentExpiresAt ? (
-        <p className="mt-3 text-xs text-base-content/45">
+        <p className="mt-3 text-xs text-base-content/55">
           Assignment expires {new Date(assignment.assignmentExpiresAt).toLocaleString()}
         </p>
       ) : null}

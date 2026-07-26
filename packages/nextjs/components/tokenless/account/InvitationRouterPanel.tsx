@@ -167,15 +167,15 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
           </p>
           <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
             <div>
-              <dt className="text-xs text-base-content/45">Private material limit</dt>
+              <dt className="text-xs text-base-content/55">Private material limit</dt>
               <dd className="mt-1 capitalize">{preview.maxPrivateSensitivity}</dd>
             </div>
             <div>
-              <dt className="text-xs text-base-content/45">Invitation expires</dt>
+              <dt className="text-xs text-base-content/55">Invitation expires</dt>
               <dd className="mt-1">{formatDate(preview.expiresAt)}</dd>
             </div>
             <div>
-              <dt className="text-xs text-base-content/45">Reviewer access expires</dt>
+              <dt className="text-xs text-base-content/55">Reviewer access expires</dt>
               <dd className="mt-1">{formatDate(preview.accessExpiresAt)}</dd>
             </div>
           </dl>

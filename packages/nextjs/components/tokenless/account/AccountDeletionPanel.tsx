@@ -187,7 +187,7 @@ export function AccountDeletionPanel() {
             or security purposes may be retained only as required.
           </p>
 
-          {loading ? <p className="mt-5 text-sm text-base-content/50">Checking what will be deleted…</p> : null}
+          {loading ? <p className="mt-5 text-sm text-base-content/55">Checking what will be deleted…</p> : null}
 
           {preview ? (
             <div className="mt-5 space-y-4">
@@ -272,7 +272,7 @@ export function AccountDeletionPanel() {
                     This verification is valid only for this deletion.
                   </p>
                   {!reauthConfiguration ? (
-                    <p className="mt-4 text-sm text-base-content/50" role="status">
+                    <p className="mt-4 text-sm text-base-content/55" role="status">
                       Loading sign-in options…
                     </p>
                   ) : reauthOtpSent ? (

@@ -319,7 +319,7 @@ function FeedbackBonusClaimsControls() {
                   <p className="text-sm font-medium">
                     {item.awarded ? usdc(item.awardAmountAtomic) : "Awaiting the human award decision"}
                   </p>
-                  <p className="mt-1 font-mono text-xs text-base-content/45">
+                  <p className="mt-1 font-mono text-xs text-base-content/55">
                     Pool {item.poolId} · vote key {shortAddress(item.voteKey)}
                   </p>
                 </div>

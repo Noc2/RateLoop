@@ -10,7 +10,7 @@ export function SiteSearchResults({ query }: { query: string }) {
         <h2 id="site-results-heading" className="text-xl font-semibold text-base-content">
           Pages and docs
         </h2>
-        <span className="font-mono text-xs text-base-content/45">
+        <span className="font-mono text-xs text-base-content/55">
           {results.length} {results.length === 1 ? "result" : "results"}
         </span>
       </div>

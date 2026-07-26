@@ -1285,7 +1285,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 />
               </label>
               <label className="text-sm">
-                Description <span className="text-base-content/50">(optional)</span>
+                Description <span className="text-base-content/55">(optional)</span>
                 <textarea
                   className="textarea mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
                   name="description"
@@ -1494,7 +1494,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     />
                   </label>
                   <label className="text-sm">
-                    Review below confidence (%) <span className="text-base-content/50">(optional)</span>
+                    Review below confidence (%) <span className="text-base-content/55">(optional)</span>
                     <input
                       className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
                       type="number"
@@ -1710,7 +1710,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                               onClick={() => addExpertiseDefinition(definition)}
                             >
                               <span className="font-medium">{definition.label}</span>
-                              <span className="mt-1 block text-xs leading-5 text-base-content/50">
+                              <span className="mt-1 block text-xs leading-5 text-base-content/55">
                                 {definition.description}
                               </span>
                             </button>
@@ -2168,7 +2168,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                                 />
                               </label>
                               <label className="block text-sm">
-                                Verified email domain <span className="text-base-content/50">(optional)</span>
+                                Verified email domain <span className="text-base-content/55">(optional)</span>
                                 <input
                                   className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
                                   type="text"
@@ -2200,7 +2200,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                             <label className="block text-sm">
                               Bind code to recipient email{" "}
                               {invitationExpertiseIds.length === 0 ? (
-                                <span className="text-base-content/50">(optional)</span>
+                                <span className="text-base-content/55">(optional)</span>
                               ) : null}
                               <input
                                 className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"

@@ -126,7 +126,7 @@ function NavLinks({ mobile = false }: { mobile?: boolean }) {
               <div className={`flex flex-col gap-5 pb-4 pt-3 ${mobile ? "px-2" : "px-1"}`}>
                 {DOCS_NAV.map(group => (
                   <section key={group.section}>
-                    <h2 className="mb-1.5 px-3 text-xs font-semibold uppercase tracking-wider text-base-content/50">
+                    <h2 className="mb-1.5 px-3 text-xs font-semibold uppercase tracking-wider text-base-content/55">
                       {group.section}
                     </h2>
                     <div className="flex flex-col gap-0.5">
@@ -162,7 +162,7 @@ function NavLinks({ mobile = false }: { mobile?: boolean }) {
             <Link href="/pricing" className="transition-colors hover:text-base-content">
               Pricing
             </Link>
-            <span aria-hidden="true" className="text-base-content/30">
+            <span aria-hidden="true" className="text-base-content/55">
               ·
             </span>
             <Link href="/legal" className="transition-colors hover:text-base-content">
@@ -185,11 +185,11 @@ function Footer() {
               <Link href={href} className="transition-colors hover:text-base-content">
                 {label}
               </Link>
-              {index < footerLinks.length - 1 ? <span className="text-base-content/40">·</span> : null}
+              {index < footerLinks.length - 1 ? <span className="text-base-content/55">·</span> : null}
             </li>
           ))}
           <li className="flex items-center gap-2">
-            <span className="text-base-content/40">·</span>
+            <span className="text-base-content/55">·</span>
             <a
               href="https://github.com/Noc2/RateLoop"
               target="_blank"
@@ -200,7 +200,7 @@ function Footer() {
             </a>
           </li>
           <li className="flex items-center gap-2">
-            <span className="text-base-content/40">·</span>
+            <span className="text-base-content/55">·</span>
             <a
               href="https://x.com/RateLoop"
               target="_blank"

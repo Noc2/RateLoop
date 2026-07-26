@@ -418,7 +418,7 @@ function percentFromBps(value: number) {
 function SummaryItem({ label, value, mono = false }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return (
     <div className="border-l border-white/15 pl-4">
-      <dt className="text-xs uppercase tracking-wider text-base-content/45">{label}</dt>
+      <dt className="text-xs uppercase tracking-wider text-base-content/55">{label}</dt>
       <dd className={`mt-1 break-words text-sm text-base-content/85 ${mono ? "font-mono" : ""}`}>{value}</dd>
     </div>
   );
@@ -829,7 +829,7 @@ export function TokenlessHandoffClient() {
           <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Browser handoff</p>
           <h1 className="mt-4 text-4xl font-semibold">Track your ask.</h1>
           <p className="mt-3 text-base leading-7 text-base-content/65">
-            RateLoop saved this non-secret operation reference so the authenticated result survives reloads.
+            RateLoop saved this non-secret request reference so the authenticated result survives reloads.
           </p>
         </header>
 
@@ -841,7 +841,7 @@ export function TokenlessHandoffClient() {
 
         <section className="rateloop-surface-card mt-7 p-5 sm:p-7" aria-live="polite">
           <h2 className="text-2xl font-semibold">{result ? "Authenticated outcome" : "Ask submitted"}</h2>
-          <p className="mt-2 font-mono text-xs text-base-content/50">Operation {handoff.operationKey}</p>
+          <p className="mt-2 font-mono text-xs text-base-content/55">Request {handoff.operationKey}</p>
 
           {session.status === "loading" ? (
             <p className="mt-5 text-sm text-base-content/60" role="status">
@@ -921,7 +921,7 @@ export function TokenlessHandoffClient() {
         <p className="mt-4 max-w-3xl text-base leading-7 text-base-content/65 sm:text-lg">
           Check the question, confirm it is safe to share, then get the exact price.
         </p>
-        <p className="mt-3 text-sm text-base-content/50">
+        <p className="mt-3 text-sm text-base-content/55">
           Link expires <time dateTime={payload.expiresAt}>{formatDate(payload.expiresAt)}</time>
         </p>
       </header>
@@ -959,7 +959,7 @@ export function TokenlessHandoffClient() {
               changeRequest({ ...request, question: { ...request.question, prompt: event.target.value } })
             }
           />
-          <p className="mt-1 text-right font-mono text-xs text-base-content/35">
+          <p className="mt-1 text-right font-mono text-xs text-base-content/55">
             {request.question.prompt.length}/{MAX_PROMPT_LENGTH}
           </p>
 
@@ -998,7 +998,7 @@ export function TokenlessHandoffClient() {
                   value={request.question.optionA.label}
                   onChange={event => changeComparisonLabel("optionA", event.target.value)}
                 />
-                <span className="mt-1 block font-mono text-xs text-base-content/35">
+                <span className="mt-1 block font-mono text-xs text-base-content/55">
                   Key: {request.question.optionA.key}
                 </span>
               </label>
@@ -1010,7 +1010,7 @@ export function TokenlessHandoffClient() {
                   value={request.question.optionB.label}
                   onChange={event => changeComparisonLabel("optionB", event.target.value)}
                 />
-                <span className="mt-1 block font-mono text-xs text-base-content/35">
+                <span className="mt-1 block font-mono text-xs text-base-content/55">
                   Key: {request.question.optionB.key}
                 </span>
               </label>
@@ -1074,7 +1074,7 @@ export function TokenlessHandoffClient() {
           <details className="mt-6 rounded-xl border border-white/10 bg-black/15 p-4 text-sm">
             <summary className="cursor-pointer font-medium">Technical request details</summary>
             <dl className="mt-5 grid gap-5 sm:grid-cols-2">
-              <SummaryItem label="Admission policy" value={request.audience.admissionPolicyHash} mono />
+              <SummaryItem label="Reviewer rules" value={request.audience.admissionPolicyHash} mono />
               <SummaryItem label="Handoff ID" value={payload.handoffId} mono />
             </dl>
           </details>
@@ -1279,7 +1279,7 @@ export function TokenlessHandoffClient() {
               <h2 id="result-heading" className="text-2xl font-semibold">
                 {result ? "Authenticated outcome" : "Ask submitted"}
               </h2>
-              <p className="mt-2 font-mono text-xs text-base-content/50">Operation {activeOperationKey}</p>
+              <p className="mt-2 font-mono text-xs text-base-content/55">Request {activeOperationKey}</p>
             </div>
             {!result ? (
               <button

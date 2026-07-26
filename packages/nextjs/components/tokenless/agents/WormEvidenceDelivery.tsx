@@ -118,21 +118,21 @@ export function WormEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
           </div>
           <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
             <div>
-              <dt className="text-xs text-base-content/45">Bucket path</dt>
+              <dt className="text-xs text-base-content/55">Bucket path</dt>
               <dd className="mt-1 break-all font-mono text-xs">
                 {destination.bucketName}/{destination.keyPrefix}
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-base-content/45">Object Lock</dt>
+              <dt className="text-xs text-base-content/55">Object Lock</dt>
               <dd className="mt-1">COMPLIANCE · {destination.retentionDays} days</dd>
             </div>
             <div>
-              <dt className="text-xs text-base-content/45">Endpoint</dt>
+              <dt className="text-xs text-base-content/55">Endpoint</dt>
               <dd className="mt-1 break-all">{destination.endpointOrigin}</dd>
             </div>
             <div>
-              <dt className="text-xs text-base-content/45">Preflight</dt>
+              <dt className="text-xs text-base-content/55">Preflight</dt>
               <dd className="mt-1">{formatEvidenceDeliveryDate(destination.preflight.checkedAt)}</dd>
             </div>
           </dl>
@@ -181,7 +181,7 @@ export function WormEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
           </div>
         </div>
       ) : (
-        <p className="mt-4 text-sm text-base-content/50">No immutable archive is configured.</p>
+        <p className="mt-4 text-sm text-base-content/55">No immutable archive is configured.</p>
       )}
 
       <button

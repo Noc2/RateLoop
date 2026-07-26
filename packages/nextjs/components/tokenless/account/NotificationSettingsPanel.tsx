@@ -237,7 +237,7 @@ export function NotificationSettingsPanel() {
                   : "Browser alerts need permission"}
           </div>
         </div>
-        {loading ? <p className="mt-5 text-sm text-base-content/50">Loading notification settings…</p> : null}
+        {loading ? <p className="mt-5 text-sm text-base-content/55">Loading notification settings…</p> : null}
         {!loading ? (
           <>
             <div className="mt-5 space-y-3">

@@ -130,7 +130,7 @@ export function PrivateArtifactPreview({
         ) : null}
       </div>
       {loading ? (
-        <p role="status" className="mt-4 text-sm text-base-content/50">
+        <p role="status" className="mt-4 text-sm text-base-content/55">
           Loading private content…
         </p>
       ) : null}

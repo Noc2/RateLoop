@@ -79,7 +79,7 @@ export function WorldIdAssuranceClient({ verified, onVerified }: Props) {
 
   return (
     <div className="border-l-2 border-sky-300 pl-4 sm:col-span-2">
-      <span className="text-xs text-base-content/45">RateLoop-network assurance</span>
+      <span className="text-xs text-base-content/55">RateLoop-network assurance</span>
       <strong className="mt-1 block">{verified ? "Unique human verified" : "World ID Proof of Human required"}</strong>
       <p className="mt-2 text-xs leading-5 text-base-content/55">
         This adds a provider-scoped uniqueness assertion for network panels. It does not replace legal, tax, sanctions,

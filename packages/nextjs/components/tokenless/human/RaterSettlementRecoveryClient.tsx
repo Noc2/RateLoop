@@ -313,29 +313,29 @@ function SettlementRecoveryControls() {
         <div className="surface-card-nested mt-5 rounded-xl p-4">
           <dl className="grid gap-3 text-sm sm:grid-cols-2">
             <div>
-              <dt className="text-base-content/45">Round status</dt>
+              <dt className="text-base-content/55">Round status</dt>
               <dd className="mt-1 font-medium">{snapshot.roundStatus.replaceAll("_", " ")}</dd>
             </div>
             <div>
-              <dt className="text-base-content/45">Review outcome</dt>
+              <dt className="text-base-content/55">Review outcome</dt>
               <dd className="mt-1 font-medium">
                 {snapshot.claimed ? "Paid" : snapshot.revealed ? "Revealed" : "Committed"}
               </dd>
             </div>
             <div>
-              <dt className="text-base-content/45">Earned</dt>
+              <dt className="text-base-content/55">Earned</dt>
               <dd className="mt-1 font-medium">{usdc(earnedAtomic)}</dd>
             </div>
             <div>
-              <dt className="text-base-content/45">Claim deadline</dt>
+              <dt className="text-base-content/55">Claim deadline</dt>
               <dd className="mt-1 font-medium">{deadline(snapshot.claimDeadline)}</dd>
             </div>
             <div>
-              <dt className="text-base-content/45">Reveal deadline</dt>
+              <dt className="text-base-content/55">Reveal deadline</dt>
               <dd className="mt-1 font-medium">{deadline(snapshot.revealDeadline)}</dd>
             </div>
             <div>
-              <dt className="text-base-content/45">Commit</dt>
+              <dt className="text-base-content/55">Commit</dt>
               <dd className="mt-1 font-mono text-xs">{short(snapshot.commitKey)}</dd>
             </div>
           </dl>

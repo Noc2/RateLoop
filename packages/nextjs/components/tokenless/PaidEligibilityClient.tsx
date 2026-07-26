@@ -186,23 +186,23 @@ export function PaidEligibilityClient() {
         {eligible ? (
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <div className="border-l-2 border-[var(--rateloop-blue)] pl-4">
-              <span className="text-xs text-base-content/45">Identity & age</span>
+              <span className="text-xs text-base-content/55">Identity & age</span>
               <strong className="mt-1 block">Verified</strong>
             </div>
             <div className="border-l-2 border-[var(--rateloop-green)] pl-4">
-              <span className="text-xs text-base-content/45">Tax / DAC7</span>
+              <span className="text-xs text-base-content/55">Tax / DAC7</span>
               <strong className="mt-1 block">{state.dac7Status === "complete" ? "Complete" : "Not required"}</strong>
             </div>
             <div className="border-l-2 border-[var(--rateloop-yellow)] pl-4">
-              <span className="text-xs text-base-content/45">Sanctions screening</span>
+              <span className="text-xs text-base-content/55">Sanctions screening</span>
               <strong className="mt-1 block">Current</strong>
             </div>
             <div className="border-l-2 border-[var(--rateloop-pink)] pl-4">
-              <span className="text-xs text-base-content/45">Payout wallet</span>
+              <span className="text-xs text-base-content/55">Payout wallet</span>
               <strong className="mt-1 block break-all text-sm">{state.payoutAccount}</strong>
             </div>
             <div className="border-l-2 border-white/20 pl-4 sm:col-span-2">
-              <span className="text-xs text-base-content/45">Current assurance capabilities</span>
+              <span className="text-xs text-base-content/55">Current assurance capabilities</span>
               <strong className="mt-1 block text-sm font-medium capitalize">
                 {state.capabilities?.length
                   ? state.capabilities.map(formatCapability).join(" · ")
@@ -403,7 +403,7 @@ export function PaidEligibilityClient() {
       </section>
 
       <aside className="surface-card rounded-2xl p-6">
-        <p className="font-mono text-xs uppercase tracking-widest text-base-content/45">Why this happens now</p>
+        <p className="font-mono text-xs uppercase tracking-widest text-base-content/55">Why this happens now</p>
         <h2 className="mt-2 text-xl font-semibold">No blocked earnings later</h2>
         <p className="mt-4 text-sm leading-6 text-base-content/60">
           Every paid-work gate is complete before the first voucher. Browsing and advisory calibration remain available

@@ -79,7 +79,7 @@ function EvaluationVolumeChart({ profile }: { profile: EvaluationModelProfile })
   return (
     <div>
       <h3 className="text-sm font-semibold">Evaluation volume</h3>
-      <p className="mt-1 text-xs text-base-content/50">Eligible outputs and human-review requests by day.</p>
+      <p className="mt-1 text-xs text-base-content/55">Eligible outputs and human-review requests by day.</p>
       {points.length > 0 ? (
         <svg
           className="mt-4 h-40 w-full text-[var(--rateloop-blue)]"
@@ -142,7 +142,7 @@ function EvaluationVolumeChart({ profile }: { profile: EvaluationModelProfile })
           })}
         </svg>
       ) : (
-        <p className="mt-4 text-sm text-base-content/50">No request history yet.</p>
+        <p className="mt-4 text-sm text-base-content/55">No request history yet.</p>
       )}
       <div className="mt-2 flex flex-wrap gap-4 text-xs text-base-content/55" aria-hidden="true">
         <span className="flex items-center gap-2">
@@ -166,7 +166,7 @@ function AgreementChart({ profile }: { profile: EvaluationModelProfile }) {
   return (
     <div>
       <h3 className="text-sm font-semibold">Human agreement</h3>
-      <p className="mt-1 text-xs text-base-content/50">Comparable reviewed outputs for this model profile.</p>
+      <p className="mt-1 text-xs text-base-content/55">Comparable reviewed outputs for this model profile.</p>
       {profile.comparableCount > 0 ? (
         <div
           className="mt-6"
@@ -179,17 +179,17 @@ function AgreementChart({ profile }: { profile: EvaluationModelProfile }) {
           </div>
           <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
             <div>
-              <p className="text-xs text-base-content/50">Agreed</p>
+              <p className="text-xs text-base-content/55">Agreed</p>
               <p className="mt-1 font-mono text-lg">{agreed.toLocaleString()}</p>
             </div>
             <div>
-              <p className="text-xs text-base-content/50">Disagreed</p>
+              <p className="text-xs text-base-content/55">Disagreed</p>
               <p className="mt-1 font-mono text-lg">{disagreed.toLocaleString()}</p>
             </div>
           </div>
         </div>
       ) : (
-        <p className="mt-4 text-sm text-base-content/50">No comparable human results yet.</p>
+        <p className="mt-4 text-sm text-base-content/55">No comparable human results yet.</p>
       )}
     </div>
   );
@@ -235,7 +235,7 @@ function RecentExecutions({ executions }: { executions: EvaluationModelExecution
       </h3>
       <div className="mt-3 overflow-x-auto rounded-xl border border-white/10">
         <table className="w-full min-w-[720px] text-left text-sm">
-          <thead className="bg-white/[0.03] text-xs text-base-content/50">
+          <thead className="bg-white/[0.03] text-xs text-base-content/55">
             <tr>
               <th className="px-4 py-3 font-medium">Time</th>
               <th className="px-4 py-3 font-medium">Scope</th>
@@ -253,14 +253,14 @@ function RecentExecutions({ executions }: { executions: EvaluationModelExecution
                 <td className="px-4 py-3">
                   <p>{execution.workflowKey ?? "Not reported"}</p>
                   {execution.riskTier ? (
-                    <p className="mt-1 text-xs capitalize text-base-content/45">{execution.riskTier} risk</p>
+                    <p className="mt-1 text-xs capitalize text-base-content/55">{execution.riskTier} risk</p>
                   ) : null}
                 </td>
                 <td className="px-4 py-3">
                   <p>
                     {execution.modelCallCount} {execution.modelCallCount === 1 ? "model call" : "model calls"}
                   </p>
-                  <p className="mt-1 text-xs text-base-content/45">{duration(execution.durationMs)}</p>
+                  <p className="mt-1 text-xs text-base-content/55">{duration(execution.durationMs)}</p>
                 </td>
                 <td className="px-4 py-3 font-mono text-xs">
                   {tokenCount(execution.inputTokens)} in · {tokenCount(execution.outputTokens)} out
@@ -268,7 +268,7 @@ function RecentExecutions({ executions }: { executions: EvaluationModelExecution
                 <td className="px-4 py-3">
                   <p>{reviewLabel(execution)}</p>
                   {execution.agreement ? (
-                    <p className="mt-1 text-xs capitalize text-base-content/45">{execution.agreement}</p>
+                    <p className="mt-1 text-xs capitalize text-base-content/55">{execution.agreement}</p>
                   ) : null}
                   {execution.metadataComplete === false ? (
                     <p className="mt-1 text-xs text-amber-100/80">Metadata incomplete</p>
@@ -318,7 +318,7 @@ export function ModelEvidencePanel({ profiles }: { profiles: EvaluationModelProf
       <div className="mt-5 flex flex-wrap items-start justify-between gap-4 border-t border-white/10 pt-5">
         <div>
           <p className="text-lg font-semibold">{profileLabel(selected)}</p>
-          <p className="mt-1 text-xs text-base-content/50">
+          <p className="mt-1 text-xs text-base-content/55">
             {selected.agentNames.length > 0 ? selected.agentNames.join(", ") : "Connected agent"}
             {selected.orchestrationMode === "multi_model" ? " · Multi-model execution" : " · Single model"}
           </p>
@@ -339,7 +339,7 @@ export function ModelEvidencePanel({ profiles }: { profiles: EvaluationModelProf
           ["Mean execution time", duration(selected.averageDurationMs)],
         ].map(([label, value]) => (
           <div key={label} className="surface-card-nested rounded-xl p-4">
-            <dt className="text-xs text-base-content/45">{label}</dt>
+            <dt className="text-xs text-base-content/55">{label}</dt>
             <dd className="mt-2 font-mono text-lg">{value}</dd>
           </div>
         ))}
@@ -359,7 +359,7 @@ export function ModelEvidencePanel({ profiles }: { profiles: EvaluationModelProf
         <RecentExecutions executions={selected.recentExecutions} />
       </div>
 
-      <p className="mt-5 border-t border-white/10 pt-4 text-xs text-base-content/45">
+      <p className="mt-5 border-t border-white/10 pt-4 text-xs text-base-content/55">
         Model and execution metadata is reported by the connected host, not independently verified.
       </p>
     </section>

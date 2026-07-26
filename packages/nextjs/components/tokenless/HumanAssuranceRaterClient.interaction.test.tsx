@@ -249,10 +249,7 @@ test("a closed private review has one terminal recovery path", async () => {
     await waitFor(() => assert.ok(view.getByText("Review window closed")));
     assert.equal(view.queryByRole("button", { name: "Accept terms and open assignment" }), null);
     assert.equal(view.queryByRole("button", { name: "Restore assignment access" }), null);
-    assert.equal(
-      view.getByRole("link", { name: "Return to Review work" }).getAttribute("href"),
-      "/human?scope=private",
-    );
+    assert.equal(view.getByRole("link", { name: "Return to review queue" }).getAttribute("href"), "/human?tab=reviews");
   } finally {
     cleanup();
     globalThis.fetch = previousFetch;

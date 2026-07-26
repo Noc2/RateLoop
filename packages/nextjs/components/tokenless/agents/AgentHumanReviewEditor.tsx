@@ -648,7 +648,7 @@ export function AgentHumanReviewEditor({
                 Invited and RateLoop network (unavailable)
               </option>
             </select>
-            <span className="mt-1 block text-xs text-base-content/50">
+            <span className="mt-1 block text-xs text-base-content/55">
               This deployment currently supports invited reviewers without a guaranteed bounty.
             </span>
           </label>
@@ -698,7 +698,7 @@ export function AgentHumanReviewEditor({
               </option>
             </select>
             {draft.audience !== "private_invited" ? (
-              <span className="mt-1 block text-xs text-base-content/50">
+              <span className="mt-1 block text-xs text-base-content/55">
                 Network assignments currently require a guaranteed bounty.
               </span>
             ) : null}

@@ -10,6 +10,7 @@ import { ReviewerShell } from "~~/components/tokenless/review/ReviewerShell";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { Chip } from "~~/components/tokenless/ui/Chip";
+import { PageHeading } from "~~/components/tokenless/ui/PageHeading";
 import { readBrowserSession, subscribeToBrowserAuthSessionChanges } from "~~/lib/auth/client";
 import { HttpJsonError, readJson } from "~~/lib/tokenless/http";
 import { clearReviewDraft, loadReviewDraft, saveReviewDraft } from "~~/lib/tokenless/reviewDrafts";
@@ -175,11 +176,11 @@ function privateTermsSummary(terms: DirectAssignmentTerms) {
       <p className="mt-2 leading-6 text-base-content/65">{terms.purpose}</p>
       <dl className="mt-3 grid gap-3 text-xs sm:grid-cols-2">
         <div>
-          <dt className="text-base-content/45">Private material</dt>
+          <dt className="text-base-content/55">Private material</dt>
           <dd className="mt-1">{classifications.length ? classifications.join(", ") : "Assigned private content"}</dd>
         </div>
         <div>
-          <dt className="text-base-content/45">Export</dt>
+          <dt className="text-base-content/55">Export</dt>
           <dd className="mt-1">{exportAllowed ? "Allowed by this policy" : "Not allowed"}</dd>
         </div>
       </dl>
@@ -705,19 +706,16 @@ export function HumanAssuranceRaterClient({
   return (
     <div className={presentation === "embedded" ? "w-full" : "mx-auto w-full max-w-4xl px-4 py-8 sm:py-10"}>
       {presentation === "standalone" ? (
-        <div className="border-l-2 border-[var(--rateloop-green)] pl-6">
-          <p className="font-mono text-xs uppercase tracking-[0.25em] text-base-content/55">Private assignment</p>
-          <h1 className="mt-3 text-3xl font-semibold sm:text-4xl">
-            {task ? "Complete your assigned review" : "Open your assigned review"}
-          </h1>
-          <p className="mt-3 text-base text-base-content/60">
-            {task
+        <PageHeading
+          heading={task ? "Complete your assigned review" : "Open your assigned review"}
+          subtitle={
+            task
               ? task.taskKind === "binary_review"
                 ? "Review the source and decide whether the agent output meets the criterion."
                 : "Compare each blinded pair and explain your choice."
-              : "Use the details from your invitation."}
-          </p>
-        </div>
+              : "Use the details from your invitation."
+          }
+        />
       ) : null}
 
       <div className={presentation === "embedded" ? "" : "mt-8"}>
@@ -1066,7 +1064,7 @@ export function HumanAssuranceRaterClient({
                   const failureTags = reviewCase.failureTags?.length ? reviewCase.failureTags : task.rubric.failureTags;
                   return (
                     <Card as="article" key={reviewCase.caseId} className="rounded-2xl p-5 sm:p-7">
-                      <p className="font-mono text-xs uppercase tracking-widest text-base-content/45">
+                      <p className="font-mono text-xs uppercase tracking-widest text-base-content/55">
                         Case {String(activeCaseIndex + 1).padStart(2, "0")}
                       </p>
                       <h3 className="mt-2 text-2xl font-semibold">{reviewCase.title}</h3>
@@ -1188,7 +1186,7 @@ export function HumanAssuranceRaterClient({
                       {failureTags.length > 0 ? (
                         <fieldset className="mt-6 border-t border-white/10 pt-5">
                           <legend className="text-sm font-semibold">Failure tags</legend>
-                          <p className="mt-1 text-xs leading-5 text-base-content/45">
+                          <p className="mt-1 text-xs leading-5 text-base-content/55">
                             Select every issue that materially affected your decision.
                           </p>
                           <div className="mt-3 flex flex-wrap gap-2">

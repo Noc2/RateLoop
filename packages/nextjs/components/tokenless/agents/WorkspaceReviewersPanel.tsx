@@ -278,7 +278,7 @@ export function WorkspaceReviewersPanel({
       <div className="mt-6 border-t border-white/10 pt-5">
         <h3 className="text-sm font-semibold">Active reviewers</h3>
         {loading ? (
-          <p className="mt-3 text-sm text-base-content/50" role="status">
+          <p className="mt-3 text-sm text-base-content/55" role="status">
             Loading reviewers…
           </p>
         ) : activeReviewers.length ? (
@@ -294,14 +294,14 @@ export function WorkspaceReviewersPanel({
                     <p className="mt-1 truncate text-xs text-base-content/60">{reviewer.email}</p>
                   ) : null}
                   {reviewer.displayName || reviewer.email ? (
-                    <p className="mt-1 truncate font-mono text-xs text-base-content/40">
+                    <p className="mt-1 truncate font-mono text-xs text-base-content/55">
                       {shortPrincipal(reviewer.principalAddress)}
                     </p>
                   ) : null}
                   {reviewer.grants
                     .filter(grant => grant.status === "active")
                     .map(grant => (
-                      <p className="mt-1 text-xs text-base-content/45" key={grant.grantId}>
+                      <p className="mt-1 text-xs text-base-content/55" key={grant.grantId}>
                         Up to {grant.maxPrivateSensitivity} material · access expires {dateLabel(grant.validUntil)}
                       </p>
                     ))}
@@ -318,7 +318,7 @@ export function WorkspaceReviewersPanel({
             ))}
           </ul>
         ) : (
-          <p className="mt-3 text-sm text-base-content/50">No reviewers yet.</p>
+          <p className="mt-3 text-sm text-base-content/55">No reviewers yet.</p>
         )}
       </div>
 
