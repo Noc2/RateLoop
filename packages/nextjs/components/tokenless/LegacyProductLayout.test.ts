@@ -106,7 +106,7 @@ test("Human profile and settings render their controls directly", () => {
   assert.match(invitations, /startsWith\("rli_"\)/);
   assert.match(invitations, /startsWith\("rlri_"\)/);
   assert.doesNotMatch(invitations, /rlgi_|private-groups/);
-  assert.match(invitations, /aria-label="Invitation code"/);
+  assert.match(invitations, /label="Invitation code"/);
   assert.doesNotMatch(invitations, /<label/);
   assert.match(paidEligibility, /Add payout wallet/);
   assert.doesNotMatch(paidEligibility, /Sign in to RateLoop first/);
