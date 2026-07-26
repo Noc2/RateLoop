@@ -76,6 +76,7 @@ export type PersistedHybridReviewOperation = {
   preparationEvidenceHash: Hash | null;
   resultEvidenceHash: Hash | null;
   cancellationReasonCode: string | null;
+  retentionUntil: Date;
   children: [PersistedHybridReviewChild, PersistedHybridReviewChild];
 };
 
@@ -110,6 +111,24 @@ function number(row: Row | undefined, field: string) {
   const value = Number(row?.[field]);
   if (!Number.isSafeInteger(value)) throw new Error(`Stored ${field} is invalid.`);
   return value;
+}
+
+function date(row: Row | undefined, field: string) {
+  const value = row?.[field] instanceof Date ? (row[field] as Date) : new Date(String(row?.[field]));
+  if (!Number.isFinite(value.getTime())) throw new Error(`Stored ${field} is invalid.`);
+  return value;
+}
+
+function addCalendarMonths(value: Date, months: number) {
+  const result = new Date(value);
+  const originalDay = result.getUTCDate();
+  result.setUTCDate(1);
+  result.setUTCMonth(result.getUTCMonth() + months);
+  const lastDay = new Date(
+    Date.UTC(result.getUTCFullYear(), result.getUTCMonth() + 1, 0, result.getUTCHours(), result.getUTCMinutes()),
+  ).getUTCDate();
+  result.setUTCDate(Math.min(originalDay, lastDay));
+  return result;
 }
 
 function childFromRow(row: Row): PersistedHybridReviewChild {
@@ -168,6 +187,7 @@ function operationFromRows(parent: Row, childRows: Row[]): PersistedHybridReview
     preparationEvidenceHash: text(parent, "preparation_evidence_hash") as Hash | null,
     resultEvidenceHash: text(parent, "result_evidence_hash") as Hash | null,
     cancellationReasonCode: text(parent, "cancellation_reason_code"),
+    retentionUntil: date(parent, "retention_until"),
     children: [children[0], children[1]],
   };
 }
@@ -348,11 +368,26 @@ export async function ensureHybridReviewOperation(seed: HybridReviewParentSeed, 
   validateSeed(seed);
   const hybridOperationId = id("hybrid", seed.parentBindingHash);
   return transaction(async client => {
+    const retention = await client.query(
+      `SELECT evidence_retention_months FROM tokenless_workspace_evidence_retention_policies
+       WHERE workspace_id=$1 AND superseded_at IS NULL LIMIT 1 FOR UPDATE`,
+      [seed.workspaceId],
+    );
+    const retentionMonths = number(retention.rows[0], "evidence_retention_months");
+    if (retentionMonths < 1) {
+      throw new TokenlessServiceError(
+        "The workspace hybrid evidence retention policy is unavailable.",
+        409,
+        "hybrid_review_retention_unavailable",
+      );
+    }
+    const retentionUntil = addCalendarMonths(now, retentionMonths);
     const inserted = await client.query(
       `INSERT INTO tokenless_hybrid_review_operations
         (hybrid_operation_id,workspace_id,opportunity_id,parent_binding_hash,request_profile_hash,
-         audience_policy_hash,source_commitment,suggestion_commitment,state,transition_revision,created_at,updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'preparing',1,$9,$9)
+         audience_policy_hash,source_commitment,suggestion_commitment,state,transition_revision,
+         retention_until,created_at,updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'preparing',1,$9,$10,$10)
        ON CONFLICT DO NOTHING RETURNING hybrid_operation_id`,
       [
         hybridOperationId,
@@ -363,6 +398,7 @@ export async function ensureHybridReviewOperation(seed: HybridReviewParentSeed, 
         seed.audiencePolicyHash,
         seed.sourceCommitment,
         seed.suggestionCommitment,
+        retentionUntil,
         now,
       ],
     );

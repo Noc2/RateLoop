@@ -64,6 +64,17 @@ function digest(value: string) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function hybridPruneDigest(rows: Row[]) {
+  if (rows.length === 0) return null;
+  return `sha256:${digest(
+    JSON.stringify(
+      rows.map(row =>
+        Object.fromEntries(Object.entries(row).map(([key, value]) => [key, value instanceof Date ? value.toISOString() : value])),
+      ),
+    ),
+  )}`;
+}
+
 function addCalendarMonths(value: Date, months: number) {
   const result = new Date(value);
   const originalDay = result.getUTCDate();
@@ -133,7 +144,7 @@ async function workspaceHasDueRecords(input: {
   auditCutoff: Date;
   now: Date;
 }) {
-  const [objects, logs] = await Promise.all([
+  const [objects, logs, hybridReviews] = await Promise.all([
     dbPool.query(
       `SELECT o.object_id FROM tokenless_assurance_artifact_objects o
        WHERE o.workspace_id = $1 AND o.status = 'active' AND o.created_at <= $2 AND o.delete_after <= $3
@@ -146,8 +157,14 @@ async function workspaceHasDueRecords(input: {
        LIMIT 1`,
       [input.workspaceId, input.auditCutoff],
     ),
+    dbPool.query(
+      `SELECT hybrid_operation_id FROM tokenless_hybrid_review_operations
+       WHERE workspace_id=$1 AND state IN ('terminal','cancelled') AND retention_until<=$2
+       LIMIT 1`,
+      [input.workspaceId, input.now],
+    ),
   ]);
-  return objects.rows.length > 0 || logs.rows.length > 0;
+  return objects.rows.length > 0 || logs.rows.length > 0 || hybridReviews.rows.length > 0;
 }
 
 async function seedRetentionRuns(now: Date) {
@@ -377,6 +394,95 @@ async function pruneRun(row: Row, now: Date, itemLimit: number) {
       );
       accessLogsPruned += removed.rowCount ?? 0;
     }
+    const hybridPredicate = `hro.workspace_id=$1
+      AND hro.state IN ('terminal','cancelled') AND hro.retention_until<=$2`;
+    const [hybridTotal, hybridHeld] = await Promise.all([
+      count(
+        client,
+        `SELECT COUNT(*) AS count FROM tokenless_hybrid_review_operations hro
+         WHERE ${hybridPredicate}
+           AND NOT EXISTS (
+             SELECT 1 FROM tokenless_legal_holds hold
+             WHERE hold.workspace_id=$1 AND hold.status='active'
+           )`,
+        [workspaceId, now],
+      ),
+      count(
+        client,
+        `SELECT COUNT(*) AS count FROM tokenless_hybrid_review_operations hro
+         WHERE ${hybridPredicate}
+           AND EXISTS (
+             SELECT 1 FROM tokenless_legal_holds hold
+             WHERE hold.workspace_id=$1 AND hold.status='active'
+           )`,
+        [workspaceId, now],
+      ),
+    ]);
+    const hybridRows = await client.query(
+      `SELECT hro.hybrid_operation_id FROM tokenless_hybrid_review_operations hro
+       WHERE ${hybridPredicate}
+         AND NOT EXISTS (
+           SELECT 1 FROM tokenless_legal_holds hold
+           WHERE hold.workspace_id=$1 AND hold.status='active'
+         )
+       ORDER BY hro.retention_until,hro.hybrid_operation_id LIMIT $3 FOR UPDATE`,
+      [workspaceId, now, itemLimit],
+    );
+    const hybridIds = hybridRows.rows.map(value => string(value, "hybrid_operation_id")!);
+    let hybridReviewsPruned = 0;
+    let hybridReviewPruneDigest: string | null = null;
+    if (hybridIds.length > 0) {
+      const digestRows = await client.query(
+        `SELECT record_kind,hybrid_operation_id,record_key,state,transition_revision,
+                binding_hash,evidence_hash
+         FROM (
+           SELECT 'parent' AS record_kind,parent.hybrid_operation_id,
+                  parent.hybrid_operation_id AS record_key,parent.state,parent.transition_revision,
+                  parent.parent_binding_hash AS binding_hash,
+                  COALESCE(parent.result_evidence_hash,parent.preparation_evidence_hash,
+                           parent.request_profile_hash) AS evidence_hash
+           FROM tokenless_hybrid_review_operations parent
+           WHERE parent.hybrid_operation_id=ANY($1::text[])
+           UNION ALL
+           SELECT 'child',child.hybrid_operation_id,child.child_id,child.state,child.transition_revision,
+                  child.child_binding_hash,
+                  COALESCE(child.settlement_evidence_hash,child.settlement_binding_hash,
+                           child.voucher_preparation_hash,child.assignment_evidence_hash,
+                           child.admission_policy_hash)
+           FROM tokenless_hybrid_review_children child
+           WHERE child.hybrid_operation_id=ANY($1::text[])
+           UNION ALL
+           SELECT 'receipt',receipt.hybrid_operation_id,receipt.receipt_id,receipt.receipt_type,
+                  receipt.transition_revision,receipt.receipt_hash,receipt.evidence_hash
+           FROM tokenless_hybrid_review_receipts receipt
+           WHERE receipt.hybrid_operation_id=ANY($1::text[])
+         ) records
+         ORDER BY hybrid_operation_id,record_kind,record_key`,
+        [hybridIds],
+      );
+      hybridReviewPruneDigest = hybridPruneDigest([
+        { record_kind: "batch", record_key: [...hybridIds].sort().join(",") },
+        ...digestRows.rows,
+      ]);
+      await client.query("SELECT set_config('rateloop.retention_erasure','on',true)");
+      for (const hybridOperationId of hybridIds) {
+        await client.query(
+          `DELETE FROM tokenless_hybrid_review_receipts WHERE hybrid_operation_id=$1`,
+          [hybridOperationId],
+        );
+        await client.query(
+          `DELETE FROM tokenless_hybrid_review_children WHERE hybrid_operation_id=$1`,
+          [hybridOperationId],
+        );
+        const deleted = await client.query(
+          `DELETE FROM tokenless_hybrid_review_operations
+           WHERE hybrid_operation_id=$1 RETURNING hybrid_operation_id`,
+          [hybridOperationId],
+        );
+        hybridReviewsPruned += deleted.rows.length;
+      }
+      if (hybridReviewsPruned === 0) hybridReviewPruneDigest = null;
+    }
     const [auditEvents, evidencePackets, attestations, wormReceipts] = await Promise.all([
       count(
         client,
@@ -407,13 +513,16 @@ async function pruneRun(row: Row, now: Date, itemLimit: number) {
     const backlog =
       Math.max(objectTotal - objectRows.rows.length, 0) +
       Math.max(accessLogTotal - accessLogsPruned, 0) +
+      Math.max(hybridTotal - hybridReviewsPruned, 0) +
       blockedDeleteItems;
     await client.query(
       `UPDATE tokenless_evidence_retention_enforcement_runs
        SET objects_queued = $1, access_logs_pruned = $2, objects_held = $3, access_logs_held = $4,
            backlog_count = $5, audit_events_preserved = $6, evidence_packets_preserved = $7,
-           attestations_preserved = $8, worm_receipts_preserved = $9, pruned_at = $10, updated_at = $10
-       WHERE run_id = $11 AND state = 'processing'`,
+           attestations_preserved = $8, worm_receipts_preserved = $9,
+           hybrid_reviews_pruned=$10,hybrid_reviews_held=$11,hybrid_review_prune_digest=$12,
+           pruned_at = $13, updated_at = $13
+       WHERE run_id = $14 AND state = 'processing'`,
       [
         objectsQueued,
         accessLogsPruned,
@@ -424,6 +533,9 @@ async function pruneRun(row: Row, now: Date, itemLimit: number) {
         evidencePackets,
         attestations,
         wormReceipts,
+        hybridReviewsPruned,
+        hybridHeld,
+        hybridReviewPruneDigest,
         now,
         runId,
       ],
@@ -473,6 +585,9 @@ async function recordRunAudit(row: Row, now: Date) {
         accessLogsPruned: integer(row, "access_logs_pruned"),
         objectsHeld: integer(row, "objects_held"),
         accessLogsHeld: integer(row, "access_logs_held"),
+        hybridReviewsPruned: integer(row, "hybrid_reviews_pruned"),
+        hybridReviewsHeld: integer(row, "hybrid_reviews_held"),
+        hybridReviewPruneDigest: string(row, "hybrid_review_prune_digest"),
         backlog: integer(row, "backlog_count"),
         integrityRecordsPreserved: {
           auditEvents: integer(row, "audit_events_preserved"),

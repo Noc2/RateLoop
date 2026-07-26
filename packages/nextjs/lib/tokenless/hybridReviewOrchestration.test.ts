@@ -4,6 +4,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { createWorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
+import { processDueEvidenceRetentionEnforcement } from "~~/lib/tokenless/evidenceRetentionEnforcement";
 import {
   cancelHybridReviewBeforeLiability,
   completeHybridReviewPreparation,
@@ -551,4 +552,74 @@ test("the adapter persists two child rounds end to end and retry cannot duplicat
   });
   assert.equal(Number(persisted.rows[0]?.parents), 1);
   assert.equal(Number(persisted.rows[0]?.children), 2);
+});
+
+test("workspace retention erases terminal hybrid links only after expiry and legal-hold release", async () => {
+  const seeded = await fixture();
+  const parent = await ensureHybridReviewOperation(seeded, NOW);
+  const cancelled = await cancelHybridReviewBeforeLiability({
+    hybridOperationId: parent.operation.hybridOperationId,
+    reasonCode: "retention_fixture",
+    releaseChildren: async () => undefined,
+    now: NOW,
+  });
+  const due = new Date(cancelled.operation.retentionUntil.getTime() + 3_600_000);
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_legal_holds
+          (hold_id,workspace_id,project_id,scope,reason,status,created_by,created_at,review_at)
+          VALUES ('hold_hybrid_retention',?,NULL,'workspace','active dispute','active','system:test',?,?)`,
+    args: [seeded.workspaceId, NOW, new Date(due.getTime() + 86_400_000)],
+  });
+  const heldSummary = await processDueEvidenceRetentionEnforcement({ now: due, limit: 10, itemLimit: 10 });
+  assert.equal(heldSummary.completed, 1);
+  assert.equal(heldSummary.retry, 0);
+  assert.equal(heldSummary.dead, 0);
+  let stored = await dbClient.execute({
+    sql: "SELECT count(*) AS count FROM tokenless_hybrid_review_operations WHERE hybrid_operation_id=?",
+    args: [parent.operation.hybridOperationId],
+  });
+  assert.equal(Number(stored.rows[0]?.count), 1);
+  const heldRuns = await dbClient.execute(
+    "SELECT workspace_id,hybrid_reviews_pruned,hybrid_reviews_held FROM tokenless_evidence_retention_enforcement_runs",
+  );
+  const held = heldRuns.rows.find(row => String(row.workspace_id) === seeded.workspaceId);
+  assert.ok(held);
+  assert.equal(Number(held.hybrid_reviews_pruned), 0);
+  assert.equal(Number(held.hybrid_reviews_held), 1);
+  await dbClient.execute({
+    sql: `UPDATE tokenless_legal_holds
+          SET status='released',released_by='system:test',released_at=?,release_reason='dispute closed'
+          WHERE hold_id='hold_hybrid_retention'`,
+    args: [due],
+  });
+  const afterRelease = new Date(due.getTime() + 3_600_000);
+  const prunedSummary = await processDueEvidenceRetentionEnforcement({
+    now: afterRelease,
+    limit: 10,
+    itemLimit: 10,
+  });
+  if (prunedSummary.retry > 0) {
+    const failed = await dbClient.execute(
+      "SELECT last_error FROM tokenless_evidence_retention_enforcement_runs WHERE state='retry'",
+    );
+    assert.fail(String(failed.rows[0]?.last_error));
+  }
+  assert.equal(prunedSummary.completed, 1);
+  assert.equal(prunedSummary.retry, 0);
+  assert.equal(prunedSummary.dead, 0);
+  stored = await dbClient.execute({
+    sql: "SELECT count(*) AS count FROM tokenless_hybrid_review_operations WHERE hybrid_operation_id=?",
+    args: [parent.operation.hybridOperationId],
+  });
+  assert.equal(Number(stored.rows[0]?.count), 0);
+  const afterReleaseRuns = await dbClient.execute(
+    `SELECT workspace_id,hybrid_reviews_pruned,hybrid_reviews_held,hybrid_review_prune_digest
+     FROM tokenless_evidence_retention_enforcement_runs`,
+  );
+  const pruned = afterReleaseRuns.rows.find(
+    row => String(row.workspace_id) === seeded.workspaceId && Number(row.hybrid_reviews_pruned) === 1,
+  );
+  assert.ok(pruned);
+  assert.equal(Number(pruned.hybrid_reviews_held), 0);
+  assert.match(String(pruned.hybrid_review_prune_digest), /^sha256:[0-9a-f]{64}$/u);
 });

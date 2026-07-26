@@ -12,6 +12,7 @@ CREATE TABLE "tokenless_hybrid_review_operations" (
   "preparation_evidence_hash" text,
   "result_evidence_hash" text,
   "cancellation_reason_code" text,
+  "retention_until" timestamp with time zone NOT NULL,
   "created_at" timestamp with time zone NOT NULL,
   "updated_at" timestamp with time zone NOT NULL,
   FOREIGN KEY ("workspace_id","opportunity_id")
@@ -67,7 +68,9 @@ CREATE TABLE "tokenless_hybrid_review_operations" (
     )
   ),
   CONSTRAINT "tokenless_hybrid_review_operations_values_check" CHECK (
-    "transition_revision" > 0 AND "updated_at" >= "created_at"
+    "transition_revision" > 0
+    AND "updated_at" >= "created_at"
+    AND "retention_until" > "created_at"
   )
 );--> statement-breakpoint
 
@@ -228,6 +231,26 @@ CREATE INDEX "tokenless_hybrid_review_operations_state_idx"
 CREATE INDEX "tokenless_hybrid_review_children_state_idx"
   ON "tokenless_hybrid_review_children" ("state","updated_at","child_id");--> statement-breakpoint
 
+ALTER TABLE "tokenless_evidence_retention_enforcement_runs"
+  ADD COLUMN "hybrid_reviews_pruned" integer NOT NULL DEFAULT 0;--> statement-breakpoint
+ALTER TABLE "tokenless_evidence_retention_enforcement_runs"
+  ADD COLUMN "hybrid_reviews_held" integer NOT NULL DEFAULT 0;--> statement-breakpoint
+ALTER TABLE "tokenless_evidence_retention_enforcement_runs"
+  ADD COLUMN "hybrid_review_prune_digest" text;--> statement-breakpoint
+ALTER TABLE "tokenless_evidence_retention_enforcement_runs"
+  ADD CONSTRAINT "tokenless_evidence_retention_runs_hybrid_values_check"
+  CHECK (
+    "hybrid_reviews_pruned" >= 0
+    AND "hybrid_reviews_held" >= 0
+    AND (
+      ("hybrid_reviews_pruned" = 0 AND "hybrid_review_prune_digest" IS NULL)
+      OR (
+        "hybrid_reviews_pruned" > 0
+        AND "hybrid_review_prune_digest" ~ '^sha256:[0-9a-f]{64}$'
+      )
+    )
+  );--> statement-breakpoint
+
 CREATE TABLE "tokenless_hybrid_review_receipts" (
   "receipt_id" text PRIMARY KEY NOT NULL,
   "hybrid_operation_id" text NOT NULL
@@ -279,6 +302,10 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
+  IF TG_OP = 'DELETE'
+     AND current_setting('rateloop.retention_erasure',true) = 'on' THEN
+    RETURN OLD;
+  END IF;
   RAISE EXCEPTION 'hybrid review receipts are append-only';
 END;
 $$;--> statement-breakpoint
@@ -445,10 +472,12 @@ BEGIN
   END IF;
   IF ROW(
     NEW.workspace_id,NEW.opportunity_id,NEW.parent_binding_hash,NEW.request_profile_hash,
-    NEW.audience_policy_hash,NEW.source_commitment,NEW.suggestion_commitment,NEW.created_at
+    NEW.audience_policy_hash,NEW.source_commitment,NEW.suggestion_commitment,
+    NEW.retention_until,NEW.created_at
   ) IS DISTINCT FROM ROW(
     OLD.workspace_id,OLD.opportunity_id,OLD.parent_binding_hash,OLD.request_profile_hash,
-    OLD.audience_policy_hash,OLD.source_commitment,OLD.suggestion_commitment,OLD.created_at
+    OLD.audience_policy_hash,OLD.source_commitment,OLD.suggestion_commitment,
+    OLD.retention_until,OLD.created_at
   ) THEN
     RAISE EXCEPTION 'hybrid review parent bindings are immutable';
   END IF;
