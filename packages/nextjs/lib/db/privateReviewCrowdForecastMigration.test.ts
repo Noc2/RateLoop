@@ -11,8 +11,7 @@ const journal = JSON.parse(readFileSync(new URL("../../drizzle/meta/_journal.jso
 };
 
 test("0135 stores private crowd forecasts on the exact one-percent grid", () => {
-  assert.equal(journal.entries.at(-1)?.idx, 135);
-  assert.equal(journal.entries.at(-1)?.tag, "0135_private_review_crowd_forecasts");
+  assert.equal(journal.entries.find(value => value.tag === "0135_private_review_crowd_forecasts")?.idx, 135);
   assert.match(migration, /ADD COLUMN "predicted_positive_bps" integer/u);
   assert.match(migration, /"predicted_positive_bps" BETWEEN 100 AND 9900/u);
   assert.match(migration, /"predicted_positive_bps" % 100 = 0/u);

@@ -19,6 +19,7 @@ const invitationKeys = new Set([
   "intendedEmailDomain",
   "maximumRedemptions",
   "maxPrivateSensitivity",
+  "paidAdulthoodAttested",
   "projectIds",
 ]);
 
@@ -80,6 +81,7 @@ export async function POST(request: NextRequest, context: Context) {
       accessExpiresAt: optionalDate(body.accessExpiresAt, "accessExpiresAt"),
       expiresAt: optionalDate(body.expiresAt, "expiresAt"),
       maximumRedemptions: body.maximumRedemptions as number | undefined,
+      paidAdulthoodAttested: body.paidAdulthoodAttested === true,
     });
     return NextResponse.json({ invitation }, { status: 201, headers: noStore });
   } catch (error) {

@@ -290,7 +290,7 @@ export async function listWorkspaceReviewerInvitations(input: { accountAddress: 
   const result = await dbClient.execute({
     sql: `SELECT invitation_id,token_prefix,intended_account_address,intended_email_hash,
                  intended_email_domain,access_expires_at,expires_at,maximum_redemptions,
-                 redemption_count,revoked_at,created_at
+                 redemption_count,paid_adulthood_attested,revoked_at,created_at
           FROM tokenless_workspace_reviewer_invitations WHERE workspace_id=?
           ORDER BY created_at DESC,invitation_id DESC`,
     args: [input.workspaceId],
@@ -307,6 +307,7 @@ export async function listWorkspaceReviewerInvitations(input: { accountAddress: 
       expiresAt: iso(date(row, "expires_at")),
       maximumRedemptions: count(row, "maximum_redemptions"),
       redemptionCount: count(row, "redemption_count"),
+      paidAdulthoodAttested: boolean(row, "paid_adulthood_attested"),
       revokedAt: iso(date(row, "revoked_at")),
       createdAt: iso(date(row, "created_at")),
     };
@@ -374,6 +375,12 @@ type WorkspaceReviewerInvitationCreateInput = {
   expiresAt?: Date;
   accessExpiresAt?: Date | null;
   maximumRedemptions?: number;
+  /**
+   * Required only if the invitation may later unlock paid work. The workspace,
+   * not RateLoop, warrants that its invitee is an adult; this is not document
+   * or biometric age verification.
+   */
+  paidAdulthoodAttested?: boolean;
   now?: Date;
 };
 
@@ -404,6 +411,7 @@ export async function createWorkspaceReviewerInvitationInTransaction(
     );
   }
   const now = input.now ?? new Date();
+  const paidAdulthoodAttested = input.paidAdulthoodAttested === true;
   const expiresAt = input.expiresAt ?? new Date(now.getTime() + DEFAULT_INVITATION_TTL_MS);
   const invitationTtl = expiresAt.getTime() - now.getTime();
   if (!Number.isFinite(expiresAt.getTime()) || invitationTtl < 60_000 || invitationTtl > MAX_INVITATION_TTL_MS) {
@@ -451,8 +459,9 @@ export async function createWorkspaceReviewerInvitationInTransaction(
     `INSERT INTO tokenless_workspace_reviewer_invitations
      (invitation_id,workspace_id,token_hash,token_prefix,project_scope,max_private_sensitivity,
       intended_account_address,intended_email_hash,intended_email_domain,access_expires_at,expires_at,
-      maximum_redemptions,redemption_count,created_by,created_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,0,$13,$14)`,
+      maximum_redemptions,redemption_count,paid_adulthood_attested,paid_adulthood_attested_by,
+      paid_adulthood_attested_at,created_by,created_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,0,$13,$14,$15,$16,$17)`,
     [
       invitationId,
       input.workspaceId,
@@ -466,6 +475,9 @@ export async function createWorkspaceReviewerInvitationInTransaction(
       accessExpiresAt,
       expiresAt,
       maximumRedemptions,
+      paidAdulthoodAttested,
+      paidAdulthoodAttested ? manager : null,
+      paidAdulthoodAttested ? now : null,
       manager,
       now,
     ],
@@ -487,6 +499,7 @@ export async function createWorkspaceReviewerInvitationInTransaction(
       projectCount: projects.length,
       maxPrivateSensitivity: ceiling,
       maximumRedemptions,
+      paidAdulthoodAttested,
       accountBound: intendedAccount !== null,
       contactBound: intendedEmail !== null,
       domainBound: intendedDomain !== null,
@@ -501,6 +514,7 @@ export async function createWorkspaceReviewerInvitationInTransaction(
     accessExpiresAt: iso(accessExpiresAt),
     expiresAt: expiresAt.toISOString(),
     maximumRedemptions,
+    paidAdulthoodAttested,
   };
 }
 
@@ -781,6 +795,35 @@ export async function redeemWorkspaceReviewerInvitation(input: { accountAddress:
       `INSERT INTO tokenless_workspace_reviewer_invitation_redemptions
        (invitation_id,workspace_id,principal_address,grant_id,redeemed_at) VALUES ($1,$2,$3,$4,$5)`,
       [invitationId, workspaceId, principalAddress, grantId, now],
+    );
+    const invitationQualificationId = `qual_inv_${digest(`${invitationId}\0${principalAddress}`).slice(0, 40)}`;
+    const qualificationKeys: Array<string | { key: string; value: boolean }> = [
+      { key: "customer_invitation", value: true },
+      ...(boolean(row, "paid_adulthood_attested") ? [{ key: "customer_attested_adult", value: true } as const] : []),
+    ];
+    await client.query(
+      `INSERT INTO tokenless_reviewer_qualifications
+       (qualification_id,rater_id,reviewer_source,qualification_kind,cohort_ids_json,
+        qualification_keys_json,verified_at,expires_at,status,created_at,updated_at,evidence_kind,
+        workspace_id,reviewer_account_address,evidence_reference_hash,qualification_value_json)
+       VALUES ($1,NULL,'customer_invited','invitation','[]',$2,$3,$4,'active',$3,$3,
+               'owner_attested',$5,$6,$7,$8)
+       ON CONFLICT (qualification_id) DO NOTHING`,
+      [
+        invitationQualificationId,
+        JSON.stringify(qualificationKeys),
+        now,
+        date(row, "access_expires_at"),
+        workspaceId,
+        principalAddress,
+        grantHash,
+        JSON.stringify({
+          adulthoodBasis: boolean(row, "paid_adulthood_attested") ? "customer_attested" : null,
+          invitationId,
+          paidWorkEligible: boolean(row, "paid_adulthood_attested"),
+          assertedBy: text(row, "paid_adulthood_attested_by") ?? text(row, "created_by"),
+        }),
+      ],
     );
     await client.query(
       `UPDATE tokenless_workspace_reviewer_invitations

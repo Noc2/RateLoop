@@ -76,6 +76,7 @@ export function WorkspaceReviewersPanel({
     "internal" | "confidential" | "restricted" | "regulated"
   >("confidential");
   const [issuedUrl, setIssuedUrl] = useState<string | null>(null);
+  const [paidAdulthoodAttested, setPaidAdulthoodAttested] = useState(false);
   const [busyTarget, setBusyTarget] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -141,7 +142,11 @@ export function WorkspaceReviewersPanel({
           method: "POST",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ intendedEmail: email.trim() || null, maxPrivateSensitivity }),
+          body: JSON.stringify({
+            intendedEmail: email.trim() || null,
+            maxPrivateSensitivity,
+            paidAdulthoodAttested,
+          }),
           signal: request.signal,
         }),
       );
@@ -247,6 +252,18 @@ export function WorkspaceReviewersPanel({
         <button className="rateloop-gradient-action min-h-12 px-5" disabled={busyTarget === "invite"}>
           {busyTarget === "invite" ? "Creating…" : "Invite reviewer"}
         </button>
+        <label className="flex items-start gap-2 text-xs leading-5 text-base-content/65 sm:col-span-3">
+          <input
+            type="checkbox"
+            className="checkbox checkbox-sm mt-0.5"
+            checked={paidAdulthoodAttested}
+            onChange={event => setPaidAdulthoodAttested(event.target.checked)}
+          />
+          <span>
+            Permit paid assignments: our workspace warrants this invitee is at least 18. This is a customer attestation,
+            not verified age, and sanctions screening still adds a manual review delay.
+          </span>
+        </label>
       </form>
 
       {issuedUrl ? (
