@@ -69,7 +69,7 @@ export function ScheduledWorkerHealthPanel({ workspaceId }: { workspaceId: strin
           <h2 className={`text-base font-semibold ${content.tone}`}>{content.label}</h2>
           <p className="mt-1 text-sm text-base-content/65">{content.description}</p>
         </div>
-        <p className="text-xs text-base-content/50">
+        <p className="text-xs text-base-content/60">
           {health.currentRun === "running" ? "Run in progress · " : ""}
           {completedLabel(health.lastCompletedAt)}
         </p>
