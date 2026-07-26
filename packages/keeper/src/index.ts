@@ -37,11 +37,6 @@ async function main() {
 
   setHealthThreshold(config.intervalMs);
   setMinimumWalletBalanceWei(config.minGasBalanceWei);
-  const metricsServer = startMetricsServer(
-    config.metricsPort,
-    config.metricsBindAddress,
-    config.metricsAuthToken,
-  );
 
   await validateKeeperSigner();
   await validateKeeperConnectivity(publicClient);
@@ -55,6 +50,11 @@ async function main() {
     feedbackBonus: config.deployment.feedbackBonus,
     account: account.address,
   });
+  const metricsServer = startMetricsServer(
+    config.metricsPort,
+    config.metricsBindAddress,
+    config.metricsAuthToken,
+  );
 
   let running = false;
   let shuttingDown = false;
