@@ -348,6 +348,11 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
     ...tokenlessTestOperationalSecrets(),
   };
   assert.deepEqual(validateTokenlessProductionReadiness({ env, activeRegistry: {} }), []);
+  const disabledWithoutWalletScreening = { ...env };
+  delete disabledWithoutWalletScreening.TOKENLESS_WALLET_SCREENING_PROVIDER_ID;
+  delete disabledWithoutWalletScreening.TOKENLESS_WALLET_SCREENING_PROVIDER_URL;
+  delete disabledWithoutWalletScreening.TOKENLESS_WALLET_SCREENING_PROVIDER_SECRET;
+  assert.deepEqual(validateTokenlessProductionReadiness({ env: disabledWithoutWalletScreening, activeRegistry: {} }), []);
   const activated = {
     ...env,
     TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "true",
@@ -367,6 +372,14 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
   };
   activated.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE = derivePaidLaneActivationReference(activated);
   assert.deepEqual(validateTokenlessProductionReadiness({ env: activated, activeRegistry: {} }), []);
+  const activatedWithoutWalletScreening = { ...activated };
+  delete activatedWithoutWalletScreening.TOKENLESS_WALLET_SCREENING_PROVIDER_ID;
+  delete activatedWithoutWalletScreening.TOKENLESS_WALLET_SCREENING_PROVIDER_URL;
+  delete activatedWithoutWalletScreening.TOKENLESS_WALLET_SCREENING_PROVIDER_SECRET;
+  assert.match(
+    validateTokenlessProductionReadiness({ env: activatedWithoutWalletScreening, activeRegistry: {} }).join("\n"),
+    /TOKENLESS_WALLET_SCREENING_PROVIDER_ID is required for paid eligibility/u,
+  );
   const publicOnlyActivation = {
     ...activated,
     TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "false",

@@ -361,6 +361,15 @@ function validateTokenlessTestVault(env, errors) {
 
 function validateTokenlessTestDeployment(env) {
   const errors = [];
+  const activatedTestLanes = [
+    [
+      "TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED",
+      "NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED",
+      "private_invited_paid",
+    ],
+    ["TOKENLESS_NETWORK_PANELS_ENABLED", "NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED", "public_paid_network"],
+    ["TOKENLESS_HYBRID_REVIEWS_ENABLED", "NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED", "hybrid_public_safe"],
+  ];
   const sanctionsRetention = value(env, "TOKENLESS_SANCTIONS_MATCH_RETENTION_DAYS");
   if (
     sanctionsRetention &&
@@ -368,15 +377,20 @@ function validateTokenlessTestDeployment(env) {
   ) {
     errors.push("TOKENLESS_SANCTIONS_MATCH_RETENTION_DAYS must be an integer from 365 to 3650.");
   }
-  const walletScreeningUrl = value(env, "TOKENLESS_WALLET_SCREENING_PROVIDER_URL");
-  if (!value(env, "TOKENLESS_WALLET_SCREENING_PROVIDER_ID")) {
-    errors.push("TOKENLESS_WALLET_SCREENING_PROVIDER_ID is required for paid eligibility.");
-  }
-  if (!walletScreeningUrl || !/^https:\/\//iu.test(walletScreeningUrl)) {
-    errors.push("TOKENLESS_WALLET_SCREENING_PROVIDER_URL must be an HTTPS URL.");
-  }
-  if (value(env, "TOKENLESS_WALLET_SCREENING_PROVIDER_SECRET").length < 32) {
-    errors.push("TOKENLESS_WALLET_SCREENING_PROVIDER_SECRET must contain at least 32 characters.");
+  const paidLaneEnabled = activatedTestLanes.some(
+    ([serverFlag, publicFlag]) => value(env, serverFlag) === "true" || value(env, publicFlag) === "true",
+  );
+  if (paidLaneEnabled) {
+    const walletScreeningUrl = value(env, "TOKENLESS_WALLET_SCREENING_PROVIDER_URL");
+    if (!value(env, "TOKENLESS_WALLET_SCREENING_PROVIDER_ID")) {
+      errors.push("TOKENLESS_WALLET_SCREENING_PROVIDER_ID is required for paid eligibility.");
+    }
+    if (!walletScreeningUrl || !/^https:\/\//iu.test(walletScreeningUrl)) {
+      errors.push("TOKENLESS_WALLET_SCREENING_PROVIDER_URL must be an HTTPS URL.");
+    }
+    if (value(env, "TOKENLESS_WALLET_SCREENING_PROVIDER_SECRET").length < 32) {
+      errors.push("TOKENLESS_WALLET_SCREENING_PROVIDER_SECRET must contain at least 32 characters.");
+    }
   }
   errors.push(...validateHostedDatabaseIdentity(env));
   const isolatedReviewVaultKey = validateTokenlessTestVault(env, errors);
@@ -460,15 +474,6 @@ function validateTokenlessTestDeployment(env) {
       errors.push(`${name} must be exactly true or false for a tokenless test deployment.`);
     }
   }
-  const activatedTestLanes = [
-    [
-      "TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED",
-      "NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED",
-      "private_invited_paid",
-    ],
-    ["TOKENLESS_NETWORK_PANELS_ENABLED", "NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED", "public_paid_network"],
-    ["TOKENLESS_HYBRID_REVIEWS_ENABLED", "NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED", "hybrid_public_safe"],
-  ];
   for (const [serverFlag, publicFlag, lane] of activatedTestLanes) {
     if (value(env, serverFlag) === "true" || value(env, publicFlag) === "true") {
       errors.push(...validatePaidLaneActivation(lane, env).map(error => `Paid-lane activation: ${error}`));
