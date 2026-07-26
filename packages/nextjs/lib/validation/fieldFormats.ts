@@ -11,6 +11,18 @@ export const FIELD_FORMATS = {
     title: "Use a 0x-prefixed EVM address.",
     message: "Enter a valid 0x-prefixed EVM address.",
   },
+  agentVersion: {
+    pattern: "[A-Za-z0-9][A-Za-z0-9._:-]{0,159}",
+    maxLength: 160,
+    title: "Use letters, numbers, dots, underscores, colons, or hyphens.",
+    message: "Enter a valid version of at most 160 characters.",
+  },
+  grcCredentialReference: {
+    pattern: "(?:vault|kms|secret)://rateloop/grc/[A-Za-z0-9._~:/-]{3,300}",
+    maxLength: 322,
+    title: "Use a RateLoop vault, KMS, or secret reference.",
+    message: "Enter a valid RateLoop GRC credential reference.",
+  },
   sha256Digest: {
     pattern: "sha256:[0-9a-f]{64}",
     maxLength: 71,
@@ -23,11 +35,23 @@ export const FIELD_FORMATS = {
     title: "Use a positive amount with no more than six decimal places.",
     message: "Enter a valid USDC amount with no more than six decimal places.",
   },
+  usdInvoiceAmount: {
+    pattern: "[0-9]{1,6}([.][0-9]{1,2})?",
+    maxLength: 9,
+    title: "Use up to six whole dollars and no more than two decimal places.",
+    message: "Enter a valid USD amount with no more than two decimal places.",
+  },
   vatIdentifier: {
     pattern: "[A-Za-z0-9][A-Za-z0-9 ._/-]{0,63}",
     maxLength: 64,
     title: "Use at most 64 letters, numbers, spaces, dots, slashes, underscores, or hyphens.",
     message: "Enter a valid VAT identifier of at most 64 characters.",
+  },
+  wormCredentialReference: {
+    pattern: "sec_[0-9a-f]{48}",
+    maxLength: 52,
+    title: "Use sec_ followed by 48 lowercase hexadecimal characters.",
+    message: "Enter a valid opaque server credential reference.",
   },
 } as const;
 

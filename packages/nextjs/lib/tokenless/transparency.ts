@@ -535,23 +535,33 @@ export function validateWebhookUrl(value: string, production = process.env.NODE_
   try {
     url = new URL(value);
   } catch {
-    throw new TokenlessServiceError("Webhook URL is invalid.", 400, "invalid_webhook_url");
+    throw new TokenlessServiceError("Webhook URL is invalid.", 400, "invalid_webhook_url", false, "url");
   }
   if (url.username || url.password || url.hash || url.protocol !== "https:") {
     throw new TokenlessServiceError(
       "Webhook URL must be a credential-free HTTPS URL without a fragment.",
       400,
       "invalid_webhook_url",
+      false,
+      "url",
     );
   }
   if (isNonGlobalHost(url.hostname)) {
-    throw new TokenlessServiceError("Webhook URL cannot target a private or local host.", 400, "invalid_webhook_url");
+    throw new TokenlessServiceError(
+      "Webhook URL cannot target a private or local host.",
+      400,
+      "invalid_webhook_url",
+      false,
+      "url",
+    );
   }
   if (production && url.port && url.port !== "443") {
     throw new TokenlessServiceError(
       "Production webhook URLs must use the standard HTTPS port.",
       400,
       "invalid_webhook_url",
+      false,
+      "url",
     );
   }
   return url.toString();
@@ -573,13 +583,21 @@ export async function assertPublicWebhookDestination(
   try {
     addresses = await resolver(new URL(url).hostname);
   } catch {
-    throw new TokenlessServiceError("Webhook hostname could not be resolved.", 400, "invalid_webhook_url");
+    throw new TokenlessServiceError(
+      "Webhook hostname could not be resolved.",
+      400,
+      "invalid_webhook_url",
+      false,
+      "url",
+    );
   }
   if (addresses.length === 0 || addresses.some(address => !isIP(address) || isNonGlobalHost(address))) {
     throw new TokenlessServiceError(
       "Webhook hostname cannot resolve to a private or local address.",
       400,
       "invalid_webhook_url",
+      false,
+      "url",
     );
   }
   return addresses[0];
@@ -634,6 +652,8 @@ function parseEventTypes(value: unknown) {
       "eventTypes must contain supported webhook event names.",
       400,
       "invalid_webhook_events",
+      false,
+      "eventTypes",
     );
   }
   return [...new Set(value as string[])].sort();

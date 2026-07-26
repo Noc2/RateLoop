@@ -133,14 +133,26 @@ function exactObject(value: unknown, allowed: readonly string[]) {
 
 function provider(value: unknown): GrcProvider {
   if (value !== "drata" && value !== "vanta") {
-    throw new TokenlessServiceError("Connector provider must be Drata or Vanta.", 400, "invalid_grc_connector");
+    throw new TokenlessServiceError(
+      "Connector provider must be Drata or Vanta.",
+      400,
+      "invalid_grc_connector",
+      false,
+      "provider",
+    );
   }
   return value;
 }
 
 function displayName(value: unknown) {
   if (typeof value !== "string" || value.trim().length < 1 || value.trim().length > 100) {
-    throw new TokenlessServiceError("Connector name must contain one to 100 characters.", 400, "invalid_grc_connector");
+    throw new TokenlessServiceError(
+      "Connector name must contain one to 100 characters.",
+      400,
+      "invalid_grc_connector",
+      false,
+      "displayName",
+    );
   }
   return value.trim();
 }
@@ -158,6 +170,8 @@ function credentialReference(value: unknown) {
       "Credential reference must be an opaque RateLoop GRC vault, KMS, or secret reference.",
       400,
       "invalid_grc_connector",
+      false,
+      "credentialReference",
     );
   }
   return value;

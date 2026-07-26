@@ -120,7 +120,21 @@ function integer(row: Row | undefined, key: string) {
 
 function requiredString(value: unknown, field: string, max: number) {
   if (typeof value !== "string" || !value.trim() || value.trim().length > max) {
-    throw new TokenlessServiceError(`${field} is invalid.`, 400, "invalid_worm_destination");
+    throw new TokenlessServiceError(
+      `${field} is invalid.`,
+      400,
+      "invalid_worm_destination",
+      false,
+      field === "Endpoint origin"
+        ? "endpointOrigin"
+        : field === "Bucket name"
+          ? "bucketName"
+          : field === "Object key prefix"
+            ? "keyPrefix"
+            : field === "Credential reference"
+              ? "credentialReference"
+              : field.toLowerCase(),
+    );
   }
   return value.trim();
 }
@@ -131,7 +145,13 @@ function normalizeEndpoint(value: unknown) {
   try {
     url = new URL(raw);
   } catch {
-    throw new TokenlessServiceError("Endpoint origin is invalid.", 400, "invalid_worm_destination");
+    throw new TokenlessServiceError(
+      "Endpoint origin is invalid.",
+      400,
+      "invalid_worm_destination",
+      false,
+      "endpointOrigin",
+    );
   }
   if (
     url.protocol !== "https:" ||
@@ -146,6 +166,8 @@ function normalizeEndpoint(value: unknown) {
       "Endpoint origin must be a standard-port HTTPS origin without credentials, path, query, or fragment.",
       400,
       "invalid_worm_destination",
+      false,
+      "endpointOrigin",
     );
   }
   const configuredSuffixes = (process.env.TOKENLESS_WORM_S3_ALLOWED_ENDPOINT_SUFFIXES ?? "")
@@ -162,6 +184,8 @@ function normalizeEndpoint(value: unknown) {
       "Endpoint origin is not in the server-managed S3 endpoint allowlist.",
       400,
       "invalid_worm_destination",
+      false,
+      "endpointOrigin",
     );
   }
   return url.origin;
@@ -194,15 +218,21 @@ function normalizeDestination(value: unknown): WormDestinationSpec {
     bucketName.includes("..") ||
     /^(?:\d{1,3}\.){3}\d{1,3}$/.test(bucketName)
   ) {
-    throw new TokenlessServiceError("Bucket name is invalid.", 400, "invalid_worm_destination");
+    throw new TokenlessServiceError("Bucket name is invalid.", 400, "invalid_worm_destination", false, "bucketName");
   }
   const keyPrefix = requiredString(body.keyPrefix, "Object key prefix", 240).replace(/^\/+|\/+$/g, "");
   if (!keyPrefix || keyPrefix.split("/").some(part => !part || part === "." || part === "..")) {
-    throw new TokenlessServiceError("Object key prefix is invalid.", 400, "invalid_worm_destination");
+    throw new TokenlessServiceError(
+      "Object key prefix is invalid.",
+      400,
+      "invalid_worm_destination",
+      false,
+      "keyPrefix",
+    );
   }
   const region = requiredString(body.region, "Region", 63).toLowerCase();
   if (!/^[a-z0-9][a-z0-9-]{1,62}$/.test(region)) {
-    throw new TokenlessServiceError("Region is invalid.", 400, "invalid_worm_destination");
+    throw new TokenlessServiceError("Region is invalid.", 400, "invalid_worm_destination", false, "region");
   }
   const credentialReference = requiredString(body.credentialReference, "Credential reference", 52);
   if (!CREDENTIAL_REFERENCE.test(credentialReference)) {
@@ -210,6 +240,8 @@ function normalizeDestination(value: unknown): WormDestinationSpec {
       "Credential reference must be an opaque server-side secret reference.",
       400,
       "invalid_worm_destination",
+      false,
+      "credentialReference",
     );
   }
   if (
@@ -221,6 +253,8 @@ function normalizeDestination(value: unknown): WormDestinationSpec {
       `Retention must be between ${MIN_RETENTION_DAYS} and ${MAX_RETENTION_DAYS} days.`,
       400,
       "invalid_worm_destination",
+      false,
+      "retentionDays",
     );
   }
   return {

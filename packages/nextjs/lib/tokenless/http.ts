@@ -1,11 +1,16 @@
 export class HttpJsonError extends Error {
   code: string | null;
+  field: string | null;
   status: number;
 
-  constructor(message: string, { code = null, status }: { code?: string | null; status: number }) {
+  constructor(
+    message: string,
+    { code = null, field = null, status }: { code?: string | null; field?: string | null; status: number },
+  ) {
     super(message);
     this.name = "HttpJsonError";
     this.code = code;
+    this.field = field;
     this.status = status;
   }
 }
@@ -35,6 +40,7 @@ export async function readJson<T = Record<string, unknown>>(
   );
   throw new HttpJsonError(message ?? fallbackMessage, {
     code: typeof details.code === "string" ? details.code : null,
+    field: typeof details.field === "string" ? details.field : null,
     status: response.status,
   });
 }

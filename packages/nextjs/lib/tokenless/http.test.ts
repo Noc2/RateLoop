@@ -32,3 +32,20 @@ test("readJson prefers configured response messages and handles invalid error bo
     error => error instanceof HttpJsonError && error.message === "Service unavailable." && error.status === 502,
   );
 });
+
+test("readJson preserves a server field for inline form errors", async () => {
+  await assert.rejects(
+    () =>
+      readJson(
+        Response.json(
+          { code: "invalid_billing_profile", field: "vatId", message: "Enter a valid VAT identifier." },
+          { status: 400 },
+        ),
+      ),
+    error =>
+      error instanceof HttpJsonError &&
+      error.code === "invalid_billing_profile" &&
+      error.field === "vatId" &&
+      error.message === "Enter a valid VAT identifier.",
+  );
+});

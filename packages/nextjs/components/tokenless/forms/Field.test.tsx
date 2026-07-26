@@ -3,6 +3,7 @@ import { Field } from "./Field";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import test from "node:test";
+import { HttpJsonError } from "~~/lib/tokenless/http";
 
 const nodeRequire = createRequire(import.meta.url);
 const { renderToStaticMarkup } = nodeRequire("react-dom/server") as {
@@ -19,4 +20,13 @@ test("Field applies one shared format and associates field errors", () => {
   assert.match(html, /aria-invalid="true"/);
   assert.match(html, /aria-describedby="vat-id-error"/);
   assert.match(html, /role="alert">Check this value/);
+});
+
+test("HTTP form errors retain the server field for accessible placement", () => {
+  const error = new HttpJsonError("Check this value.", {
+    code: "invalid_billing_profile",
+    field: "vatId",
+    status: 400,
+  });
+  assert.equal(error.field, "vatId");
 });

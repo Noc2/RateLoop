@@ -67,7 +67,7 @@ function requireBillingManager(access: Awaited<ReturnType<typeof requireWorkspac
 function optionalProfileText(value: unknown, field: string, maxLength: number) {
   if (value === undefined || value === null || value === "") return null;
   if (typeof value !== "string") {
-    throw new TokenlessServiceError(`${field} must be text.`, 400, "invalid_billing_profile");
+    throw new TokenlessServiceError(`${field} must be text.`, 400, "invalid_billing_profile", false, field);
   }
   const normalized = value.trim();
   if (!normalized) return null;
@@ -76,6 +76,8 @@ function optionalProfileText(value: unknown, field: string, maxLength: number) {
       `${field} must be at most ${maxLength} characters.`,
       400,
       "invalid_billing_profile",
+      false,
+      field,
     );
   }
   return normalized;
@@ -150,6 +152,8 @@ export async function updateWorkspaceBillingProfile(input: {
       "A legal name and registered business address are required.",
       400,
       "invalid_billing_profile",
+      false,
+      !legalName ? "legalName" : "registeredAddress",
     );
   }
   if ((vatCountryCode === null) !== (vatId === null) || (vatCountryCode && !/^[A-Z]{2}$/.test(vatCountryCode))) {
@@ -157,6 +161,8 @@ export async function updateWorkspaceBillingProfile(input: {
       "VAT country code and VAT ID must be supplied together.",
       400,
       "invalid_billing_profile",
+      false,
+      vatCountryCode ? "vatId" : "vatCountryCode",
     );
   }
   const hasAnyBillingAddress = Boolean(
@@ -179,6 +185,14 @@ export async function updateWorkspaceBillingProfile(input: {
       "A country, address line, city, and postal code are required for invoice funding.",
       400,
       "invalid_billing_profile",
+      false,
+      !billingCountryCode
+        ? "billingCountryCode"
+        : !billingAddressLine1
+          ? "billingAddressLine1"
+          : !billingCity
+            ? "billingCity"
+            : "billingPostalCode",
     );
   }
   const now = new Date();

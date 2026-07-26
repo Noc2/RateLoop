@@ -45,7 +45,13 @@ export async function POST(request: NextRequest, context: Context) {
       typeof body.url !== "string" ||
       !Array.isArray(body.eventTypes)
     ) {
-      throw new TokenlessServiceError("Event stream request is invalid.", 400, "invalid_assurance_event_stream");
+      throw new TokenlessServiceError(
+        "Event stream request is invalid.",
+        400,
+        "invalid_assurance_event_stream",
+        false,
+        typeof body.url !== "string" ? "url" : "eventTypes",
+      );
     }
     return NextResponse.json(
       await createAssuranceEventStream({
