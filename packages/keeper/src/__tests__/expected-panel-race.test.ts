@@ -4,8 +4,14 @@ import {
   encodeErrorResult,
   parseAbi,
 } from "viem";
-import { isExpectedPanelRaceError } from "../expected-panel-race.js";
-import { TokenlessPanelAbi } from "../tokenless-abi.js";
+import {
+  isExpectedFeedbackBonusRaceError,
+  isExpectedPanelRaceError,
+} from "../expected-panel-race.js";
+import {
+  TokenlessFeedbackBonusAbi,
+  TokenlessPanelAbi,
+} from "../tokenless-abi.js";
 
 function revert(errorName: "CursorMismatch" | "InvalidState") {
   const data = encodeErrorResult({
@@ -58,5 +64,43 @@ describe("expected TokenlessPanel race errors", () => {
 
     expect(isExpectedPanelRaceError(error)).toBe(false);
     expect(isExpectedPanelRaceError(new Error("InvalidState"))).toBe(false);
+  });
+});
+
+describe("expected TokenlessFeedbackBonus race errors", () => {
+  it.each(["AwardWindowClosed", "InvalidPool", "NothingToRefund"] as const)(
+    "classifies decoded and raw %s reverts",
+    (errorName) => {
+      const data = encodeErrorResult({
+        abi: TokenlessFeedbackBonusAbi,
+        errorName,
+      });
+      const decoded = new ContractFunctionRevertedError({
+        abi: TokenlessFeedbackBonusAbi,
+        data,
+        functionName: "refundRemainder",
+      });
+
+      expect(
+        isExpectedFeedbackBonusRaceError(
+          new Error("competing caller won", { cause: decoded }),
+        ),
+      ).toBe(true);
+      expect(
+        isExpectedFeedbackBonusRaceError({ cause: { data: { data } } }),
+      ).toBe(true);
+    },
+  );
+
+  it("does not trust provider text or suppress an unrelated feedback revert", () => {
+    const data = encodeErrorResult({
+      abi: parseAbi(["error Unauthorized()"]),
+      errorName: "Unauthorized",
+    });
+
+    expect(isExpectedFeedbackBonusRaceError({ data })).toBe(false);
+    expect(
+      isExpectedFeedbackBonusRaceError(new Error("NothingToRefund")),
+    ).toBe(false);
   });
 });

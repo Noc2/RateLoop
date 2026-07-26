@@ -15,7 +15,10 @@ import {
   type VerifiedDrandBeacon,
   validateQuicknetTScoringSchedule,
 } from "./drand.js";
-import { isExpectedPanelRaceError } from "./expected-panel-race.js";
+import {
+  isExpectedFeedbackBonusRaceError,
+  isExpectedPanelRaceError,
+} from "./expected-panel-race.js";
 import type { Logger } from "./logger.js";
 import {
   createPonderWorkFeed,
@@ -753,9 +756,7 @@ async function reconcileFeedbackBonusRemainders(params: {
       });
       params.result.feedbackBonusRefundsExecuted += 1;
     } catch (error) {
-      if (
-        /NothingToRefund|AwardWindowClosed|InvalidPool/iu.test(String(error))
-      ) {
+      if (isExpectedFeedbackBonusRaceError(error)) {
         params.logger.debug("Feedback bonus refund lost an on-chain race", {
           poolId: poolId.toString(),
           error: error instanceof Error ? error.message : String(error),

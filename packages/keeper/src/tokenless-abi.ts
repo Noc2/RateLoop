@@ -34,6 +34,9 @@ export const TokenlessPanelAbi = parseAbi([
 ]);
 
 export const TokenlessFeedbackBonusAbi = parseAbi([
+  "error AwardWindowClosed()",
+  "error InvalidPool()",
+  "error NothingToRefund()",
   "function usdc() view returns (address)",
   "function credentialIssuer() view returns (address)",
   "function nextPoolId() view returns (uint256)",

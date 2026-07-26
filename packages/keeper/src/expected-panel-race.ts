@@ -20,6 +20,18 @@ const EXPECTED_RACE_ERROR_SELECTORS = new Set<string>(
   ].map((signature) => toFunctionSelector(signature)),
 );
 
+const EXPECTED_FEEDBACK_BONUS_RACE_ERROR_NAMES = new Set([
+  "AwardWindowClosed",
+  "InvalidPool",
+  "NothingToRefund",
+]);
+
+const EXPECTED_FEEDBACK_BONUS_RACE_ERROR_SELECTORS = new Set<string>(
+  ["AwardWindowClosed()", "InvalidPool()", "NothingToRefund()"].map(
+    (signature) => toFunctionSelector(signature),
+  ),
+);
+
 function selector(value: unknown) {
   if (typeof value !== "string") return null;
   const match = /^0x[0-9a-f]{8}/iu.exec(value);
@@ -32,14 +44,18 @@ function selector(value: unknown) {
  * `{ data }` object, so walk those structured fields without trusting display
  * text that providers are free to rewrite.
  */
-export function isExpectedPanelRaceError(error: unknown) {
+function isExpectedStructuredRaceError(
+  error: unknown,
+  names: ReadonlySet<string>,
+  selectors: ReadonlySet<string>,
+) {
   const pending: unknown[] = [error];
   const seen = new Set<object>();
 
   while (pending.length > 0) {
     const candidate = pending.pop();
     const rawSelector = selector(candidate);
-    if (rawSelector && EXPECTED_RACE_ERROR_SELECTORS.has(rawSelector)) {
+    if (rawSelector && selectors.has(rawSelector)) {
       return true;
     }
     if (!candidate || typeof candidate !== "object") continue;
@@ -49,7 +65,7 @@ export function isExpectedPanelRaceError(error: unknown) {
     const record = candidate as Record<string, unknown>;
     if (
       typeof record.errorName === "string" &&
-      EXPECTED_RACE_ERROR_NAMES.has(record.errorName)
+      names.has(record.errorName)
     ) {
       return true;
     }
@@ -57,4 +73,20 @@ export function isExpectedPanelRaceError(error: unknown) {
   }
 
   return false;
+}
+
+export function isExpectedPanelRaceError(error: unknown) {
+  return isExpectedStructuredRaceError(
+    error,
+    EXPECTED_RACE_ERROR_NAMES,
+    EXPECTED_RACE_ERROR_SELECTORS,
+  );
+}
+
+export function isExpectedFeedbackBonusRaceError(error: unknown) {
+  return isExpectedStructuredRaceError(
+    error,
+    EXPECTED_FEEDBACK_BONUS_RACE_ERROR_NAMES,
+    EXPECTED_FEEDBACK_BONUS_RACE_ERROR_SELECTORS,
+  );
 }
