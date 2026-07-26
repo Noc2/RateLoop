@@ -141,3 +141,80 @@ test("the editor uses workspace reviewer readiness without exposing legacy group
     restoreDom();
   }
 });
+
+test("the editor renders a server field error beside the matching review control", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, render, screen } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const { AgentHumanReviewEditor } = await import("./AgentHumanReviewEditor");
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (!url.endsWith("/human-review")) throw new Error(`Unexpected request: ${url}`);
+    if (init?.method === "PUT") {
+      return Response.json(
+        {
+          code: "invalid_review_request_profile",
+          field: "responseWindowSeconds",
+          message: "Response window is not available for this profile.",
+          retryable: false,
+        },
+        { status: 400 },
+      );
+    }
+    return Response.json({
+      bindingRevision: 4,
+      blockingReason: null,
+      capability: { available: true, code: "ready", lane: "private_invited_unpaid", message: "Ready." },
+      configuration: {
+        authority: "check_only",
+        delegation: null,
+        selection: {
+          value: {
+            agreementThresholdBps: 7_000,
+            criticalRiskTiers: ["critical"],
+            enforcementMode: "advisory",
+            fixedRateBps: 10_000,
+            maximumLatencyMs: 120_000,
+            maximumUnreviewedGap: 20,
+            minimumConfidenceBps: 7_000,
+            mode: "fixed",
+            requiredRiskTiers: ["high"],
+          },
+        },
+        requestProfile: {
+          value: {
+            audience: "private_invited",
+            compensationMode: "unpaid",
+            criterion: "Is this response safe and correct?",
+            feedbackBonusEnabled: false,
+            negativeLabel: "Reject",
+            panelSize: 2,
+            positiveLabel: "Approve",
+            privateGroupId: "compatibility-routing-id",
+            questionAuthority: "owner_fixed",
+            rationaleMode: "required",
+            responseWindowSeconds: 3_600,
+          },
+        },
+      },
+      connection: null,
+    });
+  };
+
+  try {
+    const view = render(<AgentHumanReviewEditor workspaceId="workspace-1" agentId="agent-1" />);
+    await view.findByRole("heading", { name: "Human review" });
+    const responseWindow = view.getByRole("spinbutton", { name: "Response window (seconds)" });
+    await userEvent.setup({ document }).click(view.getByRole("button", { name: "Save changes" }));
+    assert.equal(
+      (await view.findByRole("alert", { name: "" })).textContent,
+      "Response window is not available for this profile.",
+    );
+    assert.equal(responseWindow.getAttribute("aria-invalid"), "true");
+  } finally {
+    await act(async () => cleanup());
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});

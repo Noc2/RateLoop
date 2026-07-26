@@ -8,6 +8,8 @@ import {
   ReviewRoutingFields,
   reviewRoutingStateForMode,
 } from "~~/components/tokenless/agents/ReviewRoutingFields";
+import { Field, TextareaField } from "~~/components/tokenless/forms/Field";
+import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { readJson } from "~~/lib/tokenless/http";
@@ -85,14 +87,24 @@ function atomicToUsdc(value: unknown) {
   return formatUsdcAtomic(value, { includeUnit: false, useGrouping: false });
 }
 
-function usdcToAtomic(value: string) {
+class FormFieldError extends Error {
+  field: string;
+
+  constructor(field: string, message: string) {
+    super(message);
+    this.name = "FormFieldError";
+    this.field = field;
+  }
+}
+
+function usdcToAtomic(value: string, field: string, label: string) {
   let atomic: string;
   try {
     atomic = parseUsdcDecimal(value);
   } catch {
-    throw new Error("USDC per reviewer must have at most six decimal places.");
+    throw new FormFieldError(field, `${label} must have at most six decimal places.`);
   }
-  if (BigInt(atomic) <= 0n) throw new Error("USDC per reviewer must be greater than zero.");
+  if (BigInt(atomic) <= 0n) throw new FormFieldError(field, `${label} must be greater than zero.`);
   return atomic;
 }
 
@@ -145,19 +157,19 @@ function draftFromView(view: OwnerView): Draft {
   };
 }
 
-function positiveInteger(value: string, field: string, minimum: number, maximum: number) {
-  if (!/^\d+$/u.test(value.trim())) throw new Error(`${field} must be a whole number.`);
+function positiveInteger(value: string, field: string, label: string, minimum: number, maximum: number) {
+  if (!/^\d+$/u.test(value.trim())) throw new FormFieldError(field, `${label} must be a whole number.`);
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) {
-    throw new Error(`${field} must be between ${minimum} and ${maximum}.`);
+    throw new FormFieldError(field, `${label} must be between ${minimum} and ${maximum}.`);
   }
   return parsed;
 }
 
-function bps(value: string, field: string, minimum: number) {
+function bps(value: string, field: string, label: string, minimum: number) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed * 100 < minimum || parsed > 100) {
-    throw new Error(`${field} must be between ${minimum / 100}% and 100%.`);
+    throw new FormFieldError(field, `${label} must be between ${minimum / 100}% and 100%.`);
   }
   return Math.round(parsed * 100);
 }
@@ -191,8 +203,14 @@ function buildMutation(view: OwnerView, draft: Draft) {
     ),
   ];
   const minimumPanelSize = draft.audience === "private_invited" ? 2 : 3;
-  const panelSize = positiveInteger(draft.panelSize, "Reviewer count", minimumPanelSize, 100);
-  const responseWindowSeconds = positiveInteger(draft.responseWindowSeconds, "Response window", 1_200, 86_400);
+  const panelSize = positiveInteger(draft.panelSize, "panelSize", "Reviewer count", minimumPanelSize, 100);
+  const responseWindowSeconds = positiveInteger(
+    draft.responseWindowSeconds,
+    "responseWindowSeconds",
+    "Response window",
+    1_200,
+    86_400,
+  );
   const compensationMode = draft.audience === "private_invited" ? draft.compensationMode : "usdc";
   const configuredLane = configuredHumanReviewLaneForSelection(draft.audience, compensationMode);
   if (!configuredLane.available) throw new Error(configuredLane.message);
@@ -205,12 +223,18 @@ function buildMutation(view: OwnerView, draft: Draft) {
     enforcementMode: draft.mode === "manual" ? "advisory" : currentSelection.enforcementMode,
     agreementThresholdBps: currentSelection.agreementThresholdBps,
     productionFloorBps: draft.mode === "adaptive" ? 2_500 : 0,
-    fixedRateBps: draft.mode === "fixed" ? bps(draft.ratePercent, "Fixed review rate", 1) : null,
-    maximumUnreviewedGap: positiveInteger(draft.maximumUnreviewedGap, "Maximum unreviewed gap", 1, 10_000),
+    fixedRateBps: draft.mode === "fixed" ? bps(draft.ratePercent, "ratePercent", "Fixed review rate", 1) : null,
+    maximumUnreviewedGap: positiveInteger(
+      draft.maximumUnreviewedGap,
+      "maximumUnreviewedGap",
+      "Maximum unreviewed gap",
+      1,
+      10_000,
+    ),
     requiredRiskTiers,
     criticalRiskTiers: currentSelection.criticalRiskTiers,
     minimumConfidenceBps: draft.minimumConfidencePercent.trim()
-      ? bps(draft.minimumConfidencePercent, "Confidence threshold", 0)
+      ? bps(draft.minimumConfidencePercent, "minimumConfidencePercent", "Confidence threshold", 0)
       : null,
     maximumLatencyMs: currentSelection.maximumLatencyMs,
   };
@@ -236,9 +260,12 @@ function buildMutation(view: OwnerView, draft: Draft) {
     responseWindowSeconds,
     panelSize,
     compensationMode,
-    bountyPerSeatAtomic: compensationMode === "usdc" ? usdcToAtomic(draft.bountyUsdc) : null,
+    bountyPerSeatAtomic:
+      compensationMode === "usdc" ? usdcToAtomic(draft.bountyUsdc, "bountyUsdc", "USDC per reviewer") : null,
     feedbackBonusEnabled: draft.feedbackBonusEnabled,
-    feedbackBonusPoolAtomic: draft.feedbackBonusEnabled ? usdcToAtomic(draft.feedbackBonusUsdc) : null,
+    feedbackBonusPoolAtomic: draft.feedbackBonusEnabled
+      ? usdcToAtomic(draft.feedbackBonusUsdc, "feedbackBonusUsdc", "Bonus pool")
+      : null,
     feedbackBonusAwarderKind: draft.feedbackBonusEnabled ? draft.feedbackBonusAwarderKind : "requester",
     feedbackBonusAwarderAccount:
       draft.feedbackBonusEnabled && draft.feedbackBonusAwarderKind === "designated"
@@ -250,14 +277,22 @@ function buildMutation(view: OwnerView, draft: Draft) {
     draft.questionAuthority === "owner_fixed" &&
     (!requestProfile.criterion || !requestProfile.positiveLabel || !requestProfile.negativeLabel)
   ) {
-    throw new Error("Question and answer labels are required.");
+    const missingField = !requestProfile.criterion
+      ? "criterion"
+      : !requestProfile.positiveLabel
+        ? "positiveLabel"
+        : "negativeLabel";
+    throw new FormFieldError(missingField, "Question and answer labels are required.");
   }
   if (
     draft.feedbackBonusEnabled &&
     draft.feedbackBonusAwarderKind === "designated" &&
     !draft.feedbackBonusAwarderAccount.trim()
   ) {
-    throw new Error("Enter the authenticated account for the designated Feedback Bonus awarder.");
+    throw new FormFieldError(
+      "feedbackBonusAwarderAccount",
+      "Enter the authenticated account for the designated Feedback Bonus awarder.",
+    );
   }
   let publishingGrant: Record<string, unknown> | null = null;
   if (authority === "ask_automatically") {
@@ -343,8 +378,8 @@ export function AgentHumanReviewEditor({
   const [view, setView] = useState<OwnerView | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const { capture, clear, fieldErrors, formError } = useFormErrors();
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
@@ -369,13 +404,14 @@ export function AgentHumanReviewEditor({
     const controller = new AbortController();
     void load(controller.signal).catch(cause => {
       if (cause instanceof DOMException && cause.name === "AbortError") return;
-      setError(cause instanceof Error ? cause.message : "Unable to load human review.");
+      capture(cause, "Unable to load human review.");
     });
     return () => controller.abort();
   }, [load]);
 
   function update<Key extends keyof Draft>(key: Key, value: Draft[Key]) {
     setDraft(current => (current ? { ...current, [key]: value } : current));
+    clear(key);
     setStatus(null);
   }
 
@@ -413,7 +449,7 @@ export function AgentHumanReviewEditor({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!view || !draft) return;
-    setError(null);
+    clear();
     try {
       const next = buildMutation(view, draft);
       if (next.confirmation && !window.confirm(next.confirmation)) return;
@@ -433,7 +469,7 @@ export function AgentHumanReviewEditor({
       setStatus(savedStatus(saved, draft.authority));
       onSaved?.();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to save human review.");
+      capture(cause, "Unable to save human review.");
     } finally {
       setBusy(false);
     }
@@ -442,7 +478,7 @@ export function AgentHumanReviewEditor({
   if (!draft || !view) {
     return (
       <Card as="section" id="agent-human-review-editor" className="rounded-2xl p-6">
-        <p className="text-sm text-base-content/60">{error ?? "Loading human-review configuration…"}</p>
+        <p className="text-sm text-base-content/60">{formError ?? "Loading human-review configuration…"}</p>
       </Card>
     );
   }
@@ -499,34 +535,31 @@ export function AgentHumanReviewEditor({
           </label>
           {draft.questionAuthority === "owner_fixed" ? (
             <>
-              <label className="text-sm sm:col-span-2">
-                Review question
-                <textarea
-                  className="textarea mt-2 w-full"
+              <div className="sm:col-span-2">
+                <TextareaField
+                  label="Review question"
+                  className="w-full"
                   rows={3}
                   value={draft.criterion}
+                  error={fieldErrors.criterion}
                   onChange={event => update("criterion", event.target.value)}
                   required
                 />
-              </label>
-              <label className="text-sm">
-                Positive label
-                <input
-                  className="input mt-2 w-full"
-                  value={draft.positiveLabel}
-                  onChange={event => update("positiveLabel", event.target.value)}
-                  required
-                />
-              </label>
-              <label className="text-sm">
-                Negative label
-                <input
-                  className="input mt-2 w-full"
-                  value={draft.negativeLabel}
-                  onChange={event => update("negativeLabel", event.target.value)}
-                  required
-                />
-              </label>
+              </div>
+              <Field
+                label="Positive label"
+                value={draft.positiveLabel}
+                error={fieldErrors.positiveLabel}
+                onChange={event => update("positiveLabel", event.target.value)}
+                required
+              />
+              <Field
+                label="Negative label"
+                value={draft.negativeLabel}
+                error={fieldErrors.negativeLabel}
+                onChange={event => update("negativeLabel", event.target.value)}
+                required
+              />
             </>
           ) : (
             <p className="text-sm leading-6 text-base-content/60 sm:col-span-2">
@@ -562,56 +595,48 @@ export function AgentHumanReviewEditor({
             onAuthorityChange={authority => update("authority", authority)}
           />
           {draft.mode === "adaptive" || draft.mode === "fixed" ? (
-            <label className="text-sm">
-              {draft.mode === "adaptive" ? "Minimum review rate (%)" : "Outputs reviewed (%)"}
-              <input
-                className="input mt-2 w-full"
-                type="number"
-                min={draft.mode === "adaptive" ? 25 : 0.01}
-                max={100}
-                step="0.01"
-                value={draft.ratePercent}
-                onChange={event => update("ratePercent", event.target.value)}
-                required
-                disabled={draft.mode === "adaptive"}
-              />
-            </label>
+            <Field
+              label={draft.mode === "adaptive" ? "Minimum review rate (%)" : "Outputs reviewed (%)"}
+              type="number"
+              min={draft.mode === "adaptive" ? 25 : 0.01}
+              max={100}
+              step="0.01"
+              value={draft.ratePercent}
+              error={fieldErrors.ratePercent}
+              onChange={event => update("ratePercent", event.target.value)}
+              required
+              disabled={draft.mode === "adaptive"}
+            />
           ) : null}
           {draft.mode !== "manual" ? (
-            <label className="text-sm">
-              Maximum outputs between reviews
-              <input
-                className="input mt-2 w-full"
-                type="number"
-                min={1}
-                max={10000}
-                value={draft.maximumUnreviewedGap}
-                onChange={event => update("maximumUnreviewedGap", event.target.value)}
-                required
-              />
-            </label>
+            <Field
+              label="Maximum outputs between reviews"
+              type="number"
+              min={1}
+              max={10000}
+              value={draft.maximumUnreviewedGap}
+              error={fieldErrors.maximumUnreviewedGap}
+              onChange={event => update("maximumUnreviewedGap", event.target.value)}
+              required
+            />
           ) : null}
           {draft.mode === "rules" ? (
             <>
-              <label className="text-sm">
-                Risk levels
-                <input
-                  className="input mt-2 w-full"
-                  value={draft.requiredRiskTiers}
-                  onChange={event => update("requiredRiskTiers", event.target.value)}
-                />
-              </label>
-              <label className="text-sm">
-                Review below confidence (%)
-                <input
-                  className="input mt-2 w-full"
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={draft.minimumConfidencePercent}
-                  onChange={event => update("minimumConfidencePercent", event.target.value)}
-                />
-              </label>
+              <Field
+                label="Risk levels"
+                value={draft.requiredRiskTiers}
+                error={fieldErrors.requiredRiskTiers}
+                onChange={event => update("requiredRiskTiers", event.target.value)}
+              />
+              <Field
+                label="Review below confidence (%)"
+                type="number"
+                min={0}
+                max={100}
+                value={draft.minimumConfidencePercent}
+                error={fieldErrors.minimumConfidencePercent}
+                onChange={event => update("minimumConfidencePercent", event.target.value)}
+              />
             </>
           ) : null}
           <label className="text-sm">
@@ -652,30 +677,26 @@ export function AgentHumanReviewEditor({
               This deployment currently supports invited reviewers without a guaranteed bounty.
             </span>
           </label>
-          <label className="text-sm">
-            Response window (seconds)
-            <input
-              className="input mt-2 w-full"
-              type="number"
-              min={1200}
-              max={86400}
-              value={draft.responseWindowSeconds}
-              onChange={event => update("responseWindowSeconds", event.target.value)}
-              required
-            />
-          </label>
-          <label className="text-sm">
-            Reviewers per request
-            <input
-              className="input mt-2 w-full"
-              type="number"
-              min={draft.audience === "private_invited" ? 2 : 3}
-              max={100}
-              value={draft.panelSize}
-              onChange={event => update("panelSize", event.target.value)}
-              required
-            />
-          </label>
+          <Field
+            label="Response window (seconds)"
+            type="number"
+            min={1200}
+            max={86400}
+            value={draft.responseWindowSeconds}
+            error={fieldErrors.responseWindowSeconds}
+            onChange={event => update("responseWindowSeconds", event.target.value)}
+            required
+          />
+          <Field
+            label="Reviewers per request"
+            type="number"
+            min={draft.audience === "private_invited" ? 2 : 3}
+            max={100}
+            value={draft.panelSize}
+            error={fieldErrors.panelSize}
+            onChange={event => update("panelSize", event.target.value)}
+            required
+          />
           <label className="text-sm">
             Guaranteed bounty
             <select
@@ -704,16 +725,14 @@ export function AgentHumanReviewEditor({
             ) : null}
           </label>
           {draft.compensationMode === "usdc" ? (
-            <label className="text-sm">
-              USDC per accepted reviewer
-              <input
-                className="input mt-2 w-full"
-                inputMode="decimal"
-                value={draft.bountyUsdc}
-                onChange={event => update("bountyUsdc", event.target.value)}
-                required
-              />
-            </label>
+            <Field
+              label="USDC per accepted reviewer"
+              inputMode="decimal"
+              value={draft.bountyUsdc}
+              error={fieldErrors.bountyUsdc}
+              onChange={event => update("bountyUsdc", event.target.value)}
+              required
+            />
           ) : null}
           <fieldset className="rounded-xl border border-white/10 p-4 sm:col-span-2">
             <legend className="px-1 text-sm font-medium">Feedback Bonus</legend>
@@ -740,16 +759,14 @@ export function AgentHumanReviewEditor({
             </div>
             {draft.feedbackBonusEnabled ? (
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <label className="text-sm">
-                  Bonus pool (USDC)
-                  <input
-                    className="input mt-2 w-full"
-                    inputMode="decimal"
-                    value={draft.feedbackBonusUsdc}
-                    onChange={event => update("feedbackBonusUsdc", event.target.value)}
-                    required
-                  />
-                </label>
+                <Field
+                  label="Bonus pool (USDC)"
+                  inputMode="decimal"
+                  value={draft.feedbackBonusUsdc}
+                  error={fieldErrors.feedbackBonusUsdc}
+                  onChange={event => update("feedbackBonusUsdc", event.target.value)}
+                  required
+                />
                 <label className="text-sm">
                   Human awarder
                   <select
@@ -764,16 +781,16 @@ export function AgentHumanReviewEditor({
                   </select>
                 </label>
                 {draft.feedbackBonusAwarderKind === "designated" ? (
-                  <label className="text-sm sm:col-span-2">
-                    Awarder account
-                    <input
-                      className="input mt-2 w-full"
+                  <div className="sm:col-span-2">
+                    <Field
+                      label="Awarder account"
                       value={draft.feedbackBonusAwarderAccount}
+                      error={fieldErrors.feedbackBonusAwarderAccount}
                       onChange={event => update("feedbackBonusAwarderAccount", event.target.value)}
                       maxLength={320}
                       required
                     />
-                  </label>
+                  </div>
                 ) : null}
                 <p className="text-xs text-base-content/55 sm:col-span-2">
                   The agent can never select or execute a Feedback Bonus award.
@@ -782,9 +799,9 @@ export function AgentHumanReviewEditor({
             ) : null}
           </fieldset>
         </div>
-        {error ? (
+        {formError ? (
           <p className="alert alert-error text-sm" role="alert">
-            {error}
+            {formError}
           </p>
         ) : null}
         {status ? (

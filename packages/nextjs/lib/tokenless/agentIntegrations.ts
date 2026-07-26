@@ -135,21 +135,21 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function bounded(value: unknown, field: string, max: number, optional = false) {
+function bounded(value: unknown, field: string, max: number, optional = false, responseField?: string) {
   if (optional && (value === null || value === undefined || value === "")) return null;
   if (typeof value !== "string" || !value.trim() || value.trim().length > max) {
-    throw new TokenlessServiceError(`${field} is invalid.`, 400, "invalid_agent_registration");
+    throw new TokenlessServiceError(`${field} is invalid.`, 400, "invalid_agent_registration", false, responseField);
   }
   return value.trim();
 }
 
-function stringList(value: unknown, field: string, pattern: RegExp, allowEmpty = false) {
+function stringList(value: unknown, field: string, pattern: RegExp, allowEmpty = false, responseField?: string) {
   if (!Array.isArray(value) || (!allowEmpty && value.length === 0) || value.length > 32) {
-    throw new TokenlessServiceError(`${field} is invalid.`, 400, "invalid_agent_registration");
+    throw new TokenlessServiceError(`${field} is invalid.`, 400, "invalid_agent_registration", false, responseField);
   }
   const items = [...new Set(value.map(item => (typeof item === "string" ? item.trim() : "")))];
   if (items.some(item => !pattern.test(item))) {
-    throw new TokenlessServiceError(`${field} is invalid.`, 400, "invalid_agent_registration");
+    throw new TokenlessServiceError(`${field} is invalid.`, 400, "invalid_agent_registration", false, responseField);
   }
   return items;
 }
@@ -161,24 +161,42 @@ function normalizeRegistration(value: unknown): AgentRegistrationInput {
   const input = value as Record<string, unknown>;
   const environment = input.environment as AgentEnvironment;
   if (!AGENT_ENVIRONMENTS.includes(environment)) {
-    throw new TokenlessServiceError("Agent environment is invalid.", 400, "invalid_agent_registration");
+    throw new TokenlessServiceError(
+      "Agent environment is invalid.",
+      400,
+      "invalid_agent_registration",
+      false,
+      "environment",
+    );
   }
-  const externalId = bounded(input.externalId, "External agent ID", 160);
+  const externalId = bounded(input.externalId, "External agent ID", 160, false, "externalId");
   if (!EXTERNAL_ID_PATTERN.test(externalId!)) {
-    throw new TokenlessServiceError("External agent ID is invalid.", 400, "invalid_agent_registration");
+    throw new TokenlessServiceError(
+      "External agent ID is invalid.",
+      400,
+      "invalid_agent_registration",
+      false,
+      "externalId",
+    );
   }
   return {
     externalId: externalId!,
-    displayName: bounded(input.displayName, "Display name", 120)!,
-    description: bounded(input.description, "Description", 1_000, true),
-    provider: bounded(input.provider, "Provider", 120)!,
-    model: bounded(input.model, "Model", 160)!,
-    modelVersion: bounded(input.modelVersion, "Model version", 160, true),
+    displayName: bounded(input.displayName, "Display name", 120, false, "displayName")!,
+    description: bounded(input.description, "Description", 1_000, true, "description"),
+    provider: bounded(input.provider, "Provider", 120, false, "provider")!,
+    model: bounded(input.model, "Model", 160, false, "model")!,
+    modelVersion: bounded(input.modelVersion, "Model version", 160, true, "modelVersion"),
     environment,
     clientName: bounded(input.clientName, "Client name", 120, true),
     clientVersion: bounded(input.clientVersion, "Client version", 120, true),
     clientCapabilities: stringList(input.clientCapabilities ?? [], "Client capabilities", WORKFLOW_PATTERN, true),
-    requestedWorkflowKeys: stringList(input.requestedWorkflowKeys, "Requested workflows", WORKFLOW_PATTERN),
+    requestedWorkflowKeys: stringList(
+      input.requestedWorkflowKeys,
+      "Requested workflows",
+      WORKFLOW_PATTERN,
+      false,
+      "allowedWorkflowKeys",
+    ),
   };
 }
 
@@ -802,11 +820,13 @@ export async function approveAgentPairing(input: {
       requestedWorkflowKeys:
         body.allowedWorkflowKeys ?? jsonArray(pairing.requested_workflow_keys_json, "requested workflows"),
     });
-    const publishingPolicyId = bounded(body.publishingPolicyId, "Publishing policy", 160)!;
+    const publishingPolicyId = bounded(body.publishingPolicyId, "Publishing policy", 160, false, "publishingPolicyId")!;
     const allowedWorkflowKeys = stringList(
       body.allowedWorkflowKeys ?? registration.requestedWorkflowKeys,
       "Allowed workflows",
       WORKFLOW_PATTERN,
+      false,
+      "allowedWorkflowKeys",
     );
     const created = await insertApproval(client, {
       workspaceId: input.workspaceId,

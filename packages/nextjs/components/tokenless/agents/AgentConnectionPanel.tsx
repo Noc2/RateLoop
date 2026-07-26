@@ -12,6 +12,8 @@ import type { AgentConnectionHistoryEntry } from "./agentAuditHistory";
 import { buildAgentConnectionMessage, buildAgentConnectionMessageForHost } from "./agentConnectionMessage";
 import { isUsableAgentConnection, selectReconnectableOAuthConnections } from "./agentWorkspaceState";
 import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
+import { Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
+import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { Badge } from "~~/components/tokenless/ui/Badge";
 import { Button } from "~~/components/tokenless/ui/Button";
@@ -414,14 +416,14 @@ function PairingApprovalCard({
   const [environment, setEnvironment] = useState(pairing.environment);
   const [selectedPublishingPolicyId, setSelectedPublishingPolicyId] = useState("");
   const [allowedWorkflows, setAllowedWorkflows] = useState(pairing.requestedWorkflowKeys.join(", "));
-  const [localError, setLocalError] = useState<string | null>(null);
+  const { capture, clear, fieldErrors, formError } = useFormErrors();
   const publishingPolicyId = policies.some(policy => policy.policyId === selectedPublishingPolicyId)
     ? selectedPublishingPolicyId
     : (policies[0]?.policyId ?? "");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setLocalError(null);
+    clear();
     try {
       await onApprove({
         externalId,
@@ -435,7 +437,7 @@ function PairingApprovalCard({
         allowedWorkflowKeys: workflowKeys(allowedWorkflows),
       });
     } catch (cause) {
-      setLocalError(cause instanceof Error ? cause.message : "Unable to approve this agent.");
+      capture(cause, "Unable to approve this agent.");
     }
   }
 
@@ -473,112 +475,130 @@ function PairingApprovalCard({
           as immutable version 1.
         </p>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <label className="text-sm text-base-content/65">
-            Display name
-            <input
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={displayName}
-              onChange={event => setDisplayName(event.target.value)}
-              maxLength={120}
-              required
-            />
-          </label>
-          <label className="text-sm text-base-content/65">
-            Stable external ID
-            <input
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)] font-mono text-xs"
-              value={externalId}
-              onChange={event => setExternalId(event.target.value)}
-              maxLength={160}
-              required
-            />
-          </label>
-          <label className="text-sm text-base-content/65">
-            Declared provider
-            <input
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={declaredProvider}
-              onChange={event => setDeclaredProvider(event.target.value)}
-              maxLength={120}
-              required
-            />
-          </label>
-          <label className="text-sm text-base-content/65">
-            Declared model
-            <input
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={declaredModel}
-              onChange={event => setDeclaredModel(event.target.value)}
-              maxLength={160}
-              required
-            />
-          </label>
-          <label className="text-sm text-base-content/65">
-            Declared model version (optional)
-            <input
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={declaredModelVersion}
-              onChange={event => setDeclaredModelVersion(event.target.value)}
-              maxLength={160}
-            />
-          </label>
-          <label className="text-sm text-base-content/65">
-            Environment
-            <select
-              className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={environment}
-              onChange={event => setEnvironment(event.target.value as AgentPairing["environment"])}
-            >
-              <option value="staging">Staging</option>
-              <option value="production">Production</option>
-            </select>
-          </label>
-          <label className="text-sm text-base-content/65 md:col-span-2">
-            Description
-            <textarea
-              className="textarea mt-2 min-h-24 w-full border-white/10 bg-[var(--rateloop-field)]"
+          <Field
+            label="Display name"
+            className="border-white/10 bg-[var(--rateloop-field)]"
+            value={displayName}
+            error={fieldErrors.displayName}
+            onChange={event => {
+              clear("displayName");
+              setDisplayName(event.target.value);
+            }}
+            maxLength={120}
+            required
+          />
+          <Field
+            label="Stable external ID"
+            className="border-white/10 bg-[var(--rateloop-field)] font-mono text-xs"
+            value={externalId}
+            error={fieldErrors.externalId}
+            onChange={event => {
+              clear("externalId");
+              setExternalId(event.target.value);
+            }}
+            maxLength={160}
+            required
+          />
+          <Field
+            label="Declared provider"
+            className="border-white/10 bg-[var(--rateloop-field)]"
+            value={declaredProvider}
+            error={fieldErrors.provider}
+            onChange={event => {
+              clear("provider");
+              setDeclaredProvider(event.target.value);
+            }}
+            maxLength={120}
+            required
+          />
+          <Field
+            label="Declared model"
+            className="border-white/10 bg-[var(--rateloop-field)]"
+            value={declaredModel}
+            error={fieldErrors.model}
+            onChange={event => {
+              clear("model");
+              setDeclaredModel(event.target.value);
+            }}
+            maxLength={160}
+            required
+          />
+          <Field
+            label="Declared model version (optional)"
+            className="border-white/10 bg-[var(--rateloop-field)]"
+            value={declaredModelVersion}
+            error={fieldErrors.modelVersion}
+            onChange={event => {
+              clear("modelVersion");
+              setDeclaredModelVersion(event.target.value);
+            }}
+            maxLength={160}
+          />
+          <SelectField
+            label="Environment"
+            className="border-white/10 bg-[var(--rateloop-field)]"
+            value={environment}
+            error={fieldErrors.environment}
+            onChange={event => {
+              clear("environment");
+              setEnvironment(event.target.value as AgentPairing["environment"]);
+            }}
+          >
+            <option value="staging">Staging</option>
+            <option value="production">Production</option>
+          </SelectField>
+          <div className="md:col-span-2">
+            <TextareaField
+              label="Description"
+              className="min-h-24 border-white/10 bg-[var(--rateloop-field)]"
               value={description}
-              onChange={event => setDescription(event.target.value)}
+              error={fieldErrors.description}
+              onChange={event => {
+                clear("description");
+                setDescription(event.target.value);
+              }}
               maxLength={1_000}
             />
-          </label>
+          </div>
         </div>
       </fieldset>
 
       <fieldset className="mt-6 border-t border-white/10 pt-5">
         <legend className="text-sm font-semibold">2. Choose publishing and workflow controls</legend>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <label className="text-sm text-base-content/65">
-            Publishing policy
-            <select
-              className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={publishingPolicyId}
-              onChange={event => setSelectedPublishingPolicyId(event.target.value)}
-              required
-            >
-              <option value="" disabled>
-                Select an active policy
+          <SelectField
+            label="Publishing policy"
+            className="border-white/10 bg-[var(--rateloop-field)]"
+            value={publishingPolicyId}
+            error={fieldErrors.publishingPolicyId}
+            onChange={event => {
+              clear("publishingPolicyId");
+              setSelectedPublishingPolicyId(event.target.value);
+            }}
+            required
+          >
+            <option value="" disabled>
+              Select an active policy
+            </option>
+            {policies.map(policy => (
+              <option key={policy.policyId} value={policy.policyId}>
+                {policy.name} · v{policy.version}
               </option>
-              {policies.map(policy => (
-                <option key={policy.policyId} value={policy.policyId}>
-                  {policy.name} · v{policy.version}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm text-base-content/65">
-            Allowed workflows
-            <input
-              className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              value={allowedWorkflows}
-              onChange={event => setAllowedWorkflows(event.target.value)}
-              placeholder="review.copy, review.code"
-              required
-            />
-            <span className="mt-2 block text-xs leading-5 text-base-content/55">
-              You may remove requested workflows before approval. The credential cannot add workflows later.
-            </span>
-          </label>
+            ))}
+          </SelectField>
+          <Field
+            label="Allowed workflows"
+            className="border-white/10 bg-[var(--rateloop-field)]"
+            value={allowedWorkflows}
+            error={fieldErrors.allowedWorkflowKeys}
+            hint="You may remove requested workflows before approval. The credential cannot add workflows later."
+            onChange={event => {
+              clear("allowedWorkflowKeys");
+              setAllowedWorkflows(event.target.value);
+            }}
+            placeholder="review.copy, review.code"
+            required
+          />
         </div>
         <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.025] p-4 text-xs leading-5 text-base-content/55">
           <strong className="text-base-content/75">Safe adaptive preset:</strong> private invited reviewers, two stable
@@ -596,9 +616,9 @@ function PairingApprovalCard({
           Create an active publishing policy below before approving this agent.
         </p>
       ) : null}
-      {localError ? (
+      {formError ? (
         <p className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100" role="alert">
-          {localError}
+          {formError}
         </p>
       ) : null}
       <div className="mt-5 flex flex-wrap gap-3">

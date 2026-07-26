@@ -10,6 +10,8 @@ const FORM_FILES = [
   "../account/PasskeyManagementPanel.tsx",
   "../account/ProfileClient.tsx",
   "../agents/WorkspaceReviewersPanel.tsx",
+  "../agents/AgentConnectionPanel.tsx",
+  "../agents/AgentHumanReviewEditor.tsx",
   "../agents/setup/WorkspaceSetupStart.tsx",
   "../WorkspaceDeletionPanel.tsx",
   "../WorkspaceMembersPanel.tsx",
