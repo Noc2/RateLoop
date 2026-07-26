@@ -5,8 +5,11 @@ import { GrcEvidenceDelivery } from "./GrcEvidenceDelivery";
 import { MetricsEvidenceAccess } from "./MetricsEvidenceAccess";
 import { SiemEvidenceDelivery } from "./SiemEvidenceDelivery";
 import { WormEvidenceDelivery } from "./WormEvidenceDelivery";
+import { Field } from "~~/components/tokenless/forms/Field";
+import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import type { EvaluationDashboard } from "~~/lib/tokenless/evaluationDashboard";
+import { readJson } from "~~/lib/tokenless/http";
 
 type EvidencePacket = {
   packetDigest: string;
@@ -72,16 +75,6 @@ type TrustedKey = {
   packetCount: number;
 };
 type TrustedKeyHistory = { keys: TrustedKey[]; untrustedPacketKeyCount: number };
-
-async function readJson<T>(response: Response): Promise<T> {
-  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!response.ok) {
-    throw new Error(
-      typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : "Request failed.",
-    );
-  }
-  return body as T;
-}
 
 function outcomeStyle(outcome: string) {
   if (outcome === "pass") return "bg-emerald-300/10 text-emerald-100";
@@ -235,6 +228,7 @@ function RetentionEditor({
   const [auditMonths, setAuditMonths] = useState(String(policy.auditRetentionMonths));
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const { capture, clear, fieldErrors, formError } = useFormErrors();
   useEffect(() => {
     setEvidenceMonths(String(policy.evidenceRetentionMonths));
     setAuditMonths(String(policy.auditRetentionMonths));
@@ -246,6 +240,7 @@ function RetentionEditor({
         event.preventDefault();
         setBusy(true);
         setMessage(null);
+        clear();
         void fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/assurance/retention`, {
           method: "PUT",
           credentials: "same-origin",
@@ -260,40 +255,49 @@ function RetentionEditor({
             onSaved(next);
             setMessage(`Saved as policy v${next.version}.`);
           })
-          .catch(error => setMessage(error instanceof Error ? error.message : "Unable to save retention."))
+          .catch(error => capture(error, "Unable to save retention."))
           .finally(() => setBusy(false));
       }}
     >
-      <label className="text-sm text-base-content/65">
-        Evidence retention (months)
-        <input
-          className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-          type="number"
-          min={policy.minimumRetentionMonths}
-          max={120}
-          value={evidenceMonths}
-          onChange={event => setEvidenceMonths(event.target.value)}
-          required
-        />
-      </label>
-      <label className="text-sm text-base-content/65">
-        Audit retention (months)
-        <input
-          className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-          type="number"
-          min={policy.minimumRetentionMonths}
-          max={120}
-          value={auditMonths}
-          onChange={event => setAuditMonths(event.target.value)}
-          required
-        />
-      </label>
+      <Field
+        label="Evidence retention (months)"
+        className="border-white/10 bg-[var(--rateloop-field)]"
+        type="number"
+        min={policy.minimumRetentionMonths}
+        max={120}
+        value={evidenceMonths}
+        error={fieldErrors.evidenceRetentionMonths}
+        onChange={event => {
+          clear("evidenceRetentionMonths");
+          setEvidenceMonths(event.target.value);
+        }}
+        required
+      />
+      <Field
+        label="Audit retention (months)"
+        className="border-white/10 bg-[var(--rateloop-field)]"
+        type="number"
+        min={policy.minimumRetentionMonths}
+        max={120}
+        value={auditMonths}
+        error={fieldErrors.auditRetentionMonths}
+        onChange={event => {
+          clear("auditRetentionMonths");
+          setAuditMonths(event.target.value);
+        }}
+        required
+      />
       <button type="submit" className="btn btn-sm rateloop-gradient-action" disabled={busy}>
         {busy ? "Saving…" : "Save retention"}
       </button>
       {message ? (
         <p className="text-xs text-base-content/60 sm:col-span-3" role="status">
           {message}
+        </p>
+      ) : null}
+      {formError ? (
+        <p className="text-xs text-red-100 sm:col-span-3" role="alert">
+          {formError}
         </p>
       ) : null}
     </form>

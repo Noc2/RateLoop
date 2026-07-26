@@ -144,7 +144,7 @@ test("the editor uses workspace reviewer readiness without exposing legacy group
 
 test("the editor renders a server field error beside the matching review control", async () => {
   const restoreDom = installTestDom();
-  const { act, cleanup, render, screen } = await import("@testing-library/react");
+  const { act, cleanup, render } = await import("@testing-library/react");
   const userEvent = (await import("@testing-library/user-event")).default;
   const { AgentHumanReviewEditor } = await import("./AgentHumanReviewEditor");
   const previousFetch = globalThis.fetch;

@@ -12,9 +12,13 @@ const FORM_FILES = [
   "../agents/WorkspaceReviewersPanel.tsx",
   "../agents/AgentConnectionPanel.tsx",
   "../agents/AgentHumanReviewEditor.tsx",
+  "../agents/EvaluationDashboardPanel.tsx",
+  "../agents/EvidenceWorkspacePanel.tsx",
+  "../agents/MetricsEvidenceAccess.tsx",
   "../agents/setup/WorkspaceSetupStart.tsx",
   "../WorkspaceDeletionPanel.tsx",
   "../WorkspaceMembersPanel.tsx",
+  "../WorkspaceStopControl.tsx",
 ] as const;
 
 const NON_TEXT_INPUT_TYPES = new Set(["checkbox", "file", "hidden", "radio", "range"]);

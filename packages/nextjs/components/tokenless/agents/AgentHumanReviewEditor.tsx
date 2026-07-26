@@ -407,7 +407,7 @@ export function AgentHumanReviewEditor({
       capture(cause, "Unable to load human review.");
     });
     return () => controller.abort();
-  }, [load]);
+  }, [capture, load]);
 
   function update<Key extends keyof Draft>(key: Key, value: Draft[Key]) {
     setDraft(current => (current ? { ...current, [key]: value } : current));

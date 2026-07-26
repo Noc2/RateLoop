@@ -78,7 +78,7 @@ function safeHashEquals(left: string, right: string) {
 
 function validateLabel(value: unknown) {
   if (typeof value !== "string" || !value.trim() || value.trim().length > 120) {
-    throw new TokenlessServiceError("Credential label is invalid.", 400, "invalid_metrics_credential");
+    throw new TokenlessServiceError("Credential label is invalid.", 400, "invalid_metrics_credential", false, "label");
   }
   return value.trim();
 }

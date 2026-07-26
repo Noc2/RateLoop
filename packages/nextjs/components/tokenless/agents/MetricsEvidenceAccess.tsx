@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { OneTimeSecretNotice } from "./OneTimeSecretNotice";
 import { formatEvidenceDeliveryDate, readEvidenceDeliveryJson } from "./evidenceDeliveryClient";
+import { Field } from "~~/components/tokenless/forms/Field";
+import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 
 type MetricsCredential = {
   credentialId: string;
@@ -20,6 +22,7 @@ export function MetricsEvidenceAccess({ workspaceId }: { workspaceId: string }) 
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [oneTimeToken, setOneTimeToken] = useState<string | null>(null);
+  const { capture, clear, fieldErrors, formError } = useFormErrors();
 
   const load = useCallback(async () => {
     const body = await readEvidenceDeliveryJson<{ credentials: MetricsCredential[] }>(
@@ -143,6 +146,7 @@ export function MetricsEvidenceAccess({ workspaceId }: { workspaceId: string }) 
           event.preventDefault();
           setBusy(true);
           setMessage(null);
+          clear();
           void fetch(endpoint, {
             method: "POST",
             credentials: "same-origin",
@@ -158,21 +162,25 @@ export function MetricsEvidenceAccess({ workspaceId }: { workspaceId: string }) 
               setLabel("");
               setMessage("Credential issued.");
             })
-            .catch(error => setMessage(error instanceof Error ? error.message : "Unable to issue metrics credential."))
+            .catch(error => capture(error, "Unable to issue metrics credential."))
             .finally(() => setBusy(false));
         }}
       >
-        <label className="w-full text-sm text-base-content/65 sm:max-w-md">
-          Issue credential
-          <input
-            className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+        <div className="w-full sm:max-w-md">
+          <Field
+            label="Issue credential"
+            className="border-white/10 bg-[var(--rateloop-field)]"
             value={label}
-            onChange={event => setLabel(event.target.value)}
+            error={fieldErrors.label}
+            onChange={event => {
+              clear("label");
+              setLabel(event.target.value);
+            }}
             placeholder="Security operations"
             required
             maxLength={100}
           />
-        </label>
+        </div>
         <button type="submit" className="btn btn-sm rateloop-gradient-action" disabled={busy || oneTimeToken !== null}>
           {busy ? "Issuing…" : "Issue credential"}
         </button>
@@ -180,6 +188,11 @@ export function MetricsEvidenceAccess({ workspaceId }: { workspaceId: string }) 
       {message ? (
         <p className="mt-4 text-xs text-base-content/60" role="status">
           {message}
+        </p>
+      ) : null}
+      {formError ? (
+        <p className="mt-4 text-xs text-red-100" role="alert">
+          {formError}
         </p>
       ) : null}
     </section>

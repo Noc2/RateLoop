@@ -38,7 +38,7 @@ function exactObject(value: unknown) {
   return record;
 }
 
-function months(value: unknown, name: string) {
+function months(value: unknown, name: string, field: string) {
   if (
     !Number.isSafeInteger(value) ||
     Number(value) < MINIMUM_RETENTION_MONTHS ||
@@ -48,6 +48,8 @@ function months(value: unknown, name: string) {
       `${name} must be between six and 120 calendar months.`,
       400,
       "invalid_retention_policy",
+      false,
+      field,
     );
   }
   return Number(value);
@@ -116,8 +118,8 @@ export async function putWorkspaceEvidenceRetentionPolicy(input: {
   now?: Date;
 }): Promise<WorkspaceEvidenceRetentionPolicy> {
   const body = exactObject(input.body);
-  const evidenceRetentionMonths = months(body.evidenceRetentionMonths, "Evidence retention");
-  const auditRetentionMonths = months(body.auditRetentionMonths, "Audit retention");
+  const evidenceRetentionMonths = months(body.evidenceRetentionMonths, "Evidence retention", "evidenceRetentionMonths");
+  const auditRetentionMonths = months(body.auditRetentionMonths, "Audit retention", "auditRetentionMonths");
   const now = input.now ?? new Date();
   const client = await dbPool.connect();
   let actor = "";

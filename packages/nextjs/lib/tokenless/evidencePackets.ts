@@ -1336,6 +1336,8 @@ function normalizeDecisionNote(value: string | null | undefined) {
       "Decision note must not exceed 2000 characters.",
       400,
       "invalid_assurance_decision",
+      false,
+      "note",
     );
   }
   return note || null;
@@ -1365,6 +1367,8 @@ export async function recordAssuranceClientDecision(input: {
       "This run was sampled for an explained decision: add reasons of at least 10 characters, even for go.",
       400,
       "decision_explanation_required",
+      false,
+      "note",
     );
   }
   const client = await dbPool.connect();
@@ -1472,31 +1476,35 @@ export type AssuranceOverrideDecision = {
   current: boolean;
 };
 
-function invalidOverrideDecision(message: string): never {
-  throw new TokenlessServiceError(message, 400, "invalid_override_decision");
+function invalidOverrideDecision(message: string, field?: string): never {
+  throw new TokenlessServiceError(message, 400, "invalid_override_decision", false, field);
 }
 
 function normalizeOverrideOutcome(value: unknown): AssuranceOverrideOutcome {
   if (typeof value !== "string" || !ASSURANCE_OVERRIDE_OUTCOMES.includes(value as AssuranceOverrideOutcome)) {
-    invalidOverrideDecision("Outcome must be accepted, disregarded, overridden, or reversed.");
+    invalidOverrideDecision("Outcome must be accepted, disregarded, overridden, or reversed.", "outcome");
   }
   return value as AssuranceOverrideOutcome;
 }
 
 function normalizeOverrideReasons(value: unknown) {
-  if (typeof value !== "string") invalidOverrideDecision("Override reasons must be 10-2000 characters.");
+  if (typeof value !== "string") invalidOverrideDecision("Override reasons must be 10-2000 characters.", "reasons");
   const reasons = value.trim();
   if (reasons.length < 10 || reasons.length > 2_000) {
-    invalidOverrideDecision("Override reasons must be 10-2000 characters.");
+    invalidOverrideDecision("Override reasons must be 10-2000 characters.", "reasons");
   }
   return reasons;
 }
 
 function normalizeCorrectiveAction(value: unknown) {
   if (value === null || value === undefined) return null;
-  if (typeof value !== "string") invalidOverrideDecision("Corrective action must be at most 2000 characters.");
+  if (typeof value !== "string") {
+    invalidOverrideDecision("Corrective action must be at most 2000 characters.", "correctiveAction");
+  }
   const note = value.trim();
-  if (note.length > 2_000) invalidOverrideDecision("Corrective action must be at most 2000 characters.");
+  if (note.length > 2_000) {
+    invalidOverrideDecision("Corrective action must be at most 2000 characters.", "correctiveAction");
+  }
   return note || null;
 }
 

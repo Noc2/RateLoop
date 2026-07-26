@@ -3,22 +3,15 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { AdaptiveCoverageSummary } from "~~/components/tokenless/agents/AdaptiveCoverageSummary";
 import { ModelEvidencePanel } from "~~/components/tokenless/agents/ModelEvidencePanel";
+import { Field, TextareaField } from "~~/components/tokenless/forms/Field";
+import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import type { AssuranceMetricsSnapshot } from "~~/lib/tokenless/assuranceMetrics";
 import type { DeciderDecisionTrend, EvaluationDashboard, EvaluationRun } from "~~/lib/tokenless/evaluationDashboard";
+import { readJson } from "~~/lib/tokenless/http";
 import type { OversightRunCaseView } from "~~/lib/tokenless/oversightCaseView";
 
 type Workspace = { workspaceId: string; name: string; role: string };
-
-async function readJson(response: Response) {
-  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!response.ok) {
-    throw new Error(
-      typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : "Request failed.",
-    );
-  }
-  return body;
-}
 
 function percent(bps: number | null) {
   return bps === null ? "Suppressed" : `${(bps / 100).toFixed(1)}%`;
@@ -201,13 +194,13 @@ function ClientDecisionButtons({
 }) {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { capture, clear, fieldErrors, formError } = useFormErrors();
   const explanationMissing = run.explanationRequired && note.trim().length < 10;
   const trendLabel = deciderTrendLabel(trend);
 
   async function submit(decision: NonNullable<EvaluationRun["clientDecision"]>) {
     setBusy(true);
-    setError(null);
+    clear();
     try {
       await readJson(
         await fetch(
@@ -222,7 +215,7 @@ function ClientDecisionButtons({
       );
       onDecided(decision);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to record the decision.");
+      capture(cause, "Unable to record the decision.");
     } finally {
       setBusy(false);
     }
@@ -238,13 +231,18 @@ function ClientDecisionButtons({
           <p className="mt-1 text-xs leading-5 text-amber-100/70">
             This run was sampled for an explained decision: write your reasons before choosing — even for go.
           </p>
-          <textarea
-            className="textarea mt-2 w-full border-white/10 bg-[var(--rateloop-field)] text-sm"
+          <TextareaField
+            label="Reasons"
+            className="mt-2 w-full border-white/10 bg-[var(--rateloop-field)] text-sm"
             placeholder="Reasons (required for this run, at least 10 characters)"
             value={note}
+            error={fieldErrors.note}
             maxLength={2000}
             rows={2}
-            onChange={event => setNote(event.target.value)}
+            onChange={event => {
+              clear("note");
+              setNote(event.target.value);
+            }}
           />
         </div>
       ) : null}
@@ -261,9 +259,9 @@ function ClientDecisionButtons({
           </button>
         ))}
       </div>
-      {error ? (
+      {formError ? (
         <p className="mt-2 text-xs text-red-100" role="alert">
-          {error}
+          {formError}
         </p>
       ) : null}
     </div>
@@ -285,12 +283,12 @@ function OverrideRecordForm({
   const [correctiveAction, setCorrectiveAction] = useState("");
   const [recorded, setRecorded] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { capture, clear, fieldErrors, formError } = useFormErrors();
 
   async function submit(event: FormEvent, outcome: (typeof OVERRIDE_OUTCOMES)[number]) {
     event.preventDefault();
     setBusy(true);
-    setError(null);
+    clear();
     try {
       await readJson(
         await fetch(
@@ -311,7 +309,7 @@ function OverrideRecordForm({
       setReasons("");
       setCorrectiveAction("");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to record the override decision.");
+      capture(cause, "Unable to record the override decision.");
     } finally {
       setBusy(false);
     }
@@ -331,19 +329,29 @@ function OverrideRecordForm({
           Recorded as {recorded}. Recording again supersedes this record.
         </p>
       ) : null}
-      <textarea
-        className="textarea mt-3 w-full border-white/10 bg-[var(--rateloop-field)] text-sm"
+      <TextareaField
+        label="Reasons"
+        className="mt-3 w-full border-white/10 bg-[var(--rateloop-field)] text-sm"
         placeholder="Reasons (required, 10-2000 characters)"
         value={reasons}
-        onChange={event => setReasons(event.target.value)}
+        error={fieldErrors.reasons}
+        onChange={event => {
+          clear("reasons");
+          setReasons(event.target.value);
+        }}
         maxLength={2000}
         rows={2}
       />
-      <input
-        className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)] text-sm"
+      <Field
+        label="Linked corrective action"
+        className="mt-2 w-full border-white/10 bg-[var(--rateloop-field)] text-sm"
         placeholder="Linked corrective action (optional)"
         value={correctiveAction}
-        onChange={event => setCorrectiveAction(event.target.value)}
+        error={fieldErrors.correctiveAction}
+        onChange={event => {
+          clear("correctiveAction");
+          setCorrectiveAction(event.target.value);
+        }}
         maxLength={2000}
       />
       <div className="mt-2 flex flex-wrap gap-2">
@@ -359,9 +367,9 @@ function OverrideRecordForm({
           </button>
         ))}
       </div>
-      {error ? (
+      {formError ? (
         <p className="mt-2 text-xs text-red-100" role="alert">
-          {error}
+          {formError}
         </p>
       ) : null}
     </form>
