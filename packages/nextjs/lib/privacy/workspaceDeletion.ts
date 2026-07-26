@@ -472,7 +472,13 @@ export async function requestWorkspaceDeletion(input: {
   workspaceId: string;
 }) {
   if (typeof input.confirmationName !== "string") {
-    throw new TokenlessServiceError("Workspace name confirmation is required.", 400, "workspace_confirmation_required");
+    throw new TokenlessServiceError(
+      "Workspace name confirmation is required.",
+      400,
+      "workspace_confirmation_required",
+      false,
+      "confirmationName",
+    );
   }
   const requester = accountReference(input.accountAddress);
   const now = input.now ?? new Date();
@@ -490,6 +496,8 @@ export async function requestWorkspaceDeletion(input: {
         "Workspace name confirmation does not match.",
         400,
         "workspace_confirmation_mismatch",
+        false,
+        "confirmationName",
       );
     }
     if (preview.blockers.length > 0) {

@@ -94,7 +94,7 @@ function normalizeEmail(value: string) {
   const normalized = value.trim().toLowerCase();
   const match = EMAIL_PATTERN.exec(normalized);
   if (!match || normalized.length > 320 || !EMAIL_DOMAIN_PATTERN.test(match[1]!)) {
-    throw new TokenlessServiceError("intendedEmail must be a valid email address.", 400, "invalid_invite");
+    throw new TokenlessServiceError("Enter a valid email address.", 400, "invalid_invite", false, "intendedEmail");
   }
   return normalized;
 }
@@ -476,7 +476,7 @@ export async function createWorkspaceMemberInvite(input: {
   const manager = await requireWorkspaceManagement(input.accountAddress, input.workspaceId);
   const governanceRole = input.governanceRole ?? null;
   if (!INVITE_ACCESS_ROLE_SET.has(input.accessRole) || (governanceRole && !GOVERNANCE_ROLE_SET.has(governanceRole))) {
-    throw new TokenlessServiceError("Invitation role is unsupported.", 400, "invalid_invite");
+    throw new TokenlessServiceError("Invitation role is unsupported.", 400, "invalid_invite", false, "accessRole");
   }
   if (governanceRole && (input.accessRole === "billing") !== (governanceRole === "billing")) {
     throw new TokenlessServiceError(

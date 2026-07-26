@@ -64,11 +64,23 @@ async function requireWorkspaceRole(accountAddress: string, workspaceId: string,
 
 function normalizeReason(value: unknown) {
   if (typeof value !== "string") {
-    throw new TokenlessServiceError("A stop reason of 1-2000 characters is required.", 400, "invalid_workspace_stop");
+    throw new TokenlessServiceError(
+      "A stop reason of 1-2000 characters is required.",
+      400,
+      "invalid_workspace_stop",
+      false,
+      "reason",
+    );
   }
   const reason = value.trim();
   if (!reason || reason.length > 2_000) {
-    throw new TokenlessServiceError("A stop reason of 1-2000 characters is required.", 400, "invalid_workspace_stop");
+    throw new TokenlessServiceError(
+      "A stop reason of 1-2000 characters is required.",
+      400,
+      "invalid_workspace_stop",
+      false,
+      "reason",
+    );
   }
   return reason;
 }

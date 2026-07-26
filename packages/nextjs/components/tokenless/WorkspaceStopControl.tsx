@@ -1,6 +1,9 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { TextareaField } from "~~/components/tokenless/forms/Field";
+import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { readJson } from "~~/lib/tokenless/http";
 
 export type WorkspaceStopState = {
   workspaceId: string;
@@ -11,16 +14,6 @@ export type WorkspaceStopState = {
   releasedBy: string | null;
   releasedAt: string | null;
 };
-
-async function readJson(response: Response) {
-  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!response.ok) {
-    throw new Error(
-      typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : "Request failed.",
-    );
-  }
-  return body;
-}
 
 function useWorkspaceStopState(workspaceId: string, revision: number) {
   const [stop, setStop] = useState<WorkspaceStopState | null>(null);
@@ -68,17 +61,20 @@ export function WorkspaceStopPanel({ workspaceId }: { workspaceId: string }) {
   const [confirming, setConfirming] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { capture, clear, fieldErrors, formError } = useFormErrors();
   const refresh = useCallback(() => setRevision(value => value + 1), []);
 
   async function engage(event: FormEvent) {
     event.preventDefault();
     if (!reason.trim()) {
-      setError("A reason is required to stop all agent activity.");
+      capture(
+        { field: "reason", message: "A reason is required to stop all agent activity." },
+        "A reason is required.",
+      );
       return;
     }
     setBusy(true);
-    setError(null);
+    clear();
     try {
       await readJson(
         await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/stop`, {
@@ -92,7 +88,7 @@ export function WorkspaceStopPanel({ workspaceId }: { workspaceId: string }) {
       setReason("");
       refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to stop agent activity.");
+      capture(cause, "Unable to stop agent activity.");
     } finally {
       setBusy(false);
     }
@@ -100,7 +96,7 @@ export function WorkspaceStopPanel({ workspaceId }: { workspaceId: string }) {
 
   async function release() {
     setBusy(true);
-    setError(null);
+    clear();
     try {
       await readJson(
         await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/stop`, {
@@ -110,7 +106,7 @@ export function WorkspaceStopPanel({ workspaceId }: { workspaceId: string }) {
       );
       refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to release the stop.");
+      capture(cause, "Unable to release the stop.");
     } finally {
       setBusy(false);
     }
@@ -150,14 +146,16 @@ export function WorkspaceStopPanel({ workspaceId }: { workspaceId: string }) {
         </div>
       ) : confirming ? (
         <form className="mt-4 max-w-xl" onSubmit={engage}>
-          <label className="text-sm text-base-content/65" htmlFor="workspace-stop-reason">
-            Give a reason. It will be recorded in the audit chain.
-          </label>
-          <textarea
+          <TextareaField
             id="workspace-stop-reason"
+            label="Give a reason. It will be recorded in the audit chain."
             className="textarea mt-2 w-full border-red-400/40 bg-[var(--rateloop-field)]"
             value={reason}
-            onChange={event => setReason(event.target.value)}
+            error={fieldErrors.reason}
+            onChange={event => {
+              clear("reason");
+              setReason(event.target.value);
+            }}
             maxLength={2000}
             rows={3}
             required
@@ -171,7 +169,7 @@ export function WorkspaceStopPanel({ workspaceId }: { workspaceId: string }) {
               className="btn btn-ghost btn-sm"
               onClick={() => {
                 setConfirming(false);
-                setError(null);
+                clear();
               }}
               disabled={busy}
             >
@@ -181,9 +179,9 @@ export function WorkspaceStopPanel({ workspaceId }: { workspaceId: string }) {
         </form>
       ) : null}
 
-      {error ? (
+      {formError ? (
         <p className="mt-3 rounded-lg bg-red-400/10 p-3 text-sm text-red-100" role="alert">
-          {error}
+          {formError}
         </p>
       ) : null}
     </section>

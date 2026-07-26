@@ -11,6 +11,8 @@ const FORM_FILES = [
   "../account/ProfileClient.tsx",
   "../agents/WorkspaceReviewersPanel.tsx",
   "../agents/setup/WorkspaceSetupStart.tsx",
+  "../WorkspaceDeletionPanel.tsx",
+  "../WorkspaceMembersPanel.tsx",
 ] as const;
 
 const NON_TEXT_INPUT_TYPES = new Set(["checkbox", "file", "hidden", "radio", "range"]);

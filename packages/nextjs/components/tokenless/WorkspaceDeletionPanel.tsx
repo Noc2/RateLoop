@@ -1,6 +1,9 @@
 "use client";
 
 import { type FormEvent, useState } from "react";
+import { Field } from "~~/components/tokenless/forms/Field";
+import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { readJson } from "~~/lib/tokenless/http";
 
 type WorkspaceDeletionPreview = {
   workspace: { workspaceId: string; name: string };
@@ -25,20 +28,6 @@ type WorkspaceDeletionPanelProps = {
   workspaceId: string;
   workspaceName: string;
 };
-
-async function readJson(response: Response) {
-  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!response.ok) {
-    throw new Error(
-      typeof body.message === "string"
-        ? body.message
-        : typeof body.error === "string"
-          ? body.error
-          : "The deletion request failed.",
-    );
-  }
-  return body;
-}
 
 function countLabel(count: number, singular: string, plural: string) {
   return `${count} ${count === 1 ? singular : plural}`;
@@ -100,22 +89,22 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
   const [confirmationName, setConfirmationName] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { capture, clear, fieldErrors, formError } = useFormErrors();
 
   async function loadPreview() {
     if (preview || loading) return;
     setLoading(true);
-    setError(null);
+    clear();
     try {
-      const body = await readJson(
+      const body = await readJson<WorkspaceDeletionPreview>(
         await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/deletion`, {
           cache: "no-store",
           credentials: "same-origin",
         }),
       );
-      setPreview(body as unknown as WorkspaceDeletionPreview);
+      setPreview(body);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to check this workspace.");
+      capture(cause, "Unable to check this workspace.");
     } finally {
       setLoading(false);
     }
@@ -125,7 +114,7 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
     event.preventDefault();
     if (!preview || preview.blockers.length > 0 || confirmationName !== preview.workspace.name) return;
     setSubmitting(true);
-    setError(null);
+    clear();
     try {
       await readJson(
         await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/deletion`, {
@@ -137,7 +126,7 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
       );
       window.location.assign("/agents");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to delete this workspace.");
+      capture(cause, "Unable to delete this workspace.");
       setSubmitting(false);
     }
   }
@@ -211,17 +200,23 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
             ) : null}
 
             {preview.blockers.length === 0 ? (
-              <div>
-                <label className="mt-5 block text-sm text-base-content/65">
-                  Type <span className="font-semibold text-base-content">{preview.workspace.name}</span> to confirm
-                  <input
-                    className="input mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                    value={confirmationName}
-                    onChange={event => setConfirmationName(event.target.value)}
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
-                </label>
+              <div className="mt-5">
+                <Field
+                  label={
+                    <>
+                      Type <span className="font-semibold text-base-content">{preview.workspace.name}</span> to confirm
+                    </>
+                  }
+                  className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                  value={confirmationName}
+                  error={fieldErrors.confirmationName}
+                  onChange={event => {
+                    clear("confirmationName");
+                    setConfirmationName(event.target.value);
+                  }}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
               </div>
             ) : null}
 
@@ -238,7 +233,7 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
                 onClick={() => {
                   setPreview(null);
                   setConfirmationName("");
-                  setError(null);
+                  clear();
                 }}
               >
                 Cancel
@@ -248,9 +243,9 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
         </div>
       ) : null}
 
-      {error ? (
+      {formError ? (
         <p className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100" role="alert">
-          {error}
+          {formError}
         </p>
       ) : null}
     </section>

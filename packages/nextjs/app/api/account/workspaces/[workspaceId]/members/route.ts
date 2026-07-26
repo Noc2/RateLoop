@@ -45,10 +45,10 @@ export async function POST(request: NextRequest, context: Context) {
       Object.keys(body).some(key => !["accessRole", "intendedEmail"].includes(key)) ||
       typeof body.accessRole !== "string"
     ) {
-      throw new TokenlessServiceError("Choose a workspace role.", 400, "invalid_workspace_role");
+      throw new TokenlessServiceError("Choose a workspace role.", 400, "invalid_workspace_role", false, "accessRole");
     }
     if (body.intendedEmail !== undefined && body.intendedEmail !== null && typeof body.intendedEmail !== "string") {
-      throw new TokenlessServiceError("Email must be a string.", 400, "invalid_invite");
+      throw new TokenlessServiceError("Email must be a string.", 400, "invalid_invite", false, "intendedEmail");
     }
     const invitation = await createWorkspaceMemberInvite({
       accountAddress: session.principalId,

@@ -2,6 +2,9 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { OneTimeSecretNotice } from "~~/components/tokenless/agents/OneTimeSecretNotice";
+import { Field, SelectField } from "~~/components/tokenless/forms/Field";
+import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { readJson } from "~~/lib/tokenless/http";
 import { WorkspaceRequestScope } from "~~/lib/tokenless/workspaceRequestScope";
 
 type WorkspaceAccessRole = "owner" | "admin" | "member" | "billing";
@@ -31,18 +34,6 @@ type MembersResponse = {
   invitations: WorkspaceInvitation[];
 };
 
-class RequestFailure extends Error {}
-
-async function readJson(response: Response) {
-  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!response.ok) {
-    throw new RequestFailure(
-      typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : "Request failed.",
-    );
-  }
-  return body;
-}
-
 function shortPrincipal(value: string) {
   return value.length > 22 ? `${value.slice(0, 10)}…${value.slice(-8)}` : value;
 }
@@ -66,31 +57,31 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
   const [issuedToken, setIssuedToken] = useState<string | null>(null);
   const [busyTarget, setBusyTarget] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [workspaceRequests] = useState(() => new WorkspaceRequestScope());
+  const { capture, clear, fieldErrors, formError } = useFormErrors();
 
   const loadMembers = useCallback(async () => {
     if (!workspaceId || !canManage) return;
     const request = workspaceRequests.begin(workspaceId, "members:load");
     setLoading(true);
     try {
-      const body = (await readJson(
+      const body = await readJson<MembersResponse>(
         await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/members`, {
           cache: "no-store",
           credentials: "same-origin",
           signal: request.signal,
         }),
-      )) as MembersResponse;
+      );
       if (!request.isCurrent()) return;
       setMembers(body.members);
       setInvitations(body.invitations);
       setViewerPrincipalId(body.viewerPrincipalId);
-      setError(null);
+      clear();
     } finally {
       if (request.isCurrent()) setLoading(false);
       request.finish();
     }
-  }, [canManage, workspaceId, workspaceRequests]);
+  }, [canManage, clear, workspaceId, workspaceRequests]);
 
   useEffect(() => {
     workspaceRequests.selectWorkspace(workspaceId);
@@ -98,22 +89,22 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
     setInvitations([]);
     setViewerPrincipalId("");
     setIssuedToken(null);
-    setError(null);
+    clear();
     if (!canManage) return;
     void loadMembers().catch(cause => {
       if (!workspaceRequests.isWorkspaceCurrent(workspaceId)) return;
       setLoading(false);
-      setError(cause instanceof Error ? cause.message : "Unable to load workspace members.");
+      capture(cause, "Unable to load workspace members.");
     });
-  }, [canManage, loadMembers, workspaceId, workspaceRequests]);
+  }, [canManage, capture, clear, loadMembers, workspaceId, workspaceRequests]);
 
   async function createInvitation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const request = workspaceRequests.begin(workspaceId, "members:action");
     setBusyTarget("invite");
-    setError(null);
+    clear();
     try {
-      const body = await readJson(
+      const body = await readJson<{ invitation: { token?: unknown } }>(
         await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/members`, {
           method: "POST",
           credentials: "same-origin",
@@ -123,13 +114,13 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
         }),
       );
       if (!request.isCurrent()) return;
-      const invitation = body.invitation as Record<string, unknown>;
+      const invitation = body.invitation;
       if (typeof invitation.token !== "string") throw new Error("Invitation code was unavailable.");
       setIssuedToken(invitation.token);
       setEmail("");
       await loadMembers();
     } catch (cause) {
-      if (request.isCurrent()) setError(cause instanceof Error ? cause.message : "Unable to create the invitation.");
+      if (request.isCurrent()) capture(cause, "Unable to create the invitation.");
     } finally {
       if (request.isCurrent()) setBusyTarget(null);
       request.finish();
@@ -139,7 +130,7 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
   async function updateRole(member: WorkspaceMember, nextRole: Exclude<WorkspaceAccessRole, "owner">) {
     const request = workspaceRequests.begin(workspaceId, "members:action");
     setBusyTarget(member.principalId);
-    setError(null);
+    clear();
     try {
       await readJson(
         await fetch(
@@ -155,7 +146,7 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
       );
       if (request.isCurrent()) await loadMembers();
     } catch (cause) {
-      if (request.isCurrent()) setError(cause instanceof Error ? cause.message : "Unable to change the member role.");
+      if (request.isCurrent()) capture(cause, "Unable to change the member role.");
     } finally {
       if (request.isCurrent()) setBusyTarget(null);
       request.finish();
@@ -167,7 +158,7 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
     if (!window.confirm(`Remove ${label} from this workspace?`)) return;
     const request = workspaceRequests.begin(workspaceId, "members:action");
     setBusyTarget(member.principalId);
-    setError(null);
+    clear();
     try {
       await readJson(
         await fetch(
@@ -177,7 +168,7 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
       );
       if (request.isCurrent()) await loadMembers();
     } catch (cause) {
-      if (request.isCurrent()) setError(cause instanceof Error ? cause.message : "Unable to remove the member.");
+      if (request.isCurrent()) capture(cause, "Unable to remove the member.");
     } finally {
       if (request.isCurrent()) setBusyTarget(null);
       request.finish();
@@ -188,7 +179,7 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
     if (!window.confirm("Revoke this workspace invitation?")) return;
     const request = workspaceRequests.begin(workspaceId, "members:action");
     setBusyTarget(invitation.inviteId);
-    setError(null);
+    clear();
     try {
       await readJson(
         await fetch(
@@ -198,7 +189,7 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
       );
       if (request.isCurrent()) await loadMembers();
     } catch (cause) {
-      if (request.isCurrent()) setError(cause instanceof Error ? cause.message : "Unable to revoke the invitation.");
+      if (request.isCurrent()) capture(cause, "Unable to revoke the invitation.");
     } finally {
       if (request.isCurrent()) setBusyTarget(null);
       request.finish();
@@ -225,30 +216,34 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
         className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_auto] sm:items-end"
         onSubmit={createInvitation}
       >
-        <label className="text-xs text-base-content/55">
-          Email
-          <input
-            className="input mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={event => setEmail(event.target.value)}
-            placeholder="name@company.com"
-            required
-          />
-        </label>
-        <label className="text-xs text-base-content/55">
-          Role
-          <select
-            className="select mt-1.5 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-            value={accessRole}
-            onChange={event => setAccessRole(event.target.value as Exclude<WorkspaceAccessRole, "owner">)}
-          >
-            <option value="member">Member</option>
-            <option value="admin">Admin</option>
-            <option value="billing">Billing</option>
-          </select>
-        </label>
+        <Field
+          label="Email"
+          className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+          type="email"
+          autoComplete="email"
+          value={email}
+          error={fieldErrors.intendedEmail}
+          onChange={event => {
+            clear("intendedEmail");
+            setEmail(event.target.value);
+          }}
+          placeholder="name@company.com"
+          required
+        />
+        <SelectField
+          label="Role"
+          className="rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+          value={accessRole}
+          error={fieldErrors.accessRole}
+          onChange={event => {
+            clear("accessRole");
+            setAccessRole(event.target.value as Exclude<WorkspaceAccessRole, "owner">);
+          }}
+        >
+          <option value="member">Member</option>
+          <option value="admin">Admin</option>
+          <option value="billing">Billing</option>
+        </SelectField>
         <button className="rateloop-gradient-action min-h-12 px-5" disabled={busyTarget === "invite"}>
           {busyTarget === "invite" ? "Creating…" : "Create invitation"}
         </button>
@@ -261,9 +256,9 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
           onDismiss={() => setIssuedToken(null)}
         />
       ) : null}
-      {error ? (
+      {formError ? (
         <p className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100" role="alert">
-          {error}
+          {formError}
         </p>
       ) : null}
 

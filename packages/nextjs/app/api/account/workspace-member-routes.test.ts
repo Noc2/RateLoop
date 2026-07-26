@@ -79,6 +79,30 @@ test("workspace member routes invite, redeem, change role, remove, and revoke wi
   );
   assert.equal(crossOrigin.status, 403);
 
+  const invalidEmail = await inviteMember(
+    browserRequest(membersPath, {
+      body: { accessRole: "member", intendedEmail: 42 },
+      method: "POST",
+      origin: APP_ORIGIN,
+      token: owner.token,
+    }),
+    membersContext,
+  );
+  assert.equal(invalidEmail.status, 400);
+  assert.equal((await invalidEmail.json()).field, "intendedEmail");
+
+  const invalidRole = await inviteMember(
+    browserRequest(membersPath, {
+      body: { accessRole: 42, intendedEmail: "route-member@workspace.test" },
+      method: "POST",
+      origin: APP_ORIGIN,
+      token: owner.token,
+    }),
+    membersContext,
+  );
+  assert.equal(invalidRole.status, 400);
+  assert.equal((await invalidRole.json()).field, "accessRole");
+
   const invited = await inviteMember(
     browserRequest(membersPath, {
       body: { accessRole: "member", intendedEmail: "route-member@workspace.test" },
