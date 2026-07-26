@@ -12,7 +12,7 @@ import {
   createLocalKeyWrappingProvider,
   validateVaultEnvironment,
 } from "~~/lib/privacy/vault";
-import { createConfiguredAwsKmsKeyWrappingProvider } from "~~/lib/privacy/vault/awsKms";
+import { createConfiguredPlatformSecretKeyWrappingProvider } from "~~/lib/privacy/vault/platformSecret";
 import { authorizeProjectAccount, projectAccountReference } from "~~/lib/tokenless/projectAccess";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -50,7 +50,7 @@ type ArtifactDeletionHookPhase =
   | "after_audit_append";
 
 let runtimeOverride: ArtifactPrivacyRuntime | null = null;
-let managedKeyProvider: KeyWrappingProvider | null = null;
+let configuredKeyProvider: KeyWrappingProvider | null = null;
 
 function rowString(row: QueryRow | undefined, key: string) {
   const value = row?.[key];
@@ -122,30 +122,14 @@ function getRuntime(env: NodeJS.ProcessEnv = process.env): ArtifactPrivacyRuntim
         createLocalKeyWrappingProvider({ key: masterKey, keyVersion: runtimeOverride.keyVersion }),
     };
   }
-  const policy = validateVaultEnvironment(env);
-  if (policy.mode === "managed") {
-    const keyProvider = managedKeyProvider ?? createConfiguredAwsKmsKeyWrappingProvider(env);
-    if (keyProvider.provider !== policy.provider || keyProvider.keyResource !== policy.keyResource) {
-      throw new TokenlessServiceError(
-        "The configured managed KMS adapter is unavailable.",
-        503,
-        "artifact_kms_adapter_unavailable",
-      );
-    }
-    return {
-      commitmentKey: decodeMasterKey(env.TOKENLESS_PSEUDONYM_KEY),
-      keyProvider,
-      keyVersion: keyProvider.keyVersion,
-      store: createVercelBlobStore(),
-    };
-  }
-  const masterKey = decodeMasterKey(env.TOKENLESS_ARTIFACT_MASTER_KEY);
-  const keyVersion = env.TOKENLESS_ARTIFACT_KEY_VERSION?.trim() || "artifact-v1";
+  validateVaultEnvironment(env);
+  const keyProvider = configuredKeyProvider ?? createConfiguredPlatformSecretKeyWrappingProvider(env);
+  configuredKeyProvider = keyProvider;
+  const commitmentKey = decodeMasterKey(env.TOKENLESS_PSEUDONYM_KEY ?? env.TOKENLESS_ARTIFACT_MASTER_KEY);
   return {
-    commitmentKey: masterKey,
-    keyProvider: createLocalKeyWrappingProvider({ key: masterKey, keyVersion }),
-    keyVersion,
-    masterKey,
+    commitmentKey,
+    keyProvider,
+    keyVersion: keyProvider.keyVersion,
     store: createVercelBlobStore(),
   };
 }
@@ -789,9 +773,6 @@ export async function readEncryptedArtifact(input: {
   if (!storageRef) throw new TokenlessServiceError("Artifact not found.", 404, "artifact_not_found");
   const runtime = getRuntime();
   const keyVersion = rowString(row, "key_version")!;
-  if (keyVersion !== runtime.keyVersion) {
-    throw new TokenlessServiceError("The artifact key version is unavailable.", 503, "artifact_key_unavailable");
-  }
   const aad = `${ARTIFACT_KEY_DOMAIN}:${input.workspaceId}:${input.projectId}:${input.artifactId}`;
   const storedKeyDomain = parseKeyDomain(rowString(row, "key_domain"), runtime.keyProvider!);
   const dataKey = await runtime.keyProvider!.unwrap(
@@ -1333,7 +1314,7 @@ export function __setArtifactPrivacyRuntimeForTests(runtime: ArtifactPrivacyRunt
 }
 
 export function registerArtifactManagedKeyProvider(provider: KeyWrappingProvider | null) {
-  managedKeyProvider = provider;
+  configuredKeyProvider = provider;
 }
 
 export const __artifactPrivacyTestUtils = { decodeMasterKey, getRuntime };
