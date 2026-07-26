@@ -3,6 +3,7 @@ import { DELETE as leaveReviewerAccess } from "./reviewer-access/[workspaceId]/r
 import { GET as listReviewerAccess } from "./reviewer-access/route";
 import { POST as previewReviewerInvitation } from "./reviewer-invitations/preview/route";
 import { POST as redeemReviewerInvitation } from "./reviewer-invitations/redeem/route";
+import { PUT as replaceReviewerExpertise } from "./workspaces/[workspaceId]/private-groups/[groupId]/members/[principalAddress]/expertise/route";
 import { DELETE as revokeReviewerInvitation } from "./workspaces/[workspaceId]/reviewer-invitations/[invitationId]/route";
 import {
   POST as createReviewerInvitation,
@@ -15,8 +16,9 @@ import { existsSync, readFileSync } from "node:fs";
 import { afterEach, beforeEach, test } from "node:test";
 import { resolveBetterAuthPrincipal } from "~~/lib/auth/principal";
 import { AUTH_SESSION_COOKIE, createAuthSession } from "~~/lib/auth/session";
-import { __setDatabaseResourcesForTests } from "~~/lib/db";
+import { __setDatabaseResourcesForTests, dbClient, dbPool } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { createPrivateGroup, createPrivateGroupInvitationInTransaction } from "~~/lib/tokenless/privateGroups";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 
 const APP_ORIGIN = "https://tokenless.example.test";
@@ -46,7 +48,7 @@ async function browser(label: string) {
 
 function request(
   path: string,
-  options: { body?: unknown; method?: "GET" | "POST" | "DELETE"; origin?: string; token?: string } = {},
+  options: { body?: unknown; method?: "GET" | "POST" | "PUT" | "DELETE"; origin?: string; token?: string } = {},
 ) {
   const body = options.body === undefined ? undefined : JSON.stringify(options.body);
   return new NextRequest(`${APP_ORIGIN}${path}`, {
@@ -300,4 +302,173 @@ test("reviewer routes enforce browser identity, origin, tenant scope, invitation
     { params: Promise.resolve({ workspaceId, invitationId: secondBody.invitation.invitationId }) },
   );
   assert.equal(revoked.status, 200);
+});
+
+test("reviewer routes redeem setup provenance and let the owner materialize exact expertise", async () => {
+  const owner = await browser("setup-owner");
+  const reviewer = await browser("setup-reviewer");
+  const outsider = await browser("setup-outsider");
+  const { workspaceId } = await createWorkspace({ name: "Setup reviewer routes", ownerAddress: owner.principalId });
+  const group = await createPrivateGroup({
+    accountAddress: owner.principalId,
+    workspaceId,
+    name: "Setup specialist reviewers",
+    purpose: "Exercise canonical route redemption into exact private-group membership.",
+  });
+  const definitionResult = await dbClient.execute({
+    sql: `SELECT definition_id,version,definition_hash
+          FROM tokenless_reviewer_expertise_definitions
+          WHERE slug='code-review:typescript' AND superseded_at IS NULL`,
+  });
+  const definition = {
+    definitionId: String(definitionResult.rows[0]?.definition_id),
+    definitionVersion: Number(definitionResult.rows[0]?.version),
+    definitionHash: String(definitionResult.rows[0]?.definition_hash) as `sha256:${string}`,
+  };
+  const invitationsPath = `/api/account/workspaces/${workspaceId}/reviewer-invitations`;
+  const workspaceContext = { params: Promise.resolve({ workspaceId }) };
+  const issued = await createReviewerInvitation(
+    request(invitationsPath, {
+      body: {
+        intendedAccountAddress: reviewer.principalId,
+        maxPrivateSensitivity: "confidential",
+      },
+      method: "POST",
+      origin: APP_ORIGIN,
+      token: owner.token,
+    }),
+    workspaceContext,
+  );
+  assert.equal(issued.status, 201);
+  const issuedBody = (await issued.json()) as {
+    invitation: { invitationId: string; token: string; expiresAt: string };
+  };
+  const now = new Date();
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    await createPrivateGroupInvitationInTransaction(client, {
+      actorAddress: owner.principalId,
+      invitationId: issuedBody.invitation.invitationId,
+      workspaceId,
+      groupId: group.groupId,
+      intendedAccountAddress: reviewer.principalId,
+      expiresAt: new Date(issuedBody.invitation.expiresAt),
+      expertiseDefinitions: [definition],
+      now,
+    });
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+  await dbClient.execute({
+    sql: `UPDATE tokenless_workspace_agent_setups
+          SET status='completed',current_step='complete',people_decision='invited',private_group_id=?,
+              people_decided_at=?,people_decided_by=?,people_invitation_id=?,
+              finalization_idempotency_key_hash=?,finalization_request_hash=?,
+              completed_at=?,completed_by=?,updated_at=?
+          WHERE workspace_id=?`,
+    args: [
+      group.groupId,
+      now,
+      owner.principalId,
+      issuedBody.invitation.invitationId,
+      `sha256:${"7".repeat(64)}`,
+      `sha256:${"8".repeat(64)}`,
+      now,
+      owner.principalId,
+      now,
+      workspaceId,
+    ],
+  });
+
+  const wrongRecipient = await redeemReviewerInvitation(
+    request("/api/account/reviewer-invitations/redeem", {
+      body: { token: issuedBody.invitation.token },
+      method: "POST",
+      origin: APP_ORIGIN,
+      token: outsider.token,
+    }),
+  );
+  assert.equal(wrongRecipient.status, 403);
+  const redeemed = await redeemReviewerInvitation(
+    request("/api/account/reviewer-invitations/redeem", {
+      body: { token: issuedBody.invitation.token },
+      method: "POST",
+      origin: APP_ORIGIN,
+      token: reviewer.token,
+    }),
+  );
+  assert.equal(redeemed.status, 200);
+  assert.equal(((await redeemed.json()) as { reviewer: { replay: boolean } }).reviewer.replay, false);
+  const membership = await dbClient.execute({
+    sql: `SELECT source_invitation_id,status FROM tokenless_private_group_memberships
+          WHERE group_id=? AND principal_address=?`,
+    args: [group.groupId, reviewer.principalId],
+  });
+  assert.deepEqual(membership.rows[0], {
+    source_invitation_id: issuedBody.invitation.invitationId,
+    status: "active",
+  });
+
+  const expertisePath =
+    `/api/account/workspaces/${workspaceId}/private-groups/${group.groupId}/members/` +
+    `${encodeURIComponent(reviewer.principalId)}/expertise`;
+  const expertise = await replaceReviewerExpertise(
+    request(expertisePath, {
+      body: {
+        definitions: [definition],
+        expiresAt: new Date(now.getTime() + 86_400_000).toISOString(),
+      },
+      method: "PUT",
+      origin: APP_ORIGIN,
+      token: owner.token,
+    }),
+    {
+      params: Promise.resolve({
+        workspaceId,
+        groupId: group.groupId,
+        principalAddress: reviewer.principalId,
+      }),
+    },
+  );
+  assert.equal(expertise.status, 200);
+  assert.equal(
+    ((await expertise.json()) as { expertise: { sourceInvitationId: string } }).expertise.sourceInvitationId,
+    issuedBody.invitation.invitationId,
+  );
+  const attestation = await dbClient.execute({
+    sql: `SELECT status FROM tokenless_private_group_invitation_expertise_attestations
+          WHERE invitation_id=? AND expertise_definition_id=?`,
+    args: [issuedBody.invitation.invitationId, definition.definitionId],
+  });
+  assert.equal(attestation.rows[0]?.status, "materialized");
+
+  await dbClient.execute({
+    sql: `DELETE FROM tokenless_private_group_memberships
+          WHERE group_id=? AND principal_address=?`,
+    args: [group.groupId, reviewer.principalId],
+  });
+  const replay = await redeemReviewerInvitation(
+    request("/api/account/reviewer-invitations/redeem", {
+      body: { token: issuedBody.invitation.token },
+      method: "POST",
+      origin: APP_ORIGIN,
+      token: reviewer.token,
+    }),
+  );
+  assert.equal(replay.status, 200);
+  assert.equal(((await replay.json()) as { reviewer: { replay: boolean } }).reviewer.replay, true);
+  const restored = await dbClient.execute({
+    sql: `SELECT source_invitation_id,status FROM tokenless_private_group_memberships
+          WHERE group_id=? AND principal_address=?`,
+    args: [group.groupId, reviewer.principalId],
+  });
+  assert.deepEqual(restored.rows[0], {
+    source_invitation_id: issuedBody.invitation.invitationId,
+    status: "active",
+  });
 });
