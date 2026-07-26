@@ -75,6 +75,7 @@ function split(): FrozenHybridReviewSplit {
 
 function dependencies(events: string[]): HybridHumanReviewDependencies {
   return {
+    requireCompliance() {},
     requireEligibility: async ({ principalId, reviewerSource }) => {
       const payoutAccount = [A, B, C].find(account => candidate(account).principalId === principalId)!;
       events.push(`preflight:${reviewerSource}:${principalId}`);

@@ -122,6 +122,7 @@ test("hybrid callbacks receive only the canonical public-safe split and candidat
 
   const callbackInputs: unknown[] = [];
   const dependencies: HybridHumanReviewDependencies = {
+    requireCompliance() {},
     requireEligibility: async ({ principalId }) => preflight(principalId),
     prepareInvited: async value => {
       callbackInputs.push(value);
@@ -200,6 +201,7 @@ test("hybrid callbacks receive only the canonical public-safe split and candidat
 test("v3 rejects caller-supplied invited candidates before any callback", async () => {
   let sideEffects = 0;
   const dependencies: HybridHumanReviewDependencies = {
+    requireCompliance() {},
     requireEligibility: async ({ principalId }) => {
       sideEffects += 1;
       return preflight(principalId);
@@ -228,6 +230,7 @@ test("v3 rejects caller-supplied invited candidates before any callback", async 
 test("v3 rejects caller-supplied network candidates before any callback", async () => {
   let sideEffects = 0;
   const dependencies: HybridHumanReviewDependencies = {
+    requireCompliance() {},
     requireEligibility: async ({ principalId }) => {
       sideEffects += 1;
       return preflight(principalId);
@@ -256,6 +259,7 @@ test("v3 rejects caller-supplied network candidates before any callback", async 
 test("hybrid publication still fails closed for a private declaration before any callback", async () => {
   let sideEffects = 0;
   const dependencies: HybridHumanReviewDependencies = {
+    requireCompliance() {},
     requireEligibility: async ({ principalId }) => {
       sideEffects += 1;
       return preflight(principalId);

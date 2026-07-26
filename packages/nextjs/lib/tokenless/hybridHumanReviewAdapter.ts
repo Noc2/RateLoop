@@ -176,6 +176,7 @@ export type HybridHumanReviewOrchestrationDependencies = {
 };
 
 export type HybridHumanReviewDependencies = {
+  requireCompliance(): void;
   requireEligibility(input: {
     principalId: string;
     reviewerSource: "customer_invited" | "rateloop_network";
@@ -735,7 +736,7 @@ export function createHybridHumanReviewAdapter(dependencies: HybridHumanReviewDe
     input: FrozenHybridReviewSplit | HybridHumanReviewRequest,
   ): Promise<HybridHumanReviewResult> {
     const { split, request } = adapterInput(input);
-    requirePaidLaneComplianceApproval("hybrid_public_safe");
+    dependencies.requireCompliance();
     validate(split);
     const exactInvited = exactInvitedBinding(split, request);
     const frozenSplit = canonicalSplit(split, exactInvited.candidates);
@@ -949,6 +950,9 @@ export function createHybridHumanReviewAdapter(dependencies: HybridHumanReviewDe
 }
 
 const DEFAULT_DEPENDENCIES: HybridHumanReviewDependencies = {
+  requireCompliance() {
+    requirePaidLaneComplianceApproval("hybrid_public_safe");
+  },
   requireEligibility: input =>
     requirePaidReviewEligibility(input.principalId, new Date(), {
       reviewerSource: input.reviewerSource,

@@ -468,6 +468,7 @@ test("the adapter persists two child rounds end to end and retry cannot duplicat
     };
   };
   const adapter = createHybridHumanReviewAdapter({
+    requireCompliance() {},
     clock: () => NOW,
     requireEligibility: async ({ principalId, reviewerSource }) => {
       const payoutAccount = reviewerSource === "customer_invited" ? INVITED : NETWORK;
