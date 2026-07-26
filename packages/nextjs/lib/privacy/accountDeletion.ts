@@ -71,6 +71,7 @@ type RaterErasureEvidence = {
     voucherAssuranceSnapshots: number;
     networkSettlementCommitments: number;
     sanctionsMatches: number;
+    dac7Records: number;
   };
   retainedPaidVouchers: number;
   networkCopiesErasure: {
@@ -1121,6 +1122,7 @@ async function eraseRaterIdentity(
       voucherAssuranceSnapshots: 0,
       networkSettlementCommitments: 0,
       sanctionsMatches: 0,
+      dac7Records: 0,
     },
     retainedPaidVouchers: 0,
     networkCopiesErasure: {
@@ -1245,7 +1247,9 @@ async function eraseRaterIdentity(
        WHERE assignment.rater_id=$1)
          AS retained_network_settlement_commitments,
        (SELECT COUNT(*) FROM tokenless_sanctions_blocks WHERE rater_id=$1)
-         AS retained_sanctions_matches`,
+         AS retained_sanctions_matches,
+       (SELECT COUNT(*) FROM tokenless_dac7_records WHERE rater_id=$1)
+         AS retained_dac7_records`,
     [raterId, principalId],
   );
   const row = remaining.rows[0] as Row | undefined;
@@ -1285,6 +1289,7 @@ async function eraseRaterIdentity(
       voucherAssuranceSnapshots: rowNumber(row, "retained_voucher_assurance_snapshots"),
       networkSettlementCommitments: rowNumber(row, "retained_network_settlement_commitments"),
       sanctionsMatches: rowNumber(row, "retained_sanctions_matches"),
+      dac7Records: rowNumber(row, "retained_dac7_records"),
     },
     retainedPaidVouchers: rowNumber(row, "retained_paid_vouchers"),
     networkCopiesErasure,

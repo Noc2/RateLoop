@@ -129,11 +129,14 @@ function isLegalEligibilityCurrent(row: Row, now: Date) {
   const verifiedResidence = text(row, "verified_residence_country");
   const dac7Status = text(row, "dac7_status");
   const taxVaultComplete =
-    typeof row.tax_vault_ciphertext === "string" &&
-    row.tax_vault_ciphertext.length > 0 &&
-    typeof row.tax_vault_key_version === "string" &&
-    row.tax_vault_key_version.length > 0 &&
-    text(row, "tax_vault_key_domain") === "tax_records";
+    typeof row.dac7_record_ciphertext === "string" &&
+    row.dac7_record_ciphertext.length > 0 &&
+    typeof row.dac7_record_key_version === "string" &&
+    row.dac7_record_key_version.length > 0 &&
+    text(row, "dac7_record_key_domain") === "tax_records" &&
+    text(row, "dac7_retention_basis") === "psttg_dac7_ao_147" &&
+    date(row, "dac7_retained_until") !== null &&
+    date(row, "dac7_retained_until")! > now;
   return (
     text(row, "legal_eligibility_status") === "eligible" &&
     declaredResidence !== null &&
@@ -243,8 +246,12 @@ export async function requirePaidReviewEligibilityInTransaction(
             p.nullifier_key_version, p.nullifier_key_domain, p.updated_at AS profile_updated_at,
             l.minimum_age_verified, l.age_evidence_verified_at, l.age_evidence_expires_at,
             l.verified_residence_country, l.declared_residence_country, l.tax_residence_country,
-            l.residence_tax_status, l.tax_profile_status, l.dac7_status,
-            l.tax_vault_ciphertext, l.tax_vault_key_version, l.tax_vault_key_domain,
+            l.residence_tax_status, l.tax_profile_status, l.dac7_status,l.dac7_record_id,
+            dac7.tax_vault_ciphertext AS dac7_record_ciphertext,
+            dac7.tax_vault_key_version AS dac7_record_key_version,
+            dac7.tax_vault_key_domain AS dac7_record_key_domain,
+            dac7.retention_basis AS dac7_retention_basis,
+            dac7.retained_until AS dac7_retained_until,
             l.sanctions_consent_at, l.sanctions_status, l.sanctions_reference_hash,
             l.sanctions_screened_at, l.sanctions_expires_at,
             l.eligibility_status AS legal_eligibility_status, l.updated_at AS legal_updated_at,
@@ -268,6 +275,7 @@ export async function requirePaidReviewEligibilityInTransaction(
        AND l.rater_id=scope.rater_id
        AND l.reviewer_source=scope.reviewer_source
        AND (($3::text IS NULL AND l.workspace_id IS NULL) OR l.workspace_id=$3)
+     LEFT JOIN tokenless_dac7_records dac7 ON dac7.record_id=l.dac7_record_id
      WHERE p.principal_id = $1 LIMIT 1 FOR UPDATE`,
     [principalId, requirement.reviewerSource, requirement.workspaceId ?? null],
   );

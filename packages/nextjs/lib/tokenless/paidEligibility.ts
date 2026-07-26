@@ -109,8 +109,7 @@ export type EligibilitySubmission = {
     streetAddress: string;
     city: string;
     postalCode: string;
-    tin?: string;
-    noTinReason?: string;
+    taxIdentification: { kind: "tin"; value: string } | { kind: "place_of_birth"; city: string; country: string };
   };
 };
 
@@ -773,15 +772,79 @@ function validateDac7(value: EligibilitySubmission["dac7"]) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value.birthDate)) {
     throw new TokenlessServiceError("DAC7 birth date is required.", 400, "dac7_incomplete", false, "birthDate");
   }
-  if (!value.tin?.trim() && !value.noTinReason?.trim()) {
+  if (value.taxIdentification?.kind === "tin") {
+    if (
+      typeof value.taxIdentification.value !== "string" ||
+      !value.taxIdentification.value.trim() ||
+      value.taxIdentification.value.length > 120
+    ) {
+      throw new TokenlessServiceError("Tax identification number is incomplete.", 400, "dac7_incomplete", false, "tin");
+    }
+  } else if (value.taxIdentification?.kind === "place_of_birth") {
+    if (
+      typeof value.taxIdentification.city !== "string" ||
+      !value.taxIdentification.city.trim() ||
+      value.taxIdentification.city.length > 300 ||
+      typeof value.taxIdentification.country !== "string" ||
+      !COUNTRY.test(value.taxIdentification.country.toUpperCase())
+    ) {
+      throw new TokenlessServiceError(
+        "Place of birth is incomplete.",
+        400,
+        "dac7_incomplete",
+        false,
+        "placeOfBirthCity",
+      );
+    }
+  } else {
     throw new TokenlessServiceError(
-      "Enter a tax identification number or explain why one is unavailable.",
+      "Enter a tax identification number or a structured place of birth.",
       400,
       "dac7_incomplete",
       false,
       "tin",
     );
   }
+}
+
+function dac7RetentionUntil(collectedAt: Date) {
+  return new Date(Date.UTC(collectedAt.getUTCFullYear() + 11, 0, 1));
+}
+
+async function persistDac7Record(
+  client: Pick<PoolClient, "query">,
+  input: {
+    raterId: string;
+    reviewerSource: "customer_invited" | "rateloop_network";
+    scopeId: string;
+    workspaceId: string | null;
+    vault: ReturnType<typeof encryptVaultValue> | null;
+    now: Date;
+  },
+) {
+  if (!input.vault) return null;
+  const recordId = `dac7_${randomUUID().replaceAll("-", "")}`;
+  await client.query(
+    `INSERT INTO tokenless_dac7_records
+     (record_id,rater_id,source_scope_reference,reviewer_source,workspace_reference,
+      reporting_year,dataset_schema_version,tax_vault_ciphertext,tax_vault_key_version,
+      tax_vault_key_domain,retention_basis,collected_at,retained_until,created_at)
+     VALUES ($1,$2,$3,$4,$5,$6,2,$7,$8,$9,'psttg_dac7_ao_147',$10,$11,$10)`,
+    [
+      recordId,
+      input.raterId,
+      input.scopeId,
+      input.reviewerSource,
+      input.workspaceId,
+      input.now.getUTCFullYear(),
+      input.vault.ciphertext,
+      input.vault.keyVersion,
+      input.vault.keyDomain,
+      input.now,
+      dac7RetentionUntil(input.now),
+    ],
+  );
+  return recordId;
 }
 
 function validateScreeningSubject(submission: EligibilitySubmission, now: Date) {
@@ -848,7 +911,7 @@ async function submitInvitedPaidEligibility(input: {
       "birthDate",
     );
   }
-  const dac7Required = requiresDac7(input.taxCountry);
+  const dac7Required = requiresDac7(input.declaredResidenceCountry) || requiresDac7(input.taxCountry);
   if (dac7Required) validateDac7(input.submission.dac7);
   const dac7Vault =
     dac7Required && input.submission.dac7
@@ -1009,25 +1072,33 @@ async function submitInvitedPaidEligibility(input: {
          blocked_reason='sanctions_pending',valid_until=NULL,updated_at=EXCLUDED.updated_at`,
       [scopeId, raterId, workspaceId, assertionId, qualificationId, screeningId, input.now],
     );
+    const dac7RecordId = await persistDac7Record(client, {
+      raterId,
+      reviewerSource: "customer_invited",
+      scopeId,
+      workspaceId,
+      vault: dac7Vault,
+      now: input.now,
+    });
     await client.query(
       `INSERT INTO tokenless_legal_eligibility
        (scope_id,rater_id,reviewer_source,workspace_id,sanctions_screening_id,
         minimum_age_verified,age_evidence_verified_at,age_evidence_expires_at,
         verified_residence_country,declared_residence_country,tax_residence_country,residence_tax_status,
-        tax_profile_status,dac7_status,tax_vault_ciphertext,tax_vault_key_version,tax_vault_key_domain,
+        tax_profile_status,dac7_status,dac7_record_id,tax_vault_ciphertext,tax_vault_key_version,tax_vault_key_domain,
         sanctions_consent_at,sanctions_status,sanctions_reference_hash,sanctions_screened_at,
         sanctions_expires_at,eligibility_status,blocked_reason,created_at,updated_at)
-       VALUES ($1,$2,'customer_invited',$3,$4,18,$5,$6,NULL,$7,$8,$9,'complete',$10,$11,$12,$13,
-               $5,'pending',$14,$5,$15,'review','sanctions_pending',$5,$5)
+       VALUES ($1,$2,'customer_invited',$3,$4,18,$5,$6,NULL,$7,$8,$9,'complete',$10,$11,NULL,NULL,NULL,
+               $5,'pending',$12,$5,$13,'review','sanctions_pending',$5,$5)
        ON CONFLICT (scope_id) DO UPDATE SET
          sanctions_screening_id=EXCLUDED.sanctions_screening_id,
          minimum_age_verified=18,age_evidence_verified_at=EXCLUDED.age_evidence_verified_at,
          age_evidence_expires_at=EXCLUDED.age_evidence_expires_at,verified_residence_country=NULL,
          declared_residence_country=EXCLUDED.declared_residence_country,
          tax_residence_country=EXCLUDED.tax_residence_country,residence_tax_status=EXCLUDED.residence_tax_status,
-         tax_profile_status='complete',dac7_status=EXCLUDED.dac7_status,
-         tax_vault_ciphertext=EXCLUDED.tax_vault_ciphertext,tax_vault_key_version=EXCLUDED.tax_vault_key_version,
-         tax_vault_key_domain=EXCLUDED.tax_vault_key_domain,sanctions_consent_at=EXCLUDED.sanctions_consent_at,
+         tax_profile_status='complete',dac7_status=EXCLUDED.dac7_status,dac7_record_id=EXCLUDED.dac7_record_id,
+         tax_vault_ciphertext=NULL,tax_vault_key_version=NULL,
+         tax_vault_key_domain=NULL,sanctions_consent_at=EXCLUDED.sanctions_consent_at,
          sanctions_status='pending',sanctions_reference_hash=EXCLUDED.sanctions_reference_hash,
          sanctions_screened_at=EXCLUDED.sanctions_screened_at,sanctions_expires_at=EXCLUDED.sanctions_expires_at,
          eligibility_status='review',blocked_reason='sanctions_pending',updated_at=EXCLUDED.updated_at`,
@@ -1042,9 +1113,7 @@ async function submitInvitedPaidEligibility(input: {
         input.taxCountry,
         residenceTaxStatus,
         dac7Required ? "complete" : "not_required",
-        dac7Vault?.ciphertext ?? null,
-        dac7Vault?.keyVersion ?? null,
-        dac7Vault?.keyDomain ?? null,
+        dac7RecordId,
         hash(screeningId),
         new Date(input.now.getTime() + 30 * 86_400_000),
       ],
@@ -1166,7 +1235,7 @@ export async function submitPaidEligibility(input: {
       "provider_account_mismatch",
     );
   }
-  const dac7Required = requiresDac7(taxCountry);
+  const dac7Required = requiresDac7(declaredResidenceCountry) || requiresDac7(taxCountry);
   if (dac7Required) validateDac7(input.submission.dac7);
   const dac7Vault =
     dac7Required && input.submission.dac7
@@ -1437,17 +1506,25 @@ export async function submitPaidEligibility(input: {
          blocked_reason=EXCLUDED.blocked_reason,valid_until=NULL,updated_at=EXCLUDED.updated_at`,
       [scopeId, raterId, persistedAssuranceAssertionId, screeningId, state.status, state.reason, now],
     );
+    const dac7RecordId = await persistDac7Record(client, {
+      raterId,
+      reviewerSource: "rateloop_network",
+      scopeId,
+      workspaceId: null,
+      vault: dac7Vault,
+      now,
+    });
     await client.query(
       `INSERT INTO tokenless_legal_eligibility
        (scope_id,rater_id,reviewer_source,workspace_id,sanctions_screening_id,
         minimum_age_verified, age_evidence_verified_at, age_evidence_expires_at,
         verified_residence_country, declared_residence_country, tax_residence_country,
-        residence_tax_status, tax_profile_status, dac7_status, tax_vault_ciphertext,
+        residence_tax_status, tax_profile_status, dac7_status, dac7_record_id, tax_vault_ciphertext,
         tax_vault_key_version, tax_vault_key_domain, sanctions_consent_at, sanctions_status,
         sanctions_reference_hash, sanctions_screened_at, sanctions_expires_at,
         eligibility_status, blocked_reason, created_at, updated_at)
-       VALUES ($1,$2,'rateloop_network',NULL,$3,$4,$5,$6,$7,$8,$9,$10,'complete',$11,$12,$13,$14,
-               $15,$16,$17,$18,$19,$20,$21,$22,$22)
+       VALUES ($1,$2,'rateloop_network',NULL,$3,$4,$5,$6,$7,$8,$9,$10,'complete',$11,$12,NULL,NULL,NULL,
+               $13,$14,$15,$16,$17,$18,$19,$20,$20)
        ON CONFLICT (scope_id) DO UPDATE SET
         sanctions_screening_id = EXCLUDED.sanctions_screening_id,
         minimum_age_verified = EXCLUDED.minimum_age_verified,
@@ -1458,9 +1535,10 @@ export async function submitPaidEligibility(input: {
         tax_residence_country = EXCLUDED.tax_residence_country,
         residence_tax_status = EXCLUDED.residence_tax_status,
         tax_profile_status = EXCLUDED.tax_profile_status, dac7_status = EXCLUDED.dac7_status,
-        tax_vault_ciphertext = EXCLUDED.tax_vault_ciphertext,
-        tax_vault_key_version = EXCLUDED.tax_vault_key_version,
-        tax_vault_key_domain = EXCLUDED.tax_vault_key_domain,
+        dac7_record_id = EXCLUDED.dac7_record_id,
+        tax_vault_ciphertext = NULL,
+        tax_vault_key_version = NULL,
+        tax_vault_key_domain = NULL,
         sanctions_consent_at = EXCLUDED.sanctions_consent_at,
         sanctions_status = EXCLUDED.sanctions_status,
         sanctions_reference_hash = EXCLUDED.sanctions_reference_hash,
@@ -1480,9 +1558,7 @@ export async function submitPaidEligibility(input: {
         taxCountry,
         state.residenceTaxStatus,
         dac7Required ? "complete" : "not_required",
-        dac7Vault?.ciphertext ?? null,
-        dac7Vault?.keyVersion ?? null,
-        dac7Vault?.keyDomain ?? null,
+        dac7RecordId,
         now,
         "pending",
         hash(screeningId),

@@ -22,6 +22,23 @@ export async function purgeExpiredPrivacyOperations(now = new Date()) {
     sql: "DELETE FROM tokenless_sanctions_blocks WHERE retained_until <= ?",
     args: [now],
   });
+  const expiredDac7Eligibility = await dbClient.execute({
+    sql: `UPDATE tokenless_legal_eligibility
+          SET dac7_status='expired',dac7_record_id=NULL,eligibility_status='expired',
+              blocked_reason='dac7_record_expired',updated_at=?
+          WHERE dac7_record_id IN (
+            SELECT record_id FROM tokenless_dac7_records WHERE retained_until<=?
+          )`,
+    args: [now, now],
+  });
+  const expiredDac7Records = await dbClient.execute({
+    sql: "DELETE FROM tokenless_dac7_records WHERE retained_until <= ?",
+    args: [now],
+  });
+  const expiredEligibilityDeclines = await dbClient.execute({
+    sql: "DELETE FROM tokenless_paid_eligibility_decisions WHERE delete_after <= ?",
+    args: [now],
+  });
   const [
     subjectExports,
     verifications,
@@ -95,6 +112,9 @@ export async function purgeExpiredPrivacyOperations(now = new Date()) {
     staleEligibilityScopes: affected(staleScopes),
     staleLegalEligibility: affected(staleLegalEligibility),
     expiredSanctionsBlocks: affected(expiredSanctionsBlocks),
+    expiredDac7Eligibility: affected(expiredDac7Eligibility),
+    expiredDac7Records: affected(expiredDac7Records),
+    expiredEligibilityDeclines: affected(expiredEligibilityDeclines),
     subjectExports: affected(subjectExports),
     verifications: affected(verifications),
   };

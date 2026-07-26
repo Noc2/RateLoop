@@ -124,7 +124,7 @@ function submission(payoutAccount = ACCOUNT) {
       streetAddress: "Example Street 1",
       city: "Berlin",
       postalCode: "10115",
-      tin: "DE-PRIVATE-TIN",
+      taxIdentification: { kind: "tin" as const, value: "DE-PRIVATE-TIN" },
     },
   };
 }
@@ -329,9 +329,11 @@ test("paid-task unlock persists every gate while vaulting DAC7 and nullifier mat
 
   const rows = await dbClient.execute(
     `SELECT p.nullifier_seed_ciphertext, p.nullifier_key_domain,
-            l.tax_vault_ciphertext, l.tax_vault_key_domain, a.provider_evidence_key_domain
+            d.tax_vault_ciphertext, d.tax_vault_key_domain,d.retention_basis,d.retained_until,
+            a.provider_evidence_key_domain
      FROM tokenless_rater_profiles p
      JOIN tokenless_legal_eligibility l ON l.rater_id = p.rater_id
+     JOIN tokenless_dac7_records d ON d.record_id=l.dac7_record_id
      JOIN tokenless_assurance_assertions a ON a.rater_id = p.rater_id`,
   );
   const seedCiphertext = String(rows.rows[0]?.nullifier_seed_ciphertext);
@@ -341,6 +343,8 @@ test("paid-task unlock persists every gate while vaulting DAC7 and nullifier mat
   assert.doesNotMatch(dac7Ciphertext, /Ada Rater|DE-PRIVATE-TIN/);
   assert.equal(rows.rows[0]?.nullifier_key_domain, "vote_mapping");
   assert.equal(rows.rows[0]?.tax_vault_key_domain, "tax_records");
+  assert.equal(rows.rows[0]?.retention_basis, "psttg_dac7_ao_147");
+  assert.equal(new Date(String(rows.rows[0]?.retained_until)).toISOString(), "2037-01-01T00:00:00.000Z");
   assert.equal(rows.rows[0]?.provider_evidence_key_domain, "provider_evidence");
 
   await unlockPaidTasks();
@@ -359,6 +363,49 @@ test("paid-task unlock persists every gate while vaulting DAC7 and nullifier mat
   const durableEnrollment = await getPaidEligibility(PRINCIPAL, NOW);
   assert.ok(durableEnrollment.capabilities?.includes("unique_human"));
   assert.deepEqual(durableEnrollment.assuranceProviders, ["world:poh"]);
+});
+
+test("DAC7 accepts a structured place of birth instead of free-text no-TIN reasons", async () => {
+  const pending = await submitPaidEligibility({
+    principalId: PRINCIPAL,
+    payoutAccount: ACCOUNT,
+    submission: {
+      ...submission(),
+      dac7: {
+        ...submission().dac7,
+        taxIdentification: {
+          kind: "place_of_birth",
+          city: "Lovelace",
+          country: "GB",
+        },
+      },
+    },
+    now: NOW,
+  });
+  assert.equal(pending.status, "review");
+  const record = await dbClient.execute(
+    "SELECT dataset_schema_version,tax_vault_ciphertext FROM tokenless_dac7_records",
+  );
+  assert.equal(record.rows[0]?.dataset_schema_version, 2);
+  assert.doesNotMatch(String(record.rows[0]?.tax_vault_ciphertext), /Lovelace|GB/u);
+
+  await assert.rejects(
+    () =>
+      submitPaidEligibility({
+        principalId: PRINCIPAL,
+        payoutAccount: ACCOUNT,
+        submission: {
+          ...submission(),
+          dac7: {
+            ...submission().dac7,
+            taxIdentification: undefined,
+            noTinReason: "not issued",
+          } as never,
+        },
+        now: new Date(NOW.getTime() + 1_000),
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "dac7_incomplete",
+  );
 });
 
 test("invited paid eligibility uses the workspace adulthood warranty without calling an identity vendor", async () => {

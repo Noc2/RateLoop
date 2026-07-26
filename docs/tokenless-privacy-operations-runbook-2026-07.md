@@ -71,6 +71,13 @@ metadata.
   ciphertext. `TOKENLESS_SANCTIONS_MATCH_RETENTION_DAYS` may be 365–3650 and defaults to 1825. Change the period only
   against the documented legal-basis and retention review; scheduled maintenance removes the deny record at its
   deadline before the now-orphaned encrypted screening can be purged.
+- A completed DAC7 declaration is copied into a versioned statutory record under the `tax_records` key domain. The
+  operational eligibility row retains only that record reference. The record is restricted to reporting and
+  compliance operations until 1 January following the tenth full calendar year after collection, so account erasure
+  removes the active eligibility link but preserves the encrypted statutory record against the receipt-tombstoned
+  rater identifier. Scheduled maintenance expires any remaining active reference before deleting the record at its
+  `retained_until` deadline. Never shorten this schedule or decrypt/export a retained record without the documented
+  PStTG/AO legal-basis review.
 - Subject exports contain the authenticated principal&apos;s account, membership, reviewer-access, eligibility-status,
   crowd-forecast integrity counters and findings, and request-lifecycle categories. They do not contain another
   reviewer&apos;s pair identity, vault ciphertext, encryption material, session credentials, or raw provider evidence.

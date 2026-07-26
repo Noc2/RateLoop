@@ -116,6 +116,16 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
     return null;
   }
   if (
+    file === "0154_dac7_statutory_records.sql" &&
+    (/^INSERT INTO "tokenless_dac7_records"/u.test(statement) ||
+      /^UPDATE "tokenless_legal_eligibility"/u.test(statement))
+  ) {
+    // Production migrates any existing encrypted DAC7 payloads into their
+    // statutory-retention rows. Memory databases start empty, and pg-mem does
+    // not implement the date-construction functions used by that backfill.
+    return null;
+  }
+  if (
     file === "0130_workspace_reviewer_roster.sql" &&
     (/\bDO \$\$/u.test(statement) || /^WITH "legacy_/u.test(statement))
   ) {
