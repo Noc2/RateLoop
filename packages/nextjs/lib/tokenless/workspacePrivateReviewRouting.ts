@@ -374,37 +374,6 @@ async function ensureManagedProject(
   return projectId;
 }
 
-async function requireManagedProject(
-  client: PoolClient,
-  input: { projectId: string; workspaceId: string; sensitivity: string },
-) {
-  const stored = await client.query(
-    `SELECT workspace_id,name,description,data_classification,visibility,material_kind,private_sensitivity,
-            retention_days,status
-     FROM tokenless_assurance_projects WHERE project_id=$1 LIMIT 1 FOR UPDATE`,
-    [input.projectId],
-  );
-  const row = stored.rows[0] as Row | undefined;
-  if (
-    !row ||
-    text(row, "workspace_id") !== input.workspaceId ||
-    text(row, "name") !== MANAGED_PROJECT_NAME ||
-    text(row, "description") !== MANAGED_PROJECT_DESCRIPTION ||
-    text(row, "data_classification") !== input.sensitivity ||
-    text(row, "visibility") !== "private" ||
-    row.material_kind !== null ||
-    text(row, "private_sensitivity") !== input.sensitivity ||
-    integer(row, "retention_days") !== MANAGED_RETENTION_DAYS ||
-    text(row, "status") !== "active"
-  ) {
-    throw new TokenlessServiceError(
-      "The exact managed private review project is unavailable.",
-      409,
-      "private_review_project_conflict",
-    );
-  }
-}
-
 async function ensureManagedCohort(
   client: PoolClient,
   input: {
@@ -461,44 +430,6 @@ async function ensureManagedCohort(
     );
   }
   return { cohortId, activeReservations: integer(row, "active_reservations") };
-}
-
-async function requireManagedCohort(
-  client: PoolClient,
-  input: {
-    cohortId: string;
-    projectId: string;
-    privateGroupId: string;
-    panelSize: number;
-    qualificationRules: unknown[];
-  },
-) {
-  const qualificationRulesJson = stableJson(input.qualificationRules);
-  const stored = await client.query(
-    `SELECT project_id,name,source,selection,capacity,active_reservations,private_group_id,
-            qualification_rules_json,status
-     FROM tokenless_assurance_cohorts WHERE project_id=$1 AND cohort_id=$2 LIMIT 1 FOR UPDATE`,
-    [input.projectId, input.cohortId],
-  );
-  const row = stored.rows[0] as Row | undefined;
-  if (
-    !row ||
-    text(row, "project_id") !== input.projectId ||
-    text(row, "name") !== MANAGED_COHORT_NAME ||
-    text(row, "source") !== "customer_invited" ||
-    text(row, "selection") !== "customer_named" ||
-    integer(row, "capacity") !== input.panelSize ||
-    text(row, "private_group_id") !== input.privateGroupId ||
-    stableJson(json(row.qualification_rules_json, "cohort qualification rules")) !== qualificationRulesJson ||
-    text(row, "status") !== "active"
-  ) {
-    throw new TokenlessServiceError(
-      "The exact managed private reviewer cohort is unavailable.",
-      409,
-      "private_review_cohort_conflict",
-    );
-  }
-  return { cohortId: input.cohortId, activeReservations: integer(row, "active_reservations") };
 }
 
 async function reconcilePriorManagedRouting(

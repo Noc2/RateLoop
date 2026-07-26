@@ -270,7 +270,8 @@ function exactInvitedBinding(
   }
   const foundation = binding.foundation;
   const frozen = freezeAdmissionPolicy(binding.admissionPolicy);
-  const { bindingHash: _bindingHash, ...hashInput } = binding;
+  const { bindingHash, ...hashInput } = binding;
+  void bindingHash;
   if (
     binding.schemaVersion !== "rateloop.hybrid-invited-private-binding.v1" ||
     binding.bindingHash !== hashHybridInvitedPrivateBinding(hashInput) ||
@@ -717,12 +718,15 @@ function adapterInput(input: FrozenHybridReviewSplit | HybridHumanReviewRequest)
 function publicChildRequest(
   request: HybridHumanReviewRequest,
 ): Omit<HybridHumanReviewRequest, "split" | "invitedBinding"> {
-  const { split: _split, invitedBinding: _invitedBinding, ...publicRequest } = request;
+  const { split, invitedBinding, ...publicRequest } = request;
+  void split;
+  void invitedBinding;
   return publicRequest;
 }
 
 function privateChildRequest(request: HybridHumanReviewRequest): Omit<HybridHumanReviewRequest, "split"> {
-  const { split: _split, ...privateRequest } = request;
+  const { split, ...privateRequest } = request;
+  void split;
   return privateRequest;
 }
 

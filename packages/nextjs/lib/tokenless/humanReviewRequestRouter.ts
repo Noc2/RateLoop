@@ -41,11 +41,7 @@ import {
   hashHybridInvitedPrivateBinding,
   requestHybridHumanReview,
 } from "~~/lib/tokenless/hybridHumanReviewAdapter";
-import {
-  deriveHybridCohortEconomics,
-  hashHybridCohortEconomics,
-  hashHybridCohortExpertise,
-} from "~~/lib/tokenless/hybridReviewChildBindings";
+import { deriveHybridCohortEconomics } from "~~/lib/tokenless/hybridReviewChildBindings";
 import {
   type PaidReviewerBinding,
   requirePaidReviewEligibility,
@@ -1079,7 +1075,8 @@ function childHybridAdmissionPolicy(
     },
   };
   if (reviewerSource === "customer_invited") {
-    const { integrity: _integrity, ...invited } = common;
+    const { integrity, ...invited } = common;
+    void integrity;
     return freezeAdmissionPolicy(invited).policy;
   }
   return freezeAdmissionPolicy(common).policy;

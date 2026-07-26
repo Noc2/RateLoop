@@ -1,10 +1,10 @@
 import { manifestDigest, tokenlessEuDeploymentManifest } from "../../../scripts/validate-tokenless-eu-deployment.mjs";
+import paidLaneActivation from "../lib/tokenless/paidLaneActivation.ts";
 import {
   DEFAULT_HOSTED_RELEASE_CAPABILITIES,
   REQUIRED_TOKENLESS_PRODUCTION_VARIABLES,
   validateTokenlessProductionReadiness,
 } from "./check-tokenless-production-readiness.mjs";
-import paidLaneActivation from "../lib/tokenless/paidLaneActivation.ts";
 import { deriveHostedDatabaseIdentity } from "./migrate-hosted-database.mjs";
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
@@ -358,8 +358,7 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
     WORLD_ID_RP_ID: "rp_production123",
     WORLD_ID_ENVIRONMENT: "production",
   };
-  activated.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE =
-    derivePaidLaneActivationReference(activated);
+  activated.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE = derivePaidLaneActivationReference(activated);
   assert.deepEqual(validateTokenlessProductionReadiness({ env: activated, activeRegistry: {} }), []);
   assert.match(
     validateTokenlessProductionReadiness({

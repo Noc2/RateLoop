@@ -744,9 +744,7 @@ export function validateTokenlessProductionReadiness({
   if (value(env, "TOKENLESS_NETWORK_PANELS_ENABLED") !== "true") {
     errors.push("TOKENLESS_NETWORK_PANELS_ENABLED must be true for the production public network.");
   }
-  errors.push(
-    ...validatePaidLaneActivation("hybrid_public_safe", env).map(error => `Paid-lane activation: ${error}`),
-  );
+  errors.push(...validatePaidLaneActivation("hybrid_public_safe", env).map(error => `Paid-lane activation: ${error}`));
   if (!/^app_[A-Za-z0-9_-]{8,128}$/u.test(value(env, "WORLD_ID_APP_ID"))) {
     errors.push("WORLD_ID_APP_ID is invalid.");
   }
