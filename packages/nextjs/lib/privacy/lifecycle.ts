@@ -5,6 +5,7 @@ import "server-only";
 import { dbClient, dbPool } from "~~/lib/db";
 import { verifySecurityAuditChain } from "~~/lib/privacy/audit";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
+import { recordPrivacyWorkerFailure } from "~~/lib/privacy/privacyWorkerFailures";
 import { listPrincipalForecastIntegrityInTransaction } from "~~/lib/tokenless/crowdForecastPersistence";
 import { authorizeProjectAccount } from "~~/lib/tokenless/projectAccess";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -739,10 +740,13 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
 export async function processSubjectRequestQueue(now = new Date(), requestedLimit = 25) {
   const limit = Math.min(Math.max(Math.trunc(requestedLimit), 1), 100);
   const queued = await dbPool.query(
-    `SELECT request_id FROM tokenless_subject_requests
-     WHERE request_type IN ('access','export') AND status='received'
-     ORDER BY received_at,request_id LIMIT $1`,
-    [limit],
+    `SELECT request.request_id FROM tokenless_subject_requests request
+     LEFT JOIN tokenless_privacy_worker_failures failure
+       ON failure.worker_kind='subject_request' AND failure.work_item_key=request.request_id
+     WHERE request.request_type IN ('access','export') AND request.status='received'
+       AND (failure.failure_id IS NULL OR (failure.status='retrying' AND failure.next_retry_at<=$1))
+     ORDER BY request.received_at,request.request_id LIMIT $2`,
+    [now, limit],
   );
   let completed = 0;
   for (const queuedRow of queued.rows) {
@@ -802,11 +806,23 @@ export async function processSubjectRequestQueue(now = new Date(), requestedLimi
           now,
         ],
       );
+      await client.query(
+        `UPDATE tokenless_privacy_worker_failures
+         SET status='resolved',next_retry_at=NULL,operator_alert_state='resolved',
+             resolved_at=$1,updated_at=$1
+         WHERE worker_kind='subject_request' AND work_item_key=$2 AND status <> 'resolved'`,
+        [now, requestId],
+      );
       await client.query("COMMIT");
       completed += 1;
     } catch (error) {
       await client.query("ROLLBACK");
-      throw error;
+      await recordPrivacyWorkerFailure({
+        error,
+        now,
+        workerKind: "subject_request",
+        workItemKey: requestId,
+      });
     } finally {
       client.release();
     }

@@ -981,6 +981,13 @@
       "when": 1785128400000,
       "tag": "0140_network_assignment_settlement",
       "breakpoints": true
+    },
+    {
+      "idx": 141,
+      "version": "7",
+      "when": 1785132000000,
+      "tag": "0141_privacy_worker_failure_isolation",
+      "breakpoints": true
     }
   ]
 }

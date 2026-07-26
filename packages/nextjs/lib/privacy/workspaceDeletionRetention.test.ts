@@ -77,6 +77,20 @@ async function seedDueWorkspaceRetention() {
 
 test("scheduled category expiry anonymizes due workspace billing and audit records", async () => {
   const fixture = await seedDueWorkspaceRetention();
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_deletion_job_categories
+          (job_id,category,disposition,status,basis_code,retention_deadline,
+           evidence_digest,created_at,started_at,completed_at)
+          VALUES (?,'aaa_poison','retain','retained','settlement_and_audit',?,?,?, ?,?)`,
+    args: [
+      fixture.jobId,
+      new Date(NOW.getTime() - 2),
+      "d".repeat(64),
+      new Date("2026-07-26T10:00:00.000Z"),
+      new Date("2026-07-26T10:00:00.000Z"),
+      new Date("2026-07-26T10:00:00.000Z"),
+    ],
+  });
   assert.deepEqual(await expireWorkspaceDeletionRetentionCategories(NOW), {
     completed: 3,
     deferredByHold: 0,
@@ -84,7 +98,8 @@ test("scheduled category expiry anonymizes due workspace billing and audit recor
   });
   const categories = await dbClient.execute({
     sql: `SELECT category,disposition,status,basis_code,retention_deadline
-          FROM tokenless_deletion_job_categories WHERE job_id=? ORDER BY category`,
+          FROM tokenless_deletion_job_categories
+          WHERE job_id=? AND category <> 'aaa_poison' ORDER BY category`,
     args: [fixture.jobId],
   });
   assert.ok(
@@ -124,6 +139,17 @@ test("scheduled category expiry anonymizes due workspace billing and audit recor
   assert.equal(Number(audit.rows[0]?.count), 0);
   assert.match(String(request.rows[0]?.principal_id), /^deleted-workspace-subject:/u);
   assert.equal(job.rows[0]?.requested_by, "system:retention_expiry");
+  const failure = await dbClient.execute({
+    sql: `SELECT status,attempt_count,last_error_code,last_error_digest,operator_alert_state,next_retry_at
+          FROM tokenless_privacy_worker_failures
+          WHERE worker_kind='workspace_retention' AND work_item_key=?`,
+    args: [`${fixture.jobId}:aaa_poison`],
+  });
+  assert.equal(failure.rows[0]?.status, "retrying");
+  assert.equal(Number(failure.rows[0]?.attempt_count), 1);
+  assert.equal(failure.rows[0]?.last_error_code, "internal_error");
+  assert.match(String(failure.rows[0]?.last_error_digest), /^sha256:[0-9a-f]{64}$/u);
+  assert.equal(failure.rows[0]?.operator_alert_state, "pending");
 });
 
 test("active legal holds defer due categories without claiming expiry", async () => {

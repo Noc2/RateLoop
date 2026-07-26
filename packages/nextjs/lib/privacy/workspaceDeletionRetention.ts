@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
 import { dbPool } from "~~/lib/db";
+import { recordPrivacyWorkerFailure, resolvePrivacyWorkerFailure } from "~~/lib/privacy/privacyWorkerFailures";
 
 const HOLD_RECHECK_MS = 30 * 86_400_000;
 const POST_HOLD_AUDIT_RETENTION_MS = 365 * 86_400_000;
@@ -130,22 +131,38 @@ export async function expireWorkspaceDeletionRetentionCategories(now = new Date(
   );
   let releasedHoldSchedules = 0;
   for (const value of releasedHoldRows.rows as Row[]) {
-    const released = await dbPool.query(
-      `UPDATE tokenless_deletion_job_categories
-       SET basis_code='settlement_and_audit',retention_deadline=$1
-       WHERE job_id=$2 AND category='legal_hold_records'
-         AND status='retained' AND retention_deadline IS NULL`,
-      [new Date(now.getTime() + POST_HOLD_AUDIT_RETENTION_MS), text(value, "job_id")],
-    );
-    releasedHoldSchedules += released.rowCount ?? 0;
+    const jobId = text(value, "job_id")!;
+    const workItemKey = `${jobId}:legal_hold_schedule`;
+    try {
+      const released = await dbPool.query(
+        `UPDATE tokenless_deletion_job_categories
+         SET basis_code='settlement_and_audit',retention_deadline=$1
+         WHERE job_id=$2 AND category='legal_hold_records'
+           AND status='retained' AND retention_deadline IS NULL`,
+        [new Date(now.getTime() + POST_HOLD_AUDIT_RETENTION_MS), jobId],
+      );
+      await resolvePrivacyWorkerFailure({ now, workerKind: "workspace_retention", workItemKey });
+      releasedHoldSchedules += released.rowCount ?? 0;
+    } catch (error) {
+      await recordPrivacyWorkerFailure({
+        error,
+        now,
+        workerKind: "workspace_retention",
+        workItemKey,
+      });
+    }
   }
   const due = await dbPool.query(
     `SELECT category.job_id,category.category,job.scope_id,job.subject_request_id
      FROM tokenless_deletion_job_categories category
      JOIN tokenless_deletion_jobs job ON job.job_id=category.job_id
+     LEFT JOIN tokenless_privacy_worker_failures failure
+       ON failure.worker_kind='workspace_retention'
+      AND failure.work_item_key=category.job_id || ':' || category.category
      WHERE job.scope_kind='workspace' AND job.status='completed'
        AND category.disposition='retain' AND category.status='retained'
        AND category.retention_deadline IS NOT NULL AND category.retention_deadline<=$1
+       AND (failure.failure_id IS NULL OR (failure.status='retrying' AND failure.next_retry_at<=$1))
      ORDER BY category.retention_deadline,category.job_id,category.category LIMIT $2`,
     [now, limit],
   );
@@ -159,12 +176,13 @@ export async function expireWorkspaceDeletionRetentionCategories(now = new Date(
     const category = text(value, "category")!;
     const workspaceId = text(value, "scope_id")!;
     const requestId = text(value, "subject_request_id");
-    if (!EXPIRABLE_CATEGORIES.has(category) && category !== "legal_hold_records") {
-      throw new Error(`Workspace retention category ${category} has no expiry handler.`);
-    }
+    const workItemKey = `${jobId}:${category}`;
     const client = await dbPool.connect();
     try {
       await client.query("BEGIN");
+      if (!EXPIRABLE_CATEGORIES.has(category) && category !== "legal_hold_records") {
+        throw new Error(`Workspace retention category ${category} has no expiry handler.`);
+      }
       const locked = await client.query(
         `SELECT category.status
          FROM tokenless_deletion_job_categories category
@@ -222,11 +240,23 @@ export async function expireWorkspaceDeletionRetentionCategories(now = new Date(
         [digest(`${jobId}:${category}:retention-expired:${now.toISOString()}`), now, jobId, category],
       );
       if (updated.rowCount !== 1) throw new Error("Retention expiry category transition failed.");
+      await client.query(
+        `UPDATE tokenless_privacy_worker_failures
+         SET status='resolved',next_retry_at=NULL,operator_alert_state='resolved',
+             resolved_at=$1,updated_at=$1
+         WHERE worker_kind='workspace_retention' AND work_item_key=$2 AND status <> 'resolved'`,
+        [now, workItemKey],
+      );
       await client.query("COMMIT");
       summary.completed += 1;
     } catch (error) {
       await client.query("ROLLBACK");
-      throw error;
+      await recordPrivacyWorkerFailure({
+        error,
+        now,
+        workerKind: "workspace_retention",
+        workItemKey,
+      });
     } finally {
       client.release();
     }

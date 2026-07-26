@@ -384,15 +384,40 @@ test("subject export includes only the principal identity audit scope and fails 
           WHERE scope_kind='identity' AND scope_id=?`,
     args: [principalId],
   });
-  await createSubjectRequest({
+  const poisoned = await createSubjectRequest({
     identityAssurance: "better_auth:passkey",
     now: new Date(now.getTime() + 1_000),
     principalId,
     requestType: "export",
     scope: { principal: true },
   });
-  await assert.rejects(
-    () => processSubjectRequestQueue(new Date(now.getTime() + 1_000)),
-    (error: unknown) => error instanceof TokenlessServiceError && error.code === "security_audit_integrity_invalid",
-  );
+  const healthy = await createSubjectRequest({
+    identityAssurance: "better_auth:passkey",
+    now: new Date(now.getTime() + 2_000),
+    principalId: "rlp_subject_security_export_healthy",
+    requestType: "export",
+    scope: { principal: true },
+  });
+  assert.deepEqual(await processSubjectRequestQueue(new Date(now.getTime() + 2_000)), {
+    completed: 1,
+    queued: 2,
+  });
+  const healthyExport = await readSubjectRequestExport({
+    now: new Date(now.getTime() + 2_000),
+    principalId: "rlp_subject_security_export_healthy",
+    requestId: healthy.requestId,
+  });
+  assert.equal(healthyExport.data.generatedFor, "rlp_subject_security_export_healthy");
+  const failure = await dbClient.execute({
+    sql: `SELECT status,attempt_count,last_error_code,last_error_digest,operator_alert_state,next_retry_at
+          FROM tokenless_privacy_worker_failures
+          WHERE worker_kind='subject_request' AND work_item_key=?`,
+    args: [poisoned.requestId],
+  });
+  assert.equal(failure.rows[0]?.status, "retrying");
+  assert.equal(Number(failure.rows[0]?.attempt_count), 1);
+  assert.equal(failure.rows[0]?.last_error_code, "security_audit_integrity_invalid");
+  assert.match(String(failure.rows[0]?.last_error_digest), /^sha256:[0-9a-f]{64}$/u);
+  assert.equal(failure.rows[0]?.operator_alert_state, "pending");
+  assert.ok(new Date(String(failure.rows[0]?.next_retry_at)) > new Date(now.getTime() + 2_000));
 });
