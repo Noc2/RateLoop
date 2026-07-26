@@ -13,6 +13,7 @@ import {
   verifyAgentConnection,
 } from "~~/lib/tokenless/agentConnectionIntents";
 import { putHumanReviewConfigurationForOwner } from "~~/lib/tokenless/humanReviewConfiguration";
+import { createPrivateGroup } from "~~/lib/tokenless/privateGroups";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import type { ReviewRequestProfileInput } from "~~/lib/tokenless/reviewRequestProfiles";
 import {
@@ -178,6 +179,48 @@ async function connectedWorkspace(ownerAddress: string) {
     decision: "not_required",
   });
   await completeWorkspaceAgentSetup({ accountAddress: ownerAddress, workspaceId, revision: people.revision });
+  const privateGroup = await createPrivateGroup({
+    accountAddress: ownerAddress,
+    workspaceId,
+    name: "Browser test reviewers",
+    purpose: "Exercise the owner-facing private human-review configuration with a real routing group.",
+    policy: {
+      defaultCompensation: "unpaid",
+      dataClassifications: ["internal", "confidential"],
+      exportAllowed: false,
+    },
+  });
+  await putHumanReviewConfigurationForOwner({
+    accountAddress: ownerAddress,
+    workspaceId,
+    agentId: connected.agent.agentId,
+    body: {
+      expectedBindingVersion: review.configuration.version,
+      selection: {
+        mode: "adaptive",
+        enforcementMode: "advisory",
+        agreementThresholdBps: 8_000,
+        productionFloorBps: 1_000,
+        fixedRateBps: null,
+        maximumUnreviewedGap: 20,
+        requiredRiskTiers: ["high"],
+        criticalRiskTiers: ["critical"],
+        minimumConfidenceBps: 7_000,
+        maximumLatencyMs: 120_000,
+      },
+      requestProfile: {
+        ...requestProfile,
+        audience: "private_invited",
+        contentBoundary: "private_workspace",
+        privateSensitivity: "confidential",
+        privateGroupId: privateGroup.groupId,
+        panelSize: 2,
+        compensationMode: "unpaid",
+        bountyPerSeatAtomic: null,
+      },
+      authority: "check_only",
+    },
+  });
   return { agentId: connected.agent.agentId, workspaceId };
 }
 
