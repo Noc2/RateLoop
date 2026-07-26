@@ -207,6 +207,11 @@ test("access and export requests produce a bounded authenticated download instea
   await createWorkspace({ name: "Subject export", ownerAddress: OWNER });
   const now = new Date("2026-07-15T12:00:00.000Z");
   await dbClient.execute({
+    sql: `INSERT INTO tokenless_principals (principal_id,status,created_at,updated_at)
+          VALUES (?,'active',?,?) ON CONFLICT (principal_id) DO NOTHING`,
+    args: [OWNER, now, now],
+  });
+  await dbClient.execute({
     sql: `INSERT INTO tokenless_browser_identities
           (principal_address,thirdweb_user_id,auth_provider,primary_email,email_verified,
            email_domain,display_name,created_at,updated_at,last_login_at)
@@ -244,7 +249,10 @@ test("access and export requests produce a bounded authenticated download instea
   assert.equal(listed[0]?.exportReady, true);
 
   const exported = await readSubjectRequestExport({ principalId: OWNER, requestId: created.requestId, now });
-  assert.equal(exported.data.schemaVersion, "rateloop.subject-export.v2");
+  assert.equal(exported.data.schemaVersion, "rateloop.subject-export.v3");
+  const accountProfile = exported.data.accountProfile as Record<string, unknown>;
+  assert.equal(accountProfile.primary_email, "subject@example.test");
+  assert.equal(accountProfile.display_name, "Subject");
   assert.deepEqual(exported.data.forecastIntegrity, {
     schemaVersion: "rateloop.reviewer-forecast-integrity.v1",
     items: [],
@@ -286,6 +294,34 @@ test("access and export requests produce a bounded authenticated download instea
     Object.keys(exported.data).filter(key => key === "billing"),
     ["billing"],
   );
+  assert.deepEqual(
+    Object.keys(exported.data).filter(key => key === "agentActivity"),
+    ["agentActivity"],
+  );
+  assert.deepEqual(
+    Object.keys(exported.data).filter(key => key === "oversightAttestations"),
+    ["oversightAttestations"],
+  );
+  assert.deepEqual(
+    Object.keys(exported.data).filter(key => key === "publicQuestionMedia"),
+    ["publicQuestionMedia"],
+  );
+  const reviewActivity = exported.data.reviewActivity as {
+    networkSettlements: Array<Record<string, unknown>>;
+  };
+  assert.deepEqual(reviewActivity.networkSettlements, []);
+  const categoryManifest = exported.data.categoryManifest as {
+    included: Array<{ category: string; path: string }>;
+    withheld: Array<{ category: string; reason: string }>;
+  };
+  assert.ok(categoryManifest.included.some(item => item.category === "account_profile"));
+  assert.ok(categoryManifest.included.some(item => item.category === "network_settlement_status"));
+  const networkRetention = categoryManifest.withheld.find(
+    item => item.category === "network_reviewer_lookup_and_receipt_payloads",
+  );
+  assert.match(String(networkRetention?.reason), /reviewer HMAC correlation handle/u);
+  assert.match(String(networkRetention?.reason), /append-only receipt payloads/u);
+  assert.doesNotMatch(JSON.stringify(exported.data), /integrity_reviewer_lookup|receipt_json/u);
   await assert.rejects(
     () => readSubjectRequestExport({ principalId: "rlp_other_subject", requestId: created.requestId, now }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "subject_export_unavailable",

@@ -365,6 +365,14 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
     ownedSsoConfigurations,
     billingSubscriptions,
     payerTransactions,
+    agentRegistry,
+    agentAuditActivity,
+    oversightAttestations,
+    publicQuestionMedia,
+    publicMediaQuotas,
+    mcpSessions,
+    workspaceMoves,
+    networkSettlements,
   ] = await Promise.all([
     client.query(
       `SELECT preferences.assignment_available,preferences.assignment_completed,
@@ -503,6 +511,106 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
        ORDER BY intent.created_at,intent.payment_intent_id`,
       [principalId],
     ),
+    client.query(
+      `SELECT agent.agent_id,agent.workspace_id,agent.external_id,agent.status,
+              agent.created_at,agent.updated_at,agent.deactivated_at,
+              version.version_id,version.version_number,version.display_name,
+              version.declared_provider,version.declared_model,version.declared_model_version,
+              version.environment,version.configuration_commitment,
+              version.created_at AS version_created_at
+       FROM tokenless_agents agent
+       LEFT JOIN tokenless_agent_versions version
+         ON version.workspace_id=agent.workspace_id AND version.agent_id=agent.agent_id
+       WHERE agent.owner_account_address=$1 OR agent.created_by=$1 OR version.created_by=$1
+       ORDER BY agent.created_at,agent.agent_id,version.version_number`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT event.event_id,event.workspace_id,event.agent_id,event.version_id,
+              event.event_type,event.created_at
+       FROM tokenless_agent_audit_events event
+       WHERE event.actor_account_address=$1 OR event.agent_id IN (
+         SELECT agent_id FROM tokenless_agents
+         WHERE owner_account_address=$1 OR created_by=$1
+       )
+       ORDER BY event.created_at,event.event_id`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT attestation.attestation_id,attestation.workspace_id,
+              CASE WHEN attestation.account_address=$1 THEN attestation.competence_basis ELSE NULL END
+                AS competence_basis,
+              CASE WHEN attestation.account_address=$1 THEN attestation.training_records_json ELSE '[]' END
+                AS training_records_json,
+              attestation.authority_scope,attestation.attested_at,attestation.expires_at,
+              attestation.status,attestation.revoked_at,attestation.created_at,attestation.updated_at,
+              attestation.account_address=$1 AS subject_is_oversight_member,
+              attestation.attested_by=$1 AS subject_is_attestor,
+              attestation.revoked_by=$1 AS subject_is_revoker
+       FROM tokenless_oversight_attestations attestation
+       WHERE attestation.account_address=$1 OR attestation.attested_by=$1 OR attestation.revoked_by=$1
+          OR attestation.training_records_json LIKE '%' || $1 || '%'
+       ORDER BY attestation.created_at,attestation.attestation_id`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT media.asset_id,media.workspace_id,media.client_request_id,media.question_id,
+              media.digest,media.content_type,media.original_filename,media.size_bytes,
+              media.width,media.height,media.technical_status,media.moderation_status,
+              media.expires_at,media.bound_at,media.moderated_at,media.deletion_requested_at,
+              media.created_at,media.updated_at
+       FROM tokenless_public_question_media media
+       WHERE media.owner_account_address=$1
+       ORDER BY media.created_at,media.asset_id`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT quota.workspace_id,quota.day_key,quota.upload_count,quota.upload_bytes,quota.updated_at
+       FROM tokenless_public_media_daily_quotas quota
+       WHERE quota.owner_account_address=$1
+       ORDER BY quota.day_key,quota.workspace_id`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT session.session_hash,session.workspace_id,session.integration_id,
+              session.client_name,session.client_version,session.protocol_version,
+              session.elicitation_mode,session.status,session.created_at,
+              session.last_seen_at,session.expires_at
+       FROM tokenless_mcp_sessions session
+       WHERE session.subject_principal_id=$1
+       ORDER BY session.created_at,session.session_hash`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT move.move_id,move.source_workspace_id,move.target_workspace_id,move.status,
+              move.source_confirmed_at,move.target_approved_at,move.completed_at,
+              move.created_at,move.expires_at,
+              move.oauth_subject_principal_id=$1 AS subject_is_oauth_principal,
+              move.target_approved_by=$1 AS subject_is_approver
+       FROM tokenless_agent_workspace_moves move
+       WHERE move.oauth_subject_principal_id=$1 OR move.target_approved_by=$1
+       ORDER BY move.created_at,move.move_id`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT settlement.binding_id,settlement.assignment_id,settlement.state,
+              settlement.terminal_outcome,settlement.settlement_reference,
+              settlement.settlement_evidence_hash,settlement.committed_at,
+              settlement.terminal_at,settlement.created_at,settlement.updated_at,
+              COALESCE(receipts.append_only_receipt_count,0) AS append_only_receipt_count
+       FROM tokenless_network_assignment_settlements settlement
+       JOIN tokenless_assurance_assignments assignment
+         ON assignment.assignment_id=settlement.assignment_id
+       LEFT JOIN (
+         SELECT binding_id,COUNT(*) AS append_only_receipt_count
+         FROM tokenless_network_assignment_settlement_receipts GROUP BY binding_id
+       ) receipts ON receipts.binding_id=settlement.binding_id
+       WHERE assignment.reviewer_account_address=$1 OR assignment.rater_id IN (
+         SELECT rater_id FROM tokenless_rater_profiles WHERE principal_id=$1
+       )
+       ORDER BY settlement.created_at,settlement.binding_id`,
+      [principalId],
+    ),
   ]);
   const securityHead = await client.query(
     `SELECT last_sequence,last_digest FROM tokenless_security_audit_heads
@@ -522,10 +630,53 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
     );
   }
   const forecastIntegrity = await listPrincipalForecastIntegrityInTransaction(client, principalId);
+  const categoryManifest = {
+    included: [
+      { category: "account_profile", path: "accountProfile" },
+      { category: "workspace_access", path: "workspaceMemberships" },
+      { category: "reviewer_and_paid_profile", path: "workspaceReviewerAccess, paidReviewerProfile" },
+      { category: "communications_metadata", path: "communications" },
+      { category: "review_activity", path: "reviewActivity" },
+      { category: "network_settlement_status", path: "reviewActivity.networkSettlements" },
+      { category: "agent_registry_and_audit", path: "agentActivity" },
+      { category: "oversight_attestations", path: "oversightAttestations" },
+      { category: "public_question_media_and_quota", path: "publicQuestionMedia" },
+      { category: "mcp_sessions_and_workspace_moves", path: "connectedAutomation" },
+      { category: "authentication_devices", path: "authentication" },
+      { category: "enterprise_identity", path: "enterpriseIdentity" },
+      { category: "billing_metadata", path: "billing" },
+      { category: "forecast_integrity", path: "forecastIntegrity" },
+      { category: "subject_request_history", path: "subjectRequests" },
+    ],
+    withheld: [
+      {
+        category: "authentication_and_recovery_secrets",
+        reason: "Secrets and reusable authentication, OAuth, and recovery material are never exported.",
+      },
+      {
+        category: "encrypted_tax_and_provider_evidence",
+        reason:
+          "Encrypted statutory/provider evidence and provider credentials remain restricted to their legal purpose.",
+      },
+      {
+        category: "notification_and_private_review_content",
+        reason: "Message bodies, private rationale, customer artifacts, and other people's data are excluded.",
+      },
+      {
+        category: "network_reviewer_lookup_and_receipt_payloads",
+        reason:
+          "The reviewer HMAC correlation handle and append-only receipt payloads are withheld as security and multi-party evidence. Their presence and receipt count are disclosed; they remain restricted for assignment integrity, fraud/dispute handling, and settlement evidence only for the applicable retention period.",
+      },
+      {
+        category: "public_chain_records",
+        reason: "Public-chain records are referenced by the product but are not copied into this off-chain export.",
+      },
+    ],
+  };
   return {
-    schemaVersion: "rateloop.subject-export.v2",
+    schemaVersion: "rateloop.subject-export.v3",
     generatedFor: principalId,
-    account: account.rows[0] ?? null,
+    accountProfile: account.rows[0] ?? null,
     workspaceMemberships: workspaces.rows,
     workspaceReviewerAccess: reviewerAccess.rows,
     paidReviewerProfile: rater.rows[0] ?? null,
@@ -536,6 +687,20 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
     reviewActivity: {
       assuranceAssignments: assuranceAssignments.rows,
       directAssignmentsAndResponses: directReviewAssignments.rows,
+      networkSettlements: networkSettlements.rows.map(row => ({
+        ...row,
+        reviewerLookup: "withheld_security_identifier",
+        settlementReceipts: "append_only_hash_evidence_retained",
+      })),
+    },
+    agentActivity: {
+      registryAndVersions: agentRegistry.rows,
+      auditEventsWithoutDetails: agentAuditActivity.rows,
+    },
+    oversightAttestations: oversightAttestations.rows,
+    publicQuestionMedia: {
+      media: publicQuestionMedia.rows,
+      dailyQuotaUsage: publicMediaQuotas.rows,
     },
     auditAndSecurityActivity: {
       workspaceEventsAsActor: workspaceAuditEvents.rows,
@@ -547,6 +712,8 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
     connectedAutomation: {
       oauthAuthorizations: oauthAuthorizations.rows,
       agentIntegrations: agentIntegrations.rows,
+      mcpSessions: mcpSessions.rows,
+      workspaceMoves: workspaceMoves.rows,
     },
     authentication: {
       passkeys: passkeys.rows,
@@ -561,6 +728,7 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
     },
     forecastIntegrity,
     subjectRequests: requests.rows,
+    categoryManifest,
     exclusions: [
       "Authentication secrets, OAuth token material, recovery material, encrypted tax payloads, provider evidence, notification content, private rationale, and other users' data are excluded.",
       "Public-chain records are referenced by the product but are not copied into this export.",
