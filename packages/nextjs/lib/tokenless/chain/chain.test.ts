@@ -393,6 +393,35 @@ function admissionPolicy() {
   };
 }
 
+function invitedAdmissionPolicy() {
+  return {
+    schemaVersion: HUMAN_ASSURANCE_SCHEMA_VERSION,
+    policyId: "policy_chain_private_paid",
+    version: 1,
+    reviewerSource: "customer_invited" as const,
+    compensation: "paid" as const,
+    cohorts: [{ cohortId: "cohort_chain_private_paid", minimumReviewers: 2, maximumReviewers: 15 }],
+    selection: "customer_named" as const,
+    fallbacks: { allowed: false, sources: [] },
+    requiredQualifications: [],
+    assurance: {
+      requirements: [
+        {
+          capability: "customer_invitation" as const,
+          reviewerSources: ["customer_invited" as const],
+          allowedProviders: ["workspace-invitation"],
+        },
+      ],
+    },
+    buyerPrivacy: {
+      visibleFields: ["reviewer_source" as const],
+      minimumAggregationSize: 2,
+      suppressSmallCells: true,
+    },
+    legalEligibilityRequired: true,
+  };
+}
+
 function stableJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
   if (value && typeof value === "object") {
@@ -448,6 +477,7 @@ async function walletAsk(
   options: {
     attemptReserveAtomic?: string;
     feeBps?: number;
+    invited?: boolean;
     stripAdmissionPolicy?: boolean;
     responseWindowSeconds?: unknown;
   } = {},
@@ -461,12 +491,13 @@ async function walletAsk(
           WHERE workspace_id = ?`,
     args: [new Date(now.getTime() - 60_000), new Date(now.getTime() + 86_400_000), now, workspaceId],
   });
+  const policy = options.invited ? invitedAdmissionPolicy() : admissionPolicy();
   const quote = await createTokenlessQuote({
     audience: {
-      admissionPolicyHash: freezeAdmissionPolicy(admissionPolicy()).admissionPolicyHash,
-      source: "rateloop_network",
+      admissionPolicyHash: freezeAdmissionPolicy(policy).admissionPolicyHash,
+      source: policy.reviewerSource,
     },
-    audiencePolicy: admissionPolicy(),
+    audiencePolicy: policy,
     confirmedNoSensitiveData: true,
     dataClassification: "synthetic",
     budget: {
@@ -493,11 +524,11 @@ async function walletAsk(
   if (options.stripAdmissionPolicy) await stripAskAdmissionPolicy(ask.operationKey);
   await dbClient.execute("UPDATE tokenless_content_records SET moderation_status = 'approved'");
   await dbClient.execute("UPDATE tokenless_question_records SET moderation_status = 'approved'");
-  return ask.operationKey;
+  return { operationKey: ask.operationKey, workspaceId };
 }
 
 test("legacy tier-only asks fail closed instead of being converted into capability admission", async () => {
-  const operationKey = await walletAsk({ stripAdmissionPolicy: true });
+  const { operationKey } = await walletAsk({ stripAdmissionPolicy: true });
   await assert.rejects(
     () => prepareChainPayment(operationKey, { config: config(), runtime: mockRuntime() }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "capability_policy_required",
@@ -507,7 +538,7 @@ test("legacy tier-only asks fail closed instead of being converted into capabili
 });
 
 test("the explicit frozen response window creates one immutable deadline across retries", async () => {
-  const operationKey = await walletAsk({ responseWindowSeconds: 7_200 });
+  const { operationKey } = await walletAsk({ responseWindowSeconds: 7_200 });
   const source = await dbClient.execute({
     sql: `SELECT q.terms_json FROM tokenless_ask_ownership o
           JOIN tokenless_question_records q ON q.question_id = o.question_id
@@ -549,7 +580,7 @@ test("the explicit frozen response window creates one immutable deadline across 
 });
 
 test("chain preparation fails closed for missing or invalid frozen response windows", async () => {
-  const operationKey = await walletAsk();
+  const { operationKey } = await walletAsk();
   for (const candidate of [
     { present: false, value: undefined },
     { present: true, value: 1_199 },
@@ -568,7 +599,7 @@ test("chain preparation fails closed for missing or invalid frozen response wind
 });
 
 test("underfunded fixed-base guarantees fail before chain funding", async () => {
-  const operationKey = await walletAsk({ attemptReserveAtomic: "5000000" });
+  const { operationKey } = await walletAsk({ attemptReserveAtomic: "5000000" });
   await assert.rejects(
     () => prepareChainPayment(operationKey, { config: config(), runtime: mockRuntime() }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_round_terms",
@@ -614,7 +645,7 @@ function roundCreatedLog(expected: Awaited<ReturnType<typeof prepareChainPayment
 }
 
 test("zero-fee rounds skip surprise-bounty reservation and still confirm the base round", async () => {
-  const operationKey = await walletAsk({ feeBps: 0 });
+  const { operationKey } = await walletAsk({ feeBps: 0 });
   const runtime = mockRuntime();
   delete runtime.surpriseBonusAccount;
   const prepared = await prepareChainPayment(operationKey, { config: config(), runtime });
@@ -653,7 +684,7 @@ test("zero-fee rounds skip surprise-bounty reservation and still confirm the bas
 });
 
 test("wallet confirmation accepts only the exact quoted RoundCreated evidence and reconciles the operation", async () => {
-  const operationKey = await walletAsk();
+  const { operationKey } = await walletAsk();
   const runtime = mockRuntime();
   const preparedAt = new Date();
   const expected = await prepareChainPayment(operationKey, {
@@ -716,8 +747,36 @@ test("wallet confirmation accepts only the exact quoted RoundCreated evidence an
   assert.equal(resumedAsk.commitDeadline, new Date(Number(expected.roundTerms.commitDeadline) * 1_000).toISOString());
 });
 
+test("an invited paid round is registered with its exact owning workspace", async () => {
+  const { operationKey, workspaceId } = await walletAsk({ invited: true });
+  const runtime = mockRuntime();
+  const expected = await prepareChainPayment(operationKey, { config: config(), runtime });
+  const receiptRuntime = mockRuntime(
+    {
+      getTransactionReceipt: async () => ({
+        blockHash: BLOCK_HASH,
+        blockNumber: 200n,
+        logs: [roundCreatedLog(expected)],
+        status: "success",
+      }),
+    },
+    expected,
+  );
+
+  await confirmWalletChainPayment(operationKey, TX_HASH, {
+    config: config(),
+    runtime: receiptRuntime,
+  });
+
+  const voucherRound = await dbClient.execute({
+    sql: "SELECT workspace_id,admission_policy_json FROM tokenless_voucher_rounds WHERE round_id = '7'",
+  });
+  assert.equal(voucherRound.rows[0]?.workspace_id, workspaceId);
+  assert.equal(JSON.parse(String(voucherRound.rows[0]?.admission_policy_json)).reviewerSource, "customer_invited");
+});
+
 test("receipt reconciliation rejects altered economics even when the panel and funder match", async () => {
-  const operationKey = await walletAsk();
+  const { operationKey } = await walletAsk();
   const runtime = mockRuntime();
   const expected = await prepareChainPayment(operationKey, { config: config(), runtime });
   const altered = { ...expected, roundTerms: { ...expected.roundTerms, bountyAmount: "1" } };
@@ -728,7 +787,7 @@ test("receipt reconciliation rejects altered economics even when the panel and f
 });
 
 test("receipt reconciliation rejects an altered admission policy hash", async () => {
-  const operationKey = await walletAsk();
+  const { operationKey } = await walletAsk();
   const runtime = mockRuntime();
   const expected = await prepareChainPayment(operationKey, { config: config(), runtime });
   const altered = {
@@ -742,7 +801,7 @@ test("receipt reconciliation rejects an altered admission policy hash", async ()
 });
 
 test("round reconciliation reads back and rejects altered non-event terms", async () => {
-  const operationKey = await walletAsk();
+  const { operationKey } = await walletAsk();
   const runtime = mockRuntime();
   const expected = await prepareChainPayment(operationKey, { config: config(), runtime });
   const altered = {

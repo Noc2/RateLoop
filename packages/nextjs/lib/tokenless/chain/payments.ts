@@ -898,7 +898,7 @@ async function persistConfirmation(input: {
       [now, input.expected.operationKey],
     );
     const admissionSource = await client.query(
-      `SELECT q.terms_json FROM tokenless_ask_ownership o
+      `SELECT o.workspace_id,q.terms_json FROM tokenless_ask_ownership o
        JOIN tokenless_question_records q ON q.question_id = o.question_id
        WHERE o.operation_key = $1 LIMIT 1`,
       [input.expected.operationKey],
@@ -923,12 +923,23 @@ async function persistConfirmation(input: {
         "admission_policy_mismatch",
       );
     }
+    const workspaceId =
+      frozenPolicy.policy.reviewerSource === "customer_invited"
+        ? rowString(admissionSource.rows[0] as QueryRow | undefined, "workspace_id")
+        : null;
+    if (frozenPolicy.policy.reviewerSource === "customer_invited" && !workspaceId) {
+      throw new TokenlessServiceError(
+        "The invited paid round has no exact workspace binding.",
+        409,
+        "round_workspace_mismatch",
+      );
+    }
     await client.query(
       `INSERT INTO tokenless_voucher_rounds
        (chain_id, panel_address, round_id, content_id, admission_policy_hash,
         admission_policy_json, maximum_commits, voucher_not_before, voucher_deadline,
-        status, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'open', $8, $8)
+        status, workspace_id, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'open', $10, $8, $8)
        ON CONFLICT (chain_id, panel_address, round_id) DO NOTHING`,
       [
         input.expected.chainId,
@@ -940,6 +951,7 @@ async function persistConfirmation(input: {
         input.expected.roundTerms.maximumCommits,
         now,
         new Date(Number(input.expected.roundTerms.commitDeadline) * 1_000),
+        workspaceId,
       ],
     );
     await client.query("COMMIT");
