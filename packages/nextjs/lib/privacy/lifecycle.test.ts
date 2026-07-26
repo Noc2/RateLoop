@@ -98,7 +98,7 @@ test("subject requests have explicit transitions and category-level completion e
     identityAssurance: "better_auth_session",
     now: new Date("2026-07-15T10:00:00.000Z"),
     principalId: "rlp_subject_1234567890abcdefgh",
-    requestType: "deletion",
+    requestType: "access",
     scope: { account: true },
   });
   await transitionSubjectRequest({
@@ -173,7 +173,7 @@ test("invalid completion transitions roll back their evidence insert", async () 
     identityAssurance: "better_auth_session",
     now: new Date("2026-07-15T10:00:00.000Z"),
     principalId: "rlp_rollback_1234567890abcdef",
-    requestType: "deletion",
+    requestType: "access",
     scope: { account: true },
   });
 
@@ -262,14 +262,30 @@ test("access and export requests produce a bounded authenticated download instea
   assert.equal(communications.notifications[0]?.title, undefined);
   assert.equal(communications.notifications[0]?.body, undefined);
   assert.equal(communications.preferences.assignment_completed, false);
-  assert.deepEqual(Object.keys(exported.data).filter(key => key === "reviewActivity"), ["reviewActivity"]);
-  assert.deepEqual(Object.keys(exported.data).filter(key => key === "auditAndSecurityActivity"), [
-    "auditAndSecurityActivity",
-  ]);
-  assert.deepEqual(Object.keys(exported.data).filter(key => key === "connectedAutomation"), ["connectedAutomation"]);
-  assert.deepEqual(Object.keys(exported.data).filter(key => key === "authentication"), ["authentication"]);
-  assert.deepEqual(Object.keys(exported.data).filter(key => key === "enterpriseIdentity"), ["enterpriseIdentity"]);
-  assert.deepEqual(Object.keys(exported.data).filter(key => key === "billing"), ["billing"]);
+  assert.deepEqual(
+    Object.keys(exported.data).filter(key => key === "reviewActivity"),
+    ["reviewActivity"],
+  );
+  assert.deepEqual(
+    Object.keys(exported.data).filter(key => key === "auditAndSecurityActivity"),
+    ["auditAndSecurityActivity"],
+  );
+  assert.deepEqual(
+    Object.keys(exported.data).filter(key => key === "connectedAutomation"),
+    ["connectedAutomation"],
+  );
+  assert.deepEqual(
+    Object.keys(exported.data).filter(key => key === "authentication"),
+    ["authentication"],
+  );
+  assert.deepEqual(
+    Object.keys(exported.data).filter(key => key === "enterpriseIdentity"),
+    ["enterpriseIdentity"],
+  );
+  assert.deepEqual(
+    Object.keys(exported.data).filter(key => key === "billing"),
+    ["billing"],
+  );
   await assert.rejects(
     () => readSubjectRequestExport({ principalId: "rlp_other_subject", requestId: created.requestId, now }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "subject_export_unavailable",

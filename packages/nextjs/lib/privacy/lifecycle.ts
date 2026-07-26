@@ -18,6 +18,8 @@ export const SUBJECT_REQUEST_TYPES = [
   "deletion",
 ] as const;
 export type SubjectRequestType = (typeof SUBJECT_REQUEST_TYPES)[number];
+export const SELF_SERVICE_SUBJECT_REQUEST_TYPES = ["access", "export"] as const satisfies readonly SubjectRequestType[];
+export type SelfServiceSubjectRequestType = (typeof SELF_SERVICE_SUBJECT_REQUEST_TYPES)[number];
 export const SUBJECT_REQUEST_STATUSES = [
   "received",
   "identity_verified",
@@ -209,12 +211,12 @@ export async function assertProjectDeletionAllowed(projectId: string, workspaceI
 export async function createSubjectRequest(input: {
   identityAssurance: string;
   principalId: string;
-  requestType: SubjectRequestType;
+  requestType: SelfServiceSubjectRequestType;
   scope: Record<string, unknown>;
   workspaceId?: string | null;
   now?: Date;
 }) {
-  if (!SUBJECT_REQUEST_TYPES.includes(input.requestType)) {
+  if (!SELF_SERVICE_SUBJECT_REQUEST_TYPES.includes(input.requestType)) {
     throw new TokenlessServiceError("Subject request type is invalid.", 400, "invalid_privacy_request");
   }
   const principalId = required(input.principalId, "Principal", 120);

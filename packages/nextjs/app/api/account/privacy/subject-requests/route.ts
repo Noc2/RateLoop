@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
 import { dbClient } from "~~/lib/db";
 import {
+  SELF_SERVICE_SUBJECT_REQUEST_TYPES,
   SUBJECT_REQUEST_TYPES,
+  type SelfServiceSubjectRequestType,
   type SubjectRequestType,
   createSubjectRequest,
   listSubjectRequests,
@@ -62,12 +64,19 @@ export async function POST(request: NextRequest) {
     ) {
       throw new TokenlessServiceError("Subject request type is invalid.", 400, "invalid_privacy_request");
     }
+    if (!SELF_SERVICE_SUBJECT_REQUEST_TYPES.includes(body.requestType as SelfServiceSubjectRequestType)) {
+      throw new TokenlessServiceError(
+        "This self-service endpoint accepts access and export requests only. Use account deletion in Settings, or email hawigxyz@proton.me for correction, restriction, objection, or another deletion request. No request or due date was created.",
+        409,
+        "manual_subject_request_required",
+      );
+    }
     const workspaceId = optionalWorkspaceId(body.workspaceId);
     if (workspaceId) await requireWorkspaceMembership(session.principalId, workspaceId);
     const receipt = await createSubjectRequest({
       identityAssurance: session.authProvider,
       principalId: session.principalId,
-      requestType: body.requestType as SubjectRequestType,
+      requestType: body.requestType as SelfServiceSubjectRequestType,
       scope: {
         principal: true,
         ...(workspaceId ? { workspaceId } : {}),

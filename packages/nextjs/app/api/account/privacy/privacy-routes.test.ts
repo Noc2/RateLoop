@@ -10,7 +10,7 @@ import { AUTH_SESSION_COOKIE, createAuthSession } from "~~/lib/auth/session";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
-import { SUBJECT_REQUEST_TYPES } from "~~/lib/privacy/lifecycle";
+import { SELF_SERVICE_SUBJECT_REQUEST_TYPES, SUBJECT_REQUEST_TYPES } from "~~/lib/privacy/lifecycle";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { createProjectOwnerAssignment, grantProjectAccountAccess } from "~~/lib/tokenless/projectAccess";
 
@@ -72,7 +72,7 @@ test("subject-request intake binds requests to the authenticated principal and s
   const owner = await authenticatedPrincipal("subject_owner");
   const { workspaceId } = await createWorkspace({ name: "Subject requests", ownerAddress: owner.principalId });
 
-  for (const requestType of SUBJECT_REQUEST_TYPES) {
+  for (const requestType of SELF_SERVICE_SUBJECT_REQUEST_TYPES) {
     const response = await createSubjectRequest(
       browserRequest("/api/account/privacy/subject-requests", {
         body: { requestType, scope: { account: true, privateArtifacts: true }, workspaceId },
@@ -92,13 +92,42 @@ test("subject-request intake binds requests to the authenticated principal and s
     sql: `SELECT principal_id, workspace_id, request_type, scope_json, identity_assurance
           FROM tokenless_subject_requests ORDER BY received_at ASC`,
   });
-  assert.equal(rows.rowCount, SUBJECT_REQUEST_TYPES.length);
+  assert.equal(rows.rowCount, SELF_SERVICE_SUBJECT_REQUEST_TYPES.length);
   for (const row of rows.rows) {
     assert.equal(String(row.principal_id), owner.principalId);
     assert.equal(String(row.workspace_id), workspaceId);
     assert.equal(String(row.identity_assurance), "better_auth:passkey");
     assert.deepEqual(JSON.parse(String(row.scope_json)), { principal: true, workspaceId });
   }
+});
+
+test("subject-request intake does not start an unhandled statutory clock", async () => {
+  const owner = await authenticatedPrincipal("restricted_subject_owner");
+  const { workspaceId } = await createWorkspace({
+    name: "Restricted subject requests",
+    ownerAddress: owner.principalId,
+  });
+  const restrictedTypes = SUBJECT_REQUEST_TYPES.filter(
+    requestType => !SELF_SERVICE_SUBJECT_REQUEST_TYPES.includes(requestType as "access" | "export"),
+  );
+
+  for (const requestType of restrictedTypes) {
+    const response = await createSubjectRequest(
+      browserRequest("/api/account/privacy/subject-requests", {
+        body: { requestType, workspaceId },
+        method: "POST",
+        origin: APP_ORIGIN,
+        token: owner.token,
+      }),
+    );
+    assert.equal(response.status, 409);
+    const body = await response.json();
+    assert.equal(body.code, "manual_subject_request_required");
+    assert.match(String(body.message), /No request or due date was created/u);
+  }
+
+  const rows = await dbClient.execute({ sql: "SELECT request_id FROM tokenless_subject_requests" });
+  assert.equal(rows.rowCount, 0);
 });
 
 test("subject-request intake rejects workspace scope outside the authenticated membership", async () => {
