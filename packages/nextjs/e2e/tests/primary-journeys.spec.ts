@@ -485,6 +485,7 @@ test("workspace owner inspects and exports a signed decision packet", async ({ p
   await expect(page.getByText(/release-engineering \(3\)/u)).toBeVisible();
   await expect(page.getByText(/No reviewer compensation was due/iu)).toBeVisible();
   await expect(page.getByText("Transparency receipt recorded")).toBeVisible();
+  await page.getByText("Anchor details", { exact: true }).click();
   await expect(page.getByText("rekor-playwright-01")).toBeVisible();
   await expect(page.getByRole("link", { name: "Audit log" })).toHaveAttribute(
     "href",

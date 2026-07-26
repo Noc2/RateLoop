@@ -16,6 +16,7 @@ import { putHumanReviewConfigurationForOwner } from "~~/lib/tokenless/humanRevie
 import { createPrivateGroup } from "~~/lib/tokenless/privateGroups";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import type { ReviewRequestProfileInput } from "~~/lib/tokenless/reviewRequestProfiles";
+import { persistCurrentIntegrityEpochFixture } from "~~/lib/tokenless/testing/integrityEpochFixture";
 import {
   completeWorkspaceAgentSetup,
   configureWorkspaceSetupPeople,
@@ -144,6 +145,7 @@ async function connectedWorkspace(ownerAddress: string) {
     compensationMode: "usdc",
     bountyPerSeatAtomic: "1000000",
   };
+  await persistCurrentIntegrityEpochFixture("integrity:playwright");
   const review = await putHumanReviewConfigurationForOwner({
     accountAddress: ownerAddress,
     workspaceId,
