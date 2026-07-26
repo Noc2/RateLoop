@@ -63,6 +63,8 @@ const REVIEWER_A = "0x2222222222222222222222222222222222222222";
 const REVIEWER_B = "0x3333333333333333333333333333333333333333";
 const originalSamplerKey = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY;
 const originalSamplerVersion = process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION;
+const originalIntegrityLookupKey = process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY;
+const originalIntegrityLookupVersion = process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION;
 
 function hash(value: string): `sha256:${string}` {
   return `sha256:${createHash("sha256").update(value).digest("hex")}`;
@@ -125,6 +127,8 @@ test("private response submission does not lock the nullable project grant", () 
 beforeEach(() => {
   process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = "79".repeat(32);
   process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION = "private-content-e2e-v1";
+  process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY = Buffer.alloc(32, 17).toString("base64url");
+  process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION = "forecast-test-v1";
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
   __setArtifactPrivacyRuntimeForTests({
     keyVersion: "private-unpaid-test-v1",
@@ -159,6 +163,10 @@ afterEach(() => {
   else process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY = originalSamplerKey;
   if (originalSamplerVersion === undefined) delete process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION;
   else process.env.TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION = originalSamplerVersion;
+  if (originalIntegrityLookupKey === undefined) delete process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY;
+  else process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY = originalIntegrityLookupKey;
+  if (originalIntegrityLookupVersion === undefined) delete process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION;
+  else process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION = originalIntegrityLookupVersion;
 });
 
 type PrivateAdapterFixture = Awaited<ReturnType<typeof fixture>>;
@@ -410,10 +418,27 @@ test("direct private assignments surface in reviewer work and produce a terminal
   assert.equal(stored.rows.length, 2);
   assert.ok(
     stored.rows.every(
-      row => row.choice === "positive" && row.predicted_positive_bps === 6_500 && row.rationale_ciphertext === null,
+      row => row.choice === "positive" && row.predicted_positive_bps === null && row.rationale_ciphertext === null,
     ),
   );
   assert.ok(stored.rows.every(row => /^sha256:[0-9a-f]{64}$/u.test(String(row.response_commitment))));
+  const forecastAggregates = await dbClient.execute(
+    `SELECT observation_count,outcome_observation_count,current_reason_codes_json
+     FROM tokenless_forecast_calibration_accumulators ORDER BY subject_key`,
+  );
+  assert.equal(forecastAggregates.rows.length, 2);
+  assert.ok(
+    forecastAggregates.rows.every(
+      row =>
+        Number(row.observation_count) === 1 &&
+        Number(row.outcome_observation_count) === 1 &&
+        row.current_reason_codes_json === "[]",
+    ),
+  );
+  const forecastReceipt = await dbClient.execute(
+    "SELECT aggregated_forecast_count FROM tokenless_forecast_integrity_terminal_receipts",
+  );
+  assert.equal(Number(forecastReceipt.rows[0]?.aggregated_forecast_count), 2);
 });
 
 test("private review wait returns a pending continuation after its bounded timeout", async () => {

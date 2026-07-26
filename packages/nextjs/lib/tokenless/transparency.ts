@@ -13,6 +13,7 @@ import {
   getTokenlessChainRuntime,
   loadTokenlessEvidenceFinalityPolicy,
 } from "~~/lib/tokenless/chain/runtime";
+import { aggregatePublicForecastRound } from "~~/lib/tokenless/crowdForecastPersistence";
 import {
   type PostRoundIntegrityPolicy,
   type PostRoundIntegrityReport,
@@ -1542,6 +1543,14 @@ export async function appendFinalizedRoundEvidence(input: {
   }
   const evidenceJson = stableTransparencyJson(evidence);
   const evidenceHash = digest(`round.finalized:${evidenceJson}`);
+  await aggregatePublicForecastRound({
+    operationKey: input.operationKey,
+    deploymentKey: evidence.deploymentKey,
+    roundId: evidence.roundId,
+    sourceSetCommitment: `sha256:${evidenceHash}`,
+    upVotes: evidence.upVotes,
+    reveals: surpriseReports,
+  });
   const eventId = `tpe_${digest(`${input.operationKey}:${evidenceHash}`).slice(0, 32)}`;
   const existingEvidence = await dbClient.execute({
     sql: `SELECT event_id, evidence_hash, evidence_json FROM tokenless_transparency_events

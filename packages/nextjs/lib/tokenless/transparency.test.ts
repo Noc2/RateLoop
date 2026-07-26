@@ -11,6 +11,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { type TokenlessChainRuntime, __setTokenlessChainRuntimeForTests } from "~~/lib/tokenless/chain/runtime";
+import { tokenlessCommitKey } from "~~/lib/tokenless/rater/settlementRecovery";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
   appendFinalizedRoundEvidence,
@@ -133,10 +134,8 @@ const roundTerms = {
   feeRecipient: FEE_RECIPIENT,
 };
 
-const COMMIT_KEYS = Array.from(
-  { length: 5 },
-  (_, index) => `0x${String(index + 31).padStart(64, "0")}` as `0x${string}`,
-);
+const VOTE_KEYS = Array.from({ length: 5 }, (_, index) => `0x${String(index + 1).padStart(40, "0")}` as `0x${string}`);
+const COMMIT_KEYS = VOTE_KEYS.map(voteKey => tokenlessCommitKey(42n, voteKey));
 const ENTROPY = `0x${"73".repeat(32)}` as const;
 const RBTS_FIXTURE = recomputeRbtsSettlement({
   chainId: 84_532,
@@ -233,7 +232,7 @@ function indexedCommits(responseHash?: string) {
       deploymentKey: DEPLOYMENT,
       roundId: "42",
       commitKey: COMMIT_KEYS[index],
-      voteKey: `0x${String(index + 1).padStart(40, "0")}`,
+      voteKey: VOTE_KEYS[index],
       nullifier: `0x${String(index + 11).padStart(64, "0")}`,
       responseHash: responseHash ?? `0x${String(index + 21).padStart(64, "0")}`,
       vote: index === 4 ? 0 : 1,
@@ -512,7 +511,7 @@ beforeEach(async () => {
     const principalId = `principal_transparency_${index}`;
     const accountAddress = `0x${String(index + 101).padStart(40, "0")}`;
     const identitySubjectHash = `identity_${index}`;
-    const voteKey = `0x${String(index + 1).padStart(40, "0")}`;
+    const voteKey = VOTE_KEYS[index]!;
     const assuranceSnapshotJson = stableTransparencyJson({
       schemaVersion: "rateloop.voucher-assurance-snapshot.v1",
       reviewerSource: "rateloop_network",
@@ -686,6 +685,12 @@ test("evidence waits for the configured confirmation depth, then publishes idemp
     fetchImpl: ponderFetch(),
     ponderUrl: "https://ponder.example.test",
   });
+  const appendReplay = await appendFinalizedRoundEvidence({
+    operationKey: OPERATION,
+    fetchImpl: ponderFetch(),
+    ponderUrl: "https://ponder.example.test",
+  });
+  assert.equal(appendReplay.eventId, appended.eventId);
   const storedEvidence = await dbClient.execute({
     sql: "SELECT evidence_json FROM tokenless_transparency_events WHERE operation_key = ? AND event_type = 'round.finalized'",
     args: [OPERATION],
@@ -709,11 +714,26 @@ test("evidence waits for the configured confirmation depth, then publishes idemp
   const counts = await dbClient.execute({
     sql: `SELECT
             (SELECT COUNT(*) FROM tokenless_transparency_events WHERE operation_key = ?) AS evidence_count,
-            (SELECT COUNT(*) FROM tokenless_result_publications WHERE operation_key = ?) AS publication_count`,
-    args: [OPERATION, OPERATION],
+            (SELECT COUNT(*) FROM tokenless_result_publications WHERE operation_key = ?) AS publication_count,
+            (SELECT COUNT(*) FROM tokenless_forecast_integrity_terminal_receipts
+             WHERE lane = 'public_paid' AND terminal_key = ?) AS forecast_receipt_count,
+            (SELECT MAX(aggregated_forecast_count) FROM tokenless_forecast_integrity_terminal_receipts
+             WHERE lane = 'public_paid' AND terminal_key = ?) AS aggregated_forecast_count,
+            (SELECT COUNT(*) FROM tokenless_paid_vouchers
+             WHERE chain_id = 84532 AND LOWER(panel_address) = LOWER(?) AND round_id = 42) AS eligible_voucher_count,
+            (SELECT COUNT(*) FROM tokenless_forecast_calibration_accumulators
+             WHERE subject_space = 'network_rater') AS forecast_subject_count,
+            (SELECT SUM(observation_count) FROM tokenless_forecast_calibration_accumulators
+             WHERE subject_space = 'network_rater') AS forecast_observation_count`,
+    args: [OPERATION, OPERATION, `${DEPLOYMENT}:42`, `${DEPLOYMENT}:42`, PANEL],
   });
   assert.equal(Number(counts.rows[0]?.evidence_count), 1);
   assert.equal(Number(counts.rows[0]?.publication_count), 1);
+  assert.equal(Number(counts.rows[0]?.forecast_receipt_count), 1);
+  assert.equal(Number(counts.rows[0]?.eligible_voucher_count), 5);
+  assert.equal(Number(counts.rows[0]?.aggregated_forecast_count), 5);
+  assert.equal(Number(counts.rows[0]?.forecast_subject_count), 5);
+  assert.equal(Number(counts.rows[0]?.forecast_observation_count), 5);
 });
 
 test("publication fails closed on canonical block-hash drift and succeeds on an idempotent retry", async () => {

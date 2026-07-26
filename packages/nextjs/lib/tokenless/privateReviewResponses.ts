@@ -10,6 +10,7 @@ import {
   encryptAssuranceRationale,
   getAssuranceResponseKeyrings,
 } from "~~/lib/tokenless/assuranceResponses";
+import { aggregatePrivateForecastDeliveryInTransaction } from "~~/lib/tokenless/crowdForecastPersistence";
 import { projectDirectPrivateReviewDecisionEvidence } from "~~/lib/tokenless/directPrivateReviewEvidence";
 import { hashHumanAssuranceDocument } from "~~/lib/tokenless/humanAssurance";
 import { transitionHumanReviewOpportunityLifecycleInTransaction } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
@@ -505,7 +506,15 @@ async function terminalEnvelopeForDelivery(
   const row = result.rows[0] as Row | undefined;
   if (!row) throw new Error("Private review delivery disappeared.");
   if (row.result_envelope_json) {
-    return parseHumanReviewResultEnvelope(JSON.parse(String(row.result_envelope_json)));
+    const envelope = parseHumanReviewResultEnvelope(JSON.parse(String(row.result_envelope_json)));
+    await aggregatePrivateForecastDeliveryInTransaction(client, {
+      deliveryId,
+      workspaceId: text(row, "workspace_id")!,
+      outcome: envelope.outcome,
+      sourceSetCommitment: envelope.commitments.responseSet,
+      now,
+    });
+    return envelope;
   }
   const responses = await client.query(
     `SELECT response_commitment,choice FROM tokenless_private_review_responses
@@ -650,6 +659,13 @@ async function terminalEnvelopeForDelivery(
       result: resultCommitment,
     },
     terminalEvidence: null,
+  });
+  await aggregatePrivateForecastDeliveryInTransaction(client, {
+    deliveryId,
+    workspaceId: text(row, "workspace_id")!,
+    outcome: envelope.outcome,
+    sourceSetCommitment: envelope.commitments.responseSet,
+    now,
   });
   await client.query(
     `UPDATE tokenless_private_unpaid_review_deliveries
