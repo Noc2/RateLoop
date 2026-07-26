@@ -796,8 +796,9 @@ export function PublicQuestionCard({
             <dd className="inline break-all font-mono">{networkAssignment.confidentialityTermsHash}</dd>
           </div>
         </dl>
-        <label className="mt-5 flex items-start gap-3 text-sm">
+        <label className="mt-5 flex items-start gap-3 text-sm" htmlFor="public-review-terms">
           <ChoiceInput
+            id="public-review-terms"
             type="checkbox"
             className="checkbox checkbox-sm mt-0.5"
             checked={networkTermsAccepted}
@@ -1022,8 +1023,12 @@ export function PublicQuestionCard({
                   >
                     Download recovery backup
                   </a>
-                  <label className="mt-3 flex items-start gap-2 text-xs leading-5">
+                  <label
+                    className="mt-3 flex items-start gap-2 text-xs leading-5"
+                    htmlFor="public-review-recovery-confirmed"
+                  >
                     <ChoiceInput
+                      id="public-review-recovery-confirmed"
                       type="checkbox"
                       className="checkbox checkbox-xs mt-0.5"
                       checked={recoveryConfirmed}

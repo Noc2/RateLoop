@@ -1049,8 +1049,12 @@ export function TokenlessHandoffClient() {
                 value={payload.redactionSummary.trim() || "No redaction applied"}
               />
             </dl>
-            <label className="flex items-start gap-3 text-sm leading-6 text-base-content/80">
+            <label
+              className="flex items-start gap-3 text-sm leading-6 text-base-content/80"
+              htmlFor="handoff-privacy-confirmed"
+            >
               <ChoiceInput
+                id="handoff-privacy-confirmed"
                 type="checkbox"
                 className="checkbox checkbox-sm mt-1 border-white/30"
                 checked={privacyConfirmed}

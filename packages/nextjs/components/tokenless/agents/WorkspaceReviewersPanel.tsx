@@ -383,8 +383,12 @@ export function WorkspaceReviewersPanel({
         <button className="rateloop-gradient-action min-h-12 px-5" disabled={busyTarget === "invite"}>
           {busyTarget === "invite" ? "Creating…" : "Invite reviewer"}
         </button>
-        <label className="flex items-start gap-2 text-xs leading-5 text-base-content/65 sm:col-span-3">
+        <label
+          className="flex items-start gap-2 text-xs leading-5 text-base-content/65 sm:col-span-3"
+          htmlFor="workspace-reviewer-paid-adulthood"
+        >
           <ChoiceInput
+            id="workspace-reviewer-paid-adulthood"
             type="checkbox"
             className="checkbox checkbox-sm mt-0.5"
             checked={paidAdulthoodAttested}

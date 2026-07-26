@@ -1300,8 +1300,12 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                                   {provider.domainVerified ? "domain verified" : "verification required"}
                                 </p>
                               </div>
-                              <label className="flex items-center gap-2 text-xs text-base-content/65">
+                              <label
+                                className="flex items-center gap-2 text-xs text-base-content/65"
+                                htmlFor={`identity-enforce-${provider.providerId}`}
+                              >
                                 <ChoiceInput
+                                  id={`identity-enforce-${provider.providerId}`}
                                   type="checkbox"
                                   className="toggle toggle-sm"
                                   checked={provider.enforceSso}

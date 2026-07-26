@@ -132,12 +132,14 @@ function AlertSettings({ workspaceId }: { workspaceId: string }) {
         <label
           key={option.key}
           className="flex items-start justify-between gap-4 rounded-xl border border-white/10 bg-black/20 px-4 py-3"
+          htmlFor={`oversight-alert-${option.key}`}
         >
           <span>
             <span className="block text-sm font-semibold">{option.label}</span>
             <span className="mt-1 block text-xs leading-5 text-base-content/55">{option.description}</span>
           </span>
           <ChoiceInput
+            id={`oversight-alert-${option.key}`}
             type="checkbox"
             aria-label={option.label}
             className="toggle toggle-sm toggle-primary mt-1"

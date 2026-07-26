@@ -329,8 +329,12 @@ export function GrcEvidenceDelivery({ workspaceId }: { workspaceId: string }) {
             hint="Percent of eligible evidence."
             required
           />
-          <label className="flex items-center gap-2 text-sm text-base-content/65 sm:col-span-2">
+          <label
+            className="flex items-center gap-2 text-sm text-base-content/65 sm:col-span-2"
+            htmlFor="grc-require-signed-packet"
+          >
             <ChoiceInput
+              id="grc-require-signed-packet"
               className="checkbox checkbox-sm"
               type="checkbox"
               checked={form.requireSignedPacket}
