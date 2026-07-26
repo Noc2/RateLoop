@@ -6,6 +6,7 @@ import { describe, it } from "node:test";
 const sql = readFileSync(resolve(process.cwd(), "drizzle/0146_hybrid_review_parent_settlement.sql"), "utf8");
 const worker = readFileSync(resolve(process.cwd(), "lib/tokenless/audienceAssignments.ts"), "utf8");
 const adapter = readFileSync(resolve(process.cwd(), "lib/tokenless/publicPaidHumanReviewAdapter.ts"), "utf8");
+const retentionWorker = readFileSync(resolve(process.cwd(), "lib/tokenless/evidenceRetentionEnforcement.ts"), "utf8");
 
 describe("hybrid review parent settlement migration", () => {
   it("persists exactly one invited child and one network child with distinct paid rounds", () => {
@@ -76,6 +77,11 @@ describe("hybrid review parent settlement migration", () => {
     assert.match(sql, /"hybrid_reviews_held" integer NOT NULL DEFAULT 0/u);
     assert.match(sql, /"hybrid_review_prune_digest"/u);
     assert.match(sql, /\^sha256:\[0-9a-f\]\{64\}\$/u);
+    assert.match(retentionWorker, /SELECT 'reviewer_exclusion'[\s\S]*exclusion\.exclusion_hash/u);
+    assert.match(
+      retentionWorker,
+      /DELETE FROM tokenless_hybrid_network_reviewer_exclusions WHERE hybrid_operation_id=\$1/u,
+    );
   });
 
   it("binds every receipt to the correct parent and rejects duplicate parent revisions", () => {

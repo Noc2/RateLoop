@@ -458,6 +458,11 @@ async function pruneRun(row: Row, now: Date, itemLimit: number) {
                   receipt.transition_revision,receipt.receipt_hash,receipt.evidence_hash
            FROM tokenless_hybrid_review_receipts receipt
            WHERE receipt.hybrid_operation_id=ANY($1::text[])
+           UNION ALL
+           SELECT 'reviewer_exclusion',exclusion.hybrid_operation_id,exclusion.exclusion_hash,
+                  'excluded',1,exclusion.exclusion_hash,exclusion.exclusion_hash
+           FROM tokenless_hybrid_network_reviewer_exclusions exclusion
+           WHERE exclusion.hybrid_operation_id=ANY($1::text[])
          ) records
          ORDER BY hybrid_operation_id,record_kind,record_key`,
         [hybridIds],
@@ -468,6 +473,9 @@ async function pruneRun(row: Row, now: Date, itemLimit: number) {
       ]);
       await client.query("SELECT set_config('rateloop.retention_erasure','on',true)");
       for (const hybridOperationId of hybridIds) {
+        await client.query(`DELETE FROM tokenless_hybrid_network_reviewer_exclusions WHERE hybrid_operation_id=$1`, [
+          hybridOperationId,
+        ]);
         await client.query(`DELETE FROM tokenless_hybrid_review_receipts WHERE hybrid_operation_id=$1`, [
           hybridOperationId,
         ]);

@@ -70,8 +70,10 @@ restricted to the minimum operational and statutory purpose. It is not an anonym
 `hybrid_public_safe` persists one parent and exactly two child settlement records: invited and network. Those records
 contain purpose-bound hashes, exact round coordinates, lifecycle counters, and append-only receipt hashes. They do not
 store reviewer principals, names, emails, payout accounts, raw customer content, raw rationales, or raw receipt JSON.
-Reviewer identity remains in the purpose-specific invited-seat or network-assignment record and is not copied into the
-hybrid parent.
+Reviewer identity normally remains in the purpose-specific invited-seat or network-assignment record and is not copied
+into the hybrid parent or child. One ephemeral invited-wins exclusion table necessarily copies the invited reviewers'
+principal IDs and payout accounts into the network binding scope to prevent self-review and duplicate payment. Those
+direct links are restricted selection data, not settlement evidence.
 
 Authenticated subject exports apply the following minimum-disclosure rule:
 
@@ -79,18 +81,21 @@ Authenticated subject exports apply the following minimum-disclosure rule:
 - an invited reviewer may export only the invited child that is bound to their exact paid-assignment seat;
 - a network reviewer may export only the network child that is bound through their exact network assignment and rater
   principal; and
+- a reviewer may export only their own hybrid network-exclusion record, never a peer's principal or payout account; and
 - reviewer exports redact the workspace ID, opportunity ID, parent evidence hashes, and the other cohort's receipt
   count. A subject with no exact membership or assignment receives no hybrid row.
 
-Account erasure irreversibly unlinks identity in the underlying seat, assignment, and rater records. The hybrid record
-does not contain a second identity copy and therefore does not block that erasure. Workspace deletion follows the
-existing restricted/tombstoned workspace workflow while settlement obligations or legal holds remain.
+Account erasure irreversibly unlinks identity in the underlying seat, assignment, and rater records and deletes the
+exact subject's ephemeral exclusion rows. Workspace deletion receipts any temporarily retained exclusion links under
+the settlement-and-audit deadline. Its legal-hold-aware expiry transaction deletes those links before their public
+network binding and retains only the parent/child commitment evidence needed for accepted or payable claims.
 
 The effective workspace evidence-retention period is frozen on the hybrid parent when preparation begins. A terminal
 or safely cancelled parent, both children, and their hash-only receipts are deleted after that deadline only when no
 workspace legal hold is active. The retention worker records counts plus one aggregate SHA-256 deletion digest in the
-restricted audit trail; it does not retain the deleted operation references or receipt payloads. An active hold defers
-the entire hybrid parent so one cohort cannot be erased while the other remains evidentially incomplete.
+restricted audit trail; the digest includes the exclusion commitment but no reviewer principal or payout account. It
+does not retain the deleted operation references or receipt payloads. An active hold defers the entire hybrid parent so
+one cohort cannot be erased while the other remains evidentially incomplete.
 
 ## Mandatory technical controls
 
