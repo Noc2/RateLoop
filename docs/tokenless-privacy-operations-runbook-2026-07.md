@@ -70,10 +70,11 @@ principal and console are available.
 - Public-network and hybrid paid lanes remain disabled unless production has approval-record hashes for the blockchain
   DPIA and provider-transfer inventory. An approval hash records governance evidence; it is not a substitute for the
   underlying signed assessment, transfer mechanism, processor terms, or pre-work transparency.
-- The scheduled producer samples only current paid-scope, payout-ownership, provider-subject, and unique-human state.
-  It persists HMAC reviewer lookups, HMAC hard-link values, encrypted private feature vectors, and aggregate signed
-  manifests. Raw principal IDs, provider subjects, payout accounts, device history, network history, and protected
-  attributes are not written to an epoch. Behavioral scoring stays disabled pending a separately approved DPIA.
+- Once `TOKENLESS_INTEGRITY_EPOCH_PRODUCER_ENABLED=true`, the scheduled producer samples only current paid-scope,
+  payout-ownership, provider-subject, and unique-human state. It persists HMAC reviewer lookups, HMAC hard-link values,
+  encrypted private feature vectors, and aggregate signed manifests. Raw principal IDs, provider subjects, payout
+  accounts, device history, network history, and protected attributes are not written to an epoch. Behavioral scoring
+  stays disabled pending a separately approved DPIA.
 - Private feature rows have a configured 1–365 day expiry and scheduled deletion; aggregate signed manifests remain as
   integrity evidence. Account deletion removes the reviewer from every unexpired epoch before the rater profile is
   tombstoned. Operators must keep every still-referenced lookup-key version in

@@ -8,6 +8,7 @@ import {
   eraseIntegrityEpochReviewerMemberships,
   integrityEpochRuntime,
   integrityObservationFromRow,
+  produceScheduledIntegrityEpoch,
   purgeExpiredIntegrityEpochPrivateFeatures,
 } from "~~/lib/tokenless/integrityEpochProducer";
 import { buildIntegrityEpoch, hashIntegrityValue } from "~~/lib/tokenless/integrityEpochs";
@@ -53,6 +54,21 @@ test("integrity epoch runtime requires independent private keys and bounded rete
         NEXT_PUBLIC_TOKENLESS_INTEGRITY_PSEUDONYM_KEY: "leaked",
       }),
     /must never use a NEXT_PUBLIC_/u,
+  );
+});
+
+test("the scheduled producer is inert until its explicit production activation gate is enabled", async () => {
+  assert.deepEqual(
+    await produceScheduledIntegrityEpoch({
+      now: NOW,
+      env: { NODE_ENV: "production", TOKENLESS_INTEGRITY_EPOCH_PRODUCER_ENABLED: "false" },
+    }),
+    {
+      status: "disabled",
+      epochId: "integrity:2026-07-26",
+      manifestHash: null,
+      observations: 0,
+    },
   );
 });
 

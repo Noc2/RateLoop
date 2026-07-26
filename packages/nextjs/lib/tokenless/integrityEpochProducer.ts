@@ -296,11 +296,7 @@ export async function produceScheduledIntegrityEpoch(
   const now = input.now ?? new Date();
   if (!Number.isFinite(now.getTime())) throw new Error("Integrity epoch time is invalid.");
   const env = input.env ?? process.env;
-  if (
-    env.NODE_ENV !== "production" &&
-    !env.TOKENLESS_INTEGRITY_SIGNING_PRIVATE_KEY?.trim() &&
-    !env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY?.trim()
-  ) {
+  if (env.TOKENLESS_INTEGRITY_EPOCH_PRODUCER_ENABLED !== "true") {
     return { status: "disabled" as const, epochId: epochId(now), manifestHash: null, observations: 0 };
   }
   requirePaidLaneComplianceApproval("public_paid_network");
