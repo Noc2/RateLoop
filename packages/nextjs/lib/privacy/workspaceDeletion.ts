@@ -802,6 +802,76 @@ export async function requestWorkspaceDeletion(input: {
        ON CONFLICT (workspace_id,principal_address) DO NOTHING`,
       [reviewerTombstone, now, input.workspaceId],
     );
+    const assuranceAssignmentSubjects = await client.query(
+      `SELECT assignment_id,project_id,cohort_id FROM tokenless_assurance_assignments
+       WHERE workspace_id=$1 ORDER BY assignment_id FOR UPDATE`,
+      [input.workspaceId],
+    );
+    for (const value of assuranceAssignmentSubjects.rows) {
+      const row = value as Row;
+      const assignmentId = text(row, "assignment_id")!;
+      const assignmentTombstone = `rlp_erased_assignment_${evidenceDigest(
+        jobId,
+        "assurance_assignment",
+        assignmentId,
+      ).slice(0, 24)}`;
+      await client.query(
+        `INSERT INTO tokenless_assurance_cohort_reviewers
+         (project_id,cohort_id,reviewer_account_address,qualification_provenance_json,
+          qualification_expires_at,maximum_active_assignments,active_reservations,status,
+          created_by,created_at,updated_at)
+         VALUES ($1,$2,$3,'{"subject":"deleted"}',$4,1,0,'removed',
+                 'system:workspace_deletion',$4,$4)
+         ON CONFLICT (project_id,cohort_id,reviewer_account_address) DO NOTHING`,
+        [row.project_id, row.cohort_id, assignmentTombstone, now],
+      );
+      await client.query(
+        `UPDATE tokenless_assurance_assignments
+         SET reviewer_account_address=$1,updated_at=$2 WHERE assignment_id=$3`,
+        [assignmentTombstone, now, assignmentId],
+      );
+    }
+    const directAssignmentSubjects = await client.query(
+      `SELECT assignment_id,project_id,cohort_id FROM tokenless_private_unpaid_review_assignments
+       WHERE workspace_id=$1 ORDER BY assignment_id FOR UPDATE`,
+      [input.workspaceId],
+    );
+    for (const value of directAssignmentSubjects.rows) {
+      const row = value as Row;
+      const assignmentId = text(row, "assignment_id")!;
+      const assignmentTombstone = `rlp_erased_assignment_${evidenceDigest(
+        jobId,
+        "direct_private_assignment",
+        assignmentId,
+      ).slice(0, 24)}`;
+      await client.query(
+        `INSERT INTO tokenless_assurance_cohort_reviewers
+         (project_id,cohort_id,reviewer_account_address,qualification_provenance_json,
+          qualification_expires_at,maximum_active_assignments,active_reservations,status,
+          created_by,created_at,updated_at)
+         VALUES ($1,$2,$3,'{"subject":"deleted"}',$4,1,0,'removed',
+                 'system:workspace_deletion',$4,$4)
+         ON CONFLICT (project_id,cohort_id,reviewer_account_address) DO NOTHING`,
+        [row.project_id, row.cohort_id, assignmentTombstone, now],
+      );
+      await client.query(
+        `UPDATE tokenless_private_unpaid_review_assignments
+         SET reviewer_account_address=$1,updated_at=$2 WHERE assignment_id=$3`,
+        [assignmentTombstone, now, assignmentId],
+      );
+    }
+    await client.query(
+      `DELETE FROM tokenless_private_group_policy_acceptances WHERE workspace_id=$1`,
+      [input.workspaceId],
+    );
+    await client.query(
+      `DELETE FROM tokenless_assurance_cohort_reviewers
+       WHERE project_id IN (
+         SELECT project_id FROM tokenless_assurance_projects WHERE workspace_id=$1
+       )
+       AND reviewer_account_address NOT LIKE 'rlp_erased_assignment_%'`,
+      [input.workspaceId],
+    );
     await client.query(`DELETE FROM tokenless_workspace_reviewer_terms_acceptances WHERE workspace_id=$1`, [
       input.workspaceId,
     ]);
@@ -875,6 +945,16 @@ export async function requestWorkspaceDeletion(input: {
       [now, input.workspaceId],
     );
     await client.query(
+      `DELETE FROM tokenless_private_group_invitation_redemptions
+       WHERE group_id IN (SELECT group_id FROM tokenless_private_groups WHERE workspace_id=$1)`,
+      [input.workspaceId],
+    );
+    await client.query(
+      `DELETE FROM tokenless_private_group_memberships
+       WHERE group_id IN (SELECT group_id FROM tokenless_private_groups WHERE workspace_id=$1)`,
+      [input.workspaceId],
+    );
+    await client.query(
       `UPDATE tokenless_private_groups SET status = 'archived', updated_at = $1
        WHERE workspace_id = $2 AND status = 'active'`,
       [now, input.workspaceId],
@@ -935,7 +1015,20 @@ export async function requestWorkspaceDeletion(input: {
          (SELECT COUNT(*) FROM tokenless_forecast_workspace_histograms
           WHERE workspace_id=$1) AS forecast_histograms,
          (SELECT COUNT(*) FROM tokenless_forecast_integrity_terminal_receipts
-          WHERE workspace_id=$1) AS forecast_terminal_receipts`,
+          WHERE workspace_id=$1) AS forecast_terminal_receipts,
+         (SELECT COUNT(*) FROM tokenless_private_group_policy_acceptances
+          WHERE workspace_id=$1) AS private_group_policy_acceptances,
+         (SELECT COUNT(*) FROM tokenless_private_group_memberships membership
+          JOIN tokenless_private_groups private_group ON private_group.group_id=membership.group_id
+          WHERE private_group.workspace_id=$1) AS private_group_memberships,
+         (SELECT COUNT(*) FROM tokenless_assurance_assignments
+          WHERE workspace_id=$1 AND reviewer_account_address NOT LIKE 'rlp_erased_assignment_%')
+          AS assurance_assignment_direct_subjects,
+         (SELECT COUNT(*) FROM tokenless_private_unpaid_review_assignments
+          WHERE workspace_id=$1 AND reviewer_account_address NOT LIKE 'rlp_erased_assignment_%')
+          AS direct_private_assignment_subjects,
+         (SELECT COUNT(*) FROM tokenless_workspace_members
+          WHERE workspace_id=$1) AS workspace_memberships`,
       [input.workspaceId],
     );
     const accessRow = accessPostconditions.rows[0] as Row;

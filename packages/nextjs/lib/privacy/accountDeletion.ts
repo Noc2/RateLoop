@@ -20,9 +20,18 @@ type DeletionBlocker = { code: string; message: string };
 type DeletionCategoryEvidence = Record<string, unknown>;
 type DirectAccessErasureEvidence = {
   enterpriseMembersUnlinked: number;
+  assuranceAssignmentsAnonymized: number;
+  directPrivateAssignmentsAnonymized: number;
+  privateGroupPolicyAcceptancesDeleted: number;
   reviewerAccessRowsAnonymized: number;
   reviewerAcceptancesDeleted: number;
   tombstonePrincipalId: string;
+};
+
+type ReleasedReservationEvidence = {
+  assurance: number;
+  directPrivate: number;
+  total: number;
 };
 
 type RaterErasureEvidence = {
@@ -136,9 +145,12 @@ async function loadPreview(client: PoolClient, principalId: string, lock = false
           )
         )) AS accepted_assignments,
        (SELECT COUNT(*) FROM tokenless_private_unpaid_review_assignments assignments
-        JOIN tokenless_paid_assignment_seats seats ON seats.assignment_id=assignments.assignment_id
-        WHERE assignments.status='accepted' AND seats.reviewer_principal_id=$1)
-         AS accepted_paid_assignments,
+        WHERE assignments.status='accepted' AND (
+          assignments.reviewer_account_address=$1 OR assignments.assignment_id IN (
+            SELECT seats.assignment_id FROM tokenless_paid_assignment_seats seats
+            WHERE seats.reviewer_principal_id=$1
+          )
+        )) AS accepted_private_assignments,
        (SELECT COUNT(*) FROM tokenless_wallet_bindings
         WHERE principal_id = $1 AND wallet_source = 'thirdweb' AND revoked_at IS NULL) AS managed_wallets,
        (SELECT COUNT(*) FROM tokenless_assurance_assignments
@@ -148,9 +160,12 @@ async function loadPreview(client: PoolClient, principalId: string, lock = false
           )
         )) AS completed_assignments,
        (SELECT COUNT(*) FROM tokenless_private_unpaid_review_assignments assignments
-        JOIN tokenless_paid_assignment_seats seats ON seats.assignment_id=assignments.assignment_id
-        WHERE assignments.status='completed' AND seats.reviewer_principal_id=$1)
-         AS completed_paid_assignments,
+        WHERE assignments.status='completed' AND (
+          assignments.reviewer_account_address=$1 OR assignments.assignment_id IN (
+            SELECT seats.assignment_id FROM tokenless_paid_assignment_seats seats
+            WHERE seats.reviewer_principal_id=$1
+          )
+        )) AS completed_private_assignments,
        (SELECT COUNT(*) FROM tokenless_paid_vouchers v
         JOIN tokenless_rater_profiles r ON r.rater_id = v.rater_id
         WHERE r.principal_id = $1) AS paid_vouchers,
@@ -168,12 +183,12 @@ async function loadPreview(client: PoolClient, principalId: string, lock = false
   const row = result.rows[0] as Row | undefined;
   const ownedWorkspaces = rowNumber(row, "owned_workspaces");
   const sharedWorkspaces = rowNumber(row, "shared_workspaces");
-  const acceptedAssignments = rowNumber(row, "accepted_assignments") + rowNumber(row, "accepted_paid_assignments");
+  const acceptedAssignments = rowNumber(row, "accepted_assignments") + rowNumber(row, "accepted_private_assignments");
   const managedWallets = rowNumber(row, "managed_wallets");
   const retainedRecords: string[] = [];
   if (
     rowNumber(row, "completed_assignments") > 0 ||
-    rowNumber(row, "completed_paid_assignments") > 0 ||
+    rowNumber(row, "completed_private_assignments") > 0 ||
     rowNumber(row, "paid_vouchers") > 0
   ) {
     retainedRecords.push("Completed paid-work and settlement evidence for the applicable legal retention period");
@@ -223,7 +238,11 @@ export async function getAccountDeletionPreview(principalId: string) {
   }
 }
 
-async function releaseReservedAssignments(client: PoolClient, principalId: string, now: Date) {
+async function releaseReservedAssignments(
+  client: PoolClient,
+  principalId: string,
+  now: Date,
+): Promise<ReleasedReservationEvidence> {
   const released = await client.query(
     `UPDATE tokenless_assurance_assignments
      SET status = 'released', lease_state = 'expired', updated_at = $1
@@ -254,7 +273,48 @@ async function releaseReservedAssignments(client: PoolClient, principalId: strin
       [row.project_id, row.cohort_id, row.reviewer_account_address],
     );
   }
-  return released.rowCount ?? 0;
+  const direct = await client.query(
+    `UPDATE tokenless_private_unpaid_review_assignments
+     SET status='expired',lease_state='expired',updated_at=$1
+     WHERE status='reserved' AND reviewer_account_address=$2
+     RETURNING project_id,cohort_id,reviewer_account_address`,
+    [now, principalId],
+  );
+  for (const value of direct.rows) {
+    const row = value as Row;
+    const reviewer = await client.query(
+      `UPDATE tokenless_assurance_cohort_reviewers
+       SET active_reservations=active_reservations-1,updated_at=$1
+       WHERE project_id=$2 AND cohort_id=$3 AND reviewer_account_address=$4
+         AND active_reservations>0 RETURNING active_reservations`,
+      [now, row.project_id, row.cohort_id, row.reviewer_account_address],
+    );
+    const cohort = await client.query(
+      `UPDATE tokenless_assurance_cohorts
+       SET active_reservations=active_reservations-1,updated_at=$1
+       WHERE project_id=$2 AND cohort_id=$3 AND active_reservations>0
+       RETURNING active_reservations`,
+      [now, row.project_id, row.cohort_id],
+    );
+    if (reviewer.rowCount !== 1 || cohort.rowCount !== 1) {
+      throw new Error("Account deletion found inconsistent direct-review reservation capacity.");
+    }
+  }
+  const remaining = await client.query(
+    `SELECT
+       (SELECT COUNT(*) FROM tokenless_private_unpaid_review_assignments
+        WHERE reviewer_account_address=$1 AND status='reserved') AS reserved_direct,
+       (SELECT COUNT(*) FROM tokenless_assurance_assignments
+        WHERE reviewer_account_address=$1 AND status='reserved') AS reserved_assurance`,
+    [principalId],
+  );
+  const remainingRow = remaining.rows[0] as Row | undefined;
+  if (rowNumber(remainingRow, "reserved_direct") !== 0 || rowNumber(remainingRow, "reserved_assurance") !== 0) {
+    throw new Error("Account deletion reservation-release postcondition failed.");
+  }
+  const assurance = released.rowCount ?? 0;
+  const directPrivate = direct.rowCount ?? 0;
+  return { assurance, directPrivate, total: assurance + directPrivate };
 }
 
 async function eraseDirectWorkspaceAccess(
@@ -267,6 +327,45 @@ async function eraseDirectWorkspaceAccess(
     `INSERT INTO tokenless_principals (principal_id,status,created_at,updated_at,disabled_at)
      VALUES ($1,'deleted',$2,$2,$2) ON CONFLICT (principal_id) DO NOTHING`,
     [tombstonePrincipalId, input.now],
+  );
+  await client.query(
+    `INSERT INTO tokenless_assurance_cohort_reviewers
+     (project_id,cohort_id,reviewer_account_address,qualification_provenance_json,
+      qualification_expires_at,maximum_active_assignments,active_reservations,status,
+      created_by,created_at,updated_at)
+     SELECT DISTINCT assignment.project_id,assignment.cohort_id,$1,'{"subject":"deleted"}',
+            $2::timestamptz,1,0,'removed','system:account_deletion',
+            $2::timestamptz,$2::timestamptz
+     FROM (
+       SELECT project_id,cohort_id FROM tokenless_assurance_assignments
+       WHERE reviewer_account_address=$3
+       UNION
+       SELECT project_id,cohort_id FROM tokenless_private_unpaid_review_assignments
+       WHERE reviewer_account_address=$3
+     ) assignment
+     ON CONFLICT (project_id,cohort_id,reviewer_account_address) DO NOTHING`,
+    [tombstonePrincipalId, input.now, input.principalId],
+  );
+  const assuranceAssignments = await client.query(
+    `UPDATE tokenless_assurance_assignments
+     SET reviewer_account_address=$1,updated_at=$2
+     WHERE reviewer_account_address=$3`,
+    [tombstonePrincipalId, input.now, input.principalId],
+  );
+  const directPrivateAssignments = await client.query(
+    `UPDATE tokenless_private_unpaid_review_assignments
+     SET reviewer_account_address=$1,updated_at=$2
+     WHERE reviewer_account_address=$3`,
+    [tombstonePrincipalId, input.now, input.principalId],
+  );
+  const privateGroupPolicyAcceptances = await client.query(
+    `DELETE FROM tokenless_private_group_policy_acceptances WHERE principal_address=$1`,
+    [input.principalId],
+  );
+  await client.query(
+    `DELETE FROM tokenless_assurance_cohort_reviewers
+     WHERE reviewer_account_address=$1 AND active_reservations=0`,
+    [input.principalId],
   );
   const enterpriseOwner = await client.query(
     `SELECT COUNT(*) AS count FROM tokenless_better_auth_sso_providers WHERE user_id=$1
@@ -385,7 +484,15 @@ async function eraseDirectWorkspaceAccess(
         WHERE principal_address=$1) AS acceptances,
        (SELECT COUNT(*) FROM tokenless_workspace_reviewer_events WHERE principal_address=$1) AS reviewer_events,
        (SELECT COUNT(*) FROM tokenless_enterprise_managed_members
-        WHERE principal_id=$1 OR better_auth_user_id=$2) AS enterprise_members`,
+        WHERE principal_id=$1 OR better_auth_user_id=$2) AS enterprise_members,
+       (SELECT COUNT(*) FROM tokenless_assurance_assignments
+        WHERE reviewer_account_address=$1) AS assurance_assignments,
+       (SELECT COUNT(*) FROM tokenless_private_unpaid_review_assignments
+        WHERE reviewer_account_address=$1) AS direct_private_assignments,
+       (SELECT COUNT(*) FROM tokenless_private_group_policy_acceptances
+        WHERE principal_address=$1) AS private_group_policy_acceptances,
+       (SELECT COUNT(*) FROM tokenless_assurance_cohort_reviewers
+        WHERE reviewer_account_address=$1) AS cohort_reviewers`,
     [input.principalId, input.betterAuthUserId],
   );
   const remainingRow = remaining.rows[0] as Row;
@@ -393,6 +500,9 @@ async function eraseDirectWorkspaceAccess(
   if (incomplete) throw new Error(`Account deletion postcondition failed: ${incomplete[0]}.`);
   return {
     enterpriseMembersUnlinked: enterpriseMembers.rowCount ?? 0,
+    assuranceAssignmentsAnonymized: assuranceAssignments.rowCount ?? 0,
+    directPrivateAssignmentsAnonymized: directPrivateAssignments.rowCount ?? 0,
+    privateGroupPolicyAcceptancesDeleted: privateGroupPolicyAcceptances.rowCount ?? 0,
     reviewerAccessRowsAnonymized: (grants.rowCount ?? 0) + (redemptions.rowCount ?? 0),
     reviewerAcceptancesDeleted: acceptances.rowCount ?? 0,
     tombstonePrincipalId,
@@ -807,7 +917,7 @@ async function collectDeletionCategoryEvidence(
     raterErasure: RaterErasureEvidence;
     directAccessErasure: DirectAccessErasureEvidence;
     forecastIntegrityErasure: { deletedRows: number; remainingRows: number; subjectCount: number };
-    releasedReservations: number;
+    releasedReservations: ReleasedReservationEvidence;
   },
 ) {
   const postconditions = await client.query(
@@ -1194,7 +1304,7 @@ export async function deleteAccount(input: {
       requestId,
       requestedAt: now,
       dueAt,
-      releasedReservations,
+      releasedReservations: releasedReservations.total,
     });
     if (storedReceiptDigest !== receiptDigest)
       throw new Error("Account deletion receipt digest changed during erasure.");

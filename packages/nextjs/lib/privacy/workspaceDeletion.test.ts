@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
@@ -525,4 +526,20 @@ test("workspace deletion marks private media for worker reconciliation and keeps
     ),
     { deletion_requested_at: NOW, technical_status: "ready" },
   );
+});
+
+test("workspace deletion anonymizes terminal review subjects and removes private access links", () => {
+  const source = readFileSync(new URL("./workspaceDeletion.ts", import.meta.url), "utf8");
+  assert.match(source, /rlp_erased_assignment_/u);
+  assert.match(source, /UPDATE tokenless_assurance_assignments[\s\S]*reviewer_account_address=\$1/u);
+  assert.match(
+    source,
+    /UPDATE tokenless_private_unpaid_review_assignments[\s\S]*reviewer_account_address=\$1/u,
+  );
+  assert.match(source, /DELETE FROM tokenless_private_group_policy_acceptances WHERE workspace_id=\$1/u);
+  assert.match(source, /DELETE FROM tokenless_private_group_memberships/u);
+  assert.match(source, /DELETE FROM tokenless_workspace_members WHERE workspace_id = \$1/u);
+  assert.match(source, /assurance_assignment_direct_subjects/u);
+  assert.match(source, /direct_private_assignment_subjects/u);
+  assert.match(source, /workspace_memberships/u);
 });

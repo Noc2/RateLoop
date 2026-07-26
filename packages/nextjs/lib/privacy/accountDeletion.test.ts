@@ -661,3 +661,25 @@ test("the account deletion route requires the product session and a one-use rece
   ]);
   assert.doesNotMatch(source, /better-auth\.session_token/);
 });
+
+test("account deletion covers direct-review reservations, identities, and policy acceptances", () => {
+  const source = readFileSync(join(process.cwd(), "lib/privacy/accountDeletion.ts"), "utf8");
+  assert.match(
+    source,
+    /UPDATE tokenless_private_unpaid_review_assignments[\s\S]*status='expired',lease_state='expired'/u,
+  );
+  assert.match(
+    source,
+    /UPDATE tokenless_assurance_cohort_reviewers[\s\S]*active_reservations=active_reservations-1/u,
+  );
+  assert.match(source, /UPDATE tokenless_assurance_cohorts[\s\S]*active_reservations=active_reservations-1/u);
+  assert.match(
+    source,
+    /UPDATE tokenless_private_unpaid_review_assignments[\s\S]*reviewer_account_address=\$1/u,
+  );
+  assert.match(source, /UPDATE tokenless_assurance_assignments[\s\S]*reviewer_account_address=\$1/u);
+  assert.match(source, /DELETE FROM tokenless_private_group_policy_acceptances WHERE principal_address=\$1/u);
+  assert.match(source, /Account deletion reservation-release postcondition failed/u);
+  assert.match(source, /direct_private_assignments/u);
+  assert.match(source, /private_group_policy_acceptances/u);
+});
