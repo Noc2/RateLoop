@@ -29,7 +29,6 @@ import {
   buildWorkspaceReviewerInvitationUrl,
   createWorkspaceReviewerInvitation,
   createWorkspaceReviewerInvitationInTransaction,
-  deliverWorkspaceReviewerInvitationEmail,
 } from "~~/lib/tokenless/workspaceReviewers";
 
 export { agentSetupUrl } from "~~/lib/tokenless/agentSetupNavigation";
@@ -2041,15 +2040,6 @@ export async function finalizeWorkspaceAgentSetup(input: {
     throw error;
   } finally {
     client.release();
-  }
-  if (response?.invitation?.destinationUrl) {
-    await deliverWorkspaceReviewerInvitationEmail({
-      invitation: {
-        invitationId: response.invitation.invitationId,
-        destinationUrl: response.invitation.destinationUrl,
-      },
-      intendedEmail: normalizedRequest.intendedEmail,
-    });
   }
   await recordWorkspaceSetupFunnelEvent({
     accountAddress: access.actor,

@@ -296,6 +296,14 @@ test("setup specialist invitation redemption reaches exact membership, expertise
   assert.ok(finalized.invitation?.token);
 
   const invitationId = finalized.invitation!.invitationId;
+  const invitationEmail = await dbClient.execute({
+    sql: `SELECT state,payload_ciphertext
+          FROM tokenless_workspace_reviewer_invitation_email_deliveries
+          WHERE invitation_id=?`,
+    args: [invitationId],
+  });
+  assert.equal(invitationEmail.rows[0]?.state, "pending");
+  assert.doesNotMatch(String(invitationEmail.rows[0]?.payload_ciphertext), /specialist@example\.test|rlri_/iu);
   const companion = await dbClient.execute({
     sql: `SELECT p.group_id,p.expires_at,p.membership_expires_at,p.maximum_redemptions,
                  w.expires_at AS workspace_expires_at,w.access_expires_at

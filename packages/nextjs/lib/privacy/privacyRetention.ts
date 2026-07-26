@@ -83,6 +83,7 @@ export async function purgeExpiredPrivacyOperations(now = new Date()) {
     productSessions,
     eligibilityHandoffs,
     notificationDeliveries,
+    reviewerInvitationEmailDeliveries,
     staleLegalEligibility,
   ] = await Promise.all([
     dbClient.execute({ sql: "DELETE FROM tokenless_subject_request_exports WHERE delete_after <= ?", args: [now] }),
@@ -106,6 +107,11 @@ export async function purgeExpiredPrivacyOperations(now = new Date()) {
     }),
     dbClient.execute({
       sql: `DELETE FROM tokenless_notification_email_deliveries
+            WHERE state IN ('delivered','suppressed','dead') AND updated_at <= ?`,
+      args: [notificationCutoff],
+    }),
+    dbClient.execute({
+      sql: `DELETE FROM tokenless_workspace_reviewer_invitation_email_deliveries
             WHERE state IN ('delivered','suppressed','dead') AND updated_at <= ?`,
       args: [notificationCutoff],
     }),
@@ -146,6 +152,7 @@ export async function purgeExpiredPrivacyOperations(now = new Date()) {
     notificationDeliveries: affected(notificationDeliveries),
     orphanedScreenings: affected(orphanedScreenings),
     productSessions: affected(productSessions),
+    reviewerInvitationEmailDeliveries: affected(reviewerInvitationEmailDeliveries),
     staleEligibilityScopes: affected(staleScopes),
     staleLegalEligibility: affected(staleLegalEligibility),
     expiredSanctionsBlocks: affected(expiredSanctionsBlocks),

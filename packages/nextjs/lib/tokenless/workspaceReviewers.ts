@@ -4,7 +4,7 @@ import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
 import { getOptionalAppUrl } from "~~/lib/env/server";
-import { sendWorkspaceReviewerInvitationEmail } from "~~/lib/notifications/resend";
+import { enqueueWorkspaceReviewerInvitationEmailInTransaction } from "~~/lib/notifications/workspaceReviewerInvitations";
 import { createPrivateGroupInvitationInTransaction } from "~~/lib/tokenless/privateGroups";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -520,15 +520,26 @@ export async function createWorkspaceReviewerInvitationInTransaction(
     },
     now,
   });
+  const destinationUrl = buildWorkspaceReviewerInvitationUrl(token);
+  const emailDelivery = intendedEmail
+    ? await enqueueWorkspaceReviewerInvitationEmailInTransaction(client, {
+        email: intendedEmail,
+        invitationId,
+        now,
+        token,
+        workspaceId: input.workspaceId,
+      })
+    : { deliveryId: null, status: "not_requested" as const };
   return {
     invitationId,
     token,
-    destinationUrl: buildWorkspaceReviewerInvitationUrl(token),
+    destinationUrl,
     tokenPrefix: suffix,
     accessExpiresAt: iso(accessExpiresAt),
     expiresAt: expiresAt.toISOString(),
     maximumRedemptions,
     paidAdulthoodAttested,
+    emailDelivery,
   };
 }
 
@@ -559,39 +570,12 @@ export async function createWorkspaceReviewerInvitation(
       });
     }
     await client.query("COMMIT");
-    return {
-      ...invitation,
-      emailDelivery: await deliverWorkspaceReviewerInvitationEmail({
-        invitation,
-        intendedEmail: input.intendedEmail,
-      }),
-    };
+    return invitation;
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
   } finally {
     client.release();
-  }
-}
-
-export async function deliverWorkspaceReviewerInvitationEmail(input: {
-  invitation: { destinationUrl: string; invitationId: string };
-  intendedEmail?: string | null;
-}) {
-  if (!input.intendedEmail) return { status: "not_requested" as const, messageId: null };
-  try {
-    const destination = new URL(input.invitation.destinationUrl);
-    if (!["http:", "https:"].includes(destination.protocol)) {
-      return { status: "unavailable" as const, messageId: null };
-    }
-    const sent = await sendWorkspaceReviewerInvitationEmail({
-      destinationUrl: destination.toString(),
-      email: normalizeEmail(input.intendedEmail),
-      invitationId: input.invitation.invitationId,
-    });
-    return { status: "sent" as const, messageId: sent.id };
-  } catch {
-    return { status: "failed" as const, messageId: null };
   }
 }
 

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import { resolveBetterAuthPrincipal } from "~~/lib/auth/principal";
 import { type DatabaseResources, __setDatabaseResourcesForTests, dbClient, dbPool } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { deliverPendingWorkspaceReviewerInvitationEmails } from "~~/lib/notifications/workspaceReviewerInvitations";
 import { createPrivateGroup, createPrivateGroupInvitationInTransaction } from "~~/lib/tokenless/privateGroups";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -530,6 +531,173 @@ test("verified-email invitations cannot be redeemed by a different authenticated
     now,
   });
   assert.equal(redeemed.principalAddress, rightReviewer);
+});
+
+test("reviewer invitation email delivery is encrypted, durable, and resumes after configuration repair", async () => {
+  const { workspaceId, owner } = await fixture();
+  const now = new Date("2026-07-21T09:00:00.000Z");
+  const invitation = await createWorkspaceReviewerInvitation({
+    accountAddress: owner,
+    workspaceId,
+    maxPrivateSensitivity: "restricted",
+    intendedEmail: "REVIEWER@example.test",
+    now,
+  });
+  assert.equal(invitation.emailDelivery.status, "queued");
+  const queued = await dbClient.execute({
+    sql: `SELECT state,attempt_count,payload_ciphertext,parked_at
+          FROM tokenless_workspace_reviewer_invitation_email_deliveries
+          WHERE invitation_id=?`,
+    args: [invitation.invitationId],
+  });
+  assert.equal(queued.rows[0]?.state, "pending");
+  assert.equal(Number(queued.rows[0]?.attempt_count), 0);
+  assert.doesNotMatch(String(queued.rows[0]?.payload_ciphertext), /reviewer@example\.test|rlri_/iu);
+
+  const parked = await deliverPendingWorkspaceReviewerInvitationEmails({
+    appOrigin: "http://not-a-production-origin.test",
+    now,
+  });
+  assert.deepEqual(
+    parked.map(value => value.state),
+    ["parked"],
+  );
+  let stored = await dbClient.execute({
+    sql: `SELECT state,attempt_count,parked_at
+          FROM tokenless_workspace_reviewer_invitation_email_deliveries
+          WHERE invitation_id=?`,
+    args: [invitation.invitationId],
+  });
+  assert.equal(stored.rows[0]?.state, "parked");
+  assert.equal(Number(stored.rows[0]?.attempt_count), 0);
+  assert.ok(stored.rows[0]?.parked_at);
+
+  const sent: Array<{ destinationUrl: string; email: string; invitationId: string }> = [];
+  const resumed = await deliverPendingWorkspaceReviewerInvitationEmails({
+    appOrigin: "https://tokenless.example.test",
+    now: new Date(now.getTime() + 60_000),
+    send: async input => {
+      sent.push(input);
+      return { id: "resend_invitation_1" };
+    },
+  });
+  const resumedState = await dbClient.execute({
+    sql: `SELECT state,last_error FROM tokenless_workspace_reviewer_invitation_email_deliveries
+          WHERE invitation_id=?`,
+    args: [invitation.invitationId],
+  });
+  assert.deepEqual(
+    resumed.map(value => value.state),
+    ["delivered"],
+    JSON.stringify(resumedState.rows[0]),
+  );
+  assert.equal(sent[0]?.email, "reviewer@example.test");
+  assert.equal(sent[0]?.invitationId, invitation.invitationId);
+  assert.equal(
+    sent[0]?.destinationUrl,
+    buildWorkspaceReviewerInvitationUrl(invitation.token, "https://tokenless.example.test"),
+  );
+  stored = await dbClient.execute({
+    sql: `SELECT state,attempt_count,payload_ciphertext,payload_key_version,provider_message_id
+          FROM tokenless_workspace_reviewer_invitation_email_deliveries
+          WHERE invitation_id=?`,
+    args: [invitation.invitationId],
+  });
+  assert.equal(stored.rows[0]?.state, "delivered");
+  assert.equal(Number(stored.rows[0]?.attempt_count), 1);
+  assert.equal(stored.rows[0]?.payload_ciphertext, null);
+  assert.equal(stored.rows[0]?.payload_key_version, null);
+  assert.equal(stored.rows[0]?.provider_message_id, "resend_invitation_1");
+});
+
+test("reviewer invitation email delivery retries transient failures and dead-letters at its bound", async () => {
+  const { workspaceId, owner } = await fixture();
+  const now = new Date("2026-07-21T09:00:00.000Z");
+  const invitation = await createWorkspaceReviewerInvitation({
+    accountAddress: owner,
+    workspaceId,
+    maxPrivateSensitivity: "confidential",
+    intendedEmail: "reviewer@example.test",
+    now,
+  });
+  const failingSend = async () => {
+    throw new Error("temporary provider failure");
+  };
+  const first = await deliverPendingWorkspaceReviewerInvitationEmails({
+    appOrigin: "https://tokenless.example.test",
+    now,
+    send: failingSend,
+  });
+  assert.deepEqual(
+    first.map(value => value.state),
+    ["retry"],
+  );
+  let stored = await dbClient.execute({
+    sql: `SELECT state,attempt_count,next_attempt_at,dead_at
+          FROM tokenless_workspace_reviewer_invitation_email_deliveries WHERE invitation_id=?`,
+    args: [invitation.invitationId],
+  });
+  assert.equal(stored.rows[0]?.state, "retry");
+  assert.equal(Number(stored.rows[0]?.attempt_count), 1);
+  assert.ok(new Date(String(stored.rows[0]?.next_attempt_at)) > now);
+
+  await dbClient.execute({
+    sql: `UPDATE tokenless_workspace_reviewer_invitation_email_deliveries
+          SET attempt_count=7,next_attempt_at=? WHERE invitation_id=?`,
+    args: [now, invitation.invitationId],
+  });
+  const terminal = await deliverPendingWorkspaceReviewerInvitationEmails({
+    appOrigin: "https://tokenless.example.test",
+    now,
+    send: failingSend,
+  });
+  assert.deepEqual(
+    terminal.map(value => value.state),
+    ["dead"],
+  );
+  stored = await dbClient.execute({
+    sql: `SELECT state,attempt_count,next_attempt_at,dead_at
+          FROM tokenless_workspace_reviewer_invitation_email_deliveries WHERE invitation_id=?`,
+    args: [invitation.invitationId],
+  });
+  assert.equal(stored.rows[0]?.state, "dead");
+  assert.equal(Number(stored.rows[0]?.attempt_count), 8);
+  assert.equal(stored.rows[0]?.next_attempt_at, null);
+  assert.ok(stored.rows[0]?.dead_at);
+});
+
+test("expired parked invitation email payloads are suppressed and erased", async () => {
+  const { workspaceId, owner } = await fixture();
+  const now = new Date("2026-07-21T09:00:00.000Z");
+  const invitation = await createWorkspaceReviewerInvitation({
+    accountAddress: owner,
+    workspaceId,
+    maxPrivateSensitivity: "confidential",
+    intendedEmail: "reviewer@example.test",
+    expiresAt: new Date(now.getTime() + 60_000),
+    now,
+  });
+  await deliverPendingWorkspaceReviewerInvitationEmails({
+    appOrigin: "http://not-a-production-origin.test",
+    now,
+  });
+  const suppressed = await deliverPendingWorkspaceReviewerInvitationEmails({
+    appOrigin: "http://not-a-production-origin.test",
+    now: new Date(now.getTime() + 60_001),
+  });
+  assert.deepEqual(
+    suppressed.map(value => value.state),
+    ["suppressed"],
+  );
+  const stored = await dbClient.execute({
+    sql: `SELECT state,payload_ciphertext,payload_key_version,suppressed_at
+          FROM tokenless_workspace_reviewer_invitation_email_deliveries WHERE invitation_id=?`,
+    args: [invitation.invitationId],
+  });
+  assert.equal(stored.rows[0]?.state, "suppressed");
+  assert.equal(stored.rows[0]?.payload_ciphertext, null);
+  assert.equal(stored.rows[0]?.payload_key_version, null);
+  assert.ok(stored.rows[0]?.suppressed_at);
 });
 
 test("reviewer terms acceptance is idempotent and records one immutable event", async () => {

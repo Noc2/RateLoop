@@ -3,6 +3,7 @@ import "server-only";
 import { dbClient } from "~~/lib/db";
 import { isResendConfigured, sendTokenlessNotificationEmail } from "~~/lib/notifications/resend";
 import { type TokenlessNotificationKey, buildTokenlessSignedUnsubscribeToken } from "~~/lib/notifications/tokenless";
+import { deliverPendingWorkspaceReviewerInvitationEmails } from "~~/lib/notifications/workspaceReviewerInvitations";
 import { materializeOversightAlertNotifications } from "~~/lib/tokenless/oversightAlerts";
 import { listRaterSettlementNotificationCandidates } from "~~/lib/tokenless/raterSettlementService";
 
@@ -600,14 +601,42 @@ export async function runTokenlessNotificationCycle(input: { appOrigin: string; 
   const alerts = await materializeOversightAlertNotifications({ now, limit });
   const enqueued = await enqueueTokenlessNotificationEmails({ now, limit });
   const outcomes = await deliverPendingTokenlessNotificationEmails({ appOrigin: input.appOrigin, now, limit });
+  const invitationOutcomes = await deliverPendingWorkspaceReviewerInvitationEmails({
+    appOrigin: input.appOrigin,
+    now,
+    limit,
+  });
+  const allOutcomes = [...outcomes, ...invitationOutcomes];
+  const [notificationBacklog, invitationBacklog] = await Promise.all([
+    dbClient.execute({
+      sql: `SELECT state,COUNT(*) AS count FROM tokenless_notification_email_deliveries
+            WHERE state IN ('retry','parked','dead') GROUP BY state`,
+    }),
+    dbClient.execute({
+      sql: `SELECT state,COUNT(*) AS count FROM tokenless_workspace_reviewer_invitation_email_deliveries
+            WHERE state IN ('retry','parked','dead') GROUP BY state`,
+    }),
+  ]);
+  const backlog = new Map<"dead" | "parked" | "retry", number>([
+    ["dead", 0],
+    ["parked", 0],
+    ["retry", 0],
+  ]);
+  for (const value of [...notificationBacklog.rows, ...invitationBacklog.rows]) {
+    const row = value as Row;
+    const state = rowString(row, "state");
+    if (state === "dead" || state === "parked" || state === "retry") {
+      backlog.set(state, (backlog.get(state) ?? 0) + Number(row.count));
+    }
+  }
   return {
-    dead: outcomes.filter(value => value.state === "dead").length,
-    delivered: outcomes.filter(value => value.state === "delivered").length,
+    dead: backlog.get("dead")!,
+    delivered: allOutcomes.filter(value => value.state === "delivered").length,
     enqueued: enqueued.inserted,
     materialized: materialized.inserted + alerts.inserted,
-    parked: outcomes.filter(value => value.state === "parked").length,
-    retry: outcomes.filter(value => value.state === "retry").length,
-    suppressed: outcomes.filter(value => value.state === "suppressed").length,
+    parked: backlog.get("parked")!,
+    retry: backlog.get("retry")!,
+    suppressed: allOutcomes.filter(value => value.state === "suppressed").length,
   };
 }
 
