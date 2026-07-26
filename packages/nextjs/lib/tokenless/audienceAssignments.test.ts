@@ -1179,6 +1179,15 @@ test("confidentiality acceptance unlocks only the assigned blinded task and shor
     confidentialityTermsHash: TERMS_HASH,
     now,
   });
+  const storedAcceptance = await dbClient.execute({
+    sql: "SELECT assignment_expires_at FROM tokenless_assurance_assignments WHERE assignment_id = ?",
+    args: [reserved.assignmentId],
+  });
+  assert.equal(
+    accepted.assignmentExpiresAt,
+    new Date(String(storedAcceptance.rows[0]?.assignment_expires_at)).toISOString(),
+  );
+  assert.ok(new Date(accepted.assignmentExpiresAt).getTime() > now.getTime());
   assert.equal(accepted.leases.length, 2);
   assert.ok(accepted.leases.every(value => new Date(value.expiresAt).getTime() - now.getTime() === 600_000));
   const activeReplay = await recoverExpiredAudienceAssignment({

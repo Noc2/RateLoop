@@ -2640,14 +2640,24 @@ export async function acceptAudienceAssignment(input: {
     client.release();
   }
   const assignmentOwner = await dbClient.execute({
-    sql: `SELECT reviewer_account_address FROM tokenless_assurance_assignments
+    sql: `SELECT reviewer_account_address,assignment_expires_at FROM tokenless_assurance_assignments
           WHERE assignment_id = ? LIMIT 1`,
     args: [input.assignmentId],
   });
-  const reviewer = rowString(assignmentOwner.rows[0] as QueryRow | undefined, "reviewer_account_address");
-  if (!reviewer) throw new TokenlessServiceError("Assignment not found.", 404, "assignment_not_found");
+  const assignment = assignmentOwner.rows[0] as QueryRow | undefined;
+  const reviewer = rowString(assignment, "reviewer_account_address");
+  const assignmentExpiresAt = rowDate(assignment, "assignment_expires_at");
+  if (!reviewer || !assignmentExpiresAt) {
+    throw new TokenlessServiceError("Assignment not found.", 404, "assignment_not_found");
+  }
   const leases = await issueAssignmentArtifactLeases(input.assignmentId, now, reviewer, input.confidentialityTermsHash);
-  return { assignmentId: input.assignmentId, accepted: true, replay, leases };
+  return {
+    assignmentId: input.assignmentId,
+    assignmentExpiresAt: assignmentExpiresAt.toISOString(),
+    accepted: true,
+    replay,
+    leases,
+  };
 }
 
 export async function getAssignmentOnlyTask(input: { baseAccountAddress: string; assignmentId: string; now?: Date }) {
