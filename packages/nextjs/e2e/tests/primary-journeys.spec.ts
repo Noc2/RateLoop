@@ -330,7 +330,7 @@ test("owner approves a request and prepares its human feedback award", async ({ 
   await expectNoAxeViolations(page);
   await page.getByRole("button", { name: "Approve" }).click();
   await expect(page.getByText("Approved and ready for the request adapter.")).toBeVisible();
-  await page.getByLabel("Feedback Bonus award amount").fill("1.5");
+  await page.getByLabel("Award amount (USDC)").fill("1.5");
   await page.getByRole("button", { name: "Award this feedback" }).click();
   await expect(page.getByText("No feedback bonuses need an award.")).toBeVisible();
 });
