@@ -122,12 +122,18 @@ export async function expireWorkspaceDeletionRetentionCategories(now = new Date(
     `SELECT category.job_id
      FROM tokenless_deletion_job_categories category
      JOIN tokenless_deletion_jobs job ON job.job_id=category.job_id
+     LEFT JOIN tokenless_privacy_worker_failures failure
+       ON failure.worker_kind='workspace_retention'
+      AND failure.work_item_key=category.job_id || ':legal_hold_schedule'
      WHERE job.scope_kind='workspace' AND category.category='legal_hold_records'
        AND category.status='retained' AND category.retention_deadline IS NULL
        AND job.scope_id NOT IN (
          SELECT hold.workspace_id FROM tokenless_legal_holds hold WHERE hold.status='active'
        )
-     ORDER BY category.job_id`,
+       AND (failure.failure_id IS NULL OR (failure.status='retrying' AND failure.next_retry_at<=$1))
+     ORDER BY category.job_id
+     LIMIT $2`,
+    [now, limit],
   );
   let releasedHoldSchedules = 0;
   for (const value of releasedHoldRows.rows as Row[]) {

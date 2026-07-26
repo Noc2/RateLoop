@@ -209,3 +209,81 @@ test("released legal holds receive a bounded post-hold audit deadline", async ()
   assert.equal(category.rows[0]?.status, "retained");
   assert.equal(new Date(String(category.rows[0]?.retention_deadline)).toISOString(), "2038-07-26T10:00:00.000Z");
 });
+
+test("released-hold scheduling honors retry backoff and permanently isolates dead rows", async () => {
+  const fixture = await seedDueWorkspaceRetention();
+  const workItemKey = `${fixture.jobId}:legal_hold_schedule`;
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_deletion_job_categories
+          (job_id,category,disposition,status,basis_code,retention_deadline,
+           evidence_digest,created_at,started_at,completed_at)
+          VALUES (?,'legal_hold_records','retain','retained','active_legal_hold',NULL,?,?,?,?)`,
+    args: [
+      fixture.jobId,
+      "e".repeat(64),
+      new Date("2026-07-26T10:00:00.000Z"),
+      new Date("2026-07-26T10:00:00.000Z"),
+      new Date("2026-07-26T10:00:00.000Z"),
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_privacy_worker_failures
+          (failure_id,worker_kind,work_item_key,status,attempt_count,first_failed_at,last_failed_at,
+           next_retry_at,last_error_code,last_error_digest,operator_alert_state,resolved_at,updated_at)
+          VALUES ('privacyfail_hold_schedule','workspace_retention',?,'retrying',1,?,?,?,
+                  'internal_error',?,'pending',NULL,?)`,
+    args: [
+      workItemKey,
+      new Date(NOW.getTime() - 60_000),
+      new Date(NOW.getTime() - 60_000),
+      new Date(NOW.getTime() + 60_000),
+      `sha256:${"f".repeat(64)}`,
+      new Date(NOW.getTime() - 60_000),
+    ],
+  });
+
+  const backedOff = await expireWorkspaceDeletionRetentionCategories(NOW);
+  assert.equal(backedOff.releasedHoldSchedules, 0);
+  let category = await dbClient.execute({
+    sql: `SELECT retention_deadline FROM tokenless_deletion_job_categories
+          WHERE job_id=? AND category='legal_hold_records'`,
+    args: [fixture.jobId],
+  });
+  assert.equal(category.rows[0]?.retention_deadline, null);
+
+  await dbClient.execute({
+    sql: `UPDATE tokenless_privacy_worker_failures SET next_retry_at=?,updated_at=?
+          WHERE worker_kind='workspace_retention' AND work_item_key=?`,
+    args: [NOW, NOW, workItemKey],
+  });
+  const retried = await expireWorkspaceDeletionRetentionCategories(NOW);
+  assert.equal(retried.releasedHoldSchedules, 1);
+  const resolved = await dbClient.execute({
+    sql: `SELECT status,operator_alert_state FROM tokenless_privacy_worker_failures
+          WHERE worker_kind='workspace_retention' AND work_item_key=?`,
+    args: [workItemKey],
+  });
+  assert.deepEqual(resolved.rows[0], { operator_alert_state: "resolved", status: "resolved" });
+
+  await dbClient.execute({
+    sql: `UPDATE tokenless_deletion_job_categories
+          SET basis_code='active_legal_hold',retention_deadline=NULL
+          WHERE job_id=? AND category='legal_hold_records'`,
+    args: [fixture.jobId],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_privacy_worker_failures
+          SET status='dead',attempt_count=5,next_retry_at=NULL,operator_alert_state='pending',
+              resolved_at=NULL,updated_at=?
+          WHERE worker_kind='workspace_retention' AND work_item_key=?`,
+    args: [NOW, workItemKey],
+  });
+  const dead = await expireWorkspaceDeletionRetentionCategories(new Date(NOW.getTime() + 86_400_000));
+  assert.equal(dead.releasedHoldSchedules, 0);
+  category = await dbClient.execute({
+    sql: `SELECT retention_deadline FROM tokenless_deletion_job_categories
+          WHERE job_id=? AND category='legal_hold_records'`,
+    args: [fixture.jobId],
+  });
+  assert.equal(category.rows[0]?.retention_deadline, null);
+});
