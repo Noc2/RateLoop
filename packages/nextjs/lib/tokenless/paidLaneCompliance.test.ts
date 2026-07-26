@@ -5,6 +5,7 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const HASH_A = `sha256:${"a".repeat(64)}`;
 const HASH_B = `sha256:${"b".repeat(64)}`;
+const HASH_C = `sha256:${"c".repeat(64)}`;
 
 test("production paid lanes fail closed without DPIA and transfer-inventory approval", () => {
   assert.throws(
@@ -23,6 +24,7 @@ test("paid lane approval contains only documented approval references", () => {
         NODE_ENV: "production",
         TOKENLESS_PAID_LANES_DPIA_APPROVAL_REFERENCE: HASH_A,
         TOKENLESS_PAID_LANES_TRANSFER_INVENTORY_APPROVAL_REFERENCE: HASH_B,
+        TOKENLESS_PAID_LANES_FUNDING_VALIDATION_REFERENCE: HASH_C,
         TOKENLESS_PAID_LANES_COMPLIANCE_APPROVED_AT: "2026-07-20T12:00:00.000Z",
       },
       { force: true, now: new Date("2026-07-26T12:00:00.000Z") },
@@ -31,6 +33,7 @@ test("paid lane approval contains only documented approval references", () => {
       schemaVersion: "rateloop.paid-lane-compliance-approval.v1",
       dpiaApprovalReference: HASH_A,
       providerTransferInventoryReference: HASH_B,
+      fundedDeploymentReference: HASH_C,
       approvedAt: "2026-07-20T12:00:00.000Z",
     },
   );
@@ -44,6 +47,7 @@ test("future-dated approvals are rejected", () => {
           NODE_ENV: "production",
           TOKENLESS_PAID_LANES_DPIA_APPROVAL_REFERENCE: HASH_A,
           TOKENLESS_PAID_LANES_TRANSFER_INVENTORY_APPROVAL_REFERENCE: HASH_B,
+          TOKENLESS_PAID_LANES_FUNDING_VALIDATION_REFERENCE: HASH_C,
           TOKENLESS_PAID_LANES_COMPLIANCE_APPROVED_AT: "2026-07-27T12:00:00.000Z",
         },
         { force: true, now: new Date("2026-07-26T12:00:00.000Z") },
