@@ -30,12 +30,9 @@ test("workspace deletion reveals only relevant impact, warnings, and blockers", 
   assert.match(source, /legal hold delays deletion/);
 });
 
-test("workspace deletion stays out of setup and appears only for owners in the connected danger zone", () => {
-  const setupStart = panelsSource.indexOf("if (initialSetup && !initialSetup.complete)");
-  const setupEnd = panelsSource.indexOf("\n  }\n\n  return (", setupStart);
-  const setupBranch = panelsSource.slice(setupStart, setupEnd);
-  assert.ok(setupStart >= 0 && setupEnd > setupStart);
-  assert.doesNotMatch(setupBranch, /WorkspaceDangerZone/);
+test("workspace deletion stays out of agent setup and appears only for owners in workspace settings", () => {
+  assert.match(panelsSource, /setupIncomplete && initialSetup \? <AgentSetupFlow/);
+  assert.match(panelsSource, /<WorkspaceSettingsClient initialWorkspaceId=\{workspaceId\}/);
   assert.doesNotMatch(panelsSource, /<WorkspaceDangerZone/);
   assert.match(settingsSource, /selected && canManageWorkspace/);
   assert.match(settingsSource, /canDelete=\{selected\.role === "owner"\}/);
