@@ -370,18 +370,18 @@ test("people and funding are conditional on the exact review audience and compen
   assert.doesNotMatch(flowSource, /RateLoop will still prepare the private group/);
 });
 
-test("invitation copy states that email binds the code but is not delivered", () => {
+test("invitation copy states that an email-bound link is delivered", () => {
   assert.match(flowSource, /const \[peopleDecision, setPeopleDecision\]/);
   assert.match(flowSource, /checked=\{peopleDecision === "invited" && !sharedInvitation\}/);
   assert.match(flowSource, /checked=\{peopleDecision === "later"\}/);
   assert.match(flowSource, /peopleDecision === "invited" \? \(/);
   assert.match(flowSource, /Invite one person/);
   assert.match(flowSource, /Bind code to recipient email/);
-  assert.match(flowSource, /RateLoop does not send this email/);
-  assert.match(flowSource, /Copy this invitation code now/);
+  assert.match(flowSource, /RateLoop sends the personal invitation link/);
+  assert.match(flowSource, /Copy this invitation link now/);
   assert.match(flowSource, /issuedInvitationCapacity/);
-  assert.match(flowSource, /copyInvitationCode/);
-  assert.match(flowSource, /notifications\.success\("Invitation code copied to clipboard\."\)/);
+  assert.match(flowSource, /copyInvitationLink/);
+  assert.match(flowSource, /notifications\.success\("Invitation link copied to clipboard\."\)/);
   assert.match(flowSource, /Intended specialist areas/);
   assert.match(flowSource, /expertiseDefinitionIds/);
   assert.match(flowSource, /required=\{invitationExpertiseIds\.length > 0\}/);

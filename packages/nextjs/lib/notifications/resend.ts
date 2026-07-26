@@ -132,6 +132,49 @@ export async function sendTokenlessNotificationEmail(
   return { id: typeof result?.id === "string" ? result.id : null };
 }
 
+export async function sendWorkspaceReviewerInvitationEmail(
+  params: { destinationUrl: string; email: string; invitationId: string },
+  fetchImpl: typeof fetch = fetch,
+) {
+  const { apiKey, fromEmail: configuredFromEmail } = getResendConfig();
+  const fromEmail = normalizeResendFromEmail(configuredFromEmail);
+  if (!apiKey || !fromEmail) throw new Error("Resend is not configured");
+  const destination = new URL(params.destinationUrl);
+  if (!["http:", "https:"].includes(destination.protocol)) {
+    throw new Error("Reviewer invitation destination must be an absolute HTTP URL.");
+  }
+  const response = await fetchImpl("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "Idempotency-Key": `workspace-reviewer-invitation:${params.invitationId}`,
+    },
+    body: JSON.stringify({
+      from: fromEmail,
+      to: [params.email],
+      subject: "You’re invited to review with RateLoop",
+      text: `You have been invited to review assigned private work with RateLoop.\n\nAccept invitation: ${params.destinationUrl}\n\nThis link is personal and may expire. Do not forward it.`,
+      html: buildRateLoopEmailHtml({
+        kind: "action",
+        eyebrow: "Reviewer invitation",
+        title: "Review with RateLoop",
+        body: "You have been invited to review assigned private work without joining the sender’s workspace.",
+        ctaLabel: "Review invitation",
+        ctaHref: params.destinationUrl,
+        preheader: "Open your private RateLoop reviewer invitation.",
+        footerNote: "This personal invitation may expire. Do not forward it.",
+      }),
+    }),
+  });
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`Resend request failed: ${response.status} ${body}`.trim());
+  }
+  const result = (await response.json().catch(() => null)) as { id?: unknown } | null;
+  return { id: typeof result?.id === "string" ? result.id : null };
+}
+
 export function buildTokenlessVerificationUrl(token: string) {
   const appUrl = getOptionalAppUrl();
   if (!appUrl) throw new Error("APP_URL is required for email verification links");

@@ -9,6 +9,7 @@ import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
   acceptWorkspaceReviewerTerms,
+  buildWorkspaceReviewerInvitationUrl,
   createWorkspaceReviewerInvitation,
   createWorkspaceReviewerTermsVersion,
   leaveWorkspaceReviewer,
@@ -86,6 +87,11 @@ test("reviewer invitations persist only token hashes and never grant workspace m
   });
 
   assert.match(invitation.token, /^rlri_[a-f0-9]{16}_[A-Za-z0-9_-]{43}$/u);
+  assert.equal(
+    buildWorkspaceReviewerInvitationUrl(invitation.token, "https://tokenless.example.test"),
+    `https://tokenless.example.test/human?tab=discover&invite=1#invite=${invitation.token}`,
+  );
+  assert.match(invitation.destinationUrl, /\/human\?tab=discover&invite=1#invite=rlri_/u);
   const stored = await dbClient.execute({
     sql: `SELECT token_hash,token_prefix,intended_account_address
           FROM tokenless_workspace_reviewer_invitations WHERE invitation_id=?`,
@@ -145,6 +151,77 @@ test("reviewer invitations persist only token hashes and never grant workspace m
   });
   const unverifiedReviewers = await listWorkspaceReviewers({ accountAddress: owner, workspaceId, now });
   assert.equal(unverifiedReviewers[0]?.email, null);
+});
+
+test("setup-bound reviewer invitation redemption activates the selected private group idempotently", async () => {
+  const { workspaceId, owner, reviewer } = await fixture();
+  const group = await createPrivateGroup({
+    accountAddress: owner,
+    workspaceId,
+    name: "Deployment reviewers",
+    purpose: "Review private agent output.",
+  });
+  const now = new Date("2026-07-21T09:00:00.000Z");
+  const invitation = await createWorkspaceReviewerInvitation({
+    accountAddress: owner,
+    workspaceId,
+    maxPrivateSensitivity: "confidential",
+    intendedAccountAddress: reviewer,
+    accessExpiresAt: new Date(now.getTime() + 30 * 86_400_000),
+    now,
+  });
+  const setup = await dbClient.execute({
+    sql: `UPDATE tokenless_workspace_agent_setups
+          SET status='completed',current_step='complete',people_decision='invited',private_group_id=?,
+              people_decided_at=?,people_decided_by=?,people_invitation_id=?,
+              finalization_idempotency_key_hash=?,finalization_request_hash=?,
+              completed_at=?,completed_by=?,updated_at=?
+          WHERE workspace_id=?`,
+    args: [
+      group.groupId,
+      now,
+      owner,
+      invitation.invitationId,
+      `sha256:${"1".repeat(64)}`,
+      `sha256:${"2".repeat(64)}`,
+      now,
+      owner,
+      now,
+      workspaceId,
+    ],
+  });
+  assert.equal(setup.rowCount, 1);
+
+  const first = await redeemWorkspaceReviewerInvitation({ accountAddress: reviewer, token: invitation.token, now });
+  assert.equal(first.replay, false);
+  const stored = await dbClient.execute({
+    sql: `SELECT status,allowed_project_ids_json,source_invitation_id,membership_expires_at
+          FROM tokenless_private_group_memberships WHERE group_id=? AND principal_address=?`,
+    args: [group.groupId, reviewer],
+  });
+  assert.equal(stored.rows[0]?.status, "active");
+  assert.equal(stored.rows[0]?.allowed_project_ids_json, "[]");
+  assert.equal(stored.rows[0]?.source_invitation_id, null);
+  assert.equal(
+    new Date(String(stored.rows[0]?.membership_expires_at)).toISOString(),
+    new Date(now.getTime() + 30 * 86_400_000).toISOString(),
+  );
+
+  await dbClient.execute({
+    sql: "DELETE FROM tokenless_private_group_memberships WHERE group_id=? AND principal_address=?",
+    args: [group.groupId, reviewer],
+  });
+  const replay = await redeemWorkspaceReviewerInvitation({
+    accountAddress: reviewer,
+    token: invitation.token,
+    now: new Date(now.getTime() + 60_000),
+  });
+  assert.equal(replay.replay, true);
+  const repaired = await dbClient.execute({
+    sql: "SELECT status FROM tokenless_private_group_memberships WHERE group_id=? AND principal_address=?",
+    args: [group.groupId, reviewer],
+  });
+  assert.equal(repaired.rows[0]?.status, "active");
 });
 
 test("reviewer invitation redemption is idempotent after reaching its redemption cap", async () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 type ReviewerInvitationPreview = {
   workspaceName: string;
@@ -31,61 +31,80 @@ export function InvitationRouterPanel({ onAccepted }: { onAccepted?: (kind: Invi
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const fragmentLoaded = useRef(false);
 
-  async function checkInvitation(event: FormEvent<HTMLFormElement>) {
+  const inspectInvitation = useCallback(
+    async (normalized: string) => {
+      setBusy(true);
+      setStatus(null);
+      setError(null);
+      setPreview(null);
+      try {
+        if (normalized.startsWith("rlwi_")) {
+          await readJson(
+            await fetch("/api/account/workspace-invitations/redeem", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ token: normalized }),
+            }),
+          );
+          setToken("");
+          setStatus("Workspace invitation accepted.");
+          onAccepted?.("workspace");
+          return;
+        }
+        if (normalized.startsWith("rli_")) {
+          await readJson(
+            await fetch("/api/account/assurance/reviewer-invitations/redeem", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ token: normalized }),
+            }),
+          );
+          setToken("");
+          setStatus("Invitation accepted.");
+          onAccepted?.("reviewer");
+          return;
+        }
+        if (normalized.startsWith("rlri_")) {
+          const body = await readJson(
+            await fetch("/api/account/reviewer-invitations/preview", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ token: normalized }),
+            }),
+          );
+          setPreview(body.invitation as ReviewerInvitationPreview);
+          return;
+        }
+        throw new Error("Enter a valid RateLoop invitation code.");
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Unable to check the invitation.");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [onAccepted],
+  );
+
+  useEffect(() => {
+    if (fragmentLoaded.current) return;
+    fragmentLoaded.current = true;
+    const fragmentToken = new URLSearchParams(window.location.hash.slice(1)).get("invite")?.trim();
+    if (!fragmentToken?.startsWith("rlri_")) return;
+    setToken(fragmentToken);
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}`);
+    void inspectInvitation(fragmentToken);
+  }, [inspectInvitation]);
+
+  function checkInvitation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const normalized = token.trim();
     setBusy(true);
-    setStatus(null);
-    setError(null);
-    setPreview(null);
-    try {
-      if (normalized.startsWith("rlwi_")) {
-        await readJson(
-          await fetch("/api/account/workspace-invitations/redeem", {
-            method: "POST",
-            credentials: "same-origin",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token: normalized }),
-          }),
-        );
-        setToken("");
-        setStatus("Workspace invitation accepted.");
-        onAccepted?.("workspace");
-        return;
-      }
-      if (normalized.startsWith("rli_")) {
-        await readJson(
-          await fetch("/api/account/assurance/reviewer-invitations/redeem", {
-            method: "POST",
-            credentials: "same-origin",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token: normalized }),
-          }),
-        );
-        setToken("");
-        setStatus("Invitation accepted.");
-        onAccepted?.("reviewer");
-        return;
-      }
-      if (normalized.startsWith("rlri_")) {
-        const body = await readJson(
-          await fetch("/api/account/reviewer-invitations/preview", {
-            method: "POST",
-            credentials: "same-origin",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token: normalized }),
-          }),
-        );
-        setPreview(body.invitation as ReviewerInvitationPreview);
-        return;
-      }
-      throw new Error("Enter a valid RateLoop invitation code.");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to check the invitation.");
-    } finally {
-      setBusy(false);
-    }
+    void inspectInvitation(normalized);
   }
 
   async function acceptReviewerInvitation() {

@@ -653,15 +653,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     }
   }
 
-  async function copyInvitationCode() {
+  async function copyInvitationLink() {
     if (!inviteToken) return;
     try {
       await navigator.clipboard.writeText(inviteToken);
-      setAnnouncement("Invitation code copied to clipboard.");
-      notifications.success("Invitation code copied to clipboard.");
+      setAnnouncement("Invitation link copied to clipboard.");
+      notifications.success("Invitation link copied to clipboard.");
     } catch {
-      setError("Clipboard access was denied. Select and copy the visible invitation code manually.");
-      notifications.error("Clipboard access was blocked. Copy the invitation code manually.");
+      setError("Clipboard access was denied. Select and copy the visible invitation link manually.");
+      notifications.error("Clipboard access was blocked. Copy the invitation link manually.");
     }
   }
 
@@ -1104,8 +1104,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         }),
       );
       const invitation = body.invitation as Record<string, unknown> | null;
-      if (invitation && typeof invitation.token === "string") {
-        setInviteToken(invitation.token);
+      if (invitation && typeof invitation.destinationUrl === "string") {
+        setInviteToken(invitation.destinationUrl);
         setIssuedInvitationCapacity(
           typeof invitation.maximumRedemptions === "number" ? invitation.maximumRedemptions : 1,
         );
@@ -1120,7 +1120,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         peopleDecision: decision as "invited" | "later" | "not_required",
         revision: typeof body.revision === "number" ? body.revision : current.revision,
       }));
-      if (!invitation?.token) {
+      if (!invitation?.destinationUrl) {
         const destination =
           typeof body.destination === "string"
             ? body.destination
@@ -2214,8 +2214,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                                 required={invitationExpertiseIds.length > 0}
                               />
                               <span className="mt-1 block text-xs text-base-content/55">
-                                RateLoop does not send this email. The recipient must use the code while signed in with
-                                that address.
+                                RateLoop sends the personal invitation link to this address. The recipient must sign in
+                                with that verified address.
                               </span>
                             </label>
                             {privateExpertiseRequirements.length > 0 ? (
@@ -2284,7 +2284,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               <div className="mt-5 space-y-4">
                 {inviteToken ? (
                   <div className="rounded-xl border border-primary/30 bg-primary/10 p-4">
-                    <p className="font-medium">Copy this invitation code now</p>
+                    <p className="font-medium">Copy this invitation link now</p>
                     <p className="mt-1 text-sm text-base-content/60">
                       {issuedInvitationCapacity > 1
                         ? `Up to ${issuedInvitationCapacity} people can use it before it expires.`
@@ -2294,9 +2294,9 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     <button
                       className="btn btn-sm rateloop-secondary-action mt-3"
                       type="button"
-                      onClick={() => void copyInvitationCode()}
+                      onClick={() => void copyInvitationLink()}
                     >
-                      Copy code
+                      Copy link
                     </button>
                   </div>
                 ) : null}
@@ -2311,7 +2311,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   <p className="mt-2">
                     <span className="text-base-content/55">People:</span>{" "}
                     {setup.peopleDecision === "invited"
-                      ? "Invitation code created"
+                      ? "Invitation link created"
                       : setup.peopleDecision === "not_required"
                         ? "RateLoop network; no invitation needed"
                         : "Invite later"}

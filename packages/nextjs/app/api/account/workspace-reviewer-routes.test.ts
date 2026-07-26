@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 function source(relativePath: string) {
@@ -78,4 +78,15 @@ test("reviewers can inspect and leave their own workspace reviewer access", () =
   assert.match(leave, /accountAddress: session\.principalId/);
   assert.match(leave, /workspaceId/);
   assert.match(leave, /private, no-store, max-age=0/);
+});
+
+test("legacy private-group invitation endpoints are absent", () => {
+  for (const relativePath of [
+    "./private-groups/invitations/preview/route.ts",
+    "./private-groups/invitations/redeem/route.ts",
+    "./workspaces/[workspaceId]/private-groups/[groupId]/invitations/route.ts",
+    "./workspaces/[workspaceId]/private-groups/[groupId]/invitations/[invitationId]/route.ts",
+  ]) {
+    assert.equal(existsSync(new URL(relativePath, import.meta.url)), false, relativePath);
+  }
 });

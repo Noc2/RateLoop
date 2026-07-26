@@ -25,8 +25,10 @@ import {
   provisionWorkspacePrivateReviewRouting,
 } from "~~/lib/tokenless/workspacePrivateReviewRouting";
 import {
+  buildWorkspaceReviewerInvitationUrl,
   createWorkspaceReviewerInvitation,
   createWorkspaceReviewerInvitationInTransaction,
+  deliverWorkspaceReviewerInvitationEmail,
 } from "~~/lib/tokenless/workspaceReviewers";
 
 export { agentSetupUrl } from "~~/lib/tokenless/agentSetupNavigation";
@@ -1391,6 +1393,7 @@ async function setupFinalizationInvitationReplay(
   return {
     invitationId: input.invitationId,
     token: status === "active" ? input.token : null,
+    destinationUrl: status === "active" ? buildWorkspaceReviewerInvitationUrl(input.token) : null,
     tokenPrefix: rowString(invitation, "token_prefix"),
     expiresAt,
     accessExpiresAt: rowDate(invitation, "access_expires_at"),
@@ -1899,6 +1902,15 @@ export async function finalizeWorkspaceAgentSetup(input: {
     throw error;
   } finally {
     client.release();
+  }
+  if (response?.invitation?.destinationUrl) {
+    await deliverWorkspaceReviewerInvitationEmail({
+      invitation: {
+        invitationId: response.invitation.invitationId,
+        destinationUrl: response.invitation.destinationUrl,
+      },
+      intendedEmail: normalizedRequest.intendedEmail,
+    });
   }
   await recordWorkspaceSetupFunnelEvent({
     accountAddress: access.actor,

@@ -3,6 +3,8 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
+import { getOptionalAppUrl } from "~~/lib/env/server";
+import { sendWorkspaceReviewerInvitationEmail } from "~~/lib/notifications/resend";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const INVITATION_PATTERN = /^rlri_([a-f0-9]{16})_([A-Za-z0-9_-]{43})$/u;
@@ -117,6 +119,14 @@ function integer(value: number, field: string, minimum: number, maximum: number)
 
 function iso(value: Date | null) {
   return value?.toISOString() ?? null;
+}
+
+export function buildWorkspaceReviewerInvitationUrl(token: string, appUrl = getOptionalAppUrl()) {
+  if (!INVITATION_PATTERN.test(token)) {
+    throw new TokenlessServiceError("Reviewer invitation token is invalid.", 400, "invalid_workspace_reviewer");
+  }
+  const relative = `/human?tab=discover&invite=1#invite=${encodeURIComponent(token)}`;
+  return appUrl ? new URL(relative, appUrl).toString() : relative;
 }
 
 async function requireManager(accountAddress: string, workspaceId: string) {
@@ -486,6 +496,7 @@ export async function createWorkspaceReviewerInvitationInTransaction(
   return {
     invitationId,
     token,
+    destinationUrl: buildWorkspaceReviewerInvitationUrl(token),
     tokenPrefix: suffix,
     accessExpiresAt: iso(accessExpiresAt),
     expiresAt: expiresAt.toISOString(),
@@ -504,12 +515,39 @@ export async function createWorkspaceReviewerInvitation(
       actorAddress: input.accountAddress,
     });
     await client.query("COMMIT");
-    return invitation;
+    return {
+      ...invitation,
+      emailDelivery: await deliverWorkspaceReviewerInvitationEmail({
+        invitation,
+        intendedEmail: input.intendedEmail,
+      }),
+    };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
   } finally {
     client.release();
+  }
+}
+
+export async function deliverWorkspaceReviewerInvitationEmail(input: {
+  invitation: { destinationUrl: string; invitationId: string };
+  intendedEmail?: string | null;
+}) {
+  if (!input.intendedEmail) return { status: "not_requested" as const, messageId: null };
+  try {
+    const destination = new URL(input.invitation.destinationUrl);
+    if (!["http:", "https:"].includes(destination.protocol)) {
+      return { status: "unavailable" as const, messageId: null };
+    }
+    const sent = await sendWorkspaceReviewerInvitationEmail({
+      destinationUrl: destination.toString(),
+      email: normalizeEmail(input.intendedEmail),
+      invitationId: input.invitation.invitationId,
+    });
+    return { status: "sent" as const, messageId: sent.id };
+  } catch {
+    return { status: "failed" as const, messageId: null };
   }
 }
 
@@ -609,6 +647,50 @@ export async function previewWorkspaceReviewerInvitation(input: { accountAddress
   }
 }
 
+async function ensureSetupPrivateGroupMembership(
+  client: PoolClient,
+  input: {
+    invitation: Row;
+    invitationId: string;
+    joinedAt: Date;
+    principalAddress: string;
+    projects: string[];
+    workspaceId: string;
+  },
+) {
+  const setup = await client.query(
+    `SELECT s.private_group_id
+     FROM tokenless_workspace_agent_setups s
+     JOIN tokenless_private_groups g
+       ON g.group_id=s.private_group_id AND g.workspace_id=s.workspace_id AND g.status='active'
+     WHERE s.workspace_id=$1 AND s.people_invitation_id=$2
+       AND s.status='completed' AND s.people_decision='invited'
+     LIMIT 1 FOR SHARE`,
+    [input.workspaceId, input.invitationId],
+  );
+  const groupId = text(setup.rows[0] as Row | undefined, "private_group_id");
+  if (!groupId) return null;
+  await client.query(
+    `INSERT INTO tokenless_private_group_memberships
+     (group_id,principal_address,role,status,allowed_project_ids_json,source_invitation_id,
+      membership_expires_at,joined_at,ended_at,end_reason,created_by,updated_at)
+     VALUES ($1,$2,'reviewer','active',$3,NULL,$4,$5,NULL,NULL,$6,$5)
+     ON CONFLICT (group_id,principal_address) DO UPDATE SET
+       role='reviewer',status='active',allowed_project_ids_json=EXCLUDED.allowed_project_ids_json,
+       source_invitation_id=NULL,membership_expires_at=EXCLUDED.membership_expires_at,
+       ended_at=NULL,end_reason=NULL,updated_at=EXCLUDED.updated_at`,
+    [
+      groupId,
+      input.principalAddress,
+      JSON.stringify(input.projects),
+      date(input.invitation, "access_expires_at"),
+      input.joinedAt,
+      text(input.invitation, "created_by"),
+    ],
+  );
+  return groupId;
+}
+
 export async function redeemWorkspaceReviewerInvitation(input: { accountAddress: string; token: string; now?: Date }) {
   const principalAddress = normalizePrincipal(input.accountAddress);
   const now = input.now ?? new Date();
@@ -620,11 +702,25 @@ export async function redeemWorkspaceReviewerInvitation(input: { accountAddress:
     const invitationId = text(row, "invitation_id")!;
     const workspaceId = text(row, "workspace_id")!;
     const replay = await client.query(
-      `SELECT grant_id FROM tokenless_workspace_reviewer_invitation_redemptions
+      `SELECT grant_id,redeemed_at FROM tokenless_workspace_reviewer_invitation_redemptions
        WHERE invitation_id=$1 AND principal_address=$2 LIMIT 1`,
       [invitationId, principalAddress],
     );
+    const projectResult = await client.query(
+      `SELECT project_id FROM tokenless_workspace_reviewer_invitation_projects
+       WHERE invitation_id=$1 ORDER BY project_id`,
+      [invitationId],
+    );
+    const projects = projectResult.rows.map(value => text(value as Row, "project_id")!);
     if (replay.rowCount === 1) {
+      await ensureSetupPrivateGroupMembership(client, {
+        invitation: row,
+        invitationId,
+        joinedAt: date(replay.rows[0] as Row, "redeemed_at")!,
+        principalAddress,
+        projects,
+        workspaceId,
+      });
       await client.query("COMMIT");
       return {
         invitationId,
@@ -635,12 +731,6 @@ export async function redeemWorkspaceReviewerInvitation(input: { accountAddress:
       };
     }
     assertInvitationAvailable(row, now);
-    const projectResult = await client.query(
-      `SELECT project_id FROM tokenless_workspace_reviewer_invitation_projects
-       WHERE invitation_id=$1 ORDER BY project_id`,
-      [invitationId],
-    );
-    const projects = projectResult.rows.map(value => text(value as Row, "project_id")!);
     await client.query(
       `INSERT INTO tokenless_workspace_reviewers
        (workspace_id,principal_address,status,activated_at,created_by,updated_at)
@@ -698,6 +788,14 @@ export async function redeemWorkspaceReviewerInvitation(input: { accountAddress:
        WHERE invitation_id=$2 AND revoked_at IS NULL AND redemption_count<maximum_redemptions`,
       [now, invitationId],
     );
+    await ensureSetupPrivateGroupMembership(client, {
+      invitation: row,
+      invitationId,
+      joinedAt: now,
+      principalAddress,
+      projects,
+      workspaceId,
+    });
     await appendEvent(client, {
       workspaceId,
       principalAddress,

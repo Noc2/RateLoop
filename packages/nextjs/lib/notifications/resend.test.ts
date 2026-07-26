@@ -3,6 +3,7 @@ import {
   sendTokenlessLoginOtpEmail,
   sendTokenlessNotificationEmail,
   sendTokenlessVerificationEmail,
+  sendWorkspaceReviewerInvitationEmail,
 } from "./resend";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -124,6 +125,44 @@ test("lifecycle email uses the branded design and preserves delivery headers", a
     assert.match(body.html, />\s*Open RateLoop\s*</u);
     assert.match(body.html, /intentionally omits question, answer, payment, and workspace details/u);
     assert.match(body.html, /Unsubscribe from RateLoop email notifications/u);
+  } finally {
+    if (previousKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = previousKey;
+    if (previousFrom === undefined) delete process.env.RESEND_FROM_EMAIL;
+    else process.env.RESEND_FROM_EMAIL = previousFrom;
+  }
+});
+
+test("workspace reviewer invitation email uses an idempotent personal action link", async () => {
+  const previousKey = process.env.RESEND_API_KEY;
+  const previousFrom = process.env.RESEND_FROM_EMAIL;
+  process.env.RESEND_API_KEY = "resend-test-key";
+  process.env.RESEND_FROM_EMAIL = "RateLoop <notifications@example.test>";
+  try {
+    let request: RequestInit | undefined;
+    const sent = await sendWorkspaceReviewerInvitationEmail(
+      {
+        destinationUrl:
+          "https://tokenless.example.test/human?tab=discover&invite=1#invite=rlri_0123456789abcdef_secret",
+        email: "reviewer@example.test",
+        invitationId: "wri_0123456789abcdef",
+      },
+      async (_url, init) => {
+        request = init;
+        return Response.json({ id: "reviewer-invite-message" });
+      },
+    );
+    assert.deepEqual(sent, { id: "reviewer-invite-message" });
+    assert.equal(
+      (request?.headers as Record<string, string>)["Idempotency-Key"],
+      "workspace-reviewer-invitation:wri_0123456789abcdef",
+    );
+    const body = JSON.parse(String(request?.body)) as { html: string; subject: string; text: string; to: string[] };
+    assert.equal(body.to[0], "reviewer@example.test");
+    assert.equal(body.subject, "You’re invited to review with RateLoop");
+    assert.match(body.html, />\s*Review invitation\s*</u);
+    assert.match(body.text, /Do not forward it/u);
+    assert.match(body.text, /#invite=rlri_/u);
   } finally {
     if (previousKey === undefined) delete process.env.RESEND_API_KEY;
     else process.env.RESEND_API_KEY = previousKey;

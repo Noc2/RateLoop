@@ -75,7 +75,7 @@ export function WorkspaceReviewersPanel({
   const [maxPrivateSensitivity, setMaxPrivateSensitivity] = useState<
     "internal" | "confidential" | "restricted" | "regulated"
   >("confidential");
-  const [issuedToken, setIssuedToken] = useState<string | null>(null);
+  const [issuedUrl, setIssuedUrl] = useState<string | null>(null);
   const [busyTarget, setBusyTarget] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -117,7 +117,7 @@ export function WorkspaceReviewersPanel({
     workspaceRequests.selectWorkspace(workspaceId);
     setReviewers([]);
     setInvitations([]);
-    setIssuedToken(null);
+    setIssuedUrl(null);
     setError(null);
     if (!canManage) {
       setLoading(false);
@@ -147,8 +147,8 @@ export function WorkspaceReviewersPanel({
       );
       if (!request.isCurrent()) return;
       const invitation = body.invitation as Record<string, unknown> | undefined;
-      if (typeof invitation?.token !== "string") throw new Error("Invitation code was unavailable.");
-      setIssuedToken(invitation.token);
+      if (typeof invitation?.destinationUrl !== "string") throw new Error("Invitation link was unavailable.");
+      setIssuedUrl(invitation.destinationUrl);
       setEmail("");
       await load();
     } catch (cause) {
@@ -249,12 +249,8 @@ export function WorkspaceReviewersPanel({
         </button>
       </form>
 
-      {issuedToken ? (
-        <OneTimeSecretNotice
-          label="reviewer invitation code"
-          value={issuedToken}
-          onDismiss={() => setIssuedToken(null)}
-        />
+      {issuedUrl ? (
+        <OneTimeSecretNotice label="reviewer invitation link" value={issuedUrl} onDismiss={() => setIssuedUrl(null)} />
       ) : null}
       {error ? (
         <p className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100" role="alert">
