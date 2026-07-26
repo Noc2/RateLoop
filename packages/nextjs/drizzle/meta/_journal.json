@@ -1016,6 +1016,13 @@
       "when": 1785146400000,
       "tag": "0145_public_network_review_reachability",
       "breakpoints": true
+    },
+    {
+      "idx": 146,
+      "version": "7",
+      "when": 1785150000000,
+      "tag": "0146_hybrid_review_parent_settlement",
+      "breakpoints": true
     }
   ]
 }

@@ -86,6 +86,7 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
       "0142_network_settlement_hardening.sql",
       "0144_forecast_appeal_resolution.sql",
       "0145_public_network_review_reachability.sql",
+      "0146_hybrid_review_parent_settlement.sql",
     ].includes(file) &&
     (/\bDO \$\$/u.test(statement) ||
       /\bCREATE OR REPLACE FUNCTION\b/u.test(statement) ||
