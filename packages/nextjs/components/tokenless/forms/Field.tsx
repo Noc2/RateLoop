@@ -3,6 +3,7 @@ import React, {
   type ReactNode,
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
+  forwardRef,
   useId,
 } from "react";
 import { classNames } from "~~/components/tokenless/ui/classNames";
@@ -55,7 +56,10 @@ type TextareaFieldProps = TextareaHTMLAttributes<HTMLTextAreaElement> & {
   label: ReactNode;
 };
 
-export function TextareaField({ className, error, hint, id, label, ...textarea }: TextareaFieldProps) {
+export const TextareaField = forwardRef<HTMLTextAreaElement, TextareaFieldProps>(function TextareaField(
+  { className, error, hint, id, label, ...textarea },
+  ref,
+) {
   const generatedId = useId();
   const inputId = id ?? generatedId;
   const errorId = `${inputId}-error`;
@@ -66,6 +70,7 @@ export function TextareaField({ className, error, hint, id, label, ...textarea }
     <label className="block" htmlFor={inputId}>
       <span className="mb-2 block text-sm font-medium text-base-content/80">{label}</span>
       <textarea
+        ref={ref}
         {...textarea}
         id={inputId}
         className={classNames("textarea textarea-bordered w-full", error && "textarea-error", className)}
@@ -82,6 +87,22 @@ export function TextareaField({ className, error, hint, id, label, ...textarea }
         </span>
       ) : null}
     </label>
+  );
+});
+
+type ChoiceInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type"> & {
+  type: "checkbox" | "radio";
+  error?: string | null;
+};
+
+export function ChoiceInput({ className, error, type, ...input }: ChoiceInputProps) {
+  return (
+    <input
+      {...input}
+      type={type}
+      className={classNames(type === "checkbox" ? "checkbox" : "radio", error && "input-error", className)}
+      aria-invalid={error ? true : input["aria-invalid"]}
+    />
   );
 }
 

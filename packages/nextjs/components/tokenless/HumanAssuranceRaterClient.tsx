@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Field } from "~~/components/tokenless/forms/Field";
+import { ChoiceInput, Field, TextareaField } from "~~/components/tokenless/forms/Field";
 import { CrowdForecastField } from "~~/components/tokenless/review/CrowdForecastField";
 import { DeadlineChip } from "~~/components/tokenless/review/DeadlineChip";
 import { PrivateArtifactPreview } from "~~/components/tokenless/review/PrivateArtifactPreview";
@@ -793,8 +793,12 @@ export function HumanAssuranceRaterClient({
                       Checking access…
                     </p>
                   ) : termsRequired ? (
-                    <label className="mt-5 flex items-start gap-3 rounded-lg border border-white/10 p-4 text-sm leading-6 text-base-content/70">
-                      <input
+                    <label
+                      htmlFor="private-review-confidentiality-acceptance-embedded"
+                      className="mt-5 flex items-start gap-3 rounded-lg border border-white/10 p-4 text-sm leading-6 text-base-content/70"
+                    >
+                      <ChoiceInput
+                        id="private-review-confidentiality-acceptance-embedded"
                         type="checkbox"
                         className="checkbox checkbox-sm mt-1"
                         checked={confidentialityAccepted}
@@ -866,16 +870,14 @@ export function HumanAssuranceRaterClient({
                       </div>
                     ) : manualCredentialEntry ? (
                       <div className="space-y-4">
-                        <label className="block text-sm text-base-content/60">
-                          Assignment ID
-                          <input
-                            className="input mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)] font-mono text-sm"
-                            value={assignmentId}
-                            onChange={event => setAssignmentId(event.target.value)}
-                            placeholder="haas_…"
-                            required
-                          />
-                        </label>
+                        <Field
+                          label="Assignment ID"
+                          className="rounded-lg border-white/10 bg-[var(--rateloop-field)] font-mono text-sm"
+                          value={assignmentId}
+                          onChange={event => setAssignmentId(event.target.value)}
+                          placeholder="haas_…"
+                          required
+                        />
                         <Field
                           label="Confidentiality terms hash"
                           className="rounded-lg border-white/10 bg-[var(--rateloop-field)] font-mono text-sm"
@@ -937,8 +939,12 @@ export function HumanAssuranceRaterClient({
                         Checking confidentiality terms…
                       </p>
                     ) : termsRequired ? (
-                      <label className="flex items-start gap-3 rounded-lg border border-white/10 p-4 text-sm leading-6 text-base-content/70">
-                        <input
+                      <label
+                        htmlFor="private-review-confidentiality-acceptance"
+                        className="flex items-start gap-3 rounded-lg border border-white/10 p-4 text-sm leading-6 text-base-content/70"
+                      >
+                        <ChoiceInput
+                          id="private-review-confidentiality-acceptance"
                           type="checkbox"
                           className="checkbox checkbox-sm mt-1"
                           checked={confidentialityAccepted}
@@ -1136,7 +1142,7 @@ export function HumanAssuranceRaterClient({
                                   }`}
                                 >
                                   <span className="flex items-center gap-3 font-semibold">
-                                    <input
+                                    <ChoiceInput
                                       id={`choice-${reviewCase.caseId}-${key}`}
                                       aria-label={label}
                                       type="radio"
@@ -1187,7 +1193,7 @@ export function HumanAssuranceRaterClient({
                                       : "border-white/10 bg-black/20 hover:border-white/25"
                                   }`}
                                 >
-                                  <input
+                                  <ChoiceInput
                                     id={`choice-${reviewCase.caseId}-${option.key}`}
                                     aria-label={`Candidate ${option.key}`}
                                     type="radio"
@@ -1228,24 +1234,22 @@ export function HumanAssuranceRaterClient({
                       ) : null}
 
                       {task.rubric.rationale.mode !== "off" ? (
-                        <label className="mt-6 block text-sm font-semibold">
-                          Decision rationale
-                          <textarea
-                            ref={rationaleRef}
-                            className="textarea mt-2 min-h-32 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)] text-sm leading-6"
-                            value={draft.rationale}
-                            onChange={event => updateDraft(reviewCase.caseId, { rationale: event.target.value })}
-                            minLength={requiredRationaleLength(task)}
-                            maxLength={Math.min(2_000, task.rubric.rationale.maxLength)}
-                            disabled={serverAcceptance !== null}
-                            placeholder={
-                              task.taskKind === "binary_review"
-                                ? "Explain the concrete evidence behind your rating."
-                                : "Identify the concrete difference that determined your choice."
-                            }
-                            required={task.rubric.rationale.mode === "required"}
-                          />
-                        </label>
+                        <TextareaField
+                          ref={rationaleRef}
+                          label="Decision rationale"
+                          className="mt-2 min-h-32 rounded-lg border-white/10 bg-[var(--rateloop-field)] text-sm leading-6"
+                          value={draft.rationale}
+                          onChange={event => updateDraft(reviewCase.caseId, { rationale: event.target.value })}
+                          minLength={requiredRationaleLength(task)}
+                          maxLength={Math.min(2_000, task.rubric.rationale.maxLength)}
+                          disabled={serverAcceptance !== null}
+                          placeholder={
+                            task.taskKind === "binary_review"
+                              ? "Explain the concrete evidence behind your rating."
+                              : "Identify the concrete difference that determined your choice."
+                          }
+                          required={task.rubric.rationale.mode === "required"}
+                        />
                       ) : null}
                     </Card>
                   );

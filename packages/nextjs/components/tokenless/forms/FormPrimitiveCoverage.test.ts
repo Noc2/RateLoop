@@ -22,6 +22,7 @@ const FORM_FILES = [
 ] as const;
 
 const NON_TEXT_INPUT_TYPES = new Set(["checkbox", "file", "hidden", "radio", "range"]);
+const RATING_SURFACES = ["../HumanAssuranceRaterClient.tsx"] as const;
 
 function source(relativePath: string) {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
@@ -42,6 +43,15 @@ test("retrofitted account and workspace forms keep editable text in the shared f
     assert.match(value, /from "~~\/components\/tokenless\/forms\/Field"/u, `${file} imports Field`);
     assert.match(value, /useFormErrors\(\)/u, `${file} preserves server field errors`);
     assert.deepEqual(rawTextInputs(value), [], `${file} has a raw editable text input`);
+  }
+});
+
+test("rating surfaces use shared primitives for every input, textarea, and select", () => {
+  for (const file of RATING_SURFACES) {
+    const value = source(file);
+    assert.match(value, /ChoiceInput/u, `${file} uses the shared choice primitive`);
+    assert.match(value, /TextareaField/u, `${file} uses the shared textarea primitive`);
+    assert.doesNotMatch(value, /<(?:input|textarea|select)\b/u, `${file} has a raw form control`);
   }
 });
 
