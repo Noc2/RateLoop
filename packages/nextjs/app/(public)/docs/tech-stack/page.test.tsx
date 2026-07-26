@@ -31,7 +31,7 @@ test("tech-stack docs explain the production mechanisms behind the landing page"
   }
   assert.match(html, /Model Context Protocol.*Streamable HTTP/i);
   assert.match(html, /EIP-3009.*X402PanelSubmitter.*Base/i);
-  assert.match(html, /World ID 4.*unique_human/i);
+  assert.match(html, /provider-scoped uniqueness signal.*does not establish expertise, independence, residence/i);
   assert.match(html, /signed correlation epochs/i);
   assert.match(html, /fixedBasePay.*maximumBonus.*score/i);
   assert.match(html, /at least ten reports.*500 basis points.*2,500 basis points/i);
