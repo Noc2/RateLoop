@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { getWorkspaceDeletionPreview } from "~~/lib/privacy/workspaceDeletion";
 import { createWorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
 import { processDueEvidenceRetentionEnforcement } from "~~/lib/tokenless/evidenceRetentionEnforcement";
 import {
@@ -391,7 +392,6 @@ test("the adapter persists two child rounds end to end and retry cannot duplicat
   const seeded = await fixture();
   const INVITED = "0x4444444444444444444444444444444444444444";
   const NETWORK = "0x5555555555555555555555555555555555555555";
-  const principal = (account: string) => `rlp_${account.slice(2, 26)}`;
   const split: FrozenHybridReviewSplit = {
     schemaVersion: "rateloop.hybrid-review-split.v3",
     workspaceId: seeded.workspaceId,
@@ -605,4 +605,15 @@ test("workspace retention erases terminal hybrid links only after expiry and leg
   assert.ok(pruned);
   assert.equal(Number(pruned.hybrid_reviews_held), 0);
   assert.match(String(pruned.hybrid_review_prune_digest), /^sha256:[0-9a-f]{64}$/u);
+});
+
+test("workspace deletion remains blocked while a hybrid review can create reviewer liability", async () => {
+  const seeded = await fixture();
+  await ensureHybridReviewOperation(seeded, NOW);
+  const preview = await getWorkspaceDeletionPreview({
+    accountAddress: OWNER,
+    workspaceId: seeded.workspaceId,
+  });
+  assert.ok(preview.blockers.some(blocker => blocker.code === "workspace_assignments_active"));
+  assert.ok(preview.impact.activeWork > 0);
 });

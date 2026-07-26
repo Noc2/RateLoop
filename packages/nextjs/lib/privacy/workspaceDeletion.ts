@@ -100,6 +100,8 @@ async function loadPreviewRow(
         WHERE workspace_id = $1 AND status = 'active') AS active_agents,
        (SELECT COUNT(*)::integer FROM tokenless_assurance_assignments
         WHERE workspace_id = $1 AND status IN ('reserved','accepted')) AS active_assignments,
+       (SELECT COUNT(*)::integer FROM tokenless_hybrid_review_operations
+        WHERE workspace_id=$1 AND state IN ('preparing','ready','active')) AS active_hybrid_reviews,
        (SELECT COUNT(*)::integer FROM tokenless_ask_ownership ownership
         JOIN tokenless_agent_asks asks ON asks.operation_key = ownership.operation_key
         WHERE ownership.workspace_id = $1
@@ -167,7 +169,7 @@ function previewFromRow(row: Row): WorkspaceDeletionPreview {
   const availableAtomic = (settled - reserved).toString();
   const otherMembers = integer(row, "other_members");
   const agents = integer(row, "active_agents");
-  const activeAssignments = integer(row, "active_assignments");
+  const activeAssignments = integer(row, "active_assignments") + integer(row, "active_hybrid_reviews");
   const openAsks = integer(row, "open_asks");
   const activePaymentReservations =
     integer(row, "active_payment_intents") +
@@ -1201,13 +1203,18 @@ export async function requestWorkspaceDeletion(input: {
             ON assignment.assignment_id=settlement.assignment_id
           WHERE assignment.workspace_id=$1) AS settlement_receipt_commitments,
          (SELECT COUNT(*) FROM tokenless_public_network_review_bindings
-          WHERE workspace_id=$1) AS public_network_bindings`,
+          WHERE workspace_id=$1) AS public_network_bindings,
+         (SELECT COUNT(*) FROM tokenless_hybrid_network_reviewer_exclusions exclusion
+          JOIN tokenless_hybrid_review_operations hybrid
+            ON hybrid.hybrid_operation_id=exclusion.hybrid_operation_id
+          WHERE hybrid.workspace_id=$1) AS hybrid_reviewer_exclusions`,
       [input.workspaceId],
     );
     const retainedNetworkRow = retainedNetworkEvidence.rows[0] as Row | undefined;
     const networkEvidenceRetention = {
       basis: "settlement_and_audit",
-      form: "restricted_claim_links_and_commitment_only_receipts",
+      form: "restricted_claim_links_direct_exclusions_and_commitment_only_receipts",
+      hybridReviewerExclusions: integer(retainedNetworkRow, "hybrid_reviewer_exclusions"),
       publicNetworkBindings: integer(retainedNetworkRow, "public_network_bindings"),
       settlementCommitments: integer(retainedNetworkRow, "settlement_commitments"),
       settlementReceiptCommitments: integer(retainedNetworkRow, "settlement_receipt_commitments"),
@@ -1277,6 +1284,7 @@ export async function requestWorkspaceDeletion(input: {
         `:network_snapshot_rater_links:${networkEvidenceRetention.voucherSnapshotRaterLinks}` +
         `:network_settlement_commitments:${networkEvidenceRetention.settlementCommitments}` +
         `:network_settlement_receipts:${networkEvidenceRetention.settlementReceiptCommitments}` +
+        `:hybrid_reviewer_exclusions:${networkEvidenceRetention.hybridReviewerExclusions}` +
         `:public_network_bindings:${networkEvidenceRetention.publicNetworkBindings}`,
       retentionDeadline: new Date(now.getTime() + AUDIT_RETENTION_MS),
     });

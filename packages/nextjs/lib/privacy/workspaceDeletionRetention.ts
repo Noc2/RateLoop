@@ -56,6 +56,15 @@ async function anonymizeBilling(client: PoolClient, input: { jobId: string; work
   );
 }
 
+export const __hybridWorkspaceExclusionExpirySqlForTests = `DELETE FROM tokenless_hybrid_network_reviewer_exclusions
+WHERE hybrid_operation_id IN (
+  SELECT hybrid_operation_id FROM tokenless_hybrid_review_operations WHERE workspace_id=$1
+)
+OR binding_id IN (
+  SELECT binding_id FROM tokenless_public_network_review_bindings WHERE workspace_id=$1
+)
+RETURNING hybrid_operation_id`;
+
 async function anonymizeExpiredNetworkEvidence(
   client: PoolClient,
   input: { jobId: string; workspaceId: string; now: Date },
@@ -93,6 +102,15 @@ async function anonymizeExpiredNetworkEvidence(
   );
   if (Number((unsettledClaims.rows[0] as Row | undefined)?.count ?? 0) !== 0) {
     throw new Error("Network voucher claims remain payable or unsettled at retention expiry.");
+  }
+  const activeHybridReviews = await client.query(
+    `SELECT hybrid_operation_id FROM tokenless_hybrid_review_operations
+     WHERE workspace_id=$1 AND state IN ('preparing','ready','active')
+     ORDER BY hybrid_operation_id FOR UPDATE`,
+    [input.workspaceId],
+  );
+  if ((activeHybridReviews.rowCount ?? 0) !== 0) {
+    throw new Error("Hybrid review claims remain active at retention expiry.");
   }
 
   let assignmentsAnonymized = 0;
@@ -223,6 +241,7 @@ async function anonymizeExpiredNetworkEvidence(
       }
     }
   }
+  const hybridExclusions = await client.query(__hybridWorkspaceExclusionExpirySqlForTests, [input.workspaceId]);
   const publicBindings = await client.query(
     "DELETE FROM tokenless_public_network_review_bindings WHERE workspace_id=$1",
     [input.workspaceId],
@@ -295,6 +314,13 @@ async function anonymizeExpiredNetworkEvidence(
             OR snapshot.snapshot_json
               NOT LIKE '%rateloop.erased-voucher-assurance-snapshot.v1%'))
         AS voucher_snapshot_personal_copies,
+       (SELECT COUNT(*) FROM tokenless_hybrid_network_reviewer_exclusions exclusion
+        LEFT JOIN tokenless_hybrid_review_operations hybrid
+          ON hybrid.hybrid_operation_id=exclusion.hybrid_operation_id
+        LEFT JOIN tokenless_public_network_review_bindings binding
+          ON binding.binding_id=exclusion.binding_id
+        WHERE hybrid.workspace_id=$1 OR binding.workspace_id=$1)
+        AS hybrid_reviewer_exclusions,
        (SELECT COUNT(*) FROM tokenless_public_network_review_bindings
         WHERE workspace_id=$1) AS public_network_bindings`,
     [input.workspaceId],
@@ -307,6 +333,7 @@ async function anonymizeExpiredNetworkEvidence(
   return {
     assignmentsAnonymized,
     historyAnonymized,
+    hybridReviewerExclusionsDeleted: hybridExclusions.rowCount ?? 0,
     publicBindingsDeleted: publicBindings.rowCount ?? 0,
     settlementCommitmentsRetained: Number(commitmentRow?.settlements ?? 0),
     settlementReceiptCommitmentsRetained: Number(commitmentRow?.receipts ?? 0),

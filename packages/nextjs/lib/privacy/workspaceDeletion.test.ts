@@ -821,7 +821,8 @@ test("workspace deletion tombstones copied network reviewer data without deletin
   };
   assert.deepEqual(evidence.networkEvidenceRetention, {
     basis: "settlement_and_audit",
-    form: "restricted_claim_links_and_commitment_only_receipts",
+    form: "restricted_claim_links_direct_exclusions_and_commitment_only_receipts",
+    hybridReviewerExclusions: 0,
     publicNetworkBindings: 0,
     settlementCommitments: 0,
     settlementReceiptCommitments: 0,
@@ -1042,6 +1043,8 @@ test("workspace deletion anonymizes terminal review subjects and removes private
   assert.match(source, /network_assignment_personal_copies/u);
   assert.match(source, /network_history_personal_copies/u);
   assert.match(source, /network_voucher_snapshot_personal_copies/u);
+  assert.match(source, /active_hybrid_reviews/u);
+  assert.match(source, /hybrid_reviewer_exclusions/u);
   assert.match(source, /direct_private_assignment_subjects/u);
   assert.match(source, /workspace_memberships/u);
 });

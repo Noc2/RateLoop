@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
+import { newDb } from "pg-mem";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
-import { expireWorkspaceDeletionRetentionCategories } from "~~/lib/privacy/workspaceDeletionRetention";
+import {
+  __hybridWorkspaceExclusionExpirySqlForTests,
+  expireWorkspaceDeletionRetentionCategories,
+} from "~~/lib/privacy/workspaceDeletionRetention";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
@@ -74,6 +78,47 @@ async function seedDueWorkspaceRetention() {
   });
   return { jobId, requestId, workspaceId: workspace.workspaceId };
 }
+
+test("network retention deletes workspace hybrid exclusions before their public binding", async () => {
+  const database = newDb();
+  database.public.none(`
+    CREATE TABLE tokenless_hybrid_review_operations (
+      hybrid_operation_id text PRIMARY KEY,
+      workspace_id text NOT NULL
+    );
+    CREATE TABLE tokenless_public_network_review_bindings (
+      binding_id text PRIMARY KEY,
+      workspace_id text NOT NULL
+    );
+    CREATE TABLE tokenless_hybrid_network_reviewer_exclusions (
+      hybrid_operation_id text NOT NULL,
+      binding_id text NOT NULL,
+      reviewer_principal_id text NOT NULL
+    );
+    INSERT INTO tokenless_hybrid_review_operations VALUES
+      ('hybrid_subject','workspace_subject'),
+      ('hybrid_peer','workspace_peer');
+    INSERT INTO tokenless_public_network_review_bindings VALUES
+      ('binding_subject','workspace_subject'),
+      ('binding_peer','workspace_peer');
+    INSERT INTO tokenless_hybrid_network_reviewer_exclusions VALUES
+      ('hybrid_subject','binding_subject','rlp_subject_00000001'),
+      ('hybrid_peer','binding_peer','rlp_peer_000000000001');
+  `);
+  const adapter = database.adapters.createPg();
+  const pool = new adapter.Pool();
+  try {
+    const deleted = await pool.query(__hybridWorkspaceExclusionExpirySqlForTests, ["workspace_subject"]);
+    assert.equal(deleted.rowCount, 1);
+    assert.equal(deleted.rows[0]?.hybrid_operation_id, "hybrid_subject");
+    const retained = await pool.query(
+      "SELECT hybrid_operation_id,binding_id FROM tokenless_hybrid_network_reviewer_exclusions",
+    );
+    assert.deepEqual(retained.rows, [{ binding_id: "binding_peer", hybrid_operation_id: "hybrid_peer" }]);
+  } finally {
+    await pool.end();
+  }
+});
 
 test("scheduled category expiry anonymizes due workspace billing and audit records", async () => {
   const fixture = await seedDueWorkspaceRetention();
