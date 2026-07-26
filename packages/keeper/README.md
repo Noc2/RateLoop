@@ -32,28 +32,27 @@ The configured addresses must match that key. Startup also verifies bytecode at 
 
 ## Signer custody
 
-Production accepts only a dedicated AWS KMS `ECC_SECG_P256K1` gas signer. The
-configured exact key ARN must be in an EU AWS region, its public key must recover
-the configured keeper address, and every signature must come back from that same
-key. The key policy should grant only `kms:GetPublicKey` and `kms:Sign`; the
-permissionless keeper role needs no protocol or fund authority.
+Production uses a dedicated gas-only secp256k1 key held in Railway's sealed
+service variables. `KEEPER_PRIVATE_KEY` remains the deployment-compatible input;
+`TOKENLESS_KEEPER_PRIVATE_KEY` is the preferred explicit name for new services.
+When both exist they must contain the same key. The permissionless keeper account
+has no protocol or fund authority and should hold only the configured minimum gas
+balance.
 
-AWS credentials come from `AssumeRoleWithWebIdentity`. The Railway deployment
-must mount a continuously refreshed OIDC token at `AWS_WEB_IDENTITY_TOKEN_FILE`
-and scope `TOKENLESS_KEEPER_KMS_ROLE_ARN` to the isolated keeper workload in the
-IAM trust policy. The AWS SDK exchanges that token for short-lived credentials
-and refreshes them from the file. Static AWS access keys, raw keeper private keys,
-and local keystores are rejected in production. A Foundry keystore or raw key is
-available only for explicit non-production development and tests.
+`TOKENLESS_KEEPER_EXPECTED_ADDRESS` optionally pins the recovered address, and
+`TOKENLESS_KEEPER_KEY_VERSION` optionally pins the rotation identifier. Startup
+fails on a mismatch. Existing isolated deployments without those values derive
+the address from the sealed key and use the deterministic
+`railway-tokenless-v1` version until the explicit pins are added. A Foundry
+keystore remains local-test only.
 
-Every managed signing attempt is written to the shared Postgres ledger before
-KMS is called, then receives an immutable success or failure event before the
-keeper continues. The events bind the keeper role, exact key ARN, digest,
-purpose, AWS request ID, error class, timestamps, and signature or transaction
-identity without storing signature bytes or secret material. `DATABASE_URL` is
-therefore required whenever the managed signer is configured. Per-class signing
-failure counters distinguish retryable timeouts, throttling, and outages from
-key/access configuration or malformed-response incidents.
+Every signing attempt is written to the shared Postgres ledger before the key is
+used, then receives an immutable success or failure event before the keeper
+continues. Events bind the keeper role, `platform-secret` provider, non-secret
+key version identifier, digest, purpose, error class, timestamps, and signature
+or transaction identity without storing signature bytes or key material.
+`DATABASE_URL` is therefore required. Per-class counters distinguish operational
+failures from key configuration or malformed-signature incidents.
 
 ## Sealed reveal payload
 

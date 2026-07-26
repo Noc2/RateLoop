@@ -1,10 +1,11 @@
 import { createPublicClient, createWalletClient, defineChain } from "viem";
-import { privateKeyToAccount, type LocalAccount } from "viem/accounts";
-import { createAwsKmsKeeperAccount } from "./aws-kms-account.js";
+import { type LocalAccount } from "viem/accounts";
+import { createAuditedPlatformSecretEvmAccount } from "@rateloop/node-utils/platform-secret-evm-account";
 import { config } from "./config.js";
 import { getKeystoreAccount } from "./keystore.js";
-import { createKeeperEvmKmsSigningLedgerPool } from "./kms-signing-ledger.js";
+import { recordSigningFailure } from "./metrics.js";
 import { createConfiguredRpcTransport } from "./rpc.js";
+import { createKeeperEvmSigningLedgerPool } from "./signing-ledger.js";
 
 const rpcUrls = [config.rpcUrl, ...config.rpcFallbackUrls];
 
@@ -20,19 +21,25 @@ export const chain = defineChain({
 let cachedAccount: LocalAccount | undefined;
 let validateManagedAccount: (() => Promise<void>) | undefined;
 let signingLedgerPool:
-  | ReturnType<typeof createKeeperEvmKmsSigningLedgerPool>
+  | ReturnType<typeof createKeeperEvmSigningLedgerPool>
   | undefined;
 
 export function getAccount(): LocalAccount {
   if (cachedAccount) return cachedAccount;
 
-  if (config.signer.kind === "aws-kms") {
-    signingLedgerPool ??= createKeeperEvmKmsSigningLedgerPool(
-      config.kmsSigningDatabaseUrl!,
+  if (config.signer.kind === "platform-secret") {
+    signingLedgerPool ??= createKeeperEvmSigningLedgerPool(
+      config.signingDatabaseUrl!,
     );
-    const managedAccount = createAwsKmsKeeperAccount({
-      configuration: config.signer,
+    const managedAccount = createAuditedPlatformSecretEvmAccount({
+      configuration: {
+        expectedAddress: config.signer.expectedAddress,
+        keyVersion: config.signer.keyVersion,
+        privateKey: config.signer.privateKey,
+        signerRole: "keeper",
+      },
       ledger: signingLedgerPool.ledger,
+      onFailure: recordSigningFailure,
     });
     cachedAccount = managedAccount;
     validateManagedAccount = managedAccount.validate;
@@ -45,13 +52,8 @@ export function getAccount(): LocalAccount {
     return cachedAccount;
   }
 
-  if (config.signer.privateKey) {
-    cachedAccount = privateKeyToAccount(config.signer.privateKey);
-    return cachedAccount;
-  }
-
   throw new Error(
-    "No local-test wallet configured. Set KEYSTORE_ACCOUNT+KEYSTORE_PASSWORD or KEEPER_PRIVATE_KEY",
+    "No local-test wallet configured. Set KEYSTORE_ACCOUNT+KEYSTORE_PASSWORD",
   );
 }
 

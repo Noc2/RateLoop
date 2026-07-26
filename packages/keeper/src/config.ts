@@ -1,6 +1,6 @@
 import { config as loadDotenv } from "dotenv";
-import { isAbsolute } from "node:path";
 import { isAddress, zeroAddress, type Address, type Hex } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 
 loadDotenv({ path: ".env.local", override: false });
 loadDotenv();
@@ -10,12 +10,8 @@ const LOCAL_CHAIN_ID = 31337;
 const TOKENLESS_EU_RAILWAY_REGION = "europe-west4-drams3a";
 export const TOKENLESS_DEPLOYMENT_VERSION = "tokenless-v4";
 const PRIVATE_KEY_PATTERN = /^0x[0-9a-fA-F]{64}$/u;
-const KMS_KEY_ARN_PATTERN =
-  /^arn:aws:kms:([a-z0-9-]+):[0-9]{12}:key\/[0-9a-f-]{36}$/u;
-const IAM_ROLE_ARN_PATTERN =
-  /^arn:aws:iam::[0-9]{12}:role\/[A-Za-z0-9+=,.@_\/-]+$/u;
-const EU_AWS_REGION_PATTERN = /^eu-(?:central|north|south|west)-[1-3]$/u;
-const ROLE_SESSION_NAME_PATTERN = /^[\w+=,.@-]{2,64}$/u;
+const KEY_VERSION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u;
+const DEFAULT_KEEPER_KEY_VERSION = "railway-tokenless-v1";
 const MAXIMUM_RPC_FALLBACKS = 3;
 
 function readEnv(env: NodeJS.ProcessEnv, name: string): string | undefined {
@@ -273,128 +269,111 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     );
   }
 
-  const privateKey = readEnv(env, "KEEPER_PRIVATE_KEY");
-  const keystoreAccount = readEnv(env, "KEYSTORE_ACCOUNT");
-  const keystorePassword = readEnv(env, "KEYSTORE_PASSWORD");
-  const kmsKeyResource = readEnv(env, "TOKENLESS_KEEPER_KMS_KEY_RESOURCE");
-  const kmsExpectedAddress = readEnv(
-    env,
-    "TOKENLESS_KEEPER_KMS_EXPECTED_ADDRESS",
-  );
-  const kmsRegion = readEnv(env, "TOKENLESS_KEEPER_KMS_REGION");
-  const kmsRoleArn = readEnv(env, "TOKENLESS_KEEPER_KMS_ROLE_ARN");
-  const webIdentityTokenFile = readEnv(env, "AWS_WEB_IDENTITY_TOKEN_FILE");
-  const kmsRoleSessionName =
-    readEnv(env, "TOKENLESS_KEEPER_KMS_ROLE_SESSION_NAME") ??
-    "rateloop-tokenless-keeper";
-  const databaseUrl = readEnv(env, "DATABASE_URL");
-  const kmsValues = [kmsKeyResource, kmsExpectedAddress, kmsRegion, kmsRoleArn];
-  const kmsConfigured = kmsValues.some(Boolean);
-  const localSignerConfigured = Boolean(privateKey || keystoreAccount);
-
-  if (production && !kmsConfigured) {
-    errors.push(
-      "production requires the TOKENLESS_KEEPER_KMS_* signer and AWS_WEB_IDENTITY_TOKEN_FILE",
-    );
-  }
-  if (!production && !kmsConfigured && !localSignerConfigured) {
-    errors.push(
-      "TOKENLESS_KEEPER_KMS_* or a local-test KEYSTORE_ACCOUNT/KEEPER_PRIVATE_KEY is required",
-    );
-  }
-  if (kmsConfigured && localSignerConfigured) {
-    errors.push(
-      "managed KMS signing cannot be combined with KEYSTORE_ACCOUNT or KEEPER_PRIVATE_KEY",
-    );
-  }
-  if (kmsConfigured) {
-    for (const [name, value] of [
-      ["TOKENLESS_KEEPER_KMS_KEY_RESOURCE", kmsKeyResource],
-      ["TOKENLESS_KEEPER_KMS_EXPECTED_ADDRESS", kmsExpectedAddress],
-      ["TOKENLESS_KEEPER_KMS_REGION", kmsRegion],
-      ["TOKENLESS_KEEPER_KMS_ROLE_ARN", kmsRoleArn],
-      ["AWS_WEB_IDENTITY_TOKEN_FILE", webIdentityTokenFile],
-    ] as const) {
-      if (!value) errors.push(`${name} is required for managed signing`);
-    }
-    const keyMatch = kmsKeyResource?.match(KMS_KEY_ARN_PATTERN);
-    if (!keyMatch) {
-      errors.push(
-        "TOKENLESS_KEEPER_KMS_KEY_RESOURCE must be an exact AWS KMS key ARN",
-      );
-    }
-    if (!kmsRegion || !EU_AWS_REGION_PATTERN.test(kmsRegion)) {
-      errors.push("TOKENLESS_KEEPER_KMS_REGION must be an EU AWS region");
-    }
-    if (keyMatch?.[1] !== kmsRegion) {
-      errors.push(
-        "TOKENLESS_KEEPER_KMS_KEY_RESOURCE region must match TOKENLESS_KEEPER_KMS_REGION",
-      );
-    }
-    if (!kmsRoleArn || !IAM_ROLE_ARN_PATTERN.test(kmsRoleArn)) {
-      errors.push("TOKENLESS_KEEPER_KMS_ROLE_ARN must be an AWS IAM role ARN");
-    }
-    const sdkRoleArn = readEnv(env, "AWS_ROLE_ARN");
-    if (sdkRoleArn && sdkRoleArn !== kmsRoleArn) {
-      errors.push(
-        "AWS_ROLE_ARN must match TOKENLESS_KEEPER_KMS_ROLE_ARN when provided",
-      );
-    }
-    if (!webIdentityTokenFile || !isAbsolute(webIdentityTokenFile)) {
-      errors.push("AWS_WEB_IDENTITY_TOKEN_FILE must be an absolute path");
-    }
-    if (!ROLE_SESSION_NAME_PATTERN.test(kmsRoleSessionName)) {
-      errors.push(
-        "TOKENLESS_KEEPER_KMS_ROLE_SESSION_NAME must be a valid AWS role session name",
-      );
-    }
-    if (!kmsExpectedAddress || !isAddress(kmsExpectedAddress)) {
-      errors.push(
-        "TOKENLESS_KEEPER_KMS_EXPECTED_ADDRESS must be an Ethereum address",
-      );
-    } else if (kmsExpectedAddress.toLowerCase() === zeroAddress) {
-      errors.push(
-        "TOKENLESS_KEEPER_KMS_EXPECTED_ADDRESS must be a non-zero address",
-      );
-    }
-    if (!databaseUrl) {
-      errors.push(
-        "DATABASE_URL is required for the durable managed-signing ledger",
-      );
-    } else {
-      try {
-        const parsed = new URL(databaseUrl);
-        if (!["postgres:", "postgresql:"].includes(parsed.protocol))
-          throw new Error("invalid");
-      } catch {
-        errors.push(
-          "DATABASE_URL must be a PostgreSQL URL for the managed-signing ledger",
-        );
-      }
-    }
-  }
+  const preferredPrivateKey = readEnv(env, "TOKENLESS_KEEPER_PRIVATE_KEY");
+  const legacyPrivateKey = readEnv(env, "KEEPER_PRIVATE_KEY");
   if (
-    production &&
-    ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"].some(
-      (name) => readEnv(env, name),
-    )
+    preferredPrivateKey &&
+    legacyPrivateKey &&
+    preferredPrivateKey.toLowerCase() !== legacyPrivateKey.toLowerCase()
   ) {
     errors.push(
-      "production keeper forbids static AWS credential environment variables; use web identity",
+      "TOKENLESS_KEEPER_PRIVATE_KEY and KEEPER_PRIVATE_KEY must identify the same key when both are set",
     );
   }
-  if (production && localSignerConfigured) {
+  const privateKey = preferredPrivateKey ?? legacyPrivateKey;
+  const keystoreAccount = readEnv(env, "KEYSTORE_ACCOUNT");
+  const keystorePassword = readEnv(env, "KEYSTORE_PASSWORD");
+  const configuredExpectedAddress = readEnv(
+    env,
+    "TOKENLESS_KEEPER_EXPECTED_ADDRESS",
+  );
+  const configuredKeyVersion = readEnv(env, "TOKENLESS_KEEPER_KEY_VERSION");
+  const keyVersion = configuredKeyVersion ?? DEFAULT_KEEPER_KEY_VERSION;
+  const databaseUrl = readEnv(env, "DATABASE_URL");
+  const platformSignerConfigured = Boolean(
+    privateKey || configuredExpectedAddress || configuredKeyVersion,
+  );
+  const keystoreConfigured = Boolean(keystoreAccount);
+  if (!platformSignerConfigured && !keystoreConfigured) {
     errors.push(
-      "production keeper forbids KEYSTORE_ACCOUNT and KEEPER_PRIVATE_KEY",
+      "KEEPER_PRIVATE_KEY or TOKENLESS_KEEPER_PRIVATE_KEY is required (KEYSTORE_ACCOUNT is local-test only)",
     );
+  }
+  if (platformSignerConfigured && keystoreConfigured) {
+    errors.push(
+      "platform-secret signing cannot be combined with KEYSTORE_ACCOUNT",
+    );
+  }
+  if (production && keystoreConfigured) {
+    errors.push("production keeper forbids KEYSTORE_ACCOUNT");
   }
   if (privateKey && !PRIVATE_KEY_PATTERN.test(privateKey)) {
-    errors.push("KEEPER_PRIVATE_KEY must be a 32-byte hex private key");
+    errors.push(
+      "KEEPER_PRIVATE_KEY or TOKENLESS_KEEPER_PRIVATE_KEY must be a 32-byte hex private key",
+    );
   }
   if (keystoreAccount && !keystorePassword) {
     errors.push("KEYSTORE_PASSWORD is required with KEYSTORE_ACCOUNT");
   }
+  if (!KEY_VERSION_PATTERN.test(keyVersion)) {
+    errors.push("TOKENLESS_KEEPER_KEY_VERSION is invalid");
+  }
 
+  let derivedSignerAddress: Address = zeroAddress;
+  if (privateKey && PRIVATE_KEY_PATTERN.test(privateKey)) {
+    try {
+      derivedSignerAddress = privateKeyToAccount(privateKey as Hex).address;
+    } catch {
+      errors.push(
+        "KEEPER_PRIVATE_KEY or TOKENLESS_KEEPER_PRIVATE_KEY is not a valid secp256k1 key",
+      );
+    }
+  }
+  let expectedSignerAddress = derivedSignerAddress;
+  if (configuredExpectedAddress) {
+    if (
+      !isAddress(configuredExpectedAddress) ||
+      configuredExpectedAddress.toLowerCase() === zeroAddress
+    ) {
+      errors.push(
+        "TOKENLESS_KEEPER_EXPECTED_ADDRESS must be a non-zero Ethereum address",
+      );
+    } else {
+      expectedSignerAddress = configuredExpectedAddress;
+      if (
+        derivedSignerAddress !== zeroAddress &&
+        configuredExpectedAddress.toLowerCase() !==
+          derivedSignerAddress.toLowerCase()
+      ) {
+        errors.push(
+          "TOKENLESS_KEEPER_EXPECTED_ADDRESS does not match the configured keeper private key",
+        );
+      }
+    }
+  }
+  if (platformSignerConfigured && !privateKey) {
+    errors.push(
+      "KEEPER_PRIVATE_KEY or TOKENLESS_KEEPER_PRIVATE_KEY is required for platform-secret signing",
+    );
+  }
+  if (platformSignerConfigured) {
+    if (!databaseUrl) {
+      errors.push(
+        "DATABASE_URL is required for the durable signing ledger",
+      );
+    } else {
+      try {
+        const parsed = new URL(databaseUrl);
+        if (!["postgres:", "postgresql:"].includes(parsed.protocol)) {
+          throw new Error("invalid");
+        }
+      } catch {
+        errors.push(
+          "DATABASE_URL must be a PostgreSQL URL for the signing ledger",
+        );
+      }
+    }
+  }
   const metricsBindAddress =
     readEnv(env, "METRICS_BIND_ADDRESS") ??
     (readEnv(env, "PORT") ? "0.0.0.0" : "127.0.0.1");
@@ -478,19 +457,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
       feedbackBonus,
       beaconVerifier,
     },
-    signer: kmsConfigured
+    signer: platformSignerConfigured
       ? {
-          kind: "aws-kms" as const,
-          expectedAddress: kmsExpectedAddress as Address,
-          keyResource: kmsKeyResource!,
-          region: kmsRegion!,
-          roleArn: kmsRoleArn!,
-          roleSessionName: kmsRoleSessionName,
-          webIdentityTokenFile: webIdentityTokenFile!,
+          kind: "platform-secret" as const,
+          expectedAddress: expectedSignerAddress,
+          keyVersion,
+          privateKey: privateKey as Hex,
         }
       : {
           kind: "local-test" as const,
-          privateKey: privateKey as Hex | undefined,
           keystoreAccount,
         },
     intervalMs,
@@ -503,7 +478,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     metricsAuthToken,
     logFormat: readEnv(env, "LOG_FORMAT") === "text" ? "text" : "json",
     minGasBalanceWei,
-    kmsSigningDatabaseUrl: kmsConfigured ? databaseUrl! : null,
+    signingDatabaseUrl: platformSignerConfigured ? databaseUrl! : null,
     ponderWorkFeed:
       ponderUrl && ponderKeeperWorkToken
         ? { baseUrl: ponderUrl, token: ponderKeeperWorkToken }

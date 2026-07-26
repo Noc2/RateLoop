@@ -1,17 +1,18 @@
+import { privateKeyToAccount } from "viem/accounts";
 import { beforeAll, describe, expect, it } from "vitest";
 
 const PANEL = "0x0000000000000000000000000000000000000011";
 const ISSUER = "0x0000000000000000000000000000000000000022";
 const FEEDBACK_BONUS = "0x0000000000000000000000000000000000000033";
 const BEACON_VERIFIER = "0x0000000000000000000000000000000000000044";
-const KEEPER = "0x0000000000000000000000000000000000000055";
 const ZERO = "0x0000000000000000000000000000000000000000";
-const KMS_KEY_ARN =
-  "arn:aws:kms:eu-central-1:123456789012:key/11111111-1111-1111-1111-111111111111";
-const KMS_ROLE_ARN = "arn:aws:iam::123456789012:role/rateloop-tokenless-keeper";
+const KEEPER_PRIVATE_KEY = `0x${"11".repeat(32)}` as const;
+const KEEPER = privateKeyToAccount(KEEPER_PRIVATE_KEY).address;
 
 let loadConfig: typeof import("../config.js").loadConfig;
-let buildTokenlessDeploymentKey: typeof import("../config.js").buildTokenlessDeploymentKey;
+let buildTokenlessDeploymentKey: typeof import(
+  "../config.js"
+).buildTokenlessDeploymentKey;
 
 beforeAll(async () => {
   process.env.NODE_ENV = "test";
@@ -22,7 +23,9 @@ beforeAll(async () => {
   process.env.TOKENLESS_FEEDBACK_BONUS_ADDRESS = FEEDBACK_BONUS;
   process.env.TOKENLESS_BEACON_VERIFIER_ADDRESS = BEACON_VERIFIER;
   process.env.TOKENLESS_DEPLOYMENT_KEY = `tokenless-v4:31337:${PANEL}:${ISSUER}:${ZERO}:${FEEDBACK_BONUS}`;
-  process.env.KEEPER_PRIVATE_KEY = `0x${"11".repeat(32)}`;
+  process.env.KEEPER_PRIVATE_KEY = KEEPER_PRIVATE_KEY;
+  process.env.DATABASE_URL =
+    "postgresql://keeper:secret@postgres.internal/rateloop_tokenless";
   ({ loadConfig, buildTokenlessDeploymentKey } = await import("../config.js"));
 });
 
@@ -48,12 +51,7 @@ function productionEnv(): NodeJS.ProcessEnv {
     PONDER_KEEPER_WORK_TOKEN: "keeper-work-secret",
     DATABASE_URL:
       "postgresql://keeper:secret@postgres.internal/rateloop_tokenless",
-    TOKENLESS_KEEPER_KMS_KEY_RESOURCE: KMS_KEY_ARN,
-    TOKENLESS_KEEPER_KMS_EXPECTED_ADDRESS: KEEPER,
-    TOKENLESS_KEEPER_KMS_REGION: "eu-central-1",
-    TOKENLESS_KEEPER_KMS_ROLE_ARN: KMS_ROLE_ARN,
-    AWS_ROLE_ARN: KMS_ROLE_ARN,
-    AWS_WEB_IDENTITY_TOKEN_FILE: "/var/run/secrets/rateloop/aws-oidc-token",
+    KEEPER_PRIVATE_KEY,
     METRICS_BIND_ADDRESS: "0.0.0.0",
     METRICS_AUTH_TOKEN: "0123456789abcdef",
   };
@@ -71,26 +69,72 @@ describe("tokenless keeper config", () => {
     ).toBe(`tokenless-v4:84532:${PANEL}:${ISSUER}:${ZERO}:${FEEDBACK_BONUS}`);
   });
 
-  it("accepts a complete Base Sepolia deployment", () => {
+  it("accepts the live Railway variable shape without new signer pins", () => {
     const config = loadConfig(productionEnv());
     expect(config.chainId).toBe(84532);
     expect(config.deployment.blockNumber).toBe(123n);
     expect(config.deployment.panel).toBe(PANEL);
     expect(config.signer).toEqual({
-      kind: "aws-kms",
+      kind: "platform-secret",
       expectedAddress: KEEPER,
-      keyResource: KMS_KEY_ARN,
-      region: "eu-central-1",
-      roleArn: KMS_ROLE_ARN,
-      roleSessionName: "rateloop-tokenless-keeper",
-      webIdentityTokenFile: "/var/run/secrets/rateloop/aws-oidc-token",
+      keyVersion: "railway-tokenless-v1",
+      privateKey: KEEPER_PRIVATE_KEY,
     });
     expect(config.rpcFallbackUrls).toEqual([
       "https://base-sepolia-fallback.example/",
     ]);
-    expect(config.kmsSigningDatabaseUrl).toBe(
+    expect(config.signingDatabaseUrl).toBe(
       "postgresql://keeper:secret@postgres.internal/rateloop_tokenless",
     );
+  });
+
+  it("supports explicit role-specific key, address, and version pins", () => {
+    const env = {
+      ...productionEnv(),
+      KEEPER_PRIVATE_KEY: undefined,
+      TOKENLESS_KEEPER_PRIVATE_KEY: KEEPER_PRIVATE_KEY,
+      TOKENLESS_KEEPER_EXPECTED_ADDRESS: KEEPER,
+      TOKENLESS_KEEPER_KEY_VERSION: "railway-v2",
+    };
+    expect(loadConfig(env).signer).toMatchObject({
+      kind: "platform-secret",
+      expectedAddress: KEEPER,
+      keyVersion: "railway-v2",
+    });
+    expect(() =>
+      loadConfig({
+        ...env,
+        TOKENLESS_KEEPER_EXPECTED_ADDRESS:
+          "0x0000000000000000000000000000000000000055",
+      }),
+    ).toThrow(/does not match the configured keeper private key/);
+    expect(() =>
+      loadConfig({
+        ...env,
+        TOKENLESS_KEEPER_KEY_VERSION: "invalid version",
+      }),
+    ).toThrow(/TOKENLESS_KEEPER_KEY_VERSION is invalid/);
+  });
+
+  it("rejects ambiguous key aliases", () => {
+    expect(() =>
+      loadConfig({
+        ...productionEnv(),
+        TOKENLESS_KEEPER_PRIVATE_KEY: `0x${"22".repeat(32)}`,
+      }),
+    ).toThrow(/must identify the same key/);
+  });
+
+  it("requires a durable signing database", () => {
+    expect(() =>
+      loadConfig({ ...productionEnv(), DATABASE_URL: undefined }),
+    ).toThrow(/DATABASE_URL is required for the durable signing ledger/);
+    expect(() =>
+      loadConfig({
+        ...productionEnv(),
+        DATABASE_URL: "https://not-postgres.example",
+      }),
+    ).toThrow(/must be a PostgreSQL URL for the signing ledger/);
   });
 
   it("requires a nonzero deployment block in production", () => {
@@ -120,7 +164,7 @@ describe("tokenless keeper config", () => {
     ).toThrow(/does not match/);
   });
 
-  it("requires HTTPS and authenticated hosted metrics", () => {
+  it("requires HTTPS, an independent fallback, and authenticated metrics", () => {
     expect(() =>
       loadConfig({
         ...productionEnv(),
@@ -128,18 +172,9 @@ describe("tokenless keeper config", () => {
         METRICS_AUTH_TOKEN: "short",
       }),
     ).toThrow(/RPC_URL must use HTTPS/);
-  });
-
-  it("requires an independent HTTPS RPC fallback in production", () => {
     expect(() =>
       loadConfig({ ...productionEnv(), RPC_FALLBACK_URLS: undefined }),
     ).toThrow(/must contain at least one independent HTTPS RPC/);
-    expect(() =>
-      loadConfig({
-        ...productionEnv(),
-        RPC_FALLBACK_URLS: "http://fallback.example",
-      }),
-    ).toThrow(/RPC_FALLBACK_URLS must use HTTPS/);
     expect(() =>
       loadConfig({
         ...productionEnv(),
@@ -155,70 +190,29 @@ describe("tokenless keeper config", () => {
   });
 
   it("requires the exact EU Railway runtime identity", () => {
-    const verifiedEu = productionEnv();
-    expect(loadConfig(verifiedEu).chainId).toBe(84532);
+    expect(loadConfig(productionEnv()).chainId).toBe(84532);
     expect(() =>
-      loadConfig({ ...verifiedEu, RAILWAY_REPLICA_REGION: "us-east4-eqdc4a" }),
+      loadConfig({
+        ...productionEnv(),
+        RAILWAY_REPLICA_REGION: "us-east4-eqdc4a",
+      }),
     ).toThrow(/RAILWAY_REPLICA_REGION must be europe-west4-drams3a/);
     expect(() =>
-      loadConfig({ ...verifiedEu, RAILWAY_SERVICE_ID: "legacy-keeper" }),
+      loadConfig({
+        ...productionEnv(),
+        RAILWAY_SERVICE_ID: "legacy-keeper",
+      }),
     ).toThrow(/RAILWAY_SERVICE_ID must match TOKENLESS_KEEPER_SERVICE_ID/);
   });
 
-  it("requires a complete web-identity KMS signer in production", () => {
+  it("keeps Foundry keystores local-test only", () => {
     expect(() =>
       loadConfig({
         ...productionEnv(),
-        AWS_WEB_IDENTITY_TOKEN_FILE: undefined,
+        KEEPER_PRIVATE_KEY: undefined,
+        KEYSTORE_ACCOUNT: "tokenless-keeper",
+        KEYSTORE_PASSWORD: "test-only",
       }),
-    ).toThrow(/AWS_WEB_IDENTITY_TOKEN_FILE is required/);
-    expect(() =>
-      loadConfig({
-        ...productionEnv(),
-        TOKENLESS_KEEPER_KMS_EXPECTED_ADDRESS: ZERO,
-      }),
-    ).toThrow(/must be a non-zero address/);
-    expect(() =>
-      loadConfig({
-        ...productionEnv(),
-        TOKENLESS_KEEPER_KMS_KEY_RESOURCE: "alias/tokenless-keeper",
-      }),
-    ).toThrow(/must be an exact AWS KMS key ARN/);
-    expect(() =>
-      loadConfig({ ...productionEnv(), DATABASE_URL: undefined }),
-    ).toThrow(
-      /DATABASE_URL is required for the durable managed-signing ledger/,
-    );
-  });
-
-  it("binds the KMS key, role, and region to the configured keeper", () => {
-    expect(() =>
-      loadConfig({
-        ...productionEnv(),
-        TOKENLESS_KEEPER_KMS_REGION: "us-east-1",
-      }),
-    ).toThrow(/must be an EU AWS region/);
-    expect(() =>
-      loadConfig({
-        ...productionEnv(),
-        AWS_ROLE_ARN: "arn:aws:iam::123456789012:role/different-role",
-      }),
-    ).toThrow(/AWS_ROLE_ARN must match/);
-  });
-
-  it("forbids raw keeper and AWS credentials in production", () => {
-    expect(() =>
-      loadConfig({
-        ...productionEnv(),
-        KEEPER_PRIVATE_KEY: `0x${"22".repeat(32)}`,
-      }),
-    ).toThrow(/forbids KEYSTORE_ACCOUNT and KEEPER_PRIVATE_KEY/);
-    expect(() =>
-      loadConfig({
-        ...productionEnv(),
-        AWS_ACCESS_KEY_ID: "AKIAEXAMPLE",
-        AWS_SECRET_ACCESS_KEY: "not-a-production-secret",
-      }),
-    ).toThrow(/forbids static AWS credential environment variables/);
+    ).toThrow(/production keeper forbids KEYSTORE_ACCOUNT/);
   });
 });

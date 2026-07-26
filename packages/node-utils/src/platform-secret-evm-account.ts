@@ -152,7 +152,6 @@ export function createAuditedPlatformSecretEvmAccount(input: {
           errorClass: "malformed_response_or_recovery",
           message: "Platform-secret EVM signing failed.",
         });
-        input.onFailure?.(failure.errorClass);
         const completedAt = new Date();
         await appendOrReconcileEvmSigningTerminalEvent(input.ledger, {
           ...baseEvent,
@@ -184,7 +183,9 @@ export function createAuditedPlatformSecretEvmAccount(input: {
       });
       return projected.result;
     } catch (error) {
-      throw mapError(normalizeEvmSigningError(error));
+      const failure = normalizeEvmSigningError(error);
+      input.onFailure?.(failure.errorClass);
+      throw mapError(failure);
     }
   }
 

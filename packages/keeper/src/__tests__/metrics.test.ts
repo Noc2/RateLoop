@@ -3,7 +3,7 @@ import {
   __resetMetricsForTests,
   operationalHealthSnapshot,
   recordError,
-  recordKmsSigningFailure,
+  recordSigningFailure,
   recordRun,
   renderMetrics,
   setHealthThreshold,
@@ -97,20 +97,20 @@ describe("tokenless keeper liveness metrics", () => {
   });
 
   it("publishes managed-signing failures by actionable error class", () => {
-    recordKmsSigningFailure("timeout");
-    recordKmsSigningFailure("throttling");
-    recordKmsSigningFailure("access_or_key_configuration");
-    recordKmsSigningFailure("malformed_response_or_recovery");
-    recordKmsSigningFailure("outage");
+    recordSigningFailure("timeout");
+    recordSigningFailure("throttling");
+    recordSigningFailure("access_or_key_configuration");
+    recordSigningFailure("malformed_response_or_recovery");
+    recordSigningFailure("outage");
     const metrics = renderMetrics();
-    expect(metrics).toContain("keeper_kms_signing_errors_timeout_total 1");
-    expect(metrics).toContain("keeper_kms_signing_errors_throttling_total 1");
+    expect(metrics).toContain("keeper_signing_errors_timeout_total 1");
+    expect(metrics).toContain("keeper_signing_errors_throttling_total 1");
     expect(metrics).toContain(
-      "keeper_kms_signing_errors_access_or_key_configuration_total 1",
+      "keeper_signing_errors_access_or_key_configuration_total 1",
     );
     expect(metrics).toContain(
-      "keeper_kms_signing_errors_malformed_response_or_recovery_total 1",
+      "keeper_signing_errors_malformed_response_or_recovery_total 1",
     );
-    expect(metrics).toContain("keeper_kms_signing_errors_outage_total 1");
+    expect(metrics).toContain("keeper_signing_errors_outage_total 1");
   });
 });
