@@ -4,6 +4,7 @@ import { HumanAssuranceRaterClient } from "~~/components/tokenless/HumanAssuranc
 import { AccountDeletionPanel } from "~~/components/tokenless/account/AccountDeletionPanel";
 import { NotificationSettingsPanel } from "~~/components/tokenless/account/NotificationSettingsPanel";
 import { PasskeyManagementPanel } from "~~/components/tokenless/account/PasskeyManagementPanel";
+import { SubjectDataExportPanel } from "~~/components/tokenless/account/SubjectDataExportPanel";
 import { AnswerPageClient } from "~~/components/tokenless/answer/AnswerPageClient";
 import { HumanAccountSignInPrompt } from "~~/components/tokenless/human/HumanAccountSignInPrompt";
 import { HumanProfileContent } from "~~/components/tokenless/human/HumanProfileContent";
@@ -76,6 +77,7 @@ export default async function HumanPage({
         <>
           <PasskeyManagementPanel />
           <NotificationSettingsPanel />
+          <SubjectDataExportPanel />
           <AccountDeletionPanel />
         </>
       )}
