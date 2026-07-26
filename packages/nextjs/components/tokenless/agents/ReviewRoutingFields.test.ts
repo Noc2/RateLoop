@@ -17,7 +17,7 @@ test("review routing keeps selection and authority together with accessible expl
   assert.match(source, /<ReviewAuthorityFields/);
   assert.match(source, /When should RateLoop require human review\?/);
   assert.match(source, /If review is required, what may the agent do\?/);
-  assert.match(source, /Adaptive — Recommended/);
+  assert.match(source, /Every output — Recommended/);
   assert.match(source, /aria-describedby=\{frequencyDescriptionId\}/);
   assert.match(source, /type="radio"/);
   assert.match(source, /aria-describedby=\{describedBy\}/);

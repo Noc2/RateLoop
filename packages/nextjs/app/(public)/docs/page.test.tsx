@@ -16,7 +16,7 @@ test("documentation introduction presents the focused production path", async ()
   assert.match(html, /Human.*rateloop-text-gradient.*Assurance/i);
   assert.match(html, /Human Assurance Loop/i);
   assert.match(html, /Automated checks can pass.*contextual decision/i);
-  assert.match(html, /100% review.*50%.*25%.*10% monitoring floor/i);
+  assert.match(html, /100% review.*50%.*25%.*never drops below 25%/i);
   assert.match(html, /weaker measured agreement.*restore calibration/i);
   assert.doesNotMatch(
     html,

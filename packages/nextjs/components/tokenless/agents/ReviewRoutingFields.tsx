@@ -7,8 +7,8 @@ export type ReviewRoutingMode = "adaptive" | "always" | "manual" | "rules" | "fi
 export type ReviewRoutingAuthority = "check_only" | "prepare_for_approval" | "ask_automatically";
 
 const REVIEW_MODES = [
-  ["adaptive", "Adaptive — Recommended"],
-  ["always", "Every output"],
+  ["always", "Every output — Recommended"],
+  ["adaptive", "Adaptive"],
   ["fixed", "Fixed percentage"],
   ["rules", "Rules and conditions"],
   ["manual", "Manual handoff only"],

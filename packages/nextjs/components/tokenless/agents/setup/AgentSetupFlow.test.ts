@@ -61,12 +61,13 @@ test("review setup distinguishes a saved policy decision from delivery authority
   assert.doesNotMatch(flowSource, /mark an eligible output for human review/i);
   assert.doesNotMatch(flowSource, /This saves a review policy/i);
   assert.doesNotMatch(flowSource, /safe\s+connection does not send requests or pay reviewers/i);
-  for (const label of ["Adaptive — Recommended", "Every output", "Fixed percentage", "Rules and conditions"]) {
+  for (const label of ["Every output — Recommended", "Adaptive", "Fixed percentage", "Rules and conditions"]) {
     assert.match(routingSource, new RegExp(label));
   }
   assert.match(routingSource, /Manual handoff only/);
   assert.match(routingSource, /Never requires review automatically\. You start each handoff\./);
   assert.match(flowSource, /Minimum review rate \(%\)/);
+  assert.match(flowSource, /disabled=\{reviewFrequency\.mode === "adaptive"\}/);
   assert.match(flowSource, /Outputs reviewed \(%\)/);
   assert.match(flowSource, /Maximum outputs between reviews/);
   assert.match(flowSource, /Review these risk levels/);

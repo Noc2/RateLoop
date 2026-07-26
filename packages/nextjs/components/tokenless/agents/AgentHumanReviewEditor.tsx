@@ -93,8 +93,8 @@ function usdcToAtomic(value: string) {
 
 function draftFromView(view: OwnerView): Draft {
   const selection = view.configuration?.selection.value ?? {
-    mode: "adaptive",
-    productionFloorBps: 1_000,
+    mode: "always",
+    productionFloorBps: 0,
     maximumUnreviewedGap: 20,
     requiredRiskTiers: ["high"],
     minimumConfidenceBps: 7_000,
@@ -113,7 +113,7 @@ function draftFromView(view: OwnerView): Draft {
   };
   const mode = String(selection.mode) as Mode;
   const rateBps =
-    mode === "fixed" ? number(selection.fixedRateBps, 1_000) : number(selection.productionFloorBps, 1_000);
+    mode === "fixed" ? number(selection.fixedRateBps, 1_000) : number(selection.productionFloorBps, 2_500);
   return {
     questionAuthority: request.questionAuthority === "agent_per_request" ? "agent_per_request" : "owner_fixed",
     mode,
@@ -197,7 +197,7 @@ function buildMutation(view: OwnerView, draft: Draft) {
     mode: draft.mode,
     enforcementMode: draft.mode === "manual" ? "advisory" : currentSelection.enforcementMode,
     agreementThresholdBps: currentSelection.agreementThresholdBps,
-    productionFloorBps: draft.mode === "adaptive" ? bps(draft.ratePercent, "Minimum review rate", 1_000) : 0,
+    productionFloorBps: draft.mode === "adaptive" ? 2_500 : 0,
     fixedRateBps: draft.mode === "fixed" ? bps(draft.ratePercent, "Fixed review rate", 1) : null,
     maximumUnreviewedGap: positiveInteger(draft.maximumUnreviewedGap, "Maximum unreviewed gap", 1, 10_000),
     requiredRiskTiers,
@@ -553,12 +553,13 @@ export function AgentHumanReviewEditor({
               <input
                 className="input mt-2 w-full"
                 type="number"
-                min={draft.mode === "adaptive" ? 10 : 0.01}
+                min={draft.mode === "adaptive" ? 25 : 0.01}
                 max={100}
                 step="0.01"
                 value={draft.ratePercent}
                 onChange={event => update("ratePercent", event.target.value)}
                 required
+                disabled={draft.mode === "adaptive"}
               />
             </label>
           ) : null}

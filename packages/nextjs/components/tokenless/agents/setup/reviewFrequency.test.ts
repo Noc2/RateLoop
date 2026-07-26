@@ -12,7 +12,7 @@ const selection: AgentSetupReviewDraft["selection"] = {
   mode: "adaptive",
   enforcementMode: "advisory",
   agreementThresholdBps: 8_000,
-  productionFloorBps: 1_000,
+  productionFloorBps: 2_500,
   fixedRateBps: null,
   maximumUnreviewedGap: 20,
   requiredRiskTiers: ["high"],
@@ -25,12 +25,12 @@ function form(overrides: Partial<ReviewFrequencyFormValues>): ReviewFrequencyFor
   return { ...reviewFrequencyFormValues(selection), ...overrides };
 }
 
-test("adaptive and fixed percentages map exactly to deterministic basis points", () => {
+test("adaptive uses the conservative fixed floor while fixed percentages map exactly", () => {
   const adaptive = buildReviewFrequencySelection(
     selection,
     form({ mode: "adaptive", adaptiveFloorPercent: "12.25", maximumUnreviewedGap: "40" }),
   );
-  assert.equal(adaptive.productionFloorBps, 1_225);
+  assert.equal(adaptive.productionFloorBps, 2_500);
   assert.equal(adaptive.fixedRateBps, null);
   assert.equal(adaptive.maximumUnreviewedGap, 40);
 
@@ -70,10 +70,6 @@ test("every-output and manual modes clear inactive rate fields", () => {
 
 test("mode-specific invalid and empty frequency fields fail before the owner save", () => {
   assert.throws(
-    () => buildReviewFrequencySelection(selection, form({ mode: "adaptive", adaptiveFloorPercent: "9.99" })),
-    /between 10% and 100%/,
-  );
-  assert.throws(
     () => buildReviewFrequencySelection(selection, form({ mode: "fixed", fixedPercent: "0" })),
     /between 0.01% and 100%/,
   );
@@ -110,5 +106,5 @@ test("saved frequency summaries preserve the exact visible mode", () => {
     reviewFrequencySummary({ ...selection, mode: "rules", productionFloorBps: 0 }),
     "When risk or confidence conditions match",
   );
-  assert.equal(reviewFrequencySummary(selection), "Adaptive review, at least 10%");
+  assert.equal(reviewFrequencySummary(selection), "Adaptive review, at least 25%");
 });

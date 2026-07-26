@@ -101,10 +101,10 @@ const DEFAULT_REVIEW_DRAFT: AgentSetupReviewDraft = {
   schemaVersion: "rateloop.workspace-agent-setup-review.v2",
   bindingRevision: null,
   selection: {
-    mode: "adaptive",
+    mode: "always",
     enforcementMode: "advisory",
     agreementThresholdBps: DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS,
-    productionFloorBps: 1_000,
+    productionFloorBps: 0,
     fixedRateBps: null,
     maximumUnreviewedGap: 20,
     requiredRiskTiers: ["high"],

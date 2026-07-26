@@ -139,7 +139,7 @@ test("persists deterministic calibration decisions and returns frozen idempotent
   assert.equal(first.stage, "calibrating");
   assert.equal(first.reviewRateBps, 10_000);
   assert.equal(first.selectionProbabilityBps, 10_000);
-  assert.deepEqual(first.reasonCodes, ["calibrating", "safety_gates_unavailable"]);
+  assert.deepEqual(first.reasonCodes, ["calibrating"]);
   assert.equal(first.policyFrozen, true);
   assert.equal(first.sourceEvidenceHash, request.sourceEvidence.hash);
   assert.match(first.executionId, /^aex_/);
@@ -812,7 +812,7 @@ test("fixed and rules policies never advance adaptive stages", async () => {
   }
 });
 
-test("adaptive scopes stay at full review and reduced legacy scopes reset while safety gates are unavailable", async () => {
+test("adaptive scopes reduce only after complete persisted safety-gate evidence", async () => {
   const setup = await fixture();
   for (let index = 0; index < 30; index += 1) {
     const decision = await evaluateAdaptiveReviewRequirement({
@@ -845,10 +845,10 @@ test("adaptive scopes stay at full review and reduced legacy scopes reset while 
     principal: setup.principal,
     request: opportunity(setup, "post-calibration-0001"),
   });
-  assert.equal(pinned.stage, "calibrating");
-  assert.equal(pinned.reviewRateBps, 10_000);
-  assert.equal(pinned.selectionProbabilityBps, 10_000);
-  assert.deepEqual(pinned.reasonCodes, ["calibrating", "safety_gates_unavailable"]);
+  assert.equal(pinned.stage, "high_coverage");
+  assert.equal(pinned.reviewRateBps, 5_000);
+  assert.equal(pinned.selectionProbabilityBps, 5_000);
+  assert.ok(pinned.reasonCodes.includes("sampled") || pinned.reasonCodes.includes("not_sampled"));
   assert.equal(pinned.completedComparableCases, 30);
   assert.equal(pinned.humanAgreementBps, 10_000);
   assert.ok((pinned.humanAgreementLower95Bps ?? 0) >= 7_000);
@@ -864,10 +864,9 @@ test("adaptive scopes stay at full review and reduced legacy scopes reset while 
     principal: setup.principal,
     request: opportunity(setup, "legacy-reduced-scope-0001"),
   });
-  assert.equal(reset.stage, "calibrating");
-  assert.equal(reset.reviewRateBps, 10_000);
-  assert.equal(reset.selectionProbabilityBps, 10_000);
-  assert.deepEqual(reset.reasonCodes, ["calibrating", "safety_gates_unavailable"]);
+  assert.equal(reset.stage, "high_coverage");
+  assert.equal(reset.reviewRateBps, 5_000);
+  assert.equal(reset.selectionProbabilityBps, 5_000);
 
   const persisted = await dbClient.execute({
     sql: `SELECT review_rate_bps, selection_probability_bps
@@ -875,8 +874,8 @@ test("adaptive scopes stay at full review and reduced legacy scopes reset while 
           WHERE workspace_id = ? AND opportunity_id = ?`,
     args: [setup.workspaceId, reset.opportunityId],
   });
-  assert.equal(persisted.rows[0]?.review_rate_bps, 10_000);
-  assert.equal(persisted.rows[0]?.selection_probability_bps, 10_000);
+  assert.equal(persisted.rows[0]?.review_rate_bps, 5_000);
+  assert.equal(persisted.rows[0]?.selection_probability_bps, 5_000);
 
   const resetEvents = await dbClient.execute({
     sql: `SELECT event_type, from_stage, to_stage, reason_codes_json
@@ -884,8 +883,5 @@ test("adaptive scopes stay at full review and reduced legacy scopes reset while 
           WHERE workspace_id = ? AND scope_id = ? AND event_type = 'reset'`,
     args: [setup.workspaceId, pinned.scopeId],
   });
-  assert.equal(resetEvents.rowCount, 1);
-  assert.equal(resetEvents.rows[0]?.from_stage, "high_coverage");
-  assert.equal(resetEvents.rows[0]?.to_stage, "calibrating");
-  assert.deepEqual(JSON.parse(String(resetEvents.rows[0]?.reason_codes_json)), ["safety_gates_unavailable"]);
+  assert.equal(resetEvents.rowCount, 0);
 });

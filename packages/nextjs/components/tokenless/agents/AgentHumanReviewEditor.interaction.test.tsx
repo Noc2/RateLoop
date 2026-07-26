@@ -40,7 +40,7 @@ test("the editor uses workspace reviewer readiness without exposing legacy group
     assert.equal(screen.queryByRole("combobox", { name: "Invited reviewer group" }), null);
     assert.equal(
       (screen.getByRole("combobox", { name: "When should RateLoop require human review?" }) as HTMLSelectElement).value,
-      "adaptive",
+      "always",
     );
     assert.equal((screen.getByRole("radio", { name: "Send automatically" }) as HTMLInputElement).disabled, false);
     assert.ok(screen.getByText("Plugin connection: advisory."));

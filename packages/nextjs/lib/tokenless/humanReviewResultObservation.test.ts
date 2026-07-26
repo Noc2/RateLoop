@@ -18,6 +18,7 @@ import {
   __humanReviewResultObservationTestUtils,
   hashHumanReviewSelectionPolicySnapshot,
   observeHumanReviewResult,
+  pairwiseHumanAgreementBps,
 } from "~~/lib/tokenless/humanReviewResultObservation";
 import { createAgentPublishingPolicy, createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -36,6 +37,14 @@ beforeEach(() => {
 afterEach(() => {
   __humanReviewResultObservationTestUtils.setAfterAdaptiveWriteForTests(null);
   __setDatabaseResourcesForTests(null);
+});
+
+test("pairwise human agreement distinguishes unanimous, split, and undersized panels", () => {
+  assert.equal(pairwiseHumanAgreementBps(2, 0), 10_000);
+  assert.equal(pairwiseHumanAgreementBps(1, 1), 0);
+  assert.equal(pairwiseHumanAgreementBps(2, 1), 3_333);
+  assert.equal(pairwiseHumanAgreementBps(1, 0), null);
+  assert.throws(() => pairwiseHumanAgreementBps(-1, 2), /counts are invalid/);
 });
 
 async function fixture(

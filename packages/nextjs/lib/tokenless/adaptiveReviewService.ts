@@ -43,9 +43,10 @@ type QueryRow = Record<string, unknown>;
 type AdaptivePrincipal = Extract<ProductPrincipal, { kind: "api_key" }>;
 
 const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/;
-// Adaptive coverage must not fall below 100% until these gates are backed by
-// persisted, scope-specific drift and severe-disagreement evidence.
-const ADAPTIVE_SAFETY_GATES_AVAILABLE = false;
+// Every adaptive safety gate below is derived from persisted, scope-specific
+// observations. Missing evidence fails closed in the individual gate.
+const ADAPTIVE_SAFETY_GATES_AVAILABLE = true;
+const MAXIMUM_WINDOW_AGREEMENT_DRIFT_BPS = 2_000;
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
 const SOURCE_REFERENCE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,239}$/;
 const RISK_TIER_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
@@ -499,9 +500,20 @@ function humanAgreementGatePassed(rows: QueryRow[], thresholdBps: number) {
   });
 }
 
-function observationWindow(rows: QueryRow[], policy: ReviewPolicyRow): AdaptiveObservationWindow {
+function agreementRateBps(rows: QueryRow[]) {
+  if (rows.length === 0) return null;
+  return Math.floor((10_000 * rows.filter(row => rowString(row, "agreement") === "agree").length) / rows.length);
+}
+
+function observationWindow(
+  rows: QueryRow[],
+  policy: ReviewPolicyRow,
+  comparisonRows: QueryRow[] = [],
+): AdaptiveObservationWindow {
   const comparable = rows.length;
   const agreements = rows.filter(row => rowString(row, "agreement") === "agree").length;
+  const currentAgreementRate = agreementRateBps(rows);
+  const comparisonAgreementRate = agreementRateBps(comparisonRows);
   return {
     comparable,
     agreements,
@@ -516,8 +528,11 @@ function observationWindow(rows: QueryRow[], policy: ReviewPolicyRow): AdaptiveO
         Number(row.latency_ms) <= policy.rules.maximumLatencyMs
       );
     }),
-    driftGatePassed: true,
-    severeDisagreementOpen: false,
+    driftGatePassed:
+      currentAgreementRate === null ||
+      comparisonAgreementRate === null ||
+      Math.abs(currentAgreementRate - comparisonAgreementRate) <= MAXIMUM_WINDOW_AGREEMENT_DRIFT_BPS,
+    severeDisagreementOpen: rows.some(row => row.critical_risk === true && rowString(row, "agreement") === "disagree"),
   };
 }
 
@@ -574,10 +589,15 @@ async function refreshScopeState(
   input: { workspaceId: string; scope: ScopeRow; policy: ReviewPolicyRow; resetReason?: string | null },
 ) {
   const observations = await client.query(
-    `SELECT agreement, responding_human_count, human_human_agreement_bps, latency_ms, finalized_at
-     FROM tokenless_agent_evaluation_observations
-     WHERE workspace_id = $1 AND scope_id = $2 AND comparable = true
-     ORDER BY finalized_at DESC LIMIT 30`,
+    `SELECT observation.agreement,observation.responding_human_count,
+            observation.human_human_agreement_bps,observation.latency_ms,
+            observation.finalized_at,opportunity.critical_risk
+     FROM tokenless_agent_evaluation_observations observation
+     JOIN tokenless_agent_review_opportunities opportunity
+       ON opportunity.workspace_id=observation.workspace_id
+      AND opportunity.opportunity_id=observation.opportunity_id
+     WHERE observation.workspace_id = $1 AND observation.scope_id = $2 AND observation.comparable = true
+     ORDER BY observation.finalized_at DESC LIMIT 30`,
     [input.workspaceId, input.scope.scopeId],
   );
   const totals = await client.query(
@@ -594,7 +614,7 @@ async function refreshScopeState(
   const result = nextAdaptiveStage({
     policy: policyMath(input.policy),
     state: { ...input.scope, completedComparableCases: completed, stableCasesSinceStage: stable },
-    latestWindow: observationWindow(latestRows, input.policy),
+    latestWindow: observationWindow(latestRows, input.policy, previousRows),
     ...(previousRows.length > 0 ? { previousWindow: observationWindow(previousRows, input.policy) } : {}),
     resetReason: input.resetReason,
   });
@@ -942,20 +962,6 @@ function decisionForMode(input: {
           : [rulesMatch ? "rules_match" : "no_rule_match"],
     };
   }
-  if (!ADAPTIVE_SAFETY_GATES_AVAILABLE) {
-    return {
-      ...sampled,
-      required: true,
-      decision: "required" as const,
-      reviewRateBps: 10_000,
-      selectionProbabilityBps: 10_000,
-      criticalRisk,
-      reasonCodes: [
-        ...sampled.reasonCodes.filter(reason => reason !== "sampled" && reason !== "not_sampled"),
-        "safety_gates_unavailable",
-      ],
-    };
-  }
   const forced = sampled.reasonCodes.some(reason => reason !== "sampled" && reason !== "not_sampled");
   return {
     ...sampled,
@@ -1091,7 +1097,7 @@ function nextReassessmentAfter(scope: ScopeRow) {
   if (scope.stage === "calibrating") return Math.max(0, 30 - scope.completedComparableCases);
   if (scope.stage === "high_coverage") return Math.max(0, 50 - scope.stableCasesSinceStage);
   if (scope.stage === "medium_coverage") return Math.max(0, 100 - scope.stableCasesSinceStage);
-  return 0;
+  return Math.max(0, 100 - scope.stableCasesSinceStage);
 }
 
 async function assuranceState(
@@ -1106,7 +1112,7 @@ async function assuranceState(
         ? 5_000
         : input.scope.stage === "medium_coverage"
           ? 2_500
-          : 1_000,
+          : 2_500,
     input.policy.productionFloorBps,
   );
   return {

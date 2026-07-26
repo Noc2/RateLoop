@@ -42,8 +42,9 @@ export default function DocsPage() {
       <h2>Human judgment that follows the evidence</h2>
       <p>
         A new agent version and workflow starts with 100% review. Repeated agreement can move its baseline coverage to
-        50%, 25%, and a 10% monitoring floor. Risk rules, missing context, review gaps, or weaker measured agreement
-        keep humans in the loop or restore calibration. The final decision stays with you.
+        50%, then 25%. Monitoring never drops below 25% and periodically returns to full-review calibration. Risk rules,
+        missing context, review gaps, or weaker measured agreement keep humans in the loop or restore calibration. The
+        final decision stays with you.
       </p>
 
       <div className="not-prose my-8">

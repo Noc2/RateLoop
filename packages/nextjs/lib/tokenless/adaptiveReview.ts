@@ -4,6 +4,7 @@ import { wilsonIntervalBps } from "~~/lib/tokenless/transparency";
 
 export const ADAPTIVE_REVIEW_STAGES = ["calibrating", "high_coverage", "medium_coverage", "monitoring"] as const;
 export type AdaptiveReviewStage = (typeof ADAPTIVE_REVIEW_STAGES)[number];
+export const ADAPTIVE_MONITORING_RECALIBRATION_CASES = 100;
 
 export type AdaptiveReviewPolicy = {
   policyVersion: number;
@@ -34,7 +35,7 @@ export const ADAPTIVE_REVIEW_STAGE_RATE_BPS: Record<AdaptiveReviewStage, number>
   calibrating: 10_000,
   high_coverage: 5_000,
   medium_coverage: 2_500,
-  monitoring: 1_000,
+  monitoring: 2_500,
 };
 
 function validBps(value: number) {
@@ -78,6 +79,11 @@ function windowPasses(window: AdaptiveObservationWindow, thresholdBps: number, m
 
 function windowResetReason(window: AdaptiveObservationWindow, thresholdBps: number, minimumSize: number) {
   if (!window.safetyGatesAvailable) return "safety_gates_unavailable";
+  if (!window.completionGatePassed) return "completion_gate_failed";
+  if (!window.humanAgreementGatePassed) return "human_agreement_gate_failed";
+  if (!window.latencyGatePassed) return "latency_gate_failed";
+  if (!window.driftGatePassed) return "drift_gate_failed";
+  if (window.severeDisagreementOpen) return "severe_disagreement_open";
   if (
     !Number.isSafeInteger(window.comparable) ||
     !Number.isSafeInteger(window.agreements) ||
@@ -87,11 +93,6 @@ function windowResetReason(window: AdaptiveObservationWindow, thresholdBps: numb
   ) {
     return null;
   }
-  if (!window.completionGatePassed) return "completion_gate_failed";
-  if (!window.humanAgreementGatePassed) return "human_agreement_gate_failed";
-  if (!window.latencyGatePassed) return "latency_gate_failed";
-  if (!window.driftGatePassed) return "drift_gate_failed";
-  if (window.severeDisagreementOpen) return "severe_disagreement_open";
   const interval = wilsonIntervalBps(window.agreements, window.comparable);
   return interval.lower < thresholdBps ? "agreement_below_threshold" : null;
 }
@@ -112,6 +113,9 @@ export function nextAdaptiveStage(input: {
   if (state.stage !== "calibrating" && evidenceResetReason) {
     return { stage: "calibrating" as const, reviewRateBps: 10_000, reason: evidenceResetReason };
   }
+  if (state.stage === "monitoring" && state.stableCasesSinceStage >= ADAPTIVE_MONITORING_RECALIBRATION_CASES) {
+    return { stage: "calibrating" as const, reviewRateBps: 10_000, reason: "periodic_recalibration" };
+  }
   const latestPasses = windowPasses(input.latestWindow, policy.agreementThresholdBps, 15);
   if (state.stage === "calibrating") {
     const priorPasses = input.previousWindow
@@ -125,7 +129,7 @@ export function nextAdaptiveStage(input: {
   } else if (state.stage === "medium_coverage" && state.stableCasesSinceStage >= 100 && latestPasses) {
     return {
       stage: "monitoring" as const,
-      reviewRateBps: Math.max(1_000, policy.productionFloorBps),
+      reviewRateBps: Math.max(2_500, policy.productionFloorBps),
       reason: "one_hundred_stable_cases",
     };
   }

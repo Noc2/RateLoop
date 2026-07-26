@@ -584,9 +584,10 @@ function PairingApprovalCard({
           <strong className="text-base-content/75">Safe adaptive preset:</strong> private invited reviewers, two stable
           15-case windows with at least 14 agent-human agreements each, 70% minimum declared confidence, review for high
           and critical risk, and at most 20 outputs without a sample. Coverage starts at 100%, then may move to 50%,
-          25%, and a 10% monitoring floor after stable evidence. Generic MCP is advisory: RateLoop decides and records
-          when review is required, but cannot prove this host blocks an answer before review finishes. Customize the
-          immutable review policy in the Review policy panel after approval.
+          then 25% after stable evidence. Monitoring never drops below 25% and returns to a full-review calibration
+          block after 100 comparable cases. Generic MCP is advisory: RateLoop decides and records when review is
+          required, but cannot prove this host blocks an answer before review finishes. Customize the immutable review
+          policy in the Review policy panel after approval.
         </div>
       </fieldset>
 

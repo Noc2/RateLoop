@@ -16,8 +16,8 @@ decide whether baseline review can decrease.
 
 Within the same owner-approved policy, two independent 15-case windows with at least 14 comparable agent-human
 agreements each can move baseline review from 100% to 50%. Another 50 stable cases can move it to 25%, and 100 more can
-move it to the 10% monitoring floor. A complete evidence window below the agreement threshold restores 100%
-calibration.
+start the 25% monitoring stage. After 100 comparable monitoring cases, coverage returns to a full-review
+calibration block. A complete evidence window below the agreement threshold restores 100% calibration.
 
 Coverage never becomes a global agent score. Evidence from another version, policy, workflow, risk tier, or reviewer
 audience cannot silently lower review.

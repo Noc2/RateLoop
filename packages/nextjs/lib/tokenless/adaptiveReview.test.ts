@@ -5,7 +5,7 @@ import { decideAdaptiveReview, nextAdaptiveStage } from "~~/lib/tokenless/adapti
 const policy = {
   policyVersion: 4,
   agreementThresholdBps: 7_000,
-  productionFloorBps: 1_000,
+  productionFloorBps: 2_500,
   maximumUnreviewedGap: 20,
 };
 
@@ -57,7 +57,7 @@ test("adaptive stages require two independent calibration windows and stable evi
     },
     latestWindow: passingWindow,
   });
-  assert.deepEqual(monitoring, { stage: "monitoring", reviewRateBps: 1_000, reason: "one_hundred_stable_cases" });
+  assert.deepEqual(monitoring, { stage: "monitoring", reviewRateBps: 2_500, reason: "one_hundred_stable_cases" });
 });
 
 test("the 7,000 bps Wilson threshold accepts 14/15 and resets reduced coverage at 13/15", () => {
@@ -120,6 +120,41 @@ test("the 7,000 bps Wilson threshold accepts 14/15 and resets reduced coverage a
   assert.deepEqual(reset, { stage: "calibrating", reviewRateBps: 10_000, reason: "model_version_changed" });
 });
 
+test("drift and severe disagreement reset reduced coverage even before a window reaches minimum size", () => {
+  const state = {
+    stage: "monitoring" as const,
+    completedComparableCases: 500,
+    stableCasesSinceStage: 300,
+    unreviewedSinceLastSample: 0,
+  };
+  for (const [latestWindow, reason] of [
+    [{ ...passingWindow, comparable: 3, agreements: 3, driftGatePassed: false }, "drift_gate_failed"],
+    [{ ...passingWindow, comparable: 3, agreements: 3, severeDisagreementOpen: true }, "severe_disagreement_open"],
+  ] as const) {
+    assert.deepEqual(nextAdaptiveStage({ policy, state, latestWindow }), {
+      stage: "calibrating",
+      reviewRateBps: 10_000,
+      reason,
+    });
+  }
+});
+
+test("monitoring returns to a full-review recalibration block after one hundred comparable cases", () => {
+  assert.deepEqual(
+    nextAdaptiveStage({
+      policy,
+      state: {
+        stage: "monitoring",
+        completedComparableCases: 600,
+        stableCasesSinceStage: 100,
+        unreviewedSinceLastSample: 0,
+      },
+      latestWindow: passingWindow,
+    }),
+    { stage: "calibrating", reviewRateBps: 10_000, reason: "periodic_recalibration" },
+  );
+});
+
 test("sampling is deterministic and forced by risk, missing metadata, or maximum gap", () => {
   const base = {
     samplerKey: Buffer.alloc(32, 7),
@@ -139,7 +174,7 @@ test("sampling is deterministic and forced by risk, missing metadata, or maximum
   const first = decideAdaptiveReview(base);
   const replay = decideAdaptiveReview(base);
   assert.deepEqual(first, replay);
-  assert.equal(first.reviewRateBps, 1_000);
+  assert.equal(first.reviewRateBps, 2_500);
 
   for (const forced of [
     { ...base, criticalRisk: true },

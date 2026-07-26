@@ -20,7 +20,8 @@ test("how-it-works follows the production agent, reviewer, and settlement paths"
   );
   assert.match(html, /agent version, review-policy version, workflow, risk tier, and reviewer audience/i);
   assert.match(html, /two independent 15-case windows.*at least 14 comparable/i);
-  assert.match(html, /50%.*25%.*10% monitoring floor/i);
+  assert.match(html, /50%.*25%.*25% monitoring stage/i);
+  assert.match(html, /100 comparable monitoring cases.*full-review calibration block/i);
   assert.match(html, /below the agreement threshold restores 100% calibration/i);
   assert.match(html, /Critical risk, missing required context, and the maximum unreviewed gap/i);
   assert.match(html, /quote.*ask.*payment.*wait.*result/i);

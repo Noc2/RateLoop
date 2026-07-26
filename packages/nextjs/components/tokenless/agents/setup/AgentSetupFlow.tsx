@@ -1418,7 +1418,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     <input
                       className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
                       type="number"
-                      min={reviewFrequency.mode === "adaptive" ? 10 : 0.01}
+                      min={reviewFrequency.mode === "adaptive" ? 25 : 0.01}
                       max={100}
                       step={0.01}
                       inputMode="decimal"
@@ -1435,6 +1435,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                         }))
                       }
                       required
+                      disabled={reviewFrequency.mode === "adaptive"}
                     />
                   </label>
                   <label className="text-sm">
@@ -1458,7 +1459,9 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   </label>
                 </div>
                 <p className="mt-3 text-xs leading-5 text-base-content/55">
-                  {reviewFrequency.mode === "adaptive" ? "Starts at 100% while calibrating. " : ""}
+                  {reviewFrequency.mode === "adaptive"
+                    ? "Starts at 100% while calibrating and never drops below 25%. "
+                    : ""}
                   Critical, incomplete, or low-confidence outputs can still require review.
                 </p>
               </div>

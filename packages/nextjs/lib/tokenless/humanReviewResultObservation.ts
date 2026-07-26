@@ -71,6 +71,7 @@ type DerivedAdaptiveObservation = {
   agreement: "agree" | "disagree" | "inconclusive";
   comparable: boolean;
   respondingHumanCount: number;
+  humanHumanAgreementBps: number | null;
   latencyMs: number;
   costAtomic: string;
   finalizedAt: Date;
@@ -204,6 +205,8 @@ async function loadFrozenOpportunity(client: QueryableClient, envelope: HumanRev
             e.integration_id AS execution_integration_id,
             private_origin.integration_id AS private_integration_id,
             private_origin.response_deadline AS private_response_deadline,
+            private_origin.positive_response_count AS private_positive_response_count,
+            private_origin.negative_response_count AS private_negative_response_count,
             p.mode AS policy_mode,p.agreement_threshold_bps,p.production_floor_bps,p.fixed_rate_bps,
             p.maximum_unreviewed_gap,p.rules_json,p.audience_policy_json,
             p.publishing_policy_id AS review_publishing_policy_id,
@@ -228,9 +231,13 @@ async function loadFrozenOpportunity(client: QueryableClient, envelope: HumanRev
       AND opportunity_question.opportunity_id=o.opportunity_id
      LEFT JOIN tokenless_agent_executions e ON e.execution_id=o.execution_id
      LEFT JOIN (
-       SELECT d.workspace_id,d.opportunity_id,r.integration_id,r.response_deadline
+       SELECT d.workspace_id,d.opportunity_id,r.integration_id,r.response_deadline,
+              COUNT(*) FILTER (WHERE response.choice='positive') AS positive_response_count,
+              COUNT(*) FILTER (WHERE response.choice='negative') AS negative_response_count
        FROM tokenless_private_unpaid_review_deliveries d
        JOIN tokenless_private_review_requests r ON r.private_review_id=d.private_review_id
+       LEFT JOIN tokenless_private_review_responses response ON response.delivery_id=d.delivery_id
+       GROUP BY d.workspace_id,d.opportunity_id,r.integration_id,r.response_deadline
      ) private_origin
        ON private_origin.workspace_id=o.workspace_id AND private_origin.opportunity_id=o.opportunity_id
      WHERE o.workspace_id=$1 AND o.opportunity_id=$2`,
@@ -294,6 +301,21 @@ function realizedCostAtomic(envelope: HumanReviewResultEnvelope) {
   ).toString();
 }
 
+export function pairwiseHumanAgreementBps(positiveCount: number, negativeCount: number) {
+  if (
+    !Number.isSafeInteger(positiveCount) ||
+    positiveCount < 0 ||
+    !Number.isSafeInteger(negativeCount) ||
+    negativeCount < 0
+  ) {
+    throw new Error("Human response counts are invalid.");
+  }
+  const responseCount = positiveCount + negativeCount;
+  if (responseCount < 2) return null;
+  const agreeingPairs = positiveCount * (positiveCount - 1) + negativeCount * (negativeCount - 1);
+  return Math.floor((10_000 * agreeingPairs) / (responseCount * (responseCount - 1)));
+}
+
 function deriveAdaptiveObservation(row: Row, envelope: HumanReviewResultEnvelope): DerivedAdaptiveObservation | null {
   const resultSemantics = string(row, "result_semantics");
   if (resultSemantics === "feedback") {
@@ -330,6 +352,13 @@ function deriveAdaptiveObservation(row: Row, envelope: HumanReviewResultEnvelope
       envelope.outcome === "positive" ? "agree" : envelope.outcome === "negative" ? "disagree" : "inconclusive",
     comparable,
     respondingHumanCount: envelope.panel.responseCount,
+    humanHumanAgreementBps:
+      row.private_positive_response_count === null || row.private_positive_response_count === undefined
+        ? null
+        : pairwiseHumanAgreementBps(
+            integer(row, "private_positive_response_count"),
+            integer(row, "private_negative_response_count"),
+          ),
     latencyMs: Math.max(0, finalizedAt.getTime() - startedAt.getTime()),
     costAtomic: realizedCostAtomic(envelope),
     finalizedAt,
@@ -352,7 +381,9 @@ function adaptiveRowMatches(row: Row, expected: DerivedAdaptiveObservation) {
     string(row, "agreement") === expected.agreement &&
     boolean(row, "comparable") === expected.comparable &&
     integer(row, "responding_human_count") === expected.respondingHumanCount &&
-    row.human_human_agreement_bps === null &&
+    (row.human_human_agreement_bps === null || row.human_human_agreement_bps === undefined
+      ? null
+      : integer(row, "human_human_agreement_bps")) === expected.humanHumanAgreementBps &&
     integer(row, "latency_ms") === expected.latencyMs &&
     string(row, "cost_atomic") === expected.costAtomic &&
     date(row, "finalized_at").getTime() === expected.finalizedAt.getTime()
@@ -365,7 +396,7 @@ async function appendAdaptiveObservation(client: QueryableClient, expected: Deri
      (observation_id,workspace_id,scope_id,opportunity_id,execution_id,operation_key,run_id,evidence_reference,
       source_payload_hash,agent_outcome_commitment,human_outcome_commitment,agreement,comparable,
       responding_human_count,human_human_agreement_bps,latency_ms,cost_atomic,finalized_at,created_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NULL,$15,$16,$17,$18)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
      ON CONFLICT (opportunity_id) DO NOTHING`,
     [
       expected.observationId,
@@ -382,6 +413,7 @@ async function appendAdaptiveObservation(client: QueryableClient, expected: Deri
       expected.agreement,
       expected.comparable,
       expected.respondingHumanCount,
+      expected.humanHumanAgreementBps,
       expected.latencyMs,
       expected.costAtomic,
       expected.finalizedAt,

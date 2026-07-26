@@ -17,10 +17,10 @@ function percent(bps: number | null, fallbackBps: number) {
 
 export function reviewFrequencyFormValues(selection: ReviewSelection | null | undefined): ReviewFrequencyFormValues {
   return {
-    mode: selection?.mode ?? "adaptive",
+    mode: selection?.mode ?? "always",
     adaptiveFloorPercent: percent(
-      selection && selection.productionFloorBps >= 1_000 ? selection.productionFloorBps : null,
-      1_000,
+      selection && selection.productionFloorBps >= 2_500 ? selection.productionFloorBps : null,
+      2_500,
     ),
     fixedPercent: percent(selection?.fixedRateBps ?? null, 1_000),
     maximumUnreviewedGap: String(selection?.maximumUnreviewedGap ?? 20),
@@ -35,7 +35,7 @@ export function reviewFrequencySummary(selection: ReviewSelection | null | undef
   if (selection.mode === "manual") return "Manual handoff only";
   if (selection.mode === "fixed") return `${percent(selection.fixedRateBps, 0)}% of eligible outputs`;
   if (selection.mode === "rules") return "When risk or confidence conditions match";
-  return `Adaptive review, at least ${percent(selection.productionFloorBps, 1_000)}%`;
+  return `Adaptive review, at least ${percent(selection.productionFloorBps, 2_500)}%`;
 }
 
 function percentageBps(value: string, field: string, minimumBps: number) {
@@ -92,7 +92,7 @@ export function buildReviewFrequencySelection(
   if (form.mode === "adaptive") {
     return {
       ...next,
-      productionFloorBps: percentageBps(form.adaptiveFloorPercent, "Minimum review rate", 1_000),
+      productionFloorBps: 2_500,
       maximumUnreviewedGap: maximumGap(form.maximumUnreviewedGap),
     };
   }

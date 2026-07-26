@@ -27,9 +27,9 @@ export default function HowTokenlessWorksPage() {
       <p>
         Under the default adaptive policy, two independent 15-case windows must each contain at least 14 comparable
         agent-human agreements before coverage can move to 50%. Another 50 stable cases can move it to 25%, and 100 more
-        can move it to the 10% monitoring floor. A complete evidence window below the agreement threshold restores 100%
-        calibration. Critical risk, missing required context, and the maximum unreviewed gap can force a check at any
-        stage.
+        start the 25% monitoring stage. After 100 comparable monitoring cases, coverage returns to a full-review
+        calibration block. A complete evidence window below the agreement threshold restores 100% calibration. Critical
+        risk, missing required context, and the maximum unreviewed gap can force a check at any stage.
       </p>
 
       <h2 id="agent-flow">2. One human-review cycle</h2>
