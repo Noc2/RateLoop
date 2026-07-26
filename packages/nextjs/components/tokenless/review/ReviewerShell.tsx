@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, type RefObject, useEffect } from "react";
+import { type ReactNode, type RefObject, useEffect, useRef } from "react";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 
@@ -48,9 +48,20 @@ export function ReviewerShell({
   shortcutsEnabled?: boolean;
   totalCases: number;
 }) {
+  const shellRef = useRef<HTMLElement>(null);
+
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (!shortcutsEnabled || event.metaKey || event.ctrlKey || event.altKey || isInteractiveTarget(event.target)) {
+      const shell = shellRef.current;
+      if (
+        !shortcutsEnabled ||
+        !shell ||
+        !shell.contains(document.activeElement) ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        isInteractiveTarget(event.target)
+      ) {
         return;
       }
       if (event.key === "1") onSelectFirst();
@@ -65,7 +76,15 @@ export function ReviewerShell({
   }, [advanceDisabled, onAdvance, onSelectFirst, onSelectSecond, rationaleRef, shortcutsEnabled]);
 
   return (
-    <section className="space-y-4" aria-label="Reviewer workspace">
+    <section
+      ref={shellRef}
+      className="space-y-4 outline-none"
+      aria-label="Reviewer workspace"
+      tabIndex={-1}
+      onPointerDown={event => {
+        if (!isInteractiveTarget(event.target)) shellRef.current?.focus({ preventScroll: true });
+      }}
+    >
       <Card className="rounded-2xl p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>{laneHeader}</div>

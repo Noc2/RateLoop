@@ -21,6 +21,17 @@ test("public rating progressively collects feedback without LREP and hides the a
 });
 
 test("an already reserved voucher retries the prepared device queue and waits for confirmation", () => {
+  assert.match(source, /What becomes public/);
+  assert.match(
+    source,
+    /tlock ciphertext containing your vote, crowd forecast, response\s+hash, per-round payout address, and salt/,
+  );
+  assert.match(source, /publicly decryptable after the commit deadline/);
+  assert.match(source, /even if no keeper or reviewer submits a reveal/);
+  assert.match(source, /A reveal publishes the plaintext/);
+  assert.match(source, /Public blockchain\s+records generally cannot be erased/);
+  assert.match(source, /href="\/legal\/privacy#on-chain-data"/);
+  assert.ok(source.indexOf("What becomes public") < source.indexOf("{recoveryUrl && activePreparedSubmission"));
   assert.match(source, /dueTokenlessCommits\(queue, principalId\)/);
   assert.match(source, /queue\.list\(principalId\)/);
   assert.match(source, /recordTokenlessCommitRelayFailure/);
@@ -52,6 +63,8 @@ test("an already reserved voucher retries the prepared device queue and waits fo
   assert.match(source, /async function submitPreparedResponse/);
   assert.match(source, /Submitting…/);
   assert.match(source, /Recorded/);
+  assert.match(source, /Commit receipt/);
+  assert.match(source, /View confirmed transaction/);
   assert.match(source, /Technical details/);
   assert.doesNotMatch(source, /Recovery secret/);
 });

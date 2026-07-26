@@ -745,9 +745,25 @@ export function HumanAssuranceRaterClient({
                   </p>
                   {assignmentTerms ? privateTermsSummary(assignmentTerms) : null}
                   {assignmentClosed || assignmentUnavailable ? (
-                    <p role="status" className="mt-5 rounded-lg border border-white/10 p-4 text-sm">
-                      {assignmentClosed ? "This review window has closed." : "This assignment is no longer available."}
-                    </p>
+                    <div role="status" className="mt-5 rounded-lg border border-white/10 p-4 text-sm">
+                      <p>
+                        {assignmentClosed
+                          ? "This review window has closed."
+                          : "This assignment is no longer available."}
+                      </p>
+                      {onContinue ? (
+                        <Button type="button" variant="secondary" className="mt-3 w-full" onClick={onContinue}>
+                          Return to review queue
+                        </Button>
+                      ) : (
+                        <Link
+                          href="/human?tab=reviews"
+                          className="mt-3 inline-flex font-semibold underline underline-offset-4"
+                        >
+                          Return to review queue
+                        </Link>
+                      )}
+                    </div>
                   ) : termsRequired === null ? (
                     <p
                       role="status"
@@ -889,10 +905,10 @@ export function HumanAssuranceRaterClient({
                             : "This assignment could not be restored. Open Review work for another assignment."}
                         </p>
                         <Link
-                          href="/human?scope=private"
+                          href="/human?tab=reviews"
                           className="mt-3 inline-flex text-xs font-semibold underline underline-offset-4"
                         >
-                          Return to Review work
+                          Return to review queue
                         </Link>
                       </div>
                     ) : termsRequired === null ? (
@@ -978,6 +994,7 @@ export function HumanAssuranceRaterClient({
                     Private · unpaid
                   </p>
                   <p className="mt-1 text-sm font-semibold">{assignmentTitle}</p>
+                  <DeadlineChip deadline={draftExpiresAt} label="Submit" />
                   <DeadlineChip deadline={leaseDeadline} label="Access" />
                 </>
               }
@@ -1215,11 +1232,25 @@ export function HumanAssuranceRaterClient({
               ) : null}
 
               {serverAcceptance ? (
-                <Card className="rounded-2xl p-5 sm:p-7">
+                <Card className="rounded-2xl p-5 sm:p-7" aria-label="Submission receipt">
                   <p role="status" className="rounded-lg bg-emerald-300/10 p-3 text-sm leading-6 text-emerald-100">
                     {serverAcceptance.replay ? "Review already recorded." : "Review submitted."} Private content is now
                     closed. This assignment was unpaid.
                   </p>
+                  <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                    <div>
+                      <dt className="text-base-content/55">Assignment receipt</dt>
+                      <dd className="mt-1 break-all font-mono text-xs">{task.assignmentId}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-base-content/55">Responses recorded</dt>
+                      <dd className="mt-1">{serverAcceptance.responseCount}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-base-content/55">Compensation</dt>
+                      <dd className="mt-1">Unpaid · no settlement or claim required</dd>
+                    </div>
+                  </dl>
                   {onContinue ? (
                     <Button type="button" className="mt-4 w-full sm:w-auto" onClick={onContinue}>
                       Review next assignment

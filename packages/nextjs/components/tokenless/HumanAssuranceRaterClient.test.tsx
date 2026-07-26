@@ -81,6 +81,7 @@ test("assigned review keeps the content, decision, and deadline visible without 
           },
         ],
       }}
+      assignmentExpiresAt="2030-01-02T02:00:00.000Z"
     />,
   ).replace(/\s+/g, " ");
 
@@ -95,5 +96,57 @@ test("assigned review keeps the content, decision, and deadline visible without 
   assert.doesNotMatch(html, /voucher|calibration|qualification/i);
   assert.match(html, /Case 1 of 1/);
   assert.match(html, /Keyboard: 1 or 2 selects/);
+  assert.match(html, /Submit:/);
   assert.match(html, /Access:/);
+});
+
+test("a server-confirmed private response shows a durable unpaid submission receipt", async () => {
+  (globalThis as typeof globalThis & { React: typeof React }).React = React;
+  const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
+  const expiresAt = new Date("2030-01-02T03:04:05.000Z").toISOString();
+  const html = renderToStaticMarkup(
+    <HumanAssuranceRaterClient
+      initialServerAcceptance={{
+        accepted: true,
+        replay: false,
+        responseCount: 1,
+        compensation: "unpaid",
+        settlementStatus: "not_applicable",
+      }}
+      initialTask={{
+        assignmentId: "haas_receipt",
+        runId: "har_receipt",
+        source: "customer_invited",
+        runManifestHash: `sha256:${"d".repeat(64)}`,
+        policyHash: `sha256:${"e".repeat(64)}`,
+        qualificationProvenance: [],
+        rubric: {
+          prompt: "Which response is better?",
+          failureTags: [],
+          rationale: { mode: "optional", maxLength: 2_000 },
+        },
+        cases: [
+          {
+            caseId: "hacase_receipt",
+            position: 0,
+            title: "Compare responses",
+            instructions: "Choose one.",
+            options: [
+              { key: "A", artifactId: "haa_a", leaseId: "lease_a", expiresAt },
+              { key: "B", artifactId: "haa_b", leaseId: "lease_b", expiresAt },
+            ],
+            context: [],
+            objectiveReference: null,
+          },
+        ],
+      }}
+    />,
+  ).replace(/\s+/g, " ");
+
+  assert.match(html, /Submission receipt/);
+  assert.match(html, /Review submitted/);
+  assert.match(html, /Assignment receipt/);
+  assert.match(html, /haas_receipt/);
+  assert.match(html, /Responses recorded/);
+  assert.match(html, /Unpaid · no settlement or claim required/);
 });

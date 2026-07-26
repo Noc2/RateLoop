@@ -121,6 +121,12 @@ type PreparedPublicSubmission = {
   secrets: TokenlessRaterRoundSecrets;
 };
 
+type PublicSubmissionReceipt = {
+  commitId: string;
+  confirmedAt: string | null;
+  transactionHash: string | null;
+};
+
 function publicSubmissionBinding(
   task: PublicAnswerTask,
   draft: Pick<PublicReviewDraft, "answer" | "prediction" | "feedbackCategory" | "feedbackBody" | "sourceUrl">,
@@ -187,6 +193,7 @@ export function PublicQuestionCard({
   const [feedbackBody, setFeedbackBody] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [savedCommit, setSavedCommit] = useState<TokenlessQueuedCommit | null>(null);
+  const [submissionReceipt, setSubmissionReceipt] = useState<PublicSubmissionReceipt | null>(null);
   const [retryClock, setRetryClock] = useState(() => Date.now());
   const [draftRestored, setDraftRestored] = useState(false);
   const rationaleRef = useRef<HTMLTextAreaElement>(null);
@@ -359,6 +366,11 @@ export function PublicQuestionCard({
         setSavedCommit(null);
         clearReviewDraft("public", task.roundId, publicDraftStorage);
         setStatus("Recorded");
+        setSubmissionReceipt({
+          commitId,
+          confirmedAt: typeof committed.confirmedAt === "string" ? committed.confirmedAt : null,
+          transactionHash: typeof committed.transactionHash === "string" ? committed.transactionHash : null,
+        });
         setTechnicalStatus("The answer is confirmed. The panel rating stays hidden until settlement.");
         onSubmitted();
       } else if (committed.state === "failed") {
@@ -628,6 +640,11 @@ export function PublicQuestionCard({
         setSavedCommit(null);
         clearReviewDraft("public", task.roundId, publicDraftStorage);
         setStatus("Recorded");
+        setSubmissionReceipt({
+          commitId: committed.commitId,
+          confirmedAt: typeof current.confirmedAt === "string" ? current.confirmedAt : null,
+          transactionHash: typeof current.transactionHash === "string" ? current.transactionHash : null,
+        });
         setTechnicalStatus("The answer is confirmed. The panel rating stays hidden until settlement.");
         onSubmitted();
       } else if (current.state === "failed") {
@@ -858,6 +875,23 @@ export function PublicQuestionCard({
                   ) : null}
                 </fieldset>
               ) : null}
+              <section
+                className="mt-5 rounded-lg border border-[var(--rateloop-blue)]/30 bg-[var(--rateloop-blue)]/[0.06] p-3 text-xs leading-5"
+                aria-labelledby={`public-records-${task.roundId}`}
+              >
+                <h3 id={`public-records-${task.roundId}`} className="font-semibold">
+                  What becomes public
+                </h3>
+                <p className="mt-2 text-base-content/70">
+                  Submitting a paid rating publishes a tlock ciphertext containing your vote, crowd forecast, response
+                  hash, per-round payout address, and salt. It becomes publicly decryptable after the commit deadline
+                  even if no keeper or reviewer submits a reveal. A reveal publishes the plaintext. Public blockchain
+                  records generally cannot be erased.
+                </p>
+                <Link href="/legal/privacy#on-chain-data" className="mt-2 inline-block underline underline-offset-4">
+                  Read the privacy notice
+                </Link>
+              </section>
               {recoveryUrl && activePreparedSubmission ? (
                 <div className="mt-5 rounded-lg border border-white/10 p-3">
                   <p className="font-mono text-[11px] uppercase tracking-widest text-[var(--rateloop-blue)]">
@@ -902,6 +936,40 @@ export function PublicQuestionCard({
                 <p role="status" className="mt-3 text-xs leading-5 text-emerald-100">
                   {status}
                 </p>
+              ) : null}
+              {submissionReceipt ? (
+                <section
+                  className="mt-3 rounded-lg border border-emerald-300/20 bg-emerald-300/[0.06] p-3 text-xs"
+                  aria-label="Submission receipt"
+                >
+                  <p className="font-semibold text-emerald-100">Rating recorded</p>
+                  <dl className="mt-2 grid gap-2">
+                    <div>
+                      <dt className="text-base-content/55">Commit receipt</dt>
+                      <dd className="mt-0.5 break-all font-mono">{submissionReceipt.commitId}</dd>
+                    </div>
+                    {submissionReceipt.confirmedAt ? (
+                      <div>
+                        <dt className="text-base-content/55">Confirmed</dt>
+                        <dd className="mt-0.5">
+                          <time dateTime={submissionReceipt.confirmedAt}>
+                            {new Date(submissionReceipt.confirmedAt).toLocaleString()}
+                          </time>
+                        </dd>
+                      </div>
+                    ) : null}
+                  </dl>
+                  {submissionReceipt.transactionHash ? (
+                    <a
+                      className="mt-2 inline-block underline underline-offset-4"
+                      href={`https://sepolia.basescan.org/tx/${submissionReceipt.transactionHash}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      View confirmed transaction
+                    </a>
+                  ) : null}
+                </section>
               ) : null}
               {technicalStatus ? (
                 <details className="mt-3 rounded-lg border border-white/10 px-3 py-2 text-xs text-base-content/55">

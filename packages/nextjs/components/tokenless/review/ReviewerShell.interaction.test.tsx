@@ -29,6 +29,7 @@ test("reviewer shell supports 1, 2, R, and Enter without a pointer", async () =>
     );
 
     const user = userEvent.setup();
+    screen.getByRole("region", { name: "Reviewer workspace" }).focus();
     await user.keyboard("12r");
     assert.deepEqual(actions, ["first", "second"]);
     assert.equal(document.activeElement, screen.getByRole("textbox", { name: "Rationale" }));
@@ -81,6 +82,7 @@ test("only the explicitly active shell handles shortcuts and links keep Enter ac
     );
 
     const user = userEvent.setup({ document });
+    view.getAllByRole("region", { name: "Reviewer workspace" })[0]!.focus();
     await user.keyboard("1");
     assert.deepEqual(actions, ["first-select"]);
 
@@ -90,6 +92,41 @@ test("only the explicitly active shell handles shortcuts and links keep Enter ac
     artifact.dispatchEvent(event);
     assert.equal(event.defaultPrevented, false);
     assert.deepEqual(actions, ["first-select"]);
+  } finally {
+    cleanup();
+    restoreDom();
+  }
+});
+
+test("a shell outside the active focus scope ignores window shortcuts", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const { ReviewerShell } = await import("./ReviewerShell");
+  const actions: string[] = [];
+
+  try {
+    render(
+      <div>
+        <button type="button">Outside review</button>
+        <ReviewerShell
+          advanceDisabled={false}
+          advanceLabel="Advance"
+          caseIndex={0}
+          laneHeader={<p>Review</p>}
+          onAdvance={() => actions.push("advance")}
+          onSelectFirst={() => actions.push("select")}
+          onSelectSecond={() => undefined}
+          totalCases={1}
+        >
+          <p>Case</p>
+        </ReviewerShell>
+      </div>,
+    );
+    const outside = document.querySelector("button")!;
+    outside.focus();
+    await userEvent.setup({ document }).keyboard("1{Enter}");
+    assert.deepEqual(actions, []);
   } finally {
     cleanup();
     restoreDom();

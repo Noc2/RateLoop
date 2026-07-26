@@ -153,6 +153,19 @@ test("voucher and commit APIs stay unreachable until the downloaded recovery bac
       />,
     );
     const screen = within(document.body);
+    assert.ok(screen.getByRole("heading", { name: "What becomes public" }));
+    assert.match(
+      screen.getByText(/submitting a paid rating publishes a tlock ciphertext/iu).textContent ?? "",
+      /vote, crowd forecast, response hash, per-round payout address, and salt/iu,
+    );
+    assert.equal(
+      screen.getByRole("link", { name: "Read the privacy notice" }).getAttribute("href"),
+      "/legal/privacy#on-chain-data",
+    );
+    assert.equal(
+      requests.some(url => url === "/api/rater/vouchers" || url.includes("/api/rater/commits")),
+      false,
+    );
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Supported" }));
     fireEvent.change(screen.getByRole("spinbutton", { name: /what percentage/iu }), { target: { value: "73" } });
