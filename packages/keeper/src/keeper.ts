@@ -22,6 +22,7 @@ import {
 import type { Logger } from "./logger.js";
 import {
   createPonderWorkFeed,
+  PonderWorkFeedIdentityMismatchError,
   prioritizedKeeperWorkRoundIds,
   type KeeperWorkFeed,
 } from "./ponder-work-feed.js";
@@ -989,6 +990,7 @@ export async function runTokenlessKeeper(
         now: block.timestamp,
       }).filter((roundId) => roundId < nextRoundId);
     } catch (error) {
+      if (error instanceof PonderWorkFeedIdentityMismatchError) throw error;
       logger.warn(
         "Ponder keeper work feed unavailable; using direct chain scan",
         {

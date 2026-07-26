@@ -27,6 +27,13 @@ export type KeeperWorkFeed = (input: {
   limit: number;
 }) => Promise<unknown>;
 
+export class PonderWorkFeedIdentityMismatchError extends Error {
+  constructor() {
+    super("Ponder keeper work identity does not match this keeper.");
+    this.name = "PonderWorkFeedIdentityMismatchError";
+  }
+}
+
 export function createPonderWorkFeed(input: {
   baseUrl: string;
   token: string;
@@ -69,11 +76,15 @@ export function prioritizedKeeperWorkRoundIds(
     response.deploymentKey !== expected.deploymentKey ||
     response.chainId !== expected.chainId ||
     !isAddress(response.panelAddress ?? "") ||
-    !isAddressEqual(response.panelAddress as Address, expected.panelAddress) ||
+    !isAddressEqual(response.panelAddress as Address, expected.panelAddress)
+  ) {
+    throw new PonderWorkFeedIdentityMismatchError();
+  }
+  if (
     response.now !== expected.now.toString() ||
     !Array.isArray(response.work)
   ) {
-    throw new Error("Ponder keeper work identity does not match this keeper.");
+    throw new Error("Ponder keeper work is invalid.");
   }
   const items = response.work.map((item) => {
     if (

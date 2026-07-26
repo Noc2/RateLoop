@@ -567,27 +567,20 @@ describe("tokenless keeper orchestration", () => {
     expect(writes).not.toContain("finalizeScoringSeed");
   });
 
-  it("falls back to the rotating chain scan for wrong-identity feeds and feed outages", async () => {
-    for (const feed of [
-      async () =>
-        keeperWorkResponse(300n, [], { deploymentKey: "wrong-deployment" }),
-      async () => {
-        throw new Error("ponder unavailable");
-      },
-    ]) {
-      resetTokenlessKeeperStateForTests();
-      const readRoundIds: bigint[] = [];
-      const instance = clients({
-        currentRound: round({
-          state: TokenlessRoundState.Finalized,
-          staleReturned: true,
-        }),
-        now: 300n,
-        nextRoundId: 10_001n,
-        readRoundIds,
-      });
-      instance.keeperWorkFeed = feed;
-      await runTokenlessKeeper(
+  it("fails closed when the Ponder feed deployment identity is wrong", async () => {
+    const instance = clients({
+      currentRound: round({
+        state: TokenlessRoundState.Finalized,
+        staleReturned: true,
+      }),
+      now: 300n,
+      nextRoundId: 10_001n,
+    });
+    instance.keeperWorkFeed = async () =>
+      keeperWorkResponse(300n, [], { deploymentKey: "wrong-deployment" });
+
+    await expect(
+      runTokenlessKeeper(
         instance,
         {
           ...config,
@@ -599,9 +592,38 @@ describe("tokenless keeper orchestration", () => {
         },
         logger,
         decrypt,
-      );
-      expect(readRoundIds).toEqual([10_000n, 9_999n]);
-    }
+      ),
+    ).rejects.toThrow(/identity does not match/);
+  });
+
+  it("falls back to the rotating chain scan for feed outages", async () => {
+    const readRoundIds: bigint[] = [];
+    const instance = clients({
+      currentRound: round({
+        state: TokenlessRoundState.Finalized,
+        staleReturned: true,
+      }),
+      now: 300n,
+      nextRoundId: 10_001n,
+      readRoundIds,
+    });
+    instance.keeperWorkFeed = async () => {
+      throw new Error("ponder unavailable");
+    };
+    await runTokenlessKeeper(
+      instance,
+      {
+        ...config,
+        maxRoundsPerTick: 2,
+        ponderWorkFeed: {
+          baseUrl: "https://ponder.example",
+          token: "secret",
+        },
+      },
+      logger,
+      decrypt,
+    );
+    expect(readRoundIds).toEqual([10_000n, 9_999n]);
   });
 
   it("fails closed when panel issuer wiring differs", async () => {
