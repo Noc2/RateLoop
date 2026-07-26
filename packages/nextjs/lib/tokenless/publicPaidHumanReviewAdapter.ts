@@ -1039,7 +1039,6 @@ async function finalizePublicPaidAsk(input: {
   preparation: PreparedHumanReviewRequest;
   idempotencyKey: string;
   operationKey: string;
-  foundation: PublicNetworkFoundation;
 }) {
   const workspaceId = input.principal.integration.workspaceId;
   const client = await dbPool.connect();
@@ -1187,10 +1186,45 @@ async function finalizePublicPaidAsk(input: {
         "review_binding_conflict",
       );
     }
+    if (!transition.replayed) {
+      await client.query(
+        `UPDATE tokenless_agent_integrations
+         SET last_request_at = CASE WHEN last_request_at IS NULL OR last_request_at < $1 THEN $1 ELSE last_request_at END,
+             updated_at = CASE WHEN updated_at < $1 THEN $1 ELSE updated_at END
+         WHERE integration_id = $2 AND workspace_id = $3 AND agent_id = $4 AND agent_version_id = $5`,
+        [
+          now,
+          input.principal.integration.integrationId,
+          workspaceId,
+          input.principal.integration.agentId,
+          input.principal.integration.agentVersionId,
+        ],
+      );
+    }
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function bindPublicPaidAskFoundation(input: {
+  principal: PublicPaidHumanReviewPrincipal;
+  opportunityId: string;
+  operationKey: string;
+  foundation: PublicNetworkFoundation;
+}) {
+  const workspaceId = input.principal.integration.workspaceId;
+  const now = new Date();
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
     const exactFoundation = await bindPublicNetworkReviewOperation(client, {
       bindingId: input.foundation.bindingId,
       workspaceId,
-      opportunityId: input.opportunity.opportunityId,
+      opportunityId: input.opportunityId,
       operationKey: input.operationKey,
       now,
     });
@@ -1210,28 +1244,13 @@ async function finalizePublicPaidAsk(input: {
        SET run_id=$1,updated_at=$2
        WHERE workspace_id=$3 AND opportunity_id=$4
          AND operation_key=$5 AND (run_id IS NULL OR run_id=$1)`,
-      [input.foundation.runId, now, workspaceId, input.opportunity.opportunityId, input.operationKey],
+      [input.foundation.runId, now, workspaceId, input.opportunityId, input.operationKey],
     );
     if (runBound.rowCount !== 1) {
       throw new TokenlessServiceError(
         "The review opportunity could not bind its assurance run.",
         409,
         "public_network_operation_binding_conflict",
-      );
-    }
-    if (!transition.replayed) {
-      await client.query(
-        `UPDATE tokenless_agent_integrations
-         SET last_request_at = CASE WHEN last_request_at IS NULL OR last_request_at < $1 THEN $1 ELSE last_request_at END,
-             updated_at = CASE WHEN updated_at < $1 THEN $1 ELSE updated_at END
-         WHERE integration_id = $2 AND workspace_id = $3 AND agent_id = $4 AND agent_version_id = $5`,
-        [
-          now,
-          input.principal.integration.integrationId,
-          workspaceId,
-          input.principal.integration.agentId,
-          input.principal.integration.agentVersionId,
-        ],
       );
     }
     await client.query("COMMIT");
@@ -1307,21 +1326,26 @@ export async function requestPublicPaidHumanReview(
     suggestionPayload,
     publication,
   });
-  const expertisePool = opportunity.requestProfile.expertiseRequirements?.length
-    ? await countEligibleNetworkExactExpertisePool({
-        requirements: opportunity.requestProfile.expertiseRequirements,
-        panelSize: opportunity.requestProfile.panelSize,
-        responseDeadline: preparation.preparedRequest.timing.expiresAt,
-      })
-    : await countEligibleNetworkExpertisePool({
-        expertiseKeys: opportunity.requestProfile.requiredExpertiseKeys,
-      });
-  if (!expertisePool.ready || expertisePool.eligible < opportunity.requestProfile.panelSize) {
-    throw new TokenlessServiceError(
-      "The RateLoop network does not currently have enough eligible reviewers for the funded panel.",
-      409,
-      "expertise_reviewer_pool_unavailable",
-    );
+  const requiresExpertise =
+    (opportunity.requestProfile.requiredExpertiseKeys?.length ?? 0) > 0 ||
+    (opportunity.requestProfile.expertiseRequirements?.length ?? 0) > 0;
+  if (requiresExpertise) {
+    const expertisePool = opportunity.requestProfile.expertiseRequirements?.length
+      ? await countEligibleNetworkExactExpertisePool({
+          requirements: opportunity.requestProfile.expertiseRequirements,
+          panelSize: opportunity.requestProfile.panelSize,
+          responseDeadline: preparation.preparedRequest.timing.expiresAt,
+        })
+      : await countEligibleNetworkExpertisePool({
+          expertiseKeys: opportunity.requestProfile.requiredExpertiseKeys,
+        });
+    if (!expertisePool.ready || expertisePool.eligible < opportunity.requestProfile.panelSize) {
+      throw new TokenlessServiceError(
+        "The RateLoop network does not currently have enough eligible reviewers for the funded panel.",
+        409,
+        "expertise_reviewer_pool_unavailable",
+      );
+    }
   }
   await ensureFeedbackBonusPoolForDelivery({
     workspaceId: input.principal.integration.workspaceId,
@@ -1407,7 +1431,6 @@ export async function requestPublicPaidHumanReview(
       preparation,
       idempotencyKey,
       operationKey: ask.operationKey,
-      foundation,
     });
     opportunityBound = true;
     await beforePublicPaidActivationForTests?.({
@@ -1416,6 +1439,12 @@ export async function requestPublicPaidHumanReview(
       opportunityId: opportunity.opportunityId,
     });
     await attachProductAsk(prepared, ask);
+    await bindPublicPaidAskFoundation({
+      principal: input.principal,
+      opportunityId: opportunity.opportunityId,
+      operationKey: ask.operationKey,
+      foundation,
+    });
     return { schemaVersion: "rateloop.adaptive-review-request.v1", opportunityId: opportunity.opportunityId, ask };
   } catch (error) {
     if (prepared && (!askCreated || !opportunityBound)) await releasePreparedProductAsk(prepared);
@@ -1527,25 +1556,29 @@ export async function requestPublicPaidNetworkChild(
       "hybrid_review_child_conflict",
     );
   }
-  const pool = childProfile.expertiseRequirements?.length
-    ? await countEligibleNetworkExactExpertisePool({
-        requirements: childProfile.expertiseRequirements,
-        panelSize: childProfile.panelSize,
-        responseDeadline: preparation.preparedRequest.timing.expiresAt,
-        excludedPrincipalIds: input.hybridParent.excludedReviewers.map(value => value.principalId),
-        excludedPayoutAccounts: input.hybridParent.excludedReviewers.map(value => value.payoutAccount),
-      })
-    : await countEligibleNetworkExpertisePool({
-        expertiseKeys: childProfile.requiredExpertiseKeys,
-        excludedPrincipalIds: input.hybridParent.excludedReviewers.map(value => value.principalId),
-        excludedPayoutAccounts: input.hybridParent.excludedReviewers.map(value => value.payoutAccount),
-      });
-  if (!pool.ready || pool.eligible < childProfile.panelSize) {
-    throw new TokenlessServiceError(
-      "The network child cannot satisfy the frozen eligible cohort.",
-      409,
-      "expertise_reviewer_pool_unavailable",
-    );
+  const requiresExpertise =
+    (childProfile.requiredExpertiseKeys?.length ?? 0) > 0 || (childProfile.expertiseRequirements?.length ?? 0) > 0;
+  if (requiresExpertise) {
+    const pool = childProfile.expertiseRequirements?.length
+      ? await countEligibleNetworkExactExpertisePool({
+          requirements: childProfile.expertiseRequirements,
+          panelSize: childProfile.panelSize,
+          responseDeadline: preparation.preparedRequest.timing.expiresAt,
+          excludedPrincipalIds: input.hybridParent.excludedReviewers.map(value => value.principalId),
+          excludedPayoutAccounts: input.hybridParent.excludedReviewers.map(value => value.payoutAccount),
+        })
+      : await countEligibleNetworkExpertisePool({
+          expertiseKeys: childProfile.requiredExpertiseKeys,
+          excludedPrincipalIds: input.hybridParent.excludedReviewers.map(value => value.principalId),
+          excludedPayoutAccounts: input.hybridParent.excludedReviewers.map(value => value.payoutAccount),
+        });
+    if (!pool.ready || pool.eligible < childProfile.panelSize) {
+      throw new TokenlessServiceError(
+        "The network child cannot satisfy the frozen eligible cohort.",
+        409,
+        "expertise_reviewer_pool_unavailable",
+      );
+    }
   }
   await ensureFeedbackBonusPoolForDelivery({
     workspaceId: input.principal.integration.workspaceId,
@@ -1625,6 +1658,7 @@ export async function requestPublicPaidNetworkChild(
     });
     const ask = await createTokenlessAsk(askRequest, idempotencyKey, input.appOrigin, prepared.idempotencyScope);
     askCreated = true;
+    await attachProductAsk(prepared, ask);
     await persistHybridNetworkChildState({
       principal: input.principal,
       opportunity: parentOpportunity,
@@ -1635,7 +1669,6 @@ export async function requestPublicPaidNetworkChild(
       now: new Date(),
     });
     childBound = true;
-    await attachProductAsk(prepared, ask);
     let ready: Awaited<ReturnType<typeof readReadyPublicNetworkReviewChild>>;
     try {
       ready = await readReadyPublicNetworkReviewChild(foundation.bindingId);

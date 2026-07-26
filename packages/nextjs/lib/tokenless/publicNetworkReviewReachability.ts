@@ -693,7 +693,7 @@ export async function bindPublicNetworkReviewOperation(
     `SELECT binding.state,binding.operation_key,binding.product_question_id,binding.product_content_id,
             ownership.workspace_id AS operation_workspace_id,
             ownership.question_id AS operation_question_id,
-            question.content_id AS operation_content_id,
+            content.content_hash AS operation_content_hash,
             question.visibility AS question_visibility,
             question.data_classification AS question_data_classification,
             question.moderation_status AS question_moderation_status,
@@ -705,20 +705,22 @@ export async function bindPublicNetworkReviewOperation(
      JOIN tokenless_question_records question ON question.question_id=ownership.question_id
      JOIN tokenless_content_records content ON content.content_id=question.content_id
      WHERE binding.binding_id=$2 AND binding.workspace_id=$3 AND binding.opportunity_id=$4
-     LIMIT 1 FOR UPDATE OF binding,ask,ownership,question,content`,
+     LIMIT 1 FOR UPDATE`,
     [input.operationKey, input.bindingId, input.workspaceId, input.opportunityId],
   );
   const exactRow = exact.rows[0] as Row | undefined;
+  const operationContentHash = text(exactRow, "operation_content_hash");
   if (
     !exactRow ||
     text(exactRow, "operation_workspace_id") !== input.workspaceId ||
     text(exactRow, "operation_question_id") !== text(exactRow, "product_question_id") ||
-    text(exactRow, "operation_content_id")?.toLowerCase() !== text(exactRow, "product_content_id") ||
+    !operationContentHash ||
+    `0x${operationContentHash.toLowerCase()}` !== text(exactRow, "product_content_id") ||
     text(exactRow, "question_visibility") !== "public" ||
     !["public", "synthetic", "redacted"].includes(text(exactRow, "question_data_classification") ?? "") ||
-    text(exactRow, "question_moderation_status") !== "approved" ||
+    !["pending", "approved"].includes(text(exactRow, "question_moderation_status") ?? "") ||
     exactRow.confirmed_no_sensitive_data !== true ||
-    text(exactRow, "content_moderation_status") !== "approved" ||
+    !["pending", "approved"].includes(text(exactRow, "content_moderation_status") ?? "") ||
     !["foundation_ready", "ask_bound", "round_bound", "audience_ready"].includes(text(exactRow, "state") ?? "") ||
     (text(exactRow, "operation_key") !== null && text(exactRow, "operation_key") !== input.operationKey)
   ) {
