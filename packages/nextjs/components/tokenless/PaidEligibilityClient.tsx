@@ -2,6 +2,8 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
+import { Field } from "~~/components/tokenless/forms/Field";
+import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { readBrowserSession } from "~~/lib/auth/client";
 
 type EligibilityState = {
@@ -41,15 +43,25 @@ const initialForm: UnlockForm = {
   sanctionsConsent: false,
 };
 
+class EligibilityRequestError extends Error {
+  field: string | null;
+
+  constructor(message: string, field: string | null) {
+    super(message);
+    this.field = field;
+  }
+}
+
 async function readJson(response: Response) {
   const body = (await response.json()) as Record<string, unknown>;
   if (!response.ok) {
-    throw new Error(
+    throw new EligibilityRequestError(
       typeof body.message === "string"
         ? body.message
         : typeof body.error === "string"
           ? body.error
           : "Eligibility request failed.",
+      typeof body.field === "string" ? body.field : null,
     );
   }
   return body;
@@ -77,6 +89,7 @@ export function PaidEligibilityClient() {
   const [workspaceId, setWorkspaceId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { capture, clear, fieldErrors, formError } = useFormErrors();
 
   async function refresh() {
     const session = await readBrowserSession();
@@ -122,6 +135,7 @@ export function PaidEligibilityClient() {
 
   function update<K extends keyof UnlockForm>(key: K, value: UnlockForm[K]) {
     setForm(current => ({ ...current, [key]: value }));
+    clear(key);
   }
 
   async function submitUnlock(event: FormEvent) {
@@ -129,6 +143,7 @@ export function PaidEligibilityClient() {
     if (!accountAddress || (reviewerSource === "rateloop_network" && !providerState)) return;
     setBusy(true);
     setError(null);
+    clear();
     try {
       await readJson(
         await fetch("/api/rater/eligibility", {
@@ -160,7 +175,7 @@ export function PaidEligibilityClient() {
       window.history.replaceState({}, "", "/human?tab=profile&section=paid-work");
       await refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to complete paid-task eligibility.");
+      capture(cause, "Unable to complete paid-task eligibility.");
     } finally {
       setBusy(false);
     }
@@ -228,107 +243,98 @@ export function PaidEligibilityClient() {
             ) : null}
             <div className="grid gap-4 sm:grid-cols-2">
               {reviewerSource === "customer_invited" ? (
-                <label className="text-sm text-base-content/60 sm:col-span-2">
-                  Inviting workspace ID
-                  <input
-                    className="input mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                <div className="sm:col-span-2">
+                  <Field
+                    label="Inviting workspace ID"
                     value={workspaceId}
-                    onChange={event => setWorkspaceId(event.target.value)}
+                    onChange={event => {
+                      setWorkspaceId(event.target.value);
+                      clear("workspaceId");
+                    }}
                     required
                     maxLength={160}
+                    error={fieldErrors.workspaceId}
                   />
-                </label>
+                </div>
               ) : null}
-              <label className="text-sm text-base-content/60">
-                Residence country
-                <input
-                  className="input mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)] uppercase"
-                  value={form.declaredResidenceCountry}
-                  onChange={event => update("declaredResidenceCountry", event.target.value)}
-                  minLength={2}
-                  maxLength={2}
-                  required
-                />
-              </label>
-              <label className="text-sm text-base-content/60">
-                Tax residence country
-                <input
-                  className="input mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)] uppercase"
-                  value={form.taxResidenceCountry}
-                  onChange={event => update("taxResidenceCountry", event.target.value)}
-                  minLength={2}
-                  maxLength={2}
-                  required
-                />
-              </label>
-              <label className="text-sm text-base-content/60">
-                Legal name
-                <input
-                  className="input mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                  value={form.fullName}
-                  onChange={event => update("fullName", event.target.value)}
-                  maxLength={300}
-                  required
-                />
-              </label>
-              <label className="text-sm text-base-content/60">
-                Birth date
-                <input
-                  type="date"
-                  className="input mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                  value={form.birthDate}
-                  onChange={event => update("birthDate", event.target.value)}
-                  required
-                />
-              </label>
-              <label className="text-sm text-base-content/60">
-                Street address
-                <input
-                  className="input mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                  value={form.streetAddress}
-                  onChange={event => update("streetAddress", event.target.value)}
-                  maxLength={300}
-                  required
-                />
-              </label>
-              <label className="text-sm text-base-content/60">
-                City
-                <input
-                  className="input mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                  value={form.city}
-                  onChange={event => update("city", event.target.value)}
-                  maxLength={300}
-                  required
-                />
-              </label>
-              <label className="text-sm text-base-content/60">
-                Postal code
-                <input
-                  className="input mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                  value={form.postalCode}
-                  onChange={event => update("postalCode", event.target.value)}
-                  maxLength={40}
-                  required
-                />
-              </label>
-              <label className="text-sm text-base-content/60">
-                Tax identification number
-                <input
-                  className="input mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                  value={form.tin}
-                  onChange={event => update("tin", event.target.value)}
-                  maxLength={120}
-                />
-              </label>
-              <label className="text-sm text-base-content/60">
-                If no TIN, reason
-                <input
-                  className="input mt-2 w-full rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                  value={form.noTinReason}
-                  onChange={event => update("noTinReason", event.target.value)}
-                  maxLength={300}
-                />
-              </label>
+              <Field
+                label="Residence country"
+                className="uppercase"
+                format="countryCode"
+                value={form.declaredResidenceCountry}
+                onChange={event => update("declaredResidenceCountry", event.target.value)}
+                required
+                error={fieldErrors.declaredResidenceCountry}
+              />
+              <Field
+                label="Tax residence country"
+                className="uppercase"
+                format="countryCode"
+                value={form.taxResidenceCountry}
+                onChange={event => update("taxResidenceCountry", event.target.value)}
+                required
+                error={fieldErrors.taxResidenceCountry}
+              />
+              <Field
+                label="Legal name"
+                value={form.fullName}
+                onChange={event => update("fullName", event.target.value)}
+                maxLength={300}
+                autoComplete="name"
+                required
+                error={fieldErrors.fullName}
+              />
+              <Field
+                label="Birth date"
+                type="date"
+                value={form.birthDate}
+                onChange={event => update("birthDate", event.target.value)}
+                autoComplete="bday"
+                required
+                error={fieldErrors.birthDate}
+              />
+              <Field
+                label="Street address"
+                value={form.streetAddress}
+                onChange={event => update("streetAddress", event.target.value)}
+                maxLength={300}
+                autoComplete="street-address"
+                required
+                error={fieldErrors.streetAddress}
+              />
+              <Field
+                label="City"
+                value={form.city}
+                onChange={event => update("city", event.target.value)}
+                maxLength={300}
+                autoComplete="address-level2"
+                required
+                error={fieldErrors.city}
+              />
+              <Field
+                label="Postal code"
+                value={form.postalCode}
+                onChange={event => update("postalCode", event.target.value)}
+                maxLength={40}
+                autoComplete="postal-code"
+                required
+                error={fieldErrors.postalCode}
+              />
+              <Field
+                label="Tax identification number"
+                value={form.tin}
+                onChange={event => update("tin", event.target.value)}
+                maxLength={120}
+                autoComplete="off"
+                error={fieldErrors.tin}
+              />
+              <Field
+                label="If no TIN, reason"
+                value={form.noTinReason}
+                onChange={event => update("noTinReason", event.target.value)}
+                maxLength={300}
+                error={fieldErrors.noTinReason}
+              />
             </div>
             <label className="flex items-start gap-3 text-sm leading-6 text-base-content/65">
               <input
@@ -336,6 +342,7 @@ export function PaidEligibilityClient() {
                 className="checkbox checkbox-sm mt-1"
                 checked={form.sanctionsConsent}
                 onChange={event => update("sanctionsConsent", event.target.checked)}
+                aria-invalid={fieldErrors.sanctionsConsent ? true : undefined}
                 required
               />
               <span>
@@ -343,9 +350,19 @@ export function PaidEligibilityClient() {
                 and never an already accepted payment.
               </span>
             </label>
+            {fieldErrors.sanctionsConsent ? (
+              <p className="text-sm text-error" role="alert">
+                {fieldErrors.sanctionsConsent}
+              </p>
+            ) : null}
             <button className="rateloop-gradient-action w-full px-6" disabled={busy}>
               {busy ? "Completing…" : "Unlock paid tasks"}
             </button>
+            {formError ? (
+              <p className="rounded-lg bg-red-400/10 p-3 text-sm text-red-100" role="alert">
+                {formError}
+              </p>
+            ) : null}
           </form>
         ) : (
           <div className="mt-6">

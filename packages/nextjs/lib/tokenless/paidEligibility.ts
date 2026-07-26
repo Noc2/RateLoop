@@ -717,13 +717,30 @@ function validateDac7(value: EligibilitySubmission["dac7"]) {
       "DAC7 details are required before paid tasks can be unlocked.",
       400,
       "dac7_required",
+      false,
+      "fullName",
     );
-  const required = [value.fullName, value.streetAddress, value.city, value.postalCode];
-  if (required.some(item => typeof item !== "string" || !item.trim() || item.length > 300)) {
-    throw new TokenlessServiceError("DAC7 details are incomplete.", 400, "dac7_incomplete");
+  const required = [
+    ["fullName", value.fullName],
+    ["streetAddress", value.streetAddress],
+    ["city", value.city],
+    ["postalCode", value.postalCode],
+  ] as const;
+  const missing = required.find(([, item]) => typeof item !== "string" || !item.trim() || item.length > 300);
+  if (missing) {
+    throw new TokenlessServiceError("DAC7 details are incomplete.", 400, "dac7_incomplete", false, missing[0]);
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value.birthDate) || (!value.tin?.trim() && !value.noTinReason?.trim())) {
-    throw new TokenlessServiceError("DAC7 birth date and TIN status are required.", 400, "dac7_incomplete");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value.birthDate)) {
+    throw new TokenlessServiceError("DAC7 birth date is required.", 400, "dac7_incomplete", false, "birthDate");
+  }
+  if (!value.tin?.trim() && !value.noTinReason?.trim()) {
+    throw new TokenlessServiceError(
+      "Enter a tax identification number or explain why one is unavailable.",
+      400,
+      "dac7_incomplete",
+      false,
+      "tin",
+    );
   }
 }
 
@@ -731,16 +748,27 @@ function validateScreeningSubject(submission: EligibilitySubmission, now: Date) 
   const value = submission.screeningSubject ?? submission.dac7;
   const fullName = value?.fullName?.trim();
   const birthDate = value?.birthDate;
-  if (!fullName || fullName.length > 300 || !birthDate || !/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) {
+  if (!fullName || fullName.length > 300) {
     throw new TokenlessServiceError(
-      "Legal name and birth date are required for sanctions screening.",
+      "Legal name is required for sanctions screening.",
       400,
       "sanctions_subject_required",
+      false,
+      "fullName",
+    );
+  }
+  if (!birthDate || !/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) {
+    throw new TokenlessServiceError(
+      "Birth date is required for sanctions screening.",
+      400,
+      "sanctions_subject_required",
+      false,
+      "birthDate",
     );
   }
   const parsedBirthDate = new Date(`${birthDate}T00:00:00.000Z`);
   if (!Number.isFinite(parsedBirthDate.getTime()) || parsedBirthDate > now) {
-    throw new TokenlessServiceError("Birth date is invalid.", 400, "tax_profile_invalid");
+    throw new TokenlessServiceError("Birth date is invalid.", 400, "tax_profile_invalid", false, "birthDate");
   }
   return { birthDate, fullName };
 }
@@ -766,11 +794,19 @@ async function submitInvitedPaidEligibility(input: {
       "Choose the workspace whose paid invitation you are using.",
       400,
       "invitation_workspace_required",
+      false,
+      "workspaceId",
     );
   }
   const screeningSubject = validateScreeningSubject(input.submission, input.now);
   if (declaredAge(screeningSubject, input.now) < 18) {
-    throw new TokenlessServiceError("Paid work is available only to adults.", 403, "minimum_age_not_met");
+    throw new TokenlessServiceError(
+      "Paid work is available only to adults.",
+      403,
+      "minimum_age_not_met",
+      false,
+      "birthDate",
+    );
   }
   const dac7Required = requiresDac7(input.taxCountry);
   if (dac7Required) validateDac7(input.submission.dac7);
@@ -1032,6 +1068,8 @@ export async function submitPaidEligibility(input: {
       "Sanctions screening consent is required for paid tasks.",
       400,
       "sanctions_consent_required",
+      false,
+      "sanctionsConsent",
     );
   }
   const payoutAccount = getAddress(input.submission.payoutAccount);
@@ -1044,8 +1082,23 @@ export async function submitPaidEligibility(input: {
   }
   const taxCountry = input.submission.taxResidenceCountry.toUpperCase();
   const declaredResidenceCountry = input.submission.declaredResidenceCountry.toUpperCase();
-  if (!COUNTRY.test(taxCountry) || !COUNTRY.test(declaredResidenceCountry)) {
-    throw new TokenlessServiceError("Residence and tax countries are invalid.", 400, "tax_profile_invalid");
+  if (!COUNTRY.test(declaredResidenceCountry)) {
+    throw new TokenlessServiceError(
+      "Residence country is invalid.",
+      400,
+      "tax_profile_invalid",
+      false,
+      "declaredResidenceCountry",
+    );
+  }
+  if (!COUNTRY.test(taxCountry)) {
+    throw new TokenlessServiceError(
+      "Tax residence country is invalid.",
+      400,
+      "tax_profile_invalid",
+      false,
+      "taxResidenceCountry",
+    );
   }
   if ((input.submission.reviewerSource ?? "rateloop_network") === "customer_invited") {
     return submitInvitedPaidEligibility({
