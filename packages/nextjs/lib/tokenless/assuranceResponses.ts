@@ -450,14 +450,7 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
               sp.private_group_id AS subpanel_private_group_id,
               sp.private_group_policy_version AS subpanel_private_group_policy_version,
               sp.private_group_policy_hash AS subpanel_private_group_policy_hash,
-              ap.policy_hash AS frozen_policy_hash, ap.policy_json AS frozen_policy_json,
-              (SELECT COUNT(*) FROM tokenless_assurance_run_cases run_case
-                WHERE run_case.run_id=a.run_id) AS network_case_count,
-              (SELECT COUNT(*) FROM tokenless_network_assignment_settlements settlement
-                WHERE settlement.assignment_id=a.assignment_id) AS network_binding_count,
-              (SELECT COUNT(*) FROM tokenless_network_assignment_settlements settlement
-                WHERE settlement.assignment_id=a.assignment_id
-                  AND settlement.state IN ('committed','terminal')) AS network_committed_count
+              ap.policy_hash AS frozen_policy_hash, ap.policy_json AS frozen_policy_json
        FROM tokenless_assurance_assignments a
        JOIN tokenless_assurance_runs r ON r.run_id = a.run_id AND r.project_id = a.project_id
        JOIN tokenless_assurance_suites s ON s.suite_id = r.suite_id AND s.version = r.suite_version
@@ -475,15 +468,8 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
     if (!assignment) serviceError("Assignment not found.", "assignment_not_found", 404);
     const accountAddress = rowString(assignment, "reviewer_account_address")!;
     const identityReference = rowString(assignment, "rater_id") ?? principalId;
-    assertAssuranceAssignmentSettlementAvailable({
-      paidAssignment: rowBoolean(assignment, "paid_assignment"),
-      policy: parseJson<HumanAssuranceAudiencePolicy>(assignment.frozen_policy_json, "audience policy"),
-      source: rowString(assignment, "source") as CohortSource,
-      networkSettlementReady:
-        Number(assignment.network_case_count) > 0 &&
-        Number(assignment.network_binding_count) === Number(assignment.network_case_count) &&
-        Number(assignment.network_committed_count) === Number(assignment.network_case_count),
-    });
+    const policy = parseJson<HumanAssuranceAudiencePolicy>(assignment.frozen_policy_json, "audience policy");
+    const source = rowString(assignment, "source") as CohortSource;
     assertMatchingPrivateGroupSnapshot(assignment);
     const assignmentStatus = rowString(assignment, "status");
     const completedReplay = assignmentStatus === "completed";
@@ -508,6 +494,30 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
     if (!runCases.length || runCases.length !== responses.length) {
       serviceError("Every assigned case must be submitted exactly once.", "incomplete_assurance_response", 400);
     }
+    let networkSettlementReady = false;
+    if (
+      rowBoolean(assignment, "paid_assignment") &&
+      policy.reviewerSource === "rateloop_network" &&
+      policy.compensation === "paid" &&
+      source === "rateloop_network"
+    ) {
+      const networkSettlementResult = await client.query(
+        `SELECT COUNT(*) AS binding_count,
+                COUNT(*) FILTER (WHERE state IN ('committed','terminal')) AS committed_count
+         FROM tokenless_network_assignment_settlements WHERE assignment_id=$1`,
+        [assignmentId],
+      );
+      const networkSettlement = networkSettlementResult.rows[0] as QueryRow | undefined;
+      networkSettlementReady =
+        Number(networkSettlement?.binding_count) === runCases.length &&
+        Number(networkSettlement?.committed_count) === runCases.length;
+    }
+    assertAssuranceAssignmentSettlementAvailable({
+      paidAssignment: rowBoolean(assignment, "paid_assignment"),
+      policy,
+      source,
+      networkSettlementReady,
+    });
     const suiteManifest = parseJson<Record<string, unknown>>(assignment.suite_manifest_json, "suite manifest");
     const rubric = validateFrozenManifests({ assignment, runCases, suiteManifest });
     const allowedTags = new Set(rubric.failureTags.map(tag => tag.key));
