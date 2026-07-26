@@ -7,6 +7,7 @@ import { ProfileClient } from "~~/components/tokenless/account/ProfileClient";
 import { FeedbackBonusClaimsClient } from "~~/components/tokenless/human/FeedbackBonusClaimsClient";
 import { RaterSettlementRecoveryClient } from "~~/components/tokenless/human/RaterSettlementRecoveryClient";
 import { ReviewerAccessPanel } from "~~/components/tokenless/human/ReviewerAccessPanel";
+import { ReviewerEarningsClient } from "~~/components/tokenless/human/ReviewerEarningsClient";
 import { WorldIdProfilePanel } from "~~/components/tokenless/human/WorldIdProfilePanel";
 
 export function HumanProfileContent({ worldIdEnabled }: { worldIdEnabled: boolean }) {
@@ -23,6 +24,9 @@ export function HumanProfileContent({ worldIdEnabled }: { worldIdEnabled: boolea
       {worldIdEnabled ? <WorldIdProfilePanel /> : null}
       <section id="paid-work" className="scroll-mt-24">
         <PaidEligibilityClient />
+      </section>
+      <section id="earnings" className="scroll-mt-24">
+        <ReviewerEarningsClient />
       </section>
       <section id="paid-settlement" className="scroll-mt-24">
         <RaterSettlementRecoveryClient />

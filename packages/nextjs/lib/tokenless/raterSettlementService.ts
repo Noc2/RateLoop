@@ -2,7 +2,7 @@ import { loadTokenlessChainConfig } from "./chain/config";
 import "server-only";
 import { type Address, encodeAbiParameters, getAddress, isAddress, isHash, keccak256, parseAbiParameters } from "viem";
 import { dbClient } from "~~/lib/db";
-import type { RaterSettlementSnapshot } from "~~/lib/tokenless/rater/settlementRecovery";
+import { type RaterSettlementSnapshot, tokenlessCommitKey } from "~~/lib/tokenless/rater/settlementRecovery";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type Row = Record<string, unknown>;
@@ -254,4 +254,188 @@ export async function getRaterSettlementSnapshot(input: {
     commits,
     nowSeconds: BigInt(Math.floor((input.now ?? new Date()).getTime() / 1_000)),
   });
+}
+
+export type ReviewerEarning = {
+  commitId: string;
+  roundId: string;
+  voteKey: Address;
+  commitKey: `0x${string}`;
+  question: string;
+  committedAt: string;
+  commitTransactionHash: string | null;
+  claimTransactionHash: string | null;
+  status:
+    | "commit_pending"
+    | "commit_failed"
+    | "indexing"
+    | "reveal_required"
+    | "settling"
+    | "claimable"
+    | "paid"
+    | "expired"
+    | "no_payout";
+  roundStatus: string | null;
+  vote: "up" | "down" | null;
+  verdict: "up" | "down" | "tie" | null;
+  scoringEligible: boolean;
+  earnedAtomic: string;
+  claimedAtomic: string;
+  claimDeadline: string | null;
+};
+
+function questionSummary(raw: string | null, roundId: string) {
+  if (!raw) return `Paid review round ${roundId}`;
+  try {
+    const value = JSON.parse(raw) as Record<string, unknown>;
+    for (const key of ["question", "prompt", "title", "text"]) {
+      const candidate = value[key];
+      if (typeof candidate === "string" && candidate.trim()) return candidate.trim().slice(0, 240);
+    }
+  } catch {
+    // Content display is optional; settlement identity remains chain-bound.
+  }
+  return `Paid review round ${roundId}`;
+}
+
+export async function listReviewerEarnings(input: {
+  principalId: string;
+  fetchImpl?: typeof fetch;
+  ponderUrl?: string;
+  now?: Date;
+}) {
+  const result = await dbClient.execute({
+    sql: `SELECT c.commit_id, c.round_id, c.vote_key, c.state, c.transaction_hash,
+                 c.created_at, c.deployment_key, v.chain_id, v.panel_address, content.content_json
+          FROM tokenless_rater_commits c
+          JOIN tokenless_paid_vouchers v ON v.voucher_id = c.voucher_id
+          JOIN tokenless_rater_profiles p ON p.rater_id = v.rater_id
+          LEFT JOIN tokenless_content_records content ON content.content_id = v.content_id
+          WHERE p.principal_id = ?
+          ORDER BY c.created_at DESC LIMIT 100`,
+    args: [input.principalId],
+  });
+  const local = result.rows.map(value => value as Row);
+  if (local.length === 0) {
+    return {
+      schemaVersion: "rateloop.reviewer-earnings.v1" as const,
+      totals: { earnedAtomic: "0", claimedAtomic: "0", claimableAtomic: "0" },
+      items: [] as ReviewerEarning[],
+    };
+  }
+  const config = loadTokenlessChainConfig();
+  const localByCommitKey = new Map(
+    local.map(row => {
+      const roundId = rowString(row, "round_id")!;
+      const voteKey = getAddress(rowString(row, "vote_key")!);
+      return [tokenlessCommitKey(BigInt(roundId), voteKey).toLowerCase(), row] as const;
+    }),
+  );
+  const base = configuredPonderUrl(input.ponderUrl);
+  const settlementsUrl = endpoint(base, "/settlements");
+  settlementsUrl.searchParams.set("commitKeys", [...localByCommitKey.keys()].join(","));
+  const indexed = record(
+    await fetchJson(input.fetchImpl ?? fetch, settlementsUrl, "Indexed settlements"),
+    "Indexed settlements",
+  );
+  if (
+    indexed.schemaVersion !== "rateloop.indexed-settlements.v1" ||
+    String(indexed.deploymentKey ?? "") !== config.deploymentKey ||
+    integer(indexed.chainId, "Indexed settlements chain ID") !== config.chainId ||
+    !isAddress(String(indexed.panelAddress ?? "")) ||
+    getAddress(String(indexed.panelAddress)) !== config.panelAddress ||
+    !Array.isArray(indexed.items)
+  ) {
+    throw new TokenlessServiceError(
+      "Indexed settlements do not match the committed deployment.",
+      409,
+      "settlement_identity_mismatch",
+    );
+  }
+  const indexedByCommitKey = new Map<string, Row>();
+  for (const [index, value] of indexed.items.entries()) {
+    const item = record(value, `Indexed settlement ${index}`);
+    const commit = record(item.commit, `Indexed settlement ${index} commit`);
+    const commitKey = String(commit.commitKey ?? "").toLowerCase();
+    if (!isHash(commitKey) || !localByCommitKey.has(commitKey) || indexedByCommitKey.has(commitKey)) {
+      throw new TokenlessServiceError("Indexed settlements are malformed.", 409, "indexed_settlement_invalid");
+    }
+    indexedByCommitKey.set(commitKey, item);
+  }
+  const nowSeconds = BigInt(Math.floor((input.now ?? new Date()).getTime() / 1_000));
+  let totalEarned = 0n;
+  let totalClaimed = 0n;
+  let totalClaimable = 0n;
+  const items = [...localByCommitKey.entries()].map(([commitKey, row]): ReviewerEarning => {
+    const roundId = rowString(row, "round_id")!;
+    const localState = rowString(row, "state")!;
+    const indexedItem = indexedByCommitKey.get(commitKey);
+    const commit = indexedItem ? record(indexedItem.commit, "Indexed commit") : null;
+    const round = indexedItem?.round ? record(indexedItem.round, "Indexed round") : null;
+    const claim = indexedItem?.claim ? record(indexedItem.claim, "Indexed claim") : null;
+    const revealed = commit?.revealed === true;
+    const claimed = commit?.claimed === true;
+    const state = round ? integer(round.state, "Indexed round state") : null;
+    const claimDeadlineRaw = round ? unsigned(round.claimDeadline, "Indexed claim deadline") : "0";
+    const claimDeadline = claimDeadlineRaw === "0" ? null : claimDeadlineRaw;
+    const finalizedPayout = commit ? BigInt(unsigned(commit.finalizedPayout, "Indexed finalized payout")) : 0n;
+    const compensation =
+      round && (state === 7 || state === 8)
+        ? BigInt(unsigned(round.compensationPerRecipient, "Indexed compensation"))
+        : 0n;
+    const earned = state === 5 ? finalizedPayout : compensation;
+    const claimedAmount = claim ? BigInt(unsigned(claim.amount, "Indexed claimed amount")) : 0n;
+    const claimWindowOpen =
+      claimDeadline !== null && nowSeconds <= BigInt(claimDeadline) && round?.staleReturned !== true;
+    let status: ReviewerEarning["status"];
+    if (localState === "failed") status = "commit_failed";
+    else if (localState !== "confirmed") status = "commit_pending";
+    else if (!commit || !round) status = "indexing";
+    else if (claimed) status = "paid";
+    else if (!revealed && String(round.status) === "revealable") status = "reveal_required";
+    else if (state === 6 || ((state === 5 || state === 7 || state === 8) && earned === 0n)) status = "no_payout";
+    else if ((state === 5 || state === 7 || state === 8) && claimWindowOpen) status = "claimable";
+    else if ((state === 5 || state === 7 || state === 8) && !claimWindowOpen) status = "expired";
+    else status = "settling";
+    totalEarned += earned;
+    totalClaimed += claimedAmount;
+    if (status === "claimable") totalClaimable += earned;
+    const revealCount = round ? integer(round.revealCount, "Indexed reveal count") : 0;
+    const upVotes = round ? integer(round.upVotes, "Indexed up votes") : 0;
+    const verdict =
+      !round || revealCount === 0
+        ? null
+        : upVotes * 2 > revealCount
+          ? "up"
+          : upVotes * 2 < revealCount
+            ? "down"
+            : "tie";
+    return {
+      commitId: rowString(row, "commit_id")!,
+      roundId,
+      voteKey: getAddress(rowString(row, "vote_key")!),
+      commitKey: commitKey as `0x${string}`,
+      question: questionSummary(rowString(row, "content_json"), roundId),
+      committedAt: new Date(String(row.created_at)).toISOString(),
+      commitTransactionHash: rowString(row, "transaction_hash"),
+      claimTransactionHash: claim ? String(claim.transactionHash ?? "") || null : null,
+      status,
+      roundStatus: round ? String(round.status ?? "") : null,
+      vote: !revealed ? null : integer(commit!.vote, "Indexed vote") === 1 ? "up" : "down",
+      verdict,
+      scoringEligible: commit?.scoringEligible === true,
+      earnedAtomic: earned.toString(10),
+      claimedAtomic: claimedAmount.toString(10),
+      claimDeadline,
+    };
+  });
+  return {
+    schemaVersion: "rateloop.reviewer-earnings.v1" as const,
+    totals: {
+      earnedAtomic: totalEarned.toString(10),
+      claimedAtomic: totalClaimed.toString(10),
+      claimableAtomic: totalClaimable.toString(10),
+    },
+    items,
+  };
 }

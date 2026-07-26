@@ -1,6 +1,7 @@
 import { tokenlessCommitKey } from "./rater/settlementRecovery";
 import { deriveRaterSettlementSnapshot } from "./raterSettlementService";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { getAddress } from "viem";
 
@@ -102,4 +103,14 @@ test("fails closed across deployment identity and after the claim window", () =>
     commits: [{ ...(base.commits as Array<Record<string, unknown>>)[0], revealed: true }],
   });
   assert.equal(expired.canClaim, false);
+});
+
+test("earnings stay principal-bound and reconcile the pinned settlement feed", () => {
+  const sourceText = readFileSync(new URL("./raterSettlementService.ts", import.meta.url), "utf8");
+  assert.match(sourceText, /WHERE p\.principal_id = \?/u);
+  assert.match(sourceText, /ORDER BY c\.created_at DESC LIMIT 100/u);
+  assert.match(sourceText, /settlementsUrl\.searchParams\.set\("commitKeys"/u);
+  assert.match(sourceText, /indexed\.deploymentKey/u);
+  assert.match(sourceText, /settlement_identity_mismatch/u);
+  assert.match(sourceText, /totalClaimable/u);
 });

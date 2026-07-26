@@ -16,3 +16,10 @@ test("self-reveal and claim status routes are authenticated and never accept rec
     assert.doesNotMatch(route, /request\.json/u);
   }
 });
+
+test("the earnings ledger is account-bound and private", () => {
+  const route = source("./earnings/route.ts");
+  assert.match(route, /requireBrowserSession/u);
+  assert.match(route, /listReviewerEarnings/u);
+  assert.match(route, /private, no-store/u);
+});

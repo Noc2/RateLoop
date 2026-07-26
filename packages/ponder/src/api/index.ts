@@ -26,7 +26,7 @@ import {
   tokenlessFeedbackRecord,
   tokenlessRound,
 } from "ponder:schema";
-import { isAddress } from "viem";
+import { isAddress, isHash } from "viem";
 import {
   resolveTokenlessDeployment,
   roundKey,
@@ -153,6 +153,99 @@ app.onError((error, c) => {
 });
 
 app.get("/deployment", (c) => c.json(deployment));
+
+app.get("/settlements", async (c) => {
+  const commitKeys = (c.req.query("commitKeys") ?? "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+  if (
+    commitKeys.length === 0 ||
+    commitKeys.length > 100 ||
+    new Set(commitKeys).size !== commitKeys.length ||
+    commitKeys.some((value) => !isHash(value))
+  ) {
+    return c.json(
+      { error: "commitKeys must contain 1 to 100 unique bytes32 values" },
+      400,
+    );
+  }
+  const commits = await db
+    .select()
+    .from(tokenlessCommit)
+    .where(
+      and(
+        eq(tokenlessCommit.deploymentKey, deployment.deploymentKey),
+        inArray(tokenlessCommit.commitKey, commitKeys as `0x${string}`[]),
+      ),
+    );
+  const roundIds = [...new Set(commits.map((commit) => commit.roundId))];
+  const [rounds, claims] = await Promise.all([
+    roundIds.length
+      ? db
+          .select()
+          .from(tokenlessRound)
+          .where(
+            and(
+              eq(tokenlessRound.deploymentKey, deployment.deploymentKey),
+              inArray(tokenlessRound.roundId, roundIds),
+            ),
+          )
+      : [],
+    db
+      .select()
+      .from(tokenlessClaim)
+      .where(
+        and(
+          eq(tokenlessClaim.deploymentKey, deployment.deploymentKey),
+          inArray(tokenlessClaim.commitKey, commitKeys as `0x${string}`[]),
+        ),
+      ),
+  ]);
+  const roundsById = new Map(
+    rounds.map((round) => [round.roundId.toString(), round]),
+  );
+  const claimsByKey = new Map(
+    claims.map((claim) => [claim.commitKey.toLowerCase(), claim]),
+  );
+  const now = BigInt(Math.floor(Date.now() / 1_000));
+  c.header("cache-control", "public, max-age=10, s-maxage=30");
+  return c.json(
+    jsonSafe({
+      schemaVersion: "rateloop.indexed-settlements.v1",
+      deploymentKey: deployment.deploymentKey,
+      chainId: deployment.chainId,
+      panelAddress: deployment.panelAddress,
+      items: commits.map((commit) => {
+        const round = roundsById.get(commit.roundId.toString());
+        const claim = claimsByKey.get(commit.commitKey.toLowerCase());
+        return {
+          commit,
+          round: round
+            ? {
+                roundId: round.roundId,
+                state: round.state,
+                status: publicRoundStatus(round, now),
+                revealCount: round.revealCount,
+                upVotes: round.upVotes,
+                compensationPerRecipient: round.compensationPerRecipient,
+                claimDeadline: round.claimDeadline,
+                staleReturned: round.staleReturned,
+              }
+            : null,
+          claim: claim
+            ? {
+                amount: claim.amount,
+                payoutAddress: claim.payoutAddress,
+                claimedAt: claim.claimedAt,
+                transactionHash: claim.txHash,
+              }
+            : null,
+        };
+      }),
+    }),
+  );
+});
 
 app.get("/health/tokenless", async (c) => {
   c.header("cache-control", "no-store");
