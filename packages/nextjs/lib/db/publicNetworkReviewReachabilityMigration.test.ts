@@ -1,3 +1,4 @@
+import { createMemoryDatabaseResources } from "./testing/testMemory";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -33,4 +34,20 @@ test("0145 makes terminal rows and exact round identity immutable", () => {
   assert.match(migration, /public network review worker attempts are monotonic/u);
   assert.match(migration, /public network review identity is immutable/u);
   assert.match(migration, /"round_terms_hash" IS NOT NULL[\s\S]*"maximum_commits" IS NOT NULL/u);
+});
+
+test("the memory database applies the journal through public-network reachability", async () => {
+  const resources = createMemoryDatabaseResources();
+  try {
+    const bindingTable = await resources.pool.query(
+      "SELECT binding_id,state FROM tokenless_public_network_review_bindings LIMIT 0",
+    );
+    const membershipColumn = await resources.pool.query(
+      "SELECT network_managed FROM tokenless_assurance_cohort_reviewers LIMIT 0",
+    );
+    assert.deepEqual(bindingTable.rows, []);
+    assert.deepEqual(membershipColumn.rows, []);
+  } finally {
+    await resources.pool.end();
+  }
 });

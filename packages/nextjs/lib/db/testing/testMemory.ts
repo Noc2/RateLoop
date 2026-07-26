@@ -192,6 +192,40 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
       'FOREIGN KEY ("rubric_id", "rubric_version") REFERENCES "tokenless_assurance_rubrics"("rubric_id", "version")',
     );
   }
+  if (
+    file === "0145_public_network_review_reachability.sql" &&
+    /^CREATE TABLE "tokenless_public_network_review_bindings"/u.test(statement)
+  ) {
+    // pg-mem does not recognize composite UNIQUE constraints installed by
+    // preceding ALTER statements when it resolves this table's scoped FKs.
+    // Production retains every workspace/project-scoped FK; memory tests bind
+    // the same rows through the referenced tables' existing primary keys.
+    return statement
+      .replace(
+        /FOREIGN KEY \("workspace_id","integration_id"\)\s+REFERENCES "tokenless_agent_integrations" \("workspace_id","integration_id"\)/u,
+        'FOREIGN KEY ("integration_id") REFERENCES "tokenless_agent_integrations" ("integration_id")',
+      )
+      .replace(
+        /FOREIGN KEY \("workspace_id","project_id"\)\s+REFERENCES "tokenless_assurance_projects" \("workspace_id","project_id"\)/u,
+        'FOREIGN KEY ("project_id") REFERENCES "tokenless_assurance_projects" ("project_id")',
+      )
+      .replace(
+        /FOREIGN KEY \("project_id","audience_policy_id","audience_policy_version"\)\s+REFERENCES "tokenless_assurance_audience_policies" \("project_id","policy_id","version"\)/u,
+        'FOREIGN KEY ("audience_policy_id","audience_policy_version") REFERENCES "tokenless_assurance_audience_policies" ("policy_id","version")',
+      )
+      .replace(
+        /FOREIGN KEY \("project_id","suite_id","suite_version"\)\s+REFERENCES "tokenless_assurance_suites" \("project_id","suite_id","version"\)/u,
+        'FOREIGN KEY ("suite_id","suite_version") REFERENCES "tokenless_assurance_suites" ("suite_id","version")',
+      )
+      .replace(
+        /FOREIGN KEY \("project_id","case_id"\)\s+REFERENCES "tokenless_assurance_cases" \("project_id","case_id"\)/u,
+        'FOREIGN KEY ("case_id") REFERENCES "tokenless_assurance_cases" ("case_id")',
+      )
+      .replace(
+        /FOREIGN KEY \("project_id","run_id"\)\s+REFERENCES "tokenless_assurance_runs" \("project_id","run_id"\)/u,
+        'FOREIGN KEY ("run_id") REFERENCES "tokenless_assurance_runs" ("run_id")',
+      );
+  }
   if (file !== "0058_human_review_binding_backfill.sql") return statement;
 
   // The in-memory test database applies migrations to a guaranteed-empty schema.
