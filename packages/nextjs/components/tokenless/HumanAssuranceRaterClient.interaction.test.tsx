@@ -580,6 +580,78 @@ test("a transient session read failure retains private content and in-memory dra
   }
 });
 
+test("refreshing short-lived artifact access preserves a draft until the assignment deadline", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render, waitFor } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const { HumanAssuranceRaterClient } = await import("./HumanAssuranceRaterClient");
+  const previousFetch = globalThis.fetch;
+  const expiredTask: AssignmentTask = {
+    ...privateTask,
+    cases: privateTask.cases.map(reviewCase => ({
+      ...reviewCase,
+      options: reviewCase.options.map(option => ({ ...option, expiresAt: "2026-01-01T00:00:00.000Z" })),
+    })),
+  };
+  const refreshedTask: AssignmentTask = {
+    ...privateTask,
+    cases: privateTask.cases.map(reviewCase => ({
+      ...reviewCase,
+      options: reviewCase.options.map(option => ({
+        ...option,
+        leaseId: `${option.leaseId}_refreshed`,
+        expiresAt: "2030-01-01T00:05:00.000Z",
+      })),
+    })),
+  };
+  let refreshPosts = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url === "/api/auth/session") return Response.json(authenticatedSession(PRINCIPAL_A));
+    if (url.includes("/accept?includeTask=1") && init?.method === "POST") {
+      refreshPosts += 1;
+      return Response.json({
+        acceptance: { assignmentExpiresAt: "2030-01-02T00:00:00.000Z" },
+        task: refreshedTask,
+      });
+    }
+    if (url.includes("/artifacts/")) {
+      if (refreshPosts === 0) return Response.json({ error: "expired" }, { status: 410 });
+      return privateArtifactResponse(url) ?? Response.json({ error: "missing" }, { status: 404 });
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  };
+
+  try {
+    const view = render(
+      <HumanAssuranceRaterClient
+        principalId={PRINCIPAL_A}
+        initialAssignmentId={privateTask.assignmentId}
+        initialTermsHash={`sha256:${"d".repeat(64)}`}
+        initialTask={expiredTask}
+        assignmentExpiresAt="2030-01-02T00:00:00.000Z"
+      />,
+    );
+    const user = userEvent.setup({ document });
+    await waitFor(() => assert.equal(view.getAllByRole("button", { name: "Refresh access" }).length, 2));
+    await user.click(view.getByRole("radio", { name: /Candidate A/u }));
+    const rationale = view.getByRole("textbox", { name: "Decision rationale" });
+    await user.type(rationale, "Keep this draft through lease refresh.");
+    await user.click(view.getAllByRole("button", { name: "Refresh access" })[0]!);
+
+    await waitFor(() => assert.equal(refreshPosts, 1));
+    assert.equal((view.getByRole("radio", { name: /Candidate A/u }) as HTMLInputElement).checked, true);
+    assert.equal(
+      (view.getByRole("textbox", { name: "Decision rationale" }) as HTMLTextAreaElement).value,
+      "Keep this draft through lease refresh.",
+    );
+  } finally {
+    cleanup();
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
 test("the last case opens an editable summary and submits only after explicit confirmation", async () => {
   const restoreDom = installTestDom();
   const { cleanup, render, waitFor } = await import("@testing-library/react");

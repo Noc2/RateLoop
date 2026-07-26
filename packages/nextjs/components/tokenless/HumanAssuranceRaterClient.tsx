@@ -293,6 +293,7 @@ export function HumanAssuranceRaterClient({
   const [error, setError] = useState<string | null>(null);
   const [canRecover, setCanRecover] = useState(false);
   const [serverAcceptance, setServerAcceptance] = useState<AssuranceServerAcceptance | null>(initialServerAcceptance);
+  const [draftExpiresAt, setDraftExpiresAt] = useState<string | null>(assignmentExpiresAt);
   const [activeCaseIndex, setActiveCaseIndex] = useState(0);
   const [reviewingResponses, setReviewingResponses] = useState(false);
   const [restoredDraftKey, setRestoredDraftKey] = useState<string | null>(null);
@@ -339,6 +340,7 @@ export function HumanAssuranceRaterClient({
           setActiveCaseIndex(0);
           setReviewingResponses(false);
           setServerAcceptance(null);
+          setDraftExpiresAt(null);
           setCanRecover(false);
           setAssignmentClosed(false);
           setAssignmentUnavailable(false);
@@ -405,6 +407,7 @@ export function HumanAssuranceRaterClient({
         setAssignmentClosed(body.state === "closed");
         setAssignmentUnavailable(false);
         setCanRecover(body.state === "recoverable");
+        setDraftExpiresAt(body.responseDeadline);
         setError(null);
         if (
           presentation === "embedded" &&
@@ -440,8 +443,8 @@ export function HumanAssuranceRaterClient({
     return values.sort((left, right) => new Date(left).getTime() - new Date(right).getTime())[0] ?? null;
   }, [task]);
   const privateDraftStorage = useMemo(
-    () => ({ principalId: activePrincipalId, expiresAt: leaseDeadline }),
-    [activePrincipalId, leaseDeadline],
+    () => ({ principalId: activePrincipalId, expiresAt: draftExpiresAt }),
+    [activePrincipalId, draftExpiresAt],
   );
   const privateDraftKey = activePrincipalId && task ? `${activePrincipalId}:${task.assignmentId}` : null;
 
@@ -522,6 +525,13 @@ export function HumanAssuranceRaterClient({
         PRIVATE_REVIEW_JSON_OPTIONS,
       );
       if (privateStateEpoch !== privateStateEpochRef.current) return;
+      if (
+        opened.acceptance &&
+        typeof opened.acceptance === "object" &&
+        typeof (opened.acceptance as Record<string, unknown>).assignmentExpiresAt === "string"
+      ) {
+        setDraftExpiresAt((opened.acceptance as Record<string, unknown>).assignmentExpiresAt as string);
+      }
       if (opened.task && typeof opened.task === "object") applyLoadedTask(opened.task);
       else await loadAssignment(id);
     } catch (cause) {
