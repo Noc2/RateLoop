@@ -45,7 +45,7 @@ export const tokenlessAgentQuotes = pgTable(
 export type TokenlessAgentQuote = typeof tokenlessAgentQuotes.$inferSelect;
 export type NewTokenlessAgentQuote = typeof tokenlessAgentQuotes.$inferInsert;
 
-export const tokenlessEvmKmsSigningLedger = pgTable(
+export const tokenlessLegacyEvmKmsSigningLedger = pgTable(
   "tokenless_evm_kms_signing_ledger",
   {
     eventId: text("event_id").primaryKey(),
@@ -85,8 +85,61 @@ export const tokenlessEvmKmsSigningLedger = pgTable(
   }),
 );
 
-export type TokenlessEvmKmsSigningLedgerEvent = typeof tokenlessEvmKmsSigningLedger.$inferSelect;
-export type NewTokenlessEvmKmsSigningLedgerEvent = typeof tokenlessEvmKmsSigningLedger.$inferInsert;
+export type TokenlessLegacyEvmKmsSigningLedgerEvent = typeof tokenlessLegacyEvmKmsSigningLedger.$inferSelect;
+
+export const tokenlessEvmSigningLedger = pgTable(
+  "tokenless_evm_signing_ledger",
+  {
+    eventId: text("event_id").primaryKey(),
+    attemptId: text("attempt_id").notNull(),
+    outcome: text("outcome").notNull(),
+    signerRole: text("signer_role").notNull(),
+    provider: text("provider").notNull(),
+    keyId: text("key_id").notNull(),
+    digest: text("digest").notNull(),
+    purpose: text("purpose").notNull(),
+    providerRequestId: text("provider_request_id"),
+    errorClass: text("error_class"),
+    retryable: boolean("retryable"),
+    signatureHash: text("signature_hash"),
+    transactionHash: text("transaction_hash"),
+    startedAt: timestamp("started_at", {
+      mode: "date",
+      withTimezone: true,
+    }).notNull(),
+    completedAt: timestamp("completed_at", {
+      mode: "date",
+      withTimezone: true,
+    }),
+    recordedAt: timestamp("recorded_at", {
+      mode: "date",
+      withTimezone: true,
+    }).notNull(),
+  },
+  table => ({
+    attemptOutcomeUnique: uniqueIndex("tokenless_evm_signing_ledger_attempt_outcome_unique").on(
+      table.attemptId,
+      table.outcome,
+    ),
+    keyTimeIdx: index("tokenless_evm_signing_ledger_key_time_idx").on(
+      table.provider,
+      table.keyId,
+      table.startedAt,
+      table.attemptId,
+    ),
+    roleTimeIdx: index("tokenless_evm_signing_ledger_role_time_idx").on(
+      table.signerRole,
+      table.startedAt,
+      table.attemptId,
+    ),
+    terminalUnique: uniqueIndex("tokenless_evm_signing_ledger_terminal_unique")
+      .on(table.attemptId)
+      .where(sql`${table.outcome} IN ('succeeded', 'failed')`),
+  }),
+);
+
+export type TokenlessEvmSigningLedgerEvent = typeof tokenlessEvmSigningLedger.$inferSelect;
+export type NewTokenlessEvmSigningLedgerEvent = typeof tokenlessEvmSigningLedger.$inferInsert;
 
 export const tokenlessEvmNonceRecoveryFindings = pgTable(
   "tokenless_evm_nonce_recovery_findings",

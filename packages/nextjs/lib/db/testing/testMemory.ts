@@ -79,6 +79,7 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
       "0121_paid_assignment_operations.sql",
       "0122_evm_kms_signing_ledger.sql",
       "0123_evm_kms_signing_ledger_integrity.sql",
+      "0156_provider_neutral_evm_signing_ledger.sql",
       "0126_evm_transaction_fee_replacements.sql",
       "0138_crowd_forecast_integrity.sql",
       "0139_paid_assignment_terminal_states.sql",
@@ -175,6 +176,14 @@ function memoryCompatibleMigrationStatement(file: string, statement: string): st
     file === "0123_evm_kms_signing_ledger_integrity.sql" &&
     /^ALTER TABLE "tokenless_evm_kms_signing_ledger"\s+VALIDATE CONSTRAINT/u.test(statement)
   ) {
+    return null;
+  }
+  if (
+    file === "0156_provider_neutral_evm_signing_ledger.sql" &&
+    /^CREATE UNIQUE INDEX "tokenless_evm_signing_ledger_terminal_unique"/u.test(statement)
+  ) {
+    // pg-mem does not honor the terminal-only partial-index predicate. The
+    // production migration and source test retain the uniqueness guarantee.
     return null;
   }
   if (

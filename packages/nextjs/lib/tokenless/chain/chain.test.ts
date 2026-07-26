@@ -194,7 +194,7 @@ afterEach(() => {
 });
 
 test("deployment config binds the complete bundle and forbids credential key reuse", () => {
-  const key = `0x${"11".repeat(32)}`;
+  const key = `0x${"11".repeat(32)}` as Hex;
   const env = {
     TOKENLESS_DEPLOYMENT_SCHEMA: "rateloop-tokenless-deployment-v4",
     TOKENLESS_CHAIN_ID: "84532",
@@ -210,6 +210,8 @@ test("deployment config binds the complete bundle and forbids credential key reu
     BASE_SEPOLIA_RPC_FALLBACK_URLS: "https://base-sepolia-fallback.example",
     TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY: key,
     TOKENLESS_X402_RELAYER_PRIVATE_KEY: key,
+    TOKENLESS_X402_RELAYER_EXPECTED_ADDRESS: privateKeyToAccount(key).address,
+    TOKENLESS_X402_RELAYER_KEY_VERSION: "test-v1",
   } as unknown as NodeJS.ProcessEnv;
   assert.throws(() => loadTokenlessChainConfig(env), /must never reuse the credential issuer signer/);
   assert.throws(
@@ -217,8 +219,13 @@ test("deployment config binds the complete bundle and forbids credential key reu
       loadTokenlessChainConfig({
         ...env,
         TOKENLESS_X402_RELAYER_PRIVATE_KEY: `0x${"22".repeat(32)}`,
+        TOKENLESS_X402_RELAYER_EXPECTED_ADDRESS: privateKeyToAccount(`0x${"22".repeat(32)}`).address,
         TOKENLESS_PREPAID_FUNDER_PRIVATE_KEY: `0x${"33".repeat(32)}`,
+        TOKENLESS_PREPAID_FUNDER_EXPECTED_ADDRESS: privateKeyToAccount(`0x${"33".repeat(32)}`).address,
+        TOKENLESS_PREPAID_FUNDER_KEY_VERSION: "test-v1",
         TOKENLESS_SURPRISE_BONUS_FUNDER_PRIVATE_KEY: `0x${"33".repeat(32)}`,
+        TOKENLESS_SURPRISE_BONUS_FUNDER_EXPECTED_ADDRESS: privateKeyToAccount(`0x${"33".repeat(32)}`).address,
+        TOKENLESS_SURPRISE_BONUS_FUNDER_KEY_VERSION: "test-v1",
       }),
     /must use distinct keys/,
   );
@@ -227,6 +234,8 @@ test("deployment config binds the complete bundle and forbids credential key reu
       loadTokenlessChainConfig({
         ...env,
         TOKENLESS_X402_RELAYER_PRIVATE_KEY: undefined,
+        TOKENLESS_X402_RELAYER_EXPECTED_ADDRESS: undefined,
+        TOKENLESS_X402_RELAYER_KEY_VERSION: undefined,
         TOKENLESS_DEPLOYMENT_KEY: "wrong",
       }),
     /does not match the complete configured tokenless contract bundle/,
@@ -236,6 +245,8 @@ test("deployment config binds the complete bundle and forbids credential key reu
       loadTokenlessChainConfig({
         ...env,
         TOKENLESS_X402_RELAYER_PRIVATE_KEY: undefined,
+        TOKENLESS_X402_RELAYER_EXPECTED_ADDRESS: undefined,
+        TOKENLESS_X402_RELAYER_KEY_VERSION: undefined,
         TOKENLESS_DEPLOYMENT_SCHEMA: "rateloop-tokenless-deployment-v2",
       }),
     /must be rateloop-tokenless-deployment-v4/,

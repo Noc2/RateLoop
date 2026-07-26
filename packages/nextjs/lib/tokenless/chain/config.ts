@@ -1,4 +1,7 @@
-import { type AwsKmsEthereumAccountConfiguration, loadAwsKmsEthereumAccountConfiguration } from "./awsKmsAccount";
+import {
+  type TokenlessPlatformSecretAccountConfiguration,
+  loadPlatformSecretEthereumAccountConfiguration,
+} from "./platformSecretAccount";
 import "server-only";
 import { type Address, getAddress, isAddress, zeroAddress } from "viem";
 
@@ -36,9 +39,10 @@ export type TokenlessChainConfig = {
   x402SubmitterAddress: Address;
 };
 
-export type TokenlessSignerConfig =
-  | { kind: "aws-kms"; configuration: AwsKmsEthereumAccountConfiguration }
-  | { kind: "local-test"; privateKey: `0x${string}` };
+export type TokenlessSignerConfig = {
+  kind: "platform-secret";
+  configuration: TokenlessPlatformSecretAccountConfiguration;
+};
 
 const MAXIMUM_RPC_FALLBACKS = 3;
 
@@ -64,38 +68,30 @@ function positiveInteger(env: NodeJS.ProcessEnv, name: string, fallback: number)
   return value;
 }
 
-function privateKey(env: NodeJS.ProcessEnv, name: string) {
-  const value = env[name]?.trim();
-  if (!value) return undefined;
-  if (!PRIVATE_KEY_PATTERN.test(value)) throw new Error(`${name} must be a 32-byte hex private key.`);
-  return value as `0x${string}`;
-}
-
 function signerConfiguration(
   env: NodeJS.ProcessEnv,
   input: {
-    localKeyName: string;
-    role: Parameters<typeof loadAwsKmsEthereumAccountConfiguration>[0]["role"];
+    role: Parameters<typeof loadPlatformSecretEthereumAccountConfiguration>[0]["role"];
   },
 ): TokenlessSignerConfig | undefined {
-  const localKey = privateKey(env, input.localKeyName);
-  const kmsKeyResource = env[`TOKENLESS_${input.role}_KMS_KEY_RESOURCE`]?.trim();
-  if (localKey && kmsKeyResource) {
-    throw new Error(`${input.localKeyName} cannot be configured together with its managed KMS signer.`);
-  }
-  if (kmsKeyResource) {
-    return {
-      configuration: loadAwsKmsEthereumAccountConfiguration({ env, role: input.role }),
-      kind: "aws-kms",
-    };
-  }
-  return localKey ? { kind: "local-test", privateKey: localKey } : undefined;
-}
-
-function signerAddress(signer: TokenlessSignerConfig | undefined) {
-  if (!signer) return null;
-  if (signer.kind === "aws-kms") return signer.configuration.expectedAddress.toLowerCase();
-  return null;
+  const prefixes = {
+    PREPAID_FUNDER: "TOKENLESS_PREPAID_FUNDER",
+    SURPRISE_BONUS_FUNDER: "TOKENLESS_SURPRISE_BONUS_FUNDER",
+    X402_RELAYER: "TOKENLESS_X402_RELAYER",
+    CREDENTIAL_ISSUER: "TOKENLESS_CREDENTIAL_ISSUER_SIGNER",
+  } as const;
+  const prefix = prefixes[input.role];
+  const configured = ["PRIVATE_KEY", "EXPECTED_ADDRESS", "KEY_VERSION"].some(suffix =>
+    env[`${prefix}_${suffix}`]?.trim(),
+  );
+  if (!configured) return undefined;
+  return {
+    configuration: loadPlatformSecretEthereumAccountConfiguration({
+      env,
+      role: input.role,
+    }),
+    kind: "platform-secret",
+  };
 }
 
 function rpcUrls(env: NodeJS.ProcessEnv) {
@@ -208,50 +204,50 @@ export function loadTokenlessChainConfig(env: NodeJS.ProcessEnv = process.env): 
     );
   }
   const prepaidFunderSigner = signerConfiguration(env, {
-    localKeyName: "TOKENLESS_PREPAID_FUNDER_PRIVATE_KEY",
     role: "PREPAID_FUNDER",
   });
   const relayerSigner = signerConfiguration(env, {
-    localKeyName: "TOKENLESS_X402_RELAYER_PRIVATE_KEY",
     role: "X402_RELAYER",
   });
   const surpriseBonusFunderSigner = signerConfiguration(env, {
-    localKeyName: "TOKENLESS_SURPRISE_BONUS_FUNDER_PRIVATE_KEY",
     role: "SURPRISE_BONUS_FUNDER",
   });
-  const credentialSignerPrivateKey = privateKey(env, "TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY");
+  const credentialSignerPrivateKey = env.TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY?.trim();
+  if (credentialSignerPrivateKey && !PRIVATE_KEY_PATTERN.test(credentialSignerPrivateKey)) {
+    throw new Error("TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY must be a 32-byte hex private key.");
+  }
   if (
-    (relayerSigner?.kind === "local-test" &&
-      relayerSigner.privateKey.toLowerCase() === credentialSignerPrivateKey?.toLowerCase()) ||
-    (prepaidFunderSigner?.kind === "local-test" &&
-      prepaidFunderSigner.privateKey.toLowerCase() === credentialSignerPrivateKey?.toLowerCase())
+    credentialSignerPrivateKey &&
+    (relayerSigner?.configuration.privateKey.toLowerCase() === credentialSignerPrivateKey.toLowerCase() ||
+      prepaidFunderSigner?.configuration.privateKey.toLowerCase() === credentialSignerPrivateKey.toLowerCase())
   ) {
     throw new Error("Chain payment and relay keys must never reuse the credential issuer signer.");
   }
   if (
-    prepaidFunderSigner?.kind === "local-test" &&
-    relayerSigner?.kind === "local-test" &&
-    prepaidFunderSigner.privateKey.toLowerCase() === relayerSigner.privateKey.toLowerCase()
+    prepaidFunderSigner &&
+    relayerSigner &&
+    prepaidFunderSigner.configuration.privateKey.toLowerCase() === relayerSigner?.configuration.privateKey.toLowerCase()
   ) {
     throw new Error("The prepaid funder and gas-only relayer must use distinct keys.");
   }
   const paymentKeys = [prepaidFunderSigner, relayerSigner, surpriseBonusFunderSigner].flatMap(signer =>
-    signer?.kind === "local-test" ? [signer.privateKey] : [],
+    signer ? [signer.configuration.privateKey] : [],
   );
   if (new Set(paymentKeys.map(value => value.toLowerCase())).size !== paymentKeys.length) {
     throw new Error("The prepaid funder, gas-only relayer, and surprise-bonus funder must use distinct keys.");
   }
   if (
-    surpriseBonusFunderSigner?.kind === "local-test" &&
-    surpriseBonusFunderSigner.privateKey.toLowerCase() === credentialSignerPrivateKey?.toLowerCase()
+    surpriseBonusFunderSigner &&
+    credentialSignerPrivateKey &&
+    surpriseBonusFunderSigner.configuration.privateKey.toLowerCase() === credentialSignerPrivateKey.toLowerCase()
   ) {
     throw new Error("The surprise-bonus funder must never reuse the credential issuer signer.");
   }
-  const managedAddresses = [prepaidFunderSigner, relayerSigner, surpriseBonusFunderSigner]
-    .map(signerAddress)
-    .filter((value): value is string => Boolean(value));
+  const managedAddresses = [prepaidFunderSigner, relayerSigner, surpriseBonusFunderSigner].flatMap(signer =>
+    signer ? [signer.configuration.expectedAddress.toLowerCase()] : [],
+  );
   if (new Set(managedAddresses).size !== managedAddresses.length) {
-    throw new Error("Managed prepaid, relay, and surprise-bonus roles must use distinct KMS accounts.");
+    throw new Error("Managed prepaid, relay, and surprise-bonus roles must use distinct accounts.");
   }
   return {
     chainId: TOKENLESS_BASE_SEPOLIA_CHAIN_ID,

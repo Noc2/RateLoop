@@ -1,4 +1,3 @@
-import { createAwsKmsEthereumAccount } from "./awsKmsAccount";
 import {
   TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS,
   TOKENLESS_QUICKNET_T_CHAIN_HASH,
@@ -6,6 +5,7 @@ import {
   type TokenlessChainConfig,
   type TokenlessSignerConfig,
 } from "./config";
+import { createPlatformSecretEthereumAccount } from "./platformSecretAccount";
 import { TokenlessFeedbackBonusAbi, TokenlessPanelAbi, X402PanelSubmitterAbi } from "@rateloop/contracts/tokenless";
 import "server-only";
 import {
@@ -21,7 +21,6 @@ import {
   getAddress,
   http,
 } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
 import { baseSepolia } from "viem/chains";
 
 const RPC_TIMEOUT_MS = 8_000;
@@ -109,10 +108,9 @@ let runtimeCache: { rpcKey: string; runtime: TokenlessChainRuntime } | null = nu
 let runtimeOverride: TokenlessChainRuntime | null = null;
 
 function wallet(signer: TokenlessSignerConfig, rpcUrls: readonly string[]) {
-  const account =
-    signer.kind === "aws-kms"
-      ? createAwsKmsEthereumAccount({ configuration: signer.configuration })
-      : privateKeyToAccount(signer.privateKey);
+  const account = createPlatformSecretEthereumAccount({
+    configuration: signer.configuration,
+  });
   return {
     account,
     client: createBaseWalletClient(account, rpcUrls),
