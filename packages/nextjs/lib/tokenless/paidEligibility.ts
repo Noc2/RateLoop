@@ -43,6 +43,10 @@ import {
   requirePaidReviewEligibility,
   requirePaidReviewEligibilityInTransaction,
 } from "~~/lib/tokenless/paidReviewEligibilityPreflight";
+import {
+  completePaidReviewVoucherIssuance,
+  requirePrivatePaidReviewVoucherIssuance,
+} from "~~/lib/tokenless/paidReviewVoucherReceipts";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const COUNTRY = /^[A-Z]{2}$/;
@@ -115,6 +119,7 @@ export type VoucherRequest = {
   contentId: Hex;
   voteKey: Address;
   reviewerSource: Exclude<HumanAssuranceReviewerSource, "hybrid">;
+  issuanceId?: string;
   assignmentId?: string;
   selectionBindingHash?: `sha256:${string}`;
 };
@@ -2089,7 +2094,12 @@ export async function issuePaidVoucher(input: { principalId: string; request: Vo
         input.request.assignmentId.length > 256 ||
         !SHA256.test(input.request.selectionBindingHash ?? ""))) ||
     (input.request.reviewerSource === "customer_invited" &&
-      (input.request.assignmentId !== undefined || input.request.selectionBindingHash !== undefined))
+      (!input.request.issuanceId ||
+        input.request.issuanceId.length > 256 ||
+        !input.request.assignmentId ||
+        input.request.assignmentId.length > 256 ||
+        input.request.selectionBindingHash !== undefined)) ||
+    (input.request.reviewerSource === "rateloop_network" && input.request.issuanceId !== undefined)
   ) {
     throw new TokenlessServiceError("Voucher request is invalid.", 400, "invalid_voucher_request");
   }
@@ -2141,6 +2151,18 @@ export async function issuePaidVoucher(input: { principalId: string; request: Vo
       "voucher_reviewer_source_mismatch",
     );
   }
+  const privateBridge =
+    input.request.reviewerSource === "customer_invited"
+      ? await requirePrivatePaidReviewVoucherIssuance({
+          issuanceId: input.request.issuanceId!,
+          assignmentId: input.request.assignmentId!,
+          principalId: input.principalId,
+          chainId: issuer.chainId,
+          panelAddress: issuer.panelAddress,
+          roundId: input.request.roundId,
+          contentId: input.request.contentId,
+        })
+      : null;
   const previous = await dbClient.execute({
     sql: `SELECT v.* FROM tokenless_paid_vouchers v
           JOIN tokenless_rater_profiles p ON p.rater_id = v.rater_id
@@ -2156,6 +2178,12 @@ export async function issuePaidVoucher(input: { principalId: string; request: Vo
         "voucher_conflict",
       );
     }
+    if (privateBridge) {
+      await completePaidReviewVoucherIssuance({
+        issuanceId: privateBridge.issuanceId,
+        voucherId: stringValue(priorRow, "voucher_id")!,
+      });
+    }
     return voucherResponse(priorRow);
   }
   const roundWorkspaceId = stringValue(round, "workspace_id");
@@ -2166,6 +2194,13 @@ export async function issuePaidVoucher(input: { principalId: string; request: Vo
     now,
   );
   const raterId = stringValue(eligibility.row, "rater_id")!;
+  if (privateBridge && (privateBridge.raterId !== raterId || privateBridge.workspaceId !== roundWorkspaceId)) {
+    throw new TokenlessServiceError(
+      "The invited voucher request does not match its exact paid eligibility and workspace.",
+      409,
+      "paid_voucher_issuance_conflict",
+    );
+  }
   if (!roundWorkspaceId && input.request.reviewerSource === "customer_invited") {
     throw new TokenlessServiceError("This round has no workspace binding.", 409, "round_workspace_mismatch");
   }
@@ -2403,7 +2438,15 @@ export async function issuePaidVoucher(input: { principalId: string; request: Vo
         args: [raterId, input.request.idempotencyKey],
       });
       const replayRow = replay.rows[0] as QueryRow | undefined;
-      if (replayRow && stringValue(replayRow, "request_hash") === requestHash) return voucherResponse(replayRow);
+      if (replayRow && stringValue(replayRow, "request_hash") === requestHash) {
+        if (privateBridge) {
+          await completePaidReviewVoucherIssuance({
+            issuanceId: privateBridge.issuanceId,
+            voucherId: stringValue(replayRow, "voucher_id")!,
+          });
+        }
+        return voucherResponse(replayRow);
+      }
       throw new TokenlessServiceError(
         "This identity already has a voucher for the round.",
         409,
@@ -2413,6 +2456,13 @@ export async function issuePaidVoucher(input: { principalId: string; request: Vo
     throw error;
   } finally {
     insertClient.release();
+  }
+  if (privateBridge) {
+    await completePaidReviewVoucherIssuance({
+      issuanceId: privateBridge.issuanceId,
+      voucherId,
+      issuedAt: now,
+    });
   }
   return { voucherId, voucher, voucherSignature, assuranceSnapshotHash, issuedAt: now };
 }

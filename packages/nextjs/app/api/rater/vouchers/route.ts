@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
         contentId: body.contentId,
         voteKey: body.voteKey,
         reviewerSource: body.reviewerSource!,
+        ...(body.issuanceId ? { issuanceId: body.issuanceId } : {}),
         ...(body.assignmentId ? { assignmentId: body.assignmentId } : {}),
         ...(body.selectionBindingHash ? { selectionBindingHash: body.selectionBindingHash } : {}),
       },

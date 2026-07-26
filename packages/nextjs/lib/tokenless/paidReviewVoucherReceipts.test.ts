@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
@@ -12,6 +13,8 @@ import {
 import type { HumanReviewDerivedEconomics, HumanReviewPreparedRequest } from "~~/lib/tokenless/humanReviewApprovals";
 import {
   type PaidReviewAudienceBinding,
+  type PaidReviewEligibilitySnapshot,
+  type PaidReviewVoucherLifecycle,
   type PreparePaidReviewVoucherIssuanceInput,
   __paidReviewVoucherReceiptTestUtils,
   completePaidReviewVoucherIssuance,
@@ -26,6 +29,9 @@ import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanRevie
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const RATER = "0x2222222222222222222222222222222222222222";
+const PANEL = "0x3333333333333333333333333333333333333333";
+const CONTENT = `0x${"44".repeat(32)}`;
+const ADMISSION = `0x${"55".repeat(32)}`;
 
 function hash(value: string) {
   return `sha256:${createHash("sha256").update(value).digest("hex")}` as `sha256:${string}`;
@@ -37,6 +43,156 @@ beforeEach(() => {
 
 afterEach(() => {
   __setDatabaseResourcesForTests(null);
+});
+
+test("private issuance, voucher, and commit bridges bind one exact live panel identity", () => {
+  const audienceBinding = {
+    schemaVersion: "rateloop.paid-review-audience-binding.v1",
+    profileAudience: "private_invited",
+    reviewerSource: "customer_invited",
+    audiencePolicyHash: hash("private-audience"),
+    assignmentReference: "assignment_private_bridge",
+    assignmentHash: hash("private-assignment"),
+    selectionBatchId: null,
+    integrityProvenanceHash: null,
+  } as const;
+  const snapshot = {
+    schemaVersion: "rateloop.paid-review-eligibility-snapshot.v1",
+    snapshotVersion: 1,
+    workspaceId: "workspace_private_bridge",
+    opportunity: {
+      id: "opportunity_private_bridge",
+      sourceEvidenceHash: hash("private-source"),
+      suggestionCommitment: hash("private-suggestion"),
+    },
+    raterId: "rater_private_bridge",
+    requestProfile: { id: "profile_private_bridge", version: 1, hash: hash("private-profile") },
+    preparedRequestHash: hash("private-request"),
+    audienceBinding,
+    audienceBindingHash: hash("private-audience-binding"),
+    economics: {
+      schemaVersion: "rateloop.human-review-derived-economics.v1",
+      compensationMode: "usdc",
+      bountyPerSeatAtomic: "1000000",
+      panelSize: 1,
+      baseBountyAtomic: "1000000",
+      feeBps: 500,
+      feeAtomic: "50000",
+      attemptReserveAtomic: "100000",
+      maximumChargeAtomic: "1150000",
+    },
+    economicsHash: hash("private-economics"),
+    paidEligibilityPreflight: {
+      reference: "preflight_private_bridge",
+      hash: hash("private-preflight"),
+      verifiedAt: "2026-07-26T08:00:00.000Z",
+      expiresAt: "2026-07-26T09:00:00.000Z",
+    },
+    capturedAt: "2026-07-26T08:00:00.000Z",
+  } satisfies PaidReviewEligibilitySnapshot;
+  const lifecycle = {
+    issuanceId: "issuance_private_bridge",
+    workspaceId: snapshot.workspaceId,
+    opportunityId: snapshot.opportunity.id,
+    raterId: snapshot.raterId,
+    status: "prepared",
+    snapshot,
+  } as PaidReviewVoucherLifecycle;
+  const row = {
+    workspace_id: snapshot.workspaceId,
+    rater_id: snapshot.raterId,
+    principal_id: "rlp_private_bridge",
+    assignment_id: audienceBinding.assignmentReference,
+    audience_policy_hash: audienceBinding.audiencePolicyHash,
+    lane: "private_invited_paid",
+    operation_state: "round_bound",
+    seat_state: "accepted",
+    execution_state: "confirmed",
+    voucher_round_status: "open",
+    voucher_workspace_id: snapshot.workspaceId,
+    deployment_key: "tokenless-v4:private-bridge",
+    chain_id: 84532,
+    panel_address: PANEL,
+    round_id: "42",
+    content_id: CONTENT,
+    voucher_content_id: CONTENT,
+    chain_admission_policy_hash: ADMISSION,
+    voucher_admission_policy_hash: ADMISSION,
+  };
+  const bridge = __paidReviewVoucherReceiptTestUtils.projectPrivatePaidVoucherIssuanceBridge({
+    issuanceId: lifecycle.issuanceId,
+    lifecycle,
+    row,
+    persistedSnapshot: snapshot,
+    policySource: "customer_invited",
+  });
+  assert.equal(bridge.assignmentId, audienceBinding.assignmentReference);
+  assert.equal(bridge.panelAddress, PANEL);
+  assert.equal(
+    __paidReviewVoucherReceiptTestUtils.voucherMatchesPrivatePaidBridge(
+      {
+        voucher_chain_id: 84532,
+        voucher_panel_address: PANEL,
+        voucher_round_id: "42",
+        voucher_content_id: CONTENT,
+        voucher_admission_policy_hash: ADMISSION,
+      },
+      bridge,
+    ),
+    true,
+  );
+  assert.equal(
+    __paidReviewVoucherReceiptTestUtils.voucherMatchesPrivatePaidBridge(
+      {
+        voucher_chain_id: 84532,
+        voucher_panel_address: RATER,
+        voucher_round_id: "42",
+        voucher_content_id: CONTENT,
+        voucher_admission_policy_hash: ADMISSION,
+      },
+      bridge,
+    ),
+    false,
+  );
+  assert.doesNotThrow(() =>
+    __paidReviewVoucherReceiptTestUtils.projectPrivatePaidVoucherIssuanceBridge({
+      issuanceId: lifecycle.issuanceId,
+      lifecycle,
+      row: { ...row, operation_state: "settling", voucher_round_status: "closed" },
+      persistedSnapshot: snapshot,
+      policySource: "customer_invited",
+      phase: "consumption",
+    }),
+  );
+  assert.throws(
+    () =>
+      __paidReviewVoucherReceiptTestUtils.projectPrivatePaidVoucherIssuanceBridge({
+        issuanceId: lifecycle.issuanceId,
+        lifecycle,
+        row: { ...row, operation_state: "settling", voucher_round_status: "closed" },
+        persistedSnapshot: snapshot,
+        policySource: "customer_invited",
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "paid_voucher_issuance_conflict",
+  );
+  assert.throws(
+    () =>
+      __paidReviewVoucherReceiptTestUtils.projectPrivatePaidVoucherIssuanceBridge({
+        issuanceId: lifecycle.issuanceId,
+        lifecycle,
+        row: { ...row, voucher_workspace_id: "workspace_other" },
+        persistedSnapshot: snapshot,
+        policySource: "customer_invited",
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "paid_voucher_issuance_conflict",
+  );
+});
+
+test("production voucher and commit paths complete and consume the private issuance bridge", () => {
+  const eligibilitySource = readFileSync(new URL("./paidEligibility.ts", import.meta.url), "utf8");
+  const commitSource = readFileSync(new URL("./raterService.ts", import.meta.url), "utf8");
+  assert.match(eligibilitySource, /completePaidReviewVoucherIssuance\(\{/u);
+  assert.match(commitSource, /consumePrivatePaidReviewVoucherForCommit\(\{/u);
 });
 
 async function fixture(suffix: string) {

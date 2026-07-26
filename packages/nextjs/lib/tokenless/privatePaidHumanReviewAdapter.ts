@@ -540,7 +540,8 @@ export async function acceptPrivatePaidReviewAssignment(input: {
     `SELECT d.delivery_id,pr.reservation_id,pr.status,pr.operation_key,
             abr.reservation_id AS policy_reservation_id,abr.status AS policy_status,
             abr.operation_key AS policy_operation_key,o.state AS paid_operation_state,
-            o.operation_id,o.commit_deadline,vr.status AS voucher_round_status,
+            o.operation_id,o.deployment_key,o.chain_id,o.panel_address,o.round_id,o.content_id,
+            o.commit_deadline,vr.status AS voucher_round_status,
             vr.voucher_not_before,vr.voucher_deadline
      FROM tokenless_paid_assignment_seats s
      JOIN tokenless_paid_assignment_operations o ON o.operation_id=s.operation_id
@@ -591,6 +592,16 @@ export async function acceptPrivatePaidReviewAssignment(input: {
     ...accepted,
     issuanceId: issuance.issuanceId,
     fundingOperationReference: text(row, "operation_key")!,
+    voucherRequest: {
+      issuanceId: issuance.issuanceId,
+      assignmentId: input.assignmentId,
+      reviewerSource: "customer_invited" as const,
+      deploymentKey: text(row, "deployment_key")!,
+      chainId: Number(row.chain_id),
+      panelAddress: getAddress(String(row.panel_address)),
+      roundId: text(row, "round_id")!,
+      contentId: text(row, "content_id")!,
+    },
     acceptedWorkLiability: "locked" as const,
   };
 }

@@ -37,6 +37,7 @@ import { dbClient, dbPool } from "~~/lib/db";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { markNetworkVoucherConsumed } from "~~/lib/tokenless/networkAssignmentSettlement";
 import { requirePaidLaneComplianceApproval } from "~~/lib/tokenless/paidLaneCompliance";
+import { consumePrivatePaidReviewVoucherForCommit } from "~~/lib/tokenless/paidReviewVoucherReceipts";
 import { preparePublicRaterResponse } from "~~/lib/tokenless/publicRaterResponses";
 import type { PublicRaterResponseInput } from "~~/lib/tokenless/rater/publicResponse";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -963,11 +964,27 @@ export async function reconcilePaidRaterCommit(commitId: string) {
   const row = result.rows[0] as Row | undefined;
   if (!row) return null;
   const state = rowString(row, "state");
-  if (state === "confirmed" || state === "failed") return publicCommit(row);
+  if (state === "confirmed") {
+    await consumePrivatePaidReviewVoucherForCommit({
+      voucherId: rowString(row, "voucher_id")!,
+      commitId,
+      consumedAt: row.confirmed_at ? new Date(String(row.confirmed_at)) : undefined,
+    });
+    return publicCommit(row);
+  }
+  if (state === "failed") return publicCommit(row);
   if (state === "submitted") {
     const config = loadTokenlessChainConfig();
     const runtime = getTokenlessChainRuntime(config);
-    return publicCommit(await reconcileSubmittedRaterCommitReceipt(row, runtime.publicClient));
+    const reconciled = await reconcileSubmittedRaterCommitReceipt(row, runtime.publicClient);
+    if (rowString(reconciled, "state") === "confirmed") {
+      await consumePrivatePaidReviewVoucherForCommit({
+        voucherId: rowString(reconciled, "voucher_id")!,
+        commitId,
+        consumedAt: reconciled.confirmed_at ? new Date(String(reconciled.confirmed_at)) : undefined,
+      });
+    }
+    return publicCommit(reconciled);
   }
   const nonceValue = rowString(row, "relay_nonce");
   if (nonceValue === null) {
@@ -1069,7 +1086,22 @@ export async function getPaidRaterCommit(input: { principalId: string; commitId:
   if (rowString(row, "state") === "submitted") {
     const config = loadTokenlessChainConfig();
     const runtime = getTokenlessChainRuntime(config);
-    return publicCommit(await reconcileSubmittedRaterCommitReceipt(row, runtime.publicClient));
+    const reconciled = await reconcileSubmittedRaterCommitReceipt(row, runtime.publicClient);
+    if (rowString(reconciled, "state") === "confirmed") {
+      await consumePrivatePaidReviewVoucherForCommit({
+        voucherId: rowString(reconciled, "voucher_id")!,
+        commitId: input.commitId,
+        consumedAt: reconciled.confirmed_at ? new Date(String(reconciled.confirmed_at)) : undefined,
+      });
+    }
+    return publicCommit(reconciled);
+  }
+  if (rowString(row, "state") === "confirmed") {
+    await consumePrivatePaidReviewVoucherForCommit({
+      voucherId: rowString(row, "voucher_id")!,
+      commitId: input.commitId,
+      consumedAt: row.confirmed_at ? new Date(String(row.confirmed_at)) : undefined,
+    });
   }
   return publicCommit(row);
 }

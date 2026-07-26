@@ -5,6 +5,7 @@ export function buildPublicVoucherRequest(
     roundId: string;
     contentId: Hex;
     reviewerSource: "customer_invited" | "rateloop_network";
+    issuanceId?: string;
     assignmentId?: string;
     selectionBindingHash?: `sha256:${string}`;
   },
@@ -16,6 +17,7 @@ export function buildPublicVoucherRequest(
     contentId: task.contentId,
     voteKey: input.voteKey,
     reviewerSource: task.reviewerSource,
+    ...(task.issuanceId ? { issuanceId: task.issuanceId } : {}),
     ...(task.assignmentId ? { assignmentId: task.assignmentId } : {}),
     ...(task.selectionBindingHash ? { selectionBindingHash: task.selectionBindingHash } : {}),
   };

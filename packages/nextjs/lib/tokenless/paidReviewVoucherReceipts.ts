@@ -1,7 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
+import { getAddress } from "viem";
 import { dbPool } from "~~/lib/db";
+import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import type { HumanReviewDerivedEconomics, HumanReviewPreparedRequest } from "~~/lib/tokenless/humanReviewApprovals";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -111,6 +113,20 @@ export type PaidReviewVoucherLifecycle = {
   receipts: PaidReviewVoucherReceipt[];
   createdAt: string;
   updatedAt: string;
+};
+
+export type PrivatePaidVoucherIssuanceBridge = {
+  issuanceId: string;
+  assignmentId: string;
+  workspaceId: string;
+  raterId: string;
+  principalId: string;
+  deploymentKey: string;
+  chainId: number;
+  panelAddress: string;
+  roundId: string;
+  contentId: string;
+  admissionPolicyHash: string;
 };
 
 function canonicalJson(value: unknown): string {
@@ -541,6 +557,157 @@ async function issuanceProjection(client: PoolClient, issuanceId: string): Promi
   };
 }
 
+async function privatePaidVoucherIssuanceBridge(
+  issuanceId: string,
+  phase: "issuance" | "consumption" = "issuance",
+): Promise<PrivatePaidVoucherIssuanceBridge | null> {
+  const lifecycle = await getPaidReviewVoucherLifecycle(issuanceId);
+  if (
+    lifecycle.snapshot.audienceBinding.profileAudience !== "private_invited" ||
+    lifecycle.snapshot.audienceBinding.reviewerSource !== "customer_invited"
+  ) {
+    return null;
+  }
+  const result = await dbPool.query(
+    `SELECT i.workspace_id,i.rater_id,profile.principal_id,snapshot.snapshot_json,
+            seat.assignment_id,seat.state AS seat_state,
+            operation.lane,operation.state AS operation_state,operation.deployment_key,
+            operation.chain_id,operation.panel_address,operation.round_id,operation.content_id,
+            operation.audience_policy_hash,operation.chain_admission_policy_hash,
+            execution.state AS execution_state,
+            voucher_round.workspace_id AS voucher_workspace_id,
+            voucher_round.content_id AS voucher_content_id,
+            voucher_round.admission_policy_hash AS voucher_admission_policy_hash,
+            voucher_round.admission_policy_json,voucher_round.status AS voucher_round_status
+       FROM tokenless_paid_review_voucher_issuances i
+       JOIN tokenless_paid_review_eligibility_snapshots snapshot
+         ON snapshot.snapshot_id=i.snapshot_id
+        AND snapshot.snapshot_version=i.snapshot_version
+        AND snapshot.snapshot_hash=i.snapshot_hash
+       JOIN tokenless_rater_profiles profile ON profile.rater_id=i.rater_id
+       JOIN tokenless_paid_assignment_seats seat ON seat.voucher_issuance_id=i.issuance_id
+       JOIN tokenless_paid_assignment_operations operation ON operation.operation_id=seat.operation_id
+       JOIN tokenless_chain_executions execution ON execution.operation_key=operation.ask_operation_key
+       JOIN tokenless_voucher_rounds voucher_round
+         ON voucher_round.chain_id=operation.chain_id
+        AND lower(voucher_round.panel_address)=lower(operation.panel_address)
+        AND voucher_round.round_id=operation.round_id
+      WHERE i.issuance_id=$1 LIMIT 1`,
+    [issuanceId],
+  );
+  const row = result.rows[0] as Row | undefined;
+  let persistedSnapshot: PaidReviewEligibilitySnapshot | null = null;
+  let policySource: string | null = null;
+  try {
+    persistedSnapshot = JSON.parse(rowText(row, "snapshot_json") ?? "null") as PaidReviewEligibilitySnapshot | null;
+    policySource = freezeAdmissionPolicy(JSON.parse(rowText(row, "admission_policy_json") ?? "null")).policy
+      .reviewerSource;
+  } catch {
+    // The exact checks below turn malformed stored evidence into a fail-closed bridge conflict.
+  }
+  return projectPrivatePaidVoucherIssuanceBridge({
+    issuanceId,
+    lifecycle,
+    row,
+    persistedSnapshot,
+    policySource,
+    phase,
+  });
+}
+
+function projectPrivatePaidVoucherIssuanceBridge(input: {
+  issuanceId: string;
+  lifecycle: PaidReviewVoucherLifecycle;
+  row: Row | undefined;
+  persistedSnapshot: PaidReviewEligibilitySnapshot | null;
+  policySource: string | null;
+  phase?: "issuance" | "consumption";
+}): PrivatePaidVoucherIssuanceBridge {
+  const { issuanceId, lifecycle, row, persistedSnapshot, policySource, phase = "issuance" } = input;
+  const operationState = rowText(row, "operation_state");
+  const voucherRoundStatus = rowText(row, "voucher_round_status");
+  if (
+    !row ||
+    !persistedSnapshot ||
+    lifecycle.workspaceId !== rowText(row, "workspace_id") ||
+    lifecycle.raterId !== rowText(row, "rater_id") ||
+    persistedSnapshot.audienceBinding.assignmentReference !== rowText(row, "assignment_id") ||
+    persistedSnapshot.audienceBinding.audiencePolicyHash !== rowText(row, "audience_policy_hash") ||
+    rowInteger(row, "chain_id") === null ||
+    rowText(row, "lane") !== "private_invited_paid" ||
+    (phase === "issuance"
+      ? operationState !== "round_bound"
+      : !["round_bound", "active", "settling", "terminal"].includes(operationState ?? "")) ||
+    !["voucher_prepared", "accepted", "committed", "revealed", "terminal"].includes(rowText(row, "seat_state") ?? "") ||
+    rowText(row, "execution_state") !== "confirmed" ||
+    (phase === "issuance" ? voucherRoundStatus !== "open" : !voucherRoundStatus) ||
+    rowText(row, "voucher_workspace_id") !== lifecycle.workspaceId ||
+    rowText(row, "voucher_content_id")?.toLowerCase() !== rowText(row, "content_id")?.toLowerCase() ||
+    rowText(row, "voucher_admission_policy_hash")?.toLowerCase() !==
+      rowText(row, "chain_admission_policy_hash")?.toLowerCase() ||
+    policySource !== "customer_invited"
+  ) {
+    throw new TokenlessServiceError(
+      "The private paid voucher preparation is not bound to one exact live panel assignment.",
+      409,
+      "paid_voucher_issuance_conflict",
+    );
+  }
+  return {
+    issuanceId,
+    assignmentId: rowText(row, "assignment_id")!,
+    workspaceId: lifecycle.workspaceId,
+    raterId: lifecycle.raterId,
+    principalId: rowText(row, "principal_id")!,
+    deploymentKey: rowText(row, "deployment_key")!,
+    chainId: rowInteger(row, "chain_id")!,
+    panelAddress: getAddress(rowText(row, "panel_address")!).toLowerCase(),
+    roundId: rowText(row, "round_id")!,
+    contentId: rowText(row, "content_id")!.toLowerCase(),
+    admissionPolicyHash: rowText(row, "chain_admission_policy_hash")!.toLowerCase(),
+  };
+}
+
+function voucherMatchesPrivatePaidBridge(row: Row, bridge: PrivatePaidVoucherIssuanceBridge) {
+  const voucherPanelAddress = rowText(row, "voucher_panel_address");
+  return (
+    rowInteger(row, "voucher_chain_id") === bridge.chainId &&
+    Boolean(voucherPanelAddress) &&
+    getAddress(voucherPanelAddress!) === getAddress(bridge.panelAddress) &&
+    rowText(row, "voucher_round_id") === bridge.roundId &&
+    rowText(row, "voucher_content_id")?.toLowerCase() === bridge.contentId &&
+    rowText(row, "voucher_admission_policy_hash")?.toLowerCase() === bridge.admissionPolicyHash
+  );
+}
+
+export async function requirePrivatePaidReviewVoucherIssuance(input: {
+  issuanceId: string;
+  assignmentId: string;
+  principalId: string;
+  chainId: number;
+  panelAddress: string;
+  roundId: string;
+  contentId: string;
+}) {
+  const bridge = await privatePaidVoucherIssuanceBridge(input.issuanceId);
+  if (
+    !bridge ||
+    bridge.assignmentId !== input.assignmentId ||
+    bridge.principalId !== input.principalId ||
+    bridge.chainId !== input.chainId ||
+    bridge.panelAddress !== getAddress(input.panelAddress).toLowerCase() ||
+    bridge.roundId !== input.roundId ||
+    bridge.contentId !== input.contentId.toLowerCase()
+  ) {
+    throw new TokenlessServiceError(
+      "The invited voucher request does not match its exact prepared assignment and panel.",
+      409,
+      "paid_voucher_issuance_conflict",
+    );
+  }
+  return bridge;
+}
+
 async function replayPreparedIssuance(raterId: string, idempotencyKey: string, requestHash: Hash) {
   const client = await dbPool.connect();
   try {
@@ -673,11 +840,15 @@ export async function completePaidReviewVoucherIssuance(input: {
   if (!Number.isFinite(issuedAt.getTime())) {
     throw new TokenlessServiceError("Voucher issue time is invalid.", 400, "invalid_paid_review_voucher_binding");
   }
+  const privateBridge = await privatePaidVoucherIssuanceBridge(input.issuanceId);
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
     const result = await client.query(
-      `SELECT i.*,v.rater_id AS voucher_rater_id,v.voucher_json,v.voucher_signature,v.status AS voucher_status
+      `SELECT i.*,v.rater_id AS voucher_rater_id,v.voucher_json,v.voucher_signature,v.status AS voucher_status,
+              v.chain_id AS voucher_chain_id,v.panel_address AS voucher_panel_address,
+              v.round_id AS voucher_round_id,v.content_id AS voucher_content_id,
+              v.admission_policy_hash AS voucher_admission_policy_hash
        FROM tokenless_paid_review_voucher_issuances i
        LEFT JOIN tokenless_paid_vouchers v ON v.voucher_id=$2
        WHERE i.issuance_id=$1 LIMIT 1 FOR UPDATE`,
@@ -686,6 +857,14 @@ export async function completePaidReviewVoucherIssuance(input: {
     const row = result.rows[0] as Row | undefined;
     if (!row)
       throw new TokenlessServiceError("Paid voucher issuance not found.", 404, "paid_voucher_issuance_not_found");
+    const privateBridgeMismatch = privateBridge !== null && !voucherMatchesPrivatePaidBridge(row, privateBridge);
+    if (privateBridgeMismatch) {
+      throw new TokenlessServiceError(
+        "Voucher does not match the prepared paid-review issuance panel.",
+        409,
+        "paid_voucher_issuance_conflict",
+      );
+    }
     if (rowText(row, "status") !== "prepared") {
       if (rowText(row, "voucher_id") !== input.voucherId) {
         throw new TokenlessServiceError(
@@ -893,6 +1072,63 @@ export async function consumePaidReviewVoucher(input: {
   }
 }
 
+export async function consumePrivatePaidReviewVoucherForCommit(input: {
+  voucherId: string;
+  commitId: string;
+  consumedAt?: Date;
+}) {
+  const result = await dbPool.query(
+    `SELECT issuance.issuance_id,commit.request_hash,commit.deployment_key,commit.round_id,
+            commit.vote_key,commit.sealed_commitment,commit.sealed_payload_hash,commit.payout_commitment
+       FROM tokenless_paid_review_voucher_issuances issuance
+       JOIN tokenless_rater_commits commit ON commit.voucher_id=issuance.voucher_id
+      WHERE issuance.voucher_id=$1 AND commit.commit_id=$2 LIMIT 1`,
+    [input.voucherId, input.commitId],
+  );
+  const row = result.rows[0] as Row | undefined;
+  if (!row) return null;
+  const issuanceId = rowText(row, "issuance_id")!;
+  const bridge = await privatePaidVoucherIssuanceBridge(issuanceId, "consumption");
+  if (!bridge) return null;
+  if (
+    rowText(row, "deployment_key") !== bridge.deploymentKey ||
+    rowText(row, "round_id") !== bridge.roundId ||
+    !rowText(row, "request_hash") ||
+    !rowText(row, "vote_key") ||
+    !rowText(row, "sealed_commitment") ||
+    !rowText(row, "sealed_payload_hash") ||
+    !rowText(row, "payout_commitment")
+  ) {
+    throw new TokenlessServiceError(
+      "The private paid commit does not match its exact voucher panel.",
+      409,
+      "paid_voucher_consumption_conflict",
+    );
+  }
+  const evidence = {
+    schemaVersion: "rateloop.private-paid-voucher-consumption.v1",
+    issuanceId,
+    voucherId: input.voucherId,
+    commitId: input.commitId,
+    deploymentKey: bridge.deploymentKey,
+    chainId: bridge.chainId,
+    panelAddress: bridge.panelAddress,
+    roundId: bridge.roundId,
+    requestHash: rowText(row, "request_hash"),
+    voteKey: rowText(row, "vote_key"),
+    sealedCommitment: rowText(row, "sealed_commitment"),
+    sealedPayloadHash: rowText(row, "sealed_payload_hash"),
+    payoutCommitment: rowText(row, "payout_commitment"),
+  };
+  return consumePaidReviewVoucher({
+    issuanceId,
+    idempotencyKey: `private-paid-commit:${input.commitId}`,
+    consumptionReference: `commit:${bridge.deploymentKey}:${input.commitId}`,
+    consumptionEvidenceHash: sha256(evidence),
+    consumedAt: input.consumedAt,
+  });
+}
+
 export async function getPaidReviewVoucherLifecycle(issuanceId: string) {
   requiredText(issuanceId, "Issuance ID", 8, 256);
   const client = await dbPool.connect();
@@ -905,9 +1141,11 @@ export async function getPaidReviewVoucherLifecycle(issuanceId: string) {
 
 export const __paidReviewVoucherReceiptTestUtils = {
   canonicalJson,
+  projectPrivatePaidVoucherIssuanceBridge,
   sha256,
   validatePreparedInput,
   validateEconomics,
   validateAudienceBinding,
+  voucherMatchesPrivatePaidBridge,
   buildRequestHash,
 };

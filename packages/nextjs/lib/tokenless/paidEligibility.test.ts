@@ -780,7 +780,12 @@ test("voucher issuance rejects invalid or caller-mismatched reviewer sources", a
     () =>
       issuePaidVoucher({
         principalId: PRINCIPAL,
-        request: { ...request, reviewerSource: "customer_invited" },
+        request: {
+          ...request,
+          reviewerSource: "customer_invited",
+          assignmentId: "assignment_source_binding",
+          issuanceId: "issuance_source_binding",
+        },
         now: NOW,
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "voucher_reviewer_source_mismatch",
