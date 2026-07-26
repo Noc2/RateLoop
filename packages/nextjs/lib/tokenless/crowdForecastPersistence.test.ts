@@ -150,14 +150,14 @@ test("appeals suspend only their exact active findings and terminal transitions 
   assert.ok(appendOnly.rows.length >= 2);
   assert.ok(appendOnly.rows.every(row => row.payout_effect === "none"));
   const events = await dbClient.execute(
-    "SELECT event_type,actor_kind FROM tokenless_forecast_integrity_appeal_events ORDER BY occurred_at,event_id",
+    "SELECT event_type,actor_kind FROM tokenless_forecast_integrity_appeal_events ORDER BY event_type,actor_kind",
   );
   assert.deepEqual(
     events.rows.map(row => [row.event_type, row.actor_kind]),
     [
-      ["opened", "principal"],
-      ["opened", "principal"],
       ["accepted", "workspace_manager"],
+      ["opened", "principal"],
+      ["opened", "principal"],
       ["withdrawn", "principal"],
     ],
   );

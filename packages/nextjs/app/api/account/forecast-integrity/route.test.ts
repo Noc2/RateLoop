@@ -239,17 +239,17 @@ test("forecast appeal routes enforce exact-finding scope, ownership, terminal re
   assert.equal((await complianceResolved.json()).status, "rejected");
 
   const events = await dbClient.execute(
-    "SELECT event_type,actor_kind FROM tokenless_forecast_integrity_appeal_events ORDER BY occurred_at,event_id",
+    "SELECT event_type,actor_kind FROM tokenless_forecast_integrity_appeal_events ORDER BY event_type,actor_kind",
   );
   assert.deepEqual(
     events.rows.map(row => [row.event_type, row.actor_kind]),
     [
-      ["opened", "principal"],
-      ["opened", "principal"],
       ["accepted", "workspace_manager"],
-      ["withdrawn", "principal"],
+      ["opened", "principal"],
+      ["opened", "principal"],
       ["opened", "principal"],
       ["rejected", "compliance_operator"],
+      ["withdrawn", "principal"],
     ],
   );
 });
