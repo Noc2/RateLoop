@@ -16,14 +16,14 @@ test("platform-secret keyring is version-pinned and never accepts public configu
   const configuration = loadPlatformSecretKeyringConfiguration({
     TOKENLESS_ARTIFACT_WRAPPING_KEYS: JSON.stringify({ "artifact-v1": v1, "artifact-v2": v2 }),
     TOKENLESS_ARTIFACT_WRAPPING_KEY_VERSION: "artifact-v2",
-  } as NodeJS.ProcessEnv);
+  } as unknown as NodeJS.ProcessEnv);
   assert.equal(configuration.activeVersion, "artifact-v2");
   assert.deepEqual([...configuration.keys.keys()], ["artifact-v1", "artifact-v2"]);
   assert.throws(
     () =>
       loadPlatformSecretKeyringConfiguration({
         NEXT_PUBLIC_TOKENLESS_ARTIFACT_WRAPPING_KEYS: "{}",
-      } as NodeJS.ProcessEnv),
+      } as unknown as NodeJS.ProcessEnv),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "public_vault_key_forbidden",
   );
   assert.throws(
@@ -31,7 +31,7 @@ test("platform-secret keyring is version-pinned and never accepts public configu
       loadPlatformSecretKeyringConfiguration({
         TOKENLESS_ARTIFACT_WRAPPING_KEYS: JSON.stringify({ "artifact-v1": v1 }),
         TOKENLESS_ARTIFACT_WRAPPING_KEY_VERSION: "artifact-v2",
-      } as NodeJS.ProcessEnv),
+      } as unknown as NodeJS.ProcessEnv),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_artifact_key",
   );
 });
@@ -86,7 +86,7 @@ test("legacy platform secret loads as a one-version transitional keyring", () =>
   const configuration = loadPlatformSecretKeyringConfiguration({
     TOKENLESS_ARTIFACT_KEY_VERSION: "legacy-v4",
     TOKENLESS_ARTIFACT_MASTER_KEY: root.toString("base64url"),
-  } as NodeJS.ProcessEnv);
+  } as unknown as NodeJS.ProcessEnv);
   assert.equal(configuration.activeVersion, "legacy-v4");
   assert.deepEqual(configuration.keys.get("legacy-v4"), root);
 });

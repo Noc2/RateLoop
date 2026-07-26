@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { test } from "node:test";
 import {
-  createAwsKmsManagedAttestationSigner,
+  createPlatformSecretManagedAttestationSigner,
   createRekorDssePublisher,
   createRfc3161TimestampAuthority,
 } from "~~/lib/tokenless/assuranceAttestationExternalWitness";
@@ -20,7 +20,7 @@ import {
 
 const NOW = new Date("2026-07-16T12:00:00.000Z");
 const DIGEST = `sha256:${"12".repeat(32)}`;
-const KEY_ARN = "arn:aws:kms:eu-central-1:123456789012:key/11111111-2222-3333-4444-555555555555";
+const SIGNER_KEY_ID = "ed25519:platform-secret-test";
 
 async function signedEnvelope() {
   const signerKeys = generateKeyPairSync("ed25519");
@@ -32,7 +32,7 @@ async function signedEnvelope() {
   });
   const envelope = await createAssuranceDsseEnvelope({
     statement,
-    signer: { keyId: KEY_ARN, sign: async payload => sign(null, payload, signerKeys.privateKey) },
+    signer: { keyId: SIGNER_KEY_ID, sign: async payload => sign(null, payload, signerKeys.privateKey) },
   });
   return { signerKeys, statement, envelope };
 }
@@ -74,43 +74,21 @@ function rekorResponse(input: {
   };
 }
 
-test("AWS KMS managed signer pins the Ed25519 key policy and signs only RAW messages", async () => {
+test("platform-secret managed signer pins the Ed25519 key fingerprint and signs bounded payloads", async () => {
   const keys = generateKeyPairSync("ed25519");
-  const requests: Array<{ headers: Headers; body: Record<string, unknown> }> = [];
-  const signer = await createAwsKmsManagedAttestationSigner({
-    keyArn: KEY_ARN,
-    region: "eu-central-1",
-    resolveCredential: async () => ({ accessKeyId: "AKIATEST", secretAccessKey: "s".repeat(32) }),
-    now: () => NOW,
-    fetch: async (_url, init) => {
-      const headers = new Headers(init?.headers);
-      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
-      requests.push({ headers, body });
-      if (headers.get("x-amz-target") === "TrentService.GetPublicKey") {
-        return Response.json({
-          KeyId: KEY_ARN,
-          KeySpec: "ECC_NIST_EDWARDS25519",
-          KeyUsage: "SIGN_VERIFY",
-          SigningAlgorithms: ["ED25519_SHA_512"],
-          PublicKey: keys.publicKey.export({ format: "der", type: "spki" }).toString("base64"),
-        });
-      }
-      const message = Buffer.from(String(body.Message), "base64");
-      return Response.json({
-        KeyId: KEY_ARN,
-        SigningAlgorithm: "ED25519_SHA_512",
-        Signature: sign(null, message, keys.privateKey).toString("base64"),
-      });
-    },
-  });
-  const signature = await signer.sign(Buffer.from("managed signing test"));
+  const privateKey = keys.privateKey.export({ format: "der", type: "pkcs8" }).toString("base64url");
   const publicKeyDer = keys.publicKey.export({ format: "der", type: "spki" });
-  assert.equal(signer.keyId, `ed25519:${createHash("sha256").update(publicKeyDer).digest("hex").slice(0, 24)}`);
+  const keyId = `ed25519:${createHash("sha256").update(publicKeyDer).digest("hex").slice(0, 24)}`;
+  const signer = createPlatformSecretManagedAttestationSigner({ expectedKeyId: keyId, privateKey });
+  const signature = await signer.sign(Buffer.from("managed signing test"));
+  assert.equal(signer.keyId, keyId);
   assert.equal(signature.byteLength, 64);
-  assert.equal(requests[1]?.body.MessageType, "RAW");
-  assert.equal(requests[1]?.body.SigningAlgorithm, "ED25519_SHA_512");
-  assert.match(requests[0]?.headers.get("authorization") ?? "", /^AWS4-HMAC-SHA256 /u);
-  assert.doesNotMatch(requests[0]?.headers.get("authorization") ?? "", /s{16}/u);
+  assert.equal(signer.publicKeyDer.toString("base64url"), publicKeyDer.toString("base64url"));
+  assert.throws(
+    () => createPlatformSecretManagedAttestationSigner({ expectedKeyId: `ed25519:${"0".repeat(24)}`, privateKey }),
+    /fingerprint/u,
+  );
+  await assert.rejects(() => signer.sign(Buffer.alloc(4097)), /payload/u);
 });
 
 test("Rekor publisher submits DSSE proposedContent and locally verifies SET plus inclusion proof", async () => {
@@ -180,7 +158,7 @@ test("offline witness verifier binds DSSE, Rekor, and explicit signer/log trust 
       boundaryAt: NOW.toISOString(),
     },
     statement: signed.statement,
-    dsse: { signerKeyId: KEY_ARN, envelope: signed.envelope },
+    dsse: { signerKeyId: SIGNER_KEY_ID, envelope: signed.envelope },
     rekor: {
       entryUuid: response.entryUuid,
       logIndex: "0",
@@ -197,7 +175,7 @@ test("offline witness verifier binds DSSE, Rekor, and explicit signer/log trust 
   const valid = verifyAssuranceAttestationWitnessBundle(bundle, {
     signerPublicKey: signed.signerKeys.publicKey.export({ format: "pem", type: "spki" }),
     rekorPublicKey: rekorKeys.publicKey.export({ format: "pem", type: "spki" }),
-    expectedSignerKeyId: KEY_ARN,
+    expectedSignerKeyId: SIGNER_KEY_ID,
   });
   assert.deepEqual(valid, { valid: true, errors: [] });
   const tampered = structuredClone(bundle);

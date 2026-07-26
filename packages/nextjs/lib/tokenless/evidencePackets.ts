@@ -14,10 +14,6 @@ import { isRateLoopPrincipalId, normalizeAccountSubject } from "~~/lib/auth/acco
 import { dbPool } from "~~/lib/db";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { enqueueAssuranceAttestation } from "~~/lib/tokenless/assuranceAttestationPipeline";
-import {
-  type ManagedEvidenceSigner,
-  createConfiguredAwsKmsEvidenceSigner,
-} from "~~/lib/tokenless/awsKmsEvidenceSigner";
 import { decisionExplanationRequired } from "~~/lib/tokenless/decisionPromptSampling";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
@@ -25,8 +21,7 @@ type Queryable = { query: (text: string, values?: unknown[]) => Promise<{ rows: 
 type QueryRow = Record<string, unknown>;
 type ReviewerSource = "customer_invited" | "rateloop_network";
 type ClientDecision = "go" | "revise" | "stop";
-type LocalEvidenceSigner = { kind?: "local-test"; keyId?: string; privateKey: KeyObject };
-type EvidenceSigner = LocalEvidenceSigner | ManagedEvidenceSigner;
+type EvidenceSigner = { kind?: "local-test" | "platform-secret"; keyId?: string; privateKey: KeyObject };
 type SelectionTriggerKind =
   | "adaptive_sample"
   | "critical_risk"
@@ -167,17 +162,15 @@ function parseSigningKey(value: string) {
 }
 
 function loadEvidenceSigner(): EvidenceSigner {
-  const encoded = process.env.TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY?.trim();
-  const kmsKey = process.env.TOKENLESS_EVIDENCE_KMS_KEY_RESOURCE?.trim();
-  if (encoded && kmsKey) {
+  if (process.env.NEXT_PUBLIC_TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY) {
     throw new TokenlessServiceError(
-      "Evidence packet signing has conflicting key sources.",
+      "Evidence packet signing keys must never use NEXT_PUBLIC_ variables.",
       503,
       "assurance_evidence_signing_unavailable",
       true,
     );
   }
-  if (kmsKey) return createConfiguredAwsKmsEvidenceSigner();
+  const encoded = process.env.TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY?.trim();
   if (!encoded) {
     throw new TokenlessServiceError(
       "Evidence packet signing is unavailable.",
@@ -187,13 +180,13 @@ function loadEvidenceSigner(): EvidenceSigner {
     );
   }
   return {
+    kind: "platform-secret",
     keyId: process.env.TOKENLESS_EVIDENCE_SIGNING_KEY_ID?.trim() || undefined,
     privateKey: parseSigningKey(encoded),
   };
 }
 
 async function signingMetadata(signer: EvidenceSigner) {
-  if (signer.kind === "aws-kms") return signer.metadata();
   if (signer.privateKey.asymmetricKeyType !== "ed25519") {
     throw new TokenlessServiceError(
       "Evidence packets require a dedicated Ed25519 signing key.",
@@ -1055,10 +1048,7 @@ async function signPacket(payload: Record<string, any>, signer: EvidenceSigner):
   return {
     ...signedDocument,
     packetDigest: sha256EvidenceValue(signedDocument),
-    signature:
-      signer.kind === "aws-kms"
-        ? await signer.sign(Buffer.from(canonical))
-        : sign(null, Buffer.from(canonical), signer.privateKey).toString("base64url"),
+    signature: sign(null, Buffer.from(canonical), signer.privateKey).toString("base64url"),
   };
 }
 

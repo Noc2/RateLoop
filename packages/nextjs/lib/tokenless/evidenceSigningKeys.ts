@@ -27,7 +27,7 @@ function keyIdentity(keyId: string, publicKeySpki: string) {
 }
 
 type DecisionPacketVerificationKey = {
-  algorithm: "ECDSA-SHA256";
+  algorithm: "ECDSA-SHA256" | "Ed25519";
   keyId: string;
   publicKey: string;
   publicKeyJwk: JsonWebKey;
@@ -36,7 +36,6 @@ type DecisionPacketVerificationKey = {
 
 type EvidenceSigningEnvironment = {
   TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS?: string;
-  TOKENLESS_EVIDENCE_KMS_KEY_RESOURCE?: string;
   TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY?: string;
 };
 
@@ -61,20 +60,31 @@ function parseDecisionPacketVerificationKeysWithOptions(encoded: string, options
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw new Error("invalid key entry");
     const value = entry as Record<string, unknown>;
     if (
-      value.algorithm !== "ECDSA-SHA256" ||
+      (value.algorithm !== "Ed25519" && value.algorithm !== "ECDSA-SHA256") ||
       typeof value.keyId !== "string" ||
-      !/^p256:[0-9a-f]{24}$/u.test(value.keyId) ||
       typeof value.publicKey !== "string" ||
       (value.status !== "current" && value.status !== "retired")
     ) {
       throw new Error("invalid key entry");
     }
     const publicKey = createPublicKey({ key: Buffer.from(value.publicKey, "base64url"), format: "der", type: "spki" });
-    if (publicKey.asymmetricKeyType !== "ec" || publicKey.asymmetricKeyDetails?.namedCurve !== "prime256v1") {
+    const canonical = publicKey.export({ format: "der", type: "spki" });
+    const ed25519 = value.algorithm === "Ed25519";
+    if (
+      (ed25519 &&
+        (publicKey.asymmetricKeyType !== "ed25519" || !/^ed25519:[0-9a-f]{24}$/u.test(value.keyId))) ||
+      (!ed25519 &&
+        (publicKey.asymmetricKeyType !== "ec" ||
+          publicKey.asymmetricKeyDetails?.namedCurve !== "prime256v1" ||
+          !/^p256:[0-9a-f]{24}$/u.test(value.keyId) ||
+          value.status !== "retired"))
+    ) {
       throw new Error("invalid key type");
     }
-    const canonical = publicKey.export({ format: "der", type: "spki" });
-    const derivedKeyId = `p256:${createHash("sha256").update(canonical).digest("hex").slice(0, 24)}`;
+    const derivedKeyId = `${ed25519 ? "ed25519" : "p256"}:${createHash("sha256")
+      .update(canonical)
+      .digest("hex")
+      .slice(0, 24)}`;
     if (derivedKeyId !== value.keyId || canonical.toString("base64url") !== value.publicKey) {
       throw new Error("invalid key identity");
     }
@@ -103,13 +113,11 @@ export function configuredDecisionPacketVerificationKeys(
 ): DecisionPacketVerificationKey[] {
   const configuration = env ?? {
     TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS: process.env.TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS,
-    TOKENLESS_EVIDENCE_KMS_KEY_RESOURCE: process.env.TOKENLESS_EVIDENCE_KMS_KEY_RESOURCE,
     TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY: process.env.TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY,
   };
   const encoded = configuration.TOKENLESS_DECISION_PACKET_VERIFICATION_KEYS?.trim();
-  const usesManagedSigner = Boolean(configuration.TOKENLESS_EVIDENCE_KMS_KEY_RESOURCE?.trim());
-  const usesTestSigner = Boolean(configuration.TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY?.trim());
-  const allowEmpty = usesTestSigner && !usesManagedSigner;
+  const usesPlatformSecretSigner = Boolean(configuration.TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY?.trim());
+  const allowEmpty = usesPlatformSecretSigner;
   if (!encoded) {
     if (allowEmpty) return [];
     throw new TokenlessServiceError(

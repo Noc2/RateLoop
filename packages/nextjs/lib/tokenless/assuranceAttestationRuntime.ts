@@ -1,7 +1,6 @@
 import "server-only";
 import {
-  type AwsKmsCredential,
-  createAwsKmsManagedAttestationSigner,
+  createPlatformSecretManagedAttestationSigner,
   createRekorDssePublisher,
   createRfc3161TimestampAuthority,
 } from "~~/lib/tokenless/assuranceAttestationExternalWitness";
@@ -14,8 +13,6 @@ import {
 } from "~~/lib/tokenless/assuranceAttestationPipeline";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
-const CREDENTIAL_REFERENCE = /^sec_[0-9a-f]{48}$/u;
-
 type RuntimeDependencies = {
   signer: ManagedAttestationSigner;
   rekor: RekorPublisher;
@@ -27,15 +24,15 @@ let runtimeOverride: RuntimeDependencies | null = null;
 let managedRuntime: Promise<RuntimeDependencies> | null = null;
 
 const PRIVATE_ENV_NAMES = [
-  "TOKENLESS_ATTESTATION_KMS_KEY_ARN",
-  "TOKENLESS_ATTESTATION_KMS_REGION",
-  "TOKENLESS_ATTESTATION_AWS_CREDENTIAL_REFERENCE",
-  "TOKENLESS_ATTESTATION_AWS_CREDENTIALS_JSON",
+  "TOKENLESS_ATTESTATION_SIGNING_PRIVATE_KEY",
+  "TOKENLESS_ATTESTATION_SIGNING_KEY_ID",
   "TOKENLESS_ATTESTATION_REKOR_URL",
   "TOKENLESS_ATTESTATION_REKOR_PUBLIC_KEY_PEM",
   "TOKENLESS_ATTESTATION_TSA_URL",
   "TOKENLESS_ATTESTATION_TSA_CA_PEM",
+  "TOKENLESS_ATTESTATION_TSA_UNTRUSTED_PEM",
 ] as const;
+const REQUIRED_ENV_NAMES = PRIVATE_ENV_NAMES.filter(name => name !== "TOKENLESS_ATTESTATION_TSA_UNTRUSTED_PEM");
 
 function value(env: AttestationEnvironment, name: string) {
   return env[name]?.trim() ?? "";
@@ -48,7 +45,7 @@ function configurationState(env: AttestationEnvironment) {
   }
   const present = PRIVATE_ENV_NAMES.filter(name => value(env, name));
   if (present.length === 0) return { configured: false, error: null } as const;
-  if (present.length !== PRIVATE_ENV_NAMES.length) {
+  if (REQUIRED_ENV_NAMES.some(name => !value(env, name))) {
     return { configured: false, error: "Managed attestation runtime configuration is incomplete." } as const;
   }
   return { configured: true, error: null } as const;
@@ -97,43 +94,9 @@ async function buildRuntime(env: AttestationEnvironment): Promise<RuntimeDepende
       true,
     );
   }
-  const credentialReference = value(env, "TOKENLESS_ATTESTATION_AWS_CREDENTIAL_REFERENCE");
-  if (!CREDENTIAL_REFERENCE.test(credentialReference)) {
-    throw new TokenlessServiceError(
-      "Managed attestation credential reference is invalid.",
-      500,
-      "invalid_attestation_config",
-    );
-  }
-  let credentials: Record<string, AwsKmsCredential>;
-  try {
-    credentials = JSON.parse(value(env, "TOKENLESS_ATTESTATION_AWS_CREDENTIALS_JSON")) as Record<
-      string,
-      AwsKmsCredential
-    >;
-  } catch {
-    throw new TokenlessServiceError(
-      "Managed attestation credential map is invalid.",
-      500,
-      "invalid_attestation_config",
-    );
-  }
-  const resolveCredential = async () => {
-    const credential = credentials[credentialReference];
-    if (!credential) {
-      throw new TokenlessServiceError(
-        "Managed attestation credential reference could not be resolved.",
-        503,
-        "attestation_credential_unavailable",
-        true,
-      );
-    }
-    return credential;
-  };
-  const signer = await createAwsKmsManagedAttestationSigner({
-    keyArn: value(env, "TOKENLESS_ATTESTATION_KMS_KEY_ARN"),
-    region: value(env, "TOKENLESS_ATTESTATION_KMS_REGION"),
-    resolveCredential,
+  const signer = createPlatformSecretManagedAttestationSigner({
+    expectedKeyId: value(env, "TOKENLESS_ATTESTATION_SIGNING_KEY_ID"),
+    privateKey: value(env, "TOKENLESS_ATTESTATION_SIGNING_PRIVATE_KEY"),
   });
   requirePublishedSignerKey(signer, env);
   return {

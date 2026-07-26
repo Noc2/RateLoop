@@ -79,17 +79,62 @@ test("scheduled attestation processing executes dependency-injected managed witn
   });
 });
 
-test("public-prefixed managed attestation secrets never count as configured", async () => {
+test("public-prefixed platform attestation secrets never count as configured", async () => {
   await queuedJob();
   assert.equal(
     (
       await processDueAssuranceAttestations({
         now: NOW,
-        env: { NEXT_PUBLIC_TOKENLESS_ATTESTATION_AWS_CREDENTIALS_JSON: "do-not-use" },
+        env: { NEXT_PUBLIC_TOKENLESS_ATTESTATION_SIGNING_PRIVATE_KEY: "do-not-use" },
       })
     ).unavailable,
     1,
   );
+});
+
+test("platform attestation runtime stays optional and rejects partial configuration", () => {
+  assert.deepEqual(__assuranceAttestationRuntimeTestUtils.configurationState({}), {
+    configured: false,
+    error: null,
+  });
+  assert.deepEqual(
+    __assuranceAttestationRuntimeTestUtils.configurationState({
+      TOKENLESS_ATTESTATION_SIGNING_PRIVATE_KEY: "partial",
+    }),
+    {
+      configured: false,
+      error: "Managed attestation runtime configuration is incomplete.",
+    },
+  );
+});
+
+test("platform attestation runtime builds from a sealed Ed25519 secret and public trust anchors", async () => {
+  const signerKeys = generateKeyPairSync("ed25519");
+  const publicKeyDer = signerKeys.publicKey.export({ format: "der", type: "spki" });
+  const keyId = `ed25519:${createHash("sha256").update(publicKeyDer).digest("hex").slice(0, 24)}`;
+  const rekorKeys = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  const runtime = await __assuranceAttestationRuntimeTestUtils.buildRuntime({
+    TOKENLESS_ATTESTATION_REKOR_PUBLIC_KEY_PEM: rekorKeys.publicKey
+      .export({ format: "pem", type: "spki" })
+      .toString(),
+    TOKENLESS_ATTESTATION_REKOR_URL: "https://rekor.example.test",
+    TOKENLESS_ATTESTATION_SIGNING_KEY_ID: keyId,
+    TOKENLESS_ATTESTATION_SIGNING_PRIVATE_KEY: signerKeys.privateKey
+      .export({ format: "der", type: "pkcs8" })
+      .toString("base64url"),
+    TOKENLESS_ATTESTATION_TSA_CA_PEM: "test-only-ca",
+    TOKENLESS_ATTESTATION_TSA_URL: "https://tsa.example.test/rfc3161",
+    TOKENLESS_EVIDENCE_VERIFICATION_KEYS: JSON.stringify([
+      {
+        algorithm: "Ed25519",
+        status: "current",
+        keyId,
+        publicKey: publicKeyDer.toString("base64url"),
+      },
+    ]),
+  });
+  assert.equal(runtime.signer.keyId, keyId);
+  assert.equal((await runtime.signer.sign(Buffer.from("attestation"))).byteLength, 64);
 });
 
 test("managed attestation signing requires the exact current public verification key", () => {

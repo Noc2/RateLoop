@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { createHash, createHmac, createPublicKey, randomBytes } from "node:crypto";
+import { createHash, createPrivateKey, createPublicKey, randomBytes, sign } from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -20,14 +20,6 @@ import {
 
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
-export type AwsKmsCredential = {
-  accessKeyId: string;
-  secretAccessKey: string;
-  sessionToken?: string;
-};
-
-const AWS_REGION = /^[a-z]{2}(?:-gov)?-[a-z]+-\d$/u;
-const KEY_ARN = /^arn:aws(?:-us-gov)?:kms:([a-z0-9-]+):\d{12}:key\/[0-9a-f-]{36}$/u;
 const MAX_PROVIDER_BYTES = 2 * 1024 * 1024;
 const execFileAsync = promisify(execFile);
 
@@ -37,45 +29,6 @@ function sha256Hex(value: string | Uint8Array) {
 
 function ed25519KeyId(publicKeyDer: Buffer) {
   return `ed25519:${sha256Hex(publicKeyDer).slice(0, 24)}`;
-}
-
-function hmac(key: string | Uint8Array, value: string) {
-  return createHmac("sha256", key).update(value).digest();
-}
-
-function awsTimestamp(date: Date) {
-  return date.toISOString().replace(/[:-]|\.\d{3}/g, "");
-}
-
-function canonicalHeaders(headers: Record<string, string>) {
-  const normalized = Object.entries(headers)
-    .map(([name, value]) => [name.toLowerCase(), value.trim().replace(/\s+/g, " ")] as const)
-    .sort(([left], [right]) => left.localeCompare(right));
-  return {
-    names: normalized.map(([name]) => name).join(";"),
-    value: `${normalized.map(([name, value]) => `${name}:${value}\n`).join("")}`,
-  };
-}
-
-function validateAwsCredential(value: AwsKmsCredential) {
-  if (
-    !value ||
-    typeof value.accessKeyId !== "string" ||
-    value.accessKeyId.length < 4 ||
-    value.accessKeyId.length > 256 ||
-    typeof value.secretAccessKey !== "string" ||
-    value.secretAccessKey.length < 16 ||
-    value.secretAccessKey.length > 512 ||
-    (value.sessionToken !== undefined && (!value.sessionToken || value.sessionToken.length > 4096))
-  ) {
-    throw new TokenlessServiceError(
-      "Managed attestation credential could not be resolved.",
-      503,
-      "attestation_credential_unavailable",
-      true,
-    );
-  }
-  return value;
 }
 
 async function responseBytes(response: Response, description: string) {
@@ -112,153 +65,41 @@ async function responseBytes(response: Response, description: string) {
   return Buffer.concat(chunks, total);
 }
 
-async function signedKmsRequest(input: {
-  region: string;
-  credential: AwsKmsCredential;
-  target: "TrentService.GetPublicKey" | "TrentService.Sign";
-  body: Record<string, unknown>;
-  fetch: FetchLike;
-  now: Date;
-}) {
-  const body = canonicalAttestationJson(input.body);
-  const url = new URL(`https://kms.${input.region}.amazonaws.com/`);
-  const amzDate = awsTimestamp(input.now);
-  const dateStamp = amzDate.slice(0, 8);
-  const payloadHash = sha256Hex(body);
-  const headers: Record<string, string> = {
-    "content-type": "application/x-amz-json-1.1",
-    host: url.host,
-    "x-amz-date": amzDate,
-    "x-amz-target": input.target,
-  };
-  if (input.credential.sessionToken) headers["x-amz-security-token"] = input.credential.sessionToken;
-  const canonical = canonicalHeaders(headers);
-  const canonicalRequest = ["POST", "/", "", canonical.value, canonical.names, payloadHash].join("\n");
-  const scope = `${dateStamp}/${input.region}/kms/aws4_request`;
-  const stringToSign = ["AWS4-HMAC-SHA256", amzDate, scope, sha256Hex(canonicalRequest)].join("\n");
-  const dateKey = hmac(`AWS4${input.credential.secretAccessKey}`, dateStamp);
-  const regionKey = hmac(dateKey, input.region);
-  const serviceKey = hmac(regionKey, "kms");
-  const signingKey = hmac(serviceKey, "aws4_request");
-  const signature = createHmac("sha256", signingKey).update(stringToSign).digest("hex");
-  headers.authorization = `AWS4-HMAC-SHA256 Credential=${input.credential.accessKeyId}/${scope}, SignedHeaders=${canonical.names}, Signature=${signature}`;
-  const response = await input.fetch(url, {
-    method: "POST",
-    headers,
-    body,
-    cache: "no-store",
-    redirect: "error",
-    signal: AbortSignal.timeout(15_000),
-  });
-  const bytes = await responseBytes(response, "AWS KMS");
-  if (!response.ok) {
-    throw new TokenlessServiceError(
-      "Managed attestation signing provider rejected the request.",
-      response.status >= 500 ? 503 : 502,
-      "attestation_signer_rejected",
-      response.status >= 500,
-    );
-  }
+export function createPlatformSecretManagedAttestationSigner(input: {
+  expectedKeyId?: string;
+  privateKey: string;
+}): ManagedAttestationSigner {
+  let privateKey: ReturnType<typeof createPrivateKey>;
   try {
-    return JSON.parse(bytes.toString("utf8")) as Record<string, unknown>;
+    privateKey = input.privateKey.includes("BEGIN PRIVATE KEY")
+      ? createPrivateKey(input.privateKey)
+      : createPrivateKey({ key: Buffer.from(input.privateKey, "base64url"), format: "der", type: "pkcs8" });
+    if (privateKey.asymmetricKeyType !== "ed25519") throw new Error();
   } catch {
-    throw new TokenlessServiceError("AWS KMS returned invalid JSON.", 502, "invalid_attestation_provider_response");
-  }
-}
-
-export async function createAwsKmsManagedAttestationSigner(input: {
-  keyArn: string;
-  region: string;
-  resolveCredential: () => Promise<AwsKmsCredential>;
-  fetch?: FetchLike;
-  now?: () => Date;
-}): Promise<ManagedAttestationSigner> {
-  const keyArn = input.keyArn.trim();
-  const region = input.region.trim().toLowerCase();
-  const match = keyArn.match(KEY_ARN);
-  if (!AWS_REGION.test(region) || match?.[1] !== region) {
     throw new TokenlessServiceError(
-      "Managed attestation KMS key configuration is invalid.",
+      "Platform attestation signing key must be a private Ed25519 PKCS#8 key.",
       500,
-      "invalid_attestation_config",
-    );
-  }
-  const fetcher = input.fetch ?? fetch;
-  const currentTime = input.now ?? (() => new Date());
-  const credential = validateAwsCredential(await input.resolveCredential());
-  const response = await signedKmsRequest({
-    region,
-    credential,
-    target: "TrentService.GetPublicKey",
-    body: { KeyId: keyArn },
-    fetch: fetcher,
-    now: currentTime(),
-  });
-  if (
-    response.KeyId !== keyArn ||
-    response.KeySpec !== "ECC_NIST_EDWARDS25519" ||
-    response.KeyUsage !== "SIGN_VERIFY" ||
-    !Array.isArray(response.SigningAlgorithms) ||
-    !response.SigningAlgorithms.includes("ED25519_SHA_512") ||
-    typeof response.PublicKey !== "string"
-  ) {
-    throw new TokenlessServiceError(
-      "Managed attestation KMS key does not satisfy the Ed25519 signing policy.",
-      503,
       "invalid_attestation_signing_key",
-      true,
     );
   }
-  let publicKeyDer: Buffer;
-  try {
-    publicKeyDer = Buffer.from(response.PublicKey, "base64");
-    const key = createPublicKey({ key: publicKeyDer, format: "der", type: "spki" });
-    if (key.asymmetricKeyType !== "ed25519") throw new Error();
-  } catch {
-    throw new TokenlessServiceError("AWS KMS returned an invalid Ed25519 key.", 502, "invalid_attestation_signing_key");
+  const publicKeyDer = createPublicKey(privateKey).export({ format: "der", type: "spki" });
+  const keyId = ed25519KeyId(publicKeyDer);
+  if (input.expectedKeyId?.trim() && input.expectedKeyId.trim() !== keyId) {
+    throw new TokenlessServiceError(
+      "Platform attestation signing key ID does not match its public-key fingerprint.",
+      500,
+      "invalid_attestation_signing_key",
+    );
   }
   return {
     custody: "managed",
-    keyId: ed25519KeyId(publicKeyDer),
+    keyId,
     publicKeyDer,
     async sign(payload) {
       if (!Buffer.isBuffer(payload) || payload.byteLength < 1 || payload.byteLength > 4096) {
         throw new TokenlessServiceError("Attestation signing payload is invalid.", 500, "invalid_attestation_payload");
       }
-      const liveCredential = validateAwsCredential(await input.resolveCredential());
-      const signed = await signedKmsRequest({
-        region,
-        credential: liveCredential,
-        target: "TrentService.Sign",
-        body: {
-          KeyId: keyArn,
-          Message: payload.toString("base64"),
-          MessageType: "RAW",
-          SigningAlgorithm: "ED25519_SHA_512",
-        },
-        fetch: fetcher,
-        now: currentTime(),
-      });
-      if (
-        signed.KeyId !== keyArn ||
-        signed.SigningAlgorithm !== "ED25519_SHA_512" ||
-        typeof signed.Signature !== "string"
-      ) {
-        throw new TokenlessServiceError(
-          "AWS KMS returned an invalid signature receipt.",
-          502,
-          "invalid_managed_signature",
-        );
-      }
-      const signature = Buffer.from(signed.Signature, "base64");
-      if (signature.byteLength !== 64) {
-        throw new TokenlessServiceError(
-          "AWS KMS returned an invalid Ed25519 signature.",
-          502,
-          "invalid_managed_signature",
-        );
-      }
-      return signature;
+      return sign(null, payload, privateKey);
     },
   };
 }
@@ -522,9 +363,6 @@ export function createRfc3161TimestampAuthority(input: {
 }
 
 export const __assuranceAttestationExternalWitnessTestUtils = {
-  awsTimestamp,
-  canonicalHeaders,
   derLength,
-  signedKmsRequest,
   ed25519KeyId,
 };
