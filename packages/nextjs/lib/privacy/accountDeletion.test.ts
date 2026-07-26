@@ -129,7 +129,7 @@ test("account deletion revokes authentication, removes shared access, and permit
     browser_identities: 0,
     memberships: 0,
     wallet_bindings: 0,
-    categories: 10,
+    categories: 11,
   });
 
   await assert.rejects(
@@ -145,6 +145,160 @@ test("account deletion revokes authentication, removes shared access, and permit
   const freshIdentity = await resolveBetterAuthPrincipal({ betterAuthUserId: "better-new" });
   assert.notEqual(freshIdentity.principalId, oldIdentity.principalId);
   assert.equal((await getAccountDeletionPreview(freshIdentity.principalId)).impact.ownedWorkspaces, 0);
+});
+
+test("account deletion pseudonymizes durable agent, oversight, public-media, and MCP references", async () => {
+  const now = new Date("2026-07-16T08:20:00.000Z");
+  await seedBetterAuthUser("better-service-references", "service-references@example.test");
+  const identity = await resolveBetterAuthPrincipal({ betterAuthUserId: "better-service-references" });
+  const workspace = await createWorkspace({
+    name: "Service references",
+    ownerAddress: "0x1111111111111111111111111111111111111111",
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agents
+          (agent_id,workspace_id,external_id,owner_account_address,status,created_by,created_at,updated_at)
+          VALUES ('agent_service_delete',?,'service-delete',?,'active',?,?,?)`,
+    args: [workspace.workspaceId, identity.principalId, identity.principalId, now, now],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_versions
+          (version_id,agent_id,workspace_id,version_number,display_name,description,
+           declared_provider,declared_model,declared_model_version,environment,
+           configuration_commitment,created_by,created_at)
+          VALUES ('version_service_delete','agent_service_delete',?,1,'Service delete',NULL,
+                  'test','test-model',NULL,'staging',?, ?,?)`,
+    args: [workspace.workspaceId, `sha256:${"1".repeat(64)}`, identity.principalId, now],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_audit_events
+          (event_id,workspace_id,agent_id,version_id,event_type,actor_account_address,details_json,created_at)
+          VALUES ('audit_service_delete',?,'agent_service_delete','version_service_delete',
+                  'agent.created',?,? ,?)`,
+    args: [workspace.workspaceId, identity.principalId, JSON.stringify({ approvedBy: identity.principalId }), now],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_oversight_attestations
+          (attestation_id,workspace_id,account_address,competence_basis,training_records_json,
+           authority_scope,attested_by,attested_at,expires_at,status,created_at,updated_at)
+          VALUES ('attestation_service_delete',?,?,'Trained reviewer',?,'both',?,?,?,'active',?,?)`,
+    args: [
+      workspace.workspaceId,
+      identity.principalId,
+      JSON.stringify([{ verifiedBy: identity.principalId }]),
+      identity.principalId,
+      now,
+      new Date(now.getTime() + 86_400_000),
+      now,
+      now,
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_public_question_media
+          (asset_id,workspace_id,owner_account_address,client_request_id,digest,storage_ref,
+           content_type,original_filename,size_bytes,width,height,technical_status,
+           moderation_status,expires_at,created_at,updated_at)
+          VALUES ('pqm_service_delete_1234567890',?,?,'personal-client-request',
+                  ?,'blob:service-delete','image/png','personal-name.png',10,1,1,'ready',
+                  'pending',?,?,?)`,
+    args: [
+      workspace.workspaceId,
+      identity.principalId,
+      `sha256:${"2".repeat(64)}`,
+      new Date(now.getTime() + 86_400_000),
+      now,
+      now,
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_public_media_daily_quotas
+          (workspace_id,owner_account_address,day_key,upload_count,upload_bytes,updated_at)
+          VALUES (?,?,'2026-07-16',1,10,?)`,
+    args: [workspace.workspaceId, identity.principalId, now],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_oauth_clients
+          (client_id,client_name,redirect_uris_json,redirect_uris_digest,token_endpoint_auth_method,
+           allowed_scopes_json,registration_source,status,created_at,updated_at)
+          VALUES ('client_service_delete','Service delete','[]','redirect-delete','none',
+                  '[]','pre_registered','active',?,?)`,
+    args: [now, now],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_oauth_token_families
+          (token_family_id,client_id,subject_principal_id,audience,resource,granted_scopes_json,
+           status,created_at,absolute_expires_at)
+          VALUES ('family_service_delete','client_service_delete',?,'rateloop','rateloop','[]',
+                  'active',?,?)`,
+    args: [identity.principalId, now, new Date(now.getTime() + 86_400_000)],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_mcp_sessions
+          (session_hash,workspace_id,integration_id,subject_principal_id,token_family_id,
+           client_name,client_version,protocol_version,elicitation_mode,status,
+           created_at,last_seen_at,expires_at)
+          VALUES (?,NULL,NULL,?,'family_service_delete','test','1','2025-11-25','none',
+                  'active',?,?,?)`,
+    args: [`sha256:${"3".repeat(64)}`, identity.principalId, now, now, new Date(now.getTime() + 3_600_000)],
+  });
+
+  const deleted = await deleteAccount({
+    confirmation: "DELETE",
+    principalId: identity.principalId,
+    recentAuthProof: await deletionProof("better-service-references", identity.principalId, now),
+    now,
+  });
+  const stored = await dbClient.execute({
+    sql: `SELECT
+            (SELECT owner_account_address FROM tokenless_agents
+             WHERE agent_id='agent_service_delete') AS agent_owner,
+            (SELECT created_by FROM tokenless_agent_versions
+             WHERE version_id='version_service_delete') AS version_creator,
+            (SELECT actor_account_address FROM tokenless_agent_audit_events
+             WHERE event_id='audit_service_delete') AS audit_actor,
+            (SELECT details_json FROM tokenless_agent_audit_events
+             WHERE event_id='audit_service_delete') AS audit_details,
+            (SELECT account_address FROM tokenless_oversight_attestations
+             WHERE attestation_id='attestation_service_delete') AS oversight_account,
+            (SELECT training_records_json FROM tokenless_oversight_attestations
+             WHERE attestation_id='attestation_service_delete') AS oversight_training,
+            (SELECT owner_account_address FROM tokenless_public_question_media
+             WHERE asset_id='pqm_service_delete_1234567890') AS media_owner,
+            (SELECT original_filename FROM tokenless_public_question_media
+             WHERE asset_id='pqm_service_delete_1234567890') AS media_filename,
+            (SELECT deletion_requested_at FROM tokenless_public_question_media
+             WHERE asset_id='pqm_service_delete_1234567890') AS media_deletion_requested_at,
+            (SELECT COUNT(*) FROM tokenless_public_media_daily_quotas
+             WHERE owner_account_address=?) AS media_quota_links,
+            (SELECT subject_principal_id FROM tokenless_mcp_sessions
+             WHERE session_hash=?) AS mcp_subject`,
+    args: [identity.principalId, `sha256:${"3".repeat(64)}`],
+  });
+  const storedRow = Object.fromEntries(
+    Object.entries(stored.rows[0] ?? {}).map(([key, value]) => [key, Array.isArray(value) ? value[0] : value]),
+  );
+  const serialized = JSON.stringify(storedRow);
+  assert.doesNotMatch(serialized, new RegExp(identity.principalId, "u"));
+  assert.match(String(storedRow.agent_owner), /^rlp_erased_/u);
+  assert.match(String(storedRow.version_creator), /^deleted-actor:/u);
+  assert.equal(storedRow.audit_details, '{"subject":"deleted","retentionBasis":"security_audit"}');
+  assert.equal(storedRow.oversight_training, "[]");
+  assert.match(String(storedRow.media_owner), /^deleted-media:/u);
+  assert.equal(storedRow.media_filename, "deleted");
+  assert.equal(new Date(String(storedRow.media_deletion_requested_at)).toISOString(), now.toISOString());
+  assert.equal(Number(storedRow.media_quota_links), 0);
+  assert.match(String(storedRow.mcp_subject), /^rlp_erased_/u);
+
+  const completion = await dbClient.execute({
+    sql: "SELECT anonymized_categories_json,evidence_json FROM tokenless_subject_request_completions WHERE request_id=?",
+    args: [deleted.requestId],
+  });
+  assert.deepEqual(JSON.parse(String(completion.rows[0]?.anonymized_categories_json)), ["service_identity_references"]);
+  const evidence = JSON.parse(String(completion.rows[0]?.evidence_json)) as {
+    categoryEvidence: Record<string, Record<string, number>>;
+  };
+  assert.equal(evidence.categoryEvidence.service_identity_references?.agentsPseudonymized, 1);
+  assert.equal(evidence.categoryEvidence.service_identity_references?.mcpSessionsPseudonymized, 1);
 });
 
 test("account deletion deletes unused private quotes and anonymizes retained quote ownership", async () => {
@@ -668,15 +822,9 @@ test("account deletion covers direct-review reservations, identities, and policy
     source,
     /UPDATE tokenless_private_unpaid_review_assignments[\s\S]*status='expired',lease_state='expired'/u,
   );
-  assert.match(
-    source,
-    /UPDATE tokenless_assurance_cohort_reviewers[\s\S]*active_reservations=active_reservations-1/u,
-  );
+  assert.match(source, /UPDATE tokenless_assurance_cohort_reviewers[\s\S]*active_reservations=active_reservations-1/u);
   assert.match(source, /UPDATE tokenless_assurance_cohorts[\s\S]*active_reservations=active_reservations-1/u);
-  assert.match(
-    source,
-    /UPDATE tokenless_private_unpaid_review_assignments[\s\S]*reviewer_account_address=\$1/u,
-  );
+  assert.match(source, /UPDATE tokenless_private_unpaid_review_assignments[\s\S]*reviewer_account_address=\$1/u);
   assert.match(source, /UPDATE tokenless_assurance_assignments[\s\S]*reviewer_account_address=\$1/u);
   assert.match(source, /DELETE FROM tokenless_private_group_policy_acceptances WHERE principal_address=\$1/u);
   assert.match(source, /Account deletion reservation-release postcondition failed/u);

@@ -83,6 +83,19 @@ type PrivateQuoteErasureEvidence = {
   retainedReferencedCommitmentOnly: number;
 };
 
+type ServiceIdentityErasureEvidence = {
+  agentAuditEventsPseudonymized: number;
+  agentIntegrationsPseudonymized: number;
+  agentVersionsPseudonymized: number;
+  agentsPseudonymized: number;
+  connectionIntentsPseudonymized: number;
+  mcpSessionsPseudonymized: number;
+  oversightAttestationsPseudonymized: number;
+  publicMediaPseudonymized: number;
+  publicMediaQuotasErased: number;
+  workspaceMovesPseudonymized: number;
+};
+
 export type AccountDeletionPreview = {
   blockers: DeletionBlocker[];
   impact: {
@@ -519,6 +532,120 @@ async function eraseDirectWorkspaceAccess(
   };
 }
 
+async function eraseServiceIdentityReferences(
+  client: PoolClient,
+  input: {
+    now: Date;
+    principalId: string;
+    receiptDigest: string;
+    tombstonePrincipalId: string;
+  },
+): Promise<ServiceIdentityErasureEvidence> {
+  const actorTombstone = `deleted-actor:${digest(`service-actor:${input.receiptDigest}`)}`;
+  const mediaOwnerTombstone = `deleted-media:${digest(`public-media:${input.receiptDigest}`)}`;
+  const agents = await client.query(
+    `UPDATE tokenless_agents
+     SET owner_account_address=CASE WHEN owner_account_address=$1 THEN $2 ELSE owner_account_address END,
+         created_by=CASE WHEN created_by=$1 THEN $3 ELSE created_by END,
+         status=CASE WHEN owner_account_address=$1 THEN 'inactive' ELSE status END,
+         deactivated_at=CASE WHEN owner_account_address=$1 THEN COALESCE(deactivated_at,$4) ELSE deactivated_at END,
+         updated_at=$4
+     WHERE owner_account_address=$1 OR created_by=$1`,
+    [input.principalId, input.tombstonePrincipalId, actorTombstone, input.now],
+  );
+  const agentVersions = await client.query("UPDATE tokenless_agent_versions SET created_by=$1 WHERE created_by=$2", [
+    actorTombstone,
+    input.principalId,
+  ]);
+  const agentAuditEvents = await client.query(
+    `UPDATE tokenless_agent_audit_events
+     SET actor_account_address=CASE WHEN actor_account_address=$1 THEN $2 ELSE actor_account_address END,
+         details_json=CASE WHEN details_json LIKE '%' || $1 || '%'
+           THEN '{"subject":"deleted","retentionBasis":"security_audit"}' ELSE details_json END
+     WHERE actor_account_address=$1 OR details_json LIKE '%' || $1 || '%'`,
+    [input.principalId, actorTombstone],
+  );
+  const agentIntegrations = await client.query(
+    `UPDATE tokenless_agent_integrations
+     SET oauth_subject_principal_id=CASE WHEN oauth_subject_principal_id=$1 THEN $2 ELSE oauth_subject_principal_id END,
+         created_by=CASE WHEN created_by=$1 THEN $3 ELSE created_by END,
+         status=CASE WHEN oauth_subject_principal_id=$1 THEN 'revoked' ELSE status END,
+         revoked_at=CASE WHEN oauth_subject_principal_id=$1 THEN COALESCE(revoked_at,$4) ELSE revoked_at END,
+         updated_at=$4
+     WHERE oauth_subject_principal_id=$1 OR created_by=$1`,
+    [input.principalId, input.tombstonePrincipalId, actorTombstone, input.now],
+  );
+  const connectionIntents = await client.query(
+    `UPDATE tokenless_agent_connection_intents
+     SET claimed_subject_principal_id=CASE
+           WHEN claimed_subject_principal_id=$1 THEN $2 ELSE claimed_subject_principal_id END,
+         created_by=CASE WHEN created_by=$1 THEN $3 ELSE created_by END
+     WHERE claimed_subject_principal_id=$1 OR created_by=$1`,
+    [input.principalId, input.tombstonePrincipalId, actorTombstone],
+  );
+  const oversightAttestations = await client.query(
+    `UPDATE tokenless_oversight_attestations
+     SET account_address=CASE WHEN account_address=$1 THEN $2 ELSE account_address END,
+         attested_by=CASE WHEN attested_by=$1 THEN $3 ELSE attested_by END,
+         revoked_by=CASE
+           WHEN account_address=$1 AND status='active' THEN 'system:account_deletion'
+           WHEN revoked_by=$1 THEN $3 ELSE revoked_by END,
+         revoked_at=CASE WHEN account_address=$1 AND status='active' THEN $4 ELSE revoked_at END,
+         status=CASE WHEN account_address=$1 THEN 'revoked' ELSE status END,
+         training_records_json=CASE
+           WHEN account_address=$1 OR training_records_json LIKE '%' || $1 || '%' THEN '[]'
+           ELSE training_records_json END,
+         updated_at=$4
+     WHERE account_address=$1 OR attested_by=$1 OR revoked_by=$1
+        OR training_records_json LIKE '%' || $1 || '%'`,
+    [input.principalId, input.tombstonePrincipalId, actorTombstone, input.now],
+  );
+  const publicMedia = await client.query(
+    `UPDATE tokenless_public_question_media
+     SET owner_account_address=$1,
+         client_request_id='deleted:' || asset_id,
+         original_filename='deleted',
+         deletion_requested_at=CASE
+           WHEN question_id IS NULL AND technical_status='ready' THEN COALESCE(deletion_requested_at,$2)
+           ELSE deletion_requested_at END,
+         updated_at=$2
+     WHERE owner_account_address=$3`,
+    [mediaOwnerTombstone, input.now, input.principalId],
+  );
+  const publicMediaQuotas = await client.query(
+    "DELETE FROM tokenless_public_media_daily_quotas WHERE owner_account_address=$1",
+    [input.principalId],
+  );
+  const mcpSessions = await client.query(
+    `UPDATE tokenless_mcp_sessions
+     SET subject_principal_id=$1,status='revoked',last_seen_at=$2
+     WHERE subject_principal_id=$3`,
+    [input.tombstonePrincipalId, input.now, input.principalId],
+  );
+  const workspaceMoves = await client.query(
+    `UPDATE tokenless_agent_workspace_moves
+     SET oauth_subject_principal_id=$1,
+         target_approved_by=CASE WHEN target_approved_by=$2 THEN $3 ELSE target_approved_by END,
+         status=CASE
+           WHEN status IN ('source_confirmation_required','owner_approval_required') THEN 'cancelled'
+           ELSE status END
+     WHERE oauth_subject_principal_id=$2 OR target_approved_by=$2`,
+    [input.tombstonePrincipalId, input.principalId, actorTombstone],
+  );
+  return {
+    agentAuditEventsPseudonymized: agentAuditEvents.rowCount ?? 0,
+    agentIntegrationsPseudonymized: agentIntegrations.rowCount ?? 0,
+    agentVersionsPseudonymized: agentVersions.rowCount ?? 0,
+    agentsPseudonymized: agents.rowCount ?? 0,
+    connectionIntentsPseudonymized: connectionIntents.rowCount ?? 0,
+    mcpSessionsPseudonymized: mcpSessions.rowCount ?? 0,
+    oversightAttestationsPseudonymized: oversightAttestations.rowCount ?? 0,
+    publicMediaPseudonymized: publicMedia.rowCount ?? 0,
+    publicMediaQuotasErased: publicMediaQuotas.rowCount ?? 0,
+    workspaceMovesPseudonymized: workspaceMoves.rowCount ?? 0,
+  };
+}
+
 async function insertSubjectRequest(
   client: PoolClient,
   input: {
@@ -565,6 +692,7 @@ async function insertDeletionEvidence(
     ["account_authentication", "erase", "completed", null, null],
     ["contact_and_preferences", "erase", "completed", null, null],
     ["shared_workspace_access", "erase", "completed", null, null],
+    ["service_identity_references", "anonymize", "completed", null, null],
     ["eligibility_handoffs", "erase", "completed", null, null],
     ["world_id_and_rater_linkage", "erase", "completed", null, null],
     ["private_quote_plaintext_payloads", "erase", "completed", null, null],
@@ -632,7 +760,7 @@ async function insertDeletionEvidence(
      (completion_id, request_id, deleted_categories_json, anonymized_categories_json,
       retained_categories_json, pending_backup_expiry_json, public_chain_exceptions_json,
       evidence_json, completed_by, completed_at)
-     VALUES ($1, $2, $3, '[]', $4, $5, $6, $7, 'system:account_deletion', $8)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'system:account_deletion', $9)`,
     [
       id("dsrc"),
       input.requestId,
@@ -644,6 +772,7 @@ async function insertDeletionEvidence(
         "world_id_and_rater_linkage",
         "private_quote_plaintext_payloads",
       ]),
+      JSON.stringify(["service_identity_references"]),
       JSON.stringify([
         { category: "deleted_auth_subject_guard", basis: "account_resurrection_prevention" },
         { category: "settlement_legal_security", basis: "legal_settlement_security" },
@@ -928,6 +1057,7 @@ async function collectDeletionCategoryEvidence(
     directAccessErasure: DirectAccessErasureEvidence;
     forecastIntegrityErasure: { deletedRows: number; remainingRows: number; subjectCount: number };
     releasedReservations: ReleasedReservationEvidence;
+    serviceIdentityErasure: ServiceIdentityErasureEvidence;
   },
 ) {
   const postconditions = await client.query(
@@ -975,8 +1105,29 @@ async function collectDeletionCategoryEvidence(
        (SELECT COUNT(*) FROM tokenless_network_assignment_settlements settlement
         JOIN tokenless_assurance_assignments assignment
           ON assignment.assignment_id=settlement.assignment_id
-        JOIN tokenless_rater_profiles profile ON profile.rater_id=assignment.rater_id
-        WHERE profile.principal_id=$1) AS network_settlement_principal_links`,
+       JOIN tokenless_rater_profiles profile ON profile.rater_id=assignment.rater_id
+        WHERE profile.principal_id=$1) AS network_settlement_principal_links,
+       (SELECT COUNT(*) FROM tokenless_agents
+        WHERE owner_account_address=$1 OR created_by=$1) AS agent_identity_links,
+       (SELECT COUNT(*) FROM tokenless_agent_versions
+        WHERE created_by=$1) AS agent_version_identity_links,
+       (SELECT COUNT(*) FROM tokenless_agent_audit_events
+        WHERE actor_account_address=$1 OR details_json LIKE '%' || $1 || '%') AS agent_audit_identity_links,
+       (SELECT COUNT(*) FROM tokenless_agent_integrations
+        WHERE oauth_subject_principal_id=$1 OR created_by=$1) AS agent_integration_identity_links,
+       (SELECT COUNT(*) FROM tokenless_agent_connection_intents
+        WHERE claimed_subject_principal_id=$1 OR created_by=$1) AS connection_intent_identity_links,
+       (SELECT COUNT(*) FROM tokenless_oversight_attestations
+        WHERE account_address=$1 OR attested_by=$1 OR revoked_by=$1
+           OR training_records_json LIKE '%' || $1 || '%') AS oversight_identity_links,
+       (SELECT COUNT(*) FROM tokenless_public_question_media
+        WHERE owner_account_address=$1) AS public_media_identity_links,
+       (SELECT COUNT(*) FROM tokenless_public_media_daily_quotas
+        WHERE owner_account_address=$1) AS public_media_quota_identity_links,
+       (SELECT COUNT(*) FROM tokenless_mcp_sessions
+        WHERE subject_principal_id=$1) AS mcp_session_identity_links,
+       (SELECT COUNT(*) FROM tokenless_agent_workspace_moves
+        WHERE oauth_subject_principal_id=$1 OR target_approved_by=$1) AS workspace_move_identity_links`,
     [input.principalId, input.betterAuthUserId],
   );
   const row = postconditions.rows[0] as Row | undefined;
@@ -1013,6 +1164,7 @@ async function collectDeletionCategoryEvidence(
       workspaceMemberships: rowNumber(row, "workspace_memberships"),
       directAccessErasure: input.directAccessErasure,
     },
+    service_identity_references: input.serviceIdentityErasure,
     eligibility_handoffs: {
       eligibilityHandoffs: rowNumber(row, "eligibility_handoffs"),
       managedWalletJtis: rowNumber(row, "managed_wallet_jtis"),
@@ -1066,6 +1218,10 @@ async function collectDeletionCategoryEvidence(
   };
   const requiredZeroPostconditions = {
     activeAgentIntegrations: rowNumber(row, "active_agent_integrations"),
+    agentAuditIdentityLinks: rowNumber(row, "agent_audit_identity_links"),
+    agentIdentityLinks: rowNumber(row, "agent_identity_links"),
+    agentIntegrationIdentityLinks: rowNumber(row, "agent_integration_identity_links"),
+    agentVersionIdentityLinks: rowNumber(row, "agent_version_identity_links"),
     activeAuthSessions: rowNumber(row, "active_auth_sessions"),
     activeIdentityBindings: rowNumber(row, "active_identity_bindings"),
     activeOauthAccessTokens: rowNumber(row, "active_oauth_access_tokens"),
@@ -1076,19 +1232,25 @@ async function collectDeletionCategoryEvidence(
     betterAuthUsers: rowNumber(row, "better_auth_users"),
     betterAuthVerifications,
     browserIdentities: rowNumber(row, "browser_identities"),
+    connectionIntentIdentityLinks: rowNumber(row, "connection_intent_identity_links"),
     eligibilityHandoffs: rowNumber(row, "eligibility_handoffs"),
     managedWalletJtis: rowNumber(row, "managed_wallet_jtis"),
     payoutWalletOwnership: rowNumber(row, "payout_wallet_ownership"),
     paidAssignmentSeatDirectIdentities: rowNumber(row, "paid_assignment_seat_direct_identities"),
     networkSettlementPrincipalLinks: rowNumber(row, "network_settlement_principal_links"),
+    mcpSessionIdentityLinks: rowNumber(row, "mcp_session_identity_links"),
+    oversightIdentityLinks: rowNumber(row, "oversight_identity_links"),
     passkeyActionProofs: rowNumber(row, "passkey_action_proofs"),
     recentAccountActionProofs: rowNumber(row, "recent_account_action_proofs"),
     privateQuoteOwnerLinks: input.privateQuoteErasure.remainingDirectOwnerLinks,
+    publicMediaIdentityLinks: rowNumber(row, "public_media_identity_links"),
+    publicMediaQuotaIdentityLinks: rowNumber(row, "public_media_quota_identity_links"),
     walletBindings: rowNumber(row, "wallet_bindings"),
     walletChallenges: rowNumber(row, "wallet_challenges"),
     workspaceClients: rowNumber(row, "workspace_clients"),
     workspaceGovernance: rowNumber(row, "workspace_governance"),
     workspaceMemberships: rowNumber(row, "workspace_memberships"),
+    workspaceMoveIdentityLinks: rowNumber(row, "workspace_move_identity_links"),
     ...input.raterErasure.remainingRows,
     forecastIntegrityRows: input.forecastIntegrityErasure.remainingRows,
   };
@@ -1232,6 +1394,12 @@ export async function deleteAccount(input: {
          AND status NOT IN ('rejected','expired','cancelled')`,
       [now, input.principalId],
     );
+    const serviceIdentityErasure = await eraseServiceIdentityReferences(client, {
+      now,
+      principalId: input.principalId,
+      receiptDigest,
+      tombstonePrincipalId: directAccessErasure.tombstonePrincipalId,
+    });
     await client.query(
       `UPDATE tokenless_project_access_assignments
        SET status = 'revoked', revoked_at = $1, revoked_by = 'system:account_deletion'
@@ -1309,6 +1477,7 @@ export async function deleteAccount(input: {
       directAccessErasure,
       forecastIntegrityErasure,
       releasedReservations,
+      serviceIdentityErasure,
     });
     const completedAt = new Date(Math.max(Date.now(), now.getTime()));
     const dueAt = await insertSubjectRequest(client, {
