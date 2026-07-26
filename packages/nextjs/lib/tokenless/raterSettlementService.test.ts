@@ -29,6 +29,8 @@ function source(overrides: Record<string, unknown> = {}) {
       revealDeadline: "200",
       beaconFailureDeadline: "300",
       claimDeadline: "0",
+      minimumReveals: 2,
+      revealCount: 2,
       compensationPerRecipient: "0",
       staleReturned: false,
     },
@@ -53,6 +55,27 @@ test("derives the self-reveal window from an account-bound indexed commit", () =
   assert.equal(result.canReveal, true);
   assert.equal(result.canClaim, false);
   assert.equal(result.claimDeadline, null);
+});
+
+test("models the contract late-reveal eligibility before offering a transaction", () => {
+  const base = source({ nowSeconds: 250n });
+  assert.equal(deriveRaterSettlementSnapshot(base).canReveal, false);
+
+  assert.equal(
+    deriveRaterSettlementSnapshot({
+      ...base,
+      commits: [{ ...(base.commits as Array<Record<string, unknown>>)[0], scoringEligible: true }],
+    }).canReveal,
+    true,
+  );
+
+  assert.equal(
+    deriveRaterSettlementSnapshot({
+      ...base,
+      round: { ...(base.round as Record<string, unknown>), revealCount: 1 },
+    }).canReveal,
+    true,
+  );
 });
 
 test("shows exact payout and deadline after finalization", () => {

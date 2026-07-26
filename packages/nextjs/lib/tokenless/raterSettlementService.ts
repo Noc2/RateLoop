@@ -43,6 +43,21 @@ function integer(value: unknown, label: string) {
   return parsed;
 }
 
+function indexedCommitCanReveal(input: { commit: Row; round: Row; nowSeconds: bigint }) {
+  const revealDeadline = BigInt(unsigned(input.round.revealDeadline, "Indexed reveal deadline"));
+  const beaconFailureDeadline = BigInt(unsigned(input.round.beaconFailureDeadline, "Indexed beacon failure deadline"));
+  const revealCount = integer(input.round.revealCount, "Indexed reveal count");
+  const minimumReveals = integer(input.round.minimumReveals, "Indexed minimum reveals");
+  const lateRevealBlocked =
+    input.nowSeconds > revealDeadline && input.commit.scoringEligible !== true && revealCount >= minimumReveals;
+  return (
+    input.commit.revealed !== true &&
+    String(input.round.status ?? "") === "revealable" &&
+    input.nowSeconds <= beaconFailureDeadline &&
+    !lateRevealBlocked
+  );
+}
+
 function configuredPonderUrl(raw = process.env.TOKENLESS_PONDER_URL ?? process.env.NEXT_PUBLIC_PONDER_URL) {
   const value = raw?.trim() || (process.env.NODE_ENV === "production" ? "" : "http://127.0.0.1:42069");
   if (!value) throw new TokenlessServiceError("Settlement index is unavailable.", 503, "ponder_unavailable", true);
@@ -182,9 +197,7 @@ export function deriveRaterSettlementSnapshot(input: {
     claimKind,
     canReveal:
       input.localCommit.state === "confirmed" &&
-      !revealed &&
-      roundStatus === "revealable" &&
-      input.nowSeconds <= BigInt(beaconFailureDeadline),
+      indexedCommitCanReveal({ commit, round, nowSeconds: input.nowSeconds }),
     canClaim:
       input.localCommit.state === "confirmed" &&
       revealed &&
@@ -392,7 +405,8 @@ export async function listReviewerEarnings(input: {
     else if (localState !== "confirmed") status = "commit_pending";
     else if (!commit || !round) status = "indexing";
     else if (claimed) status = "paid";
-    else if (!revealed && String(round.status) === "revealable") status = "reveal_required";
+    else if (localState === "confirmed" && commit && round && indexedCommitCanReveal({ commit, round, nowSeconds }))
+      status = "reveal_required";
     else if (state === 6 || ((state === 5 || state === 7 || state === 8) && earned === 0n)) status = "no_payout";
     else if ((state === 5 || state === 7 || state === 8) && claimWindowOpen) status = "claimable";
     else if ((state === 5 || state === 7 || state === 8) && !claimWindowOpen) status = "expired";
