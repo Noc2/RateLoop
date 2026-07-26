@@ -10,6 +10,7 @@ type Finding = {
   payoutEffect: "none";
   consequence: "none" | "future_assignment_restriction";
   appealOpen: boolean;
+  openAppealId: string | null;
   createdAt: string;
 };
 
@@ -102,6 +103,26 @@ export function ForecastIntegrityClient() {
     }
   }
 
+  async function withdraw(appealId: string, findingId: string) {
+    setBusyFinding(findingId);
+    setError(null);
+    try {
+      const response = await fetch("/api/account/forecast-integrity", {
+        method: "DELETE",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appealId }),
+      });
+      const body = (await response.json().catch(() => null)) as { message?: string } | null;
+      if (!response.ok) throw new Error(body?.message ?? "Unable to withdraw the appeal.");
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to withdraw the appeal.");
+    } finally {
+      setBusyFinding(null);
+    }
+  }
+
   if (!data && !error) return null;
   return (
     <section className="surface-card rounded-2xl p-5" aria-labelledby="forecast-integrity-title">
@@ -160,10 +181,20 @@ export function ForecastIntegrityClient() {
                           {finding.severity === "hard" ? "Assignment signal" : "Advisory signal"}
                         </span>
                       </div>
-                      {finding.appealOpen ? (
-                        <p className="mt-2 text-xs text-amber-100">
-                          Appeal open. Assignment consequences are suspended.
-                        </p>
+                      {finding.appealOpen && finding.openAppealId ? (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <p className="text-xs text-amber-100">
+                            Appeal open. Only this finding’s assignment consequence is suspended.
+                          </p>
+                          <button
+                            type="button"
+                            className="rateloop-secondary-action rounded-lg px-3 py-2 text-sm"
+                            disabled={busyFinding === finding.findingId}
+                            onClick={() => void withdraw(finding.openAppealId!, finding.findingId)}
+                          >
+                            {busyFinding === finding.findingId ? "Withdrawing…" : "Withdraw appeal"}
+                          </button>
+                        </div>
                       ) : finding.severity === "hard" ? (
                         <div className="mt-3 flex flex-wrap items-end gap-2">
                           <label className="text-xs">

@@ -4,6 +4,7 @@ import {
   type ForecastAppealReason,
   listPrincipalForecastIntegrity,
   openPrincipalForecastAppeal,
+  withdrawPrincipalForecastAppeal,
 } from "~~/lib/tokenless/crowdForecastPersistence";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -15,6 +16,31 @@ export async function GET(request: NextRequest) {
   try {
     const session = await requireBrowserSession(request);
     return NextResponse.json(await listPrincipalForecastIntegrity(session.principalId), { headers: NO_STORE });
+  } catch (error) {
+    const response = tokenlessErrorResponse(error);
+    return NextResponse.json(response.body, { status: response.status, headers: NO_STORE });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await requireBrowserSession(request, { mutation: true });
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    if (
+      !body ||
+      Array.isArray(body) ||
+      Object.keys(body).some(key => key !== "appealId") ||
+      typeof body.appealId !== "string"
+    ) {
+      throw new TokenlessServiceError("Appeal request is invalid.", 400, "invalid_forecast_appeal");
+    }
+    return NextResponse.json(
+      await withdrawPrincipalForecastAppeal({
+        principalId: session.principalId,
+        appealId: body.appealId,
+      }),
+      { headers: NO_STORE },
+    );
   } catch (error) {
     const response = tokenlessErrorResponse(error);
     return NextResponse.json(response.body, { status: response.status, headers: NO_STORE });
