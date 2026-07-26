@@ -35,7 +35,7 @@ afterEach(() => {
   else process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEYS_JSON = originalLookupKeyring;
 });
 
-test("appeals suspend only their exact active findings and terminal transitions restore restrictions", async () => {
+test("accepted appeals clear their finding source while withdrawn appeals do not", async () => {
   const workspace = await createWorkspace({
     ownerAddress: OWNER,
     name: "Forecast persistence",
@@ -119,16 +119,11 @@ test("appeals suspend only their exact active findings and terminal transitions 
     resolutionReason: "Evidence reviewed with the workspace owner.",
   });
   assert.equal(resolution.status, "accepted");
-  await assert.rejects(
-    () =>
-      assertPrincipalForecastAssignmentEligible({
-        principalId: REVIEWER,
-        reviewerSource: "customer_invited",
-        workspaceId: workspace.workspaceId,
-      }),
-    (error: unknown) =>
-      error instanceof Error && "code" in error && error.code === "forecast_integrity_assignment_restricted",
-  );
+  await assertPrincipalForecastAssignmentEligible({
+    principalId: REVIEWER,
+    reviewerSource: "customer_invited",
+    workspaceId: workspace.workspaceId,
+  });
   await assert.rejects(
     () =>
       withdrawPrincipalForecastAppeal({
@@ -142,7 +137,10 @@ test("appeals suspend only their exact active findings and terminal transitions 
     appealId: discriminationAppeal.appealId!,
   });
   assert.equal(withdrawal.status, "withdrawn");
-  assert.equal(withdrawal.consequence, "future_assignment_restriction");
+  assert.equal(withdrawal.consequence, "none");
+  const recovered = await listPrincipalForecastIntegrity(REVIEWER);
+  assert.equal(recovered.items[0]?.observationCount, 0);
+  assert.equal(recovered.items[0]?.consequence, "none");
 
   const appendOnly = await dbClient.execute(
     "SELECT finding_id,payout_effect FROM tokenless_forecast_integrity_findings ORDER BY created_at",
@@ -161,6 +159,72 @@ test("appeals suspend only their exact active findings and terminal transitions 
       ["withdrawn", "principal"],
     ],
   );
+});
+
+test("expired restrictions reopen assignments and stale accumulators restart from a fresh window", async () => {
+  const workspace = await createWorkspace({
+    ownerAddress: OWNER,
+    name: "Forecast recovery window",
+  });
+  const originalWindowStart = new Date("2025-01-01T00:00:00.000Z");
+  for (let index = 0; index < 16; index += 1) {
+    const client = await dbPool.connect();
+    try {
+      await client.query("BEGIN");
+      await __crowdForecastPersistenceTestUtils.aggregateInvitedBatch(client, {
+        workspaceId: workspace.workspaceId,
+        observations: [
+          {
+            principalId: REVIEWER,
+            predictedPositiveBps: 5_000,
+            vote: index % 2 === 0 ? 1 : 0,
+          },
+        ],
+        outcome: index % 2 === 0 ? 1 : 0,
+        now: new Date(originalWindowStart.getTime() + index * 1_000),
+      });
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  await assertPrincipalForecastAssignmentEligible({
+    principalId: REVIEWER,
+    reviewerSource: "customer_invited",
+    workspaceId: workspace.workspaceId,
+  });
+
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    await __crowdForecastPersistenceTestUtils.aggregateInvitedBatch(client, {
+      workspaceId: workspace.workspaceId,
+      observations: [
+        {
+          principalId: REVIEWER,
+          predictedPositiveBps: 6_000,
+          vote: 1,
+        },
+      ],
+      outcome: 1,
+      now: new Date("2026-07-26T12:00:00.000Z"),
+    });
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  const recovered = await listPrincipalForecastIntegrity(REVIEWER);
+  assert.equal(recovered.items[0]?.observationCount, 1);
+  assert.deepEqual(recovered.items[0]?.reasonCodes, []);
+  assert.equal(recovered.items[0]?.consequence, "none");
 });
 
 test("account erasure removes invited accumulators, pair pseudonyms, findings, and appeals", async () => {

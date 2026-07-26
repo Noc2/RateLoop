@@ -47,6 +47,7 @@ const APPEAL_REASONS = new Set<ForecastAppealReason>([
 ]);
 const APPEAL_ID_PATTERN = /^cfa_[a-f0-9]{32}$/u;
 const FINDING_ID_PATTERN = /^cff_[a-f0-9]{32}$/u;
+const FORECAST_RESTRICTION_WINDOW_MS = 30 * 24 * 60 * 60 * 1_000;
 
 function text(row: Row | undefined, key: string) {
   const value = row?.[key];
@@ -317,6 +318,23 @@ async function appendCalibration(
   client: PoolClient,
   input: { entry: ForecastBatchEntry; outcome: 0 | 1 | null; now: Date },
 ) {
+  await client.query(
+    `UPDATE tokenless_forecast_calibration_accumulators
+     SET observation_count=0,outcome_observation_count=0,forecast_sum_bps=0,
+         forecast_square_sum=0,squared_error_sum=0,outcome_positive_count=0,
+         positive_outcome_forecast_sum_bps=0,positive_outcome_count=0,
+         negative_outcome_forecast_sum_bps=0,negative_outcome_count=0,
+         positive_vote_forecast_sum_bps=0,positive_vote_count=0,
+         negative_vote_forecast_sum_bps=0,negative_vote_count=0,
+         current_reason_codes_json='[]',updated_at=$1
+     WHERE subject_space=$2 AND subject_key=$3 AND updated_at<=$4`,
+    [
+      input.now,
+      input.entry.subjectSpace,
+      input.entry.subjectKey,
+      new Date(input.now.getTime() - FORECAST_RESTRICTION_WINDOW_MS),
+    ],
+  );
   const delta = appendForecastCalibration(emptyForecastCalibrationAccumulator(), {
     predictedPositiveBps: input.entry.predictedPositiveBps,
     outcome: input.outcome,
@@ -438,6 +456,21 @@ async function appendPair(
 ) {
   const [left, right] =
     input.left.subjectKey < input.right.subjectKey ? [input.left, input.right] : [input.right, input.left];
+  await client.query(
+    `UPDATE tokenless_forecast_pair_accumulators
+     SET observation_count=0,exact_match_count=0,expected_exact_match_bps_sum=0,
+         distance_sum_bps=0,distance_square_sum=0,current_reason_codes_json='[]',updated_at=$1
+     WHERE workspace_id=$2 AND subject_space=$3 AND left_subject_key=$4
+       AND right_subject_key=$5 AND updated_at<=$6`,
+    [
+      input.now,
+      input.workspaceId,
+      left.subjectSpace,
+      left.subjectKey,
+      right.subjectKey,
+      new Date(input.now.getTime() - FORECAST_RESTRICTION_WINDOW_MS),
+    ],
+  );
   const delta = appendForecastPair(emptyForecastPairAccumulator(), {
     leftForecastBps: left.predictedPositiveBps,
     rightForecastBps: right.predictedPositiveBps,
@@ -825,8 +858,9 @@ type ActiveForecastRestriction = {
 
 async function activeForecastRestrictions(
   client: PoolClient,
-  input: { subject: ForecastSubject; workspaceId?: string },
+  input: { subject: ForecastSubject; workspaceId?: string; now?: Date },
 ): Promise<ActiveForecastRestriction[]> {
+  const restrictionCutoff = new Date((input.now ?? new Date()).getTime() - FORECAST_RESTRICTION_WINDOW_MS);
   const calibration = await client.query(
     `SELECT current_reason_codes_json FROM tokenless_forecast_calibration_accumulators
      WHERE subject_space=$1 AND subject_key=$2 LIMIT 1`,
@@ -872,10 +906,8 @@ async function activeForecastRestrictions(
   const restrictions: ActiveForecastRestriction[] = [];
   for (const cause of uniqueCauses.values()) {
     const finding = await client.query(
-      `SELECT finding.finding_id,appeal.appeal_id
+      `SELECT finding.finding_id
        FROM tokenless_forecast_integrity_findings finding
-       LEFT JOIN tokenless_forecast_integrity_appeals appeal
-         ON appeal.finding_id=finding.finding_id AND appeal.status='open'
        WHERE finding.subject_space=$1 AND finding.subject_key=$2 AND finding.reason_code=$3
          AND (
            (finding.peer_subject_key IS NULL AND $4::text IS NULL)
@@ -885,14 +917,37 @@ async function activeForecastRestrictions(
            (finding.workspace_id IS NULL AND $5::text IS NULL)
            OR finding.workspace_id=$5
          )
+         AND finding.created_at>$6
        ORDER BY finding.source_observation_count DESC,finding.created_at DESC,finding.finding_id DESC
        LIMIT 1`,
-      [input.subject.subjectSpace, input.subject.subjectKey, cause.reasonCode, cause.peerSubjectKey, cause.workspaceId],
+      [
+        input.subject.subjectSpace,
+        input.subject.subjectKey,
+        cause.reasonCode,
+        cause.peerSubjectKey,
+        cause.workspaceId,
+        restrictionCutoff,
+      ],
     );
+    const findingId = text(finding.rows[0] as Row | undefined, "finding_id");
+    if (!findingId) continue;
+    const appeals = await client.query(
+      `SELECT appeal_id,status
+       FROM tokenless_forecast_integrity_appeals
+       WHERE finding_id=$1
+       ORDER BY opened_at DESC,appeal_id DESC`,
+      [findingId],
+    );
+    if ((appeals.rows as Row[]).some(appeal => text(appeal, "status") === "accepted")) {
+      continue;
+    }
     restrictions.push({
       ...cause,
-      findingId: text(finding.rows[0] as Row | undefined, "finding_id"),
-      openAppealId: text(finding.rows[0] as Row | undefined, "appeal_id"),
+      findingId,
+      openAppealId: text(
+        (appeals.rows as Row[]).find(appeal => text(appeal, "status") === "open"),
+        "appeal_id",
+      ),
     });
   }
   return restrictions;
@@ -1360,6 +1415,47 @@ async function requireForecastAppealManager(
   return actor;
 }
 
+async function clearAcceptedForecastFinding(
+  client: PoolClient,
+  input: {
+    subjectSpace: ForecastSubjectSpace;
+    subjectKey: string;
+    peerSubjectKey: string | null;
+    workspaceId: string | null;
+    now: Date;
+  },
+) {
+  if (input.peerSubjectKey === null) {
+    await client.query(
+      `UPDATE tokenless_forecast_calibration_accumulators
+       SET observation_count=0,outcome_observation_count=0,forecast_sum_bps=0,
+           forecast_square_sum=0,squared_error_sum=0,outcome_positive_count=0,
+           positive_outcome_forecast_sum_bps=0,positive_outcome_count=0,
+           negative_outcome_forecast_sum_bps=0,negative_outcome_count=0,
+           positive_vote_forecast_sum_bps=0,positive_vote_count=0,
+           negative_vote_forecast_sum_bps=0,negative_vote_count=0,
+           current_reason_codes_json='[]',updated_at=$1
+       WHERE subject_space=$2 AND subject_key=$3`,
+      [input.now, input.subjectSpace, input.subjectKey],
+    );
+    return;
+  }
+  if (!input.workspaceId) {
+    throw new Error("A paired forecast finding is missing its workspace.");
+  }
+  const [leftSubjectKey, rightSubjectKey] =
+    input.subjectKey < input.peerSubjectKey
+      ? [input.subjectKey, input.peerSubjectKey]
+      : [input.peerSubjectKey, input.subjectKey];
+  await client.query(
+    `UPDATE tokenless_forecast_pair_accumulators
+     SET observation_count=0,exact_match_count=0,expected_exact_match_bps_sum=0,
+         distance_sum_bps=0,distance_square_sum=0,current_reason_codes_json='[]',updated_at=$1
+     WHERE workspace_id=$2 AND subject_space=$3 AND left_subject_key=$4 AND right_subject_key=$5`,
+    [input.now, input.workspaceId, input.subjectSpace, leftSubjectKey, rightSubjectKey],
+  );
+}
+
 async function resolveForecastAppealInTransaction(
   client: PoolClient,
   input: {
@@ -1374,7 +1470,7 @@ async function resolveForecastAppealInTransaction(
 ) {
   const appeal = await client.query(
     `SELECT appeal.appeal_id,appeal.finding_id,appeal.subject_space,appeal.subject_key,appeal.status,
-            appeal.resolved_by,appeal.resolution_reason,finding.workspace_id
+            appeal.resolved_by,appeal.resolution_reason,finding.workspace_id,finding.peer_subject_key
      FROM tokenless_forecast_integrity_appeals appeal
      JOIN tokenless_forecast_integrity_findings finding ON finding.finding_id=appeal.finding_id
      WHERE appeal.appeal_id=$1 LIMIT 1 FOR UPDATE`,
@@ -1411,6 +1507,15 @@ async function resolveForecastAppealInTransaction(
       eventReason: input.resolutionReason,
       now: input.now,
     });
+    if (input.status === "accepted") {
+      await clearAcceptedForecastFinding(client, {
+        subjectSpace: text(row, "subject_space") as ForecastSubjectSpace,
+        subjectKey: text(row, "subject_key")!,
+        peerSubjectKey: text(row, "peer_subject_key"),
+        workspaceId: text(row, "workspace_id"),
+        now: input.now,
+      });
+    }
   }
   return {
     appealId: input.appealId,
