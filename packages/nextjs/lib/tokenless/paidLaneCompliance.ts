@@ -32,7 +32,7 @@ export function paidLaneComplianceApproval(
     approvedAt > now
   ) {
     throw new TokenlessServiceError(
-      "Paid review is unavailable until the blockchain DPIA and provider-transfer inventory are approved.",
+      "Paid review is unavailable until the blockchain DPIA, provider-transfer inventory, and funded deployment are approved.",
       503,
       "paid_lane_compliance_approval_required",
       true,

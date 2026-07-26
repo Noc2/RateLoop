@@ -34,13 +34,22 @@ export type HumanReviewLaneReadiness = Pick<
 type HumanReviewActivationEnv = Record<string, string | undefined>;
 
 const HASH = /^sha256:[0-9a-f]{64}$/u;
+const PUBLIC_HUMAN_REVIEW_ACTIVATION_ENV: HumanReviewActivationEnv = {
+  NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE:
+    process.env.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE,
+  NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: process.env.NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED,
+  NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED: process.env.NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED,
+  NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED: process.env.NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED,
+};
 
 /**
  * Public configuration is deliberately only an availability projection. The
  * server independently verifies the matching signed-off activation evidence
  * before any paid reservation, voucher, round, or spend can be created.
  */
-export function humanReviewLaneImplementation(env: HumanReviewActivationEnv = process.env): HumanReviewLaneReadiness {
+export function humanReviewLaneImplementation(
+  env: HumanReviewActivationEnv = PUBLIC_HUMAN_REVIEW_ACTIVATION_ENV,
+): HumanReviewLaneReadiness {
   const activationReference = env.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE?.trim() ?? "";
   const activationBound = HASH.test(activationReference);
   const privateInvitedPaid =

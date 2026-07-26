@@ -10,6 +10,7 @@ import {
   resolveHumanReviewCapability,
 } from "./reviewCapabilities";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const allReady: HumanReviewReadiness = {
@@ -133,6 +134,19 @@ test("paid lanes default off and become reachable only through an evidence-bound
     }).publicPaidNetwork,
     false,
   );
+});
+
+test("client capability defaults use direct Next.js public-environment references", () => {
+  const source = readFileSync(new URL("./reviewCapabilities.ts", import.meta.url), "utf8");
+  for (const name of [
+    "NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE",
+    "NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED",
+    "NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED",
+    "NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED",
+  ]) {
+    assert.match(source, new RegExp(`process\\.env\\.${name}`, "u"));
+  }
+  assert.doesNotMatch(source, /HumanReviewActivationEnv = process\.env/u);
 });
 
 test("configured lane descriptions use the same implementation truth", () => {
