@@ -394,6 +394,10 @@ test("direct private assignments surface in reviewer work and produce a terminal
   assert.equal(packet.payload.settlement.mode, "no_onchain_settlement_unpaid_invited");
   assert.equal(packet.payload.privacy.reviewerIdentitiesIncluded, false);
   assert.equal(packet.payload.privacy.rawRationaleIncluded, false);
+  assert.equal(packet.payload.aggregation.minimumAggregationSize, 2);
+  assert.equal(packet.payload.aggregation.suite.outcome, "pass");
+  assert.equal(packet.payload.aggregation.cases[0]?.suppressed, false);
+  assert.ok(packet.payload.aggregation.cases[0]?.preference);
   assert.deepEqual(packet.payload.recomputation.reviewerSources, [
     {
       source: "customer_invited",

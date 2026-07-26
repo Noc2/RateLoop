@@ -233,7 +233,7 @@ async function insertProjection(client: PoolClient, source: Row, now: Date) {
     assurance: { requirements: [DEADLINE_TERMINAL_REQUIREMENT] },
     buyerPrivacy: {
       visibleFields: ["reviewer_source"],
-      minimumAggregationSize: 3,
+      minimumAggregationSize: passRule.minimumValidResponses,
       suppressSmallCells: true,
     },
     legalEligibilityRequired: paid,
