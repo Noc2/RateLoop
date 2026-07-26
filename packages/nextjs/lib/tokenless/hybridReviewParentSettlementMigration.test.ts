@@ -62,6 +62,7 @@ describe("hybrid review parent settlement migration", () => {
 
   it("persists exclusions before spend and filters actual profiles before worker selection", () => {
     assert.match(adapter, /INSERT INTO tokenless_hybrid_network_reviewer_exclusions/u);
+    assert.match(adapter, /FROM tokenless_principals[\s\S]*status='active'[\s\S]*ORDER BY principal_id FOR SHARE/u);
     assert.match(adapter, /storedExclusions[\s\S]*exactExclusions/u);
     assert.match(adapter, /excludedPrincipalIds:[\s\S]*countEligibleNetwork/u);
     assert.match(worker, /NOT EXISTS \([\s\S]*tokenless_hybrid_network_reviewer_exclusions exclusion/u);

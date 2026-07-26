@@ -46,10 +46,7 @@ import {
   countEligibleNetworkExactExpertisePool,
   exactReviewerExpertiseDefinitionKey,
 } from "~~/lib/tokenless/reviewerExpertiseAssignments";
-import {
-  type ReviewerExpertiseRequirement,
-  normalizeReviewerExpertiseRequirementsSelection,
-} from "~~/lib/tokenless/reviewerExpertiseOptions";
+import { normalizeReviewerExpertiseRequirementsSelection } from "~~/lib/tokenless/reviewerExpertiseOptions";
 import {
   expertiseQualificationRules,
   normalizeReviewerExpertiseKeys,
@@ -957,6 +954,22 @@ async function persistHybridNetworkChildState(input: {
         }),
       }))
       .sort((left, right) => left.principalId.localeCompare(right.principalId));
+    if (exclusions.length > 0) {
+      const activePrincipals = await client.query(
+        `SELECT principal_id FROM tokenless_principals
+         WHERE principal_id=ANY($1::text[]) AND status='active'
+         ORDER BY principal_id FOR SHARE`,
+        [exclusions.map(value => value.principalId)],
+      );
+      if (activePrincipals.rowCount !== exclusions.length) {
+        throw new TokenlessServiceError(
+          "A hybrid network exclusion subject is no longer active.",
+          409,
+          "hybrid_review_child_conflict",
+          true,
+        );
+      }
+    }
     for (const exclusion of exclusions) {
       await client.query(
         `INSERT INTO tokenless_hybrid_network_reviewer_exclusions
