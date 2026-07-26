@@ -83,10 +83,25 @@ test("pair lockstep uses the workspace histogram null and low distance variance"
   assert.deepEqual(evaluation.limitationCodes, []);
 });
 
-test("open appeals suspend consequences without erasing append-only findings", () => {
-  const reasons = ["forecast_invariant"];
-  assert.equal(forecastConsequence({ reasonCodes: reasons, hasOpenAppeal: false }), "future_assignment_restriction");
-  assert.equal(forecastConsequence({ reasonCodes: reasons, hasOpenAppeal: true }), "suspended_by_open_appeal");
-  assert.deepEqual(reasons, ["forecast_invariant"]);
-  assert.equal(forecastConsequence({ reasonCodes: ["forecast_vote_decoupled"], hasOpenAppeal: false }), "none");
+test("only appeals covering every active hard finding suspend consequences", () => {
+  const reasons = ["forecast_invariant", "forecast_discrimination_absent"];
+  assert.equal(forecastConsequence({ reasonCodes: reasons }), "future_assignment_restriction");
+  assert.equal(
+    forecastConsequence({
+      reasonCodes: reasons,
+      activeHardFindingCount: 2,
+      suspendedHardFindingCount: 1,
+    }),
+    "future_assignment_restriction",
+  );
+  assert.equal(
+    forecastConsequence({
+      reasonCodes: reasons,
+      activeHardFindingCount: 2,
+      suspendedHardFindingCount: 2,
+    }),
+    "suspended_by_open_appeal",
+  );
+  assert.deepEqual(reasons, ["forecast_invariant", "forecast_discrimination_absent"]);
+  assert.equal(forecastConsequence({ reasonCodes: ["forecast_vote_decoupled"] }), "none");
 });

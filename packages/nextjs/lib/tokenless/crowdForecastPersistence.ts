@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
 import { getAddress } from "viem";
+import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbPool } from "~~/lib/db";
 import {
   type ForecastCalibrationAccumulator,
@@ -22,6 +23,7 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 type Row = Record<string, unknown>;
 export type ForecastSubjectSpace = "invited_workspace" | "network_rater";
 export type ForecastAppealReason = "context_missing" | "shared_process" | "measurement_error" | "other";
+export type ForecastAppealResolutionStatus = "accepted" | "rejected";
 
 type ForecastSubject = {
   subjectSpace: ForecastSubjectSpace;
@@ -43,6 +45,8 @@ const APPEAL_REASONS = new Set<ForecastAppealReason>([
   "measurement_error",
   "other",
 ]);
+const APPEAL_ID_PATTERN = /^cfa_[a-f0-9]{32}$/u;
+const FINDING_ID_PATTERN = /^cff_[a-f0-9]{32}$/u;
 
 function text(row: Row | undefined, key: string) {
   const value = row?.[key];
@@ -811,19 +815,18 @@ async function subjectsForPrincipal(client: PoolClient, principalId: string) {
   return raterId ? [...invited, networkForecastSubject(raterId)] : invited;
 }
 
-async function hasOpenAppeal(client: PoolClient, subject: ForecastSubject) {
-  const result = await client.query(
-    `SELECT appeal_id FROM tokenless_forecast_integrity_appeals
-     WHERE subject_space=$1 AND subject_key=$2 AND status='open' LIMIT 1`,
-    [subject.subjectSpace, subject.subjectKey],
-  );
-  return result.rowCount === 1;
-}
+type ActiveForecastRestriction = {
+  findingId: string | null;
+  openAppealId: string | null;
+  peerSubjectKey: string | null;
+  reasonCode: string;
+  workspaceId: string | null;
+};
 
-export async function isForecastAssignmentRestricted(
+async function activeForecastRestrictions(
   client: PoolClient,
   input: { subject: ForecastSubject; workspaceId?: string },
-) {
+): Promise<ActiveForecastRestriction[]> {
   const calibration = await client.query(
     `SELECT current_reason_codes_json FROM tokenless_forecast_calibration_accumulators
      WHERE subject_space=$1 AND subject_key=$2 LIMIT 1`,
@@ -831,26 +834,84 @@ export async function isForecastAssignmentRestricted(
   );
   const pairs = input.workspaceId
     ? await client.query(
-        `SELECT current_reason_codes_json FROM tokenless_forecast_pair_accumulators
+        `SELECT workspace_id,left_subject_key,right_subject_key,current_reason_codes_json
+         FROM tokenless_forecast_pair_accumulators
          WHERE workspace_id=$1 AND subject_space=$2
            AND (left_subject_key=$3 OR right_subject_key=$3)`,
         [input.workspaceId, input.subject.subjectSpace, input.subject.subjectKey],
       )
     : await client.query(
-        `SELECT current_reason_codes_json FROM tokenless_forecast_pair_accumulators
+        `SELECT workspace_id,left_subject_key,right_subject_key,current_reason_codes_json
+         FROM tokenless_forecast_pair_accumulators
          WHERE subject_space=$1 AND (left_subject_key=$2 OR right_subject_key=$2)`,
         [input.subject.subjectSpace, input.subject.subjectKey],
       );
-  const codes = [
-    ...reasonCodes((calibration.rows[0] as Row | undefined)?.current_reason_codes_json),
-    ...(pairs.rows as Row[]).flatMap(row => reasonCodes(row.current_reason_codes_json)),
+  const causes = [
+    ...reasonCodes((calibration.rows[0] as Row | undefined)?.current_reason_codes_json)
+      .filter(code => HARD_REASON_CODES.has(code))
+      .map(reasonCode => ({
+        peerSubjectKey: null,
+        reasonCode,
+        workspaceId: input.subject.workspaceId,
+      })),
+    ...(pairs.rows as Row[]).flatMap(row => {
+      const left = text(row, "left_subject_key");
+      const right = text(row, "right_subject_key");
+      const peerSubjectKey = left === input.subject.subjectKey ? right : left;
+      const workspaceId = text(row, "workspace_id");
+      if (!peerSubjectKey || !workspaceId) return [];
+      return reasonCodes(row.current_reason_codes_json)
+        .filter(code => HARD_REASON_CODES.has(code))
+        .map(reasonCode => ({ peerSubjectKey, reasonCode, workspaceId }));
+    }),
   ];
-  return (
-    forecastConsequence({
-      reasonCodes: [...new Set(codes)],
-      hasOpenAppeal: await hasOpenAppeal(client, input.subject),
-    }) === "future_assignment_restriction"
-  );
+  const uniqueCauses = new Map<string, (typeof causes)[number]>();
+  for (const cause of causes) {
+    uniqueCauses.set(`${cause.workspaceId ?? ""}\0${cause.peerSubjectKey ?? ""}\0${cause.reasonCode}`, cause);
+  }
+  const restrictions: ActiveForecastRestriction[] = [];
+  for (const cause of uniqueCauses.values()) {
+    const finding = await client.query(
+      `SELECT finding.finding_id,appeal.appeal_id
+       FROM tokenless_forecast_integrity_findings finding
+       LEFT JOIN tokenless_forecast_integrity_appeals appeal
+         ON appeal.finding_id=finding.finding_id AND appeal.status='open'
+       WHERE finding.subject_space=$1 AND finding.subject_key=$2 AND finding.reason_code=$3
+         AND (
+           (finding.peer_subject_key IS NULL AND $4::text IS NULL)
+           OR finding.peer_subject_key=$4
+         )
+         AND (
+           (finding.workspace_id IS NULL AND $5::text IS NULL)
+           OR finding.workspace_id=$5
+         )
+       ORDER BY finding.source_observation_count DESC,finding.created_at DESC,finding.finding_id DESC
+       LIMIT 1`,
+      [input.subject.subjectSpace, input.subject.subjectKey, cause.reasonCode, cause.peerSubjectKey, cause.workspaceId],
+    );
+    restrictions.push({
+      ...cause,
+      findingId: text(finding.rows[0] as Row | undefined, "finding_id"),
+      openAppealId: text(finding.rows[0] as Row | undefined, "appeal_id"),
+    });
+  }
+  return restrictions;
+}
+
+function restrictionConsequence(reasonCodeList: readonly string[], restrictions: readonly ActiveForecastRestriction[]) {
+  return forecastConsequence({
+    reasonCodes: reasonCodeList,
+    activeHardFindingCount: restrictions.length,
+    suspendedHardFindingCount: restrictions.filter(restriction => restriction.openAppealId !== null).length,
+  });
+}
+
+export async function isForecastAssignmentRestricted(
+  client: PoolClient,
+  input: { subject: ForecastSubject; workspaceId?: string },
+) {
+  const restrictions = await activeForecastRestrictions(client, input);
+  return restrictions.some(restriction => restriction.openAppealId === null);
 }
 
 export async function assertForecastAssignmentEligible(input: { subject: ForecastSubject; workspaceId?: string }) {
@@ -955,6 +1016,7 @@ export async function listPrincipalForecastIntegrityInTransaction(client: PoolCl
     const findings = await client.query(
       `SELECT finding.finding_id,finding.reason_code,finding.severity,finding.source_observation_count,
                 finding.payout_effect,finding.consequence,finding.created_at,
+                appeal.appeal_id,
                 CASE WHEN appeal.appeal_id IS NULL THEN false ELSE true END AS appeal_open
          FROM tokenless_forecast_integrity_findings finding
          LEFT JOIN tokenless_forecast_integrity_appeals appeal
@@ -963,8 +1025,70 @@ export async function listPrincipalForecastIntegrityInTransaction(client: PoolCl
          ORDER BY finding.created_at DESC,finding.finding_id DESC LIMIT 50`,
       [subject.subjectSpace, subject.subjectKey],
     );
-    const openAppeal = (findings.rows as Row[]).some(value => value.appeal_open === true);
+    const appealHistory = await client.query(
+      `SELECT appeal.appeal_id,appeal.finding_id,appeal.reason_code,appeal.status,
+              appeal.opened_at,appeal.resolved_at,appeal.resolution_reason,
+              event.event_id,event.event_type,event.from_status,event.to_status,
+              event.actor_kind,event.event_reason,event.occurred_at
+       FROM tokenless_forecast_integrity_appeals appeal
+       LEFT JOIN tokenless_forecast_integrity_appeal_events event ON event.appeal_id=appeal.appeal_id
+       WHERE appeal.subject_space=$1 AND appeal.subject_key=$2
+       ORDER BY appeal.opened_at DESC,appeal.appeal_id DESC,event.occurred_at,event.event_id`,
+      [subject.subjectSpace, subject.subjectKey],
+    );
+    const appealsByFinding = new Map<
+      string,
+      Array<{
+        appealId: string;
+        reasonCode: string;
+        status: string;
+        openedAt: string;
+        resolvedAt: string | null;
+        resolutionReason: string | null;
+        events: Array<{
+          eventType: string;
+          fromStatus: string | null;
+          toStatus: string;
+          actorKind: string;
+          eventReason: string;
+          occurredAt: string;
+        }>;
+      }>
+    >();
+    const appealsById = new Map<string, NonNullable<ReturnType<typeof appealsByFinding.get>>[number]>();
+    for (const value of appealHistory.rows as Row[]) {
+      const appealId = text(value, "appeal_id");
+      const findingId = text(value, "finding_id");
+      if (!appealId || !findingId) throw new Error("Stored forecast appeal history is invalid.");
+      let appeal = appealsById.get(appealId);
+      if (!appeal) {
+        appeal = {
+          appealId,
+          reasonCode: text(value, "reason_code")!,
+          status: text(value, "status")!,
+          openedAt: new Date(String(value.opened_at)).toISOString(),
+          resolvedAt: value.resolved_at ? new Date(String(value.resolved_at)).toISOString() : null,
+          resolutionReason: text(value, "resolution_reason"),
+          events: [],
+        };
+        appealsById.set(appealId, appeal);
+        const history = appealsByFinding.get(findingId) ?? [];
+        history.push(appeal);
+        appealsByFinding.set(findingId, history);
+      }
+      if (value.event_id) {
+        appeal.events.push({
+          eventType: text(value, "event_type")!,
+          fromStatus: text(value, "from_status"),
+          toStatus: text(value, "to_status")!,
+          actorKind: text(value, "actor_kind")!,
+          eventReason: text(value, "event_reason")!,
+          occurredAt: new Date(String(value.occurred_at)).toISOString(),
+        });
+      }
+    }
     const currentReasonCodes = [...new Set([...evaluation.reasonCodes, ...pairReasons])];
+    const restrictions = await activeForecastRestrictions(client, { subject });
     items.push({
       subjectSpace: subject.subjectSpace,
       workspaceId: subject.workspaceId,
@@ -976,7 +1100,7 @@ export async function listPrincipalForecastIntegrityInTransaction(client: PoolCl
       reasonCodes: currentReasonCodes,
       limitationCodes: [],
       payoutEffect: "none" as const,
-      consequence: forecastConsequence({ reasonCodes: currentReasonCodes, hasOpenAppeal: openAppeal }),
+      consequence: restrictionConsequence(currentReasonCodes, restrictions),
       findings: (findings.rows as Row[]).map(value => ({
         findingId: text(value, "finding_id")!,
         reasonCode: text(value, "reason_code")!,
@@ -985,11 +1109,67 @@ export async function listPrincipalForecastIntegrityInTransaction(client: PoolCl
         payoutEffect: "none" as const,
         consequence: text(value, "consequence")!,
         appealOpen: value.appeal_open === true,
+        openAppealId: text(value, "appeal_id"),
+        appeals: appealsByFinding.get(text(value, "finding_id")!) ?? [],
         createdAt: new Date(String(value.created_at)).toISOString(),
       })),
     });
   }
   return { schemaVersion: "rateloop.reviewer-forecast-integrity.v1" as const, items };
+}
+
+async function appendAppealEvent(
+  client: PoolClient,
+  input: {
+    appealId: string;
+    eventType: "opened" | "accepted" | "rejected" | "withdrawn";
+    fromStatus: "open" | null;
+    actorKind: "principal" | "workspace_manager" | "compliance_operator";
+    actorReference: string;
+    eventReason: string;
+    now: Date;
+  },
+) {
+  await client.query(
+    `INSERT INTO tokenless_forecast_integrity_appeal_events
+     (event_id,appeal_id,event_type,from_status,to_status,actor_kind,actor_reference,event_reason,occurred_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    [
+      `cfae_${randomUUID().replaceAll("-", "")}`,
+      input.appealId,
+      input.eventType,
+      input.fromStatus,
+      input.eventType === "opened" ? "open" : input.eventType,
+      input.actorKind,
+      input.actorReference,
+      input.eventReason,
+      input.now,
+    ],
+  );
+}
+
+function normalizeResolutionReason(value: string) {
+  const normalized = value.trim();
+  if (!normalized || normalized.length > 1_000) {
+    throw new TokenlessServiceError(
+      "Appeal resolutionReason must be 1-1000 characters.",
+      400,
+      "invalid_forecast_appeal_resolution",
+    );
+  }
+  return normalized;
+}
+
+function normalizeResolverReference(value: string) {
+  const normalized = value.trim();
+  if (!normalized || normalized.length > 200) {
+    throw new TokenlessServiceError(
+      "Appeal resolver reference must be 1-200 characters.",
+      400,
+      "invalid_forecast_appeal_resolution",
+    );
+  }
+  return normalized;
 }
 
 export async function openPrincipalForecastAppeal(input: {
@@ -998,7 +1178,7 @@ export async function openPrincipalForecastAppeal(input: {
   reasonCode: ForecastAppealReason;
   now?: Date;
 }) {
-  if (!/^cff_[a-f0-9]{32}$/u.test(input.findingId) || !APPEAL_REASONS.has(input.reasonCode)) {
+  if (!FINDING_ID_PATTERN.test(input.findingId) || !APPEAL_REASONS.has(input.reasonCode)) {
     throw new TokenlessServiceError("Appeal request is invalid.", 400, "invalid_forecast_appeal");
   }
   const now = input.now ?? new Date();
@@ -1024,8 +1204,20 @@ export async function openPrincipalForecastAppeal(input: {
        ON CONFLICT DO NOTHING RETURNING appeal_id`,
       [appealId, input.findingId, owned.subjectSpace, owned.subjectKey, input.reasonCode, now],
     );
+    const insertedAppealId = text(inserted.rows[0] as Row | undefined, "appeal_id");
+    if (insertedAppealId) {
+      await appendAppealEvent(client, {
+        appealId: insertedAppealId,
+        eventType: "opened",
+        fromStatus: null,
+        actorKind: "principal",
+        actorReference: input.principalId,
+        eventReason: `appeal_reason:${input.reasonCode}`,
+        now,
+      });
+    }
     const storedAppealId =
-      text(inserted.rows[0] as Row | undefined, "appeal_id") ??
+      insertedAppealId ??
       text(
         (
           await client.query(
@@ -1036,13 +1228,264 @@ export async function openPrincipalForecastAppeal(input: {
         ).rows[0] as Row | undefined,
         "appeal_id",
       );
+    if (!storedAppealId) throw new Error("Forecast appeal insert did not return an appeal.");
+    const restrictions = await activeForecastRestrictions(client, {
+      subject: owned,
+      ...(owned.workspaceId ? { workspaceId: owned.workspaceId } : {}),
+    });
+    const consequence = restrictionConsequence(
+      restrictions.map(restriction => restriction.reasonCode),
+      restrictions,
+    );
     await client.query("COMMIT");
     return {
       schemaVersion: "rateloop.reviewer-forecast-appeal.v1" as const,
       appealId: storedAppealId,
       findingId: input.findingId,
       status: "open" as const,
-      consequence: "suspended_by_open_appeal" as const,
+      consequence,
+    };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+function appealResult(input: {
+  appealId: string;
+  findingId: string;
+  status: "accepted" | "rejected" | "withdrawn";
+  consequence: ReturnType<typeof forecastConsequence>;
+  replay: boolean;
+}) {
+  return {
+    schemaVersion: "rateloop.reviewer-forecast-appeal.v1" as const,
+    ...input,
+  };
+}
+
+export async function withdrawPrincipalForecastAppeal(input: { principalId: string; appealId: string; now?: Date }) {
+  if (!APPEAL_ID_PATTERN.test(input.appealId)) {
+    throw new TokenlessServiceError("Appeal request is invalid.", 400, "invalid_forecast_appeal");
+  }
+  const now = input.now ?? new Date();
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const appeal = await client.query(
+      `SELECT appeal.appeal_id,appeal.finding_id,appeal.subject_space,appeal.subject_key,appeal.status,
+              finding.workspace_id
+       FROM tokenless_forecast_integrity_appeals appeal
+       JOIN tokenless_forecast_integrity_findings finding ON finding.finding_id=appeal.finding_id
+       WHERE appeal.appeal_id=$1 LIMIT 1 FOR UPDATE`,
+      [input.appealId],
+    );
+    const row = appeal.rows[0] as Row | undefined;
+    if (!row) throw new TokenlessServiceError("Appeal not found.", 404, "forecast_appeal_not_found");
+    const subjects = await subjectsForPrincipal(client, input.principalId);
+    const owned = subjects.find(
+      subject => subject.subjectSpace === text(row, "subject_space") && subject.subjectKey === text(row, "subject_key"),
+    );
+    if (!owned) throw new TokenlessServiceError("Appeal not found.", 404, "forecast_appeal_not_found");
+    const status = text(row, "status");
+    if (status !== "open" && status !== "withdrawn") {
+      throw new TokenlessServiceError("Resolved appeals cannot be withdrawn.", 409, "forecast_appeal_already_resolved");
+    }
+    const replay = status === "withdrawn";
+    if (!replay) {
+      await client.query(
+        `UPDATE tokenless_forecast_integrity_appeals
+         SET status='withdrawn',resolved_at=$1,resolved_by=$2,resolution_reason=$3
+         WHERE appeal_id=$4 AND status='open'`,
+        [now, input.principalId, "Principal withdrew the appeal.", input.appealId],
+      );
+      await appendAppealEvent(client, {
+        appealId: input.appealId,
+        eventType: "withdrawn",
+        fromStatus: "open",
+        actorKind: "principal",
+        actorReference: input.principalId,
+        eventReason: "Principal withdrew the appeal.",
+        now,
+      });
+    }
+    const workspaceId = text(row, "workspace_id");
+    const restrictions = await activeForecastRestrictions(client, {
+      subject: owned,
+      ...(workspaceId ? { workspaceId } : {}),
+    });
+    const consequence = restrictionConsequence(
+      restrictions.map(restriction => restriction.reasonCode),
+      restrictions,
+    );
+    await client.query("COMMIT");
+    return appealResult({
+      appealId: input.appealId,
+      findingId: text(row, "finding_id")!,
+      status: "withdrawn",
+      consequence,
+      replay,
+    });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function requireForecastAppealManager(
+  client: PoolClient,
+  input: { accountAddress: string; workspaceId: string },
+) {
+  let actor: string;
+  try {
+    actor = normalizeAccountSubject(input.accountAddress);
+  } catch {
+    throw new TokenlessServiceError("Account address is invalid.", 400, "invalid_account");
+  }
+  const manager = await client.query(
+    `SELECT 1 FROM tokenless_workspace_members member
+     JOIN tokenless_workspaces workspace ON workspace.workspace_id=member.workspace_id
+     WHERE member.workspace_id=$1 AND member.account_address=$2
+       AND member.role IN ('owner','admin') AND workspace.status='active'
+     LIMIT 1 FOR SHARE`,
+    [input.workspaceId, actor],
+  );
+  if (manager.rowCount !== 1) {
+    throw new TokenlessServiceError("Appeal not found.", 404, "forecast_appeal_not_found");
+  }
+  return actor;
+}
+
+async function resolveForecastAppealInTransaction(
+  client: PoolClient,
+  input: {
+    appealId: string;
+    status: ForecastAppealResolutionStatus;
+    resolutionReason: string;
+    actorKind: "workspace_manager" | "compliance_operator";
+    actorReference: string;
+    workspaceId?: string;
+    now: Date;
+  },
+) {
+  const appeal = await client.query(
+    `SELECT appeal.appeal_id,appeal.finding_id,appeal.subject_space,appeal.subject_key,appeal.status,
+            appeal.resolved_by,appeal.resolution_reason,finding.workspace_id
+     FROM tokenless_forecast_integrity_appeals appeal
+     JOIN tokenless_forecast_integrity_findings finding ON finding.finding_id=appeal.finding_id
+     WHERE appeal.appeal_id=$1 LIMIT 1 FOR UPDATE`,
+    [input.appealId],
+  );
+  const row = appeal.rows[0] as Row | undefined;
+  if (!row || (input.workspaceId !== undefined && text(row, "workspace_id") !== input.workspaceId)) {
+    throw new TokenlessServiceError("Appeal not found.", 404, "forecast_appeal_not_found");
+  }
+  const priorStatus = text(row, "status");
+  const replay =
+    priorStatus === input.status &&
+    text(row, "resolved_by") === input.actorReference &&
+    text(row, "resolution_reason") === input.resolutionReason;
+  if (priorStatus !== "open" && !replay) {
+    throw new TokenlessServiceError("Appeal has already been resolved.", 409, "forecast_appeal_already_resolved");
+  }
+  if (!replay) {
+    const updated = await client.query(
+      `UPDATE tokenless_forecast_integrity_appeals
+       SET status=$1,resolved_at=$2,resolved_by=$3,resolution_reason=$4
+       WHERE appeal_id=$5 AND status='open' RETURNING appeal_id`,
+      [input.status, input.now, input.actorReference, input.resolutionReason, input.appealId],
+    );
+    if (updated.rowCount !== 1) {
+      throw new TokenlessServiceError("Appeal has already been resolved.", 409, "forecast_appeal_already_resolved");
+    }
+    await appendAppealEvent(client, {
+      appealId: input.appealId,
+      eventType: input.status,
+      fromStatus: "open",
+      actorKind: input.actorKind,
+      actorReference: input.actorReference,
+      eventReason: input.resolutionReason,
+      now: input.now,
+    });
+  }
+  return {
+    appealId: input.appealId,
+    findingId: text(row, "finding_id")!,
+    status: input.status,
+    replay,
+  };
+}
+
+export async function resolveWorkspaceForecastAppeal(input: {
+  accountAddress: string;
+  workspaceId: string;
+  appealId: string;
+  status: ForecastAppealResolutionStatus;
+  resolutionReason: string;
+  now?: Date;
+}) {
+  if (!APPEAL_ID_PATTERN.test(input.appealId) || !["accepted", "rejected"].includes(input.status)) {
+    throw new TokenlessServiceError("Appeal resolution is invalid.", 400, "invalid_forecast_appeal_resolution");
+  }
+  const resolutionReason = normalizeResolutionReason(input.resolutionReason);
+  const now = input.now ?? new Date();
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const actor = await requireForecastAppealManager(client, input);
+    const resolved = await resolveForecastAppealInTransaction(client, {
+      appealId: input.appealId,
+      status: input.status,
+      resolutionReason,
+      actorKind: "workspace_manager",
+      actorReference: actor,
+      workspaceId: input.workspaceId,
+      now,
+    });
+    await client.query("COMMIT");
+    return {
+      schemaVersion: "rateloop.reviewer-forecast-appeal-resolution.v1" as const,
+      ...resolved,
+    };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function resolveComplianceForecastAppeal(input: {
+  appealId: string;
+  status: ForecastAppealResolutionStatus;
+  resolutionReason: string;
+  resolvedBy: string;
+  now?: Date;
+}) {
+  if (!APPEAL_ID_PATTERN.test(input.appealId) || !["accepted", "rejected"].includes(input.status)) {
+    throw new TokenlessServiceError("Appeal resolution is invalid.", 400, "invalid_forecast_appeal_resolution");
+  }
+  const resolutionReason = normalizeResolutionReason(input.resolutionReason);
+  const resolvedBy = normalizeResolverReference(input.resolvedBy);
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const resolved = await resolveForecastAppealInTransaction(client, {
+      appealId: input.appealId,
+      status: input.status,
+      resolutionReason,
+      actorKind: "compliance_operator",
+      actorReference: resolvedBy,
+      now: input.now ?? new Date(),
+    });
+    await client.query("COMMIT");
+    return {
+      schemaVersion: "rateloop.reviewer-forecast-appeal-resolution.v1" as const,
+      ...resolved,
     };
   } catch (error) {
     await client.query("ROLLBACK");

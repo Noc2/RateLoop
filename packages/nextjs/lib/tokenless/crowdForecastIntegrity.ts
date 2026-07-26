@@ -249,8 +249,15 @@ export function evaluateForecastPair(accumulator: ForecastPairAccumulator): Fore
   };
 }
 
-export function forecastConsequence(input: { reasonCodes: readonly string[]; hasOpenAppeal: boolean }) {
+export function forecastConsequence(input: {
+  reasonCodes: readonly string[];
+  activeHardFindingCount?: number;
+  suspendedHardFindingCount?: number;
+}) {
   const hardReasons = input.reasonCodes.filter(code => code !== "forecast_vote_decoupled");
-  if (hardReasons.length === 0) return "none" as const;
-  return input.hasOpenAppeal ? ("suspended_by_open_appeal" as const) : ("future_assignment_restriction" as const);
+  const activeHardFindingCount = input.activeHardFindingCount ?? new Set(hardReasons).size;
+  if (activeHardFindingCount === 0) return "none" as const;
+  return (input.suspendedHardFindingCount ?? 0) >= activeHardFindingCount
+    ? ("suspended_by_open_appeal" as const)
+    : ("future_assignment_restriction" as const);
 }

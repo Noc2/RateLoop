@@ -8,6 +8,8 @@ import {
   erasePrincipalForecastIntegrityInTransaction,
   listPrincipalForecastIntegrity,
   openPrincipalForecastAppeal,
+  resolveWorkspaceForecastAppeal,
+  withdrawPrincipalForecastAppeal,
 } from "~~/lib/tokenless/crowdForecastPersistence";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 
@@ -33,7 +35,7 @@ afterEach(() => {
   else process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEYS_JSON = originalLookupKeyring;
 });
 
-test("running sums create append-only payout-neutral findings and an appeal suspends assignment consequences", async () => {
+test("appeals suspend only their exact active findings and terminal transitions restore restrictions", async () => {
   const workspace = await createWorkspace({
     ownerAddress: OWNER,
     name: "Forecast persistence",
@@ -63,8 +65,10 @@ test("running sums create append-only payout-neutral findings and an appeal susp
   assert.equal(record.items[0]?.consequence, "future_assignment_restriction");
   assert.ok(record.items[0]?.reasonCodes.includes("forecast_invariant"));
   assert.ok(record.items[0]?.reasonCodes.includes("forecast_discrimination_absent"));
-  const finding = record.items[0]?.findings.find(value => value.reasonCode === "forecast_invariant");
-  assert.ok(finding);
+  const invariant = record.items[0]?.findings.find(value => value.reasonCode === "forecast_invariant");
+  const discrimination = record.items[0]?.findings.find(value => value.reasonCode === "forecast_discrimination_absent");
+  assert.ok(invariant);
+  assert.ok(discrimination);
   await assert.rejects(
     () =>
       assertPrincipalForecastAssignmentEligible({
@@ -76,12 +80,29 @@ test("running sums create append-only payout-neutral findings and an appeal susp
       error instanceof Error && "code" in error && error.code === "forecast_integrity_assignment_restricted",
   );
 
-  const appeal = await openPrincipalForecastAppeal({
+  const invariantAppeal = await openPrincipalForecastAppeal({
     principalId: REVIEWER,
-    findingId: finding.findingId,
+    findingId: invariant.findingId,
     reasonCode: "measurement_error",
   });
-  assert.equal(appeal.consequence, "suspended_by_open_appeal");
+  assert.equal(invariantAppeal.consequence, "future_assignment_restriction");
+  await assert.rejects(
+    () =>
+      assertPrincipalForecastAssignmentEligible({
+        principalId: REVIEWER,
+        reviewerSource: "customer_invited",
+        workspaceId: workspace.workspaceId,
+      }),
+    (error: unknown) =>
+      error instanceof Error && "code" in error && error.code === "forecast_integrity_assignment_restricted",
+  );
+
+  const discriminationAppeal = await openPrincipalForecastAppeal({
+    principalId: REVIEWER,
+    findingId: discrimination.findingId,
+    reasonCode: "context_missing",
+  });
+  assert.equal(discriminationAppeal.consequence, "suspended_by_open_appeal");
   const appealed = await listPrincipalForecastIntegrity(REVIEWER);
   assert.equal(appealed.items[0]?.consequence, "suspended_by_open_appeal");
   await assertPrincipalForecastAssignmentEligible({
@@ -90,11 +111,56 @@ test("running sums create append-only payout-neutral findings and an appeal susp
     workspaceId: workspace.workspaceId,
   });
 
+  const resolution = await resolveWorkspaceForecastAppeal({
+    accountAddress: OWNER,
+    workspaceId: workspace.workspaceId,
+    appealId: invariantAppeal.appealId!,
+    status: "accepted",
+    resolutionReason: "Evidence reviewed with the workspace owner.",
+  });
+  assert.equal(resolution.status, "accepted");
+  await assert.rejects(
+    () =>
+      assertPrincipalForecastAssignmentEligible({
+        principalId: REVIEWER,
+        reviewerSource: "customer_invited",
+        workspaceId: workspace.workspaceId,
+      }),
+    (error: unknown) =>
+      error instanceof Error && "code" in error && error.code === "forecast_integrity_assignment_restricted",
+  );
+  await assert.rejects(
+    () =>
+      withdrawPrincipalForecastAppeal({
+        principalId: REVIEWER,
+        appealId: invariantAppeal.appealId!,
+      }),
+    (error: unknown) => error instanceof Error && "code" in error && error.code === "forecast_appeal_already_resolved",
+  );
+  const withdrawal = await withdrawPrincipalForecastAppeal({
+    principalId: REVIEWER,
+    appealId: discriminationAppeal.appealId!,
+  });
+  assert.equal(withdrawal.status, "withdrawn");
+  assert.equal(withdrawal.consequence, "future_assignment_restriction");
+
   const appendOnly = await dbClient.execute(
     "SELECT finding_id,payout_effect FROM tokenless_forecast_integrity_findings ORDER BY created_at",
   );
   assert.ok(appendOnly.rows.length >= 2);
   assert.ok(appendOnly.rows.every(row => row.payout_effect === "none"));
+  const events = await dbClient.execute(
+    "SELECT event_type,actor_kind FROM tokenless_forecast_integrity_appeal_events ORDER BY occurred_at,event_id",
+  );
+  assert.deepEqual(
+    events.rows.map(row => [row.event_type, row.actor_kind]),
+    [
+      ["opened", "principal"],
+      ["opened", "principal"],
+      ["accepted", "workspace_manager"],
+      ["withdrawn", "principal"],
+    ],
+  );
 });
 
 test("account erasure removes invited accumulators, pair pseudonyms, findings, and appeals", async () => {
@@ -192,6 +258,8 @@ test("rotated invited lookup keys preserve old findings for access, gating, appe
   } finally {
     client.release();
   }
+  const appealEvents = await dbClient.execute("SELECT event_id FROM tokenless_forecast_integrity_appeal_events");
+  assert.equal(appealEvents.rowCount, 0);
 });
 
 test("stored invited key versions fail closed instead of hiding old findings", async () => {
