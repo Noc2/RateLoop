@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { eth_getTransactionByHash, getRpcClient, prepareTransaction, sendTransaction, waitForReceipt } from "thirdweb";
 import { baseSepolia } from "thirdweb/chains";
 import { ConnectButton, ThirdwebProvider, useActiveAccount } from "thirdweb/react";
+import { Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { readBrowserSession } from "~~/lib/auth/client";
 import { rateLoopThirdwebWallets, thirdwebBrowserClient } from "~~/lib/thirdweb/client";
 import { listDeviceRecoveries, parseDeviceRecoveryBackup } from "~~/lib/tokenless/rater/deviceRecovery";
@@ -255,50 +256,49 @@ function SettlementRecoveryControls() {
         stay in this browser until you approve the exact on-chain transaction.
       </p>
       <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
-        <label className="text-sm">
-          Saved paid review
-          <select
-            className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-            value={selectedSource}
-            onChange={event => {
-              resetSettlement();
-              setSelectedSource(event.target.value);
-            }}
-          >
-            <option value="">Choose a review</option>
-            {allSources.map(source => (
-              <option key={source.id} value={source.id}>
-                {source.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="rateloop-secondary-action mt-7 cursor-pointer self-start rounded-lg px-4 py-2 text-sm">
-          Import backup
-          <input
-            className="sr-only"
-            type="file"
-            accept="application/json,.json"
-            onChange={event => void loadFile(event.target.files?.[0])}
-          />
-        </label>
+        <SelectField
+          className="border-white/10 bg-[var(--rateloop-field)]"
+          label="Saved paid review"
+          labelClassName="text-sm"
+          value={selectedSource}
+          onChange={event => {
+            resetSettlement();
+            setSelectedSource(event.target.value);
+          }}
+        >
+          <option value="">Choose a review</option>
+          {allSources.map(source => (
+            <option key={source.id} value={source.id}>
+              {source.label}
+            </option>
+          ))}
+        </SelectField>
+        <Field
+          containerClassName="rateloop-secondary-action mt-7 cursor-pointer self-start rounded-lg px-4 py-2 text-sm"
+          className="sr-only"
+          label="Import backup"
+          labelClassName="m-0 inline text-sm font-normal text-inherit"
+          type="file"
+          accept="application/json,.json"
+          onChange={event => void loadFile(event.target.files?.[0])}
+        />
       </div>
       {needsRecoverySecret ? (
-        <label className="mt-3 block text-sm">
-          Recovery secret
-          <input
-            className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-            type="password"
-            minLength={12}
-            maxLength={1024}
-            autoComplete="off"
-            value={recoverySecret}
-            onChange={event => {
-              resetSettlement();
-              setRecoverySecret(event.target.value);
-            }}
-          />
-        </label>
+        <Field
+          containerClassName="mt-3"
+          className="border-white/10 bg-[var(--rateloop-field)]"
+          label="Recovery secret"
+          labelClassName="text-sm"
+          type="password"
+          minLength={12}
+          maxLength={1024}
+          autoComplete="off"
+          value={recoverySecret}
+          onChange={event => {
+            resetSettlement();
+            setRecoverySecret(event.target.value);
+          }}
+        />
       ) : null}
       <button
         type="button"

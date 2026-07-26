@@ -295,23 +295,20 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
                         Owner
                       </span>
                     ) : (
-                      <label>
-                        <span className="sr-only">
-                          Role for {member.displayName ?? member.email ?? member.principalId}
-                        </span>
-                        <select
-                          className="select select-sm rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                          value={member.accessRole}
-                          disabled={immutable || busyTarget === member.principalId}
-                          onChange={event =>
-                            void updateRole(member, event.target.value as Exclude<WorkspaceAccessRole, "owner">)
-                          }
-                        >
-                          <option value="member">Member</option>
-                          <option value="admin">Admin</option>
-                          <option value="billing">Billing</option>
-                        </select>
-                      </label>
+                      <SelectField
+                        className="select-sm rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                        label={`Role for ${member.displayName ?? member.email ?? member.principalId}`}
+                        labelClassName="sr-only"
+                        value={member.accessRole}
+                        disabled={immutable || busyTarget === member.principalId}
+                        onChange={event =>
+                          void updateRole(member, event.target.value as Exclude<WorkspaceAccessRole, "owner">)
+                        }
+                      >
+                        <option value="member">Member</option>
+                        <option value="admin">Admin</option>
+                        <option value="billing">Billing</option>
+                      </SelectField>
                     )}
                     {!immutable ? (
                       <button

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Field } from "~~/components/tokenless/forms/Field";
+import { ChoiceInput, Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { readJson } from "~~/lib/tokenless/http";
 
@@ -74,12 +74,16 @@ function PreferenceToggle({
   onChange: (value: boolean) => void;
 }) {
   return (
-    <label className="flex items-start justify-between gap-4 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+    <label
+      className="flex items-start justify-between gap-4 rounded-xl border border-white/10 bg-black/20 px-4 py-3"
+      htmlFor={`notification-${option.key}`}
+    >
       <span>
         <span className="block text-sm font-semibold text-base-content">{option.label}</span>
         <span className="mt-1 block text-xs leading-5 text-base-content/55">{option.description}</span>
       </span>
-      <input
+      <ChoiceInput
+        id={`notification-${option.key}`}
         type="checkbox"
         aria-label={option.label}
         className="toggle toggle-sm toggle-primary mt-1"

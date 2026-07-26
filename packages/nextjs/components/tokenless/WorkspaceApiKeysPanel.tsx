@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { OneTimeSecretNotice } from "~~/components/tokenless/agents/OneTimeSecretNotice";
-import { Field } from "~~/components/tokenless/forms/Field";
+import { ChoiceInput, Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 
 const API_KEY_SCOPES = [
@@ -165,7 +165,7 @@ export function WorkspaceApiKeysPanel({ workspaceId }: { workspaceId: string }) 
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             {API_KEY_SCOPES.map(scope => (
               <label key={scope} className="flex min-h-11 items-center gap-3 rounded-lg border border-white/10 px-3">
-                <input
+                <ChoiceInput
                   className="checkbox checkbox-sm"
                   type="checkbox"
                   checked={scopes.includes(scope)}

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { eth_getTransactionByHash, getRpcClient, prepareTransaction, sendTransaction, waitForReceipt } from "thirdweb";
 import { baseSepolia } from "thirdweb/chains";
 import { ConnectButton, ThirdwebProvider, useActiveAccount } from "thirdweb/react";
+import { Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { readBrowserSession } from "~~/lib/auth/client";
 import { rateLoopThirdwebWallets, thirdwebBrowserClient } from "~~/lib/thirdweb/client";
 import type { PublicFeedbackBonusEntitlement } from "~~/lib/tokenless/feedbackBonusRecipientClaims";
@@ -252,55 +253,52 @@ function FeedbackBonusClaimsControls() {
         vote, prediction, response hash, payout address, and salt even without a reveal or claim. Claiming later submits
         the payout address and salt on-chain; any wallet may relay, but funds still go to that address.
       </p>
-      <div className="mt-4">
-        <label className="text-sm">
-          Saved review
-          <select
-            className="select mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-            value={selectedSource}
-            onChange={event => {
-              resetEvidence();
-              setSelectedSource(event.target.value);
-            }}
-          >
-            <option value="">Choose a review</option>
-            {allSources.map(source => (
-              <option key={source.id} value={source.id}>
-                {source.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+      <SelectField
+        containerClassName="mt-4"
+        className="border-white/10 bg-[var(--rateloop-field)]"
+        label="Saved review"
+        labelClassName="text-sm"
+        value={selectedSource}
+        onChange={event => {
+          resetEvidence();
+          setSelectedSource(event.target.value);
+        }}
+      >
+        <option value="">Choose a review</option>
+        {allSources.map(source => (
+          <option key={source.id} value={source.id}>
+            {source.label}
+          </option>
+        ))}
+      </SelectField>
       {needsRecoverySecret ? (
         <div className="mt-3 rounded-lg border border-white/10 p-3 text-sm text-base-content/60">
-          <label className="block text-xs">
-            Recovery secret
-            <input
-              className="input input-sm mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-              type="password"
-              value={recoverySecret}
-              onChange={event => {
-                resetEvidence();
-                setRecoverySecret(event.target.value);
-              }}
-              minLength={12}
-              maxLength={1024}
-              autoComplete="off"
-            />
-          </label>
+          <Field
+            className="input-sm border-white/10 bg-[var(--rateloop-field)]"
+            label="Recovery secret"
+            labelClassName="text-xs"
+            type="password"
+            value={recoverySecret}
+            onChange={event => {
+              resetEvidence();
+              setRecoverySecret(event.target.value);
+            }}
+            minLength={12}
+            maxLength={1024}
+            autoComplete="off"
+          />
         </div>
       ) : null}
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <label className="rateloop-secondary-action cursor-pointer rounded-lg px-4 py-2 text-sm">
-          Import backup
-          <input
-            className="sr-only"
-            type="file"
-            accept="application/json,.json"
-            onChange={event => void loadFile(event.target.files?.[0])}
-          />
-        </label>
+        <Field
+          containerClassName="rateloop-secondary-action cursor-pointer rounded-lg px-4 py-2 text-sm"
+          className="sr-only"
+          label="Import backup"
+          labelClassName="m-0 inline text-sm font-normal text-inherit"
+          type="file"
+          accept="application/json,.json"
+          onChange={event => void loadFile(event.target.files?.[0])}
+        />
         <button
           type="button"
           className="rateloop-gradient-action px-4 text-sm"

@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { Field } from "~~/components/tokenless/forms/Field";
+import { ChoiceInput, Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { readBrowserSession } from "~~/lib/auth/client";
 import {
@@ -365,19 +365,16 @@ export function PaidEligibilityClient() {
                         required
                         error={fieldErrors.postalCode}
                       />
-                      <label className="text-sm text-base-content/70">
-                        Tax identifier type
-                        <select
-                          className="select select-bordered mt-1 w-full"
-                          value={form.taxIdentificationKind}
-                          onChange={event =>
-                            update("taxIdentificationKind", event.target.value as "tin" | "place_of_birth")
-                          }
-                        >
-                          <option value="tin">Tax identification number</option>
-                          <option value="place_of_birth">Place of birth (when no TIN is issued)</option>
-                        </select>
-                      </label>
+                      <SelectField
+                        label="Tax identifier type"
+                        value={form.taxIdentificationKind}
+                        onChange={event =>
+                          update("taxIdentificationKind", event.target.value as "tin" | "place_of_birth")
+                        }
+                      >
+                        <option value="tin">Tax identification number</option>
+                        <option value="place_of_birth">Place of birth (when no TIN is issued)</option>
+                      </SelectField>
                       {form.taxIdentificationKind === "tin" ? (
                         <Field
                           label="Tax identification number"
@@ -415,8 +412,12 @@ export function PaidEligibilityClient() {
               )}
             </div>
             {residenceComplete ? (
-              <label className="flex items-start gap-3 text-sm leading-6 text-base-content/65">
-                <input
+              <label
+                className="flex items-start gap-3 text-sm leading-6 text-base-content/65"
+                htmlFor="paid-eligibility-sanctions-consent"
+              >
+                <ChoiceInput
+                  id="paid-eligibility-sanctions-consent"
                   type="checkbox"
                   className="checkbox checkbox-sm mt-1"
                   checked={form.sanctionsConsent}

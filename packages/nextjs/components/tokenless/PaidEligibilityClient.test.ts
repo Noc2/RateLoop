@@ -6,7 +6,9 @@ const source = readFileSync(new URL("./PaidEligibilityClient.tsx", import.meta.u
 
 test("paid eligibility asks residence first and conditionally renders the structured DAC7 form", () => {
   assert.ok((source.match(/<Field/g)?.length ?? 0) >= 10);
-  assert.equal(source.match(/<input/g)?.length, 1);
+  assert.equal(source.match(/<ChoiceInput/g)?.length, 1);
+  assert.equal(source.match(/<SelectField/g)?.length, 1);
+  assert.doesNotMatch(source, /<input\b/);
   assert.match(source, /format="countryCode"/);
   assert.match(source, /type="date"/);
   assert.match(source, /autoComplete="street-address"/);

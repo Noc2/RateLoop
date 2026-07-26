@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { SelectField } from "~~/components/tokenless/forms/Field";
 
 type Finding = {
   findingId: string;
@@ -197,21 +198,21 @@ export function ForecastIntegrityClient() {
                         </div>
                       ) : finding.severity === "hard" ? (
                         <div className="mt-3 flex flex-wrap items-end gap-2">
-                          <label className="text-xs">
-                            Appeal reason
-                            <select
-                              className="mt-1 block rounded-lg border border-white/15 bg-black px-3 py-2"
-                              value={appealReasons[finding.findingId] ?? "context_missing"}
-                              onChange={event =>
-                                setAppealReasons(current => ({ ...current, [finding.findingId]: event.target.value }))
-                              }
-                            >
-                              <option value="context_missing">Context was missing</option>
-                              <option value="shared_process">Shared review process</option>
-                              <option value="measurement_error">Measurement error</option>
-                              <option value="other">Other</option>
-                            </select>
-                          </label>
+                          <SelectField
+                            containerClassName="text-xs"
+                            className="mt-1 block rounded-lg border-white/15 bg-black px-3 py-2"
+                            label="Appeal reason"
+                            labelClassName="mb-0 text-xs"
+                            value={appealReasons[finding.findingId] ?? "context_missing"}
+                            onChange={event =>
+                              setAppealReasons(current => ({ ...current, [finding.findingId]: event.target.value }))
+                            }
+                          >
+                            <option value="context_missing">Context was missing</option>
+                            <option value="shared_process">Shared review process</option>
+                            <option value="measurement_error">Measurement error</option>
+                            <option value="other">Other</option>
+                          </SelectField>
                           <button
                             type="button"
                             className="rateloop-secondary-action rounded-lg px-3 py-2 text-sm"
