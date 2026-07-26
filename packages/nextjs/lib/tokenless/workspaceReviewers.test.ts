@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { afterEach, beforeEach, test } from "node:test";
 import { resolveBetterAuthPrincipal } from "~~/lib/auth/principal";
-import { type DatabaseResources, __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
+import { type DatabaseResources, __setDatabaseResourcesForTests, dbClient, dbPool } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
-import { createPrivateGroup } from "~~/lib/tokenless/privateGroups";
+import { createPrivateGroup, createPrivateGroupInvitationInTransaction } from "~~/lib/tokenless/privateGroups";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
@@ -170,6 +170,26 @@ test("setup-bound reviewer invitation redemption activates the selected private 
     accessExpiresAt: new Date(now.getTime() + 30 * 86_400_000),
     now,
   });
+  const companionClient = await dbPool.connect();
+  try {
+    await companionClient.query("BEGIN");
+    await createPrivateGroupInvitationInTransaction(companionClient, {
+      actorAddress: owner,
+      invitationId: invitation.invitationId,
+      workspaceId,
+      groupId: group.groupId,
+      intendedAccountAddress: reviewer,
+      expiresAt: new Date(invitation.expiresAt),
+      membershipExpiresAt: new Date(invitation.accessExpiresAt!),
+      now,
+    });
+    await companionClient.query("COMMIT");
+  } catch (error) {
+    await companionClient.query("ROLLBACK");
+    throw error;
+  } finally {
+    companionClient.release();
+  }
   const setup = await dbClient.execute({
     sql: `UPDATE tokenless_workspace_agent_setups
           SET status='completed',current_step='complete',people_decision='invited',private_group_id=?,
@@ -201,7 +221,7 @@ test("setup-bound reviewer invitation redemption activates the selected private 
   });
   assert.equal(stored.rows[0]?.status, "active");
   assert.equal(stored.rows[0]?.allowed_project_ids_json, "[]");
-  assert.equal(stored.rows[0]?.source_invitation_id, null);
+  assert.equal(stored.rows[0]?.source_invitation_id, invitation.invitationId);
   assert.equal(
     new Date(String(stored.rows[0]?.membership_expires_at)).toISOString(),
     new Date(now.getTime() + 30 * 86_400_000).toISOString(),
@@ -218,10 +238,212 @@ test("setup-bound reviewer invitation redemption activates the selected private 
   });
   assert.equal(replay.replay, true);
   const repaired = await dbClient.execute({
-    sql: "SELECT status FROM tokenless_private_group_memberships WHERE group_id=? AND principal_address=?",
+    sql: `SELECT status,source_invitation_id FROM tokenless_private_group_memberships
+          WHERE group_id=? AND principal_address=?`,
     args: [group.groupId, reviewer],
   });
   assert.equal(repaired.rows[0]?.status, "active");
+  assert.equal(repaired.rows[0]?.source_invitation_id, invitation.invitationId);
+
+  await removeWorkspaceReviewer({
+    accountAddress: owner,
+    workspaceId,
+    principalAddress: reviewer,
+    reason: "access_removed",
+    now: new Date(now.getTime() + 120_000),
+  });
+  const removedReplay = await redeemWorkspaceReviewerInvitation({
+    accountAddress: reviewer,
+    token: invitation.token,
+    now: new Date(now.getTime() + 180_000),
+  });
+  assert.equal(removedReplay.replay, true);
+  const remainsRemoved = await dbClient.execute({
+    sql: `SELECT status FROM tokenless_private_group_memberships
+          WHERE group_id=? AND principal_address=?`,
+    args: [group.groupId, reviewer],
+  });
+  assert.equal(remainsRemoved.rows[0]?.status, "removed");
+});
+
+test("revoking a setup invitation also revokes its private-group provenance and pending expertise", async () => {
+  const { workspaceId, owner, reviewer } = await fixture();
+  const group = await createPrivateGroup({
+    accountAddress: owner,
+    workspaceId,
+    name: "Revoked setup reviewers",
+    purpose: "Exercise setup invitation revocation.",
+  });
+  const now = new Date("2026-07-21T09:00:00.000Z");
+  const accessExpiresAt = new Date(now.getTime() + 30 * 86_400_000);
+  const invitation = await createWorkspaceReviewerInvitation({
+    accountAddress: owner,
+    workspaceId,
+    maxPrivateSensitivity: "confidential",
+    intendedAccountAddress: reviewer,
+    accessExpiresAt,
+    now,
+  });
+  const definitionResult = await dbClient.execute({
+    sql: `SELECT definition_id,version,definition_hash
+          FROM tokenless_reviewer_expertise_definitions
+          WHERE slug='code-review:typescript' AND superseded_at IS NULL`,
+  });
+  const definition = definitionResult.rows[0]!;
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    await createPrivateGroupInvitationInTransaction(client, {
+      actorAddress: owner,
+      invitationId: invitation.invitationId,
+      workspaceId,
+      groupId: group.groupId,
+      intendedAccountAddress: reviewer,
+      expiresAt: new Date(invitation.expiresAt),
+      membershipExpiresAt: accessExpiresAt,
+      expertiseExpiresAt: new Date(now.getTime() + 10 * 86_400_000),
+      expertiseDefinitions: [
+        {
+          definitionId: String(definition.definition_id),
+          definitionVersion: Number(definition.version),
+          definitionHash: String(definition.definition_hash) as `sha256:${string}`,
+        },
+      ],
+      now,
+    });
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+  await dbClient.execute({
+    sql: `UPDATE tokenless_workspace_agent_setups
+          SET status='completed',current_step='complete',people_decision='invited',private_group_id=?,
+              people_decided_at=?,people_decided_by=?,people_invitation_id=?,
+              finalization_idempotency_key_hash=?,finalization_request_hash=?,
+              completed_at=?,completed_by=?,updated_at=?
+          WHERE workspace_id=?`,
+    args: [
+      group.groupId,
+      now,
+      owner,
+      invitation.invitationId,
+      `sha256:${"3".repeat(64)}`,
+      `sha256:${"4".repeat(64)}`,
+      now,
+      owner,
+      now,
+      workspaceId,
+    ],
+  });
+
+  await revokeWorkspaceReviewerInvitation({
+    accountAddress: owner,
+    workspaceId,
+    invitationId: invitation.invitationId,
+    now: new Date(now.getTime() + 60_000),
+  });
+  await assert.rejects(
+    redeemWorkspaceReviewerInvitation({
+      accountAddress: reviewer,
+      token: invitation.token,
+      now: new Date(now.getTime() + 120_000),
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "reviewer_invitation_unavailable",
+  );
+  const revoked = await dbClient.execute({
+    sql: `SELECT
+            (SELECT revoked_at FROM tokenless_workspace_reviewer_invitations WHERE invitation_id=?) AS workspace_revoked_at,
+            (SELECT revoked_at FROM tokenless_private_group_invitations WHERE invitation_id=?) AS group_revoked_at,
+            (SELECT COUNT(*) FROM tokenless_private_group_memberships
+             WHERE group_id=? AND principal_address=?) AS membership_count`,
+    args: [invitation.invitationId, invitation.invitationId, group.groupId, reviewer],
+  });
+  const expertiseStatus = await dbClient.execute({
+    sql: `SELECT status FROM tokenless_private_group_invitation_expertise_attestations
+          WHERE invitation_id=? LIMIT 1`,
+    args: [invitation.invitationId],
+  });
+  assert.ok(revoked.rows[0]?.workspace_revoked_at);
+  assert.ok(revoked.rows[0]?.group_revoked_at);
+  assert.equal(expertiseStatus.rows[0]?.status, "revoked");
+  assert.equal(Number(revoked.rows[0]?.membership_count), 0);
+});
+
+test("expired setup invitations cannot create private-group memberships", async () => {
+  const { workspaceId, owner, reviewer } = await fixture();
+  const group = await createPrivateGroup({
+    accountAddress: owner,
+    workspaceId,
+    name: "Expired setup reviewers",
+    purpose: "Exercise setup invitation expiry.",
+  });
+  const now = new Date("2026-07-21T09:00:00.000Z");
+  const invitation = await createWorkspaceReviewerInvitation({
+    accountAddress: owner,
+    workspaceId,
+    maxPrivateSensitivity: "confidential",
+    intendedAccountAddress: reviewer,
+    accessExpiresAt: new Date(now.getTime() + 30 * 86_400_000),
+    now,
+  });
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    await createPrivateGroupInvitationInTransaction(client, {
+      actorAddress: owner,
+      invitationId: invitation.invitationId,
+      workspaceId,
+      groupId: group.groupId,
+      intendedAccountAddress: reviewer,
+      expiresAt: new Date(invitation.expiresAt),
+      membershipExpiresAt: new Date(invitation.accessExpiresAt!),
+      now,
+    });
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+  await dbClient.execute({
+    sql: `UPDATE tokenless_workspace_agent_setups
+          SET status='completed',current_step='complete',people_decision='invited',private_group_id=?,
+              people_decided_at=?,people_decided_by=?,people_invitation_id=?,
+              finalization_idempotency_key_hash=?,finalization_request_hash=?,
+              completed_at=?,completed_by=?,updated_at=?
+          WHERE workspace_id=?`,
+    args: [
+      group.groupId,
+      now,
+      owner,
+      invitation.invitationId,
+      `sha256:${"5".repeat(64)}`,
+      `sha256:${"6".repeat(64)}`,
+      now,
+      owner,
+      now,
+      workspaceId,
+    ],
+  });
+
+  await assert.rejects(
+    redeemWorkspaceReviewerInvitation({
+      accountAddress: reviewer,
+      token: invitation.token,
+      now: new Date(now.getTime() + 8 * 86_400_000),
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "reviewer_invitation_unavailable",
+  );
+  const membership = await dbClient.execute({
+    sql: `SELECT 1 FROM tokenless_private_group_memberships
+          WHERE group_id=? AND principal_address=?`,
+    args: [group.groupId, reviewer],
+  });
+  assert.equal(membership.rowCount, 0);
 });
 
 test("reviewer invitation redemption is idempotent after reaching its redemption cap", async () => {

@@ -588,7 +588,11 @@ function validateInvitationToken(token: string) {
 
 export async function createPrivateGroupInvitationInTransaction(
   client: Pick<Client, "query">,
-  input: Omit<CreatePrivateGroupInvitationInput, "accountAddress"> & { actorAddress: string; token?: string },
+  input: Omit<CreatePrivateGroupInvitationInput, "accountAddress"> & {
+    actorAddress: string;
+    invitationId?: string;
+    token?: string;
+  },
 ) {
   const manager = normalizeAddress(input.actorAddress);
   const now = input.now ?? new Date();
@@ -651,7 +655,10 @@ export async function createPrivateGroupInvitationInTransaction(
   const validatedToken = validateInvitationToken(tokenCandidate);
   const token = validatedToken.token;
   const prefix = validatedToken.prefix;
-  const invitationId = `pgi_${randomUUID().replaceAll("-", "")}`;
+  const invitationId = input.invitationId ?? `pgi_${randomUUID().replaceAll("-", "")}`;
+  if (!/^(?:pgi_[a-f0-9]{32}|wri_[a-f0-9]{16})$/u.test(invitationId)) {
+    throw new TokenlessServiceError("Private-group invitation ID is invalid.", 400, "invalid_private_group_invitation");
+  }
   const managedGroup = await client.query(
     `SELECT g.group_id
      FROM tokenless_private_groups g

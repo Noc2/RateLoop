@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
+import { resolveBetterAuthPrincipal } from "~~/lib/auth/principal";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { DEFAULT_ADAPTIVE_AGREEMENT_THRESHOLD_BPS } from "~~/lib/tokenless/adaptiveReviewDefaults";
@@ -14,8 +15,13 @@ import {
   putHumanReviewConfigurationForOwner,
 } from "~~/lib/tokenless/humanReviewConfiguration";
 import { loadWorkspaceOnboardingFunnel } from "~~/lib/tokenless/onboardingObservability";
-import { createPrivateGroup } from "~~/lib/tokenless/privateGroups";
+import {
+  createPrivateGroup,
+  createPrivateGroupInvitation,
+  redeemPrivateGroupInvitation,
+} from "~~/lib/tokenless/privateGroups";
 import { createAgentPublishingPolicy, createWorkspace } from "~~/lib/tokenless/productCore";
+import { replacePrivateGroupMemberExpertise } from "~~/lib/tokenless/reviewerExpertiseAssignments";
 import { createWorkspaceReviewerExpertiseDefinition } from "~~/lib/tokenless/reviewerExpertiseDefinitions";
 import type { ReviewerExpertiseRequirement } from "~~/lib/tokenless/reviewerExpertiseOptions";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -31,7 +37,12 @@ import {
   getWorkspaceAgentSetup,
   updateWorkspaceSetupName,
 } from "~~/lib/tokenless/workspaceAgentSetup";
-import { listWorkspaceReviewerInvitations } from "~~/lib/tokenless/workspaceReviewers";
+import { provisionWorkspacePrivateReviewRouting } from "~~/lib/tokenless/workspacePrivateReviewRouting";
+import {
+  createWorkspaceReviewerInvitation,
+  listWorkspaceReviewerInvitations,
+  redeemWorkspaceReviewerInvitation,
+} from "~~/lib/tokenless/workspaceReviewers";
 
 const OWNER = `rlp_${"b".repeat(24)}`;
 const CLIENT_ID = "rloc_setup_client";
@@ -101,6 +112,24 @@ async function connectedSetup() {
   return { workspaceId, integrationId: claimed.connection.integrationId };
 }
 
+async function reviewerPrincipal(label: string, email: string) {
+  const now = new Date();
+  const betterAuthUserId = `better_setup_reviewer_${label}`;
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_better_auth_users
+          (id,name,email,email_verified,created_at,updated_at)
+          VALUES (?,?,?,true,?,?)`,
+    args: [betterAuthUserId, `Setup reviewer ${label}`, email, now, now],
+  });
+  return (
+    await resolveBetterAuthPrincipal({
+      betterAuthUserId,
+      displayName: `Setup reviewer ${label}`,
+      method: "email-otp",
+    })
+  ).principalId;
+}
+
 async function saveSetupReviewConfiguration(input: {
   workspaceId: string;
   agentId: string;
@@ -110,6 +139,7 @@ async function saveSetupReviewConfiguration(input: {
   authority?: "check_only" | "prepare_for_approval";
   questionAuthority?: "owner_fixed" | "agent_per_request" | "omit";
   expertiseRequirements?: ReviewerExpertiseRequirement[];
+  panelSize?: number;
 }) {
   const audience = input.audience ?? "private_invited";
   const questionAuthority = input.questionAuthority ?? "owner_fixed";
@@ -147,7 +177,7 @@ async function saveSetupReviewConfiguration(input: {
         privateGroupId: audience === "public_network" ? null : input.groupId,
         expertiseRequirements: input.expertiseRequirements,
         responseWindowSeconds: 3_600,
-        panelSize: audience === "public_network" ? 3 : 2,
+        panelSize: input.panelSize ?? (audience === "public_network" ? 3 : 2),
         compensationMode: audience === "public_network" ? "usdc" : "unpaid",
         bountyPerSeatAtomic: audience === "public_network" ? "1000000" : null,
       },
@@ -192,7 +222,7 @@ async function readyPrivateSetupForFinalization() {
   return { group, reviews, workspaceId };
 }
 
-test("setup resumes exact workspace specialist requirements without weakening the frozen profile", async () => {
+test("setup specialist invitation redemption reaches exact membership, expertise, and routing", async () => {
   const { workspaceId } = await connectedSetup();
   const connected = await getWorkspaceAgentSetup({ accountAddress: OWNER, workspaceId });
   const confirmed = await confirmWorkspaceSetupAgent({
@@ -246,20 +276,185 @@ test("setup resumes exact workspace specialist requirements without weakening th
   assert.deepEqual(setup.reviewDraft?.requestProfile.expertiseRequirements, expertiseRequirements);
   assert.deepEqual(setup.reviewDraft?.requestProfile.requiredExpertiseKeys, []);
 
-  await assert.rejects(
-    configureWorkspaceSetupPeople({
-      accountAddress: OWNER,
-      workspaceId,
-      revision: reviews.revision,
-      decision: "invited",
-      createInvitation: true,
-      intendedEmail: "specialist@example.com",
-      expertiseDefinitionIds: [definition.definitionId],
-    }),
-    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_agent_setup_people",
+  const finalized = await finalizeWorkspaceAgentSetup({
+    accountAddress: OWNER,
+    workspaceId,
+    revision: reviews.revision,
+    idempotencyKey: "c5b69376-50f7-4361-a9ec-1e3525099776",
+    decision: "invited",
+    groupId: group.groupId,
+    createInvitation: true,
+    intendedEmail: "specialist@example.test",
+    expertiseDefinitionIds: [definition.definitionId],
+  });
+  assert.equal(finalized.idempotent, false);
+  assert.equal(finalized.invitation?.status, "active");
+  assert.ok(finalized.invitation?.token);
+
+  const invitationId = finalized.invitation!.invitationId;
+  const companion = await dbClient.execute({
+    sql: `SELECT p.group_id,p.expires_at,p.membership_expires_at,p.maximum_redemptions,
+                 w.expires_at AS workspace_expires_at,w.access_expires_at
+          FROM tokenless_private_group_invitations p
+          JOIN tokenless_workspace_reviewer_invitations w
+            ON w.invitation_id=p.invitation_id AND w.workspace_id=p.workspace_id
+          WHERE p.invitation_id=?`,
+    args: [invitationId],
+  });
+  assert.equal(companion.rows[0]?.group_id, group.groupId);
+  assert.equal(
+    new Date(String(companion.rows[0]?.expires_at)).toISOString(),
+    new Date(String(companion.rows[0]?.workspace_expires_at)).toISOString(),
   );
-  const invitations = await listWorkspaceReviewerInvitations({ accountAddress: OWNER, workspaceId });
-  assert.equal(invitations.length, 0);
+  assert.equal(companion.rows[0]?.membership_expires_at, companion.rows[0]?.access_expires_at);
+  assert.equal(Number(companion.rows[0]?.maximum_redemptions), 1);
+  const pending = await dbClient.execute({
+    sql: `SELECT expertise_definition_id,expertise_definition_version,expertise_definition_hash,status
+          FROM tokenless_private_group_invitation_expertise_attestations
+          WHERE invitation_id=?`,
+    args: [invitationId],
+  });
+  assert.deepEqual(pending.rows[0], {
+    expertise_definition_id: definition.definitionId,
+    expertise_definition_version: definition.version,
+    expertise_definition_hash: definition.hash,
+    status: "pending",
+  });
+
+  const outsider = await reviewerPrincipal("outsider", "outsider@example.test");
+  await assert.rejects(
+    redeemWorkspaceReviewerInvitation({
+      accountAddress: outsider,
+      token: finalized.invitation!.token!,
+      now: new Date(Date.now() + 1_000),
+    }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "reviewer_invitation_email_mismatch",
+  );
+  const reviewer = await reviewerPrincipal("specialist", "specialist@example.test");
+  const generalist = await reviewerPrincipal("generalist", "generalist@example.test");
+  const redemptionNow = new Date(Date.now() + 2_000);
+  const redeemed = await redeemWorkspaceReviewerInvitation({
+    accountAddress: reviewer,
+    token: finalized.invitation!.token!,
+    now: redemptionNow,
+  });
+  assert.equal(redeemed.replay, false);
+
+  const membership = await dbClient.execute({
+    sql: `SELECT status,source_invitation_id FROM tokenless_private_group_memberships
+          WHERE group_id=? AND principal_address=?`,
+    args: [group.groupId, reviewer],
+  });
+  assert.deepEqual(membership.rows[0], {
+    status: "active",
+    source_invitation_id: invitationId,
+  });
+  const privateRedemption = await dbClient.execute({
+    sql: `SELECT invitation_id,principal_address,group_id
+          FROM tokenless_private_group_invitation_redemptions
+          WHERE invitation_id=? AND principal_address=?`,
+    args: [invitationId, reviewer],
+  });
+  assert.deepEqual(privateRedemption.rows[0], {
+    invitation_id: invitationId,
+    principal_address: reviewer,
+    group_id: group.groupId,
+  });
+
+  const generalistMembershipExpiry = new Date(redemptionNow.getTime() + 30 * 86_400_000);
+  const generalistGroupInvitation = await createPrivateGroupInvitation({
+    accountAddress: OWNER,
+    workspaceId,
+    groupId: group.groupId,
+    intendedAccountAddress: generalist,
+    membershipExpiresAt: generalistMembershipExpiry,
+    now: redemptionNow,
+  });
+  await redeemPrivateGroupInvitation({
+    accountAddress: generalist,
+    token: generalistGroupInvitation.token,
+    now: redemptionNow,
+  });
+  const generalistWorkspaceInvitation = await createWorkspaceReviewerInvitation({
+    accountAddress: OWNER,
+    workspaceId,
+    intendedAccountAddress: generalist,
+    maxPrivateSensitivity: "confidential",
+    accessExpiresAt: generalistMembershipExpiry,
+    now: redemptionNow,
+  });
+  await redeemWorkspaceReviewerInvitation({
+    accountAddress: generalist,
+    token: generalistWorkspaceInvitation.token,
+    now: redemptionNow,
+  });
+
+  const expertiseExpiresAt = new Date(redemptionNow.getTime() + 86_400_000);
+  const expertise = await replacePrivateGroupMemberExpertise({
+    accountAddress: OWNER,
+    workspaceId,
+    groupId: group.groupId,
+    reviewerAccountAddress: reviewer,
+    definitions: [
+      {
+        definitionId: definition.definitionId,
+        definitionVersion: definition.version,
+        definitionHash: definition.hash,
+      },
+    ],
+    expiresAt: expertiseExpiresAt,
+    now: redemptionNow,
+  });
+  assert.equal(expertise.sourceInvitationId, invitationId);
+  const materialized = await dbClient.execute({
+    sql: `SELECT status,materialized_qualification_id
+          FROM tokenless_private_group_invitation_expertise_attestations
+          WHERE invitation_id=? AND expertise_definition_id=?`,
+    args: [invitationId, definition.definitionId],
+  });
+  assert.equal(materialized.rows[0]?.status, "materialized");
+  assert.equal(materialized.rows[0]?.materialized_qualification_id, expertise.grants[0]?.qualificationId);
+
+  const routing = await provisionWorkspacePrivateReviewRouting({
+    accountAddress: OWNER,
+    workspaceId,
+    profileId: saved.configuration.requestProfile.id,
+    profileVersion: saved.configuration.requestProfile.version,
+    profileHash: saved.configuration.requestProfile.hash,
+    now: redemptionNow,
+  });
+  assert.equal(routing.ready, true);
+  assert.equal(routing.syncedReviewerCount, 2);
+  assert.equal(routing.selectedReviewerCount, 2);
+
+  await dbClient.execute({
+    sql: "DELETE FROM tokenless_private_group_memberships WHERE group_id=? AND principal_address=?",
+    args: [group.groupId, reviewer],
+  });
+  const replay = await redeemWorkspaceReviewerInvitation({
+    accountAddress: reviewer,
+    token: finalized.invitation!.token!,
+    now: new Date(redemptionNow.getTime() + 60_000),
+  });
+  assert.equal(replay.replay, true);
+  const restored = await dbClient.execute({
+    sql: `SELECT status,source_invitation_id FROM tokenless_private_group_memberships
+          WHERE group_id=? AND principal_address=?`,
+    args: [group.groupId, reviewer],
+  });
+  assert.deepEqual(restored.rows[0], {
+    status: "active",
+    source_invitation_id: invitationId,
+  });
+  const replayedRouting = await provisionWorkspacePrivateReviewRouting({
+    accountAddress: OWNER,
+    workspaceId,
+    profileId: saved.configuration.requestProfile.id,
+    profileVersion: saved.configuration.requestProfile.version,
+    profileHash: saved.configuration.requestProfile.hash,
+    now: new Date(redemptionNow.getTime() + 60_000),
+  });
+  assert.equal(replayedRouting.ready, true);
 });
 
 test("setup binds one verified connection and completes without publishing or spending authority", async () => {

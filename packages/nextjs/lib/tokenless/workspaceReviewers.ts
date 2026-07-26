@@ -701,6 +701,7 @@ async function ensureSetupPrivateGroupMembership(
     invitation: Row;
     invitationId: string;
     joinedAt: Date;
+    now: Date;
     principalAddress: string;
     projects: string[];
     workspaceId: string;
@@ -711,31 +712,156 @@ async function ensureSetupPrivateGroupMembership(
      FROM tokenless_workspace_agent_setups s
      JOIN tokenless_private_groups g
        ON g.group_id=s.private_group_id AND g.workspace_id=s.workspace_id AND g.status='active'
+     JOIN tokenless_workspace_reviewer_invitation_redemptions r
+       ON r.workspace_id=s.workspace_id AND r.invitation_id=s.people_invitation_id
+      AND r.principal_address=$3
+     JOIN tokenless_workspace_reviewers reviewer
+       ON reviewer.workspace_id=s.workspace_id AND reviewer.principal_address=r.principal_address
+      AND reviewer.status='active'
+     JOIN tokenless_workspace_reviewer_access_grants access_grant
+       ON access_grant.grant_id=r.grant_id AND access_grant.workspace_id=r.workspace_id
+      AND access_grant.principal_address=r.principal_address
+      AND access_grant.source_invitation_id=r.invitation_id
+      AND access_grant.revoked_at IS NULL AND access_grant.valid_from<=$4
+      AND (access_grant.valid_until IS NULL OR access_grant.valid_until>$4)
      WHERE s.workspace_id=$1 AND s.people_invitation_id=$2
        AND s.status='completed' AND s.people_decision='invited'
      LIMIT 1 FOR SHARE`,
-    [input.workspaceId, input.invitationId],
+    [input.workspaceId, input.invitationId, input.principalAddress, input.now],
   );
   const groupId = text(setup.rows[0] as Row | undefined, "private_group_id");
   if (!groupId) return null;
-  await client.query(
-    `INSERT INTO tokenless_private_group_memberships
-     (group_id,principal_address,role,status,allowed_project_ids_json,source_invitation_id,
-      membership_expires_at,joined_at,ended_at,end_reason,created_by,updated_at)
-     VALUES ($1,$2,'reviewer','active',$3,NULL,$4,$5,NULL,NULL,$6,$5)
-     ON CONFLICT (group_id,principal_address) DO UPDATE SET
-       role='reviewer',status='active',allowed_project_ids_json=EXCLUDED.allowed_project_ids_json,
-       source_invitation_id=NULL,membership_expires_at=EXCLUDED.membership_expires_at,
-       ended_at=NULL,end_reason=NULL,updated_at=EXCLUDED.updated_at`,
-    [
-      groupId,
-      input.principalAddress,
-      JSON.stringify(input.projects),
-      date(input.invitation, "access_expires_at"),
-      input.joinedAt,
-      text(input.invitation, "created_by"),
-    ],
+  const privateInvitationResult = await client.query(
+    `SELECT invitation_id,workspace_id,group_id,allowed_project_ids_json,membership_expires_at,
+            intended_account_address,intended_email_hash,intended_email_domain,
+            expires_at,maximum_redemptions,redemption_count,revoked_at,created_by
+     FROM tokenless_private_group_invitations
+     WHERE invitation_id=$1 AND workspace_id=$2 AND group_id=$3
+     LIMIT 1 FOR UPDATE`,
+    [input.invitationId, input.workspaceId, groupId],
   );
+  const privateInvitation = privateInvitationResult.rows[0] as Row | undefined;
+  const accessExpiresAt = date(input.invitation, "access_expires_at");
+  const membershipExpiresAt = date(privateInvitation, "membership_expires_at");
+  if (
+    !privateInvitation ||
+    text(privateInvitation, "allowed_project_ids_json") !== canonicalJson(input.projects) ||
+    date(privateInvitation, "expires_at")?.getTime() !== date(input.invitation, "expires_at")?.getTime() ||
+    membershipExpiresAt?.getTime() !== accessExpiresAt?.getTime() ||
+    count(privateInvitation, "maximum_redemptions") !== count(input.invitation, "maximum_redemptions") ||
+    text(privateInvitation, "created_by") !== text(input.invitation, "created_by") ||
+    text(privateInvitation, "intended_account_address") !== text(input.invitation, "intended_account_address") ||
+    Boolean(text(privateInvitation, "intended_email_hash")) !==
+      Boolean(text(input.invitation, "intended_email_hash")) ||
+    text(privateInvitation, "intended_email_domain") !== text(input.invitation, "intended_email_domain")
+  ) {
+    throw new TokenlessServiceError(
+      "Reviewer invitation has no exact private-group provenance.",
+      500,
+      "reviewer_invitation_provenance_incomplete",
+    );
+  }
+  const priorRedemption = await client.query(
+    `SELECT redeemed_at FROM tokenless_private_group_invitation_redemptions
+     WHERE invitation_id=$1 AND principal_address=$2 AND group_id=$3 LIMIT 1`,
+    [input.invitationId, input.principalAddress, groupId],
+  );
+  const existingMembershipResult = await client.query(
+    `SELECT status,source_invitation_id FROM tokenless_private_group_memberships
+     WHERE group_id=$1 AND principal_address=$2 LIMIT 1 FOR UPDATE`,
+    [groupId, input.principalAddress],
+  );
+  const existingMembership = existingMembershipResult.rows[0] as Row | undefined;
+  if (
+    text(existingMembership, "status") === "active" &&
+    text(existingMembership, "source_invitation_id") !== input.invitationId
+  ) {
+    throw new TokenlessServiceError(
+      "This reviewer already has access to the private group through another invitation.",
+      409,
+      "private_group_membership_exists",
+    );
+  }
+  if (
+    priorRedemption.rowCount !== 1 &&
+    (date(privateInvitation, "revoked_at") ||
+      date(privateInvitation, "expires_at")! <= input.now ||
+      (membershipExpiresAt !== null && membershipExpiresAt <= input.now) ||
+      count(privateInvitation, "redemption_count") >= count(privateInvitation, "maximum_redemptions"))
+  ) {
+    throw new TokenlessServiceError(
+      "Reviewer invitation is no longer available for private-group access.",
+      410,
+      "reviewer_invitation_unavailable",
+      false,
+      "token",
+    );
+  }
+  if (priorRedemption.rowCount !== 1) {
+    const consumed = await client.query(
+      `UPDATE tokenless_private_group_invitations
+       SET redemption_count=redemption_count+1,last_used_at=$1
+       WHERE invitation_id=$2 AND workspace_id=$3 AND group_id=$4
+         AND revoked_at IS NULL AND expires_at>$1
+         AND (membership_expires_at IS NULL OR membership_expires_at>$1)
+         AND redemption_count<maximum_redemptions`,
+      [input.now, input.invitationId, input.workspaceId, groupId],
+    );
+    if (consumed.rowCount !== 1) {
+      throw new TokenlessServiceError(
+        "Reviewer invitation is no longer available for private-group access.",
+        410,
+        "reviewer_invitation_unavailable",
+        false,
+        "token",
+      );
+    }
+  }
+  if (membershipExpiresAt === null || membershipExpiresAt > input.now) {
+    await client.query(
+      `INSERT INTO tokenless_private_group_memberships
+       (group_id,principal_address,role,status,allowed_project_ids_json,source_invitation_id,
+        membership_expires_at,joined_at,ended_at,end_reason,created_by,updated_at)
+       VALUES ($1,$2,'reviewer','active',$3,$4,$5,$6,NULL,NULL,$7,$8)
+       ON CONFLICT (group_id,principal_address) DO UPDATE SET
+         role='reviewer',status='active',allowed_project_ids_json=EXCLUDED.allowed_project_ids_json,
+         source_invitation_id=EXCLUDED.source_invitation_id,
+         membership_expires_at=EXCLUDED.membership_expires_at,joined_at=EXCLUDED.joined_at,
+         ended_at=NULL,end_reason=NULL,created_by=EXCLUDED.created_by,updated_at=EXCLUDED.updated_at`,
+      [
+        groupId,
+        input.principalAddress,
+        canonicalJson(input.projects),
+        input.invitationId,
+        membershipExpiresAt,
+        input.joinedAt,
+        text(privateInvitation, "created_by"),
+        input.now,
+      ],
+    );
+  }
+  if (priorRedemption.rowCount !== 1) {
+    await client.query(
+      `INSERT INTO tokenless_private_group_invitation_redemptions
+       (invitation_id,principal_address,group_id,redeemed_at) VALUES ($1,$2,$3,$4)`,
+      [input.invitationId, input.principalAddress, groupId, input.joinedAt],
+    );
+    await client.query(
+      `INSERT INTO tokenless_private_group_events
+       (event_id,workspace_id,group_id,invitation_id,principal_address,event_type,
+        actor_reference,details_json,created_at)
+       VALUES ($1,$2,$3,$4,$5,'invitation_redeemed',$5,$6,$7)`,
+      [
+        `pge_${randomUUID().replaceAll("-", "")}`,
+        input.workspaceId,
+        groupId,
+        input.invitationId,
+        input.principalAddress,
+        canonicalJson({ source: "workspace_reviewer_invitation" }),
+        input.joinedAt,
+      ],
+    );
+  }
   return groupId;
 }
 
@@ -765,6 +891,7 @@ export async function redeemWorkspaceReviewerInvitation(input: { accountAddress:
         invitation: row,
         invitationId,
         joinedAt: date(replay.rows[0] as Row, "redeemed_at")!,
+        now,
         principalAddress,
         projects,
         workspaceId,
@@ -869,6 +996,7 @@ export async function redeemWorkspaceReviewerInvitation(input: { accountAddress:
       invitation: row,
       invitationId,
       joinedAt: now,
+      now,
       principalAddress,
       projects,
       workspaceId,
@@ -912,6 +1040,38 @@ export async function revokeWorkspaceReviewerInvitation(input: {
     );
     if (result.rowCount !== 1) {
       throw new TokenlessServiceError("Reviewer invitation not found.", 404, "reviewer_invitation_not_found");
+    }
+    const privateInvitation = await client.query(
+      `UPDATE tokenless_private_group_invitations
+       SET revoked_at=$1,revoked_by=$2
+       WHERE invitation_id=$3 AND workspace_id=$4 AND revoked_at IS NULL
+         AND redemption_count<maximum_redemptions
+       RETURNING group_id`,
+      [now, manager, input.invitationId, input.workspaceId],
+    );
+    if (privateInvitation.rowCount === 1) {
+      const groupId = text(privateInvitation.rows[0] as Row, "group_id")!;
+      await client.query(
+        `UPDATE tokenless_private_group_invitation_expertise_attestations
+         SET status='revoked',revoked_at=$1,revoked_by=$2
+         WHERE invitation_id=$3 AND status='pending'`,
+        [now, manager, input.invitationId],
+      );
+      await client.query(
+        `INSERT INTO tokenless_private_group_events
+         (event_id,workspace_id,group_id,invitation_id,principal_address,event_type,
+          actor_reference,details_json,created_at)
+         VALUES ($1,$2,$3,$4,NULL,'invitation_revoked',$5,$6,$7)`,
+        [
+          `pge_${randomUUID().replaceAll("-", "")}`,
+          input.workspaceId,
+          groupId,
+          input.invitationId,
+          manager,
+          canonicalJson({ source: "workspace_reviewer_invitation" }),
+          now,
+        ],
+      );
     }
     await appendEvent(client, {
       workspaceId: input.workspaceId,
