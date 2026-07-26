@@ -191,6 +191,8 @@ test("one selected seat advances through exact voucher issuance and consumption 
     /"selectionBindingHash"/u,
     "selection receipt should preserve the exact binding",
   );
+  assert.match(String(writes[1]?.values?.[4]), /"integrityReviewerCommitment":"sha256:/u);
+  assert.doesNotMatch(String(writes[1]?.values?.[4]), /reviewer_lookup_exact/u);
 
   const selectionHash = bound.selectionBindingHashes[0]!;
   const selectionClient = {
@@ -201,6 +203,12 @@ test("one selected seat advances through exact voucher issuance and consumption 
           {
             binding_id: "binding_exact",
             assignment_id: "assignment_exact",
+            operation_key: "op_exact",
+            deployment_key: "deployment_exact",
+            chain_id: 84532,
+            panel_address: PANEL,
+            round_id: "42",
+            content_id: CONTENT_ID,
             principal_id: PRINCIPAL,
             assignment_status: "reserved",
             reservation_expires_at: new Date(NOW.getTime() + 60_000),
@@ -211,6 +219,13 @@ test("one selected seat advances through exact voucher issuance and consumption 
             integrity_provenance_hash: integrityHash,
             assignment_integrity_provenance_hash: integrityHash,
             integrity_provenance_json: JSON.stringify(integrity),
+            execution_operation_key: "op_exact",
+            execution_deployment_key: "deployment_exact",
+            execution_chain_id: 84532,
+            execution_panel_address: PANEL,
+            execution_round_id: "42",
+            execution_content_id: CONTENT_ID,
+            execution_state: "confirmed",
           },
         ],
       };
@@ -220,6 +235,8 @@ test("one selected seat advances through exact voucher issuance and consumption 
     principalId: PRINCIPAL,
     assignmentId: "assignment_exact",
     selectionBindingHash: selectionHash,
+    chainId: 84532,
+    panelAddress: PANEL,
     roundId: "42",
     contentId: CONTENT_ID,
     admissionPolicyHash: `0x${"d".repeat(64)}`,
@@ -231,7 +248,7 @@ test("one selected seat advances through exact voucher issuance and consumption 
   const issuedClient = {
     async query(sql: string) {
       issuedWrites.push(sql);
-      if (sql.startsWith("UPDATE")) {
+      if (sql.startsWith("SELECT")) {
         return { rowCount: 1, rows: [{ operation_key: "op_exact", round_id: "42", content_id: CONTENT_ID }] };
       }
       return { rowCount: 1, rows: [] };
@@ -242,7 +259,10 @@ test("one selected seat advances through exact voucher issuance and consumption 
     voucherId: "voucher_exact",
     issuedAt: NOW,
   });
-  assert.equal(issuedWrites.length, 2);
+  assert.equal(issuedWrites.length, 3);
+  assert.match(issuedWrites[0]!, /^SELECT/u);
+  assert.match(issuedWrites[1]!, /^INSERT INTO tokenless_network_assignment_settlement_receipts/u);
+  assert.match(issuedWrites[2]!, /^UPDATE/u);
 
   const consumedWrites: string[] = [];
   const consumedClient = {
@@ -281,6 +301,23 @@ test("one selected seat advances through exact voucher issuance and consumption 
         principalId: PRINCIPAL,
         assignmentId: "assignment_exact",
         selectionBindingHash: `sha256:${"0".repeat(64)}`,
+        chainId: 84532,
+        panelAddress: PANEL,
+        roundId: "42",
+        contentId: CONTENT_ID,
+        admissionPolicyHash: `0x${"d".repeat(64)}`,
+        now: NOW,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "network_selection_binding_mismatch",
+  );
+  await assert.rejects(
+    () =>
+      loadExactNetworkVoucherSelection(selectionClient, {
+        principalId: PRINCIPAL,
+        assignmentId: "assignment_exact",
+        selectionBindingHash: selectionHash,
+        chainId: 84532,
+        panelAddress: "0x3333333333333333333333333333333333333333",
         roundId: "42",
         contentId: CONTENT_ID,
         admissionPolicyHash: `0x${"d".repeat(64)}`,
@@ -321,10 +358,21 @@ test("account deletion releases selected seats to pseudonymous retained evidence
   );
   assert.match(statements[0]!.sql, /assignment\.status='released'/u);
   assert.match(statements[0]!.sql, /profile\.principal_id=\$1/u);
-  assert.match(statements[1]!.sql, /terminal_outcome='not_accepted'/u);
-  const receiptJson = String(statements[2]?.values?.[4]);
+  assert.match(statements[1]!.sql, /^INSERT INTO tokenless_network_assignment_settlement_receipts/u);
+  assert.match(statements[2]!.sql, /terminal_outcome='not_accepted'/u);
+  const receiptJson = String(statements[1]?.values?.[4]);
   assert.match(receiptJson, /"accountDeletionReceiptHash":"sha256:b{64}"/u);
   assert.doesNotMatch(receiptJson, new RegExp(PRINCIPAL, "u"));
+});
+
+test("voucher expiry preserves every local commit state that can still confirm", () => {
+  assert.deepEqual(__networkAssignmentSettlementTestUtils.recoverableLocalCommitStates, [
+    "prepared",
+    "signed",
+    "retry",
+    "submitted",
+    "confirmed",
+  ]);
 });
 
 test("terminal settlement distinguishes payout, compensation, pending, and expired claims", () => {

@@ -69,6 +69,7 @@ type RaterErasureEvidence = {
     paidReviewEligibilitySnapshots: number;
     paidReviewVoucherIssuances: number;
     voucherAssuranceSnapshots: number;
+    networkSettlementCommitments: number;
   };
   retainedPaidVouchers: number;
   tombstoneWritten: boolean;
@@ -901,6 +902,7 @@ async function eraseRaterIdentity(
       paidReviewEligibilitySnapshots: 0,
       paidReviewVoucherIssuances: 0,
       voucherAssuranceSnapshots: 0,
+      networkSettlementCommitments: 0,
     },
     retainedPaidVouchers: 0,
     tombstoneReceiptHash: null,
@@ -1001,7 +1003,12 @@ async function eraseRaterIdentity(
        (SELECT COUNT(*) FROM tokenless_paid_review_voucher_issuances WHERE rater_id = $1)
          AS retained_paid_review_voucher_issuances,
        (SELECT COUNT(*) FROM tokenless_voucher_assurance_snapshots WHERE rater_id = $1)
-         AS retained_voucher_assurance_snapshots`,
+         AS retained_voucher_assurance_snapshots,
+       (SELECT COUNT(*) FROM tokenless_network_assignment_settlements settlement
+        JOIN tokenless_assurance_assignments assignment
+          ON assignment.assignment_id=settlement.assignment_id
+        WHERE assignment.rater_id=$1)
+         AS retained_network_settlement_commitments`,
     [raterId, principalId],
   );
   const row = remaining.rows[0] as Row | undefined;
@@ -1039,6 +1046,7 @@ async function eraseRaterIdentity(
       paidReviewEligibilitySnapshots: rowNumber(row, "retained_paid_review_eligibility_snapshots"),
       paidReviewVoucherIssuances: rowNumber(row, "retained_paid_review_voucher_issuances"),
       voucherAssuranceSnapshots: rowNumber(row, "retained_voucher_assurance_snapshots"),
+      networkSettlementCommitments: rowNumber(row, "retained_network_settlement_commitments"),
     },
     retainedPaidVouchers: rowNumber(row, "retained_paid_vouchers"),
     tombstoneReceiptHash: `sha256:${receiptDigest}`,
@@ -1271,6 +1279,14 @@ async function collectDeletionCategoryEvidence(
       retainedPrivateQuoteCommitments: input.privateQuoteErasure.retainedReferencedCommitmentOnly,
       retainedPaidVouchers: input.raterErasure.retainedPaidVouchers,
       retainedRaterLinkedSettlementAndQualityRows: input.raterErasure.retainedRaterRows,
+      networkReviewerLinkageRetention:
+        input.raterErasure.retainedRaterRows.networkSettlementCommitments > 0
+          ? {
+              form: "one_way_assignment_scoped_commitment",
+              basis: "settlement_integrity_and_legal_claims",
+              directPrincipalLinkRetained: false,
+            }
+          : null,
       raterTombstoneRetained: input.raterErasure.tombstoneWritten,
       tombstoneReceiptHash: input.raterErasure.tombstoneReceiptHash,
     },

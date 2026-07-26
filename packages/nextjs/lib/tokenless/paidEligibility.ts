@@ -1914,6 +1914,8 @@ async function loadVoucherIntegrityEvidence(input: {
   accountAddress: Address;
   assignmentId: string;
   selectionBindingHash: `sha256:${string}`;
+  chainId: number;
+  panelAddress: Address;
   roundId: string;
   contentId: Hex;
   admissionPolicyHash: string;
@@ -1941,6 +1943,8 @@ async function loadVoucherIntegrityEvidence(input: {
       principalId: input.principalId,
       assignmentId: input.assignmentId,
       selectionBindingHash: input.selectionBindingHash,
+      chainId: input.chainId,
+      panelAddress: input.panelAddress,
       roundId: input.roundId,
       contentId: input.contentId,
       admissionPolicyHash: input.admissionPolicyHash,
@@ -2182,6 +2186,8 @@ export async function issuePaidVoucher(input: { principalId: string; request: Vo
           assignmentId: input.request.assignmentId ?? "test-injected-assignment",
           selectionBindingHash:
             input.request.selectionBindingHash ?? (`sha256:${"0".repeat(64)}` as `sha256:${string}`),
+          chainId: issuer.chainId,
+          panelAddress: issuer.panelAddress,
           roundId: input.request.roundId,
           contentId: input.request.contentId,
           admissionPolicyHash: frozenPolicy.admissionPolicyHash,
@@ -2326,6 +2332,8 @@ export async function issuePaidVoucher(input: { principalId: string; request: Vo
             principalId: input.principalId,
             assignmentId: input.request.assignmentId!,
             selectionBindingHash: input.request.selectionBindingHash!,
+            chainId: issuer.chainId,
+            panelAddress: issuer.panelAddress,
             roundId: input.request.roundId,
             contentId: input.request.contentId,
             admissionPolicyHash: frozenPolicy.admissionPolicyHash,
@@ -2338,8 +2346,10 @@ export async function issuePaidVoucher(input: { principalId: string; request: Vo
              panel_address, issuer_address, issuer_epoch, signer_address, round_id, content_id, vote_key,
              nullifier, admission_policy_hash, assurance_snapshot_hash, expires_at,
              payout_account_snapshot, voucher_json, voucher_signature,
-             network_assignment_id,network_selection_binding_hash,status, issued_at)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,'issued',$22)`,
+             network_assignment_id,network_selection_binding_hash,
+             network_operation_key,network_deployment_key,status, issued_at)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,
+                   $20,$21,$22,$23,'issued',$24)`,
       [
         voucherId,
         raterId,
@@ -2362,6 +2372,8 @@ export async function issuePaidVoucher(input: { principalId: string; request: Vo
         voucherSignature,
         finalNetworkSelection?.assignmentId ?? null,
         finalNetworkSelection?.selectionBindingHash ?? null,
+        finalNetworkSelection?.operationKey ?? null,
+        finalNetworkSelection?.deploymentKey ?? null,
         now,
       ],
     );

@@ -678,6 +678,7 @@ test("account deletion receipts the rater identity, erases World ID state, and p
     paidAssignmentSeatIdentityCommitmentsRetained: 0,
     privateQuoteOwnerTombstone: null,
     raterTombstoneRetained: true,
+    networkReviewerLinkageRetention: null,
     retainedPrivateQuoteCommitments: 0,
     retainedPaidVouchers: 1,
     retainedRaterLinkedSettlementAndQualityRows: {
@@ -687,6 +688,7 @@ test("account deletion receipts the rater identity, erases World ID state, and p
       paidReviewEligibilitySnapshots: 0,
       paidReviewVoucherIssuances: 0,
       voucherAssuranceSnapshots: 0,
+      networkSettlementCommitments: 0,
     },
     tombstoneReceiptHash: `sha256:${deleted.receiptDigest}`,
   });

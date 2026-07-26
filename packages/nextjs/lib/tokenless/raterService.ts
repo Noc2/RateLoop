@@ -123,8 +123,8 @@ export async function listPaidRaterTasks(
     sql: `SELECT vr.chain_id, vr.panel_address, vr.round_id, vr.content_id,
                  vr.admission_policy_hash, vr.admission_policy_json, vr.voucher_deadline,
                  c.content_json, e.round_terms_json, e.operation_key,
-                 network_assignment.assignment_id AS network_assignment_id,
-                 network_settlement.selection_binding_hash AS network_selection_binding_hash,
+                 network_binding.assignment_id AS network_assignment_id,
+                 network_binding.selection_binding_hash AS network_selection_binding_hash,
                  CASE WHEN v.voucher_id IS NULL THEN false ELSE true END AS already_vouchered
           FROM tokenless_voucher_rounds vr
           JOIN tokenless_chain_executions e ON e.chain_id = vr.chain_id AND e.panel_address = vr.panel_address
@@ -134,20 +134,38 @@ export async function listPaidRaterTasks(
           JOIN tokenless_question_records q ON q.question_id = o.question_id
           JOIN tokenless_content_records c ON c.content_id = q.content_id
           LEFT JOIN tokenless_rater_profiles p ON p.principal_id = ?
-          LEFT JOIN tokenless_assurance_assignments network_assignment
-            ON network_assignment.rater_id=p.rater_id
-           AND network_assignment.source='rateloop_network'
-           AND (
-             (network_assignment.status='reserved' AND network_assignment.reservation_expires_at > ?)
-             OR (network_assignment.status='accepted' AND network_assignment.assignment_expires_at > ?)
-           )
-          LEFT JOIN tokenless_network_assignment_settlements network_settlement
-            ON network_settlement.assignment_id=network_assignment.assignment_id
-           AND network_settlement.operation_key=e.operation_key
-           AND network_settlement.round_id=vr.round_id
-           AND network_settlement.state IN ('selected','voucher_issued','committed','terminal')
+          LEFT JOIN (
+            SELECT settlement.assignment_id,settlement.selection_binding_hash,
+                   settlement.operation_key,settlement.deployment_key,settlement.chain_id,
+                   settlement.panel_address,settlement.round_id,settlement.content_id,
+                   settlement.admission_policy_hash,assignment.rater_id
+            FROM tokenless_network_assignment_settlements settlement
+            INNER JOIN tokenless_assurance_assignments assignment
+              ON assignment.assignment_id=settlement.assignment_id
+             AND assignment.source='rateloop_network'
+            WHERE settlement.state IN ('selected','voucher_issued','committed')
+              AND (
+                (assignment.status='reserved' AND assignment.reservation_expires_at > ?)
+                OR (assignment.status='accepted' AND assignment.assignment_expires_at > ?)
+              )
+          ) network_binding
+            ON network_binding.rater_id=p.rater_id
+           AND network_binding.operation_key=e.operation_key
+           AND network_binding.deployment_key=e.deployment_key
+           AND network_binding.chain_id=e.chain_id
+           AND lower(network_binding.panel_address)=lower(e.panel_address)
+           AND network_binding.round_id=e.round_id
+           AND lower(network_binding.content_id)=lower(e.content_id)
+           AND lower(network_binding.admission_policy_hash)=lower(vr.admission_policy_hash)
           LEFT JOIN tokenless_paid_vouchers v ON v.rater_id = p.rater_id AND v.round_id = vr.round_id
-             AND v.panel_address = vr.panel_address
+             AND v.chain_id=vr.chain_id AND lower(v.panel_address)=lower(vr.panel_address)
+             AND (
+               network_binding.operation_key IS NULL
+               OR (
+                 v.network_operation_key=network_binding.operation_key
+                 AND v.network_deployment_key=network_binding.deployment_key
+               )
+             )
           WHERE vr.status = 'open' AND vr.voucher_deadline > ? AND c.moderation_status = 'approved'
             AND q.visibility = 'public' AND q.data_classification IN ('public', 'synthetic', 'redacted')
             AND (? = '' OR c.content_json ILIKE ?)

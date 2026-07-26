@@ -466,6 +466,24 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
     );
     const assignment = assignmentResult.rows[0] as QueryRow | undefined;
     if (!assignment) serviceError("Assignment not found.", "assignment_not_found", 404);
+    const networkCases = await client.query(
+      "SELECT COUNT(*) AS case_count FROM tokenless_assurance_run_cases WHERE run_id=$1",
+      [rowString(assignment, "run_id")],
+    );
+    const networkSettlements = await client.query(
+      `SELECT COUNT(*) AS binding_count,
+              SUM(CASE
+                WHEN state='committed' THEN 1
+                WHEN state='terminal' AND committed_at IS NOT NULL
+                  AND terminal_outcome IN ('paid','compensated','no_payout','claim_expired') THEN 1
+                ELSE 0
+              END) AS committed_count
+       FROM tokenless_network_assignment_settlements WHERE assignment_id=$1`,
+      [assignmentId],
+    );
+    assignment.network_case_count = networkCases.rows[0]?.case_count ?? 0;
+    assignment.network_binding_count = networkSettlements.rows[0]?.binding_count ?? 0;
+    assignment.network_committed_count = networkSettlements.rows[0]?.committed_count ?? 0;
     const accountAddress = rowString(assignment, "reviewer_account_address")!;
     const identityReference = rowString(assignment, "rater_id") ?? principalId;
     const policy = parseJson<HumanAssuranceAudiencePolicy>(assignment.frozen_policy_json, "audience policy");

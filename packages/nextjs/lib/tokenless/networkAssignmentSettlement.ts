@@ -15,6 +15,7 @@ type Hash = `sha256:${string}`;
 const HASH = /^sha256:[0-9a-f]{64}$/u;
 const BYTES32 = /^0x[0-9a-f]{64}$/u;
 const UNSIGNED = /^(0|[1-9][0-9]*)$/u;
+const RECOVERABLE_LOCAL_COMMIT_STATES = ["prepared", "signed", "retry", "submitted", "confirmed"] as const;
 
 function text(row: Row | undefined, key: string) {
   const value = row?.[key];
@@ -212,7 +213,23 @@ type NetworkSelectionIdentity = {
   integrityReviewerLookup: string;
 };
 
-function selectionBindingHash(input: NetworkSelectionIdentity & { round: ExactNetworkRoundBinding }) {
+function integrityReviewerCommitment(
+  input: Pick<NetworkSelectionIdentity, "assignmentId" | "runId" | "integrityReviewerLookup">,
+) {
+  return sha256({
+    schemaVersion: "rateloop.network-integrity-reviewer-commitment.v1",
+    assignmentId: input.assignmentId,
+    runId: input.runId,
+    reviewerLookup: input.integrityReviewerLookup,
+  });
+}
+
+function selectionBindingHash(
+  input: Omit<NetworkSelectionIdentity, "integrityReviewerLookup"> & {
+    integrityReviewerCommitment: Hash;
+    round: ExactNetworkRoundBinding;
+  },
+) {
   return sha256({
     schemaVersion: "rateloop.network-selection-binding.v1",
     assignment: {
@@ -224,7 +241,7 @@ function selectionBindingHash(input: NetworkSelectionIdentity & { round: ExactNe
     selection: {
       batchId: input.selectionBatchId,
       integrityProvenanceHash: input.integrityProvenanceHash,
-      reviewerLookup: input.integrityReviewerLookup,
+      reviewerCommitment: input.integrityReviewerCommitment,
     },
     round: input.round,
   });
@@ -268,13 +285,18 @@ export async function bindSelectedNetworkAssignment(
     throw new Error("Selected network assignment identity is incomplete.");
   }
   const hashes: Hash[] = [];
+  const reviewerCommitment = integrityReviewerCommitment(input);
   for (const round of input.rounds) {
-    const bindingHash = selectionBindingHash({ ...input, round });
+    const bindingHash = selectionBindingHash({
+      ...input,
+      integrityReviewerCommitment: reviewerCommitment,
+      round,
+    });
     const bindingId = `nas_${randomUUID().replaceAll("-", "")}`;
     await client.query(
       `INSERT INTO tokenless_network_assignment_settlements
        (binding_id,assignment_id,run_id,case_id,operation_key,selection_batch_id,
-        selection_binding_hash,integrity_provenance_hash,integrity_reviewer_lookup,
+        selection_binding_hash,integrity_provenance_hash,integrity_reviewer_commitment,
         deployment_key,chain_id,panel_address,round_id,content_id,admission_policy_hash,
         round_terms_hash,total_funded_atomic,maximum_commits,state,transition_revision,created_at,updated_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
@@ -288,7 +310,7 @@ export async function bindSelectedNetworkAssignment(
         input.selectionBatchId,
         bindingHash,
         input.integrityProvenanceHash,
-        input.integrityReviewerLookup,
+        reviewerCommitment,
         round.deploymentKey,
         round.chainId,
         round.panelAddress,
@@ -311,7 +333,7 @@ export async function bindSelectedNetworkAssignment(
         selectionBindingHash: bindingHash,
         selectionBatchId: input.selectionBatchId,
         integrityProvenanceHash: input.integrityProvenanceHash,
-        integrityReviewerLookup: input.integrityReviewerLookup,
+        integrityReviewerCommitment: reviewerCommitment,
         round,
         selectedAt: input.now.toISOString(),
       },
@@ -332,6 +354,8 @@ export type NetworkVoucherSelection = {
   bindingId: string;
   assignmentId: string;
   selectionBindingHash: Hash;
+  operationKey: string;
+  deploymentKey: string;
   integrity: Record<string, unknown>;
 };
 
@@ -341,6 +365,8 @@ export async function loadExactNetworkVoucherSelection(
     principalId: string;
     assignmentId: string;
     selectionBindingHash: Hash;
+    chainId: number;
+    panelAddress: string;
     roundId: string;
     contentId: string;
     admissionPolicyHash: string;
@@ -351,14 +377,30 @@ export async function loadExactNetworkVoucherSelection(
     `SELECT settlement.*,assignment.integrity_provenance_json,
             assignment.integrity_provenance_hash AS assignment_integrity_provenance_hash,
             assignment.rater_id,profile.principal_id,assignment.status AS assignment_status,
-            assignment.reservation_expires_at,assignment.assignment_expires_at
+            assignment.reservation_expires_at,assignment.assignment_expires_at,
+            execution.operation_key AS execution_operation_key,
+            execution.deployment_key AS execution_deployment_key,
+            execution.chain_id AS execution_chain_id,
+            execution.panel_address AS execution_panel_address,
+            execution.round_id AS execution_round_id,
+            execution.content_id AS execution_content_id,
+            execution.state AS execution_state
      FROM tokenless_network_assignment_settlements settlement
      JOIN tokenless_assurance_assignments assignment
        ON assignment.assignment_id=settlement.assignment_id
      JOIN tokenless_rater_profiles profile ON profile.rater_id=assignment.rater_id
-     WHERE settlement.assignment_id=$1 AND settlement.round_id=$2
-       AND lower(settlement.content_id)=lower($3) LIMIT 1 FOR UPDATE OF settlement,assignment`,
-    [input.assignmentId, input.roundId, input.contentId],
+     JOIN tokenless_chain_executions execution
+       ON execution.operation_key=settlement.operation_key
+      AND execution.deployment_key=settlement.deployment_key
+      AND execution.chain_id=settlement.chain_id
+      AND lower(execution.panel_address)=lower(settlement.panel_address)
+      AND execution.round_id=settlement.round_id
+      AND lower(execution.content_id)=lower(settlement.content_id)
+     WHERE settlement.assignment_id=$1
+       AND settlement.chain_id=$2 AND lower(settlement.panel_address)=lower($3)
+       AND settlement.round_id=$4 AND lower(settlement.content_id)=lower($5)
+     LIMIT 1 FOR UPDATE OF settlement,assignment,execution`,
+    [input.assignmentId, input.chainId, input.panelAddress, input.roundId, input.contentId],
   );
   const row = result.rows[0] as Row | undefined;
   const activeUntil = row
@@ -373,6 +415,15 @@ export async function loadExactNetworkVoucherSelection(
     !["reserved", "accepted"].includes(text(row, "assignment_status") ?? "") ||
     activeUntil <= input.now ||
     text(row, "state") !== "selected" ||
+    text(row, "operation_key") !== text(row, "execution_operation_key") ||
+    text(row, "deployment_key") !== text(row, "execution_deployment_key") ||
+    integer(row, "chain_id") !== input.chainId ||
+    integer(row, "execution_chain_id") !== input.chainId ||
+    getAddress(text(row, "panel_address")!) !== getAddress(input.panelAddress) ||
+    getAddress(text(row, "execution_panel_address")!) !== getAddress(input.panelAddress) ||
+    text(row, "round_id") !== text(row, "execution_round_id") ||
+    text(row, "content_id")?.toLowerCase() !== text(row, "execution_content_id")?.toLowerCase() ||
+    text(row, "execution_state") !== "confirmed" ||
     text(row, "selection_binding_hash") !== input.selectionBindingHash ||
     text(row, "admission_policy_hash")?.toLowerCase() !== input.admissionPolicyHash.toLowerCase() ||
     text(row, "integrity_provenance_hash") !== text(row, "assignment_integrity_provenance_hash")
@@ -395,6 +446,8 @@ export async function loadExactNetworkVoucherSelection(
     bindingId: text(row, "binding_id")!,
     assignmentId: input.assignmentId,
     selectionBindingHash: input.selectionBindingHash,
+    operationKey: text(row, "operation_key")!,
+    deploymentKey: text(row, "deployment_key")!,
     integrity,
   };
 }
@@ -403,14 +456,15 @@ export async function attachIssuedNetworkVoucher(
   client: Pick<PoolClient, "query">,
   input: NetworkVoucherSelection & { voucherId: string; issuedAt: Date },
 ) {
-  const updated = await client.query(
-    `UPDATE tokenless_network_assignment_settlements
-     SET voucher_id=$1,state='voucher_issued',transition_revision=2,updated_at=$2
-     WHERE binding_id=$3 AND state='selected' AND selection_binding_hash=$4
-     RETURNING operation_key,round_id,content_id`,
-    [input.voucherId, input.issuedAt, input.bindingId, input.selectionBindingHash],
+  const locked = await client.query(
+    `SELECT operation_key,deployment_key,round_id,content_id
+     FROM tokenless_network_assignment_settlements
+     WHERE binding_id=$1 AND state='selected' AND selection_binding_hash=$2
+       AND operation_key=$3 AND deployment_key=$4
+     LIMIT 1 FOR UPDATE`,
+    [input.bindingId, input.selectionBindingHash, input.operationKey, input.deploymentKey],
   );
-  const row = updated.rows[0] as Row | undefined;
+  const row = locked.rows[0] as Row | undefined;
   if (!row) {
     throw new TokenlessServiceError(
       "The selected network seat changed before voucher issuance.",
@@ -428,12 +482,34 @@ export async function attachIssuedNetworkVoucher(
       selectionBindingHash: input.selectionBindingHash,
       voucherId: input.voucherId,
       operationKey: text(row, "operation_key"),
+      deploymentKey: text(row, "deployment_key"),
       roundId: text(row, "round_id"),
       contentId: text(row, "content_id"),
       issuedAt: input.issuedAt.toISOString(),
     },
     now: input.issuedAt,
   });
+  const updated = await client.query(
+    `UPDATE tokenless_network_assignment_settlements
+     SET voucher_id=$1,state='voucher_issued',transition_revision=2,updated_at=$2
+     WHERE binding_id=$3 AND state='selected' AND selection_binding_hash=$4
+       AND operation_key=$5 AND deployment_key=$6`,
+    [
+      input.voucherId,
+      input.issuedAt,
+      input.bindingId,
+      input.selectionBindingHash,
+      input.operationKey,
+      input.deploymentKey,
+    ],
+  );
+  if (updated.rowCount !== 1) {
+    throw new TokenlessServiceError(
+      "The selected network seat changed before voucher issuance.",
+      409,
+      "network_selection_binding_mismatch",
+    );
+  }
 }
 
 export async function markNetworkVoucherConsumed(
@@ -457,12 +533,6 @@ export async function markNetworkVoucherConsumed(
       "network_voucher_consumption_conflict",
     );
   }
-  await client.query(
-    `UPDATE tokenless_network_assignment_settlements
-     SET state='committed',transition_revision=3,committed_at=$1,updated_at=$1
-     WHERE binding_id=$2 AND state='voucher_issued'`,
-    [input.committedAt, text(row, "binding_id")],
-  );
   await insertReceipt(client, {
     bindingId: text(row, "binding_id")!,
     receiptType: "voucher_consumed",
@@ -478,6 +548,19 @@ export async function markNetworkVoucherConsumed(
     },
     now: input.committedAt,
   });
+  const updated = await client.query(
+    `UPDATE tokenless_network_assignment_settlements
+     SET state='committed',transition_revision=3,committed_at=$1,updated_at=$1
+     WHERE binding_id=$2 AND state='voucher_issued' AND transition_revision=2`,
+    [input.committedAt, text(row, "binding_id")],
+  );
+  if (updated.rowCount !== 1) {
+    throw new TokenlessServiceError(
+      "The selected network voucher changed before consumption.",
+      409,
+      "network_voucher_consumption_conflict",
+    );
+  }
   return { networkBinding: true, replayed: false };
 }
 
@@ -513,6 +596,13 @@ export async function releaseSelectedNetworkAssignmentsForAccountDeletion(
     };
     const evidenceHash = sha256(evidence);
     const settlementReference = `account-deletion:${receiptHash}`;
+    await insertReceipt(client, {
+      bindingId: text(row, "binding_id")!,
+      receiptType: "settlement_terminal",
+      revision,
+      payload: evidence,
+      now: input.now,
+    });
     const updated = await client.query(
       `UPDATE tokenless_network_assignment_settlements
        SET state='terminal',transition_revision=$1,terminal_outcome='not_accepted',
@@ -530,13 +620,6 @@ export async function releaseSelectedNetworkAssignmentsForAccountDeletion(
     if (updated.rowCount !== 1) {
       throw new Error("Network assignment release lost its locked settlement transition.");
     }
-    await insertReceipt(client, {
-      bindingId: text(row, "binding_id")!,
-      receiptType: "settlement_terminal",
-      revision,
-      payload: evidence,
-      now: input.now,
-    });
     released += 1;
   }
   return { released };
@@ -592,16 +675,91 @@ export async function reconcileNetworkAssignmentSettlements(
         voteKey: value.voteKey,
         now: value.now,
       }));
+  const expiredSelections = await dbPool.query(
+    `SELECT settlement.binding_id,settlement.assignment_id,settlement.selection_binding_hash,
+            settlement.transition_revision,assignment.status,
+            assignment.reservation_expires_at,assignment.assignment_expires_at
+     FROM tokenless_network_assignment_settlements settlement
+     JOIN tokenless_assurance_assignments assignment
+       ON assignment.assignment_id=settlement.assignment_id
+     WHERE settlement.state='selected'
+       AND (
+         assignment.status IN ('released','expired')
+         OR (assignment.status='reserved' AND assignment.reservation_expires_at <= $1)
+         OR (assignment.status='accepted' AND assignment.assignment_expires_at <= $1)
+       )
+     ORDER BY settlement.updated_at ASC,settlement.binding_id ASC LIMIT $2`,
+    [now, limit],
+  );
+  let terminal = 0;
+  for (const value of expiredSelections.rows) {
+    const row = value as Row;
+    const evidence = {
+      schemaVersion: "rateloop.network-assignment-terminal-evidence.v1",
+      bindingId: text(row, "binding_id"),
+      assignmentId: text(row, "assignment_id"),
+      selectionBindingHash: text(row, "selection_binding_hash"),
+      assignmentStatus: text(row, "status"),
+      outcome: "not_accepted",
+      terminalAt: now.toISOString(),
+    };
+    const evidenceHash = sha256(evidence);
+    const revision = integer(row, "transition_revision") + 1;
+    const client = await dbPool.connect();
+    try {
+      await client.query("BEGIN");
+      await insertReceipt(client, {
+        bindingId: text(row, "binding_id")!,
+        receiptType: "settlement_terminal",
+        revision,
+        payload: evidence,
+        now,
+      });
+      const updated = await client.query(
+        `UPDATE tokenless_network_assignment_settlements
+         SET state='terminal',transition_revision=$1,terminal_outcome='not_accepted',
+             settlement_reference=$2,settlement_evidence_hash=$3,terminal_at=$4,updated_at=$4
+         WHERE binding_id=$5 AND state='selected' AND transition_revision=$6`,
+        [
+          revision,
+          `assignment-closed:${text(row, "assignment_id")}`,
+          evidenceHash,
+          now,
+          text(row, "binding_id"),
+          integer(row, "transition_revision"),
+        ],
+      );
+      if (updated.rowCount !== 1) {
+        throw new TokenlessServiceError(
+          "The expired network selection changed before settlement.",
+          409,
+          "network_settlement_transition_conflict",
+          true,
+        );
+      }
+      terminal += 1;
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
   const expiredVouchers = await dbPool.query(
     `SELECT settlement.binding_id,settlement.assignment_id,settlement.selection_binding_hash,
             settlement.voucher_id,settlement.transition_revision
      FROM tokenless_network_assignment_settlements settlement
      JOIN tokenless_paid_vouchers voucher ON voucher.voucher_id=settlement.voucher_id
      WHERE settlement.state='voucher_issued' AND voucher.expires_at <= $1
+       AND NOT EXISTS (
+         SELECT 1 FROM tokenless_rater_commits commit
+         WHERE commit.voucher_id=voucher.voucher_id
+           AND commit.state=ANY($3::text[])
+       )
      ORDER BY settlement.updated_at ASC,settlement.binding_id ASC LIMIT $2`,
-    [now, limit],
+    [now, limit, [...RECOVERABLE_LOCAL_COMMIT_STATES]],
   );
-  let terminal = 0;
   for (const value of expiredVouchers.rows) {
     const row = value as Row;
     const evidence = {
@@ -618,6 +776,13 @@ export async function reconcileNetworkAssignmentSettlements(
     try {
       await client.query("BEGIN");
       const revision = integer(row, "transition_revision") + 1;
+      await insertReceipt(client, {
+        bindingId: text(row, "binding_id")!,
+        receiptType: "settlement_terminal",
+        revision,
+        payload: evidence,
+        now,
+      });
       const updated = await client.query(
         `UPDATE tokenless_network_assignment_settlements
          SET state='terminal',transition_revision=$1,terminal_outcome='not_submitted',
@@ -632,16 +797,15 @@ export async function reconcileNetworkAssignmentSettlements(
           integer(row, "transition_revision"),
         ],
       );
-      if (updated.rowCount === 1) {
-        await insertReceipt(client, {
-          bindingId: text(row, "binding_id")!,
-          receiptType: "settlement_terminal",
-          revision,
-          payload: evidence,
-          now,
-        });
-        terminal += 1;
+      if (updated.rowCount !== 1) {
+        throw new TokenlessServiceError(
+          "The expired network voucher changed before settlement.",
+          409,
+          "network_settlement_transition_conflict",
+          true,
+        );
       }
+      terminal += 1;
       await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK");
@@ -701,49 +865,51 @@ export async function reconcileNetworkAssignmentSettlements(
       const client = await dbPool.connect();
       try {
         await client.query("BEGIN");
+        await insertReceipt(client, {
+          bindingId: text(row, "binding_id")!,
+          receiptType: "settlement_terminal",
+          revision: 4,
+          payload: evidence,
+          now,
+        });
         const updated = await client.query(
           `UPDATE tokenless_network_assignment_settlements
            SET state='terminal',transition_revision=4,terminal_outcome=$1,settlement_reference=$2,
                settlement_evidence_hash=$3,terminal_at=$4,updated_at=$4
-           WHERE binding_id=$5 AND state='committed' RETURNING binding_id`,
+           WHERE binding_id=$5 AND state='committed' AND transition_revision=3 RETURNING binding_id`,
           [outcome, settlementReference, evidenceHash, now, text(row, "binding_id")],
         );
-        if (updated.rowCount === 1) {
-          await insertReceipt(client, {
-            bindingId: text(row, "binding_id")!,
-            receiptType: "settlement_terminal",
-            revision: 4,
-            payload: evidence,
-            now,
-          });
-          const keys = getAssuranceResponseKeyrings().reviewerMapping;
-          const reviewerKeys = [...keys.keys.keys()].map(version =>
-            assuranceReviewerKey(
-              { accountAddress: text(row, "rater_id")!, runId: text(row, "run_id")! },
-              keys,
-              version,
-            ),
+        if (updated.rowCount !== 1) {
+          throw new TokenlessServiceError(
+            "The committed network settlement changed before terminal evidence was stored.",
+            409,
+            "network_settlement_transition_conflict",
+            true,
           );
-          const responses = await client.query(
-            `UPDATE tokenless_assurance_responses
-             SET settlement_reference=$1,settlement_evidence_hash=$2,updated_at=$3
-             WHERE run_id=$4 AND case_id=$5 AND reviewer_key=ANY($6::text[])
-               AND (
-                 (settlement_reference IS NULL AND settlement_evidence_hash IS NULL)
-                 OR (settlement_reference=$1 AND settlement_evidence_hash=$2)
-               )`,
-            [settlementReference, evidenceHash, now, text(row, "run_id"), text(row, "case_id"), reviewerKeys],
-          );
-          if (responses.rowCount !== 1) {
-            throw new TokenlessServiceError(
-              "The exact network response settlement binding is unavailable.",
-              409,
-              "network_response_settlement_pending",
-              true,
-            );
-          }
-          terminal += 1;
         }
+        const keys = getAssuranceResponseKeyrings().reviewerMapping;
+        const reviewerKeys = [...keys.keys.keys()].map(version =>
+          assuranceReviewerKey({ accountAddress: text(row, "rater_id")!, runId: text(row, "run_id")! }, keys, version),
+        );
+        const responses = await client.query(
+          `UPDATE tokenless_assurance_responses
+           SET settlement_reference=$1,settlement_evidence_hash=$2,updated_at=$3
+           WHERE run_id=$4 AND case_id=$5 AND reviewer_key=ANY($6::text[])
+             AND (
+               (settlement_reference IS NULL AND settlement_evidence_hash IS NULL)
+               OR (settlement_reference=$1 AND settlement_evidence_hash=$2)
+             )`,
+          [settlementReference, evidenceHash, now, text(row, "run_id"), text(row, "case_id"), reviewerKeys],
+        );
+        if (responses.rowCount !== 1) {
+          throw new TokenlessServiceError(
+            "The exact network response settlement binding is unavailable.",
+            409,
+            "network_response_settlement_pending",
+            true,
+          );
+        }
+        terminal += 1;
         await client.query("COMMIT");
       } catch (error) {
         await client.query("ROLLBACK");
@@ -759,11 +925,16 @@ export async function reconcileNetworkAssignmentSettlements(
       throw error;
     }
   }
-  return { scanned: (expiredVouchers.rowCount ?? 0) + (due.rowCount ?? 0), terminal, retry };
+  return {
+    scanned: (expiredSelections.rowCount ?? 0) + (expiredVouchers.rowCount ?? 0) + (due.rowCount ?? 0),
+    terminal,
+    retry,
+  };
 }
 
 export const __networkAssignmentSettlementTestUtils = {
   selectionBindingHash,
   sha256,
   terminalSettlement,
+  recoverableLocalCommitStates: RECOVERABLE_LOCAL_COMMIT_STATES,
 };

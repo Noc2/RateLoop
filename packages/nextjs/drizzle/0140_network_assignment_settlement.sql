@@ -4,14 +4,29 @@ ALTER TABLE "tokenless_paid_vouchers"
 ALTER TABLE "tokenless_paid_vouchers"
   ADD COLUMN "network_selection_binding_hash" text;--> statement-breakpoint
 ALTER TABLE "tokenless_paid_vouchers"
+  ADD COLUMN "network_operation_key" text
+  REFERENCES "tokenless_agent_asks" ("operation_key") ON DELETE RESTRICT;--> statement-breakpoint
+ALTER TABLE "tokenless_paid_vouchers"
+  ADD COLUMN "network_deployment_key" text;--> statement-breakpoint
+ALTER TABLE "tokenless_paid_vouchers"
   ADD CONSTRAINT "tokenless_paid_vouchers_network_assignment_round_unique"
-  UNIQUE ("network_assignment_id","round_id");--> statement-breakpoint
+  UNIQUE (
+    "network_assignment_id","network_operation_key","network_deployment_key",
+    "chain_id","panel_address","round_id"
+  );--> statement-breakpoint
 ALTER TABLE "tokenless_paid_vouchers"
   ADD CONSTRAINT "tokenless_paid_vouchers_network_binding_check" CHECK (
-    ("network_assignment_id" IS NULL AND "network_selection_binding_hash" IS NULL)
+    (
+      "network_assignment_id" IS NULL
+      AND "network_selection_binding_hash" IS NULL
+      AND "network_operation_key" IS NULL
+      AND "network_deployment_key" IS NULL
+    )
     OR (
       "network_assignment_id" IS NOT NULL
       AND "network_selection_binding_hash" ~ '^sha256:[0-9a-f]{64}$'
+      AND "network_operation_key" IS NOT NULL
+      AND char_length("network_deployment_key") BETWEEN 1 AND 256
     )
   );--> statement-breakpoint
 
@@ -26,7 +41,7 @@ CREATE TABLE "tokenless_network_assignment_settlements" (
   "selection_batch_id" text NOT NULL,
   "selection_binding_hash" text NOT NULL,
   "integrity_provenance_hash" text NOT NULL,
-  "integrity_reviewer_lookup" text NOT NULL,
+  "integrity_reviewer_commitment" text NOT NULL,
   "deployment_key" text NOT NULL,
   "chain_id" integer NOT NULL,
   "panel_address" text NOT NULL,
@@ -55,6 +70,7 @@ CREATE TABLE "tokenless_network_assignment_settlements" (
   CONSTRAINT "tokenless_network_assignment_settlements_hashes_check" CHECK (
     "selection_binding_hash" ~ '^sha256:[0-9a-f]{64}$'
     AND "integrity_provenance_hash" ~ '^sha256:[0-9a-f]{64}$'
+    AND "integrity_reviewer_commitment" ~ '^sha256:[0-9a-f]{64}$'
     AND "round_terms_hash" ~ '^sha256:[0-9a-f]{64}$'
     AND "admission_policy_hash" ~ '^0x[0-9a-f]{64}$'
   ),
@@ -160,16 +176,21 @@ DECLARE
   old_rank integer;
   new_rank integer;
 BEGIN
+  IF OLD.state = 'terminal' THEN
+    RAISE EXCEPTION 'terminal network assignment settlements are immutable';
+  END IF;
   IF ROW(
     NEW.assignment_id,NEW.run_id,NEW.case_id,NEW.operation_key,NEW.selection_batch_id,
-    NEW.selection_binding_hash,NEW.integrity_provenance_hash,NEW.integrity_reviewer_lookup,
+    NEW.selection_binding_hash,NEW.integrity_provenance_hash,NEW.integrity_reviewer_commitment,
     NEW.deployment_key,NEW.chain_id,NEW.panel_address,NEW.round_id,NEW.content_id,
-    NEW.admission_policy_hash,NEW.round_terms_hash,NEW.total_funded_atomic,NEW.maximum_commits
+    NEW.admission_policy_hash,NEW.round_terms_hash,NEW.total_funded_atomic,NEW.maximum_commits,
+    NEW.created_at
   ) IS DISTINCT FROM ROW(
     OLD.assignment_id,OLD.run_id,OLD.case_id,OLD.operation_key,OLD.selection_batch_id,
-    OLD.selection_binding_hash,OLD.integrity_provenance_hash,OLD.integrity_reviewer_lookup,
+    OLD.selection_binding_hash,OLD.integrity_provenance_hash,OLD.integrity_reviewer_commitment,
     OLD.deployment_key,OLD.chain_id,OLD.panel_address,OLD.round_id,OLD.content_id,
-    OLD.admission_policy_hash,OLD.round_terms_hash,OLD.total_funded_atomic,OLD.maximum_commits
+    OLD.admission_policy_hash,OLD.round_terms_hash,OLD.total_funded_atomic,OLD.maximum_commits,
+    OLD.created_at
   ) THEN
     RAISE EXCEPTION 'network assignment settlement bindings are immutable';
   END IF;
@@ -180,15 +201,51 @@ BEGIN
     WHEN 'selected' THEN 1 WHEN 'voucher_issued' THEN 2
     WHEN 'committed' THEN 3 WHEN 'terminal' THEN 4 END;
   IF NEW.state <> OLD.state THEN
-    IF OLD.state = 'terminal' OR new_rank <= old_rank
+    IF new_rank <= old_rank
        OR (new_rank > old_rank + 1 AND NEW.state <> 'terminal') THEN
       RAISE EXCEPTION 'network assignment settlement transitions are monotonic';
     END IF;
     IF NEW.transition_revision <> OLD.transition_revision + 1 THEN
       RAISE EXCEPTION 'network assignment settlement revision must advance once';
     END IF;
-  ELSIF NEW.transition_revision <> OLD.transition_revision THEN
-    RAISE EXCEPTION 'network assignment settlement revision changed without a transition';
+    IF NOT EXISTS (
+      SELECT 1 FROM "tokenless_network_assignment_settlement_receipts" receipt
+      WHERE receipt.binding_id=OLD.binding_id
+        AND receipt.transition_revision=NEW.transition_revision
+        AND receipt.receipt_type=CASE NEW.state
+          WHEN 'voucher_issued' THEN 'voucher_issued'
+          WHEN 'committed' THEN 'voucher_consumed'
+          WHEN 'terminal' THEN 'settlement_terminal'
+        END
+    ) THEN
+      RAISE EXCEPTION 'network assignment settlement transition requires its append-only receipt';
+    END IF;
+  ELSE
+    RAISE EXCEPTION 'network assignment settlement lifecycle changes require a state transition';
+  END IF;
+  IF NEW.state = 'voucher_issued' AND (
+    OLD.state <> 'selected' OR OLD.voucher_id IS NOT NULL OR NEW.voucher_id IS NULL
+    OR NEW.committed_at IS NOT NULL OR NEW.terminal_outcome IS NOT NULL
+    OR NEW.settlement_reference IS NOT NULL OR NEW.settlement_evidence_hash IS NOT NULL
+    OR NEW.terminal_at IS NOT NULL
+  ) THEN
+    RAISE EXCEPTION 'invalid network voucher-issued transition shape';
+  END IF;
+  IF NEW.state = 'committed' AND (
+    OLD.state <> 'voucher_issued' OR NEW.voucher_id IS DISTINCT FROM OLD.voucher_id
+    OR NEW.committed_at IS NULL OR NEW.terminal_outcome IS NOT NULL
+    OR NEW.settlement_reference IS NOT NULL OR NEW.settlement_evidence_hash IS NOT NULL
+    OR NEW.terminal_at IS NOT NULL
+  ) THEN
+    RAISE EXCEPTION 'invalid network committed transition shape';
+  END IF;
+  IF NEW.state = 'terminal' AND (
+    NEW.voucher_id IS DISTINCT FROM OLD.voucher_id
+    OR NEW.committed_at IS DISTINCT FROM OLD.committed_at
+    OR NEW.terminal_outcome IS NULL OR NEW.settlement_reference IS NULL
+    OR NEW.settlement_evidence_hash IS NULL OR NEW.terminal_at IS NULL
+  ) THEN
+    RAISE EXCEPTION 'invalid network terminal transition shape';
   END IF;
   RETURN NEW;
 END;
@@ -199,6 +256,14 @@ CREATE TRIGGER "tokenless_network_assignment_settlements_guard"
 
 ALTER TABLE "tokenless_assurance_responses"
   ADD COLUMN "settlement_evidence_hash" text;--> statement-breakpoint
+UPDATE "tokenless_assurance_responses"
+SET "settlement_evidence_hash" =
+  'sha256:' || encode(digest(convert_to(
+    'rateloop.legacy-assurance-settlement-reference.v1|' || "settlement_reference",
+    'UTF8'
+  ), 'sha256'), 'hex')
+WHERE "settlement_reference" IS NOT NULL
+  AND "settlement_evidence_hash" IS NULL;--> statement-breakpoint
 ALTER TABLE "tokenless_assurance_responses"
   ADD CONSTRAINT "tokenless_assurance_responses_settlement_evidence_check" CHECK (
     ("settlement_reference" IS NULL AND "settlement_evidence_hash" IS NULL)
