@@ -239,27 +239,3 @@ export function evaluatePostRoundIntegrity(input: {
     aggregates,
   };
 }
-
-export function createPostRoundIntegrityAppeal(input: {
-  evaluationHash: string;
-  appealId: string;
-  reasonCode: string;
-  submittedAt: string;
-}) {
-  if (!/^sha256:[0-9a-f]{64}$/u.test(input.evaluationHash) || !PSEUDONYM.test(input.appealId)) {
-    throw new Error("Post-round integrity appeal binding is invalid.");
-  }
-  if (!LIMITATION.test(input.reasonCode) || !Number.isFinite(Date.parse(input.submittedAt))) {
-    throw new Error("Post-round integrity appeal details are invalid.");
-  }
-  const appeal = {
-    schemaVersion: "rateloop.post-round-integrity-appeal.v1" as const,
-    appealId: input.appealId,
-    originalEvaluationHash: input.evaluationHash,
-    reasonCode: input.reasonCode,
-    submittedAt: new Date(input.submittedAt).toISOString(),
-    effect: "append_only_review" as const,
-    payoutEffect: "none" as const,
-  };
-  return { ...appeal, appealHash: sha256(appeal) };
-}

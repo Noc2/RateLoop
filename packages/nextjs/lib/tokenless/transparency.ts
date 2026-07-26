@@ -16,7 +16,6 @@ import {
 import {
   type PostRoundIntegrityPolicy,
   type PostRoundIntegrityReport,
-  createPostRoundIntegrityAppeal,
   evaluatePostRoundIntegrity,
 } from "~~/lib/tokenless/postRoundIntegrity";
 import {
@@ -1841,76 +1840,6 @@ export async function reviewAndPublishResult(input: { operationKey: string; appO
     now,
   });
   return { evidenceRoot: root, publicationId, reasonCodes: evaluation.reasonCodes, evaluation, result };
-}
-
-export async function appendPostRoundIntegrityReviewRecord(input: {
-  operationKey: string;
-  evaluationHash: string;
-  recordType: "appeal" | "remediation";
-  reasonCode: string;
-  details?: Record<string, unknown>;
-  submittedBy: string;
-  now?: Date;
-}) {
-  const now = input.now ?? new Date();
-  if (!input.submittedBy.trim()) {
-    throw new TokenlessServiceError("Integrity review submitter is required.", 400, "invalid_integrity_record");
-  }
-  const ownership = await dbClient.execute({
-    sql: "SELECT workspace_id FROM tokenless_ask_ownership WHERE operation_key = ? LIMIT 1",
-    args: [input.operationKey],
-  });
-  const workspaceId = rowString(ownership.rows[0] as Row | undefined, "workspace_id");
-  if (!workspaceId) throw new TokenlessServiceError("Result not found.", 404, "result_not_found");
-  await requireWorkspaceMember(input.submittedBy, workspaceId);
-  const evaluation = await dbClient.execute({
-    sql: `SELECT evaluation_hash FROM tokenless_analytics_reviews
-          WHERE operation_key = ? AND evaluation_hash = ? LIMIT 1`,
-    args: [input.operationKey, input.evaluationHash],
-  });
-  if (evaluation.rows.length === 0) {
-    throw new TokenlessServiceError("Integrity evaluation was not found.", 404, "integrity_evaluation_not_found");
-  }
-  const appealBinding = createPostRoundIntegrityAppeal({
-    evaluationHash: input.evaluationHash,
-    appealId: `appeal_${digest(`${input.operationKey}:${input.submittedBy}:${now.toISOString()}`).slice(0, 32)}`,
-    reasonCode: input.reasonCode,
-    submittedAt: now.toISOString(),
-  });
-  const detailsJson = stableTransparencyJson(input.details ?? {});
-  const recordHash = `sha256:${digest(
-    stableTransparencyJson({
-      appealBinding,
-      recordType: input.recordType,
-      details: JSON.parse(detailsJson),
-      submittedBy: input.submittedBy,
-    }),
-  )}`;
-  const recordId = `pir_${digest(`${input.operationKey}:${recordHash}`).slice(0, 32)}`;
-  await dbClient.execute({
-    sql: `INSERT INTO tokenless_post_round_integrity_records
-          (record_id, operation_key, evaluation_hash, record_type, reason_code, details_json,
-           record_hash, submitted_by, effect, payout_effect, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'append_only_review', 'none', ?)
-          ON CONFLICT (operation_key, record_hash) DO NOTHING`,
-    args: [
-      recordId,
-      input.operationKey,
-      input.evaluationHash,
-      input.recordType,
-      input.reasonCode,
-      detailsJson,
-      recordHash,
-      input.submittedBy,
-      now,
-    ],
-  });
-  return {
-    recordId,
-    recordHash,
-    effect: "append_only_review" as const,
-    payoutEffect: "none" as const,
-  };
 }
 
 async function enqueuePublicationWebhooks(input: {

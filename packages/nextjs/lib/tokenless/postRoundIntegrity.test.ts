@@ -1,10 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  type PostRoundIntegrityReport,
-  createPostRoundIntegrityAppeal,
-  evaluatePostRoundIntegrity,
-} from "~~/lib/tokenless/postRoundIntegrity";
+import { type PostRoundIntegrityReport, evaluatePostRoundIntegrity } from "~~/lib/tokenless/postRoundIntegrity";
 
 const policy = {
   minimumReports: 5,
@@ -90,23 +86,6 @@ test("provider reuse, fingerprint rings, timing bursts, and coassignment rings a
     "provider_subject_reuse",
     "recent_coassignment_excess",
   ]);
-});
-
-test("appeals append to an immutable evaluation and cannot affect payout", () => {
-  const evaluation = evaluatePostRoundIntegrity({
-    policy,
-    reports: [1, 2, 3, 4, 5].map(index => report(index)),
-    inputsComplete: true,
-  });
-  const appeal = createPostRoundIntegrityAppeal({
-    evaluationHash: evaluation.evaluationHash,
-    appealId: "appeal_00000001",
-    reasonCode: "cluster_false_positive",
-    submittedAt: "2026-07-13T12:00:00.000Z",
-  });
-  assert.equal(appeal.originalEvaluationHash, evaluation.evaluationHash);
-  assert.equal(appeal.effect, "append_only_review");
-  assert.equal(appeal.payoutEffect, "none");
 });
 
 test("versioned World ID HMAC references remain valid opaque integrity evidence", () => {

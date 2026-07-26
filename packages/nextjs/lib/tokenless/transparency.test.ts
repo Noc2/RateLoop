@@ -14,7 +14,6 @@ import { type TokenlessChainRuntime, __setTokenlessChainRuntimeForTests } from "
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import {
   appendFinalizedRoundEvidence,
-  appendPostRoundIntegrityReviewRecord,
   assertPublicWebhookDestination,
   createWorkspaceWebhook,
   deliverPendingWebhooks,
@@ -1162,7 +1161,7 @@ test("post-round integrity can delist public interpretation without changing ind
   assert.equal(JSON.parse(String(stored.rows[0]?.result_json)).verdict, null);
 });
 
-test("pending integrity and append-only remediation cannot mutate finalized accounting", async () => {
+test("pending integrity cannot mutate finalized accounting", async () => {
   await appendFinalizedRoundEvidence({
     operationKey: OPERATION,
     fetchImpl: ponderFetch(),
@@ -1181,37 +1180,9 @@ test("pending integrity and append-only remediation cannot mutate finalized acco
   assert.equal(pending.result.terminal, false);
   assert.equal(pending.publicationId, null);
   assert.equal(pending.evaluation.payoutEffect, "none");
-  await seedFrozenIntegrityAssignments();
-  await appendFinalizedRoundEvidence({
-    operationKey: OPERATION,
-    fetchImpl: ponderFetch(),
-    ponderUrl: "https://ponder.example.test",
-  });
-  const completed = await reviewAndPublishResult({
-    operationKey: OPERATION,
-    appOrigin: "https://app.example.test",
-    now: new Date(NOW.getTime() + 1_000),
-  });
-  const record = await appendPostRoundIntegrityReviewRecord({
-    operationKey: OPERATION,
-    evaluationHash: completed.evaluation.evaluationHash,
-    recordType: "remediation",
-    reasonCode: "buyer_requested_review",
-    details: { note: "Review the aggregate claim only." },
-    submittedBy: OWNER,
-    now: new Date(NOW.getTime() + 2_000),
-  });
-  assert.equal(record.payoutEffect, "none");
   const after = await dbClient.execute({
     sql: "SELECT economics_json FROM tokenless_agent_asks WHERE operation_key = ?",
     args: [OPERATION],
   });
   assert.equal(String(after.rows[0]?.economics_json), String(before.rows[0]?.economics_json));
-  const inspection = await inspectWorkspaceTransparency({
-    accountAddress: OWNER,
-    workspaceId: WORKSPACE,
-    operationKey: OPERATION,
-  });
-  assert.equal(inspection.analyticsReviews.length, 2);
-  assert.equal(inspection.integrityReviewRecords[0]?.payout_effect, "none");
 });
