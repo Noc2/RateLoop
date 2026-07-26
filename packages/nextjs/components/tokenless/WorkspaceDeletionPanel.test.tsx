@@ -14,8 +14,9 @@ test("the visible workspace deletion action loads a preview before accepting an 
   assert.match(source, /cache: "no-store"/);
   assert.match(source, /JSON\.stringify\(\{ confirmationName \}\)/);
   assert.match(source, /confirmationName !== preview\.workspace\.name/);
-  assert.match(source, /preview\.blockers\.length === 0/);
-  assert.match(source, /disabled=\{submitting \|\| !confirmed\}/);
+  assert.match(source, /requiresFundResolution\(preview\)/);
+  assert.match(source, /Request verified refund/);
+  assert.match(source, /resolutionQueued/);
   assert.match(source, /window\.location\.assign\("\/agents"\)/);
 });
 

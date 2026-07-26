@@ -29,6 +29,15 @@ type WorkspaceDeletionPanelProps = {
   workspaceName: string;
 };
 
+type WorkspaceDeletionResult =
+  | { deleted: true; status: "completed" }
+  | {
+      deleted: false;
+      requestId: string;
+      resolutionId: string;
+      status: "blocked_by_funds";
+    };
+
 function countLabel(count: number, singular: string, plural: string) {
   return `${count} ${count === 1 ? singular : plural}`;
 }
@@ -84,11 +93,16 @@ function impactRows(preview: WorkspaceDeletionPreview) {
   ].filter((value): value is string => Boolean(value));
 }
 
+function requiresFundResolution(preview: WorkspaceDeletionPreview) {
+  return preview.blockers.length === 1 && preview.blockers[0]?.code === "workspace_funds_active";
+}
+
 export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: WorkspaceDeletionPanelProps) {
   const [preview, setPreview] = useState<WorkspaceDeletionPreview | null>(null);
   const [confirmationName, setConfirmationName] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [resolutionQueued, setResolutionQueued] = useState<string | null>(null);
   const { capture, clear, fieldErrors, formError } = useFormErrors();
 
   async function loadPreview() {
@@ -112,11 +126,17 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
 
   async function requestDeletion(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!preview || preview.blockers.length > 0 || confirmationName !== preview.workspace.name) return;
+    if (
+      !preview ||
+      (preview.blockers.length > 0 && !requiresFundResolution(preview)) ||
+      confirmationName !== preview.workspace.name
+    ) {
+      return;
+    }
     setSubmitting(true);
     clear();
     try {
-      await readJson(
+      const result = await readJson<WorkspaceDeletionResult>(
         await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/deletion`, {
           method: "POST",
           body: JSON.stringify({ confirmationName }),
@@ -124,6 +144,11 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
           headers: { "Content-Type": "application/json" },
         }),
       );
+      if (!result.deleted && result.status === "blocked_by_funds") {
+        setResolutionQueued(result.resolutionId);
+        setSubmitting(false);
+        return;
+      }
       window.location.assign("/agents");
     } catch (cause) {
       capture(cause, "Unable to delete this workspace.");
@@ -133,6 +158,8 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
 
   const impacts = preview ? impactRows(preview) : [];
   const confirmed = preview ? confirmationName === preview.workspace.name : false;
+  const fundResolutionRequired = preview ? requiresFundResolution(preview) : false;
+  const canRequest = preview ? preview.blockers.length === 0 || fundResolutionRequired : false;
 
   return (
     <section className="p-5 sm:p-6" aria-labelledby="workspace-deletion-heading">
@@ -164,11 +191,13 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
 
           <form className="mt-3" onSubmit={requestDeletion}>
             <p className="text-sm leading-6 text-base-content/65">
-              {preview.blockers.length > 0
-                ? "Resolve the items below before deleting this workspace."
-                : preview.immediate
-                  ? "This workspace has no work or funds. Deletion is immediate."
-                  : "The workspace closes immediately. Stored objects are deleted afterward, while required records remain restricted."}
+              {fundResolutionRequired
+                ? "Confirm the request to queue verified fund resolution. The workspace and its balance remain active until an operator records the external refund."
+                : preview.blockers.length > 0
+                  ? "Resolve the items below before deleting this workspace."
+                  : preview.immediate
+                    ? "This workspace has no work or funds. Deletion is immediate."
+                    : "The workspace closes immediately. Stored objects are deleted afterward, while required records remain restricted."}
             </p>
 
             {impacts.length > 0 ? (
@@ -199,7 +228,7 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
               </div>
             ) : null}
 
-            {preview.blockers.length === 0 ? (
+            {canRequest ? (
               <div className="mt-5">
                 <Field
                   label={
@@ -220,10 +249,27 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
               </div>
             ) : null}
 
+            {resolutionQueued ? (
+              <p className="mt-4 rounded-lg bg-emerald-300/[0.08] p-3 text-sm text-emerald-100" role="status">
+                Fund resolution queued. Your balance has not been forfeited. Reference:{" "}
+                <span className="font-mono text-xs">{resolutionQueued}</span>
+              </p>
+            ) : null}
+
             <div className="mt-4 flex flex-wrap gap-3">
-              {preview.blockers.length === 0 ? (
-                <button type="submit" className="btn btn-error min-h-10 px-4" disabled={submitting || !confirmed}>
-                  {submitting ? "Deleting…" : "Delete workspace"}
+              {canRequest ? (
+                <button
+                  type="submit"
+                  className="btn btn-error min-h-10 px-4"
+                  disabled={submitting || !confirmed || Boolean(resolutionQueued)}
+                >
+                  {submitting
+                    ? fundResolutionRequired
+                      ? "Queuing…"
+                      : "Deleting…"
+                    : fundResolutionRequired
+                      ? "Request verified refund"
+                      : "Delete workspace"}
                 </button>
               ) : null}
               <button
@@ -233,6 +279,7 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
                 onClick={() => {
                   setPreview(null);
                   setConfirmationName("");
+                  setResolutionQueued(null);
                   clear();
                 }}
               >
