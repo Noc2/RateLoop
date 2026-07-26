@@ -65,7 +65,7 @@ test("an already reserved voucher retries the prepared device queue and waits fo
   assert.match(source, /Recorded/);
   assert.match(source, /Commit receipt/);
   assert.match(source, /View confirmed transaction/);
-  assert.match(source, /Technical details/);
+  assert.doesNotMatch(source, /Technical details|technicalStatus|setTechnicalStatus/);
   assert.doesNotMatch(source, /Recovery secret/);
 });
 

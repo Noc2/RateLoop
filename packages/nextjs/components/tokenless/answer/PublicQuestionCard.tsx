@@ -195,7 +195,6 @@ export function PublicQuestionCard({
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const [technicalStatus, setTechnicalStatus] = useState<string | null>(null);
   const [preparedSubmission, setPreparedSubmission] = useState<PreparedPublicSubmission | null>(null);
   const [recoveryDownloaded, setRecoveryDownloaded] = useState(false);
   const [recoveryConfirmed, setRecoveryConfirmed] = useState(false);
@@ -272,8 +271,7 @@ export function PublicQuestionCard({
     setPreparedSubmission(null);
     setRecoveryDownloaded(false);
     setRecoveryConfirmed(false);
-    setStatus(null);
-    setTechnicalStatus("Your rating changed. Create a new recovery backup before submitting.");
+    setStatus("Rating changed. Create a new recovery backup before submitting.");
   }, [preparationBinding, preparedSubmission]);
 
   useEffect(() => {
@@ -307,13 +305,6 @@ export function PublicQuestionCard({
             ? "Submission expired"
             : "No saved submission",
       );
-      setTechnicalStatus(
-        record
-          ? isDue
-            ? "A prepared submission for this account is ready to retry."
-            : `The next retry is available after ${new Date(record.nextAttemptAt).toLocaleTimeString()}.`
-          : "This voucher was reserved in another session. No prepared submission is available on this device.",
-      );
     });
     return () => {
       active = false;
@@ -333,15 +324,11 @@ export function PublicQuestionCard({
     if (failure.expired) {
       setSavedCommit(null);
       setStatus("Submission expired");
-      setTechnicalStatus("The immutable commit deadline passed, so the saved submission was removed.");
       return;
     }
     setSavedCommit(failure.record);
     setRetryClock(Date.now());
-    setStatus("Retry scheduled");
-    setTechnicalStatus(
-      `The next retry is available after ${new Date(failure.record.nextAttemptAt).toLocaleTimeString()}.`,
-    );
+    setStatus(`Retry available after ${new Date(failure.record.nextAttemptAt).toLocaleTimeString()}`);
   }
 
   async function acceptNetworkAssignment() {
@@ -350,7 +337,6 @@ export function PublicQuestionCard({
     setBusyLabel("Accepting…");
     setError(null);
     setStatus("Accepting paid review…");
-    setTechnicalStatus("Checking the exact assignment, review terms, and funded-round state.");
     try {
       const browserSession = await readBrowserSession();
       if (!browserSession || browserSession.principalId !== principalId) {
@@ -373,14 +359,10 @@ export function PublicQuestionCard({
       setNetworkAssignmentStatus("accepted");
       setNetworkTermsAccepted(false);
       setStatus(result.replay === true ? "Assignment already accepted" : "Assignment accepted");
-      setTechnicalStatus("The exact paid network seat is accepted. You can now open and answer the public review.");
     } catch (cause) {
       setNetworkAssignmentStatus("reserved");
       setStatus(null);
       setError(cause instanceof Error ? cause.message : "The paid review could not be accepted.");
-      setTechnicalStatus(
-        "The assignment may have expired or the funded review may have closed. Refresh the queue before retrying.",
-      );
     } finally {
       setBusy(false);
       setBusyLabel(null);
@@ -393,14 +375,12 @@ export function PublicQuestionCard({
     setBusyLabel("Retrying…");
     setError(null);
     setStatus("Submitting…");
-    setTechnicalStatus("Sending the saved transaction and checking confirmation.");
     try {
       const browserSession = await readBrowserSession();
       if (!browserSession || browserSession.principalId !== principalId) {
         setSavedCommit(null);
         setError("Your account changed. Reopen this review before retrying.");
         setStatus(null);
-        setTechnicalStatus("Saved submissions are available only to the account that created them.");
         return;
       }
       const queue = createIndexedDbTokenlessCommitQueue();
@@ -409,11 +389,10 @@ export function PublicQuestionCard({
       if (!currentRecord) {
         const retained = await queue.get(savedCommit.queueId, principalId);
         setSavedCommit(retained);
-        setStatus(retained ? "Retry scheduled" : "Submission expired");
-        setTechnicalStatus(
+        setStatus(
           retained
-            ? `The next retry is available after ${new Date(retained.nextAttemptAt).toLocaleTimeString()}.`
-            : "The immutable commit deadline passed, so the saved submission was removed.",
+            ? `Retry available after ${new Date(retained.nextAttemptAt).toLocaleTimeString()}`
+            : "Submission expired",
         );
         return;
       }
@@ -429,7 +408,6 @@ export function PublicQuestionCard({
       if (typeof committed.commitId !== "string") throw new Error("Commit response is incomplete.");
       const commitId = committed.commitId;
       for (let attempt = 0; attempt < 10 && committed.state === "submitted"; attempt += 1) {
-        setTechnicalStatus(`Saved transaction sent; checking confirmation${attempt ? ` (${attempt + 1}/10)` : ""}.`);
         await wait(1_000);
         committed = await readAnswerJson(
           await fetch(`/api/rater/commits/${encodeURIComponent(commitId)}`, { credentials: "same-origin" }),
@@ -445,7 +423,6 @@ export function PublicQuestionCard({
           confirmedAt: typeof committed.confirmedAt === "string" ? committed.confirmedAt : null,
           transactionHash: typeof committed.transactionHash === "string" ? committed.transactionHash : null,
         });
-        setTechnicalStatus("The answer is confirmed. The panel rating stays hidden until settlement.");
         onSubmitted();
       } else if (committed.state === "failed") {
         throw new Error("The sponsored transaction failed. The prepared submission remains saved for retry.");
@@ -453,17 +430,16 @@ export function PublicQuestionCard({
         await scheduleRetry(currentRecord, "confirmation_pending");
       }
     } catch (cause) {
-      setError("We couldn’t finish recording your rating. Try again.");
+      setError(cause instanceof Error ? cause.message : "We couldn’t finish recording your rating. Try again.");
       if (savedCommit && savedCommit.principalId === principalId) {
         try {
           await scheduleRetry(savedCommit, "relay_failed");
         } catch {
           setStatus("Retry unavailable");
-          setTechnicalStatus("The saved submission could not be updated. Refocus this tab and try again.");
+          setError("The saved submission could not be updated. Refocus this tab and try again.");
         }
       } else {
         setStatus(null);
-        setTechnicalStatus(cause instanceof Error ? cause.message : "Unable to retry the saved submission.");
       }
     } finally {
       setBusy(false);
@@ -485,7 +461,6 @@ export function PublicQuestionCard({
     setBusyLabel("Creating backup…");
     setError(null);
     setStatus("Creating backup…");
-    setTechnicalStatus("Creating one-time answer and payout keys on this device.");
     try {
       const browserSession = await readBrowserSession();
       if (!browserSession) throw new Error("Sign in again before creating recovery material.");
@@ -528,14 +503,12 @@ export function PublicQuestionCard({
       setRecoveryDownloaded(false);
       setRecoveryConfirmed(false);
       setStatus("Backup ready");
-      setTechnicalStatus("No voucher or commit has been requested. The recovery secret exists only in the download.");
     } catch (cause) {
       setPreparedSubmission(null);
       setRecoveryDownloaded(false);
       setRecoveryConfirmed(false);
       setError(cause instanceof Error ? cause.message : "We couldn’t create your recovery backup. Try again.");
       setStatus(null);
-      setTechnicalStatus(cause instanceof Error ? cause.message : "Unable to prepare recovery material.");
     } finally {
       setBusy(false);
       setBusyLabel(null);
@@ -554,16 +527,13 @@ export function PublicQuestionCard({
         setRecoveryDownloaded(false);
         setRecoveryConfirmed(false);
         setStatus(null);
-        setTechnicalStatus("The signed-in account changed. Create a new backup for this account.");
         setError("Your account changed. Create a new recovery backup before submitting.");
         return;
       }
       setRecoveryConfirmed(true);
       setStatus("Backup confirmed");
-      setTechnicalStatus("The recovery secret is not in browser storage. No voucher or commit has been requested.");
     } catch (cause) {
-      setError("We couldn’t confirm the recovery backup. Try again.");
-      setTechnicalStatus(cause instanceof Error ? cause.message : "Unable to confirm recovery material.");
+      setError(cause instanceof Error ? cause.message : "We couldn’t confirm the recovery backup. Try again.");
     } finally {
       setBusy(false);
       setBusyLabel(null);
@@ -601,7 +571,6 @@ export function PublicQuestionCard({
         fallback.click();
       }
       setRecoveryDownloaded(true);
-      setTechnicalStatus("Recovery backup saved or handed to your device’s share sheet.");
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === "AbortError") return;
       setError(cause instanceof Error ? cause.message : "The recovery backup could not be saved.");
@@ -617,7 +586,6 @@ export function PublicQuestionCard({
     setBusyLabel("Submitting…");
     setError(null);
     setStatus("Submitting…");
-    setTechnicalStatus("Checking the account before reserving a voucher.");
     try {
       const browserSession = await readBrowserSession();
       if (!browserSession || browserSession.principalId !== activePreparedSubmission.principalId) {
@@ -627,12 +595,7 @@ export function PublicQuestionCard({
         throw new Error("The signed-in account changed. Create a new recovery backup for this account.");
       }
       const { response, secrets } = activePreparedSubmission;
-      const recoveryStored = storeDeviceRecovery(activePreparedSubmission.recoveryRecord, browserSession.principalId);
-      setTechnicalStatus(
-        recoveryStored
-          ? "The encrypted recovery record is saved for this account. Reserving a voucher now."
-          : "Device storage is unavailable. Keep the downloaded backup. Reserving a voucher now.",
-      );
+      storeDeviceRecovery(activePreparedSubmission.recoveryRecord, browserSession.principalId);
       const sealed = await sealTokenlessReveal({
         material: secrets.reveal,
         drandNetwork: task.disclosureBeacon.network,
@@ -684,7 +647,6 @@ export function PublicQuestionCard({
       setPreparedSubmission(null);
       setRecoveryDownloaded(false);
       setRecoveryConfirmed(false);
-      setTechnicalStatus("Sending the sponsored transaction.");
       const committed = await readAnswerJson(
         await fetch("/api/rater/commits", {
           method: "POST",
@@ -701,7 +663,6 @@ export function PublicQuestionCard({
       if (typeof committed.commitId !== "string") throw new Error("Commit response is incomplete.");
       let current = committed;
       for (let attempt = 0; attempt < 10 && current.state === "submitted"; attempt += 1) {
-        setTechnicalStatus(`Transaction sent; checking confirmation${attempt ? ` (${attempt + 1}/10)` : ""}.`);
         await wait(1_000);
         current = await readAnswerJson(
           await fetch(`/api/rater/commits/${encodeURIComponent(committed.commitId)}`, {
@@ -719,7 +680,6 @@ export function PublicQuestionCard({
           confirmedAt: typeof current.confirmedAt === "string" ? current.confirmedAt : null,
           transactionHash: typeof current.transactionHash === "string" ? current.transactionHash : null,
         });
-        setTechnicalStatus("The answer is confirmed. The panel rating stays hidden until settlement.");
         onSubmitted();
       } else if (current.state === "failed") {
         throw new Error(
@@ -737,11 +697,10 @@ export function PublicQuestionCard({
           if (record) await scheduleRetry(record, "initial_relay_failed");
         } catch {
           setStatus("Retry unavailable");
-          setTechnicalStatus("The saved submission could not be updated. Refocus this tab and try again.");
+          setError("The saved submission could not be updated. Refocus this tab and try again.");
         }
       } else {
         setStatus(null);
-        setTechnicalStatus(cause instanceof Error ? cause.message : "Unable to submit the sealed answer.");
       }
     } finally {
       setBusy(false);
@@ -827,7 +786,6 @@ export function PublicQuestionCard({
             {error}
           </p>
         ) : null}
-        {technicalStatus ? <p className="mt-3 text-xs text-base-content/55">{technicalStatus}</p> : null}
       </Card>
     );
   }
@@ -1092,12 +1050,6 @@ export function PublicQuestionCard({
                     </a>
                   ) : null}
                 </section>
-              ) : null}
-              {technicalStatus ? (
-                <details className="mt-3 rounded-lg border border-white/10 px-3 py-2 text-xs text-base-content/55">
-                  <summary className="cursor-pointer font-medium text-base-content/70">Technical details</summary>
-                  <p className="mt-2 leading-5">{technicalStatus}</p>
-                </details>
               ) : null}
               {error ? (
                 <p role="alert" className="mt-3 text-xs leading-5 text-red-100">
