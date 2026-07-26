@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
+import { getHumanReviewConfigurationForOwner } from "~~/lib/tokenless/humanReviewConfiguration";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 import {
   createWorkspaceReviewerInvitation,
@@ -13,6 +14,7 @@ type Context = { params: Promise<{ workspaceId: string }> };
 const noStore = { "Cache-Control": "private, no-store, max-age=0" };
 const invitationKeys = new Set([
   "accessExpiresAt",
+  "agentId",
   "expiresAt",
   "intendedAccountAddress",
   "intendedEmail",
@@ -20,6 +22,7 @@ const invitationKeys = new Set([
   "maximumRedemptions",
   "maxPrivateSensitivity",
   "paidAdulthoodAttested",
+  "privateGroupId",
   "projectIds",
 ]);
 
@@ -72,9 +75,44 @@ export async function POST(request: NextRequest, context: Context) {
     const session = await requireBrowserSession(request, { mutation: true });
     const { workspaceId } = await context.params;
     const body = await invitationBody(request);
+    if (
+      (typeof body.agentId !== "string" || !body.agentId.trim()) &&
+      (typeof body.privateGroupId !== "string" || !body.privateGroupId.trim())
+    ) {
+      throw new TokenlessServiceError(
+        "Choose the agent whose reviewer group should receive this invitation.",
+        400,
+        "invalid_workspace_reviewer",
+        false,
+        "agentId",
+      );
+    }
+    const ownerView =
+      typeof body.agentId === "string"
+        ? await getHumanReviewConfigurationForOwner({
+            accountAddress: session.principalId,
+            workspaceId,
+            agentId: body.agentId,
+          })
+        : null;
+    const requestProfile = ownerView?.configuration?.requestProfile.value;
+    const audience = requestProfile?.audience;
+    const privateGroupId = ownerView
+      ? audience === "private_invited" || audience === "hybrid"
+        ? requestProfile?.privateGroupId
+        : null
+      : body.privateGroupId;
+    if (typeof privateGroupId !== "string" || !privateGroupId) {
+      throw new TokenlessServiceError(
+        "This agent does not have an active invited-reviewer group.",
+        409,
+        "private_group_not_found",
+      );
+    }
     const invitation = await createWorkspaceReviewerInvitation({
       accountAddress: session.principalId,
       workspaceId,
+      privateGroupId,
       projectIds: body.projectIds as string[] | undefined,
       maxPrivateSensitivity: body.maxPrivateSensitivity as "internal" | "confidential" | "restricted" | "regulated",
       intendedAccountAddress: body.intendedAccountAddress as string | null | undefined,

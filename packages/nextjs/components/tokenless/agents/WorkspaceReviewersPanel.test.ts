@@ -11,6 +11,7 @@ test("reviewer management has one direct invitation path and states its access b
   assert.match(panel, /Private material limit/);
   assert.match(panel, /maxPrivateSensitivity/);
   assert.match(panel, /OneTimeSecretNotice/);
+  assert.match(panel, /body: JSON\.stringify\(\{\s*agentId,/u);
   assert.doesNotMatch(panel, /Create group|Choose a group|private-groups|PrivateGroupsPanel/);
 });
 

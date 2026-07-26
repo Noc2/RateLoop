@@ -153,7 +153,7 @@ test("reviewer invitations persist only token hashes and never grant workspace m
   assert.equal(unverifiedReviewers[0]?.email, null);
 });
 
-test("setup-bound reviewer invitation redemption activates the selected private group idempotently", async () => {
+test("a reviewer invitation transactionally binds and activates the selected private group idempotently", async () => {
   const { workspaceId, owner, reviewer } = await fixture();
   const group = await createPrivateGroup({
     accountAddress: owner,
@@ -165,52 +165,20 @@ test("setup-bound reviewer invitation redemption activates the selected private 
   const invitation = await createWorkspaceReviewerInvitation({
     accountAddress: owner,
     workspaceId,
+    privateGroupId: group.groupId,
     maxPrivateSensitivity: "confidential",
     intendedAccountAddress: reviewer,
     accessExpiresAt: new Date(now.getTime() + 30 * 86_400_000),
     now,
   });
-  const companionClient = await dbPool.connect();
-  try {
-    await companionClient.query("BEGIN");
-    await createPrivateGroupInvitationInTransaction(companionClient, {
-      actorAddress: owner,
-      invitationId: invitation.invitationId,
-      workspaceId,
-      groupId: group.groupId,
-      intendedAccountAddress: reviewer,
-      expiresAt: new Date(invitation.expiresAt),
-      membershipExpiresAt: new Date(invitation.accessExpiresAt!),
-      now,
-    });
-    await companionClient.query("COMMIT");
-  } catch (error) {
-    await companionClient.query("ROLLBACK");
-    throw error;
-  } finally {
-    companionClient.release();
-  }
-  const setup = await dbClient.execute({
-    sql: `UPDATE tokenless_workspace_agent_setups
-          SET status='completed',current_step='complete',people_decision='invited',private_group_id=?,
-              people_decided_at=?,people_decided_by=?,people_invitation_id=?,
-              finalization_idempotency_key_hash=?,finalization_request_hash=?,
-              completed_at=?,completed_by=?,updated_at=?
-          WHERE workspace_id=?`,
-    args: [
-      group.groupId,
-      now,
-      owner,
-      invitation.invitationId,
-      `sha256:${"1".repeat(64)}`,
-      `sha256:${"2".repeat(64)}`,
-      now,
-      owner,
-      now,
-      workspaceId,
-    ],
+  const paired = await dbClient.execute({
+    sql: `SELECT group_id,intended_account_address,membership_expires_at
+          FROM tokenless_private_group_invitations
+          WHERE invitation_id=? AND workspace_id=?`,
+    args: [invitation.invitationId, workspaceId],
   });
-  assert.equal(setup.rowCount, 1);
+  assert.equal(paired.rows[0]?.group_id, group.groupId);
+  assert.equal(paired.rows[0]?.intended_account_address, reviewer);
 
   const first = await redeemWorkspaceReviewerInvitation({ accountAddress: reviewer, token: invitation.token, now });
   assert.equal(first.replay, false);

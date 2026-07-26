@@ -108,7 +108,7 @@ export function AgentReviewsPanel({ canManage, workspaceId }: { canManage: boole
             workspaceId={workspaceId}
             agentId={selectedAgentId}
           />
-          <WorkspaceReviewersPanel canManage workspaceId={workspaceId} />
+          <WorkspaceReviewersPanel agentId={selectedAgentId} canManage workspaceId={workspaceId} />
         </div>
       ) : !currentRegistry.loading && !currentRegistry.error ? (
         <Card as="section" className="rounded-2xl p-6" aria-labelledby="reviews-connection-required">

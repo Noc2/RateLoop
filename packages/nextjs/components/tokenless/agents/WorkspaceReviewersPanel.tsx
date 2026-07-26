@@ -56,9 +56,11 @@ function invitationStatus(invitation: ReviewerInvitation) {
 }
 
 export function WorkspaceReviewersPanel({
+  agentId,
   canManage = true,
   workspaceId,
 }: {
+  agentId: string;
   canManage?: boolean;
   workspaceId: string;
 }) {
@@ -138,6 +140,7 @@ export function WorkspaceReviewersPanel({
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            agentId,
             intendedEmail: email.trim() || null,
             maxPrivateSensitivity,
             paidAdulthoodAttested,

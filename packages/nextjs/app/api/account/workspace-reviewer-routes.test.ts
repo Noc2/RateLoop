@@ -16,9 +16,9 @@ import { existsSync, readFileSync } from "node:fs";
 import { afterEach, beforeEach, test } from "node:test";
 import { resolveBetterAuthPrincipal } from "~~/lib/auth/principal";
 import { AUTH_SESSION_COOKIE, createAuthSession } from "~~/lib/auth/session";
-import { __setDatabaseResourcesForTests, dbClient, dbPool } from "~~/lib/db";
+import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
-import { createPrivateGroup, createPrivateGroupInvitationInTransaction } from "~~/lib/tokenless/privateGroups";
+import { createPrivateGroup } from "~~/lib/tokenless/privateGroups";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 
 const APP_ORIGIN = "https://tokenless.example.test";
@@ -88,6 +88,8 @@ test("reviewer invitation creation is same-origin, strict, and preserves the mat
   assert.match(invitations, /Object\.keys\(body\)\.some\(key => !invitationKeys\.has\(key\)\)/);
   assert.match(invitations, /typeof body\.maxPrivateSensitivity !== "string"/);
   assert.match(invitations, /createWorkspaceReviewerInvitation/);
+  assert.match(invitations, /getHumanReviewConfigurationForOwner/);
+  assert.match(invitations, /privateGroupId/);
   assert.match(invitations, /maxPrivateSensitivity: body\.maxPrivateSensitivity/);
   assert.match(invitations, /status: 201/);
 });
@@ -156,6 +158,12 @@ test("reviewer routes enforce browser identity, origin, tenant scope, invitation
   const reviewer = await browser("reviewer");
   const outsider = await browser("outsider");
   const { workspaceId } = await createWorkspace({ name: "Reviewer routes", ownerAddress: owner.principalId });
+  const group = await createPrivateGroup({
+    accountAddress: owner.principalId,
+    workspaceId,
+    name: "Reviewer routes group",
+    purpose: "Bind route-issued reviewer invitations.",
+  });
   const invitationsPath = `/api/account/workspaces/${workspaceId}/reviewer-invitations`;
   const reviewersPath = `/api/account/workspaces/${workspaceId}/reviewers`;
   const workspaceContext = { params: Promise.resolve({ workspaceId }) };
@@ -169,7 +177,11 @@ test("reviewer routes enforce browser identity, origin, tenant scope, invitation
 
   const crossOrigin = await createReviewerInvitation(
     request(invitationsPath, {
-      body: { intendedAccountAddress: reviewer.principalId, maxPrivateSensitivity: "confidential" },
+      body: {
+        intendedAccountAddress: reviewer.principalId,
+        maxPrivateSensitivity: "confidential",
+        privateGroupId: group.groupId,
+      },
       method: "POST",
       origin: "https://attacker.example",
       token: owner.token,
@@ -180,7 +192,11 @@ test("reviewer routes enforce browser identity, origin, tenant scope, invitation
 
   const created = await createReviewerInvitation(
     request(invitationsPath, {
-      body: { intendedAccountAddress: reviewer.principalId, maxPrivateSensitivity: "confidential" },
+      body: {
+        intendedAccountAddress: reviewer.principalId,
+        maxPrivateSensitivity: "confidential",
+        privateGroupId: group.groupId,
+      },
       method: "POST",
       origin: APP_ORIGIN,
       token: owner.token,
@@ -284,7 +300,11 @@ test("reviewer routes enforce browser identity, origin, tenant scope, invitation
 
   const secondInvitation = await createReviewerInvitation(
     request(invitationsPath, {
-      body: { intendedAccountAddress: reviewer.principalId, maxPrivateSensitivity: "internal" },
+      body: {
+        intendedAccountAddress: reviewer.principalId,
+        maxPrivateSensitivity: "internal",
+        privateGroupId: group.groupId,
+      },
       method: "POST",
       origin: APP_ORIGIN,
       token: owner.token,
@@ -332,6 +352,7 @@ test("reviewer routes redeem setup provenance and let the owner materialize exac
       body: {
         intendedAccountAddress: reviewer.principalId,
         maxPrivateSensitivity: "confidential",
+        privateGroupId: group.groupId,
       },
       method: "POST",
       origin: APP_ORIGIN,
@@ -344,46 +365,6 @@ test("reviewer routes redeem setup provenance and let the owner materialize exac
     invitation: { invitationId: string; token: string; expiresAt: string };
   };
   const now = new Date();
-  const client = await dbPool.connect();
-  try {
-    await client.query("BEGIN");
-    await createPrivateGroupInvitationInTransaction(client, {
-      actorAddress: owner.principalId,
-      invitationId: issuedBody.invitation.invitationId,
-      workspaceId,
-      groupId: group.groupId,
-      intendedAccountAddress: reviewer.principalId,
-      expiresAt: new Date(issuedBody.invitation.expiresAt),
-      expertiseDefinitions: [definition],
-      now,
-    });
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
-  await dbClient.execute({
-    sql: `UPDATE tokenless_workspace_agent_setups
-          SET status='completed',current_step='complete',people_decision='invited',private_group_id=?,
-              people_decided_at=?,people_decided_by=?,people_invitation_id=?,
-              finalization_idempotency_key_hash=?,finalization_request_hash=?,
-              completed_at=?,completed_by=?,updated_at=?
-          WHERE workspace_id=?`,
-    args: [
-      group.groupId,
-      now,
-      owner.principalId,
-      issuedBody.invitation.invitationId,
-      `sha256:${"7".repeat(64)}`,
-      `sha256:${"8".repeat(64)}`,
-      now,
-      owner.principalId,
-      now,
-      workspaceId,
-    ],
-  });
 
   const wrongRecipient = await redeemReviewerInvitation(
     request("/api/account/reviewer-invitations/redeem", {
@@ -440,12 +421,13 @@ test("reviewer routes redeem setup provenance and let the owner materialize exac
     ((await expertise.json()) as { expertise: { sourceInvitationId: string } }).expertise.sourceInvitationId,
     issuedBody.invitation.invitationId,
   );
-  const attestation = await dbClient.execute({
-    sql: `SELECT status FROM tokenless_private_group_invitation_expertise_attestations
-          WHERE invitation_id=? AND expertise_definition_id=?`,
+  const exactGrant = await dbClient.execute({
+    sql: `SELECT expertise_record_schema_version,status
+          FROM tokenless_reviewer_qualifications
+          WHERE source_invitation_id=? AND expertise_definition_id=?`,
     args: [issuedBody.invitation.invitationId, definition.definitionId],
   });
-  assert.equal(attestation.rows[0]?.status, "materialized");
+  assert.deepEqual(exactGrant.rows[0], { expertise_record_schema_version: 2, status: "active" });
 
   await dbClient.execute({
     sql: `DELETE FROM tokenless_private_group_memberships
