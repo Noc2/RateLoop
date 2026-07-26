@@ -448,14 +448,16 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
       [principalId],
     ),
     client.query(
-      `SELECT profile.rater_id,profile.created_at,legal.declared_residence_country,
+      `SELECT profile.rater_id,profile.created_at,legal.scope_id,legal.reviewer_source,
+              legal.workspace_id,legal.declared_residence_country,
               legal.tax_residence_country,legal.tax_profile_status,legal.dac7_status,
               legal.sanctions_status,legal.eligibility_status,payout.payout_account,
               payout.eligibility_status AS payout_status
        FROM tokenless_rater_profiles profile
        LEFT JOIN tokenless_legal_eligibility legal ON legal.rater_id=profile.rater_id
        LEFT JOIN tokenless_payout_eligibility payout ON payout.rater_id=profile.rater_id
-       WHERE profile.principal_id=$1 LIMIT 1`,
+       WHERE profile.principal_id=$1
+       ORDER BY legal.updated_at DESC NULLS LAST,legal.scope_id ASC`,
       [principalId],
     ),
     client.query(
@@ -819,7 +821,10 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
     included: [
       { category: "account_profile", path: "accountProfile" },
       { category: "workspace_access", path: "workspaceMemberships" },
-      { category: "reviewer_and_paid_profile", path: "workspaceReviewerAccess, paidReviewerProfile" },
+      {
+        category: "reviewer_and_paid_profile",
+        path: "workspaceReviewerAccess, paidReviewerProfile, paidEligibilityScopes",
+      },
       { category: "communications_metadata", path: "communications" },
       { category: "review_activity", path: "reviewActivity" },
       { category: "network_settlement_status", path: "reviewActivity.networkSettlements" },
@@ -880,6 +885,7 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
     workspaceMemberships: workspaces.rows,
     workspaceReviewerAccess: reviewerAccess.rows,
     paidReviewerProfile: rater.rows[0] ?? null,
+    paidEligibilityScopes: rater.rows,
     communications: {
       preferences: notificationPreferences.rows[0] ?? null,
       notifications: notifications.rows,

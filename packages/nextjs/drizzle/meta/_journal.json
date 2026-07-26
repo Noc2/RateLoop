@@ -1037,6 +1037,13 @@
       "when": 1785157200000,
       "tag": "0148_subject_export_v4",
       "breakpoints": true
+    },
+    {
+      "idx": 152,
+      "version": "7",
+      "when": 1785171600000,
+      "tag": "0152_lane_scoped_legal_eligibility",
+      "breakpoints": true
     }
   ]
 }

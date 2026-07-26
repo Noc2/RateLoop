@@ -258,13 +258,16 @@ export async function requirePaidReviewEligibilityInTransaction(
             scope.blocked_reason AS scope_blocked_reason, scope.valid_until AS scope_valid_until,
             scope.updated_at AS scope_updated_at
      FROM tokenless_rater_profiles p
-     JOIN tokenless_legal_eligibility l ON l.rater_id = p.rater_id
      JOIN tokenless_payout_eligibility pe ON pe.rater_id = p.rater_id
      JOIN tokenless_wallet_bindings wb ON wb.principal_id = p.principal_id
        AND wb.purpose = 'payout' AND wb.revoked_at IS NULL
      JOIN tokenless_paid_eligibility_scopes scope ON scope.rater_id=p.rater_id
        AND scope.reviewer_source=$2
        AND (($3::text IS NULL AND scope.workspace_id IS NULL) OR scope.workspace_id=$3)
+     JOIN tokenless_legal_eligibility l ON l.scope_id=scope.scope_id
+       AND l.rater_id=scope.rater_id
+       AND l.reviewer_source=scope.reviewer_source
+       AND (($3::text IS NULL AND l.workspace_id IS NULL) OR l.workspace_id=$3)
      WHERE p.principal_id = $1 LIMIT 1 FOR UPDATE`,
     [principalId, requirement.reviewerSource, requirement.workspaceId ?? null],
   );

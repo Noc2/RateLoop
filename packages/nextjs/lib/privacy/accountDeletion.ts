@@ -1162,6 +1162,7 @@ async function eraseRaterIdentity(
   const payoutEligibility = await client.query(`DELETE FROM tokenless_payout_eligibility WHERE rater_id = $1`, [
     raterId,
   ]);
+  const legalEligibility = await client.query(`DELETE FROM tokenless_legal_eligibility WHERE rater_id = $1`, [raterId]);
   const paidEligibilityScopes = await client.query(
     `DELETE FROM tokenless_paid_eligibility_scopes WHERE rater_id = $1`,
     [raterId],
@@ -1169,7 +1170,6 @@ async function eraseRaterIdentity(
   const sanctionsScreenings = await client.query(`DELETE FROM tokenless_sanctions_screenings WHERE rater_id = $1`, [
     raterId,
   ]);
-  const legalEligibility = await client.query(`DELETE FROM tokenless_legal_eligibility WHERE rater_id = $1`, [raterId]);
   await client.query(
     `DELETE FROM tokenless_private_group_invitation_expertise_attestations
      WHERE materialized_qualification_id IN (

@@ -418,6 +418,62 @@ test("invited paid eligibility uses the workspace adulthood warranty without cal
   ]);
 });
 
+test("an invited submission cannot clobber network legal eligibility or verified residence", async () => {
+  await unlockPaidTasks();
+  const networkBefore = await requirePaidReviewEligibility(PRINCIPAL, NOW, {
+    reviewerSource: "rateloop_network",
+  });
+  const { workspaceId } = await createWorkspace({ name: "Lane isolation", ownerAddress: OTHER_PRINCIPAL });
+  const invitation = await createWorkspaceReviewerInvitation({
+    accountAddress: OTHER_PRINCIPAL,
+    workspaceId,
+    maxPrivateSensitivity: "confidential",
+    intendedAccountAddress: PRINCIPAL,
+    paidAdulthoodAttested: true,
+    accessExpiresAt: new Date(NOW.getTime() + 2 * 86_400_000),
+    expiresAt: new Date(NOW.getTime() + 86_400_000),
+    now: NOW,
+  });
+  await redeemWorkspaceReviewerInvitation({ accountAddress: PRINCIPAL, token: invitation.token, now: NOW });
+
+  const invited = await submitPaidEligibility({
+    principalId: PRINCIPAL,
+    payoutAccount: ACCOUNT,
+    submission: {
+      ...submission(),
+      providerResult: undefined,
+      reviewerSource: "customer_invited",
+      workspaceId,
+    },
+    now: new Date(NOW.getTime() + 1_000),
+  });
+  assert.equal(invited.status, "review");
+
+  const networkAfter = await requirePaidReviewEligibility(PRINCIPAL, new Date(NOW.getTime() + 1_000), {
+    reviewerSource: "rateloop_network",
+  });
+  assert.equal(networkAfter.raterId, networkBefore.raterId);
+  assert.equal(networkAfter.identityAssertions[0]?.providerId, "world:poh");
+  const lanes = await dbClient.execute({
+    sql: `SELECT reviewer_source,workspace_id,verified_residence_country,eligibility_status
+          FROM tokenless_legal_eligibility ORDER BY reviewer_source`,
+  });
+  assert.deepEqual(lanes.rows, [
+    {
+      reviewer_source: "customer_invited",
+      workspace_id: workspaceId,
+      verified_residence_country: null,
+      eligibility_status: "review",
+    },
+    {
+      reviewer_source: "rateloop_network",
+      workspace_id: null,
+      verified_residence_country: "DE",
+      eligibility_status: "eligible",
+    },
+  ]);
+});
+
 test("generic provider identifiers use rotation-aware domain-separated HMAC references", async () => {
   await unlockPaidTasks();
   const first = await dbClient.execute(

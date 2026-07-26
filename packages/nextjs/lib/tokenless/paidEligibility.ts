@@ -967,16 +967,33 @@ async function submitInvitedPaidEligibility(input: {
       [screeningId, raterId, subjectVault.ciphertext, subjectVault.keyVersion, subjectVault.keyDomain, input.now],
     );
     const residenceTaxStatus = input.declaredResidenceCountry === input.taxCountry ? "consistent" : "review";
+    const scopeId = `pes_${hash(`${raterId}\0customer_invited\0${workspaceId}`).slice(0, 40)}`;
+    await client.query(
+      `INSERT INTO tokenless_paid_eligibility_scopes
+       (scope_id,rater_id,reviewer_source,workspace_id,compensation_mode,adulthood_basis,
+        adulthood_assertion_id,invitation_qualification_id,sanctions_screening_id,status,
+        blocked_reason,valid_until,created_at,updated_at)
+       VALUES ($1,$2,'customer_invited',$3,'usdc','customer_attested',$4,$5,$6,'pending',
+               'sanctions_pending',NULL,$7,$7)
+       ON CONFLICT (scope_id) DO UPDATE SET
+         adulthood_assertion_id=EXCLUDED.adulthood_assertion_id,
+         invitation_qualification_id=EXCLUDED.invitation_qualification_id,
+         sanctions_screening_id=EXCLUDED.sanctions_screening_id,status='pending',
+         blocked_reason='sanctions_pending',valid_until=NULL,updated_at=EXCLUDED.updated_at`,
+      [scopeId, raterId, workspaceId, assertionId, qualificationId, screeningId, input.now],
+    );
     await client.query(
       `INSERT INTO tokenless_legal_eligibility
-       (rater_id,minimum_age_verified,age_evidence_verified_at,age_evidence_expires_at,
+       (scope_id,rater_id,reviewer_source,workspace_id,sanctions_screening_id,
+        minimum_age_verified,age_evidence_verified_at,age_evidence_expires_at,
         verified_residence_country,declared_residence_country,tax_residence_country,residence_tax_status,
         tax_profile_status,dac7_status,tax_vault_ciphertext,tax_vault_key_version,tax_vault_key_domain,
         sanctions_consent_at,sanctions_status,sanctions_reference_hash,sanctions_screened_at,
         sanctions_expires_at,eligibility_status,blocked_reason,created_at,updated_at)
-       VALUES ($1,18,$2,$3,NULL,$4,$5,$6,'complete',$7,$8,$9,$10,$2,'pending',$11,$2,$12,
-               'review','sanctions_pending',$2,$2)
-       ON CONFLICT (rater_id) DO UPDATE SET
+       VALUES ($1,$2,'customer_invited',$3,$4,18,$5,$6,NULL,$7,$8,$9,'complete',$10,$11,$12,$13,
+               $5,'pending',$14,$5,$15,'review','sanctions_pending',$5,$5)
+       ON CONFLICT (scope_id) DO UPDATE SET
+         sanctions_screening_id=EXCLUDED.sanctions_screening_id,
          minimum_age_verified=18,age_evidence_verified_at=EXCLUDED.age_evidence_verified_at,
          age_evidence_expires_at=EXCLUDED.age_evidence_expires_at,verified_residence_country=NULL,
          declared_residence_country=EXCLUDED.declared_residence_country,
@@ -988,7 +1005,10 @@ async function submitInvitedPaidEligibility(input: {
          sanctions_screened_at=EXCLUDED.sanctions_screened_at,sanctions_expires_at=EXCLUDED.sanctions_expires_at,
          eligibility_status='review',blocked_reason='sanctions_pending',updated_at=EXCLUDED.updated_at`,
       [
+        scopeId,
         raterId,
+        workspaceId,
+        screeningId,
         input.now,
         assertionExpiry,
         input.declaredResidenceCountry,
@@ -1011,21 +1031,6 @@ async function submitInvitedPaidEligibility(input: {
         payout_verified_at=EXCLUDED.payout_verified_at,payout_expires_at=NULL,
         eligibility_status='ready',blocked_reason=NULL,updated_at=EXCLUDED.updated_at`,
       [raterId, input.payoutAddress.toLowerCase(), input.now],
-    );
-    const scopeId = `pes_${hash(`${raterId}\0customer_invited\0${workspaceId}`).slice(0, 40)}`;
-    await client.query(
-      `INSERT INTO tokenless_paid_eligibility_scopes
-       (scope_id,rater_id,reviewer_source,workspace_id,compensation_mode,adulthood_basis,
-        adulthood_assertion_id,invitation_qualification_id,sanctions_screening_id,status,
-        blocked_reason,valid_until,created_at,updated_at)
-       VALUES ($1,$2,'customer_invited',$3,'usdc','customer_attested',$4,$5,$6,'pending',
-               'sanctions_pending',NULL,$7,$7)
-       ON CONFLICT (scope_id) DO UPDATE SET
-         adulthood_assertion_id=EXCLUDED.adulthood_assertion_id,
-         invitation_qualification_id=EXCLUDED.invitation_qualification_id,
-         sanctions_screening_id=EXCLUDED.sanctions_screening_id,status='pending',
-         blocked_reason='sanctions_pending',valid_until=NULL,updated_at=EXCLUDED.updated_at`,
-      [scopeId, raterId, workspaceId, assertionId, qualificationId, screeningId, input.now],
     );
     await client.query("COMMIT");
     return {
@@ -1391,16 +1396,32 @@ export async function submitPaidEligibility(input: {
         now,
       ],
     );
+    const scopeId = `pes_${hash(`${raterId}\0rateloop_network`).slice(0, 40)}`;
+    await client.query(
+      `INSERT INTO tokenless_paid_eligibility_scopes
+       (scope_id,rater_id,reviewer_source,workspace_id,compensation_mode,adulthood_basis,
+        adulthood_assertion_id,invitation_qualification_id,sanctions_screening_id,status,
+        blocked_reason,valid_until,created_at,updated_at)
+       VALUES ($1,$2,'rateloop_network',NULL,'usdc','provider_attested',$3,NULL,$4,$5,$6,NULL,$7,$7)
+       ON CONFLICT (scope_id) DO UPDATE SET
+         adulthood_assertion_id=EXCLUDED.adulthood_assertion_id,
+         sanctions_screening_id=EXCLUDED.sanctions_screening_id,status=EXCLUDED.status,
+         blocked_reason=EXCLUDED.blocked_reason,valid_until=NULL,updated_at=EXCLUDED.updated_at`,
+      [scopeId, raterId, persistedAssuranceAssertionId, screeningId, state.status, state.reason, now],
+    );
     await client.query(
       `INSERT INTO tokenless_legal_eligibility
-       (rater_id, minimum_age_verified, age_evidence_verified_at, age_evidence_expires_at,
+       (scope_id,rater_id,reviewer_source,workspace_id,sanctions_screening_id,
+        minimum_age_verified, age_evidence_verified_at, age_evidence_expires_at,
         verified_residence_country, declared_residence_country, tax_residence_country,
         residence_tax_status, tax_profile_status, dac7_status, tax_vault_ciphertext,
         tax_vault_key_version, tax_vault_key_domain, sanctions_consent_at, sanctions_status,
         sanctions_reference_hash, sanctions_screened_at, sanctions_expires_at,
         eligibility_status, blocked_reason, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'complete',$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$20)
-       ON CONFLICT (rater_id) DO UPDATE SET
+       VALUES ($1,$2,'rateloop_network',NULL,$3,$4,$5,$6,$7,$8,$9,$10,'complete',$11,$12,$13,$14,
+               $15,$16,$17,$18,$19,$20,$21,$22,$22)
+       ON CONFLICT (scope_id) DO UPDATE SET
+        sanctions_screening_id = EXCLUDED.sanctions_screening_id,
         minimum_age_verified = EXCLUDED.minimum_age_verified,
         age_evidence_verified_at = EXCLUDED.age_evidence_verified_at,
         age_evidence_expires_at = EXCLUDED.age_evidence_expires_at,
@@ -1420,7 +1441,9 @@ export async function submitPaidEligibility(input: {
         eligibility_status = EXCLUDED.eligibility_status,
         blocked_reason = EXCLUDED.blocked_reason, updated_at = EXCLUDED.updated_at`,
       [
+        scopeId,
         raterId,
+        screeningId,
         assertion.minimumAgeVerified,
         assertion.evidenceVerifiedAt,
         assertion.evidenceExpiresAt,
@@ -1462,19 +1485,6 @@ export async function submitPaidEligibility(input: {
         expires_at = EXCLUDED.expires_at, status = 'active', revoked_at = NULL, updated_at = EXCLUDED.updated_at`,
       [`qual_legacy_${raterId}`, raterId, assertion.evidenceVerifiedAt, assertion.evidenceExpiresAt, now],
     );
-    const scopeId = `pes_${hash(`${raterId}\0rateloop_network`).slice(0, 40)}`;
-    await client.query(
-      `INSERT INTO tokenless_paid_eligibility_scopes
-       (scope_id,rater_id,reviewer_source,workspace_id,compensation_mode,adulthood_basis,
-        adulthood_assertion_id,invitation_qualification_id,sanctions_screening_id,status,
-        blocked_reason,valid_until,created_at,updated_at)
-       VALUES ($1,$2,'rateloop_network',NULL,'usdc','provider_attested',$3,NULL,$4,$5,$6,NULL,$7,$7)
-       ON CONFLICT (scope_id) DO UPDATE SET
-         adulthood_assertion_id=EXCLUDED.adulthood_assertion_id,
-         sanctions_screening_id=EXCLUDED.sanctions_screening_id,status=EXCLUDED.status,
-         blocked_reason=EXCLUDED.blocked_reason,valid_until=NULL,updated_at=EXCLUDED.updated_at`,
-      [scopeId, raterId, persistedAssuranceAssertionId, screeningId, state.status, state.reason, now],
-    );
     if (resolvedAssertion.stateHash) {
       const consumed = await client.query(
         `UPDATE tokenless_eligibility_provider_handoffs SET status = 'consumed', consumed_at = $1
@@ -1512,7 +1522,8 @@ export async function submitPaidEligibility(input: {
 
 export async function getPaidEligibility(principalId: string, now = new Date()) {
   const result = await dbClient.execute({
-    sql: `SELECT p.rater_id, l.minimum_age_verified, l.age_evidence_expires_at,
+    sql: `SELECT p.rater_id, l.reviewer_source, l.workspace_id,
+                 l.minimum_age_verified, l.age_evidence_expires_at,
                  l.verified_residence_country, l.declared_residence_country,
                  l.tax_residence_country, l.residence_tax_status, l.tax_profile_status,
                  l.dac7_status, l.sanctions_status, l.sanctions_expires_at,
@@ -1525,7 +1536,8 @@ export async function getPaidEligibility(principalId: string, now = new Date()) 
           JOIN tokenless_payout_eligibility pe ON pe.rater_id = p.rater_id
           LEFT JOIN tokenless_wallet_bindings wb ON wb.principal_id = p.principal_id
             AND wb.purpose = 'payout' AND wb.revoked_at IS NULL
-          WHERE p.principal_id = ? LIMIT 1`,
+          WHERE p.principal_id = ?
+          ORDER BY l.updated_at DESC,l.scope_id ASC LIMIT 1`,
     args: [principalId],
   });
   const row = result.rows[0] as QueryRow | undefined;
@@ -1569,6 +1581,8 @@ export async function getPaidEligibility(principalId: string, now = new Date()) 
       : persisted;
   return {
     status: currentStatus,
+    reviewerSource: stringValue(row, "reviewer_source"),
+    workspaceId: stringValue(row, "workspace_id"),
     blockedReason: publicBlockedReason(stringValue(row, "blocked_reason")),
     capabilities,
     assuranceProviders,
@@ -1677,10 +1691,10 @@ export async function recordSanctionsScreening(input: {
        WHERE screening_id=$6 AND status='pending'`,
       [input.status, input.listSnapshotHash, input.screenedBy.trim(), now, input.expiresAt, input.screeningId],
     );
-    const raterId = stringValue(row, "rater_id")!;
     const legal = await client.query(
-      `SELECT residence_tax_status FROM tokenless_legal_eligibility WHERE rater_id=$1 FOR UPDATE`,
-      [raterId],
+      `SELECT residence_tax_status FROM tokenless_legal_eligibility
+       WHERE sanctions_screening_id=$1 FOR UPDATE`,
+      [input.screeningId],
     );
     const residenceConsistent =
       stringValue(legal.rows[0] as QueryRow | undefined, "residence_tax_status") === "consistent";
@@ -1726,7 +1740,7 @@ export async function recordSanctionsScreening(input: {
       `UPDATE tokenless_legal_eligibility
        SET sanctions_status=$1,sanctions_reference_hash=$2,sanctions_screened_at=$3,
            sanctions_expires_at=$4,eligibility_status=$5,blocked_reason=$6,updated_at=$3
-       WHERE rater_id=$7`,
+       WHERE sanctions_screening_id=$7`,
       [
         input.status,
         input.listSnapshotHash.slice("sha256:".length),
@@ -1734,7 +1748,7 @@ export async function recordSanctionsScreening(input: {
         input.expiresAt,
         eligibilityStatus,
         blockedReason,
-        raterId,
+        input.screeningId,
       ],
     );
     await client.query(
