@@ -20,6 +20,7 @@ const tokenlessGoldKeyring = (index = 16) => ({
 const tokenlessTestOperationalSecrets = () => ({
   TOKENLESS_MCP_RATE_LIMIT_SECRET: "m".repeat(32),
   CRON_SECRET: "c".repeat(32),
+  TOKENLESS_COMPLIANCE_OPERATOR_SECRET: "o".repeat(32),
 });
 const tokenlessTestDatabase = () => {
   const DATABASE_URL = "postgresql://rateloop:secret@tokenless-db.example/tokenless?sslmode=require";
@@ -417,7 +418,7 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
     }).join("\n"),
     /TOKENLESS_FEEDBACK_BONUS_ADDRESS must be a non-zero EVM address/,
   );
-  for (const name of ["TOKENLESS_MCP_RATE_LIMIT_SECRET", "CRON_SECRET"]) {
+  for (const name of ["TOKENLESS_MCP_RATE_LIMIT_SECRET", "CRON_SECRET", "TOKENLESS_COMPLIANCE_OPERATOR_SECRET"]) {
     const missingSecret = { ...env };
     delete missingSecret[name];
     assert.match(
@@ -529,6 +530,7 @@ test("the tokenless test deployment still rejects browser-exposed secrets", () =
     TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET: encodedKey(18),
     ...tokenlessGoldKeyring(),
     ...tokenlessTestOperationalSecrets(),
+    NEXT_PUBLIC_TOKENLESS_COMPLIANCE_OPERATOR_SECRET: "must-not-ship-operator",
     NEXT_PUBLIC_TOKENLESS_PIPELINE_TOKEN: "must-not-ship",
     NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEY_VERSION: "must-not-ship-version",
     NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEYS: "must-not-ship-keys",
@@ -536,12 +538,13 @@ test("the tokenless test deployment still rejects browser-exposed secrets", () =
     NEXT_PUBLIC_TOKENLESS_EXPERTISE_OPERATOR_ACCOUNTS: "must-not-ship-expertise-accounts",
   };
   const output = validateTokenlessProductionReadiness({ env, activeRegistry: {} }).join("\n");
+  assert.match(output, /NEXT_PUBLIC_TOKENLESS_COMPLIANCE_OPERATOR_SECRET is forbidden/);
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_PIPELINE_TOKEN is forbidden/);
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEY_VERSION is forbidden/);
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_GOLD_INJECTION_KEYS is forbidden/);
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_KMS_KEY_RESOURCE is forbidden/);
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_EXPERTISE_OPERATOR_ACCOUNTS is forbidden/);
-  assert.doesNotMatch(output, /must-not-ship(?:-version|-keys|-kms-resource|-expertise-accounts)?/);
+  assert.doesNotMatch(output, /must-not-ship(?:-operator|-version|-keys|-kms-resource|-expertise-accounts)?/);
 });
 
 test("the tokenless test deployment requires a dedicated server-only media preview key", () => {

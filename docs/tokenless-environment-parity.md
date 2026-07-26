@@ -84,9 +84,10 @@ Next.js:
 - distinct `TOKENLESS_X402_RELAYER_KMS_*`, `TOKENLESS_PREPAID_FUNDER_KMS_*`, and
   `TOKENLESS_SURPRISE_BONUS_FUNDER_KMS_*` resource, expected-address, region, role, and OIDC bundles
 - eligibility provider ID/public key/start URL/handoff secret, versioned vault keys, and DAC7 policy
-- `TOKENLESS_PIPELINE_TOKEN`, `CRON_SECRET`, `TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET`,
+- `TOKENLESS_PIPELINE_TOKEN`, `CRON_SECRET`, `TOKENLESS_COMPLIANCE_OPERATOR_SECRET`,
+  `TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET`,
   `TOKENLESS_WEBHOOK_ENCRYPTION_KEY`; use a distinct server-only secret of at least 32 random characters for signed
-  email unsubscribe links
+  email unsubscribe links, and a separate operator credential for sanctions, appeals, and verified workspace refunds
 - `TOKENLESS_MCP_RATE_LIMIT_SECRET` with at least 32 random characters and no public variant
 - dedicated `TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET` (32-byte base64url or hex), distinct from every signing,
   encryption, rate-limit, and session key, server-only, with no `NEXT_PUBLIC_` variant

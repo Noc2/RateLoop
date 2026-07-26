@@ -27,6 +27,13 @@ Correction, restriction, objection, exceptional deletion, and manual overrides s
 procedure, role, and evidence owner. Compliance actions use a separate operator secret until a production operator
 principal and console are available.
 
+Provision `TOKENLESS_COMPLIANCE_OPERATOR_SECRET` as a server-only random credential of at least 32 characters before
+deploying. The release preflight rejects a missing, short, reused, or `NEXT_PUBLIC_` copy. An approved operator sends
+it as `Authorization: Bearer <credential>` only to the internal sanctions, forecast-appeal, and workspace-fund routes
+under `/api/internal/compliance/`. Rotate it through the hosting secret store and preserve the corresponding operator
+identity and evidence reference outside application logs; never paste the credential into a request note or audit
+metadata.
+
 ## Self-service deletion
 
 - Account deletion is blocked while the principal owns a workspace, has accepted work that has not reached its terminal
