@@ -7,6 +7,7 @@ export const TOKENLESS_DEPLOYMENT_SCHEMA = "rateloop-tokenless-deployment-v4";
 export const TOKENLESS_QUICKNET_T_CHAIN_HASH =
   "0xcc9c398442737cbd141526600919edd69f1d6f9b4adb67e4d912fbc64341a9a5" as const;
 export const TOKENLESS_MINIMUM_REVEAL_WINDOW_SECONDS = 5 * 60;
+export const TOKENLESS_DEFAULT_REVEAL_WINDOW_SECONDS = 60 * 60;
 export const TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS = 6 * 60 * 60;
 export const TOKENLESS_SCORING_BEACON_SAFETY_MARGIN_SECONDS = 24 * 60 * 60;
 
@@ -189,7 +190,7 @@ export function loadTokenlessChainConfig(env: NodeJS.ProcessEnv = process.env): 
   const revealWindowSeconds = positiveInteger(
     env,
     "TOKENLESS_REVEAL_WINDOW_SECONDS",
-    TOKENLESS_MINIMUM_REVEAL_WINDOW_SECONDS,
+    TOKENLESS_DEFAULT_REVEAL_WINDOW_SECONDS,
   );
   if (revealWindowSeconds < TOKENLESS_MINIMUM_REVEAL_WINDOW_SECONDS) {
     throw new Error(

@@ -1,4 +1,5 @@
 import {
+  TOKENLESS_DEFAULT_REVEAL_WINDOW_SECONDS,
   TOKENLESS_MINIMUM_BEACON_FAILURE_GRACE_SECONDS,
   TOKENLESS_MINIMUM_REVEAL_WINDOW_SECONDS,
   TOKENLESS_QUICKNET_T_CHAIN_HASH,
@@ -267,7 +268,7 @@ test("deployment config defaults to and enforces the contract beacon-failure gra
   );
 });
 
-test("deployment config defaults to and enforces the immutable five-minute reveal window", () => {
+test("deployment config defaults to one hour while enforcing the immutable five-minute reveal floor", () => {
   const env = {
     TOKENLESS_DEPLOYMENT_SCHEMA: "rateloop-tokenless-deployment-v4",
     TOKENLESS_CHAIN_ID: "84532",
@@ -282,7 +283,7 @@ test("deployment config defaults to and enforces the immutable five-minute revea
     BASE_SEPOLIA_RPC_URL: "https://sepolia.base.org",
   } as unknown as NodeJS.ProcessEnv;
 
-  assert.equal(loadTokenlessChainConfig(env).revealWindowSeconds, TOKENLESS_MINIMUM_REVEAL_WINDOW_SECONDS);
+  assert.equal(loadTokenlessChainConfig(env).revealWindowSeconds, TOKENLESS_DEFAULT_REVEAL_WINDOW_SECONDS);
   assert.equal(
     loadTokenlessChainConfig({ ...env, TOKENLESS_REVEAL_WINDOW_SECONDS: "300" }).revealWindowSeconds,
     TOKENLESS_MINIMUM_REVEAL_WINDOW_SECONDS,
