@@ -38,6 +38,7 @@ import {
   loadExactNetworkVoucherSelection,
 } from "~~/lib/tokenless/networkAssignmentSettlement";
 import { isOpaqueSubjectReference } from "~~/lib/tokenless/opaqueReferences";
+import { requirePaidLaneComplianceApproval } from "~~/lib/tokenless/paidLaneCompliance";
 import {
   requirePaidReviewEligibility,
   requirePaidReviewEligibilityInTransaction,
@@ -2092,6 +2093,9 @@ export async function issuePaidVoucher(input: { principalId: string; request: Vo
   ) {
     throw new TokenlessServiceError("Voucher request is invalid.", 400, "invalid_voucher_request");
   }
+  requirePaidLaneComplianceApproval(
+    input.request.reviewerSource === "customer_invited" ? "private_invited_paid" : "public_paid_network",
+  );
   const voteKey = getAddress(input.request.voteKey);
   const requestHash = hash(
     stableJson({ ...input.request, voteKey: voteKey.toLowerCase(), contentId: input.request.contentId.toLowerCase() }),

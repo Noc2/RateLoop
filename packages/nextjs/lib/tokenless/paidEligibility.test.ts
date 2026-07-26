@@ -18,6 +18,7 @@ import {
   registerVoucherRound,
   submitPaidEligibility,
 } from "~~/lib/tokenless/paidEligibility";
+import { derivePaidLaneActivationReference } from "~~/lib/tokenless/paidLaneActivation";
 import { requirePaidReviewEligibility } from "~~/lib/tokenless/paidReviewEligibilityPreflight";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -44,6 +45,44 @@ const PROVIDER_REFERENCE_KEY = Buffer.alloc(32, 10);
 const originalProviderId = process.env.TOKENLESS_ELIGIBILITY_PROVIDER_ID;
 const originalProviderKey = process.env.TOKENLESS_ELIGIBILITY_PROVIDER_PUBLIC_KEY;
 const originalAppUrl = process.env.APP_URL;
+const PAID_LANE_ENV_NAMES = [
+  "TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED",
+  "TOKENLESS_NETWORK_PANELS_ENABLED",
+  "TOKENLESS_HYBRID_REVIEWS_ENABLED",
+  "NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED",
+  "NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED",
+  "NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED",
+  "TOKENLESS_PAID_LANES_DPIA_APPROVAL_REFERENCE",
+  "TOKENLESS_PAID_LANES_TRANSFER_INVENTORY_APPROVAL_REFERENCE",
+  "TOKENLESS_PAID_LANES_FUNDING_VALIDATION_REFERENCE",
+  "TOKENLESS_INVITED_PAID_ADULTHOOD_APPROVAL_REFERENCE",
+  "TOKENLESS_PAID_LANES_COMPLIANCE_APPROVED_AT",
+  "NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE",
+  "WORLD_ID_APP_ID",
+  "WORLD_ID_RP_ID",
+  "WORLD_ID_ENVIRONMENT",
+] as const;
+const originalPaidLaneEnv = new Map(PAID_LANE_ENV_NAMES.map(name => [name, process.env[name]]));
+
+function activatePaidLanesForTest() {
+  Object.assign(process.env, {
+    TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "true",
+    TOKENLESS_NETWORK_PANELS_ENABLED: "true",
+    TOKENLESS_HYBRID_REVIEWS_ENABLED: "true",
+    NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "true",
+    NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED: "true",
+    NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED: "true",
+    TOKENLESS_PAID_LANES_DPIA_APPROVAL_REFERENCE: `sha256:${"a".repeat(64)}`,
+    TOKENLESS_PAID_LANES_TRANSFER_INVENTORY_APPROVAL_REFERENCE: `sha256:${"b".repeat(64)}`,
+    TOKENLESS_PAID_LANES_FUNDING_VALIDATION_REFERENCE: `sha256:${"c".repeat(64)}`,
+    TOKENLESS_INVITED_PAID_ADULTHOOD_APPROVAL_REFERENCE: `sha256:${"d".repeat(64)}`,
+    TOKENLESS_PAID_LANES_COMPLIANCE_APPROVED_AT: "2026-07-12T00:00:00.000Z",
+    WORLD_ID_APP_ID: "app_ratelooptest",
+    WORLD_ID_RP_ID: "rp_ratelooptest",
+    WORLD_ID_ENVIRONMENT: "production",
+  });
+  process.env.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE = derivePaidLaneActivationReference(process.env);
+}
 
 function provider(overrides: Partial<Awaited<ReturnType<EligibilityProvider["verify"]>>> = {}): EligibilityProvider {
   return {
@@ -155,6 +194,7 @@ async function bindPayout(principalId: string, payoutAccount: string, suffix: st
 
 beforeEach(async () => {
   process.env.APP_URL = "https://tokenless.example";
+  activatePaidLanesForTest();
   __setDatabaseResourcesForTests(createMemoryDatabaseResources());
   await bindPayout(PRINCIPAL, ACCOUNT, "1");
   await bindPayout(OTHER_PRINCIPAL, OTHER_ACCOUNT, "2");
@@ -170,6 +210,11 @@ afterEach(() => {
   else process.env.TOKENLESS_ELIGIBILITY_PROVIDER_PUBLIC_KEY = originalProviderKey;
   if (originalAppUrl === undefined) delete process.env.APP_URL;
   else process.env.APP_URL = originalAppUrl;
+  for (const name of PAID_LANE_ENV_NAMES) {
+    const value = originalPaidLaneEnv.get(name);
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
 });
 
 async function unlockPaidTasks() {
@@ -244,6 +289,27 @@ async function openRound() {
   });
   return freezeAdmissionPolicy(admissionPolicy);
 }
+
+test("voucher issuance stops before eligibility or signing when paid-lane activation is withdrawn", async () => {
+  delete process.env.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE;
+  await assert.rejects(
+    () =>
+      issuePaidVoucher({
+        principalId: PRINCIPAL,
+        request: {
+          idempotencyKey: "voucher:activation:withdrawn",
+          roundId: "42",
+          contentId: CONTENT_ID,
+          voteKey: VOTE_KEY,
+          reviewerSource: "rateloop_network",
+          assignmentId: "assignment_activation_withdrawn",
+          selectionBindingHash: `sha256:${"e".repeat(64)}`,
+        },
+        now: NOW,
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "paid_lane_activation_required",
+  );
+});
 
 test("paid-task unlock persists every gate while vaulting DAC7 and nullifier material", async () => {
   const result = await unlockPaidTasks();

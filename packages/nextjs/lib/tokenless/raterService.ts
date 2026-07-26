@@ -36,6 +36,7 @@ import { baseSepolia } from "viem/chains";
 import { dbClient, dbPool } from "~~/lib/db";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { markNetworkVoucherConsumed } from "~~/lib/tokenless/networkAssignmentSettlement";
+import { requirePaidLaneComplianceApproval } from "~~/lib/tokenless/paidLaneCompliance";
 import { preparePublicRaterResponse } from "~~/lib/tokenless/publicRaterResponses";
 import type { PublicRaterResponseInput } from "~~/lib/tokenless/rater/publicResponse";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -678,7 +679,7 @@ export async function relayPaidRaterCommit(input: { principalId: string; request
   assertIsolatedCommitRelayer(runtime);
   await assertLiveTokenlessDeployment(config, runtime);
   const voucherResult = await dbClient.execute({
-    sql: `SELECT v.*, p.principal_id, vr.voucher_deadline,
+    sql: `SELECT v.*, p.principal_id, vr.voucher_deadline, vr.admission_policy_json,
                  vr.admission_policy_hash AS round_admission_policy_hash, e.round_terms_json,
                  e.operation_key, o.question_id, c.content_json
           FROM tokenless_paid_vouchers v
@@ -695,6 +696,13 @@ export async function relayPaidRaterCommit(input: { principalId: string; request
   if (!voucherRow || rowString(voucherRow, "principal_id") !== input.principalId) {
     throw new TokenlessServiceError("Voucher not found.", 404, "voucher_not_found");
   }
+  const reviewerSource = boundTaskReviewerSource(voucherRow);
+  if (!reviewerSource) {
+    throw new TokenlessServiceError("Voucher has no exact paid lane binding.", 409, "commit_voucher_mismatch");
+  }
+  requirePaidLaneComplianceApproval(
+    reviewerSource === "customer_invited" ? "private_invited_paid" : "public_paid_network",
+  );
   const voucher = JSON.parse(rowString(voucherRow, "voucher_json")!) as Record<string, string | number>;
   const auth = input.request.authorization;
   const terms = JSON.parse(rowString(voucherRow, "round_terms_json")!) as Record<string, string | number>;

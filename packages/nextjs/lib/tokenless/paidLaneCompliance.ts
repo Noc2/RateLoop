@@ -13,8 +13,7 @@ export type PaidLaneComplianceApproval = {
 export function paidLaneComplianceApproval(
   env: NodeJS.ProcessEnv = process.env,
   options: { force?: boolean; now?: Date } = {},
-): PaidLaneComplianceApproval | null {
-  if (!options.force && env.NODE_ENV !== "production") return null;
+): PaidLaneComplianceApproval {
   const dpiaApprovalReference = env.TOKENLESS_PAID_LANES_DPIA_APPROVAL_REFERENCE?.trim();
   const providerTransferInventoryReference = env.TOKENLESS_PAID_LANES_TRANSFER_INVENTORY_APPROVAL_REFERENCE?.trim();
   const fundedDeploymentReference = env.TOKENLESS_PAID_LANES_FUNDING_VALIDATION_REFERENCE?.trim();
@@ -49,22 +48,12 @@ export function paidLaneComplianceApproval(
 
 export function requirePaidLaneComplianceApproval(lane: PaidLane) {
   const approval = paidLaneComplianceApproval();
-  if (process.env.NODE_ENV === "production") {
-    const activationErrors = validatePaidLaneActivation(lane, process.env);
-    if (activationErrors.length > 0) {
-      throw new TokenlessServiceError(
-        `${lane} is unavailable until its exact compliance, funding, provider, and deployment activation evidence is configured.`,
-        503,
-        "paid_lane_activation_required",
-        true,
-      );
-    }
-  }
-  if (process.env.NODE_ENV === "production" && !approval) {
+  const activationErrors = validatePaidLaneActivation(lane, process.env);
+  if (activationErrors.length > 0) {
     throw new TokenlessServiceError(
-      `${lane} is unavailable until its compliance approval is configured.`,
+      `${lane} is unavailable until its exact compliance, funding, provider, and deployment activation evidence is configured.`,
       503,
-      "paid_lane_compliance_approval_required",
+      "paid_lane_activation_required",
       true,
     );
   }

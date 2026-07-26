@@ -1,15 +1,16 @@
-import { createHash } from "node:crypto";
+import { sha256, stringToBytes } from "viem";
 
 export const PAID_LANE_ACTIVATION_SCHEMA = "rateloop.paid-lane-activation.v1";
 export const PAID_LANE_HASH = /^sha256:[0-9a-f]{64}$/u;
 
 export type PaidLane = "private_invited_paid" | "public_paid_network" | "hybrid_public_safe";
+type PaidLaneActivationEnv = Readonly<Record<string, string | undefined>>;
 
-function value(env: NodeJS.ProcessEnv, name: string) {
+function value(env: PaidLaneActivationEnv, name: string) {
   return env[name]?.trim() ?? "";
 }
 
-export function derivePaidLaneActivationReference(env: NodeJS.ProcessEnv): `sha256:${string}` {
+export function derivePaidLaneActivationReference(env: PaidLaneActivationEnv): `sha256:${string}` {
   const payload = JSON.stringify({
     schemaVersion: PAID_LANE_ACTIVATION_SCHEMA,
     approvedAt: value(env, "TOKENLESS_PAID_LANES_COMPLIANCE_APPROVED_AT"),
@@ -24,12 +25,12 @@ export function derivePaidLaneActivationReference(env: NodeJS.ProcessEnv): `sha2
     worldIdRpId: value(env, "WORLD_ID_RP_ID"),
     worldIdEnvironment: value(env, "WORLD_ID_ENVIRONMENT"),
   });
-  return `sha256:${createHash("sha256").update(payload).digest("hex")}`;
+  return `sha256:${sha256(stringToBytes(payload)).slice(2)}`;
 }
 
 function requireFlagPair(
   errors: string[],
-  env: NodeJS.ProcessEnv,
+  env: PaidLaneActivationEnv,
   serverName: string,
   publicName: string,
   required: boolean,
@@ -48,7 +49,7 @@ function requireFlagPair(
   }
 }
 
-export function validatePaidLaneActivation(lane: PaidLane, env: NodeJS.ProcessEnv, now = new Date()): string[] {
+export function validatePaidLaneActivation(lane: PaidLane, env: PaidLaneActivationEnv, now = new Date()): string[] {
   const errors: string[] = [];
   const privateRequired = lane === "private_invited_paid" || lane === "hybrid_public_safe";
   const networkRequired = lane === "public_paid_network" || lane === "hybrid_public_safe";

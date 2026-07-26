@@ -41,6 +41,7 @@ import {
 import { baseSepolia } from "viem/chains";
 import { dbClient, dbPool } from "~~/lib/db";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
+import { requirePaidLaneComplianceApproval } from "~~/lib/tokenless/paidLaneCompliance";
 import { normalizedX402Authorization } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { reserveSurpriseBountyCapacity } from "~~/lib/tokenless/surpriseBountyService";
@@ -256,6 +257,25 @@ async function operationSource(operationKey: string) {
     );
   }
   return row;
+}
+
+function requirePaidLaneForOperationSource(source: QueryRow) {
+  const terms = JSON.parse(rowString(source, "terms_json") ?? "null") as { audiencePolicy?: unknown } | null;
+  if (!terms?.audiencePolicy) {
+    throw new TokenlessServiceError(
+      "The paid operation has no frozen admission policy.",
+      409,
+      "capability_policy_required",
+    );
+  }
+  const reviewerSource = freezeAdmissionPolicy(terms.audiencePolicy).policy.reviewerSource;
+  requirePaidLaneComplianceApproval(
+    reviewerSource === "customer_invited"
+      ? "private_invited_paid"
+      : reviewerSource === "rateloop_network"
+        ? "public_paid_network"
+        : "hybrid_public_safe",
+  );
 }
 
 function buildRoundTerms(row: QueryRow, config: TokenlessChainConfig, now: Date): PersistedRoundTerms {
@@ -1409,6 +1429,7 @@ export async function executeServerChainPayment(
 ) {
   const config = options.config ?? loadTokenlessChainConfig();
   const runtime = options.runtime ?? getTokenlessChainRuntime(config);
+  requirePaidLaneForOperationSource(await operationSource(operationKey));
   const expected = await prepareChainPayment(operationKey, { config, runtime });
   if (expected.paymentMode === "wallet") return expected;
   if (expected.paymentMode === "x402" && expected.paymentState === X402_AUTHORIZATION_RECONCILIATION_STATE) {

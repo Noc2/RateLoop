@@ -24,6 +24,7 @@ import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { EVM_TRANSACTION_FEE_POLICY } from "~~/lib/tokenless/chain/evmTransactionReplacement";
+import { derivePaidLaneActivationReference } from "~~/lib/tokenless/paidLaneActivation";
 import { attachProductAsk, createWorkspace, prepareProductAsk } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError, createTokenlessAsk, createTokenlessQuote } from "~~/lib/tokenless/server";
 
@@ -37,6 +38,42 @@ const FEE_RECIPIENT = getAddress("0x6666666666666666666666666666666666666666");
 const SURPRISE_BONUS_ACCOUNT = privateKeyToAccount(`0x${"77".repeat(32)}`);
 const PREPAID_ACCOUNT = privateKeyToAccount(`0x${"88".repeat(32)}`);
 const APPROVE_ABI = parseAbi(["function approve(address spender, uint256 amount) returns (bool)"]);
+const PAID_LANE_ENV_NAMES = [
+  "TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED",
+  "TOKENLESS_NETWORK_PANELS_ENABLED",
+  "TOKENLESS_HYBRID_REVIEWS_ENABLED",
+  "NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED",
+  "NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED",
+  "NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED",
+  "TOKENLESS_PAID_LANES_DPIA_APPROVAL_REFERENCE",
+  "TOKENLESS_PAID_LANES_TRANSFER_INVENTORY_APPROVAL_REFERENCE",
+  "TOKENLESS_PAID_LANES_FUNDING_VALIDATION_REFERENCE",
+  "TOKENLESS_PAID_LANES_COMPLIANCE_APPROVED_AT",
+  "NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE",
+  "WORLD_ID_APP_ID",
+  "WORLD_ID_RP_ID",
+  "WORLD_ID_ENVIRONMENT",
+] as const;
+const originalPaidLaneEnv = new Map(PAID_LANE_ENV_NAMES.map(name => [name, process.env[name]]));
+
+function activateNetworkLane() {
+  Object.assign(process.env, {
+    TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "false",
+    TOKENLESS_NETWORK_PANELS_ENABLED: "true",
+    TOKENLESS_HYBRID_REVIEWS_ENABLED: "false",
+    NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "false",
+    NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED: "true",
+    NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED: "false",
+    TOKENLESS_PAID_LANES_DPIA_APPROVAL_REFERENCE: `sha256:${"a".repeat(64)}`,
+    TOKENLESS_PAID_LANES_TRANSFER_INVENTORY_APPROVAL_REFERENCE: `sha256:${"b".repeat(64)}`,
+    TOKENLESS_PAID_LANES_FUNDING_VALIDATION_REFERENCE: `sha256:${"c".repeat(64)}`,
+    TOKENLESS_PAID_LANES_COMPLIANCE_APPROVED_AT: "2026-07-01T00:00:00.000Z",
+    WORLD_ID_APP_ID: "app_ratelooptest",
+    WORLD_ID_RP_ID: "rp_ratelooptest",
+    WORLD_ID_ENVIRONMENT: "production",
+  });
+  process.env.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE = derivePaidLaneActivationReference(process.env);
+}
 
 type Prepared = Awaited<ReturnType<typeof prepareChainPayment>>;
 type Broadcast = { to: Address; kind: "approval" | "createRound" };
@@ -356,8 +393,37 @@ async function persistLegacyApproval(operationKey: string, expected: Prepared, m
   return { hash, signedTransaction };
 }
 
-beforeEach(() => __setDatabaseResourcesForTests(createMemoryDatabaseResources()));
-afterEach(() => __setDatabaseResourcesForTests(null));
+beforeEach(() => {
+  activateNetworkLane();
+  __setDatabaseResourcesForTests(createMemoryDatabaseResources());
+});
+afterEach(() => {
+  __setDatabaseResourcesForTests(null);
+  for (const name of PAID_LANE_ENV_NAMES) {
+    const value = originalPaidLaneEnv.get(name);
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
+});
+
+test("withdrawing paid-lane activation stops server-funded spend before signing or broadcast", async () => {
+  const { operationKey } = await prepaidAsk();
+  const holder: { current?: Prepared } = {};
+  const broadcasts: Broadcast[] = [];
+  const chainConfig = config();
+  const chainRuntime = prepaidRuntime({
+    expected: () => holder.current!,
+    broadcasts,
+  });
+  holder.current = await prepareChainPayment(operationKey, { config: chainConfig, runtime: chainRuntime });
+  delete process.env.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE;
+
+  await assert.rejects(
+    executeServerChainPayment(operationKey, { config: chainConfig, runtime: chainRuntime }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "paid_lane_activation_required",
+  );
+  assert.deepEqual(broadcasts, []);
+});
 
 test("a prepaid execution rejects an over-cap prepared fee before signing", async () => {
   const { operationKey } = await prepaidAsk();

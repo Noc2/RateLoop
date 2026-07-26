@@ -1,3 +1,5 @@
+import { PAID_LANE_HASH, derivePaidLaneActivationReference } from "~~/lib/tokenless/paidLaneActivation";
+
 export const HUMAN_REVIEW_AUDIENCES = ["private_invited", "public_network", "hybrid"] as const;
 export type HumanReviewAudience = (typeof HUMAN_REVIEW_AUDIENCES)[number];
 
@@ -31,15 +33,25 @@ export type HumanReviewLaneReadiness = Pick<
   "privateInvitedUnpaid" | "privateInvitedPaid" | "publicPaidNetwork" | "hybridPublicSafe"
 >;
 
-type HumanReviewActivationEnv = Record<string, string | undefined>;
-
-const HASH = /^sha256:[0-9a-f]{64}$/u;
-const PUBLIC_HUMAN_REVIEW_ACTIVATION_ENV: HumanReviewActivationEnv = {
+type HumanReviewActivationEnv = Readonly<Record<string, string | undefined>>;
+const RUNTIME_HUMAN_REVIEW_ACTIVATION_ENV: HumanReviewActivationEnv = {
   NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE:
     process.env.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE,
   NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: process.env.NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED,
   NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED: process.env.NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED,
   NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED: process.env.NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED,
+  TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: process.env.TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED,
+  TOKENLESS_NETWORK_PANELS_ENABLED: process.env.TOKENLESS_NETWORK_PANELS_ENABLED,
+  TOKENLESS_HYBRID_REVIEWS_ENABLED: process.env.TOKENLESS_HYBRID_REVIEWS_ENABLED,
+  TOKENLESS_PAID_LANES_DPIA_APPROVAL_REFERENCE: process.env.TOKENLESS_PAID_LANES_DPIA_APPROVAL_REFERENCE,
+  TOKENLESS_PAID_LANES_TRANSFER_INVENTORY_APPROVAL_REFERENCE:
+    process.env.TOKENLESS_PAID_LANES_TRANSFER_INVENTORY_APPROVAL_REFERENCE,
+  TOKENLESS_PAID_LANES_FUNDING_VALIDATION_REFERENCE: process.env.TOKENLESS_PAID_LANES_FUNDING_VALIDATION_REFERENCE,
+  TOKENLESS_INVITED_PAID_ADULTHOOD_APPROVAL_REFERENCE: process.env.TOKENLESS_INVITED_PAID_ADULTHOOD_APPROVAL_REFERENCE,
+  TOKENLESS_PAID_LANES_COMPLIANCE_APPROVED_AT: process.env.TOKENLESS_PAID_LANES_COMPLIANCE_APPROVED_AT,
+  WORLD_ID_APP_ID: process.env.WORLD_ID_APP_ID,
+  WORLD_ID_RP_ID: process.env.WORLD_ID_RP_ID,
+  WORLD_ID_ENVIRONMENT: process.env.WORLD_ID_ENVIRONMENT,
 };
 
 /**
@@ -48,14 +60,23 @@ const PUBLIC_HUMAN_REVIEW_ACTIVATION_ENV: HumanReviewActivationEnv = {
  * before any paid reservation, voucher, round, or spend can be created.
  */
 export function humanReviewLaneImplementation(
-  env: HumanReviewActivationEnv = PUBLIC_HUMAN_REVIEW_ACTIVATION_ENV,
+  env: HumanReviewActivationEnv = RUNTIME_HUMAN_REVIEW_ACTIVATION_ENV,
 ): HumanReviewLaneReadiness {
   const activationReference = env.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE?.trim() ?? "";
-  const activationBound = HASH.test(activationReference);
+  const activationBound =
+    PAID_LANE_HASH.test(activationReference) && activationReference === derivePaidLaneActivationReference(env);
   const privateInvitedPaid =
-    activationBound && env.NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED?.trim() === "true";
-  const publicPaidNetwork = activationBound && env.NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED?.trim() === "true";
-  const hybridRequested = activationBound && env.NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED?.trim() === "true";
+    activationBound &&
+    env.TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED?.trim() === "true" &&
+    env.NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED?.trim() === "true";
+  const publicPaidNetwork =
+    activationBound &&
+    env.TOKENLESS_NETWORK_PANELS_ENABLED?.trim() === "true" &&
+    env.NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED?.trim() === "true";
+  const hybridRequested =
+    activationBound &&
+    env.TOKENLESS_HYBRID_REVIEWS_ENABLED?.trim() === "true" &&
+    env.NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED?.trim() === "true";
   return {
     privateInvitedUnpaid: true,
     privateInvitedPaid,

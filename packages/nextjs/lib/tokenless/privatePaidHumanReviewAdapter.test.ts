@@ -4,6 +4,7 @@ import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import {
   type PrivatePaidHumanReviewRequest,
   __privatePaidHumanReviewAdapterTestUtils,
+  acceptPrivatePaidReviewAssignment,
   createDirectPrivateReviewAssignmentAcceptor,
   createPrivatePaidHumanReviewAdapter,
 } from "~~/lib/tokenless/privatePaidHumanReviewAdapter";
@@ -16,6 +17,21 @@ const REVIEWER_BINDINGS = REVIEWERS.map(payoutAccount => ({
   principalId: `rlp_${payoutAccount.slice(2, 26)}`,
   payoutAccount,
 }));
+
+test("private paid acceptance fails closed before loading assignment data when activation is absent", async () => {
+  await assert.rejects(
+    () =>
+      acceptPrivatePaidReviewAssignment({
+        assignmentId: "assignment_paid_gate",
+        issuanceId: "issuance_paid_gate",
+        principalId: REVIEWER_BINDINGS[0]!.principalId,
+        payoutAccount: REVIEWERS[0],
+        now: NOW,
+      }),
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "paid_lane_compliance_approval_required",
+  );
+});
 
 function admissionPolicy() {
   return {

@@ -359,6 +359,16 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
   };
   activated.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE = derivePaidLaneActivationReference(activated);
   assert.deepEqual(validateTokenlessProductionReadiness({ env: activated, activeRegistry: {} }), []);
+  const publicOnlyActivation = {
+    ...activated,
+    TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "false",
+  };
+  publicOnlyActivation.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE =
+    derivePaidLaneActivationReference(publicOnlyActivation);
+  assert.match(
+    validateTokenlessProductionReadiness({ env: publicOnlyActivation, activeRegistry: {} }).join("\n"),
+    /TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED and NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED must match/u,
+  );
   assert.match(
     validateTokenlessProductionReadiness({
       env: { ...env, STRIPE_SECRET_KEY: `sk_live_${"a".repeat(32)}` },

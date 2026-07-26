@@ -513,6 +513,7 @@ export async function acceptPrivatePaidReviewAssignment(input: {
   payoutAccount: string;
   now?: Date;
 }) {
+  requirePaidLaneComplianceApproval("private_invited_paid");
   const now = input.now ?? new Date();
   const payoutAccount = getAddress(input.payoutAccount).toLowerCase();
   const issuance = await getPaidReviewVoucherLifecycle(input.issuanceId);

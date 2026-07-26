@@ -12,6 +12,7 @@ import {
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { derivePaidLaneActivationReference } from "~~/lib/tokenless/paidLaneActivation";
 
 const allReady: HumanReviewReadiness = {
   autonomousPublishing: true,
@@ -109,11 +110,23 @@ test("paid lanes default off and become reachable only through an evidence-bound
     hybridPublicSafe: false,
   });
   const activation = {
-    NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE: `sha256:${"a".repeat(64)}`,
+    NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE: "",
+    TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "true",
+    TOKENLESS_NETWORK_PANELS_ENABLED: "true",
+    TOKENLESS_HYBRID_REVIEWS_ENABLED: "true",
     NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "true",
     NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED: "true",
     NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED: "true",
+    TOKENLESS_PAID_LANES_DPIA_APPROVAL_REFERENCE: `sha256:${"a".repeat(64)}`,
+    TOKENLESS_PAID_LANES_TRANSFER_INVENTORY_APPROVAL_REFERENCE: `sha256:${"b".repeat(64)}`,
+    TOKENLESS_PAID_LANES_FUNDING_VALIDATION_REFERENCE: `sha256:${"c".repeat(64)}`,
+    TOKENLESS_INVITED_PAID_ADULTHOOD_APPROVAL_REFERENCE: `sha256:${"d".repeat(64)}`,
+    TOKENLESS_PAID_LANES_COMPLIANCE_APPROVED_AT: "2026-07-25T12:00:00.000Z",
+    WORLD_ID_APP_ID: "app_rateloopprod",
+    WORLD_ID_RP_ID: "rp_rateloopprod",
+    WORLD_ID_ENVIRONMENT: "production",
   };
+  activation.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE = derivePaidLaneActivationReference(activation);
   assert.deepEqual(humanReviewLaneImplementation(activation), {
     privateInvitedUnpaid: true,
     privateInvitedPaid: true,
@@ -130,13 +143,20 @@ test("paid lanes default off and become reachable only through an evidence-bound
   assert.equal(
     humanReviewLaneImplementation({
       ...activation,
-      NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE: "operator-said-ready",
+      NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE: `sha256:${"f".repeat(64)}`,
     }).publicPaidNetwork,
+    false,
+  );
+  assert.equal(
+    humanReviewLaneImplementation({
+      ...activation,
+      TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "false",
+    }).privateInvitedPaid,
     false,
   );
 });
 
-test("client capability defaults use direct Next.js public-environment references", () => {
+test("capability defaults bind the public projection to exact server activation evidence", () => {
   const source = readFileSync(new URL("./reviewCapabilities.ts", import.meta.url), "utf8");
   for (const name of [
     "NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE",
@@ -146,7 +166,8 @@ test("client capability defaults use direct Next.js public-environment reference
   ]) {
     assert.match(source, new RegExp(`process\\.env\\.${name}`, "u"));
   }
-  assert.doesNotMatch(source, /HumanReviewActivationEnv = process\.env/u);
+  assert.match(source, /derivePaidLaneActivationReference\(env\)/u);
+  assert.match(source, /process\.env\.TOKENLESS_PAID_LANES_DPIA_APPROVAL_REFERENCE/u);
 });
 
 test("configured lane descriptions use the same implementation truth", () => {

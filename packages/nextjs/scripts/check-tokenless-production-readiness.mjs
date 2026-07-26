@@ -438,12 +438,16 @@ function validateTokenlessTestDeployment(env) {
     }
   }
   const activatedTestLanes = [
-    ["TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED", "private_invited_paid"],
-    ["TOKENLESS_NETWORK_PANELS_ENABLED", "public_paid_network"],
-    ["TOKENLESS_HYBRID_REVIEWS_ENABLED", "hybrid_public_safe"],
+    [
+      "TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED",
+      "NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED",
+      "private_invited_paid",
+    ],
+    ["TOKENLESS_NETWORK_PANELS_ENABLED", "NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED", "public_paid_network"],
+    ["TOKENLESS_HYBRID_REVIEWS_ENABLED", "NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED", "hybrid_public_safe"],
   ];
-  for (const [flag, lane] of activatedTestLanes) {
-    if (value(env, flag) === "true") {
+  for (const [serverFlag, publicFlag, lane] of activatedTestLanes) {
+    if (value(env, serverFlag) === "true" || value(env, publicFlag) === "true") {
       errors.push(...validatePaidLaneActivation(lane, env).map(error => `Paid-lane activation: ${error}`));
     }
   }
