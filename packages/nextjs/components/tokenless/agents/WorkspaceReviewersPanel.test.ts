@@ -12,7 +12,7 @@ test("reviewer management has one direct invitation path and states its access b
   assert.match(panel, /maxPrivateSensitivity/);
   assert.match(panel, /OneTimeSecretNotice/);
   assert.match(panel, /body: JSON\.stringify\(\{\s*agentId,/u);
-  assert.doesNotMatch(panel, /Create group|Choose a group|private-groups|PrivateGroupsPanel/);
+  assert.doesNotMatch(panel, /Create group|Choose a group|PrivateGroupsPanel/);
 });
 
 test("reviewer management lists active reviewers and pending invitations with recovery controls", () => {
@@ -44,4 +44,15 @@ test("private-material sensitivity errors stay attached to the select", () => {
     panel,
     /id="workspace-reviewer-sensitivity-error"[\s\S]*role="alert"[\s\S]*fieldErrors\.maxPrivateSensitivity/u,
   );
+});
+
+test("owners can materialize exact specialist records for active invited reviewers", () => {
+  assert.match(panel, /agents\/\$\{encodeURIComponent\(agentId\)\}\/human-review/u);
+  assert.match(panel, /reviewer-expertise\/definitions/u);
+  assert.match(panel, /confirmReviewerExpertise/u);
+  assert.match(panel, /private-groups\/\$\{encodeURIComponent\(\s*expertiseContext\.groupId/u);
+  assert.match(panel, /method: "PUT"/u);
+  assert.match(panel, /Confirm specialist areas/u);
+  assert.match(panel, /definitionVersion/u);
+  assert.match(panel, /definitionHash/u);
 });

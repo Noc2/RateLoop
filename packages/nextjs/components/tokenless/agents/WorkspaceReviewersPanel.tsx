@@ -34,6 +34,61 @@ type ReviewerInvitation = {
   revokedAt: string | null;
 };
 
+type ExactExpertiseDefinition = {
+  definitionId: string;
+  definitionVersion: number;
+  definitionHash: string;
+  label: string;
+};
+
+function invitedExpertiseContext(
+  ownerView: Record<string, unknown>,
+  definitionsBody: Record<string, unknown>,
+): { groupId: string; definitions: ExactExpertiseDefinition[] } | null {
+  const configuration = ownerView.configuration;
+  if (!configuration || typeof configuration !== "object" || Array.isArray(configuration)) return null;
+  const requestProfile = (configuration as Record<string, unknown>).requestProfile;
+  if (!requestProfile || typeof requestProfile !== "object" || Array.isArray(requestProfile)) return null;
+  const value = (requestProfile as Record<string, unknown>).value;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const profile = value as Record<string, unknown>;
+  if (typeof profile.privateGroupId !== "string" || !profile.privateGroupId) return null;
+  const requirements = Array.isArray(profile.expertiseRequirements) ? profile.expertiseRequirements : [];
+  const definitions = Array.isArray(definitionsBody.definitions) ? definitionsBody.definitions : [];
+  const labels = new Map(
+    definitions.flatMap(definition => {
+      if (!definition || typeof definition !== "object" || Array.isArray(definition)) return [];
+      const candidate = definition as Record<string, unknown>;
+      return typeof candidate.definitionId === "string" && typeof candidate.label === "string"
+        ? [[candidate.definitionId, candidate.label] as const]
+        : [];
+    }),
+  );
+  return {
+    groupId: profile.privateGroupId,
+    definitions: requirements.flatMap(requirement => {
+      if (!requirement || typeof requirement !== "object" || Array.isArray(requirement)) return [];
+      const candidate = requirement as Record<string, unknown>;
+      if (
+        candidate.sourceScope === "rateloop_network" ||
+        typeof candidate.definitionId !== "string" ||
+        !Number.isSafeInteger(candidate.definitionVersion) ||
+        typeof candidate.definitionHash !== "string"
+      ) {
+        return [];
+      }
+      return [
+        {
+          definitionId: candidate.definitionId,
+          definitionVersion: Number(candidate.definitionVersion),
+          definitionHash: candidate.definitionHash,
+          label: labels.get(candidate.definitionId) ?? candidate.definitionId,
+        },
+      ];
+    }),
+  };
+}
+
 function shortPrincipal(value: string) {
   return value.length > 22 ? `${value.slice(0, 10)}…${value.slice(-8)}` : value;
 }
@@ -72,9 +127,14 @@ export function WorkspaceReviewersPanel({
   >("confidential");
   const [issuedUrl, setIssuedUrl] = useState<string | null>(null);
   const [paidAdulthoodAttested, setPaidAdulthoodAttested] = useState(false);
+  const [expertiseContext, setExpertiseContext] = useState<{
+    groupId: string;
+    definitions: ExactExpertiseDefinition[];
+  } | null>(null);
   const [busyTarget, setBusyTarget] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [workspaceRequests] = useState(() => new WorkspaceRequestScope());
   const { capture, clear, fieldErrors, formError } = useFormErrors();
 
@@ -84,7 +144,7 @@ export function WorkspaceReviewersPanel({
     setLoading(true);
     try {
       const base = `/api/account/workspaces/${encodeURIComponent(workspaceId)}`;
-      const [reviewersBody, invitationsBody] = await Promise.all([
+      const [reviewersBody, invitationsBody, ownerView, definitionsBody] = await Promise.all([
         readJson(
           await fetch(`${base}/reviewers`, {
             cache: "no-store",
@@ -99,23 +159,42 @@ export function WorkspaceReviewersPanel({
             signal: request.signal,
           }),
         ),
+        readJson(
+          await fetch(`${base}/agents/${encodeURIComponent(agentId)}/human-review`, {
+            cache: "no-store",
+            credentials: "same-origin",
+            signal: request.signal,
+          }),
+        ),
+        readJson(
+          await fetch(`${base}/reviewer-expertise/definitions`, {
+            cache: "no-store",
+            credentials: "same-origin",
+            signal: request.signal,
+          }),
+        ),
       ]);
       if (!request.isCurrent()) return;
       setReviewers((reviewersBody.reviewers ?? []) as WorkspaceReviewer[]);
       setInvitations((invitationsBody.invitations ?? []) as ReviewerInvitation[]);
+      setExpertiseContext(
+        invitedExpertiseContext(ownerView as Record<string, unknown>, definitionsBody as Record<string, unknown>),
+      );
       setError(null);
     } finally {
       if (request.isCurrent()) setLoading(false);
       request.finish();
     }
-  }, [canManage, workspaceId, workspaceRequests]);
+  }, [agentId, canManage, workspaceId, workspaceRequests]);
 
   useEffect(() => {
     workspaceRequests.selectWorkspace(workspaceId);
     setReviewers([]);
     setInvitations([]);
     setIssuedUrl(null);
+    setExpertiseContext(null);
     setError(null);
+    setNotice(null);
     if (!canManage) {
       setLoading(false);
       return;
@@ -177,6 +256,54 @@ export function WorkspaceReviewersPanel({
       if (request.isCurrent()) await load();
     } catch (cause) {
       if (request.isCurrent()) setError(cause instanceof Error ? cause.message : "Unable to remove the reviewer.");
+    } finally {
+      if (request.isCurrent()) setBusyTarget(null);
+      request.finish();
+    }
+  }
+
+  async function confirmReviewerExpertise(reviewer: WorkspaceReviewer) {
+    if (!expertiseContext?.definitions.length) return;
+    const request = workspaceRequests.begin(workspaceId, "reviewers:action");
+    setBusyTarget(reviewer.principalAddress);
+    setError(null);
+    setNotice(null);
+    const activeExpiryTimes = reviewer.grants
+      .filter(grant => grant.status === "active" && grant.validUntil)
+      .map(grant => new Date(grant.validUntil!).getTime())
+      .filter(value => Number.isFinite(value) && value > Date.now());
+    const expiresAt = new Date(
+      activeExpiryTimes.length ? Math.min(...activeExpiryTimes) : Date.now() + 365 * 86_400_000,
+    ).toISOString();
+    try {
+      await readJson(
+        await fetch(
+          `/api/account/workspaces/${encodeURIComponent(workspaceId)}/private-groups/${encodeURIComponent(
+            expertiseContext.groupId,
+          )}/members/${encodeURIComponent(reviewer.principalAddress)}/expertise`,
+          {
+            method: "PUT",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              definitions: expertiseContext.definitions.map(({ definitionId, definitionVersion, definitionHash }) => ({
+                definitionId,
+                definitionVersion,
+                definitionHash,
+              })),
+              expiresAt,
+            }),
+            signal: request.signal,
+          },
+        ),
+      );
+      if (request.isCurrent()) {
+        setNotice(`Specialist areas confirmed for ${reviewerLabel(reviewer)}.`);
+        await load();
+      }
+    } catch (cause) {
+      if (request.isCurrent())
+        setError(cause instanceof Error ? cause.message : "Unable to confirm this reviewer's specialist areas.");
     } finally {
       if (request.isCurrent()) setBusyTarget(null);
       request.finish();
@@ -292,6 +419,11 @@ export function WorkspaceReviewersPanel({
           {formError}
         </p>
       ) : null}
+      {notice ? (
+        <p className="mt-4 rounded-lg bg-emerald-400/10 p-3 text-sm text-emerald-100" role="status">
+          {notice}
+        </p>
+      ) : null}
 
       <div className="mt-6 border-t border-white/10 pt-5">
         <h3 className="text-sm font-semibold">Active reviewers</h3>
@@ -324,14 +456,27 @@ export function WorkspaceReviewersPanel({
                       </p>
                     ))}
                 </div>
-                <button
-                  className="btn btn-sm border-red-300/20 bg-red-300/[0.06] text-red-100"
-                  type="button"
-                  disabled={busyTarget === reviewer.principalAddress}
-                  onClick={() => void removeReviewer(reviewer)}
-                >
-                  Remove
-                </button>
+                <div className="flex flex-wrap justify-end gap-2">
+                  {expertiseContext?.definitions.length ? (
+                    <button
+                      className="btn btn-sm border-white/10 bg-white/[0.04]"
+                      type="button"
+                      disabled={busyTarget === reviewer.principalAddress}
+                      onClick={() => void confirmReviewerExpertise(reviewer)}
+                      title={`Attest: ${expertiseContext.definitions.map(definition => definition.label).join(", ")}`}
+                    >
+                      {busyTarget === reviewer.principalAddress ? "Confirming…" : "Confirm specialist areas"}
+                    </button>
+                  ) : null}
+                  <button
+                    className="btn btn-sm border-red-300/20 bg-red-300/[0.06] text-red-100"
+                    type="button"
+                    disabled={busyTarget === reviewer.principalAddress}
+                    onClick={() => void removeReviewer(reviewer)}
+                  >
+                    Remove
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

@@ -29,6 +29,7 @@ function jsonForSupportingRequest(url: string) {
   if (url.endsWith("/human-review")) return Response.json(ownerReviewView());
   if (url.endsWith("/reviewers")) return Response.json({ reviewers: [] });
   if (url.endsWith("/reviewer-invitations")) return Response.json({ invitations: [] });
+  if (url.endsWith("/reviewer-expertise/definitions")) return Response.json({ definitions: [] });
   return null;
 }
 
