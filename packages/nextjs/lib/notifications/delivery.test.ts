@@ -399,10 +399,88 @@ test("bounded delivery retries end in a visible dead letter", async () => {
     ["dead"],
   );
   const delivery = await dbClient.execute(
-    "SELECT state, attempt_count, last_error, dead_at FROM tokenless_notification_email_deliveries",
+    `SELECT state, attempt_count, recovery_count, next_recovery_at, last_error, dead_at
+     FROM tokenless_notification_email_deliveries`,
   );
   assert.equal(delivery.rows[0]?.state, "dead");
   assert.equal(Number(delivery.rows[0]?.attempt_count), 8);
   assert.equal(delivery.rows[0]?.last_error, "provider unavailable");
   assert.ok(delivery.rows[0]?.dead_at);
+  assert.equal(Number(delivery.rows[0]?.recovery_count), 0);
+  assert.deepEqual(delivery.rows[0]?.next_recovery_at, new Date(NOW.getTime() + 6 * 3_600_000));
+});
+
+test("dead notification delivery recovers automatically after the provider returns", async () => {
+  await seedVerifiedSubscription();
+  await insertGenericLifecycleNotification();
+  await enqueueTokenlessNotificationEmails({ now: NOW });
+  await dbClient.execute("UPDATE tokenless_notification_email_deliveries SET attempt_count = 7");
+  await deliverPendingTokenlessNotificationEmails({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    unsubscribeSecret: SECRET,
+    async send() {
+      throw new Error("provider unavailable");
+    },
+  });
+
+  const recoveredAt = new Date(NOW.getTime() + 6 * 3_600_000);
+  const outcomes = await deliverPendingTokenlessNotificationEmails({
+    appOrigin: "https://tokenless.example.test",
+    now: recoveredAt,
+    unsubscribeSecret: SECRET,
+    async send() {
+      return { id: "resend-provider-restored" };
+    },
+  });
+  assert.deepEqual(
+    outcomes.map(value => value.state),
+    ["delivered"],
+  );
+  const delivery = await dbClient.execute(
+    `SELECT state, attempt_count, recovery_count, next_recovery_at, dead_at, provider_message_id
+     FROM tokenless_notification_email_deliveries`,
+  );
+  assert.equal(delivery.rows[0]?.state, "delivered");
+  assert.equal(Number(delivery.rows[0]?.attempt_count), 1);
+  assert.equal(Number(delivery.rows[0]?.recovery_count), 1);
+  assert.equal(delivery.rows[0]?.next_recovery_at, null);
+  assert.equal(delivery.rows[0]?.dead_at, null);
+  assert.equal(delivery.rows[0]?.provider_message_id, "resend-provider-restored");
+});
+
+test("notification recovery stops after a bounded number of dead-letter cycles", async () => {
+  await seedVerifiedSubscription();
+  await insertGenericLifecycleNotification();
+  await enqueueTokenlessNotificationEmails({ now: NOW });
+  await dbClient.execute(
+    `UPDATE tokenless_notification_email_deliveries
+     SET attempt_count = 7, recovery_count = 6`,
+  );
+  await deliverPendingTokenlessNotificationEmails({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    unsubscribeSecret: SECRET,
+    async send() {
+      throw new Error("permanent provider failure");
+    },
+  });
+  const muchLater = new Date(NOW.getTime() + 30 * 86_400_000);
+  assert.deepEqual(
+    await deliverPendingTokenlessNotificationEmails({
+      appOrigin: "https://tokenless.example.test",
+      now: muchLater,
+      unsubscribeSecret: SECRET,
+      async send() {
+        return { id: "must-not-recover" };
+      },
+    }),
+    [],
+  );
+  const delivery = await dbClient.execute(
+    "SELECT state, recovery_count, next_recovery_at FROM tokenless_notification_email_deliveries",
+  );
+  assert.equal(delivery.rows[0]?.state, "dead");
+  assert.equal(Number(delivery.rows[0]?.recovery_count), 6);
+  assert.equal(delivery.rows[0]?.next_recovery_at, null);
 });

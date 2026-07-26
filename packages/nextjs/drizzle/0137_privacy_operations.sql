@@ -69,6 +69,11 @@ ALTER TABLE "tokenless_notification_email_deliveries"
   ADD CONSTRAINT "tokenless_notification_email_deliveries_recovery_check"
   CHECK (
     "recovery_count" BETWEEN 0 AND 6
-    AND (("state" = 'dead' AND "next_recovery_at" IS NOT NULL)
+    AND (("state" = 'dead' AND (
+          ("recovery_count" < 6 AND "next_recovery_at" IS NOT NULL)
+          OR ("recovery_count" = 6 AND "next_recovery_at" IS NULL)
+        ))
       OR ("state" <> 'dead' AND "next_recovery_at" IS NULL))
-  );
+  );--> statement-breakpoint
+CREATE INDEX "tokenless_notification_email_deliveries_recovery_due_idx"
+  ON "tokenless_notification_email_deliveries" ("state","next_recovery_at","created_at");

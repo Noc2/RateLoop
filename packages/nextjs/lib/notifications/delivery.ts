@@ -22,6 +22,7 @@ type DeliveryState = "dead" | "delivered" | "retry" | "suppressed";
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
 const MAX_ATTEMPTS = 8;
+const MAX_RECOVERIES = 6;
 const STALE_CLAIM_MS = 10 * 60_000;
 
 function digest(value: string) {
@@ -49,6 +50,11 @@ function deliveryId(notification: string) {
 
 function retryAt(now: Date, attempt: number) {
   const delayMs = Math.min(30_000 * 2 ** Math.min(Math.max(attempt - 1, 0), 7), 3_600_000);
+  return new Date(now.getTime() + delayMs);
+}
+
+function recoveryAt(now: Date, recoveryCount: number) {
+  const delayMs = Math.min(6 * 3_600_000 * 2 ** Math.min(Math.max(recoveryCount, 0), 5), 7 * 86_400_000);
   return new Date(now.getTime() + delayMs);
 }
 
@@ -375,12 +381,20 @@ export async function deliverPendingTokenlessNotificationEmails(input: {
   const limit = bounded(input.limit);
   await dbClient.execute({
     sql: `UPDATE tokenless_notification_email_deliveries
+          SET state = 'retry', attempt_count = 0, recovery_count = recovery_count + 1,
+              next_attempt_at = ?, next_recovery_at = NULL, dead_at = NULL, updated_at = ?
+          WHERE state = 'dead' AND recovery_count < ? AND next_recovery_at <= ?`,
+    args: [now, now, MAX_RECOVERIES, now],
+  });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_notification_email_deliveries
           SET state = 'retry', next_attempt_at = ?, last_error = 'stale email claim recovered', updated_at = ?
           WHERE state = 'delivering' AND updated_at <= ?`,
     args: [now, now, new Date(now.getTime() - STALE_CLAIM_MS)],
   });
   const due = await dbClient.execute({
     sql: `SELECT d.delivery_id, d.notification_id, d.principal_address, d.preference_key, d.attempt_count,
+                 d.recovery_count,
                  n.title, n.body, n.href,
                  s.email, s.verified_at, s.unsubscribe_token_hash,
                  s.assignment_available, s.assignment_completed, s.payment_updates, s.ask_results, s.account_security,
@@ -442,12 +456,24 @@ export async function deliverPendingTokenlessNotificationEmails(input: {
       outcomes.push({ deliveryId: id, state: "delivered" });
     } catch (error) {
       const dead = attempt >= MAX_ATTEMPTS;
+      const recoveryCount = Number(row.recovery_count);
+      const nextRecoveryAt = dead && recoveryCount < MAX_RECOVERIES ? recoveryAt(now, recoveryCount) : null;
       const message = error instanceof Error ? error.message.slice(0, 500) : "Email delivery failed";
       await dbClient.execute({
         sql: `UPDATE tokenless_notification_email_deliveries
-              SET state = ?, attempt_count = ?, next_attempt_at = ?, last_error = ?, dead_at = ?, updated_at = ?
+              SET state = ?, attempt_count = ?, next_attempt_at = ?, next_recovery_at = ?,
+                  last_error = ?, dead_at = ?, updated_at = ?
               WHERE delivery_id = ? AND state = 'delivering'`,
-        args: [dead ? "dead" : "retry", attempt, retryAt(now, attempt), message, dead ? now : null, now, id],
+        args: [
+          dead ? "dead" : "retry",
+          attempt,
+          retryAt(now, attempt),
+          nextRecoveryAt,
+          message,
+          dead ? now : null,
+          now,
+          id,
+        ],
       });
       const state = dead ? "dead" : "retry";
       outcomes.push({ deliveryId: id, state });
@@ -477,5 +503,6 @@ export const __notificationDeliveryTestUtils = {
   actionUrl,
   insertLifecycleCandidates,
   notificationId,
+  recoveryAt,
   retryAt,
 };
