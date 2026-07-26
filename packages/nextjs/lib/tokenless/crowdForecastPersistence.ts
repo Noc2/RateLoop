@@ -103,14 +103,11 @@ function normalizeBatchEntries(entries: readonly ForecastBatchEntry[]) {
   );
 }
 
-function lookupRuntime(env: NodeJS.ProcessEnv = process.env) {
-  if (env.NEXT_PUBLIC_TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY) {
-    throw new Error("The integrity reviewer lookup key must never be public.");
-  }
-  const encoded = env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY?.trim();
-  const version = env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION?.trim();
-  const key = encoded ? Buffer.from(encoded, "base64url") : Buffer.alloc(0);
-  if (!version || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(version) || key.byteLength < 32) {
+function runtimeFromEncoded(version: string | undefined, encoded: string | undefined) {
+  const normalizedVersion = version?.trim();
+  const normalizedEncoded = encoded?.trim();
+  const key = normalizedEncoded ? Buffer.from(normalizedEncoded, "base64url") : Buffer.alloc(0);
+  if (!normalizedVersion || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(normalizedVersion) || key.byteLength < 32) {
     throw new TokenlessServiceError(
       "Crowd forecast integrity is unavailable.",
       503,
@@ -118,7 +115,91 @@ function lookupRuntime(env: NodeJS.ProcessEnv = process.env) {
       true,
     );
   }
-  return { key, version };
+  return { key, version: normalizedVersion };
+}
+
+function lookupRuntimeKeyring(env: NodeJS.ProcessEnv = process.env) {
+  if (
+    env.NEXT_PUBLIC_TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY ||
+    env.NEXT_PUBLIC_TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEYS_JSON
+  ) {
+    throw new Error("The integrity reviewer lookup key must never be public.");
+  }
+  const current = runtimeFromEncoded(
+    env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION,
+    env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY,
+  );
+  const runtimes = new Map<string, { key: Buffer; version: string }>([[current.version, current]]);
+  const encodedKeyring = env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEYS_JSON?.trim();
+  if (!encodedKeyring) return { current, runtimes };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(encodedKeyring);
+  } catch {
+    throw new TokenlessServiceError(
+      "Crowd forecast integrity is unavailable.",
+      503,
+      "forecast_integrity_unavailable",
+      true,
+    );
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new TokenlessServiceError(
+      "Crowd forecast integrity is unavailable.",
+      503,
+      "forecast_integrity_unavailable",
+      true,
+    );
+  }
+  for (const [version, encoded] of Object.entries(parsed as Record<string, unknown>)) {
+    if (typeof encoded !== "string") {
+      throw new TokenlessServiceError(
+        "Crowd forecast integrity is unavailable.",
+        503,
+        "forecast_integrity_unavailable",
+        true,
+      );
+    }
+    const runtime = runtimeFromEncoded(version, encoded);
+    const existing = runtimes.get(runtime.version);
+    if (existing && !existing.key.equals(runtime.key)) {
+      throw new TokenlessServiceError(
+        "Crowd forecast integrity is unavailable.",
+        503,
+        "forecast_integrity_unavailable",
+        true,
+      );
+    }
+    runtimes.set(runtime.version, runtime);
+  }
+  return { current, runtimes };
+}
+
+function lookupRuntime(env: NodeJS.ProcessEnv = process.env) {
+  return lookupRuntimeKeyring(env).current;
+}
+
+function invitedSubjectForVersion(input: {
+  workspaceId: string;
+  principalId: string;
+  keyVersion: string;
+  keyring: ReturnType<typeof lookupRuntimeKeyring>;
+}) {
+  const runtime = input.keyring.runtimes.get(input.keyVersion);
+  if (!runtime) {
+    throw new TokenlessServiceError(
+      "Crowd forecast integrity is unavailable until the configured keyring includes all retained key versions.",
+      503,
+      "forecast_integrity_key_version_unavailable",
+      true,
+    );
+  }
+  return invitedForecastSubject({
+    workspaceId: input.workspaceId,
+    principalId: input.principalId,
+    key: runtime.key,
+    keyVersion: runtime.version,
+  });
 }
 
 export function invitedForecastSubject(input: {
@@ -693,28 +774,35 @@ export async function aggregatePublicForecastRound(input: {
   }
 }
 
-async function subjectsForPrincipal(client: PoolClient, principalId: string) {
+async function invitedSubjectsForPrincipal(client: PoolClient, input: { principalId: string; workspaceId?: string }) {
   const workspaceRows = await client.query(
-    `SELECT DISTINCT workspace_id FROM (
-       SELECT workspace_id FROM tokenless_forecast_calibration_accumulators WHERE workspace_id IS NOT NULL
-       UNION SELECT workspace_id FROM tokenless_forecast_pair_accumulators
-       UNION SELECT workspace_id FROM tokenless_forecast_integrity_findings WHERE workspace_id IS NOT NULL
-     ) workspaces ORDER BY workspace_id`,
+    `SELECT DISTINCT workspace_id,key_version
+     FROM tokenless_forecast_calibration_accumulators
+     WHERE subject_space='invited_workspace' AND workspace_id IS NOT NULL
+       AND ($1::text IS NULL OR workspace_id=$1)
+     ORDER BY workspace_id,key_version`,
+    [input.workspaceId ?? null],
   );
-  const runtime = workspaceRows.rows.length > 0 ? lookupRuntime() : null;
-  const invited = (workspaceRows.rows as Row[]).flatMap(row => {
+  if (workspaceRows.rows.length === 0) return [];
+  const keyring = lookupRuntimeKeyring();
+  return (workspaceRows.rows as Row[]).flatMap(row => {
     const workspaceId = text(row, "workspace_id");
-    return workspaceId && runtime
+    const keyVersion = text(row, "key_version");
+    return workspaceId && keyVersion
       ? [
-          invitedForecastSubject({
+          invitedSubjectForVersion({
             workspaceId,
-            principalId,
-            key: runtime.key,
-            keyVersion: runtime.version,
+            principalId: input.principalId,
+            keyVersion,
+            keyring,
           }),
         ]
       : [];
   });
+}
+
+async function subjectsForPrincipal(client: PoolClient, principalId: string) {
+  const invited = await invitedSubjectsForPrincipal(client, { principalId });
   const rater = await client.query(
     "SELECT rater_id FROM tokenless_rater_profiles WHERE principal_id=$1 AND deleted_at IS NULL LIMIT 1",
     [principalId],
@@ -811,22 +899,22 @@ export async function assertPrincipalForecastAssignmentEligibleInTransaction(
         "forecast_integrity_workspace_required",
       );
     }
-    const hasWorkspaceSignals = await client.query(
-      `SELECT 1 FROM (
-         SELECT workspace_id FROM tokenless_forecast_calibration_accumulators
-         WHERE workspace_id=$1 AND subject_space='invited_workspace'
-         UNION ALL
-         SELECT workspace_id FROM tokenless_forecast_pair_accumulators
-         WHERE workspace_id=$1 AND subject_space='invited_workspace'
-       ) signals LIMIT 1`,
-      [input.workspaceId],
-    );
-    if (hasWorkspaceSignals.rowCount === 0) return;
+    const subjects = await invitedSubjectsForPrincipal(client, {
+      principalId: input.principalId,
+      workspaceId: input.workspaceId,
+    });
+    for (const subject of subjects) {
+      if (await isForecastAssignmentRestricted(client, { subject, workspaceId: input.workspaceId })) {
+        throw new TokenlessServiceError(
+          "New review assignments are paused while crowd forecast integrity needs review.",
+          403,
+          "forecast_integrity_assignment_restricted",
+        );
+      }
+    }
+    return;
   }
-  const subject =
-    input.reviewerSource === "rateloop_network"
-      ? networkForecastSubject(input.raterId ?? "")
-      : invitedForecastSubject({ workspaceId: input.workspaceId!, principalId: input.principalId });
+  const subject = networkForecastSubject(input.raterId ?? "");
   if (await isForecastAssignmentRestricted(client, { subject, workspaceId: input.workspaceId })) {
     throw new TokenlessServiceError(
       "New review assignments are paused while crowd forecast integrity needs review.",

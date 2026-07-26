@@ -15,6 +15,7 @@ const OWNER = "0x1111111111111111111111111111111111111111";
 const REVIEWER = "0x2222222222222222222222222222222222222222";
 const originalLookupKey = process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY;
 const originalLookupVersion = process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION;
+const originalLookupKeyring = process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEYS_JSON;
 
 beforeEach(() => {
   process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY = Buffer.alloc(32, 29).toString("base64url");
@@ -28,6 +29,8 @@ afterEach(() => {
   else process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY = originalLookupKey;
   if (originalLookupVersion === undefined) delete process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION;
   else process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION = originalLookupVersion;
+  if (originalLookupKeyring === undefined) delete process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEYS_JSON;
+  else process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEYS_JSON = originalLookupKeyring;
 });
 
 test("running sums create append-only payout-neutral findings and an appeal suspends assignment consequences", async () => {
@@ -124,4 +127,111 @@ test("account erasure removes invited accumulators, pair pseudonyms, findings, a
   }
   const remainingPairs = await dbClient.execute("SELECT COUNT(*) AS count FROM tokenless_forecast_pair_accumulators");
   assert.equal(Number(remainingPairs.rows[0]?.count), 0);
+});
+
+test("rotated invited lookup keys preserve old findings for access, gating, appeal, and erasure", async () => {
+  const oldKey = Buffer.alloc(32, 29).toString("base64url");
+  const workspace = await createWorkspace({
+    ownerAddress: OWNER,
+    name: "Forecast key rotation",
+  });
+  for (let index = 0; index < 16; index += 1) {
+    const client = await dbPool.connect();
+    try {
+      await client.query("BEGIN");
+      await __crowdForecastPersistenceTestUtils.aggregateInvitedBatch(client, {
+        workspaceId: workspace.workspaceId,
+        observations: [{ principalId: REVIEWER, predictedPositiveBps: 5_000, vote: index % 2 === 0 ? 1 : 0 }],
+        outcome: index % 2 === 0 ? 1 : 0,
+        now: new Date(1_786_100_000_000 + index * 1_000),
+      });
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY = Buffer.alloc(32, 41).toString("base64url");
+  process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION = "forecast-persistence-test-v2";
+  process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEYS_JSON = JSON.stringify({
+    "forecast-persistence-test-v1": oldKey,
+  });
+
+  const record = await listPrincipalForecastIntegrity(REVIEWER);
+  const finding = record.items[0]?.findings.find(value => value.reasonCode === "forecast_invariant");
+  assert.ok(finding);
+  await assert.rejects(
+    () =>
+      assertPrincipalForecastAssignmentEligible({
+        principalId: REVIEWER,
+        reviewerSource: "customer_invited",
+        workspaceId: workspace.workspaceId,
+      }),
+    (error: unknown) =>
+      error instanceof Error && "code" in error && error.code === "forecast_integrity_assignment_restricted",
+  );
+  await openPrincipalForecastAppeal({
+    principalId: REVIEWER,
+    findingId: finding.findingId,
+    reasonCode: "context_missing",
+  });
+
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    const erased = await erasePrincipalForecastIntegrityInTransaction(client, { principalId: REVIEWER });
+    assert.ok(erased.deletedRows > 0);
+    assert.equal(erased.remainingRows, 0);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+});
+
+test("stored invited key versions fail closed instead of hiding old findings", async () => {
+  const workspace = await createWorkspace({
+    ownerAddress: OWNER,
+    name: "Forecast missing old key",
+  });
+  const client = await dbPool.connect();
+  try {
+    await client.query("BEGIN");
+    await __crowdForecastPersistenceTestUtils.aggregateInvitedBatch(client, {
+      workspaceId: workspace.workspaceId,
+      observations: [{ principalId: REVIEWER, predictedPositiveBps: 5_000, vote: 1 }],
+      outcome: 1,
+      now: new Date("2026-07-26T12:00:00.000Z"),
+    });
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+  process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY = Buffer.alloc(32, 43).toString("base64url");
+  process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION = "forecast-persistence-test-v2";
+  delete process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEYS_JSON;
+
+  await assert.rejects(
+    () => listPrincipalForecastIntegrity(REVIEWER),
+    (error: unknown) =>
+      error instanceof Error && "code" in error && error.code === "forecast_integrity_key_version_unavailable",
+  );
+  await assert.rejects(
+    () =>
+      assertPrincipalForecastAssignmentEligible({
+        principalId: REVIEWER,
+        reviewerSource: "customer_invited",
+        workspaceId: workspace.workspaceId,
+      }),
+    (error: unknown) =>
+      error instanceof Error && "code" in error && error.code === "forecast_integrity_key_version_unavailable",
+  );
 });
