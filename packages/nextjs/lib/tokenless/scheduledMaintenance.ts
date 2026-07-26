@@ -244,6 +244,36 @@ type MaintenanceProcessors = {
   sweepExpiredQuotes: typeof sweepExpiredTokenlessQuotes;
 };
 
+type MaintenanceProcessorFailure = {
+  processor: keyof MaintenanceProcessors;
+  errorCode: string;
+};
+
+function maintenanceProcessorErrorCode(error: unknown) {
+  if (error instanceof TokenlessServiceError) return error.code;
+  if (error instanceof Error && /^[A-Za-z][A-Za-z0-9_]{0,79}$/u.test(error.name)) {
+    return error.name;
+  }
+  return "processor_error";
+}
+
+async function runIsolatedMaintenanceProcessor<T>(input: {
+  failures: MaintenanceProcessorFailure[];
+  processor: keyof MaintenanceProcessors;
+  run: () => Promise<T>;
+  fallback: T;
+}) {
+  try {
+    return await input.run();
+  } catch (error) {
+    input.failures.push({
+      processor: input.processor,
+      errorCode: maintenanceProcessorErrorCode(error),
+    });
+    return input.fallback;
+  }
+}
+
 const defaultProcessors: MaintenanceProcessors = {
   deleteArtifact: processArtifactDeletionByObjectId,
   deletePublicMedia: processPublicQuestionMediaDeletionByAssetId,
@@ -458,28 +488,76 @@ export async function runTokenlessScheduledMaintenance(input: {
   const idempotencyKey = `tokenless-maintenance:${bucket}`;
   const runId = `swr_${digest(idempotencyKey).slice(0, 40)}`;
   const existingRun = await dbClient.execute({
-    sql: "SELECT run_id FROM tokenless_scheduled_worker_runs WHERE idempotency_key = ? LIMIT 1",
+    sql: "SELECT run_id, status FROM tokenless_scheduled_worker_runs WHERE idempotency_key = ? LIMIT 1",
     args: [idempotencyKey],
   });
-  if (existingRun.rows.length > 0) return { runId, status: "duplicate" as const };
-  const started = await dbClient.execute({
-    sql: `INSERT INTO tokenless_scheduled_worker_runs
-          (run_id, idempotency_key, trigger, status, started_at)
-          VALUES (?, ?, 'vercel_cron', 'running', ?)
-          ON CONFLICT (idempotency_key) DO NOTHING RETURNING run_id`,
-    args: [runId, idempotencyKey, now],
-  });
-  if (started.rowCount !== 1) return { runId, status: "duplicate" as const };
+  if (existingRun.rows.length > 0) {
+    const reclaimed = await dbClient.execute({
+      sql: `UPDATE tokenless_scheduled_worker_runs
+            SET status = 'running', started_at = ?, completed_at = NULL,
+                summary_json = NULL, last_error = NULL
+            WHERE idempotency_key = ? AND status = 'failed'
+            RETURNING run_id`,
+      args: [now, idempotencyKey],
+    });
+    if (reclaimed.rows.length !== 1) return { runId, status: "duplicate" as const };
+  } else {
+    const started = await dbClient.execute({
+      sql: `INSERT INTO tokenless_scheduled_worker_runs
+            (run_id, idempotency_key, trigger, status, started_at)
+            VALUES (?, ?, 'vercel_cron', 'running', ?)
+            ON CONFLICT (idempotency_key) DO NOTHING RETURNING run_id`,
+      args: [runId, idempotencyKey, now],
+    });
+    if (started.rowCount !== 1) return { runId, status: "duplicate" as const };
+  }
 
   try {
     const processors: MaintenanceProcessors = { ...defaultProcessors, ...input.processors };
-    const expiredQuotes = await processors.sweepExpiredQuotes({ now, limit: workLimit });
-    const evidenceRetention = await processors.processEvidenceRetention({
-      now,
-      limit: workLimit,
-      itemLimit: workLimit,
+    const processorFailures: MaintenanceProcessorFailure[] = [];
+    const expiredQuotes = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "sweepExpiredQuotes",
+      run: () => processors.sweepExpiredQuotes({ now, limit: workLimit }),
+      fallback: { deleted: 0, scanned: 0 } as Awaited<ReturnType<MaintenanceProcessors["sweepExpiredQuotes"]>>,
     });
-    const nonceDriftSweep = await processors.sweepNonceDrift({ now, limit: workLimit });
+    const evidenceRetention = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "processEvidenceRetention",
+      run: () =>
+        processors.processEvidenceRetention({
+          now,
+          limit: workLimit,
+          itemLimit: workLimit,
+        }),
+      fallback: {
+        seeded: 0,
+        due: 0,
+        completed: 0,
+        superseded: 0,
+        retry: 0,
+        dead: 0,
+        objectsQueued: 0,
+        accessLogsPruned: 0,
+        objectsHeld: 0,
+        accessLogsHeld: 0,
+        backlog: 0,
+        integrityRecordsPreserved: { auditEvents: 0, evidencePackets: 0, attestations: 0, wormReceipts: 0 },
+        retryRunIds: [],
+      } as Awaited<ReturnType<MaintenanceProcessors["processEvidenceRetention"]>>,
+    });
+    const nonceDriftSweep = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "sweepNonceDrift",
+      run: () => processors.sweepNonceDrift({ now, limit: workLimit }),
+      fallback: {
+        checked: 0,
+        pending: 0,
+        reconciliationRequired: 0,
+        reopened: 0,
+        unavailable: 0,
+      } as Awaited<ReturnType<MaintenanceProcessors["sweepNonceDrift"]>>,
+    });
     const seeded = await seedTokenlessScheduledWork(now);
     const items = await claimDueWork(now, workLimit);
     const work = await processClaimedWork({
@@ -497,40 +575,117 @@ export async function runTokenlessScheduledMaintenance(input: {
       throw new Error("Database returned an invalid scheduled dead-letter count.");
     }
     const nonceDriftFindings = await unresolvedManagedEvmNonceFindings();
-    const deletionJobs = await processors.reconcileDeletionJobs(now, workLimit);
-    const deletedAccountPaidAssignmentSeats = await processors.reconcileDeletedAccountPaidAssignmentSeats(
-      now,
-      workLimit,
-    );
-    const deletedAuthGuards = await processors.expireDeletedAuthGuards(now, workLimit);
-    const surpriseBounties = await processors.processSurpriseBounties({
-      now,
-      limit: workLimit,
+    const deletionJobs = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "reconcileDeletionJobs",
+      run: () => processors.reconcileDeletionJobs(now, workLimit),
+      fallback: { blocked: 0, completed: 0, pending: 0 } as Awaited<
+        ReturnType<MaintenanceProcessors["reconcileDeletionJobs"]>
+      >,
     });
-    const grcReconciliations = await processors.processGrcReconciliations({
-      now,
-      limit: 1,
+    const deletedAccountPaidAssignmentSeats = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "reconcileDeletedAccountPaidAssignmentSeats",
+      run: () => processors.reconcileDeletedAccountPaidAssignmentSeats(now, workLimit),
+      fallback: { accounts: 0, erasedSeats: 0 } as Awaited<
+        ReturnType<MaintenanceProcessors["reconcileDeletedAccountPaidAssignmentSeats"]>
+      >,
     });
-    const wormExports = await processors.processWormExports({
-      now,
-      limit: workLimit,
+    const deletedAuthGuards = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "expireDeletedAuthGuards",
+      run: () => processors.expireDeletedAuthGuards(now, workLimit),
+      fallback: { expired: 0 } as Awaited<ReturnType<MaintenanceProcessors["expireDeletedAuthGuards"]>>,
     });
-    const attestations = await processors.processAttestations({
-      now,
-      limit: workLimit,
+    const surpriseBounties = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "processSurpriseBounties",
+      run: () => processors.processSurpriseBounties({ now, limit: workLimit }),
+      fallback: {
+        paid: 0,
+        pendingClaim: 0,
+        retry: 0,
+        reconciliationRequired: 0,
+      } as Awaited<ReturnType<MaintenanceProcessors["processSurpriseBounties"]>>,
     });
-    const prepaidTopups = await processors.reconcilePrepaidTopups({ now, limit: workLimit });
-    const prepaidTopupAudit = await processors.drainPrepaidTopupAudit({ limit: webhookLimit });
-    const enterpriseIdentityAuditReservations = await processors.reconcileEnterpriseIdentityAudit(webhookLimit);
-    const enterpriseIdentityAudit = await processors.drainEnterpriseIdentityAudit(now, webhookLimit);
-    const mechanismHealth = await processors.refreshMechanismHealth({ now, limit: workLimit });
-    const assuranceEventProjection = await processors.projectAssuranceEvents({
-      now,
-      limit: webhookLimit,
+    const grcReconciliations = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "processGrcReconciliations",
+      run: () => processors.processGrcReconciliations({ now, limit: 1 }),
+      fallback: { enqueued: 0, claimed: 0, succeeded: 0, retry: 0, failed: 0 } as Awaited<
+        ReturnType<MaintenanceProcessors["processGrcReconciliations"]>
+      >,
     });
-    const assuranceEventOutcomes = await processors.deliverAssuranceEvents({
-      now,
-      limit: webhookLimit,
+    const wormExports = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "processWormExports",
+      run: () => processors.processWormExports({ now, limit: workLimit }),
+      fallback: { due: 0, delivered: 0, retry: 0, dead: 0, skipped: 0 } as Awaited<
+        ReturnType<MaintenanceProcessors["processWormExports"]>
+      >,
+    });
+    const attestations = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "processAttestations",
+      run: () => processors.processAttestations({ now, limit: workLimit }),
+      fallback: { configured: false, due: 0, completed: 0, retry: 0, dead: 0, unavailable: 0 } as Awaited<
+        ReturnType<MaintenanceProcessors["processAttestations"]>
+      >,
+    });
+    const prepaidTopups = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "reconcilePrepaidTopups",
+      run: () => processors.reconcilePrepaidTopups({ now, limit: workLimit }),
+      fallback: { attempted: 0, credited: 0, failed: 0 } as Awaited<
+        ReturnType<MaintenanceProcessors["reconcilePrepaidTopups"]>
+      >,
+    });
+    const prepaidTopupAudit = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "drainPrepaidTopupAudit",
+      run: () => processors.drainPrepaidTopupAudit({ limit: webhookLimit }),
+      fallback: { attempted: 0, delivered: 0 } as Awaited<ReturnType<MaintenanceProcessors["drainPrepaidTopupAudit"]>>,
+    });
+    const enterpriseIdentityAuditReservations = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "reconcileEnterpriseIdentityAudit",
+      run: () => processors.reconcileEnterpriseIdentityAudit(webhookLimit),
+      fallback: { activated: 0, inspected: 0 } as Awaited<
+        ReturnType<MaintenanceProcessors["reconcileEnterpriseIdentityAudit"]>
+      >,
+    });
+    const enterpriseIdentityAudit = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "drainEnterpriseIdentityAudit",
+      run: () => processors.drainEnterpriseIdentityAudit(now, webhookLimit),
+      fallback: { delivered: 0, retry: 0 } as Awaited<
+        ReturnType<MaintenanceProcessors["drainEnterpriseIdentityAudit"]>
+      >,
+    });
+    const mechanismHealth = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "refreshMechanismHealth",
+      run: () => processors.refreshMechanismHealth({ now, limit: workLimit }),
+      fallback: { refreshed: 0 } as Awaited<ReturnType<MaintenanceProcessors["refreshMechanismHealth"]>>,
+    });
+    const assuranceEventProjection = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "projectAssuranceEvents",
+      run: () => processors.projectAssuranceEvents({ now, limit: webhookLimit }),
+      fallback: {
+        scanned: 0,
+        projected: 0,
+        replayed: 0,
+        retry: 0,
+        deferredWithoutPacket: { gateBlocked: 0, reviewCompleted: 0 },
+        retrySources: [],
+      } as Awaited<ReturnType<MaintenanceProcessors["projectAssuranceEvents"]>>,
+    });
+    const assuranceEventOutcomes = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "deliverAssuranceEvents",
+      run: () => processors.deliverAssuranceEvents({ now, limit: webhookLimit }),
+      fallback: [] as Awaited<ReturnType<MaintenanceProcessors["deliverAssuranceEvents"]>>,
     });
     const assuranceEvents = {
       projection: assuranceEventProjection,
@@ -540,21 +695,32 @@ export async function runTokenlessScheduledMaintenance(input: {
         retry: assuranceEventOutcomes.filter(value => value.state === "retry").length,
       },
     };
-    const webhookOutcomes = await processors.deliverWebhooks({
-      now,
-      limit: webhookLimit,
+    const webhookOutcomes = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "deliverWebhooks",
+      run: () => processors.deliverWebhooks({ now, limit: webhookLimit }),
+      fallback: [] as Awaited<ReturnType<MaintenanceProcessors["deliverWebhooks"]>>,
     });
     const webhooks = {
       dead: webhookOutcomes.filter(value => value.state === "dead").length,
       delivered: webhookOutcomes.filter(value => value.state === "delivered").length,
       retry: webhookOutcomes.filter(value => value.state === "retry").length,
     };
-    const notifications = await processors.processNotifications({
-      appOrigin: input.appOrigin,
-      now,
-      limit: notificationLimit,
+    const notifications = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "processNotifications",
+      run: () =>
+        processors.processNotifications({
+          appOrigin: input.appOrigin,
+          now,
+          limit: notificationLimit,
+        }),
+      fallback: { dead: 0, delivered: 0, enqueued: 0, materialized: 0, retry: 0, suppressed: 0 } as Awaited<
+        ReturnType<MaintenanceProcessors["processNotifications"]>
+      >,
     });
     const status =
+      processorFailures.length > 0 ||
       deadWorkItems > 0 ||
       nonceDriftSweep.unavailable > 0 ||
       nonceDriftFindings.unresolved > 0 ||
@@ -606,6 +772,7 @@ export async function runTokenlessScheduledMaintenance(input: {
       enterpriseIdentityAudit: { reservations: enterpriseIdentityAuditReservations, delivery: enterpriseIdentityAudit },
       mechanismHealth,
       expiredQuotes,
+      processorFailures,
       adaptiveRollups: "not_scheduled_until_a_persisted_rollup_processor_exists",
     };
     await dbClient.execute({

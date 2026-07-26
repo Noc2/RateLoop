@@ -956,6 +956,32 @@ test("a webhook delivery stranded in 'delivering' past its lease is reclaimed an
   assert.equal(row.lease_expires_at, null);
 });
 
+test("webhook secret decryption failures release the claim into bounded retry", async () => {
+  const deliveryId = await seedPendingDelivery();
+  let fetchCalls = 0;
+  const outcomes = await deliverPendingWebhooks({
+    fetchImpl: async () => {
+      fetchCalls += 1;
+      return new Response(null, { status: 204 });
+    },
+    now: NOW,
+    encryptionKey: Buffer.alloc(32, 99).toString("base64url"),
+    resolveHostname: resolvePublic,
+    operationKey: OPERATION,
+  });
+  assert.deepEqual(outcomes, [{ deliveryId, state: "retry" }]);
+  assert.equal(fetchCalls, 0);
+  const retry = await dbClient.execute({
+    sql: `SELECT state,attempt_count,lease_expires_at,next_attempt_at
+          FROM tokenless_webhook_deliveries WHERE delivery_id=?`,
+    args: [deliveryId],
+  });
+  assert.equal(retry.rows[0]?.state, "retry");
+  assert.equal(Number(retry.rows[0]?.attempt_count), 1);
+  assert.equal(retry.rows[0]?.lease_expires_at, null);
+  assert.ok(retry.rows[0]?.next_attempt_at);
+});
+
 test("a stale worker's completion write is rejected once the lease is reclaimed", async () => {
   const deliveryId = await seedPendingDelivery();
   // While the original worker is mid-flight, another worker reclaims the lease

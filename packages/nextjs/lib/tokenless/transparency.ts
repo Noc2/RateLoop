@@ -2011,16 +2011,16 @@ export async function deliverPendingWebhooks(
       args: [leaseExpiresAt, claimGeneration, now, deliveryId, previousGeneration, now],
     });
     if (claimed.rowCount !== 1) continue;
-    const payload = rowString(row, "payload_json")!;
-    const timestamp = String(Math.floor(now.getTime() / 1_000));
-    const signature = `v1=${createHmac(
-      "sha256",
-      decryptSecret(rowString(row, "secret_ciphertext")!, input.encryptionKey),
-    )
-      .update(`${timestamp}.${payload}`)
-      .digest("hex")}`;
     const attempt = Number(row.attempt_count) + 1;
     try {
+      const payload = rowString(row, "payload_json")!;
+      const timestamp = String(Math.floor(now.getTime() / 1_000));
+      const signature = `v1=${createHmac(
+        "sha256",
+        decryptSecret(rowString(row, "secret_ciphertext")!, input.encryptionKey),
+      )
+        .update(`${timestamp}.${payload}`)
+        .digest("hex")}`;
       const pinnedAddress = await assertPublicWebhookDestination(rowString(row, "url")!, input.resolveHostname);
       const response = await fetchImpl(rowString(row, "url")!, {
         method: "POST",

@@ -241,6 +241,68 @@ test("scheduled maintenance publishes each due round once and deduplicates a cro
   assert.deepEqual(published, ["operation_due_1"]);
 });
 
+test("a failed maintenance bucket can be reclaimed and completed exactly once", async () => {
+  const bucket = Math.floor(NOW.getTime() / (5 * 60_000));
+  const idempotencyKey = `tokenless-maintenance:${bucket}`;
+  const runId = `swr_${createHash("sha256").update(idempotencyKey).digest("hex").slice(0, 40)}`;
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_scheduled_worker_runs
+          (run_id,idempotency_key,trigger,status,started_at,completed_at,last_error)
+          VALUES (?,?,'vercel_cron','failed',?,?,?)`,
+    args: [
+      runId,
+      idempotencyKey,
+      new Date(NOW.getTime() - 1_000),
+      new Date(NOW.getTime() - 500),
+      "prior transient failure",
+    ],
+  });
+
+  const retried = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    processors: processors(async () => undefined),
+  });
+  assert.equal(retried.status, "healthy");
+  const stored = await dbClient.execute({
+    sql: "SELECT status,last_error,completed_at FROM tokenless_scheduled_worker_runs WHERE run_id=?",
+    args: [runId],
+  });
+  assert.equal(stored.rows[0]?.status, "healthy");
+  assert.equal(stored.rows[0]?.last_error, null);
+  assert.ok(stored.rows[0]?.completed_at);
+
+  const duplicate = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    processors: processors(async () => undefined),
+  });
+  assert.equal(duplicate.status, "duplicate");
+});
+
+test("one processor failure degrades the run without skipping later processors or retaining its message", async () => {
+  let notificationsRan = false;
+  const result = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    processors: {
+      ...processors(async () => undefined),
+      async sweepExpiredQuotes() {
+        throw new Error("private-provider-detail-must-not-persist");
+      },
+      async processNotifications() {
+        notificationsRan = true;
+        return { dead: 0, delivered: 0, enqueued: 0, materialized: 0, retry: 0, suppressed: 0 };
+      },
+    },
+  });
+  if (result.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.equal(result.status, "degraded");
+  assert.equal(notificationsRan, true);
+  assert.deepEqual(result.summary.processorFailures, [{ processor: "sweepExpiredQuotes", errorCode: "Error" }]);
+  assert.doesNotMatch(JSON.stringify(result.summary), /private-provider-detail/u);
+});
+
 test("scheduled work seeds only server-funded executions whose recovery claim is due", async () => {
   await seedRecoverableExecution("operation_recovery_due", {
     claimExpiresAt: new Date(NOW.getTime() - 1),
