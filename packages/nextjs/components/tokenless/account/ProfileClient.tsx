@@ -1,7 +1,10 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { Field } from "~~/components/tokenless/forms/Field";
+import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { notifyBrowserAuthSessionChanged } from "~~/lib/auth/client";
+import { readJson } from "~~/lib/tokenless/http";
 
 type Profile = {
   principalAddress: string;
@@ -11,57 +14,49 @@ type Profile = {
   updatedAt: string | null;
 };
 
-async function readJson(response: Response) {
-  const body = (await response.json()) as Record<string, unknown>;
-  if (!response.ok) {
-    throw new Error(
-      typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : "Request failed.",
-    );
-  }
-  return body;
-}
-
 export function ProfileClient() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const { capture, clear, fieldErrors, formError } = useFormErrors();
 
   const refresh = useCallback(async () => {
-    const profileBody = await readJson(
+    const profileBody = await readJson<Profile>(
       await fetch("/api/account/profile", { cache: "no-store", credentials: "same-origin" }),
+      { fallbackMessage: "Unable to load your account." },
     );
-    const nextProfile = profileBody as unknown as Profile;
+    const nextProfile = profileBody;
     setProfile(nextProfile);
     setDisplayName(nextProfile.profileDisplayName ?? "");
   }, []);
 
   useEffect(() => {
-    void refresh().catch(cause => setError(cause instanceof Error ? cause.message : "Unable to load your account."));
-  }, [refresh]);
+    void refresh().catch(cause => capture(cause, "Unable to load your account."));
+  }, [capture, refresh]);
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
-    setError(null);
+    clear();
     setSaved(false);
     try {
-      const body = await readJson(
+      const body = await readJson<Profile>(
         await fetch("/api/account/profile", {
           method: "PATCH",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ displayName }),
         }),
+        { fallbackMessage: "Unable to save your profile." },
       );
-      const nextProfile = body as unknown as Profile;
+      const nextProfile = body;
       setProfile(nextProfile);
       setDisplayName(nextProfile.profileDisplayName ?? "");
       notifyBrowserAuthSessionChanged();
       setSaved(true);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to save your profile.");
+      capture(cause, "Unable to save your profile.");
     } finally {
       setBusy(false);
     }
@@ -76,13 +71,18 @@ export function ProfileClient() {
         </h2>
         <form className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={save}>
           <div className="grow">
-            <input
-              aria-labelledby="profile-display-name-heading"
+            <Field
+              id="profile-display-name"
+              label="Display name"
               value={displayName}
-              onChange={event => setDisplayName(event.target.value)}
+              onChange={event => {
+                setDisplayName(event.target.value);
+                clear("displayName");
+              }}
               className="input w-full border-white/10 bg-[var(--rateloop-field)]"
               maxLength={80}
               placeholder={profile?.providerDisplayName ?? "Your private name"}
+              error={fieldErrors.displayName}
             />
           </div>
           <button type="submit" className="rateloop-gradient-action px-5" disabled={busy}>
@@ -90,7 +90,11 @@ export function ProfileClient() {
           </button>
         </form>
         {saved ? <p className="mt-3 text-sm text-emerald-100">Profile saved.</p> : null}
-        {error ? <p className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100">{error}</p> : null}
+        {formError ? (
+          <p className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100" role="alert">
+            {formError}
+          </p>
+        ) : null}
       </section>
     </div>
   );

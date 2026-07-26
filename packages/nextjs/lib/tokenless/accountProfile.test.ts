@@ -3,6 +3,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { getAccountProfile, updateAccountProfile } from "~~/lib/tokenless/accountProfile";
+import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const ADDRESS = "0x1111111111111111111111111111111111111111";
 
@@ -40,13 +41,30 @@ test("profile preference is private and provider identity remains the fallback",
 });
 
 test("profile names are bounded", async () => {
-  await assert.rejects(
-    () =>
-      updateAccountProfile({
+  await assert.rejects(async () => {
+    try {
+      await updateAccountProfile({
         principalAddress: ADDRESS,
         providerDisplayName: null,
         displayName: "x".repeat(81),
-      }),
-    /at most 80 characters/,
-  );
+      });
+    } catch (error) {
+      assert.ok(error instanceof TokenlessServiceError);
+      assert.equal(error.field, "displayName");
+      throw error;
+    }
+  }, /at most 80 characters/);
+  await assert.rejects(async () => {
+    try {
+      await updateAccountProfile({
+        principalAddress: ADDRESS,
+        providerDisplayName: null,
+        displayName: 42,
+      });
+    } catch (error) {
+      assert.ok(error instanceof TokenlessServiceError);
+      assert.equal(error.field, "displayName");
+      throw error;
+    }
+  }, /must be text or empty/);
 });

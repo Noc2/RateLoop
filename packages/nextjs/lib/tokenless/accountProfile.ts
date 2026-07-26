@@ -26,12 +26,24 @@ function rowDate(row: Row | undefined, key: string) {
 function optionalDisplayName(value: unknown) {
   if (value === null || value === undefined) return null;
   if (typeof value !== "string") {
-    throw new TokenlessServiceError("displayName must be text or null.", 400, "invalid_profile");
+    throw new TokenlessServiceError(
+      "Display name must be text or empty.",
+      400,
+      "invalid_profile",
+      false,
+      "displayName",
+    );
   }
   const normalized = value.trim();
   if (!normalized) return null;
   if (normalized.length > 80) {
-    throw new TokenlessServiceError("displayName must be at most 80 characters.", 400, "invalid_profile");
+    throw new TokenlessServiceError(
+      "Display name must be at most 80 characters.",
+      400,
+      "invalid_profile",
+      false,
+      "displayName",
+    );
   }
   return normalized;
 }

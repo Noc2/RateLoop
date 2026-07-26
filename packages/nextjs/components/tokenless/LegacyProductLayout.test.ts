@@ -43,7 +43,7 @@ test("Human profile keeps established surface cards without a dashboard hero", (
 
   assert.match(profile, /surface-card rounded-2xl/);
   assert.match(profile, /<h2 id="profile-display-name-heading"[\s\S]*Display name[\s\S]*<\/h2>/);
-  assert.match(profile, /aria-labelledby="profile-display-name-heading"/);
+  assert.match(profile, /<Field[\s\S]*id="profile-display-name"[\s\S]*label="Display name"/);
   assert.doesNotMatch(profile, /How RateLoop addresses you/);
   assert.doesNotMatch(profile, /NotificationSettingsPanel/);
   assert.doesNotMatch(profile, /lg:grid-cols-\[minmax\(0,1fr\)_340px\]/);

@@ -70,3 +70,39 @@ test("saving a profile name updates the navbar account label without a reload", 
     restoreDom();
   }
 });
+
+test("profile validation errors are attached to the display-name field", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render, waitFor, within } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const { ProfileClient } = await import("./ProfileClient");
+  const previousFetch = globalThis.fetch;
+
+  globalThis.fetch = async (input, init) => {
+    if (String(input) !== "/api/account/profile") throw new Error(`Unexpected request: ${String(input)}`);
+    if (init?.method === "PATCH") {
+      return Response.json(
+        { code: "invalid_profile", field: "displayName", message: "Choose a shorter display name." },
+        { status: 400 },
+      );
+    }
+    return Response.json(profile(null));
+  };
+
+  try {
+    const view = render(<ProfileClient />);
+    const screen = within(view.container);
+    const input = await screen.findByRole("textbox", { name: "Display name" });
+    const user = userEvent.setup({ document });
+    await user.type(input, "Ada");
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+
+    await waitFor(() => assert.equal(input.getAttribute("aria-invalid"), "true"));
+    assert.equal(input.getAttribute("aria-describedby"), "profile-display-name-error");
+    assert.ok(screen.getByText("Choose a shorter display name."));
+  } finally {
+    cleanup();
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});

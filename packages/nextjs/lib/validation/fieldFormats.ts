@@ -23,6 +23,12 @@ export const FIELD_FORMATS = {
     title: "Use a RateLoop vault, KMS, or secret reference.",
     message: "Enter a valid RateLoop GRC credential reference.",
   },
+  oneTimeCode: {
+    pattern: "[0-9]{6}",
+    maxLength: 6,
+    title: "Use the six-digit code from your email.",
+    message: "Enter the six-digit code from your email.",
+  },
   sha256Digest: {
     pattern: "sha256:[0-9a-f]{64}",
     maxLength: 71,

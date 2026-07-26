@@ -46,6 +46,11 @@ test("passkey management exposes named controls and blocks removal of the last f
 
 test("passkey mutations require matching-account reauthentication and keep credentials out of storage", () => {
   const source = readFileSync(new URL("./PasskeyManagementPanel.tsx", import.meta.url), "utf8");
+  assert.match(source, /useFormErrors\(\)/);
+  assert.equal(source.match(/<Field/g)?.length, 3);
+  assert.match(source, /format="oneTimeCode"/);
+  assert.match(source, /new PasskeyFieldError\([^)]*, "email"\)/);
+  assert.match(source, /new PasskeyFieldError\([^)]*, "otp"\)/);
   assert.match(source, /betterAuthClient\.passkey\.addPasskey/);
   assert.doesNotMatch(source, /betterAuthClient\.passkey\.deletePasskey/);
   assert.match(source, /betterAuthClient\.signIn\.passkey/);

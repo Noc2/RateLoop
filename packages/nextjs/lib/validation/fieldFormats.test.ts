@@ -12,3 +12,10 @@ test("shared field formats keep browser constraints and messages together", () =
   }
   assert.equal(fieldFormat("vatIdentifier").maxLength, 64);
 });
+
+test("one-time codes share the exact six-digit browser constraint", () => {
+  const format = fieldFormat("oneTimeCode");
+  assert.equal(format.pattern, "[0-9]{6}");
+  assert.equal(format.maxLength, 6);
+  assert.match(format.message, /six-digit/u);
+});

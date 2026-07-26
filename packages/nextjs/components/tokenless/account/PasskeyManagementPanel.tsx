@@ -1,7 +1,10 @@
 "use client";
 
 import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { Field } from "~~/components/tokenless/forms/Field";
+import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { betterAuthClient, readBrowserAuthConfiguration } from "~~/lib/auth/client";
+import { readJson } from "~~/lib/tokenless/http";
 
 type PasskeySummary = {
   backedUp: boolean;
@@ -15,17 +18,17 @@ type PendingAction = { kind: "add" } | { id: string; kind: "remove" };
 
 async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { cache: "no-store", credentials: "same-origin", ...init });
-  const body = (await response.json().catch(() => ({}))) as T & { error?: unknown; message?: unknown };
-  if (!response.ok) {
-    throw new Error(
-      typeof body.message === "string"
-        ? body.message
-        : typeof body.error === "string"
-          ? body.error
-          : "Unable to update passkeys.",
-    );
+  return readJson<T>(response, { fallbackMessage: "Unable to update passkeys." });
+}
+
+class PasskeyFieldError extends Error {
+  field: string;
+
+  constructor(message: string, field: string) {
+    super(message);
+    this.name = "PasskeyFieldError";
+    this.field = field;
   }
-  return body;
 }
 
 function addedLabel(createdAt: string | null) {
@@ -46,8 +49,9 @@ export function PasskeyManagementPanel() {
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const { capture, clear, fieldErrors, formError } = useFormErrors();
 
   const refresh = useCallback(async () => {
     const result = await jsonRequest<{ canRemoveLast: boolean; passkeys: PasskeySummary[] }>("/api/account/passkeys");
@@ -57,7 +61,7 @@ export function PasskeyManagementPanel() {
 
   useEffect(() => {
     void refresh()
-      .catch(cause => setError(cause instanceof Error ? cause.message : "Unable to load passkeys."))
+      .catch(cause => setLoadError(cause instanceof Error ? cause.message : "Unable to load passkeys."))
       .finally(() => setLoading(false));
   }, [refresh]);
 
@@ -67,16 +71,17 @@ export function PasskeyManagementPanel() {
     setEmail("");
     setOtp("");
     setOtpSent(false);
+    clear();
   }
 
   async function run(action: () => Promise<void>, fallback: string) {
     setBusy(true);
-    setError(null);
+    clear();
     setNotice(null);
     try {
       await action();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : fallback);
+      capture(cause, fallback);
     } finally {
       setBusy(false);
     }
@@ -102,7 +107,9 @@ export function PasskeyManagementPanel() {
         fetchOptions: { headers: { "x-rateloop-passkey-action-proof": authorized.proof } },
         name: name.trim() || "Passkey",
       });
-      if (result.error) throw new Error(result.error.message || "Unable to add this passkey.");
+      if (result.error) {
+        throw new PasskeyFieldError(result.error.message || "Unable to add this passkey.", "name");
+      }
       setName("");
       setNotice("Passkey added.");
     } else {
@@ -129,7 +136,9 @@ export function PasskeyManagementPanel() {
     event.preventDefault();
     await run(async () => {
       const result = await betterAuthClient.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
-      if (result.error) throw new Error(result.error.message || "Unable to send the sign-in code.");
+      if (result.error) {
+        throw new PasskeyFieldError(result.error.message || "Unable to send the sign-in code.", "email");
+      }
       setOtpSent(true);
     }, "Unable to send the sign-in code.");
   }
@@ -138,7 +147,9 @@ export function PasskeyManagementPanel() {
     event.preventDefault();
     await run(async () => {
       const result = await betterAuthClient.signIn.emailOtp({ email, otp });
-      if (result.error) throw new Error(result.error.message || "The sign-in code is invalid or expired.");
+      if (result.error) {
+        throw new PasskeyFieldError(result.error.message || "The sign-in code is invalid or expired.", "otp");
+      }
       await finish();
     }, "Unable to verify the sign-in code.");
     await betterAuthClient.signOut().catch(() => undefined);
@@ -212,17 +223,21 @@ export function PasskeyManagementPanel() {
             Verify before {pending.kind === "add" ? "adding" : "removing"}
           </h3>
           {pending.kind === "add" ? (
-            <label className="mt-4 block max-w-md text-sm" htmlFor="new-passkey-name">
-              Passkey name
-              <input
+            <div className="mt-4 max-w-md">
+              <Field
                 id="new-passkey-name"
                 className="input mt-2 w-full"
+                label="Passkey name"
                 maxLength={80}
                 placeholder="This device"
                 value={name}
-                onChange={event => setName(event.target.value)}
+                error={fieldErrors.name}
+                onChange={event => {
+                  setName(event.target.value);
+                  clear("name");
+                }}
               />
-            </label>
+            </div>
           ) : null}
           {removingOnlyPasskey ? (
             <p className="mt-2 text-sm leading-6 text-base-content/60">
@@ -247,36 +262,45 @@ export function PasskeyManagementPanel() {
           {configuration.methods.emailOtp ? (
             otpSent ? (
               <form className="mt-4 flex max-w-md flex-wrap items-end gap-3" onSubmit={event => void verifyCode(event)}>
-                <label className="grow text-sm" htmlFor="passkey-verification-code">
-                  Sign-in code
-                  <input
+                <div className="grow">
+                  <Field
                     id="passkey-verification-code"
                     className="input mt-2 w-full"
+                    label="Sign-in code"
+                    format="oneTimeCode"
                     inputMode="numeric"
                     autoComplete="one-time-code"
                     value={otp}
-                    onChange={event => setOtp(event.target.value)}
+                    error={fieldErrors.otp}
+                    onChange={event => {
+                      setOtp(event.target.value.replace(/\D/g, ""));
+                      clear("otp");
+                    }}
                     required
                   />
-                </label>
+                </div>
                 <button className="btn btn-primary btn-sm" disabled={busy} type="submit">
                   Verify
                 </button>
               </form>
             ) : (
               <form className="mt-4 flex max-w-md flex-wrap items-end gap-3" onSubmit={event => void sendCode(event)}>
-                <label className="grow text-sm" htmlFor="passkey-verification-email">
-                  Account email
-                  <input
+                <div className="grow">
+                  <Field
                     id="passkey-verification-email"
                     className="input mt-2 w-full"
+                    label="Account email"
                     type="email"
                     autoComplete="email"
                     value={email}
-                    onChange={event => setEmail(event.target.value)}
+                    error={fieldErrors.email}
+                    onChange={event => {
+                      setEmail(event.target.value);
+                      clear("email");
+                    }}
                     required
                   />
-                </label>
+                </div>
                 <button className="btn btn-outline btn-sm" disabled={busy} type="submit">
                   Send code
                 </button>
@@ -291,9 +315,9 @@ export function PasskeyManagementPanel() {
           {notice}
         </p>
       ) : null}
-      {error ? (
+      {loadError || formError ? (
         <p className="mt-4 text-sm text-error" role="alert">
-          {error}
+          {loadError ?? formError}
         </p>
       ) : null}
     </section>
