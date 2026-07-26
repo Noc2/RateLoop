@@ -348,18 +348,198 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
       [principalId],
     ),
   ]);
+  const [
+    notificationPreferences,
+    notifications,
+    assuranceAssignments,
+    directReviewAssignments,
+    workspaceAuditEvents,
+    securityEvents,
+    oauthAuthorizations,
+    agentIntegrations,
+    passkeys,
+    enterpriseMemberships,
+    ownedSsoConfigurations,
+    billingSubscriptions,
+    payerTransactions,
+  ] = await Promise.all([
+    client.query(
+      `SELECT preferences.assignment_available,preferences.assignment_completed,
+              preferences.payment_updates,preferences.ask_results,preferences.account_security,
+              preferences.created_at,preferences.updated_at,
+              subscription.email,subscription.verified_at
+       FROM tokenless_notification_preferences preferences
+       LEFT JOIN tokenless_notification_email_subscriptions subscription
+         ON subscription.principal_address=preferences.principal_address
+       WHERE preferences.principal_address=$1`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT notification.notification_id,notification.kind,notification.preference_key,
+              notification.read_at,notification.created_at,
+              delivery.state AS email_delivery_state,delivery.delivered_at,delivery.suppressed_at,
+              delivery.dead_at
+       FROM tokenless_notifications notification
+       LEFT JOIN tokenless_notification_email_deliveries delivery
+         ON delivery.notification_id=notification.notification_id
+       WHERE notification.principal_address=$1
+       ORDER BY notification.created_at,notification.notification_id`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT assignment.assignment_id,assignment.workspace_id,assignment.project_id,
+              assignment.run_id,assignment.source,assignment.selection,assignment.status,
+              assignment.paid_assignment,assignment.created_at,assignment.accepted_at,
+              assignment.updated_at
+       FROM tokenless_assurance_assignments assignment
+       WHERE assignment.reviewer_account_address=$1 OR assignment.rater_id IN (
+         SELECT rater_id FROM tokenless_rater_profiles WHERE principal_id=$1
+       )
+       ORDER BY assignment.created_at,assignment.assignment_id`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT assignment.assignment_id,assignment.delivery_id,assignment.workspace_id,
+              assignment.project_id,assignment.private_review_id,assignment.status,
+              assignment.created_at,assignment.accepted_at,assignment.updated_at,
+              response.choice,response.response_commitment,response.created_at AS response_created_at
+       FROM tokenless_private_unpaid_review_assignments assignment
+       LEFT JOIN tokenless_private_review_responses response
+         ON response.assignment_id=assignment.assignment_id
+       WHERE assignment.reviewer_account_address=$1 OR assignment.assignment_id IN (
+         SELECT seat.assignment_id FROM tokenless_paid_assignment_seats seat
+         WHERE seat.reviewer_principal_id=$1
+       )
+       ORDER BY assignment.created_at,assignment.assignment_id`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT event.workspace_id,event.sequence,event.actor_kind,event.action,event.target_kind,
+              event.purpose,event.reason,event.result,event.occurred_at
+       FROM tokenless_audit_events event
+       WHERE event.actor_reference=$1
+       ORDER BY event.occurred_at,event.workspace_id,event.sequence`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT event.sequence,event.actor_kind,event.action,event.target_kind,event.purpose,
+              event.reason,event.result,event.occurred_at
+       FROM tokenless_security_audit_events event
+       WHERE event.scope_kind='identity' AND event.scope_id=$1
+       ORDER BY event.occurred_at,event.sequence`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT family.token_family_id,family.client_id,client.client_name,
+              family.granted_scopes_json,family.status,family.created_at,
+              family.absolute_expires_at,family.last_rotated_at,family.revoked_at,
+              family.revocation_reason
+       FROM tokenless_agent_oauth_token_families family
+       JOIN tokenless_agent_oauth_clients client ON client.client_id=family.client_id
+       WHERE family.subject_principal_id=$1
+       ORDER BY family.created_at,family.token_family_id`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT integration.integration_id,integration.workspace_id,integration.agent_id,
+              integration.status,integration.enforcement_mode,integration.credential_expires_at,
+              integration.last_seen_at,integration.created_at,integration.updated_at,
+              integration.revoked_at
+       FROM tokenless_agent_integrations integration
+       WHERE integration.oauth_subject_principal_id=$1 OR integration.created_by=$1
+       ORDER BY integration.created_at,integration.integration_id`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT passkey.id,passkey.name,passkey.device_type,passkey.backed_up,passkey.created_at
+       FROM tokenless_better_auth_passkeys passkey
+       WHERE passkey.user_id IN (
+         SELECT provider_subject FROM tokenless_identity_bindings
+         WHERE principal_id=$1 AND provider='better_auth'
+       )
+       ORDER BY passkey.created_at,passkey.id`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT member.workspace_id,member.provider_id,member.source,member.status,
+              member.created_at,member.last_synced_at,member.deactivated_at
+       FROM tokenless_enterprise_managed_members member
+       WHERE member.principal_id=$1
+       ORDER BY member.created_at,member.workspace_id`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT provider.id,provider.provider_id,provider.domain,provider.domain_verified,
+              CASE WHEN provider.oidc_config IS NULL THEN 'saml' ELSE 'oidc' END AS protocol
+       FROM tokenless_better_auth_sso_providers provider
+       WHERE provider.user_id IN (
+         SELECT provider_subject FROM tokenless_identity_bindings
+         WHERE principal_id=$1 AND provider='better_auth'
+       )
+       ORDER BY provider.provider_id`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT subscription.workspace_id,subscription.plan_key,subscription.price_version,
+              subscription.provider_status,subscription.current_period_start,
+              subscription.current_period_end,subscription.cancel_at_period_end,
+              subscription.created_at,subscription.updated_at
+       FROM tokenless_workspace_subscriptions subscription
+       JOIN tokenless_workspace_members member ON member.workspace_id=subscription.workspace_id
+       WHERE member.account_address=$1 AND member.role='owner'
+       ORDER BY subscription.workspace_id`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT intent.payment_intent_id,intent.workspace_id,intent.mode,intent.amount_atomic,
+              intent.state,intent.created_at,intent.updated_at
+       FROM tokenless_payment_intents intent
+       WHERE intent.payer_address IN (
+         SELECT wallet_address FROM tokenless_wallet_bindings WHERE principal_id=$1
+       )
+       ORDER BY intent.created_at,intent.payment_intent_id`,
+      [principalId],
+    ),
+  ]);
   const forecastIntegrity = await listPrincipalForecastIntegrityInTransaction(client, principalId);
   return {
-    schemaVersion: "rateloop.subject-export.v1",
+    schemaVersion: "rateloop.subject-export.v2",
     generatedFor: principalId,
     account: account.rows[0] ?? null,
     workspaceMemberships: workspaces.rows,
     workspaceReviewerAccess: reviewerAccess.rows,
     paidReviewerProfile: rater.rows[0] ?? null,
+    communications: {
+      preferences: notificationPreferences.rows[0] ?? null,
+      notifications: notifications.rows,
+    },
+    reviewActivity: {
+      assuranceAssignments: assuranceAssignments.rows,
+      directAssignmentsAndResponses: directReviewAssignments.rows,
+    },
+    auditAndSecurityActivity: {
+      workspaceEventsAsActor: workspaceAuditEvents.rows,
+      identitySecurityEvents: securityEvents.rows,
+    },
+    connectedAutomation: {
+      oauthAuthorizations: oauthAuthorizations.rows,
+      agentIntegrations: agentIntegrations.rows,
+    },
+    authentication: {
+      passkeys: passkeys.rows,
+    },
+    enterpriseIdentity: {
+      managedMemberships: enterpriseMemberships.rows,
+      ownedSsoConfigurations: ownedSsoConfigurations.rows,
+    },
+    billing: {
+      ownedWorkspaceSubscriptions: billingSubscriptions.rows,
+      payerTransactions: payerTransactions.rows,
+    },
     forecastIntegrity,
     subjectRequests: requests.rows,
     exclusions: [
-      "Authentication secrets, recovery material, encrypted tax payloads, provider evidence, and other users' data are excluded.",
+      "Authentication secrets, OAuth token material, recovery material, encrypted tax payloads, provider evidence, notification content, private rationale, and other users' data are excluded.",
       "Public-chain records are referenced by the product but are not copied into this export.",
     ],
   };

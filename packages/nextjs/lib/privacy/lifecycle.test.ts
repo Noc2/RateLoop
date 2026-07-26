@@ -205,6 +205,30 @@ test("invalid completion transitions roll back their evidence insert", async () 
 test("access and export requests produce a bounded authenticated download instead of a dead-end intake row", async () => {
   await createWorkspace({ name: "Subject export", ownerAddress: OWNER });
   const now = new Date("2026-07-15T12:00:00.000Z");
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_browser_identities
+          (principal_address,thirdweb_user_id,auth_provider,primary_email,email_verified,
+           email_domain,display_name,created_at,updated_at,last_login_at)
+          VALUES (?,'subject-export-user','email','subject@example.test',true,
+                  'example.test','Subject',?,?,?)`,
+    args: [OWNER, now, now, now],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_notification_preferences
+          (principal_address,assignment_available,assignment_completed,payment_updates,
+           ask_results,account_security,created_at,updated_at)
+          VALUES (?,true,false,true,true,true,?,?)`,
+    args: [OWNER, now, now],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_notifications
+          (notification_id,principal_address,kind,title,body,href,preference_key,
+           source_type,source_key,created_at)
+          VALUES ('notification_subject_export',?,'assignment','Private colleague name',
+                  'Private rationale must not leave the workspace','/private/review',
+                  'assignmentAvailable','assignment','private-source',?)`,
+    args: [OWNER, now],
+  });
   const created = await createSubjectRequest({
     identityAssurance: "better_auth:passkey",
     now,
@@ -219,7 +243,7 @@ test("access and export requests produce a bounded authenticated download instea
   assert.equal(listed[0]?.exportReady, true);
 
   const exported = await readSubjectRequestExport({ principalId: OWNER, requestId: created.requestId, now });
-  assert.equal(exported.data.schemaVersion, "rateloop.subject-export.v1");
+  assert.equal(exported.data.schemaVersion, "rateloop.subject-export.v2");
   assert.deepEqual(exported.data.forecastIntegrity, {
     schemaVersion: "rateloop.reviewer-forecast-integrity.v1",
     items: [],
@@ -227,8 +251,24 @@ test("access and export requests produce a bounded authenticated download instea
   assert.match(String(exported.payloadHash), /^sha256:[0-9a-f]{64}$/u);
   assert.doesNotMatch(
     JSON.stringify(exported.data),
-    /tax_vault_ciphertext|provider_evidence_ciphertext|nullifier_seed_ciphertext/iu,
+    /tax_vault_ciphertext|provider_evidence_ciphertext|nullifier_seed_ciphertext|Private colleague name|Private rationale must not leave/iu,
   );
+  const communications = exported.data.communications as {
+    notifications: Array<Record<string, unknown>>;
+    preferences: Record<string, unknown>;
+  };
+  assert.equal(communications.notifications[0]?.notification_id, "notification_subject_export");
+  assert.equal(communications.notifications[0]?.title, undefined);
+  assert.equal(communications.notifications[0]?.body, undefined);
+  assert.equal(communications.preferences.assignment_completed, false);
+  assert.deepEqual(Object.keys(exported.data).filter(key => key === "reviewActivity"), ["reviewActivity"]);
+  assert.deepEqual(Object.keys(exported.data).filter(key => key === "auditAndSecurityActivity"), [
+    "auditAndSecurityActivity",
+  ]);
+  assert.deepEqual(Object.keys(exported.data).filter(key => key === "connectedAutomation"), ["connectedAutomation"]);
+  assert.deepEqual(Object.keys(exported.data).filter(key => key === "authentication"), ["authentication"]);
+  assert.deepEqual(Object.keys(exported.data).filter(key => key === "enterpriseIdentity"), ["enterpriseIdentity"]);
+  assert.deepEqual(Object.keys(exported.data).filter(key => key === "billing"), ["billing"]);
   await assert.rejects(
     () => readSubjectRequestExport({ principalId: "rlp_other_subject", requestId: created.requestId, now }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "subject_export_unavailable",
