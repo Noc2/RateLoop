@@ -3,6 +3,7 @@ import {
   creditBalanceAfterEvent,
   keeperAction,
   publicRoundStatus,
+  quicknetTBeaconTimestamp,
   revealTalliesAfterVote,
   ROUND_STATE,
   type KeeperRound,
@@ -22,6 +23,7 @@ function round(overrides: Partial<KeeperRound> = {}): KeeperRound {
     commitDeadline: 100n,
     revealDeadline: 200n,
     beaconFailureDeadline: 300n,
+    scoringBeaconRound: 1n,
     claimDeadline: 0n,
     staleReturned: false,
     ...overrides,
@@ -96,7 +98,7 @@ describe("tokenless public and keeper state", () => {
     expect(
       keeperAction(
         round({ state: ROUND_STATE.AWAITING_SEED, frozenRevealCount: 3 }),
-        250n,
+        quicknetTBeaconTimestamp(1n),
       ),
     ).toBe("finalize_scoring_seed");
     expect(
@@ -125,6 +127,16 @@ describe("tokenless public and keeper state", () => {
         401n,
       ),
     ).toBe("return_stale_shares");
+  });
+
+  it("does not emit scoring-seed work before the frozen beacon exists", () => {
+    const beaconTimestamp = quicknetTBeaconTimestamp(10n);
+    const value = round({
+      state: ROUND_STATE.AWAITING_SEED,
+      scoringBeaconRound: 10n,
+    });
+    expect(keeperAction(value, beaconTimestamp - 1n)).toBeNull();
+    expect(keeperAction(value, beaconTimestamp)).toBe("finalize_scoring_seed");
   });
 
   it("does not imply analytics publication from payout finality", () => {

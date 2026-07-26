@@ -41,6 +41,8 @@ import { validateRuntimeTokenlessDeployment } from "../runtime-deployment-health
 import {
   keeperAction,
   publicRoundStatus,
+  QUICKNET_T_GENESIS_SECONDS,
+  QUICKNET_T_PERIOD_SECONDS,
   ROUND_STATE,
   verdictStatus,
 } from "../status";
@@ -132,9 +134,13 @@ function keeperWorkPredicate(now: bigint) {
     ),
     inArray(tokenlessRound.state, [
       ROUND_STATE.AGGREGATING,
-      ROUND_STATE.AWAITING_SEED,
       ROUND_STATE.SCORING,
     ]),
+    and(
+      eq(tokenlessRound.state, ROUND_STATE.AWAITING_SEED),
+      gt(tokenlessRound.scoringBeaconRound, 0n),
+      sql<boolean>`${now} >= ${QUICKNET_T_GENESIS_SECONDS} + (${tokenlessRound.scoringBeaconRound} - 1) * ${QUICKNET_T_PERIOD_SECONDS}`,
+    ),
     and(
       terminal,
       eq(tokenlessRound.staleReturned, false),

@@ -22,6 +22,14 @@ export const ROUND_STATUS = [
   "beacon_failure_compensated",
 ] as const;
 
+export const QUICKNET_T_GENESIS_SECONDS = 1_689_232_296n;
+export const QUICKNET_T_PERIOD_SECONDS = 3n;
+
+export function quicknetTBeaconTimestamp(round: bigint) {
+  if (round < 1n) throw new Error("drand round must be positive");
+  return QUICKNET_T_GENESIS_SECONDS + (round - 1n) * QUICKNET_T_PERIOD_SECONDS;
+}
+
 export interface KeeperRound {
   roundId: bigint;
   state: number;
@@ -34,6 +42,7 @@ export interface KeeperRound {
   commitDeadline: bigint;
   revealDeadline: bigint;
   beaconFailureDeadline: bigint;
+  scoringBeaconRound: bigint;
   claimDeadline: bigint;
   staleReturned: boolean;
 }
@@ -118,7 +127,11 @@ export function keeperAction(round: KeeperRound, now: bigint) {
     return "begin_settlement";
   }
   if (round.state === ROUND_STATE.AGGREGATING) return "process_aggregate";
-  if (round.state === ROUND_STATE.AWAITING_SEED) return "finalize_scoring_seed";
+  if (round.state === ROUND_STATE.AWAITING_SEED) {
+    return now >= quicknetTBeaconTimestamp(round.scoringBeaconRound)
+      ? "finalize_scoring_seed"
+      : null;
+  }
   if (round.state === ROUND_STATE.SCORING) {
     return round.scoreCursor < round.frozenRevealCount
       ? "process_scores"
