@@ -351,7 +351,15 @@ export async function createWorkspaceApiKey(input: {
   const secret = randomBytes(32).toString("base64url");
   const token = `rlk_${keyId}_${secret}`;
   const name = input.name.trim();
-  if (!name || name.length > 120) throw new Error("API key name must be 1-120 characters.");
+  if (!name || name.length > 120) {
+    throw new TokenlessServiceError(
+      "API key name must be 1-120 characters.",
+      400,
+      "invalid_api_key_name",
+      false,
+      "name",
+    );
+  }
   const scopes = input.scopes ?? [...TOKENLESS_AGENT_SCOPES];
   const maxDataClassification = parseDataClassification(input.maxDataClassification ?? "confidential");
   const permittedDataUses = parseDataUses(input.permittedDataUses ?? ["service_delivery"]);
@@ -417,6 +425,81 @@ export async function createWorkspaceApiKey(input: {
     ],
   });
   return { apiKeyId: keyId, token };
+}
+
+export type WorkspaceApiKeySummary = {
+  apiKeyId: string;
+  name: string;
+  keyPrefix: string;
+  scopes: TokenlessAgentScope[];
+  expiresAt: string | null;
+  revokedAt: string | null;
+  lastUsedAt: string | null;
+  createdAt: string;
+};
+
+export async function listWorkspaceApiKeys(input: {
+  accountAddress: string;
+  workspaceId: string;
+}): Promise<WorkspaceApiKeySummary[]> {
+  await requireWorkspaceManagement(input.accountAddress, input.workspaceId);
+  const result = await dbClient.execute({
+    sql: `SELECT key_id, name, key_prefix, scopes_json, expires_at, revoked_at, last_used_at, created_at
+          FROM tokenless_workspace_api_keys
+          WHERE workspace_id = ?
+          ORDER BY created_at DESC`,
+    args: [input.workspaceId],
+  });
+  return result.rows.map(value => {
+    const row = value as QueryRow;
+    const apiKeyId = rowString(row, "key_id");
+    const name = rowString(row, "name");
+    const keyPrefix = rowString(row, "key_prefix");
+    const createdAt = rowString(row, "created_at");
+    if (!apiKeyId || !name || !keyPrefix || !createdAt) {
+      throw new TokenlessServiceError("Stored API key metadata is invalid.", 500, "invalid_api_key");
+    }
+    return {
+      apiKeyId,
+      name,
+      keyPrefix,
+      scopes: normalizedScopes(row.scopes_json),
+      expiresAt: row.expires_at ? new Date(String(row.expires_at)).toISOString() : null,
+      revokedAt: row.revoked_at ? new Date(String(row.revoked_at)).toISOString() : null,
+      lastUsedAt: row.last_used_at ? new Date(String(row.last_used_at)).toISOString() : null,
+      createdAt: new Date(createdAt).toISOString(),
+    };
+  });
+}
+
+export async function createManagedWorkspaceApiKey(input: {
+  accountAddress: string;
+  workspaceId: string;
+  name: string;
+  scopes: TokenlessAgentScope[];
+  expiresAt?: Date | null;
+}) {
+  await requireWorkspaceManagement(input.accountAddress, input.workspaceId);
+  return createWorkspaceApiKey({
+    workspaceId: input.workspaceId,
+    name: input.name,
+    role: "member",
+    scopes: input.scopes,
+    expiresAt: input.expiresAt,
+  });
+}
+
+export async function revokeWorkspaceApiKey(input: { accountAddress: string; workspaceId: string; apiKeyId: string }) {
+  await requireWorkspaceManagement(input.accountAddress, input.workspaceId);
+  const result = await dbClient.execute({
+    sql: `UPDATE tokenless_workspace_api_keys
+          SET revoked_at = COALESCE(revoked_at, ?)
+          WHERE workspace_id = ? AND key_id = ?`,
+    args: [new Date(), input.workspaceId, input.apiKeyId],
+  });
+  if (result.rowCount !== 1) {
+    throw new TokenlessServiceError("API key not found.", 404, "api_key_not_found");
+  }
 }
 
 export type ProductWorkspaceSummary = {

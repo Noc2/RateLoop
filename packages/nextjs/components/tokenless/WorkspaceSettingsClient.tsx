@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { InfoPopover } from "~~/components/tokenless/InfoPopover";
+import { WorkspaceApiKeysPanel } from "~~/components/tokenless/WorkspaceApiKeysPanel";
 import { WorkspaceDangerZone } from "~~/components/tokenless/WorkspaceDangerZone";
 import { WorkspaceMembersPanel } from "~~/components/tokenless/WorkspaceMembersPanel";
 import { Field } from "~~/components/tokenless/forms/Field";
@@ -760,7 +761,10 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
         {workspaces.length ? (
           <>
             {selected && canManageWorkspace ? (
-              <WorkspaceMembersPanel canManage workspaceId={selected.workspaceId} />
+              <>
+                <WorkspaceMembersPanel canManage workspaceId={selected.workspaceId} />
+                <WorkspaceApiKeysPanel workspaceId={selected.workspaceId} />
+              </>
             ) : null}
             <section
               aria-labelledby="workspace-plan"

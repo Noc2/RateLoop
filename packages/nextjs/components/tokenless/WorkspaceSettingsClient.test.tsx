@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const source = readFileSync(new URL("./WorkspaceSettingsClient.tsx", import.meta.url), "utf8");
+const apiKeySource = readFileSync(new URL("./WorkspaceApiKeysPanel.tsx", import.meta.url), "utf8");
 const apiKeyRoute = new URL("../../app/api/account/workspaces/[workspaceId]/api-keys/route.ts", import.meta.url);
 const webhookRoute = new URL("../../app/api/account/workspaces/[workspaceId]/webhooks/route.ts", import.meta.url);
 
@@ -94,11 +95,16 @@ test("enterprise identity settings cover provider lifecycle and workspace-local 
   assert.match(source, /Publish this domain verification token/);
 });
 
-test("workspace setup does not expose manual agent credentials or result webhooks", () => {
-  assert.doesNotMatch(source, /Agent API keys|Result webhooks|\/api-keys|\/webhooks/);
+test("workspace managers can create one-time scoped API keys without result webhooks", () => {
+  assert.match(source, /<WorkspaceApiKeysPanel workspaceId=\{selected\.workspaceId\} \/>/);
+  assert.match(apiKeySource, /<OneTimeSecretNotice label="this API key"/);
+  assert.match(apiKeySource, /New keys expire after 90 days and secrets are\s+stored only as hashes/);
+  assert.match(apiKeySource, /setRevealedToken\(null\)/);
+  assert.doesNotMatch(apiKeySource, /localStorage|sessionStorage|document\.cookie/);
+  assert.doesNotMatch(source, /Result webhooks|\/webhooks/);
   assert.doesNotMatch(source, /Agent setup|Connect an agent once|RateLoop creates its bound access automatically/);
   assert.doesNotMatch(source, /Prepaid funds are usable only after settlement|Reserved amounts cannot be double-spent/);
-  assert.equal(existsSync(apiKeyRoute), false);
+  assert.equal(existsSync(apiKeyRoute), true);
   assert.equal(existsSync(webhookRoute), false);
 });
 
