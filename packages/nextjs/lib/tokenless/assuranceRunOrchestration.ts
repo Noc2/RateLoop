@@ -2,6 +2,7 @@ import { type HumanAssuranceRubric, parseHumanAssuranceRubric } from "@rateloop/
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import "server-only";
+import { getAddress } from "viem";
 import { reserveWorkspaceUsageAllocations } from "~~/lib/billing/entitlements";
 import { dbPool } from "~~/lib/db";
 import type { TokenlessWorkspaceRole } from "~~/lib/db/productSchema";
@@ -959,6 +960,12 @@ export async function bindAssuranceCaseRound(input: {
   caseId: string;
   roundId: string;
   status: Exclude<AssuranceCaseRoundStatus, "planned">;
+  exactNetworkRound?: {
+    operationKey: string;
+    deploymentKey: string;
+    chainId: number;
+    panelAddress: string;
+  };
 }) {
   if (!ROUND_ID_PATTERN.test(input.roundId)) serviceError("roundId must be an unsigned base-10 integer string.");
   if (
@@ -971,10 +978,13 @@ export async function bindAssuranceCaseRound(input: {
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
-    await loadRunWithAccess(client, input.principal, input.runId, { lock: true });
+    const run = await loadRunWithAccess(client, input.principal, input.runId, { lock: true });
     const current = await client.query(
-      `SELECT round_id, round_status, content_id, admission_policy_hash FROM tokenless_assurance_run_cases
-       WHERE run_id = $1 AND case_id = $2 LIMIT 1`,
+      `SELECT round_id,round_status,content_id,admission_policy_hash,
+              network_operation_key,network_deployment_key,network_chain_id,
+              network_panel_address,network_round_id
+       FROM tokenless_assurance_run_cases
+       WHERE run_id = $1 AND case_id = $2 LIMIT 1 FOR UPDATE`,
       [input.runId, input.caseId],
     );
     const row = current.rows[0] as QueryRow | undefined;
@@ -991,11 +1001,97 @@ export async function bindAssuranceCaseRound(input: {
         409,
       );
     }
-    await client.query(
-      `UPDATE tokenless_assurance_run_cases SET round_id = $1, round_status = $2, updated_at = $3
-       WHERE run_id = $4 AND case_id = $5`,
-      [input.roundId, input.status, new Date(), input.runId, input.caseId],
-    );
+    if (input.exactNetworkRound) {
+      const audiencePolicy = JSON.parse(rowString(run, "audience_policy_json") ?? "null") as {
+        reviewerSource?: string;
+        compensation?: string;
+      };
+      if (
+        !["rateloop_network", "hybrid"].includes(audiencePolicy.reviewerSource ?? "") ||
+        !["paid", "mixed"].includes(audiencePolicy.compensation ?? "") ||
+        !["frozen", "recruiting", "collecting"].includes(rowString(run, "status") ?? "")
+      ) {
+        serviceError("This run cannot bind a network round.", "assurance_round_binding_conflict", 409);
+      }
+      const panelAddress = getAddress(input.exactNetworkRound.panelAddress).toLowerCase();
+      if (
+        !IDENTIFIER_PATTERN.test(input.exactNetworkRound.operationKey) ||
+        !input.exactNetworkRound.deploymentKey ||
+        !Number.isSafeInteger(input.exactNetworkRound.chainId) ||
+        input.exactNetworkRound.chainId <= 0
+      ) {
+        serviceError("Exact network round identity is invalid.", "assurance_round_binding_conflict", 409);
+      }
+      const exact = await client.query(
+        `SELECT execution.operation_key
+         FROM tokenless_chain_executions execution
+         JOIN tokenless_ask_ownership ownership ON ownership.operation_key=execution.operation_key
+         JOIN tokenless_voucher_rounds voucher
+           ON voucher.chain_id=execution.chain_id
+          AND lower(voucher.panel_address)=lower(execution.panel_address)
+          AND voucher.round_id=execution.round_id
+         WHERE execution.operation_key=$1 AND execution.deployment_key=$2
+           AND execution.chain_id=$3 AND lower(execution.panel_address)=lower($4)
+           AND execution.round_id=$5 AND lower(execution.content_id)=lower($6)
+           AND lower(voucher.content_id)=lower($6)
+           AND lower(voucher.admission_policy_hash)=lower($7)
+           AND execution.state='confirmed' AND ownership.workspace_id=$8
+         LIMIT 1 FOR UPDATE OF execution,voucher`,
+        [
+          input.exactNetworkRound.operationKey,
+          input.exactNetworkRound.deploymentKey,
+          input.exactNetworkRound.chainId,
+          panelAddress,
+          input.roundId,
+          rowString(row, "content_id"),
+          rowString(row, "admission_policy_hash"),
+          rowString(run, "workspace_id"),
+        ],
+      );
+      if (exact.rowCount !== 1) {
+        serviceError("Exact confirmed network round is unavailable.", "assurance_round_binding_conflict", 409);
+      }
+      const existingExact = [
+        rowString(row, "network_operation_key"),
+        rowString(row, "network_deployment_key"),
+        rowString(row, "network_chain_id"),
+        rowString(row, "network_panel_address"),
+        rowString(row, "network_round_id"),
+      ];
+      if (
+        existingExact.some(Boolean) &&
+        (existingExact[0] !== input.exactNetworkRound.operationKey ||
+          existingExact[1] !== input.exactNetworkRound.deploymentKey ||
+          Number(existingExact[2]) !== input.exactNetworkRound.chainId ||
+          getAddress(existingExact[3]!) !== getAddress(panelAddress) ||
+          existingExact[4] !== input.roundId)
+      ) {
+        serviceError("A run case cannot be rebound to another exact round.", "assurance_round_binding_conflict", 409);
+      }
+      await client.query(
+        `UPDATE tokenless_assurance_run_cases
+         SET round_id=$1,round_status=$2,network_operation_key=$3,network_deployment_key=$4,
+             network_chain_id=$5,network_panel_address=$6,network_round_id=$1,updated_at=$7
+         WHERE run_id=$8 AND case_id=$9`,
+        [
+          input.roundId,
+          input.status,
+          input.exactNetworkRound.operationKey,
+          input.exactNetworkRound.deploymentKey,
+          input.exactNetworkRound.chainId,
+          panelAddress,
+          new Date(),
+          input.runId,
+          input.caseId,
+        ],
+      );
+    } else {
+      await client.query(
+        `UPDATE tokenless_assurance_run_cases SET round_id=$1,round_status=$2,updated_at=$3
+         WHERE run_id=$4 AND case_id=$5`,
+        [input.roundId, input.status, new Date(), input.runId, input.caseId],
+      );
+    }
     await client.query("COMMIT");
     return {
       runId: input.runId,

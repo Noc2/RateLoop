@@ -85,9 +85,20 @@ test("funded network rounds are checked against the frozen policy and exact cons
           {
             case_id: "case_exact",
             content_id: CONTENT_ID,
+            round_terms_hash: __networkAssignmentSettlementTestUtils.sha256({
+              bountyAmount: "100",
+              feeAmount: "10",
+              attemptReserve: "15",
+              maximumCommits: 1,
+            }),
             admission_policy_hash: frozen.admissionPolicyHash,
             round_id: "42",
             round_status: "open",
+            network_operation_key: "op_exact",
+            network_deployment_key: "deployment_exact",
+            network_chain_id: 84532,
+            network_panel_address: PANEL,
+            network_round_id: "42",
             operation_key: "op_exact",
             deployment_key: "deployment_exact",
             chain_id: 84532,
@@ -162,6 +173,7 @@ test("one selected seat advances through exact voucher issuance and consumption 
   } as unknown as Pick<PoolClient, "query">;
   const bound = await bindSelectedNetworkAssignment(bindingClient, {
     assignmentId: "assignment_exact",
+    raterId: "rater_exact",
     runId: "run_exact",
     subpanelId: "subpanel_exact",
     selectionBatchId: "batch_exact",
@@ -177,7 +189,12 @@ test("one selected seat advances through exact voucher issuance and consumption 
         roundId: "42",
         contentId: CONTENT_ID,
         admissionPolicyHash: `0x${"d".repeat(64)}`,
-        roundTermsHash: `sha256:${"e".repeat(64)}`,
+        roundTermsHash: __networkAssignmentSettlementTestUtils.sha256({
+          bountyAmount: "100",
+          feeAmount: "10",
+          attemptReserve: "15",
+          maximumCommits: 1,
+        }),
         totalFundedAtomic: "125",
         maximumCommits: 1,
       },
@@ -203,18 +220,38 @@ test("one selected seat advances through exact voucher issuance and consumption 
           {
             binding_id: "binding_exact",
             assignment_id: "assignment_exact",
+            run_id: "run_exact",
+            case_id: "case_exact",
+            subpanel_id: "subpanel_exact",
+            selection_batch_id: "batch_exact",
             operation_key: "op_exact",
             deployment_key: "deployment_exact",
             chain_id: 84532,
             panel_address: PANEL,
             round_id: "42",
             content_id: CONTENT_ID,
+            round_terms_hash: __networkAssignmentSettlementTestUtils.sha256({
+              bountyAmount: "100",
+              feeAmount: "10",
+              attemptReserve: "15",
+              maximumCommits: 1,
+            }),
+            total_funded_atomic: "125",
+            maximum_commits: 1,
             principal_id: PRINCIPAL,
+            rater_id: "rater_exact",
+            assignment_run_id: "run_exact",
+            assignment_subpanel_id: "subpanel_exact",
+            assignment_selection_batch_id: "batch_exact",
+            assignment_integrity_reviewer_lookup: "reviewer_lookup_exact",
             assignment_status: "reserved",
+            run_status: "frozen",
             reservation_expires_at: new Date(NOW.getTime() + 60_000),
             assignment_expires_at: null,
             state: "selected",
             selection_binding_hash: selectionHash,
+            integrity_reviewer_commitment: writes[0]?.values?.[9],
+            reviewer_round_reservation_hash: writes[0]?.values?.[10],
             admission_policy_hash: `0x${"d".repeat(64)}`,
             integrity_provenance_hash: integrityHash,
             assignment_integrity_provenance_hash: integrityHash,
@@ -226,6 +263,18 @@ test("one selected seat advances through exact voucher issuance and consumption 
             execution_round_id: "42",
             execution_content_id: CONTENT_ID,
             execution_state: "confirmed",
+            execution_round_terms_json: JSON.stringify({
+              bountyAmount: "100",
+              feeAmount: "10",
+              attemptReserve: "15",
+              maximumCommits: 1,
+            }),
+            execution_total_funded_atomic: "125",
+            voucher_maximum_commits: 1,
+            voucher_content_id: CONTENT_ID,
+            voucher_admission_policy_hash: `0x${"d".repeat(64)}`,
+            voucher_status: "open",
+            voucher_deadline: new Date(NOW.getTime() + 60_000),
           },
         ],
       };
@@ -365,7 +414,7 @@ test("account deletion releases selected seats to pseudonymous retained evidence
   assert.doesNotMatch(receiptJson, new RegExp(PRINCIPAL, "u"));
 });
 
-test("voucher expiry preserves every local commit state that can still confirm", () => {
+test("voucher expiry recognizes each potentially confirmable local commit state", () => {
   assert.deepEqual(__networkAssignmentSettlementTestUtils.recoverableLocalCommitStates, [
     "prepared",
     "signed",
@@ -373,6 +422,24 @@ test("voucher expiry preserves every local commit state that can still confirm",
     "submitted",
     "confirmed",
   ]);
+  const blocks = __networkAssignmentSettlementTestUtils.commitBlocksVoucherExpiry;
+  assert.equal(blocks({ state: "submitted", updated_at: new Date(0) }, NOW), true);
+  assert.equal(blocks({ state: "confirmed", updated_at: new Date(0) }, NOW), true);
+  assert.equal(
+    blocks({ state: "signed", updated_at: new Date(NOW.getTime() - 60_000), recovery_state: null }, NOW),
+    true,
+  );
+  assert.equal(blocks({ state: "retry", updated_at: new Date(0), recovery_state: "processing" }, NOW), true);
+  assert.equal(blocks({ state: "prepared", updated_at: new Date(0), recovery_state: "dead" }, NOW), false);
+  assert.equal(blocks({ state: "signed", updated_at: new Date(0), recovery_state: "completed" }, NOW), false);
+});
+
+test("expired selections distinguish unaccepted reservations from accepted work", () => {
+  const outcome = __networkAssignmentSettlementTestUtils.expiredSelectionTerminalOutcome;
+  assert.equal(outcome("reserved", null), "not_accepted");
+  assert.equal(outcome("released", null), "not_accepted");
+  assert.equal(outcome("accepted", null), "not_submitted");
+  assert.equal(outcome("expired", NOW), "not_submitted");
 });
 
 test("terminal settlement distinguishes payout, compensation, pending, and expired claims", () => {

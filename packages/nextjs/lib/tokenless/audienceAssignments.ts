@@ -1520,6 +1520,7 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
       );
       const networkBinding = await bindSelectedNetworkAssignment(client, {
         assignmentId,
+        raterId: chosen.raterId,
         runId: input.runId,
         subpanelId: input.subpanelId,
         selectionBatchId: batchId,

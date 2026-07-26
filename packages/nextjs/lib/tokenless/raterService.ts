@@ -142,7 +142,11 @@ export async function listPaidRaterTasks(
             FROM tokenless_network_assignment_settlements settlement
             INNER JOIN tokenless_assurance_assignments assignment
               ON assignment.assignment_id=settlement.assignment_id
+             AND assignment.run_id=settlement.run_id
+             AND assignment.subpanel_id=settlement.subpanel_id
              AND assignment.source='rateloop_network'
+            INNER JOIN tokenless_assurance_runs run ON run.run_id=assignment.run_id
+             AND run.status IN ('frozen','recruiting','collecting')
             WHERE settlement.state IN ('selected','voucher_issued','committed')
               AND (
                 (assignment.status='reserved' AND assignment.reservation_expires_at > ?)
@@ -690,9 +694,68 @@ export async function relayPaidRaterCommit(input: { principalId: string; request
   const preparationClient = await dbPool.connect();
   try {
     await preparationClient.query("BEGIN");
+    const lockedVoucher = await preparationClient.query(
+      `SELECT voucher_id,status,expires_at,voucher_json,voucher_signature,vote_key,nullifier,
+              admission_policy_hash,network_assignment_id,network_selection_binding_hash,
+              network_operation_key,network_deployment_key,chain_id,panel_address,round_id,content_id
+       FROM tokenless_paid_vouchers WHERE voucher_id=$1 LIMIT 1 FOR UPDATE`,
+      [input.request.voucherId],
+    );
+    const lockedVoucherRow = lockedVoucher.rows[0] as Row | undefined;
+    const now = new Date();
+    if (
+      !lockedVoucherRow ||
+      rowString(lockedVoucherRow, "status") !== "issued" ||
+      new Date(String(lockedVoucherRow.expires_at)) <= now ||
+      rowString(lockedVoucherRow, "voucher_json") !== rowString(voucherRow, "voucher_json") ||
+      rowString(lockedVoucherRow, "voucher_signature") !== rowString(voucherRow, "voucher_signature") ||
+      getAddress(rowString(lockedVoucherRow, "vote_key")!) !== getAddress(auth.voteKey) ||
+      rowString(lockedVoucherRow, "nullifier")?.toLowerCase() !== auth.nullifier.toLowerCase() ||
+      rowString(lockedVoucherRow, "admission_policy_hash")?.toLowerCase() !==
+        String(voucher.admissionPolicyHash).toLowerCase() ||
+      Number(lockedVoucherRow.chain_id) !== auth.chainId ||
+      getAddress(String(lockedVoucherRow.panel_address)) !== getAddress(auth.panelAddress) ||
+      String(lockedVoucherRow.round_id) !== auth.roundId ||
+      String(lockedVoucherRow.content_id).toLowerCase() !== String(voucher.contentId).toLowerCase()
+    ) {
+      throw new TokenlessServiceError(
+        "Commit does not match an active locked voucher.",
+        409,
+        "commit_voucher_mismatch",
+      );
+    }
+    const networkAssignmentId = rowString(lockedVoucherRow, "network_assignment_id");
+    if (networkAssignmentId) {
+      const lockedSettlement = await preparationClient.query(
+        `SELECT assignment_id,selection_binding_hash,operation_key,deployment_key,
+                chain_id,panel_address,round_id,content_id,state
+         FROM tokenless_network_assignment_settlements
+         WHERE voucher_id=$1 LIMIT 1 FOR UPDATE`,
+        [input.request.voucherId],
+      );
+      const settlement = lockedSettlement.rows[0] as Row | undefined;
+      if (
+        !settlement ||
+        rowString(settlement, "state") !== "voucher_issued" ||
+        rowString(settlement, "assignment_id") !== networkAssignmentId ||
+        rowString(settlement, "selection_binding_hash") !==
+          rowString(lockedVoucherRow, "network_selection_binding_hash") ||
+        rowString(settlement, "operation_key") !== rowString(lockedVoucherRow, "network_operation_key") ||
+        rowString(settlement, "deployment_key") !== rowString(lockedVoucherRow, "network_deployment_key") ||
+        Number(settlement.chain_id) !== Number(lockedVoucherRow.chain_id) ||
+        getAddress(String(settlement.panel_address)) !== getAddress(String(lockedVoucherRow.panel_address)) ||
+        String(settlement.round_id) !== String(lockedVoucherRow.round_id) ||
+        String(settlement.content_id).toLowerCase() !== String(lockedVoucherRow.content_id).toLowerCase()
+      ) {
+        throw new TokenlessServiceError(
+          "The network settlement no longer permits this voucher commit.",
+          409,
+          "commit_voucher_mismatch",
+        );
+      }
+    }
     const previous = await lockCommitForVoucher(preparationClient, input.request.voucherId);
     const previousRow = previous.rows[0] as Row | undefined;
-    const now = new Date();
     if (previousRow) {
       if (rowString(previousRow, "request_hash") !== requestHash) {
         throw new TokenlessServiceError("Commit request conflicts with the existing attempt.", 409, "commit_conflict");

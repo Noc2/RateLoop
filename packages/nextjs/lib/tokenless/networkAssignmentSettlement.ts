@@ -15,7 +15,14 @@ type Hash = `sha256:${string}`;
 const HASH = /^sha256:[0-9a-f]{64}$/u;
 const BYTES32 = /^0x[0-9a-f]{64}$/u;
 const UNSIGNED = /^(0|[1-9][0-9]*)$/u;
-const RECOVERABLE_LOCAL_COMMIT_STATES = ["prepared", "signed", "retry", "submitted", "confirmed"] as const;
+const PRE_SUBMISSION_LOCAL_COMMIT_STATES = ["prepared", "signed", "retry"] as const;
+const FINALIZING_LOCAL_COMMIT_STATES = ["submitted", "confirmed"] as const;
+const ACTIVE_RECOVERY_WORK_STATES = ["pending", "retry", "processing"] as const;
+const RECOVERY_SCHEDULING_GRACE_MS = 15 * 60 * 1_000;
+const RECOVERABLE_LOCAL_COMMIT_STATES = [
+  ...PRE_SUBMISSION_LOCAL_COMMIT_STATES,
+  ...FINALIZING_LOCAL_COMMIT_STATES,
+] as const;
 
 function text(row: Row | undefined, key: string) {
   const value = row?.[key];
@@ -32,6 +39,14 @@ function date(row: Row | undefined, key: string) {
   const value = row?.[key] instanceof Date ? (row[key] as Date) : new Date(String(row?.[key]));
   if (!Number.isFinite(value.getTime())) throw new Error(`Stored ${key} is invalid.`);
   return value;
+}
+
+function commitBlocksVoucherExpiry(row: Row | undefined, now: Date) {
+  const state = text(row, "state");
+  if ((FINALIZING_LOCAL_COMMIT_STATES as readonly string[]).includes(state ?? "")) return true;
+  if (!(PRE_SUBMISSION_LOCAL_COMMIT_STATES as readonly string[]).includes(state ?? "")) return false;
+  if (date(row, "updated_at").getTime() > now.getTime() - RECOVERY_SCHEDULING_GRACE_MS) return true;
+  return (ACTIVE_RECOVERY_WORK_STATES as readonly string[]).includes(text(row, "recovery_state") ?? "");
 }
 
 function stableJson(value: unknown): string {
@@ -107,6 +122,8 @@ export async function loadExactNetworkRoundBindings(
   }
   const result = await client.query(
     `SELECT rc.case_id,rc.content_id,rc.admission_policy_hash,rc.round_id,rc.round_status,
+            rc.network_operation_key,rc.network_deployment_key,rc.network_chain_id,
+            rc.network_panel_address,rc.network_round_id,
             e.operation_key,e.deployment_key,e.chain_id,e.panel_address,e.round_terms_json,
             e.total_funded_atomic,e.state AS execution_state,e.confirmed_at,
             own.workspace_id AS operation_workspace_id,q.terms_json,
@@ -115,7 +132,12 @@ export async function loadExactNetworkRoundBindings(
             voucher.maximum_commits,voucher.voucher_deadline,voucher.status AS voucher_status
      FROM tokenless_assurance_run_cases rc
      LEFT JOIN tokenless_chain_executions e
-       ON CAST(e.round_id AS text)=rc.round_id AND lower(e.content_id)=lower(rc.content_id)
+       ON e.operation_key=rc.network_operation_key
+      AND e.deployment_key=rc.network_deployment_key
+      AND e.chain_id=rc.network_chain_id
+      AND lower(e.panel_address)=lower(rc.network_panel_address)
+      AND e.round_id=rc.network_round_id
+      AND lower(e.content_id)=lower(rc.content_id)
      LEFT JOIN tokenless_ask_ownership own ON own.operation_key=e.operation_key
      LEFT JOIN tokenless_question_records q ON q.question_id=own.question_id
      LEFT JOIN tokenless_voucher_rounds voucher
@@ -127,11 +149,23 @@ export async function loadExactNetworkRoundBindings(
   if (!result.rowCount) {
     throw new TokenlessServiceError("The network run has no funded cases.", 409, "network_round_binding_pending", true);
   }
+  if (new Set(result.rows.map(value => text(value as Row, "case_id"))).size !== result.rows.length) {
+    throw new TokenlessServiceError(
+      "A network run case resolved to more than one funded round.",
+      409,
+      "network_round_binding_invalid",
+    );
+  }
   return result.rows.map(value => {
     const row = value as Row;
     if (
       !text(row, "operation_key") ||
       !text(row, "deployment_key") ||
+      text(row, "network_operation_key") !== text(row, "operation_key") ||
+      text(row, "network_deployment_key") !== text(row, "deployment_key") ||
+      integer(row, "network_chain_id") !== integer(row, "chain_id") ||
+      !sameAddress(row.network_panel_address, row.panel_address) ||
+      text(row, "network_round_id") !== text(row, "round_id") ||
       !row.round_terms_json ||
       !row.terms_json ||
       !text(row, "voucher_content_id")
@@ -206,6 +240,7 @@ export async function loadExactNetworkRoundBindings(
 
 type NetworkSelectionIdentity = {
   assignmentId: string;
+  raterId: string;
   runId: string;
   subpanelId: string;
   selectionBatchId: string;
@@ -224,9 +259,25 @@ function integrityReviewerCommitment(
   });
 }
 
+function reviewerRoundReservationHash(
+  input: Pick<NetworkSelectionIdentity, "raterId"> & { round: ExactNetworkRoundBinding },
+) {
+  return sha256({
+    schemaVersion: "rateloop.network-reviewer-round-reservation.v1",
+    raterId: input.raterId,
+    round: {
+      deploymentKey: input.round.deploymentKey,
+      chainId: input.round.chainId,
+      panelAddress: getAddress(input.round.panelAddress),
+      roundId: input.round.roundId,
+    },
+  });
+}
+
 function selectionBindingHash(
   input: Omit<NetworkSelectionIdentity, "integrityReviewerLookup"> & {
     integrityReviewerCommitment: Hash;
+    reviewerRoundReservationHash: Hash;
     round: ExactNetworkRoundBinding;
   },
 ) {
@@ -242,6 +293,7 @@ function selectionBindingHash(
       batchId: input.selectionBatchId,
       integrityProvenanceHash: input.integrityProvenanceHash,
       reviewerCommitment: input.integrityReviewerCommitment,
+      reviewerRoundReservationHash: input.reviewerRoundReservationHash,
     },
     round: input.round,
   });
@@ -287,20 +339,22 @@ export async function bindSelectedNetworkAssignment(
   const hashes: Hash[] = [];
   const reviewerCommitment = integrityReviewerCommitment(input);
   for (const round of input.rounds) {
+    const roundReservationHash = reviewerRoundReservationHash({ ...input, round });
     const bindingHash = selectionBindingHash({
       ...input,
       integrityReviewerCommitment: reviewerCommitment,
+      reviewerRoundReservationHash: roundReservationHash,
       round,
     });
     const bindingId = `nas_${randomUUID().replaceAll("-", "")}`;
     await client.query(
       `INSERT INTO tokenless_network_assignment_settlements
        (binding_id,assignment_id,run_id,case_id,operation_key,selection_batch_id,
-        selection_binding_hash,integrity_provenance_hash,integrity_reviewer_commitment,
-        deployment_key,chain_id,panel_address,round_id,content_id,admission_policy_hash,
+        subpanel_id,selection_binding_hash,integrity_provenance_hash,integrity_reviewer_commitment,
+        reviewer_round_reservation_hash,deployment_key,chain_id,panel_address,round_id,content_id,admission_policy_hash,
         round_terms_hash,total_funded_atomic,maximum_commits,state,transition_revision,created_at,updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
-               'selected',1,$19,$19)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+               'selected',1,$21,$21)`,
       [
         bindingId,
         input.assignmentId,
@@ -308,9 +362,11 @@ export async function bindSelectedNetworkAssignment(
         round.caseId,
         round.operationKey,
         input.selectionBatchId,
+        input.subpanelId,
         bindingHash,
         input.integrityProvenanceHash,
         reviewerCommitment,
+        roundReservationHash,
         round.deploymentKey,
         round.chainId,
         round.panelAddress,
@@ -334,6 +390,7 @@ export async function bindSelectedNetworkAssignment(
         selectionBatchId: input.selectionBatchId,
         integrityProvenanceHash: input.integrityProvenanceHash,
         integrityReviewerCommitment: reviewerCommitment,
+        reviewerRoundReservationHash: roundReservationHash,
         round,
         selectedAt: input.now.toISOString(),
       },
@@ -356,6 +413,11 @@ export type NetworkVoucherSelection = {
   selectionBindingHash: Hash;
   operationKey: string;
   deploymentKey: string;
+  chainId: number;
+  panelAddress: string;
+  roundId: string;
+  contentId: string;
+  admissionPolicyHash: string;
   integrity: Record<string, unknown>;
 };
 
@@ -376,18 +438,31 @@ export async function loadExactNetworkVoucherSelection(
   const result = await client.query(
     `SELECT settlement.*,assignment.integrity_provenance_json,
             assignment.integrity_provenance_hash AS assignment_integrity_provenance_hash,
+            assignment.integrity_reviewer_lookup AS assignment_integrity_reviewer_lookup,
+            assignment.run_id AS assignment_run_id,assignment.subpanel_id AS assignment_subpanel_id,
+            assignment.selection_batch_id AS assignment_selection_batch_id,
             assignment.rater_id,profile.principal_id,assignment.status AS assignment_status,
             assignment.reservation_expires_at,assignment.assignment_expires_at,
+            run.status AS run_status,
             execution.operation_key AS execution_operation_key,
             execution.deployment_key AS execution_deployment_key,
             execution.chain_id AS execution_chain_id,
             execution.panel_address AS execution_panel_address,
             execution.round_id AS execution_round_id,
             execution.content_id AS execution_content_id,
-            execution.state AS execution_state
+            execution.state AS execution_state,
+            execution.round_terms_json AS execution_round_terms_json,
+            execution.total_funded_atomic AS execution_total_funded_atomic,
+            voucher.maximum_commits AS voucher_maximum_commits,
+            voucher.content_id AS voucher_content_id,
+            voucher.admission_policy_hash AS voucher_admission_policy_hash,
+            voucher.voucher_deadline,voucher.status AS voucher_status
      FROM tokenless_network_assignment_settlements settlement
      JOIN tokenless_assurance_assignments assignment
        ON assignment.assignment_id=settlement.assignment_id
+      AND assignment.run_id=settlement.run_id
+      AND assignment.subpanel_id=settlement.subpanel_id
+     JOIN tokenless_assurance_runs run ON run.run_id=assignment.run_id
      JOIN tokenless_rater_profiles profile ON profile.rater_id=assignment.rater_id
      JOIN tokenless_chain_executions execution
        ON execution.operation_key=settlement.operation_key
@@ -396,10 +471,14 @@ export async function loadExactNetworkVoucherSelection(
       AND lower(execution.panel_address)=lower(settlement.panel_address)
       AND execution.round_id=settlement.round_id
       AND lower(execution.content_id)=lower(settlement.content_id)
+     JOIN tokenless_voucher_rounds voucher
+       ON voucher.chain_id=settlement.chain_id
+      AND lower(voucher.panel_address)=lower(settlement.panel_address)
+      AND voucher.round_id=settlement.round_id
      WHERE settlement.assignment_id=$1
        AND settlement.chain_id=$2 AND lower(settlement.panel_address)=lower($3)
        AND settlement.round_id=$4 AND lower(settlement.content_id)=lower($5)
-     LIMIT 1 FOR UPDATE OF settlement,assignment,execution`,
+     LIMIT 1 FOR UPDATE OF run,assignment,execution,voucher,settlement`,
     [input.assignmentId, input.chainId, input.panelAddress, input.roundId, input.contentId],
   );
   const row = result.rows[0] as Row | undefined;
@@ -408,22 +487,32 @@ export async function loadExactNetworkVoucherSelection(
       ? date(row, "assignment_expires_at")
       : date(row, "reservation_expires_at")
     : null;
+  const currentRoundTermsHash = row?.execution_round_terms_json
+    ? sha256(parseObject(row.execution_round_terms_json, "network round terms"))
+    : null;
   if (
     !row ||
     !activeUntil ||
     text(row, "principal_id") !== input.principalId ||
+    !["frozen", "recruiting", "collecting"].includes(text(row, "run_status") ?? "") ||
     !["reserved", "accepted"].includes(text(row, "assignment_status") ?? "") ||
     activeUntil <= input.now ||
     text(row, "state") !== "selected" ||
     text(row, "operation_key") !== text(row, "execution_operation_key") ||
     text(row, "deployment_key") !== text(row, "execution_deployment_key") ||
-    integer(row, "chain_id") !== input.chainId ||
     integer(row, "execution_chain_id") !== input.chainId ||
     getAddress(text(row, "panel_address")!) !== getAddress(input.panelAddress) ||
     getAddress(text(row, "execution_panel_address")!) !== getAddress(input.panelAddress) ||
     text(row, "round_id") !== text(row, "execution_round_id") ||
     text(row, "content_id")?.toLowerCase() !== text(row, "execution_content_id")?.toLowerCase() ||
     text(row, "execution_state") !== "confirmed" ||
+    currentRoundTermsHash !== text(row, "round_terms_hash") ||
+    text(row, "execution_total_funded_atomic") !== text(row, "total_funded_atomic") ||
+    integer(row, "voucher_maximum_commits") !== integer(row, "maximum_commits") ||
+    text(row, "voucher_content_id")?.toLowerCase() !== text(row, "content_id")?.toLowerCase() ||
+    text(row, "voucher_admission_policy_hash")?.toLowerCase() !== text(row, "admission_policy_hash")?.toLowerCase() ||
+    text(row, "voucher_status") !== "open" ||
+    date(row, "voucher_deadline") <= input.now ||
     text(row, "selection_binding_hash") !== input.selectionBindingHash ||
     text(row, "admission_policy_hash")?.toLowerCase() !== input.admissionPolicyHash.toLowerCase() ||
     text(row, "integrity_provenance_hash") !== text(row, "assignment_integrity_provenance_hash")
@@ -442,12 +531,57 @@ export async function loadExactNetworkVoucherSelection(
       "network_selection_binding_mismatch",
     );
   }
+  const exactRound = {
+    caseId: text(row, "case_id")!,
+    operationKey: text(row, "operation_key")!,
+    deploymentKey: text(row, "deployment_key")!,
+    chainId: integer(row, "chain_id"),
+    panelAddress: text(row, "panel_address")!,
+    roundId: text(row, "round_id")!,
+    contentId: text(row, "content_id")!,
+    admissionPolicyHash: text(row, "admission_policy_hash")!,
+    roundTermsHash: text(row, "round_terms_hash") as Hash,
+    totalFundedAtomic: text(row, "total_funded_atomic")!,
+    maximumCommits: integer(row, "maximum_commits"),
+  };
+  const identity = {
+    assignmentId: input.assignmentId,
+    raterId: text(row, "rater_id")!,
+    runId: text(row, "assignment_run_id")!,
+    subpanelId: text(row, "assignment_subpanel_id")!,
+    selectionBatchId: text(row, "assignment_selection_batch_id")!,
+    integrityProvenanceHash: text(row, "integrity_provenance_hash") as Hash,
+    integrityReviewerLookup: text(row, "assignment_integrity_reviewer_lookup")!,
+  };
+  const reviewerCommitment = integrityReviewerCommitment(identity);
+  const reservationHash = reviewerRoundReservationHash({ ...identity, round: exactRound });
+  if (
+    reviewerCommitment !== text(row, "integrity_reviewer_commitment") ||
+    reservationHash !== text(row, "reviewer_round_reservation_hash") ||
+    selectionBindingHash({
+      ...identity,
+      integrityReviewerCommitment: reviewerCommitment,
+      reviewerRoundReservationHash: reservationHash,
+      round: exactRound,
+    }) !== text(row, "selection_binding_hash")
+  ) {
+    throw new TokenlessServiceError(
+      "The selected network seat cryptographic binding is inconsistent.",
+      409,
+      "network_selection_binding_mismatch",
+    );
+  }
   return {
     bindingId: text(row, "binding_id")!,
     assignmentId: input.assignmentId,
     selectionBindingHash: input.selectionBindingHash,
     operationKey: text(row, "operation_key")!,
     deploymentKey: text(row, "deployment_key")!,
+    chainId: integer(row, "chain_id"),
+    panelAddress: getAddress(text(row, "panel_address")!),
+    roundId: text(row, "round_id")!,
+    contentId: text(row, "content_id")!,
+    admissionPolicyHash: text(row, "admission_policy_hash")!,
     integrity,
   };
 }
@@ -457,12 +591,39 @@ export async function attachIssuedNetworkVoucher(
   input: NetworkVoucherSelection & { voucherId: string; issuedAt: Date },
 ) {
   const locked = await client.query(
-    `SELECT operation_key,deployment_key,round_id,content_id
-     FROM tokenless_network_assignment_settlements
-     WHERE binding_id=$1 AND state='selected' AND selection_binding_hash=$2
-       AND operation_key=$3 AND deployment_key=$4
-     LIMIT 1 FOR UPDATE`,
-    [input.bindingId, input.selectionBindingHash, input.operationKey, input.deploymentKey],
+    `SELECT settlement.operation_key,settlement.deployment_key,settlement.chain_id,
+            settlement.panel_address,settlement.round_id,settlement.content_id,
+            settlement.admission_policy_hash
+     FROM tokenless_network_assignment_settlements settlement
+     JOIN tokenless_paid_vouchers voucher ON voucher.voucher_id=$5
+       AND voucher.network_assignment_id=settlement.assignment_id
+       AND voucher.network_selection_binding_hash=settlement.selection_binding_hash
+       AND voucher.network_operation_key=settlement.operation_key
+       AND voucher.network_deployment_key=settlement.deployment_key
+       AND voucher.chain_id=settlement.chain_id
+       AND lower(voucher.panel_address)=lower(settlement.panel_address)
+       AND voucher.round_id=settlement.round_id
+       AND lower(voucher.content_id)=lower(settlement.content_id)
+     WHERE settlement.binding_id=$1 AND settlement.state='selected'
+       AND settlement.selection_binding_hash=$2
+       AND settlement.operation_key=$3 AND settlement.deployment_key=$4
+       AND settlement.chain_id=$6 AND lower(settlement.panel_address)=lower($7)
+       AND settlement.round_id=$8 AND lower(settlement.content_id)=lower($9)
+       AND lower(settlement.admission_policy_hash)=lower($10)
+       AND lower(voucher.admission_policy_hash)=lower(settlement.admission_policy_hash)
+     LIMIT 1 FOR UPDATE OF settlement,voucher`,
+    [
+      input.bindingId,
+      input.selectionBindingHash,
+      input.operationKey,
+      input.deploymentKey,
+      input.voucherId,
+      input.chainId,
+      input.panelAddress,
+      input.roundId,
+      input.contentId,
+      input.admissionPolicyHash,
+    ],
   );
   const row = locked.rows[0] as Row | undefined;
   if (!row) {
@@ -517,13 +678,34 @@ export async function markNetworkVoucherConsumed(
   input: { voucherId: string; commitId: string; transactionHash: string; committedAt: Date },
 ) {
   const locked = await client.query(
-    `SELECT * FROM tokenless_network_assignment_settlements
-     WHERE voucher_id=$1 LIMIT 1 FOR UPDATE`,
+    `SELECT settlement.*
+     FROM tokenless_network_assignment_settlements settlement
+     WHERE settlement.voucher_id=$1 LIMIT 1 FOR UPDATE`,
     [input.voucherId],
   );
   const row = locked.rows[0] as Row | undefined;
   if (!row) return { networkBinding: false, replayed: false };
   if (text(row, "state") === "committed" || text(row, "state") === "terminal") {
+    const receipt = await client.query(
+      `SELECT receipt_json FROM tokenless_network_assignment_settlement_receipts
+       WHERE binding_id=$1 AND receipt_type='voucher_consumed' AND transition_revision=3
+       LIMIT 1`,
+      [text(row, "binding_id")],
+    );
+    const consumed = parseObject(
+      (receipt.rows[0] as Row | undefined)?.receipt_json,
+      "network voucher consumption receipt",
+    );
+    if (
+      String(consumed.commitId ?? "") !== input.commitId ||
+      String(consumed.transactionHash ?? "").toLowerCase() !== input.transactionHash.toLowerCase()
+    ) {
+      throw new TokenlessServiceError(
+        "The network voucher was consumed by a different commit.",
+        409,
+        "network_voucher_consumption_conflict",
+      );
+    }
     return { networkBinding: true, replayed: true };
   }
   if (text(row, "state") !== "voucher_issued") {
@@ -627,10 +809,89 @@ export async function releaseSelectedNetworkAssignmentsForAccountDeletion(
 
 type NetworkSettlementLoad = (input: {
   principalId: string;
+  deploymentKey: string;
+  chainId: number;
+  panelAddress: string;
   roundId: string;
   voteKey: string;
   now: Date;
 }) => Promise<RaterSettlementSnapshot>;
+
+function expiredSelectionTerminalOutcome(assignmentStatus: string | null, confidentialityAcceptedAt: unknown) {
+  return assignmentStatus === "accepted" || confidentialityAcceptedAt
+    ? ("not_submitted" as const)
+    : ("not_accepted" as const);
+}
+
+function expiredSelectionIsStillDue(row: Row, now: Date) {
+  if (!["frozen", "recruiting", "collecting"].includes(text(row, "run_status") ?? "")) return true;
+  const status = text(row, "status");
+  if (status === "released" || status === "expired") return true;
+  const deadline =
+    status === "reserved" ? row.reservation_expires_at : status === "accepted" ? row.assignment_expires_at : null;
+  if (!deadline) return false;
+  const expiresAt = deadline instanceof Date ? deadline : new Date(String(deadline));
+  return Number.isFinite(expiresAt.getTime()) && expiresAt <= now;
+}
+
+function sameAddress(left: unknown, right: unknown) {
+  try {
+    return getAddress(String(left)) === getAddress(String(right));
+  } catch {
+    return false;
+  }
+}
+
+function committedPersistenceIdentityMatches(row: Row) {
+  try {
+    return (
+      text(row, "operation_key") === text(row, "voucher_operation_key") &&
+      text(row, "deployment_key") === text(row, "voucher_deployment_key") &&
+      text(row, "deployment_key") === text(row, "commit_deployment_key") &&
+      integer(row, "chain_id") === integer(row, "voucher_chain_id") &&
+      sameAddress(row.panel_address, row.voucher_panel_address) &&
+      text(row, "round_id") === text(row, "voucher_round_id") &&
+      text(row, "round_id") === text(row, "commit_round_id") &&
+      text(row, "content_id")?.toLowerCase() === text(row, "voucher_content_id")?.toLowerCase() &&
+      sameAddress(row.voucher_vote_key, row.commit_vote_key) &&
+      text(row, "voucher_id") === text(row, "commit_voucher_id")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function committedBindingFingerprint(row: Row) {
+  return sha256({
+    bindingId: text(row, "binding_id"),
+    operationKey: text(row, "operation_key"),
+    deploymentKey: text(row, "deployment_key"),
+    chainId: integer(row, "chain_id"),
+    panelAddress: getAddress(text(row, "panel_address")!),
+    roundId: text(row, "round_id"),
+    contentId: text(row, "content_id")?.toLowerCase(),
+    voucherId: text(row, "voucher_id"),
+    commitId: text(row, "commit_id"),
+    voteKey: getAddress(text(row, "commit_vote_key")!),
+    transactionHash: text(row, "transaction_hash"),
+    principalId: text(row, "principal_id"),
+  });
+}
+
+function committedSnapshotIdentityMatches(row: Row, snapshot: RaterSettlementSnapshot) {
+  try {
+    const voteKey = getAddress(text(row, "commit_vote_key")!);
+    return (
+      snapshot.chainId === integer(row, "chain_id") &&
+      sameAddress(snapshot.panelAddress, row.panel_address) &&
+      snapshot.roundId === text(row, "round_id") &&
+      getAddress(snapshot.voteKey) === voteKey &&
+      snapshot.commitKey.toLowerCase() === tokenlessCommitKey(BigInt(snapshot.roundId), voteKey).toLowerCase()
+    );
+  } catch {
+    return false;
+  }
+}
 
 function terminalSettlement(snapshot: RaterSettlementSnapshot, now: Date) {
   const claimAmount =
@@ -661,6 +922,50 @@ function terminalSettlement(snapshot: RaterSettlementSnapshot, now: Date) {
   return null;
 }
 
+function networkSettlementFailureEvidence(error: unknown) {
+  const code =
+    error instanceof TokenlessServiceError
+      ? error.code
+      : error instanceof Error
+        ? error.name
+        : "unknown_network_settlement_error";
+  return {
+    code,
+    digest: sha256({ schemaVersion: "rateloop.network-settlement-failure.v1", code }),
+  };
+}
+
+async function recordNetworkSettlementFailure(bindingId: string, error: unknown, now: Date) {
+  const evidence = networkSettlementFailureEvidence(error);
+  await dbPool.query(
+    `INSERT INTO tokenless_network_settlement_failures
+     (binding_id,status,attempt_count,first_failed_at,last_failed_at,next_retry_at,
+      last_error_code,last_error_digest,operator_alert_state,resolved_at,updated_at)
+     VALUES ($1,'retrying',1,$2,$2,$3,$4,$5,'pending',NULL,$2)
+     ON CONFLICT (binding_id) DO UPDATE SET
+       attempt_count=LEAST(5,tokenless_network_settlement_failures.attempt_count+1),
+       status=CASE WHEN tokenless_network_settlement_failures.attempt_count+1 >= 5 THEN 'dead' ELSE 'retrying' END,
+       last_failed_at=EXCLUDED.last_failed_at,
+       next_retry_at=CASE
+         WHEN tokenless_network_settlement_failures.attempt_count+1 >= 5 THEN NULL
+         ELSE EXCLUDED.next_retry_at
+       END,
+       last_error_code=EXCLUDED.last_error_code,last_error_digest=EXCLUDED.last_error_digest,
+       operator_alert_state='pending',resolved_at=NULL,updated_at=EXCLUDED.updated_at`,
+    [bindingId, now, new Date(now.getTime() + 60_000), evidence.code, evidence.digest],
+  );
+}
+
+async function resolveNetworkSettlementFailure(client: Pick<PoolClient, "query">, bindingId: string, now: Date) {
+  await client.query(
+    `UPDATE tokenless_network_settlement_failures
+     SET status='resolved',next_retry_at=NULL,operator_alert_state='resolved',
+         resolved_at=$1,updated_at=$1
+     WHERE binding_id=$2 AND status<>'resolved'`,
+    [now, bindingId],
+  );
+}
+
 export async function reconcileNetworkAssignmentSettlements(
   input: { now?: Date; limit?: number; loadSettlement?: NetworkSettlementLoad } = {},
 ) {
@@ -677,14 +982,24 @@ export async function reconcileNetworkAssignmentSettlements(
       }));
   const expiredSelections = await dbPool.query(
     `SELECT settlement.binding_id,settlement.assignment_id,settlement.selection_binding_hash,
-            settlement.transition_revision,assignment.status,
-            assignment.reservation_expires_at,assignment.assignment_expires_at
+            settlement.transition_revision,assignment.status,assignment.confidentiality_accepted_at,
+            assignment.reservation_expires_at,assignment.assignment_expires_at,run.status AS run_status
      FROM tokenless_network_assignment_settlements settlement
      JOIN tokenless_assurance_assignments assignment
        ON assignment.assignment_id=settlement.assignment_id
+      AND assignment.run_id=settlement.run_id
+      AND assignment.subpanel_id=settlement.subpanel_id
+     JOIN tokenless_assurance_runs run ON run.run_id=assignment.run_id
+     LEFT JOIN tokenless_network_settlement_failures failure
+       ON failure.binding_id=settlement.binding_id
      WHERE settlement.state='selected'
        AND (
-         assignment.status IN ('released','expired')
+         failure.binding_id IS NULL OR failure.status='resolved'
+         OR (failure.status='retrying' AND failure.next_retry_at <= $1)
+       )
+       AND (
+         run.status NOT IN ('frozen','recruiting','collecting')
+         OR assignment.status IN ('released','expired')
          OR (assignment.status='reserved' AND assignment.reservation_expires_at <= $1)
          OR (assignment.status='accepted' AND assignment.assignment_expires_at <= $1)
        )
@@ -693,21 +1008,43 @@ export async function reconcileNetworkAssignmentSettlements(
   );
   let terminal = 0;
   for (const value of expiredSelections.rows) {
-    const row = value as Row;
-    const evidence = {
-      schemaVersion: "rateloop.network-assignment-terminal-evidence.v1",
-      bindingId: text(row, "binding_id"),
-      assignmentId: text(row, "assignment_id"),
-      selectionBindingHash: text(row, "selection_binding_hash"),
-      assignmentStatus: text(row, "status"),
-      outcome: "not_accepted",
-      terminalAt: now.toISOString(),
-    };
-    const evidenceHash = sha256(evidence);
-    const revision = integer(row, "transition_revision") + 1;
+    const candidate = value as Row;
     const client = await dbPool.connect();
     try {
       await client.query("BEGIN");
+      const current = await client.query(
+        `SELECT settlement.binding_id,settlement.assignment_id,settlement.selection_binding_hash,
+                settlement.transition_revision,settlement.state,assignment.status,
+                assignment.confidentiality_accepted_at,assignment.reservation_expires_at,
+                assignment.assignment_expires_at,run.status AS run_status
+         FROM tokenless_network_assignment_settlements settlement
+         JOIN tokenless_assurance_assignments assignment
+           ON assignment.assignment_id=settlement.assignment_id
+          AND assignment.run_id=settlement.run_id
+          AND assignment.subpanel_id=settlement.subpanel_id
+         JOIN tokenless_assurance_runs run ON run.run_id=assignment.run_id
+         WHERE settlement.binding_id=$1
+         LIMIT 1 FOR UPDATE OF settlement,assignment`,
+        [text(candidate, "binding_id")],
+      );
+      const row = current.rows[0] as Row | undefined;
+      if (!row || text(row, "state") !== "selected" || !expiredSelectionIsStillDue(row, now)) {
+        await resolveNetworkSettlementFailure(client, text(candidate, "binding_id")!, now);
+        await client.query("COMMIT");
+        continue;
+      }
+      const terminalOutcome = expiredSelectionTerminalOutcome(text(row, "status"), row.confidentiality_accepted_at);
+      const evidence = {
+        schemaVersion: "rateloop.network-assignment-terminal-evidence.v1",
+        bindingId: text(row, "binding_id"),
+        assignmentId: text(row, "assignment_id"),
+        selectionBindingHash: text(row, "selection_binding_hash"),
+        assignmentStatus: text(row, "status"),
+        outcome: terminalOutcome,
+        terminalAt: now.toISOString(),
+      };
+      const evidenceHash = sha256(evidence);
+      const revision = integer(row, "transition_revision") + 1;
       await insertReceipt(client, {
         bindingId: text(row, "binding_id")!,
         receiptType: "settlement_terminal",
@@ -717,11 +1054,12 @@ export async function reconcileNetworkAssignmentSettlements(
       });
       const updated = await client.query(
         `UPDATE tokenless_network_assignment_settlements
-         SET state='terminal',transition_revision=$1,terminal_outcome='not_accepted',
-             settlement_reference=$2,settlement_evidence_hash=$3,terminal_at=$4,updated_at=$4
-         WHERE binding_id=$5 AND state='selected' AND transition_revision=$6`,
+         SET state='terminal',transition_revision=$1,terminal_outcome=$2,
+             settlement_reference=$3,settlement_evidence_hash=$4,terminal_at=$5,updated_at=$5
+         WHERE binding_id=$6 AND state='selected' AND transition_revision=$7`,
         [
           revision,
+          terminalOutcome,
           `assignment-closed:${text(row, "assignment_id")}`,
           evidenceHash,
           now,
@@ -738,10 +1076,11 @@ export async function reconcileNetworkAssignmentSettlements(
         );
       }
       terminal += 1;
+      await resolveNetworkSettlementFailure(client, text(candidate, "binding_id")!, now);
       await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK");
-      throw error;
+      await recordNetworkSettlementFailure(text(candidate, "binding_id")!, error, now);
     } finally {
       client.release();
     }
@@ -751,30 +1090,131 @@ export async function reconcileNetworkAssignmentSettlements(
             settlement.voucher_id,settlement.transition_revision
      FROM tokenless_network_assignment_settlements settlement
      JOIN tokenless_paid_vouchers voucher ON voucher.voucher_id=settlement.voucher_id
+     LEFT JOIN tokenless_network_settlement_failures failure
+       ON failure.binding_id=settlement.binding_id
      WHERE settlement.state='voucher_issued' AND voucher.expires_at <= $1
+       AND (
+         failure.binding_id IS NULL OR failure.status='resolved'
+         OR (failure.status='retrying' AND failure.next_retry_at <= $1)
+       )
        AND NOT EXISTS (
          SELECT 1 FROM tokenless_rater_commits commit
+         LEFT JOIN tokenless_scheduled_work_items recovery
+           ON recovery.kind='recover_rater_commit' AND recovery.subject_key=commit.commit_id
          WHERE commit.voucher_id=voucher.voucher_id
-           AND commit.state=ANY($3::text[])
+           AND (
+             commit.state=ANY($3::text[])
+             OR (
+               commit.state=ANY($5::text[])
+               AND (commit.updated_at > $4 OR recovery.state=ANY($6::text[]))
+             )
+           )
        )
      ORDER BY settlement.updated_at ASC,settlement.binding_id ASC LIMIT $2`,
-    [now, limit, [...RECOVERABLE_LOCAL_COMMIT_STATES]],
+    [
+      now,
+      limit,
+      [...FINALIZING_LOCAL_COMMIT_STATES],
+      new Date(now.getTime() - RECOVERY_SCHEDULING_GRACE_MS),
+      [...PRE_SUBMISSION_LOCAL_COMMIT_STATES],
+      [...ACTIVE_RECOVERY_WORK_STATES],
+    ],
   );
   for (const value of expiredVouchers.rows) {
-    const row = value as Row;
-    const evidence = {
-      schemaVersion: "rateloop.network-assignment-terminal-evidence.v1",
-      bindingId: text(row, "binding_id"),
-      assignmentId: text(row, "assignment_id"),
-      selectionBindingHash: text(row, "selection_binding_hash"),
-      voucherId: text(row, "voucher_id"),
-      outcome: "not_submitted",
-      terminalAt: now.toISOString(),
-    };
-    const evidenceHash = sha256(evidence);
+    const candidate = value as Row;
     const client = await dbPool.connect();
     try {
       await client.query("BEGIN");
+      const lockedVoucher = await client.query(
+        `SELECT voucher_id,expires_at FROM tokenless_paid_vouchers
+         WHERE voucher_id=$1 LIMIT 1 FOR UPDATE`,
+        [text(candidate, "voucher_id")],
+      );
+      const current = await client.query(
+        `SELECT settlement.binding_id,settlement.assignment_id,settlement.selection_binding_hash,
+                settlement.voucher_id,settlement.transition_revision,settlement.state
+         FROM tokenless_network_assignment_settlements settlement
+         WHERE settlement.binding_id=$1 AND settlement.voucher_id=$2
+         LIMIT 1 FOR UPDATE`,
+        [text(candidate, "binding_id"), text(candidate, "voucher_id")],
+      );
+      const voucherRow = lockedVoucher.rows[0] as Row | undefined;
+      const row = current.rows[0] as Row | undefined;
+      const commitResult = row
+        ? await client.query(
+            `SELECT commit_id,state,updated_at FROM tokenless_rater_commits
+             WHERE voucher_id=$1
+             LIMIT 1 FOR UPDATE`,
+            [text(row, "voucher_id")],
+          )
+        : null;
+      const commit = commitResult?.rows[0] as Row | undefined;
+      let commitWithRecovery = commit;
+      if (
+        commit &&
+        (PRE_SUBMISSION_LOCAL_COMMIT_STATES as readonly string[]).includes(text(commit, "state") ?? "") &&
+        date(commit, "updated_at").getTime() <= now.getTime() - RECOVERY_SCHEDULING_GRACE_MS
+      ) {
+        await client.query(
+          `INSERT INTO tokenless_scheduled_work_items
+           (item_id,kind,subject_key,state,attempt_count,next_attempt_at,last_error,dead_at,created_at,updated_at)
+           VALUES ($1,'recover_rater_commit',$2,'dead',20,$3,
+                   'Rater commit recovery was not active before voucher settlement expiry.',$3,$3,$3)
+           ON CONFLICT (kind,subject_key) DO NOTHING`,
+          [`swi_${randomUUID().replaceAll("-", "")}`, text(commit, "commit_id"), now],
+        );
+        const recovery = await client.query(
+          `SELECT state FROM tokenless_scheduled_work_items
+           WHERE kind='recover_rater_commit' AND subject_key=$1 LIMIT 1 FOR UPDATE`,
+          [text(commit, "commit_id")],
+        );
+        commitWithRecovery = {
+          ...commit,
+          recovery_state: text(recovery.rows[0] as Row | undefined, "state"),
+        };
+      }
+      if (
+        !voucherRow ||
+        !row ||
+        text(row, "state") !== "voucher_issued" ||
+        date(voucherRow, "expires_at") > now ||
+        commitBlocksVoucherExpiry(commitWithRecovery, now)
+      ) {
+        await resolveNetworkSettlementFailure(client, text(candidate, "binding_id")!, now);
+        await client.query("COMMIT");
+        continue;
+      }
+      if (commit && (PRE_SUBMISSION_LOCAL_COMMIT_STATES as readonly string[]).includes(text(commit, "state") ?? "")) {
+        const failed = await client.query(
+          `UPDATE tokenless_rater_commits
+           SET state='failed',failure_code=$1,updated_at=$2
+           WHERE commit_id=$3 AND state=ANY($4::text[])`,
+          [
+            text(commitWithRecovery, "recovery_state") === "dead" ? "recovery_dead_lettered" : "recovery_not_scheduled",
+            now,
+            text(commit, "commit_id"),
+            [...PRE_SUBMISSION_LOCAL_COMMIT_STATES],
+          ],
+        );
+        if (failed.rowCount !== 1) {
+          throw new TokenlessServiceError(
+            "The local rater commit changed before expired voucher settlement.",
+            409,
+            "network_settlement_transition_conflict",
+            true,
+          );
+        }
+      }
+      const evidence = {
+        schemaVersion: "rateloop.network-assignment-terminal-evidence.v1",
+        bindingId: text(row, "binding_id"),
+        assignmentId: text(row, "assignment_id"),
+        selectionBindingHash: text(row, "selection_binding_hash"),
+        voucherId: text(row, "voucher_id"),
+        outcome: "not_submitted",
+        terminalAt: now.toISOString(),
+      };
+      const evidenceHash = sha256(evidence);
       const revision = integer(row, "transition_revision") + 1;
       await insertReceipt(client, {
         bindingId: text(row, "binding_id")!,
@@ -806,44 +1246,75 @@ export async function reconcileNetworkAssignmentSettlements(
         );
       }
       terminal += 1;
+      await resolveNetworkSettlementFailure(client, text(candidate, "binding_id")!, now);
       await client.query("COMMIT");
     } catch (error) {
       await client.query("ROLLBACK");
-      throw error;
+      await recordNetworkSettlementFailure(text(candidate, "binding_id")!, error, now);
     } finally {
       client.release();
     }
   }
   const due = await dbPool.query(
     `SELECT settlement.binding_id,settlement.assignment_id,settlement.run_id,settlement.case_id,
-            settlement.selection_binding_hash,settlement.deployment_key,settlement.round_id,
-            settlement.content_id,settlement.voucher_id,
-            commit.commit_id,commit.vote_key,commit.transaction_hash,
-            voucher.rater_id,profile.principal_id
+            settlement.selection_binding_hash,settlement.operation_key,settlement.deployment_key,
+            settlement.chain_id,settlement.panel_address,settlement.round_id,
+            settlement.content_id,settlement.voucher_id,settlement.transition_revision,settlement.state,
+            commit.commit_id,commit.voucher_id AS commit_voucher_id,
+            commit.deployment_key AS commit_deployment_key,commit.round_id AS commit_round_id,
+            commit.vote_key AS commit_vote_key,commit.transaction_hash,commit.state AS commit_state,
+            voucher.network_operation_key AS voucher_operation_key,
+            voucher.network_deployment_key AS voucher_deployment_key,
+            voucher.chain_id AS voucher_chain_id,voucher.panel_address AS voucher_panel_address,
+            voucher.round_id AS voucher_round_id,voucher.content_id AS voucher_content_id,
+            voucher.vote_key AS voucher_vote_key,voucher.rater_id,profile.principal_id
      FROM tokenless_network_assignment_settlements settlement
      JOIN tokenless_paid_vouchers voucher ON voucher.voucher_id=settlement.voucher_id
      JOIN tokenless_rater_profiles profile ON profile.rater_id=voucher.rater_id
      JOIN tokenless_rater_commits commit ON commit.voucher_id=voucher.voucher_id
+     LEFT JOIN tokenless_network_settlement_failures failure
+       ON failure.binding_id=settlement.binding_id
      WHERE settlement.state='committed' AND commit.state='confirmed'
+       AND (
+         failure.binding_id IS NULL OR failure.status='resolved'
+         OR (failure.status='retrying' AND failure.next_retry_at <= $2)
+       )
      ORDER BY settlement.updated_at ASC,settlement.binding_id ASC LIMIT $1`,
-    [limit],
+    [limit, now],
   );
   let retry = 0;
   for (const value of due.rows) {
     const row = value as Row;
     try {
+      if (!committedPersistenceIdentityMatches(row)) {
+        throw new TokenlessServiceError(
+          "The committed network settlement has conflicting durable round identities.",
+          409,
+          "network_settlement_identity_mismatch",
+        );
+      }
       const snapshot = await loadSettlement({
         principalId: text(row, "principal_id")!,
+        deploymentKey: text(row, "deployment_key")!,
+        chainId: integer(row, "chain_id"),
+        panelAddress: text(row, "panel_address")!,
         roundId: text(row, "round_id")!,
-        voteKey: text(row, "vote_key")!,
+        voteKey: text(row, "commit_vote_key")!,
         now,
       });
+      if (!committedSnapshotIdentityMatches(row, snapshot)) {
+        throw new TokenlessServiceError(
+          "The returned network settlement does not match the exact committed round.",
+          409,
+          "network_settlement_identity_mismatch",
+        );
+      }
       const outcome = terminalSettlement(snapshot, now);
       if (!outcome) {
         retry += 1;
         continue;
       }
-      const commitKey = tokenlessCommitKey(BigInt(text(row, "round_id")!), getAddress(text(row, "vote_key")!));
+      const commitKey = tokenlessCommitKey(BigInt(text(row, "round_id")!), getAddress(text(row, "commit_vote_key")!));
       const evidence = {
         schemaVersion: "rateloop.network-assignment-terminal-evidence.v1",
         bindingId: text(row, "binding_id"),
@@ -865,6 +1336,47 @@ export async function reconcileNetworkAssignmentSettlements(
       const client = await dbPool.connect();
       try {
         await client.query("BEGIN");
+        await client.query(
+          "SELECT assignment_id FROM tokenless_assurance_assignments WHERE assignment_id=$1 FOR UPDATE",
+          [text(row, "assignment_id")],
+        );
+        const locked = await client.query(
+          `SELECT settlement.binding_id,settlement.assignment_id,settlement.run_id,settlement.case_id,
+                  settlement.selection_binding_hash,settlement.operation_key,settlement.deployment_key,
+                  settlement.chain_id,settlement.panel_address,settlement.round_id,
+                  settlement.content_id,settlement.voucher_id,settlement.transition_revision,settlement.state,
+                  commit.commit_id,commit.voucher_id AS commit_voucher_id,
+                  commit.deployment_key AS commit_deployment_key,commit.round_id AS commit_round_id,
+                  commit.vote_key AS commit_vote_key,commit.transaction_hash,commit.state AS commit_state,
+                  voucher.network_operation_key AS voucher_operation_key,
+                  voucher.network_deployment_key AS voucher_deployment_key,
+                  voucher.chain_id AS voucher_chain_id,voucher.panel_address AS voucher_panel_address,
+                  voucher.round_id AS voucher_round_id,voucher.content_id AS voucher_content_id,
+                  voucher.vote_key AS voucher_vote_key,voucher.rater_id,profile.principal_id
+           FROM tokenless_network_assignment_settlements settlement
+           JOIN tokenless_paid_vouchers voucher ON voucher.voucher_id=settlement.voucher_id
+           JOIN tokenless_rater_profiles profile ON profile.rater_id=voucher.rater_id
+           JOIN tokenless_rater_commits commit ON commit.voucher_id=voucher.voucher_id
+           WHERE settlement.binding_id=$1
+           LIMIT 1 FOR UPDATE OF settlement,voucher,commit`,
+          [text(row, "binding_id")],
+        );
+        const lockedRow = locked.rows[0] as Row | undefined;
+        if (
+          !lockedRow ||
+          text(lockedRow, "state") !== "committed" ||
+          integer(lockedRow, "transition_revision") !== 3 ||
+          text(lockedRow, "commit_state") !== "confirmed" ||
+          !committedPersistenceIdentityMatches(lockedRow) ||
+          committedBindingFingerprint(lockedRow) !== committedBindingFingerprint(row)
+        ) {
+          throw new TokenlessServiceError(
+            "The committed network settlement changed before terminal evidence was stored.",
+            409,
+            "network_settlement_transition_conflict",
+            true,
+          );
+        }
         await insertReceipt(client, {
           bindingId: text(row, "binding_id")!,
           receiptType: "settlement_terminal",
@@ -901,15 +1413,15 @@ export async function reconcileNetworkAssignmentSettlements(
              )`,
           [settlementReference, evidenceHash, now, text(row, "run_id"), text(row, "case_id"), reviewerKeys],
         );
-        if (responses.rowCount !== 1) {
+        if ((responses.rowCount ?? 0) > 1) {
           throw new TokenlessServiceError(
-            "The exact network response settlement binding is unavailable.",
+            "More than one network response matched exact terminal settlement evidence.",
             409,
-            "network_response_settlement_pending",
-            true,
+            "network_response_settlement_conflict",
           );
         }
         terminal += 1;
+        await resolveNetworkSettlementFailure(client, text(row, "binding_id")!, now);
         await client.query("COMMIT");
       } catch (error) {
         await client.query("ROLLBACK");
@@ -918,11 +1430,9 @@ export async function reconcileNetworkAssignmentSettlements(
         client.release();
       }
     } catch (error) {
-      if (error instanceof TokenlessServiceError && error.retryable) {
-        retry += 1;
-        continue;
-      }
-      throw error;
+      await recordNetworkSettlementFailure(text(row, "binding_id")!, error, now);
+      retry += 1;
+      continue;
     }
   }
   return {
@@ -933,6 +1443,8 @@ export async function reconcileNetworkAssignmentSettlements(
 }
 
 export const __networkAssignmentSettlementTestUtils = {
+  commitBlocksVoucherExpiry,
+  expiredSelectionTerminalOutcome,
   selectionBindingHash,
   sha256,
   terminalSettlement,

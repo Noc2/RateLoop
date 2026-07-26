@@ -484,6 +484,24 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
     assignment.network_case_count = networkCases.rows[0]?.case_count ?? 0;
     assignment.network_binding_count = networkSettlements.rows[0]?.binding_count ?? 0;
     assignment.network_committed_count = networkSettlements.rows[0]?.committed_count ?? 0;
+    const terminalNetworkSettlements = await client.query(
+      `SELECT case_id,settlement_reference,settlement_evidence_hash
+       FROM tokenless_network_assignment_settlements
+       WHERE assignment_id=$1 AND state='terminal'`,
+      [assignmentId],
+    );
+    const terminalNetworkByCase = new Map(
+      terminalNetworkSettlements.rows.map(value => {
+        const row = value as QueryRow;
+        return [
+          rowString(row, "case_id")!,
+          {
+            settlementReference: rowString(row, "settlement_reference")!,
+            settlementEvidenceHash: rowString(row, "settlement_evidence_hash")!,
+          },
+        ] as const;
+      }),
+    );
     const accountAddress = rowString(assignment, "reviewer_account_address")!;
     const identityReference = rowString(assignment, "rater_id") ?? principalId;
     const policy = parseJson<HumanAssuranceAudiencePolicy>(assignment.frozen_policy_json, "audience policy");
@@ -616,13 +634,14 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
       serviceError("The completed assignment has no matching response batch.", "assurance_response_conflict", 409);
     }
     for (const record of records) {
+      const terminalSettlement = terminalNetworkByCase.get(record.caseId);
       await client.query(
         `INSERT INTO tokenless_assurance_responses
          (response_id, run_id, case_id, reviewer_key, reviewer_source, choice,
           failure_tag_keys_json, rationale_ciphertext, rationale_key_ref, rationale_digest,
           qualification_keys_json, assurance_capabilities_json, response_digest,
-          settlement_reference, validity, submitted_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NULL, $14, $15, $15)`,
+          settlement_reference,settlement_evidence_hash,validity,submitted_at,updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$17)`,
         [
           `hares_${randomUUID().replaceAll("-", "")}`,
           rowString(assignment, "run_id"),
@@ -637,6 +656,8 @@ export async function submitAssuranceResponses(input: SubmitAssuranceResponsesIn
           canonicalizeHumanAssuranceDocument(qualificationKeys),
           canonicalizeHumanAssuranceDocument(assuranceCapabilities),
           record.responseDigest,
+          terminalSettlement?.settlementReference ?? null,
+          terminalSettlement?.settlementEvidenceHash ?? null,
           "valid",
           now,
         ],
