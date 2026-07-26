@@ -1,4 +1,4 @@
-export const EVM_KMS_SIGNING_FAILURE_CLASSES = [
+export const EVM_SIGNING_FAILURE_CLASSES = [
   "timeout",
   "throttling",
   "access_or_key_configuration",
@@ -6,32 +6,33 @@ export const EVM_KMS_SIGNING_FAILURE_CLASSES = [
   "outage",
 ] as const;
 
-export type EvmKmsSigningFailureClass =
-  (typeof EVM_KMS_SIGNING_FAILURE_CLASSES)[number];
+export type EvmSigningFailureClass =
+  (typeof EVM_SIGNING_FAILURE_CLASSES)[number];
 
-export type EvmKmsSignerRole =
+export type EvmSignerRole =
   | "credential_issuer"
   | "prepaid_funder"
   | "surprise_bonus_funder"
   | "x402_relayer"
   | "keeper";
 
-export type EvmKmsSigningPurpose =
+export type EvmSigningPurpose =
   | "raw_hash"
   | "eip191_message"
   | "eip712_typed_data"
   | "evm_transaction";
 
-export type EvmKmsSigningLedgerEvent = Readonly<{
+export type EvmSigningLedgerEvent = Readonly<{
   eventId: string;
   attemptId: string;
   outcome: "attempted" | "succeeded" | "failed";
-  signerRole: EvmKmsSignerRole;
-  keyArn: string;
+  signerRole: EvmSignerRole;
+  provider: string;
+  keyId: string;
   digest: `0x${string}`;
-  purpose: EvmKmsSigningPurpose;
-  awsRequestId: string | null;
-  errorClass: EvmKmsSigningFailureClass | null;
+  purpose: EvmSigningPurpose;
+  providerRequestId: string | null;
+  errorClass: EvmSigningFailureClass | null;
   retryable: boolean | null;
   signatureHash: `0x${string}` | null;
   transactionHash: `0x${string}` | null;
@@ -40,15 +41,15 @@ export type EvmKmsSigningLedgerEvent = Readonly<{
   recordedAt: Date;
 }>;
 
-export type EvmKmsSigningTerminalEvent = EvmKmsSigningLedgerEvent &
+export type EvmSigningTerminalEvent = EvmSigningLedgerEvent &
   Readonly<{ outcome: "succeeded" | "failed" }>;
 
-export type EvmKmsSigningLedger = Readonly<{
-  append(event: EvmKmsSigningLedgerEvent): Promise<void>;
-  readTerminal(attemptId: string): Promise<EvmKmsSigningTerminalEvent | null>;
+export type EvmSigningLedger = Readonly<{
+  append(event: EvmSigningLedgerEvent): Promise<void>;
+  readTerminal(attemptId: string): Promise<EvmSigningTerminalEvent | null>;
 }>;
 
-const RETRYABLE_FAILURE_CLASSES = new Set<EvmKmsSigningFailureClass>([
+const RETRYABLE_FAILURE_CLASSES = new Set<EvmSigningFailureClass>([
   "timeout",
   "throttling",
   "outage",
@@ -75,10 +76,7 @@ const ACCESS_OR_KEY_NAMES = new Set([
   "DisabledException",
   "ExpiredTokenException",
   "IncorrectKeyException",
-  "InvalidArnException",
-  "InvalidGrantTokenException",
   "InvalidKeyUsageException",
-  "KMSInvalidStateException",
   "NotFoundException",
   "UnrecognizedClientException",
 ]);
@@ -86,6 +84,7 @@ const ACCESS_OR_KEY_NAMES = new Set([
 type ErrorMetadata = {
   name?: unknown;
   code?: unknown;
+  requestId?: unknown;
   $metadata?: { requestId?: unknown };
 };
 
@@ -96,24 +95,25 @@ function errorName(error: unknown) {
   return typeof candidate.code === "string" ? candidate.code : "";
 }
 
-export function awsKmsRequestId(value: unknown): string | null {
+export function providerRequestId(value: unknown): string | null {
   if (!value || typeof value !== "object") return null;
-  const requestId = (value as ErrorMetadata).$metadata?.requestId;
+  const metadata = value as ErrorMetadata;
+  const requestId = metadata.requestId ?? metadata.$metadata?.requestId;
   return typeof requestId === "string" && requestId.length > 0
     ? requestId
     : null;
 }
 
-export function isEvmKmsSigningFailureRetryable(
-  errorClass: EvmKmsSigningFailureClass,
+export function isEvmSigningFailureRetryable(
+  errorClass: EvmSigningFailureClass,
 ) {
   return RETRYABLE_FAILURE_CLASSES.has(errorClass);
 }
 
-export function classifyEvmKmsSigningFailure(
+export function classifyEvmSigningFailure(
   error: unknown,
-): EvmKmsSigningFailureClass {
-  if (error instanceof EvmKmsSigningError) return error.errorClass;
+): EvmSigningFailureClass {
+  if (error instanceof EvmSigningError) return error.errorClass;
   const name = errorName(error);
   if (TIMEOUT_NAMES.has(name)) return "timeout";
   if (THROTTLING_NAMES.has(name)) return "throttling";
@@ -121,54 +121,61 @@ export function classifyEvmKmsSigningFailure(
   return "outage";
 }
 
-export class EvmKmsSigningError extends Error {
-  readonly errorClass: EvmKmsSigningFailureClass;
+export class EvmSigningError extends Error {
+  readonly errorClass: EvmSigningFailureClass;
   readonly retryable: boolean;
-  readonly awsRequestId: string | null;
+  readonly providerRequestId: string | null;
 
   constructor(
     message: string,
-    errorClass: EvmKmsSigningFailureClass,
-    options?: { cause?: unknown; awsRequestId?: string | null },
+    errorClass: EvmSigningFailureClass,
+    options?: { cause?: unknown; providerRequestId?: string | null },
   ) {
     super(
       message,
       options?.cause === undefined ? undefined : { cause: options.cause },
     );
-    this.name = "EvmKmsSigningError";
+    this.name = "EvmSigningError";
     this.errorClass = errorClass;
-    this.retryable = isEvmKmsSigningFailureRetryable(errorClass);
-    this.awsRequestId =
-      options?.awsRequestId ?? awsKmsRequestId(options?.cause);
+    this.retryable = isEvmSigningFailureRetryable(errorClass);
+    this.providerRequestId =
+      options?.providerRequestId ?? providerRequestId(options?.cause);
   }
 }
 
-export function normalizeEvmKmsSigningError(
+export function normalizeEvmSigningError(
   error: unknown,
   options?: {
-    errorClass?: EvmKmsSigningFailureClass;
+    errorClass?: EvmSigningFailureClass;
     message?: string;
-    awsRequestId?: string | null;
+    providerRequestId?: string | null;
   },
 ) {
-  if (error instanceof EvmKmsSigningError) {
-    if (!options?.errorClass && !options?.message && !options?.awsRequestId)
+  if (error instanceof EvmSigningError) {
+    if (
+      !options?.errorClass &&
+      !options?.message &&
+      !options?.providerRequestId
+    ) {
       return error;
-    return new EvmKmsSigningError(
+    }
+    return new EvmSigningError(
       options.message ?? error.message,
       options.errorClass ?? error.errorClass,
       {
         cause: error,
-        awsRequestId: options.awsRequestId ?? error.awsRequestId,
+        providerRequestId:
+          options.providerRequestId ?? error.providerRequestId,
       },
     );
   }
-  return new EvmKmsSigningError(
+  return new EvmSigningError(
     options?.message ?? "Managed EVM signer is unavailable.",
-    options?.errorClass ?? classifyEvmKmsSigningFailure(error),
+    options?.errorClass ?? classifyEvmSigningFailure(error),
     {
       cause: error,
-      awsRequestId: options?.awsRequestId ?? awsKmsRequestId(error),
+      providerRequestId:
+        options?.providerRequestId ?? providerRequestId(error),
     },
   );
 }
@@ -180,18 +187,19 @@ function sameDate(left: Date | null, right: Date | null) {
 }
 
 function sameTerminalEvent(
-  left: EvmKmsSigningTerminalEvent,
-  right: EvmKmsSigningTerminalEvent,
+  left: EvmSigningTerminalEvent,
+  right: EvmSigningTerminalEvent,
 ) {
   return (
     left.eventId === right.eventId &&
     left.attemptId === right.attemptId &&
     left.outcome === right.outcome &&
     left.signerRole === right.signerRole &&
-    left.keyArn === right.keyArn &&
+    left.provider === right.provider &&
+    left.keyId === right.keyId &&
     left.digest === right.digest &&
     left.purpose === right.purpose &&
-    left.awsRequestId === right.awsRequestId &&
+    left.providerRequestId === right.providerRequestId &&
     left.errorClass === right.errorClass &&
     left.retryable === right.retryable &&
     left.signatureHash === right.signatureHash &&
@@ -202,19 +210,19 @@ function sameTerminalEvent(
   );
 }
 
-export async function appendOrReconcileEvmKmsSigningTerminalEvent(
-  ledger: EvmKmsSigningLedger,
-  event: EvmKmsSigningTerminalEvent,
+export async function appendOrReconcileEvmSigningTerminalEvent(
+  ledger: EvmSigningLedger,
+  event: EvmSigningTerminalEvent,
 ) {
   try {
     await ledger.append(event);
     return;
   } catch (appendError) {
-    let recorded: EvmKmsSigningTerminalEvent | null;
+    let recorded: EvmSigningTerminalEvent | null;
     try {
       recorded = await ledger.readTerminal(event.attemptId);
     } catch (readError) {
-      throw new EvmKmsSigningError(
+      throw new EvmSigningError(
         "Managed EVM signing audit ledger is unavailable.",
         "outage",
         {
@@ -222,17 +230,17 @@ export async function appendOrReconcileEvmKmsSigningTerminalEvent(
             [appendError, readError],
             "Terminal ledger write and reconciliation failed.",
           ),
-          awsRequestId: event.awsRequestId,
+          providerRequestId: event.providerRequestId,
         },
       );
     }
     if (recorded && sameTerminalEvent(recorded, event)) return;
-    throw new EvmKmsSigningError(
+    throw new EvmSigningError(
       "Managed EVM signing audit ledger is unavailable.",
       "outage",
       {
         cause: appendError,
-        awsRequestId: event.awsRequestId,
+        providerRequestId: event.providerRequestId,
       },
     );
   }

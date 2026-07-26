@@ -36,15 +36,15 @@
       "import": "./dist/esm/keystore.js",
       "require": "./dist/cjs/keystore.js"
     },
-    "./aws-kms-secp256k1": {
-      "types": "./dist/esm/aws-kms-secp256k1.d.ts",
-      "import": "./dist/esm/aws-kms-secp256k1.js",
-      "require": "./dist/cjs/aws-kms-secp256k1.js"
+    "./evm-signing-audit": {
+      "types": "./dist/esm/evm-signing-audit.d.ts",
+      "import": "./dist/esm/evm-signing-audit.js",
+      "require": "./dist/cjs/evm-signing-audit.js"
     },
-    "./aws-kms-signing-audit": {
-      "types": "./dist/esm/aws-kms-signing-audit.d.ts",
-      "import": "./dist/esm/aws-kms-signing-audit.js",
-      "require": "./dist/cjs/aws-kms-signing-audit.js"
+    "./platform-secret-evm-account": {
+      "types": "./dist/esm/platform-secret-evm-account.d.ts",
+      "import": "./dist/esm/platform-secret-evm-account.js",
+      "require": "./dist/cjs/platform-secret-evm-account.js"
     }
   },
   "typesVersions": {
@@ -52,11 +52,11 @@
       "keystore": [
         "dist/esm/keystore.d.ts"
       ],
-      "aws-kms-secp256k1": [
-        "dist/esm/aws-kms-secp256k1.d.ts"
+      "evm-signing-audit": [
+        "dist/esm/evm-signing-audit.d.ts"
       ],
-      "aws-kms-signing-audit": [
-        "dist/esm/aws-kms-signing-audit.d.ts"
+      "platform-secret-evm-account": [
+        "dist/esm/platform-secret-evm-account.d.ts"
       ],
       "*": [
         "dist/esm/index.d.ts"
