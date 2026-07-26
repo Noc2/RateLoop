@@ -95,6 +95,7 @@ export type ExactNetworkRoundBinding = {
   roundTermsHash: Hash;
   totalFundedAtomic: string;
   maximumCommits: number;
+  voucherDeadline?: Date;
 };
 
 export async function loadExactNetworkRoundBindings(
@@ -181,6 +182,15 @@ export async function loadExactNetworkRoundBindings(
     const productTerms = parseObject(row.terms_json, "network product terms");
     const audiencePolicy = productTerms.audiencePolicy;
     const frozenActual = freezeAdmissionPolicy(audiencePolicy);
+    const productEconomics = productTerms.economics as
+      | {
+          bounty?: { fundedAtomic?: unknown };
+          fee?: { fundedAtomic?: unknown };
+          attemptReserve?: { fundedAtomic?: unknown };
+          totalFundedAtomic?: unknown;
+        }
+      | undefined;
+    const productPanel = productTerms.panel as { requestedSize?: unknown } | undefined;
     const totalFundedAtomic = unsigned(row.total_funded_atomic, "network funded amount");
     const bounty = BigInt(unsigned(roundTerms.bountyAmount, "network bounty amount"));
     const fee = BigInt(unsigned(roundTerms.feeAmount, "network fee amount"));
@@ -204,6 +214,11 @@ export async function loadExactNetworkRoundBindings(
       frozenActual.admissionPolicyHash.toLowerCase() !== admissionPolicyHash ||
       frozenActual.policy.reviewerSource !== "rateloop_network" ||
       frozenActual.policy.compensation !== "paid" ||
+      String(productEconomics?.bounty?.fundedAtomic ?? "") !== bounty.toString() ||
+      String(productEconomics?.fee?.fundedAtomic ?? "") !== fee.toString() ||
+      String(productEconomics?.attemptReserve?.fundedAtomic ?? "") !== reserve.toString() ||
+      String(productEconomics?.totalFundedAtomic ?? "") !== totalFundedAtomic ||
+      Number(productPanel?.requestedSize) !== input.targetCount ||
       BigInt(totalFundedAtomic) !== bounty + fee + reserve
     ) {
       throw new TokenlessServiceError(
@@ -234,6 +249,7 @@ export async function loadExactNetworkRoundBindings(
       roundTermsHash: sha256(roundTerms),
       totalFundedAtomic,
       maximumCommits,
+      voucherDeadline: date(row, "voucher_deadline"),
     };
   });
 }
@@ -295,7 +311,19 @@ function selectionBindingHash(
       reviewerCommitment: input.integrityReviewerCommitment,
       reviewerRoundReservationHash: input.reviewerRoundReservationHash,
     },
-    round: input.round,
+    round: {
+      caseId: input.round.caseId,
+      operationKey: input.round.operationKey,
+      deploymentKey: input.round.deploymentKey,
+      chainId: input.round.chainId,
+      panelAddress: input.round.panelAddress,
+      roundId: input.round.roundId,
+      contentId: input.round.contentId,
+      admissionPolicyHash: input.round.admissionPolicyHash,
+      roundTermsHash: input.round.roundTermsHash,
+      totalFundedAtomic: input.round.totalFundedAtomic,
+      maximumCommits: input.round.maximumCommits,
+    },
   });
 }
 
@@ -456,7 +484,15 @@ export async function loadExactNetworkVoucherSelection(
             voucher.maximum_commits AS voucher_maximum_commits,
             voucher.content_id AS voucher_content_id,
             voucher.admission_policy_hash AS voucher_admission_policy_hash,
-            voucher.voucher_deadline,voucher.status AS voucher_status
+            voucher.voucher_deadline,voucher.status AS voucher_status,
+            reachability.state AS reachability_state,
+            opportunity.status AS opportunity_status,
+            lifecycle.state AS opportunity_lifecycle_state,
+            question.visibility AS question_visibility,
+            question.data_classification AS question_data_classification,
+            question.moderation_status AS question_moderation_status,
+            question.confirmed_no_sensitive_data,
+            content.moderation_status AS content_moderation_status
      FROM tokenless_network_assignment_settlements settlement
      JOIN tokenless_assurance_assignments assignment
        ON assignment.assignment_id=settlement.assignment_id
@@ -475,10 +511,37 @@ export async function loadExactNetworkVoucherSelection(
        ON voucher.chain_id=settlement.chain_id
       AND lower(voucher.panel_address)=lower(settlement.panel_address)
       AND voucher.round_id=settlement.round_id
+     JOIN tokenless_public_network_review_bindings reachability
+       ON reachability.state='audience_ready'
+      AND reachability.operation_key=settlement.operation_key
+      AND reachability.run_id=settlement.run_id
+      AND reachability.case_id=settlement.case_id
+      AND reachability.deployment_key=settlement.deployment_key
+      AND reachability.chain_id=settlement.chain_id
+      AND lower(reachability.panel_address)=lower(settlement.panel_address)
+      AND reachability.round_id=settlement.round_id
+      AND lower(reachability.product_content_id)=lower(settlement.content_id)
+      AND lower(reachability.admission_policy_hash)=lower(settlement.admission_policy_hash)
+      AND reachability.round_terms_hash=settlement.round_terms_hash
+      AND reachability.total_funded_atomic=settlement.total_funded_atomic
+      AND reachability.maximum_commits=settlement.maximum_commits
+     JOIN tokenless_agent_review_opportunities opportunity
+       ON opportunity.workspace_id=reachability.workspace_id
+      AND opportunity.opportunity_id=reachability.opportunity_id
+     JOIN tokenless_agent_review_opportunity_lifecycles lifecycle
+       ON lifecycle.workspace_id=opportunity.workspace_id
+      AND lifecycle.opportunity_id=opportunity.opportunity_id
+     JOIN tokenless_ask_ownership ownership
+       ON ownership.operation_key=settlement.operation_key
+      AND ownership.workspace_id=reachability.workspace_id
+     JOIN tokenless_question_records question
+       ON question.question_id=ownership.question_id
+      AND lower(question.content_id)=lower(settlement.content_id)
+     JOIN tokenless_content_records content ON content.content_id=question.content_id
      WHERE settlement.assignment_id=$1
        AND settlement.chain_id=$2 AND lower(settlement.panel_address)=lower($3)
        AND settlement.round_id=$4 AND lower(settlement.content_id)=lower($5)
-     LIMIT 1 FOR UPDATE OF run,assignment,execution,voucher,settlement`,
+     LIMIT 1 FOR UPDATE OF run,assignment,execution,voucher,settlement,reachability,opportunity,lifecycle,ownership,question,content`,
     [input.assignmentId, input.chainId, input.panelAddress, input.roundId, input.contentId],
   );
   const row = result.rows[0] as Row | undefined;
@@ -495,7 +558,7 @@ export async function loadExactNetworkVoucherSelection(
     !activeUntil ||
     text(row, "principal_id") !== input.principalId ||
     !["frozen", "recruiting", "collecting"].includes(text(row, "run_status") ?? "") ||
-    !["reserved", "accepted"].includes(text(row, "assignment_status") ?? "") ||
+    text(row, "assignment_status") !== "accepted" ||
     activeUntil <= input.now ||
     text(row, "state") !== "selected" ||
     text(row, "operation_key") !== text(row, "execution_operation_key") ||
@@ -512,6 +575,12 @@ export async function loadExactNetworkVoucherSelection(
     text(row, "voucher_content_id")?.toLowerCase() !== text(row, "content_id")?.toLowerCase() ||
     text(row, "voucher_admission_policy_hash")?.toLowerCase() !== text(row, "admission_policy_hash")?.toLowerCase() ||
     text(row, "voucher_status") !== "open" ||
+    text(row, "reachability_state") !== "audience_ready" ||
+    text(row, "question_visibility") !== "public" ||
+    !["public", "synthetic", "redacted"].includes(text(row, "question_data_classification") ?? "") ||
+    text(row, "question_moderation_status") !== "approved" ||
+    row.confirmed_no_sensitive_data !== true ||
+    text(row, "content_moderation_status") !== "approved" ||
     date(row, "voucher_deadline") <= input.now ||
     text(row, "selection_binding_hash") !== input.selectionBindingHash ||
     text(row, "admission_policy_hash")?.toLowerCase() !== input.admissionPolicyHash.toLowerCase() ||

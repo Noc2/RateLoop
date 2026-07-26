@@ -387,6 +387,13 @@ export async function registerProjectCohortReviewer(input: {
       "invitation_required",
     );
   }
+  if (rowString(cohort, "source") === "rateloop_network") {
+    throw new TokenlessServiceError(
+      "RateLoop-network cohort membership is materialized only from the verified global reviewer pool.",
+      409,
+      "network_cohort_platform_managed",
+    );
+  }
   const reviewer = normalizeAddress(input.reviewerAccountAddress, "reviewerAccountAddress");
   const provenance = validateProvenance(input.qualificationProvenance);
   const now = new Date();
@@ -1262,16 +1269,33 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
     throw new TokenlessServiceError("Confidentiality terms hash is invalid.", 400, "invalid_confidentiality_terms");
   }
   const now = input.now ?? new Date();
-  const ttl = integer(
-    input.reservationTtlMs ?? DEFAULT_RESERVATION_TTL_MS,
-    "reservationTtlMs",
-    60_000,
-    MAX_RESERVATION_TTL_MS,
-  );
   const lookup = integrityLookupRuntime();
   const client = await dbPool.connect();
   try {
     await beginIntegrityAssignmentTransaction(client, input.workspaceId);
+    const liveReachability = await client.query(
+      `SELECT binding.binding_id
+       FROM tokenless_public_network_review_bindings binding
+       JOIN tokenless_agent_review_opportunities opportunity
+         ON opportunity.workspace_id=binding.workspace_id
+        AND opportunity.opportunity_id=binding.opportunity_id
+       JOIN tokenless_agent_review_opportunity_lifecycles lifecycle
+         ON lifecycle.workspace_id=opportunity.workspace_id
+        AND lifecycle.opportunity_id=opportunity.opportunity_id
+       WHERE binding.workspace_id=$1 AND binding.project_id=$2 AND binding.run_id=$3
+         AND binding.state='round_bound'
+         AND opportunity.status='review_requested' AND opportunity.run_id=binding.run_id
+         AND lifecycle.state='pending'
+       LIMIT 1 FOR UPDATE OF binding,opportunity,lifecycle`,
+      [input.workspaceId, input.projectId, input.runId],
+    );
+    if (liveReachability.rowCount !== 1) {
+      throw new TokenlessServiceError(
+        "The public network opportunity is no longer live for audience reservation.",
+        409,
+        "public_network_audience_projection_conflict",
+      );
+    }
     const locked = await client.query(
       `SELECT sp.*, c.qualification_rules_json, r.status AS run_status, r.manifest_hash AS current_run_manifest_hash,
               r.policy_hash AS current_policy_hash, p.policy_json, e.lookup_key_version,
@@ -1293,7 +1317,7 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
       !policy?.integrity ||
       rowString(subpanel, "source") !== "rateloop_network" ||
       rowString(subpanel, "selection") !== "randomized" ||
-      rowString(subpanel, "selection_status") !== "pending" ||
+      !["pending", "reserved"].includes(rowString(subpanel, "selection_status") ?? "") ||
       rowString(subpanel, "run_status") !== "frozen" ||
       rowString(subpanel, "run_manifest_hash") !== rowString(subpanel, "current_run_manifest_hash") ||
       rowString(subpanel, "policy_hash") !== rowString(subpanel, "current_policy_hash") ||
@@ -1314,13 +1338,127 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
       targetCount,
       now,
     });
+    const fundedReservationTtl =
+      Math.min(...exactRounds.map(round => round.voucherDeadline?.getTime() ?? now.getTime())) - now.getTime();
+    const ttl = integer(
+      input.reservationTtlMs ?? Math.min(fundedReservationTtl, MAX_RESERVATION_TTL_MS),
+      "reservationTtlMs",
+      60_000,
+      MAX_RESERVATION_TTL_MS,
+    );
+    if (rowString(subpanel, "selection_status") === "reserved") {
+      const replay = await client.query(
+        `SELECT a.assignment_id,a.status,a.reservation_expires_at,a.assignment_expires_at,
+                a.integrity_cluster_pseudonym,a.integrity_risk_band,a.selection_batch_id,
+                a.voucher_marker,COUNT(s.binding_id) AS settlement_count
+         FROM tokenless_assurance_assignments a
+         LEFT JOIN tokenless_network_assignment_settlements s
+           ON s.assignment_id=a.assignment_id AND s.run_id=a.run_id
+         WHERE a.run_id=$1 AND a.subpanel_id=$2 AND a.source='rateloop_network'
+         GROUP BY a.assignment_id,a.status,a.reservation_expires_at,a.assignment_expires_at,
+                  a.integrity_cluster_pseudonym,a.integrity_risk_band,a.selection_batch_id,a.voucher_marker
+         ORDER BY a.assignment_id ASC`,
+        [input.runId, input.subpanelId],
+      );
+      const rows = replay.rows as QueryRow[];
+      if (
+        rows.length !== targetCount ||
+        rows.some(row => {
+          const status = rowString(row, "status");
+          const activeUntil =
+            status === "reserved" ? rowDate(row, "reservation_expires_at") : rowDate(row, "assignment_expires_at");
+          return (
+            !["reserved", "accepted"].includes(status ?? "") ||
+            !activeUntil ||
+            activeUntil <= now ||
+            rowString(row, "selection_batch_id") !== rowString(subpanel, "selection_batch_id") ||
+            !rowString(row, "voucher_marker") ||
+            rowNumber(row, "settlement_count") !== exactRounds.length
+          );
+        })
+      ) {
+        throw new TokenlessServiceError(
+          "The prior network selection is incomplete or expired.",
+          409,
+          "integrity_selection_replay_unavailable",
+        );
+      }
+      const clusterCounts = new Map<string, number>();
+      const riskBandCounts = { low: 0, medium: 0, high: 0 };
+      for (const row of rows) {
+        const cluster = rowString(row, "integrity_cluster_pseudonym")!;
+        clusterCounts.set(cluster, (clusterCounts.get(cluster) ?? 0) + 1);
+        const riskBand = rowString(row, "integrity_risk_band") as keyof typeof riskBandCounts;
+        if (!(riskBand in riskBandCounts)) {
+          throw new TokenlessServiceError(
+            "The prior network selection contains an invalid integrity risk band.",
+            409,
+            "integrity_selection_replay_unavailable",
+          );
+        }
+        riskBandCounts[riskBand] += 1;
+      }
+      const largestCluster = Math.max(...clusterCounts.values());
+      await client.query("COMMIT");
+      return {
+        subpanelId: input.subpanelId,
+        source: "rateloop_network" as const,
+        selectedCount: rows.length,
+        selectionCommitment: rowString(subpanel, "selection_commitment")!,
+        integrity: {
+          epochId: policy.integrity.epochId,
+          manifestHash: policy.integrity.epochManifestHash,
+          independentClusterCount: clusterCounts.size,
+          largestClusterShareBps: Math.ceil((largestCluster * 10_000) / rows.length),
+          riskBandCounts,
+        },
+      };
+    }
+    const customerManagedCollision = await client.query(
+      `SELECT cr.reviewer_account_address
+       FROM tokenless_assurance_cohort_reviewers cr
+       JOIN tokenless_rater_profiles profile
+         ON profile.account_address=cr.reviewer_account_address
+       WHERE cr.project_id=$1 AND cr.cohort_id=$2 AND cr.network_managed=false
+       ORDER BY cr.reviewer_account_address ASC LIMIT 1 FOR SHARE OF cr`,
+      [input.projectId, rowString(subpanel, "cohort_id")],
+    );
+    if (customerManagedCollision.rowCount) {
+      throw new TokenlessServiceError(
+        "A customer-managed cohort row collides with the global RateLoop reviewer namespace.",
+        409,
+        "network_cohort_membership_conflict",
+      );
+    }
     const reviewers = await client.query(
-      `SELECT * FROM tokenless_assurance_cohort_reviewers
-       WHERE project_id = $1 AND cohort_id = $2 AND status = 'active'
-         AND active_reservations < maximum_active_assignments
-         AND (qualification_expires_at IS NULL OR qualification_expires_at > $3)
-       FOR UPDATE`,
-      [input.projectId, rowString(subpanel, "cohort_id"), now],
+      `SELECT profile.account_address AS reviewer_account_address,profile.rater_id
+       FROM tokenless_rater_profiles profile
+       LEFT JOIN tokenless_assurance_cohort_reviewers membership
+         ON membership.project_id=$2 AND membership.cohort_id=$3
+        AND membership.reviewer_account_address=profile.account_address
+        AND membership.network_managed=true
+       WHERE profile.principal_id IS NOT NULL AND profile.deleted_at IS NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM tokenless_assurance_assignments prior
+           WHERE prior.run_id=$1 AND prior.rater_id=profile.rater_id
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM tokenless_assurance_assignments active
+           WHERE active.rater_id=profile.rater_id
+             AND (
+               (active.status='reserved' AND active.reservation_expires_at>$4)
+               OR (active.status='accepted' AND active.assignment_expires_at>$4)
+             )
+         )
+         AND (
+           membership.reviewer_account_address IS NULL
+           OR (
+             membership.status='active'
+             AND membership.active_reservations < membership.maximum_active_assignments
+           )
+         )
+       ORDER BY profile.created_at ASC,profile.rater_id ASC`,
+      [input.runId, input.projectId, rowString(subpanel, "cohort_id"), now],
     );
     const since = new Date(now.getTime() - policy.integrity.recentCoassignmentWindowSeconds * 1_000);
     const history = await client.query(
@@ -1373,10 +1511,33 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
       );
       const member = memberResult.rows[0] as QueryRow | undefined;
       if (!member) continue;
-      const provenance = parseJson<QualificationProvenance[]>(
-        reviewer.qualification_provenance_json,
-        "qualification provenance",
+      const qualificationResult = await client.query(
+        `SELECT qualification_id,cohort_ids_json,qualification_keys_json,verified_at,expires_at
+         FROM tokenless_reviewer_qualifications
+         WHERE rater_id=$1 AND reviewer_source='rateloop_network' AND status='active'
+           AND (expires_at IS NULL OR expires_at > $2)
+         ORDER BY qualification_id ASC`,
+        [rowString(reviewer, "rater_id"), now],
       );
+      const provenance: QualificationProvenance[] = qualificationResult.rows.flatMap(value => {
+        const qualification = value as QueryRow;
+        const cohortIds = parseJson<string[]>(qualification.cohort_ids_json, "qualification cohort ids");
+        if (cohortIds.length && !cohortIds.includes(rowString(subpanel, "cohort_id")!)) return [];
+        const entries = parseJson<Array<string | { key: string; value: string | number | boolean | string[] }>>(
+          qualification.qualification_keys_json,
+          "qualification keys",
+        );
+        return entries.map(entry => ({
+          key: typeof entry === "string" ? entry : entry.key,
+          value: typeof entry === "string" ? true : entry.value,
+          source: "rateloop_network",
+          assertedBy: rowString(qualification, "qualification_id")!,
+          verifiedAt: rowDate(qualification, "verified_at")!.toISOString(),
+          ...(rowDate(qualification, "expires_at")
+            ? { expiresAt: rowDate(qualification, "expires_at")!.toISOString() }
+            : {}),
+        }));
+      });
       if (!satisfiesQualifications(rules, provenance, now)) continue;
       let eligibility: Awaited<ReturnType<typeof paidEligibility>>;
       try {
@@ -1449,6 +1610,89 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
     }
     const seed = randomBytes(32).toString("hex");
     const selection = selectDiversifiedIntegrityPanel({ candidates, constraints: policy.integrity, targetCount, seed });
+    const selectedRaterIds = selection.selected.map(value => value.raterId).sort();
+    const lockedProfiles = await client.query(
+      `SELECT rater_id,account_address,principal_id,deleted_at
+       FROM tokenless_rater_profiles
+       WHERE rater_id=ANY($1::text[]) ORDER BY rater_id ASC FOR UPDATE`,
+      [selectedRaterIds],
+    );
+    const lockedById = new Map(
+      lockedProfiles.rows.map(value => [rowString(value as QueryRow, "rater_id"), value as QueryRow] as const),
+    );
+    if (
+      lockedProfiles.rowCount !== selectedRaterIds.length ||
+      selection.selected.some(chosen => {
+        const locked = lockedById.get(chosen.raterId);
+        return (
+          !locked ||
+          rowString(locked, "account_address") !== chosen.reviewerAccountAddress ||
+          rowString(locked, "principal_id") === null ||
+          locked.deleted_at !== null
+        );
+      })
+    ) {
+      throw new TokenlessServiceError(
+        "A selected network reviewer was deleted during selection.",
+        409,
+        "network_reviewer_identity_conflict",
+        true,
+      );
+    }
+    const crossWorkspaceCapacity = await client.query(
+      `SELECT rater_id,COUNT(*) AS active_count
+       FROM tokenless_assurance_assignments
+       WHERE rater_id=ANY($1::text[])
+         AND (
+           (status='reserved' AND reservation_expires_at>$2)
+           OR (status='accepted' AND assignment_expires_at>$2)
+         )
+       GROUP BY rater_id`,
+      [selectedRaterIds, now],
+    );
+    if (crossWorkspaceCapacity.rows.length) {
+      throw new TokenlessServiceError(
+        "A selected network reviewer reached concurrent capacity.",
+        409,
+        "network_reviewer_capacity_conflict",
+        true,
+      );
+    }
+    for (const chosen of selection.selected) {
+      const refreshed = await paidEligibility(client, chosen.reviewerAccountAddress, now);
+      if (
+        refreshed.raterId !== chosen.raterId ||
+        refreshed.preflight.payoutAccount.toLowerCase() !== chosen.payoutAccountSnapshot.toLowerCase() ||
+        (await isForecastAssignmentRestricted(client, {
+          workspaceId: input.workspaceId,
+          subject: networkForecastSubject(chosen.raterId),
+        }))
+      ) {
+        throw new TokenlessServiceError(
+          "A selected network reviewer changed eligibility during selection.",
+          409,
+          "network_reviewer_eligibility_conflict",
+          true,
+        );
+      }
+      const currentQualifications = await client.query(
+        `SELECT qualification_id FROM tokenless_reviewer_qualifications
+         WHERE rater_id=$1 AND reviewer_source='rateloop_network' AND status='active'
+           AND (expires_at IS NULL OR expires_at>$2)`,
+        [chosen.raterId, now],
+      );
+      const currentQualificationIds = new Set(
+        currentQualifications.rows.map(value => rowString(value as QueryRow, "qualification_id")),
+      );
+      if (chosen.provenance.some(item => !currentQualificationIds.has(item.assertedBy))) {
+        throw new TokenlessServiceError(
+          "A selected network reviewer changed qualifications during selection.",
+          409,
+          "network_reviewer_qualification_conflict",
+          true,
+        );
+      }
+    }
     const batchId = `hasb_${randomUUID().replaceAll("-", "")}`;
     const reservationExpiresAt = new Date(now.getTime() + ttl);
     for (const chosen of selection.selected) {
@@ -1475,6 +1719,35 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
       const integrityJson = canonicalJson(integrityProvenance);
       const integrityHash = `sha256:${hashToken(integrityJson)}`;
       const assuranceJson = canonicalJson(chosen.assuranceSnapshot);
+      const materialized = await client.query(
+        `INSERT INTO tokenless_assurance_cohort_reviewers
+         (project_id,cohort_id,reviewer_account_address,qualification_provenance_json,
+          qualification_expires_at,maximum_active_assignments,active_reservations,
+          status,created_by,created_at,updated_at,network_managed)
+         VALUES ($1,$2,$3,$4,$5,1,0,'active',$6,$7,$7,true)
+         ON CONFLICT (project_id,cohort_id,reviewer_account_address) DO UPDATE SET
+           qualification_provenance_json=EXCLUDED.qualification_provenance_json,
+           qualification_expires_at=EXCLUDED.qualification_expires_at,
+           status='active',updated_at=EXCLUDED.updated_at
+         WHERE tokenless_assurance_cohort_reviewers.network_managed=true
+         RETURNING reviewer_account_address,network_managed`,
+        [
+          input.projectId,
+          rowString(subpanel, "cohort_id"),
+          chosen.reviewerAccountAddress,
+          JSON.stringify(chosen.provenance),
+          provenanceExpiry(chosen.provenance),
+          manager,
+          now,
+        ],
+      );
+      if (materialized.rowCount !== 1 || materialized.rows[0]?.network_managed !== true) {
+        throw new TokenlessServiceError(
+          "A customer-managed cohort row collides with the global RateLoop reviewer namespace.",
+          409,
+          "network_cohort_membership_conflict",
+        );
+      }
       await client.query(
         `INSERT INTO tokenless_assurance_assignments
          (assignment_id, workspace_id, project_id, run_id, subpanel_id, cohort_id,
@@ -1958,6 +2231,13 @@ export async function recoverExpiredAudienceAssignment(input: {
     ) {
       throw new TokenlessServiceError("Assignment cannot be recovered.", 409, "assignment_recovery_unavailable");
     }
+    if (rowString(row, "source") === "rateloop_network") {
+      throw new TokenlessServiceError(
+        "Expired public network seats are immutable and cannot be revived.",
+        409,
+        "network_assignment_recovery_unavailable",
+      );
+    }
     const reviewer = rowString(row, "reviewer_account_address")!;
     assertAssuranceAssignmentSettlementAvailable({
       paidAssignment: row.paid_assignment === true,
@@ -2046,7 +2326,7 @@ async function issueAssignmentArtifactLeases(
     sql: `SELECT a.workspace_id, a.project_id, a.reviewer_account_address,
                  a.lease_issuer_account_address, a.confidentiality_terms_hash,
                  a.confidentiality_accepted_at, a.assignment_expires_at,
-                 a.source, a.paid_assignment,
+                 a.source, a.paid_assignment, a.voucher_marker,
                  a.private_group_id, a.private_group_policy_version, a.private_group_policy_hash,
                  r.status AS run_status, r.manifest_hash AS current_run_manifest_hash,
                  r.policy_hash AS current_policy_hash, sp.run_manifest_hash, sp.policy_hash,
@@ -2086,6 +2366,15 @@ async function issueAssignmentArtifactLeases(
     rowString(row, "policy_hash") !== rowString(row, "current_policy_hash")
   ) {
     throw new TokenlessServiceError("Assignment not found.", 404, "assignment_not_found");
+  }
+  if (rowString(row, "source") === "rateloop_network") {
+    await dbClient.execute({
+      sql: `UPDATE tokenless_assurance_assignments
+            SET lease_state='issued',updated_at=?
+            WHERE assignment_id=? AND status='accepted'`,
+      args: [now, assignmentId],
+    });
+    return [];
   }
   const leases = [];
   try {
@@ -2217,6 +2506,47 @@ export async function acceptAudienceAssignment(input: {
       ) {
         throw new TokenlessServiceError("Assignment reservation expired.", 410, "assignment_expired");
       }
+      if (rowString(row, "source") === "rateloop_network") {
+        const live = await client.query(
+          `SELECT reachability.binding_id
+           FROM tokenless_network_assignment_settlements settlement
+           JOIN tokenless_public_network_review_bindings reachability
+             ON reachability.state='audience_ready'
+            AND reachability.operation_key=settlement.operation_key
+            AND reachability.run_id=settlement.run_id
+            AND reachability.case_id=settlement.case_id
+           JOIN tokenless_agent_review_opportunities opportunity
+             ON opportunity.workspace_id=reachability.workspace_id
+            AND opportunity.opportunity_id=reachability.opportunity_id
+           JOIN tokenless_agent_review_opportunity_lifecycles lifecycle
+             ON lifecycle.workspace_id=opportunity.workspace_id
+            AND lifecycle.opportunity_id=opportunity.opportunity_id
+           JOIN tokenless_ask_ownership ownership
+             ON ownership.operation_key=settlement.operation_key
+            AND ownership.workspace_id=reachability.workspace_id
+           JOIN tokenless_question_records question
+             ON question.question_id=ownership.question_id
+            AND lower(question.content_id)=lower(settlement.content_id)
+           JOIN tokenless_content_records content
+             ON content.content_id=question.content_id
+           WHERE settlement.assignment_id=$1 AND settlement.state='selected'
+             AND opportunity.status='review_requested' AND lifecycle.state='pending'
+             AND question.visibility='public'
+             AND question.data_classification IN ('public','synthetic','redacted')
+             AND question.moderation_status='approved'
+             AND question.confirmed_no_sensitive_data=true
+             AND content.moderation_status='approved'
+           LIMIT 1 FOR UPDATE OF settlement,reachability,opportunity,lifecycle,ownership,question,content`,
+          [input.assignmentId],
+        );
+        if (live.rowCount !== 1) {
+          throw new TokenlessServiceError(
+            "The public network review is no longer accepting reviewers.",
+            409,
+            "public_network_opportunity_not_live",
+          );
+        }
+      }
       let voucherMarker: string | null = null;
       if (row.paid_assignment === true) {
         const source = rowString(row, "source") as CohortSource;
@@ -2224,7 +2554,12 @@ export async function acceptAudienceAssignment(input: {
           reviewerSource: source,
           ...(source === "customer_invited" ? { workspaceId: rowString(row, "workspace_id") } : {}),
         });
-        voucherMarker = `eligibility:${eligibility.raterId}:${createHash("sha256").update(`${input.assignmentId}:${reviewer}`).digest("hex")}`;
+        voucherMarker =
+          source === "rateloop_network"
+            ? rowString(row, "voucher_marker")
+            : `eligibility:${eligibility.raterId}:${createHash("sha256")
+                .update(`${input.assignmentId}:${reviewer}`)
+                .digest("hex")}`;
       }
       await client.query(
         `UPDATE tokenless_assurance_assignments
@@ -2262,7 +2597,9 @@ export async function getAssignmentOnlyTask(input: { baseAccountAddress: string;
                  sp.private_group_id AS subpanel_private_group_id,
                  sp.private_group_policy_version AS subpanel_private_group_policy_version,
                  sp.private_group_policy_hash AS subpanel_private_group_policy_hash,
-                 s.manifest_json AS suite_manifest_json, ap.policy_json
+                 s.manifest_json AS suite_manifest_json, ap.policy_json,
+                 network_content.content_id AS public_content_id,
+                 network_content.content_json AS public_content_json
           FROM tokenless_assurance_assignments a
           JOIN tokenless_assurance_runs r ON r.run_id = a.run_id AND r.project_id = a.project_id
           JOIN tokenless_assurance_run_subpanels sp ON sp.subpanel_id = a.subpanel_id
@@ -2270,6 +2607,19 @@ export async function getAssignmentOnlyTask(input: { baseAccountAddress: string;
           JOIN tokenless_assurance_suites s ON s.suite_id = r.suite_id AND s.version = r.suite_version
           JOIN tokenless_assurance_audience_policies ap
             ON ap.policy_id = r.audience_policy_id AND ap.version = r.audience_policy_version
+          LEFT JOIN tokenless_public_network_review_bindings reachability
+            ON reachability.run_id=a.run_id AND reachability.state='audience_ready'
+          LEFT JOIN tokenless_ask_ownership network_ownership
+            ON network_ownership.operation_key=reachability.operation_key
+          LEFT JOIN tokenless_question_records network_question
+            ON network_question.question_id=network_ownership.question_id
+           AND network_question.visibility='public'
+           AND network_question.data_classification IN ('public','synthetic','redacted')
+           AND network_question.moderation_status='approved'
+           AND network_question.confirmed_no_sensitive_data=true
+          LEFT JOIN tokenless_content_records network_content
+            ON network_content.content_id=network_question.content_id
+           AND network_content.moderation_status='approved'
           WHERE a.assignment_id = ?
             AND ((a.rater_id IS NOT NULL AND owner_profile.principal_id = ?)
               OR (a.rater_id IS NULL AND a.reviewer_account_address = ?))
@@ -2324,6 +2674,13 @@ export async function getAssignmentOnlyTask(input: { baseAccountAddress: string;
   }
   const suiteManifest = parseJson<{ rubric?: unknown }>(assignment.suite_manifest_json, "suite manifest");
   const rubric = parseHumanAssuranceRubric(suiteManifest.rubric);
+  const publicNetworkContent =
+    rowString(assignment, "source") === "rateloop_network"
+      ? {
+          contentId: rowString(assignment, "public_content_id"),
+          content: parseJson<unknown>(assignment.public_content_json, "public review content"),
+        }
+      : null;
   const artifact = (artifactId: string) => {
     const lease = leases.get(artifactId);
     if (!lease) throw new TokenlessServiceError("Artifact lease expired.", 410, "artifact_lease_expired");
@@ -2352,6 +2709,7 @@ export async function getAssignmentOnlyTask(input: { baseAccountAddress: string;
       failureTags: rubric.failureTags,
       rationale: rubric.rationale,
     },
+    publicContent: publicNetworkContent,
     cases: caseResult.rows.map(value => {
       const row = value as QueryRow;
       const variantAId = rowString(row, "variant_a_artifact_id")!;
@@ -2361,11 +2719,18 @@ export async function getAssignmentOnlyTask(input: { baseAccountAddress: string;
         position: rowNumber(row, "position"),
         title: rowString(row, "title"),
         instructions: rowString(row, "instructions"),
-        options: [
-          { key: "A", ...artifact(variantAId) },
-          { key: "B", ...artifact(variantBId) },
-        ],
-        context: parseJson<string[]>(row.context_artifact_ids_json, "context artifact ids").map(artifact),
+        options: publicNetworkContent
+          ? [
+              { key: "A", artifactId: variantAId },
+              { key: "B", artifactId: variantBId },
+            ]
+          : [
+              { key: "A", ...artifact(variantAId) },
+              { key: "B", ...artifact(variantBId) },
+            ],
+        context: publicNetworkContent
+          ? []
+          : parseJson<string[]>(row.context_artifact_ids_json, "context artifact ids").map(artifact),
         objectiveReference: rowString(row, "objective_reference"),
       };
     }),

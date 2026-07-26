@@ -43,6 +43,7 @@ import { maximumSurpriseBonusForBase } from "~~/lib/tokenless/surpriseBounties";
 
 type Row = Record<string, unknown>;
 const BYTES32 = /^0x[0-9a-fA-F]{64}$/;
+const SHA256 = /^sha256:[0-9a-f]{64}$/u;
 const SIGNATURE = /^0x[0-9a-fA-F]{130}$/;
 const IDEMPOTENCY = /^[A-Za-z0-9._:-]{8,160}$/;
 
@@ -125,6 +126,9 @@ export async function listPaidRaterTasks(
                  c.content_json, e.round_terms_json, e.operation_key,
                  network_binding.assignment_id AS network_assignment_id,
                  network_binding.selection_binding_hash AS network_selection_binding_hash,
+                 network_binding.assignment_status AS network_assignment_status,
+                 network_binding.confidentiality_terms_hash AS network_confidentiality_terms_hash,
+                 network_binding.assignment_expires_at AS network_assignment_expires_at,
                  CASE WHEN v.voucher_id IS NULL THEN false ELSE true END AS already_vouchered
           FROM tokenless_voucher_rounds vr
           JOIN tokenless_chain_executions e ON e.chain_id = vr.chain_id AND e.panel_address = vr.panel_address
@@ -138,7 +142,13 @@ export async function listPaidRaterTasks(
             SELECT settlement.assignment_id,settlement.selection_binding_hash,
                    settlement.operation_key,settlement.deployment_key,settlement.chain_id,
                    settlement.panel_address,settlement.round_id,settlement.content_id,
-                   settlement.admission_policy_hash,assignment.rater_id
+                   settlement.admission_policy_hash,assignment.rater_id,
+                   assignment.status AS assignment_status,
+                   assignment.confidentiality_terms_hash,
+                   CASE WHEN assignment.status='reserved'
+                     THEN assignment.reservation_expires_at
+                     ELSE assignment.assignment_expires_at
+                   END AS assignment_expires_at
             FROM tokenless_network_assignment_settlements settlement
             INNER JOIN tokenless_assurance_assignments assignment
               ON assignment.assignment_id=settlement.assignment_id
@@ -147,10 +157,34 @@ export async function listPaidRaterTasks(
              AND assignment.source='rateloop_network'
             INNER JOIN tokenless_assurance_runs run ON run.run_id=assignment.run_id
              AND run.status IN ('frozen','recruiting','collecting')
+            INNER JOIN tokenless_public_network_review_bindings reachability
+              ON reachability.state='audience_ready'
+             AND reachability.operation_key=settlement.operation_key
+             AND reachability.run_id=settlement.run_id
+             AND reachability.case_id=settlement.case_id
+             AND reachability.deployment_key=settlement.deployment_key
+             AND reachability.chain_id=settlement.chain_id
+             AND lower(reachability.panel_address)=lower(settlement.panel_address)
+             AND reachability.round_id=settlement.round_id
+             AND lower(reachability.product_content_id)=lower(settlement.content_id)
+             AND lower(reachability.admission_policy_hash)=lower(settlement.admission_policy_hash)
+             AND reachability.round_terms_hash=settlement.round_terms_hash
+             AND reachability.total_funded_atomic=settlement.total_funded_atomic
+             AND reachability.maximum_commits=settlement.maximum_commits
+            INNER JOIN tokenless_agent_review_opportunities opportunity
+              ON opportunity.workspace_id=reachability.workspace_id
+             AND opportunity.opportunity_id=reachability.opportunity_id
+            INNER JOIN tokenless_agent_review_opportunity_lifecycles lifecycle
+              ON lifecycle.workspace_id=opportunity.workspace_id
+             AND lifecycle.opportunity_id=opportunity.opportunity_id
             WHERE settlement.state IN ('selected','voucher_issued','committed')
               AND (
                 (assignment.status='reserved' AND assignment.reservation_expires_at > ?)
                 OR (assignment.status='accepted' AND assignment.assignment_expires_at > ?)
+              )
+              AND (
+                assignment.status='accepted'
+                OR (opportunity.status='review_requested' AND lifecycle.state='pending')
               )
           ) network_binding
             ON network_binding.rater_id=p.rater_id
@@ -172,6 +206,7 @@ export async function listPaidRaterTasks(
              )
           WHERE vr.status = 'open' AND vr.voucher_deadline > ? AND c.moderation_status = 'approved'
             AND q.visibility = 'public' AND q.data_classification IN ('public', 'synthetic', 'redacted')
+            AND q.moderation_status='approved' AND q.confirmed_no_sensitive_data=true
             AND (? = '' OR c.content_json ILIKE ?)
           ORDER BY vr.voucher_deadline ASC LIMIT 50`,
     args: [principalId, now, now, now, query, `%${query}%`],
@@ -181,6 +216,15 @@ export async function listPaidRaterTasks(
     const reviewerSource = boundTaskReviewerSource(row);
     if (!reviewerSource) return [];
     if (reviewerSource === "rateloop_network" && !rowString(row, "network_assignment_id")) return [];
+    if (
+      reviewerSource === "rateloop_network" &&
+      (!["reserved", "accepted"].includes(rowString(row, "network_assignment_status") ?? "") ||
+        !SHA256.test(rowString(row, "network_confidentiality_terms_hash") ?? "") ||
+        !row.network_assignment_expires_at ||
+        new Date(String(row.network_assignment_expires_at)) <= now)
+    ) {
+      return [];
+    }
     const terms = JSON.parse(rowString(row, "round_terms_json")!) as Record<string, string | number>;
     const maximumCommits = Number(terms.maximumCommits);
     const disclosureBeaconRound = Number(terms.beaconRound);
@@ -208,6 +252,9 @@ export async function listPaidRaterTasks(
           ? {
               assignmentId: rowString(row, "network_assignment_id")!,
               selectionBindingHash: rowString(row, "network_selection_binding_hash") as `sha256:${string}`,
+              assignmentStatus: rowString(row, "network_assignment_status") as "reserved" | "accepted",
+              confidentialityTermsHash: rowString(row, "network_confidentiality_terms_hash") as `sha256:${string}`,
+              assignmentExpiresAt: new Date(String(row.network_assignment_expires_at)).toISOString(),
             }
           : {}),
         voucherDeadline: new Date(String(row.voucher_deadline)).toISOString(),
