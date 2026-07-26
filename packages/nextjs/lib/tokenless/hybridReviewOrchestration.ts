@@ -368,6 +368,18 @@ export async function ensureHybridReviewOperation(seed: HybridReviewParentSeed, 
   validateSeed(seed);
   const hybridOperationId = id("hybrid", seed.parentBindingHash);
   return transaction(async client => {
+    const workspace = await client.query(
+      `SELECT status FROM tokenless_workspaces
+       WHERE workspace_id=$1 LIMIT 1 FOR SHARE`,
+      [seed.workspaceId],
+    );
+    if (text(workspace.rows[0], "status") !== "active") {
+      throw new TokenlessServiceError(
+        "The workspace cannot start a hybrid review.",
+        409,
+        "hybrid_review_workspace_unavailable",
+      );
+    }
     const retention = await client.query(
       `SELECT evidence_retention_months FROM tokenless_workspace_evidence_retention_policies
        WHERE workspace_id=$1 AND superseded_at IS NULL LIMIT 1 FOR UPDATE`,

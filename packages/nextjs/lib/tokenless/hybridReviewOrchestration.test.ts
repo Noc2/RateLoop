@@ -617,3 +617,21 @@ test("workspace deletion remains blocked while a hybrid review can create review
   assert.ok(preview.blockers.some(blocker => blocker.code === "workspace_assignments_active"));
   assert.ok(preview.impact.activeWork > 0);
 });
+
+test("a deleted workspace cannot resurrect a hybrid review operation", async () => {
+  const seeded = await fixture();
+  await dbClient.execute({
+    sql: `UPDATE tokenless_workspaces SET status='deleted',deleted_at=?,updated_at=?
+          WHERE workspace_id=?`,
+    args: [NOW, NOW, seeded.workspaceId],
+  });
+  await assert.rejects(
+    () => ensureHybridReviewOperation(seeded, NOW),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "hybrid_review_workspace_unavailable",
+  );
+  const stored = await dbClient.execute({
+    sql: "SELECT COUNT(*) AS count FROM tokenless_hybrid_review_operations WHERE workspace_id=?",
+    args: [seeded.workspaceId],
+  });
+  assert.equal(Number(stored.rows[0]?.count), 0);
+});
