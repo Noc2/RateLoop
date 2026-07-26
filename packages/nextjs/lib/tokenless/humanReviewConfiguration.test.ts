@@ -162,6 +162,76 @@ test("manual handoff normalizes owner mutations and rejects contradictory direct
   );
 });
 
+test("hybrid owner selection emits distinct invited and network subpanel cohorts", async () => {
+  const setup = await fixture();
+  const saved = await putHumanReviewConfigurationForOwner({
+    accountAddress: OWNER,
+    workspaceId: setup.workspaceId,
+    agentId: setup.agent.agentId,
+    body: {
+      expectedBindingVersion: null,
+      selection: {
+        mode: "adaptive",
+        enforcementMode: "advisory",
+        agreementThresholdBps: 8_000,
+        productionFloorBps: 1_000,
+        fixedRateBps: null,
+        maximumUnreviewedGap: 20,
+        requiredRiskTiers: [],
+        criticalRiskTiers: ["critical"],
+        minimumConfidenceBps: null,
+        maximumLatencyMs: null,
+      },
+      requestProfile: {
+        questionAuthority: "owner_fixed",
+        criterion: setup.profileInput.criterion,
+        positiveLabel: setup.profileInput.positiveLabel,
+        negativeLabel: setup.profileInput.negativeLabel,
+        rationaleMode: setup.profileInput.rationaleMode,
+        audience: "hybrid",
+        contentBoundary: "public_or_test",
+        privateSensitivity: null,
+        privateGroupId: setup.group.groupId,
+        requiredExpertiseKeys: [],
+        responseWindowSeconds: setup.profileInput.responseWindowSeconds,
+        panelSize: 3,
+        compensationMode: "usdc",
+        bountyPerSeatAtomic: "1000000",
+        feedbackBonusEnabled: false,
+      },
+      authority: "check_only",
+    },
+  });
+  const stored = await dbClient.execute({
+    sql: `SELECT audience_policy_json FROM tokenless_agent_review_policies
+          WHERE workspace_id=? AND policy_id=? AND version=?`,
+    args: [setup.workspaceId, saved.configuration.selectionPolicy.id, saved.configuration.selectionPolicy.version],
+  });
+  const policy = JSON.parse(String(stored.rows[0]?.audience_policy_json)) as {
+    reviewerSource: string;
+    selection: string;
+    cohorts: Array<{
+      cohortId: string;
+      minimumReviewers: number;
+      maximumReviewers: number;
+    }>;
+  };
+  assert.equal(policy.reviewerSource, "hybrid");
+  assert.equal(policy.selection, "randomized");
+  assert.equal(policy.cohorts.length, 2);
+  assert.equal(new Set(policy.cohorts.map(cohort => cohort.cohortId)).size, 2);
+  assert.ok(policy.cohorts.some(cohort => cohort.cohortId.startsWith("hacoh_setup_")));
+  assert.ok(policy.cohorts.some(cohort => cohort.cohortId.startsWith("hacoh_network_")));
+  assert.equal(
+    policy.cohorts.reduce((sum, cohort) => sum + cohort.minimumReviewers, 0),
+    3,
+  );
+  assert.equal(
+    policy.cohorts.reduce((sum, cohort) => sum + cohort.maximumReviewers, 0),
+    3,
+  );
+});
+
 test("optimistic saves append one binding version while carrying forward unchanged object versions", async () => {
   const setup = await fixture();
   const created = await saveHumanReviewConfiguration({

@@ -1364,6 +1364,14 @@ function assertPrivateSensitivityAllowed(requested: string | null, maximum: stri
   }
 }
 
+function ownerNetworkSupplyCohortId(input: { workspaceId: string; policyId: string; version: number }) {
+  const suffix = createHash("sha256")
+    .update(stableJson(["rateloop.owner-network-supply-cohort.v1", input.workspaceId, input.policyId, input.version]))
+    .digest("hex")
+    .slice(0, 40);
+  return `hacoh_network_${suffix}`;
+}
+
 async function versionOwnerSelection(
   client: PoolClient,
   input: {
@@ -1418,6 +1426,8 @@ async function versionOwnerSelection(
             privateGroupId: profile.privateGroupId,
           });
     const networkSupply = reviewerSource !== "customer_invited";
+    const invitedReviewers = reviewerSource === "hybrid" ? Math.ceil(profile.panelSize / 2) : profile.panelSize;
+    const networkReviewers = profile.panelSize - invitedReviewers;
     const disabledIntegrityManifest = sha256(
       stableJson({
         schemaVersion: "rateloop.disabled-network-integrity.v1",
@@ -1432,15 +1442,32 @@ async function versionOwnerSelection(
       reviewerSource,
       compensation,
       cohorts:
-        privateRouting === null
-          ? []
-          : [
+        reviewerSource === "hybrid" && privateRouting !== null
+          ? [
               {
                 cohortId: privateRouting.cohortId,
-                minimumReviewers: profile.panelSize,
-                maximumReviewers: profile.panelSize,
+                minimumReviewers: invitedReviewers,
+                maximumReviewers: invitedReviewers,
               },
-            ],
+              {
+                cohortId: ownerNetworkSupplyCohortId({
+                  workspaceId: input.workspaceId,
+                  policyId,
+                  version,
+                }),
+                minimumReviewers: networkReviewers,
+                maximumReviewers: networkReviewers,
+              },
+            ]
+          : privateRouting === null
+            ? []
+            : [
+                {
+                  cohortId: privateRouting.cohortId,
+                  minimumReviewers: profile.panelSize,
+                  maximumReviewers: profile.panelSize,
+                },
+              ],
       selection: reviewerSource === "customer_invited" ? "customer_named" : "randomized",
       fallbacks: { allowed: false, sources: [] },
       requiredQualifications,
