@@ -27,6 +27,9 @@ WORKDIR /app
 
 RUN YARN_ENABLE_IMMUTABLE_INSTALLS=true yarn workspaces focus @rateloop/ponder --production
 
+# Ponder loads every TypeScript module under src/ as production indexer code.
+RUN ! find packages/ponder/src -type f \( -name "*.test.ts" -o -name "*.spec.ts" \) -print -quit | grep -q .
+
 # Exercise the native Node 24 TypeScript import path used by scripts/start.mjs.
 # Vite resolves extensionless imports during tests, but production loads this
 # preflight directly before Ponder starts.

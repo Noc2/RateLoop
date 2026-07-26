@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createPublicClient, custom } from "viem";
-import { createOrderedRpcFallbackTransport, resolvePonderRpcUrls } from "./rpc";
-import type { TokenlessDeployment } from "./protocol-deployment";
+import { createOrderedRpcFallbackTransport, resolvePonderRpcUrls } from "../src/rpc";
+import type { TokenlessDeployment } from "../src/protocol-deployment";
 
 const deployment = {
   chainId: 84_532,
