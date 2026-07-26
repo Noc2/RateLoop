@@ -66,6 +66,7 @@ import { humanReviewConfirmationMessage } from "~~/components/tokenless/agents/h
 import { Button } from "~~/components/tokenless/ui/Button";
 import { DurationInput } from "~~/components/ui/DurationInput";
 import { type AgentSetupScreenStep, agentSetupUrl } from "~~/lib/tokenless/agentSetupNavigation";
+import { configuredHumanReviewLaneForSelection, configuredHumanReviewLanes } from "~~/lib/tokenless/reviewCapabilities";
 import type {
   ReviewerExpertiseDefinition,
   ReviewerExpertiseRequirement,
@@ -100,6 +101,12 @@ const REVIEW_AUDIENCE_OPTIONS = [
   ["private_invited", "Invited reviewers", "Only people you invite can review private workspace material."],
   ["hybrid", "Hybrid", "Invited and RateLoop network reviewers."],
 ] as const;
+
+const CONFIGURED_HUMAN_REVIEW_LANES = configuredHumanReviewLanes();
+
+function configuredAudienceOption(audience: ReviewAudienceFormValues["audience"]) {
+  return configuredHumanReviewLaneForSelection(audience, audience === "private_invited" ? "unpaid" : "usdc");
+}
 
 type ExpertiseDefinitionsResponse = {
   definitions: ReviewerExpertiseDefinition[];
@@ -1328,7 +1335,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   checked={reviewCriterion.questionAuthority === "agent_per_request"}
                   onChange={() => changeQuestionAuthority("agent_per_request")}
                   label="Let the agent ask each time"
-                  description="The agent supplies a question and two answers for each review."
+                  description={`The agent supplies a question and two answers for each review. ${CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.message}`}
+                  disabled={!CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.available}
                 />
               </SetupChoiceGroup>
             </fieldset>
@@ -1520,21 +1528,25 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 <fieldset>
                   <legend className="text-lg font-semibold">Who should review?</legend>
                   <SetupChoiceGroup>
-                    {REVIEW_AUDIENCE_OPTIONS.map(([value, label, description]) => (
-                      <SetupRadioChoice
-                        key={value}
-                        id={`agent-setup-review-audience-${value}`}
-                        name="audience"
-                        value={value}
-                        checked={reviewAudience.audience === value}
-                        onChange={() => changeReviewAudience(value)}
-                        label={label}
-                        description={description}
-                        disabled={
-                          reviewCriterion.questionAuthority === "agent_per_request" && value !== "public_network"
-                        }
-                      />
-                    ))}
+                    {REVIEW_AUDIENCE_OPTIONS.map(([value, label, description]) => {
+                      const configuredLane = configuredAudienceOption(value);
+                      return (
+                        <SetupRadioChoice
+                          key={value}
+                          id={`agent-setup-review-audience-${value}`}
+                          name="audience"
+                          value={value}
+                          checked={reviewAudience.audience === value}
+                          onChange={() => changeReviewAudience(value)}
+                          label={label}
+                          description={`${description} ${configuredLane.available ? "" : configuredLane.message}`}
+                          disabled={
+                            !configuredLane.available ||
+                            (reviewCriterion.questionAuthority === "agent_per_request" && value !== "public_network")
+                          }
+                        />
+                      );
+                    })}
                   </SetupChoiceGroup>
                 </fieldset>
                 {reviewAudience.audience !== "private_invited" ? (
@@ -1840,9 +1852,10 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       checked={
                         reviewAudience.audience !== "private_invited" || reviewCompensation.compensationMode === "usdc"
                       }
+                      disabled={!configuredHumanReviewLaneForSelection(reviewAudience.audience, "usdc").available}
                       onChange={() => changeReviewCompensationMode("usdc")}
                       label="Add USDC bounty"
-                      description="Pay each accepted reviewer."
+                      description={`Pay each accepted reviewer. ${configuredHumanReviewLaneForSelection(reviewAudience.audience, "usdc").message}`}
                     />
                   </SetupChoiceGroup>
                   {reviewAudience.audience !== "private_invited" ? (

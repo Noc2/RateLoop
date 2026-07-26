@@ -56,6 +56,7 @@ export const HUMAN_REVIEW_IMPLEMENTATION_READINESS = {
 >;
 
 type HumanReviewLaneImplementationKey = keyof typeof HUMAN_REVIEW_LANE_IMPLEMENTATION;
+export type HumanReviewAudienceSource = "customer_invited" | "rateloop_network" | "hybrid";
 
 const HUMAN_REVIEW_LANE_UNAVAILABLE_MESSAGES: Record<HumanReviewLaneImplementationKey, string> = {
   privateInvitedUnpaid: "Invited unpaid review delivery is not implemented yet.",
@@ -89,6 +90,31 @@ export function configuredHumanReviewLanes() {
       message: configuredHumanReviewLaneMessage("hybridPublicSafe"),
     },
   } as const;
+}
+
+export function configuredHumanReviewLaneForSelection(
+  audience: HumanReviewAudience,
+  compensationMode: HumanReviewCompensationMode,
+) {
+  const key: HumanReviewLaneImplementationKey =
+    audience === "public_network"
+      ? "publicPaidNetwork"
+      : audience === "hybrid"
+        ? "hybridPublicSafe"
+        : compensationMode === "usdc"
+          ? "privateInvitedPaid"
+          : "privateInvitedUnpaid";
+  return { key, ...configuredHumanReviewLanes()[key] };
+}
+
+export function configuredHumanReviewAudienceSources(): readonly HumanReviewAudienceSource[] {
+  const sources: HumanReviewAudienceSource[] = [];
+  if (HUMAN_REVIEW_LANE_IMPLEMENTATION.privateInvitedUnpaid || HUMAN_REVIEW_LANE_IMPLEMENTATION.privateInvitedPaid) {
+    sources.push("customer_invited");
+  }
+  if (HUMAN_REVIEW_LANE_IMPLEMENTATION.publicPaidNetwork) sources.push("rateloop_network");
+  if (HUMAN_REVIEW_LANE_IMPLEMENTATION.hybridPublicSafe) sources.push("hybrid");
+  return sources;
 }
 
 export function deployedHumanReviewReadiness(

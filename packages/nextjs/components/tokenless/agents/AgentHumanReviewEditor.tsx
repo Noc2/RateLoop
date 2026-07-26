@@ -11,6 +11,7 @@ import {
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
 import { readJson } from "~~/lib/tokenless/http";
+import { configuredHumanReviewLaneForSelection, configuredHumanReviewLanes } from "~~/lib/tokenless/reviewCapabilities";
 import { formatUsdcAtomic, parseUsdcDecimal } from "~~/lib/tokenless/usdc";
 
 type Audience = "private_invited" | "public_network" | "hybrid";
@@ -18,6 +19,8 @@ type QuestionAuthority = "owner_fixed" | "agent_per_request";
 
 type OwnerView = {
   bindingRevision: number;
+  blockingReason?: { code: string; message: string } | null;
+  capability?: { available: boolean; code: string; lane: string; message: string } | null;
   configuration: {
     authority: Authority;
     delegation: {
@@ -36,6 +39,8 @@ type OwnerView = {
     reportedLane: string;
   } | null;
 };
+
+const CONFIGURED_HUMAN_REVIEW_LANES = configuredHumanReviewLanes();
 
 type SaveResponse = {
   privateReviewRouting?: { ready?: boolean; reason?: string } | null;
@@ -189,6 +194,8 @@ function buildMutation(view: OwnerView, draft: Draft) {
   const panelSize = positiveInteger(draft.panelSize, "Reviewer count", minimumPanelSize, 100);
   const responseWindowSeconds = positiveInteger(draft.responseWindowSeconds, "Response window", 1_200, 86_400);
   const compensationMode = draft.audience === "private_invited" ? draft.compensationMode : "usdc";
+  const configuredLane = configuredHumanReviewLaneForSelection(draft.audience, compensationMode);
+  if (!configuredLane.available) throw new Error(configuredLane.message);
   const privateGroupId = draft.audience === "public_network" ? null : draft.privateReviewerCompatibilityId.trim();
   if (draft.audience !== "public_network" && !privateGroupId) {
     throw new Error("Workspace reviewer routing is not ready. Invite reviewers in Reviews, then try again.");
@@ -470,6 +477,11 @@ export function AgentHumanReviewEditor({
           the host held an output until review reached a terminal result.
         </p>
       ) : null}
+      {view.blockingReason ? (
+        <p className="alert alert-warning mt-4 text-sm" role="alert">
+          {view.blockingReason.message}
+        </p>
+      ) : null}
       <form className="mt-6 space-y-5" onSubmit={submit}>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="text-sm sm:col-span-2">
@@ -480,7 +492,9 @@ export function AgentHumanReviewEditor({
               onChange={event => changeQuestionAuthority(event.target.value as QuestionAuthority)}
             >
               <option value="owner_fixed">Use one question</option>
-              <option value="agent_per_request">Let the agent ask each time</option>
+              <option value="agent_per_request" disabled={!CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.available}>
+                Let the agent ask each time (unavailable)
+              </option>
             </select>
           </label>
           {draft.questionAuthority === "owner_fixed" ? (
@@ -621,11 +635,22 @@ export function AgentHumanReviewEditor({
               <option value="private_invited" disabled={draft.questionAuthority === "agent_per_request"}>
                 Invited reviewers
               </option>
-              <option value="public_network">RateLoop network</option>
-              <option value="hybrid" disabled={draft.questionAuthority === "agent_per_request"}>
-                Invited and RateLoop network
+              <option value="public_network" disabled={!CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.available}>
+                RateLoop network (unavailable)
+              </option>
+              <option
+                value="hybrid"
+                disabled={
+                  draft.questionAuthority === "agent_per_request" ||
+                  !CONFIGURED_HUMAN_REVIEW_LANES.hybridPublicSafe.available
+                }
+              >
+                Invited and RateLoop network (unavailable)
               </option>
             </select>
+            <span className="mt-1 block text-xs text-base-content/50">
+              This deployment currently supports invited reviewers without a guaranteed bounty.
+            </span>
           </label>
           <label className="text-sm">
             Response window (seconds)
@@ -661,7 +686,16 @@ export function AgentHumanReviewEditor({
               <option value="unpaid" disabled={draft.audience !== "private_invited"}>
                 No bounty
               </option>
-              <option value="usdc">Add USDC bounty</option>
+              <option
+                value="usdc"
+                disabled={
+                  draft.audience === "private_invited"
+                    ? !CONFIGURED_HUMAN_REVIEW_LANES.privateInvitedPaid.available
+                    : true
+                }
+              >
+                Add USDC bounty (unavailable)
+              </option>
             </select>
             {draft.audience !== "private_invited" ? (
               <span className="mt-1 block text-xs text-base-content/50">

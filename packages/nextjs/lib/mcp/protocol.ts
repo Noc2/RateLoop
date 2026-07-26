@@ -7,6 +7,7 @@ import {
   getMcpHandoffResult,
   getMcpHandoffStatus,
 } from "~~/lib/mcp/handoff";
+import { configuredHumanReviewAudienceSources } from "~~/lib/tokenless/reviewCapabilities";
 
 export const TOKENLESS_MCP_PROTOCOL_VERSION = "2025-11-25" as const;
 export const TOKENLESS_MCP_STABLE_PROTOCOL_VERSION = "2025-06-18" as const;
@@ -16,6 +17,7 @@ export const TOKENLESS_MCP_PROTOCOL_VERSIONS = [
   TOKENLESS_MCP_STABLE_PROTOCOL_VERSION,
   TOKENLESS_MCP_COMPAT_PROTOCOL_VERSION,
 ] as const;
+const TOKENLESS_MCP_AUDIENCE_SOURCES = configuredHumanReviewAudienceSources();
 
 type JsonRpcId = string | number | null;
 type JsonRecord = Record<string, unknown>;
@@ -200,7 +202,7 @@ export const tokenlessMcpTools = [
               properties: {
                 admissionPolicyHash: { pattern: "^0x[0-9a-fA-F]{64}$", type: "string" },
                 source: {
-                  enum: ["customer_invited", "rateloop_network", "hybrid"],
+                  enum: TOKENLESS_MCP_AUDIENCE_SOURCES,
                   type: "string",
                 },
               },
@@ -279,7 +281,7 @@ function toolErrorResult(error: TokenlessMcpToolError) {
 
 export function tokenlessMcpCapabilities() {
   return {
-    allowedAudienceSources: ["customer_invited", "rateloop_network", "hybrid"] as const,
+    allowedAudienceSources: TOKENLESS_MCP_AUDIENCE_SOURCES,
     bodyLimitBytes: 64 * 1_024,
     handoffFragmentLimitBytes: 16 * 1_024,
     handoffTtlSeconds: 24 * 60 * 60,

@@ -9,6 +9,7 @@ import { AGENT_SETUP_SCREEN_STEPS, type AgentSetupScreenStep } from "~~/lib/toke
 import { getHumanReviewConfigurationForOwner } from "~~/lib/tokenless/humanReviewConfiguration";
 import { sameAutomaticHumanReviewGrantScopes } from "~~/lib/tokenless/humanReviewGrantScopes";
 import { recordWorkspaceSetupFunnelEvent } from "~~/lib/tokenless/onboardingObservability";
+import { configuredHumanReviewLaneForSelection, configuredHumanReviewLanes } from "~~/lib/tokenless/reviewCapabilities";
 import { MAXIMUM_REVIEW_PANEL_SIZE } from "~~/lib/tokenless/reviewRequestProfiles";
 import {
   type ReviewerExpertiseRequirement,
@@ -542,6 +543,7 @@ export async function getWorkspaceAgentSetup(input: {
     capabilities: {
       reviewerAudiences: ["private_invited"] as const,
       contentBoundaries: ["private_workspace"] as const,
+      humanReviewLanes: configuredHumanReviewLanes(),
       autonomousAccess: automaticGrantAvailable,
       unavailableReason: automaticGrantAvailable
         ? null
@@ -1454,14 +1456,21 @@ async function workspaceSetupFinalizationPostcondition(client: Pick<PoolClient, 
     rowString(row, "configuration_status") === "ready";
   const privateGroupStatus = requiresPrivateGroup ? rowString(row, "private_group_status") : "not_required";
   const setupComplete = rowString(row, "setup_status") === "completed";
+  const compensationMode = rowString(row, "compensation_mode");
+  const reviewAudience =
+    audience === "public_network" || audience === "hybrid" ? audience : ("private_invited" as const);
+  const configuredLane = configuredHumanReviewLaneForSelection(
+    reviewAudience,
+    compensationMode === "usdc" ? "usdc" : "unpaid",
+  );
   const blockingReasons = [
     ...(setupComplete ? [] : ["setup_not_completed"]),
     ...(connectionActive ? [] : ["connection_not_active"]),
     ...(reviewBindingActive ? [] : ["review_binding_not_active"]),
     ...(privateGroupStatus === "active" || privateGroupStatus === "not_required" ? [] : ["reviewer_group_not_active"]),
     ...(automaticGrantActive === false ? ["automatic_grant_not_active"] : []),
+    ...(configuredLane.available ? [] : ["review_lane_not_implemented"]),
   ];
-  const compensationMode = rowString(row, "compensation_mode");
   const reviewLane =
     audience === "public_network"
       ? "public_paid_network"
@@ -1480,6 +1489,8 @@ async function workspaceSetupFinalizationPostcondition(client: Pick<PoolClient, 
     privateGroupStatus,
     deliveryAuthority: authority,
     reviewLane,
+    reviewLaneAvailable: configuredLane.available,
+    reviewLaneMessage: configuredLane.message,
     automaticGrantActive,
     reviewBinding: {
       id: rowString(row, "binding_id"),

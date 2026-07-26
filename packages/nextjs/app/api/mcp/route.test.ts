@@ -141,10 +141,12 @@ test("lists exactly the four browser handoff tools and reports live capabilities
     ),
   );
   const capabilitiesBody = await body(capabilities);
-  assert.deepEqual(capabilitiesBody.result.structuredContent.allowedAudienceSources, [
+  assert.deepEqual(capabilitiesBody.result.structuredContent.allowedAudienceSources, ["customer_invited"]);
+  const createHandoffTool = listedBody.result.tools.find(
+    (tool: { name?: string }) => tool.name === "rateloop_create_handoff",
+  );
+  assert.deepEqual(createHandoffTool.inputSchema.properties.request.properties.audience.properties.source.enum, [
     "customer_invited",
-    "rateloop_network",
-    "hybrid",
   ]);
   assert.equal(capabilitiesBody.result.structuredContent.handoffVersion, "rateloop.handoff.v1");
 });

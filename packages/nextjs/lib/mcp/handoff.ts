@@ -8,6 +8,10 @@ import { createHash, randomBytes } from "node:crypto";
 import "server-only";
 import { TokenlessMcpToolError } from "~~/lib/mcp/errors";
 import { validatePublicQuestionMediaPreviewCapability } from "~~/lib/tokenless/publicQuestionMediaPreview";
+import {
+  type HumanReviewAudienceSource,
+  configuredHumanReviewAudienceSources,
+} from "~~/lib/tokenless/reviewCapabilities";
 import { getTokenlessAskByIdempotencyKey } from "~~/lib/tokenless/server";
 
 export const TOKENLESS_HANDOFF_VERSION = "rateloop.handoff.v1" as const;
@@ -18,7 +22,7 @@ const HANDOFF_ID_PATTERN = /^rhl_[A-Za-z0-9_-]{32}$/;
 const HANDOFF_TOKEN_PATTERN = /^rht_[A-Za-z0-9_-]{43}_([0-9a-z]{6,12})$/;
 const BYTES32_PATTERN = /^0x[0-9a-fA-F]{64}$/;
 const ATOMIC_PATTERN = /^(0|[1-9]\d*)$/;
-const AUDIENCE_SOURCES = ["customer_invited", "rateloop_network", "hybrid"] as const;
+const AUDIENCE_SOURCES = configuredHumanReviewAudienceSources();
 const DATA_CLASSIFICATIONS = ["public", "synthetic", "redacted"] as const;
 
 type JsonRecord = Record<string, unknown>;
@@ -75,7 +79,7 @@ export function parseMcpQuoteRequest(value: unknown): TokenlessQuoteRequest {
   const audience = record(input.audience, "request.audience");
   exact(audience, ["admissionPolicyHash", "source"], "request.audience");
   const source = audience.source;
-  if (!AUDIENCE_SOURCES.includes(source as (typeof AUDIENCE_SOURCES)[number])) {
+  if (!AUDIENCE_SOURCES.includes(source as HumanReviewAudienceSource)) {
     toolError("request.audience.source is unsupported.", "invalid_quote");
   }
   if (typeof audience.admissionPolicyHash !== "string" || !BYTES32_PATTERN.test(audience.admissionPolicyHash)) {

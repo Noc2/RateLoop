@@ -438,7 +438,10 @@ test("atomic setup finalization creates one invitation and safely replays a lost
   assert.equal(finalized.postcondition.connectionActive, true);
   assert.equal(finalized.postcondition.reviewBindingActive, true);
   assert.equal(finalized.postcondition.privateGroupStatus, "active");
+  assert.equal(finalized.postcondition.reviewLane, "private_invited_unpaid");
+  assert.equal(finalized.postcondition.reviewLaneAvailable, true);
   assert.equal(finalized.postcondition.setupConfigurationIntact, true);
+  assert.equal(finalized.postcondition.blockingReasons.includes("review_lane_not_implemented"), false);
   assert.equal(finalized.postcondition.reviewerRoutingStatus, "action_required");
   assert.equal(finalized.postcondition.privateRouting?.reason, "reviewer_seats_insufficient");
   assert.equal(finalized.postcondition.canSend, false);
@@ -516,6 +519,32 @@ test("atomic setup finalization creates and replays a capacity-limited shared in
     finalizeWorkspaceAgentSetup({ ...request, maximumRedemptions: 1, intendedEmailDomain: null }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "agent_setup_finalization_conflict",
   );
+});
+
+test("setup finalization postcondition fails closed when the persisted lane is not implemented", async () => {
+  const { group, reviews, workspaceId } = await readyPrivateSetupForFinalization();
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_request_profiles
+          SET compensation_mode='usdc',bounty_per_seat_atomic='1000000'
+          WHERE workspace_id=? AND superseded_at IS NULL`,
+    args: [workspaceId],
+  });
+
+  const finalized = await finalizeWorkspaceAgentSetup({
+    accountAddress: OWNER,
+    workspaceId,
+    revision: reviews.revision,
+    idempotencyKey: "f37911ee-a630-4aa4-828c-a2f30dddbcd6",
+    decision: "invited",
+    groupId: group.groupId,
+    createInvitation: false,
+  });
+
+  assert.equal(finalized.postcondition.reviewLane, "private_invited_paid");
+  assert.equal(finalized.postcondition.reviewLaneAvailable, false);
+  assert.equal(finalized.postcondition.setupConfigurationIntact, false);
+  assert.ok(finalized.postcondition.blockingReasons.includes("review_lane_not_implemented"));
+  assert.equal(finalized.postcondition.canSend, false);
 });
 
 test("shared setup invitations reject unsafe capacity, recipient, and specialist combinations", async () => {

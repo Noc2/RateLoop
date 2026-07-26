@@ -16,6 +16,11 @@ test("the editor uses workspace reviewer readiness without exposing legacy group
     if (url.endsWith("/human-review")) {
       return Response.json({
         bindingRevision: null,
+        blockingReason: {
+          code: "human_review_configuration_required",
+          message: "Configure human review before this agent can request it.",
+        },
+        capability: null,
         configuration: null,
         connection: {
           allowedWorkflowKeys: ["general-assistance"],
@@ -45,6 +50,19 @@ test("the editor uses workspace reviewer readiness without exposing legacy group
     assert.equal((screen.getByRole("radio", { name: "Send automatically" }) as HTMLInputElement).disabled, false);
     assert.ok(screen.getByText("Plugin connection: advisory."));
     assert.ok(screen.getByText(/cannot prove the host held an output until review reached a terminal result/u));
+    assert.ok(screen.getByRole("alert", { name: "" }).textContent?.includes("Configure human review"));
+    assert.equal(
+      (screen.getByRole("option", { name: "Let the agent ask each time (unavailable)" }) as HTMLOptionElement).disabled,
+      true,
+    );
+    assert.equal(
+      (screen.getByRole("option", { name: "RateLoop network (unavailable)" }) as HTMLOptionElement).disabled,
+      true,
+    );
+    assert.equal(
+      (screen.getByRole("option", { name: "Add USDC bounty (unavailable)" }) as HTMLOptionElement).disabled,
+      true,
+    );
     await userEvent.setup().click(screen.getByRole("button", { name: "Finish setup" }));
     assert.ok(
       await screen.findByText("Workspace reviewer routing is not ready. Invite reviewers in Reviews, then try again."),
@@ -63,6 +81,13 @@ test("the editor uses workspace reviewer readiness without exposing legacy group
       }
       return Response.json({
         bindingRevision: 4,
+        blockingReason: null,
+        capability: {
+          available: true,
+          code: "ready",
+          lane: "private_invited_unpaid",
+          message: "This review path is ready.",
+        },
         configuration: {
           authority: "check_only",
           delegation: null,

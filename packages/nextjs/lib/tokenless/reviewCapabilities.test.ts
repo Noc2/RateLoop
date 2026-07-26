@@ -2,6 +2,8 @@ import {
   HUMAN_REVIEW_CAPABILITY_CASES,
   HUMAN_REVIEW_IMPLEMENTATION_READINESS,
   type HumanReviewReadiness,
+  configuredHumanReviewAudienceSources,
+  configuredHumanReviewLaneForSelection,
   configuredHumanReviewLanes,
   deployedHumanReviewReadiness,
   resolveHumanReviewCapability,
@@ -113,6 +115,11 @@ test("configured lane descriptions use the same implementation truth", () => {
       message: "Hybrid invited and public delivery is not implemented yet.",
     },
   });
+  assert.deepEqual(configuredHumanReviewAudienceSources(), ["customer_invited"]);
+  assert.equal(configuredHumanReviewLaneForSelection("private_invited", "unpaid").available, true);
+  assert.equal(configuredHumanReviewLaneForSelection("private_invited", "usdc").available, false);
+  assert.equal(configuredHumanReviewLaneForSelection("public_network", "usdc").available, false);
+  assert.equal(configuredHumanReviewLaneForSelection("hybrid", "usdc").available, false);
 });
 
 test("owner approval is deployed while autonomous publishing remains grant-bound", () => {
