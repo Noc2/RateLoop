@@ -4,6 +4,7 @@ import { __setDatabaseResourcesForTests, dbClient, dbPool } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import {
   __crowdForecastPersistenceTestUtils,
+  assertPrincipalForecastAssignmentEligible,
   erasePrincipalForecastIntegrityInTransaction,
   listPrincipalForecastIntegrity,
   openPrincipalForecastAppeal,
@@ -61,6 +62,16 @@ test("running sums create append-only payout-neutral findings and an appeal susp
   assert.ok(record.items[0]?.reasonCodes.includes("forecast_discrimination_absent"));
   const finding = record.items[0]?.findings.find(value => value.reasonCode === "forecast_invariant");
   assert.ok(finding);
+  await assert.rejects(
+    () =>
+      assertPrincipalForecastAssignmentEligible({
+        principalId: REVIEWER,
+        reviewerSource: "customer_invited",
+        workspaceId: workspace.workspaceId,
+      }),
+    (error: unknown) =>
+      error instanceof Error && "code" in error && error.code === "forecast_integrity_assignment_restricted",
+  );
 
   const appeal = await openPrincipalForecastAppeal({
     principalId: REVIEWER,
@@ -70,6 +81,11 @@ test("running sums create append-only payout-neutral findings and an appeal susp
   assert.equal(appeal.consequence, "suspended_by_open_appeal");
   const appealed = await listPrincipalForecastIntegrity(REVIEWER);
   assert.equal(appealed.items[0]?.consequence, "suspended_by_open_appeal");
+  await assertPrincipalForecastAssignmentEligible({
+    principalId: REVIEWER,
+    reviewerSource: "customer_invited",
+    workspaceId: workspace.workspaceId,
+  });
 
   const appendOnly = await dbClient.execute(
     "SELECT finding_id,payout_effect FROM tokenless_forecast_integrity_findings ORDER BY created_at",

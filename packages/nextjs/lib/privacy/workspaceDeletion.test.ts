@@ -200,7 +200,7 @@ test("funded workspace erasure queues a refund and resumes the same subject requ
   );
 });
 
-test("workspace deletion requires the exact current name and completes an empty workspace atomically", async () => {
+test("workspace deletion requires the exact current name and atomically erases forecast integrity state", async () => {
   const { workspaceId } = await createWorkspace({ name: "Delete exactly", ownerAddress: OWNER });
   const { apiKeyId } = await createWorkspaceApiKey({ name: "Delete me", workspaceId });
   await dbClient.execute({
@@ -235,6 +235,38 @@ test("workspace deletion requires the exact current name and completes an empty 
           VALUES ('invite_workspace_delete', ?, 'invite-delete-hash', 'member', 'end_client', ?, ?, ?)`,
     args: [workspaceId, new Date(NOW.getTime() + 86_400_000), OWNER, NOW],
   });
+  const forecastSubject = `hmac-sha256:${"a".repeat(64)}`;
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_forecast_calibration_accumulators
+          (subject_space,subject_key,key_version,workspace_id,observation_count,outcome_observation_count,
+           forecast_sum_bps,forecast_square_sum,squared_error_sum,outcome_positive_count,
+           positive_outcome_forecast_sum_bps,positive_outcome_count,negative_outcome_forecast_sum_bps,
+           negative_outcome_count,positive_vote_forecast_sum_bps,positive_vote_count,
+           negative_vote_forecast_sum_bps,negative_vote_count,current_reason_codes_json,updated_at)
+          VALUES ('invited_workspace',?,'delete-test-v1',?,1,1,5000,25000000,25000000,1,
+                  5000,1,0,0,5000,1,0,0,'["forecast_invariant"]',?)`,
+    args: [forecastSubject, workspaceId, NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_forecast_workspace_histograms
+          (workspace_id,subject_space,observation_count,buckets_json,updated_at)
+          VALUES (?,'invited_workspace',1,?,?)`,
+    args: [workspaceId, JSON.stringify(Array<string>(99).fill("0")), NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_forecast_integrity_findings
+          (finding_id,dedupe_key,subject_space,subject_key,workspace_id,reason_code,severity,
+           source_observation_count,evidence_counters_json,payout_effect,consequence,created_at)
+          VALUES ('cff_workspace_delete','sha256:workspace-delete','invited_workspace',?,?,
+                  'forecast_invariant','hard',1,'{}','none','future_assignment_restriction',?)`,
+    args: [forecastSubject, workspaceId, NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_forecast_integrity_terminal_receipts
+          (lane,terminal_key,workspace_id,source_set_commitment,aggregated_forecast_count,processed_at)
+          VALUES ('private_invited','delivery_workspace_delete',? ,?,1,?)`,
+    args: [workspaceId, `sha256:${"b".repeat(64)}`, NOW],
+  });
 
   await assert.rejects(
     () =>
@@ -254,7 +286,6 @@ test("workspace deletion requires the exact current name and completes an empty 
     (await storedRow("SELECT COUNT(*) AS count FROM tokenless_deletion_jobs WHERE scope_id = ?", [workspaceId])).count,
     0,
   );
-
   const deleted = await requestWorkspaceDeletion({
     accountAddress: OWNER,
     confirmationName: "Delete exactly",
@@ -265,6 +296,17 @@ test("workspace deletion requires the exact current name and completes an empty 
   assert.equal(deleted.deleted, true);
   assert.equal(deleted.immediate, true);
   assert.equal(deleted.status, "completed");
+  assert.deepEqual(
+    await storedRow(
+      `SELECT
+         (SELECT COUNT(*) FROM tokenless_forecast_calibration_accumulators WHERE workspace_id=?) AS calibration,
+         (SELECT COUNT(*) FROM tokenless_forecast_workspace_histograms WHERE workspace_id=?) AS histograms,
+         (SELECT COUNT(*) FROM tokenless_forecast_integrity_findings WHERE workspace_id=?) AS findings,
+         (SELECT COUNT(*) FROM tokenless_forecast_integrity_terminal_receipts WHERE workspace_id=?) AS receipts`,
+      [workspaceId, workspaceId, workspaceId, workspaceId],
+    ),
+    { calibration: 0, findings: 0, histograms: 0, receipts: 0 },
+  );
 
   assert.deepEqual(
     await storedRow("SELECT name, status, deleted_at FROM tokenless_workspaces WHERE workspace_id = ?", [workspaceId]),

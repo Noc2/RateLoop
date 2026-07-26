@@ -31,6 +31,7 @@ import {
   createAwsKmsEthereumAccount,
   loadAwsKmsEthereumAccountConfiguration,
 } from "~~/lib/tokenless/chain/awsKmsAccount";
+import { assertPrincipalForecastAssignmentEligible } from "~~/lib/tokenless/crowdForecastPersistence";
 import { isOpaqueSubjectReference } from "~~/lib/tokenless/opaqueReferences";
 import {
   requirePaidReviewEligibility,
@@ -2078,6 +2079,15 @@ export async function issuePaidVoucher(input: { principalId: string; request: Vo
     now,
   );
   const raterId = stringValue(eligibility.row, "rater_id")!;
+  if (!roundWorkspaceId && input.request.reviewerSource === "customer_invited") {
+    throw new TokenlessServiceError("This round has no workspace binding.", 409, "round_workspace_mismatch");
+  }
+  await assertPrincipalForecastAssignmentEligible({
+    principalId: input.principalId,
+    raterId,
+    reviewerSource: input.request.reviewerSource,
+    workspaceId: roundWorkspaceId ?? undefined,
+  });
   if (
     stringValue(round, "status") !== "open" ||
     new Date(String(round.voucher_not_before)) > now ||

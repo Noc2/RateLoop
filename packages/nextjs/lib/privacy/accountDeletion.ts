@@ -7,6 +7,7 @@ import {
   type PaidAssignmentSeatIdentityErasureEvidence,
   erasePaidAssignmentSeatIdentities,
 } from "~~/lib/privacy/paidAssignmentSeatIdentityErasure";
+import { erasePrincipalForecastIntegrityInTransaction } from "~~/lib/tokenless/crowdForecastPersistence";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const DELETION_DUE_MS = 30 * 86_400_000;
@@ -794,6 +795,7 @@ async function collectDeletionCategoryEvidence(
     paidAssignmentSeatErasure: PaidAssignmentSeatIdentityErasureEvidence;
     raterErasure: RaterErasureEvidence;
     directAccessErasure: DirectAccessErasureEvidence;
+    forecastIntegrityErasure: { deletedRows: number; remainingRows: number; subjectCount: number };
     releasedReservations: number;
   },
 ) {
@@ -891,6 +893,7 @@ async function collectDeletionCategoryEvidence(
       remainingPaidAssignmentSeatDirectIdentities: input.paidAssignmentSeatErasure.remainingDirectIdentities,
       remainingRows: input.raterErasure.remainingRows,
       tombstoneWritten: input.raterErasure.tombstoneWritten,
+      forecastIntegrityErasure: input.forecastIntegrityErasure,
     },
     private_quote_plaintext_payloads: {
       deletedUnreferenced: input.privateQuoteErasure.deletedUnreferenced,
@@ -950,6 +953,7 @@ async function collectDeletionCategoryEvidence(
     workspaceGovernance: rowNumber(row, "workspace_governance"),
     workspaceMemberships: rowNumber(row, "workspace_memberships"),
     ...input.raterErasure.remainingRows,
+    forecastIntegrityRows: input.forecastIntegrityErasure.remainingRows,
   };
   const incompletePostcondition = Object.entries(requiredZeroPostconditions).find(([, value]) => value !== 0);
   if (
@@ -1131,6 +1135,9 @@ export async function deleteAccount(input: {
     await client.query(`DELETE FROM tokenless_eligibility_provider_handoffs WHERE principal_id = $1`, [
       input.principalId,
     ]);
+    const forecastIntegrityErasure = await erasePrincipalForecastIntegrityInTransaction(client, {
+      principalId: input.principalId,
+    });
     const raterErasure = await eraseRaterIdentity(client, input.principalId, receiptDigest, now);
     await client.query(`DELETE FROM tokenless_wallet_binding_challenges WHERE principal_id = $1`, [input.principalId]);
     await client.query(`DELETE FROM tokenless_thirdweb_wallet_jtis WHERE principal_id = $1`, [input.principalId]);
@@ -1158,6 +1165,7 @@ export async function deleteAccount(input: {
       privateQuoteErasure,
       raterErasure,
       directAccessErasure,
+      forecastIntegrityErasure,
       releasedReservations,
     });
     const completedAt = new Date(Math.max(Date.now(), now.getTime()));

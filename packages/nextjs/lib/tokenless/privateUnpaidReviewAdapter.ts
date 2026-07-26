@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
+import { assertPrincipalForecastAssignmentEligibleInTransaction } from "~~/lib/tokenless/crowdForecastPersistence";
 import { transitionHumanReviewOpportunityLifecycleInTransaction } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
 import { applyHumanReviewRequestTransactionTimeouts } from "~~/lib/tokenless/humanReviewRequestDatabase";
 import {
@@ -658,6 +659,11 @@ async function requestPrivateHumanReviewAssignments(input: {
           "private_reviewer_not_eligible",
         );
       }
+      await assertPrincipalForecastAssignmentEligibleInTransaction(client, {
+        workspaceId: input.principal.workspaceId,
+        principalId: reviewer,
+        reviewerSource: "customer_invited",
+      });
       const exactResult = await client.query(
         `SELECT qualification_id,expertise_definition_id,expertise_definition_version,
                 expertise_definition_hash,evidence_reference_hash,verified_at,expires_at,

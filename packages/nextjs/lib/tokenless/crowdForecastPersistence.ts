@@ -788,39 +788,51 @@ export async function assertPrincipalForecastAssignmentEligible(input: {
 }) {
   const client = await dbPool.connect();
   try {
-    if (input.reviewerSource === "customer_invited") {
-      if (!input.workspaceId) {
-        throw new TokenlessServiceError(
-          "Invited reviewer forecast checks require the exact workspace.",
-          409,
-          "forecast_integrity_workspace_required",
-        );
-      }
-      const hasWorkspaceSignals = await client.query(
-        `SELECT 1 FROM (
-           SELECT workspace_id FROM tokenless_forecast_calibration_accumulators
-           WHERE workspace_id=$1 AND subject_space='invited_workspace'
-           UNION ALL
-           SELECT workspace_id FROM tokenless_forecast_pair_accumulators
-           WHERE workspace_id=$1 AND subject_space='invited_workspace'
-         ) signals LIMIT 1`,
-        [input.workspaceId],
-      );
-      if (hasWorkspaceSignals.rowCount === 0) return;
-    }
-    const subject =
-      input.reviewerSource === "rateloop_network"
-        ? networkForecastSubject(input.raterId ?? "")
-        : invitedForecastSubject({ workspaceId: input.workspaceId!, principalId: input.principalId });
-    if (await isForecastAssignmentRestricted(client, { subject, workspaceId: input.workspaceId })) {
-      throw new TokenlessServiceError(
-        "New review assignments are paused while crowd forecast integrity needs review.",
-        403,
-        "forecast_integrity_assignment_restricted",
-      );
-    }
+    await assertPrincipalForecastAssignmentEligibleInTransaction(client, input);
   } finally {
     client.release();
+  }
+}
+
+export async function assertPrincipalForecastAssignmentEligibleInTransaction(
+  client: PoolClient,
+  input: {
+    principalId: string;
+    raterId?: string;
+    reviewerSource: "customer_invited" | "rateloop_network";
+    workspaceId?: string;
+  },
+) {
+  if (input.reviewerSource === "customer_invited") {
+    if (!input.workspaceId) {
+      throw new TokenlessServiceError(
+        "Invited reviewer forecast checks require the exact workspace.",
+        409,
+        "forecast_integrity_workspace_required",
+      );
+    }
+    const hasWorkspaceSignals = await client.query(
+      `SELECT 1 FROM (
+         SELECT workspace_id FROM tokenless_forecast_calibration_accumulators
+         WHERE workspace_id=$1 AND subject_space='invited_workspace'
+         UNION ALL
+         SELECT workspace_id FROM tokenless_forecast_pair_accumulators
+         WHERE workspace_id=$1 AND subject_space='invited_workspace'
+       ) signals LIMIT 1`,
+      [input.workspaceId],
+    );
+    if (hasWorkspaceSignals.rowCount === 0) return;
+  }
+  const subject =
+    input.reviewerSource === "rateloop_network"
+      ? networkForecastSubject(input.raterId ?? "")
+      : invitedForecastSubject({ workspaceId: input.workspaceId!, principalId: input.principalId });
+  if (await isForecastAssignmentRestricted(client, { subject, workspaceId: input.workspaceId })) {
+    throw new TokenlessServiceError(
+      "New review assignments are paused while crowd forecast integrity needs review.",
+      403,
+      "forecast_integrity_assignment_restricted",
+    );
   }
 }
 
@@ -1012,6 +1024,14 @@ export async function erasePrincipalForecastIntegrityInTransaction(client: PoolC
          (SELECT COUNT(*) FROM tokenless_forecast_pair_accumulators
           WHERE subject_space=$1 AND (left_subject_key=$2 OR right_subject_key=$2)) AS count`,
       [subject.subjectSpace, subject.subjectKey],
+    );
+    remainingRows += Number((remaining.rows[0] as Row | undefined)?.count ?? 0);
+  }
+  for (const scope of histogramScopes.values()) {
+    const remaining = await client.query(
+      `SELECT COUNT(*) AS count FROM tokenless_forecast_workspace_histograms
+       WHERE workspace_id=$1 AND subject_space=$2`,
+      [scope.workspaceId, scope.subjectSpace],
     );
     remainingRows += Number((remaining.rows[0] as Row | undefined)?.count ?? 0);
   }

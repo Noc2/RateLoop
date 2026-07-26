@@ -10,6 +10,7 @@ import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient, dbPool } from "~~/lib/db";
 import { evaluateFrozenAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { issueArtifactLease } from "~~/lib/tokenless/artifactPrivacy";
+import { isForecastAssignmentRestricted, networkForecastSubject } from "~~/lib/tokenless/crowdForecastPersistence";
 import { selectDiversifiedIntegrityPanel } from "~~/lib/tokenless/integrityAssignment";
 import { integrityReviewerLookup } from "~~/lib/tokenless/integrityEpochs";
 import { requirePaidReviewEligibilityInTransaction } from "~~/lib/tokenless/paidReviewEligibilityPreflight";
@@ -1353,6 +1354,14 @@ export async function reserveDiversifiedNetworkSubpanel(input: {
       try {
         eligibility = await paidEligibility(client, address, now);
       } catch {
+        continue;
+      }
+      if (
+        await isForecastAssignmentRestricted(client, {
+          workspaceId: input.workspaceId,
+          subject: networkForecastSubject(eligibility.raterId),
+        })
+      ) {
         continue;
       }
       const riskBand = rowString(member, "risk_band") as "low" | "medium" | "high";

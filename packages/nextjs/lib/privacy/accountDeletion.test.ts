@@ -418,6 +418,11 @@ test("account deletion receipts the rater identity, erases World ID state, and p
       worldIdContextLimits: 1,
       worldIdRequests: 1,
     },
+    forecastIntegrityErasure: {
+      deletedRows: 0,
+      remainingRows: 0,
+      subjectCount: 1,
+    },
     paidAssignmentSeatDirectIdentitiesErased: 0,
     profileFound: true,
     remainingPaidAssignmentSeatDirectIdentities: 0,

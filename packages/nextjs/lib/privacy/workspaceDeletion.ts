@@ -896,6 +896,18 @@ export async function requestWorkspaceDeletion(input: {
     ]);
     await client.query("DELETE FROM tokenless_workspace_members WHERE workspace_id = $1", [input.workspaceId]);
     await client.query("DELETE FROM tokenless_workspace_agent_setups WHERE workspace_id = $1", [input.workspaceId]);
+    await client.query("SELECT set_config('rateloop.account_erasure','on',true)");
+    await client.query("DELETE FROM tokenless_forecast_integrity_findings WHERE workspace_id=$1", [input.workspaceId]);
+    await client.query("DELETE FROM tokenless_forecast_pair_accumulators WHERE workspace_id=$1", [input.workspaceId]);
+    await client.query("DELETE FROM tokenless_forecast_calibration_accumulators WHERE workspace_id=$1", [
+      input.workspaceId,
+    ]);
+    await client.query("DELETE FROM tokenless_forecast_workspace_histograms WHERE workspace_id=$1", [
+      input.workspaceId,
+    ]);
+    await client.query("DELETE FROM tokenless_forecast_integrity_terminal_receipts WHERE workspace_id=$1", [
+      input.workspaceId,
+    ]);
     await client.query(
       `UPDATE tokenless_workspaces
        SET name = $1, status = 'deleted', deleted_at = $2, updated_at = $2
@@ -913,7 +925,17 @@ export async function requestWorkspaceDeletion(input: {
          (SELECT COUNT(*) FROM tokenless_workspace_reviewer_invitation_redemptions
           WHERE workspace_id=$1) AS invitation_redemptions,
          (SELECT COUNT(*) FROM tokenless_paid_eligibility_scopes
-          WHERE workspace_id=$1) AS paid_eligibility_scopes`,
+          WHERE workspace_id=$1) AS paid_eligibility_scopes,
+         (SELECT COUNT(*) FROM tokenless_forecast_calibration_accumulators
+          WHERE workspace_id=$1) AS forecast_calibration,
+         (SELECT COUNT(*) FROM tokenless_forecast_pair_accumulators
+          WHERE workspace_id=$1) AS forecast_pairs,
+         (SELECT COUNT(*) FROM tokenless_forecast_integrity_findings
+          WHERE workspace_id=$1) AS forecast_findings,
+         (SELECT COUNT(*) FROM tokenless_forecast_workspace_histograms
+          WHERE workspace_id=$1) AS forecast_histograms,
+         (SELECT COUNT(*) FROM tokenless_forecast_integrity_terminal_receipts
+          WHERE workspace_id=$1) AS forecast_terminal_receipts`,
       [input.workspaceId],
     );
     const accessRow = accessPostconditions.rows[0] as Row;
