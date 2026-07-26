@@ -113,6 +113,11 @@ type OauthAuthorizationErasureEvidence = {
   tokenFamiliesPseudonymized: number;
 };
 
+type HybridNetworkExclusionErasureEvidence = {
+  deletedRows: number;
+  remainingRows: number;
+};
+
 export type AccountDeletionPreview = {
   blockers: DeletionBlocker[];
   impact: {
@@ -149,6 +154,25 @@ function id(prefix: string) {
 
 function deletionReceiptDigest(input: { jobId: string; requestId: string; now: Date }) {
   return digest(`account:${input.jobId}:${input.requestId}:${input.now.toISOString()}`);
+}
+
+export const __hybridNetworkExclusionErasureSqlForTests = `DELETE FROM tokenless_hybrid_network_reviewer_exclusions
+WHERE reviewer_principal_id=$1
+RETURNING hybrid_operation_id`;
+
+async function eraseHybridNetworkReviewerExclusions(
+  client: PoolClient,
+  principalId: string,
+): Promise<HybridNetworkExclusionErasureEvidence> {
+  const deleted = await client.query(__hybridNetworkExclusionErasureSqlForTests, [principalId]);
+  const remaining = await client.query(
+    `SELECT COUNT(*) AS count FROM tokenless_hybrid_network_reviewer_exclusions
+     WHERE reviewer_principal_id=$1`,
+    [principalId],
+  );
+  const remainingRows = rowNumber(remaining.rows[0] as Row | undefined, "count");
+  if (remainingRows !== 0) throw new Error("Account deletion left a hybrid network reviewer exclusion.");
+  return { deletedRows: deleted.rowCount ?? 0, remainingRows };
 }
 
 async function loadPreview(client: PoolClient, principalId: string, lock = false): Promise<AccountDeletionPreview> {
@@ -848,6 +872,7 @@ async function insertDeletionEvidence(
         "account_authentication",
         "contact_and_preferences",
         "shared_workspace_access",
+        "hybrid_network_reviewer_exclusions",
         "eligibility_handoffs",
         "world_id_and_rater_linkage",
         "private_quote_plaintext_payloads",
@@ -1335,6 +1360,7 @@ async function collectDeletionCategoryEvidence(
     raterErasure: RaterErasureEvidence;
     directAccessErasure: DirectAccessErasureEvidence;
     forecastIntegrityErasure: { deletedRows: number; remainingRows: number; subjectCount: number };
+    hybridNetworkExclusionErasure: HybridNetworkExclusionErasureEvidence;
     oauthAuthorizationErasure: OauthAuthorizationErasureEvidence;
     releasedReservations: ReleasedReservationEvidence;
     serviceIdentityErasure: ServiceIdentityErasureEvidence;
@@ -1389,6 +1415,8 @@ async function collectDeletionCategoryEvidence(
           ON assignment.assignment_id=settlement.assignment_id
        JOIN tokenless_rater_profiles profile ON profile.rater_id=assignment.rater_id
         WHERE profile.principal_id=$1) AS network_settlement_principal_links,
+       (SELECT COUNT(*) FROM tokenless_hybrid_network_reviewer_exclusions
+        WHERE reviewer_principal_id=$1) AS hybrid_network_exclusion_identity_links,
        (SELECT COUNT(*) FROM tokenless_agents
         WHERE owner_account_address=$1 OR created_by=$1) AS agent_identity_links,
        (SELECT COUNT(*) FROM tokenless_agent_versions
@@ -1442,6 +1470,7 @@ async function collectDeletionCategoryEvidence(
       workspaceMemberships: rowNumber(row, "workspace_memberships"),
       directAccessErasure: input.directAccessErasure,
     },
+    hybrid_network_reviewer_exclusions: input.hybridNetworkExclusionErasure,
     service_identity_references: input.serviceIdentityErasure,
     oauth_authorization_records: input.oauthAuthorizationErasure,
     eligibility_handoffs: {
@@ -1528,6 +1557,7 @@ async function collectDeletionCategoryEvidence(
     paidAssignmentSeatDirectIdentities: rowNumber(row, "paid_assignment_seat_direct_identities"),
     networkRaterDirectCopies: input.raterErasure.networkCopiesErasure.remainingDirectCopies,
     networkSettlementPrincipalLinks: rowNumber(row, "network_settlement_principal_links"),
+    hybridNetworkExclusionIdentityLinks: rowNumber(row, "hybrid_network_exclusion_identity_links"),
     mcpSessionIdentityLinks: rowNumber(row, "mcp_session_identity_links"),
     oversightIdentityLinks: rowNumber(row, "oversight_identity_links"),
     passkeyActionProofs: rowNumber(row, "passkey_action_proofs"),
@@ -1616,6 +1646,7 @@ export async function deleteAccount(input: {
       receiptDigest,
       now,
     });
+    const hybridNetworkExclusionErasure = await eraseHybridNetworkReviewerExclusions(client, input.principalId);
 
     await client.query(
       `UPDATE tokenless_principals
@@ -1752,6 +1783,7 @@ export async function deleteAccount(input: {
       raterErasure,
       directAccessErasure,
       forecastIntegrityErasure,
+      hybridNetworkExclusionErasure,
       releasedReservations,
       serviceIdentityErasure,
       oauthAuthorizationErasure,

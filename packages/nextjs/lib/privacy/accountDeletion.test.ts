@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
+import { newDb } from "pg-mem";
 import { BETTER_AUTH_SESSION_COOKIE_NAMES } from "~~/lib/auth/betterAuthCookies";
 import { resolveBetterAuthPrincipal } from "~~/lib/auth/principal";
 import { issueAccountDeletionProof } from "~~/lib/auth/recentAccountActionProof";
@@ -10,7 +11,11 @@ import { createAuthSession, findAuthSession } from "~~/lib/auth/session";
 import { revokeWalletBinding } from "~~/lib/auth/walletBindings";
 import { __setDatabaseResourcesForTests, dbClient, dbPool } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
-import { deleteAccount, getAccountDeletionPreview } from "~~/lib/privacy/accountDeletion";
+import {
+  __hybridNetworkExclusionErasureSqlForTests,
+  deleteAccount,
+  getAccountDeletionPreview,
+} from "~~/lib/privacy/accountDeletion";
 import { __setPaidEligibilityOverridesForTests, ensureAssuranceRaterProfile } from "~~/lib/tokenless/paidEligibility";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
@@ -172,6 +177,37 @@ async function seedNetworkRaterCopies(input: { now: Date; payoutAccount: string;
     args: [input.raterId, `sha256:${"7".repeat(64)}`, input.now],
   });
 }
+
+test("account erasure deletes only the exact subject hybrid exclusion", async () => {
+  const database = newDb();
+  database.public.none(`
+    CREATE TABLE tokenless_hybrid_network_reviewer_exclusions (
+      hybrid_operation_id text NOT NULL,
+      reviewer_principal_id text NOT NULL,
+      payout_account text NOT NULL
+    );
+    INSERT INTO tokenless_hybrid_network_reviewer_exclusions VALUES
+      ('hybrid_subject','rlp_subject_erasure_0001',
+       '0x1111111111111111111111111111111111111111'),
+      ('hybrid_peer','rlp_peer_erasure_00000001',
+       '0x2222222222222222222222222222222222222222');
+  `);
+  const adapter = database.adapters.createPg();
+  const pool = new adapter.Pool();
+  try {
+    const deleted = await pool.query(__hybridNetworkExclusionErasureSqlForTests, ["rlp_subject_erasure_0001"]);
+    assert.equal(deleted.rowCount, 1);
+    assert.equal(deleted.rows[0]?.hybrid_operation_id, "hybrid_subject");
+    const retained = await pool.query(
+      "SELECT hybrid_operation_id,reviewer_principal_id FROM tokenless_hybrid_network_reviewer_exclusions",
+    );
+    assert.deepEqual(retained.rows, [
+      { hybrid_operation_id: "hybrid_peer", reviewer_principal_id: "rlp_peer_erasure_00000001" },
+    ]);
+  } finally {
+    await pool.end();
+  }
+});
 
 test("account deletion revokes authentication, removes shared access, and permits a genuinely fresh signup", async () => {
   const now = new Date("2026-07-16T08:04:45.000Z");
