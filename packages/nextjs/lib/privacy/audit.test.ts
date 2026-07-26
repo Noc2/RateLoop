@@ -64,11 +64,10 @@ test("canonical audit events form a verifiable tenant chain and export only to a
   assert.equal(exported.retention.auditRetentionMonths, 12);
   assert.equal(exported.retention.minimumRetentionMonths, 6);
   const exportEvent = await dbClient.execute({
-    sql: "SELECT action, actor_reference, metadata_json FROM tokenless_audit_events WHERE workspace_id = ? AND action = 'audit.export'",
+    sql: "SELECT action FROM tokenless_audit_events WHERE workspace_id = ? AND action = 'audit.export'",
     args: [workspaceId],
   });
-  assert.equal(exportEvent.rowCount, 1);
-  assert.equal(exportEvent.rows[0]?.actor_reference, OWNER);
+  assert.equal(exportEvent.rowCount, 0);
   await assert.rejects(
     () => exportWorkspaceAudit({ accountAddress: OTHER, workspaceId }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "workspace_not_found",

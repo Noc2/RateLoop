@@ -160,6 +160,12 @@ test("workspace audit export is private, integrity-bearing JSON restricted to ow
   });
   const path = `/api/account/workspaces/${workspaceId}/audit/export`;
   const context = { params: Promise.resolve({ workspaceId }) };
+  const before = await dbClient.execute({
+    sql: `SELECT
+            (SELECT COUNT(*) FROM tokenless_audit_events WHERE workspace_id = ?) AS events,
+            (SELECT COUNT(*) FROM tokenless_assurance_attestation_jobs WHERE workspace_id = ?) AS attestations`,
+    args: [workspaceId, workspaceId],
+  });
 
   const exported = await exportAudit(browserRequest(path, { token: owner.token }), context);
   assert.equal(exported.status, 200);
@@ -170,6 +176,13 @@ test("workspace audit export is private, integrity-bearing JSON restricted to ow
   assert.equal(body.format, "rateloop-audit-v1");
   assert.equal(body.integrity.valid, true);
   assert.equal(body.events.length, 1);
+  const after = await dbClient.execute({
+    sql: `SELECT
+            (SELECT COUNT(*) FROM tokenless_audit_events WHERE workspace_id = ?) AS events,
+            (SELECT COUNT(*) FROM tokenless_assurance_attestation_jobs WHERE workspace_id = ?) AS attestations`,
+    args: [workspaceId, workspaceId],
+  });
+  assert.deepEqual(after.rows, before.rows);
 
   const denied = await exportAudit(browserRequest(path, { token: member.token }), context);
   assert.equal(denied.status, 404);
