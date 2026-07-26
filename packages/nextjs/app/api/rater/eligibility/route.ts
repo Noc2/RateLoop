@@ -1,10 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { requireBrowserSession } from "~~/lib/auth/request";
 import {
   type EligibilitySubmission,
   getPaidEligibility,
   recordPaidEligibilityDecline,
   submitPaidEligibility,
 } from "~~/lib/tokenless/paidEligibility";
+import { localeCountryFromAcceptLanguage } from "~~/lib/tokenless/paidEligibilityRisk";
 import { requireRaterSession } from "~~/lib/tokenless/raterSession";
 import { TokenlessServiceError, tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
@@ -25,7 +27,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await requireRaterSession(request, true);
+    const browserSession = await requireBrowserSession(request, { mutation: true });
     let submission: Record<string, unknown>;
     try {
       submission = (await request.json()) as Record<string, unknown>;
@@ -44,16 +46,22 @@ export async function POST(request: NextRequest) {
         );
       }
       const result = await recordPaidEligibilityDecline({
-        principalId: session.principalId,
+        principalId: browserSession.principalId,
         reviewerSource,
         workspaceId: typeof submission.workspaceId === "string" ? submission.workspaceId : undefined,
       });
       return NextResponse.json(result, { status: 201, headers: { "Cache-Control": "no-store" } });
     }
+    const session = await requireRaterSession(request, true);
     const result = await submitPaidEligibility({
       principalId: session.principalId,
       payoutAccount: session.payoutAddress,
       submission: submission as EligibilitySubmission,
+      requestContext: {
+        edgeCountry: request.headers.get("x-vercel-ip-country"),
+        edgeRegion: request.headers.get("x-vercel-ip-country-region"),
+        localeCountry: localeCountryFromAcceptLanguage(request.headers.get("accept-language")),
+      },
     });
     return NextResponse.json(result, { status: 201, headers: { "Cache-Control": "no-store" } });
   } catch (error) {

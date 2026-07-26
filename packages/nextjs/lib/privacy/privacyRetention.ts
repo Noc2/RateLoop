@@ -39,6 +39,43 @@ export async function purgeExpiredPrivacyOperations(now = new Date()) {
     sql: "DELETE FROM tokenless_paid_eligibility_decisions WHERE delete_after <= ?",
     args: [now],
   });
+  const expiringRiskRows = await dbClient.execute({
+    sql: `SELECT risk_check_id FROM tokenless_paid_eligibility_risk_checks
+          WHERE expires_at<=? ORDER BY expires_at,risk_check_id LIMIT 1000`,
+    args: [now],
+  });
+  const expiringRiskIds = expiringRiskRows.rows.map(row => String(row.risk_check_id));
+  const expiredRiskEligibility =
+    expiringRiskIds.length === 0
+      ? { rowCount: 0 }
+      : await dbClient.execute({
+          sql: `UPDATE tokenless_legal_eligibility
+                SET eligibility_status=?,blocked_reason=?,updated_at=?
+                WHERE risk_check_id IN (${expiringRiskIds.map(() => "?").join(",")})`,
+          args: ["expired", "paid_eligibility_risk_expired", now, ...expiringRiskIds],
+        });
+  const deletableRiskRows = await dbClient.execute({
+    sql: `SELECT risk_check_id FROM tokenless_paid_eligibility_risk_checks
+          WHERE delete_after<=? ORDER BY delete_after,risk_check_id LIMIT 1000`,
+    args: [now],
+  });
+  const deletableRiskIds = deletableRiskRows.rows.map(row => String(row.risk_check_id));
+  if (deletableRiskIds.length > 0) {
+    await dbClient.execute({
+      sql: `UPDATE tokenless_legal_eligibility
+            SET risk_check_id=NULL
+            WHERE risk_check_id IN (${deletableRiskIds.map(() => "?").join(",")})`,
+      args: deletableRiskIds,
+    });
+  }
+  const expiredRiskChecks =
+    deletableRiskIds.length === 0
+      ? { rowCount: 0 }
+      : await dbClient.execute({
+          sql: `DELETE FROM tokenless_paid_eligibility_risk_checks
+                WHERE risk_check_id IN (${deletableRiskIds.map(() => "?").join(",")})`,
+          args: deletableRiskIds,
+        });
   const [
     subjectExports,
     verifications,
@@ -115,6 +152,8 @@ export async function purgeExpiredPrivacyOperations(now = new Date()) {
     expiredDac7Eligibility: affected(expiredDac7Eligibility),
     expiredDac7Records: affected(expiredDac7Records),
     expiredEligibilityDeclines: affected(expiredEligibilityDeclines),
+    expiredRiskEligibility: affected(expiredRiskEligibility),
+    expiredRiskChecks: affected(expiredRiskChecks),
     subjectExports: affected(subjectExports),
     verifications: affected(verifications),
   };

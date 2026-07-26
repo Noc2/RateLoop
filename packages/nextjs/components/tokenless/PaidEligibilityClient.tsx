@@ -482,9 +482,21 @@ export function PaidEligibilityClient() {
               </button>
             </div>
             {state && !accountAddress ? (
-              <Link href="/settings/wallets?use=payout" className="rateloop-gradient-action mt-5 inline-flex px-6">
-                Add payout wallet
-              </Link>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Link href="/settings/wallets?use=payout" className="rateloop-gradient-action inline-flex px-6">
+                  Add payout wallet
+                </Link>
+                {reviewerSource === "rateloop_network" ? (
+                  <button
+                    type="button"
+                    className="rounded-lg border border-white/15 px-6 py-3 text-sm"
+                    disabled={busy}
+                    onClick={() => void keepAdvisoryOnly()}
+                  >
+                    Keep advisory-only
+                  </button>
+                ) : null}
+              </div>
             ) : reviewerSource === "rateloop_network" ? (
               <div className="mt-5 flex flex-wrap gap-3">
                 <button

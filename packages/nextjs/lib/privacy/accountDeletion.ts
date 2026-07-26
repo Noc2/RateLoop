@@ -42,6 +42,7 @@ type RaterErasureEvidence = {
     paidEligibilityScopes: number;
     reviewerQualifications: number;
     sanctionsScreenings: number;
+    paidEligibilityRiskChecks: number;
     worldIdRequests: number;
     worldIdContextLimits: number;
     payoutEligibility: number;
@@ -54,6 +55,7 @@ type RaterErasureEvidence = {
     paidEligibilityScopes: number;
     reviewerQualifications: number;
     sanctionsScreenings: number;
+    paidEligibilityRiskChecks: number;
     worldIdRequests: number;
     worldIdContextLimits: number;
     payoutEligibility: number;
@@ -1097,6 +1099,7 @@ async function eraseRaterIdentity(
       integrityEpochMemberships: 0,
       reviewerQualifications: 0,
       sanctionsScreenings: 0,
+      paidEligibilityRiskChecks: 0,
       worldIdContextLimits: 0,
       worldIdRequests: 0,
     },
@@ -1110,6 +1113,7 @@ async function eraseRaterIdentity(
       integrityEpochMemberships: 0,
       reviewerQualifications: 0,
       sanctionsScreenings: 0,
+      paidEligibilityRiskChecks: 0,
       worldIdContextLimits: 0,
       worldIdRequests: 0,
     },
@@ -1167,6 +1171,10 @@ async function eraseRaterIdentity(
     raterId,
   ]);
   const legalEligibility = await client.query(`DELETE FROM tokenless_legal_eligibility WHERE rater_id = $1`, [raterId]);
+  const paidEligibilityRiskChecks = await client.query(
+    `DELETE FROM tokenless_paid_eligibility_risk_checks WHERE rater_id = $1`,
+    [raterId],
+  );
   const paidEligibilityScopes = await client.query(
     `DELETE FROM tokenless_paid_eligibility_scopes WHERE rater_id = $1`,
     [raterId],
@@ -1217,6 +1225,8 @@ async function eraseRaterIdentity(
          AS legal_eligibility,
        (SELECT COUNT(*) FROM tokenless_paid_eligibility_scopes WHERE rater_id = $1)
          AS paid_eligibility_scopes,
+       (SELECT COUNT(*) FROM tokenless_paid_eligibility_risk_checks WHERE rater_id = $1)
+         AS paid_eligibility_risk_checks,
        (SELECT COUNT(*) FROM tokenless_sanctions_screenings WHERE rater_id = $1 AND status <> 'match')
          AS sanctions_screenings,
        (SELECT COUNT(*) FROM tokenless_reviewer_qualifications
@@ -1264,6 +1274,7 @@ async function eraseRaterIdentity(
       integrityEpochMemberships: integrityErasure.erased,
       reviewerQualifications: reviewerQualifications.rowCount ?? 0,
       sanctionsScreenings: sanctionsScreenings.rowCount ?? 0,
+      paidEligibilityRiskChecks: paidEligibilityRiskChecks.rowCount ?? 0,
       worldIdContextLimits: worldIdContextLimits.rowCount ?? 0,
       worldIdRequests: worldIdRequests.rowCount ?? 0,
     },
@@ -1277,6 +1288,7 @@ async function eraseRaterIdentity(
       integrityEpochMemberships: integrityErasure.remaining,
       reviewerQualifications: rowNumber(row, "reviewer_qualifications"),
       sanctionsScreenings: rowNumber(row, "sanctions_screenings"),
+      paidEligibilityRiskChecks: rowNumber(row, "paid_eligibility_risk_checks"),
       worldIdContextLimits: rowNumber(row, "world_id_context_limits"),
       worldIdRequests: rowNumber(row, "world_id_requests"),
     },

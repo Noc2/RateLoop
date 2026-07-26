@@ -121,7 +121,6 @@ export const REQUIRED_TOKENLESS_PRODUCTION_VARIABLES = [
   "TOKENLESS_KEEPER_KMS_ROLE_ARN",
   "TOKENLESS_VOUCHER_ISSUER_EPOCH",
   "TOKENLESS_ELIGIBILITY_PROVIDER_ID",
-  "TOKENLESS_ELIGIBILITY_PROVIDER_PUBLIC_KEY",
   "TOKENLESS_ELIGIBILITY_PROVIDER_START_URL",
   "TOKENLESS_ELIGIBILITY_HANDOFF_SECRET",
   "TOKENLESS_PROVIDER_EVIDENCE_VAULT_KEY_VERSION",
@@ -131,6 +130,9 @@ export const REQUIRED_TOKENLESS_PRODUCTION_VARIABLES = [
   "TOKENLESS_VOTE_MAPPING_VAULT_KEY_VERSION",
   "TOKENLESS_VOTE_MAPPING_VAULT_KEYS",
   "TOKENLESS_DAC7_POLICY",
+  "TOKENLESS_WALLET_SCREENING_PROVIDER_ID",
+  "TOKENLESS_WALLET_SCREENING_PROVIDER_URL",
+  "TOKENLESS_WALLET_SCREENING_PROVIDER_SECRET",
   "TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED",
   "NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED",
   "TOKENLESS_NETWORK_PANELS_ENABLED",
@@ -189,6 +191,8 @@ const FORBIDDEN_PUBLIC_SECRETS = [
   "NEXT_PUBLIC_TOKENLESS_FEEDBACK_BONUS_AWARDER_PRIVATE_KEY",
   "NEXT_PUBLIC_TOKENLESS_FEEDBACK_BONUS_AWARD_WORKER_PRIVATE_KEY",
   "NEXT_PUBLIC_TOKENLESS_ELIGIBILITY_HANDOFF_SECRET",
+  "NEXT_PUBLIC_TOKENLESS_SELF_VERIFIER_SECRET",
+  "NEXT_PUBLIC_TOKENLESS_WALLET_SCREENING_PROVIDER_SECRET",
   "NEXT_PUBLIC_TOKENLESS_PROVIDER_EVIDENCE_VAULT_KEYS",
   "NEXT_PUBLIC_TOKENLESS_TAX_VAULT_KEYS",
   "NEXT_PUBLIC_TOKENLESS_VOTE_MAPPING_VAULT_KEYS",
@@ -363,6 +367,16 @@ function validateTokenlessTestDeployment(env) {
     (!positiveInteger(sanctionsRetention) || Number(sanctionsRetention) < 365 || Number(sanctionsRetention) > 3_650)
   ) {
     errors.push("TOKENLESS_SANCTIONS_MATCH_RETENTION_DAYS must be an integer from 365 to 3650.");
+  }
+  const walletScreeningUrl = value(env, "TOKENLESS_WALLET_SCREENING_PROVIDER_URL");
+  if (!value(env, "TOKENLESS_WALLET_SCREENING_PROVIDER_ID")) {
+    errors.push("TOKENLESS_WALLET_SCREENING_PROVIDER_ID is required for paid eligibility.");
+  }
+  if (!walletScreeningUrl || !/^https:\/\//iu.test(walletScreeningUrl)) {
+    errors.push("TOKENLESS_WALLET_SCREENING_PROVIDER_URL must be an HTTPS URL.");
+  }
+  if (value(env, "TOKENLESS_WALLET_SCREENING_PROVIDER_SECRET").length < 32) {
+    errors.push("TOKENLESS_WALLET_SCREENING_PROVIDER_SECRET must contain at least 32 characters.");
   }
   errors.push(...validateHostedDatabaseIdentity(env));
   const isolatedReviewVaultKey = validateTokenlessTestVault(env, errors);
@@ -816,6 +830,16 @@ export function validateTokenlessProductionReadiness({
   ) {
     errors.push("TOKENLESS_SANCTIONS_MATCH_RETENTION_DAYS must be an integer from 365 to 3650.");
   }
+  const walletScreeningUrl = value(env, "TOKENLESS_WALLET_SCREENING_PROVIDER_URL");
+  if (!value(env, "TOKENLESS_WALLET_SCREENING_PROVIDER_ID")) {
+    errors.push("TOKENLESS_WALLET_SCREENING_PROVIDER_ID is required for paid eligibility.");
+  }
+  if (!walletScreeningUrl || !/^https:\/\//iu.test(walletScreeningUrl)) {
+    errors.push("TOKENLESS_WALLET_SCREENING_PROVIDER_URL must be an HTTPS URL.");
+  }
+  if (value(env, "TOKENLESS_WALLET_SCREENING_PROVIDER_SECRET").length < 32) {
+    errors.push("TOKENLESS_WALLET_SCREENING_PROVIDER_SECRET must contain at least 32 characters.");
+  }
 
   const secretRoles = new Map();
   const managedSignerResources = new Map();
@@ -978,10 +1002,28 @@ export function validateTokenlessProductionReadiness({
     if (names.length > 1) errors.push(`Production key roles must be distinct: ${names.join(", ")}.`);
   }
 
-  try {
-    createPublicKey(value(env, "TOKENLESS_ELIGIBILITY_PROVIDER_PUBLIC_KEY").replaceAll("\\n", "\n"));
-  } catch {
-    errors.push("TOKENLESS_ELIGIBILITY_PROVIDER_PUBLIC_KEY must be a valid public key.");
+  if (value(env, "TOKENLESS_ELIGIBILITY_PROVIDER_ID") === "self:document") {
+    for (const gate of [
+      "TOKENLESS_SELF_ASSURANCE_ENABLED",
+      "TOKENLESS_SELF_PROVIDER_ACCESS_APPROVED",
+      "TOKENLESS_SELF_DPA_APPROVED",
+      "TOKENLESS_SELF_CONVERSION_GATE_APPROVED",
+      "TOKENLESS_SELF_ERROR_HANDLING_GATE_APPROVED",
+    ]) {
+      if (value(env, gate) !== "true") errors.push(`${gate} must be true when self:document is configured.`);
+    }
+    if (!/^https:\/\//iu.test(value(env, "TOKENLESS_SELF_VERIFIER_URL"))) {
+      errors.push("TOKENLESS_SELF_VERIFIER_URL must be HTTPS when self:document is configured.");
+    }
+    if (value(env, "TOKENLESS_SELF_VERIFIER_SECRET").length < 32) {
+      errors.push("TOKENLESS_SELF_VERIFIER_SECRET must contain at least 32 characters.");
+    }
+  } else {
+    try {
+      createPublicKey(value(env, "TOKENLESS_ELIGIBILITY_PROVIDER_PUBLIC_KEY").replaceAll("\\n", "\n"));
+    } catch {
+      errors.push("TOKENLESS_ELIGIBILITY_PROVIDER_PUBLIC_KEY must be a valid public key.");
+    }
   }
   const eligibilityHandoffSecret = Buffer.from(value(env, "TOKENLESS_ELIGIBILITY_HANDOFF_SECRET"), "base64");
   if (eligibilityHandoffSecret.byteLength < 32) {

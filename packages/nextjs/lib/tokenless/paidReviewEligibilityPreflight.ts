@@ -137,6 +137,12 @@ function isLegalEligibilityCurrent(row: Row, now: Date) {
     text(row, "dac7_retention_basis") === "psttg_dac7_ao_147" &&
     date(row, "dac7_retained_until") !== null &&
     date(row, "dac7_retained_until")! > now;
+  const riskCurrent =
+    text(row, "risk_geoblock_status") === "clear" &&
+    text(row, "risk_plausibility_status") === "pass" &&
+    text(row, "wallet_screening_status") === "clear" &&
+    date(row, "risk_expires_at") !== null &&
+    date(row, "risk_expires_at")! > now;
   return (
     text(row, "legal_eligibility_status") === "eligible" &&
     declaredResidence !== null &&
@@ -148,6 +154,7 @@ function isLegalEligibilityCurrent(row: Row, now: Date) {
     text(row, "residence_tax_status") === "consistent" &&
     text(row, "tax_profile_status") === "complete" &&
     (dac7Status === "not_required" || (dac7Status === "complete" && taxVaultComplete)) &&
+    riskCurrent &&
     sanctionsConsentAt !== null &&
     sanctionsConsentAt.getTime() <= now.getTime() + MAX_CLOCK_SKEW_MS &&
     text(row, "sanctions_status") === "clear" &&
@@ -246,12 +253,16 @@ export async function requirePaidReviewEligibilityInTransaction(
             p.nullifier_key_version, p.nullifier_key_domain, p.updated_at AS profile_updated_at,
             l.minimum_age_verified, l.age_evidence_verified_at, l.age_evidence_expires_at,
             l.verified_residence_country, l.declared_residence_country, l.tax_residence_country,
-            l.residence_tax_status, l.tax_profile_status, l.dac7_status,l.dac7_record_id,
+            l.residence_tax_status, l.tax_profile_status, l.dac7_status,l.dac7_record_id,l.risk_check_id,
             dac7.tax_vault_ciphertext AS dac7_record_ciphertext,
             dac7.tax_vault_key_version AS dac7_record_key_version,
             dac7.tax_vault_key_domain AS dac7_record_key_domain,
             dac7.retention_basis AS dac7_retention_basis,
             dac7.retained_until AS dac7_retained_until,
+            risk.geoblock_status AS risk_geoblock_status,
+            risk.plausibility_status AS risk_plausibility_status,
+            risk.wallet_screening_status AS wallet_screening_status,
+            risk.expires_at AS risk_expires_at,
             l.sanctions_consent_at, l.sanctions_status, l.sanctions_reference_hash,
             l.sanctions_screened_at, l.sanctions_expires_at,
             l.eligibility_status AS legal_eligibility_status, l.updated_at AS legal_updated_at,
@@ -276,6 +287,7 @@ export async function requirePaidReviewEligibilityInTransaction(
        AND l.reviewer_source=scope.reviewer_source
        AND (($3::text IS NULL AND l.workspace_id IS NULL) OR l.workspace_id=$3)
      LEFT JOIN tokenless_dac7_records dac7 ON dac7.record_id=l.dac7_record_id
+     LEFT JOIN tokenless_paid_eligibility_risk_checks risk ON risk.risk_check_id=l.risk_check_id
      WHERE p.principal_id = $1 LIMIT 1 FOR UPDATE`,
     [principalId, requirement.reviewerSource, requirement.workspaceId ?? null],
   );

@@ -454,11 +454,17 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
               dac7.reporting_year AS dac7_reporting_year,
               dac7.retention_basis AS dac7_retention_basis,
               dac7.retained_until AS dac7_retained_until,
+              risk.geoblock_status AS risk_geoblock_status,
+              risk.plausibility_status AS risk_plausibility_status,
+              risk.wallet_screening_provider,
+              risk.wallet_screening_status,risk.checked_at AS risk_checked_at,
+              risk.expires_at AS risk_expires_at,
               legal.sanctions_status,legal.eligibility_status,payout.payout_account,
               payout.eligibility_status AS payout_status
        FROM tokenless_rater_profiles profile
        LEFT JOIN tokenless_legal_eligibility legal ON legal.rater_id=profile.rater_id
        LEFT JOIN tokenless_dac7_records dac7 ON dac7.record_id=legal.dac7_record_id
+       LEFT JOIN tokenless_paid_eligibility_risk_checks risk ON risk.risk_check_id=legal.risk_check_id
        LEFT JOIN tokenless_payout_eligibility payout ON payout.rater_id=profile.rater_id
        WHERE profile.principal_id=$1
        ORDER BY legal.updated_at DESC NULLS LAST,legal.scope_id ASC`,

@@ -78,6 +78,13 @@ metadata.
   rater identifier. Scheduled maintenance expires any remaining active reference before deleting the record at its
   `retained_until` deadline. Never shorten this schedule or decrypt/export a retained record without the documented
   PStTG/AO legal-basis review.
+- Paid unlock applies the Vercel-derived country/region geoblock before storing identity or tax data. The subsequent
+  plausibility record contains only country/region/locale comparisons and reason codes; wallet screening stores
+  provider/list/reference hashes rather than the provider reference or raw wallet. A mismatch or provider review is
+  fail-closed for vouchers pending neutral review, while a blocked location or wallet match is ineligible. Risk
+  evidence expires before voucher admission and is deleted after one year unless a separately documented legal hold
+  applies. Overrides to the default blocked-country/region sets require the same sanctions and geographic-control
+  review as the screening provider inventory.
 - Subject exports contain the authenticated principal&apos;s account, membership, reviewer-access, eligibility-status,
   crowd-forecast integrity counters and findings, and request-lifecycle categories. They do not contain another
   reviewer&apos;s pair identity, vault ciphertext, encryption material, session credentials, or raw provider evidence.

@@ -38,6 +38,11 @@ import {
   loadExactNetworkVoucherSelection,
 } from "~~/lib/tokenless/networkAssignmentSettlement";
 import { isOpaqueSubjectReference } from "~~/lib/tokenless/opaqueReferences";
+import {
+  type PaidEligibilityRequestContext,
+  type PaidEligibilityRiskResult,
+  evaluatePaidEligibilityRisk,
+} from "~~/lib/tokenless/paidEligibilityRisk";
 import { requirePaidLaneComplianceApproval } from "~~/lib/tokenless/paidLaneCompliance";
 import {
   requirePaidReviewEligibility,
@@ -47,6 +52,12 @@ import {
   completePaidReviewVoucherIssuance,
   requirePrivatePaidReviewVoucherIssuance,
 } from "~~/lib/tokenless/paidReviewVoucherReceipts";
+import {
+  type NormalizedSelfDocumentResult,
+  type SelfDocumentVerifier,
+  selfDocumentAdapterStatus,
+  verifySelfDocumentPredicates,
+} from "~~/lib/tokenless/selfAssuranceAdapter";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const COUNTRY = /^[A-Z]{2}$/;
@@ -148,6 +159,15 @@ let issuerConfigOverride: IssuerConfig | null = null;
 let issuerStateVerifierOverride: IssuerStateVerifier | null = null;
 let dac7PolicyOverride: ((country: string) => boolean) | null = null;
 let handoffConfigOverride: HandoffConfig | null = null;
+let paidEligibilityRiskOverride:
+  | ((input: {
+      payoutAccount: string;
+      declaredResidenceCountry: string;
+      taxResidenceCountry: string;
+      requestContext: PaidEligibilityRequestContext;
+      now: Date;
+    }) => Promise<PaidEligibilityRiskResult>)
+  | null = null;
 let integrityEvidenceOverride:
   | ((input: {
       accountAddress: Address;
@@ -336,10 +356,146 @@ const signedProvider: EligibilityProvider = {
   },
 };
 
+function sanctionsScreeningSource(env: Record<string, string | undefined> = process.env) {
+  const source = env.TOKENLESS_SANCTIONS_SCREENING_SOURCE?.trim().toLowerCase() || "manual:v1";
+  if (!/^[a-z0-9][a-z0-9:_-]{2,79}$/u.test(source)) {
+    throw new TokenlessServiceError("Sanctions screening provider is unavailable.", 503, "provider_unavailable");
+  }
+  return source;
+}
+
+function getSelfDocumentVerifier(expectedAccountAddress: Address): SelfDocumentVerifier {
+  const url = process.env.TOKENLESS_SELF_VERIFIER_URL?.trim();
+  const secret = process.env.TOKENLESS_SELF_VERIFIER_SECRET?.trim();
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url ?? "");
+  } catch {
+    throw new TokenlessServiceError("The Self verifier is unavailable.", 503, "provider_unavailable");
+  }
+  if (parsedUrl.protocol !== "https:" || !secret || secret.length < 32) {
+    throw new TokenlessServiceError("The Self verifier is unavailable.", 503, "provider_unavailable");
+  }
+  return {
+    async verify(proof: unknown): Promise<NormalizedSelfDocumentResult> {
+      const response = await fetch(parsedUrl, {
+        method: "POST",
+        cache: "no-store",
+        signal: AbortSignal.timeout(10_000),
+        headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ proof, expectedAccountAddress, requestedPredicates: { minimumAge: 18 } }),
+      }).catch(() => null);
+      if (!response?.ok) {
+        throw new TokenlessServiceError("The Self verifier is temporarily unavailable.", 503, "provider_unavailable");
+      }
+      const body = (await response.json()) as NormalizedSelfDocumentResult & { accountAddress?: unknown };
+      if (
+        typeof body.accountAddress !== "string" ||
+        !ADDRESS.test(body.accountAddress) ||
+        getAddress(body.accountAddress) !== expectedAccountAddress
+      ) {
+        throw new TokenlessServiceError(
+          "The Self proof is not bound to this payout account.",
+          403,
+          "provider_account_mismatch",
+        );
+      }
+      return body;
+    },
+  };
+}
+
+const selfDocumentProvider: EligibilityProvider = {
+  async verify(input) {
+    if (input.provider !== "self:document" || input.payload.length > 262_144) {
+      throw new TokenlessServiceError("The Self provider result is invalid.", 400, "invalid_provider_result");
+    }
+    let envelope: Record<string, unknown>;
+    try {
+      envelope = JSON.parse(Buffer.from(input.payload, "base64url").toString("utf8")) as Record<string, unknown>;
+    } catch {
+      throw new TokenlessServiceError("The Self provider result is invalid.", 400, "invalid_provider_result");
+    }
+    const assertionId = typeof envelope.assertionId === "string" ? envelope.assertionId : "";
+    const accountAddress = typeof envelope.accountAddress === "string" ? envelope.accountAddress : "";
+    const evidenceVerifiedAt = new Date(String(envelope.evidenceVerifiedAt ?? ""));
+    const evidenceExpiresAt = new Date(String(envelope.evidenceExpiresAt ?? ""));
+    if (
+      envelope.version !== 1 ||
+      assertionId.length < 8 ||
+      assertionId.length > 256 ||
+      !ADDRESS.test(accountAddress) ||
+      Number.isNaN(evidenceVerifiedAt.getTime()) ||
+      Number.isNaN(evidenceExpiresAt.getTime()) ||
+      evidenceVerifiedAt > input.now ||
+      evidenceExpiresAt <= input.now ||
+      evidenceExpiresAt.getTime() - evidenceVerifiedAt.getTime() > MAX_PROVIDER_LIFETIME_MS
+    ) {
+      throw new TokenlessServiceError("The Self provider result is invalid.", 400, "invalid_provider_result");
+    }
+    const verified = await verifySelfDocumentPredicates({
+      requestedConfiguration: { minimumAge: 18 },
+      proof: envelope.proof,
+      verifier: getSelfDocumentVerifier(getAddress(accountAddress)),
+    });
+    if (verified.providerSubjectReference.length < 8 || verified.providerSubjectReference.length > 256) {
+      throw new TokenlessServiceError("The Self provider result is invalid.", 400, "invalid_provider_result");
+    }
+    return {
+      providerId: verified.providerId,
+      assertionId,
+      subjectId: verified.providerSubjectReference,
+      accountAddress: getAddress(accountAddress),
+      capabilities: verified.capabilities as HumanAssuranceCapability[],
+      minimumAgeVerified: verified.disclosed.minimumAgeVerified,
+      documentIssuingCountry: verified.disclosed.documentIssuingCountry,
+      nationalityCountry: verified.disclosed.nationalityCountry,
+      verifiedResidenceCountry: null,
+      evidenceVerifiedAt,
+      evidenceExpiresAt,
+      sanctionsStatus: "review",
+      sanctionsReference: `manual:${assertionId}`,
+      sanctionsScreenedAt: input.now,
+      sanctionsExpiresAt: new Date(input.now.getTime() + 30 * 86_400_000),
+      assertionHash: hash(input.payload),
+    };
+  },
+};
+
+export function paidEligibilityProviderInventory(env: Record<string, string | undefined> = process.env) {
+  const configuredIdentityProvider = env.TOKENLESS_ELIGIBILITY_PROVIDER_ID?.trim() || null;
+  const self = selfDocumentAdapterStatus(env);
+  return {
+    identity: {
+      configuredProvider: configuredIdentityProvider,
+      signedProviderConfigured: Boolean(
+        configuredIdentityProvider &&
+          configuredIdentityProvider !== "self:document" &&
+          env.TOKENLESS_ELIGIBILITY_PROVIDER_PUBLIC_KEY?.trim(),
+      ),
+      self,
+      selfVerifierConfigured: Boolean(
+        env.TOKENLESS_SELF_VERIFIER_URL?.trim()?.startsWith("https://") &&
+          (env.TOKENLESS_SELF_VERIFIER_SECRET?.trim().length ?? 0) >= 32,
+      ),
+    },
+    sanctions: { source: sanctionsScreeningSource(env) },
+    wallet: {
+      provider: env.TOKENLESS_WALLET_SCREENING_PROVIDER_ID?.trim() || null,
+      configured: Boolean(
+        env.TOKENLESS_WALLET_SCREENING_PROVIDER_ID?.trim() &&
+          env.TOKENLESS_WALLET_SCREENING_PROVIDER_URL?.trim() &&
+          env.TOKENLESS_WALLET_SCREENING_PROVIDER_SECRET?.trim(),
+      ),
+    },
+  };
+}
+
 function getProvider() {
   if (providerOverride) return providerOverride;
   return {
     async verify(input) {
+      if (input.provider === "self:document") return selfDocumentProvider.verify(input);
       if (input.provider !== "rateloop-development") return signedProvider.verify(input);
       if (
         process.env.NODE_ENV === "production" ||
@@ -577,6 +733,16 @@ export async function createEligibilityProviderHandoff(
       ? "rateloop-development"
       : "");
   if (!providerId) throw new TokenlessServiceError("Eligibility provider is unavailable.", 503, "provider_unavailable");
+  const providerInventory = paidEligibilityProviderInventory();
+  if (
+    (providerId === "self:document" &&
+      (!providerInventory.identity.self.enabled || !providerInventory.identity.selfVerifierConfigured)) ||
+    (providerId !== "self:document" &&
+      providerId !== "rateloop-development" &&
+      !providerInventory.identity.signedProviderConfigured)
+  ) {
+    throw new TokenlessServiceError("Eligibility provider is unavailable.", 503, "provider_unavailable");
+  }
   const rawState = randomBytes(32).toString("base64url");
   const state = `${rawState}.${signHandoffState(rawState, config.secret)}`;
   const expiresAt = new Date(now.getTime() + 15 * 60_000);
@@ -847,6 +1013,45 @@ async function persistDac7Record(
   return recordId;
 }
 
+async function persistPaidEligibilityRiskCheck(
+  client: Pick<PoolClient, "query">,
+  input: {
+    raterId: string;
+    scopeId: string;
+    risk: PaidEligibilityRiskResult;
+  },
+) {
+  const riskCheckId = `per_${randomUUID().replaceAll("-", "")}`;
+  await client.query(
+    `INSERT INTO tokenless_paid_eligibility_risk_checks
+     (risk_check_id,rater_id,source_scope_reference,edge_country,edge_region,locale_country,
+      geoblock_status,plausibility_status,plausibility_reason_codes_json,wallet_reference_hash,
+      wallet_screening_provider,wallet_screening_status,wallet_screening_reference_hash,
+      wallet_list_snapshot_hash,checked_at,expires_at,delete_after)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+    [
+      riskCheckId,
+      input.raterId,
+      input.scopeId,
+      input.risk.edgeCountry,
+      input.risk.edgeRegion,
+      input.risk.localeCountry,
+      input.risk.geoblockStatus,
+      input.risk.plausibilityStatus,
+      JSON.stringify(input.risk.plausibilityReasonCodes),
+      input.risk.walletReferenceHash,
+      input.risk.walletScreeningProvider,
+      input.risk.walletScreeningStatus,
+      input.risk.walletScreeningReferenceHash,
+      input.risk.walletListSnapshotHash,
+      input.risk.checkedAt,
+      input.risk.expiresAt,
+      new Date(input.risk.checkedAt.getTime() + 365 * 86_400_000),
+    ],
+  );
+  return riskCheckId;
+}
+
 function validateScreeningSubject(submission: EligibilitySubmission, now: Date) {
   const value = submission.screeningSubject ?? submission.dac7;
   const fullName = value?.fullName?.trim();
@@ -889,6 +1094,7 @@ async function submitInvitedPaidEligibility(input: {
   submission: EligibilitySubmission;
   declaredResidenceCountry: string;
   taxCountry: string;
+  risk: PaidEligibilityRiskResult;
   now: Date;
 }) {
   const workspaceId = input.submission.workspaceId?.trim();
@@ -926,6 +1132,7 @@ async function submitInvitedPaidEligibility(input: {
     declaredResidenceCountry: input.declaredResidenceCountry,
     taxResidenceCountry: input.taxCountry,
   });
+  const screeningSource = sanctionsScreeningSource();
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
@@ -1053,8 +1260,16 @@ async function submitInvitedPaidEligibility(input: {
       `INSERT INTO tokenless_sanctions_screenings
        (screening_id,rater_id,source,status,subject_ciphertext,subject_key_version,
         subject_key_domain,requested_at,updated_at)
-       VALUES ($1,$2,'manual:v1','pending',$3,$4,$5,$6,$6)`,
-      [screeningId, raterId, subjectVault.ciphertext, subjectVault.keyVersion, subjectVault.keyDomain, input.now],
+       VALUES ($1,$2,$3,'pending',$4,$5,$6,$7,$7)`,
+      [
+        screeningId,
+        raterId,
+        screeningSource,
+        subjectVault.ciphertext,
+        subjectVault.keyVersion,
+        subjectVault.keyDomain,
+        input.now,
+      ],
     );
     const residenceTaxStatus = input.declaredResidenceCountry === input.taxCountry ? "consistent" : "review";
     const scopeId = `pes_${hash(`${raterId}\0customer_invited\0${workspaceId}`).slice(0, 40)}`;
@@ -1072,6 +1287,11 @@ async function submitInvitedPaidEligibility(input: {
          blocked_reason='sanctions_pending',valid_until=NULL,updated_at=EXCLUDED.updated_at`,
       [scopeId, raterId, workspaceId, assertionId, qualificationId, screeningId, input.now],
     );
+    const riskCheckId = await persistPaidEligibilityRiskCheck(client, {
+      raterId,
+      scopeId,
+      risk: input.risk,
+    });
     const dac7RecordId = await persistDac7Record(client, {
       raterId,
       reviewerSource: "customer_invited",
@@ -1085,11 +1305,11 @@ async function submitInvitedPaidEligibility(input: {
        (scope_id,rater_id,reviewer_source,workspace_id,sanctions_screening_id,
         minimum_age_verified,age_evidence_verified_at,age_evidence_expires_at,
         verified_residence_country,declared_residence_country,tax_residence_country,residence_tax_status,
-        tax_profile_status,dac7_status,dac7_record_id,tax_vault_ciphertext,tax_vault_key_version,tax_vault_key_domain,
+        tax_profile_status,dac7_status,dac7_record_id,risk_check_id,tax_vault_ciphertext,tax_vault_key_version,tax_vault_key_domain,
         sanctions_consent_at,sanctions_status,sanctions_reference_hash,sanctions_screened_at,
         sanctions_expires_at,eligibility_status,blocked_reason,created_at,updated_at)
-       VALUES ($1,$2,'customer_invited',$3,$4,18,$5,$6,NULL,$7,$8,$9,'complete',$10,$11,NULL,NULL,NULL,
-               $5,'pending',$12,$5,$13,'review','sanctions_pending',$5,$5)
+       VALUES ($1,$2,'customer_invited',$3,$4,18,$5,$6,NULL,$7,$8,$9,'complete',$10,$11,$12,NULL,NULL,NULL,
+               $5,'pending',$13,$5,$14,'review','sanctions_pending',$5,$5)
        ON CONFLICT (scope_id) DO UPDATE SET
          sanctions_screening_id=EXCLUDED.sanctions_screening_id,
          minimum_age_verified=18,age_evidence_verified_at=EXCLUDED.age_evidence_verified_at,
@@ -1097,6 +1317,7 @@ async function submitInvitedPaidEligibility(input: {
          declared_residence_country=EXCLUDED.declared_residence_country,
          tax_residence_country=EXCLUDED.tax_residence_country,residence_tax_status=EXCLUDED.residence_tax_status,
          tax_profile_status='complete',dac7_status=EXCLUDED.dac7_status,dac7_record_id=EXCLUDED.dac7_record_id,
+         risk_check_id=EXCLUDED.risk_check_id,
          tax_vault_ciphertext=NULL,tax_vault_key_version=NULL,
          tax_vault_key_domain=NULL,sanctions_consent_at=EXCLUDED.sanctions_consent_at,
          sanctions_status='pending',sanctions_reference_hash=EXCLUDED.sanctions_reference_hash,
@@ -1114,6 +1335,7 @@ async function submitInvitedPaidEligibility(input: {
         residenceTaxStatus,
         dac7Required ? "complete" : "not_required",
         dac7RecordId,
+        riskCheckId,
         hash(screeningId),
         new Date(input.now.getTime() + 30 * 86_400_000),
       ],
@@ -1133,7 +1355,7 @@ async function submitInvitedPaidEligibility(input: {
       status: "review" as const,
       blockedReason: "sanctions_screening_pending",
       screeningId,
-      screeningSource: "manual:v1" as const,
+      screeningSource,
       adulthoodBasis: "customer_attested" as const,
       capabilities: ["customer_invitation", "minimum_age"] as HumanAssuranceCapability[],
     };
@@ -1174,6 +1396,7 @@ export async function submitPaidEligibility(input: {
   principalId: string;
   payoutAccount: string;
   submission: EligibilitySubmission;
+  requestContext?: PaidEligibilityRequestContext;
   now?: Date;
 }) {
   const now = input.now ?? new Date();
@@ -1215,6 +1438,17 @@ export async function submitPaidEligibility(input: {
       "taxResidenceCountry",
     );
   }
+  const risk = await (paidEligibilityRiskOverride ?? evaluatePaidEligibilityRisk)({
+    payoutAccount: payoutAddress,
+    declaredResidenceCountry,
+    taxResidenceCountry: taxCountry,
+    requestContext: input.requestContext ?? {
+      edgeCountry: null,
+      edgeRegion: null,
+      localeCountry: null,
+    },
+    now,
+  });
   if ((input.submission.reviewerSource ?? "rateloop_network") === "customer_invited") {
     return submitInvitedPaidEligibility({
       principalId: input.principalId,
@@ -1222,6 +1456,7 @@ export async function submitPaidEligibility(input: {
       submission: input.submission,
       declaredResidenceCountry,
       taxCountry,
+      risk,
       now,
     });
   }
@@ -1263,6 +1498,7 @@ export async function submitPaidEligibility(input: {
     declaredResidenceCountry,
     taxResidenceCountry: taxCountry,
   });
+  const screeningSource = sanctionsScreeningSource();
   const referenceKeyring = getProviderReferenceKeyring();
   const subjectReferences = allProviderReferences(
     referenceKeyring,
@@ -1285,10 +1521,14 @@ export async function submitPaidEligibility(input: {
   const providerNamespace = "generic:v3";
   const capabilities = [...new Set<HumanAssuranceCapability>(["account_control", ...assertion.capabilities])].sort();
   const preliminaryState = eligibilityState(assertion, declaredResidenceCountry, taxCountry);
+  const riskState =
+    risk.walletScreeningStatus === "match"
+      ? { ...preliminaryState, status: "blocked", reason: "wallet_screening_match" }
+      : risk.walletScreeningStatus === "review" || risk.plausibilityStatus === "review"
+        ? { ...preliminaryState, status: "review", reason: "paid_eligibility_risk_review" }
+        : preliminaryState;
   const state =
-    preliminaryState.status === "eligible"
-      ? { ...preliminaryState, status: "review", reason: "sanctions_pending" }
-      : preliminaryState;
+    riskState.status === "eligible" ? { ...riskState, status: "review", reason: "sanctions_pending" } : riskState;
   const client = await dbPool.connect();
   try {
     await client.query("BEGIN");
@@ -1483,10 +1723,11 @@ export async function submitPaidEligibility(input: {
       `INSERT INTO tokenless_sanctions_screenings
        (screening_id,rater_id,source,status,subject_ciphertext,subject_key_version,
         subject_key_domain,requested_at,updated_at)
-       VALUES ($1,$2,'manual:v1','pending',$3,$4,$5,$6,$6)`,
+       VALUES ($1,$2,$3,'pending',$4,$5,$6,$7,$7)`,
       [
         screeningId,
         raterId,
+        screeningSource,
         screeningSubjectVault.ciphertext,
         screeningSubjectVault.keyVersion,
         screeningSubjectVault.keyDomain,
@@ -1506,6 +1747,11 @@ export async function submitPaidEligibility(input: {
          blocked_reason=EXCLUDED.blocked_reason,valid_until=NULL,updated_at=EXCLUDED.updated_at`,
       [scopeId, raterId, persistedAssuranceAssertionId, screeningId, state.status, state.reason, now],
     );
+    const riskCheckId = await persistPaidEligibilityRiskCheck(client, {
+      raterId,
+      scopeId,
+      risk,
+    });
     const dac7RecordId = await persistDac7Record(client, {
       raterId,
       reviewerSource: "rateloop_network",
@@ -1519,12 +1765,12 @@ export async function submitPaidEligibility(input: {
        (scope_id,rater_id,reviewer_source,workspace_id,sanctions_screening_id,
         minimum_age_verified, age_evidence_verified_at, age_evidence_expires_at,
         verified_residence_country, declared_residence_country, tax_residence_country,
-        residence_tax_status, tax_profile_status, dac7_status, dac7_record_id, tax_vault_ciphertext,
+        residence_tax_status, tax_profile_status, dac7_status, dac7_record_id, risk_check_id, tax_vault_ciphertext,
         tax_vault_key_version, tax_vault_key_domain, sanctions_consent_at, sanctions_status,
         sanctions_reference_hash, sanctions_screened_at, sanctions_expires_at,
         eligibility_status, blocked_reason, created_at, updated_at)
-       VALUES ($1,$2,'rateloop_network',NULL,$3,$4,$5,$6,$7,$8,$9,$10,'complete',$11,$12,NULL,NULL,NULL,
-               $13,$14,$15,$16,$17,$18,$19,$20,$20)
+       VALUES ($1,$2,'rateloop_network',NULL,$3,$4,$5,$6,$7,$8,$9,$10,'complete',$11,$12,$13,NULL,NULL,NULL,
+               $14,$15,$16,$17,$18,$19,$20,$21,$21)
        ON CONFLICT (scope_id) DO UPDATE SET
         sanctions_screening_id = EXCLUDED.sanctions_screening_id,
         minimum_age_verified = EXCLUDED.minimum_age_verified,
@@ -1536,6 +1782,7 @@ export async function submitPaidEligibility(input: {
         residence_tax_status = EXCLUDED.residence_tax_status,
         tax_profile_status = EXCLUDED.tax_profile_status, dac7_status = EXCLUDED.dac7_status,
         dac7_record_id = EXCLUDED.dac7_record_id,
+        risk_check_id = EXCLUDED.risk_check_id,
         tax_vault_ciphertext = NULL,
         tax_vault_key_version = NULL,
         tax_vault_key_domain = NULL,
@@ -1559,6 +1806,7 @@ export async function submitPaidEligibility(input: {
         state.residenceTaxStatus,
         dac7Required ? "complete" : "not_required",
         dac7RecordId,
+        riskCheckId,
         now,
         "pending",
         hash(screeningId),
@@ -1605,7 +1853,7 @@ export async function submitPaidEligibility(input: {
       blockedReason:
         state.reason === "sanctions_pending" ? "sanctions_screening_pending" : publicBlockedReason(state.reason),
       screeningId,
-      screeningSource: "manual:v1" as const,
+      screeningSource,
       adulthoodBasis: "provider_attested" as const,
       capabilities,
     };
@@ -1873,22 +2121,48 @@ export async function recordSanctionsScreening(input: {
       );
     }
     const legal = await client.query(
-      `SELECT residence_tax_status FROM tokenless_legal_eligibility
+      `SELECT residence_tax_status,risk_check_id FROM tokenless_legal_eligibility
        WHERE sanctions_screening_id=$1 FOR UPDATE`,
       [input.screeningId],
     );
-    const residenceConsistent =
-      stringValue(legal.rows[0] as QueryRow | undefined, "residence_tax_status") === "consistent";
+    const lockedLegalRow = legal.rows[0] as QueryRow | undefined;
+    const riskResult = lockedLegalRow?.risk_check_id
+      ? await client.query(
+          `SELECT plausibility_status,wallet_screening_status,expires_at AS risk_expires_at
+           FROM tokenless_paid_eligibility_risk_checks WHERE risk_check_id=$1`,
+          [lockedLegalRow.risk_check_id],
+        )
+      : { rows: [] };
+    const legalRow = {
+      ...lockedLegalRow,
+      ...(riskResult.rows[0] as QueryRow | undefined),
+    };
+    const residenceConsistent = stringValue(legalRow, "residence_tax_status") === "consistent";
+    const walletScreeningStatus = stringValue(legalRow, "wallet_screening_status");
+    const riskClear =
+      stringValue(legalRow, "plausibility_status") === "pass" &&
+      walletScreeningStatus === "clear" &&
+      legalRow?.risk_expires_at !== null &&
+      legalRow?.risk_expires_at !== undefined &&
+      new Date(String(legalRow.risk_expires_at)) > now;
     const eligibilityStatus =
-      input.status === "match" ? "blocked" : input.status === "clear" && residenceConsistent ? "eligible" : "review";
+      input.status === "match" || walletScreeningStatus === "match"
+        ? "blocked"
+        : input.status === "clear" && residenceConsistent && riskClear
+          ? "eligible"
+          : "review";
     const blockedReason =
       input.status === "match"
         ? "sanctions_match"
-        : input.status === "review"
-          ? "sanctions_review"
-          : residenceConsistent
-            ? null
-            : "residence_tax_review";
+        : walletScreeningStatus === "match"
+          ? "wallet_screening_match"
+          : input.status === "review"
+            ? "sanctions_review"
+            : !residenceConsistent
+              ? "residence_tax_review"
+              : !riskClear
+                ? "paid_eligibility_risk_review"
+                : null;
     const scopeEvidence = await client.query(
       `SELECT scope.scope_id,assertion.evidence_expires_at,
               qualification.expires_at AS qualification_expires_at
@@ -1912,6 +2186,7 @@ export async function recordSanctionsScreening(input: {
                   evidence.qualification_expires_at
                     ? new Date(String(evidence.qualification_expires_at)).getTime()
                     : null,
+                  legalRow?.risk_expires_at ? new Date(String(legalRow.risk_expires_at)).getTime() : null,
                 ].filter((expiry): expiry is number => expiry !== null);
               }),
             ),
@@ -2670,6 +2945,15 @@ export function __setPaidEligibilityOverridesForTests(input: {
   verifyIssuerState?: IssuerStateVerifier | null;
   requiresDac7?: ((country: string) => boolean) | null;
   handoff?: HandoffConfig | null;
+  riskCheck?:
+    | ((input: {
+        payoutAccount: string;
+        declaredResidenceCountry: string;
+        taxResidenceCountry: string;
+        requestContext: PaidEligibilityRequestContext;
+        now: Date;
+      }) => Promise<PaidEligibilityRiskResult>)
+    | null;
   integrityEvidence?:
     | ((input: {
         accountAddress: Address;
@@ -2686,5 +2970,6 @@ export function __setPaidEligibilityOverridesForTests(input: {
   issuerStateVerifierOverride = input.verifyIssuerState ?? null;
   dac7PolicyOverride = input.requiresDac7 ?? null;
   handoffConfigOverride = input.handoff ?? null;
+  paidEligibilityRiskOverride = input.riskCheck ?? null;
   integrityEvidenceOverride = input.integrityEvidence ?? null;
 }

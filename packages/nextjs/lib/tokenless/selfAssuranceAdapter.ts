@@ -173,6 +173,11 @@ export async function verifySelfDocumentPredicates(input: {
     capabilities: [...capabilities].sort(),
     configuration: requestedConfiguration,
     configurationHash: selfDocumentConfigurationHash(requestedConfiguration),
+    disclosed: {
+      minimumAgeVerified: result.disclosed.minimumAgeVerified ?? null,
+      documentIssuingCountry: result.disclosed.documentIssuingCountry?.toUpperCase() ?? null,
+      nationalityCountry: result.disclosed.nationality?.toUpperCase() ?? null,
+    },
     limitationCodes: status.limitationCodes,
   };
 }

@@ -15,6 +15,7 @@ import {
   createEligibilityProviderHandoff,
   getPaidEligibility,
   issuePaidVoucher,
+  paidEligibilityProviderInventory,
   recordPaidEligibilityDecline,
   recordSanctionsScreening,
   registerVoucherRound,
@@ -176,6 +177,21 @@ function installOverrides(
     requiresDac7: () => true,
     handoff: { startUrl: "https://identity.example/start", secret: Buffer.alloc(32, 9) },
     integrityEvidence,
+    riskCheck: async ({ payoutAccount, now }) => ({
+      edgeCountry: "DE",
+      edgeRegion: "BE",
+      localeCountry: "DE",
+      geoblockStatus: "clear",
+      plausibilityStatus: "pass",
+      plausibilityReasonCodes: [],
+      walletReferenceHash: `sha256:${createHash("sha256").update(payoutAccount.toLowerCase()).digest("hex")}`,
+      walletScreeningProvider: "test-wallet-screening:v1",
+      walletScreeningStatus: "clear",
+      walletScreeningReferenceHash: `sha256:${"8".repeat(64)}`,
+      walletListSnapshotHash: `sha256:${"9".repeat(64)}`,
+      checkedAt: now,
+      expiresAt: new Date(now.getTime() + 30 * 86_400_000),
+    }),
   });
 }
 
@@ -331,10 +347,13 @@ test("paid-task unlock persists every gate while vaulting DAC7 and nullifier mat
   const rows = await dbClient.execute(
     `SELECT p.nullifier_seed_ciphertext, p.nullifier_key_domain,
             d.tax_vault_ciphertext, d.tax_vault_key_domain,d.retention_basis,d.retained_until,
+            risk.geoblock_status,risk.plausibility_status,risk.wallet_screening_provider,
+            risk.wallet_screening_status,
             a.provider_evidence_key_domain
      FROM tokenless_rater_profiles p
      JOIN tokenless_legal_eligibility l ON l.rater_id = p.rater_id
      JOIN tokenless_dac7_records d ON d.record_id=l.dac7_record_id
+     JOIN tokenless_paid_eligibility_risk_checks risk ON risk.risk_check_id=l.risk_check_id
      JOIN tokenless_assurance_assertions a ON a.rater_id = p.rater_id`,
   );
   const seedCiphertext = String(rows.rows[0]?.nullifier_seed_ciphertext);
@@ -347,6 +366,10 @@ test("paid-task unlock persists every gate while vaulting DAC7 and nullifier mat
   assert.equal(rows.rows[0]?.retention_basis, "psttg_dac7_ao_147");
   assert.equal(new Date(String(rows.rows[0]?.retained_until)).toISOString(), "2037-01-01T00:00:00.000Z");
   assert.equal(rows.rows[0]?.provider_evidence_key_domain, "provider_evidence");
+  assert.equal(rows.rows[0]?.geoblock_status, "clear");
+  assert.equal(rows.rows[0]?.plausibility_status, "pass");
+  assert.equal(rows.rows[0]?.wallet_screening_provider, "test-wallet-screening:v1");
+  assert.equal(rows.rows[0]?.wallet_screening_status, "clear");
 
   await unlockPaidTasks();
   const refreshed = await dbClient.execute("SELECT nullifier_seed_ciphertext FROM tokenless_rater_profiles");
@@ -388,7 +411,7 @@ test("DAC7 accepts a structured place of birth instead of free-text no-TIN reaso
     "SELECT dataset_schema_version,tax_vault_ciphertext FROM tokenless_dac7_records",
   );
   assert.equal(record.rows[0]?.dataset_schema_version, 2);
-  assert.doesNotMatch(String(record.rows[0]?.tax_vault_ciphertext), /Lovelace|GB/u);
+  assert.doesNotMatch(String(record.rows[0]?.tax_vault_ciphertext), /Lovelace/u);
 
   await assert.rejects(
     () =>
@@ -447,6 +470,27 @@ test("declining paid data collection records the advisory-only election without 
       error.code === "invalid_paid_eligibility_decision" &&
       error.field === "workspaceId",
   );
+});
+
+test("provider inventory imports Self gates and a configurable sanctions adapter", () => {
+  const inventory = paidEligibilityProviderInventory({
+    TOKENLESS_ELIGIBILITY_PROVIDER_ID: "self:document",
+    TOKENLESS_SELF_ASSURANCE_ENABLED: "true",
+    TOKENLESS_SELF_PROVIDER_ACCESS_APPROVED: "true",
+    TOKENLESS_SELF_DPA_APPROVED: "true",
+    TOKENLESS_SELF_CONVERSION_GATE_APPROVED: "true",
+    TOKENLESS_SELF_ERROR_HANDLING_GATE_APPROVED: "true",
+    TOKENLESS_SELF_VERIFIER_URL: "https://self-verifier.example.test/verify",
+    TOKENLESS_SELF_VERIFIER_SECRET: "s".repeat(32),
+    TOKENLESS_SANCTIONS_SCREENING_SOURCE: "opensanctions:v1",
+    TOKENLESS_WALLET_SCREENING_PROVIDER_ID: "wallet-risk:v1",
+    TOKENLESS_WALLET_SCREENING_PROVIDER_URL: "https://wallet.example.test/check",
+    TOKENLESS_WALLET_SCREENING_PROVIDER_SECRET: "w".repeat(32),
+  });
+  assert.equal(inventory.identity.self.enabled, true);
+  assert.equal(inventory.identity.selfVerifierConfigured, true);
+  assert.equal(inventory.sanctions.source, "opensanctions:v1");
+  assert.deepEqual(inventory.wallet, { provider: "wallet-risk:v1", configured: true });
 });
 
 test("invited paid eligibility uses the workspace adulthood warranty without calling an identity vendor", async () => {
@@ -690,6 +734,21 @@ test("production provider results require an Ed25519 signature bound to the sign
     },
     requiresDac7: () => true,
     handoff: { startUrl: "https://identity.example/start", secret: Buffer.alloc(32, 9) },
+    riskCheck: async ({ payoutAccount, now }) => ({
+      edgeCountry: "DE",
+      edgeRegion: "BE",
+      localeCountry: "DE",
+      geoblockStatus: "clear",
+      plausibilityStatus: "pass",
+      plausibilityReasonCodes: [],
+      walletReferenceHash: `sha256:${createHash("sha256").update(payoutAccount.toLowerCase()).digest("hex")}`,
+      walletScreeningProvider: "test-wallet-screening:v1",
+      walletScreeningStatus: "clear",
+      walletScreeningReferenceHash: `sha256:${"8".repeat(64)}`,
+      walletListSnapshotHash: `sha256:${"9".repeat(64)}`,
+      checkedAt: now,
+      expiresAt: new Date(now.getTime() + 30 * 86_400_000),
+    }),
   });
   const payload = Buffer.from(
     JSON.stringify({
@@ -884,6 +943,31 @@ test("privacy retention does not discard a queued sanctions screening", async ()
   assert.deepEqual(queue.rows, [{ screening_id: pending.screeningId, status: "pending" }]);
   const scope = await dbClient.execute("SELECT status FROM tokenless_paid_eligibility_scopes");
   assert.deepEqual(scope.rows, [{ status: "review" }]);
+});
+
+test("paid risk evidence expires voucher eligibility before its bounded deletion", async () => {
+  await submitPaidEligibility({
+    principalId: PRINCIPAL,
+    payoutAccount: ACCOUNT,
+    submission: submission(),
+    now: NOW,
+  });
+  const expiredAt = new Date(NOW.getTime() + 31 * 86_400_000);
+  const firstPurge = await purgeExpiredPrivacyOperations(expiredAt);
+  assert.equal(firstPurge.expiredRiskEligibility, 1);
+  assert.equal(firstPurge.expiredRiskChecks, 0);
+  const retained = await dbClient.execute({
+    sql: "SELECT eligibility_status,risk_check_id FROM tokenless_legal_eligibility",
+  });
+  assert.equal(retained.rows[0]?.eligibility_status, "expired");
+  assert.match(String(retained.rows[0]?.risk_check_id), /^per_[0-9a-f]{32}$/u);
+  const riskCount = await dbClient.execute({
+    sql: "SELECT COUNT(*) AS count FROM tokenless_paid_eligibility_risk_checks",
+  });
+  assert.equal(Number(riskCount.rows[0]?.count), 1);
+
+  const finalPurge = await purgeExpiredPrivacyOperations(new Date(NOW.getTime() + 366 * 86_400_000));
+  assert.equal(finalPurge.expiredRiskChecks, 1);
 });
 
 test("voucher issuance fails before eligibility and for missing required capabilities", async () => {

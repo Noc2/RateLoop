@@ -857,6 +857,7 @@ test("account deletion receipts the rater identity, erases World ID state, and p
     deletedRows: {
       assuranceAssertions: 1,
       legalEligibility: 0,
+      paidEligibilityRiskChecks: 0,
       paidEligibilityScopes: 0,
       payoutEligibility: 0,
       providerSubjectBindings: 1,
@@ -885,6 +886,7 @@ test("account deletion receipts the rater identity, erases World ID state, and p
     remainingRows: {
       assuranceAssertions: 0,
       legalEligibility: 0,
+      paidEligibilityRiskChecks: 0,
       paidEligibilityScopes: 0,
       payoutEligibility: 0,
       principalProfileLinks: 0,

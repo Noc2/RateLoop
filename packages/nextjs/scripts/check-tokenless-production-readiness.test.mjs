@@ -21,6 +21,9 @@ const tokenlessTestOperationalSecrets = () => ({
   TOKENLESS_MCP_RATE_LIMIT_SECRET: "m".repeat(32),
   CRON_SECRET: "c".repeat(32),
   TOKENLESS_COMPLIANCE_OPERATOR_SECRET: "o".repeat(32),
+  TOKENLESS_WALLET_SCREENING_PROVIDER_ID: "wallet-screening:v1",
+  TOKENLESS_WALLET_SCREENING_PROVIDER_URL: "https://screening.example.test/check",
+  TOKENLESS_WALLET_SCREENING_PROVIDER_SECRET: "w".repeat(32),
 });
 const tokenlessTestDatabase = () => {
   const DATABASE_URL = "postgresql://rateloop:secret@tokenless-db.example/tokenless?sslmode=require";
@@ -145,6 +148,9 @@ function validFixture() {
     TOKENLESS_EVIDENCE_FINALITY_BLOCK_TAG: "safe",
     TOKENLESS_DAC7_POLICY: "eu",
     TOKENLESS_SANCTIONS_MATCH_RETENTION_DAYS: "1825",
+    TOKENLESS_WALLET_SCREENING_PROVIDER_ID: "wallet-screening:v1",
+    TOKENLESS_WALLET_SCREENING_PROVIDER_URL: "https://screening.example.test/check",
+    TOKENLESS_WALLET_SCREENING_PROVIDER_SECRET: "w".repeat(32),
     TOKENLESS_EVIDENCE_TENANT_COMMITMENT_KEY: encodedKey(9),
     TOKENLESS_PSEUDONYM_KEY: encodedKey(14),
     TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY: encodedKey(10),
