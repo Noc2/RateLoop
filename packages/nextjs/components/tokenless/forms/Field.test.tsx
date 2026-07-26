@@ -1,5 +1,5 @@
 import React from "react";
-import { Field } from "./Field";
+import { Field, SelectField, TextareaField } from "./Field";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import test from "node:test";
@@ -29,4 +29,20 @@ test("HTTP form errors retain the server field for accessible placement", () => 
     status: 400,
   });
   assert.equal(error.field, "vatId");
+});
+
+test("shared fields support compact and visually hidden labels without losing associations", () => {
+  const html = renderToStaticMarkup(
+    <>
+      <Field id="secret" label="One-time secret" labelClassName="sr-only" containerClassName="grow" readOnly />
+      <TextareaField id="message" label="Connection message" labelClassName="sr-only" readOnly />
+      <SelectField id="workspace" label="Workspace" labelClassName="sr-only">
+        <option value="workspace-1">Workspace one</option>
+      </SelectField>
+    </>,
+  );
+  assert.match(html, /class="block grow" for="secret"/);
+  assert.match(html, /class="[^"]*sr-only[^"]*"[^>]*>One-time secret/);
+  assert.match(html, /<textarea[^>]*id="message"/);
+  assert.match(html, /<select[^>]*id="workspace"/);
 });

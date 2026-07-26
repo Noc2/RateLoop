@@ -10,13 +10,18 @@ import { classNames } from "~~/components/tokenless/ui/classNames";
 import { type FieldFormatName, fieldFormat } from "~~/lib/validation/fieldFormats";
 
 type FieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, "pattern" | "title"> & {
+  containerClassName?: string;
   error?: string | null;
   format?: FieldFormatName;
   hint?: ReactNode;
   label: ReactNode;
+  labelClassName?: string;
 };
 
-export function Field({ className, error, format, hint, id, label, maxLength, ...input }: FieldProps) {
+export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
+  { className, containerClassName, error, format, hint, id, label, labelClassName, maxLength, ...input },
+  ref,
+) {
   const generatedId = useId();
   const inputId = id ?? generatedId;
   const constraint = format ? fieldFormat(format) : null;
@@ -25,9 +30,10 @@ export function Field({ className, error, format, hint, id, label, maxLength, ..
   const describedBy = [error ? errorId : null, hint ? hintId : null].filter(Boolean).join(" ") || undefined;
 
   return (
-    <label className="block" htmlFor={inputId}>
-      <span className="mb-2 block text-sm font-medium text-base-content/80">{label}</span>
+    <label className={classNames("block", containerClassName)} htmlFor={inputId}>
+      <span className={classNames("mb-2 block text-sm font-medium text-base-content/80", labelClassName)}>{label}</span>
       <input
+        ref={ref}
         {...input}
         id={inputId}
         className={classNames("input input-bordered w-full", error && "input-error", className)}
@@ -48,16 +54,18 @@ export function Field({ className, error, format, hint, id, label, maxLength, ..
       ) : null}
     </label>
   );
-}
+});
 
 type TextareaFieldProps = TextareaHTMLAttributes<HTMLTextAreaElement> & {
+  containerClassName?: string;
   error?: string | null;
   hint?: ReactNode;
   label: ReactNode;
+  labelClassName?: string;
 };
 
 export const TextareaField = forwardRef<HTMLTextAreaElement, TextareaFieldProps>(function TextareaField(
-  { className, error, hint, id, label, ...textarea },
+  { className, containerClassName, error, hint, id, label, labelClassName, ...textarea },
   ref,
 ) {
   const generatedId = useId();
@@ -67,8 +75,8 @@ export const TextareaField = forwardRef<HTMLTextAreaElement, TextareaFieldProps>
   const describedBy = [error ? errorId : null, hint ? hintId : null].filter(Boolean).join(" ") || undefined;
 
   return (
-    <label className="block" htmlFor={inputId}>
-      <span className="mb-2 block text-sm font-medium text-base-content/80">{label}</span>
+    <label className={classNames("block", containerClassName)} htmlFor={inputId}>
+      <span className={classNames("mb-2 block text-sm font-medium text-base-content/80", labelClassName)}>{label}</span>
       <textarea
         ref={ref}
         {...textarea}
@@ -108,12 +116,24 @@ export function ChoiceInput({ className, error, type, ...input }: ChoiceInputPro
 
 type SelectFieldProps = SelectHTMLAttributes<HTMLSelectElement> & {
   children: ReactNode;
+  containerClassName?: string;
   error?: string | null;
   hint?: ReactNode;
   label: ReactNode;
+  labelClassName?: string;
 };
 
-export function SelectField({ children, className, error, hint, id, label, ...select }: SelectFieldProps) {
+export function SelectField({
+  children,
+  className,
+  containerClassName,
+  error,
+  hint,
+  id,
+  label,
+  labelClassName,
+  ...select
+}: SelectFieldProps) {
   const generatedId = useId();
   const inputId = id ?? generatedId;
   const errorId = `${inputId}-error`;
@@ -121,8 +141,8 @@ export function SelectField({ children, className, error, hint, id, label, ...se
   const describedBy = [error ? errorId : null, hint ? hintId : null].filter(Boolean).join(" ") || undefined;
 
   return (
-    <label className="block" htmlFor={inputId}>
-      <span className="mb-2 block text-sm font-medium text-base-content/80">{label}</span>
+    <label className={classNames("block", containerClassName)} htmlFor={inputId}>
+      <span className={classNames("mb-2 block text-sm font-medium text-base-content/80", labelClassName)}>{label}</span>
       <select
         {...select}
         id={inputId}
