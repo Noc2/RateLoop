@@ -113,3 +113,71 @@ export async function seedReadyHumanReviewBinding(input: {
   });
   return { bindingId, bindingVersion: 1, profileId, profileVersion: 1, profileHash };
 }
+
+export async function seedLegacyAgentIntegration(input: {
+  integrationId: string;
+  workspaceId: string;
+  agentId: string;
+  agentVersionId: string;
+  reviewPolicyId: string;
+  reviewPolicyVersion?: number;
+  publishingPolicyId: string;
+  publishingPolicyVersion?: number;
+  apiKeyId: string;
+  humanReviewBindingId: string;
+  humanReviewBindingVersion?: number;
+  allowedWorkflowKeys: string[];
+  grantedScopes: string[];
+  actor: string;
+}) {
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 7 * 86_400_000);
+  const pairingId = `apr_${createHash("sha256").update(input.integrationId).digest("hex").slice(0, 32)}`;
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_pairing_sessions
+          (pairing_id,workspace_id,api_key_id,credential_hash,credential_prefix,status,
+           created_by,resolved_by,created_at,expires_at,approved_at)
+          VALUES (?,?,?,?,?,'approved',?,?,?,?,?)`,
+    args: [
+      pairingId,
+      input.workspaceId,
+      input.apiKeyId,
+      `test-credential:${input.integrationId}`,
+      input.integrationId.slice(0, 20),
+      input.actor,
+      input.actor,
+      now,
+      expiresAt,
+      now,
+    ],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_integrations
+          (integration_id,pairing_id,workspace_id,agent_id,agent_version_id,
+           review_policy_id,review_policy_version,publishing_policy_id,publishing_policy_version,
+           api_key_id,status,enforcement_mode,allowed_workflow_keys_json,granted_scopes_json,
+           credential_expires_at,human_review_binding_id,human_review_binding_version,
+           created_by,created_at,updated_at)
+          VALUES (?,?,?,?,?,?,?,?,?,?,'active','advisory',?,?,?,?,?,?,?,?)`,
+    args: [
+      input.integrationId,
+      pairingId,
+      input.workspaceId,
+      input.agentId,
+      input.agentVersionId,
+      input.reviewPolicyId,
+      input.reviewPolicyVersion ?? 1,
+      input.publishingPolicyId,
+      input.publishingPolicyVersion ?? 1,
+      input.apiKeyId,
+      JSON.stringify(input.allowedWorkflowKeys),
+      JSON.stringify(input.grantedScopes),
+      expiresAt,
+      input.humanReviewBindingId,
+      input.humanReviewBindingVersion ?? 1,
+      input.actor,
+      now,
+      now,
+    ],
+  });
+}

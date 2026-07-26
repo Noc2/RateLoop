@@ -62,7 +62,7 @@ test("all audiences persist optional Feedback Bonus while private review also su
           privateGroupPolicyVersion: audience === "public_network" ? null : 1,
           privateGroupPolicyHash: audience === "public_network" ? null : group.policyHash,
           responseWindowSeconds: index % 2 === 0 ? 1_200 : 86_400,
-          panelSize: audience === "private_invited" ? 2 : 3,
+          panelSize: audience === "private_invited" ? 2 : audience === "public_network" ? 3 : 4,
           compensationMode: baseBounty ? ("usdc" as const) : ("unpaid" as const),
           bountyPerSeatAtomic: baseBounty ? "1250000" : null,
           feedbackBonusEnabled: feedbackBonus,

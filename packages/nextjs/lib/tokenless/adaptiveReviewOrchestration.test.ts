@@ -12,6 +12,7 @@ import {
 import { evaluateAdaptiveReviewRequirement } from "~~/lib/tokenless/adaptiveReviewService";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import { createWorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
+import { createAssuranceProject } from "~~/lib/tokenless/humanAssurance";
 import { hashHumanReviewConfiguration } from "~~/lib/tokenless/humanReviewConfiguration";
 import { transitionHumanReviewOpportunityLifecycle } from "~~/lib/tokenless/humanReviewOpportunityLifecycle";
 import { prepareHumanReviewRequest } from "~~/lib/tokenless/humanReviewRequestPreparation";
@@ -24,7 +25,10 @@ import {
 } from "~~/lib/tokenless/productCore";
 import { __setPublicPaidHumanReviewActivationHookForTests } from "~~/lib/tokenless/publicPaidHumanReviewAdapter";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
-import { seedReadyHumanReviewBinding } from "~~/lib/tokenless/testing/humanReviewBindingFixture";
+import {
+  seedLegacyAgentIntegration,
+  seedReadyHumanReviewBinding,
+} from "~~/lib/tokenless/testing/humanReviewBindingFixture";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
 const APP_ORIGIN = "https://rateloop-tokenless.example";
@@ -52,7 +56,7 @@ function networkAdmissionPolicy(policyId: string) {
       onePerProviderSubject: true as const,
     },
     compensation: "paid" as const,
-    cohorts: [],
+    cohorts: [{ cohortId: "adaptive-review-network", minimumReviewers: 3, maximumReviewers: 3 }],
     selection: "randomized" as const,
     fallbacks: { allowed: false, sources: [] },
     requiredQualifications: [],
@@ -77,13 +81,15 @@ function networkAdmissionPolicy(policyId: string) {
 
 async function seedNetworkAdmissionPolicy(workspaceId: string) {
   const now = new Date();
-  const projectId = `hap_adaptive_${workspaceId.slice(-16)}`;
   const frozenAdmissionPolicy = freezeAdmissionPolicy(networkAdmissionPolicy(`haa_adaptive_${workspaceId.slice(-16)}`));
-  await dbClient.execute({
-    sql: `INSERT INTO tokenless_assurance_projects
-          (project_id,workspace_id,name,data_classification,retention_days,created_by,created_at,updated_at)
-          VALUES (?,?,'Adaptive review network fixture','synthetic',30,?,?,?)`,
-    args: [projectId, workspaceId, OWNER, now, now],
+  const { projectId } = await createAssuranceProject({
+    principal: { kind: "workspace_session", accountAddress: OWNER, workspaceId, role: "owner" },
+    name: "Adaptive review network fixture",
+    dataClassification: "public",
+    visibility: "public",
+    publicMaterialKind: "synthetic",
+    confirmedNoSensitiveData: true,
+    retentionDays: 30,
   });
   await dbClient.execute({
     sql: `INSERT INTO tokenless_assurance_audience_policies
@@ -246,6 +252,20 @@ async function fixture(
     policyId: publishingPolicy.policyId,
     scopes: ["review:decide", "evaluation:read", "panel:publish", "payment:submit", "result:read"],
   });
+  const integrationId = `int_refund_${workspaceId.slice(-16)}`;
+  await seedLegacyAgentIntegration({
+    integrationId,
+    workspaceId,
+    agentId: agent.agentId,
+    agentVersionId: agent.currentVersion.versionId,
+    reviewPolicyId,
+    publishingPolicyId: publishingPolicy.policyId,
+    apiKeyId: key.apiKeyId,
+    humanReviewBindingId: humanReview.bindingId,
+    allowedWorkflowKeys: ["refund-review"],
+    grantedScopes: ["review:decide", "evaluation:read", "panel:publish", "payment:submit", "result:read"],
+    actor: OWNER,
+  });
   const productPrincipal = await authenticateProductPrincipal({
     authorization: `Bearer ${key.token}`,
     sessionToken: undefined,
@@ -255,7 +275,7 @@ async function fixture(
     kind: "integration",
     principal: productPrincipal,
     integration: {
-      integrationId: "int_refund_v1",
+      integrationId,
       workspaceId,
       agentId: agent.agentId,
       agentVersionId: agent.currentVersion.versionId,
