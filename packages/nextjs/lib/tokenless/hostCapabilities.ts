@@ -1,15 +1,14 @@
 /**
- * Single source of truth for agent-host compatibility (Phase 0 of
- * docs/tokenless-agent-install-plan-2026-07.md). Message variants, the share-time
- * picker, install affordances, docs pages, and support-tier badges must all render
- * from this registry so capability claims match code by construction.
+ * Single source of truth for agent-host compatibility. Message variants, the
+ * share-time picker, install affordances, docs pages, and support-tier badges
+ * must all render from this registry so capability claims match code by
+ * construction.
  *
  * Tier honesty is enforced structurally: a host may carry `supportTier: "verified"`
  * only together with `verifiedAt` and a `verificationEvidence` reference (a green
- * pinned-version smoke run, per the compatibility review's acceptance criteria).
- * Today no host is verified. Install affordances exist only where they are factual
- * now; unverified deep links and config snippets are represented by their absence,
- * per docs/tokenless-mcp-cross-client-compatibility-review-2026-07.md.
+ * pinned-version smoke run, per the smoke harness's acceptance criteria). Today
+ * no host is verified. Install affordances exist only where they are factual now;
+ * unverified deep links and config snippets are represented by their absence.
  */
 
 export const TOKENLESS_HOST_CATEGORIES = [
@@ -48,7 +47,7 @@ export type TokenlessHostMessageVariant = (typeof TOKENLESS_HOST_MESSAGE_VARIANT
 /**
  * An install affordance renders only with its own freshness evidence: `checkedAt`
  * is the ISO date the affordance was last checked, and `clientVersion` names the
- * exact artifact or client version it was checked against. Until the Phase 5
+ * exact artifact or client version it was checked against. Until the smoke
  * harness pins named host versions, the bundled plugin affordances record the
  * plugin bundle version that was checked.
  */
@@ -65,11 +64,11 @@ const WORKSPACE_MCP_URL = "https://rateloop-tokenless.vercel.app/api/agent/v1/mc
 
 /**
  * Per-host syntax below was checked against the named vendors' documentation on
- * 2026-07-17 by the compatibility review; the review pins no client versions,
- * so these affordances carry the review reference instead of an invented one.
+ * 2026-07-17. That research did not pin client versions, so these affordances
+ * carry an explicit provider-docs snapshot label instead of an invented version.
  */
-const COMPAT_REVIEW_CHECKED_AT = "2026-07-17";
-const COMPAT_REVIEW_REFERENCE = "docs/tokenless-mcp-cross-client-compatibility-review-2026-07.md";
+const PROVIDER_DOCS_CHECKED_AT = "2026-07-17";
+const PROVIDER_DOCS_SNAPSHOT = "provider-docs-snapshot@2026-07-17";
 
 type TokenlessHostVerification =
   | {
@@ -147,8 +146,8 @@ export const TOKENLESS_HOST_CAPABILITIES = [
         kind: "cli-command",
         label: "Generic remote-server registration without RateLoop's hooks; authorize from /mcp",
         value: `claude mcp add --scope user --transport http rateloop-workspace ${WORKSPACE_MCP_URL}`,
-        checkedAt: COMPAT_REVIEW_CHECKED_AT,
-        clientVersion: COMPAT_REVIEW_REFERENCE,
+        checkedAt: PROVIDER_DOCS_CHECKED_AT,
+        clientVersion: PROVIDER_DOCS_SNAPSHOT,
       },
     ],
     humanActions: [
@@ -171,8 +170,8 @@ export const TOKENLESS_HOST_CAPABILITIES = [
         label: "Connector setup in the host's settings",
         value:
           "Add the RateLoop connector in this host's settings and approve the OAuth consent; a pasted message alone cannot install it. Details: /docs/connect",
-        checkedAt: COMPAT_REVIEW_CHECKED_AT,
-        clientVersion: COMPAT_REVIEW_REFERENCE,
+        checkedAt: PROVIDER_DOCS_CHECKED_AT,
+        clientVersion: PROVIDER_DOCS_SNAPSHOT,
       },
     ],
     humanActions: ["Add the RateLoop connector in the host's settings", "Approve the RateLoop OAuth consent screen"],
@@ -191,8 +190,8 @@ export const TOKENLESS_HOST_CAPABILITIES = [
         kind: "config-snippet",
         label: "Local mcp.json servers entry; leave the optional oauth.clientId unset — none is preregistered",
         value: `{\n  "servers": {\n    "rateloop-workspace": {\n      "type": "http",\n      "url": "${WORKSPACE_MCP_URL}"\n    }\n  }\n}`,
-        checkedAt: COMPAT_REVIEW_CHECKED_AT,
-        clientVersion: COMPAT_REVIEW_REFERENCE,
+        checkedAt: PROVIDER_DOCS_CHECKED_AT,
+        clientVersion: PROVIDER_DOCS_SNAPSHOT,
       },
     ],
     humanActions: [
@@ -227,15 +226,15 @@ export const TOKENLESS_HOST_CAPABILITIES = [
         kind: "cli-command",
         label: "Register at user scope, then run /mcp auth rateloop-workspace if prompted",
         value: `gemini mcp add --scope user --transport http rateloop-workspace ${WORKSPACE_MCP_URL}`,
-        checkedAt: COMPAT_REVIEW_CHECKED_AT,
-        clientVersion: COMPAT_REVIEW_REFERENCE,
+        checkedAt: PROVIDER_DOCS_CHECKED_AT,
+        clientVersion: PROVIDER_DOCS_SNAPSHOT,
       },
       {
         kind: "config-snippet",
         label: "settings.json entry; the transport field is httpUrl, not url plus type",
         value: `{\n  "mcpServers": {\n    "rateloop-workspace": {\n      "httpUrl": "${WORKSPACE_MCP_URL}"\n    }\n  }\n}`,
-        checkedAt: COMPAT_REVIEW_CHECKED_AT,
-        clientVersion: COMPAT_REVIEW_REFERENCE,
+        checkedAt: PROVIDER_DOCS_CHECKED_AT,
+        clientVersion: PROVIDER_DOCS_SNAPSHOT,
       },
     ],
     humanActions: [
@@ -259,8 +258,8 @@ export const TOKENLESS_HOST_CAPABILITIES = [
         label: "Connector setup in the host's connector settings",
         value:
           "Add the RateLoop connector in this host's connector settings and approve the OAuth consent. Details: /docs/connect",
-        checkedAt: COMPAT_REVIEW_CHECKED_AT,
-        clientVersion: COMPAT_REVIEW_REFERENCE,
+        checkedAt: PROVIDER_DOCS_CHECKED_AT,
+        clientVersion: PROVIDER_DOCS_SNAPSHOT,
       },
     ],
     humanActions: ["Add the RateLoop connector in the host's settings", "Approve the RateLoop OAuth consent screen"],
@@ -295,7 +294,7 @@ export const TOKENLESS_HOST_CAPABILITIES = [
         label: "RateLoop agents CLI with a workspace API key",
         value:
           "export RATELOOP_API_BASE_URL=https://rateloop-tokenless.vercel.app\nexport RATELOOP_AGENT_API_KEY='rlk_...'\nrateloop-agents quote --file quote.json",
-        checkedAt: COMPAT_REVIEW_CHECKED_AT,
+        checkedAt: PROVIDER_DOCS_CHECKED_AT,
         clientVersion: "@rateloop/agents@0.2.0",
       },
     ],

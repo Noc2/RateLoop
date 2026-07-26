@@ -2,8 +2,8 @@ import type { TokenlessHostCategory, TokenlessHostSupportTier } from "~~/lib/tok
 
 /**
  * Presentation-only projection helpers for the generated per-host connection
- * guides (Phase 4 of docs/tokenless-agent-install-plan-2026-07.md). Facts come
- * from lib/tokenless/hostCapabilities; everything here is template prose.
+ * guides. Facts come from lib/tokenless/hostCapabilities; everything here is
+ * template prose.
  */
 
 /**

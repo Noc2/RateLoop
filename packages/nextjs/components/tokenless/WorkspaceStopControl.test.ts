@@ -18,7 +18,7 @@ test("the danger-zone stop action requires a reason and never resumes agents imp
   assert.match(controlSource, /disabled=\{busy \|\| !reason\.trim\(\)\}/);
   assert.match(controlSource, /method: "POST"/);
   assert.match(controlSource, /method: "DELETE"/);
-  // Release and safe-state semantics match docs/tokenless-oversight-stop-semantics.md.
+  // Release and safe-state semantics preserve the design-of-record authority boundary.
   assert.match(controlSource, /holds gated work undelivered/);
   assert.match(controlSource, /Release stop \(agents stay halted until re-granted\)/);
   assert.match(controlSource, /Agents do not restart/);

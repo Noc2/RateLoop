@@ -1,9 +1,8 @@
 # Agent-host smoke harness (scaffold)
 
-Phase 5 of [the agent-install plan](../../docs/tokenless-agent-install-plan-2026-07.md) makes the
-[compatibility review's acceptance criteria](../../docs/tokenless-mcp-cross-client-compatibility-review-2026-07.md)
-the only way a host's support tier improves. This directory is the harness scaffold and the CI-runnable
-claims-discipline gate around it.
+The [agent connection design of record](../../docs/tokenless-immutable-implementation-plan-2026-07.md#agent-connection-and-integration)
+defines the product boundary. This directory is the harness scaffold and CI-runnable claims-discipline gate that controls
+when a host's support tier may improve.
 
 ## What this scaffold is — and is not
 
@@ -28,20 +27,20 @@ The runner prints a per-host checklist and exits non-zero when:
 
 ## Per-host specs (`specs/`)
 
-One JSON spec per host (`specs/<hostId>.json`), with the fixed step sequence from the plan:
+One JSON spec per host (`specs/<hostId>.json`), with the fixed step sequence enforced by the runner:
 
 ```text
 install -> auth -> lifecycle -> rateloop_get_agent_context -> rateloop_verify_connection -> resume-after-new-task
 ```
 
-Each step carries `automated: false` plus operator instructions distilled from the compatibility
-review's acceptance criteria (single-session lifecycle, idempotent claim/verify, no credential in the
+Each step carries `automated: false` plus operator instructions that encode the harness acceptance
+criteria (single-session lifecycle, idempotent claim/verify, no credential in the
 transcript, resume without re-asking for the link). `pinnedClientVersion` stays `null` in the spec;
 the exact version exercised is recorded per run in the artifact, because a green run is only meaningful
 at the version it actually ran against.
 
-Run order (from the plan): Codex desktop and Claude Code first (bundled paths), then VS Code /
-Copilot Chat and Gemini CLI, ordered thereafter by Phase 2 connection-funnel telemetry.
+Initial run order: Codex desktop and Claude Code first (bundled paths), then VS Code /
+Copilot Chat and Gemini CLI, ordered thereafter by connection-funnel telemetry.
 
 ## Recording a run (`results/`)
 
@@ -90,7 +89,7 @@ registry's own tests are the authoritative gate).
 
 ## Relationship to the CI schema-adapter gate
 
-The other CI-runnable part of Phase 5 lives at
+The schema-adapter CI gate lives at
 `packages/nextjs/lib/mcp/schemaAdapterCompatibility.test.ts`: every workspace MCP tool schema is
 compiled through conservative emulations of the OpenAI strict and Gemini CLI schema adapters, with
 today's known constraint drops pinned as an exact-match baseline (notably `rateloop_request_review`

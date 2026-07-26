@@ -158,10 +158,9 @@ function HostDetail({
 }
 
 /**
- * Optional progressive disclosure below the universal copy action (Phase 2 of
- * docs/tokenless-agent-install-plan-2026-07.md). Selecting a chip tunes the
- * copied message and sets expectations for that host's legitimate prompts;
- * deselecting returns to the universal message. Skipping it always works.
+ * Optional progressive disclosure below the universal copy action. Selecting a
+ * chip tunes the copied message and sets expectations for that host's legitimate
+ * prompts; deselecting returns to the universal message. Skipping it always works.
  */
 export function AgentConnectionHostPicker({
   onSelectHost,

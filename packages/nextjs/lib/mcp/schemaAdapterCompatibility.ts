@@ -3,14 +3,13 @@
  * tool definitions before a model sees them.
  *
  * These are NOT vendor SDKs and do not execute any vendor code. They are deliberately
- * conservative re-implementations pinned to the documented behavior referenced by
- * docs/tokenless-mcp-cross-client-compatibility-review-2026-07.md ("Make tool schemas
- * easier for different model adapters"): the OpenAI strict function-schema subset and
- * the Gemini CLI schema sanitizer. Pinning to the documented floor means the gate can
- * report a constraint as dropped even when a newer vendor build happens to keep it;
- * it must never do the reverse. When a vendor documents broader keyword support, relax
- * the corresponding rule here in an explicit reviewed change so the CI baseline moves
- * with evidence, not silently.
+ * conservative re-implementations pinned to the documented behavior captured by
+ * schemaAdapterCompatibility.test.ts: the OpenAI strict function-schema subset and
+ * the Gemini CLI schema sanitizer. Pinning to the documented floor means the gate
+ * can report a constraint as dropped even when a newer vendor build happens to keep
+ * it; it must never do the reverse. When a vendor documents broader keyword support,
+ * relax the corresponding rule here in an explicit reviewed change so the CI
+ * baseline moves with evidence, not silently.
  *
  * Emulated behaviors:
  *

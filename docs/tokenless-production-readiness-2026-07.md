@@ -63,16 +63,16 @@ or end-to-end paid-path testing is complete.
 
 ## Design-review remediation — 20 July 2026
 
-The new findings from the
-[round-two review of 20 July 2026](tokenless-design-review-round-2-remediation-2026-07-20.md) have a separate
-source-remediation record. Its remaining verifier-audit, v4 deployment, managed-signing, L1-liveness, CloudTrail,
-legacy-nonce, and mechanism/economics boundaries are release gates in this register; source fixes do not satisfy them.
+The round-two findings from 20 July 2026 were absorbed into this register; their source-remediation record remains
+available in Git history. The remaining verifier-audit, v4 deployment, managed-signing, L1-liveness, CloudTrail,
+legacy-nonce, and mechanism/economics boundaries are release gates here; source fixes do not satisfy them.
 
 ## Design-review remediation — 19 July 2026
 
-The findings in [Tokenless design review — 18 July 2026](tokenless-design-review-2026-07.md) were re-checked against
-the current branch before implementation. The following disposition is part of the internal release record; a code or
-test fix is not evidence that a remaining economics, provider, or live-operations gate has passed.
+The 18 July design-review findings were re-checked against the current branch before implementation and absorbed into
+this register; the original review remains available in Git history. The following disposition is part of the internal
+release record; a code or test fix is not evidence that a remaining economics, provider, or live-operations gate has
+passed.
 
 | Finding                         | Implemented disposition                                                                                                                                                                                                                                                                                        | Remaining release boundary                                                                                                                                    |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |

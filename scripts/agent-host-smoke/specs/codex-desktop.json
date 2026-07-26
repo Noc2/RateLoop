@@ -6,8 +6,8 @@
   "claimedTier": "experimental",
   "pinnedClientVersion": null,
   "planRefs": [
-    "docs/tokenless-agent-install-plan-2026-07.md#phase-5--verification-harness-as-the-tier-gate",
-    "docs/tokenless-mcp-cross-client-compatibility-review-2026-07.md#acceptance-criteria-for-a-broad-compatibility-claim"
+    "docs/tokenless-immutable-implementation-plan-2026-07.md#agent-connection-and-integration",
+    "scripts/agent-host-smoke/README.md#how-a-host-graduates-tiers"
   ],
   "knownQuirks": [
     "Primary bundled path: plugin install plus bundled workspace-connection skill.",
