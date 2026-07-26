@@ -42,8 +42,65 @@ test("project creation requires explicit privacy and retention choices", () => {
         retentionDays: 30,
         workspaceId: "must-be-derived-from-api-key",
       }),
-    /only name, description, dataClassification, retentionDays/,
+    /only name, description, dataClassification, visibility, publicMaterialKind, confirmedNoSensitiveData, retentionDays/,
   );
+});
+
+test("public project creation preserves each explicit public material kind", () => {
+  for (const publicMaterialKind of ["public", "synthetic", "redacted"] as const) {
+    assert.deepEqual(
+      parseHumanAssuranceProjectCreateRequest({
+        name: `${publicMaterialKind} review`,
+        dataClassification: "public",
+        visibility: "public",
+        publicMaterialKind,
+        confirmedNoSensitiveData: true,
+        retentionDays: 30,
+      }),
+      {
+        name: `${publicMaterialKind} review`,
+        dataClassification: "public",
+        visibility: "public",
+        publicMaterialKind,
+        confirmedNoSensitiveData: true,
+        retentionDays: 30,
+      },
+    );
+  }
+});
+
+test("project creation rejects visibility, classification, and material-kind mismatches", () => {
+  for (const value of [
+    {
+      name: "Public without kind",
+      dataClassification: "public",
+      visibility: "public",
+      retentionDays: 30,
+    },
+    {
+      name: "Public private classification",
+      dataClassification: "confidential",
+      visibility: "public",
+      publicMaterialKind: "redacted",
+      confirmedNoSensitiveData: true,
+      retentionDays: 30,
+    },
+    {
+      name: "Private public classification",
+      dataClassification: "public",
+      visibility: "private",
+      retentionDays: 30,
+    },
+    {
+      name: "Private with public kind",
+      dataClassification: "internal",
+      publicMaterialKind: "synthetic",
+      confirmedNoSensitiveData: true,
+      retentionDays: 30,
+    },
+  ]) {
+    assert.throws(() => parseHumanAssuranceProjectCreateRequest(value), /public visibility|private project/u);
+  }
 });
 
 test("private reviews require exact integration/profile bindings and reject plaintext fields", () => {

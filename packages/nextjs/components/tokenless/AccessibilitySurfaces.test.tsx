@@ -47,6 +47,11 @@ test("five primary tokenless surfaces pass rendered DOM axe checks", async () =>
     roundId: "round_example",
     contentId: `0x${"2".repeat(64)}` as `0x${string}`,
     reviewerSource: "rateloop_network" as const,
+    assignmentId: "hasn_accessibility",
+    assignmentStatus: "accepted" as const,
+    assignmentExpiresAt: "2030-01-01T00:00:00.000Z",
+    confidentialityTermsHash: `sha256:${"3".repeat(64)}` as const,
+    selectionBindingHash: `sha256:${"4".repeat(64)}` as const,
     question: {
       kind: "binary" as const,
       prompt: "Would you send this reply?",

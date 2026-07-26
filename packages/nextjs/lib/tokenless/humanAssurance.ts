@@ -3,6 +3,7 @@ import {
   type HumanAssuranceAudiencePolicy,
   type HumanAssuranceDataClassification,
   type HumanAssuranceRubric,
+  RateLoopSdkError,
   parseHumanAssuranceAudiencePolicy,
   parseHumanAssuranceRubric,
 } from "@rateloop/sdk";
@@ -228,8 +229,22 @@ export async function createAssuranceProject(input: {
   name: string;
   description?: string;
   dataClassification: HumanAssuranceDataClassification;
+  visibility?: "private" | "public";
+  publicMaterialKind?: "public" | "synthetic" | "redacted";
+  confirmedNoSensitiveData?: boolean;
   retentionDays: number;
 }) {
+  if (
+    input.principal.kind === "workspace_session" &&
+    input.principal.role !== "owner" &&
+    input.principal.role !== "admin"
+  ) {
+    throw new TokenlessServiceError(
+      "Only workspace owners and admins can create assurance projects.",
+      403,
+      "insufficient_role",
+    );
+  }
   const workspaceId = await resolveOnlyWritableWorkspace(input.principal);
   const name = requiredText(input.name, "Project name", 160);
   const description = input.description?.trim() || null;
@@ -261,9 +276,21 @@ export async function createAssuranceProject(input: {
       permittedDataUses: input.principal.permittedDataUses ?? ["service_delivery"],
     });
   }
+  const visibility = input.visibility ?? "private";
+  if (
+    (visibility === "public" && (input.dataClassification !== "public" || !input.publicMaterialKind)) ||
+    (visibility === "private" && input.publicMaterialKind !== undefined)
+  ) {
+    throw new TokenlessServiceError(
+      "Public projects require dataClassification public and an explicit public material kind.",
+      400,
+      "invalid_human_assurance_input",
+    );
+  }
   assertDataIngressPolicy({
     classification: input.dataClassification,
-    visibility: "private",
+    visibility,
+    confirmedNoSensitiveData: input.confirmedNoSensitiveData,
     regulatedModeEnabled: input.principal.kind === "api_key" && input.principal.maxDataClassification === "regulated",
   });
   const projectId = `hap_${randomUUID().replaceAll("-", "")}`;
@@ -272,14 +299,19 @@ export async function createAssuranceProject(input: {
     sql: `INSERT INTO tokenless_assurance_projects
           (project_id, workspace_id, name, description, data_classification, home_region,
            retention_policy_id, legal_hold_state, data_use_policy_version,
+           visibility,material_kind,private_sensitivity,
            status, retention_days, created_by, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, 'eu', 'retention-default-v1', 'none', 'data-use-v1', 'active', ?, ?, ?, ?)`,
+          VALUES (?, ?, ?, ?, ?, 'eu', 'retention-default-v1', 'none', 'data-use-v1',
+                  ?,?,?, 'active', ?, ?, ?, ?)`,
     args: [
       projectId,
       workspaceId,
       name,
       description,
       input.dataClassification,
+      visibility,
+      input.publicMaterialKind ?? null,
+      visibility === "private" && input.dataClassification !== "public" ? input.dataClassification : null,
       input.retentionDays,
       principalLabel(input.principal),
       now,
@@ -686,12 +718,20 @@ export async function createAssuranceAudiencePolicy(input: {
   await requireProjectAccess(input.principal, input.projectId, { active: true });
   const policyId = `haa_${randomUUID().replaceAll("-", "")}`;
   const version = 1;
-  const policy = parseHumanAssuranceAudiencePolicy({
-    ...input.policy,
-    schemaVersion: HUMAN_ASSURANCE_SCHEMA_VERSION,
-    policyId,
-    version,
-  });
+  let policy: HumanAssuranceAudiencePolicy;
+  try {
+    policy = parseHumanAssuranceAudiencePolicy({
+      ...input.policy,
+      schemaVersion: HUMAN_ASSURANCE_SCHEMA_VERSION,
+      policyId,
+      version,
+    });
+  } catch (error) {
+    if (error instanceof RateLoopSdkError) {
+      throw new TokenlessServiceError(error.message, 400, "invalid_human_assurance_input");
+    }
+    throw error;
+  }
   const policyJson = canonicalizeHumanAssuranceDocument(policy);
   const policyHash = hashHumanAssuranceDocument(policy);
   const now = new Date();

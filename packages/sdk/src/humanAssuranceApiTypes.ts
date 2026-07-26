@@ -10,6 +10,9 @@ export interface HumanAssuranceProjectCreateRequest {
   name: string;
   description?: string;
   dataClassification: HumanAssuranceDataClassification;
+  visibility?: "private" | "public";
+  publicMaterialKind?: "public" | "synthetic" | "redacted";
+  confirmedNoSensitiveData?: boolean;
   retentionDays: number;
 }
 

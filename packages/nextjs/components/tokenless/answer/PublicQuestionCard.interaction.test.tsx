@@ -12,6 +12,11 @@ const task: PublicAnswerTask = {
   roundId: "17",
   contentId: `0x${"2".repeat(64)}`,
   reviewerSource: "rateloop_network",
+  assignmentId: "hasn_public-task-1",
+  assignmentStatus: "accepted",
+  assignmentExpiresAt: "2099-07-17T09:00:00.000Z",
+  confidentialityTermsHash: `sha256:${"3".repeat(64)}`,
+  selectionBindingHash: `sha256:${"4".repeat(64)}`,
   question: {
     kind: "binary",
     prompt: "Is the response supported by the evidence?",
@@ -19,7 +24,7 @@ const task: PublicAnswerTask = {
     negativeLabel: "Not supported",
     rationale: { mode: "optional", maxLength: 500 },
   },
-  voucherDeadline: "2026-07-17T09:00:00.000Z",
+  voucherDeadline: "2099-07-17T09:00:00.000Z",
   alreadyVouchered: false,
   earnings: {
     guaranteedBaseAtomic: "1000000",
@@ -66,9 +71,64 @@ function assertNoRecoveryMaterial(storage: Storage) {
   );
 }
 
+test("a reserved network seat must be accepted with its exact terms before public task material opens", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const { PublicQuestionCard } = await import("./PublicQuestionCard");
+  const previousFetch = globalThis.fetch;
+  const requests: Array<{ body: unknown; url: string }> = [];
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url === "/api/auth/session") return Response.json(session(PRINCIPAL_A));
+    requests.push({ body: init?.body ? JSON.parse(String(init.body)) : null, url });
+    if (url === `/api/account/assurance/assignments/${task.assignmentId}/accept`) {
+      return Response.json({ assignmentId: task.assignmentId, accepted: true, replay: false, leases: [] });
+    }
+    throw new Error(`Unexpected acceptance-gate request: ${url}`);
+  };
+  try {
+    render(
+      <PublicQuestionCard
+        task={{ ...task, assignmentStatus: "reserved" }}
+        paidAccess={{ state: "ready" }}
+        onSubmitted={() => undefined}
+        principalId={PRINCIPAL_A}
+      />,
+    );
+    const screen = within(document.body);
+    assert.equal(screen.queryByText(task.question.prompt), null);
+    assert.equal(screen.queryByRole("button", { name: "Supported" }), null);
+    const accept = screen.getByRole<HTMLButtonElement>("button", { name: "Accept and open review" });
+    assert.equal(accept.disabled, true);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("checkbox", { name: /accept the exact public paid-review terms/iu }));
+    await user.click(accept);
+    await waitFor(() => assert.ok(screen.getByText(task.question.prompt)));
+    assert.ok(screen.getByRole("button", { name: "Supported" }));
+    assert.deepEqual(requests, [
+      {
+        url: `/api/account/assurance/assignments/${task.assignmentId}/accept`,
+        body: {
+          confidentialityTermsAccepted: true,
+          confidentialityTermsHash: task.confidentialityTermsHash,
+        },
+      },
+    ]);
+    assert.equal(
+      requests.some(value => value.url === "/api/rater/vouchers"),
+      false,
+    );
+  } finally {
+    cleanup();
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
 test("a public reviewer can choose a rating, exact crowd forecast, and optional feedback", async () => {
   const restoreDom = installTestDom();
-  const { cleanup, render, within } = await import("@testing-library/react");
+  const { cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
   const userEvent = (await import("@testing-library/user-event")).default;
   const { PublicQuestionCard } = await import("./PublicQuestionCard");
 
@@ -97,16 +157,17 @@ test("a public reviewer can choose a rating, exact crowd forecast, and optional 
     assert.equal(forecast.step, "1");
     assert.match(screen.getByText(/your forecast stays hidden until settlement/iu).textContent ?? "", /hidden/u);
     assert.equal(screen.queryByRole("button", { name: "70%" }), null);
-    await user.type(forecast, "73");
-    assert.equal(screen.getByRole<HTMLButtonElement>("button", { name: "Create recovery backup" }).disabled, false);
-    await user.clear(forecast);
-    await user.type(forecast, "100");
+    fireEvent.change(forecast, { target: { value: "73" } });
+    await waitFor(() =>
+      assert.equal(screen.getByRole<HTMLButtonElement>("button", { name: "Create recovery backup" }).disabled, false),
+    );
+    fireEvent.change(forecast, { target: { value: "100" } });
     assert.equal(screen.getByRole<HTMLButtonElement>("button", { name: "Create recovery backup" }).disabled, true);
     assert.match(screen.getByRole("alert").textContent ?? "", /whole number from 1 to 99/u);
-    await user.clear(forecast);
-    await user.type(forecast, "73");
+    fireEvent.change(forecast, { target: { value: "73" } });
     await user.click(screen.getByRole("button", { name: "Add feedback" }));
-    await user.type(screen.getByRole("textbox", { name: "Feedback" }), "The cited source supports the answer.");
+    const feedback = screen.getByRole("textbox", { name: "Feedback" });
+    fireEvent.change(feedback, { target: { value: "The cited source supports the answer." } });
     assert.equal((screen.getByRole("textbox", { name: "Feedback" }) as HTMLInputElement).value.length, 37);
   } finally {
     cleanup();

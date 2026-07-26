@@ -159,7 +159,15 @@ export function parseHumanAssuranceProjectCreateRequest(
   const input = record(value, "project");
   exactKeys(
     input,
-    ["name", "description", "dataClassification", "retentionDays"],
+    [
+      "name",
+      "description",
+      "dataClassification",
+      "visibility",
+      "publicMaterialKind",
+      "confirmedNoSensitiveData",
+      "retentionDays",
+    ],
     "project",
   );
   const name = string(input.name, "project.name").trim();
@@ -170,6 +178,26 @@ export function parseHumanAssuranceProjectCreateRequest(
   )?.trim();
   if (description && description.length > 2_000)
     invalid("project.description", "at most 2000 characters");
+  const visibility =
+    input.visibility === undefined ? undefined : enumeration(input.visibility, "project.visibility", ["private", "public"]);
+  const publicMaterialKind =
+    input.publicMaterialKind === undefined
+      ? undefined
+      : enumeration(input.publicMaterialKind, "project.publicMaterialKind", ["public", "synthetic", "redacted"]);
+  const effectiveVisibility = visibility ?? "private";
+  if (
+    (effectiveVisibility === "public" &&
+      (input.dataClassification !== "public" || !publicMaterialKind || input.confirmedNoSensitiveData !== true)) ||
+    (effectiveVisibility === "private" &&
+      (input.dataClassification === "public" ||
+        publicMaterialKind !== undefined ||
+        input.confirmedNoSensitiveData !== undefined))
+  ) {
+    invalid(
+      "project",
+      "public visibility with dataClassification public, an explicit publicMaterialKind, and confirmedNoSensitiveData true, or a private project",
+    );
+  }
   return {
     name,
     ...(description ? { description } : {}),
@@ -178,6 +206,9 @@ export function parseHumanAssuranceProjectCreateRequest(
       "project.dataClassification",
       DATA_CLASSIFICATIONS,
     ),
+    ...(visibility ? { visibility } : {}),
+    ...(publicMaterialKind ? { publicMaterialKind } : {}),
+    ...(input.confirmedNoSensitiveData === true ? { confirmedNoSensitiveData: true } : {}),
     retentionDays: integer(
       input.retentionDays,
       "project.retentionDays",

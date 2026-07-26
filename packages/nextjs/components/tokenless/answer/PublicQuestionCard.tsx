@@ -40,13 +40,12 @@ import type { TokenlessQueuedCommit } from "~~/lib/tokenless/rater/queue";
 import { clearReviewDraft, loadReviewDraft, saveReviewDraft } from "~~/lib/tokenless/reviewDrafts";
 import { formatUsdcAtomic } from "~~/lib/tokenless/usdc";
 
-export type PublicAnswerTask = {
+type PublicAnswerTaskBase = {
   operationKey: string;
   chainId: number;
   panelAddress: `0x${string}`;
   roundId: string;
   contentId: `0x${string}`;
-  reviewerSource: "customer_invited" | "rateloop_network";
   question: {
     kind: "binary" | "head_to_head";
     prompt: string;
@@ -68,6 +67,19 @@ export type PublicAnswerTask = {
   disclosureBeacon: { network: "quicknet-t"; round: number };
   scoringBeacon: { network: "quicknet-t"; round: number };
 };
+
+export type PublicAnswerTask = PublicAnswerTaskBase &
+  (
+    | { reviewerSource: "customer_invited" }
+    | {
+        reviewerSource: "rateloop_network";
+        assignmentId: string;
+        assignmentStatus: "reserved" | "accepted";
+        assignmentExpiresAt: string;
+        confidentialityTermsHash: `sha256:${string}`;
+        selectionBindingHash: `sha256:${string}`;
+      }
+  );
 
 export type PaidTaskAccess =
   | { state: "ready" }
@@ -196,6 +208,10 @@ export function PublicQuestionCard({
   const [submissionReceipt, setSubmissionReceipt] = useState<PublicSubmissionReceipt | null>(null);
   const [retryClock, setRetryClock] = useState(() => Date.now());
   const [draftRestored, setDraftRestored] = useState(false);
+  const [networkAssignmentStatus, setNetworkAssignmentStatus] = useState<"reserved" | "accepted">(
+    task.reviewerSource === "rateloop_network" ? task.assignmentStatus : "accepted",
+  );
+  const [networkTermsAccepted, setNetworkTermsAccepted] = useState(false);
   const rationaleRef = useRef<HTMLTextAreaElement>(null);
   const feedbackEnabled = task.question.rationale?.mode !== "off";
   const preparationBinding = publicSubmissionBinding(task, {
@@ -212,6 +228,21 @@ export function PublicQuestionCard({
       Date.parse(savedCommit.commitDeadline) > retryClock &&
       Date.parse(savedCommit.nextAttemptAt) <= retryClock,
   );
+  const networkAssignment =
+    task.reviewerSource === "rateloop_network"
+      ? {
+          assignmentId: task.assignmentId,
+          assignmentExpiresAt: task.assignmentExpiresAt,
+          confidentialityTermsHash: task.confidentialityTermsHash,
+          selectionBindingHash: task.selectionBindingHash,
+        }
+      : null;
+  const networkAssignmentReady = networkAssignment === null || networkAssignmentStatus === "accepted";
+
+  useEffect(() => {
+    setNetworkAssignmentStatus(task.reviewerSource === "rateloop_network" ? task.assignmentStatus : "accepted");
+    setNetworkTermsAccepted(false);
+  }, [task]);
 
   useEffect(() => {
     const draft = loadReviewDraft("public", task.roundId, isPublicReviewDraft, publicDraftStorage);
@@ -311,6 +342,49 @@ export function PublicQuestionCard({
     setTechnicalStatus(
       `The next retry is available after ${new Date(failure.record.nextAttemptAt).toLocaleTimeString()}.`,
     );
+  }
+
+  async function acceptNetworkAssignment() {
+    if (!networkAssignment || !networkTermsAccepted || busy) return;
+    setBusy(true);
+    setBusyLabel("Accepting…");
+    setError(null);
+    setStatus("Accepting paid review…");
+    setTechnicalStatus("Checking the exact assignment, review terms, and funded-round state.");
+    try {
+      const browserSession = await readBrowserSession();
+      if (!browserSession || browserSession.principalId !== principalId) {
+        throw new Error("Your account changed. Reload this review before accepting it.");
+      }
+      const result = await readAnswerJson(
+        await fetch(`/api/account/assurance/assignments/${encodeURIComponent(networkAssignment.assignmentId)}/accept`, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            confidentialityTermsAccepted: true,
+            confidentialityTermsHash: networkAssignment.confidentialityTermsHash,
+          }),
+        }),
+      );
+      if (result.accepted !== true || result.assignmentId !== networkAssignment.assignmentId) {
+        throw new Error("Assignment acceptance response is incomplete.");
+      }
+      setNetworkAssignmentStatus("accepted");
+      setNetworkTermsAccepted(false);
+      setStatus(result.replay === true ? "Assignment already accepted" : "Assignment accepted");
+      setTechnicalStatus("The exact paid network seat is accepted. You can now open and answer the public review.");
+    } catch (cause) {
+      setNetworkAssignmentStatus("reserved");
+      setStatus(null);
+      setError(cause instanceof Error ? cause.message : "The paid review could not be accepted.");
+      setTechnicalStatus(
+        "The assignment may have expired or the funded review may have closed. Refresh the queue before retrying.",
+      );
+    } finally {
+      setBusy(false);
+      setBusyLabel(null);
+    }
   }
 
   async function retrySavedCommit() {
@@ -709,6 +783,55 @@ export function PublicQuestionCard({
     }
   }
   const publicResponseIssue = feedbackIssue ?? sourceUrlIssue;
+
+  if (!networkAssignmentReady && networkAssignment) {
+    const expired = Date.parse(networkAssignment.assignmentExpiresAt) <= Date.now();
+    return (
+      <Card as="section" className="rounded-lg p-5 sm:p-6">
+        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Public paid review</p>
+        <h2 className="mt-3 text-xl font-semibold">Accept this funded review before opening it</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-base-content/65">
+          This reserves one exact seat in a public RateLoop network round. The question contains only public, synthetic,
+          or safely redacted material. Your sealed rating is linked to the immutable assignment and settlement terms
+          identified below.
+        </p>
+        <dl className="mt-4 grid gap-2 text-xs text-base-content/60">
+          <div>
+            <dt className="inline font-semibold text-base-content/80">Assignment: </dt>
+            <dd className="inline font-mono">{networkAssignment.assignmentId}</dd>
+          </div>
+          <div>
+            <dt className="inline font-semibold text-base-content/80">Terms: </dt>
+            <dd className="inline break-all font-mono">{networkAssignment.confidentialityTermsHash}</dd>
+          </div>
+        </dl>
+        <label className="mt-5 flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            className="checkbox checkbox-sm mt-0.5"
+            checked={networkTermsAccepted}
+            disabled={busy || expired}
+            onChange={event => setNetworkTermsAccepted(event.target.checked)}
+          />
+          <span>I accept the exact public paid-review terms for this assignment.</span>
+        </label>
+        <button
+          type="button"
+          className="btn btn-sm mt-4 rateloop-primary-action"
+          disabled={!networkTermsAccepted || busy || expired}
+          onClick={() => void acceptNetworkAssignment()}
+        >
+          {busy ? (busyLabel ?? "Accepting…") : expired ? "Assignment expired" : "Accept and open review"}
+        </button>
+        {error ? (
+          <p role="alert" className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100">
+            {error}
+          </p>
+        ) : null}
+        {technicalStatus ? <p className="mt-3 text-xs text-base-content/55">{technicalStatus}</p> : null}
+      </Card>
+    );
+  }
 
   return (
     <ReviewerShell
