@@ -6,12 +6,15 @@ import {
   tokenlessDeployedContracts,
   tokenlessDeploymentSchema,
 } from "../../contracts/src/tokenless/deployedContracts.ts";
+import paidLaneActivation from "../lib/tokenless/paidLaneActivation.ts";
 import { TOKENLESS_VERCEL_PROJECT } from "./check-identity-deployment.mjs";
 import { validateHostedDatabaseIdentity } from "./migrate-hosted-database.mjs";
 import { createHash, createPublicKey } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isAddress, zeroAddress } from "viem";
+
+const { validatePaidLaneActivation } = paidLaneActivation;
 
 const BASE_SEPOLIA_CHAIN_ID = 84_532;
 const DEPLOYMENT_SCHEMA = "rateloop-tokenless-deployment-v4";
@@ -127,7 +130,18 @@ export const REQUIRED_TOKENLESS_PRODUCTION_VARIABLES = [
   "TOKENLESS_VOTE_MAPPING_VAULT_KEY_VERSION",
   "TOKENLESS_VOTE_MAPPING_VAULT_KEYS",
   "TOKENLESS_DAC7_POLICY",
+  "TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED",
+  "NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED",
   "TOKENLESS_NETWORK_PANELS_ENABLED",
+  "NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED",
+  "TOKENLESS_HYBRID_REVIEWS_ENABLED",
+  "NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED",
+  "TOKENLESS_PAID_LANES_DPIA_APPROVAL_REFERENCE",
+  "TOKENLESS_PAID_LANES_TRANSFER_INVENTORY_APPROVAL_REFERENCE",
+  "TOKENLESS_PAID_LANES_FUNDING_VALIDATION_REFERENCE",
+  "TOKENLESS_INVITED_PAID_ADULTHOOD_APPROVAL_REFERENCE",
+  "TOKENLESS_PAID_LANES_COMPLIANCE_APPROVED_AT",
+  "NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE",
   "TOKENLESS_SUBSCRIPTIONS_ENABLED",
   "TOKENLESS_PREPAID_TOPUP_ENABLED",
   "TOKENLESS_ENTERPRISE_IDENTITY_ENABLED",
@@ -413,8 +427,25 @@ function validateTokenlessTestDeployment(env) {
   for (const name of ["TOKENLESS_USDC_EIP712_NAME", "TOKENLESS_USDC_EIP712_VERSION"]) {
     if (!value(env, name)) errors.push(`${name} is required for live tokenless chain execution.`);
   }
-  if (value(env, "TOKENLESS_NETWORK_PANELS_ENABLED") !== "false") {
-    errors.push("TOKENLESS_NETWORK_PANELS_ENABLED must remain false for a tokenless test deployment.");
+  for (const name of [
+    "TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED",
+    "TOKENLESS_NETWORK_PANELS_ENABLED",
+    "TOKENLESS_HYBRID_REVIEWS_ENABLED",
+  ]) {
+    const flag = value(env, name);
+    if (flag && !["true", "false"].includes(flag)) {
+      errors.push(`${name} must be exactly true or false for a tokenless test deployment.`);
+    }
+  }
+  const activatedTestLanes = [
+    ["TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED", "private_invited_paid"],
+    ["TOKENLESS_NETWORK_PANELS_ENABLED", "public_paid_network"],
+    ["TOKENLESS_HYBRID_REVIEWS_ENABLED", "hybrid_public_safe"],
+  ];
+  for (const [flag, lane] of activatedTestLanes) {
+    if (value(env, flag) === "true") {
+      errors.push(...validatePaidLaneActivation(lane, env).map(error => `Paid-lane activation: ${error}`));
+    }
   }
   if (/^(?:sk|rk)_live_/u.test(value(env, "STRIPE_SECRET_KEY"))) {
     errors.push("STRIPE_SECRET_KEY must not use Stripe live mode on the Base Sepolia tokenless test deployment.");
@@ -713,6 +744,9 @@ export function validateTokenlessProductionReadiness({
   if (value(env, "TOKENLESS_NETWORK_PANELS_ENABLED") !== "true") {
     errors.push("TOKENLESS_NETWORK_PANELS_ENABLED must be true for the production public network.");
   }
+  errors.push(
+    ...validatePaidLaneActivation("hybrid_public_safe", env).map(error => `Paid-lane activation: ${error}`),
+  );
   if (!/^app_[A-Za-z0-9_-]{8,128}$/u.test(value(env, "WORLD_ID_APP_ID"))) {
     errors.push("WORLD_ID_APP_ID is invalid.");
   }

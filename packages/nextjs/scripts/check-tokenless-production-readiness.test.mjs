@@ -4,12 +4,14 @@ import {
   REQUIRED_TOKENLESS_PRODUCTION_VARIABLES,
   validateTokenlessProductionReadiness,
 } from "./check-tokenless-production-readiness.mjs";
+import paidLaneActivation from "../lib/tokenless/paidLaneActivation.ts";
 import { deriveHostedDatabaseIdentity } from "./migrate-hosted-database.mjs";
 import assert from "node:assert/strict";
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+const { derivePaidLaneActivationReference } = paidLaneActivation;
 const address = index => `0x${index.toString(16).padStart(40, "0")}`;
 const encodedKey = index => Buffer.alloc(32, index).toString("base64url");
 const tokenlessGoldKeyring = (index = 16) => ({
@@ -126,7 +128,17 @@ function validFixture() {
     WORLD_ID_APP_ID: "app_production123",
     WORLD_ID_RP_ID: "rp_production123",
     WORLD_ID_ENVIRONMENT: "production",
+    TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "true",
+    NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "true",
     TOKENLESS_NETWORK_PANELS_ENABLED: "true",
+    NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED: "true",
+    TOKENLESS_HYBRID_REVIEWS_ENABLED: "true",
+    NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED: "true",
+    TOKENLESS_PAID_LANES_DPIA_APPROVAL_REFERENCE: `sha256:${"a".repeat(64)}`,
+    TOKENLESS_PAID_LANES_TRANSFER_INVENTORY_APPROVAL_REFERENCE: `sha256:${"b".repeat(64)}`,
+    TOKENLESS_PAID_LANES_FUNDING_VALIDATION_REFERENCE: `sha256:${"c".repeat(64)}`,
+    TOKENLESS_INVITED_PAID_ADULTHOOD_APPROVAL_REFERENCE: `sha256:${"d".repeat(64)}`,
+    TOKENLESS_PAID_LANES_COMPLIANCE_APPROVED_AT: "2026-07-20T12:00:00.000Z",
     TOKENLESS_SUBSCRIPTIONS_ENABLED: "false",
     TOKENLESS_PREPAID_TOPUP_ENABLED: "false",
     TOKENLESS_ENTERPRISE_IDENTITY_ENABLED: "false",
@@ -208,6 +220,7 @@ function validFixture() {
     env[`${prefix}_KEY_VERSION`] = "v1";
     env[`${prefix}_KEYS`] = JSON.stringify({ v1: Buffer.alloc(32, fill).toString(encoding) });
   }
+  env.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE = derivePaidLaneActivationReference(env);
   return {
     env,
     releaseCapabilities: Object.fromEntries(
@@ -328,6 +341,26 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
     ...tokenlessTestOperationalSecrets(),
   };
   assert.deepEqual(validateTokenlessProductionReadiness({ env, activeRegistry: {} }), []);
+  const activated = {
+    ...env,
+    TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "true",
+    NEXT_PUBLIC_TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "true",
+    TOKENLESS_NETWORK_PANELS_ENABLED: "true",
+    NEXT_PUBLIC_TOKENLESS_NETWORK_PANELS_ENABLED: "true",
+    TOKENLESS_HYBRID_REVIEWS_ENABLED: "true",
+    NEXT_PUBLIC_TOKENLESS_HYBRID_REVIEWS_ENABLED: "true",
+    TOKENLESS_PAID_LANES_DPIA_APPROVAL_REFERENCE: `sha256:${"a".repeat(64)}`,
+    TOKENLESS_PAID_LANES_TRANSFER_INVENTORY_APPROVAL_REFERENCE: `sha256:${"b".repeat(64)}`,
+    TOKENLESS_PAID_LANES_FUNDING_VALIDATION_REFERENCE: `sha256:${"c".repeat(64)}`,
+    TOKENLESS_INVITED_PAID_ADULTHOOD_APPROVAL_REFERENCE: `sha256:${"d".repeat(64)}`,
+    TOKENLESS_PAID_LANES_COMPLIANCE_APPROVED_AT: "2026-07-20T12:00:00.000Z",
+    WORLD_ID_APP_ID: "app_production123",
+    WORLD_ID_RP_ID: "rp_production123",
+    WORLD_ID_ENVIRONMENT: "production",
+  };
+  activated.NEXT_PUBLIC_TOKENLESS_PAID_LANES_ACTIVATION_REFERENCE =
+    derivePaidLaneActivationReference(activated);
+  assert.deepEqual(validateTokenlessProductionReadiness({ env: activated, activeRegistry: {} }), []);
   assert.match(
     validateTokenlessProductionReadiness({
       env: { ...env, STRIPE_SECRET_KEY: `sk_live_${"a".repeat(32)}` },
@@ -352,7 +385,7 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
     ["VERCEL_PROJECT_NAME", "rate-loop-nextjs", /requires Vercel project rateloop-tokenless/i],
     ["APP_URL", "https://rateloop.ai", /must remain https:\/\/rateloop-tokenless\.vercel\.app/i],
     ["NEXT_PUBLIC_APP_URL", "https://www.rateloop.ai", /must remain https:\/\/rateloop-tokenless\.vercel\.app/i],
-    ["TOKENLESS_NETWORK_PANELS_ENABLED", "true", /must remain false/i],
+    ["TOKENLESS_NETWORK_PANELS_ENABLED", "true", /Paid-lane activation/i],
     ["TOKENLESS_REVEAL_WINDOW_SECONDS", "299", /must be at least 300 seconds/i],
     ["TOKENLESS_BEACON_FAILURE_GRACE_SECONDS", "21599", /must be at least 21600 seconds/i],
   ]) {
