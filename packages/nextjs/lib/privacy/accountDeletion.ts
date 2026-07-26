@@ -96,6 +96,14 @@ type ServiceIdentityErasureEvidence = {
   workspaceMovesPseudonymized: number;
 };
 
+type OauthAuthorizationErasureEvidence = {
+  accessTokensPseudonymized: number;
+  authorizationCodesPseudonymized: number;
+  deviceAuthorizationsPseudonymized: number;
+  refreshTokensPseudonymized: number;
+  tokenFamiliesPseudonymized: number;
+};
+
 export type AccountDeletionPreview = {
   blockers: DeletionBlocker[];
   impact: {
@@ -646,6 +654,60 @@ async function eraseServiceIdentityReferences(
   };
 }
 
+async function eraseOauthAuthorizationIdentity(
+  client: PoolClient,
+  input: {
+    now: Date;
+    principalId: string;
+    tombstonePrincipalId: string;
+  },
+): Promise<OauthAuthorizationErasureEvidence> {
+  const accessTokens = await client.query(
+    `UPDATE tokenless_agent_oauth_access_tokens
+     SET subject_principal_id=$1,revoked_at=COALESCE(revoked_at,$2),
+         revocation_reason=COALESCE(revocation_reason,'account_deleted')
+     WHERE subject_principal_id=$3`,
+    [input.tombstonePrincipalId, input.now, input.principalId],
+  );
+  const refreshTokens = await client.query(
+    `UPDATE tokenless_agent_oauth_refresh_tokens
+     SET subject_principal_id=$1,revoked_at=COALESCE(revoked_at,$2),
+         revocation_reason=COALESCE(revocation_reason,'account_deleted')
+     WHERE subject_principal_id=$3`,
+    [input.tombstonePrincipalId, input.now, input.principalId],
+  );
+  const authorizationCodes = await client.query(
+    `UPDATE tokenless_agent_oauth_authorization_codes
+     SET subject_principal_id=$1,revoked_at=COALESCE(revoked_at,$2)
+     WHERE subject_principal_id=$3`,
+    [input.tombstonePrincipalId, input.now, input.principalId],
+  );
+  const tokenFamilies = await client.query(
+    `UPDATE tokenless_agent_oauth_token_families
+     SET subject_principal_id=$1,status='revoked',revoked_at=COALESCE(revoked_at,$2),
+         revoked_by='system:account_deletion',revocation_reason='account_deleted'
+     WHERE subject_principal_id=$3`,
+    [input.tombstonePrincipalId, input.now, input.principalId],
+  );
+  const deviceAuthorizations = await client.query(
+    `UPDATE tokenless_agent_oauth_device_authorizations
+     SET status=CASE WHEN status='approved' THEN 'denied' ELSE status END,
+         approved_by_principal_id=CASE WHEN status='approved' THEN NULL ELSE $1 END,
+         approved_at=CASE WHEN status='approved' THEN NULL ELSE approved_at END,
+         denied_at=CASE WHEN status='approved' THEN $2 ELSE denied_at END,
+         updated_at=$2
+     WHERE approved_by_principal_id=$3`,
+    [input.tombstonePrincipalId, input.now, input.principalId],
+  );
+  return {
+    accessTokensPseudonymized: accessTokens.rowCount ?? 0,
+    authorizationCodesPseudonymized: authorizationCodes.rowCount ?? 0,
+    deviceAuthorizationsPseudonymized: deviceAuthorizations.rowCount ?? 0,
+    refreshTokensPseudonymized: refreshTokens.rowCount ?? 0,
+    tokenFamiliesPseudonymized: tokenFamilies.rowCount ?? 0,
+  };
+}
+
 async function insertSubjectRequest(
   client: PoolClient,
   input: {
@@ -693,6 +755,7 @@ async function insertDeletionEvidence(
     ["contact_and_preferences", "erase", "completed", null, null],
     ["shared_workspace_access", "erase", "completed", null, null],
     ["service_identity_references", "anonymize", "completed", null, null],
+    ["oauth_authorization_records", "anonymize", "completed", null, null],
     ["eligibility_handoffs", "erase", "completed", null, null],
     ["world_id_and_rater_linkage", "erase", "completed", null, null],
     ["private_quote_plaintext_payloads", "erase", "completed", null, null],
@@ -772,7 +835,7 @@ async function insertDeletionEvidence(
         "world_id_and_rater_linkage",
         "private_quote_plaintext_payloads",
       ]),
-      JSON.stringify(["service_identity_references"]),
+      JSON.stringify(["service_identity_references", "oauth_authorization_records"]),
       JSON.stringify([
         { category: "deleted_auth_subject_guard", basis: "account_resurrection_prevention" },
         { category: "settlement_legal_security", basis: "legal_settlement_security" },
@@ -1056,6 +1119,7 @@ async function collectDeletionCategoryEvidence(
     raterErasure: RaterErasureEvidence;
     directAccessErasure: DirectAccessErasureEvidence;
     forecastIntegrityErasure: { deletedRows: number; remainingRows: number; subjectCount: number };
+    oauthAuthorizationErasure: OauthAuthorizationErasureEvidence;
     releasedReservations: ReleasedReservationEvidence;
     serviceIdentityErasure: ServiceIdentityErasureEvidence;
   },
@@ -1071,13 +1135,15 @@ async function collectDeletionCategoryEvidence(
        (SELECT COUNT(*) FROM tokenless_auth_sessions WHERE principal_id = $1 AND revoked_at IS NULL)
          AS active_auth_sessions,
        (SELECT COUNT(*) FROM tokenless_agent_oauth_access_tokens
-          WHERE subject_principal_id = $1 AND revoked_at IS NULL) AS active_oauth_access_tokens,
+          WHERE subject_principal_id = $1) AS oauth_access_token_identity_links,
        (SELECT COUNT(*) FROM tokenless_agent_oauth_refresh_tokens
-          WHERE subject_principal_id = $1 AND revoked_at IS NULL) AS active_oauth_refresh_tokens,
+          WHERE subject_principal_id = $1) AS oauth_refresh_token_identity_links,
        (SELECT COUNT(*) FROM tokenless_agent_oauth_authorization_codes
-          WHERE subject_principal_id = $1 AND revoked_at IS NULL) AS active_oauth_authorization_codes,
+          WHERE subject_principal_id = $1) AS oauth_authorization_code_identity_links,
        (SELECT COUNT(*) FROM tokenless_agent_oauth_token_families
-          WHERE subject_principal_id = $1 AND status = 'active') AS active_oauth_token_families,
+          WHERE subject_principal_id = $1) AS oauth_token_family_identity_links,
+       (SELECT COUNT(*) FROM tokenless_agent_oauth_device_authorizations
+          WHERE approved_by_principal_id = $1) AS oauth_device_authorization_identity_links,
        (SELECT COUNT(*) FROM tokenless_agent_integrations
           WHERE oauth_subject_principal_id = $1 AND status = 'active') AS active_agent_integrations,
        (SELECT COUNT(*) FROM tokenless_better_auth_users WHERE id = $2) AS better_auth_users,
@@ -1145,10 +1211,6 @@ async function collectDeletionCategoryEvidence(
       activeAgentIntegrations: rowNumber(row, "active_agent_integrations"),
       activeAuthSessions: rowNumber(row, "active_auth_sessions"),
       activeIdentityBindings: rowNumber(row, "active_identity_bindings"),
-      activeOauthAccessTokens: rowNumber(row, "active_oauth_access_tokens"),
-      activeOauthAuthorizationCodes: rowNumber(row, "active_oauth_authorization_codes"),
-      activeOauthRefreshTokens: rowNumber(row, "active_oauth_refresh_tokens"),
-      activeOauthTokenFamilies: rowNumber(row, "active_oauth_token_families"),
       betterAuthUsers: rowNumber(row, "better_auth_users"),
       deletedPrincipalTombstones: rowNumber(row, "deleted_principals"),
     },
@@ -1165,6 +1227,7 @@ async function collectDeletionCategoryEvidence(
       directAccessErasure: input.directAccessErasure,
     },
     service_identity_references: input.serviceIdentityErasure,
+    oauth_authorization_records: input.oauthAuthorizationErasure,
     eligibility_handoffs: {
       eligibilityHandoffs: rowNumber(row, "eligibility_handoffs"),
       managedWalletJtis: rowNumber(row, "managed_wallet_jtis"),
@@ -1224,10 +1287,11 @@ async function collectDeletionCategoryEvidence(
     agentVersionIdentityLinks: rowNumber(row, "agent_version_identity_links"),
     activeAuthSessions: rowNumber(row, "active_auth_sessions"),
     activeIdentityBindings: rowNumber(row, "active_identity_bindings"),
-    activeOauthAccessTokens: rowNumber(row, "active_oauth_access_tokens"),
-    activeOauthAuthorizationCodes: rowNumber(row, "active_oauth_authorization_codes"),
-    activeOauthRefreshTokens: rowNumber(row, "active_oauth_refresh_tokens"),
-    activeOauthTokenFamilies: rowNumber(row, "active_oauth_token_families"),
+    oauthAccessTokenIdentityLinks: rowNumber(row, "oauth_access_token_identity_links"),
+    oauthAuthorizationCodeIdentityLinks: rowNumber(row, "oauth_authorization_code_identity_links"),
+    oauthDeviceAuthorizationIdentityLinks: rowNumber(row, "oauth_device_authorization_identity_links"),
+    oauthRefreshTokenIdentityLinks: rowNumber(row, "oauth_refresh_token_identity_links"),
+    oauthTokenFamilyIdentityLinks: rowNumber(row, "oauth_token_family_identity_links"),
     activeProjectAccess: rowNumber(row, "active_project_access"),
     betterAuthUsers: rowNumber(row, "better_auth_users"),
     betterAuthVerifications,
@@ -1353,28 +1417,6 @@ export async function deleteAccount(input: {
       [now, input.principalId],
     );
     await client.query(
-      `UPDATE tokenless_agent_oauth_access_tokens SET revoked_at = $1, revocation_reason = 'account_deleted'
-       WHERE subject_principal_id = $2 AND revoked_at IS NULL`,
-      [now, input.principalId],
-    );
-    await client.query(
-      `UPDATE tokenless_agent_oauth_refresh_tokens SET revoked_at = $1, revocation_reason = 'account_deleted'
-       WHERE subject_principal_id = $2 AND revoked_at IS NULL`,
-      [now, input.principalId],
-    );
-    await client.query(
-      `UPDATE tokenless_agent_oauth_authorization_codes SET revoked_at = $1
-       WHERE subject_principal_id = $2 AND revoked_at IS NULL`,
-      [now, input.principalId],
-    );
-    await client.query(
-      `UPDATE tokenless_agent_oauth_token_families
-       SET status = 'revoked', revoked_at = $1, revoked_by = 'system:account_deletion',
-           revocation_reason = 'account_deleted'
-       WHERE subject_principal_id = $2 AND status = 'active'`,
-      [now, input.principalId],
-    );
-    await client.query(
       `UPDATE tokenless_agent_integrations SET status = 'revoked', revoked_at = $1, updated_at = $1
        WHERE oauth_subject_principal_id = $2 AND status = 'active'`,
       [now, input.principalId],
@@ -1383,13 +1425,6 @@ export async function deleteAccount(input: {
       `UPDATE tokenless_agent_oauth_clients
        SET registered_by_principal_id = NULL, updated_at = $1
        WHERE registered_by_principal_id = $2`,
-      [now, input.principalId],
-    );
-    await client.query(
-      `UPDATE tokenless_agent_oauth_device_authorizations
-       SET status = 'denied', approved_by_principal_id = NULL, approved_at = NULL,
-           denied_at = $1, updated_at = $1
-       WHERE approved_by_principal_id = $2 AND status = 'approved'`,
       [now, input.principalId],
     );
     await client.query(
@@ -1404,6 +1439,11 @@ export async function deleteAccount(input: {
       now,
       principalId: input.principalId,
       receiptDigest,
+      tombstonePrincipalId: directAccessErasure.tombstonePrincipalId,
+    });
+    const oauthAuthorizationErasure = await eraseOauthAuthorizationIdentity(client, {
+      now,
+      principalId: input.principalId,
       tombstonePrincipalId: directAccessErasure.tombstonePrincipalId,
     });
     await client.query(
@@ -1484,6 +1524,7 @@ export async function deleteAccount(input: {
       forecastIntegrityErasure,
       releasedReservations,
       serviceIdentityErasure,
+      oauthAuthorizationErasure,
     });
     const completedAt = new Date(Math.max(Date.now(), now.getTime()));
     const dueAt = await insertSubjectRequest(client, {

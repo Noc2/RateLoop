@@ -129,7 +129,7 @@ test("account deletion revokes authentication, removes shared access, and permit
     browser_identities: 0,
     memberships: 0,
     wallet_bindings: 0,
-    categories: 11,
+    categories: 12,
   });
 
   await assert.rejects(
@@ -233,6 +233,49 @@ test("account deletion pseudonymizes durable agent, oversight, public-media, and
     args: [identity.principalId, now, new Date(now.getTime() + 86_400_000)],
   });
   await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_oauth_authorization_codes
+          (authorization_code_id,code_hash,token_family_id,client_id,subject_principal_id,
+           redirect_uri,redirect_uri_digest,code_challenge,audience,resource,granted_scopes_json,
+           created_at,expires_at)
+          VALUES ('code_service_delete','code-hash-service-delete','family_service_delete',
+                  'client_service_delete',?,'https://agent.example/callback','redirect-digest',
+                  'challenge','rateloop','rateloop','[]',?,?)`,
+    args: [identity.principalId, now, new Date(now.getTime() + 5 * 60_000)],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_oauth_refresh_tokens
+          (refresh_token_id,token_hash,token_family_id,client_id,subject_principal_id,
+           audience,resource,granted_scopes_json,generation,created_at,expires_at)
+          VALUES ('refresh_service_delete','refresh-hash-service-delete','family_service_delete',
+                  'client_service_delete',?,'rateloop','rateloop','[]',1,?,?)`,
+    args: [identity.principalId, now, new Date(now.getTime() + 60 * 60_000)],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_oauth_access_tokens
+          (access_token_id,token_hash,token_family_id,refresh_token_id,client_id,
+           subject_principal_id,audience,resource,granted_scopes_json,created_at,expires_at)
+          VALUES ('access_service_delete','access-hash-service-delete','family_service_delete',
+                  'refresh_service_delete','client_service_delete',?,'rateloop','rateloop','[]',?,?)`,
+    args: [identity.principalId, now, new Date(now.getTime() + 30 * 60_000)],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_agent_oauth_device_authorizations
+          (device_authorization_id,device_code_hash,user_code_hash,client_id,audience,resource,
+           requested_scopes_json,status,approved_by_principal_id,approved_at,consumed_at,
+           token_family_id,created_at,expires_at,updated_at)
+          VALUES ('device_service_delete','device-hash-service-delete','user-hash-service-delete',
+                  'client_service_delete','rateloop','rateloop','[]','consumed',?,?,?,
+                  'family_service_delete',?,?,?)`,
+    args: [
+      identity.principalId,
+      now,
+      now,
+      now,
+      new Date(now.getTime() + 10 * 60_000),
+      now,
+    ],
+  });
+  await dbClient.execute({
     sql: `INSERT INTO tokenless_mcp_sessions
           (session_hash,workspace_id,integration_id,subject_principal_id,token_family_id,
            client_name,client_version,protocol_version,elicitation_mode,status,
@@ -289,16 +332,50 @@ test("account deletion pseudonymizes durable agent, oversight, public-media, and
   assert.equal(Number(storedRow.media_quota_links), 0);
   assert.match(String(storedRow.mcp_subject), /^rlp_erased_/u);
 
+  const oauth = await dbClient.execute({
+    sql: `SELECT
+            (SELECT subject_principal_id FROM tokenless_agent_oauth_token_families
+             WHERE token_family_id='family_service_delete') AS family_subject,
+            (SELECT status FROM tokenless_agent_oauth_token_families
+             WHERE token_family_id='family_service_delete') AS family_status,
+            (SELECT subject_principal_id FROM tokenless_agent_oauth_authorization_codes
+             WHERE authorization_code_id='code_service_delete') AS code_subject,
+            (SELECT subject_principal_id FROM tokenless_agent_oauth_refresh_tokens
+             WHERE refresh_token_id='refresh_service_delete') AS refresh_subject,
+            (SELECT subject_principal_id FROM tokenless_agent_oauth_access_tokens
+             WHERE access_token_id='access_service_delete') AS access_subject,
+            (SELECT approved_by_principal_id FROM tokenless_agent_oauth_device_authorizations
+             WHERE device_authorization_id='device_service_delete') AS device_subject`,
+  });
+  const oauthRow = Object.fromEntries(
+    Object.entries(oauth.rows[0] ?? {}).map(([key, value]) => [key, Array.isArray(value) ? value[0] : value]),
+  );
+  assert.doesNotMatch(JSON.stringify(oauthRow), new RegExp(identity.principalId, "u"));
+  assert.equal(oauthRow.family_status, "revoked");
+  for (const field of ["family_subject", "code_subject", "refresh_subject", "access_subject", "device_subject"]) {
+    assert.match(String(oauthRow[field]), /^rlp_erased_/u);
+  }
+
   const completion = await dbClient.execute({
     sql: "SELECT anonymized_categories_json,evidence_json FROM tokenless_subject_request_completions WHERE request_id=?",
     args: [deleted.requestId],
   });
-  assert.deepEqual(JSON.parse(String(completion.rows[0]?.anonymized_categories_json)), ["service_identity_references"]);
+  assert.deepEqual(JSON.parse(String(completion.rows[0]?.anonymized_categories_json)), [
+    "service_identity_references",
+    "oauth_authorization_records",
+  ]);
   const evidence = JSON.parse(String(completion.rows[0]?.evidence_json)) as {
     categoryEvidence: Record<string, Record<string, number>>;
   };
   assert.equal(evidence.categoryEvidence.service_identity_references?.agentsPseudonymized, 1);
   assert.equal(evidence.categoryEvidence.service_identity_references?.mcpSessionsPseudonymized, 1);
+  assert.deepEqual(evidence.categoryEvidence.oauth_authorization_records, {
+    accessTokensPseudonymized: 1,
+    authorizationCodesPseudonymized: 1,
+    deviceAuthorizationsPseudonymized: 1,
+    refreshTokensPseudonymized: 1,
+    tokenFamiliesPseudonymized: 1,
+  });
 });
 
 test("account deletion deletes unused private quotes and anonymizes retained quote ownership", async () => {
