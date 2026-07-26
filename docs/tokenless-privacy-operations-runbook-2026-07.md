@@ -60,9 +60,17 @@ metadata.
 ## Operational retention and delivery recovery
 
 - Scheduled maintenance deletes expired subject-request exports, expired one-time-code verification rows, expired or
-  long-revoked Better Auth and RateLoop sessions, stale eligibility handoffs/scopes and orphaned screening work, and
+  long-revoked Better Auth and RateLoop sessions, stale eligibility handoffs/expired scopes and completed orphaned
+  screening work, and
   terminal notification-delivery telemetry according to the public retention notice. Statutory, settlement,
   legal-hold, deletion-receipt, backup, and public-chain categories are deliberately outside this operational purge.
+- A queued sanctions screening is never aged out while it is pending. A confirmed match creates a separate deny record
+  containing the source, list-snapshot hash, decision maker, decision time, and retention deadline. New submissions by
+  that rater fail closed regardless of the newly supplied name. Match evidence survives account erasure as a restricted
+  legal-risk record attached only to the tombstoned rater identifier; the ordinary subject export excludes its
+  ciphertext. `TOKENLESS_SANCTIONS_MATCH_RETENTION_DAYS` may be 365–3650 and defaults to 1825. Change the period only
+  against the documented legal-basis and retention review; scheduled maintenance removes the deny record at its
+  deadline before the now-orphaned encrypted screening can be purged.
 - Subject exports contain the authenticated principal&apos;s account, membership, reviewer-access, eligibility-status,
   crowd-forecast integrity counters and findings, and request-lifecycle categories. They do not contain another
   reviewer&apos;s pair identity, vault ciphertext, encryption material, session credentials, or raw provider evidence.

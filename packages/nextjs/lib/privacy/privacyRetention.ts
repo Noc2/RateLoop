@@ -18,6 +18,10 @@ export async function purgeExpiredPrivacyOperations(now = new Date()) {
   const securityCutoff = new Date(now.getTime() - SECURITY_TELEMETRY_RETENTION_MS);
   const notificationCutoff = new Date(now.getTime() - NOTIFICATION_DELIVERY_RETENTION_MS);
   const handoffCutoff = new Date(now.getTime() - ELIGIBILITY_HANDOFF_RETENTION_MS);
+  const expiredSanctionsBlocks = await dbClient.execute({
+    sql: "DELETE FROM tokenless_sanctions_blocks WHERE retained_until <= ?",
+    args: [now],
+  });
   const [
     subjectExports,
     verifications,
@@ -25,7 +29,7 @@ export async function purgeExpiredPrivacyOperations(now = new Date()) {
     productSessions,
     eligibilityHandoffs,
     notificationDeliveries,
-    staleScopes,
+    staleLegalEligibility,
   ] = await Promise.all([
     dbClient.execute({ sql: "DELETE FROM tokenless_subject_request_exports WHERE delete_after <= ?", args: [now] }),
     dbClient.execute({
@@ -52,16 +56,34 @@ export async function purgeExpiredPrivacyOperations(now = new Date()) {
       args: [notificationCutoff],
     }),
     dbClient.execute({
-      sql: `DELETE FROM tokenless_paid_eligibility_scopes
-            WHERE status IN ('review','blocked','expired') AND updated_at <= ?`,
+      sql: `DELETE FROM tokenless_legal_eligibility
+            WHERE scope_id IN (
+              SELECT scope.scope_id FROM tokenless_paid_eligibility_scopes scope
+              JOIN tokenless_sanctions_screenings screening
+                ON screening.screening_id=scope.sanctions_screening_id
+              WHERE scope.status='expired' AND scope.updated_at<=?
+                AND screening.status<>'match'
+            )`,
       args: [securityCutoff],
     }),
   ]);
+  const staleScopes = await dbClient.execute({
+    sql: `DELETE FROM tokenless_paid_eligibility_scopes
+          WHERE status='expired' AND updated_at<=?
+            AND sanctions_screening_id NOT IN (
+              SELECT screening_id FROM tokenless_sanctions_screenings WHERE status='match'
+            )`,
+    args: [securityCutoff],
+  });
   const orphanedScreenings = await dbClient.execute({
     sql: `DELETE FROM tokenless_sanctions_screenings
           WHERE screening_id NOT IN (
             SELECT sanctions_screening_id FROM tokenless_paid_eligibility_scopes
-          ) AND updated_at <= ?`,
+          )
+            AND screening_id NOT IN (
+              SELECT screening_id FROM tokenless_sanctions_blocks
+            )
+            AND status<>'pending' AND updated_at <= ?`,
     args: [securityCutoff],
   });
   return {
@@ -71,6 +93,8 @@ export async function purgeExpiredPrivacyOperations(now = new Date()) {
     orphanedScreenings: affected(orphanedScreenings),
     productSessions: affected(productSessions),
     staleEligibilityScopes: affected(staleScopes),
+    staleLegalEligibility: affected(staleLegalEligibility),
+    expiredSanctionsBlocks: affected(expiredSanctionsBlocks),
     subjectExports: affected(subjectExports),
     verifications: affected(verifications),
   };

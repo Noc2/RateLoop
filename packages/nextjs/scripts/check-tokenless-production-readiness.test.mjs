@@ -144,6 +144,7 @@ function validFixture() {
     TOKENLESS_ENTERPRISE_IDENTITY_ENABLED: "false",
     TOKENLESS_EVIDENCE_FINALITY_BLOCK_TAG: "safe",
     TOKENLESS_DAC7_POLICY: "eu",
+    TOKENLESS_SANCTIONS_MATCH_RETENTION_DAYS: "1825",
     TOKENLESS_EVIDENCE_TENANT_COMMITMENT_KEY: encodedKey(9),
     TOKENLESS_PSEUDONYM_KEY: encodedKey(14),
     TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY: encodedKey(10),
@@ -418,6 +419,13 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
   assert.match(
     validateTokenlessProductionReadiness({ env: missingFeeRecipient, activeRegistry: {} }).join("\n"),
     /TOKENLESS_FEE_RECIPIENT must be a non-zero EVM address/,
+  );
+  assert.match(
+    validateTokenlessProductionReadiness({
+      env: { ...env, TOKENLESS_SANCTIONS_MATCH_RETENTION_DAYS: "30" },
+      activeRegistry: {},
+    }).join("\n"),
+    /TOKENLESS_SANCTIONS_MATCH_RETENTION_DAYS must be an integer from 365 to 3650/,
   );
   assert.match(
     validateTokenlessProductionReadiness({

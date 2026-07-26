@@ -357,6 +357,13 @@ function validateTokenlessTestVault(env, errors) {
 
 function validateTokenlessTestDeployment(env) {
   const errors = [];
+  const sanctionsRetention = value(env, "TOKENLESS_SANCTIONS_MATCH_RETENTION_DAYS");
+  if (
+    sanctionsRetention &&
+    (!positiveInteger(sanctionsRetention) || Number(sanctionsRetention) < 365 || Number(sanctionsRetention) > 3_650)
+  ) {
+    errors.push("TOKENLESS_SANCTIONS_MATCH_RETENTION_DAYS must be an integer from 365 to 3650.");
+  }
   errors.push(...validateHostedDatabaseIdentity(env));
   const isolatedReviewVaultKey = validateTokenlessTestVault(env, errors);
   if (env.VERCEL_ENV !== "production") {
@@ -801,6 +808,13 @@ export function validateTokenlessProductionReadiness({
   }
   if (dac7Policy === "configured" && !value(env, "TOKENLESS_DAC7_REQUIRED_COUNTRIES")) {
     errors.push("TOKENLESS_DAC7_REQUIRED_COUNTRIES is required when TOKENLESS_DAC7_POLICY is configured.");
+  }
+  const sanctionsRetention = value(env, "TOKENLESS_SANCTIONS_MATCH_RETENTION_DAYS");
+  if (
+    sanctionsRetention &&
+    (!positiveInteger(sanctionsRetention) || Number(sanctionsRetention) < 365 || Number(sanctionsRetention) > 3_650)
+  ) {
+    errors.push("TOKENLESS_SANCTIONS_MATCH_RETENTION_DAYS must be an integer from 365 to 3650.");
   }
 
   const secretRoles = new Map();

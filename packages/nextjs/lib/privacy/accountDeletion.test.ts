@@ -900,6 +900,7 @@ test("account deletion receipts the rater identity, erases World ID state, and p
       paidReviewVoucherIssuances: 0,
       voucherAssuranceSnapshots: 1,
       networkSettlementCommitments: 0,
+      sanctionsMatches: 0,
     },
     tombstoneReceiptHash: `sha256:${deleted.receiptDigest}`,
   });

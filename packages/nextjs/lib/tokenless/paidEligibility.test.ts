@@ -6,6 +6,7 @@ import { recoverTypedDataAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { purgeExpiredPrivacyOperations } from "~~/lib/privacy/privacyRetention";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import {
   type EligibilityProvider,
@@ -734,6 +735,67 @@ test("manual sanctions review is persisted and remains fail-closed for paid vouc
       }),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "paid_eligibility_required",
   );
+});
+
+test("a sanctions match survives resubmission and retains its decision evidence", async () => {
+  const pending = await submitPaidEligibility({
+    principalId: PRINCIPAL,
+    payoutAccount: ACCOUNT,
+    submission: submission(),
+    now: NOW,
+  });
+  await recordSanctionsScreening({
+    screeningId: pending.screeningId,
+    status: "match",
+    listSnapshotHash: `sha256:${"e".repeat(64)}`,
+    screenedBy: "test-compliance-operator",
+    expiresAt: new Date(NOW.getTime() + 86_400_000),
+    now: NOW,
+  });
+
+  await assert.rejects(
+    () =>
+      submitPaidEligibility({
+        principalId: PRINCIPAL,
+        payoutAccount: ACCOUNT,
+        submission: {
+          ...submission(),
+          dac7: { ...submission().dac7, fullName: "A Different Name" },
+          screeningSubject: { fullName: "A Different Name", birthDate: "1990-01-01" },
+        },
+        now: new Date(NOW.getTime() + 1_000),
+      }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "legal_eligibility_blocked",
+  );
+  const block = await dbClient.execute(
+    `SELECT screening_id,source,list_snapshot_hash,screened_by,matched_at,retained_until
+     FROM tokenless_sanctions_blocks`,
+  );
+  assert.equal(block.rows.length, 1);
+  assert.equal(block.rows[0]?.screening_id, pending.screeningId);
+  assert.equal(block.rows[0]?.source, "manual:v1");
+  assert.equal(block.rows[0]?.list_snapshot_hash, `sha256:${"e".repeat(64)}`);
+  assert.equal(block.rows[0]?.screened_by, "test-compliance-operator");
+  assert.ok(new Date(String(block.rows[0]?.retained_until)) > new Date(String(block.rows[0]?.matched_at)));
+  const screenings = await dbClient.execute("SELECT status FROM tokenless_sanctions_screenings");
+  assert.deepEqual(screenings.rows, [{ status: "match" }]);
+});
+
+test("privacy retention does not discard a queued sanctions screening", async () => {
+  const pending = await submitPaidEligibility({
+    principalId: PRINCIPAL,
+    payoutAccount: ACCOUNT,
+    submission: submission(),
+    now: NOW,
+  });
+  await purgeExpiredPrivacyOperations(new Date(NOW.getTime() + 40 * 86_400_000));
+  const queue = await dbClient.execute({
+    sql: "SELECT screening_id,status FROM tokenless_sanctions_screenings WHERE screening_id=?",
+    args: [pending.screeningId],
+  });
+  assert.deepEqual(queue.rows, [{ screening_id: pending.screeningId, status: "pending" }]);
+  const scope = await dbClient.execute("SELECT status FROM tokenless_paid_eligibility_scopes");
+  assert.deepEqual(scope.rows, [{ status: "review" }]);
 });
 
 test("voucher issuance fails before eligibility and for missing required capabilities", async () => {

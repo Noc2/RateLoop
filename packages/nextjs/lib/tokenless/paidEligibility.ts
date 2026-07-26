@@ -57,6 +57,7 @@ const SHA256 = /^sha256:[0-9a-f]{64}$/;
 const PROVIDER_CLOCK_SKEW_MS = 5 * 60_000;
 const MAX_PROVIDER_LIFETIME_MS = 370 * 24 * 60 * 60_000;
 const MAX_VOUCHER_LIFETIME_MS = 10 * 60_000;
+const DEFAULT_SANCTIONS_MATCH_RETENTION_DAYS = 1_825;
 
 type QueryRow = Record<string, unknown>;
 
@@ -164,6 +165,31 @@ function stringValue(row: QueryRow | undefined, key: string) {
 
 function hash(value: string | Buffer) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function sanctionsMatchRetentionMs() {
+  const configured = process.env.TOKENLESS_SANCTIONS_MATCH_RETENTION_DAYS?.trim();
+  if (!configured) return DEFAULT_SANCTIONS_MATCH_RETENTION_DAYS * 86_400_000;
+  const days = Number(configured);
+  if (!Number.isSafeInteger(days) || days < 365 || days > 3_650) {
+    throw new TokenlessServiceError("Sanctions retention policy is unavailable.", 503, "policy_unavailable");
+  }
+  return days * 86_400_000;
+}
+
+async function assertNoActiveSanctionsBlock(client: Pick<PoolClient, "query">, raterId: string, now: Date) {
+  const block = await client.query(
+    `SELECT screening_id FROM tokenless_sanctions_blocks
+     WHERE rater_id=$1 AND retained_until>$2 LIMIT 1 FOR UPDATE`,
+    [raterId, now],
+  );
+  if (block.rowCount !== 0) {
+    throw new TokenlessServiceError(
+      "Paid-task legal eligibility remains unavailable.",
+      403,
+      "legal_eligibility_blocked",
+    );
+  }
 }
 
 function stableJson(value: unknown): string {
@@ -887,6 +913,7 @@ async function submitInvitedPaidEligibility(input: {
       { principalId: input.principalId, payoutAccount: input.payoutAddress },
       input.now,
     );
+    await assertNoActiveSanctionsBlock(client, raterId, input.now);
     const referenceKeyring = getProviderReferenceKeyring();
     const providerId = "rateloop:invitation";
     const providerNamespace = `workspace:v1:${workspaceId}`;
@@ -1270,6 +1297,7 @@ export async function submitPaidEligibility(input: {
         [seedVault.ciphertext, seedVault.keyVersion, seedVault.keyDomain, now, raterId],
       );
     }
+    await assertNoActiveSanctionsBlock(client, raterId, now);
     const bindingId = stringValue(accountBinding, "binding_id") ?? `bind_${currentSubjectReference.hash.slice(-48)}`;
     if (accountBinding) {
       await client.query(
@@ -1660,7 +1688,7 @@ export async function recordSanctionsScreening(input: {
   try {
     await client.query("BEGIN");
     const current = await client.query(
-      `SELECT rater_id,status FROM tokenless_sanctions_screenings
+      `SELECT rater_id,source,status FROM tokenless_sanctions_screenings
        WHERE screening_id=$1 LIMIT 1 FOR UPDATE`,
       [input.screeningId],
     );
@@ -1691,6 +1719,23 @@ export async function recordSanctionsScreening(input: {
        WHERE screening_id=$6 AND status='pending'`,
       [input.status, input.listSnapshotHash, input.screenedBy.trim(), now, input.expiresAt, input.screeningId],
     );
+    if (input.status === "match") {
+      await client.query(
+        `INSERT INTO tokenless_sanctions_blocks
+         (rater_id,screening_id,source,list_snapshot_hash,screened_by,matched_at,retained_until,created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$6)
+         ON CONFLICT (rater_id) DO NOTHING`,
+        [
+          stringValue(row, "rater_id"),
+          input.screeningId,
+          stringValue(row, "source"),
+          input.listSnapshotHash,
+          input.screenedBy.trim(),
+          now,
+          new Date(now.getTime() + sanctionsMatchRetentionMs()),
+        ],
+      );
+    }
     const legal = await client.query(
       `SELECT residence_tax_status FROM tokenless_legal_eligibility
        WHERE sanctions_screening_id=$1 FOR UPDATE`,

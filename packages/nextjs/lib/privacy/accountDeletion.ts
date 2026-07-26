@@ -70,6 +70,7 @@ type RaterErasureEvidence = {
     paidReviewVoucherIssuances: number;
     voucherAssuranceSnapshots: number;
     networkSettlementCommitments: number;
+    sanctionsMatches: number;
   };
   retainedPaidVouchers: number;
   networkCopiesErasure: {
@@ -1119,6 +1120,7 @@ async function eraseRaterIdentity(
       paidReviewVoucherIssuances: 0,
       voucherAssuranceSnapshots: 0,
       networkSettlementCommitments: 0,
+      sanctionsMatches: 0,
     },
     retainedPaidVouchers: 0,
     networkCopiesErasure: {
@@ -1167,9 +1169,10 @@ async function eraseRaterIdentity(
     `DELETE FROM tokenless_paid_eligibility_scopes WHERE rater_id = $1`,
     [raterId],
   );
-  const sanctionsScreenings = await client.query(`DELETE FROM tokenless_sanctions_screenings WHERE rater_id = $1`, [
-    raterId,
-  ]);
+  const sanctionsScreenings = await client.query(
+    `DELETE FROM tokenless_sanctions_screenings WHERE rater_id = $1 AND status <> 'match'`,
+    [raterId],
+  );
   await client.query(
     `DELETE FROM tokenless_private_group_invitation_expertise_attestations
      WHERE materialized_qualification_id IN (
@@ -1212,7 +1215,7 @@ async function eraseRaterIdentity(
          AS legal_eligibility,
        (SELECT COUNT(*) FROM tokenless_paid_eligibility_scopes WHERE rater_id = $1)
          AS paid_eligibility_scopes,
-       (SELECT COUNT(*) FROM tokenless_sanctions_screenings WHERE rater_id = $1)
+       (SELECT COUNT(*) FROM tokenless_sanctions_screenings WHERE rater_id = $1 AND status <> 'match')
          AS sanctions_screenings,
        (SELECT COUNT(*) FROM tokenless_reviewer_qualifications
         WHERE rater_id = $1 OR reviewer_account_address = $2) AS reviewer_qualifications,
@@ -1239,8 +1242,10 @@ async function eraseRaterIdentity(
        (SELECT COUNT(*) FROM tokenless_network_assignment_settlements settlement
         JOIN tokenless_assurance_assignments assignment
           ON assignment.assignment_id=settlement.assignment_id
-        WHERE assignment.rater_id=$1)
-         AS retained_network_settlement_commitments`,
+       WHERE assignment.rater_id=$1)
+         AS retained_network_settlement_commitments,
+       (SELECT COUNT(*) FROM tokenless_sanctions_blocks WHERE rater_id=$1)
+         AS retained_sanctions_matches`,
     [raterId, principalId],
   );
   const row = remaining.rows[0] as Row | undefined;
@@ -1279,6 +1284,7 @@ async function eraseRaterIdentity(
       paidReviewVoucherIssuances: rowNumber(row, "retained_paid_review_voucher_issuances"),
       voucherAssuranceSnapshots: rowNumber(row, "retained_voucher_assurance_snapshots"),
       networkSettlementCommitments: rowNumber(row, "retained_network_settlement_commitments"),
+      sanctionsMatches: rowNumber(row, "retained_sanctions_matches"),
     },
     retainedPaidVouchers: rowNumber(row, "retained_paid_vouchers"),
     networkCopiesErasure,
