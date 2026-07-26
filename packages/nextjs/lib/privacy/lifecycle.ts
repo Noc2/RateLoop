@@ -57,6 +57,44 @@ function rowString(row: QueryRow | undefined, key: string) {
   return value === null || value === undefined ? null : String(value);
 }
 
+function parseExportJson(value: unknown) {
+  if (value === null || value === undefined) return null;
+  try {
+    return JSON.parse(String(value)) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function securityIdentifierCount(value: unknown) {
+  const parsed = parseExportJson(value);
+  return Array.isArray(parsed) ? parsed.length : 0;
+}
+
+function sanitizeNetworkIntegrityProvenance(value: unknown): unknown {
+  const parsed = parseExportJson(value);
+  if (Array.isArray(parsed)) return parsed.map(item => sanitizeNetworkIntegrityProvenance(item));
+  if (parsed === null || typeof parsed !== "object") return parsed;
+  return Object.fromEntries(
+    Object.entries(parsed).map(([key, item]) => {
+      const normalizedKey = key.replaceAll("_", "").toLowerCase();
+      if (normalizedKey === "reviewerlookup" || normalizedKey === "clusterpseudonym") {
+        return [key, "withheld_security_identifier"];
+      }
+      if (normalizedKey === "providersubjecthashes") {
+        return [
+          key,
+          {
+            count: Array.isArray(item) ? item.length : 0,
+            value: "withheld_security_identifiers",
+          },
+        ];
+      }
+      return [key, sanitizeNetworkIntegrityProvenance(JSON.stringify(item))];
+    }),
+  );
+}
+
 function required(value: string, field: string, max = 500) {
   const normalized = value.trim();
   if (!normalized || normalized.length > max) {
@@ -132,6 +170,12 @@ OR (
 )
 ORDER BY parent.created_at,parent.hybrid_operation_id,
          CASE child.cohort WHEN 'invited' THEN 1 ELSE 2 END`;
+
+export const __hybridNetworkExclusionSubjectExportSqlForTests = `SELECT exclusion.hybrid_operation_id,
+       exclusion.payout_account,exclusion.exclusion_hash,exclusion.created_at
+FROM tokenless_hybrid_network_reviewer_exclusions exclusion
+WHERE exclusion.reviewer_principal_id=$1
+ORDER BY exclusion.created_at,exclusion.hybrid_operation_id`;
 
 export async function createLegalHold(input: {
   accountAddress: string;
@@ -443,6 +487,11 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
     workspaceMoves,
     networkSettlements,
     hybridReviews,
+    hybridNetworkExclusions,
+    networkQualifications,
+    networkAssertions,
+    networkAssignmentSnapshots,
+    networkMaterializedMemberships,
   ] = await Promise.all([
     client.query(
       `SELECT preferences.assignment_available,preferences.assignment_completed,
@@ -675,13 +724,78 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
          SELECT binding_id,COUNT(*) AS append_only_receipt_count
          FROM tokenless_network_assignment_settlement_receipts GROUP BY binding_id
        ) receipts ON receipts.binding_id=settlement.binding_id
-       WHERE assignment.reviewer_account_address=$1 OR assignment.rater_id IN (
+       WHERE assignment.rater_id IN (
          SELECT rater_id FROM tokenless_rater_profiles WHERE principal_id=$1
        )
        ORDER BY settlement.created_at,settlement.binding_id`,
       [principalId],
     ),
     client.query(__hybridSubjectExportSqlForTests, [principalId]),
+    client.query(__hybridNetworkExclusionSubjectExportSqlForTests, [principalId]),
+    client.query(
+      `SELECT qualification.qualification_id,qualification.reviewer_source,
+              qualification.qualification_kind,qualification.cohort_ids_json,
+              qualification.qualification_keys_json,qualification.evidence_kind,
+              qualification.qualification_value_json,
+              qualification.expertise_record_schema_version,
+              qualification.expertise_definition_id,
+              qualification.expertise_definition_version,
+              qualification.expertise_definition_hash,
+              qualification.verified_at,qualification.expires_at,qualification.status,
+              qualification.created_at,qualification.updated_at,qualification.revoked_at
+       FROM tokenless_reviewer_qualifications qualification
+       WHERE qualification.reviewer_source='rateloop_network'
+         AND qualification.rater_id IN (
+           SELECT rater_id FROM tokenless_rater_profiles WHERE principal_id=$1
+         )
+       ORDER BY qualification.created_at,qualification.qualification_id`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT assertion.assertion_id,assertion.provider_id,assertion.provider_namespace,
+              assertion.capabilities_json,assertion.assurance_validity_model,
+              assertion.evidence_verified_at,assertion.evidence_expires_at,
+              assertion.minimum_age_verified,assertion.document_issuing_country,
+              assertion.nationality_country,assertion.verified_residence_country,
+              assertion.status,assertion.created_at,assertion.updated_at,assertion.revoked_at
+       FROM tokenless_assurance_assertions assertion
+       WHERE assertion.rater_id IN (
+         SELECT rater_id FROM tokenless_rater_profiles WHERE principal_id=$1
+       )
+       ORDER BY assertion.created_at,assertion.assertion_id`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT assignment.assignment_id,assignment.workspace_id,assignment.project_id,
+              assignment.run_id,assignment.cohort_id,assignment.status,
+              assignment.qualification_provenance_json,assignment.assurance_snapshot_json,
+              assignment.assurance_snapshot_hash,assignment.blinding_json,
+              assignment.integrity_epoch_id,assignment.integrity_manifest_hash,
+              assignment.integrity_cluster_pseudonym,assignment.integrity_risk_band,
+              assignment.provider_subject_hashes_json,assignment.integrity_provenance_json,
+              assignment.integrity_provenance_hash,assignment.selection_batch_id,
+              assignment.created_at,assignment.accepted_at,assignment.updated_at
+       FROM tokenless_assurance_assignments assignment
+       WHERE assignment.source='rateloop_network'
+         AND assignment.rater_id IN (
+           SELECT rater_id FROM tokenless_rater_profiles WHERE principal_id=$1
+         )
+       ORDER BY assignment.created_at,assignment.assignment_id`,
+      [principalId],
+    ),
+    client.query(
+      `SELECT reviewer.project_id,reviewer.cohort_id,
+              reviewer.qualification_provenance_json,reviewer.qualification_expires_at,
+              reviewer.maximum_active_assignments,reviewer.active_reservations,
+              reviewer.status,reviewer.created_at,reviewer.updated_at
+       FROM tokenless_assurance_cohort_reviewers reviewer
+       JOIN tokenless_rater_profiles profile
+         ON profile.account_address=reviewer.reviewer_account_address
+        AND profile.principal_id=$1
+       WHERE reviewer.network_managed=true
+       ORDER BY reviewer.created_at,reviewer.project_id,reviewer.cohort_id`,
+      [principalId],
+    ),
   ]);
   const securityHead = await client.query(
     `SELECT last_sequence,last_digest FROM tokenless_security_audit_heads
@@ -710,6 +824,20 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
       { category: "review_activity", path: "reviewActivity" },
       { category: "network_settlement_status", path: "reviewActivity.networkSettlements" },
       { category: "hybrid_review_status", path: "reviewActivity.hybridReviews" },
+      {
+        category: "hybrid_network_reviewer_exclusions",
+        path: "networkReviewerData.hybridNetworkExclusions",
+      },
+      { category: "network_qualification_records", path: "networkReviewerData.qualifications" },
+      { category: "network_assurance_assertions", path: "networkReviewerData.assuranceAssertions" },
+      {
+        category: "network_assignment_snapshots",
+        path: "networkReviewerData.assignmentSnapshots",
+      },
+      {
+        category: "network_materialized_memberships",
+        path: "networkReviewerData.materializedMemberships",
+      },
       { category: "agent_registry_and_audit", path: "agentActivity" },
       { category: "oversight_attestations", path: "oversightAttestations" },
       { category: "public_question_media_and_quota", path: "publicQuestionMedia" },
@@ -737,7 +865,7 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
       {
         category: "network_reviewer_lookup_and_receipt_payloads",
         reason:
-          "The reviewer HMAC correlation handle and append-only receipt payloads are withheld as security and multi-party evidence. Their presence and receipt count are disclosed; they remain restricted for assignment integrity, fraud/dispute handling, and settlement evidence only for the applicable retention period.",
+          "Reviewer and cluster HMAC correlation handles, provider-subject hashes, and append-only receipt payloads are withheld as security and multi-party evidence. Their presence or count is disclosed where applicable; they remain restricted for assignment integrity, fraud/dispute handling, and settlement evidence only for the applicable retention period.",
       },
       {
         category: "public_chain_records",
@@ -746,7 +874,7 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
     ],
   };
   return {
-    schemaVersion: "rateloop.subject-export.v3",
+    schemaVersion: "rateloop.subject-export.v4",
     generatedFor: principalId,
     accountProfile: account.rows[0] ?? null,
     workspaceMemberships: workspaces.rows,
@@ -767,6 +895,49 @@ async function buildSubjectExport(client: PoolClient, principalId: string) {
       hybridReviews: hybridReviews.rows.map(row => ({
         ...row,
         receiptPayloads: "not_stored_hash_only_evidence",
+      })),
+    },
+    networkReviewerData: {
+      hybridNetworkExclusions: hybridNetworkExclusions.rows,
+      qualifications: networkQualifications.rows.map(row => ({
+        ...row,
+        cohort_ids_json: parseExportJson(row.cohort_ids_json),
+        qualification_keys_json: parseExportJson(row.qualification_keys_json),
+        qualification_value_json: parseExportJson(row.qualification_value_json),
+      })),
+      assuranceAssertions: networkAssertions.rows.map(row => ({
+        ...row,
+        capabilities_json: parseExportJson(row.capabilities_json),
+      })),
+      assignmentSnapshots: networkAssignmentSnapshots.rows.map(row => ({
+        assignmentId: row.assignment_id,
+        workspaceId: row.workspace_id,
+        projectId: row.project_id,
+        runId: row.run_id,
+        cohortId: row.cohort_id,
+        status: row.status,
+        qualificationProvenance: parseExportJson(row.qualification_provenance_json),
+        assuranceSnapshot: parseExportJson(row.assurance_snapshot_json),
+        assuranceSnapshotHash: row.assurance_snapshot_hash,
+        blinding: parseExportJson(row.blinding_json),
+        integrity: {
+          epochId: row.integrity_epoch_id,
+          manifestHash: row.integrity_manifest_hash,
+          reviewerLookup: "withheld_security_identifier",
+          clusterPseudonym: row.integrity_cluster_pseudonym === null ? null : "withheld_security_identifier",
+          riskBand: row.integrity_risk_band,
+          providerSubjectHashCount: securityIdentifierCount(row.provider_subject_hashes_json),
+          provenance: sanitizeNetworkIntegrityProvenance(row.integrity_provenance_json),
+          provenanceHash: row.integrity_provenance_hash,
+          selectionBatchId: row.selection_batch_id,
+        },
+        createdAt: row.created_at,
+        acceptedAt: row.accepted_at,
+        updatedAt: row.updated_at,
+      })),
+      materializedMemberships: networkMaterializedMemberships.rows.map(row => ({
+        ...row,
+        qualification_provenance_json: parseExportJson(row.qualification_provenance_json),
       })),
     },
     agentActivity: {
@@ -847,7 +1018,7 @@ export async function processSubjectRequestQueue(now = new Date(), requestedLimi
       await client.query(
         `INSERT INTO tokenless_subject_request_exports
          (request_id,principal_id,schema_version,payload_json,payload_hash,generated_at,delete_after)
-         VALUES ($1,$2,3,$3,$4,$5,$6)
+         VALUES ($1,$2,4,$3,$4,$5,$6)
          ON CONFLICT (request_id) DO NOTHING`,
         [requestId, principalId, payloadJson, payloadHash, now, deleteAfter],
       );

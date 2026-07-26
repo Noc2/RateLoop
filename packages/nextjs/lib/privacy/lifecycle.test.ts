@@ -1,4 +1,5 @@
 import {
+  __hybridNetworkExclusionSubjectExportSqlForTests,
   __hybridSubjectExportSqlForTests,
   createLegalHold,
   createSubjectRequest,
@@ -25,6 +26,8 @@ import { createProjectOwnerAssignment } from "~~/lib/tokenless/projectAccess";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
+const SUBJECT_NETWORK_SENTINEL = "subject-network-snapshot";
+const PEER_NETWORK_SENTINEL = "peer-network-record-must-not-export";
 
 class EmptyStore implements PrivateArtifactStore {
   async delete() {}
@@ -62,6 +65,218 @@ async function seedProject() {
   });
   await createProjectOwnerAssignment({ accountAddress: OWNER, projectId, workspaceId, now });
   return { projectId, workspaceId };
+}
+
+async function seedNetworkSubjectExportRecords(workspaceId: string, now: Date) {
+  const projectId = "project_subject_network_export";
+  const subjectWallet = OWNER;
+  const peerWallet = "0x2222222222222222222222222222222222222222";
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_projects
+          (project_id,workspace_id,name,data_classification,status,retention_days,created_by,created_at,updated_at)
+          VALUES (? ,?,'Network export project','confidential','active',30,?,?,?)`,
+    args: [projectId, workspaceId, OWNER, now, now],
+  });
+  await createProjectOwnerAssignment({ accountAddress: OWNER, projectId, workspaceId, now });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_rubrics
+          (rubric_id,project_id,version,prompt,failure_tags_json,rationale_json,
+           pass_rule_json,rubric_json,created_at)
+          VALUES ('rubric_subject_network_export',?,1,'Export test','[]','{}','{}','{}',?);
+          INSERT INTO tokenless_assurance_suites
+          (suite_id,project_id,name,version,status,rubric_id,rubric_version,manifest_hash,
+           manifest_json,frozen_at,created_at,updated_at)
+          VALUES ('suite_subject_network_export',?,'Export suite',1,'frozen',
+                  'rubric_subject_network_export',1,?,'{}',?,?,?);
+          INSERT INTO tokenless_assurance_audience_policies
+          (policy_id,project_id,version,reviewer_source,compensation,cohorts_json,selection,
+           fallbacks_json,required_qualifications_json,assurance_json,buyer_privacy_json,
+           legal_eligibility_required,policy_hash,policy_json,created_at)
+          VALUES ('policy_subject_network_export',?,1,'rateloop_network','paid','[]','randomized',
+                  '{"allowed":false,"sources":[]}','[]','{"requirements":[]}','{}',true,?,'{}',?);
+          INSERT INTO tokenless_assurance_runs
+          (run_id,project_id,suite_id,suite_version,audience_policy_id,audience_policy_version,
+           status,policy_hash,manifest_hash,manifest_json,created_by,created_at,updated_at,frozen_at,
+           completed_at)
+          VALUES ('run_subject_network_export',?,'suite_subject_network_export',1,
+                  'policy_subject_network_export',1,'completed',?,?,'{}',?,?,?,?,?);
+          INSERT INTO tokenless_assurance_cohorts
+          (cohort_id,project_id,name,source,selection,capacity,active_reservations,
+           qualification_rules_json,status,created_by,created_at,updated_at)
+          VALUES ('cohort_subject_network_export',?,'Network','rateloop_network','randomized',
+                  2,0,'[]','active',?,?,?);
+          INSERT INTO tokenless_assurance_run_subpanels
+          (subpanel_id,workspace_id,project_id,run_id,cohort_id,source,selection,target_count,
+           active_reservations,policy_id,policy_version,policy_hash,run_manifest_hash,created_at)
+          VALUES ('subpanel_subject_network_export',?,?,'run_subject_network_export',
+                  'cohort_subject_network_export','rateloop_network','randomized',2,0,
+                  'policy_subject_network_export',1,?,?,?)`,
+    args: [
+      projectId,
+      now,
+      projectId,
+      `sha256:${"1".repeat(64)}`,
+      now,
+      now,
+      now,
+      projectId,
+      `sha256:${"2".repeat(64)}`,
+      now,
+      projectId,
+      `sha256:${"2".repeat(64)}`,
+      `sha256:${"3".repeat(64)}`,
+      OWNER,
+      now,
+      now,
+      now,
+      now,
+      projectId,
+      OWNER,
+      now,
+      now,
+      workspaceId,
+      projectId,
+      `sha256:${"2".repeat(64)}`,
+      `sha256:${"3".repeat(64)}`,
+      now,
+    ],
+  });
+
+  for (const subject of [
+    {
+      assertionId: "assertion_subject_network_export",
+      bindingId: "binding_subject_network_export",
+      marker: SUBJECT_NETWORK_SENTINEL,
+      principalId: OWNER,
+      qualificationId: "qualification_subject_network_export",
+      raterId: "rater_subject_network_export",
+      wallet: subjectWallet,
+    },
+    {
+      assertionId: "assertion_peer_network_export",
+      bindingId: "binding_peer_network_export",
+      marker: PEER_NETWORK_SENTINEL,
+      principalId: "rlp_peer_network_export_00000001",
+      qualificationId: "qualification_peer_network_export",
+      raterId: "rater_peer_network_export",
+      wallet: peerWallet,
+    },
+  ]) {
+    await dbClient.execute({
+      sql: `INSERT INTO tokenless_principals (principal_id,status,created_at,updated_at)
+            VALUES (?,'active',?,?) ON CONFLICT (principal_id) DO NOTHING;
+            INSERT INTO tokenless_rater_profiles
+            (rater_id,principal_id,account_address,nullifier_seed_ciphertext,
+             nullifier_key_version,nullifier_key_domain,created_at,updated_at)
+            VALUES (?,?,?,'encrypted-nullifier','test-v1','vote_mapping',?,?);
+            INSERT INTO tokenless_reviewer_qualifications
+            (qualification_id,rater_id,reviewer_source,qualification_kind,cohort_ids_json,
+             qualification_keys_json,evidence_kind,qualification_value_json,verified_at,
+             expires_at,status,created_at,updated_at)
+            VALUES (?,?,'rateloop_network','cohort',? ,?,'legacy_migrated',?,?,
+                    ?,'active',?,?);
+            INSERT INTO tokenless_provider_subject_bindings
+            (binding_id,rater_id,provider_id,provider_namespace,subject_reference_hash,
+             subject_reference_scheme,status,bound_at,last_verified_at,created_at,updated_at)
+            VALUES (?,?,'provider:network-export','network:export',?,'legacy-sha256-v2',
+                    'active',?,?,?,?);
+            INSERT INTO tokenless_assurance_assertions
+            (assertion_id,rater_id,binding_id,provider_id,provider_namespace,
+             provider_assertion_hash,provider_assertion_id_hash,
+             provider_assertion_reference_scheme,capabilities_json,
+             provider_evidence_ciphertext,provider_evidence_key_version,
+             provider_evidence_key_domain,evidence_verified_at,evidence_expires_at,
+             minimum_age_verified,verified_residence_country,status,created_at,updated_at)
+            VALUES (?,?,?,'provider:network-export','network:export',?,?,'legacy-sha256-v2',
+                    '["unique_human"]',?,'test-v1','provider_evidence',?,?,18,'DE',
+                    'active',?,?);
+            INSERT INTO tokenless_assurance_cohort_reviewers
+            (project_id,cohort_id,reviewer_account_address,qualification_provenance_json,
+             maximum_active_assignments,active_reservations,status,network_managed,
+             created_by,created_at,updated_at)
+            VALUES (?,'cohort_subject_network_export',?,?,1,0,'active',true,?,?,?);
+            INSERT INTO tokenless_assurance_assignments
+            (assignment_id,workspace_id,project_id,run_id,subpanel_id,cohort_id,
+             reviewer_account_address,rater_id,payout_account_snapshot,source,selection,status,
+             confidentiality_terms_hash,qualification_provenance_json,assurance_snapshot_json,
+             assurance_snapshot_hash,blinding_json,paid_assignment,paid_eligibility_checked_at,
+             reservation_expires_at,lease_issuer_account_address,lease_state,created_at,updated_at,
+             integrity_reviewer_lookup,integrity_cluster_pseudonym,integrity_risk_band,
+             provider_subject_hashes_json,integrity_provenance_json,integrity_provenance_hash,
+             selection_batch_id)
+            VALUES (?,?,?,'run_subject_network_export','subpanel_subject_network_export',
+                    'cohort_subject_network_export',?,?,?,'rateloop_network','randomized','expired',
+                    ?,?,?,?,'{"mode":"blind"}',true,?,?,?,'expired',?,?,? ,?,'medium',?,?,?,?)`,
+      args: [
+        subject.principalId,
+        now,
+        now,
+        subject.raterId,
+        subject.principalId,
+        subject.wallet,
+        now,
+        now,
+        subject.qualificationId,
+        subject.raterId,
+        JSON.stringify(["cohort_subject_network_export"]),
+        JSON.stringify([subject.marker]),
+        JSON.stringify({ marker: subject.marker }),
+        now,
+        new Date(now.getTime() + 86_400_000),
+        now,
+        now,
+        subject.bindingId,
+        subject.raterId,
+        `sha256:${subject.marker === SUBJECT_NETWORK_SENTINEL ? "4".repeat(64) : "5".repeat(64)}`,
+        now,
+        now,
+        now,
+        now,
+        subject.assertionId,
+        subject.raterId,
+        subject.bindingId,
+        `sha256:${"6".repeat(64)}`,
+        `sha256:${subject.marker === SUBJECT_NETWORK_SENTINEL ? "7".repeat(64) : "8".repeat(64)}`,
+        `encrypted-provider-evidence:${subject.marker}`,
+        now,
+        new Date(now.getTime() + 86_400_000),
+        now,
+        now,
+        projectId,
+        subject.wallet,
+        JSON.stringify([{ marker: subject.marker }]),
+        OWNER,
+        now,
+        now,
+        `assignment_${subject.raterId}`,
+        workspaceId,
+        projectId,
+        subject.wallet,
+        subject.raterId,
+        subject.wallet,
+        `sha256:${"9".repeat(64)}`,
+        JSON.stringify([{ marker: subject.marker }]),
+        JSON.stringify({ assertions: [{ marker: subject.marker }] }),
+        `sha256:${"a".repeat(64)}`,
+        now,
+        new Date(now.getTime() + 3_600_000),
+        OWNER,
+        now,
+        now,
+        `hmac-sha256:lookup-v1:${subject.marker}`,
+        `hmac-sha256:cluster-v1:${subject.marker}`,
+        JSON.stringify([`hmac-sha256:provider-v1:${subject.marker}`]),
+        JSON.stringify({
+          clusterPseudonym: `hmac-sha256:cluster-v1:${subject.marker}`,
+          marker: subject.marker,
+          providerSubjectHashes: [`hmac-sha256:provider-v1:${subject.marker}`],
+          reviewerLookup: `hmac-sha256:lookup-v1:${subject.marker}`,
+        }),
+        `sha256:${"b".repeat(64)}`,
+        `batch_${subject.raterId}`,
+      ],
+    });
+  }
 }
 
 test("legal holds block deletion until an authorized release", async () => {
@@ -206,7 +421,7 @@ test("invalid completion transitions roll back their evidence insert", async () 
 });
 
 test("access and export requests produce a bounded authenticated download instead of a dead-end intake row", async () => {
-  await createWorkspace({ name: "Subject export", ownerAddress: OWNER });
+  const { workspaceId } = await createWorkspace({ name: "Subject export", ownerAddress: OWNER });
   const now = new Date("2026-07-15T12:00:00.000Z");
   await dbClient.execute({
     sql: `INSERT INTO tokenless_principals (principal_id,status,created_at,updated_at)
@@ -237,6 +452,7 @@ test("access and export requests produce a bounded authenticated download instea
                   'assignmentAvailable','assignment','private-source',?)`,
     args: [OWNER, now],
   });
+  await seedNetworkSubjectExportRecords(workspaceId, now);
   const created = await createSubjectRequest({
     identityAssurance: "better_auth:passkey",
     now,
@@ -244,7 +460,16 @@ test("access and export requests produce a bounded authenticated download instea
     requestType: "export",
     scope: { principal: true },
   });
-  assert.deepEqual(await processSubjectRequestQueue(now), { completed: 1, queued: 1 });
+  const queueResult = await processSubjectRequestQueue(now);
+  if (queueResult.completed !== 1) {
+    const failures = await dbClient.execute({
+      sql: `SELECT last_error_code,last_error_digest FROM tokenless_privacy_worker_failures
+            WHERE worker_kind='subject_request' AND work_item_key=?`,
+      args: [created.requestId],
+    });
+    assert.fail(`subject export worker failed: ${JSON.stringify(failures.rows)}`);
+  }
+  assert.deepEqual(queueResult, { completed: 1, queued: 1 });
   const listed = await listSubjectRequests(OWNER, now);
   assert.equal(listed[0]?.requestId, created.requestId);
   assert.equal(listed[0]?.status, "completed");
@@ -253,10 +478,10 @@ test("access and export requests produce a bounded authenticated download instea
     sql: "SELECT schema_version FROM tokenless_subject_request_exports WHERE request_id=?",
     args: [created.requestId],
   });
-  assert.equal(Number(persistedExport.rows[0]?.schema_version), 3);
+  assert.equal(Number(persistedExport.rows[0]?.schema_version), 4);
 
   const exported = await readSubjectRequestExport({ principalId: OWNER, requestId: created.requestId, now });
-  assert.equal(exported.data.schemaVersion, "rateloop.subject-export.v3");
+  assert.equal(exported.data.schemaVersion, "rateloop.subject-export.v4");
   const accountProfile = exported.data.accountProfile as Record<string, unknown>;
   assert.equal(accountProfile.primary_email, "subject@example.test");
   assert.equal(accountProfile.display_name, "Subject");
@@ -319,6 +544,27 @@ test("access and export requests produce a bounded authenticated download instea
   };
   assert.deepEqual(reviewActivity.networkSettlements, []);
   assert.deepEqual(reviewActivity.hybridReviews, []);
+  const networkReviewerData = exported.data.networkReviewerData as {
+    assuranceAssertions: Array<Record<string, unknown>>;
+    assignmentSnapshots: Array<Record<string, unknown>>;
+    hybridNetworkExclusions: Array<Record<string, unknown>>;
+    materializedMemberships: Array<Record<string, unknown>>;
+    qualifications: Array<Record<string, unknown>>;
+  };
+  assert.deepEqual(networkReviewerData.hybridNetworkExclusions, []);
+  assert.equal(networkReviewerData.qualifications.length, 1);
+  assert.equal(networkReviewerData.qualifications[0]?.qualification_id, "qualification_subject_network_export");
+  assert.equal(networkReviewerData.assuranceAssertions.length, 1);
+  assert.equal(networkReviewerData.assuranceAssertions[0]?.assertion_id, "assertion_subject_network_export");
+  assert.equal(networkReviewerData.assignmentSnapshots.length, 1);
+  assert.equal(networkReviewerData.assignmentSnapshots[0]?.assignmentId, "assignment_rater_subject_network_export");
+  assert.equal(networkReviewerData.materializedMemberships.length, 1);
+  const serializedExport = JSON.stringify(exported.data);
+  assert.match(serializedExport, new RegExp(SUBJECT_NETWORK_SENTINEL, "u"));
+  assert.doesNotMatch(serializedExport, new RegExp(PEER_NETWORK_SENTINEL, "u"));
+  assert.doesNotMatch(serializedExport, /encrypted-provider-evidence/u);
+  assert.doesNotMatch(serializedExport, /hmac-sha256:(lookup|cluster|provider)-v1/u);
+  assert.match(serializedExport, /withheld_security_identifier/u);
   const categoryManifest = exported.data.categoryManifest as {
     included: Array<{ category: string; path: string }>;
     withheld: Array<{ category: string; reason: string }>;
@@ -326,10 +572,15 @@ test("access and export requests produce a bounded authenticated download instea
   assert.ok(categoryManifest.included.some(item => item.category === "account_profile"));
   assert.ok(categoryManifest.included.some(item => item.category === "network_settlement_status"));
   assert.ok(categoryManifest.included.some(item => item.category === "hybrid_review_status"));
+  assert.ok(categoryManifest.included.some(item => item.category === "hybrid_network_reviewer_exclusions"));
+  assert.ok(categoryManifest.included.some(item => item.category === "network_qualification_records"));
+  assert.ok(categoryManifest.included.some(item => item.category === "network_assurance_assertions"));
+  assert.ok(categoryManifest.included.some(item => item.category === "network_assignment_snapshots"));
+  assert.ok(categoryManifest.included.some(item => item.category === "network_materialized_memberships"));
   const networkRetention = categoryManifest.withheld.find(
     item => item.category === "network_reviewer_lookup_and_receipt_payloads",
   );
-  assert.match(String(networkRetention?.reason), /reviewer HMAC correlation handle/u);
+  assert.match(String(networkRetention?.reason), /Reviewer and cluster HMAC correlation handles/u);
   assert.match(String(networkRetention?.reason), /append-only receipt payloads/u);
   assert.doesNotMatch(JSON.stringify(exported.data), /integrity_reviewer_lookup|receipt_json/u);
   await assert.rejects(
@@ -460,6 +711,40 @@ test("hybrid subject export reveals both cohorts to owners but only the exact as
 
   assert.deepEqual(await query("principal_cross_subject"), []);
   await pool.end();
+});
+
+test("hybrid network exclusions export only the exact reviewer subject", async () => {
+  const database = newDb();
+  database.public.none(`
+    CREATE TABLE tokenless_hybrid_network_reviewer_exclusions (
+      hybrid_operation_id text NOT NULL,
+      reviewer_principal_id text NOT NULL,
+      payout_account text NOT NULL,
+      exclusion_hash text NOT NULL,
+      created_at timestamptz NOT NULL
+    );
+    INSERT INTO tokenless_hybrid_network_reviewer_exclusions VALUES
+      ('hybrid_subject','rlp_subject_export_0001',
+       '0x1111111111111111111111111111111111111111',
+       'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+       '2026-07-15T12:00:00Z'),
+      ('hybrid_peer','rlp_peer_export_00000001',
+       '0x2222222222222222222222222222222222222222',
+       'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+       '2026-07-15T12:01:00Z');
+  `);
+  const adapter = database.adapters.createPg();
+  const pool = new adapter.Pool();
+  try {
+    const rows = (await pool.query(__hybridNetworkExclusionSubjectExportSqlForTests, ["rlp_subject_export_0001"])).rows;
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]?.hybrid_operation_id, "hybrid_subject");
+    assert.equal(rows[0]?.reviewer_principal_id, undefined);
+    assert.equal(rows[0]?.payout_account, "0x1111111111111111111111111111111111111111");
+    assert.doesNotMatch(JSON.stringify(rows), /2222222222222222222222222222222222222222|hybrid_peer/u);
+  } finally {
+    await pool.end();
+  }
 });
 
 test("subject export includes only the principal identity audit scope and fails closed on chain corruption", async () => {
