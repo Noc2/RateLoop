@@ -518,18 +518,16 @@ async function collectAggregationInputs(
   responses: QueryRow[],
   policy: Record<string, any>,
 ) {
-  const [subpanelResult, assignmentResult] = await Promise.all([
-    client.query(
-      `SELECT source, SUM(target_count) AS target_count
-       FROM tokenless_assurance_run_subpanels WHERE run_id = $1 GROUP BY source ORDER BY source ASC`,
-      [runId],
-    ),
-    client.query(
-      `SELECT source, reviewer_account_address, paid_assignment
-       FROM tokenless_assurance_assignments WHERE run_id = $1`,
-      [runId],
-    ),
-  ]);
+  const subpanelResult = await client.query(
+    `SELECT source, SUM(target_count) AS target_count
+     FROM tokenless_assurance_run_subpanels WHERE run_id = $1 GROUP BY source ORDER BY source ASC`,
+    [runId],
+  );
+  const assignmentResult = await client.query(
+    `SELECT source, reviewer_account_address, paid_assignment
+     FROM tokenless_assurance_assignments WHERE run_id = $1`,
+    [runId],
+  );
   const reviewerCounts = new Map<
     ReviewerSource,
     {
@@ -1121,25 +1119,23 @@ export async function generateAssuranceEvidencePacket(input: {
       return packet;
     }
     const frozen = requireFrozenSource(row);
-    const [caseResult, responseResult, goldResult] = await Promise.all([
-      client.query(
-        `SELECT case_id, position, content_id, admission_policy_hash, deterministic_checks_hash,
-                deterministic_checks_status, round_id, round_status
-         FROM tokenless_assurance_run_cases WHERE run_id = $1 ORDER BY position ASC`,
-        [input.runId],
-      ),
-      client.query(
-        `SELECT case_id, reviewer_key, reviewer_source, choice, failure_tag_keys_json, rationale_ciphertext,
-                rationale_key_ref, qualification_keys_json, response_digest, settlement_reference, validity,
-                submitted_at
-         FROM tokenless_assurance_responses WHERE run_id = $1 ORDER BY response_id ASC`,
-        [input.runId],
-      ),
-      client.query(
-        `SELECT case_id FROM tokenless_assurance_run_gold_items WHERE run_id=$1 ORDER BY injection_ordinal`,
-        [input.runId],
-      ),
-    ]);
+    const caseResult = await client.query(
+      `SELECT case_id, position, content_id, admission_policy_hash, deterministic_checks_hash,
+              deterministic_checks_status, round_id, round_status
+       FROM tokenless_assurance_run_cases WHERE run_id = $1 ORDER BY position ASC`,
+      [input.runId],
+    );
+    const responseResult = await client.query(
+      `SELECT case_id, reviewer_key, reviewer_source, choice, failure_tag_keys_json, rationale_ciphertext,
+              rationale_key_ref, qualification_keys_json, response_digest, settlement_reference, validity,
+              submitted_at
+       FROM tokenless_assurance_responses WHERE run_id = $1 ORDER BY response_id ASC`,
+      [input.runId],
+    );
+    const goldResult = await client.query(
+      `SELECT case_id FROM tokenless_assurance_run_gold_items WHERE run_id=$1 ORDER BY injection_ordinal`,
+      [input.runId],
+    );
     if (caseResult.rows.length === 0) evidenceError("The completed run has no frozen cases.");
     const goldCaseIds = new Set(goldResult.rows.map(value => rowString(value as QueryRow, "case_id")!));
     const aggregationCases = caseResult.rows.filter(
@@ -1149,10 +1145,20 @@ export async function generateAssuranceEvidencePacket(input: {
       value => !goldCaseIds.has(rowString(value as QueryRow, "case_id")!),
     );
     if (aggregationCases.length === 0) evidenceError("The completed run has no customer-decision cases.");
-    const [counts, decisionCounts] = await Promise.all([
-      collectAggregationInputs(client, input.runId, caseResult.rows, responseResult.rows, frozen.policy),
-      collectAggregationInputs(client, input.runId, aggregationCases, aggregationResponses, frozen.policy),
-    ]);
+    const counts = await collectAggregationInputs(
+      client,
+      input.runId,
+      caseResult.rows,
+      responseResult.rows,
+      frozen.policy,
+    );
+    const decisionCounts = await collectAggregationInputs(
+      client,
+      input.runId,
+      aggregationCases,
+      aggregationResponses,
+      frozen.policy,
+    );
     const persistedContext = await persistedReviewContext(client, {
       workspaceId: input.workspaceId,
       runId: input.runId,

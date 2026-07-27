@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
+import { type DatabaseResources, __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { exportAdaptiveCoverage } from "~~/lib/tokenless/adaptiveCoverageExport";
 import { createWorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
@@ -824,6 +824,76 @@ test("evidence derives private aggregates, verifies only against trusted pins, a
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("evidence generation serializes queries on its transaction client", async () => {
+  const resources = createMemoryDatabaseResources();
+  __setDatabaseResourcesForTests(resources);
+  const fixture = await seedEvidenceFixture({
+    compensation: "unpaid",
+    minimumAggregationSize: 2,
+    sources: [
+      {
+        source: "customer_invited",
+        targetCount: 2,
+        responses: [
+          { choice: "candidate", validity: "valid" },
+          { choice: "candidate", validity: "valid" },
+        ],
+      },
+    ],
+  });
+  let activeQueries = 0;
+  let maximumConcurrentQueries = 0;
+  let overlappingQueryAttempted = false;
+  const guardedPool = new Proxy(resources.pool, {
+    get(target, property) {
+      if (property !== "connect") {
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      }
+      return async () => {
+        const client = await target.connect();
+        const query = client.query.bind(client) as (text: unknown, values?: unknown) => Promise<unknown>;
+        return new Proxy(client, {
+          get(clientTarget, clientProperty) {
+            if (clientProperty !== "query") {
+              const value = Reflect.get(clientTarget, clientProperty, clientTarget);
+              return typeof value === "function" ? value.bind(clientTarget) : value;
+            }
+            return async (text: unknown, values?: unknown) => {
+              if (activeQueries > 0) {
+                overlappingQueryAttempted = true;
+                throw new Error("A transaction client query overlapped another query.");
+              }
+              activeQueries += 1;
+              maximumConcurrentQueries = Math.max(maximumConcurrentQueries, activeQueries);
+              await new Promise<void>(resolve => setImmediate(resolve));
+              try {
+                return await query(text, values);
+              } finally {
+                activeQueries -= 1;
+              }
+            };
+          },
+        });
+      };
+    },
+  });
+  __setDatabaseResourcesForTests({ ...resources, pool: guardedPool } as DatabaseResources);
+
+  const signer = generateKeyPairSync("ed25519");
+  await generateAssuranceEvidencePacket({
+    accountAddress: OWNER,
+    workspaceId: fixture.workspaceId,
+    runId: fixture.runId,
+    now: NOW,
+    signer: { privateKey: signer.privateKey },
+    tenantCommitmentKey: TENANT_KEY,
+  });
+
+  assert.equal(overlappingQueryAttempted, false);
+  assert.equal(maximumConcurrentQueries, 1);
 });
 
 test("evidence omits qualification labels held by fewer reviewers than the privacy threshold", async () => {
