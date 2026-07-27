@@ -1,60 +1,57 @@
 import { HOSTED_AUTH_ROLES, type HostedAuthConfig, type HostedAuthRole, readHostedAuthConfig } from "./config";
 import { ResendReceivingInbox, redactHostedAuthSecrets } from "./inbox";
 import type { Browser, BrowserContext, Page } from "@playwright/test";
-import { randomUUID } from "node:crypto";
-import { chmod, mkdir, rename, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
 
 type HarnessOptions = {
   environment?: Record<string, string | undefined>;
   fetchImpl?: typeof fetch;
-  packageRoot?: string;
 };
 
 type CleanupOptions = {
-  removeStorageStates?: boolean;
   signOut?: boolean;
 };
 
 type IdentityRuntime = {
   authenticated: boolean;
   context: BrowserContext;
+  session: HostedBrowserSession | null;
 };
 
-type StorageState = Awaited<ReturnType<BrowserContext["storageState"]>>;
 type HostedBrowserSession = {
   authenticated: true;
+  authProvider: "better_auth:email-otp";
   principalId: string;
 };
 
-async function persistStorageState(statePath: string, state: StorageState) {
-  const directory = path.dirname(statePath);
-  await mkdir(directory, { mode: 0o700, recursive: true });
-  await chmod(directory, 0o700);
-  const temporaryPath = path.join(directory, `.${path.basename(statePath)}.${randomUUID()}.tmp`);
-  try {
-    await writeFile(temporaryPath, `${JSON.stringify(state, null, 2)}\n`, {
-      encoding: "utf8",
-      flag: "wx",
-      mode: 0o600,
-    });
-    await rename(temporaryPath, statePath);
-    await chmod(statePath, 0o600);
-  } finally {
-    await rm(temporaryPath, { force: true });
-  }
-}
-
-async function assertAuthenticatedSession(page: Page) {
+async function assertAuthenticatedSession(page: Page): Promise<HostedBrowserSession> {
   const result = await page.evaluate(async () => {
     const response = await fetch("/api/auth/session", { cache: "no-store", credentials: "same-origin" });
-    if (!response.ok) return { authenticated: false, status: response.status };
-    const body = (await response.json()) as { authenticated?: unknown };
-    return { authenticated: body.authenticated === true, status: response.status };
+    if (!response.ok) return { authenticated: false, authProvider: null, principalId: null, status: response.status };
+    const body = (await response.json()) as {
+      authenticated?: unknown;
+      authProvider?: unknown;
+      principalId?: unknown;
+    };
+    return {
+      authenticated: body.authenticated === true,
+      authProvider: body.authProvider,
+      principalId: body.principalId,
+      status: response.status,
+    };
   });
-  if (!result.authenticated) {
+  if (
+    !result.authenticated ||
+    result.authProvider !== "better_auth:email-otp" ||
+    typeof result.principalId !== "string" ||
+    !result.principalId
+  ) {
     throw new Error(`The hosted sign-in UI did not establish a RateLoop session (status ${result.status}).`);
   }
+  return {
+    authenticated: true,
+    authProvider: "better_auth:email-otp",
+    principalId: result.principalId,
+  };
 }
 
 export class HostedAuthHarness {
@@ -74,7 +71,7 @@ export class HostedAuthHarness {
   }
 
   static async create(browser: Browser, options: HarnessOptions = {}) {
-    const config = readHostedAuthConfig(options.environment, { packageRoot: options.packageRoot });
+    const config = readHostedAuthConfig(options.environment);
     const runStartedAt = new Date();
     const created: BrowserContext[] = [];
     try {
@@ -92,7 +89,7 @@ export class HostedAuthHarness {
       throw error;
     }
     const runtimes = Object.fromEntries(
-      HOSTED_AUTH_ROLES.map((role, index) => [role, { authenticated: false, context: created[index]! }]),
+      HOSTED_AUTH_ROLES.map((role, index) => [role, { authenticated: false, context: created[index]!, session: null }]),
     ) as Record<HostedAuthRole, IdentityRuntime>;
     const inbox = new ResendReceivingInbox(
       {
@@ -111,6 +108,8 @@ export class HostedAuthHarness {
   }
 
   async session(role: HostedAuthRole): Promise<HostedBrowserSession> {
+    const current = this.runtimes[role].session;
+    if (current) return current;
     const response = await this.runtimes[role].context.request.get("/api/auth/session", {
       failOnStatusCode: false,
       headers: { "Cache-Control": "no-store" },
@@ -118,15 +117,20 @@ export class HostedAuthHarness {
     if (!response.ok()) {
       throw new Error(`The ${role} RateLoop session returned status ${response.status()}.`);
     }
-    const body = (await response.json()) as { authenticated?: unknown; principalId?: unknown };
-    if (body.authenticated !== true || typeof body.principalId !== "string" || !body.principalId) {
+    const body = (await response.json()) as {
+      authenticated?: unknown;
+      authProvider?: unknown;
+      principalId?: unknown;
+    };
+    if (
+      body.authenticated !== true ||
+      body.authProvider !== "better_auth:email-otp" ||
+      typeof body.principalId !== "string" ||
+      !body.principalId
+    ) {
       throw new Error(`The ${role} RateLoop session is not authenticated.`);
     }
-    return { authenticated: true, principalId: body.principalId };
-  }
-
-  storageStatePath(role: HostedAuthRole) {
-    return this.config.accounts[role].storageStatePath;
+    return { authenticated: true, authProvider: "better_auth:email-otp", principalId: body.principalId };
   }
 
   private sensitiveValues() {
@@ -163,10 +167,9 @@ export class HostedAuthHarness {
       await finish.waitFor({ state: "visible" });
       await finish.click();
       await page.waitForURL(url => url.origin === this.config.baseUrl && url.pathname !== "/sign-in");
-      await assertAuthenticatedSession(page);
+      runtime.session = await assertAuthenticatedSession(page);
       runtime.authenticated = true;
-      await persistStorageState(account.storageStatePath, await runtime.context.storageState());
-      return { role, storageStatePath: account.storageStatePath };
+      return { role };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Hosted authentication failed.";
       throw new Error(redactHostedAuthSecrets(message, this.sensitiveValues()));
@@ -176,8 +179,12 @@ export class HostedAuthHarness {
   }
 
   async signInAll() {
-    const results: Array<{ role: HostedAuthRole; storageStatePath: string }> = [];
+    const results: Array<{ role: HostedAuthRole }> = [];
     for (const role of HOSTED_AUTH_ROLES) results.push(await this.signIn(role));
+    const principals = await Promise.all(HOSTED_AUTH_ROLES.map(role => this.session(role)));
+    if (new Set(principals.map(session => session.principalId)).size !== HOSTED_AUTH_ROLES.length) {
+      throw new Error("Hosted authentication roles must resolve to three distinct RateLoop principals.");
+    }
     return results;
   }
 
@@ -198,6 +205,7 @@ export class HostedAuthHarness {
       });
       if (!result.ok) throw new Error(`Hosted sign-out failed with status ${result.status}.`);
       runtime.authenticated = false;
+      runtime.session = null;
       await runtime.context.clearCookies();
     } finally {
       await page.close();
@@ -206,7 +214,6 @@ export class HostedAuthHarness {
 
   async cleanup(options: CleanupOptions = {}) {
     const signOut = options.signOut ?? true;
-    const removeStorageStates = options.removeStorageStates ?? true;
     const failures: string[] = [];
     if (signOut) {
       for (const role of HOSTED_AUTH_ROLES) {
@@ -219,11 +226,6 @@ export class HostedAuthHarness {
       }
     }
     await Promise.allSettled(HOSTED_AUTH_ROLES.map(role => this.runtimes[role].context.close()));
-    if (removeStorageStates) {
-      await Promise.allSettled(
-        HOSTED_AUTH_ROLES.map(role => rm(this.config.accounts[role].storageStatePath, { force: true })),
-      );
-    }
     if (failures.length > 0) {
       throw new Error(redactHostedAuthSecrets(failures.join(" "), this.sensitiveValues()));
     }

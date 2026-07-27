@@ -1,6 +1,5 @@
 import { HOSTED_AUTH_ENV, normalizeHostedAuthMailbox, readHostedAuthConfig } from "./config";
 import assert from "node:assert/strict";
-import path from "node:path";
 import test from "node:test";
 
 function validEnvironment() {
@@ -16,8 +15,7 @@ function validEnvironment() {
 }
 
 test("hosted auth config requires three exact mailboxes and isolated Vercel origin", () => {
-  const packageRoot = "/tmp/rateloop-nextjs";
-  const config = readHostedAuthConfig(validEnvironment(), { packageRoot });
+  const config = readHostedAuthConfig(validEnvironment());
 
   assert.equal(config.baseUrl, "https://rateloop-tokenless.vercel.app");
   assert.deepEqual(
@@ -27,10 +25,6 @@ test("hosted auth config requires three exact mailboxes and isolated Vercel orig
       reviewerOne: "reviewer-one@auth-harness.example",
       reviewerTwo: "reviewer-two@auth-harness.example",
     },
-  );
-  assert.equal(
-    config.accounts.owner.storageStatePath,
-    path.join(packageRoot, "test-results/hosted-auth/owner.storage.json"),
   );
   assert.equal(config.inbox.pollIntervalMs, 2_000);
   assert.equal(config.inbox.pollTimeoutMs, 90_000);

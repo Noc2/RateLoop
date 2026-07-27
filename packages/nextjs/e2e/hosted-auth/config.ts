@@ -1,6 +1,3 @@
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
 export const HOSTED_AUTH_ENV = {
   baseUrl: "E2E_BASE_URL",
   inboxProvider: "TOKENLESS_E2E_INBOX_PROVIDER",
@@ -11,7 +8,6 @@ export const HOSTED_AUTH_ENV = {
   resendApiKey: "TOKENLESS_E2E_RESEND_RECEIVING_API_KEY",
   reviewerOneEmail: "TOKENLESS_E2E_REVIEWER_ONE_EMAIL",
   reviewerTwoEmail: "TOKENLESS_E2E_REVIEWER_TWO_EMAIL",
-  storageStateDirectory: "TOKENLESS_E2E_STORAGE_STATE_DIRECTORY",
 } as const;
 
 export const HOSTED_AUTH_ROLES = ["owner", "reviewerOne", "reviewerTwo"] as const;
@@ -22,7 +18,6 @@ type HostedAuthEnvironment = Record<string, string | undefined>;
 export type HostedAuthAccount = {
   email: string;
   role: HostedAuthRole;
-  storageStatePath: string;
 };
 
 export type HostedAuthConfig = {
@@ -35,10 +30,8 @@ export type HostedAuthConfig = {
     pollTimeoutMs: number;
     provider: "resend";
   };
-  storageStateDirectory: string;
 };
 
-const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const TOKENLESS_HOSTED_ORIGIN = "https://rateloop-tokenless.vercel.app";
 const EMAIL_PATTERN =
   /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/u;
@@ -133,15 +126,7 @@ function hostedBaseUrl(environment: HostedAuthEnvironment) {
   return parsed.origin;
 }
 
-function stateDirectory(environment: HostedAuthEnvironment, packageRoot: string) {
-  const configured = environment[HOSTED_AUTH_ENV.storageStateDirectory]?.trim();
-  return configured ? path.resolve(packageRoot, configured) : path.join(packageRoot, "test-results", "hosted-auth");
-}
-
-export function readHostedAuthConfig(
-  environment: HostedAuthEnvironment = process.env,
-  options: { packageRoot?: string } = {},
-): HostedAuthConfig {
+export function readHostedAuthConfig(environment: HostedAuthEnvironment = process.env): HostedAuthConfig {
   const baseUrl = hostedBaseUrl(environment);
   const provider = required(environment, HOSTED_AUTH_ENV.inboxProvider);
   if (provider !== "resend") {
@@ -175,18 +160,16 @@ export function readHostedAuthConfig(
     throw new Error(`${HOSTED_AUTH_ENV.resendApiKey} is not a valid Resend API key.`);
   }
 
-  const storageStateDirectory = stateDirectory(environment, options.packageRoot ?? PACKAGE_ROOT);
-  const account = (role: HostedAuthRole, email: string, filename: string): HostedAuthAccount => ({
+  const account = (role: HostedAuthRole, email: string): HostedAuthAccount => ({
     email,
     role,
-    storageStatePath: path.join(storageStateDirectory, filename),
   });
 
   return {
     accounts: {
-      owner: account("owner", ownerEmail, "owner.storage.json"),
-      reviewerOne: account("reviewerOne", reviewerOneEmail, "reviewer-one.storage.json"),
-      reviewerTwo: account("reviewerTwo", reviewerTwoEmail, "reviewer-two.storage.json"),
+      owner: account("owner", ownerEmail),
+      reviewerOne: account("reviewerOne", reviewerOneEmail),
+      reviewerTwo: account("reviewerTwo", reviewerTwoEmail),
     },
     baseUrl,
     inbox: {
@@ -204,6 +187,5 @@ export function readHostedAuthConfig(
       }),
       provider: "resend",
     },
-    storageStateDirectory,
   };
 }

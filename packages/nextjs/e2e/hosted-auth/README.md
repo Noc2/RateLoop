@@ -29,7 +29,6 @@ Optional polling and output variables are:
 ```text
 TOKENLESS_E2E_INBOX_POLL_INTERVAL_MS=2000
 TOKENLESS_E2E_INBOX_POLL_TIMEOUT_MS=90000
-TOKENLESS_E2E_STORAGE_STATE_DIRECTORY=test-results/hosted-auth
 ```
 
 The recipient mailboxes must be distinct dedicated addresses. Plus-addresses,
@@ -57,8 +56,7 @@ try {
 }
 ```
 
-Storage states are written under the ignored `test-results/` tree with
-directory mode `0700` and file mode `0600`. CI never uploads that tree.
-`cleanup()` signs out each established RateLoop session, closes all contexts,
-and deletes those files by default. Never print the returned OTP, storage
-state, receiving API key, or mailbox values.
+All three authenticated states stay only in their in-memory browser contexts.
+`cleanup()` signs out each established RateLoop session and closes all
+contexts. Never print the returned OTP, receiving API key, mailbox values, or
+browser state.
