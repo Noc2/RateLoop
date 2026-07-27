@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHash, timingSafeEqual } from "node:crypto";
 import {
   getTokenlessModerationState,
   moderateTokenlessOperation,
@@ -13,7 +14,11 @@ export const runtime = "nodejs";
 function authorize(request: NextRequest) {
   const token = process.env.TOKENLESS_PIPELINE_TOKEN?.trim();
   if (!token) throw new TokenlessServiceError("Moderation pipeline is not configured.", 503, "pipeline_unavailable");
-  if (request.headers.get("authorization") !== `Bearer ${token}`) {
+  const expected = createHash("sha256").update(`Bearer ${token}`).digest();
+  const supplied = createHash("sha256")
+    .update(request.headers.get("authorization") ?? "")
+    .digest();
+  if (!timingSafeEqual(supplied, expected)) {
     throw new TokenlessServiceError("Invalid pipeline credential.", 401, "invalid_pipeline_credential");
   }
 }
