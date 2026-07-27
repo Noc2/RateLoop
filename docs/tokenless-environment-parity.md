@@ -98,6 +98,10 @@ Next.js:
   encryption, rate-limit, and session key, server-only, with no `NEXT_PUBLIC_` variant
 - explicit `TOKENLESS_SUBSCRIPTIONS_ENABLED`; when true, server-only `STRIPE_SECRET_KEY`,
   `STRIPE_WEBHOOK_SECRET`, and `STRIPE_EARLY_ACCESS_MONTHLY_PRICE_ID`
+- optional `TOKENLESS_DEMO_BOOKING_URL` for the public "Book demo" action. HTTPS only; an unset or unusable value
+  keeps the enterprise mailto. The scheduler is linked, never embedded, so it needs no Content-Security-Policy
+  entry. It is a public booking page whose provider collects the prospect's name and email under its own terms, so
+  changing the provider means revisiting the privacy notice's demo-scheduling section.
 - dedicated `TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY` (32-byte base64url or hex) and
   `TOKENLESS_ADAPTIVE_REVIEW_SAMPLER_KEY_VERSION`, with no public key variant
 
