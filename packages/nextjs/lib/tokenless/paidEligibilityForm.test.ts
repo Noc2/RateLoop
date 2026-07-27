@@ -53,3 +53,32 @@ test("residence is answered first and only EU residence includes the full DAC7 p
   assert.deepEqual(nonEu.screeningSubject, { fullName: "Ada Rater", birthDate: "1990-01-01" });
   assert.equal(nonEu.workspaceId, "workspace_1");
 });
+
+test("the server DAC7 policy decides collection, so a non-EU resident is not left unable to comply", () => {
+  // TOKENLESS_DAC7_POLICY=all. Under a hardcoded EU list the form omits `dac7` and never renders
+  // the fields, so the server's `dac7_required` rejection is unfixable by the person submitting.
+  const allPolicy = { mode: "all" as const, countries: [] };
+  assert.equal(collectsDac7Details("US", allPolicy), true);
+  const collected = buildPaidEligibilityFormPayload({
+    dac7Policy: allPolicy,
+    form: { ...base, declaredResidenceCountry: "US", taxResidenceCountry: "US" },
+    payoutAccount: "0x1111111111111111111111111111111111111111",
+    providerState: "state",
+    reviewerSource: "rateloop_network",
+    workspaceId: "",
+  });
+  assert.equal("dac7" in collected, true);
+  assert.equal(collected.dac7?.streetAddress, base.streetAddress);
+
+  // TOKENLESS_DAC7_POLICY=configured with a non-EU entry.
+  const configured = { mode: "countries" as const, countries: ["GB", "NO"] };
+  assert.equal(collectsDac7Details("NO", configured), true);
+  assert.equal(collectsDac7Details("DE", configured), false);
+
+  // An EU policy still behaves as before, and an absent policy falls back to the EU set.
+  const euPolicy = { mode: "countries" as const, countries: ["DE", "FR"] };
+  assert.equal(collectsDac7Details("FR", euPolicy), true);
+  assert.equal(collectsDac7Details("US", euPolicy), false);
+  assert.equal(collectsDac7Details("FR", null), true);
+  assert.equal(collectsDac7Details("US", null), false);
+});

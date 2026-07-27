@@ -6,6 +6,7 @@ import { ChoiceInput, Field, SelectField } from "~~/components/tokenless/forms/F
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { readBrowserSession } from "~~/lib/auth/client";
 import {
+  type Dac7FormPolicy,
   type PaidEligibilityFormValues,
   buildPaidEligibilityFormPayload,
   collectsDac7Details,
@@ -19,6 +20,7 @@ type EligibilityState = {
   assuranceProviders?: string[];
   evidenceExpiresAt?: string;
   dac7Status?: string;
+  dac7Policy?: Dac7FormPolicy | null;
   screeningStatus?: string;
   payoutAccount?: string;
 };
@@ -148,6 +150,7 @@ export function PaidEligibilityClient() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(
             buildPaidEligibilityFormPayload({
+              dac7Policy: state?.dac7Policy ?? null,
               form,
               payoutAccount: accountAddress,
               providerState,
@@ -204,7 +207,7 @@ export function PaidEligibilityClient() {
 
   const eligible = state?.status === "eligible";
   const residenceComplete = normalizedResidenceCountry(form.declaredResidenceCountry) !== null;
-  const collectDac7 = collectsDac7Details(form.declaredResidenceCountry);
+  const collectDac7 = collectsDac7Details(form.declaredResidenceCountry, state?.dac7Policy ?? null);
 
   return (
     <div className="space-y-5">

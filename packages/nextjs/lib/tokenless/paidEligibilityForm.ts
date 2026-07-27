@@ -48,12 +48,24 @@ export function normalizedResidenceCountry(value: string) {
   return /^[A-Z]{2}$/u.test(country) ? country : null;
 }
 
-export function collectsDac7Details(value: string) {
+export type Dac7FormPolicy = { mode: "all" | "countries"; countries: string[] };
+
+/**
+ * The server owns the DAC7 policy (TOKENLESS_DAC7_POLICY). The form must follow it: rendering
+ * against a hardcoded EU list omits `dac7` for residents the server then rejects as
+ * `dac7_required`, with no field on screen for them to fix it. The EU set below is only a
+ * fallback for a response that predates the policy field.
+ */
+export function collectsDac7Details(value: string, policy?: Dac7FormPolicy | null) {
   const country = normalizedResidenceCountry(value);
-  return country !== null && EU_DAC7_COUNTRIES.has(country);
+  if (country === null) return false;
+  if (!policy) return EU_DAC7_COUNTRIES.has(country);
+  if (policy.mode === "all") return true;
+  return policy.countries.includes(country);
 }
 
 export function buildPaidEligibilityFormPayload(input: {
+  dac7Policy?: Dac7FormPolicy | null;
   form: PaidEligibilityFormValues;
   payoutAccount: string;
   providerState: string | null;
@@ -62,7 +74,7 @@ export function buildPaidEligibilityFormPayload(input: {
 }) {
   const declaredResidenceCountry = normalizedResidenceCountry(input.form.declaredResidenceCountry);
   if (!declaredResidenceCountry) throw new Error("Residence country is incomplete.");
-  const collectDac7 = collectsDac7Details(declaredResidenceCountry);
+  const collectDac7 = collectsDac7Details(declaredResidenceCountry, input.dac7Policy);
   const taxResidenceCountry = collectDac7
     ? normalizedResidenceCountry(input.form.taxResidenceCountry)
     : declaredResidenceCountry;

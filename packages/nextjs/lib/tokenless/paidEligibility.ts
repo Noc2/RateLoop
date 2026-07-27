@@ -897,6 +897,34 @@ const EU_COUNTRIES = new Set([
   "SK",
 ]);
 
+export type Dac7CollectionPolicy = { mode: "all" | "countries"; countries: string[] };
+
+/**
+ * The browser form decides which DAC7 fields to render before it can ask the server. It must use
+ * this policy rather than its own country list: under `all`, or `configured` with a non-EU entry,
+ * a hardcoded EU set makes the form omit `dac7` for a resident the server then rejects as
+ * `dac7_required` - with no way for that person to supply what is missing.
+ */
+export function dac7CollectionPolicy(): Dac7CollectionPolicy {
+  const policy = process.env.TOKENLESS_DAC7_POLICY?.trim().toLowerCase();
+  if (policy === "all") return { mode: "all", countries: [] };
+  if (policy === "eu") return { mode: "countries", countries: [...EU_COUNTRIES].sort() };
+  if (policy === "configured") {
+    const configured = [
+      ...new Set(
+        (process.env.TOKENLESS_DAC7_REQUIRED_COUNTRIES ?? "")
+          .split(",")
+          .map(value => value.trim().toUpperCase())
+          .filter(value => COUNTRY.test(value)),
+      ),
+    ].sort();
+    if (configured.length === 0)
+      throw new TokenlessServiceError("DAC7 policy is not configured.", 503, "policy_unavailable");
+    return { mode: "countries", countries: configured };
+  }
+  throw new TokenlessServiceError("DAC7 policy is not configured.", 503, "policy_unavailable");
+}
+
 function requiresDac7(country: string) {
   if (dac7PolicyOverride) return dac7PolicyOverride(country);
   const policy = process.env.TOKENLESS_DAC7_POLICY?.trim().toLowerCase();
@@ -1902,9 +1930,10 @@ export async function getPaidEligibility(principalId: string, now = new Date()) 
       args: [principalId, now],
     });
     const decision = declined.rows[0] as QueryRow | undefined;
-    if (!decision) return { status: "not_started" };
+    if (!decision) return { status: "not_started", dac7Policy: dac7CollectionPolicy() };
     return {
       status: "declined",
+      dac7Policy: dac7CollectionPolicy(),
       decisionId: stringValue(decision, "decision_id"),
       reviewerSource: stringValue(decision, "reviewer_source"),
       workspaceId: stringValue(decision, "workspace_id"),
@@ -1967,6 +1996,7 @@ export async function getPaidEligibility(principalId: string, now = new Date()) 
     residenceTaxStatus: stringValue(row, "residence_tax_status"),
     taxProfileStatus: stringValue(row, "tax_profile_status"),
     dac7Status: stringValue(row, "dac7_status"),
+    dac7Policy: dac7CollectionPolicy(),
     screeningStatus: stringValue(row, "sanctions_status") === "clear" ? "clear" : "review_required",
     sanctionsExpiresAt,
     payoutAccount: getAddress(String(row.payout_account)),
