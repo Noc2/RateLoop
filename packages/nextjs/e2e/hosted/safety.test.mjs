@@ -57,22 +57,22 @@ test("smoke requires an exact tokenless Vercel origin and checked-out SHA", () =
   safetyMessage(() => validateHostedRun({ checkoutSha: "b".repeat(40), env: baseEnv(), mode: "smoke" }));
 });
 
-test("stateful runs require the mutation gate exactly", () => {
-  safetyMessage(() => validateHostedRun({ checkoutSha: SHA, env: baseEnv(), mode: "stateful" }));
+test("core runs require the mutation gate exactly", () => {
+  safetyMessage(() => validateHostedRun({ checkoutSha: SHA, env: baseEnv(), mode: "core" }));
   safetyMessage(() =>
     validateHostedRun({
       checkoutSha: SHA,
       env: { ...baseEnv(), E2E_ALLOW_HOSTED_MUTATIONS: "TRUE" },
-      mode: "stateful",
+      mode: "core",
     }),
   );
   assert.equal(
     validateHostedRun({
       checkoutSha: SHA,
       env: { ...baseEnv(), E2E_ALLOW_HOSTED_MUTATIONS: "true" },
-      mode: "stateful",
+      mode: "core",
     }).mode,
-    "stateful",
+    "core",
   );
 });
 

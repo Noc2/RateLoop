@@ -12,16 +12,11 @@ on:
         required: true
         type: string
       lane:
-        description: Highest-risk lane to run
+        description: Browser lane to run
         required: true
         default: smoke
         type: choice
-        options: [smoke, stateful, funded]
-      planned_spend_atomic:
-        description: Planned total testnet USDC spend in atomic units (funded lane only)
-        required: true
-        default: "0"
-        type: string
+        options: [smoke, core]
 
 permissions:
   contents: read
@@ -37,25 +32,21 @@ jobs:
     environment: tokenless-hosted-e2e
     env:
       E2E_ALLOW_HOSTED_MUTATIONS: ${{ vars.E2E_ALLOW_HOSTED_MUTATIONS }}
-      E2E_ALLOW_TESTNET_SPEND: ${{ vars.E2E_ALLOW_TESTNET_SPEND }}
       E2E_BASE_URL: ${{ inputs.target_url }}
-      E2E_CHAIN_ID: "84532"
       E2E_EXPECTED_GIT_REF: tokenless
       E2E_EXPECTED_GIT_SHA: ${{ inputs.expected_sha }}
       E2E_KEEPER_URL: ${{ vars.E2E_KEEPER_URL }}
       E2E_PONDER_URL: ${{ vars.E2E_PONDER_URL }}
-      E2E_TESTNET_AWARDER_ADDRESS: ${{ vars.E2E_TESTNET_AWARDER_ADDRESS }}
-      E2E_TESTNET_FUNDER_ADDRESS: ${{ vars.E2E_TESTNET_FUNDER_ADDRESS }}
-      E2E_TESTNET_KEEPER_ADDRESS: ${{ vars.E2E_TESTNET_KEEPER_ADDRESS }}
-      E2E_TESTNET_PLANNED_SPEND_ATOMIC: ${{ inputs.planned_spend_atomic }}
-      E2E_TESTNET_REVIEWER_PAYOUT_ADDRESS: ${{ vars.E2E_TESTNET_REVIEWER_PAYOUT_ADDRESS }}
-      E2E_TESTNET_SPEND_CAP_ATOMIC: ${{ vars.E2E_TESTNET_SPEND_CAP_ATOMIC }}
     steps:
-      - name: Checkout the exact requested commit
+      - name: Checkout protected tokenless branch
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
-          ref: ${{ inputs.expected_sha }}
+          ref: tokenless
           submodules: true
+      - name: Verify the exact requested branch commit
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$E2E_EXPECTED_GIT_SHA"
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
@@ -63,6 +54,8 @@ jobs:
           cache: yarn
       - name: Install dependencies
         run: yarn install --immutable
+      - name: Test hosted guards and credential handling
+        run: yarn workspace @rateloop/nextjs e2e:hosted:unit
       - name: Validate safety gates and hosted operations
         shell: bash
         env:
@@ -74,6 +67,16 @@ jobs:
         run: yarn workspace @rateloop/nextjs exec playwright install --with-deps chromium
       - name: Run exact-deployment smoke
         run: yarn workspace @rateloop/nextjs e2e:hosted:smoke
+      - name: Run real three-account core journey
+        if: ${{ inputs.lane == 'core' }}
+        env:
+          TOKENLESS_E2E_INBOX_PROVIDER: resend
+          TOKENLESS_E2E_OTP_FROM_EMAIL: ${{ vars.TOKENLESS_E2E_OTP_FROM_EMAIL }}
+          TOKENLESS_E2E_OWNER_EMAIL: ${{ vars.TOKENLESS_E2E_OWNER_EMAIL }}
+          TOKENLESS_E2E_RESEND_RECEIVING_API_KEY: ${{ secrets.TOKENLESS_E2E_RESEND_RECEIVING_API_KEY }}
+          TOKENLESS_E2E_REVIEWER_ONE_EMAIL: ${{ vars.TOKENLESS_E2E_REVIEWER_ONE_EMAIL }}
+          TOKENLESS_E2E_REVIEWER_TWO_EMAIL: ${{ vars.TOKENLESS_E2E_REVIEWER_TWO_EMAIL }}
+        run: yarn workspace @rateloop/nextjs e2e:hosted:core
       - name: Upload Playwright artifacts
         if: ${{ always() }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

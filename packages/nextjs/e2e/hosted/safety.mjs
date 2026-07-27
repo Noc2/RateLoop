@@ -3,7 +3,7 @@ const ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/u;
 
 export const BASE_SEPOLIA_CHAIN_ID = "84532";
 export const HARD_TESTNET_SPEND_CAP_ATOMIC = 10_000_000n;
-export const HOSTED_RUN_MODES = ["smoke", "stateful", "funded"];
+export const HOSTED_RUN_MODES = ["smoke", "core", "funded"];
 export const TOKENLESS_HOSTED_ORIGIN = "https://rateloop-tokenless.vercel.app";
 
 export class HostedE2ESafetyError extends Error {
@@ -110,8 +110,8 @@ export function validateHostedRun({ checkoutSha, env = process.env, mode }) {
     errors.push("E2E_EXPECTED_GIT_SHA does not match the checked-out commit.");
   }
 
-  if ((mode === "stateful" || mode === "funded") && value(env, "E2E_ALLOW_HOSTED_MUTATIONS") !== "true") {
-    errors.push("E2E_ALLOW_HOSTED_MUTATIONS must be exactly true for a stateful hosted run.");
+  if ((mode === "core" || mode === "funded") && value(env, "E2E_ALLOW_HOSTED_MUTATIONS") !== "true") {
+    errors.push("E2E_ALLOW_HOSTED_MUTATIONS must be exactly true for a core hosted run.");
   }
 
   let spend = null;

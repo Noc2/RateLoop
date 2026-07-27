@@ -23,6 +23,8 @@
     "db:studio": "drizzle-kit studio",
     "e2e": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && yarn e2e:prepare && playwright test\"",
     "e2e:hosted:guards:test": "node --test e2e/hosted/*.test.mjs",
+    "e2e:hosted:unit": "node --import tsx --test e2e/hosted-auth/*.test.ts e2e/hosted/hostedMcp.test.ts && node --test e2e/hosted/*.test.mjs",
+    "e2e:hosted:core": "playwright test --config playwright.hosted.core.config.ts",
     "e2e:hosted:smoke": "playwright test --config playwright.hosted.config.ts",
     "e2e:prepare": "node --import ../../scripts/register-node-test-env.mjs --import tsx e2e/scripts/prepare.ts",
     "evidence:verify": "node scripts/verify-assurance-evidence.mjs",

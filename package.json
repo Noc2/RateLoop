@@ -33,6 +33,7 @@
     "lint": "yarn foundry:lint && yarn next:lint",
     "next:build": "yarn workspace @rateloop/nextjs build",
     "next:check-types": "yarn workspace @rateloop/nextjs check-types",
+    "next:e2e:hosted:core": "yarn workspace @rateloop/nextjs e2e:hosted:core",
     "next:e2e:hosted:smoke": "yarn workspace @rateloop/nextjs e2e:hosted:smoke",
     "next:format": "yarn workspace @rateloop/nextjs format",
     "next:lint": "yarn workspace @rateloop/nextjs lint",
