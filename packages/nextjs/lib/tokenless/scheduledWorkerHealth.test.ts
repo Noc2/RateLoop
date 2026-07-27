@@ -34,6 +34,11 @@ test("workspace owners can reach redacted degraded scheduled-worker health", asy
       JSON.stringify({
         processorFailures: [{ processor: "privateEvidence", message: "private detail must not leave storage" }],
         notifications: { parked: 2, retry: 1, retryDeliveryIds: ["private-delivery-id"] },
+        attestations: { unavailable: 1, dueJobIds: ["private-attestation-id"] },
+        directPrivateReviewDeadlines: {
+          retry: 4,
+          retryOpportunityIds: ["private-opportunity-id"],
+        },
         directPrivateReviewEvidence: { dead: 1, deadDeliveryIds: ["private-evidence-id"] },
       }),
       new Date(NOW.getTime() - 90_000),
@@ -54,10 +59,15 @@ test("workspace owners can reach redacted degraded scheduled-worker health", asy
       ["processorFailures", 1],
       ["notifications.retry", 1],
       ["notifications.parked", 2],
+      ["attestations.unavailable", 1],
+      ["directPrivateReviewDeadlines.retry", 4],
       ["directPrivateReviewEvidence.dead", 1],
     ],
   );
-  assert.doesNotMatch(JSON.stringify(health), /private detail|private-delivery-id|private-evidence-id/u);
+  assert.doesNotMatch(
+    JSON.stringify(health),
+    /private detail|private-delivery-id|private-attestation-id|private-opportunity-id|private-evidence-id/u,
+  );
 });
 
 test("stale or absent runs are visible and non-managers cannot inspect global health", async () => {

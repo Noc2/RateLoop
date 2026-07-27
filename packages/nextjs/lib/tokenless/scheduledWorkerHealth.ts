@@ -71,6 +71,26 @@ const SIGNALS = [
   ["webhooks.retry", "Webhook retries", (summary: Record<string, unknown>) => nestedNumber(summary, "webhooks.retry")],
   ["webhooks.dead", "Dead webhooks", (summary: Record<string, unknown>) => nestedNumber(summary, "webhooks.dead")],
   [
+    "attestations.retry",
+    "Evidence anchor retries",
+    (summary: Record<string, unknown>) => nestedNumber(summary, "attestations.retry"),
+  ],
+  [
+    "attestations.dead",
+    "Dead evidence anchors",
+    (summary: Record<string, unknown>) => nestedNumber(summary, "attestations.dead"),
+  ],
+  [
+    "attestations.unavailable",
+    "Pending evidence anchors",
+    (summary: Record<string, unknown>) => nestedNumber(summary, "attestations.unavailable"),
+  ],
+  [
+    "directPrivateReviewDeadlines.retry",
+    "Review deadline retries",
+    (summary: Record<string, unknown>) => nestedNumber(summary, "directPrivateReviewDeadlines.retry"),
+  ],
+  [
     "directPrivateReviewEvidence.retry",
     "Evidence retries",
     (summary: Record<string, unknown>) => nestedNumber(summary, "directPrivateReviewEvidence.retry"),
