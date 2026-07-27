@@ -9,6 +9,7 @@ import {
   createTokenlessAsk,
   getTokenlessAskByIdempotencyKey,
   getTokenlessResult,
+  parseTokenlessAskMediaPreviewGrants,
   sweepExpiredTokenlessQuotes,
   tokenlessErrorResponse,
   waitForTokenlessAsk,
@@ -433,5 +434,28 @@ test("ask and quote request validation matches the tokenless SDK contract", asyn
         "https://tokenless.example",
       ),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_payment",
+  );
+});
+
+test("a text-only handoff submits with an empty mediaPreviews array", () => {
+  // The handoff page always sends the field; for a question with no images its value is [].
+  assert.deepEqual(parseTokenlessAskMediaPreviewGrants({ mediaPreviews: [] }), []);
+  assert.deepEqual(parseTokenlessAskMediaPreviewGrants({ mediaPreviews: null }), []);
+  assert.deepEqual(parseTokenlessAskMediaPreviewGrants({}), []);
+
+  // An image handoff still has to present one well-formed grant per staged image.
+  const grant = (index: number) => ({
+    assetId: `pqm_${String(index).padStart(2, "0")}${"a".repeat(22)}`,
+    digest: `sha256:${String(index).padStart(2, "0")}${"b".repeat(62)}`,
+    previewCapability: `pqp1_abc123_${"c".repeat(43)}`,
+  });
+  assert.deepEqual(parseTokenlessAskMediaPreviewGrants({ mediaPreviews: [grant(1)] }), [grant(1)]);
+  assert.throws(
+    () => parseTokenlessAskMediaPreviewGrants({ mediaPreviews: [1, 2, 3, 4, 5].map(grant) }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_media_preview_capability",
+  );
+  assert.throws(
+    () => parseTokenlessAskMediaPreviewGrants({ mediaPreviews: "not-an-array" }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_media_preview_capability",
   );
 });

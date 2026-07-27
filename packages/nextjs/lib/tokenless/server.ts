@@ -280,8 +280,11 @@ export function parseTokenlessAskRequest(value: unknown, idempotencyHeader: stri
 export function parseTokenlessAskMediaPreviewGrants(value: unknown): TokenlessQuestionImagePreviewGrant[] {
   if (!value || typeof value !== "object" || Array.isArray(value)) return [];
   const raw = (value as Record<string, unknown>).mediaPreviews;
-  if (raw === undefined) return [];
-  if (!Array.isArray(raw) || raw.length < 1 || raw.length > 4) {
+  // A text-only handoff sends the field present and empty, so an empty array means "no staged
+  // images" exactly as an absent field does. Requiring at least one grant here rejected every
+  // text-only ask. One grant per image is still enforced where the images are bound.
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw) || raw.length > 4) {
     throw new TokenlessServiceError(
       "mediaPreviews must contain one exact grant per staged image.",
       400,
