@@ -83,6 +83,18 @@ export default function PrivacyPage() {
         allocations. RateLoop does not store full card details. Subscription records remain separate from prepaid USDC,
         public-panel funding, participant payout, and settlement records.
       </p>
+      <h2>Demo scheduling</h2>
+      <p>
+        The public pages link to an external scheduling service for booking a demo. RateLoop places the link only; the
+        page itself loads nothing from the scheduling provider and sets no browser storage for it. Selecting it opens
+        the provider&apos;s own booking page in a new tab, identified by the destination address, and everything entered
+        there is collected by that provider under its own privacy terms rather than by RateLoop. That typically includes
+        a name, an email address, any answers to the booking questions, and the chosen time; the provider may process it
+        outside the European Economic Area. No RateLoop account is created or required, and the booking page is
+        reachable by anyone holding the link. RateLoop receives the resulting appointment and its contact details as a
+        calendar entry and email, and processes them under its legitimate interest in responding to a commercial
+        enquiry. Writing instead to the enterprise contact address avoids the scheduling provider entirely.
+      </p>
       <h2 id="on-chain-data">On-chain data</h2>
       <p>
         Public-chain interactions publish transaction addresses, commitments, round terms, settlement data, claims, and

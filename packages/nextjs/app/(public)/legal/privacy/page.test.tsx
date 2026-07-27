@@ -46,4 +46,9 @@ test("privacy notice explains subscription processor data and retention", async 
   assert.match(html, /never reduces or withholds pay already earned/i);
   assert.match(html, /assignment consequence is suspended while that appeal is open/i);
   assert.match(html, /forecast accumulators, pair records, findings, and appeals.*erased/i);
+  assert.match(html, /external scheduling service for booking a demo/i);
+  assert.match(html, /loads nothing from the scheduling provider and sets no browser storage/i);
+  assert.match(html, /collected by that provider under its own privacy terms rather than by RateLoop/i);
+  assert.match(html, /may process it outside the European Economic Area/i);
+  assert.match(html, /booking page is reachable by anyone holding the link/i);
 });
