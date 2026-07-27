@@ -12,6 +12,8 @@
 /e2e/__screenshots__/.actual/
 /playwright-report/
 /test-results/
+/hosted-playwright-report/
+/hosted-test-results/
 
 # next.js
 /.next/

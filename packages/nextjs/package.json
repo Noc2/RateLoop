@@ -22,6 +22,7 @@
     "db:push": "node -e \"console.error('db:push is disabled in this package.\\n\\nlib/db/schema.ts maps 66 tables, but the migrations in drizzle/ create 219. drizzle-kit push diffs the database against the schema and would drop the 153 unmapped tables (plus their CHECK constraints), destroying a migrated database.\\n\\nUse yarn workspace @rateloop/nextjs db:migrate to apply the checked-in migrations instead.'); process.exit(1)\"",
     "db:studio": "drizzle-kit studio",
     "e2e": "node ../../scripts/with-workspace-dist-lock.mjs \"yarn build:workspace-deps && yarn e2e:prepare && playwright test\"",
+    "e2e:hosted:smoke": "playwright test --config playwright.hosted.config.ts",
     "e2e:prepare": "node --import ../../scripts/register-node-test-env.mjs --import tsx e2e/scripts/prepare.ts",
     "evidence:verify": "node scripts/verify-assurance-evidence.mjs",
     "attestation:verify": "node scripts/verify-assurance-attestation.mjs",
