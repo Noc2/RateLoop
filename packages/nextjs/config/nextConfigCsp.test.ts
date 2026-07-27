@@ -152,11 +152,9 @@ test("next config leaves CSP to middleware", async () => {
   assert.equal(csp, undefined);
 });
 
-test("every page route group renders dynamically so middleware nonces reach Next.js scripts", () => {
-  for (const layout of ["../app/(public)/layout.tsx", "../app/(app)/layout.tsx"]) {
-    const source = readFileSync(new URL(layout, import.meta.url), "utf8");
-    assert.match(source, /export const dynamic = ["']force-dynamic["'];/u, layout);
-  }
+test("the root layout renders dynamically so middleware nonces reach every page and error route", () => {
+  const source = readFileSync(new URL("../app/layout.tsx", import.meta.url), "utf8");
+  assert.match(source, /export const dynamic = ["']force-dynamic["'];/u);
 });
 
 test("permissions policy only advertises browser-recognized directives", async () => {

@@ -3,6 +3,10 @@ import { AppProviders } from "~~/providers/AppProviders";
 import "~~/styles/globals.css";
 import { getMetadata } from "~~/utils/scaffold-eth/getMetadata";
 
+// Per-request CSP nonces can protect only dynamically rendered Next.js scripts.
+// Keep this at the root so framework error and not-found pages receive a nonce too.
+export const dynamic = "force-dynamic";
+
 export const metadata = getMetadata({
   title: "RateLoop — Human assurance for AI",
   description: "Get blind human feedback before you ship AI work.",
