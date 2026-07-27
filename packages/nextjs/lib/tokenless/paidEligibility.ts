@@ -905,7 +905,9 @@ export type Dac7CollectionPolicy = { mode: "all" | "countries"; countries: strin
  * a hardcoded EU set makes the form omit `dac7` for a resident the server then rejects as
  * `dac7_required` - with no way for that person to supply what is missing.
  */
-export function dac7CollectionPolicy(): Dac7CollectionPolicy {
+export function dac7CollectionPolicy(): Dac7CollectionPolicy | null {
+  // Reading eligibility must not fail on an unconfigured policy - only submission may. A null
+  // policy leaves the form on its EU fallback, which is what it did before this was exposed.
   const policy = process.env.TOKENLESS_DAC7_POLICY?.trim().toLowerCase();
   if (policy === "all") return { mode: "all", countries: [] };
   if (policy === "eu") return { mode: "countries", countries: [...EU_COUNTRIES].sort() };
@@ -918,11 +920,9 @@ export function dac7CollectionPolicy(): Dac7CollectionPolicy {
           .filter(value => COUNTRY.test(value)),
       ),
     ].sort();
-    if (configured.length === 0)
-      throw new TokenlessServiceError("DAC7 policy is not configured.", 503, "policy_unavailable");
-    return { mode: "countries", countries: configured };
+    return configured.length === 0 ? null : { mode: "countries", countries: configured };
   }
-  throw new TokenlessServiceError("DAC7 policy is not configured.", 503, "policy_unavailable");
+  return null;
 }
 
 function requiresDac7(country: string) {
