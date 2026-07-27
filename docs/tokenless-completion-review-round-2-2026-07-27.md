@@ -296,3 +296,52 @@ live. The regression-sweep stream had not reported when this document was writte
 
 Nothing here is a release approval, and no technical control substitutes for the counsel review the legal reference
 requires.
+
+---
+
+## 9. Addendum — forms-unification regressions
+
+A delegated sub-audit of the forms-unification commits (`30633741a`, `67ff294d5`, `68f9a033d`, `50ed217e1`,
+`bfcb646ab`, `7b99d2b1b`, `7d6b64698`, `569490767`) reported after this document was first written. Its two most
+serious findings are verified.
+
+### A1 — Non-EU raters can hit an unrecoverable dead end in paid eligibility
+
+The client hardcodes an EU-27 set (`lib/tokenless/paidEligibilityForm.ts:1`) and uses it to decide both whether to
+render the DAC7 fields and whether to emit the `dac7` key at all. The server reads
+`TOKENLESS_DAC7_POLICY` from the environment (`lib/tokenless/paidEligibility.ts:902`), supporting `all`, `eu`, and
+`configured`.
+
+Under `all` — or `configured` with any non-EU-27 entry such as `NO` or `GB` — a non-EU resident's payload omits `dac7`,
+the server rejects with `dac7_required`, and **the user cannot fix it**, because the inputs are never rendered for
+them. Before this commit the client always sent the full block, so this is a new regression. `.env.example` defaults to
+`eu`, which masks it in the default configuration only.
+
+**Related:** non-EU residents can no longer declare a divergent tax residence, since that field renders only inside the
+DAC7 branch and the form forces `taxResidenceCountry = declaredResidenceCountry`. That makes the server's
+`residence_tax_review` path unreachable for them and opens a DAC7 escape — a US-resident / DE-tax-resident reviewer now
+reports `US` and skips DAC7 entirely.
+
+### A2 — Duplicate DOM ids in the per-task rating card
+
+`PublicQuestionCard` renders once per queued task (`AnswerPageClient.tsx:263`), but `bfcb646ab` added two hardcoded
+ids inside it: `id="public-review-terms"` (`:801`) and `id="public-review-recovery-confirmed"` (`:1031`). With two
+queued tasks in the relevant state, `<label for>` binds to the first element in tree order — so **clicking the second
+card's checkbox label toggles the first card's checkbox**, in a money-bearing confirmation step. The same file already
+demonstrates the correct convention two dozen lines away (`id={`public-records-${task.roundId}`}`).
+
+### A3 — Smaller, still real
+
+- **Three toggles are visually broken.** `ChoiceInput` unconditionally adds the daisyUI `checkbox` class, and the three
+  call sites that pass a `toggle` className now carry both. `toggle` wins on layout but never resets `checkbox`'s
+  `:before` rules, so the knob is invisible when off and renders as a rotated checkmark sliver when on.
+- **The primitives discard a caller-supplied `aria-describedby`.** The computed value is written after the props
+  spread, so `undefined` clobbers it — orphaning three real descriptions, including "This value is shown once. It
+  cannot be recovered."
+- **Auto-focus is inert, and can focus a `<meta>` tag.** The fallback scans the whole document for `[name]`, and
+  `<meta name="description">` in the root layout wins for a `description` field error. More broadly the feature
+  resolves for only **4 of 92** error-wired controls, because the rest rely on `useId()`-generated ids — and two of
+  this batch's commits removed stable ids that previously worked. This is the same §6.1 finding, now quantified.
+
+**Clean:** no lost accessible names, no `required`/`name` regressions, no controlled↔uncontrolled flips, no orphaned
+CSS or components.
