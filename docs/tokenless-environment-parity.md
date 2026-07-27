@@ -129,7 +129,8 @@ Keeper:
 - `TOKENLESS_DEPLOYMENT_KEY`, `TOKENLESS_DEPLOYMENT_BLOCK`
 - `TOKENLESS_KEEPER_PRIVATE_KEY`, `_EXPECTED_ADDRESS`, and `_KEY_VERSION`, plus `DATABASE_URL` for the append-only
   signing ledger and `METRICS_AUTH_TOKEN`
-- the same keeper identity inventory in the web release environment, where the release preflight derives each
-  address, rejects key or address reuse, and verifies versioned rotation evidence
+- the same keeper identity inventory in the web release environment. Every deployment path rejects a keeper or
+  evidence key reused by another signing role. Address derivation and versioned rotation evidence are additionally
+  verified on the `main` release path; the isolated tokenless path checks key reuse only.
 
 The package-local `.env.example` files remain the executable source for exact names and validation rules.

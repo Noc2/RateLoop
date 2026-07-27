@@ -72,15 +72,13 @@ const FORBIDDEN_AWS_CONFIGURATION = [
   "TOKENLESS_THIRDWEB_WALLET_KMS_REGION",
   "TOKENLESS_THIRDWEB_WALLET_KMS_ROLE_ARN",
   "TOKENLESS_THIRDWEB_WALLET_KMS_OIDC_AUDIENCE",
-  ...["CREDENTIAL_ISSUER", "X402_RELAYER", "PREPAID_FUNDER", "SURPRISE_BONUS_FUNDER", "KEEPER"].flatMap(
-    role => [
-      `TOKENLESS_${role}_KMS_KEY_RESOURCE`,
-      `TOKENLESS_${role}_KMS_EXPECTED_ADDRESS`,
-      `TOKENLESS_${role}_KMS_REGION`,
-      `TOKENLESS_${role}_KMS_ROLE_ARN`,
-      `TOKENLESS_${role}_KMS_OIDC_AUDIENCE`,
-    ],
-  ),
+  ...["CREDENTIAL_ISSUER", "X402_RELAYER", "PREPAID_FUNDER", "SURPRISE_BONUS_FUNDER", "KEEPER"].flatMap(role => [
+    `TOKENLESS_${role}_KMS_KEY_RESOURCE`,
+    `TOKENLESS_${role}_KMS_EXPECTED_ADDRESS`,
+    `TOKENLESS_${role}_KMS_REGION`,
+    `TOKENLESS_${role}_KMS_ROLE_ARN`,
+    `TOKENLESS_${role}_KMS_OIDC_AUDIENCE`,
+  ]),
 ];
 
 export const DEFAULT_HOSTED_RELEASE_CAPABILITIES = Object.freeze({
@@ -582,11 +580,16 @@ function validateTokenlessTestDeployment(env) {
   ]) {
     addSecretRole(testSecretRoles, name, decode32(value(env, name), "base64url"));
   }
+  // The keeper and evidence signers belong here too. They are supplied to this same environment,
+  // so omitting them let the settlement signer share a key with the prepaid funder - which would
+  // put the keeper in control of the prepaid pool - without any check firing.
   for (const name of [
     "TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY",
     "TOKENLESS_X402_RELAYER_PRIVATE_KEY",
     "TOKENLESS_PREPAID_FUNDER_PRIVATE_KEY",
     "TOKENLESS_SURPRISE_BONUS_FUNDER_PRIVATE_KEY",
+    "TOKENLESS_KEEPER_PRIVATE_KEY",
+    "TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY",
     "WORLD_ID_RP_SIGNING_KEY",
   ]) {
     const raw = value(env, name).replace(/^0x/u, "");
@@ -640,7 +643,8 @@ export function validateTokenlessProductionReadiness({
     }
   }
   for (const name of FORBIDDEN_AWS_CONFIGURATION) {
-    if (value(env, name)) errors.push(`${name} is forbidden; RateLoop production has no AWS, KMS, IAM, or AWS OIDC dependency.`);
+    if (value(env, name))
+      errors.push(`${name} is forbidden; RateLoop production has no AWS, KMS, IAM, or AWS OIDC dependency.`);
   }
   if (value(env, "DATABASE_URL") && !hostedPostgresUrl(value(env, "DATABASE_URL"))) {
     errors.push("DATABASE_URL must identify a non-local hosted Postgres database.");
@@ -948,7 +952,9 @@ export function validateTokenlessProductionReadiness({
     addSecretRole(
       secretRoles,
       "TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY",
-      createHash("sha256").update(evidencePrivateKey.export({ format: "der", type: "pkcs8" })).digest(),
+      createHash("sha256")
+        .update(evidencePrivateKey.export({ format: "der", type: "pkcs8" }))
+        .digest(),
     );
   } catch {
     errors.push("TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY must be a dedicated Ed25519 PKCS#8 private key.");

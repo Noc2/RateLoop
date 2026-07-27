@@ -296,8 +296,7 @@ test("production chain execution enforces the immutable five-minute reveal windo
 
 test("platform-secret signer keys, addresses, and versions are pinned and distinct", () => {
   const mismatched = validFixture();
-  mismatched.env.TOKENLESS_X402_RELAYER_EXPECTED_ADDRESS =
-    mismatched.env.TOKENLESS_PREPAID_FUNDER_EXPECTED_ADDRESS;
+  mismatched.env.TOKENLESS_X402_RELAYER_EXPECTED_ADDRESS = mismatched.env.TOKENLESS_PREPAID_FUNDER_EXPECTED_ADDRESS;
   const mismatchOutput = validateTokenlessProductionReadiness(mismatched).join("\n");
   assert.match(mismatchOutput, /Platform signer EVM addresses must be distinct/iu);
   assert.match(mismatchOutput, /must match the address derived/iu);
@@ -364,7 +363,10 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
   delete disabledWithoutWalletScreening.TOKENLESS_WALLET_SCREENING_PROVIDER_ID;
   delete disabledWithoutWalletScreening.TOKENLESS_WALLET_SCREENING_PROVIDER_URL;
   delete disabledWithoutWalletScreening.TOKENLESS_WALLET_SCREENING_PROVIDER_SECRET;
-  assert.deepEqual(validateTokenlessProductionReadiness({ env: disabledWithoutWalletScreening, activeRegistry: {} }), []);
+  assert.deepEqual(
+    validateTokenlessProductionReadiness({ env: disabledWithoutWalletScreening, activeRegistry: {} }),
+    [],
+  );
   const activated = {
     ...env,
     TOKENLESS_PRIVATE_PAID_REVIEWS_ENABLED: "true",
@@ -552,7 +554,10 @@ test("the isolated review deployment may retain its existing local vault without
   };
   assert.deepEqual(validateTokenlessProductionReadiness({ env, activeRegistry: {} }), []);
   assert.match(
-    validateTokenlessProductionReadiness({ env: { ...env, ...tokenlessTestPlatformSecrets() }, activeRegistry: {} }).join("\n"),
+    validateTokenlessProductionReadiness({
+      env: { ...env, ...tokenlessTestPlatformSecrets() },
+      activeRegistry: {},
+    }).join("\n"),
     /Configure exactly one tokenless test vault key source/,
   );
   assert.match(
@@ -595,6 +600,45 @@ test("the tokenless test deployment still rejects browser-exposed secrets", () =
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_KMS_KEY_RESOURCE is forbidden/);
   assert.match(output, /NEXT_PUBLIC_TOKENLESS_EXPERTISE_OPERATOR_ACCOUNTS is forbidden/);
   assert.doesNotMatch(output, /must-not-ship(?:-operator|-version|-keys|-kms-resource|-expertise-accounts)?/);
+});
+
+test("the tokenless test deployment rejects a keeper key shared with another signing role", () => {
+  const base = {
+    VERCEL: "1",
+    VERCEL_ENV: "production",
+    VERCEL_PROJECT_ID: "prj_H6C2pfWKEAupFroHbLfzhquaNCLm",
+    VERCEL_PROJECT_NAME: "rateloop-tokenless",
+    VERCEL_GIT_COMMIT_REF: "tokenless",
+    APP_URL: "https://rateloop-tokenless.vercel.app",
+    NEXT_PUBLIC_APP_URL: "https://rateloop-tokenless.vercel.app",
+    TOKENLESS_NETWORK_PANELS_ENABLED: "false",
+    ...tokenlessTestRpc(),
+    ...tokenlessTestPlatformSecrets(),
+    ...tokenlessTestDatabase(),
+    ...tokenlessGoldKeyring(),
+    ...tokenlessTestOperationalSecrets(),
+  };
+  // The keeper signs settlement and the prepaid funder holds the prepaid pool. Sharing one key
+  // between them hands the keeper that pool, and this path is the one every tokenless deployment
+  // takes - the production-only reuse check never runs here.
+  const shared = `0x${"c".repeat(64)}`;
+  const reusedKeeper = validateTokenlessProductionReadiness({
+    env: { ...base, TOKENLESS_PREPAID_FUNDER_PRIVATE_KEY: shared, TOKENLESS_KEEPER_PRIVATE_KEY: shared },
+    activeRegistry: {},
+  }).join("\n");
+  assert.match(reusedKeeper, /Tokenless test key roles must be distinct/u);
+  assert.match(reusedKeeper, /TOKENLESS_KEEPER_PRIVATE_KEY/u);
+
+  const reusedEvidence = validateTokenlessProductionReadiness({
+    env: {
+      ...base,
+      TOKENLESS_X402_RELAYER_PRIVATE_KEY: shared,
+      TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY: shared,
+    },
+    activeRegistry: {},
+  }).join("\n");
+  assert.match(reusedEvidence, /Tokenless test key roles must be distinct/u);
+  assert.match(reusedEvidence, /TOKENLESS_EVIDENCE_SIGNING_PRIVATE_KEY/u);
 });
 
 test("the tokenless test deployment requires a dedicated server-only media preview key", () => {
@@ -875,8 +919,7 @@ test("hosted release rejects public secrets, reused roles, and mixed deployment 
   fixture.env.NEXT_PUBLIC_TOKENLESS_ATTESTATION_AWS_CREDENTIALS_JSON = "attestation-do-not-print-this";
   fixture.env.NEXT_PUBLIC_STRIPE_WEBHOOK_SECRET = "whsec_do-not-print-this";
   fixture.env.TOKENLESS_X402_RELAYER_PRIVATE_KEY = fixture.env.TOKENLESS_CREDENTIAL_ISSUER_SIGNER_PRIVATE_KEY;
-  fixture.env.TOKENLESS_X402_RELAYER_EXPECTED_ADDRESS =
-    fixture.env.TOKENLESS_CREDENTIAL_ISSUER_SIGNER_EXPECTED_ADDRESS;
+  fixture.env.TOKENLESS_X402_RELAYER_EXPECTED_ADDRESS = fixture.env.TOKENLESS_CREDENTIAL_ISSUER_SIGNER_EXPECTED_ADDRESS;
   fixture.env.TOKENLESS_DEPLOYMENT_BLOCK = "124";
   const errors = validateTokenlessProductionReadiness(fixture);
   const output = errors.join("\n");
