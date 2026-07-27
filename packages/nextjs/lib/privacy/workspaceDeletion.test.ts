@@ -395,6 +395,36 @@ test("workspace deletion requires the exact current name and atomically erases f
     args: [workspaceId, MEMBER, OWNER, NOW, NOW],
   });
   await dbClient.execute({
+    sql: `INSERT INTO tokenless_workspace_governance
+          (workspace_id, default_retention_days, trader_status, trader_legal_name,
+           trader_registration_number, trader_registered_address, vat_country_code, vat_id,
+           billing_country_code, billing_address_line1, billing_address_line2, billing_city,
+           billing_postal_code, billing_state, updated_by, created_at, updated_at)
+          VALUES (?, 30, 'verified', 'Delete Exactly GmbH', 'HRB 12345',
+                  'Beispielweg 1, 10115 Berlin', 'DE', 'DE123456789',
+                  'DE', 'Beispielweg 1', 'Aufgang B', 'Berlin', '10115', 'Berlin', ?, ?, ?)`,
+    args: [workspaceId, OWNER, NOW, NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_workspace_clients
+          (client_id, workspace_id, name, status, dpa_status, created_by, created_at, updated_at)
+          VALUES ('client_workspace_delete', ?, 'Nina Sørensen Consulting', 'active', 'signed', ?, ?, ?)`,
+    args: [workspaceId, OWNER, NOW, NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_workspace_member_clients
+          (workspace_id, client_id, account_address, created_by, created_at)
+          VALUES (?, 'client_workspace_delete', ?, ?, ?)`,
+    args: [workspaceId, MEMBER, OWNER, NOW],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_workspace_cost_centers
+          (cost_center_id, workspace_id, client_id, code, name, status, created_by, created_at, updated_at)
+          VALUES ('cost_center_workspace_delete', ?, 'client_workspace_delete', 'CC-1', 'Delivery',
+                  'active', ?, ?, ?)`,
+    args: [workspaceId, OWNER, NOW, NOW],
+  });
+  await dbClient.execute({
     sql: `INSERT INTO tokenless_agents
           (agent_id, workspace_id, external_id, owner_account_address, status, created_by, created_at, updated_at)
           VALUES ('agent_workspace_delete', ?, 'external-delete', ?, 'active', ?, ?, ?)`,
@@ -410,9 +440,10 @@ test("workspace deletion requires the exact current name and atomically erases f
   });
   await dbClient.execute({
     sql: `INSERT INTO tokenless_workspace_member_invites
-          (invite_id, workspace_id, invite_token_hash, access_role, governance_role, expires_at,
-           created_by, created_at)
-          VALUES ('invite_workspace_delete', ?, 'invite-delete-hash', 'member', 'end_client', ?, ?, ?)`,
+          (invite_id, workspace_id, client_id, invite_token_hash, access_role, governance_role,
+           expires_at, created_by, created_at)
+          VALUES ('invite_workspace_delete', ?, 'client_workspace_delete', 'invite-delete-hash',
+                  'member', 'end_client', ?, ?, ?)`,
     args: [workspaceId, new Date(NOW.getTime() + 86_400_000), OWNER, NOW],
   });
   const forecastSubject = `hmac-sha256:${"a".repeat(64)}`;
@@ -516,6 +547,19 @@ test("workspace deletion requires the exact current name and atomically erases f
       ])
     ).count,
     0,
+  );
+  assert.deepEqual(
+    await storedRow(
+      `SELECT
+         (SELECT COUNT(*) FROM tokenless_workspace_governance WHERE workspace_id=?) AS governance,
+         (SELECT COUNT(*) FROM tokenless_workspace_clients WHERE workspace_id=?) AS clients,
+         (SELECT COUNT(*) FROM tokenless_workspace_cost_centers WHERE workspace_id=?) AS cost_centers,
+         (SELECT COUNT(*) FROM tokenless_workspace_member_clients WHERE workspace_id=?) AS member_clients,
+         (SELECT COUNT(*) FROM tokenless_workspace_member_invites
+          WHERE workspace_id=? AND client_id IS NOT NULL) AS invite_client_links`,
+      [workspaceId, workspaceId, workspaceId, workspaceId, workspaceId],
+    ),
+    { clients: 0, cost_centers: 0, governance: 0, invite_client_links: 0, member_clients: 0 },
   );
   assert.ok(
     (await storedRow("SELECT revoked_at FROM tokenless_workspace_api_keys WHERE key_id = ?", [apiKeyId])).revoked_at,

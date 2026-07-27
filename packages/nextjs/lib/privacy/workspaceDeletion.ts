@@ -1037,7 +1037,7 @@ export async function requestWorkspaceDeletion(input: {
     );
     await client.query(
       `UPDATE tokenless_workspace_member_invites
-       SET intended_account_address = NULL, redeemed_by_account_address = NULL
+       SET intended_account_address = NULL, redeemed_by_account_address = NULL, client_id = NULL
        WHERE workspace_id = $1`,
       [input.workspaceId],
     );
@@ -1090,6 +1090,16 @@ export async function requestWorkspaceDeletion(input: {
     await client.query("DELETE FROM tokenless_workspace_member_governance WHERE workspace_id = $1", [
       input.workspaceId,
     ]);
+    // tokenless_workspace_member_clients, tokenless_workspace_cost_centers and the retained
+    // tokenless_workspace_member_invites rows all reference
+    // tokenless_workspace_clients(workspace_id, client_id), so the client roster has to go last.
+    await client.query("DELETE FROM tokenless_workspace_cost_centers WHERE workspace_id = $1", [input.workspaceId]);
+    await client.query("DELETE FROM tokenless_workspace_clients WHERE workspace_id = $1", [input.workspaceId]);
+    // The self-declared trader identity, VAT registration and billing address are the live input
+    // to provider invoicing, not the issued invoice. The statutory invoice copy lives with the
+    // payment provider and is covered by the retained billing_records category, whose expiry
+    // handler never scrubs this table, so it is erased outright here.
+    await client.query("DELETE FROM tokenless_workspace_governance WHERE workspace_id = $1", [input.workspaceId]);
     await client.query("DELETE FROM tokenless_workspace_members WHERE workspace_id = $1", [input.workspaceId]);
     await client.query("DELETE FROM tokenless_workspace_agent_setups WHERE workspace_id = $1", [input.workspaceId]);
     await client.query("SELECT set_config('rateloop.account_erasure','on',true)");
@@ -1178,6 +1188,16 @@ export async function requestWorkspaceDeletion(input: {
          (SELECT COUNT(*) FROM tokenless_private_unpaid_review_assignments
           WHERE workspace_id=$1 AND reviewer_account_address NOT LIKE 'rlp_erased_assignment_%')
           AS direct_private_assignment_subjects,
+         (SELECT COUNT(*) FROM tokenless_workspace_governance
+          WHERE workspace_id=$1) AS workspace_governance,
+         (SELECT COUNT(*) FROM tokenless_workspace_clients
+          WHERE workspace_id=$1) AS workspace_clients,
+         (SELECT COUNT(*) FROM tokenless_workspace_cost_centers
+          WHERE workspace_id=$1) AS workspace_cost_centers,
+         (SELECT COUNT(*) FROM tokenless_workspace_member_clients
+          WHERE workspace_id=$1) AS workspace_member_clients,
+         (SELECT COUNT(*) FROM tokenless_workspace_member_invites
+          WHERE workspace_id=$1 AND client_id IS NOT NULL) AS workspace_member_invite_clients,
          (SELECT COUNT(*) FROM tokenless_workspace_members
           WHERE workspace_id=$1) AS workspace_memberships`,
       [input.workspaceId],
