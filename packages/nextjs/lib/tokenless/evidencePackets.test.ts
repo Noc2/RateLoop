@@ -24,6 +24,7 @@ import {
   getAssuranceClientDecision,
   getAssuranceEvidencePacket,
   listAssuranceOverrideDecisions,
+  loadRunAccess,
   recordAssuranceClientDecision,
   recordAssuranceOverrideDecision,
   verifyEvidenceExport,
@@ -52,6 +53,24 @@ beforeEach(() => {
 
 afterEach(() => {
   __setDatabaseResourcesForTests(null);
+});
+
+test("locked assurance access targets the run without locking nullable joins", async () => {
+  const queries: string[] = [];
+  await loadRunAccess(
+    {
+      query: async (sql: string) => {
+        queries.push(sql);
+        return { rows: queries.length === 1 ? [{ run_id: "run" }] : [{ workspace_role: "owner" }] };
+      },
+    } as never,
+    { accountAddress: OWNER, workspaceId: "workspace", runId: "run" },
+    { lock: true },
+  );
+  assert.equal(queries.length, 2);
+  assert.match(queries[0], /FROM tokenless_assurance_runs r[\s\S]+FOR UPDATE$/u);
+  assert.doesNotMatch(queries[0], /LEFT JOIN/u);
+  assert.doesNotMatch(queries[1], /FOR UPDATE/u);
 });
 
 test("aggregation keeps reviewer targets separate from multi-case judgments", () => {

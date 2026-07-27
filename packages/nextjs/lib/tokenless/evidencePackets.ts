@@ -237,6 +237,18 @@ export async function loadRunAccess(
   options: { lock?: boolean; decision?: boolean } = {},
 ) {
   const address = normalizeAddress(input.accountAddress);
+  if (options.lock) {
+    await client.query(
+      `SELECT r.run_id
+       FROM tokenless_assurance_runs r
+       JOIN tokenless_assurance_projects p ON p.project_id = r.project_id
+       JOIN tokenless_workspaces w ON w.workspace_id = p.workspace_id AND w.status = 'active'
+       JOIN tokenless_workspace_members m ON m.workspace_id = p.workspace_id AND m.account_address = $1
+       WHERE r.run_id = $2 AND p.workspace_id = $3
+       FOR UPDATE`,
+      [address, input.runId, input.workspaceId],
+    );
+  }
   const result = await client.query(
     `SELECT r.*, p.workspace_id, p.data_classification,
             m.role AS workspace_role, g.governance_role,
@@ -254,7 +266,7 @@ export async function loadRunAccess(
        ON ap.policy_id = r.audience_policy_id AND ap.version = r.audience_policy_version
      JOIN tokenless_assurance_rubrics rb ON rb.rubric_id = s.rubric_id AND rb.version = s.rubric_version
      WHERE r.run_id = $2 AND p.workspace_id = $3
-     LIMIT 1${options.lock ? " FOR UPDATE" : ""}`,
+     LIMIT 1`,
     [address, input.runId, input.workspaceId],
   );
   const row = result.rows[0];
