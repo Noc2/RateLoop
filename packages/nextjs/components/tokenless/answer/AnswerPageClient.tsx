@@ -157,7 +157,19 @@ export function AnswerPageClient({
     router.push(discoverHref(pathname, query, nextScope, invitationOpen, view));
   }
 
-  const showScopeControls = !loading && tasks.length > 0 && assignments.length > 0;
+  const hasPublicTasks = tasks.length > 0;
+  const hasPrivateAssignments = assignments.length > 0;
+  // A scope keeps filtering only while it still has review work. Submitting the last item of the
+  // selected scope must never leave the queue rendering nothing, so the filter falls back to "all".
+  const visibleScope: VisibleScope =
+    (scope === "public" && !hasPublicTasks) || (scope === "private" && !hasPrivateAssignments) ? "all" : scope;
+  // Whenever the surface is filtered, the pills stay reachable so the selection can be changed
+  // without editing the URL — including after the selected scope has run out of work.
+  const showScopeControls =
+    !loading &&
+    !signedOut &&
+    (hasPublicTasks || hasPrivateAssignments) &&
+    (scope !== "all" || (hasPublicTasks && hasPrivateAssignments));
 
   return (
     <AppPageShell outerClassName="pb-8" contentClassName="space-y-4">
@@ -194,10 +206,10 @@ export function AnswerPageClient({
                   key={value}
                   type="button"
                   role="tab"
-                  aria-selected={scope === value}
+                  aria-selected={visibleScope === value}
                   onClick={() => changeScope(value)}
                   className={`tab-control px-4 py-1.5 text-base font-medium capitalize transition-colors ${
-                    scope === value ? "pill-active" : "pill-inactive"
+                    visibleScope === value ? "pill-active" : "pill-inactive"
                   }`}
                 >
                   {value}
@@ -217,7 +229,7 @@ export function AnswerPageClient({
         <AsyncSection loading={loading} loadingLabel="Loading review work">
           {null}
         </AsyncSection>
-        {!loading && !signedOut && scope !== "public" && view === "active" && assignments.length > 1 ? (
+        {!loading && !signedOut && visibleScope !== "public" && view === "active" && assignments.length > 1 ? (
           <nav className="surface-card flex flex-wrap gap-2 rounded-lg p-3" aria-label="Private assignments">
             {assignments.map((assignment, index) => (
               <button
@@ -238,7 +250,7 @@ export function AnswerPageClient({
             ))}
           </nav>
         ) : null}
-        {!loading && !signedOut && scope !== "public"
+        {!loading && !signedOut && visibleScope !== "public"
           ? view === "active"
             ? assignments
                 .filter(assignment => assignment.assignmentId === focusedAssignmentId)
@@ -258,7 +270,7 @@ export function AnswerPageClient({
                 <PrivateAssignmentCard key={assignment.assignmentId} assignment={assignment} />
               ))
           : null}
-        {!loading && !signedOut && principalId && view === "active" && scope !== "private"
+        {!loading && !signedOut && principalId && view === "active" && visibleScope !== "private"
           ? tasks.map((task, index) => (
               <PublicQuestionCard
                 key={task.roundId}
