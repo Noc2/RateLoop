@@ -217,8 +217,16 @@ export function deriveRaterSettlementSnapshot(input: {
   const beaconFailureDeadline = unsigned(round.beaconFailureDeadline, "Indexed beacon failure deadline");
   const rawClaimDeadline = unsigned(round.claimDeadline, "Indexed claim deadline");
   const claimDeadline = rawClaimDeadline === "0" ? null : rawClaimDeadline;
-  const claimKind = state === 5 ? "payout" : state === 7 || state === 8 ? "compensation" : null;
-  const claimAmount = claimKind === "payout" ? BigInt(finalizedPayoutAtomic) : BigInt(compensationAtomic);
+  // TokenlessPanel.claimCompensation requires record.revealed, but _terminalCompensation publishes
+  // compensationPerRecipient for the round even when no commit qualifies. An unrevealed commit
+  // therefore has no compensation claim, whatever the round-level rate says.
+  const claimKind = state === 5 ? "payout" : (state === 7 || state === 8) && revealed ? "compensation" : null;
+  const claimAmount =
+    claimKind === "payout"
+      ? BigInt(finalizedPayoutAtomic)
+      : claimKind === "compensation"
+        ? BigInt(compensationAtomic)
+        : 0n;
   return {
     schemaVersion: "rateloop.rater-settlement.v1",
     chainId: input.chain.chainId,
@@ -454,6 +462,46 @@ function questionSummary(raw: string | null, roundId: string) {
   return `Paid review round ${roundId}`;
 }
 
+export function deriveReviewerEarningOutcome(input: {
+  localState: string;
+  commit: unknown;
+  round: unknown;
+  nowSeconds: bigint;
+}): {
+  status: ReviewerEarning["status"];
+  earned: bigint;
+  claimDeadline: string | null;
+  revealed: boolean;
+} {
+  const commit = input.commit ? record(input.commit, "Indexed commit") : null;
+  const round = input.round ? record(input.round, "Indexed round") : null;
+  const revealed = commit?.revealed === true;
+  const claimed = commit?.claimed === true;
+  const state = round ? integer(round.state, "Indexed round state") : null;
+  const claimDeadlineRaw = round ? unsigned(round.claimDeadline, "Indexed claim deadline") : "0";
+  const claimDeadline = claimDeadlineRaw === "0" ? null : claimDeadlineRaw;
+  const finalizedPayout = commit ? BigInt(unsigned(commit.finalizedPayout, "Indexed finalized payout")) : 0n;
+  // Compensation is per-round, but claimCompensation only pays a revealed commit. A beacon-failure
+  // round has no revealed commit at all, so the published rate is never claimable there.
+  const compensation =
+    round && revealed && (state === 7 || state === 8)
+      ? BigInt(unsigned(round.compensationPerRecipient, "Indexed compensation"))
+      : 0n;
+  const earned = state === 5 ? finalizedPayout : compensation;
+  const claimWindowOpen =
+    claimDeadline !== null && input.nowSeconds <= BigInt(claimDeadline) && round?.staleReturned !== true;
+  let status: ReviewerEarning["status"];
+  if (input.localState === "failed") status = "commit_failed";
+  else if (input.localState !== "confirmed") status = "commit_pending";
+  else if (!commit || !round) status = "indexing";
+  else if (claimed) status = "paid";
+  else if (indexedCommitCanReveal({ commit, round, nowSeconds: input.nowSeconds })) status = "reveal_required";
+  else if (state === 6 || ((state === 5 || state === 7 || state === 8) && earned === 0n)) status = "no_payout";
+  else if (state === 5 || state === 7 || state === 8) status = claimWindowOpen ? "claimable" : "expired";
+  else status = "settling";
+  return { status, earned, claimDeadline, revealed };
+}
+
 export async function listReviewerEarnings(input: {
   principalId: string;
   fetchImpl?: typeof fetch;
@@ -529,31 +577,13 @@ export async function listReviewerEarnings(input: {
     const commit = indexedItem ? record(indexedItem.commit, "Indexed commit") : null;
     const round = indexedItem?.round ? record(indexedItem.round, "Indexed round") : null;
     const claim = indexedItem?.claim ? record(indexedItem.claim, "Indexed claim") : null;
-    const revealed = commit?.revealed === true;
-    const claimed = commit?.claimed === true;
-    const state = round ? integer(round.state, "Indexed round state") : null;
-    const claimDeadlineRaw = round ? unsigned(round.claimDeadline, "Indexed claim deadline") : "0";
-    const claimDeadline = claimDeadlineRaw === "0" ? null : claimDeadlineRaw;
-    const finalizedPayout = commit ? BigInt(unsigned(commit.finalizedPayout, "Indexed finalized payout")) : 0n;
-    const compensation =
-      round && (state === 7 || state === 8)
-        ? BigInt(unsigned(round.compensationPerRecipient, "Indexed compensation"))
-        : 0n;
-    const earned = state === 5 ? finalizedPayout : compensation;
+    const { status, earned, claimDeadline, revealed } = deriveReviewerEarningOutcome({
+      localState,
+      commit,
+      round,
+      nowSeconds,
+    });
     const claimedAmount = claim ? BigInt(unsigned(claim.amount, "Indexed claimed amount")) : 0n;
-    const claimWindowOpen =
-      claimDeadline !== null && nowSeconds <= BigInt(claimDeadline) && round?.staleReturned !== true;
-    let status: ReviewerEarning["status"];
-    if (localState === "failed") status = "commit_failed";
-    else if (localState !== "confirmed") status = "commit_pending";
-    else if (!commit || !round) status = "indexing";
-    else if (claimed) status = "paid";
-    else if (localState === "confirmed" && commit && round && indexedCommitCanReveal({ commit, round, nowSeconds }))
-      status = "reveal_required";
-    else if (state === 6 || ((state === 5 || state === 7 || state === 8) && earned === 0n)) status = "no_payout";
-    else if ((state === 5 || state === 7 || state === 8) && claimWindowOpen) status = "claimable";
-    else if ((state === 5 || state === 7 || state === 8) && !claimWindowOpen) status = "expired";
-    else status = "settling";
     totalEarned += earned;
     totalClaimed += claimedAmount;
     if (status === "claimable") totalClaimable += earned;

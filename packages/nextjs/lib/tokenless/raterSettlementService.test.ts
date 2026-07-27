@@ -1,5 +1,9 @@
 import { tokenlessCommitKey } from "./rater/settlementRecovery";
-import { deriveRaterSettlementNotificationKinds, deriveRaterSettlementSnapshot } from "./raterSettlementService";
+import {
+  deriveRaterSettlementNotificationKinds,
+  deriveRaterSettlementSnapshot,
+  deriveReviewerEarningOutcome,
+} from "./raterSettlementService";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -174,6 +178,69 @@ test("fails closed across deployment identity and after the claim window", () =>
     commits: [{ ...(base.commits as Array<Record<string, unknown>>)[0], revealed: true }],
   });
   assert.equal(expired.canClaim, false);
+});
+
+test("never credits round compensation to a commit that did not reveal", () => {
+  const base = source();
+  const baseCommit = (base.commits as Array<Record<string, unknown>>)[0];
+  // A beacon-failure round is only reachable when nobody revealed, yet the contract still
+  // publishes compensationPerRecipient, so Ponder indexes a non-zero round-level rate.
+  const beaconFailureRound = {
+    ...(base.round as Record<string, unknown>),
+    state: 8,
+    status: "beacon_failure_compensated",
+    claimDeadline: "500",
+    compensationPerRecipient: "250000",
+    revealCount: 0,
+  };
+
+  const unrevealed = deriveReviewerEarningOutcome({
+    localState: "confirmed",
+    commit: { ...baseCommit, revealed: false },
+    round: beaconFailureRound,
+    nowSeconds: 400n,
+  });
+  assert.equal(unrevealed.earned, 0n);
+  assert.equal(unrevealed.status, "no_payout");
+
+  const snapshot = deriveRaterSettlementSnapshot({
+    ...base,
+    nowSeconds: 400n,
+    round: beaconFailureRound,
+    commits: [{ ...baseCommit, revealed: false }],
+  });
+  assert.equal(snapshot.claimKind, null);
+  assert.equal(snapshot.canClaim, false);
+  assert.equal(snapshot.compensationAtomic, "250000");
+
+  // The revealed subset of an under-quorum round still earns the same published rate.
+  const underQuorumRound = { ...beaconFailureRound, state: 7, status: "under_quorum_compensated", revealCount: 1 };
+  const revealed = deriveReviewerEarningOutcome({
+    localState: "confirmed",
+    commit: { ...baseCommit, revealed: true },
+    round: underQuorumRound,
+    nowSeconds: 400n,
+  });
+  assert.equal(revealed.earned, 250_000n);
+  assert.equal(revealed.status, "claimable");
+
+  const unrevealedUnderQuorum = deriveReviewerEarningOutcome({
+    localState: "confirmed",
+    commit: { ...baseCommit, revealed: false },
+    round: underQuorumRound,
+    nowSeconds: 400n,
+  });
+  assert.equal(unrevealedUnderQuorum.earned, 0n);
+  assert.equal(unrevealedUnderQuorum.status, "no_payout");
+
+  const revealedSnapshot = deriveRaterSettlementSnapshot({
+    ...base,
+    nowSeconds: 400n,
+    round: underQuorumRound,
+    commits: [{ ...baseCommit, revealed: true }],
+  });
+  assert.equal(revealedSnapshot.claimKind, "compensation");
+  assert.equal(revealedSnapshot.canClaim, true);
 });
 
 test("earnings stay principal-bound and reconcile the pinned settlement feed", () => {
