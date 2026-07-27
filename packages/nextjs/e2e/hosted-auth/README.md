@@ -15,7 +15,7 @@ authentication endpoint.
 Set every required variable before creating the harness:
 
 ```text
-TOKENLESS_E2E_BASE_URL=https://rateloop-tokenless.vercel.app
+E2E_BASE_URL=https://rateloop-tokenless.vercel.app
 TOKENLESS_E2E_OWNER_EMAIL=<dedicated owner receiving mailbox>
 TOKENLESS_E2E_REVIEWER_ONE_EMAIL=<dedicated reviewer-one receiving mailbox>
 TOKENLESS_E2E_REVIEWER_TWO_EMAIL=<dedicated reviewer-two receiving mailbox>
@@ -57,7 +57,8 @@ try {
 }
 ```
 
-Storage states are written with directory mode `0700` and file mode `0600`.
+Storage states are written under the ignored `test-results/` tree with
+directory mode `0700` and file mode `0600`. CI never uploads that tree.
 `cleanup()` signs out each established RateLoop session, closes all contexts,
 and deletes those files by default. Never print the returned OTP, storage
 state, receiving API key, or mailbox values.

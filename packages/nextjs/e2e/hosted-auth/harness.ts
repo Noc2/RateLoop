@@ -22,6 +22,10 @@ type IdentityRuntime = {
 };
 
 type StorageState = Awaited<ReturnType<BrowserContext["storageState"]>>;
+type HostedBrowserSession = {
+  authenticated: true;
+  principalId: string;
+};
 
 async function persistStorageState(statePath: string, state: StorageState) {
   const directory = path.dirname(statePath);
@@ -106,6 +110,21 @@ export class HostedAuthHarness {
     return this.runtimes[role].context;
   }
 
+  async session(role: HostedAuthRole): Promise<HostedBrowserSession> {
+    const response = await this.runtimes[role].context.request.get("/api/auth/session", {
+      failOnStatusCode: false,
+      headers: { "Cache-Control": "no-store" },
+    });
+    if (!response.ok()) {
+      throw new Error(`The ${role} RateLoop session returned status ${response.status()}.`);
+    }
+    const body = (await response.json()) as { authenticated?: unknown; principalId?: unknown };
+    if (body.authenticated !== true || typeof body.principalId !== "string" || !body.principalId) {
+      throw new Error(`The ${role} RateLoop session is not authenticated.`);
+    }
+    return { authenticated: true, principalId: body.principalId };
+  }
+
   storageStatePath(role: HostedAuthRole) {
     return this.config.accounts[role].storageStatePath;
   }
@@ -145,8 +164,8 @@ export class HostedAuthHarness {
       await finish.click();
       await page.waitForURL(url => url.origin === this.config.baseUrl && url.pathname !== "/sign-in");
       await assertAuthenticatedSession(page);
-      await persistStorageState(account.storageStatePath, await runtime.context.storageState());
       runtime.authenticated = true;
+      await persistStorageState(account.storageStatePath, await runtime.context.storageState());
       return { role, storageStatePath: account.storageStatePath };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Hosted authentication failed.";
@@ -191,6 +210,7 @@ export class HostedAuthHarness {
     const failures: string[] = [];
     if (signOut) {
       for (const role of HOSTED_AUTH_ROLES) {
+        if (!this.runtimes[role].authenticated) continue;
         try {
           await this.signOut(role);
         } catch (error) {

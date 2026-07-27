@@ -2,7 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const HOSTED_AUTH_ENV = {
-  baseUrl: "TOKENLESS_E2E_BASE_URL",
+  baseUrl: "E2E_BASE_URL",
   inboxProvider: "TOKENLESS_E2E_INBOX_PROVIDER",
   otpFromEmail: "TOKENLESS_E2E_OTP_FROM_EMAIL",
   ownerEmail: "TOKENLESS_E2E_OWNER_EMAIL",
