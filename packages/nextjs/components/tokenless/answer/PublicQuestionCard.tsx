@@ -796,9 +796,9 @@ export function PublicQuestionCard({
             <dd className="inline break-all font-mono">{networkAssignment.confidentialityTermsHash}</dd>
           </div>
         </dl>
-        <label className="mt-5 flex items-start gap-3 text-sm" htmlFor="public-review-terms">
+        <label className="mt-5 flex items-start gap-3 text-sm" htmlFor={`public-review-terms-${task.roundId}`}>
           <ChoiceInput
-            id="public-review-terms"
+            id={`public-review-terms-${task.roundId}`}
             type="checkbox"
             className="checkbox checkbox-sm mt-0.5"
             checked={networkTermsAccepted}
@@ -1025,10 +1025,10 @@ export function PublicQuestionCard({
                   </a>
                   <label
                     className="mt-3 flex items-start gap-2 text-xs leading-5"
-                    htmlFor="public-review-recovery-confirmed"
+                    htmlFor={`public-review-recovery-confirmed-${task.roundId}`}
                   >
                     <ChoiceInput
-                      id="public-review-recovery-confirmed"
+                      id={`public-review-recovery-confirmed-${task.roundId}`}
                       type="checkbox"
                       className="checkbox checkbox-xs mt-0.5"
                       checked={recoveryConfirmed}

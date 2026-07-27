@@ -88,3 +88,13 @@ test("the blind crowd forecast accepts the full one-percent RBTS grid without a 
   assert.match(source, /predictedUpBps: prediction \* 100/);
   assert.doesNotMatch(crowdForecastSource, /\[10, 30, 50, 70, 90\]/);
 });
+
+test("confirmation control ids are scoped per task so queued cards cannot cross-toggle", () => {
+  const source = readFileSync(new URL("./PublicQuestionCard.tsx", import.meta.url), "utf8");
+  // AnswerPageClient renders one card per queued task. A literal id makes every `htmlFor` bind to
+  // the first card in tree order, so clicking the second card's confirmation toggles the first.
+  assert.doesNotMatch(source, /"public-review-terms"/u);
+  assert.doesNotMatch(source, /"public-review-recovery-confirmed"/u);
+  assert.match(source, /public-review-terms-\$\{task\.roundId\}/u);
+  assert.match(source, /public-review-recovery-confirmed-\$\{task\.roundId\}/u);
+});
