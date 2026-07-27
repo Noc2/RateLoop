@@ -545,6 +545,20 @@ function validateTokenlessTestDeployment(env) {
   } else if (!previewSecret) {
     errors.push("TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET must encode exactly 32 bytes.");
   }
+  const integrityReviewerLookupKey = decode32(
+    value(env, "TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY"),
+    "base64url",
+  );
+  if (!integrityReviewerLookupKey) {
+    errors.push("TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY must encode exactly 32 bytes.");
+  }
+  if (
+    !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(value(env, "TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION"))
+  ) {
+    errors.push(
+      "TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION must be a stable version label of at most 64 characters.",
+    );
+  }
   const testSecretRoles = new Map();
   addSecretRole(testSecretRoles, "TOKENLESS_ARTIFACT_MASTER_KEY", isolatedReviewVaultKey);
   addSecretRole(testSecretRoles, "TOKENLESS_PUBLIC_MEDIA_PREVIEW_SECRET", previewSecret);

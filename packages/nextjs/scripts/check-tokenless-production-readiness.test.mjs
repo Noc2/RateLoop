@@ -22,6 +22,8 @@ const tokenlessTestOperationalSecrets = () => ({
   TOKENLESS_MCP_RATE_LIMIT_SECRET: "m".repeat(32),
   CRON_SECRET: "c".repeat(32),
   TOKENLESS_COMPLIANCE_OPERATOR_SECRET: "o".repeat(32),
+  TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY: encodedKey(10),
+  TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION: "forecast-v1",
   TOKENLESS_WALLET_SCREENING_PROVIDER_ID: "wallet-screening:v1",
   TOKENLESS_WALLET_SCREENING_PROVIDER_URL: "https://screening.example.test/check",
   TOKENLESS_WALLET_SCREENING_PROVIDER_SECRET: "w".repeat(32),
@@ -482,6 +484,31 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
       new RegExp(`${name} must contain at least 32 characters`),
     );
   }
+  for (const name of [
+    "TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY",
+    "TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION",
+  ]) {
+    const missingSecret = { ...env };
+    delete missingSecret[name];
+    assert.match(
+      validateTokenlessProductionReadiness({ env: missingSecret, activeRegistry: {} }).join("\n"),
+      new RegExp(`${name} must`),
+    );
+  }
+  assert.match(
+    validateTokenlessProductionReadiness({
+      env: { ...env, TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY: "too-short" },
+      activeRegistry: {},
+    }).join("\n"),
+    /TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY must encode exactly 32 bytes/u,
+  );
+  assert.match(
+    validateTokenlessProductionReadiness({
+      env: { ...env, TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION: "contains spaces" },
+      activeRegistry: {},
+    }).join("\n"),
+    /TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION must be a stable version label/u,
+  );
 
   const mainErrors = validateTokenlessProductionReadiness({
     env: { ...env, VERCEL_GIT_COMMIT_REF: "main" },
