@@ -2062,7 +2062,7 @@ test("OAuth keeps one stable tool list and fails closed for unavailable paid-net
   const emptyStream = await GET(streamRequest(tokens.access_token, stableSessionId!, "2025-06-18"));
   assert.equal(emptyStream.status, 200);
   assert.match(emptyStream.headers.get("content-type") ?? "", /^text\/event-stream/u);
-  assert.equal(await emptyStream.text(), ": keep-alive\n\n");
+  assert.match(await emptyStream.text(), /^retry: 15000\nid: poll-[A-Za-z0-9_-]{16}\ndata:\n\n$/u);
   await assert.rejects(
     () =>
       rotateAgentIntegration({

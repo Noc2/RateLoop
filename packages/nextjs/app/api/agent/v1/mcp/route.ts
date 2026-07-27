@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const MAX_BODY_BYTES = 64 * 1_024;
+const SSE_RETRY_MS = 15_000;
 
 function json(value: unknown, status = 200, extra: HeadersInit = {}) {
   const headers = new Headers(extra);
@@ -231,8 +232,8 @@ export async function GET(request: NextRequest) {
       lastEventId: request.headers.get("last-event-id"),
     });
     const payload = elicitation
-      ? `event: message\nid: ${elicitation.eventId}\ndata: ${JSON.stringify(elicitation.request)}\n\n`
-      : ": keep-alive\n\n";
+      ? `retry: ${SSE_RETRY_MS}\nevent: message\nid: ${elicitation.eventId}\ndata: ${JSON.stringify(elicitation.request)}\n\n`
+      : `retry: ${SSE_RETRY_MS}\nid: poll-${randomBytes(12).toString("base64url")}\ndata:\n\n`;
     const headers = new Headers(cors);
     headers.set("Cache-Control", "private, no-store, max-age=0");
     headers.set("Content-Type", "text/event-stream; charset=utf-8");
