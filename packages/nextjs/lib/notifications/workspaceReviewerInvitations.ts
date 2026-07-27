@@ -136,14 +136,14 @@ function configuration(input: {
   }
 }
 
+/** See delivery.ts: only locally detectable configuration may park, or the unpark sweep loops. */
 function isConfigurationError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   return (
     message === "Resend is not configured" ||
     message.startsWith("TOKENLESS_ARTIFACT_MASTER_KEY ") ||
     message === "Invitation email app origin is invalid." ||
-    message === "Invitation email payload key version is unavailable." ||
-    /^Resend request failed: (400|401|403)\b/u.test(message)
+    message === "Invitation email payload key version is unavailable."
   );
 }
 

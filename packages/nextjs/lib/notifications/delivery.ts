@@ -442,13 +442,19 @@ function deliveryConfiguration(input: {
   return { error, origin };
 }
 
+/**
+ * Only locally detectable deployment problems may park a delivery, because the unpark sweep
+ * revives every parked row as soon as `deliveryConfiguration` reports no error. A provider
+ * rejection is not detectable that way: the key is present, so the sweep revives the row, the
+ * send fails again, and it re-parks - forever, without ever consuming an attempt. Provider
+ * failures therefore take the normal bounded-retry path to the dead state.
+ */
 function isDeliveryConfigurationError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   return (
     message === "Resend is not configured" ||
     message.startsWith("TOKENLESS_NOTIFICATION_UNSUBSCRIBE_SECRET ") ||
-    message === "Notification app origin is invalid." ||
-    /^Resend request failed: (400|401|403)\b/u.test(message)
+    message === "Notification app origin is invalid."
   );
 }
 

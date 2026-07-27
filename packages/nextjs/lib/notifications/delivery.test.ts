@@ -647,10 +647,13 @@ test("configuration failures park delivery without consuming attempts and resume
   assert.equal(delivery.rows[0]?.provider_message_id, "resend-after-config-repair");
 });
 
-test("provider credential rejection parks instead of retrying", async () => {
+test("a provider rejection retries and dies rather than parking forever", async () => {
   await seedVerifiedSubscription();
   await insertGenericLifecycleNotification();
   await enqueueTokenlessNotificationEmails({ now: NOW });
+  // Parking is reserved for locally detectable configuration. A provider rejection looks healthy
+  // to `deliveryConfiguration`, so parking it meant the unpark sweep revived and re-sent it every
+  // cycle without ever consuming an attempt.
   const outcomes = await deliverPendingTokenlessNotificationEmails({
     appOrigin: "https://tokenless.example.test",
     now: NOW,
@@ -661,14 +664,14 @@ test("provider credential rejection parks instead of retrying", async () => {
   });
   assert.deepEqual(
     outcomes.map(value => value.state),
-    ["parked"],
+    ["retry"],
   );
   const delivery = await dbClient.execute(
     "SELECT state,attempt_count,parked_at FROM tokenless_notification_email_deliveries",
   );
-  assert.equal(delivery.rows[0]?.state, "parked");
-  assert.equal(Number(delivery.rows[0]?.attempt_count), 0);
-  assert.ok(delivery.rows[0]?.parked_at);
+  assert.equal(delivery.rows[0]?.state, "retry");
+  assert.equal(Number(delivery.rows[0]?.attempt_count), 1);
+  assert.equal(delivery.rows[0]?.parked_at, null);
 });
 
 test("bounded delivery retries end in a visible dead letter", async () => {
@@ -773,4 +776,25 @@ test("notification recovery stops after a bounded number of dead-letter cycles",
   assert.equal(delivery.rows[0]?.state, "dead");
   assert.equal(Number(delivery.rows[0]?.recovery_count), 6);
   assert.equal(delivery.rows[0]?.next_recovery_at, null);
+});
+
+test("a rejected recipient reaches the dead letter instead of looping", async () => {
+  await seedVerifiedSubscription();
+  await insertGenericLifecycleNotification();
+  await enqueueTokenlessNotificationEmails({ now: NOW });
+  await dbClient.execute("UPDATE tokenless_notification_email_deliveries SET attempt_count = 7");
+  const outcomes = await deliverPendingTokenlessNotificationEmails({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    unsubscribeSecret: SECRET,
+    async send() {
+      throw new Error("Resend request failed: 400 invalid recipient");
+    },
+  });
+  assert.deepEqual(
+    outcomes.map(value => value.state),
+    ["dead"],
+  );
+  const delivery = await dbClient.execute("SELECT state FROM tokenless_notification_email_deliveries");
+  assert.equal(delivery.rows[0]?.state, "dead");
 });
