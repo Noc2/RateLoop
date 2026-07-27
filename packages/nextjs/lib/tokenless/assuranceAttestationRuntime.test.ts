@@ -114,9 +114,7 @@ test("platform attestation runtime builds from a sealed Ed25519 secret and publi
   const keyId = `ed25519:${createHash("sha256").update(publicKeyDer).digest("hex").slice(0, 24)}`;
   const rekorKeys = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
   const runtime = await __assuranceAttestationRuntimeTestUtils.buildRuntime({
-    TOKENLESS_ATTESTATION_REKOR_PUBLIC_KEY_PEM: rekorKeys.publicKey
-      .export({ format: "pem", type: "spki" })
-      .toString(),
+    TOKENLESS_ATTESTATION_REKOR_PUBLIC_KEY_PEM: rekorKeys.publicKey.export({ format: "pem", type: "spki" }).toString(),
     TOKENLESS_ATTESTATION_REKOR_URL: "https://rekor.example.test",
     TOKENLESS_ATTESTATION_SIGNING_KEY_ID: keyId,
     TOKENLESS_ATTESTATION_SIGNING_PRIVATE_KEY: signerKeys.privateKey

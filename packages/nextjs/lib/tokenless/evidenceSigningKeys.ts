@@ -71,8 +71,7 @@ function parseDecisionPacketVerificationKeysWithOptions(encoded: string, options
     const canonical = publicKey.export({ format: "der", type: "spki" });
     const ed25519 = value.algorithm === "Ed25519";
     if (
-      (ed25519 &&
-        (publicKey.asymmetricKeyType !== "ed25519" || !/^ed25519:[0-9a-f]{24}$/u.test(value.keyId))) ||
+      (ed25519 && (publicKey.asymmetricKeyType !== "ed25519" || !/^ed25519:[0-9a-f]{24}$/u.test(value.keyId))) ||
       (!ed25519 &&
         (publicKey.asymmetricKeyType !== "ec" ||
           publicKey.asymmetricKeyDetails?.namedCurve !== "prime256v1" ||

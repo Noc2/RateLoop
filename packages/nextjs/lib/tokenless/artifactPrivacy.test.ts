@@ -576,14 +576,13 @@ test("artifact vault refuses browser-exposed keys and malformed master keys", ()
     () => __artifactPrivacyTestUtils.decodeMasterKey("too-short"),
     (error: unknown) => error instanceof TokenlessServiceError && error.code === "invalid_artifact_key",
   );
-  assert.doesNotThrow(
-    () =>
-      __artifactPrivacyTestUtils.getRuntime({
-        TOKENLESS_ARTIFACT_WRAPPING_KEYS: JSON.stringify({
-          "artifact-v1": Buffer.alloc(32, 8).toString("base64url"),
-        }),
-        TOKENLESS_ARTIFACT_WRAPPING_KEY_VERSION: "artifact-v1",
-        TOKENLESS_PSEUDONYM_KEY: Buffer.alloc(32, 9).toString("base64url"),
-      } as unknown as NodeJS.ProcessEnv),
+  assert.doesNotThrow(() =>
+    __artifactPrivacyTestUtils.getRuntime({
+      TOKENLESS_ARTIFACT_WRAPPING_KEYS: JSON.stringify({
+        "artifact-v1": Buffer.alloc(32, 8).toString("base64url"),
+      }),
+      TOKENLESS_ARTIFACT_WRAPPING_KEY_VERSION: "artifact-v1",
+      TOKENLESS_PSEUDONYM_KEY: Buffer.alloc(32, 9).toString("base64url"),
+    } as unknown as NodeJS.ProcessEnv),
   );
 });

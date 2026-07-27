@@ -75,11 +75,7 @@ export async function issueThirdwebWalletJwt(principalId: string, now = new Date
     }),
   );
   const signingInput = `${header}.${payload}`;
-  const signature = sign(
-    null,
-    Buffer.from(signingInput),
-    createPrivateKey({ key: config.privateJwk, format: "jwk" }),
-  );
+  const signature = sign(null, Buffer.from(signingInput), createPrivateKey({ key: config.privateJwk, format: "jwk" }));
   const jtiHash = createHash("sha256").update(jti).digest("hex");
   await dbClient.execute({
     sql: `INSERT INTO tokenless_thirdweb_wallet_jtis

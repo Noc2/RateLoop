@@ -1,7 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
-
 export type VaultContext = Readonly<{
   tenantId: string;
   homeRegion: "eu";

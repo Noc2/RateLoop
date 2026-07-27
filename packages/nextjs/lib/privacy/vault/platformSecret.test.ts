@@ -1,7 +1,4 @@
-import {
-  createPlatformSecretKeyWrappingProvider,
-  loadPlatformSecretKeyringConfiguration,
-} from "./platformSecret";
+import { createPlatformSecretKeyWrappingProvider, loadPlatformSecretKeyringConfiguration } from "./platformSecret";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createLocalKeyWrappingProvider } from "~~/lib/privacy/vault";
