@@ -11,6 +11,7 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
 test("pricing page shows three tiers and discloses costs progressively", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   process.env.TOKENLESS_SUBSCRIPTIONS_ENABLED = "true";
+  delete process.env.TOKENLESS_DEMO_BOOKING_URL;
   const { default: PricingPage } = await import("./page");
   const html = renderToStaticMarkup(<PricingPage />).replace(/\s+/g, " ");
 
@@ -33,6 +34,7 @@ test("pricing page shows three tiers and discloses costs progressively", async (
     html,
     /class="rateloop-gradient-action min-h-12 w-full justify-center px-5" href="mailto:hawigxyz@proton\.me\?subject=RateLoop%20Enterprise">Book demo<\/a>/,
   );
+  assert.doesNotMatch(html, /target="_blank"/);
   assert.match(html, /<s[^>]*>\$99/);
   assert.match(html, /Then \$99\/month after 12 months/);
   assert.match(html, /Reviewers keep 90% of every bounty/);
@@ -46,4 +48,20 @@ test("pricing page shows three tiers and discloses costs progressively", async (
   assert.ok(html.indexOf("Early Access terms:") < html.indexOf("Choose Early Access"));
   assert.doesNotMatch(html, /<details/);
   assert.doesNotMatch(html, /Pricing questions|design-partner arrangement/);
+});
+
+test("a configured scheduler replaces the enterprise mailto with an external booking link", async () => {
+  (globalThis as typeof globalThis & { React: typeof React }).React = React;
+  process.env.TOKENLESS_SUBSCRIPTIONS_ENABLED = "true";
+  process.env.TOKENLESS_DEMO_BOOKING_URL = "https://calendar.app.google/rateloopDemo";
+  const { default: PricingPage } = await import("./page");
+  const html = renderToStaticMarkup(<PricingPage />).replace(/\s+/g, " ");
+
+  assert.match(
+    html,
+    /href="https:\/\/calendar\.app\.google\/rateloopDemo" target="_blank" rel="noopener noreferrer"[^>]*>Book demo<\/a>/,
+  );
+  assert.doesNotMatch(html, /mailto:/);
+
+  delete process.env.TOKENLESS_DEMO_BOOKING_URL;
 });

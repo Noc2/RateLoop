@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { WorkspacePlanCards } from "~~/components/pricing/WorkspacePlanCards";
 import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { TOKENLESS_BILLING_PLANS, formatUsdPrice } from "~~/lib/billing/plans";
+import { resolveDemoBookingUrl } from "~~/lib/marketing/demoBooking";
 
 export const metadata: Metadata = {
   title: "Pricing",
@@ -12,6 +13,7 @@ export const dynamic = "force-dynamic";
 
 export default function PricingPage() {
   const subscriptionsEnabled = process.env.TOKENLESS_SUBSCRIPTIONS_ENABLED === "true";
+  const demoBookingUrl = resolveDemoBookingUrl();
   const earlyAccessPrice = formatUsdPrice(TOKENLESS_BILLING_PLANS.early_access.monthlyPriceCents);
 
   return (
@@ -36,7 +38,7 @@ export default function PricingPage() {
             month for the first 12 months. We give at least 60 days&apos; notice before a later price change; founding
             customers then receive 20% off the comparable monthly plan and may cancel before the new price applies.
           </div>
-          <WorkspacePlanCards subscriptionsEnabled={subscriptionsEnabled} />
+          <WorkspacePlanCards subscriptionsEnabled={subscriptionsEnabled} demoBookingUrl={demoBookingUrl} />
         </section>
 
         <section className="surface-card mt-16 grid gap-8 rounded-2xl p-7 sm:p-9 lg:grid-cols-2">

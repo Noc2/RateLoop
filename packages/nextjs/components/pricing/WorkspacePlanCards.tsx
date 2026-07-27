@@ -4,13 +4,15 @@ import { TOKENLESS_BILLING_PLANS, formatUsdPrice } from "~~/lib/billing/plans";
 
 type WorkspacePlanCardsProps = {
   subscriptionsEnabled: boolean;
+  /** Resolved by `resolveDemoBookingUrl`; null falls back to the enterprise mailto. */
+  demoBookingUrl?: string | null;
 };
 
 const freePlan = TOKENLESS_BILLING_PLANS.free;
 const earlyAccessPlan = TOKENLESS_BILLING_PLANS.early_access;
 const earlyAccessListPrice = formatUsdPrice(earlyAccessPlan.listPriceCents ?? earlyAccessPlan.monthlyPriceCents);
 
-export function WorkspacePlanCards({ subscriptionsEnabled }: WorkspacePlanCardsProps) {
+export function WorkspacePlanCards({ subscriptionsEnabled, demoBookingUrl = null }: WorkspacePlanCardsProps) {
   const earlyAccessHref = subscriptionsEnabled
     ? "/agents?tab=overview&billing=upgrade"
     : "mailto:hawigxyz@proton.me?subject=RateLoop%20Early%20Access";
@@ -83,12 +85,26 @@ export function WorkspacePlanCards({ subscriptionsEnabled }: WorkspacePlanCardsP
           "Compliance solutions",
         ]}
         footer={
-          <Link
-            href="mailto:hawigxyz@proton.me?subject=RateLoop%20Enterprise"
-            className="rateloop-gradient-action min-h-12 w-full justify-center px-5"
-          >
-            Book demo
-          </Link>
+          demoBookingUrl ? (
+            // The scheduler is a third-party page, so it leaves the app in a new tab rather than
+            // being embedded: an embed would need its origin in the CSP and would set third-party
+            // storage on page view.
+            <a
+              href={demoBookingUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rateloop-gradient-action min-h-12 w-full justify-center px-5"
+            >
+              Book demo
+            </a>
+          ) : (
+            <Link
+              href="mailto:hawigxyz@proton.me?subject=RateLoop%20Enterprise"
+              className="rateloop-gradient-action min-h-12 w-full justify-center px-5"
+            >
+              Book demo
+            </Link>
+          )
         }
       />
     </div>

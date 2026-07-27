@@ -6,6 +6,7 @@ import { TokenlessOrb } from "~~/components/home/TokenlessOrb";
 import { WorkspacePlanCards } from "~~/components/pricing/WorkspacePlanCards";
 import type { LandingSocialProofItem } from "~~/lib/home/socialProof";
 import { getLandingPageSocialProofItems } from "~~/lib/home/socialProofServer";
+import { resolveDemoBookingUrl } from "~~/lib/marketing/demoBooking";
 import { configuredHumanReviewLanes } from "~~/lib/tokenless/reviewCapabilities";
 
 export const revalidate = 300;
@@ -131,9 +132,11 @@ function SectionTitle({
 export function TokenlessLandingPage({
   socialProofItems,
   subscriptionsEnabled,
+  demoBookingUrl = null,
 }: {
   socialProofItems: LandingSocialProofItem[];
   subscriptionsEnabled: boolean;
+  demoBookingUrl?: string | null;
 }) {
   return (
     <div className="flex grow flex-col items-center px-4 pb-16 pt-4 sm:pt-12 lg:pt-16">
@@ -278,7 +281,7 @@ export function TokenlessLandingPage({
           <p className="mb-8 max-w-3xl text-lg leading-8 text-base-content/65 sm:mb-10 sm:text-xl">
             Plans cover RateLoop decisions. Reviewer compensation is separate where an activated paid lane applies.
           </p>
-          <WorkspacePlanCards subscriptionsEnabled={subscriptionsEnabled} />
+          <WorkspacePlanCards subscriptionsEnabled={subscriptionsEnabled} demoBookingUrl={demoBookingUrl} />
         </section>
 
         <div aria-hidden="true" className="my-16 h-px w-full max-w-5xl bg-base-content/10 sm:my-20 lg:my-24" />
@@ -325,6 +328,7 @@ export default async function LandingPage() {
     <TokenlessLandingPage
       socialProofItems={await getLandingPageSocialProofItems()}
       subscriptionsEnabled={process.env.TOKENLESS_SUBSCRIPTIONS_ENABLED === "true"}
+      demoBookingUrl={resolveDemoBookingUrl()}
     />
   );
 }
