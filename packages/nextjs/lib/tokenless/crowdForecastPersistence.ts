@@ -108,6 +108,12 @@ function normalizeBatchEntries(entries: readonly ForecastBatchEntry[]) {
   );
 }
 
+function optionalPrivateForecast(row: Row) {
+  if (row.predicted_positive_bps === null || row.predicted_positive_bps === undefined) return null;
+  const prediction = Number(row.predicted_positive_bps);
+  return Number.isSafeInteger(prediction) ? prediction : null;
+}
+
 function runtimeFromEncoded(version: string | undefined, encoded: string | undefined) {
   const normalizedVersion = version?.trim();
   const normalizedEncoded = encoded?.trim();
@@ -675,10 +681,10 @@ export async function aggregatePrivateForecastDeliveryInTransaction(
   let runtime: ReturnType<typeof lookupRuntime> | null = null;
   const entries = normalizeBatchEntries(
     (responseResult.rows as Row[]).flatMap(row => {
-      const prediction = Number(row.predicted_positive_bps);
+      const prediction = optionalPrivateForecast(row);
       const principalId = text(row, "reviewer_account_address");
       const choice = text(row, "choice");
-      if (!principalId || !Number.isSafeInteger(prediction)) return [];
+      if (!principalId || prediction === null) return [];
       runtime ??= lookupRuntime();
       const subject = invitedForecastSubject({
         workspaceId: input.workspaceId,
@@ -1679,6 +1685,7 @@ export async function erasePrincipalForecastIntegrityInTransaction(client: PoolC
 }
 
 export const __crowdForecastPersistenceTestUtils = {
+  optionalPrivateForecast,
   async aggregateInvitedBatch(
     client: PoolClient,
     input: {

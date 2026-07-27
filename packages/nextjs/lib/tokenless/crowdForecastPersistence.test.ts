@@ -35,6 +35,15 @@ afterEach(() => {
   else process.env.TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEYS_JSON = originalLookupKeyring;
 });
 
+test("legacy private responses without a forecast stay absent", () => {
+  assert.equal(__crowdForecastPersistenceTestUtils.optionalPrivateForecast({ predicted_positive_bps: null }), null);
+  assert.equal(
+    __crowdForecastPersistenceTestUtils.optionalPrivateForecast({ predicted_positive_bps: undefined }),
+    null,
+  );
+  assert.equal(__crowdForecastPersistenceTestUtils.optionalPrivateForecast({ predicted_positive_bps: 5_500 }), 5_500);
+});
+
 test("accepted appeals clear their finding source while withdrawn appeals do not", async () => {
   const workspace = await createWorkspace({
     ownerAddress: OWNER,
