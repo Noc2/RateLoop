@@ -6,6 +6,10 @@ type InboxResponse = {
   notifications?: Array<{ notificationId?: string; readAt?: string | null; sourceType?: string | null }>;
 };
 
+type SessionResponse = {
+  authenticated?: boolean;
+};
+
 function unreadAssignmentNotifications(value: InboxResponse) {
   if (!Array.isArray(value.notifications)) return [];
   return value.notifications.filter(
@@ -17,6 +21,11 @@ export function HumanInboxBadge({ markAssignmentsRead = false }: { markAssignmen
   const [unread, setUnread] = useState(0);
   const refresh = useCallback(async () => {
     try {
+      const sessionResponse = await fetch("/api/auth/session", {
+        cache: "no-store",
+        credentials: "same-origin",
+      });
+      if (!sessionResponse.ok || !((await sessionResponse.json()) as SessionResponse).authenticated) return;
       const response = await fetch("/api/notifications/inbox?limit=100", {
         cache: "no-store",
         credentials: "same-origin",
