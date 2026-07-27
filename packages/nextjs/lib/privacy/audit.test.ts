@@ -15,6 +15,30 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 const OWNER = "0x1111111111111111111111111111111111111111";
 const OTHER = "0x2222222222222222222222222222222222222222";
 const OPAQUE_OWNER = "rlp_audit_workspace_owner_0001";
+const GENESIS_DIGEST = `sha256:${"0".repeat(64)}`;
+
+function auditEvent(workspaceId: string, index: number) {
+  return {
+    action: "project.created",
+    actorKind: "account" as const,
+    actorReference: OWNER,
+    assuranceMethod: "rateloop_session",
+    occurredAt: new Date(`2026-07-15T11:0${index}:00.000Z`),
+    purpose: "project_administration",
+    reason: "owner_request",
+    result: "success" as const,
+    targetId: `project_head_state_${index}`,
+    targetKind: "project",
+    workspaceId,
+  };
+}
+
+async function assertExportRejectsAsInvalid(workspaceId: string) {
+  await assert.rejects(
+    () => exportWorkspaceAudit({ accountAddress: OWNER, workspaceId }),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "audit_invalid",
+  );
+}
 
 beforeEach(() => __setDatabaseResourcesForTests(createMemoryDatabaseResources()));
 afterEach(() => __setDatabaseResourcesForTests(null));
@@ -135,6 +159,72 @@ test("audit exports authorize a Better Auth principal without requiring a wallet
   const exported = await exportWorkspaceAudit({ accountAddress: OPAQUE_OWNER, workspaceId });
   assert.equal(exported.events.length, 1);
   assert.equal(exported.integrity.valid, true);
+});
+
+test("a workspace with no audited action exports an empty chain instead of an integrity failure", async () => {
+  const { workspaceId } = await createWorkspace({ name: "No audited action", ownerAddress: OWNER });
+  const heads = await dbClient.execute({
+    sql: "SELECT workspace_id FROM tokenless_audit_heads WHERE workspace_id = ?",
+    args: [workspaceId],
+  });
+  assert.equal(heads.rowCount, 0);
+  assert.deepEqual(await verifyWorkspaceAuditChain(workspaceId), {
+    eventCount: 0,
+    headDigest: GENESIS_DIGEST,
+    valid: true,
+  });
+
+  const exported = await exportWorkspaceAudit({ accountAddress: OWNER, workspaceId });
+  assert.deepEqual(exported.events, []);
+  assert.deepEqual(exported.integrity, { eventCount: 0, headDigest: GENESIS_DIGEST, valid: true });
+  assert.equal(exported.retention.policyVersion, 1);
+});
+
+test("audit exports keep rejecting every head state that disagrees with the stored events", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Head disagreement", ownerAddress: OWNER });
+  const first = await appendAuditEvent(auditEvent(workspaceId, 1));
+  const second = await appendAuditEvent(auditEvent(workspaceId, 2));
+  assert.equal((await exportWorkspaceAudit({ accountAddress: OWNER, workspaceId })).events.length, 2);
+
+  await dbClient.execute({
+    sql: "UPDATE tokenless_audit_heads SET last_sequence = ? WHERE workspace_id = ?",
+    args: [5, workspaceId],
+  });
+  await assertExportRejectsAsInvalid(workspaceId);
+
+  await dbClient.execute({
+    sql: "UPDATE tokenless_audit_heads SET last_sequence = ?, last_digest = ? WHERE workspace_id = ?",
+    args: [2, `sha256:${"f".repeat(64)}`, workspaceId],
+  });
+  await assertExportRejectsAsInvalid(workspaceId);
+
+  await dbClient.execute({
+    sql: "UPDATE tokenless_audit_heads SET last_digest = ? WHERE workspace_id = ?",
+    args: [second.eventDigest, workspaceId],
+  });
+  assert.equal((await exportWorkspaceAudit({ accountAddress: OWNER, workspaceId })).integrity.valid, true);
+
+  await dbClient.execute({
+    sql: "DELETE FROM tokenless_audit_events WHERE event_id = ?",
+    args: [second.eventId],
+  });
+  await assertExportRejectsAsInvalid(workspaceId);
+
+  await dbClient.execute({
+    sql: "DELETE FROM tokenless_audit_events WHERE event_id = ?",
+    args: [first.eventId],
+  });
+  await assertExportRejectsAsInvalid(workspaceId);
+});
+
+test("audit exports keep rejecting stored events whose head row was removed", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Missing head", ownerAddress: OWNER });
+  await appendAuditEvent(auditEvent(workspaceId, 3));
+  await dbClient.execute({
+    sql: "DELETE FROM tokenless_audit_heads WHERE workspace_id = ?",
+    args: [workspaceId],
+  });
+  await assertExportRejectsAsInvalid(workspaceId);
 });
 
 test("workspace verification detects deleted tail events and a fully deleted chain", async () => {

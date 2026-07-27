@@ -531,7 +531,8 @@ export async function exportWorkspaceAudit(input: { accountAddress: string; work
   }
   const snapshot = await dbClient.execute({
     sql: `WITH audit_head AS (
-            SELECT last_sequence, last_digest FROM tokenless_audit_heads WHERE workspace_id = ? LIMIT 1
+            SELECT 1 AS head_present, last_sequence, last_digest
+            FROM tokenless_audit_heads WHERE workspace_id = ? LIMIT 1
           ), retention_policy AS (
             SELECT version, audit_retention_months, basis_json, effective_at
             FROM tokenless_workspace_evidence_retention_policies
@@ -540,7 +541,7 @@ export async function exportWorkspaceAudit(input: { accountAddress: string; work
           SELECT e.event_id, e.workspace_id, e.sequence, e.previous_digest, e.event_digest, e.home_region,
                  e.actor_kind, e.actor_reference, e.assurance_method, e.action, e.target_kind, e.target_id,
                  e.purpose, e.reason, e.request_correlation, e.result, e.metadata_json, e.occurred_at,
-                 h.last_sequence AS head_last_sequence, h.last_digest AS head_last_digest,
+                 h.head_present, h.last_sequence AS head_last_sequence, h.last_digest AS head_last_digest,
                  p.version AS retention_policy_version, p.audit_retention_months,
                  p.basis_json AS retention_basis_json, p.effective_at AS retention_effective_at
           FROM retention_policy p
@@ -554,18 +555,23 @@ export async function exportWorkspaceAudit(input: { accountAddress: string; work
     throw new TokenlessServiceError("The workspace retention policy is unavailable.", 500, "retention_unavailable");
   }
   const events = snapshot.rows.filter(row => row.event_id !== null && row.event_id !== undefined);
-  const snapshotHead = snapshot.rows[0]
-    ? {
-        last_sequence: snapshot.rows[0].head_last_sequence,
-        last_digest: snapshot.rows[0].head_last_digest,
-      }
-    : undefined;
+  // The head is LEFT JOINed, so its columns are null both when no head row exists and when a
+  // stored head row holds null columns. `head_present` marks the row itself, keeping a workspace
+  // that has never been audited (no head, no events) distinct from a head that contradicts them.
+  const snapshotHead =
+    snapshotRow.head_present === null || snapshotRow.head_present === undefined
+      ? undefined
+      : {
+          last_sequence: snapshotRow.head_last_sequence,
+          last_digest: snapshotRow.head_last_digest,
+        };
   const integrity = verifyWorkspaceAuditRows(input.workspaceId, events as Record<string, unknown>[], snapshotHead);
   if (!integrity.valid) {
     throw new TokenlessServiceError("The workspace audit chain failed integrity verification.", 409, "audit_invalid");
   }
   const exportedEvents = events.map(event => {
     const exportedEvent = { ...event };
+    delete exportedEvent.head_present;
     delete exportedEvent.head_last_sequence;
     delete exportedEvent.head_last_digest;
     delete exportedEvent.retention_policy_version;
