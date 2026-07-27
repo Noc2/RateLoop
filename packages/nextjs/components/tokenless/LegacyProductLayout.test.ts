@@ -60,11 +60,14 @@ test("Human Discover keeps sign-in requirements concise", () => {
   assert.doesNotMatch(page, /ThirdwebSessionButton/);
 });
 
-test("Human Discover discloses source filters only when both queues have work", () => {
+test("Human Discover offers exactly the legacy source filters and empty state", () => {
   const page = source("./answer/AnswerPageClient.tsx");
   const card = source("./answer/PublicQuestionCard.tsx");
 
-  assert.match(page, /tasks\.length > 0 && assignments\.length > 0/);
+  // When both queues have work the surface is unfiltered and the pills are redundant. The
+  // conditions governing a scope that has run out of work are asserted behaviourally in
+  // AnswerPageClient.interaction.test.tsx, which this source match cannot express.
+  assert.match(page, /hasPublicTasks && hasPrivateAssignments/);
   assert.match(page, /\["all", "public", "private"\]/);
   assert.doesNotMatch(page, /\["all", "public", "private", "submitted"\]/);
   assert.ok(page.indexOf("assignments.map") < page.indexOf("tasks.map"));
