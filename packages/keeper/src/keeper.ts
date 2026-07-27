@@ -506,14 +506,17 @@ async function revealAndClaimRound(params: {
       params.round.claimDeadline > 0n &&
       params.now <= params.round.claimDeadline
     ) {
+      // claimCompensation reverts unless the commit revealed, in *both*
+      // compensation states. A beacon-failure round is only reachable when
+      // nothing revealed, so an ungated write there can never succeed.
       const functionName =
         params.round.state === TokenlessRoundState.Finalized
           ? "claim"
-          : params.round.state ===
+          : (params.round.state ===
                 TokenlessRoundState.BeaconFailureCompensation ||
-              (params.round.state ===
-                TokenlessRoundState.UnderQuorumCompensation &&
-                commit.revealed)
+                params.round.state ===
+                  TokenlessRoundState.UnderQuorumCompensation) &&
+              commit.revealed
             ? "claimCompensation"
             : null;
       if (functionName) {
@@ -1015,9 +1018,7 @@ export async function runTokenlessKeeper(
         cursor: nextPonderWorkFeedCursor,
       });
       feedNextCursor = page.nextCursor;
-      const feedWork = page.items.filter(
-        (item) => item.roundId < nextRoundId,
-      );
+      const feedWork = page.items.filter((item) => item.roundId < nextRoundId);
       feedRoundIds = feedWork.map((item) => item.roundId);
       for (const item of feedWork) {
         feedCreatedBlocks.set(item.roundId, item.createdBlock);

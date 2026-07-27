@@ -920,16 +920,16 @@ describe("tokenless keeper orchestration", () => {
       );
     const writes: string[] = [];
     const result = await runTokenlessKeeper(
-        clients({
-          currentRound: round(),
-          writes,
-          now: 150n,
-          receiptStatus: "reverted",
-        }),
-        config,
-        logger,
-        decrypt,
-      );
+      clients({
+        currentRound: round(),
+        writes,
+        now: 150n,
+        receiptStatus: "reverted",
+      }),
+      config,
+      logger,
+      decrypt,
+    );
     // The write was submitted, but its mined receipt reverted, so the keeper
     // never confirms the reveal and never records a successful run.
     expect(writes).toEqual(["openReveal"]);
@@ -1386,20 +1386,20 @@ describe("tokenless keeper orchestration", () => {
     const beaconFetches: Array<[Hex, bigint]> = [];
     const errors: string[] = [];
     const result = await runTokenlessKeeper(
-        clients({
-          currentRound: awaitingSeedRound(overrides),
-          beaconFetches,
-          now: VALID_SCORING_TIMESTAMP,
-        }),
-        config,
-        {
-          ...logger,
-          error(_message, context) {
-            errors.push(String(context?.error));
-          },
+      clients({
+        currentRound: awaitingSeedRound(overrides),
+        beaconFetches,
+        now: VALID_SCORING_TIMESTAMP,
+      }),
+      config,
+      {
+        ...logger,
+        error(_message, context) {
+          errors.push(String(context?.error));
         },
-        decrypt,
-      );
+      },
+      decrypt,
+    );
     expect(result.roundFailures).toBe(1);
     expect(errors).toHaveLength(1);
     expect(errors[0]).toMatch(expected);
@@ -1460,5 +1460,69 @@ describe("tokenless keeper orchestration", () => {
       decrypt,
     );
     expect(staleWrites).toContain("returnStaleShares");
+  });
+
+  it("only claims compensation for a revealed commit in either compensation state", async () => {
+    // claimCompensation reverts without record.revealed, and a beacon-failure
+    // round is only reachable when nothing revealed, so every such write is
+    // doomed for the whole claim window.
+    const beaconFailureWrites: string[] = [];
+    const beaconFailure = await runTokenlessKeeper(
+      clients({
+        currentRound: round({
+          state: TokenlessRoundState.BeaconFailureCompensation,
+          revealCount: 0,
+          compensationPerRecipient: 2n,
+          claimDeadline: 300n,
+        }),
+        writes: beaconFailureWrites,
+        now: 250n,
+      }),
+      config,
+      logger,
+      decrypt,
+    );
+    expect(beaconFailureWrites).not.toContain("claimCompensation");
+    expect(beaconFailure.claimsExecuted).toBe(0);
+
+    resetTokenlessKeeperStateForTests();
+    const underQuorumWrites: string[] = [];
+    const underQuorum = await runTokenlessKeeper(
+      clients({
+        currentRound: round({
+          state: TokenlessRoundState.UnderQuorumCompensation,
+          revealCount: 1,
+          compensationPerRecipient: 2n,
+          claimDeadline: 300n,
+        }),
+        writes: underQuorumWrites,
+        now: 250n,
+      }),
+      config,
+      logger,
+      decrypt,
+    );
+    expect(underQuorumWrites).toContain("claimCompensation");
+    expect(underQuorum.claimsExecuted).toBe(1);
+
+    resetTokenlessKeeperStateForTests();
+    const unrevealedUnderQuorumWrites: string[] = [];
+    const unrevealedUnderQuorum = await runTokenlessKeeper(
+      clients({
+        currentRound: round({
+          state: TokenlessRoundState.UnderQuorumCompensation,
+          revealCount: 0,
+          compensationPerRecipient: 2n,
+          claimDeadline: 300n,
+        }),
+        writes: unrevealedUnderQuorumWrites,
+        now: 250n,
+      }),
+      config,
+      logger,
+      decrypt,
+    );
+    expect(unrevealedUnderQuorumWrites).not.toContain("claimCompensation");
+    expect(unrevealedUnderQuorum.claimsExecuted).toBe(0);
   });
 });
