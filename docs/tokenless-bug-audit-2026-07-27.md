@@ -1,6 +1,6 @@
 # Tokenless bug audit — 27 July 2026
 
-A bug hunt across the repository at `25e235d90`, run as six parallel subsystem
+A bug hunt across the repository at `25e235d90`, run as seven parallel subsystem
 reviews plus an independent tooling pass. Every finding below was re-verified by
 hand against the source before it was written down; findings that did not
 survive that check were dropped and are listed in
@@ -46,7 +46,10 @@ Ordered by what breaks if they are left alone.
    behind.** Three tables from one migration, half covered.
 5. **[8] The idempotency scope is caller-chosen.** Double funding, then a
    permanently broken handoff.
-6. **[32, 31, 30] Three user-facing breakages in the review path** — a blank
+6. **[42] RateLoop's own default policy 500s on every network panel of four or
+   fewer reviewers.** A hardcoded cluster-share cap that cannot admit a single
+   reviewer at those sizes, rejected only at reservation time.
+7. **[32, 31, 30] Three user-facing breakages in the review path** — a blank
    queue with no recovery, a terms checkbox that clears whenever the reviewer
    reads the terms, and a crash on hybrid specialist panels.
 
@@ -835,6 +838,107 @@ double-score, and no gap between the seed and fallback finalizers.
 
 Not confirmed: real drand outage behaviour against the six-hour grace, and the tlock
 ciphertext end to end beyond verifying that the commitments byte-match the contract.
+
+## Correlation-diversified assignment
+
+A follow-up pass on the integrity-epoch machinery — the assignment-time
+"correlation" subsystem referenced above. It is fully wired, from the audience
+route and the public-network worker down to the assignment insert, and it is
+load-bearing: a reviewer with no eligible epoch membership is skipped outright.
+
+### 42. RateLoop's own default policy rejects every small network panel with a 500 — High
+
+[`integrityAssignment.ts:62-65`](packages/nextjs/lib/tokenless/integrityAssignment.ts:62):
+
+```ts
+const maximumClusterMembers = Math.floor(
+  (input.targetCount * input.constraints.maxClusterShareBps) / 10_000,
+);
+if (maximumClusterMembers < 1)
+  throw new Error("Frozen cluster-share cap cannot admit even one reviewer…");
+```
+
+`maxClusterShareBps` is hardcoded to `2_000` in RateLoop's own configuration
+([`humanReviewConfiguration.ts:1505`](packages/nextjs/lib/tokenless/humanReviewConfiguration.ts:1505)),
+and network audiences accept a panel size as low as 3
+([`humanReviewApprovals.ts:350`](packages/nextjs/lib/tokenless/humanReviewApprovals.ts:350)).
+I computed the cap across panel sizes: **1, 2, 3 and 4 all yield zero and throw.**
+Because it is a plain `Error` rather than a `TokenlessServiceError`, it maps to
+`500 internal_error` ([`server.ts:775-779`](packages/nextjs/lib/tokenless/server.ts:775))
+rather than a 4xx with an actionable code.
+
+Nothing validates the combination when the policy is frozen: the schema bounds
+`maxClusterShareBps` independently of the cohort's `maximumReviewers`, and policy
+creation adds no cross-field check — even though the condition is trivially
+decidable at freeze time. So a policy that can never succeed is accepted, and the
+failure surfaces later at audience reservation, which the reviewing agent places
+_after_ the round is funded on-chain. I confirmed the arithmetic, the hardcoded
+value, the panel minimum and the 500 mapping directly; the funding-order detail is
+the agent's tracing and I did not re-verify it, so treat that as the reported
+consequence rather than an established one.
+
+An existing test asserts the throw, so failing closed is deliberate — the defect is
+the error class and the missing freeze-time validation, not the refusal itself.
+
+### 43. In production the cluster-diversification cap is inert — Medium
+
+[`integrityEpochProducer.ts:249`](packages/nextjs/lib/tokenless/integrityEpochProducer.ts:249)
+hardcodes `behavioralRiskBps: 0` for every observation, and it is the only
+production source of observations. The risk band therefore degenerates to
+`componentSize > 1 → "high"`, else `"low"`, and `"medium"` is unreachable.
+
+For any policy that excludes the high band — including RateLoop's own
+`allowedRiskBands: ["low"]` — every surviving candidate is by construction in a
+singleton cluster, so the cluster counts never exceed one and `maxClusterShareBps`
+can never bind. Its only observable effect in production is finding 42.
+
+This is defensible as intended, since behavioural signals are disabled pending a
+DPIA. Worth stating plainly regardless: the "correlation-diversified panel"
+property currently comes entirely from the risk-band filter, not from the share
+cap.
+
+### 44. The selection commitment has no recoverable preimage — Medium
+
+[`audienceAssignments.ts:1641`](packages/nextjs/lib/tokenless/audienceAssignments.ts:1641)
+draws `seed = randomBytes(32)` and persists only `selection_seed_hash` and
+`selection_commitment`; no column, log, or export ever stores the seed. The seed is
+drawn _after_ the candidate set is known and never revealed, so the published
+commitment gives an auditor nothing — seed-grinding would be undetectable, and even
+an honest operator cannot later reproduce the ranking to show the panel was drawn
+fairly. If verifiable random selection was the intent, this needs commit-then-reveal
+or a seed derived from a pre-committed run value.
+
+### 45. Smaller assignment issues — Medium and Low
+
+- **N+1 across the reviewer table inside a write transaction.** The reviewer query
+  has no `LIMIT`, and each returned reviewer triggers an epoch-member query, a
+  qualifications query, paid-eligibility queries and a forecast-restriction query —
+  all inside `BEGIN` holding `FOR UPDATE` locks on the workspace and subpanel rows.
+  At the epoch ceiling of 100,000 raters this is hundreds of thousands of
+  round-trips per reservation.
+- **One admission constraint is silently inert.** `evaluateFrozenAdmissionPolicy`
+  checks `recentCoassignments`, but the caller always passes a literal `0` while
+  the real pairwise data sits a hundred lines above. It produces no divergence today
+  because the greedy selection already guarantees the cap — correct by accident.
+- **A dead post-selection check.** The `largestClusterShareBps` guard can never fire:
+  brute-forcing every combination of target count 1–200 against every bps value
+  shows it is mathematically unreachable given the `floor` cap that precedes it. It
+  reads as a second independent check and is not one.
+- **Snapshot verification does not bind leaves to their manifest.** Neither
+  `leaf.epochId === manifest.epochId` nor the vault key version is checked, so a
+  snapshot with foreign leaves verifies as valid — and the persistence path calls
+  the verifier without the keys, skipping the only check that risk bands match the
+  features. Reachable only for externally constructed snapshots.
+- **A 400 that blames a field the caller never sent** — when the reservation TTL is
+  derived from a voucher deadline under sixty seconds away, the error names
+  `reservationTtlMs`.
+
+**Test coverage gaps** worth recording: the four integrity test files are genuine
+behavioural tests with real numeric assertions, but the _success_ path of
+`reserveDiversifiedNetworkSubpanel` is never exercised — every mode in the
+parametrised test asserts no writes occurred, so the 150-line insert block has no
+coverage. The co-assignment history is always stubbed empty, and
+`integrityEpochPersistence` has no test file at all.
 
 ---
 
