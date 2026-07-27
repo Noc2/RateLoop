@@ -44,18 +44,30 @@ export function QuestionMedia({
   const [loadedImages, setLoadedImages] = useState<Set<string>>(() => new Set());
   const imageButtonsRef = useRef<Array<HTMLButtonElement | null>>([]);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const reviewStateListenerRef = useRef(onReviewStateChange);
+  // The exact attached context, independent of object identity. A queue reload hands this component
+  // an equal but freshly parsed `media` object, which must not discard a loaded video or images.
+  const mediaKey =
+    media.kind === "youtube"
+      ? `youtube:${media.videoId}`
+      : `images:${media.items.map(item => `${item.assetId}@${item.digest}`).join("|")}`;
+  const expectedImageCount = media.kind === "images" ? media.items.length : null;
+
+  useEffect(() => {
+    reviewStateListenerRef.current = onReviewStateChange;
+  }, [onReviewStateChange]);
 
   useEffect(() => {
     setLoadedImages(new Set());
     setPlayVideo(false);
-    onReviewStateChange?.({ status: "pending" });
-  }, [media, onReviewStateChange]);
+    reviewStateListenerRef.current?.({ status: "pending" });
+  }, [mediaKey]);
 
   useEffect(() => {
-    if (media.kind === "images" && loadedImages.size === media.items.length) {
-      onReviewStateChange?.({ status: "ready" });
+    if (expectedImageCount !== null && loadedImages.size === expectedImageCount) {
+      reviewStateListenerRef.current?.({ status: "ready" });
     }
-  }, [loadedImages, media, onReviewStateChange]);
+  }, [expectedImageCount, loadedImages]);
 
   const closePreview = useCallback(() => {
     const previousIndex = selectedImage;

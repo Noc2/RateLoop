@@ -66,6 +66,70 @@ test("approval state stays blocked until every image is visible and fails closed
   }
 });
 
+test("loaded media survives a re-render with an equal media object and resets for different media", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, fireEvent, render } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const { QuestionMedia } = await import("./QuestionMedia");
+  const states: string[] = [];
+  const video = { kind: "youtube", videoId: "dQw4w9WgXcQ" } as const;
+  const images = {
+    kind: "images",
+    items: [
+      { alt: "First image", assetId: "asset_01", digest: `sha256:${"a".repeat(64)}` as const },
+      { alt: "Second image", assetId: "asset_02", digest: `sha256:${"b".repeat(64)}` as const },
+    ],
+  } as const;
+
+  try {
+    const view = render(
+      <QuestionMedia media={{ ...video }} onReviewStateChange={state => states.push(state.status)} />,
+    );
+    await userEvent.setup().click(view.getByRole("button", { name: "Load and play YouTube video" }));
+    fireEvent.load(view.getByTitle("YouTube context for this question"));
+    assert.equal(states.at(-1), "ready");
+
+    // A queue reload replaces `media` with an equal but freshly parsed object.
+    view.rerender(<QuestionMedia media={{ ...video }} onReviewStateChange={state => states.push(state.status)} />);
+    assert.ok(view.getByTitle("YouTube context for this question"));
+    assert.equal(view.queryByRole("button", { name: "Load and play YouTube video" }), null);
+    assert.equal(states.at(-1), "ready");
+
+    // A different video is different context and must be re-approved.
+    view.rerender(
+      <QuestionMedia
+        media={{ kind: "youtube", videoId: "aaaaaaaaaaa" }}
+        onReviewStateChange={state => states.push(state.status)}
+      />,
+    );
+    assert.ok(view.getByRole("button", { name: "Load and play YouTube video" }));
+    assert.equal(states.at(-1), "pending");
+
+    const imageStates: string[] = [];
+    const trackImages = (state: { status: string }) => imageStates.push(state.status);
+    const imageView = render(
+      <QuestionMedia
+        media={{ kind: "images", items: images.items.map(item => ({ ...item })) }}
+        onReviewStateChange={trackImages}
+      />,
+    );
+    const loaded = imageView.getAllByRole("img");
+    fireEvent.load(loaded[0]!);
+    fireEvent.load(loaded[1]!);
+    assert.equal(imageStates.at(-1), "ready");
+    imageView.rerender(
+      <QuestionMedia
+        media={{ kind: "images", items: images.items.map(item => ({ ...item })) }}
+        onReviewStateChange={trackImages}
+      />,
+    );
+    assert.equal(imageStates.at(-1), "ready");
+  } finally {
+    cleanup();
+    restoreDom();
+  }
+});
+
 test("YouTube approval stays blocked until the owner loads the exact video", async () => {
   const restoreDom = installTestDom();
   const { cleanup, fireEvent, render } = await import("@testing-library/react");

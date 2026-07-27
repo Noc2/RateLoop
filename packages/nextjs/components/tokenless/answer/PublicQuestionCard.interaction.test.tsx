@@ -126,6 +126,57 @@ test("a reserved network seat must be accepted with its exact terms before publi
   }
 });
 
+test("accepted paid-review terms survive a queue reload of the same round and reset for another round", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render, within } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const { PublicQuestionCard } = await import("./PublicQuestionCard");
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async input => {
+    const url = String(input);
+    if (url === "/api/auth/session") return Response.json(session(PRINCIPAL_A));
+    throw new Error(`Unexpected request while reading the terms: ${url}`);
+  };
+  const reserved: PublicAnswerTask = { ...task, assignmentStatus: "reserved" };
+  const card = (value: PublicAnswerTask) => (
+    <PublicQuestionCard
+      task={value}
+      paidAccess={{ state: "ready" }}
+      onSubmitted={() => undefined}
+      principalId={PRINCIPAL_A}
+    />
+  );
+
+  try {
+    const view = render(card(reserved));
+    const screen = within(document.body);
+    const terms = () => screen.getByRole<HTMLInputElement>("checkbox", { name: /accept the exact public/iu });
+    const accept = () => screen.getByRole<HTMLButtonElement>("button", { name: "Accept and open review" });
+    await userEvent.setup().click(terms());
+    assert.equal(terms().checked, true);
+    assert.equal(accept().disabled, false);
+
+    // The reviewer leaves to read the linked terms. Returning re-runs the auth-session subscription,
+    // which reloads the queue and replaces `task` with an equal but freshly parsed object.
+    view.rerender(card(JSON.parse(JSON.stringify(reserved)) as PublicAnswerTask));
+    assert.equal(terms().checked, true);
+    assert.equal(accept().disabled, false);
+
+    // A genuine server-side acceptance for the same round still opens the question.
+    view.rerender(card(JSON.parse(JSON.stringify(task)) as PublicAnswerTask));
+    assert.ok(screen.getByText(task.question.prompt));
+
+    // A different round is a different legal acceptance and must start unticked.
+    view.rerender(card({ ...reserved, roundId: "18", assignmentId: "hasn_public-task-2" }));
+    assert.equal(terms().checked, false);
+    assert.equal(accept().disabled, true);
+  } finally {
+    cleanup();
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
 test("a public reviewer can choose a rating, exact crowd forecast, and optional feedback", async () => {
   const restoreDom = installTestDom();
   const { cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");

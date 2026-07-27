@@ -220,9 +220,7 @@ export function PublicQuestionCard({
   const [submissionReceipt, setSubmissionReceipt] = useState<PublicSubmissionReceipt | null>(null);
   const [retryClock, setRetryClock] = useState(() => Date.now());
   const [draftRestored, setDraftRestored] = useState(false);
-  const [networkAssignmentStatus, setNetworkAssignmentStatus] = useState<"reserved" | "accepted">(
-    task.reviewerSource === "rateloop_network" ? task.assignmentStatus : "accepted",
-  );
+  const [acceptedAssignmentId, setAcceptedAssignmentId] = useState<string | null>(null);
   const [networkTermsAccepted, setNetworkTermsAccepted] = useState(false);
   const rationaleRef = useRef<HTMLTextAreaElement>(null);
   const feedbackEnabled = task.question.rationale?.mode !== "off";
@@ -249,6 +247,14 @@ export function PublicQuestionCard({
           selectionBindingHash: task.selectionBindingHash,
         }
       : null;
+  // Derived on every render so a genuine server-side status change is never ignored, while this
+  // reviewer's own acceptance is remembered per assignment rather than per `task` object identity.
+  const networkAssignmentStatus: "reserved" | "accepted" =
+    task.reviewerSource !== "rateloop_network"
+      ? "accepted"
+      : acceptedAssignmentId === task.assignmentId
+        ? "accepted"
+        : task.assignmentStatus;
   const networkAssignmentReady = networkAssignment === null || networkAssignmentStatus === "accepted";
 
   useEffect(() => {
@@ -260,10 +266,12 @@ export function PublicQuestionCard({
     }
   }, [principalId, task.roundId]);
 
+  // Acceptance of the paid-review terms must never carry across a different round or a different
+  // signed-in reviewer. It must survive a re-render caused by a queue reload of the same round,
+  // which replaces `task` with an equal but freshly parsed object.
   useEffect(() => {
-    setNetworkAssignmentStatus(task.reviewerSource === "rateloop_network" ? task.assignmentStatus : "accepted");
     setNetworkTermsAccepted(false);
-  }, [task]);
+  }, [principalId, task.roundId]);
 
   useEffect(() => {
     const draft = loadReviewDraft("public", task.roundId, isPublicReviewDraft, publicDraftStorage);
@@ -385,11 +393,11 @@ export function PublicQuestionCard({
       if (result.accepted !== true || result.assignmentId !== networkAssignment.assignmentId) {
         throw new Error("Assignment acceptance response is incomplete.");
       }
-      setNetworkAssignmentStatus("accepted");
+      setAcceptedAssignmentId(networkAssignment.assignmentId);
       setNetworkTermsAccepted(false);
       setStatus(result.replay === true ? "Assignment already accepted" : "Assignment accepted");
     } catch (cause) {
-      setNetworkAssignmentStatus("reserved");
+      setAcceptedAssignmentId(null);
       setStatus(null);
       setError(cause instanceof Error ? cause.message : "The paid review could not be accepted.");
     } finally {
