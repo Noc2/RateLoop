@@ -85,6 +85,40 @@ test("selection fails closed instead of weakening frozen independence constraint
   );
   assert.throws(
     () => selectDiversifiedIntegrityPanel({ candidates: [candidate(1)], constraints, targetCount: 4, seed: "seed-3" }),
-    /cannot admit even one/,
+    /cannot satisfy/,
+  );
+});
+
+test("a share cap that rounds below one seat admits one reviewer per cluster", () => {
+  // The standard 2000 bps cap floors to zero for every panel of four or fewer seats, and three is
+  // the minimum network panel size. Those panels must still be selectable, at the strictest
+  // possible diversification rather than not at all.
+  for (const targetCount of [1, 2, 3, 4]) {
+    const candidates = Array.from({ length: targetCount }, (_value, index) => candidate(index + 1));
+    const selection = selectDiversifiedIntegrityPanel({
+      candidates,
+      constraints,
+      targetCount,
+      seed: `seed-small-${targetCount}`,
+    });
+    assert.equal(selection.aggregate.selectedCount, targetCount);
+    assert.equal(selection.aggregate.independentClusterCount, targetCount);
+  }
+
+  // One reviewer per cluster stays the ceiling: a second member of an existing cluster is refused
+  // rather than admitted to fill the panel.
+  assert.throws(
+    () =>
+      selectDiversifiedIntegrityPanel({
+        candidates: [
+          candidate(1, { clusterPseudonym: "ring" }),
+          candidate(2, { clusterPseudonym: "ring" }),
+          candidate(3, { clusterPseudonym: "ring" }),
+        ],
+        constraints,
+        targetCount: 3,
+        seed: "seed-small-ring",
+      }),
+    /cannot satisfy/,
   );
 });

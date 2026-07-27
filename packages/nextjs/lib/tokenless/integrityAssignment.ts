@@ -59,10 +59,14 @@ export function selectDiversifiedIntegrityPanel<T extends IntegrityAssignmentCan
     throw new Error("Integrity assignment target count is invalid.");
   }
   if (!input.seed || input.seed.length > 1_000) throw new Error("Integrity assignment seed is invalid.");
-  const maximumClusterMembers = Math.floor((input.targetCount * input.constraints.maxClusterShareBps) / 10_000);
-  if (maximumClusterMembers < 1) {
-    throw new Error("Frozen cluster-share cap cannot admit even one reviewer at this panel size.");
-  }
+  // A share cap that rounds below one member means the strictest achievable diversification —
+  // one reviewer per correlation cluster — not an unsatisfiable panel. Rounding down to zero
+  // rejected every network panel of four or fewer seats under the standard 2000 bps cap, at a
+  // minimum panel size of three.
+  const maximumClusterMembers = Math.max(
+    1,
+    Math.floor((input.targetCount * input.constraints.maxClusterShareBps) / 10_000),
+  );
   const seenReviewers = new Set<string>();
   const ranked = input.candidates
     .map(candidate => {
@@ -124,7 +128,10 @@ export function selectDiversifiedIntegrityPanel<T extends IntegrityAssignmentCan
   }
   const largestCluster = Math.max(...clusterCounts.values());
   const largestClusterShareBps = Math.ceil((largestCluster * 10_000) / input.targetCount);
-  if (largestClusterShareBps > input.constraints.maxClusterShareBps) {
+  // Checked against the same effective cap the selection loop applied. Comparing the reported
+  // share against the raw bps instead would reject the one-per-cluster panels that a cap rounding
+  // below a single seat is satisfied by.
+  if (largestCluster > maximumClusterMembers) {
     throw new Error("Selected panel exceeds the frozen cluster-share cap.");
   }
   const riskBandCounts = { low: 0, medium: 0, high: 0 };
