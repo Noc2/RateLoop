@@ -126,13 +126,39 @@ function workItemId(kind: WorkKind, subjectKey: string) {
   return `swi_${digest(`${kind}:${subjectKey}`).slice(0, 40)}`;
 }
 
+// An item that exhausted MAX_ATTEMPTS gave up on an outage, not on the work itself: the seeding
+// query still selects its subject, so the work is still owed. Without this it stayed dead forever,
+// because nothing resets a dead row and nothing deletes one, and each dead row went on consuming a
+// seeding slot until new work stopped being seeded at all.
+//
+// The wait keeps a genuinely unservable subject from cycling: it can retry at most once per window
+// rather than continuously. Items dead-lettered for a terminal reason keep their low attempt count
+// and are deliberately not revived, since those need an operator rather than another attempt.
+const DEAD_WORK_REVIVAL_DELAY_MS = 6 * 60 * 60 * 1000;
+
 async function insertWorkItem(kind: WorkKind, subjectKey: string, now: Date) {
   await dbClient.execute({
     sql: `INSERT INTO tokenless_scheduled_work_items
           (item_id, kind, subject_key, state, attempt_count, next_attempt_at, created_at, updated_at)
           VALUES (?, ?, ?, 'pending', 0, ?, ?, ?)
-          ON CONFLICT (kind, subject_key) DO NOTHING`,
-    args: [workItemId(kind, subjectKey), kind, subjectKey, now, now, now],
+          ON CONFLICT (kind, subject_key) DO UPDATE
+          SET state = 'pending', attempt_count = 0, next_attempt_at = ?, last_error = NULL,
+              dead_at = NULL, updated_at = ?
+          WHERE tokenless_scheduled_work_items.state = 'dead'
+            AND tokenless_scheduled_work_items.attempt_count >= ?
+            AND tokenless_scheduled_work_items.dead_at <= ?`,
+    args: [
+      workItemId(kind, subjectKey),
+      kind,
+      subjectKey,
+      now,
+      now,
+      now,
+      now,
+      now,
+      MAX_ATTEMPTS,
+      new Date(now.getTime() - DEAD_WORK_REVIVAL_DELAY_MS),
+    ],
   });
 }
 
@@ -548,7 +574,7 @@ async function evidencePendingOperationalHealth(now: Date) {
   const result = await dbClient.execute(
     `SELECT COUNT(*) AS pending_count, MIN(created_at) AS oldest_created_at
      FROM tokenless_scheduled_work_items
-     WHERE kind = 'publish_finalized_round' AND state IN ('pending','retry','processing')`,
+     WHERE kind = 'publish_finalized_round' AND state IN ('pending','retry','processing','dead')`,
   );
   const row = result.rows[0] as Row | undefined;
   const pendingCount = Number(row?.pending_count ?? 0);

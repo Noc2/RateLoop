@@ -1239,3 +1239,79 @@ test("cron authorization fails closed when missing or incorrect", () => {
   );
   assert.doesNotThrow(() => authorizeTokenlessCron("Bearer correct", "correct"));
 });
+
+test("work that died on an outage is reseeded once the revival delay has passed", async () => {
+  await seedRecoverableExecution("operation_revived_after_outage", {
+    claimExpiresAt: new Date(NOW.getTime() - 1),
+    state: "signed",
+  });
+  await seedTokenlessScheduledWork(NOW);
+  await dbClient.execute({
+    sql: `UPDATE tokenless_scheduled_work_items SET attempt_count = 19
+          WHERE kind = 'recover_chain_execution' AND subject_key = 'operation_revived_after_outage'`,
+  });
+  const died = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    processors: {
+      ...processors(async () => undefined),
+      async recoverChainExecution() {
+        throw new Error("provider outage");
+      },
+    },
+  });
+  if (died.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.equal(died.status, "degraded");
+  assert.equal(died.summary.work.dead, 1);
+
+  const state = async () => {
+    const item = await dbClient.execute({
+      sql: `SELECT state, attempt_count FROM tokenless_scheduled_work_items
+            WHERE kind = 'recover_chain_execution' AND subject_key = 'operation_revived_after_outage'`,
+    });
+    return item.rows[0];
+  };
+  assert.equal((await state())?.state, "dead");
+
+  // Reseeding inside the revival delay must not cycle the item.
+  await seedTokenlessScheduledWork(new Date(NOW.getTime() + 60 * 60_000));
+  assert.equal((await state())?.state, "dead");
+
+  // Once the delay has passed the still-owed subject is picked up again.
+  await seedTokenlessScheduledWork(new Date(NOW.getTime() + 7 * 60 * 60_000));
+  assert.equal((await state())?.state, "pending");
+  assert.equal((await state())?.attempt_count, 0);
+});
+
+test("work dead-lettered for a terminal reason is never revived by reseeding", async () => {
+  await seedRecoverableExecution("operation_terminal_dead_letter", {
+    claimExpiresAt: new Date(NOW.getTime() - 1),
+    state: "signed",
+  });
+  await seedTokenlessScheduledWork(NOW);
+  const died = await runTokenlessScheduledMaintenance({
+    appOrigin: "https://tokenless.example.test",
+    now: NOW,
+    processors: {
+      ...processors(async () => undefined),
+      async recoverChainExecution() {
+        throw new TokenlessServiceError(
+          "authorization already used",
+          409,
+          "x402_authorization_used_reconciliation_required",
+        );
+      },
+    },
+  });
+  if (died.status === "duplicate") assert.fail("first invocation cannot be duplicate");
+  assert.equal(died.status, "degraded");
+  assert.equal(died.summary.work.dead, 1);
+
+  // It died on its first attempt, so another attempt cannot help; only an operator can.
+  await seedTokenlessScheduledWork(new Date(NOW.getTime() + 30 * 24 * 60 * 60_000));
+  const item = await dbClient.execute({
+    sql: `SELECT state FROM tokenless_scheduled_work_items
+          WHERE kind = 'recover_chain_execution' AND subject_key = 'operation_terminal_dead_letter'`,
+  });
+  assert.equal(item.rows[0]?.state, "dead");
+});
