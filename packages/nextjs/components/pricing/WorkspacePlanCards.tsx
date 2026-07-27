@@ -85,7 +85,7 @@ export function WorkspacePlanCards({ subscriptionsEnabled }: WorkspacePlanCardsP
         footer={
           <Link
             href="mailto:hawigxyz@proton.me?subject=RateLoop%20Enterprise"
-            className="btn rateloop-secondary-action min-h-12 w-full justify-center px-5"
+            className="rateloop-gradient-action min-h-12 w-full justify-center px-5"
           >
             Book demo
           </Link>

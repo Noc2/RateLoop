@@ -29,7 +29,10 @@ test("pricing page shows three tiers and discloses costs progressively", async (
   assert.match(html, /Custom/);
   assert.match(html, /Custom integrations/);
   assert.match(html, /Compliance solutions/);
-  assert.match(html, /href="mailto:hawigxyz@proton\.me\?subject=RateLoop%20Enterprise"[^>]*>Book demo<\/a>/);
+  assert.match(
+    html,
+    /class="rateloop-gradient-action min-h-12 w-full justify-center px-5" href="mailto:hawigxyz@proton\.me\?subject=RateLoop%20Enterprise">Book demo<\/a>/,
+  );
   assert.match(html, /<s[^>]*>\$99/);
   assert.match(html, /Then \$99\/month after 12 months/);
   assert.match(html, /Reviewers keep 90% of every bounty/);
