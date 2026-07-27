@@ -48,3 +48,22 @@ test("public tokenless journeys render read-only without browser or server failu
   expect(serverFailures).toEqual([]);
   expect(browserErrors).toEqual([]);
 });
+
+test("hosted authentication is configured while account data stays signed-out", async ({ request }) => {
+  const configuration = await request.get("/api/auth/config", { failOnStatusCode: false });
+  expect(configuration.status()).toBe(200);
+  expect(configuration.headers()["cache-control"]).toContain("no-store");
+  expect(await configuration.json()).toMatchObject({
+    configured: true,
+    methods: { emailOtp: true, passkey: true },
+  });
+
+  const session = await request.get("/api/auth/session", { failOnStatusCode: false });
+  expect(session.status()).toBe(200);
+  expect(session.headers()["cache-control"]).toContain("no-store");
+  expect(await session.json()).toEqual({ authenticated: false });
+
+  const protectedWorkspaces = await request.get("/api/account/workspaces", { failOnStatusCode: false });
+  expect(protectedWorkspaces.status()).toBe(401);
+  expect(JSON.stringify(await protectedWorkspaces.json())).not.toContain("workspaceId");
+});
