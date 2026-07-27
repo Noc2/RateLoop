@@ -1,7 +1,7 @@
 import React from "react";
 import { TokenlessLandingPage } from "../../app/(public)/page";
+import { SignInSurface } from "../auth/SignInSurface";
 import { HumanAssuranceRaterClient } from "./HumanAssuranceRaterClient";
-import { AgentWorkspaceExample, HumanReviewExample } from "./SignedOutExamples";
 import { PublicQuestionCard } from "./answer/PublicQuestionCard";
 import axe from "axe-core";
 import { JSDOM } from "jsdom";
@@ -74,21 +74,25 @@ test("five primary tokenless surfaces pass rendered DOM axe checks", async () =>
   await assertNoSemanticViolations("Landing", <TokenlessLandingPage subscriptionsEnabled socialProofItems={[]} />);
   await assertNoSemanticViolations(
     "Human hub",
-    <main>
-      <h1>Discover reviews</h1>
-      <h2>Available work</h2>
-      <HumanReviewExample />
+    <SignInSurface
+      description="Review work is available to eligible, signed-in RateLoop humans."
+      headingLevel={2}
+      layout="embedded"
+      title="Sign in to discover review work"
+      titleId="human-discover-sign-in-title"
+    >
       <button type="button">Sign in</button>
-    </main>,
+    </SignInSurface>,
   );
   await assertNoSemanticViolations(
     "Agents hub",
-    <main>
-      <h1>Agents</h1>
-      <h2>Workspace preview</h2>
-      <AgentWorkspaceExample />
+    <SignInSurface
+      description="Sign in to connect an agent, configure human review, manage reviewers, and evaluate performance."
+      title="Agents"
+      titleId="agents-sign-in-title"
+    >
       <button type="button">Sign in</button>
-    </main>,
+    </SignInSurface>,
   );
   await assertNoSemanticViolations("Private reviewer", <HumanAssuranceRaterClient />);
   await assertNoSemanticViolations(

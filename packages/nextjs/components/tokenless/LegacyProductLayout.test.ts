@@ -56,7 +56,7 @@ test("Human Discover keeps sign-in requirements concise", () => {
   assert.match(page, /<SignedOutGate/);
   assert.match(page, /headingLevel=\{2\}/);
   assert.match(page, /layout="embedded"/);
-  assert.match(page, /preview=\{<HumanReviewExample \/>\}/);
+  assert.doesNotMatch(page, /HumanReviewExample|Example review|preview=/);
   assert.doesNotMatch(page, /ThirdwebSessionButton/);
 });
 

@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { SignedOutGate } from "~~/components/auth/SignedOutGate";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { HumanAssuranceRaterClient } from "~~/components/tokenless/HumanAssuranceRaterClient";
-import { HumanReviewExample } from "~~/components/tokenless/SignedOutExamples";
 import { InvitationRouterPanel } from "~~/components/tokenless/account/InvitationRouterPanel";
 import {
   type PrivateAnswerAssignment,
@@ -276,7 +275,6 @@ export function AnswerPageClient({
             description="Review work is available to eligible, signed-in RateLoop humans."
             headingLevel={2}
             layout="embedded"
-            preview={<HumanReviewExample />}
             returnTo={discoverHref(pathname, query, scope, initialInvitationOpen, view)}
             title="Sign in to discover review work"
             titleId="human-discover-sign-in-title"

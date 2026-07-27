@@ -16,7 +16,7 @@ test("anonymous visitors see the Agents sign-in prompt without exposing workspac
   assert.match(promptSource, /title="Agents"/);
   assert.doesNotMatch(promptSource, /For Agents/);
   assert.match(promptSource, /Sign in to connect an agent/);
-  assert.match(promptSource, /preview=\{<AgentWorkspaceExample \/>\}/);
+  assert.doesNotMatch(promptSource, /AgentWorkspaceExample|Example workspace|preview=/);
   assert.match(promptSource, /href="\/docs\/ai"/);
   assert.match(promptSource, /<Button/);
   assert.match(promptSource, /variant="secondary"/);
