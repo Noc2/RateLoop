@@ -5,6 +5,7 @@ import {
   resolveAgentOAuthFrameRedirectOrigins,
 } from "../lib/security/contentSecurityPolicy";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { test } from "node:test";
 
@@ -149,6 +150,13 @@ test("next config leaves CSP to middleware", async () => {
   const csp = await getGlobalHeaderValue("Content-Security-Policy");
 
   assert.equal(csp, undefined);
+});
+
+test("every page route group renders dynamically so middleware nonces reach Next.js scripts", () => {
+  for (const layout of ["../app/(public)/layout.tsx", "../app/(app)/layout.tsx"]) {
+    const source = readFileSync(new URL(layout, import.meta.url), "utf8");
+    assert.match(source, /export const dynamic = ["']force-dynamic["'];/u, layout);
+  }
 });
 
 test("permissions policy only advertises browser-recognized directives", async () => {
