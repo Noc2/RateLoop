@@ -775,14 +775,26 @@ export async function requestWorkspaceDeletion(input: {
       `SELECT sanctions_screening_id FROM tokenless_paid_eligibility_scopes WHERE workspace_id=$1`,
       [input.workspaceId],
     );
+    // tokenless_legal_eligibility.scope_id and .sanctions_screening_id are both ON DELETE
+    // RESTRICT, so the legal rows have to go before the scopes they reference and before the
+    // screenings they pin. Deleting the scopes first aborts the whole deletion transaction.
+    await client.query(
+      `DELETE FROM tokenless_legal_eligibility
+       WHERE workspace_id=$1
+          OR scope_id IN (SELECT scope_id FROM tokenless_paid_eligibility_scopes WHERE workspace_id=$1)`,
+      [input.workspaceId],
+    );
     await client.query(`DELETE FROM tokenless_paid_eligibility_scopes WHERE workspace_id=$1`, [input.workspaceId]);
     const workspaceScreeningIds = workspaceScreenings.rows
       .map(value => text(value as Row, "sanctions_screening_id"))
       .filter((value): value is string => value !== null);
     if (workspaceScreeningIds.length) {
-      await client.query(`DELETE FROM tokenless_sanctions_screenings WHERE screening_id=ANY($1::text[])`, [
-        workspaceScreeningIds,
-      ]);
+      // A recorded sanctions match is retained evidence, not erasable workspace data. The
+      // account deletion path already excludes it; this path must agree.
+      await client.query(
+        `DELETE FROM tokenless_sanctions_screenings WHERE screening_id=ANY($1::text[]) AND status <> 'match'`,
+        [workspaceScreeningIds],
+      );
     }
     await client.query(
       `DELETE FROM tokenless_private_group_invitation_expertise_attestations

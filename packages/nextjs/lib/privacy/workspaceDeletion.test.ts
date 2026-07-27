@@ -1048,3 +1048,87 @@ test("workspace deletion anonymizes terminal review subjects and removes private
   assert.match(source, /direct_private_assignment_subjects/u);
   assert.match(source, /workspace_memberships/u);
 });
+
+test("workspace deletion clears invited paid eligibility and retains a recorded sanctions match", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Invited paid workspace", ownerAddress: OWNER });
+  const raterId = "rater_invited_paid_delete";
+  const principalId = "rlp_invited_paid_delete";
+  const later = new Date(NOW.getTime() + 86_400_000);
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_principals (principal_id,status,created_at,updated_at)
+          VALUES ($1,'active',$2,$2);
+          INSERT INTO tokenless_rater_profiles
+          (rater_id,principal_id,account_address,nullifier_seed_ciphertext,
+           nullifier_key_version,nullifier_key_domain,created_at,updated_at)
+          VALUES ($3,$1,'0x3333333333333333333333333333333333333333',
+                  'encrypted-nullifier','test-v1','vote_mapping',$2,$2);
+          INSERT INTO tokenless_provider_subject_bindings
+          (binding_id,rater_id,provider_id,provider_namespace,subject_reference_hash,
+           subject_reference_scheme,status,bound_at,last_verified_at,created_at,updated_at)
+          VALUES ('bind_invited_paid_delete',$3,'rateloop:invitation','workspace',
+                  'sha256:4444444444444444444444444444444444444444444444444444444444444444',
+                  'hmac-sha256-v1','active',$2,$2,$2,$2);
+          INSERT INTO tokenless_assurance_assertions
+          (assertion_id,rater_id,binding_id,provider_id,provider_namespace,provider_assertion_hash,
+           provider_assertion_id_hash,provider_assertion_reference_scheme,capabilities_json,
+           provider_evidence_ciphertext,provider_evidence_key_version,provider_evidence_key_domain,
+           evidence_verified_at,evidence_expires_at,minimum_age_verified,status,created_at,updated_at)
+          VALUES ('assert_invited_paid_delete',$3,'bind_invited_paid_delete','rateloop:invitation','workspace',
+                  'sha256:5555555555555555555555555555555555555555555555555555555555555555',
+                  'sha256:6666666666666666666666666666666666666666666666666666666666666666',
+                  'hmac-sha256-v1','["customer_invitation","minimum_age"]',
+                  'sealed','test-v1','provider_evidence',$2,$4,18,'active',$2,$2);
+          INSERT INTO tokenless_reviewer_qualifications
+          (qualification_id,rater_id,reviewer_source,qualification_kind,cohort_ids_json,
+           qualification_keys_json,verified_at,status,created_at,updated_at)
+          VALUES ('qual_invited_paid_delete',$3,'customer_invited','invitation','[]','[]',
+                  $2,'active',$2,$2);
+          INSERT INTO tokenless_sanctions_screenings
+          (screening_id,rater_id,source,status,subject_ciphertext,subject_key_version,
+           subject_key_domain,list_snapshot_hash,screened_by,requested_at,screened_at,updated_at)
+          VALUES ('screen_invited_match',$3,'manual:v1','match','sealed','test-v1','provider_evidence',
+                  'sha256:2222222222222222222222222222222222222222222222222222222222222222',
+                  'operator',$2,$2,$2);
+          INSERT INTO tokenless_paid_eligibility_scopes
+          (scope_id,rater_id,reviewer_source,workspace_id,compensation_mode,adulthood_basis,
+           adulthood_assertion_id,invitation_qualification_id,sanctions_screening_id,status,
+           created_at,updated_at)
+          VALUES ('scope_invited_paid_delete',$3,'customer_invited',$5,'usdc','customer_attested',
+                  'assert_invited_paid_delete','qual_invited_paid_delete','screen_invited_match',
+                  'blocked',$2,$2);
+          INSERT INTO tokenless_legal_eligibility
+          (scope_id,rater_id,reviewer_source,workspace_id,sanctions_screening_id,
+           declared_residence_country,tax_residence_country,residence_tax_status,tax_profile_status,
+           dac7_status,sanctions_consent_at,sanctions_status,sanctions_reference_hash,
+           sanctions_screened_at,sanctions_expires_at,eligibility_status,created_at,updated_at)
+          VALUES ('scope_invited_paid_delete',$3,'customer_invited',$5,'screen_invited_match',
+                  'DE','DE','consistent','complete','not_required',$2,'match',
+                  'sha256:1111111111111111111111111111111111111111111111111111111111111111',
+                  $2,$4,'blocked',$2,$2);`,
+    args: [principalId, NOW, raterId, later, workspaceId],
+  });
+
+  const deleted = await requestWorkspaceDeletion({
+    accountAddress: OWNER,
+    confirmationName: "Invited paid workspace",
+    identityAssurance: "better_auth:passkey",
+    now: NOW,
+    workspaceId,
+  });
+  assert.equal(deleted.deleted, true);
+
+  const legal = await dbClient.execute({
+    sql: `SELECT scope_id FROM tokenless_legal_eligibility WHERE scope_id='scope_invited_paid_delete'`,
+  });
+  assert.equal(legal.rowCount, 0);
+  const scopes = await dbClient.execute({
+    sql: `SELECT scope_id FROM tokenless_paid_eligibility_scopes WHERE scope_id='scope_invited_paid_delete'`,
+  });
+  assert.equal(scopes.rowCount, 0);
+
+  const screening = await dbClient.execute({
+    sql: `SELECT status FROM tokenless_sanctions_screenings WHERE screening_id='screen_invited_match'`,
+  });
+  assert.equal(screening.rowCount, 1);
+  assert.equal((screening.rows[0] as Record<string, unknown>).status, "match");
+});
