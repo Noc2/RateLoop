@@ -10,3 +10,9 @@ test("welcome choices route to the existing reviewer and agent entry points", ()
   assert.equal(parseWelcomeChoice("unknown"), null);
   assert.equal(parseWelcomeChoice(null), null);
 });
+
+test("welcome choices reject inherited object prototype keys", () => {
+  for (const inherited of ["toString", "constructor", "valueOf", "hasOwnProperty", "__proto__"]) {
+    assert.equal(parseWelcomeChoice(inherited), null, `${inherited} must not resolve to a welcome destination`);
+  }
+});
