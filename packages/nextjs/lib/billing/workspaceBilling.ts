@@ -441,7 +441,7 @@ export async function startWorkspaceBillingPortal(input: { accountAddress: strin
   if (!customerId) {
     throw new TokenlessServiceError("No billing account exists for this workspace.", 404, "billing_customer_not_found");
   }
-  return { url: await createStripePortal(customerId) };
+  return { url: await createStripePortal(customerId, input.workspaceId) };
 }
 
 export const __workspaceBillingTestUtils = {

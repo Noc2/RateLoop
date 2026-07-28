@@ -395,8 +395,13 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
   }, [canManageIdentity, loadIdentity, selectedId, workspaceRequests]);
 
   useEffect(() => {
-    const state = new URLSearchParams(window.location.search).get("billing");
+    const url = new URL(window.location.href);
+    const state = url.searchParams.get("billing");
     if (state === "success" || state === "cancelled" || state === "upgrade") setBillingReturn(state);
+    if (state) {
+      url.searchParams.delete("billing");
+      window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    }
   }, []);
 
   // The pricing page's primary call to action lands here with `billing=upgrade`; honour that intent
@@ -961,7 +966,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                       </button>
                     ) : null}
                     <Link
-                      href="/pricing"
+                      href={`/pricing?workspace=${encodeURIComponent(selectedId)}`}
                       className="text-sm text-base-content/60 underline decoration-base-content/30 underline-offset-4 hover:text-base-content"
                     >
                       Compare plans

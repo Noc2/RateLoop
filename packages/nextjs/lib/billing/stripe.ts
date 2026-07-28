@@ -309,12 +309,13 @@ export async function createAndSendPrepaidInvoice(input: {
 export async function createEarlyAccessCheckout(input: { customerId: string; legalName: string; workspaceId: string }) {
   const appUrl = getBillingAppUrl();
   const priceId = await getValidatedEarlyAccessPriceId();
+  const returnPath = workspaceBillingReturnPath(input.workspaceId);
   const session = await getStripe().checkout.sessions.create(
     {
       allow_promotion_codes: false,
       automatic_tax: { enabled: true },
       billing_address_collection: "required",
-      cancel_url: `${appUrl}/agents?tab=overview&billing=cancelled`,
+      cancel_url: `${appUrl}${returnPath}&billing=cancelled`,
       customer: input.customerId,
       customer_update: { address: "auto", name: "auto" },
       line_items: [{ price: priceId, quantity: 1 }],
@@ -330,7 +331,7 @@ export async function createEarlyAccessCheckout(input: { customerId: string; leg
           rateloop_workspace_id: input.workspaceId,
         },
       },
-      success_url: `${appUrl}/agents?tab=overview&billing=success`,
+      success_url: `${appUrl}${returnPath}&billing=success`,
       tax_id_collection: { enabled: true },
     },
     { idempotencyKey: checkoutIdempotencyKey(input.workspaceId) },
@@ -346,10 +347,15 @@ export async function createEarlyAccessCheckout(input: { customerId: string; leg
   return session.url;
 }
 
-export async function createStripePortal(customerId: string) {
+export function workspaceBillingReturnPath(workspaceId: string) {
+  const query = new URLSearchParams({ tab: "overview", workspace: workspaceId });
+  return `/agents?${query.toString()}`;
+}
+
+export async function createStripePortal(customerId: string, workspaceId: string) {
   const session = await getStripe().billingPortal.sessions.create({
     customer: customerId,
-    return_url: `${getBillingAppUrl()}/agents?tab=overview`,
+    return_url: `${getBillingAppUrl()}${workspaceBillingReturnPath(workspaceId)}`,
   });
   return session.url;
 }

@@ -4,6 +4,7 @@ import { TOKENLESS_BILLING_PLANS, formatUsdPrice } from "~~/lib/billing/plans";
 
 type WorkspacePlanCardsProps = {
   subscriptionsEnabled: boolean;
+  workspaceId?: string;
   /** Resolved by `resolveDemoBookingUrl`; null falls back to the enterprise mailto. */
   demoBookingUrl?: string | null;
 };
@@ -12,9 +13,20 @@ const freePlan = TOKENLESS_BILLING_PLANS.free;
 const earlyAccessPlan = TOKENLESS_BILLING_PLANS.early_access;
 const earlyAccessListPrice = formatUsdPrice(earlyAccessPlan.listPriceCents ?? earlyAccessPlan.monthlyPriceCents);
 
-export function WorkspacePlanCards({ subscriptionsEnabled, demoBookingUrl = null }: WorkspacePlanCardsProps) {
+function workspacePlanHref(workspaceId: string | undefined, billing?: "upgrade") {
+  const query = new URLSearchParams({ tab: "overview" });
+  if (workspaceId) query.set("workspace", workspaceId);
+  if (billing) query.set("billing", billing);
+  return `/agents?${query.toString()}`;
+}
+
+export function WorkspacePlanCards({
+  subscriptionsEnabled,
+  workspaceId,
+  demoBookingUrl = null,
+}: WorkspacePlanCardsProps) {
   const earlyAccessHref = subscriptionsEnabled
-    ? "/agents?tab=overview&billing=upgrade"
+    ? workspacePlanHref(workspaceId, "upgrade")
     : "mailto:hawigxyz@proton.me?subject=RateLoop%20Early%20Access";
   const earlyAccessCta = subscriptionsEnabled ? "Choose Early Access" : "Join Early Access";
 
@@ -36,7 +48,7 @@ export function WorkspacePlanCards({ subscriptionsEnabled, demoBookingUrl = null
         ]}
         footer={
           <Link
-            href="/agents?tab=overview"
+            href={workspacePlanHref(workspaceId)}
             className="btn rateloop-secondary-action min-h-12 w-full justify-center px-5"
           >
             Start free

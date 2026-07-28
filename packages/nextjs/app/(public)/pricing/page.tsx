@@ -10,7 +10,16 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default function PricingPage() {
+function first(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function PricingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ workspace?: string | string[] }>;
+}) {
+  const workspaceId = first((await searchParams).workspace);
   const subscriptionsEnabled = process.env.TOKENLESS_SUBSCRIPTIONS_ENABLED === "true";
   const demoBookingUrl = resolveDemoBookingUrl();
   const earlyAccessPrice = formatUsdPrice(TOKENLESS_BILLING_PLANS.early_access.monthlyPriceCents);
@@ -37,7 +46,11 @@ export default function PricingPage() {
             month for the first 12 months. We give at least 60 days&apos; notice before a later price change; founding
             customers then receive 20% off the comparable monthly plan and may cancel before the new price applies.
           </div>
-          <WorkspacePlanCards subscriptionsEnabled={subscriptionsEnabled} demoBookingUrl={demoBookingUrl} />
+          <WorkspacePlanCards
+            subscriptionsEnabled={subscriptionsEnabled}
+            workspaceId={workspaceId}
+            demoBookingUrl={demoBookingUrl}
+          />
         </section>
 
         <section className="surface-card mt-16 grid gap-8 rounded-2xl p-7 sm:p-9 lg:grid-cols-2">

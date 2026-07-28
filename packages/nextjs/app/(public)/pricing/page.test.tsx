@@ -13,15 +13,17 @@ test("pricing page shows three tiers and discloses costs progressively", async (
   process.env.TOKENLESS_SUBSCRIPTIONS_ENABLED = "true";
   delete process.env.TOKENLESS_DEMO_BOOKING_URL;
   const { default: PricingPage } = await import("./page");
-  const html = renderToStaticMarkup(<PricingPage />).replace(/\s+/g, " ");
+  const html = renderToStaticMarkup(
+    await PricingPage({ searchParams: Promise.resolve({ workspace: "ws second" }) }),
+  ).replace(/\s+/g, " ");
 
   assert.match(html, /Start free/);
   assert.match(html, /Free/);
   assert.match(html, /\$29/);
   assert.match(html, /25 completed review decisions/);
   assert.match(html, /250 completed review decisions/);
-  assert.match(html, /href="\/agents\?tab=overview"/);
-  assert.match(html, /href="\/agents\?tab=overview&amp;billing=upgrade"/);
+  assert.match(html, /href="\/agents\?tab=overview&amp;workspace=ws\+second"/);
+  assert.match(html, /href="\/agents\?tab=overview&amp;workspace=ws\+second&amp;billing=upgrade"/);
   assert.doesNotMatch(html, /subject=RateLoop%20Demo/);
   assert.match(html, /Available reviews/);
   assert.match(html, /reviewers you invite to the workspace/i);
@@ -54,7 +56,7 @@ test("a configured scheduler replaces the enterprise mailto with an external boo
   process.env.TOKENLESS_SUBSCRIPTIONS_ENABLED = "true";
   process.env.TOKENLESS_DEMO_BOOKING_URL = "https://calendar.app.google/rateloopDemo";
   const { default: PricingPage } = await import("./page");
-  const html = renderToStaticMarkup(<PricingPage />).replace(/\s+/g, " ");
+  const html = renderToStaticMarkup(await PricingPage({ searchParams: Promise.resolve({}) })).replace(/\s+/g, " ");
 
   assert.match(
     html,

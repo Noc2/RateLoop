@@ -72,6 +72,7 @@ test("arriving from pricing with billing=upgrade acknowledges the intent and lan
     assert.ok(view.getByText("Continue your Early Access upgrade for this workspace below."));
     assert.ok(document.activeElement === upgrade, "the upgrade action should hold focus");
     assert.deepEqual(scrollCalls, [{ behavior: "smooth", block: "center" }]);
+    assert.equal(window.location.search, "?tab=overview");
   } finally {
     await act(async () => cleanup());
     HTMLElement.prototype.scrollIntoView = previousScrollIntoView;

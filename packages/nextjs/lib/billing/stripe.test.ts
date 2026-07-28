@@ -7,6 +7,7 @@ import {
   isExpectedEarlyAccessStripePrice,
   preparePrepaidInvoiceCustomer,
   subscriptionsEnabled,
+  workspaceBillingReturnPath,
 } from "./stripe";
 import { constructStripeEvent } from "./webhooks";
 import assert from "node:assert/strict";
@@ -45,6 +46,13 @@ test("checkout retries use one server-owned key per workspace price version", ()
   const retry = checkoutIdempotencyKey("ws_test");
   assert.equal(first, retry);
   assert.match(first, new RegExp(EARLY_ACCESS_PRICE_VERSION));
+});
+
+test("billing providers return to the workspace that initiated billing", () => {
+  assert.equal(
+    workspaceBillingReturnPath("ws second/with spaces"),
+    "/agents?tab=overview&workspace=ws+second%2Fwith+spaces",
+  );
 });
 
 test("only terminal Stripe subscriptions allow a fresh Checkout", () => {
