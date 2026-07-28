@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { WalletBindingsClient } from "~~/components/auth/WalletBindingsClient";
@@ -23,6 +24,12 @@ export default async function WalletSettingsPage({
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-12 sm:py-16">
+      <Link
+        href="/human?tab=profile"
+        className="mb-6 inline-flex text-sm font-medium text-base-content/60 transition hover:text-base-content"
+      >
+        &larr; Back to Profile
+      </Link>
       <p className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--rateloop-blue)]">Account settings</p>
       <h1 className="mt-4 text-4xl font-semibold tracking-tight sm:text-5xl">Wallets</h1>
       <p className="mt-5 max-w-3xl text-base leading-7 text-base-content/65">

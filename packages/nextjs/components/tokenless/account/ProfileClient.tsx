@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { notifyBrowserAuthSessionChanged } from "~~/lib/auth/client";
@@ -65,10 +66,17 @@ export function ProfileClient() {
   return (
     <div className="space-y-5">
       <section className="surface-card rounded-2xl p-6">
-        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Profile</p>
-        <h2 id="profile-display-name-heading" className="mt-2 text-xl font-semibold">
-          Display name
-        </h2>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Profile</p>
+            <h2 id="profile-display-name-heading" className="mt-2 text-xl font-semibold">
+              Display name
+            </h2>
+          </div>
+          <Link href="/settings/wallets" className="btn btn-sm rateloop-secondary-action px-3">
+            Wallet settings
+          </Link>
+        </div>
         <form className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={save}>
           <div className="grow">
             <Field

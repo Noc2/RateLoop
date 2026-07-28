@@ -5,6 +5,7 @@ import test from "node:test";
 const signIn = readFileSync(new URL("./BetterAuthSignIn.tsx", import.meta.url), "utf8");
 const signInPage = readFileSync(new URL("../../app/(public)/sign-in/page.tsx", import.meta.url), "utf8");
 const signInSurface = readFileSync(new URL("./SignInSurface.tsx", import.meta.url), "utf8");
+const profile = readFileSync(new URL("../tokenless/account/ProfileClient.tsx", import.meta.url), "utf8");
 const wallets = readFileSync(new URL("./WalletBindingsClient.tsx", import.meta.url), "utf8");
 const walletSettings = readFileSync(new URL("../../app/(app)/settings/wallets/page.tsx", import.meta.url), "utf8");
 const privacy = readFileSync(new URL("../../app/(public)/legal/privacy/page.tsx", import.meta.url), "utf8");
@@ -52,6 +53,9 @@ test("wallet setup is explicit, purpose-bound, and keeps managed wallets disable
   assert.match(wallets, /never grants access to your RateLoop account/);
   assert.match(walletSettings, /findAuthSession/);
   assert.match(walletSettings, /redirect\("\/sign-in\?returnTo=%2Fsettings%2Fwallets"\)/);
+  assert.match(profile, /href="\/settings\/wallets"[\s\S]*Wallet settings/);
+  assert.match(walletSettings, /href="\/human\?tab=profile"[\s\S]*Back to Profile/);
+  assert.match(walletSettings, /candidate === "funding" \? candidate : "payout"/);
   assert.match(
     walletSettings,
     /process\.env\.NODE_ENV !== "production" && process\.env\.TOKENLESS_THIRDWEB_WALLET_ENABLED === "true"/,

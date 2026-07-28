@@ -56,6 +56,7 @@ test("saving a profile name updates the navbar account label without a reload", 
     );
     const screen = within(view.container);
     await waitFor(() => assert.ok(screen.getByText("Your account")));
+    assert.equal(screen.getByRole("link", { name: "Wallet settings" }).getAttribute("href"), "/settings/wallets");
 
     const user = userEvent.setup({ document });
     await user.type(screen.getByRole("textbox", { name: "Display name" }), "Ada Lovelace");
