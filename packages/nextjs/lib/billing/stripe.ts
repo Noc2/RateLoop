@@ -180,7 +180,14 @@ export async function preparePrepaidInvoiceCustomer(input: {
   address: PrepaidInvoiceAddress;
   customerId: string;
   legalName: string;
+  /** A VAT id to store. `null` means "no VAT id was supplied", never "delete the stored one". */
   vatId: string | null;
+  /**
+   * Explicit, opt-in removal of the customer's stored EU VAT ids. The Stripe customer is shared
+   * with the subscription, so an absent VAT id on one flow (a top-up request) must never silently
+   * drop reverse charge from another (subscription renewals).
+   */
+  removeStoredVatIds?: boolean;
   workspaceId: string;
 }) {
   const stripe = getStripe();
@@ -197,6 +204,7 @@ export async function preparePrepaidInvoiceCustomer(input: {
     metadata: { rateloop_workspace_id: input.workspaceId },
     name: input.legalName,
   });
+  if (!input.vatId && !input.removeStoredVatIds) return;
   const taxIds = await stripe.customers.listTaxIds(input.customerId, { limit: 100 });
   const existingVatIds = taxIds.data.filter(taxId => taxId.type === "eu_vat");
   if (!input.vatId) {
