@@ -32,6 +32,9 @@ test("every host guide is a pure projection of its registry entry", async () => 
     const html = flat(renderToStaticMarkup(await ConnectHostPage({ params: Promise.resolve({ host: host.id }) })));
     const includes = (expected: string, message: string) => assert.ok(html.includes(flat(expected)), message);
 
+    const backLink = html.indexOf('href="/docs/connect"');
+    assert.ok(backLink >= 0 && backLink < html.indexOf("<h1"), `${host.id} must begin with a link to the host index`);
+    assert.match(html, /← Back to Connect a Host/);
     includes(escapeHtml(host.displayName), `${host.id} must show its display name`);
     includes(escapeHtml(HOST_TIER_BADGES[host.supportTier].meaning), `${host.id} tier meaning missing`);
     if (host.notes) includes(escapeHtml(host.notes), `${host.id} registry notes missing`);

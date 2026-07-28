@@ -41,6 +41,13 @@ test("shell sign-in actions preserve the current destination", () => {
   assert.match(shellSource, /<ThirdwebSessionButton compact=\{compact\} returnTo=\{returnTo\}/);
 });
 
+test("Docs sub-navigation uses the longest matching route", () => {
+  assert.match(shellSource, /import \{ DOCS_NAV, resolveActiveDocsHref \}/);
+  assert.match(shellSource, /const activeDocsHref = resolveActiveDocsHref\(pathname\)/);
+  assert.match(shellSource, /const linkActive = activeDocsHref === link\.href/);
+  assert.doesNotMatch(shellSource, /const linkActive = pathname === link\.href/);
+});
+
 test("tokenless routes expose one main landmark and a keyboard skip link", () => {
   assert.match(shellSource, /href="#main-content"/);
   assert.match(shellSource, /Skip to main content/);

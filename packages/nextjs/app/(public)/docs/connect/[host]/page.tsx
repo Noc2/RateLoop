@@ -59,6 +59,12 @@ function HostGuide({ host }: { host: TokenlessHostCapability }) {
 
   return (
     <article className="prose max-w-none">
+      <Link
+        href="/docs/connect"
+        className="not-prose mb-4 inline-block text-sm text-base-content/65 underline underline-offset-4 hover:text-base-content"
+      >
+        &larr; Back to Connect a Host
+      </Link>
       <DocsTitle gradientText={host.displayName}>Connect</DocsTitle>
       <p className="not-prose flex flex-wrap items-center gap-3">
         <HostTierBadge tier={host.supportTier} />

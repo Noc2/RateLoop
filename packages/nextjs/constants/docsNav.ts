@@ -26,3 +26,16 @@ export const DOCS_NAV = [
     ],
   },
 ] as const;
+
+const DOCS_NAV_HREFS = DOCS_NAV.flatMap(group => group.links.map(link => link.href));
+
+export function resolveActiveDocsHref(pathname: string): string | null {
+  let activeHref: string | null = null;
+
+  for (const href of DOCS_NAV_HREFS) {
+    const matches = pathname === href || pathname.startsWith(`${href}/`);
+    if (matches && (activeHref === null || href.length > activeHref.length)) activeHref = href;
+  }
+
+  return activeHref;
+}

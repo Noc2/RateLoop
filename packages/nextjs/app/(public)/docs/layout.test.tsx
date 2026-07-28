@@ -1,5 +1,5 @@
 import React from "react";
-import { DOCS_NAV } from "../../../constants/docsNav";
+import { DOCS_NAV, resolveActiveDocsHref } from "../../../constants/docsNav";
 import assert from "node:assert/strict";
 import { readdirSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -52,4 +52,12 @@ test("documentation navigation includes every docs page exactly once", () => {
 
   assert.equal(new Set(navHrefs).size, navHrefs.length, "documentation navigation contains duplicate routes");
   assert.deepEqual(navHrefs.toSorted(), docsPageHrefs(docsRoot).toSorted());
+});
+
+test("documentation navigation activates the longest matching parent route", () => {
+  assert.equal(resolveActiveDocsHref("/docs"), "/docs");
+  assert.equal(resolveActiveDocsHref("/docs/connect/codex"), "/docs/connect");
+  assert.equal(resolveActiveDocsHref("/docs/ai/errors"), "/docs/ai/errors");
+  assert.equal(resolveActiveDocsHref("/docs/ai/errors/example"), "/docs/ai/errors");
+  assert.equal(resolveActiveDocsHref("/documentation"), null);
 });

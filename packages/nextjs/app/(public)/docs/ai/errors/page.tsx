@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata, NextPage } from "next";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
 
@@ -18,6 +19,12 @@ const errors = [
 
 const AIErrorsPage: NextPage = () => (
   <article className="prose max-w-none">
+    <Link
+      href="/docs/ai"
+      className="not-prose mb-4 inline-block text-sm text-base-content/65 underline underline-offset-4 hover:text-base-content"
+    >
+      &larr; Back to Agents &amp; MCP
+    </Link>
     <DocsTitle gradientText="Errors">API</DocsTitle>
     <p className="lead text-base-content/60 text-lg">
       The v1 API returns one stable error envelope. A retryable error is safe to poll again; it does not authorize a

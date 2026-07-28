@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { RateLoopLogo } from "~~/components/RateLoopLogo";
 import { SiteSearch } from "~~/components/tokenless/navigation/SiteSearch";
-import { DOCS_NAV } from "~~/constants/docsNav";
+import { DOCS_NAV, resolveActiveDocsHref } from "~~/constants/docsNav";
 
 const ThirdwebSessionButton = dynamic(
   () => import("~~/components/thirdweb/ThirdwebSessionButton").then(module => module.ThirdwebSessionButton),
@@ -106,6 +106,7 @@ function ShellSessionButton({ compact = false }: { compact?: boolean }) {
 
 function NavLinks({ mobile = false }: { mobile?: boolean }) {
   const pathname = usePathname() ?? "";
+  const activeDocsHref = resolveActiveDocsHref(pathname);
 
   return (
     <>
@@ -139,7 +140,7 @@ function NavLinks({ mobile = false }: { mobile?: boolean }) {
                     </h2>
                     <div className="flex flex-col gap-0.5">
                       {group.links.map(link => {
-                        const linkActive = pathname === link.href;
+                        const linkActive = activeDocsHref === link.href;
 
                         return (
                           <Link
