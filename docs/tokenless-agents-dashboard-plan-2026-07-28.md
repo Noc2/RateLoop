@@ -414,8 +414,9 @@ Precision matters here because these numbers will appear in evidence exports.
   Alignment". Computed as `agreementCount / comparableCount` over comparable
   cases only, reported with the Wilson 95% lower bound already computed at
   [`agentRegistry.ts:1090`](../packages/nextjs/lib/tokenless/agentRegistry.ts:1090).
-  Always display the lower bound beside the point estimate; a 100% rate over three
-  cases and over three hundred are different claims.
+  A 100% rate over three cases and over three hundred are different claims, so the
+  sample must always travel with the number — but **how** to show it is settled
+  research, and an earlier draft of this section got it wrong. See below.
 - **Correction, 28 July 2026.** An earlier draft defined "disagreement rate" as
   reviewers failing to reach unanimity, and asserted it was distinct from
   `1 − agreement`. That is wrong.
@@ -444,6 +445,59 @@ Precision matters here because these numbers will appear in evidence exports.
   distinguishable from a slow-reviewer problem.
 - **Cost per decision** — `sum(cost_atomic) / count(decisions)` over the period,
   from the existing per-observation column.
+
+### How to present the uncertainty
+
+This is the best-evidenced part of the whole plan, and it points somewhere
+counterintuitive.
+
+**Numeric ranges cost almost no trust. Verbal hedging costs a lot.** Across five
+experiments with 5,780 participants including a BBC News field experiment, verbal
+uncertainty ("roughly", "may be higher or lower") moved trust in the number by
+d = −0.55, while a numerical range moved it by d = −0.15, and trust in the *source*
+by a negligible d = −0.03. The recommendation is a point estimate with a numeric
+range and no verbal hedge. **Reducing text and improving trust are the same edit
+here.**
+
+**Do not render the bound as an error bar.** Error bars are ambiguous — the same
+bar can be a confidence interval, standard error, min/max or interquartile range,
+usually unlabelled — and a study of 473 published researchers found severe
+misreading even among experts.
+
+**Put the range on the same line as the number.** Point estimate and interval
+should coincide spatially, not sit in a tooltip or a separate column.
+
+**Separate direct from indirect uncertainty.** The interval is *direct* uncertainty
+about the number; the sample size is *indirect* confidence in the evidence behind
+it. Present them as distinct components, never blended.
+
+**No shipped product we could find displays a Wilson lower bound as a number.**
+Reddit computes it and uses it purely as a sort key; Evan Miller's original article
+is about ranking and never proposes showing it; IMDb publishes a weighted average
+and does not disclose the method. The canonical pattern is: **compute it, rank and
+gate on it, display the plain proportion and the count.**
+
+So the primary surface shows one line, three parts:
+
+> **94% endorsed** · 88–97% · 30 reviews
+
+with the point estimate at headline weight, the range adjacent at secondary weight,
+and the count visually distinct. Below the minimum sample, swap the headline rather
+than annotating it:
+
+> **Not enough reviews yet** · 4 of 20 needed
+
+Never print "Wilson", "confidence interval", "lower bound" or "statistically
+significant" on the primary surface; that belongs in the record detail. Keep the
+bound itself as the sort and threshold key, matching Reddit and IMDb. Fix the
+confidence level product-wide and never expose it as a control — participants read
+85% and 99% as the same thing, and a text interval at 85% performed no better than
+showing no uncertainty at all.
+
+One thing to state rather than assume: **"users will correctly discount a small
+sample" is unsupported.** The literature is genuinely split. That is the argument
+for swapping the headline below the threshold instead of trusting the reader to
+weigh the count.
 
 Two rules for all of them: **never average across scopes into a single agent
 score** (§4.3, and the immutability plan), and **suppress rather than mislead**
