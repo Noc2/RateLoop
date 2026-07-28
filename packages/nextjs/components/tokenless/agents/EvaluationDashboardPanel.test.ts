@@ -41,6 +41,8 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.match(source, /Assurance operations/);
   assert.match(source, /Sampling rate/);
   assert.match(source, /Mean verdict latency/);
+  assert.match(source, /formatHumanDurationFromSeconds/);
+  assert.doesNotMatch(source, /toLocaleString\(\)\} sec/);
   assert.match(source, /Disagreement rate/);
   assert.match(source, /Override rate/);
   assert.match(source, /Latest evidence anchor/);

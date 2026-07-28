@@ -6,6 +6,7 @@ import { ModelEvidencePanel } from "~~/components/tokenless/agents/ModelEvidence
 import { Field, TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
+import { formatHumanDurationFromSeconds } from "~~/lib/humanDuration";
 import type { AssuranceMetricsSnapshot } from "~~/lib/tokenless/assuranceMetrics";
 import type { DeciderDecisionTrend, EvaluationDashboard, EvaluationRun } from "~~/lib/tokenless/evaluationDashboard";
 import { readJson } from "~~/lib/tokenless/http";
@@ -62,12 +63,12 @@ function AssuranceMetricsSummary({ snapshot }: { snapshot: AssuranceMetricsSnaps
     totals.comparable > 0 ? `${((totals.disagreements / totals.comparable) * 100).toFixed(1)}%` : "No data";
   const latency =
     totals.latencyCount > 0
-      ? `${Math.round(totals.latencyMilliseconds / totals.latencyCount / 1_000).toLocaleString()} sec`
+      ? formatHumanDurationFromSeconds(Math.round(totals.latencyMilliseconds / totals.latencyCount / 1_000))
       : "No data";
   const anchor =
     snapshot.evidenceAnchor.state === "absent"
       ? "No anchor"
-      : `${snapshot.evidenceAnchor.state} · ${snapshot.evidenceAnchor.lagSeconds.toLocaleString()} sec`;
+      : `${snapshot.evidenceAnchor.state} · ${formatHumanDurationFromSeconds(snapshot.evidenceAnchor.lagSeconds)}`;
   const overrideRate =
     snapshot.overrideDecisions.overrideRateBps === null
       ? "No data"
