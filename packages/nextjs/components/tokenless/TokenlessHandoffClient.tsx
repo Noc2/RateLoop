@@ -525,7 +525,14 @@ export function TokenlessHandoffClient() {
         if (typeof sessionBody.expiresAt !== "string") {
           throw new Error("RateLoop returned an invalid signed-in session.");
         }
-        if (sessionPrincipalRef.current !== undefined && sessionPrincipalRef.current !== sessionBody.principalId) {
+        // Only a genuine switch between two principals may discard the review work. The first
+        // sign-in is a `null` (anonymous) to principal transition, and this page is the flow that
+        // told the user to sign in in another tab and come back: clearing here would delete the
+        // quote and privacy confirmation they were asked to prepare.
+        if (
+          typeof sessionPrincipalRef.current === "string" &&
+          sessionPrincipalRef.current !== sessionBody.principalId
+        ) {
           clearPrincipalState();
         }
         sessionPrincipalRef.current = sessionBody.principalId;
