@@ -192,7 +192,12 @@ export async function getOversightRunCaseView(input: {
         note: lane === "hybrid" ? HYBRID_NOTE : null,
         cases: (caseRows.rows as Row[]).map(row => {
           const caseId = text(row, "case_id")!;
-          const responses = (responsesByCase.get(caseId) ?? []).map(response => {
+          const caseResponses = responsesByCase.get(caseId) ?? [];
+          const visibleResponses =
+            lane === "hybrid"
+              ? caseResponses.filter(response => text(response, "reviewer_source") === "customer_invited")
+              : caseResponses;
+          const responses = visibleResponses.map(response => {
             const invited = text(response, "reviewer_source") === "customer_invited";
             const encrypted = text(response, "rationale_ciphertext");
             return {
@@ -204,8 +209,8 @@ export async function getOversightRunCaseView(input: {
               submittedAt: iso(response.submitted_at),
             } satisfies OversightCaseResponse;
           });
-          const baseline = responses.filter(response => response.choice === "baseline").length;
-          const candidate = responses.filter(response => response.choice === "candidate").length;
+          const baseline = caseResponses.filter(response => text(response, "choice") === "baseline").length;
+          const candidate = caseResponses.filter(response => text(response, "choice") === "candidate").length;
           const total = baseline + candidate;
           return {
             caseId,

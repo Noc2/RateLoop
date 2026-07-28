@@ -309,6 +309,48 @@ test("access control: non-decision members are denied, decision owners admitted,
   assert.doesNotMatch(JSON.stringify(networkView), /follows the frozen instructions/);
 });
 
+test("hybrid case detail exposes invited responses only while preserving aggregate network counts", async () => {
+  const seeded = await fixture();
+  await markRunCompleted(seeded.runId);
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_audience_policies SET reviewer_source = 'hybrid' WHERE policy_id = ?",
+    args: [seeded.audiencePolicyId],
+  });
+  const invited = await dbClient.execute({
+    sql: `SELECT choice FROM tokenless_assurance_responses
+          WHERE run_id = ? AND case_id = ? AND reviewer_source = 'customer_invited' LIMIT 1`,
+    args: [seeded.runId, seeded.caseIds[0]!],
+  });
+  const networkChoice = String(invited.rows[0]?.choice) === "baseline" ? "candidate" : "baseline";
+  const now = new Date();
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_assurance_responses
+          (response_id, run_id, case_id, reviewer_key, reviewer_source, choice,
+           failure_tag_keys_json, qualification_keys_json, assurance_capabilities_json,
+           response_digest, validity, submitted_at, updated_at)
+          VALUES ('hybrid_network_response', ?, ?, 'network-reviewer-secret-deadbeef',
+                  'rateloop_network', ?, '["network-secret-tag"]', '[]', '[]', ?,
+                  'valid', ?, ?)`,
+    args: [seeded.runId, seeded.caseIds[0]!, networkChoice, `sha256:${"f".repeat(64)}`, now, now],
+  });
+
+  const view = await getOversightRunCaseView({
+    accountAddress: OWNER,
+    workspaceId: seeded.workspaceId,
+    runId: seeded.runId,
+  });
+
+  assert.equal(view.lane, "hybrid");
+  assert.equal(view.detailAvailable, true);
+  assert.match(view.note ?? "", /network responses stay aggregate/);
+  const first = view.cases[0]!;
+  assert.equal(first.responses.length, 1);
+  assert.equal(first.responses[0]?.reviewerSource, "customer_invited");
+  assert.equal(first.choiceCounts.baseline + first.choiceCounts.candidate, 2);
+  assert.equal(first.disagreementBps, 5_000);
+  assert.doesNotMatch(JSON.stringify(first.responses), /deadbeef|network-secret-tag|rateloop_network/);
+});
+
 test("the cases route is a session-scoped no-store read of the oversight view", () => {
   const source = readFileSync(
     new URL("../../app/api/account/workspaces/[workspaceId]/assurance/runs/[runId]/cases/route.ts", import.meta.url),
