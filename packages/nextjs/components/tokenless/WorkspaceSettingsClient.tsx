@@ -192,6 +192,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
   const [workspaceRequests] = useState(() => new WorkspaceRequestScope());
   const upgradeActionRef = useRef<HTMLButtonElement>(null);
   const upgradeIntentDeliveredRef = useRef(false);
+  const panelFundingRef = useRef<HTMLElement>(null);
   const selected = workspaces.find(workspace => workspace.workspaceId === selectedId);
   const canManageTopups = selected?.role === "owner" || selected?.role === "billing";
   const canManageIdentity = selected?.role === "owner" || selected?.role === "admin";
@@ -745,6 +746,22 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
   );
   const showPanelFunding = Boolean(billing?.limits.paidPanels || topups?.enabled || hasFundingActivity);
 
+  useEffect(() => {
+    if (!selectedId || !showPanelFunding) return;
+
+    const focusPanelFunding = () => {
+      if (window.location.hash !== "#panel-funding") return;
+      const panel = panelFundingRef.current;
+      if (!panel) return;
+      panel.scrollIntoView?.({ block: "start" });
+      panel.focus({ preventScroll: true });
+    };
+
+    focusPanelFunding();
+    window.addEventListener("hashchange", focusPanelFunding);
+    return () => window.removeEventListener("hashchange", focusPanelFunding);
+  }, [selectedId, showPanelFunding]);
+
   const workspaceForm = (
     <form className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start" onSubmit={createWorkspace}>
       <Field
@@ -1183,8 +1200,10 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
 
             {selected && showPanelFunding ? (
               <section
+                ref={panelFundingRef}
                 id="panel-funding"
                 aria-labelledby="panel-funding-heading"
+                tabIndex={-1}
                 className="mt-5 rounded-xl border border-white/10 p-5"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">

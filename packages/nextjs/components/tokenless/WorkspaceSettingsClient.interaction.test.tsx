@@ -81,6 +81,61 @@ test("arriving from pricing with billing=upgrade acknowledges the intent and lan
   }
 });
 
+test("a delayed panel-funding hash target scrolls and receives focus without changing the URL", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, render } = await import("@testing-library/react");
+  const { WorkspaceSettingsClient } = await import("./WorkspaceSettingsClient");
+  const previousFetch = globalThis.fetch;
+  const previousScrollIntoView = HTMLElement.prototype.scrollIntoView;
+  const scrollCalls: Array<{ target: HTMLElement; options?: boolean | ScrollIntoViewOptions }> = [];
+  let resolveBilling!: (response: Response) => void;
+  const delayedBilling = new Promise<Response>(resolve => {
+    resolveBilling = resolve;
+  });
+  HTMLElement.prototype.scrollIntoView = function scrollIntoView(options?: boolean | ScrollIntoViewOptions) {
+    scrollCalls.push({ target: this, options });
+  };
+  const expectedLocation = "/agents?tab=overview&workspace=workspace-1&view=usage#panel-funding";
+  window.history.replaceState(null, "", expectedLocation);
+
+  globalThis.fetch = async input => {
+    const url = String(input);
+    if (url === "/api/account/workspaces") return Response.json(workspacesResponse());
+    if (url.endsWith("/billing")) return delayedBilling;
+    if (url.endsWith("/billing/topups"))
+      return Response.json({ enabled: false, topups: [], ledger: [], reservations: [] });
+    throw new Error(`Unexpected workspace settings request: ${url}`);
+  };
+
+  try {
+    const view = render(<WorkspaceSettingsClient initialWorkspaceId="workspace-1" />);
+    await view.findByRole("heading", { name: "Plan and usage" });
+    assert.equal(document.getElementById("panel-funding"), null, "the async funding panel should not exist yet");
+
+    await act(async () => {
+      resolveBilling(
+        Response.json(
+          billingResponse({
+            limits: { activeAgents: 1, activePrivateGroups: 0, paidPanels: true },
+          }),
+        ),
+      );
+    });
+
+    const panel = await view.findByRole("region", { name: "Panel funding" });
+    assert.equal(document.activeElement, panel, "the delayed hash target should hold focus");
+    assert.equal(scrollCalls.length, 1);
+    assert.equal(scrollCalls[0]?.target, panel);
+    assert.deepEqual(scrollCalls[0]?.options, { block: "start" });
+    assert.equal(`${window.location.pathname}${window.location.search}${window.location.hash}`, expectedLocation);
+  } finally {
+    await act(async () => cleanup());
+    HTMLElement.prototype.scrollIntoView = previousScrollIntoView;
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
 test("a failed billing status refresh is surfaced instead of rejecting silently", async () => {
   const restoreDom = installTestDom();
   const { act, cleanup, render } = await import("@testing-library/react");

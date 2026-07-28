@@ -35,6 +35,16 @@ test("workspace settings keeps subscription and panel funding separate", () => {
   assert.match(source, /billing\?\.limits\.paidPanels \|\| topups\?\.enabled \|\| hasFundingActivity/);
 });
 
+test("workspace settings focuses the funding hash after its async panel renders", () => {
+  assert.match(source, /const panelFundingRef = useRef<HTMLElement>\(null\)/);
+  assert.match(source, /window\.location\.hash !== "#panel-funding"/);
+  assert.match(source, /panel\.scrollIntoView\?\.\(\{ block: "start" \}\)/);
+  assert.match(source, /panel\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(source, /window\.addEventListener\("hashchange", focusPanelFunding\)/);
+  assert.match(source, /ref=\{panelFundingRef\}/);
+  assert.match(source, /tabIndex=\{-1\}/);
+});
+
 test("workspace settings communicates entitlement and checkout lifecycle", () => {
   assert.match(source, /role="progressbar"/);
   assert.match(source, /completed/);
