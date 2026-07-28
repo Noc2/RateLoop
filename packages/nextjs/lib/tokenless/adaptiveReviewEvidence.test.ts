@@ -408,7 +408,7 @@ test("idempotently derives comparable yes evidence from the bound server result"
   assert.equal(first.agreement, "agree");
   assert.equal(first.comparable, true);
   assert.equal(first.respondingHumanCount, 5);
-  assert.equal(first.humanHumanAgreementBps, 8_000);
+  assert.equal(first.humanHumanAgreementBps, 6_000);
   assert.equal(first.sourcePayloadHash, __adaptiveReviewOrchestrationTestUtils.sha256(SOURCE_PAYLOAD));
   assert.equal(first.agentOutcomeCommitment, __adaptiveReviewOrchestrationTestUtils.sha256(SUGGESTION_PAYLOAD));
   assert.match(first.humanOutcomeCommitment, /^sha256:[0-9a-f]{64}$/);
@@ -433,7 +433,7 @@ test("maps no to disagreement and invalidates comparability after a terminal del
   assert.ok(disagreement);
   assert.equal(disagreement.agreement, "disagree");
   assert.equal(disagreement.comparable, true);
-  assert.equal(disagreement.humanHumanAgreementBps, 7_500);
+  assert.equal(disagreement.humanHumanAgreementBps, 5_000);
 
   await storedResult(setup.operationKey, { status: "delisted", participantCount: 4 });
   const delisted = await finalizeAdaptiveReviewEvidence({ operationKey: setup.operationKey });
@@ -447,6 +447,22 @@ test("maps no to disagreement and invalidates comparability after a terminal del
   const stored = await observationRow(setup.decision.opportunityId);
   assert.equal(stored?.comparable, false);
   assert.equal(stored?.agreement, "inconclusive");
+});
+
+test("public observations use pairwise agreement for unanimous, split, and undersized panels", async () => {
+  const setup = await fixture();
+
+  await storedResult(setup.operationKey, { preferenceShareBps: 10_000, participantCount: 4 });
+  const unanimous = await finalizeAdaptiveReviewEvidence({ operationKey: setup.operationKey });
+  assert.equal(unanimous?.humanHumanAgreementBps, 10_000);
+
+  await storedResult(setup.operationKey, { preferenceShareBps: 5_000, participantCount: 4 });
+  const split = await finalizeAdaptiveReviewEvidence({ operationKey: setup.operationKey });
+  assert.equal(split?.humanHumanAgreementBps, 3_333);
+
+  await storedResult(setup.operationKey, { preferenceShareBps: 10_000, participantCount: 1 });
+  const undersized = await finalizeAdaptiveReviewEvidence({ operationKey: setup.operationKey });
+  assert.equal(undersized?.humanHumanAgreementBps, null);
 });
 
 test("agent-authored feedback results never become adaptive observations", async () => {

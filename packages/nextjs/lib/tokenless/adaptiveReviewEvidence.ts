@@ -2,6 +2,7 @@ import { type TokenlessResult, parseTokenlessResult } from "@rateloop/sdk";
 import { createHash } from "node:crypto";
 import "server-only";
 import { dbPool } from "~~/lib/db";
+import { pairwiseHumanAgreementBps } from "~~/lib/tokenless/humanReviewResultObservation";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 type QueryRow = Record<string, unknown>;
@@ -119,9 +120,13 @@ function observationFromResult(input: {
     input.result.terminal && input.result.verdictStatus === "publishable" && (selected === "yes" || selected === "no");
   const respondingHumanCount = input.result.audience.participantCount;
   const preferenceShareBps = comparable ? input.result.verdict?.preferenceShareBps : null;
+  const preferredHumanCount =
+    preferenceShareBps === null || preferenceShareBps === undefined
+      ? null
+      : Math.round((preferenceShareBps * respondingHumanCount) / 10_000);
   const humanHumanAgreementBps =
-    comparable && respondingHumanCount > 1 && preferenceShareBps !== null && preferenceShareBps !== undefined
-      ? Math.max(preferenceShareBps, 10_000 - preferenceShareBps)
+    comparable && preferredHumanCount !== null
+      ? pairwiseHumanAgreementBps(preferredHumanCount, respondingHumanCount - preferredHumanCount)
       : null;
 
   return {
