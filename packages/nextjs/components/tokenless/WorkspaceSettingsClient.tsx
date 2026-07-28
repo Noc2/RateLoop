@@ -9,6 +9,7 @@ import { WorkspaceMembersPanel } from "~~/components/tokenless/WorkspaceMembersP
 import { ChoiceInput, Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
+import { TOKENLESS_BILLING_PLANS, formatUsdPrice } from "~~/lib/billing/plans";
 import type { WorkspaceBillingSummary } from "~~/lib/billing/workspaceBillingTypes";
 import { WorkspaceRequestScope } from "~~/lib/tokenless/workspaceRequestScope";
 
@@ -191,6 +192,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
   const [identityToken, setIdentityToken] = useState<string | null>(null);
   const [identityEndpoint, setIdentityEndpoint] = useState<string | null>(null);
   const [identityConfirmation, setIdentityConfirmation] = useState<IdentityConfirmation | null>(null);
+  const [showPlanComparison, setShowPlanComparison] = useState(false);
   const [identityForm, setIdentityForm] = useState({
     providerId: "",
     protocol: "oidc" as "oidc" | "saml",
@@ -1024,13 +1026,61 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
                         {showBillingProfile ? "Close billing details" : "Business billing details"}
                       </button>
                     ) : null}
-                    <Link
-                      href={`/pricing?workspace=${encodeURIComponent(selectedId)}`}
+                    <button
+                      type="button"
                       className="text-sm text-base-content/60 underline decoration-base-content/30 underline-offset-4 hover:text-base-content"
+                      aria-expanded={showPlanComparison}
+                      aria-controls="workspace-plan-comparison"
+                      onClick={() => setShowPlanComparison(current => !current)}
                     >
-                      Compare plans
-                    </Link>
+                      {showPlanComparison ? "Close plan comparison" : "Compare plans"}
+                    </button>
                   </div>
+                  {showPlanComparison ? (
+                    <div
+                      id="workspace-plan-comparison"
+                      className="mt-5 grid gap-3 border-t border-white/10 pt-5 sm:grid-cols-2"
+                    >
+                      {([TOKENLESS_BILLING_PLANS.free, TOKENLESS_BILLING_PLANS.early_access] as const).map(plan => (
+                        <article
+                          key={plan.key}
+                          className={`rounded-xl border p-4 ${
+                            billing.plan === plan.key
+                              ? "border-[var(--rateloop-green)]/35 bg-[var(--rateloop-green)]/[0.04]"
+                              : "border-white/10 bg-black/10"
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <h3 className="font-semibold">{plan.displayName}</h3>
+                            {billing.plan === plan.key ? (
+                              <span className="rounded-full bg-base-content/[0.08] px-2 py-1 text-xs">
+                                Current plan
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="mt-3 text-2xl font-semibold">
+                            {formatUsdPrice(plan.monthlyPriceCents)}
+                            {plan.monthlyPriceCents ? (
+                              <span className="text-xs font-normal text-base-content/55"> / workspace / month</span>
+                            ) : null}
+                          </p>
+                          <ul className="mt-3 space-y-1 text-sm leading-6 text-base-content/65">
+                            <li>{plan.decisionsPerPeriod} completed decisions per period</li>
+                            <li>
+                              {plan.activeAgents} active {plan.activeAgents === 1 ? "agent" : "agents"}
+                            </li>
+                            <li>{plan.paidPanels ? "Paid reviewer panels available" : "Invited unpaid reviews"}</li>
+                          </ul>
+                        </article>
+                      ))}
+                      <p className="text-xs leading-5 text-base-content/55 sm:col-span-2">
+                        Early Access is {formatUsdPrice(TOKENLESS_BILLING_PLANS.early_access.monthlyPriceCents)} per
+                        workspace each month for 12 months. We give at least 60 days&apos; notice before a later price
+                        change; founding customers then receive 20% off the comparable monthly plan and may cancel
+                        before it applies.
+                      </p>
+                    </div>
+                  ) : null}
                   {billing.canManageBilling && showBillingProfile ? (
                     <form
                       className="mt-5 rounded-lg border border-white/10 bg-black/10 p-4"

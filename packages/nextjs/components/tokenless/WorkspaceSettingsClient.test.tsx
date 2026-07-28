@@ -59,6 +59,10 @@ test("workspace settings communicates entitlement and checkout lifecycle", () =>
   assert.match(source, /Checkout was cancelled/);
   assert.match(source, /Existing accepted work can finish/);
   assert.match(source, /Workspace owners and billing members/);
+  assert.match(source, /id="workspace-plan-comparison"/);
+  assert.match(source, /TOKENLESS_BILLING_PLANS\.free/);
+  assert.match(source, /founding customers then receive 20% off/);
+  assert.doesNotMatch(source, /href=\{`\/pricing\?workspace=/);
 });
 
 test("workspace billing profile collects self-declared business invoice details", () => {

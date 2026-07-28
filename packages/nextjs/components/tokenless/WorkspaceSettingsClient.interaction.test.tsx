@@ -82,6 +82,42 @@ test("arriving from pricing with billing=upgrade acknowledges the intent and lan
   }
 });
 
+test("plan comparison stays in the active workspace and exposes the material Early Access terms", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, render, within } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const { WorkspaceSettingsClient } = await import("./WorkspaceSettingsClient");
+  const previousFetch = globalThis.fetch;
+  window.history.replaceState(null, "", "/agents?tab=billing&workspace=workspace-1");
+
+  globalThis.fetch = async input => {
+    const url = String(input);
+    if (url === "/api/account/workspaces") return Response.json(workspacesResponse());
+    if (url.endsWith("/billing")) return Response.json(billingResponse());
+    if (url.endsWith("/billing/topups"))
+      return Response.json({ enabled: false, topups: [], ledger: [], reservations: [] });
+    throw new Error(`Unexpected workspace settings request: ${url}`);
+  };
+
+  try {
+    const view = render(<WorkspaceSettingsClient initialWorkspaceId="workspace-1" />);
+    const user = userEvent.setup({ document });
+    const compare = await view.findByRole("button", { name: "Compare plans" });
+    await user.click(compare);
+    const comparison = document.getElementById("workspace-plan-comparison");
+    assert.ok(comparison);
+    assert.ok(within(comparison).getByRole("heading", { name: "Free" }));
+    assert.ok(within(comparison).getByRole("heading", { name: "Early Access" }));
+    assert.ok(within(comparison).getByText(/60 days.*20% off/s));
+    assert.equal(window.location.pathname, "/agents");
+    assert.equal(window.location.search, "?tab=billing&workspace=workspace-1");
+  } finally {
+    await act(async () => cleanup());
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});
+
 test("a subscription needing attention offers payment recovery instead of a false disabled upgrade", async () => {
   const restoreDom = installTestDom();
   const { act, cleanup, render } = await import("@testing-library/react");
