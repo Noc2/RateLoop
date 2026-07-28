@@ -484,10 +484,7 @@ test("the tokenless branch automatically uses the isolated test deployment gate"
       new RegExp(`${name} must contain at least 32 characters`),
     );
   }
-  for (const name of [
-    "TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY",
-    "TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION",
-  ]) {
+  for (const name of ["TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY", "TOKENLESS_INTEGRITY_REVIEWER_LOOKUP_KEY_VERSION"]) {
     const missingSecret = { ...env };
     delete missingSecret[name];
     assert.match(
