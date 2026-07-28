@@ -120,9 +120,11 @@ test("connected navigation splits the owner stack into URL-backed task tabs", ()
   assert.equal(resolveAgentTabParam("groups"), "registry");
   assert.equal(resolveAgentTabParam("unknown"), "overview");
   assert.equal(agentTabHref("inbox", "workspace one"), "/agents?tab=inbox&workspace=workspace+one");
-  assert.match(tabsSource, /value: "overview", label: "Workspace"/);
-  assert.match(tabsSource, /value: "connect", label: "Connection"/);
-  assert.match(tabsSource, /value: "registry", label: "Reviews"/);
+  assert.match(tabsSource, /value: "overview", label: "Overview"/);
+  assert.match(tabsSource, /value: "connect", label: "Connections"/);
+  assert.match(tabsSource, /value: "inbox", label: "Approvals"/);
+  assert.match(tabsSource, /value: "registry", label: "Review setup"/);
+  assert.match(tabsSource, /value: "evaluations", label: "Results"/);
 });
 
 test("agent tabs use roving focus and arrow, Home, and End navigation", () => {
@@ -137,10 +139,13 @@ test("agent tabs use roving focus and arrow, Home, and End navigation", () => {
   assert.match(panelsSource, /role="tabpanel"/);
 });
 
-test("the active workspace selector shares the tab header and preserves the current tab", () => {
+test("the active workspace selector keeps a stable row and preserves the current tab", () => {
   assert.match(tabsSource, /<SelectField/);
   assert.match(tabsSource, /label="Active workspace"/);
   assert.match(tabsSource, /labelClassName="sr-only"/);
+  assert.match(tabsSource, /overflow-x-auto/);
+  assert.match(tabsSource, /min-w-max/);
+  assert.doesNotMatch(tabsSource, /flex flex-wrap gap-2/);
   assert.match(tabsSource, /workspaces\.map\(workspace =>/);
   assert.match(tabsSource, /onWorkspaceChange\(event\.target\.value\)/);
   assert.match(panelsSource, /workspaces=\{workspaces\}/);

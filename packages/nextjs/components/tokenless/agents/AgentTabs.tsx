@@ -8,11 +8,11 @@ import { SelectField } from "~~/components/tokenless/forms/Field";
 export type AgentTab = "overview" | "connect" | "inbox" | "registry" | "evaluations" | "evidence";
 
 const tabs: Array<{ value: AgentTab; label: string }> = [
-  { value: "overview", label: "Workspace" },
-  { value: "connect", label: "Connection" },
-  { value: "inbox", label: "Inbox" },
-  { value: "registry", label: "Reviews" },
-  { value: "evaluations", label: "Evaluations" },
+  { value: "overview", label: "Overview" },
+  { value: "connect", label: "Connections" },
+  { value: "inbox", label: "Approvals" },
+  { value: "registry", label: "Review setup" },
+  { value: "evaluations", label: "Results" },
   { value: "evidence", label: "Evidence" },
 ];
 
@@ -45,9 +45,9 @@ export function AgentTabs({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      <nav className="min-w-0 flex-[1_1_40rem]" aria-label="Agent workspace sections">
-        <div role="tablist" aria-orientation="horizontal" className="flex flex-wrap gap-2">
+    <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+      <nav className="-mx-1 min-w-0 overflow-x-auto px-1 lg:flex-1" aria-label="Agent workspace sections">
+        <div role="tablist" aria-orientation="horizontal" className="flex min-w-max gap-2">
           {visible.map((tab, index) => (
             <Link
               key={tab.value}
@@ -72,7 +72,7 @@ export function AgentTabs({
         </div>
       </nav>
       <SelectField
-        containerClassName="ml-auto w-56 max-w-full shrink-0"
+        containerClassName="w-full shrink-0 sm:w-56 lg:ml-auto"
         className="h-11 min-h-11 rounded-xl border-white/10 bg-[var(--rateloop-field)] text-sm font-medium"
         label="Active workspace"
         labelClassName="sr-only"

@@ -31,9 +31,12 @@ test("Agents uses URL-backed workspace tabs", () => {
 
   assert.match(tabs, /tab-control/);
   assert.match(tabs, /pill-active/);
-  assert.match(tabs, /Workspace/);
+  assert.match(tabs, /Overview/);
   assert.doesNotMatch(tabs, /Integrate/);
-  assert.match(tabs, /Evaluations/);
+  assert.match(tabs, /Connections/);
+  assert.match(tabs, /Approvals/);
+  assert.match(tabs, /Review setup/);
+  assert.match(tabs, /Results/);
   assert.doesNotMatch(page, /integrate/);
   assert.match(legacyAsk, /redirect\("\/agents\?tab=overview"\)/);
 });
