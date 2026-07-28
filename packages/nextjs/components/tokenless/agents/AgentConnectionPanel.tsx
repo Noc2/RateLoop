@@ -1156,6 +1156,7 @@ export function AgentConnectionPanel({
       connectionClock,
     ),
   );
+  const allActiveIntegrationsUseSafeAccess = activeIntegrations.every(integration => !integration.apiKeyId);
   const reconnectableIntegrations = selectReconnectableOAuthConnections(integrations, connectionClock);
   const showConnectionStart = canStartAgentConnection({
     loading,
@@ -1583,9 +1584,11 @@ export function AgentConnectionPanel({
                   ? `${activeIntegrations[0].agentDisplayName || "Agent"} connected`
                   : `${activeIntegrations.length} agents connected`}
               </h2>
-              <p className="mt-2 text-sm leading-6 text-base-content/55">
-                Safe access · No spending or private workspace content
-              </p>
+              {allActiveIntegrationsUseSafeAccess ? (
+                <p className="mt-2 text-sm leading-6 text-base-content/55">
+                  Safe access · No spending or private workspace content
+                </p>
+              ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
               {activeIntegrations.length === 1 && !activeIntegrations[0].apiKeyId ? (

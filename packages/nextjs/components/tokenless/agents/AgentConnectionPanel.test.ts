@@ -136,6 +136,8 @@ test("all five consequential connection actions use the shared confirmation dial
 
 test("safe OAuth integrations show no bearer rotation or publishing permission", () => {
   assert.match(source, /const legacyCredential = Boolean\(integration\.apiKeyId\)/);
+  assert.match(source, /allActiveIntegrationsUseSafeAccess = activeIntegrations\.every/);
+  assert.match(source, /\{allActiveIntegrationsUseSafeAccess \? \(/);
   assert.match(source, /legacyCredential \? \(/);
   assert.match(source, /OAuth-managed safe access/);
   assert.match(source, /No publishing access/);
