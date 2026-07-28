@@ -22,6 +22,24 @@ test("Field applies one shared format and associates field errors", () => {
   assert.match(html, /role="alert">Check this value/);
 });
 
+test("shared fields keep hints mounted when errors are present", () => {
+  const html = renderToStaticMarkup(
+    <>
+      <Field id="name" label="Name" hint="As shown to reviewers." error="Enter a name." />
+      <TextareaField id="reason" label="Reason" hint="Keep it concise." error="Enter a reason." />
+      <SelectField id="role" label="Role" hint="Controls access." error="Choose a role.">
+        <option value="">Choose</option>
+      </SelectField>
+    </>,
+  );
+
+  for (const id of ["name", "reason", "role"]) {
+    assert.match(html, new RegExp(`aria-describedby="${id}-error ${id}-hint"`));
+    assert.match(html, new RegExp(`id="${id}-hint"`));
+    assert.match(html, new RegExp(`id="${id}-error"`));
+  }
+});
+
 test("HTTP form errors retain the server field for accessible placement", () => {
   const error = new HttpJsonError("Check this value.", {
     code: "invalid_billing_profile",

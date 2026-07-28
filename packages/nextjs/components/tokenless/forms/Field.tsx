@@ -43,13 +43,14 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
         maxLength={constraint?.maxLength ?? maxLength}
         title={constraint?.title}
       />
+      {hint ? (
+        <span id={hintId} className="mt-2 block text-sm text-base-content/60">
+          {hint}
+        </span>
+      ) : null}
       {error ? (
         <span id={errorId} className="mt-2 block text-sm text-error" role="alert">
           {error}
-        </span>
-      ) : hint ? (
-        <span id={hintId} className="mt-2 block text-sm text-base-content/60">
-          {hint}
         </span>
       ) : null}
     </label>
@@ -85,13 +86,14 @@ export const TextareaField = forwardRef<HTMLTextAreaElement, TextareaFieldProps>
         aria-describedby={describedBy}
         aria-invalid={error ? true : undefined}
       />
+      {hint ? (
+        <span id={hintId} className="mt-2 block text-sm text-base-content/60">
+          {hint}
+        </span>
+      ) : null}
       {error ? (
         <span id={errorId} className="mt-2 block text-sm text-error" role="alert">
           {error}
-        </span>
-      ) : hint ? (
-        <span id={hintId} className="mt-2 block text-sm text-base-content/60">
-          {hint}
         </span>
       ) : null}
     </label>
@@ -152,13 +154,14 @@ export function SelectField({
       >
         {children}
       </select>
+      {hint ? (
+        <span id={hintId} className="mt-2 block text-sm text-base-content/60">
+          {hint}
+        </span>
+      ) : null}
       {error ? (
         <span id={errorId} className="mt-2 block text-sm text-error" role="alert">
           {error}
-        </span>
-      ) : hint ? (
-        <span id={hintId} className="mt-2 block text-sm text-base-content/60">
-          {hint}
         </span>
       ) : null}
     </label>
