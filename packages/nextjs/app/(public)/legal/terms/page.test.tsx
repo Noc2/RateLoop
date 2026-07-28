@@ -13,6 +13,19 @@ test("terms state service limits and accepted-work protection", async () => {
   const { default: TermsPage } = await import("./page");
   const html = renderToStaticMarkup(<TermsPage />).replace(/\s+/g, " ");
 
+  assert.match(html, /At a glance/i);
+  assert.match(html, /aria-label="On this page"/i);
+  assert.match(html, /complete terms below provide the details/i);
+  for (const href of [
+    "#service-scope",
+    "#who-may-use",
+    "#customer-material",
+    "#workspace-subscriptions",
+    "#trust-privacy",
+    "#use-of-results",
+  ]) {
+    assert.match(html, new RegExp(`href="${href}"`));
+  }
   assert.match(html, /blinded human assurance/i);
   assert.match(html, /cannot cancel the round/i);
   assert.match(html, /renew automatically until cancelled/i);

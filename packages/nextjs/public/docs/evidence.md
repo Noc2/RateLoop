@@ -1,4 +1,4 @@
-# Evidence & Compliance Mapping
+# Evidence reference
 
 RateLoop records a bounded human-review run as an integrity-bearing packet. The packet describes the frozen review
 scope, the human judgments, privacy-safe coverage and latency statistics, available settlement references, and explicit
@@ -142,7 +142,7 @@ determine the customer's legal or contractual retention schedule. Scheduled enfo
 content and access logs unless a legal hold applies. Artifact digests, signed packets, witness and WORM receipts, and the
 canonical audit chain remain as integrity records; deleting private content does not rewrite that history.
 
-## Compliance map
+## Framework cross-reference
 
 Every mapping means **supports evidence for**. It is not an assessment result, legal opinion, certification, or assertion
 that a customer's controls are implemented or effective.

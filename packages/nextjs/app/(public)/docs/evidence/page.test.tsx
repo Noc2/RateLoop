@@ -15,7 +15,12 @@ test("evidence docs explain exact artifacts, checks, mappings, and boundaries", 
   const { default: EvidencePage } = await import("./page");
   const html = renderToStaticMarkup(<EvidencePage />).replace(/\s+/g, " ");
 
-  assert.match(html, /Evidence &amp; Compliance.*rateloop-text-gradient.*Mapping/i);
+  assert.match(html, /Evidence.*rateloop-text-gradient.*Reference/i);
+  assert.match(html, /At a glance/i);
+  assert.match(html, /aria-label="On this page"/i);
+  for (const href of ["#shared-responsibility", "#packet", "#verify", "#exports", "#compliance-map"]) {
+    assert.match(html, new RegExp(`href="${href}"`));
+  }
   assert.doesNotMatch(html, /What this is not|RateLoop never claims/i);
   assert.match(html, /Shared responsibility/i);
   assert.match(html, /Your people provide oversight\. RateLoop records configured review activity and its evidence\./);
@@ -57,7 +62,7 @@ test("evidence docs explain exact artifacts, checks, mappings, and boundaries", 
   assert.match(html, /SOC 2 \/ ISO \/ HIPAA \/ residency attestations it does not hold/i);
   assert.match(html, /no evidence export by itself makes anyone compliant/i);
   assert.match(html, /rateloop\.human-assurance\.evidence\.v3/i);
-  assert.match(html, /Frozen scope.*Review context.*Judgment evidence.*Settlement and limits/i);
+  assert.match(html, /Frozen scope.*Review context.*Judgment evidence.*Available references and limits/i);
   assert.match(html, /reviewer identities and raw or decryptable rationales are excluded/i);
   assert.match(html, /evidence:verify.*--public-key.*--key-id/i);
   assert.match(html, /audit:verify.*--expected-head/i);
@@ -83,6 +88,7 @@ test("evidence docs explain exact artifacts, checks, mappings, and boundaries", 
   assert.match(html, /href="https:\/\/www\.finra\.org\/rules-guidance\/rulebooks\/finra-rules\/3110"/i);
   assert.match(html, /17 CFR 240\.17a-4\(f\)/i);
   assert.match(html, /supports evidence for/i);
+  assert.match(html, /Framework cross-reference/i);
   assert.match(html, /rateloop-human-assurance-component-definition\.oscal\.json/i);
   assert.doesNotMatch(html, /trust status|compliance-ready|certified RateLoop/i);
   assert.doesNotMatch(html, /RateLoop provides the instrument — and the proof/i);

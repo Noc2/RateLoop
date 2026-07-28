@@ -61,4 +61,4 @@ set is authoritative.
 
 Chain evidence can bind a review case to a deployment key, round, transaction receipt, indexed terminal event, and
 deterministic fund accounting. It proves only those recorded chain facts; it does not prove the quality of the source
-material, reviewer competence, or the customer's final decision. See [Evidence & Compliance Mapping](./evidence.md).
+material, reviewer competence, or the customer's final decision. See the [Evidence reference](./evidence.md).

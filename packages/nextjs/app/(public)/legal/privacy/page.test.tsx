@@ -13,6 +13,19 @@ test("privacy notice explains subscription processor data and retention", async 
   const { default: PrivacyPage } = await import("./page");
   const html = renderToStaticMarkup(<PrivacyPage />).replace(/\s+/g, " ");
 
+  assert.match(html, /At a glance/i);
+  assert.match(html, /aria-label="On this page"/i);
+  assert.match(html, /complete notice below provides the details/i);
+  for (const href of [
+    "#controller",
+    "#service-data",
+    "#browser-sign-in",
+    "#on-chain-data",
+    "#recipients-transfers",
+    "#retention-rights",
+  ]) {
+    assert.match(html, new RegExp(`href="${href}"`));
+  }
   assert.match(html, /Stripe processes payment-card details/i);
   assert.match(html, /does not store full card details/i);
   assert.match(html, /remain separate from prepaid USDC/i);

@@ -6,7 +6,45 @@ export default function PrivacyPage() {
       <Link href="/legal">&larr; Legal</Link>
       <h1>RateLoop privacy notice</h1>
       <p>Last updated: July 2026</p>
-      <h2>Controller</h2>
+      <nav
+        aria-label="On this page"
+        className="not-prose my-8 rounded-2xl border border-base-content/10 bg-base-content/[0.025] p-5 sm:p-6"
+      >
+        <h2 className="text-lg font-semibold text-base-content">At a glance</h2>
+        <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-base-content/70">
+          <li>RateLoop&apos;s controller or processor role depends on the processing activity.</li>
+          <li>
+            Private artifacts are encrypted, but authorized RateLoop workloads can decrypt them to provide the service.
+          </li>
+          <li>Ordinary accounts and invited unpaid reviews do not require a wallet.</li>
+          <li>
+            Paid public-chain interactions, where used, create records the interface operator generally cannot erase.
+          </li>
+        </ul>
+        <p className="mt-4 text-xs leading-5 text-base-content/55">
+          This summary helps you navigate. The complete notice below provides the details.
+        </p>
+        <ul className="mt-4 flex flex-wrap gap-2">
+          {[
+            ["Controller", "#controller"],
+            ["Service data", "#service-data"],
+            ["Sign-in", "#browser-sign-in"],
+            ["On-chain data", "#on-chain-data"],
+            ["Recipients and transfers", "#recipients-transfers"],
+            ["Retention and rights", "#retention-rights"],
+          ].map(([label, href]) => (
+            <li key={href}>
+              <a
+                href={href}
+                className="inline-flex rounded-lg border border-base-content/15 bg-base-content/[0.05] px-3 py-2 text-sm font-semibold text-base-content/75 no-underline hover:border-base-content/30 hover:text-base-content"
+              >
+                {label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+      <h2 id="controller">Controller</h2>
       <p>
         Hawig Ventures UG (haftungsbeschränkt), Herzogin-Juliana-Straße 7, 55469 Simmern, Germany. Contact:
         hawigxyz@proton.me.
@@ -18,7 +56,7 @@ export default function PrivacyPage() {
         <Link href="/legal/dpa">Data Processing Addendum</Link>. The role depends on the actual purpose and means of
         each processing activity.
       </p>
-      <h2>Service data</h2>
+      <h2 id="service-data">Service data</h2>
       <p>
         The isolated service stores workspaces, projects, frozen evaluation manifests, reviewer policies, assignments,
         responses, access events, itemized economics, and operational identifiers. Customer artifacts are encrypted
@@ -54,7 +92,7 @@ export default function PrivacyPage() {
         later read its status or result, so users must not share it or include secrets, credentials, regulated personal
         data, or confidential customer material.
       </p>
-      <h2>Browser sign-in</h2>
+      <h2 id="browser-sign-in">Browser sign-in</h2>
       <p>
         Browser users sign in through RateLoop&apos;s self-hosted Better Auth service using an email one-time code or a
         registered passkey. Google and Apple are offered only when their credentials are configured. Better Auth and the
@@ -64,7 +102,7 @@ export default function PrivacyPage() {
         invited unpaid review, and API-key agent use do not create or require a wallet. An email address or domain alone
         never grants workspace membership or project access.
       </p>
-      <h2>Optional wallets</h2>
+      <h2 id="optional-wallets">Optional wallets</h2>
       <p>
         A signed-in user may explicitly connect a self-custodial wallet or ask thirdweb to create an app-scoped wallet
         for public USDC funding, payout, or recovery. RateLoop sends thirdweb a five-minute, audience-bound JWT whose
@@ -116,7 +154,7 @@ export default function PrivacyPage() {
         blockchain-specific DPIA and a current provider, subprocessor, and international-transfer inventory. Until both
         release gates are complete, RateLoop does not claim launch-level GDPR compliance.
       </p>
-      <h2>Paid eligibility</h2>
+      <h2 id="paid-eligibility">Paid eligibility</h2>
       <p>
         Customer-invited unpaid reviews do not require a global identity provider. Before a paid assignment, RateLoop
         binds the exact assignment policy through current capability, minimum-age, sanctions, tax/DAC7, payout, voucher,
@@ -154,7 +192,7 @@ export default function PrivacyPage() {
         applicable reason codes and counters. A reviewer can open an appeal, and the assignment consequence is suspended
         while that appeal is open.
       </p>
-      <h2>Recipients, processors, and international transfers</h2>
+      <h2 id="recipients-transfers">Recipients, processors, and international transfers</h2>
       <p>
         RateLoop uses service providers for hosting, database/runtime operations, email, billing, and optional identity
         or wallet features. The current categories, named providers, feature conditions, and change-notice process are
@@ -163,7 +201,7 @@ export default function PrivacyPage() {
         supplementary measures as required. Public blockchain publication is a separate, user-visible replication
         boundary and not a private processor copy.
       </p>
-      <h2>Retention and rights</h2>
+      <h2 id="retention-rights">Retention and rights</h2>
       <p>
         Workspace and project retention settings control private artifact deletion and access logging. Subscription
         cancellation does not override an agreed evidence-retention setting or erase records required for audit, dispute
@@ -196,7 +234,7 @@ export default function PrivacyPage() {
         </a>{" "}
         or another competent supervisory authority.
       </p>
-      <h2>Cookies and local storage</h2>
+      <h2 id="cookies-storage">Cookies and local storage</h2>
       <p>
         RateLoop does not load audience analytics and does not set advertising cookies. It uses first-party
         authentication cookies and limited browser storage for requested functions such as drafts, device recovery,

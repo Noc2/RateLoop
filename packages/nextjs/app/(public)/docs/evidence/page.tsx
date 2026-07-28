@@ -15,7 +15,7 @@ const PACKET_FIELDS = [
     body: "Privacy-safe result counts, disagreement, failure-tag counts, rationale digests, Merkle roots, and recomputation inputs bind the derived result to the stored judgments.",
   },
   {
-    title: "Settlement and limits",
+    title: "Available references and limits",
     body: "Available deployment, round, transaction, indexed-event, refund, compensation, and claim references sit beside explicit limitations and suppression rules.",
   },
 ] as const;
@@ -151,11 +151,40 @@ const REDACTED_PACKET = `{
 export default function EvidencePage() {
   return (
     <article className="prose max-w-none">
-      <DocsTitle gradientText="Mapping">Evidence &amp; Compliance</DocsTitle>
+      <DocsTitle gradientText="Reference">Evidence</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
         RateLoop records a bounded human-review run as an integrity-bearing packet. The packet shows which review policy
         operated, what the panel returned, how coverage was measured, and which settlement references were available.
       </p>
+
+      <nav
+        aria-label="On this page"
+        className="not-prose my-8 rounded-2xl border border-base-content/10 bg-base-content/[0.025] p-5 sm:p-6"
+      >
+        <h2 className="text-lg font-semibold text-base-content">At a glance</h2>
+        <p className="mt-2 text-sm leading-6 text-base-content/65">
+          Start with responsibilities, then inspect packet contents, verification steps, exports, or framework
+          cross-references.
+        </p>
+        <ul className="mt-4 flex flex-wrap gap-2">
+          {[
+            ["Responsibilities", "#shared-responsibility"],
+            ["Packet contents", "#packet"],
+            ["Verification", "#verify"],
+            ["Exports", "#exports"],
+            ["Framework cross-reference", "#compliance-map"],
+          ].map(([label, href]) => (
+            <li key={href}>
+              <a
+                href={href}
+                className="inline-flex rounded-lg border border-base-content/15 bg-base-content/[0.05] px-3 py-2 text-sm font-semibold text-base-content/75 no-underline hover:border-base-content/30 hover:text-base-content"
+              >
+                {label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
 
       <aside className="not-prose my-8 rounded-2xl border-l-2 border-[var(--rateloop-yellow)] bg-amber-300/[0.06] p-5 sm:p-6">
         <p className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-[var(--rateloop-yellow)]">
@@ -298,7 +327,7 @@ GET /api/public/assurance/attestations/{jobId}`}</code>
         private content does not rewrite that history.
       </p>
 
-      <h2 id="compliance-map">Compliance mapping</h2>
+      <h2 id="compliance-map">Framework cross-reference</h2>
       <p>
         Every row means <em>supports evidence for</em>. It is a cross-reference, not an assessment result, legal
         opinion, certification, or assertion that a customer&apos;s controls are implemented or effective.

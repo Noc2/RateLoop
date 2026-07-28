@@ -6,20 +6,54 @@ export default function TermsPage() {
       <Link href="/legal">&larr; Legal</Link>
       <h1>RateLoop terms</h1>
       <p>Last updated: July 2026</p>
-      <h2>Service scope</h2>
+      <nav
+        aria-label="On this page"
+        className="not-prose my-8 rounded-2xl border border-base-content/10 bg-base-content/[0.025] p-5 sm:p-6"
+      >
+        <h2 className="text-lg font-semibold text-base-content">At a glance</h2>
+        <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-base-content/70">
+          <li>Users must be at least 18 and legally permitted to use the service.</li>
+          <li>Customers remain responsible for submitted material, reviewer choice, and final decisions.</li>
+          <li>Workspace subscriptions renew until cancelled under the displayed billing terms.</li>
+          <li>Fund-backed review and public-chain terms apply only where those features are offered.</li>
+        </ul>
+        <p className="mt-4 text-xs leading-5 text-base-content/55">
+          This summary helps you navigate. The complete terms below provide the details.
+        </p>
+        <ul className="mt-4 flex flex-wrap gap-2">
+          {[
+            ["Service scope", "#service-scope"],
+            ["Who may use it", "#who-may-use"],
+            ["Customer material", "#customer-material"],
+            ["Subscriptions", "#workspace-subscriptions"],
+            ["Trust and privacy", "#trust-privacy"],
+            ["Use of results", "#use-of-results"],
+          ].map(([label, href]) => (
+            <li key={href}>
+              <a
+                href={href}
+                className="inline-flex rounded-lg border border-base-content/15 bg-base-content/[0.05] px-3 py-2 text-sm font-semibold text-base-content/75 no-underline hover:border-base-content/30 hover:text-base-content"
+              >
+                {label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+      <h2 id="service-scope">Service scope</h2>
       <p>
         RateLoop provides software for blinded human assurance, workspace coordination, reviewer access, decision
         evidence, and, where offered, itemized participant compensation and public-chain settlement. The interface
         displays the available reviewer source and economic terms before a run is funded.
       </p>
-      <h2>Who may use it</h2>
+      <h2 id="who-may-use">Who may use it</h2>
       <p>
         You must be at least 18 and legally permitted to use the service. Real-money funder flows are intended for
         approved business customers whose workspace trader details have been verified. Paid assignments require an exact
         frozen assignment policy and all applicable capability, tax, sanctions, payout, voucher, settlement, and receipt
         checks.
       </p>
-      <h2>Customer material and reviewers</h2>
+      <h2 id="customer-material">Customer material and reviewers</h2>
       <p>
         Customers must have the right to submit evaluation material, minimize and redact personal or confidential data,
         choose appropriate reviewers, and provide any required notices. A one-time invitation proves project access, not
@@ -33,13 +67,13 @@ export default function TermsPage() {
         eligibility, fraud prevention, and public-chain settlement purposes. The parties&apos; roles follow the actual
         processing activity, not a blanket label.
       </p>
-      <h2>Funding and accepted work</h2>
+      <h2 id="funding-accepted-work">Funding and accepted work</h2>
       <p>
         The protocol itemizes bounty, platform fee, and maximum attempt reserve before funding. Once the first paid
         commit is accepted, a funder cannot cancel the round. Accepted work must reach the disclosed paid or compensated
         terminal path even when quorum or infrastructure fails.
       </p>
-      <h2>Workspace subscriptions</h2>
+      <h2 id="workspace-subscriptions">Workspace subscriptions</h2>
       <p>
         RateLoop may offer a recurring business-to-business workspace subscription. The displayed price, billing period,
         included review-decision allowance, and applicable tax are confirmed before checkout. Subscriptions renew
@@ -57,14 +91,14 @@ export default function TermsPage() {
         participant bounty, attempt reserve, or the separately disclosed public-panel execution fee. Those panel costs
         are itemized before funding and do not increase a workspace&apos;s subscription allowance.
       </p>
-      <h2>Billing, taxes, and refunds</h2>
+      <h2 id="billing-refunds">Billing, taxes, and refunds</h2>
       <p>
         Subscriptions are intended for approved business customers. Customers must provide accurate legal, invoice,
         trader, tax, and VAT details and remain responsible for taxes not collected at checkout. Stripe processes
         subscription payment details and provides invoices and receipts. Except where law requires otherwise or RateLoop
         agrees in writing, paid subscription periods are non-refundable.
       </p>
-      <h2>Trust and privacy limits</h2>
+      <h2 id="trust-privacy">Trust and privacy limits</h2>
       <p>
         The immutable panel core has no operator withdrawal path. A separate issuer controls new voucher admission. If
         its signer is compromised, an attacker can fill remaining seats in open rounds, influence their verdicts, and
@@ -81,7 +115,7 @@ export default function TermsPage() {
         Circle retains token-layer authority over USDC and can pause or blacklist transfers, including transfers to or
         from an escrow contract. The panel&apos;s no-operator-withdrawal design does not override those USDC controls.
       </p>
-      <h2>Use of results</h2>
+      <h2 id="use-of-results">Use of results</h2>
       <p>
         RateLoop supplies decision evidence, limitations, and settlement records. The customer remains responsible for
         the final go, revise, or stop decision. RateLoop results are not financial, legal, medical, or investment advice

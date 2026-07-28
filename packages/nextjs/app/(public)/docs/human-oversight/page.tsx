@@ -105,7 +105,7 @@ export default function HumanOversightPage() {
       </p>
       <p>
         The shared-responsibility matrix and the exportable evidence behind each capability live on{" "}
-        <Link href="/docs/evidence">Evidence &amp; Compliance</Link>.
+        <Link href="/docs/evidence">Evidence reference</Link>.
       </p>
     </article>
   );
