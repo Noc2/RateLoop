@@ -1,4 +1,4 @@
-import { type ComponentPropsWithRef, type ElementType, type ReactNode } from "react";
+import React, { type ComponentPropsWithRef, type ElementType, type ReactNode } from "react";
 import { classNames } from "./classNames";
 
 export type CardVariant = "surface" | "nested" | "marketing";
