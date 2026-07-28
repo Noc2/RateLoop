@@ -46,6 +46,10 @@ function decisionLabel(decision: EvaluationRun["clientDecision"]) {
   return null;
 }
 
+function runNeedsDecision(run: EvaluationRun) {
+  return run.status === "completed" && run.evidencePacketAvailable && !run.clientDecision;
+}
+
 function AssuranceMetricsSummary({ snapshot }: { snapshot: AssuranceMetricsSnapshot }) {
   const totals = snapshot.scopes.reduce(
     (sum, scope) => ({
@@ -513,8 +517,9 @@ function RunCard({
 }) {
   const share = run.candidateSelectionShareBps;
   const [clientDecision, setClientDecision] = useState(run.clientDecision);
+  const [overrideOpen, setOverrideOpen] = useState(false);
   const decision = decisionLabel(clientDecision);
-  const decidable = run.status === "completed" && run.evidencePacketAvailable && !clientDecision;
+  const decidable = runNeedsDecision({ ...run, clientDecision });
   const presentationStatus = decidable
     ? { label: "Needs action", className: "bg-amber-300/10 text-amber-100" }
     : ["completed", "cancelled"].includes(run.status)
@@ -625,7 +630,24 @@ function RunCard({
         <code className="mt-3 block break-all text-[11px] text-base-content/55">{run.runId}</code>
       </details>
       {run.status === "completed" ? <OversightCaseDetail run={run} workspaceId={workspaceId} /> : null}
-      {run.status === "completed" ? <OverrideRecordForm run={run} workspaceId={workspaceId} trend={trend} /> : null}
+      {run.status === "completed" ? (
+        <div className="mt-4 border-t border-white/10 pt-4">
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            aria-controls={`override-record-${run.runId}`}
+            aria-expanded={overrideOpen}
+            onClick={() => setOverrideOpen(current => !current)}
+          >
+            {overrideOpen ? "Done" : "Record override or corrective action"}
+          </button>
+          {overrideOpen ? (
+            <div id={`override-record-${run.runId}`}>
+              <OverrideRecordForm run={run} workspaceId={workspaceId} trend={trend} />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -716,6 +738,10 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
     return () => controller.abort();
   }, [workspaceId]);
 
+  const orderedRuns = dashboard
+    ? [...dashboard.runs].sort((left, right) => Number(runNeedsDecision(right)) - Number(runNeedsDecision(left)))
+    : [];
+
   return (
     <div className="space-y-5">
       <section className="surface-card rounded-2xl p-6">
@@ -753,7 +779,7 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
             <h2 id="evaluation-runs-heading" className="text-xl font-semibold">
               Results
             </h2>
-            {dashboard.runs.map(run => (
+            {orderedRuns.map(run => (
               <RunCard key={run.runId} run={run} workspaceId={workspaceId} trend={dashboard.deciderTrend} />
             ))}
           </section>

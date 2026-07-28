@@ -19,6 +19,11 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.match(source, /\["completed", "cancelled"\]\.includes\(run\.status\)/);
   assert.match(source, /\["failed", "dead"\]\.includes\(run\.status\)/);
   assert.doesNotMatch(source, /\["failed", "dead", "cancelled"\]/);
+  assert.match(
+    source,
+    /\[\.\.\.dashboard\.runs\]\.sort\(\(left, right\) => Number\(runNeedsDecision\(right\)\) - Number\(runNeedsDecision\(left\)\)\)/,
+  );
+  assert.match(source, /orderedRuns\.map\(run =>/);
   assert.match(source, /Insufficient responses/);
   assert.match(source, /run\.status === "completed".*"Insufficient responses"/s);
   assert.match(source, /Evidence and run details/);
@@ -56,6 +61,13 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.doesNotMatch(source, /agent\.declaredProvider|agent\.declaredModel/);
   assert.doesNotMatch(source, /Registered agents/);
   assert.doesNotMatch(source, /leaderboard|top agent|worst agent/i);
+  assert.match(source, /Record override or corrective action/);
+  assert.match(source, /aria-expanded=\{overrideOpen\}/);
+  assert.match(source, /overrideOpen \? \(/);
+  assert.doesNotMatch(
+    source,
+    /run\.status === "completed" \? <OverrideRecordForm run=\{run\} workspaceId=\{workspaceId\} trend=\{trend\} \/>/,
+  );
 });
 
 test("completed runs expose an oversight case detail that respects lane boundaries", () => {
@@ -83,7 +95,7 @@ test("run cards submit go/revise/stop and record per-output overrides without a 
   assert.match(source, /\["go", "revise", "stop"\] as const/);
   assert.match(source, /no choice is preselected/i);
   assert.match(source, /evidence\/decision/);
-  assert.match(source, /run\.status === "completed" && run\.evidencePacketAvailable && !clientDecision/);
+  assert.match(source, /return run\.status === "completed" && run\.evidencePacketAvailable && !run\.clientDecision/);
   assert.doesNotMatch(
     source,
     /defaultChecked|defaultValue=\{?"(go|revise|stop|accepted|disregarded|overridden|reversed)/,
