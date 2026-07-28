@@ -5,23 +5,17 @@ import { OneTimeSecretNotice } from "~~/components/tokenless/agents/OneTimeSecre
 import { ChoiceInput, Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
+import {
+  WORKSPACE_API_KEY_SCOPES,
+  WORKSPACE_API_KEY_SCOPE_DETAILS,
+  type WorkspaceApiKeyScope,
+} from "~~/lib/tokenless/workspaceApiKeyScopes";
 
-const API_KEY_SCOPES = [
-  "quote:read",
-  "panel:publish",
-  "payment:submit",
-  "result:read",
-  "evaluation:read",
-  "review:decide",
-  "telemetry:write",
-] as const;
-
-type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
 type ApiKeySummary = {
   apiKeyId: string;
   name: string;
   keyPrefix: string;
-  scopes: ApiKeyScope[];
+  scopes: WorkspaceApiKeyScope[];
   expiresAt: string | null;
   revokedAt: string | null;
   lastUsedAt: string | null;
@@ -64,7 +58,7 @@ export function WorkspaceApiKeysPanel({ workspaceId }: { workspaceId: string }) 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [name, setName] = useState("");
-  const [scopes, setScopes] = useState<ApiKeyScope[]>(["quote:read", "result:read", "evaluation:read"]);
+  const [scopes, setScopes] = useState<WorkspaceApiKeyScope[]>(["quote:read", "result:read", "evaluation:read"]);
   const [revealedToken, setRevealedToken] = useState<string | null>(null);
   const [revokeConfirmation, setRevokeConfirmation] = useState<ApiKeySummary | null>(null);
   const { capture, clear, fieldErrors, formError } = useFormErrors();
@@ -170,24 +164,35 @@ export function WorkspaceApiKeysPanel({ workspaceId }: { workspaceId: string }) 
           }}
         />
         <fieldset>
-          <legend className="text-sm font-medium text-base-content/80">Scopes</legend>
+          <legend className="text-sm font-medium text-base-content/80">Permissions</legend>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            {API_KEY_SCOPES.map(scope => (
-              <label key={scope} className="flex min-h-11 items-center gap-3 rounded-lg border border-white/10 px-3">
-                <ChoiceInput
-                  className="checkbox checkbox-sm"
-                  type="checkbox"
-                  checked={scopes.includes(scope)}
-                  onChange={event => {
-                    setScopes(current =>
-                      event.target.checked ? [...current, scope] : current.filter(candidate => candidate !== scope),
-                    );
-                    clear("scopes");
-                  }}
-                />
-                <span className="font-mono text-xs">{scope}</span>
-              </label>
-            ))}
+            {WORKSPACE_API_KEY_SCOPES.map(scope => {
+              const details = WORKSPACE_API_KEY_SCOPE_DETAILS[scope];
+              return (
+                <label
+                  key={scope}
+                  htmlFor={`workspace-api-key-scope-${scope}`}
+                  className="flex min-h-11 items-start gap-3 rounded-lg border border-white/10 px-3 py-3"
+                >
+                  <ChoiceInput
+                    id={`workspace-api-key-scope-${scope}`}
+                    className="checkbox-sm mt-0.5"
+                    type="checkbox"
+                    checked={scopes.includes(scope)}
+                    onChange={event => {
+                      setScopes(current =>
+                        event.target.checked ? [...current, scope] : current.filter(candidate => candidate !== scope),
+                      );
+                      clear("scopes");
+                    }}
+                  />
+                  <span>
+                    <span className="block text-sm font-medium">{details.label}</span>
+                    <span className="mt-1 block text-xs leading-5 text-base-content/55">{details.description}</span>
+                  </span>
+                </label>
+              );
+            })}
           </div>
           {fieldErrors.scopes ? (
             <p className="mt-2 text-sm text-error" role="alert">
@@ -235,7 +240,17 @@ export function WorkspaceApiKeysPanel({ workspaceId }: { workspaceId: string }) 
                 </button>
               )}
             </div>
-            <p className="mt-3 break-words font-mono text-xs text-base-content/55">{apiKey.scopes.join(" · ")}</p>
+            <ul className="mt-3 flex flex-wrap gap-2" aria-label={`Permissions for ${apiKey.name}`}>
+              {apiKey.scopes.map(scope => (
+                <li
+                  key={scope}
+                  className="inline-flex flex-wrap items-baseline gap-x-2 rounded-md bg-base-content/[0.05] px-2.5 py-1.5 text-xs"
+                >
+                  <span>{WORKSPACE_API_KEY_SCOPE_DETAILS[scope].label}</span>
+                  <code className="text-base-content/50">{scope}</code>
+                </li>
+              ))}
+            </ul>
           </article>
         ))}
       </div>
