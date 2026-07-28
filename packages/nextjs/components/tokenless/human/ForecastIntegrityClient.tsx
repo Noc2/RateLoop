@@ -48,6 +48,11 @@ const CONSEQUENCE_LABELS: Record<IntegrityItem["consequence"], string> = {
   suspended_by_open_appeal: "Assignment pause suspended during appeal",
 };
 
+export function formatForecastPercentage(valueBps: number) {
+  const percentage = valueBps / 100;
+  return `${Number.isInteger(percentage) ? percentage.toFixed(0) : percentage.toFixed(1)}%`;
+}
+
 export function ForecastIntegrityClient() {
   const [data, setData] = useState<IntegrityResponse | null>(null);
   const [appealReasons, setAppealReasons] = useState<Record<string, string>>({});
@@ -154,20 +159,26 @@ export function ForecastIntegrityClient() {
               </div>
               <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-2">
                 <div>
-                  <dt className="text-base-content/55">Brier skill</dt>
+                  <dt className="text-base-content/55">Accuracy vs baseline</dt>
                   <dd className="mt-1">
-                    {item.brierSkillScoreBps === null ? "Awaiting outcome variety" : `${item.brierSkillScoreBps} bps`}
+                    {item.brierSkillScoreBps === null
+                      ? "Awaiting outcome variety"
+                      : formatForecastPercentage(item.brierSkillScoreBps)}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-base-content/55">Outcome discrimination</dt>
+                  <dt className="text-base-content/55">Outcome separation</dt>
                   <dd className="mt-1">
                     {item.outcomeDiscriminationBps === null
                       ? "Not enough outcomes"
-                      : `${item.outcomeDiscriminationBps} bps`}
+                      : `${formatForecastPercentage(item.outcomeDiscriminationBps)} point gap`}
                   </dd>
                 </div>
               </dl>
+              <p className="mt-3 text-xs leading-5 text-base-content/55">
+                Accuracy compares your forecasts with a baseline; higher is better. Outcome separation is the forecast
+                gap between positive and negative outcomes.
+              </p>
               {item.findings.length ? (
                 <div className="mt-4 space-y-3">
                   {item.findings.map(finding => (
