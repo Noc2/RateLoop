@@ -37,6 +37,16 @@ test("the evidence workspace keeps verification and export state explicit", () =
   assert.match(source, /paidReviewerCount/);
   assert.match(source, /minimumAggregationSize/);
   assert.match(source, /safeExternalEvidenceLink/);
+  assert.match(source, /Workflow or project/);
+  assert.match(source, /All outcomes/);
+  assert.match(source, /Last 7 days/);
+  assert.match(source, /Last 30 days/);
+  assert.match(source, /visiblePackets\.map/);
+  assert.match(source, /No evidence records yet/);
+  assert.match(source, /No matching evidence/);
+  assert.match(source, /!loading && packets\.length > 0/);
+  assert.match(source, /!loading \? \(\s*<VerificationInstructions/s);
+  assert.doesNotMatch(source, /\{packets\.length > 0 \? \(/);
 });
 
 test("workspace compliance controls expose only browser-safe endpoints", () => {

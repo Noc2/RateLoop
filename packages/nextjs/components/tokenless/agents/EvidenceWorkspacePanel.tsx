@@ -5,7 +5,7 @@ import { GrcEvidenceDelivery } from "./GrcEvidenceDelivery";
 import { MetricsEvidenceAccess } from "./MetricsEvidenceAccess";
 import { SiemEvidenceDelivery } from "./SiemEvidenceDelivery";
 import { WormEvidenceDelivery } from "./WormEvidenceDelivery";
-import { Field } from "~~/components/tokenless/forms/Field";
+import { Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import type { EvaluationDashboard } from "~~/lib/tokenless/evaluationDashboard";
@@ -315,6 +315,9 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
   const [error, setError] = useState<string | null>(null);
   const [busyPacket, setBusyPacket] = useState<string | null>(null);
   const [showEvidenceSettings, setShowEvidenceSettings] = useState(false);
+  const [packetQuery, setPacketQuery] = useState("");
+  const [outcomeFilter, setOutcomeFilter] = useState<"all" | "pass" | "fail" | "insufficient">("all");
+  const [dateFilter, setDateFilter] = useState<"all" | "7" | "30">("all");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -339,7 +342,12 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
           })),
       );
       setPackets(packetRows);
-      setSelectedPacket(current => current ?? packetRows[0]?.packet ?? null);
+      setSelectedPacket(
+        current =>
+          packetRows.find(row => row.packet.payload.packetId === current?.payload.packetId)?.packet ??
+          packetRows[0]?.packet ??
+          null,
+      );
       if (canManage) {
         const [attestationBody, retentionBody, keyBody] = await Promise.all([
           readJson<{ attestations: Attestation[] }>(
@@ -383,6 +391,21 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
   const selectedTrustedKeyDownloadUrl = selectedTrustedKey
     ? `${base}/assurance/trusted-keys?format=spki&keyId=${encodeURIComponent(selectedTrustedKey.keyId)}`
     : null;
+  const visiblePackets = useMemo(() => {
+    const query = packetQuery.trim().toLocaleLowerCase();
+    const cutoff = dateFilter === "all" ? null : Date.now() - Number(dateFilter) * 86_400_000;
+    return packets.filter(({ packet, projectName, suiteName }) => {
+      const outcome = packet.payload.aggregation.suite.outcome;
+      if (outcomeFilter !== "all" && outcome !== outcomeFilter) return false;
+      if (cutoff !== null && Date.parse(packet.payload.generatedAt) < cutoff) return false;
+      return (
+        !query ||
+        [projectName, suiteName, packet.payload.runId, packet.payload.packetId].some(value =>
+          value.toLocaleLowerCase().includes(query),
+        )
+      );
+    });
+  }, [dateFilter, outcomeFilter, packetQuery, packets]);
 
   return (
     <div className="space-y-5">
@@ -420,12 +443,54 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
         {null}
       </AsyncSection>
 
-      {packets.length > 0 ? (
+      {!loading && packets.length === 0 ? (
+        <section className="surface-card rounded-2xl p-6" aria-labelledby="evidence-empty-heading">
+          <h2 id="evidence-empty-heading" className="font-semibold">
+            No evidence records yet
+          </h2>
+          <p className="mt-2 text-sm text-base-content/55">Completed human reviews will appear here.</p>
+        </section>
+      ) : null}
+
+      {!loading && packets.length > 0 ? (
         <section className="space-y-3" aria-labelledby="evidence-packets-heading">
           <h2 id="evidence-packets-heading" className="text-xl font-semibold">
             Decision packets
           </h2>
-          {packets.map(({ packet, projectName, suiteName }) => {
+          <div className="surface-card grid gap-3 rounded-2xl p-4 sm:grid-cols-3">
+            <Field
+              label="Workflow or project"
+              type="search"
+              value={packetQuery}
+              onChange={event => setPacketQuery(event.target.value)}
+            />
+            <SelectField
+              label="Outcome"
+              value={outcomeFilter}
+              onChange={event => setOutcomeFilter(event.target.value as "all" | "pass" | "fail" | "insufficient")}
+            >
+              <option value="all">All outcomes</option>
+              <option value="pass">Pass</option>
+              <option value="fail">Fail</option>
+              <option value="insufficient">Insufficient</option>
+            </SelectField>
+            <SelectField
+              label="Date"
+              value={dateFilter}
+              onChange={event => setDateFilter(event.target.value as "all" | "7" | "30")}
+            >
+              <option value="all">Any time</option>
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+            </SelectField>
+          </div>
+          {visiblePackets.length === 0 ? (
+            <div className="surface-card rounded-2xl p-6" role="status">
+              <h3 className="font-semibold">No matching evidence</h3>
+              <p className="mt-2 text-sm text-base-content/55">Clear or change the filters.</p>
+            </div>
+          ) : null}
+          {visiblePackets.map(({ packet, projectName, suiteName }) => {
             const outcome = packet.payload.aggregation.suite.outcome;
             const attestation = attestationByDigest.get(packet.packetDigest);
             const sourceSubpanels = packet.payload.aggregation.reviewerCoverage?.sourceSubpanels ?? [];
@@ -575,21 +640,23 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
         </section>
       ) : null}
 
-      <VerificationInstructions
-        packet={selectedPacket}
-        attestation={selectedAttestation}
-        trustedKey={selectedTrustedKey}
-        trustedKeyDownloadUrl={selectedTrustedKeyDownloadUrl}
-      />
+      {!loading ? (
+        <VerificationInstructions
+          packet={selectedPacket}
+          attestation={selectedAttestation}
+          trustedKey={selectedTrustedKey}
+          trustedKeyDownloadUrl={selectedTrustedKeyDownloadUrl}
+        />
+      ) : null}
 
-      {canManage && untrustedPacketKeyCount > 0 ? (
+      {!loading && canManage && untrustedPacketKeyCount > 0 ? (
         <p className="rounded-xl border border-red-300/20 bg-red-300/[0.06] p-3 text-sm text-red-100" role="alert">
           {untrustedPacketKeyCount} packet signing {untrustedPacketKeyCount === 1 ? "key is" : "keys are"} not in the
           configured trust anchor.
         </p>
       ) : null}
 
-      {canManage && showEvidenceSettings ? (
+      {!loading && canManage && showEvidenceSettings ? (
         <section
           id="evidence-settings"
           className="surface-card rounded-2xl p-6"
@@ -612,7 +679,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
         </section>
       ) : null}
 
-      {canManage && showEvidenceSettings ? (
+      {!loading && canManage && showEvidenceSettings ? (
         <section className="surface-card rounded-2xl p-6" aria-labelledby="trusted-key-heading">
           <h2 id="trusted-key-heading" className="text-xl font-semibold">
             Trusted verification keys
@@ -649,7 +716,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
         </section>
       ) : null}
 
-      {canManage && showEvidenceSettings ? (
+      {!loading && canManage && showEvidenceSettings ? (
         <section className="surface-card rounded-2xl p-6" aria-labelledby="enterprise-delivery-heading">
           <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Delivery</p>
           <h2 id="enterprise-delivery-heading" className="mt-2 text-xl font-semibold">
