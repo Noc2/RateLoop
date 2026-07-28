@@ -4,6 +4,7 @@ function firstQueryValue(value: string | string[] | undefined) {
 
 const agentTitles: Record<string, string> = {
   agents: "Connections",
+  billing: "Billing & settings",
   connect: "Connections",
   evaluations: "Results",
   evidence: "Evidence",

@@ -89,8 +89,8 @@ export function AgentWorkspacePanels({
   const visibleTabs = hasConnectedAgent
     ? connectedAgentTabs({ canManage })
     : canManage
-      ? (["overview", "connect"] as AgentTab[])
-      : (["overview"] as AgentTab[]);
+      ? (["connect", "billing"] as AgentTab[])
+      : (["billing"] as AgentTab[]);
   const resolvedTab = resolveAvailableAgentTab(activeTab, visibleTabs);
 
   return (
@@ -117,11 +117,9 @@ export function AgentWorkspacePanels({
         className="space-y-5 outline-none focus-visible:ring-2 focus-visible:ring-[var(--rateloop-blue)]"
       >
         {resolvedTab === "overview" ? (
-          <>
-            {canManage ? <ScheduledWorkerHealthPanel workspaceId={workspaceId} /> : null}
-            <WorkspaceSettingsClient initialWorkspaceId={workspaceId} />
-          </>
+          <>{canManage ? <ScheduledWorkerHealthPanel workspaceId={workspaceId} /> : null}</>
         ) : null}
+        {resolvedTab === "billing" ? <WorkspaceSettingsClient initialWorkspaceId={workspaceId} /> : null}
         {resolvedTab === "connect" && canManage ? (
           <AgentConnectionPanel
             workspaceId={workspaceId}

@@ -56,8 +56,8 @@ export function connectedAgentTabs({
   canManage?: boolean;
 } = {}): AgentTab[] {
   return canManage
-    ? ["overview", "connect", "inbox", "registry", "evaluations", "evidence"]
-    : ["overview", "connect", "evaluations", "evidence"];
+    ? ["overview", "connect", "inbox", "registry", "evaluations", "evidence", "billing"]
+    : ["overview", "connect", "evaluations", "evidence", "billing"];
 }
 
 export function resolveAvailableAgentTab(requested: AgentTab, available: AgentTab[]): AgentTab {
@@ -65,7 +65,15 @@ export function resolveAvailableAgentTab(requested: AgentTab, available: AgentTa
   return available.includes("overview") ? "overview" : (available[0] ?? "overview");
 }
 
-const currentAgentTabs = new Set<AgentTab>(["overview", "connect", "inbox", "registry", "evaluations", "evidence"]);
+const currentAgentTabs = new Set<AgentTab>([
+  "overview",
+  "connect",
+  "inbox",
+  "registry",
+  "evaluations",
+  "evidence",
+  "billing",
+]);
 
 export function resolveAgentTabParam(requested?: string): AgentTab {
   if (requested === "agents") return "connect";

@@ -22,8 +22,8 @@ test("pricing page shows three tiers and discloses costs progressively", async (
   assert.match(html, /\$29/);
   assert.match(html, /25 completed review decisions/);
   assert.match(html, /250 completed review decisions/);
-  assert.match(html, /href="\/agents\?tab=overview&amp;workspace=ws\+second"/);
-  assert.match(html, /href="\/agents\?tab=overview&amp;workspace=ws\+second&amp;billing=upgrade"/);
+  assert.match(html, /href="\/agents\?tab=billing&amp;workspace=ws\+second"/);
+  assert.match(html, /href="\/agents\?tab=billing&amp;workspace=ws\+second&amp;billing=upgrade"/);
   assert.doesNotMatch(html, /subject=RateLoop%20Demo/);
   assert.match(html, /Available reviews/);
   assert.match(html, /reviewers you invite to the workspace/i);

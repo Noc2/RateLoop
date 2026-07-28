@@ -67,10 +67,10 @@ export const SITE_SEARCH_INDEX: readonly SiteSearchEntry[] = [
   },
   {
     title: "Workspace and billing",
-    href: "/agents?tab=overview",
+    href: "/agents?tab=billing",
     area: "Task",
     description: "Open workspace access, plan, and billing information.",
-    keywords: ["billing", "subscription", "members", "workspace settings"],
+    keywords: ["billing", "subscription", "members", "workspace settings", "usage", "plan"],
   },
   {
     title: "Agent workspace",

@@ -117,8 +117,22 @@ test("unusable OAuth integrations reconnect their saved agent unless another usa
 });
 
 test("connected navigation splits the owner stack into URL-backed task tabs", () => {
-  assert.deepEqual(connectedAgentTabs(), ["overview", "connect", "inbox", "registry", "evaluations", "evidence"]);
-  assert.deepEqual(connectedAgentTabs({ canManage: false }), ["overview", "connect", "evaluations", "evidence"]);
+  assert.deepEqual(connectedAgentTabs(), [
+    "overview",
+    "connect",
+    "inbox",
+    "registry",
+    "evaluations",
+    "evidence",
+    "billing",
+  ]);
+  assert.deepEqual(connectedAgentTabs({ canManage: false }), [
+    "overview",
+    "connect",
+    "evaluations",
+    "evidence",
+    "billing",
+  ]);
   assert.equal(resolveAvailableAgentTab("connect", connectedAgentTabs({ canManage: false })), "connect");
   assert.equal(resolveAgentTabParam("agents"), "connect");
   assert.equal(resolveAgentTabParam("groups"), "registry");
@@ -135,13 +149,14 @@ test("connected navigation splits the owner stack into URL-backed task tabs", ()
   assert.match(tabsSource, /value: "inbox", label: "Approvals"/);
   assert.match(tabsSource, /value: "registry", label: "Review setup"/);
   assert.match(tabsSource, /value: "evaluations", label: "Results"/);
+  assert.match(tabsSource, /value: "billing", label: "Billing & settings"/);
 });
 
 test("agent tabs use roving focus and arrow, Home, and End navigation", () => {
-  assert.equal(nextAgentTabIndex(0, "ArrowLeft", 6), 5);
-  assert.equal(nextAgentTabIndex(5, "ArrowRight", 6), 0);
-  assert.equal(nextAgentTabIndex(3, "Home", 6), 0);
-  assert.equal(nextAgentTabIndex(2, "End", 6), 5);
+  assert.equal(nextAgentTabIndex(0, "ArrowLeft", 7), 6);
+  assert.equal(nextAgentTabIndex(6, "ArrowRight", 7), 0);
+  assert.equal(nextAgentTabIndex(3, "Home", 7), 0);
+  assert.equal(nextAgentTabIndex(2, "End", 7), 6);
   assert.match(tabsSource, /role="tablist"/);
   assert.match(tabsSource, /role="tab"/);
   assert.match(tabsSource, /aria-selected=/);
@@ -218,18 +233,21 @@ test("actionable oversight alerts live with approvals instead of obscuring resul
   assert.equal(panelsSource.slice(resultsStart).includes("<OversightAlertsPanel"), false);
 });
 
-test("the overview starts with workspace settings instead of an evidence summary strip", () => {
+test("billing has a direct destination and an unconnected workspace starts with connection", () => {
   assert.doesNotMatch(panelsSource, /WorkspaceEvidenceSummaryStrip/);
   assert.doesNotMatch(panelsSource, /Last decision packet|Most conservative coverage stage|Latest packet anchor/);
-  assert.match(panelsSource, /<WorkspaceSettingsClient initialWorkspaceId=\{workspaceId\} \/>/);
+  assert.match(
+    panelsSource,
+    /resolvedTab === "billing" \? <WorkspaceSettingsClient initialWorkspaceId=\{workspaceId\} \/>/,
+  );
   assert.doesNotMatch(panelsSource, /Connect another agent|Connect an agent/);
-  assert.match(panelsSource, /\["overview", "connect"\]/);
+  assert.match(panelsSource, /\["connect", "billing"\]/);
 });
 
 test("incomplete setup keeps workspace management reachable beside guided setup", () => {
   assert.doesNotMatch(panelsSource, /if \(initialSetup && !initialSetup\.complete\) \{\s*return/);
   assert.match(panelsSource, /setupIncomplete && initialSetup \? <AgentSetupFlow/);
-  assert.match(panelsSource, /resolvedTab === "overview"/);
+  assert.match(panelsSource, /resolvedTab === "billing"/);
   assert.match(panelsSource, /<WorkspaceSettingsClient initialWorkspaceId=\{workspaceId\} \/>/);
 });
 

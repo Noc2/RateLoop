@@ -5,6 +5,7 @@ import test from "node:test";
 
 test("agent titles describe the selected workspace destination", () => {
   assert.equal(agentPageTitle(undefined), "Overview");
+  assert.equal(agentPageTitle("billing"), "Billing & settings");
   assert.equal(agentPageTitle("agents"), "Connections");
   assert.equal(agentPageTitle("connect"), "Connections");
   assert.equal(agentPageTitle("inbox"), "Approvals");

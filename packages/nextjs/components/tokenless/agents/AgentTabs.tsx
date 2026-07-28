@@ -5,7 +5,7 @@ import Link from "next/link";
 import { agentTabHref, nextAgentTabIndex } from "./agentWorkspaceState";
 import { SelectField } from "~~/components/tokenless/forms/Field";
 
-export type AgentTab = "overview" | "connect" | "inbox" | "registry" | "evaluations" | "evidence";
+export type AgentTab = "overview" | "connect" | "inbox" | "registry" | "evaluations" | "evidence" | "billing";
 
 const tabs: Array<{ value: AgentTab; label: string }> = [
   { value: "overview", label: "Overview" },
@@ -14,6 +14,7 @@ const tabs: Array<{ value: AgentTab; label: string }> = [
   { value: "registry", label: "Review setup" },
   { value: "evaluations", label: "Results" },
   { value: "evidence", label: "Evidence" },
+  { value: "billing", label: "Billing & settings" },
 ];
 
 export function AgentTabs({
