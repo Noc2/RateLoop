@@ -49,11 +49,14 @@ export function AgentSetupProgress({
   stages,
   onNavigate,
   allowNavigation = true,
+  busy = false,
 }: {
   currentStep: AgentSetupScreenStep;
   stages: ProgressStage[];
   onNavigate: (step: AgentSetupScreenStep) => void;
   allowNavigation?: boolean;
+  /** Blocks step navigation while a save or load is in flight so the two cannot race. */
+  busy?: boolean;
 }) {
   const currentIndex = stages.findIndex(stage => stage.key === currentStep);
   const currentVisual = AGENT_SETUP_STAGE_VISUALS[currentStep];
@@ -127,8 +130,9 @@ export function AgentSetupProgress({
               ) : null}
               {allowNavigation && stage.status === "complete" && stage.key !== currentStep ? (
                 <button
-                  className="relative min-h-11 w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--rateloop-blue)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--rateloop-surface-elevated)]"
+                  className="relative min-h-11 w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--rateloop-blue)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--rateloop-surface-elevated)] disabled:cursor-not-allowed disabled:opacity-60"
                   type="button"
+                  disabled={busy}
                   onClick={() => onNavigate(stage.key)}
                 >
                   {content}

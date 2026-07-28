@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, Fragment, useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AgentConnectionTroubleshooting } from "../AgentConnectionTroubleshooting";
@@ -158,6 +158,9 @@ function finalizationMessage(postcondition: SetupFinalizationPostcondition | nul
   return "Setup is complete, but automatic requests need reviewer routing to be checked again.";
 }
 
+const HYBRID_SPECIALIST_UNAVAILABLE =
+  "Specialist areas can’t be added while both invited and network reviewers are used. Choose one reviewer source above to add areas, or select “No specialist needed” to continue without them.";
+
 const SAVED_AUTOMATIC_AUTHORITY_NOTICE =
   "Setup can’t preserve automatic sending with these choices. Saving will change it to Prepare for approval.";
 
@@ -293,10 +296,13 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   const [expertiseCoverageLoading, setExpertiseCoverageLoading] = useState(false);
   const [expertiseCoverageError, setExpertiseCoverageError] = useState<string | null>(null);
   const [confirmedReviewerCount, setConfirmedReviewerCount] = useState<number | null>(null);
+  const [confirmedReviewerCountError, setConfirmedReviewerCountError] = useState<string | null>(null);
+  const [confirmedReviewerCountRevision, retryConfirmedReviewerCount] = useReducer(value => value + 1, 0);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const connectionMessageRef = useRef<HTMLTextAreaElement>(null);
   const invitationExpertiseInitialized = useRef(false);
   const focusOnNavigation = useRef(false);
+  const setupLoadSequence = useRef(0);
   const finalizationKeyRef = useRef<string | null>(null);
   const peopleDecisionTouched = useRef(false);
   const sharedInvitationCapacityTouched = useRef(false);
@@ -323,7 +329,10 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     .join(" ");
   const reviewerCount = reviewTiming.panelSize || "—";
   const requiredReviewerCount = Number(setup.reviewDraft?.requestProfile.panelSize ?? 0);
-  const missingReviewerSeats = Math.max(0, requiredReviewerCount - Number(confirmedReviewerCount ?? 0));
+  // A failed check is not "zero confirmed reviewers". Sizing invitations off an unknown group would
+  // offer seats for a group that may already be full.
+  const missingReviewerSeats =
+    confirmedReviewerCountError !== null ? 0 : Math.max(0, requiredReviewerCount - Number(confirmedReviewerCount ?? 0));
   const canCreateSharedInvitation = missingReviewerSeats >= 2;
   const confirmedReviewerSeatsReady =
     requiredReviewerCount > 0 && Number(confirmedReviewerCount ?? 0) >= requiredReviewerCount;
@@ -348,8 +357,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     automaticEligibility,
   ).authority;
   const selectedExpertiseIds = new Set(reviewExpertise.requirements.map(requirement => requirement.definitionId));
+  // A hybrid panel cannot express a specialist requirement yet (requirementForDefinition has no
+  // hybrid case), so it must not offer a single control that would add one.
+  const canAddExpertiseDefinitions = reviewAudience.audience !== "hybrid";
   const selectableExpertiseDefinitions = expertiseDefinitions.filter(
     definition =>
+      canAddExpertiseDefinitions &&
       !selectedExpertiseIds.has(definition.definitionId) &&
       (reviewAudience.audience === "private_invited" || (definition.scope === "global" && definition.networkEligible)),
   );
@@ -364,17 +377,41 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   const loadStep = useCallback(
     async (step: AgentSetupScreenStep, options?: { replace?: boolean; focus?: boolean }) => {
       const url = agentSetupUrl(setup.workspaceId, step);
+      // Claim a sequence number before the request so a slower load can never overwrite a newer
+      // one. Without this, two overlapping loads (or a load overlapping the save in
+      // configureReviews) both call setSetup and router navigation and the last response wins.
+      const sequence = (setupLoadSequence.current += 1);
       const response = await fetch(
         `/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/agent-setup?step=${encodeURIComponent(step)}`,
         { cache: "no-store", credentials: "same-origin" },
       );
       const next = (await readJson(response)) as unknown as SetupResponse;
+      if (sequence !== setupLoadSequence.current) return;
       focusOnNavigation.current = options?.focus ?? true;
       setSetup(next);
       if (options?.replace) router.replace(url);
       else router.push(url);
     },
     [router, setup.workspaceId],
+  );
+
+  // readJson throws on any non-2xx, so a bare `void loadStep(...)` from Back, the progress chips or
+  // "Check agent" turned an expired session into a button that did nothing at all. Await inside a
+  // try and surface the failure exactly like createConnectionMessage and confirmAgent do, and hold
+  // `busy` for the whole request so navigation cannot race an in-flight save.
+  const navigateToStep = useCallback(
+    async (step: AgentSetupScreenStep) => {
+      setBusy(true);
+      setError(null);
+      try {
+        await loadStep(step);
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "That setup step could not be opened. Try again.");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [loadStep],
   );
 
   useEffect(() => {
@@ -469,9 +506,11 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     const groupId = setup.reviewDraft?.requestProfile.privateGroupId ?? setup.privateGroupId;
     if (!groupId) {
       setConfirmedReviewerCount(null);
+      setConfirmedReviewerCountError(null);
       return;
     }
     const controller = new AbortController();
+    setConfirmedReviewerCountError(null);
     void fetch(`/api/account/workspaces/${encodeURIComponent(setup.workspaceId)}/private-groups`, {
       cache: "no-store",
       credentials: "same-origin",
@@ -484,11 +523,24 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
         const group = groups.find(candidate => candidate.groupId === groupId);
         setConfirmedReviewerCount(typeof group?.memberCount === "number" ? group.memberCount : 0);
       })
-      .catch(() => {
-        if (!controller.signal.aborted) setConfirmedReviewerCount(null);
+      .catch(cause => {
+        // A failure must not look like "still loading": null is the loading value, so record the
+        // failure separately and stop treating an unknown group size as zero confirmed reviewers.
+        if (!controller.signal.aborted) {
+          setConfirmedReviewerCount(null);
+          setConfirmedReviewerCountError(
+            cause instanceof Error ? cause.message : "The saved reviewer group could not be checked.",
+          );
+        }
       });
     return () => controller.abort();
-  }, [currentStep, setup.privateGroupId, setup.reviewDraft?.requestProfile.privateGroupId, setup.workspaceId]);
+  }, [
+    confirmedReviewerCountRevision,
+    currentStep,
+    setup.privateGroupId,
+    setup.reviewDraft?.requestProfile.privateGroupId,
+    setup.workspaceId,
+  ]);
 
   useEffect(() => {
     if (currentStep !== "people") return;
@@ -688,9 +740,30 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
   }
 
   function addExpertiseDefinition(definition: ReviewerExpertiseDefinition) {
+    // Build the requirement before touching state. requirementForDefinition throws for combinations
+    // it cannot express (hybrid), and a throw inside a setState updater escapes to the root error
+    // boundary and takes every unsaved answer on this long form with it.
+    let requirement: ReviewerExpertiseRequirement;
+    try {
+      requirement = requirementForDefinition({
+        audience: reviewAudience.audience,
+        definition,
+        panelSize: reviewTiming.panelSize,
+      });
+    } catch (cause) {
+      const message =
+        reviewAudience.audience === "hybrid"
+          ? HYBRID_SPECIALIST_UNAVAILABLE
+          : cause instanceof Error
+            ? cause.message
+            : "That specialist area could not be added.";
+      setError(message);
+      setAnnouncement(message);
+      return;
+    }
     setReviewExpertise(current => {
       if (
-        current.requirements.some(requirement => requirement.definitionId === definition.definitionId) ||
+        current.requirements.some(candidate => candidate.definitionId === definition.definitionId) ||
         current.requirements.length >= 8
       ) {
         return current;
@@ -698,14 +771,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       return {
         ...current,
         needsSpecialists: true,
-        requirements: [
-          ...current.requirements,
-          requirementForDefinition({
-            audience: reviewAudience.audience,
-            definition,
-            panelSize: reviewTiming.panelSize,
-          }),
-        ],
+        requirements: [...current.requirements, requirement],
       };
     });
     setError(null);
@@ -1195,14 +1261,19 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       className="rateloop-secondary-action rateloop-back-action min-h-11 w-full gap-2 sm:w-auto"
       type="button"
       disabled={busy}
-      onClick={() => void loadStep(back)}
+      onClick={() => void navigateToStep(back)}
     >
       Back
     </Button>
   ) : null;
   return (
     <section className="surface-card rounded-2xl p-5 sm:p-7">
-      <AgentSetupProgress currentStep={currentStep} stages={setup.stages} onNavigate={step => void loadStep(step)} />
+      <AgentSetupProgress
+        currentStep={currentStep}
+        stages={setup.stages}
+        onNavigate={step => void navigateToStep(step)}
+        busy={busy}
+      />
       <p className="sr-only" aria-live="polite">
         {announcement}
       </p>
@@ -1254,7 +1325,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   className="min-h-11 w-full sm:w-auto"
                   type="button"
                   disabled={busy}
-                  onClick={() => void loadStep("agent")}
+                  onClick={() => void navigateToStep("agent")}
                 >
                   Check agent
                 </Button>
@@ -1322,7 +1393,9 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 labelClassName="text-sm"
                 name="description"
                 defaultValue={setup.agent.description ?? ""}
+                onChange={() => clearFormErrors("description")}
                 maxLength={1000}
+                error={fieldErrors.description}
               />
             </div>
             <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm">
@@ -1401,25 +1474,21 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       label="Positive label"
                       className="border-white/10 bg-[var(--rateloop-field)]"
                       value={reviewCriterion.positiveLabel}
-                      onChange={event => {
-                        setReviewCriterion(current => ({ ...current, positiveLabel: event.target.value }));
-                        clearFormErrors("positiveLabel");
-                      }}
+                      onChange={event =>
+                        setReviewCriterion(current => ({ ...current, positiveLabel: event.target.value }))
+                      }
                       maxLength={REVIEW_ANSWER_LABEL_MAX_LENGTH}
                       required
-                      error={fieldErrors.positiveLabel}
                     />
                     <Field
                       label="Negative label"
                       className="border-white/10 bg-[var(--rateloop-field)]"
                       value={reviewCriterion.negativeLabel}
-                      onChange={event => {
-                        setReviewCriterion(current => ({ ...current, negativeLabel: event.target.value }));
-                        clearFormErrors("negativeLabel");
-                      }}
+                      onChange={event =>
+                        setReviewCriterion(current => ({ ...current, negativeLabel: event.target.value }))
+                      }
                       maxLength={REVIEW_ANSWER_LABEL_MAX_LENGTH}
                       required
-                      error={fieldErrors.negativeLabel}
                     />
                   </>
                 ) : null}
@@ -1465,17 +1534,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                         ? reviewFrequency.adaptiveFloorPercent
                         : reviewFrequency.fixedPercent
                     }
-                    onChange={event => {
+                    onChange={event =>
                       setReviewFrequency(current => ({
                         ...current,
                         [reviewFrequency.mode === "adaptive" ? "adaptiveFloorPercent" : "fixedPercent"]:
                           event.target.value,
-                      }));
-                      clearFormErrors(reviewFrequency.mode === "adaptive" ? "adaptiveFloorPercent" : "fixedPercent");
-                    }}
+                      }))
+                    }
                     required
                     disabled={reviewFrequency.mode === "adaptive"}
-                    error={fieldErrors[reviewFrequency.mode === "adaptive" ? "adaptiveFloorPercent" : "fixedPercent"]}
                   />
                   <Field
                     label="Maximum outputs between reviews"
@@ -1486,15 +1553,13 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     step={1}
                     inputMode="numeric"
                     value={reviewFrequency.maximumUnreviewedGap}
-                    onChange={event => {
+                    onChange={event =>
                       setReviewFrequency(current => ({
                         ...current,
                         maximumUnreviewedGap: event.target.value,
-                      }));
-                      clearFormErrors("maximumUnreviewedGap");
-                    }}
+                      }))
+                    }
                     required
-                    error={fieldErrors.maximumUnreviewedGap}
                   />
                 </div>
                 <p className="mt-3 text-xs leading-5 text-base-content/55">
@@ -1512,16 +1577,14 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     label="Review these risk levels"
                     className="border-white/10 bg-[var(--rateloop-field)]"
                     value={reviewFrequency.requiredRiskTiers}
-                    onChange={event => {
+                    onChange={event =>
                       setReviewFrequency(current => ({
                         ...current,
                         requiredRiskTiers: event.target.value,
-                      }));
-                      clearFormErrors("requiredRiskTiers");
-                    }}
+                      }))
+                    }
                     placeholder="high, legal"
                     maxLength={320}
-                    error={fieldErrors.requiredRiskTiers}
                   />
                   <Field
                     label={
@@ -1536,14 +1599,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     step={0.01}
                     inputMode="decimal"
                     value={reviewFrequency.minimumConfidencePercent}
-                    onChange={event => {
+                    onChange={event =>
                       setReviewFrequency(current => ({
                         ...current,
                         minimumConfidencePercent: event.target.value,
-                      }));
-                      clearFormErrors("minimumConfidencePercent");
-                    }}
-                    error={fieldErrors.minimumConfidencePercent}
+                      }))
+                    }
                   />
                 </div>
                 <p className="mt-3 text-xs leading-5 text-base-content/55">
@@ -1635,6 +1696,9 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     <h3 id="agent-setup-specialist-areas-heading" className="font-semibold">
                       Specialist areas
                     </h3>
+                    {!canAddExpertiseDefinitions ? (
+                      <p className="mt-2 text-sm leading-6 text-base-content/60">{HYBRID_SPECIALIST_UNAVAILABLE}</p>
+                    ) : null}
                     {reviewExpertise.requirements.length ? (
                       <ul className="mt-3 space-y-3">
                         {reviewExpertise.requirements.map(requirement => {
@@ -1695,9 +1759,9 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                           );
                         })}
                       </ul>
-                    ) : (
+                    ) : canAddExpertiseDefinitions ? (
                       <p className="mt-2 text-sm text-base-content/60">Choose at least one specialist area.</p>
-                    )}
+                    ) : null}
 
                     {exampleExpertiseDefinitions.length ? (
                       <div className="mt-5">
@@ -1855,10 +1919,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                             requirements: current.requirements,
                           }),
                         }));
-                        clearFormErrors("panelSize");
                       }}
                       required
-                      error={fieldErrors.panelSize}
                     />
                   </div>
                 </fieldset>
@@ -1907,12 +1969,10 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                         format="usdcAmount"
                         maxLength={REVIEW_USDC_DECIMAL_MAX_LENGTH}
                         value={reviewCompensation.usdcPerReviewer}
-                        onChange={event => {
-                          setReviewCompensation(current => ({ ...current, usdcPerReviewer: event.target.value }));
-                          clearFormErrors("usdcPerReviewer");
-                        }}
+                        onChange={event =>
+                          setReviewCompensation(current => ({ ...current, usdcPerReviewer: event.target.value }))
+                        }
                         required
-                        error={fieldErrors.usdcPerReviewer}
                       />
                     </div>
                   ) : null}
@@ -1955,12 +2015,10 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                         format="usdcAmount"
                         maxLength={REVIEW_USDC_DECIMAL_MAX_LENGTH}
                         value={reviewCompensation.feedbackBonusUsdc}
-                        onChange={event => {
-                          setReviewCompensation(current => ({ ...current, feedbackBonusUsdc: event.target.value }));
-                          clearFormErrors("feedbackBonusUsdc");
-                        }}
+                        onChange={event =>
+                          setReviewCompensation(current => ({ ...current, feedbackBonusUsdc: event.target.value }))
+                        }
                         required
-                        error={fieldErrors.feedbackBonusUsdc}
                       />
                       <SelectField
                         className="border-white/10 bg-[var(--rateloop-field)]"
@@ -1983,17 +2041,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                             label="Awarder account"
                             className="border-white/10 bg-[var(--rateloop-field)]"
                             value={reviewCompensation.feedbackBonusAwarderAccount}
-                            onChange={event => {
+                            onChange={event =>
                               setReviewCompensation(current => ({
                                 ...current,
                                 feedbackBonusAwarderAccount: event.target.value,
-                              }));
-                              clearFormErrors("feedbackBonusAwarderAccount");
-                            }}
+                              }))
+                            }
                             placeholder="Authenticated RateLoop account"
                             maxLength={320}
                             required
-                            error={fieldErrors.feedbackBonusAwarderAccount}
                           />
                         </div>
                       ) : null}
@@ -2041,11 +2097,26 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               <section className="surface-card-nested mt-5 flex flex-wrap items-center justify-between gap-3 p-4">
                 <div>
                   <h3 className="font-semibold">Confirmed reviewers</h3>
-                  <p className="mt-1 text-sm text-base-content/60">
-                    {confirmedReviewerCount === null
-                      ? "Checking the saved reviewer group…"
-                      : `${confirmedReviewerCount}/${requiredReviewerCount} seats ready`}
-                  </p>
+                  {confirmedReviewerCountError ? (
+                    <>
+                      <p className="mt-1 text-sm text-error" role="alert">
+                        {confirmedReviewerCountError}
+                      </p>
+                      <button
+                        className="btn btn-sm rateloop-secondary-action mt-3"
+                        type="button"
+                        onClick={() => retryConfirmedReviewerCount()}
+                      >
+                        Check again
+                      </button>
+                    </>
+                  ) : (
+                    <p className="mt-1 text-sm text-base-content/60">
+                      {confirmedReviewerCount === null
+                        ? "Checking the saved reviewer group…"
+                        : `${confirmedReviewerCount}/${requiredReviewerCount} seats ready`}
+                    </p>
+                  )}
                 </div>
                 {confirmedReviewerCount !== null ? (
                   <span
@@ -2174,9 +2245,12 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                             peopleDecisionTouched.current = true;
                             setPeopleDecision("later");
                           }}
-                          label={expertiseCoverage?.ready ? "Use confirmed reviewers" : "Invite later"}
+                          // expertiseCoverage is hard-set to null when no specialist requirement
+                          // exists — the same value as "loading" — so keying off it alone told a
+                          // full reviewer group that automatic requests were still unavailable.
+                          label={confirmedReviewerPoolReady ? "Use confirmed reviewers" : "Invite later"}
                           description={
-                            expertiseCoverage?.ready
+                            confirmedReviewerPoolReady
                               ? "No new code is needed."
                               : "Automatic requests stay unavailable until enough reviewers join."
                           }
@@ -2199,10 +2273,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                                 onChange={event => {
                                   sharedInvitationCapacityTouched.current = true;
                                   setSharedInvitationCapacity(Number(event.target.value));
-                                  clearFormErrors("maximumRedemptions");
                                 }}
                                 required
-                                error={fieldErrors.maximumRedemptions}
                               />
                               <Field
                                 label={

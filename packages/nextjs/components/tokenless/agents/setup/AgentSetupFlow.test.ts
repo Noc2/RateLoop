@@ -296,10 +296,18 @@ test("setup applies shared fields and preserves server field errors across edita
   assert.ok((flowSource.match(/<Field/g)?.length ?? 0) >= 12);
   assert.match(flowSource, /const \{ capture: captureFormError, clear: clearFormErrors, fieldErrors, formError \}/);
   assert.match(flowSource, /typeof body\.field === "string" \? body\.field : null/);
-  assert.match(flowSource, /error=\{fieldErrors\.displayName\}/);
-  assert.match(flowSource, /error=\{fieldErrors\.panelSize\}/);
-  assert.match(flowSource, /error=\{fieldErrors\.intendedEmail\}/);
   assert.match(flowSource, /captureFormError\(cause, "Unable to save review behavior\."\)/);
+  // Only these five field names are ever returned as `field` by the agent-setup API, so a binding
+  // for any other name is a control that can never show an error. Keep the wiring honest: the
+  // rendered behaviour of these bindings is covered by AgentSetupFlow.interaction.test.tsx.
+  assert.deepEqual([...new Set([...flowSource.matchAll(/fieldErrors\.([A-Za-z]+)/g)].map(match => match[1]))].sort(), [
+    "description",
+    "displayName",
+    "intendedEmail",
+    "intendedEmailDomain",
+    "name",
+  ]);
+  assert.doesNotMatch(flowSource, /fieldErrors\[/);
 });
 
 test("setup uses one stage header aligned to the progress width without repeating progress metadata", () => {
