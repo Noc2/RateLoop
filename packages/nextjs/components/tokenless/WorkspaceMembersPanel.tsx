@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { OneTimeSecretNotice } from "~~/components/tokenless/agents/OneTimeSecretNotice";
 import { Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
 import { readJson } from "~~/lib/tokenless/http";
 import { WorkspaceRequestScope } from "~~/lib/tokenless/workspaceRequestScope";
 
@@ -34,6 +35,10 @@ type MembersResponse = {
   invitations: WorkspaceInvitation[];
 };
 
+type MemberConfirmation =
+  | { kind: "remove-member"; member: WorkspaceMember; label: string }
+  | { kind: "revoke-invitation"; invitation: WorkspaceInvitation };
+
 function shortPrincipal(value: string) {
   return value.length > 22 ? `${value.slice(0, 10)}…${value.slice(-8)}` : value;
 }
@@ -55,6 +60,7 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
   const [email, setEmail] = useState("");
   const [accessRole, setAccessRole] = useState<Exclude<WorkspaceAccessRole, "owner">>("member");
   const [issuedToken, setIssuedToken] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<MemberConfirmation | null>(null);
   const [busyTarget, setBusyTarget] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [workspaceRequests] = useState(() => new WorkspaceRequestScope());
@@ -89,6 +95,7 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
     setInvitations([]);
     setViewerPrincipalId("");
     setIssuedToken(null);
+    setConfirmation(null);
     clear();
     if (!canManage) return;
     void loadMembers().catch(cause => {
@@ -154,8 +161,6 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
   }
 
   async function removeMember(member: WorkspaceMember) {
-    const label = member.displayName ?? member.email ?? shortPrincipal(member.principalId);
-    if (!window.confirm(`Remove ${label} from this workspace?`)) return;
     const request = workspaceRequests.begin(workspaceId, "members:action");
     setBusyTarget(member.principalId);
     clear();
@@ -176,7 +181,6 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
   }
 
   async function revokeInvitation(invitation: WorkspaceInvitation) {
-    if (!window.confirm("Revoke this workspace invitation?")) return;
     const request = workspaceRequests.begin(workspaceId, "members:action");
     setBusyTarget(invitation.inviteId);
     clear();
@@ -194,6 +198,14 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
       if (request.isCurrent()) setBusyTarget(null);
       request.finish();
     }
+  }
+
+  async function confirmDestructiveAction() {
+    const pending = confirmation;
+    if (!pending) return;
+    if (pending.kind === "remove-member") await removeMember(pending.member);
+    else await revokeInvitation(pending.invitation);
+    setConfirmation(current => (current === pending ? null : current));
   }
 
   if (!canManage) return null;
@@ -315,7 +327,13 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
                         className="btn btn-sm border-red-300/20 bg-red-300/[0.06] text-red-100"
                         type="button"
                         disabled={busyTarget === member.principalId}
-                        onClick={() => void removeMember(member)}
+                        onClick={() =>
+                          setConfirmation({
+                            kind: "remove-member",
+                            member,
+                            label: member.displayName ?? member.email ?? shortPrincipal(member.principalId),
+                          })
+                        }
                       >
                         Remove
                       </button>
@@ -344,7 +362,7 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
                   className="text-xs text-red-200 underline underline-offset-4"
                   type="button"
                   disabled={busyTarget === invitation.inviteId}
-                  onClick={() => void revokeInvitation(invitation)}
+                  onClick={() => setConfirmation({ kind: "revoke-invitation", invitation })}
                 >
                   Revoke
                 </button>
@@ -353,6 +371,29 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
           </ul>
         </div>
       ) : null}
+      <ConfirmDialog
+        open={confirmation !== null}
+        title={
+          confirmation?.kind === "remove-member"
+            ? `Remove ${confirmation.label} from this workspace?`
+            : "Revoke this workspace invitation?"
+        }
+        description={
+          confirmation?.kind === "remove-member"
+            ? "They will lose workspace access immediately."
+            : "The invitation code will stop working."
+        }
+        confirmLabel={confirmation?.kind === "remove-member" ? "Remove member" : "Revoke invitation"}
+        busy={
+          confirmation?.kind === "remove-member"
+            ? busyTarget === confirmation.member.principalId
+            : confirmation?.kind === "revoke-invitation"
+              ? busyTarget === confirmation.invitation.inviteId
+              : false
+        }
+        onCancel={() => setConfirmation(null)}
+        onConfirm={() => void confirmDestructiveAction()}
+      />
     </section>
   );
 }

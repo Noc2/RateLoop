@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { OneTimeSecretNotice } from "~~/components/tokenless/agents/OneTimeSecretNotice";
 import { ChoiceInput, Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
 
 const API_KEY_SCOPES = [
   "quote:read",
@@ -65,12 +66,14 @@ export function WorkspaceApiKeysPanel({ workspaceId }: { workspaceId: string }) 
   const [name, setName] = useState("");
   const [scopes, setScopes] = useState<ApiKeyScope[]>(["quote:read", "result:read", "evaluation:read"]);
   const [revealedToken, setRevealedToken] = useState<string | null>(null);
+  const [revokeConfirmation, setRevokeConfirmation] = useState<ApiKeySummary | null>(null);
   const { capture, clear, fieldErrors, formError } = useFormErrors();
 
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     setRevealedToken(null);
+    setRevokeConfirmation(null);
     void fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/api-keys`, {
       credentials: "same-origin",
       signal: controller.signal,
@@ -111,7 +114,6 @@ export function WorkspaceApiKeysPanel({ workspaceId }: { workspaceId: string }) 
   }
 
   async function revokeApiKey(apiKey: ApiKeySummary) {
-    if (!window.confirm(`Revoke “${apiKey.name}”? Existing integrations using it will stop working.`)) return;
     clear();
     setBusy(true);
     try {
@@ -130,6 +132,13 @@ export function WorkspaceApiKeysPanel({ workspaceId }: { workspaceId: string }) 
     } finally {
       setBusy(false);
     }
+  }
+
+  async function confirmApiKeyRevocation() {
+    const apiKey = revokeConfirmation;
+    if (!apiKey) return;
+    await revokeApiKey(apiKey);
+    setRevokeConfirmation(current => (current === apiKey ? null : current));
   }
 
   return (
@@ -220,7 +229,7 @@ export function WorkspaceApiKeysPanel({ workspaceId }: { workspaceId: string }) 
                   type="button"
                   className="btn btn-sm border-red-300/20 bg-red-300/[0.06] text-red-100"
                   disabled={busy}
-                  onClick={() => void revokeApiKey(apiKey)}
+                  onClick={() => setRevokeConfirmation(apiKey)}
                 >
                   Revoke
                 </button>
@@ -230,6 +239,15 @@ export function WorkspaceApiKeysPanel({ workspaceId }: { workspaceId: string }) 
           </article>
         ))}
       </div>
+      <ConfirmDialog
+        open={revokeConfirmation !== null}
+        title={revokeConfirmation ? `Revoke “${revokeConfirmation.name}”?` : "Revoke this API key?"}
+        description="Existing integrations using it will stop working."
+        confirmLabel="Revoke API key"
+        busy={busy}
+        onCancel={() => setRevokeConfirmation(null)}
+        onConfirm={() => void confirmApiKeyRevocation()}
+      />
     </section>
   );
 }

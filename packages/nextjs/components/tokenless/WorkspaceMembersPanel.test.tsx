@@ -14,6 +14,8 @@ test("workspace members have a focused invite and management path", () => {
   assert.match(source, /method: "DELETE"/);
   assert.match(source, />\s*Remove\s*</);
   assert.match(source, />\s*Revoke\s*</);
+  assert.match(source, /<ConfirmDialog/);
+  assert.doesNotMatch(source, /window\.confirm/);
 });
 
 test("workspace member access stays distinct from reviewer management", () => {

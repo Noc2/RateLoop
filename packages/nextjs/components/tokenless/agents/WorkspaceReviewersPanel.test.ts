@@ -26,6 +26,8 @@ test("reviewer management lists active reviewers and pending invitations with re
   assert.match(panel, /method: "DELETE"/);
   assert.match(panel, /reviewers\/\$\{encodeURIComponent\(reviewer\.principalAddress\)\}/);
   assert.match(panel, /reviewer-invitations\/\$\{encodeURIComponent\(invitation\.invitationId\)\}/);
+  assert.match(panel, /<ConfirmDialog/);
+  assert.doesNotMatch(panel, /window\.confirm/);
   assert.doesNotMatch(panel, /localStorage|sessionStorage/);
 });
 

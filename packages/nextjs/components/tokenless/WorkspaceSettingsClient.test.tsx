@@ -119,6 +119,8 @@ test("workspace managers can create one-time scoped API keys without result webh
   assert.match(apiKeySource, /<OneTimeSecretNotice label="this API key"/);
   assert.match(apiKeySource, /New keys expire after 90 days and secrets are\s+stored only as hashes/);
   assert.match(apiKeySource, /setRevealedToken\(null\)/);
+  assert.match(apiKeySource, /<ConfirmDialog/);
+  assert.doesNotMatch(apiKeySource, /window\.confirm/);
   assert.doesNotMatch(apiKeySource, /localStorage|sessionStorage|document\.cookie/);
   assert.doesNotMatch(source, /Result webhooks|\/webhooks/);
   assert.doesNotMatch(source, /Agent setup|Connect an agent once|RateLoop creates its bound access automatically/);

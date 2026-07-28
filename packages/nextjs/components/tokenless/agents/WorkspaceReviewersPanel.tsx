@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { OneTimeSecretNotice } from "~~/components/tokenless/agents/OneTimeSecretNotice";
 import { ChoiceInput, Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
 import { readJson } from "~~/lib/tokenless/http";
 import { WorkspaceRequestScope } from "~~/lib/tokenless/workspaceRequestScope";
 
@@ -33,6 +34,10 @@ type ReviewerInvitation = {
   redemptionCount: number;
   revokedAt: string | null;
 };
+
+type ReviewerConfirmation =
+  | { kind: "remove-reviewer"; reviewer: WorkspaceReviewer; label: string }
+  | { kind: "revoke-invitation"; invitation: ReviewerInvitation };
 
 type ExactExpertiseDefinition = {
   definitionId: string;
@@ -126,6 +131,7 @@ export function WorkspaceReviewersPanel({
     "internal" | "confidential" | "restricted" | "regulated"
   >("confidential");
   const [issuedUrl, setIssuedUrl] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<ReviewerConfirmation | null>(null);
   const [paidAdulthoodAttested, setPaidAdulthoodAttested] = useState(false);
   const [expertiseContext, setExpertiseContext] = useState<{
     groupId: string;
@@ -192,6 +198,7 @@ export function WorkspaceReviewersPanel({
     setReviewers([]);
     setInvitations([]);
     setIssuedUrl(null);
+    setConfirmation(null);
     setExpertiseContext(null);
     setError(null);
     setNotice(null);
@@ -242,7 +249,6 @@ export function WorkspaceReviewersPanel({
   }
 
   async function removeReviewer(reviewer: WorkspaceReviewer) {
-    if (!window.confirm(`Remove ${reviewerLabel(reviewer)} from this workspace's reviewers?`)) return;
     const request = workspaceRequests.begin(workspaceId, "reviewers:action");
     setBusyTarget(reviewer.principalAddress);
     setError(null);
@@ -311,7 +317,6 @@ export function WorkspaceReviewersPanel({
   }
 
   async function revokeInvitation(invitation: ReviewerInvitation) {
-    if (!window.confirm("Revoke this reviewer invitation?")) return;
     const request = workspaceRequests.begin(workspaceId, "reviewers:action");
     setBusyTarget(invitation.invitationId);
     setError(null);
@@ -329,6 +334,14 @@ export function WorkspaceReviewersPanel({
       if (request.isCurrent()) setBusyTarget(null);
       request.finish();
     }
+  }
+
+  async function confirmDestructiveAction() {
+    const pending = confirmation;
+    if (!pending) return;
+    if (pending.kind === "remove-reviewer") await removeReviewer(pending.reviewer);
+    else await revokeInvitation(pending.invitation);
+    setConfirmation(current => (current === pending ? null : current));
   }
 
   if (!canManage) return null;
@@ -467,7 +480,13 @@ export function WorkspaceReviewersPanel({
                     className="btn btn-sm border-red-300/20 bg-red-300/[0.06] text-red-100"
                     type="button"
                     disabled={busyTarget === reviewer.principalAddress}
-                    onClick={() => void removeReviewer(reviewer)}
+                    onClick={() =>
+                      setConfirmation({
+                        kind: "remove-reviewer",
+                        reviewer,
+                        label: reviewerLabel(reviewer),
+                      })
+                    }
                   >
                     Remove
                   </button>
@@ -497,7 +516,7 @@ export function WorkspaceReviewersPanel({
                   className="text-xs text-red-200 underline underline-offset-4"
                   type="button"
                   disabled={busyTarget === invitation.invitationId}
-                  onClick={() => void revokeInvitation(invitation)}
+                  onClick={() => setConfirmation({ kind: "revoke-invitation", invitation })}
                 >
                   Revoke
                 </button>
@@ -506,6 +525,29 @@ export function WorkspaceReviewersPanel({
           </ul>
         </div>
       ) : null}
+      <ConfirmDialog
+        open={confirmation !== null}
+        title={
+          confirmation?.kind === "remove-reviewer"
+            ? `Remove ${confirmation.label} from this workspace's reviewers?`
+            : "Revoke this reviewer invitation?"
+        }
+        description={
+          confirmation?.kind === "remove-reviewer"
+            ? "They will stop receiving assigned private review work from this workspace."
+            : "The reviewer invitation will stop working."
+        }
+        confirmLabel={confirmation?.kind === "remove-reviewer" ? "Remove reviewer" : "Revoke invitation"}
+        busy={
+          confirmation?.kind === "remove-reviewer"
+            ? busyTarget === confirmation.reviewer.principalAddress
+            : confirmation?.kind === "revoke-invitation"
+              ? busyTarget === confirmation.invitation.invitationId
+              : false
+        }
+        onCancel={() => setConfirmation(null)}
+        onConfirm={() => void confirmDestructiveAction()}
+      />
     </section>
   );
 }
