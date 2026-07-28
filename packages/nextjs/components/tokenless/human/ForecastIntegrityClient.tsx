@@ -152,7 +152,7 @@ export function ForecastIntegrityClient() {
                 </div>
                 <span className="rounded-md bg-white/5 px-3 py-1 text-xs">{CONSEQUENCE_LABELS[item.consequence]}</span>
               </div>
-              <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-3">
+              <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-2">
                 <div>
                   <dt className="text-base-content/55">Brier skill</dt>
                   <dd className="mt-1">
@@ -166,10 +166,6 @@ export function ForecastIntegrityClient() {
                       ? "Not enough outcomes"
                       : `${item.outcomeDiscriminationBps} bps`}
                   </dd>
-                </div>
-                <div>
-                  <dt className="text-base-content/55">Payment effect</dt>
-                  <dd className="mt-1">None</dd>
                 </div>
               </dl>
               {item.findings.length ? (
