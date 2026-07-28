@@ -77,7 +77,7 @@ export default async function AgentConnectionPage({ params }: { params: Promise<
   };
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-5 py-12 sm:py-16">
+    <div className="mx-auto w-full max-w-4xl px-5 py-12 sm:py-16">
       <script
         type="application/json"
         data-rateloop-agent-connection="2026-07-17"
@@ -111,6 +111,6 @@ export default async function AgentConnectionPage({ params }: { params: Promise<
           </p>
         ) : null}
       </section>
-    </main>
+    </div>
   );
 }

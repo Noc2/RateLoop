@@ -64,9 +64,9 @@ export default async function AgentOAuthDevicePage({ searchParams }: { searchPar
   const userCode = typeof raw.user_code === "string" ? raw.user_code : null;
   if (!userCode) {
     return (
-      <main className="flex grow items-start justify-center px-4 py-16 sm:py-24">
+      <div className="flex grow items-start justify-center px-4 py-16 sm:py-24">
         <CodeEntry />
-      </main>
+      </div>
     );
   }
 
@@ -82,9 +82,9 @@ export default async function AgentOAuthDevicePage({ searchParams }: { searchPar
   } catch (error) {
     const message = error instanceof AgentOAuthError ? error.message : "That verification code could not be checked.";
     return (
-      <main className="flex grow items-start justify-center px-4 py-16 sm:py-24">
+      <div className="flex grow items-start justify-center px-4 py-16 sm:py-24">
         <CodeEntry message={message} />
-      </main>
+      </div>
     );
   }
 
@@ -113,7 +113,7 @@ export default async function AgentOAuthDevicePage({ searchParams }: { searchPar
   const terminal = approval.status === "pending" ? null : terminalCopy[approval.status];
 
   return (
-    <main className="flex grow items-start justify-center px-4 py-16 sm:py-24">
+    <div className="flex grow items-start justify-center px-4 py-16 sm:py-24">
       <section className="surface-card w-full max-w-xl rounded-2xl p-6 sm:p-9" aria-labelledby="device-approval-title">
         <p className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--rateloop-blue)]">
           {terminal?.eyebrow ?? "Agent connection"}
@@ -162,6 +162,6 @@ export default async function AgentOAuthDevicePage({ searchParams }: { searchPar
           </>
         )}
       </section>
-    </main>
+    </div>
   );
 }

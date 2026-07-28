@@ -810,29 +810,29 @@ export function TokenlessHandoffClient() {
 
   if (handoff.status === "loading") {
     return (
-      <main className="mx-auto flex w-full max-w-5xl grow items-center justify-center px-4 py-20" aria-busy="true">
+      <div className="mx-auto flex w-full max-w-5xl grow items-center justify-center px-4 py-20" aria-busy="true">
         <p className="text-base-content/65" role="status">
           Reading the private handoff fragment in this browser…
         </p>
-      </main>
+      </div>
     );
   }
 
   if (handoff.status === "invalid") {
     return (
-      <main className="mx-auto w-full max-w-3xl grow px-4 py-16 sm:py-24">
+      <div className="mx-auto w-full max-w-3xl grow px-4 py-16 sm:py-24">
         <section className="rateloop-surface-card border-error/30 p-6 sm:p-9" role="alert">
           <p className="font-mono text-xs uppercase tracking-widest text-error">Cannot open review</p>
           <h1 className="mt-4 text-3xl font-semibold">Ask the agent for a new link.</h1>
           <p className="mt-4 leading-7 text-base-content/65">{handoff.message}</p>
         </section>
-      </main>
+      </div>
     );
   }
 
   if (handoff.status === "recovery") {
     return (
-      <main className="mx-auto w-full max-w-4xl grow px-4 py-16 sm:py-24">
+      <div className="mx-auto w-full max-w-4xl grow px-4 py-16 sm:py-24">
         <header>
           <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Browser handoff</p>
           <h1 className="mt-4 text-4xl font-semibold">Track your ask.</h1>
@@ -901,7 +901,7 @@ export function TokenlessHandoffClient() {
             </div>
           )}
         </section>
-      </main>
+      </div>
     );
   }
 
@@ -909,7 +909,7 @@ export function TokenlessHandoffClient() {
 
   if (handoff.status === "expired") {
     return (
-      <main className="mx-auto w-full max-w-3xl grow px-4 py-16 sm:py-24">
+      <div className="mx-auto w-full max-w-3xl grow px-4 py-16 sm:py-24">
         <section className="rateloop-surface-card border-error/30 p-6 sm:p-9" role="alert">
           <p className="font-mono text-xs uppercase tracking-widest text-error">Review link expired</p>
           <h1 className="mt-4 text-3xl font-semibold">Ask the agent for a new link.</h1>
@@ -917,12 +917,12 @@ export function TokenlessHandoffClient() {
             This link expired <time dateTime={payload.expiresAt}>{formatDate(payload.expiresAt)}</time>.
           </p>
         </section>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="mx-auto w-full max-w-6xl grow px-4 py-10 sm:py-14">
+    <div className="mx-auto w-full max-w-6xl grow px-4 py-10 sm:py-14">
       <header className="max-w-4xl">
         <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Browser handoff</p>
         <h1 className="mt-4 text-4xl font-semibold leading-tight sm:text-5xl">Review this ask.</h1>
@@ -1363,6 +1363,6 @@ export function TokenlessHandoffClient() {
           ) : null}
         </section>
       ) : null}
-    </main>
+    </div>
   );
 }

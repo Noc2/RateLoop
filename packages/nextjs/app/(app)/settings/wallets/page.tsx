@@ -22,7 +22,7 @@ export default async function WalletSettingsPage({
   const initialPurpose = candidate === "funding" ? candidate : "payout";
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-4 py-12 sm:py-16">
+    <div className="mx-auto w-full max-w-4xl px-4 py-12 sm:py-16">
       <p className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--rateloop-blue)]">Account settings</p>
       <h1 className="mt-4 text-4xl font-semibold tracking-tight sm:text-5xl">Wallets</h1>
       <p className="mt-5 max-w-3xl text-base leading-7 text-base-content/65">
@@ -37,6 +37,6 @@ export default async function WalletSettingsPage({
           }
         />
       </div>
-    </main>
+    </div>
   );
 }

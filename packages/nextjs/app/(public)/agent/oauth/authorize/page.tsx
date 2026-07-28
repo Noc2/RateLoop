@@ -30,7 +30,7 @@ export default async function AgentOAuthAuthorizePage({ searchParams }: { search
         ? error
         : new AgentOAuthError("invalid_request", "The authorization request is invalid.");
     return (
-      <main className="flex grow items-start justify-center px-4 py-16 sm:py-24">
+      <div className="flex grow items-start justify-center px-4 py-16 sm:py-24">
         <section className="surface-card w-full max-w-lg rounded-2xl p-6 sm:p-9" aria-labelledby="oauth-error-title">
           <p className="font-mono text-xs uppercase tracking-[0.22em] text-error">Cannot connect</p>
           <h1 id="oauth-error-title" className="mt-4 text-3xl font-semibold tracking-tight">
@@ -43,7 +43,7 @@ export default async function AgentOAuthAuthorizePage({ searchParams }: { search
             Return to the agent that opened this page and restart the connection.
           </p>
         </section>
-      </main>
+      </div>
     );
   }
 
@@ -69,7 +69,7 @@ export default async function AgentOAuthAuthorizePage({ searchParams }: { search
   };
 
   return (
-    <main className="flex grow items-start justify-center px-4 py-16 sm:py-24">
+    <div className="flex grow items-start justify-center px-4 py-16 sm:py-24">
       <section className="surface-card w-full max-w-xl rounded-2xl p-6 sm:p-9" aria-labelledby="oauth-consent-title">
         <p className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--rateloop-blue)]">Agent connection</p>
         <h1 id="oauth-consent-title" className="mt-4 text-4xl font-semibold tracking-tight">
@@ -97,6 +97,6 @@ export default async function AgentOAuthAuthorizePage({ searchParams }: { search
         </section>
         <AgentOAuthConsentForm autoAuthorize={authorization.autoAuthorize} values={values} />
       </section>
-    </main>
+    </div>
   );
 }

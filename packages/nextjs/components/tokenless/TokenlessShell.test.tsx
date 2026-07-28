@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+const shellSource = readFileSync(new URL("./TokenlessShell.tsx", import.meta.url), "utf8");
+
 test("tokenless shell exposes Humans, Agents, and Docs without the legacy product navigation", async () => {
-  const source = readFileSync(new URL("./TokenlessShell.tsx", import.meta.url), "utf8");
+  const source = shellSource;
   assert.match(source, /href: "\/human", label: "Humans"/);
   assert.match(source, /href: "\/agents", label: "Agents"/);
   assert.doesNotMatch(source, /For Humans|For Agents/);
@@ -27,11 +29,30 @@ test("tokenless shell exposes Humans, Agents, and Docs without the legacy produc
 });
 
 test("tokenless navigation uses the shared page background", () => {
-  const source = readFileSync(new URL("./TokenlessShell.tsx", import.meta.url), "utf8");
+  const source = shellSource;
 
   assert.match(source, /<header className="[^"]*bg-base-100/);
   assert.match(source, /<aside className="[^"]*bg-base-100/);
   assert.doesNotMatch(source, /bg-black(?:\/\d+)?/);
+});
+
+test("tokenless routes expose one main landmark and a keyboard skip link", () => {
+  assert.match(shellSource, /href="#main-content"/);
+  assert.match(shellSource, /Skip to main content/);
+  assert.match(shellSource, /focus:not-sr-only/);
+  assert.match(shellSource, /<main[\s\S]*id="main-content"[\s\S]*tabIndex=\{-1\}/);
+
+  const nestedSurfaces = [
+    "../../app/(app)/settings/wallets/page.tsx",
+    "../../app/(public)/agent/oauth/authorize/page.tsx",
+    "../../app/(public)/agent/oauth/device/page.tsx",
+    "../../app/(public)/connect/[intentId]/page.tsx",
+    "./TokenlessHandoffClient.tsx",
+  ];
+  for (const path of nestedSurfaces) {
+    const source = readFileSync(new URL(path, import.meta.url), "utf8");
+    assert.doesNotMatch(source, /<main\b/, `${path} must use the shared shell main landmark`);
+  }
 });
 
 test("tokenless site search restores the established navbar treatment", () => {

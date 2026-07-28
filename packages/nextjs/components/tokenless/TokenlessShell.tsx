@@ -220,6 +220,12 @@ function Footer() {
 export function TokenlessShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-base-100 text-base-content">
+      <a
+        href="#main-content"
+        className="sr-only fixed left-4 top-4 z-[60] rounded-lg bg-base-content px-4 py-3 font-semibold text-base-100 shadow-xl focus:not-sr-only focus:outline-none focus:ring-2 focus:ring-[var(--rateloop-blue)] focus:ring-offset-2 focus:ring-offset-base-100"
+      >
+        Skip to main content
+      </a>
       <header className="sticky top-0 z-30 border-b border-white/10 bg-base-100 px-4 py-3 backdrop-blur-xl xl:hidden">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
           <Brand compact />
@@ -256,7 +262,11 @@ export function TokenlessShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main id="main-content" className="relative flex min-h-0 flex-1 flex-col overflow-x-hidden xl:pl-52">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="relative flex min-h-0 flex-1 flex-col overflow-x-hidden xl:pl-52"
+      >
         {children}
       </main>
       <Footer />
