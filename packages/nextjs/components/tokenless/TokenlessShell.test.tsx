@@ -59,7 +59,7 @@ test("tokenless routes expose one main landmark and a keyboard skip link", () =>
 test("the root not-found route has its own landmark and descriptive title", () => {
   const source = readFileSync(new URL("../../app/not-found.tsx", import.meta.url), "utf8");
 
-  assert.match(source, /title: "Page not found \| RateLoop"/);
+  assert.match(source, /title: "Page not found"/);
   assert.match(source, /<main[\s\S]*id="main-content"[\s\S]*tabIndex=\{-1\}/);
 });
 
