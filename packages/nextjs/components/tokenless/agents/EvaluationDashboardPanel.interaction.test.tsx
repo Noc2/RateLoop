@@ -56,7 +56,7 @@ function installFetch(dashboardBody: Record<string, unknown>, caseView?: Record<
     if (url === "/api/account/workspaces") {
       return Response.json({ workspaces: [{ workspaceId: "workspace-1", name: "Release team", role: "member" }] });
     }
-    if (url.endsWith("/evaluations")) return Response.json(dashboardBody);
+    if (url.includes("/evaluations")) return Response.json(dashboardBody);
     if (caseView && url.endsWith("/cases")) return Response.json(caseView);
     throw new Error(`Unexpected evaluation request: ${url}`);
   };
@@ -136,7 +136,7 @@ test("the panel renders no workspace selector of its own", async () => {
           ],
         });
       }
-      if (url.endsWith("/evaluations")) return Response.json(dashboard({ runs: [] }));
+      if (url.includes("/evaluations")) return Response.json(dashboard({ runs: [] }));
       throw new Error(`Unexpected evaluation request: ${url}`);
     };
     return () => {

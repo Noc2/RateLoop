@@ -464,9 +464,13 @@ async function requireWorkspaceAccess(accountAddress: string, workspaceId: strin
 
 export async function getWorkspaceEvaluationDashboard(input: {
   accountAddress: string;
+  requestedProjectId?: string | null;
+  requestedRunId?: string | null;
   workspaceId: string;
 }): Promise<EvaluationDashboard> {
   const access = await requireWorkspaceAccess(input.accountAddress, input.workspaceId);
+  const requestedProjectId = input.requestedProjectId?.trim().slice(0, 256) || null;
+  const requestedRunId = input.requestedRunId?.trim().slice(0, 256) || null;
   const [
     registry,
     runResult,
@@ -483,7 +487,31 @@ export async function getWorkspaceEvaluationDashboard(input: {
   ] = await Promise.all([
     listWorkspaceAgents(input),
     dbClient.execute({
-      sql: `SELECT r.run_id, r.project_id, r.status, r.created_at, r.completed_at,
+      sql: `WITH recent_runs AS (
+              SELECT r.run_id
+              FROM tokenless_assurance_runs r
+              JOIN tokenless_assurance_projects p ON p.project_id=r.project_id
+              WHERE p.workspace_id=? AND p.status<>'deleted'
+              ORDER BY r.created_at DESC LIMIT 100
+            ),
+            requested_project_runs AS (
+              SELECT r.run_id
+              FROM tokenless_assurance_runs r
+              JOIN tokenless_assurance_projects p ON p.project_id=r.project_id
+              WHERE p.workspace_id=? AND p.status<>'deleted' AND p.project_id=?
+              ORDER BY r.created_at DESC LIMIT 100
+            ),
+            selected_runs AS (
+              SELECT run_id FROM recent_runs
+              UNION
+              SELECT r.run_id
+              FROM tokenless_assurance_runs r
+              JOIN tokenless_assurance_projects p ON p.project_id=r.project_id
+              WHERE p.workspace_id=? AND p.status<>'deleted' AND r.run_id=?
+              UNION
+              SELECT run_id FROM requested_project_runs
+            )
+            SELECT r.run_id, r.project_id, r.status, r.created_at, r.completed_at,
                    p.name AS project_name, s.name AS suite_name,
                    ap.reviewer_source, ap.compensation, ap.buyer_privacy_json,
                    d.decision AS client_decision, ep.packet_id, ep.packet_digest,
@@ -493,7 +521,8 @@ export async function getWorkspaceEvaluationDashboard(input: {
                    attribution_scope.risk_tier AS attribution_risk_tier,
                    mh.non_gold_case_count,mh.unanimous_case_count,mh.rbts_score_variance_bps2,
                    mh.gold_outcome_count,mh.gold_failure_count,mh.comparable_drift_bps
-            FROM tokenless_assurance_runs r
+            FROM selected_runs selected
+            JOIN tokenless_assurance_runs r ON r.run_id=selected.run_id
             JOIN tokenless_assurance_projects p ON p.project_id = r.project_id
             JOIN tokenless_assurance_suites s ON s.suite_id = r.suite_id AND s.version = r.suite_version
             JOIN tokenless_assurance_audience_policies ap
@@ -507,17 +536,33 @@ export async function getWorkspaceEvaluationDashboard(input: {
               ON attribution_scope.workspace_id=attribution_opportunity.workspace_id
              AND attribution_scope.scope_id=attribution_opportunity.scope_id
             LEFT JOIN tokenless_assurance_mechanism_health mh ON mh.run_id = r.run_id
-            WHERE p.workspace_id = ? AND p.status <> 'deleted'
-            ORDER BY r.created_at DESC LIMIT 100`,
-      args: [input.workspaceId],
+            ORDER BY r.created_at DESC`,
+      args: [input.workspaceId, input.workspaceId, requestedProjectId, input.workspaceId, requestedRunId],
     }),
     dbClient.execute({
-      sql: `WITH selected_runs AS (
+      sql: `WITH recent_runs AS (
               SELECT r.run_id
               FROM tokenless_assurance_runs r
               JOIN tokenless_assurance_projects p ON p.project_id = r.project_id
               WHERE p.workspace_id = ? AND p.status <> 'deleted'
               ORDER BY r.created_at DESC LIMIT 100
+            ),
+            requested_project_runs AS (
+              SELECT r.run_id
+              FROM tokenless_assurance_runs r
+              JOIN tokenless_assurance_projects p ON p.project_id=r.project_id
+              WHERE p.workspace_id=? AND p.status<>'deleted' AND p.project_id=?
+              ORDER BY r.created_at DESC LIMIT 100
+            ),
+            selected_runs AS (
+              SELECT run_id FROM recent_runs
+              UNION
+              SELECT r.run_id
+              FROM tokenless_assurance_runs r
+              JOIN tokenless_assurance_projects p ON p.project_id=r.project_id
+              WHERE p.workspace_id=? AND p.status<>'deleted' AND r.run_id=?
+              UNION
+              SELECT run_id FROM requested_project_runs
             )
             SELECT selected_runs.run_id,
                    COUNT(CASE WHEN resp.validity = 'valid' THEN 1 END) AS valid_responses,
@@ -531,15 +576,32 @@ export async function getWorkspaceEvaluationDashboard(input: {
               ON gold.run_id=resp.run_id AND gold.case_id=resp.case_id
             WHERE gold.case_id IS NULL
             GROUP BY selected_runs.run_id`,
-      args: [input.workspaceId],
+      args: [input.workspaceId, input.workspaceId, requestedProjectId, input.workspaceId, requestedRunId],
     }),
     dbClient.execute({
-      sql: `WITH selected_runs AS (
+      sql: `WITH recent_runs AS (
               SELECT r.run_id
               FROM tokenless_assurance_runs r
               JOIN tokenless_assurance_projects p ON p.project_id = r.project_id
               WHERE p.workspace_id = ? AND p.status <> 'deleted'
               ORDER BY r.created_at DESC LIMIT 100
+            ),
+            requested_project_runs AS (
+              SELECT r.run_id
+              FROM tokenless_assurance_runs r
+              JOIN tokenless_assurance_projects p ON p.project_id=r.project_id
+              WHERE p.workspace_id=? AND p.status<>'deleted' AND p.project_id=?
+              ORDER BY r.created_at DESC LIMIT 100
+            ),
+            selected_runs AS (
+              SELECT run_id FROM recent_runs
+              UNION
+              SELECT r.run_id
+              FROM tokenless_assurance_runs r
+              JOIN tokenless_assurance_projects p ON p.project_id=r.project_id
+              WHERE p.workspace_id=? AND p.status<>'deleted' AND r.run_id=?
+              UNION
+              SELECT run_id FROM requested_project_runs
             )
             SELECT selected_runs.run_id,
                    COUNT(rc.case_id) FILTER (WHERE gold.case_id IS NULL) AS case_count,
@@ -551,7 +613,7 @@ export async function getWorkspaceEvaluationDashboard(input: {
             LEFT JOIN tokenless_assurance_run_gold_items gold
               ON gold.run_id=rc.run_id AND gold.case_id=rc.case_id
             GROUP BY selected_runs.run_id`,
-      args: [input.workspaceId],
+      args: [input.workspaceId, input.workspaceId, requestedProjectId, input.workspaceId, requestedRunId],
     }),
     access.canManage
       ? listAgentPublishingPolicies({ accountAddress: access.address, workspaceId: input.workspaceId })

@@ -57,6 +57,7 @@ export async function AgentsSectionPage({
           workspaceId: requestedWorkspaceId,
           step: requestedStep,
           evidence: requestedEvidence,
+          searchParams,
         })}
       />
     );

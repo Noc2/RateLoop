@@ -57,7 +57,7 @@ function installFetch(runs: Record<string, unknown>[]) {
   const previousFetch = globalThis.fetch;
   globalThis.fetch = async input => {
     const url = String(input);
-    if (url.endsWith("/evaluations")) return Response.json(dashboard(runs));
+    if (url.includes("/evaluations")) return Response.json(dashboard(runs));
     if (url.endsWith("/assurance/runs/run-evidence-1/evidence")) return Response.json(evidencePacket);
     if (url.endsWith("/assurance/runs/run-evidence-2/evidence")) return Response.json(secondEvidencePacket);
     if (url.includes("/assurance/attestations?")) return Response.json({ attestations: [] });

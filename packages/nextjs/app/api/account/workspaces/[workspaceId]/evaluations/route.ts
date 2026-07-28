@@ -12,8 +12,15 @@ export async function GET(request: NextRequest, context: Context) {
   try {
     const session = await requireBrowserSession(request);
     const { workspaceId } = await context.params;
+    const requestedProjectId = request.nextUrl.searchParams.get("project");
+    const requestedRunId = request.nextUrl.searchParams.get("run");
     return NextResponse.json(
-      await getWorkspaceEvaluationDashboard({ accountAddress: session.principalId, workspaceId }),
+      await getWorkspaceEvaluationDashboard({
+        accountAddress: session.principalId,
+        requestedProjectId,
+        requestedRunId,
+        workspaceId,
+      }),
       {
         headers: { "Cache-Control": "private, no-store, max-age=0" },
       },

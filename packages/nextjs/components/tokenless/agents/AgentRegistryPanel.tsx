@@ -20,11 +20,15 @@ export function AgentRegistryPanel({
   agentRevision = 0,
   onAgentsChanged,
   connectionHistory = [],
+  selectedAgentId = null,
+  selectedVersionId = null,
 }: {
   workspaceId: string;
   agentRevision?: number;
   onAgentsChanged?: () => void;
   connectionHistory?: readonly AgentConnectionHistoryEntry[];
+  selectedAgentId?: string | null;
+  selectedVersionId?: string | null;
 }) {
   const [registry, setRegistry] = useState<AgentRegistry | null>(null);
   const [editingAgent, setEditingAgent] = useState<WorkspaceAgent | null>(null);
@@ -67,6 +71,13 @@ export function AgentRegistryPanel({
     })();
     return () => controller.abort();
   }, [agentRevision, loadRegistry, workspaceId]);
+
+  useEffect(() => {
+    if (loading || !selectedAgentId || !registry?.agents.some(agent => agent.agentId === selectedAgentId)) return;
+    const selected = document.getElementById(`registered-agent-${selectedAgentId}`);
+    selected?.focus({ preventScroll: true });
+    selected?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+  }, [loading, registry, selectedAgentId]);
 
   async function createVersion(input: AgentVersionInput) {
     if (!editingAgent) return;
@@ -121,7 +132,9 @@ export function AgentRegistryPanel({
 
   const agents = registry?.agents ?? [];
   const archivedAgentCount = agents.filter(agent => agent.status === "inactive").length;
-  const visibleAgents = showArchived ? agents : agents.filter(agent => agent.status === "active");
+  const visibleAgents = showArchived
+    ? agents
+    : agents.filter(agent => agent.status === "active" || agent.agentId === selectedAgentId);
   const auditEntries = mergeAgentAuditHistory(visibleAgents, connectionHistory);
 
   return (
@@ -131,85 +144,112 @@ export function AgentRegistryPanel({
       </AsyncSection>
 
       <div className="space-y-4">
-        {visibleAgents.map(agent => (
-          <Card as="article" key={agent.agentId} className="rounded-2xl p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="font-semibold">{agent.currentVersion.displayName}</h2>
-                  <Badge variant={agent.status === "active" ? "success" : "neutral"}>{agent.status}</Badge>
+        {visibleAgents.map(agent => {
+          const selected = agent.agentId === selectedAgentId;
+          const selectedVersion = selected
+            ? (agent.versions.find(version => version.versionId === selectedVersionId) ?? agent.currentVersion)
+            : null;
+          return (
+            <Card
+              as="article"
+              key={agent.agentId}
+              id={`registered-agent-${agent.agentId}`}
+              tabIndex={selected ? -1 : undefined}
+              className={`rounded-2xl p-5 ${selected ? "ring-1 ring-[var(--rateloop-blue)]" : ""}`}
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="font-semibold">{agent.currentVersion.displayName}</h2>
+                    <Badge variant={agent.status === "active" ? "success" : "neutral"}>{agent.status}</Badge>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="mt-3 space-y-4 border-t border-white/10 pt-3">
-              {registry?.canManage && agent.status === "active" ? (
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    disabled={busy}
-                    onClick={() => setEditingAgent(current => (current?.agentId === agent.agentId ? null : agent))}
-                  >
-                    Change workflow version
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="text-error"
-                    disabled={busy}
-                    onClick={() => setPendingDeactivation(agent)}
-                  >
-                    Deactivate
-                  </Button>
+              {selectedVersion ? (
+                <div className="mt-3 rounded-xl bg-[var(--rateloop-blue)]/10 p-3 text-sm" role="status">
+                  <strong>Selected workflow version {selectedVersion.versionNumber}</strong>
+                  <p className="mt-1 text-base-content/65">
+                    {selectedVersion.declaredProvider} {selectedVersion.declaredModel}
+                    {selectedVersion.declaredModelVersion ? ` ${selectedVersion.declaredModelVersion}` : ""} ·{" "}
+                    {selectedVersion.environment}
+                  </p>
+                  <code className="mt-2 block break-all text-[11px] text-base-content/55">
+                    {selectedVersion.versionId}
+                  </code>
                 </div>
               ) : null}
+              <div className="mt-3 space-y-4 border-t border-white/10 pt-3">
+                {registry?.canManage && agent.status === "active" ? (
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={busy}
+                      onClick={() => setEditingAgent(current => (current?.agentId === agent.agentId ? null : agent))}
+                    >
+                      Change workflow version
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="text-error"
+                      disabled={busy}
+                      onClick={() => setPendingDeactivation(agent)}
+                    >
+                      Deactivate
+                    </Button>
+                  </div>
+                ) : null}
 
-              {editingAgent?.agentId === agent.agentId && registry?.canManage ? (
-                <section
-                  className="surface-card-nested rounded-xl p-4"
-                  aria-labelledby={`new-version-${agent.agentId}`}
-                >
-                  <h3 id={`new-version-${agent.agentId}`} className="font-semibold">
-                    Change workflow version
-                  </h3>
-                  <div className="mt-4">
-                    <AgentVersionForm
-                      key={editingAgent.currentVersion.versionId}
-                      current={editingAgent.currentVersion}
-                      busy={busy}
-                      submitLabel="Save workflow version"
-                      onSubmit={createVersion}
-                    />
-                  </div>
-                </section>
-              ) : null}
-
-              <details>
-                <summary className="cursor-pointer text-sm font-medium text-base-content/65">Technical details</summary>
-                <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                  <div>
-                    <dt className="text-xs text-base-content/55">External ID</dt>
-                    <dd className="mt-1 break-all font-mono text-xs">{agent.externalId}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-base-content/55">Environment</dt>
-                    <dd className="mt-1 capitalize">{agent.currentVersion.environment}</dd>
-                  </div>
-                  {agent.ownerAccountAddress ? (
-                    <div>
-                      <dt className="text-xs text-base-content/55">Owner</dt>
-                      <dd className="mt-1 font-mono text-xs" title={agent.ownerAccountAddress}>
-                        {shortAddress(agent.ownerAccountAddress)}
-                      </dd>
+                {editingAgent?.agentId === agent.agentId && registry?.canManage ? (
+                  <section
+                    className="surface-card-nested rounded-xl p-4"
+                    aria-labelledby={`new-version-${agent.agentId}`}
+                  >
+                    <h3 id={`new-version-${agent.agentId}`} className="font-semibold">
+                      Change workflow version
+                    </h3>
+                    <div className="mt-4">
+                      <AgentVersionForm
+                        key={editingAgent.currentVersion.versionId}
+                        current={editingAgent.currentVersion}
+                        busy={busy}
+                        submitLabel="Save workflow version"
+                        onSubmit={createVersion}
+                      />
                     </div>
-                  ) : null}
-                </dl>
-              </details>
-            </div>
-          </Card>
-        ))}
+                  </section>
+                ) : null}
+
+                <details>
+                  <summary className="cursor-pointer text-sm font-medium text-base-content/65">
+                    Technical details
+                  </summary>
+                  <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                    <div>
+                      <dt className="text-xs text-base-content/55">External ID</dt>
+                      <dd className="mt-1 break-all font-mono text-xs">{agent.externalId}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-base-content/55">Environment</dt>
+                      <dd className="mt-1 capitalize">{agent.currentVersion.environment}</dd>
+                    </div>
+                    {agent.ownerAccountAddress ? (
+                      <div>
+                        <dt className="text-xs text-base-content/55">Owner</dt>
+                        <dd className="mt-1 font-mono text-xs" title={agent.ownerAccountAddress}>
+                          {shortAddress(agent.ownerAccountAddress)}
+                        </dd>
+                      </div>
+                    ) : null}
+                  </dl>
+                </details>
+              </div>
+            </Card>
+          );
+        })}
       </div>
 
       {!loading && archivedAgentCount > 0 ? (

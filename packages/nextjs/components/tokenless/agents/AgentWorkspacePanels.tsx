@@ -51,7 +51,9 @@ export function AgentWorkspacePanels({
   }>({ workspaceId, entries: [] });
   const [agentManagementWorkspaceId, setAgentManagementWorkspaceId] = useState<string | null>(null);
   const connectionHistory = connectionHistoryState.workspaceId === workspaceId ? connectionHistoryState.entries : [];
-  const showAgentManagement = agentManagementWorkspaceId === workspaceId;
+  const selectedAgentId = (searchParams.get("agent") ?? "").trim().slice(0, 256) || null;
+  const selectedVersionId = (searchParams.get("version") ?? "").trim().slice(0, 256) || null;
+  const showAgentManagement = agentManagementWorkspaceId === workspaceId || selectedAgentId !== null;
 
   const handleConnectionState = useCallback(() => refreshAgents(), []);
   const handleConnectionHistoryChange = useCallback(
@@ -158,6 +160,8 @@ export function AgentWorkspacePanels({
                   workspaceId={workspaceId}
                   agentRevision={agentRevision}
                   connectionHistory={connectionHistory}
+                  selectedAgentId={selectedAgentId}
+                  selectedVersionId={selectedVersionId}
                   onAgentsChanged={refreshAgents}
                 />
               </div>

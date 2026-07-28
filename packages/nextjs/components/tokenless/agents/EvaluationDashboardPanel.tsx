@@ -790,8 +790,12 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
       setError(null);
       setMetricsError(false);
       try {
+        const requestedSelection = new URLSearchParams();
+        if (urlState.runId) requestedSelection.set("run", urlState.runId);
+        if (urlState.projectId) requestedSelection.set("project", urlState.projectId);
+        const requestedSearch = requestedSelection.size ? `?${requestedSelection.toString()}` : "";
         const body = await readJson(
-          await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/evaluations`, {
+          await fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/evaluations${requestedSearch}`, {
             cache: "no-store",
             credentials: "same-origin",
             signal: controller.signal,
@@ -824,7 +828,7 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
       }
     })();
     return () => controller.abort();
-  }, [workspaceId]);
+  }, [urlState.projectId, urlState.runId, workspaceId]);
 
   const agentOptions = useMemo(() => {
     if (!dashboard) return [];
@@ -855,6 +859,7 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
     return dashboard.runs
       .filter(run => {
         if (urlState.runId && run.runId !== urlState.runId) return false;
+        if (urlState.projectId && run.projectId !== urlState.projectId) return false;
         if (
           query &&
           ![
@@ -896,6 +901,7 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
 
   const filtersActive =
     urlState.query !== "" ||
+    urlState.projectId !== "" ||
     urlState.agentId !== "" ||
     urlState.workflowKey !== "" ||
     urlState.status !== "all" ||

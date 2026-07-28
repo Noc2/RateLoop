@@ -37,3 +37,9 @@ test("site search includes canonical tasks and core pages", () => {
   assert.equal(searchSite("pricing")[0]?.href, "/pricing");
   assert.deepEqual(searchSite(""), []);
 });
+
+test("site search keeps public documentation results and emits each URL once", () => {
+  const results = searchSite("review", 100);
+  assert.ok(results.some(result => result.area === "Docs"));
+  assert.equal(new Set(results.map(result => result.href)).size, results.length);
+});

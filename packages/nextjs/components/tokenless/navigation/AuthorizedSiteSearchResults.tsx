@@ -1,0 +1,39 @@
+import Link from "next/link";
+import type { AuthorizedSiteSearchResult } from "~~/lib/search/authorizedSiteSearch";
+
+export function AuthorizedSiteSearchResults({ results }: { results: readonly AuthorizedSiteSearchResult[] }) {
+  if (results.length === 0) return null;
+
+  return (
+    <section aria-labelledby="authorized-results-heading" className="mt-8">
+      <div className="flex items-center justify-between gap-4">
+        <h2 id="authorized-results-heading" className="text-xl font-semibold text-base-content">
+          Your workspace data
+        </h2>
+        <span className="font-mono text-xs text-base-content/55">
+          {results.length} {results.length === 1 ? "result" : "results"}
+        </span>
+      </div>
+      <div className="mt-4 space-y-2">
+        {results.map(result => (
+          <Link
+            key={`${result.area}-${result.href}`}
+            href={result.href}
+            prefetch={false}
+            className="surface-card group block rounded-xl px-4 py-3 transition-colors hover:border-base-content/20 hover:bg-base-content/[0.04]"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="font-semibold text-base-content transition-colors group-hover:text-[var(--rateloop-blue)]">
+                {result.title}
+              </h3>
+              <span className="shrink-0 rounded-full bg-base-content/[0.08] px-2 py-1 font-mono text-[0.65rem] uppercase tracking-wider text-base-content/55">
+                {result.area}
+              </span>
+            </div>
+            <p className="mt-1 text-sm leading-6 text-base-content/60">{result.description}</p>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}

@@ -17,6 +17,7 @@ import test from "node:test";
 
 const panelsSource = readFileSync(new URL("./AgentWorkspacePanels.tsx", import.meta.url), "utf8");
 const tabsSource = readFileSync(new URL("./AgentTabs.tsx", import.meta.url), "utf8");
+const registrySource = readFileSync(new URL("./AgentRegistryPanel.tsx", import.meta.url), "utf8");
 const editorSource = readFileSync(new URL("./AgentHumanReviewEditor.tsx", import.meta.url), "utf8");
 const reviewerInvitationSource = readFileSync(new URL("./ReviewerInvitationStart.tsx", import.meta.url), "utf8");
 const pageSource = readFileSync(new URL("../../../app/(app)/agents/AgentsSectionPage.tsx", import.meta.url), "utf8");
@@ -167,6 +168,17 @@ test("connected navigation splits the owner stack into URL-backed task tabs", ()
     "/agents/evidence?workspace=workspace+one&q=release&outcome=fail&date=30&run=run+one&packet=packet+one",
   );
   assert.equal(
+    agentSignInReturnTo({
+      tab: "connect",
+      searchParams: {
+        workspace: "workspace one",
+        agent: "agent one",
+        version: "version one",
+      },
+    }),
+    "/agents/connections?workspace=workspace+one&agent=agent+one&version=version+one",
+  );
+  assert.equal(
     legacyAgentRouteHref({
       billing: "success",
       date: "30",
@@ -197,6 +209,16 @@ test("agent sections use normal route links instead of tab-widget semantics", ()
   assert.match(tabsSource, /href=\{agentTabHref\(/);
   assert.doesNotMatch(tabsSource, /role="tablist"|role="tab"|aria-selected=|tabIndex=/);
   assert.doesNotMatch(panelsSource, /role="tabpanel"|aria-labelledby=\{`agent-tab-/);
+});
+
+test("registered-agent search links open and focus the exact workflow version", () => {
+  assert.match(panelsSource, /searchParams\.get\("agent"\)/);
+  assert.match(panelsSource, /searchParams\.get\("version"\)/);
+  assert.match(panelsSource, /selectedAgentId=\{selectedAgentId\}/);
+  assert.match(panelsSource, /selectedVersionId=\{selectedVersionId\}/);
+  assert.match(registrySource, /agent\.versions\.find\(version => version\.versionId === selectedVersionId\)/);
+  assert.match(registrySource, /registered-agent-\$\{selectedAgentId\}/);
+  assert.match(registrySource, /Selected workflow version/);
 });
 
 test("the active workspace selector keeps a stable row and preserves the current tab", () => {

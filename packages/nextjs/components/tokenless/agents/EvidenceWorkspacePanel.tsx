@@ -340,6 +340,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
   const [error, setError] = useState<string | null>(null);
   const [busyPacket, setBusyPacket] = useState<string | null>(null);
   const [showAdvancedControls, setShowAdvancedControls] = useState(false);
+  const [urlReady, setUrlReady] = useState(false);
   const [urlSnapshot, setUrlSnapshot] = useState<EvidenceUrlSnapshot>(() => {
     const params = new URLSearchParams();
     if (workspaceId) params.set("workspace", workspaceId);
@@ -352,6 +353,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
   });
   const [deliveryKind, setDeliveryKind] = useState<EvidenceDeliveryKind | null>(null);
   const { date: dateFilter, outcome: outcomeFilter, query: packetQuery } = urlSnapshot.state;
+  const requestedRunId = urlSnapshot.state.runId;
 
   const updateUrlState = useCallback((patch: Partial<EvidenceUrlState>, mode: "push" | "replace" = "replace") => {
     const href = evidenceUrlHref({
@@ -371,13 +373,15 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
   }, []);
 
   useEffect(() => {
-    const restoreUrlState = () =>
+    const restoreUrlState = () => {
       setUrlSnapshot({
         pathname: window.location.pathname,
         search: window.location.search.slice(1),
         hash: window.location.hash,
         state: parseEvidenceUrlState(window.location.search),
       });
+      setUrlReady(true);
+    };
     restoreUrlState();
     window.addEventListener("popstate", restoreUrlState);
     return () => window.removeEventListener("popstate", restoreUrlState);
@@ -388,8 +392,9 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
     setError(null);
     try {
       const base = `/api/account/workspaces/${encodeURIComponent(workspaceId)}`;
+      const requestedRun = requestedRunId ? `?run=${encodeURIComponent(requestedRunId)}` : "";
       const dashboard = await readJson<EvaluationDashboard>(
-        await fetch(`${base}/evaluations`, { cache: "no-store", credentials: "same-origin" }),
+        await fetch(`${base}/evaluations${requestedRun}`, { cache: "no-store", credentials: "same-origin" }),
       );
       const packetRows = await Promise.all(
         dashboard.runs
@@ -431,11 +436,11 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
     } finally {
       setLoading(false);
     }
-  }, [canManage, workspaceId]);
+  }, [canManage, requestedRunId, workspaceId]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (urlReady) void load();
+  }, [load, urlReady]);
 
   const attestationByDigest = useMemo(
     () => new Map(attestations.map(attestation => [attestation.artifactDigest, attestation])),

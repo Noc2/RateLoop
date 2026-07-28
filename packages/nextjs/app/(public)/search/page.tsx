@@ -1,7 +1,11 @@
+import { cookies } from "next/headers";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
+import { AuthorizedSiteSearchResults } from "~~/components/tokenless/navigation/AuthorizedSiteSearchResults";
 import { SiteSearchResults } from "~~/components/tokenless/navigation/SiteSearchResults";
+import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
+import { type AuthorizedSiteSearchResult, searchAuthorizedSiteData } from "~~/lib/search/authorizedSiteSearch";
 
 export const metadata: Metadata = {
   title: "Search",
@@ -12,10 +16,13 @@ function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function SearchPage({ searchParams }: { searchParams: Promise<{ q?: string | string[] }> }) {
-  const params = await searchParams;
-  const query = (first(params.q) ?? "").trim().slice(0, 120);
-
+export function SearchPageContent({
+  authorizedResults,
+  query,
+}: {
+  authorizedResults: readonly AuthorizedSiteSearchResult[];
+  query: string;
+}) {
   return (
     <AppPageShell outerClassName="pb-8" contentClassName="pt-6 sm:pt-10">
       <header>
@@ -33,6 +40,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
 
       {query ? (
         <>
+          <AuthorizedSiteSearchResults results={authorizedResults} />
           <SiteSearchResults query={query} />
           <section aria-labelledby="review-work-heading" className="mt-10">
             <div className="flex items-center justify-between gap-4">
@@ -62,4 +70,15 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
       )}
     </AppPageShell>
   );
+}
+
+export default async function SearchPage({ searchParams }: { searchParams: Promise<{ q?: string | string[] }> }) {
+  const params = await searchParams;
+  const query = (first(params.q) ?? "").trim().slice(0, 120);
+  const session = query ? await findAuthSession((await cookies()).get(AUTH_SESSION_COOKIE)?.value) : null;
+  const authorizedResults = session
+    ? await searchAuthorizedSiteData({ accountAddress: session.principalId, query })
+    : [];
+
+  return <SearchPageContent authorizedResults={authorizedResults} query={query} />;
 }

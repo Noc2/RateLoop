@@ -3,6 +3,7 @@ export type EvaluationDateFilter = "all" | "7" | "30";
 
 export type EvaluationUrlState = {
   query: string;
+  projectId: string;
   agentId: string;
   workflowKey: string;
   status: EvaluationStatusFilter;
@@ -12,6 +13,7 @@ export type EvaluationUrlState = {
 
 export const DEFAULT_EVALUATION_URL_STATE: EvaluationUrlState = {
   query: "",
+  projectId: "",
   agentId: "",
   workflowKey: "",
   status: "all",
@@ -39,6 +41,7 @@ export function parseEvaluationUrlState(search: string | URLSearchParams): Evalu
 
   return {
     query: bounded(params.get("resultQ"), 120),
+    projectId: bounded(params.get("resultProject"), 256),
     agentId: bounded(params.get("resultAgent"), 256),
     workflowKey: bounded(params.get("resultWorkflow"), 256),
     status: requestedStatus && statuses.has(requestedStatus) ? requestedStatus : "all",
@@ -54,6 +57,10 @@ export function updateEvaluationUrlSearch(search: string | URLSearchParams, patc
   const query = bounded(state.query, 120);
   if (query) params.set("resultQ", query);
   else params.delete("resultQ");
+
+  const projectId = bounded(state.projectId, 256);
+  if (projectId) params.set("resultProject", projectId);
+  else params.delete("resultProject");
 
   const agentId = bounded(state.agentId, 256);
   if (agentId) params.set("resultAgent", agentId);

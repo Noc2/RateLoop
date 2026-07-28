@@ -407,9 +407,14 @@ export function searchSite(query: string, limit = 12): SiteSearchEntry[] {
   if (!normalizedQuery) return [];
   const terms = normalizedQuery.split(/\s+/);
 
+  const seenHrefs = new Set<string>();
   return SITE_SEARCH_INDEX.map((entry, index) => ({ entry, index, score: score(entry, terms, normalizedQuery) }))
     .filter(result => result.score >= 0)
     .sort((left, right) => right.score - left.score || left.index - right.index)
-    .slice(0, limit)
-    .map(result => result.entry);
+    .flatMap(result => {
+      if (seenHrefs.has(result.entry.href)) return [];
+      seenHrefs.add(result.entry.href);
+      return [result.entry];
+    })
+    .slice(0, limit);
 }

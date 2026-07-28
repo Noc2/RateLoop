@@ -162,8 +162,10 @@ export function agentSignInReturnTo(input: {
   workspaceId?: string;
   step?: string;
   evidence?: EvidenceUrlState;
+  searchParams?: NavigationSearchParams;
 }) {
-  const params = new URLSearchParams();
+  const params = navigationSearchParams(input.searchParams);
+  params.delete("tab");
   if (input.returning === "oauth") params.set("returning", input.returning);
   if (input.workspaceId) params.set("workspace", input.workspaceId);
   if (input.step) params.set("step", input.step);
