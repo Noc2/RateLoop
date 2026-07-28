@@ -19,19 +19,38 @@ const OWNER = "0x1111111111111111111111111111111111111111";
 const REVIEWER = "0x2222222222222222222222222222222222222222";
 const SECOND_REVIEWER = "0x3333333333333333333333333333333333333333";
 const OUTSIDER = "0x4444444444444444444444444444444444444444";
+const UNVERIFIED_REVIEWER = "0x5555555555555555555555555555555555555555";
 const OPAQUE_REVIEWER = "rlp_private_group_reviewer_0001";
 
 beforeEach(() => __setDatabaseResourcesForTests(createMemoryDatabaseResources()));
 afterEach(() => __setDatabaseResourcesForTests(null));
 
-async function identity(address: string, email: string) {
+// Mirrors what production actually writes: `lib/auth/principal.ts` never populates
+// `tokenless_browser_identities.primary_email` or `.email_verified`; the verified email lives in
+// `tokenless_better_auth_users`, reached through `tokenless_identity_bindings`.
+async function identity(address: string, email: string, input: { emailVerified?: boolean } = {}) {
   const now = new Date();
   await dbClient.execute({
+    sql: `INSERT INTO tokenless_principals (principal_id, status, created_at, updated_at)
+          VALUES (?, 'active', ?, ?)`,
+    args: [address, now, now],
+  });
+  await dbClient.execute({
     sql: `INSERT INTO tokenless_browser_identities
-          (principal_address, thirdweb_user_id, auth_provider, primary_email, email_verified,
-           email_domain, display_name, created_at, updated_at, last_login_at)
-          VALUES (?, ?, 'email', ?, true, ?, ?, ?, ?, ?)`,
-    args: [address, `thirdweb-${address}`, email, email.split("@")[1], email.split("@")[0], now, now, now],
+          (principal_address, auth_provider, email_verified, display_name, created_at, updated_at, last_login_at)
+          VALUES (?, 'better_auth', false, ?, ?, ?, ?)`,
+    args: [address, email.split("@")[0], now, now, now],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_better_auth_users (id, name, email, email_verified, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?)`,
+    args: [`bau_${address}`, email.split("@")[0], email, input.emailVerified ?? true, now, now],
+  });
+  await dbClient.execute({
+    sql: `INSERT INTO tokenless_identity_bindings
+          (binding_id, principal_id, provider, provider_subject, status, created_at, last_used_at)
+          VALUES (?, ?, 'better_auth', ?, 'active', ?, ?)`,
+    args: [`idb_${address}`, address, `bau_${address}`, now, now],
   });
 }
 
@@ -172,6 +191,43 @@ test("invitations persist only a hash, enforce verified bindings, and grant memb
     args: [invitation.invitationId],
   });
   assert.equal(Number(count.rows[0]?.redemption_count), 2);
+});
+
+test("email-bound invitations read the Better Auth verified address, not the legacy identity columns", async () => {
+  const { workspaceId, group } = await fixture();
+  await identity(UNVERIFIED_REVIEWER, "unverified@example.com", { emailVerified: false });
+  const invitation = await createPrivateGroupInvitation({
+    accountAddress: OWNER,
+    workspaceId,
+    groupId: group.groupId,
+    intendedEmail: "reviewer@example.com",
+  });
+  const stored = await dbClient.execute({
+    sql: "SELECT intended_email_hash FROM tokenless_private_group_invitations WHERE invitation_id = ?",
+    args: [invitation.invitationId],
+  });
+  assert.match(String(stored.rows[0]?.intended_email_hash), /^[a-f0-9]{64}$/);
+
+  const preview = await previewPrivateGroupInvitation({ accountAddress: REVIEWER, token: invitation.token });
+  assert.equal(preview.groupId, group.groupId);
+  const redemption = await redeemPrivateGroupInvitation({ accountAddress: REVIEWER, token: invitation.token });
+  assert.equal(redemption.replay, false);
+
+  await assert.rejects(
+    () => redeemPrivateGroupInvitation({ accountAddress: SECOND_REVIEWER, token: invitation.token }),
+    /not available to this account/i,
+  );
+
+  const domainInvitation = await createPrivateGroupInvitation({
+    accountAddress: OWNER,
+    workspaceId,
+    groupId: group.groupId,
+    intendedEmailDomain: "example.com",
+  });
+  await assert.rejects(
+    () => redeemPrivateGroupInvitation({ accountAddress: UNVERIFIED_REVIEWER, token: domainInvitation.token }),
+    /not available to this account/i,
+  );
 });
 
 test("account-bound invitations support Better Auth principals without a wallet", async () => {

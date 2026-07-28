@@ -855,6 +855,24 @@ export async function listPrivateGroupInvitations(input: {
   });
 }
 
+// Better Auth owns the verified email, so read it through the identity binding rather than from
+// the legacy `tokenless_browser_identities.primary_email` / `.email_verified` columns, which no
+// production writer ever populates. Reading the legacy columns pinned `email_verified` to false and
+// rejected every email-bound invitation.
+async function verifiedIdentityEmail(client: Pick<Client, "query">, principalAddress: string, lock: boolean) {
+  const result = await client.query(
+    `SELECT u.email, u.email_verified
+     FROM tokenless_identity_bindings b
+     JOIN tokenless_better_auth_users u ON u.id = b.provider_subject
+     WHERE b.principal_id = $1 AND b.provider = 'better_auth' AND b.status = 'active'
+     ORDER BY b.last_used_at DESC LIMIT 1${lock ? " FOR SHARE" : ""}`,
+    [principalAddress],
+  );
+  const row = result.rows[0] as Row | undefined;
+  const email = rowString(row, "email")?.trim().toLowerCase() ?? null;
+  return email && rowBoolean(row, "email_verified") ? email : null;
+}
+
 async function boundInvitation(
   client: Pick<Client, "query">,
   input: {
@@ -891,7 +909,7 @@ async function boundInvitation(
     throw new TokenlessServiceError("Invitation is no longer available.", 410, "private_group_invitation_unavailable");
   }
   const identityResult = await client.query(
-    `SELECT primary_email, email_verified FROM tokenless_browser_identities
+    `SELECT principal_address FROM tokenless_browser_identities
      WHERE principal_address = $1 LIMIT 1${input.lock ? " FOR SHARE" : ""}`,
     [input.accountAddress],
   );
@@ -910,10 +928,10 @@ async function boundInvitation(
   const expectedEmailHash = rowString(invitation, "intended_email_hash");
   const expectedDomain = rowString(invitation, "intended_email_domain");
   if (expectedEmailHash || expectedDomain) {
-    const email = rowString(identity, "primary_email")?.trim().toLowerCase() ?? "";
-    const domain = email.includes("@") ? email.slice(email.lastIndexOf("@") + 1) : "";
+    const email = await verifiedIdentityEmail(client, input.accountAddress, input.lock);
+    const domain = email && email.includes("@") ? email.slice(email.lastIndexOf("@") + 1) : "";
     if (
-      !rowBoolean(identity, "email_verified") ||
+      !email ||
       (expectedEmailHash && digest(`${input.token}\0${email}`) !== expectedEmailHash) ||
       (expectedDomain && domain !== expectedDomain)
     ) {
