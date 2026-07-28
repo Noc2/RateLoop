@@ -1,5 +1,5 @@
 import React from "react";
-import { ModelEvidencePanel } from "./ModelEvidencePanel";
+import { ModelEvidencePanel, modelVolumeCalendarPoints } from "./ModelEvidencePanel";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import test from "node:test";
@@ -126,4 +126,38 @@ test("model evidence renders a profile selector, charts, coverage, and request-l
 
 test("model evidence stays absent until an eligible output reports execution metadata", () => {
   assert.equal(renderToStaticMarkup(<ModelEvidencePanel profiles={[]} />), "");
+});
+
+test("model volume fills exactly fourteen calendar days instead of slicing dates with data", () => {
+  const points = modelVolumeCalendarPoints(
+    [
+      {
+        date: "2026-07-01",
+        executionCount: 9,
+        opportunityCount: 9,
+        reviewRequestedCount: 9,
+        comparableCount: 9,
+        agreementCount: 9,
+      },
+      {
+        date: "2026-07-28",
+        executionCount: 2,
+        opportunityCount: 2,
+        reviewRequestedCount: 1,
+        comparableCount: 1,
+        agreementCount: 1,
+      },
+    ],
+    new Date("2026-07-28T20:00:00.000Z"),
+  );
+
+  assert.equal(points.length, 14);
+  assert.equal(points[0]?.date, "2026-07-15");
+  assert.equal(points[0]?.opportunityCount, 0);
+  assert.equal(points.at(-1)?.date, "2026-07-28");
+  assert.equal(points.at(-1)?.opportunityCount, 2);
+  assert.equal(
+    points.some(point => point.date === "2026-07-01"),
+    false,
+  );
 });

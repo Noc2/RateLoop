@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { SelectField } from "~~/components/tokenless/forms/Field";
 import type {
+  EvaluationModelDailyPoint,
   EvaluationModelExecution,
   EvaluationModelProfile,
   EvaluationModelScope,
@@ -57,8 +58,29 @@ function safeId(value: string) {
   return value.replace(/[^A-Za-z0-9_-]/gu, "-");
 }
 
+export function modelVolumeCalendarPoints(daily: EvaluationModelDailyPoint[], endDate = new Date()) {
+  const end = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate()));
+  if (!Number.isFinite(end.getTime())) throw new Error("The model-volume end date is invalid.");
+  const byDate = new Map(daily.map(point => [point.date, point]));
+  return Array.from({ length: 14 }, (_, index) => {
+    const date = new Date(end);
+    date.setUTCDate(end.getUTCDate() - (13 - index));
+    const key = date.toISOString().slice(0, 10);
+    return (
+      byDate.get(key) ?? {
+        date: key,
+        executionCount: 0,
+        opportunityCount: 0,
+        reviewRequestedCount: 0,
+        comparableCount: 0,
+        agreementCount: 0,
+      }
+    );
+  });
+}
+
 function EvaluationVolumeChart({ profile }: { profile: EvaluationModelProfile }) {
-  const points = profile.daily.slice(-14);
+  const points = modelVolumeCalendarPoints(profile.daily);
   const width = 560;
   const height = 150;
   const left = 12;
@@ -81,7 +103,7 @@ function EvaluationVolumeChart({ profile }: { profile: EvaluationModelProfile })
     <div>
       <h3 className="text-sm font-semibold">Evaluation volume</h3>
       <p className="mt-1 text-xs text-base-content/55">Eligible outputs and human-review requests by day.</p>
-      {points.length > 0 ? (
+      {profile.daily.length > 0 ? (
         <svg
           className="mt-4 h-40 w-full text-[var(--rateloop-blue)]"
           viewBox={`0 0 ${width} ${height}`}
@@ -91,7 +113,7 @@ function EvaluationVolumeChart({ profile }: { profile: EvaluationModelProfile })
           <title id={`${id}-title`}>{`Evaluation volume for ${profileLabel(profile)}`}</title>
           <desc id={`${id}-description`}>
             {totals.opportunities} eligible outputs and {totals.reviewed} human-review requests across {points.length}
-            observed days.
+            calendar days.
           </desc>
           <line
             x1={left}
