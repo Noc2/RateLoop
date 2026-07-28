@@ -14,6 +14,7 @@ import {
 } from "~~/lib/privacy/deletionReconciliation";
 import { processSubjectRequestQueue } from "~~/lib/privacy/lifecycle";
 import { purgeExpiredPrivacyOperations } from "~~/lib/privacy/privacyRetention";
+import { revivePrivacyWorkerFailures } from "~~/lib/privacy/privacyWorkerFailures";
 import { expireWorkspaceDeletionRetentionCategories } from "~~/lib/privacy/workspaceDeletionRetention";
 import { processArtifactDeletionByObjectId } from "~~/lib/tokenless/artifactPrivacy";
 import { processDueAssuranceAttestations } from "~~/lib/tokenless/assuranceAttestationRuntime";
@@ -346,6 +347,7 @@ type MaintenanceProcessors = {
   reconcileDeletionJobs: typeof reconcileWorkspaceDeletionJobs;
   reconcileDeletedAccountPaidAssignmentSeats: typeof reconcileDeletedAccountPaidAssignmentSeats;
   expireDeletedAuthGuards: typeof expireDeletedAuthSubjectGuards;
+  revivePrivacyWorkerFailures: typeof revivePrivacyWorkerFailures;
   processSubjectRequests: typeof processSubjectRequestQueue;
   purgePrivacyOperations: typeof purgeExpiredPrivacyOperations;
   expireWorkspaceDeletionRetention: typeof expireWorkspaceDeletionRetentionCategories;
@@ -427,6 +429,7 @@ const defaultProcessors: MaintenanceProcessors = {
   reconcileDeletionJobs: reconcileWorkspaceDeletionJobs,
   reconcileDeletedAccountPaidAssignmentSeats,
   expireDeletedAuthGuards: expireDeletedAuthSubjectGuards,
+  revivePrivacyWorkerFailures,
   processSubjectRequests: processSubjectRequestQueue,
   purgePrivacyOperations: purgeExpiredPrivacyOperations,
   expireWorkspaceDeletionRetention: expireWorkspaceDeletionRetentionCategories,
@@ -674,6 +677,13 @@ export async function runTokenlessScheduledMaintenance(input: {
       processor: "sweepExpiredPublicMedia",
       run: () => processors.sweepExpiredPublicMedia({ now, limit: workLimit }),
       fallback: { deleted: 0, failed: [] } as Awaited<ReturnType<MaintenanceProcessors["sweepExpiredPublicMedia"]>>,
+    });
+    // Runs before both privacy queues so work revived this tick is picked up immediately.
+    const revivedPrivacyWork = await runIsolatedMaintenanceProcessor({
+      failures: processorFailures,
+      processor: "revivePrivacyWorkerFailures",
+      run: () => processors.revivePrivacyWorkerFailures(now),
+      fallback: { revived: 0 } as Awaited<ReturnType<MaintenanceProcessors["revivePrivacyWorkerFailures"]>>,
     });
     const subjectRequests = await runIsolatedMaintenanceProcessor({
       failures: processorFailures,
@@ -1084,6 +1094,7 @@ export async function runTokenlessScheduledMaintenance(input: {
       expiredPrivateReviewReservations,
       integrityEpoch,
       integrityPrivateFeatureRetention,
+      revivedPrivacyWork,
       subjectRequests,
       privacyRetention,
       workspaceDeletionRetention,

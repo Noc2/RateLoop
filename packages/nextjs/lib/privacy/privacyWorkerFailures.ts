@@ -6,6 +6,12 @@ import { TokenlessServiceError } from "~~/lib/tokenless/server";
 const MAX_ATTEMPTS = 5;
 const BASE_RETRY_MS = 15 * 60_000;
 const MAX_RETRY_MS = 24 * 60 * 60_000;
+// An item that exhausted its retries gave up on an outage, not on the work itself: the subject
+// request stays 'received' and the retention category stays unfinished, so the work is still owed.
+// Both queues admit only 'retrying' rows, and nothing ever moved a row back, so a dead item meant a
+// data-subject request that silently never completed and never errored. Reviving after a delay
+// bounds the retry rate — a re-failure rewrites last_failed_at — instead of letting it cycle.
+const DEAD_REVIVAL_DELAY_MS = 6 * 60 * 60_000;
 
 export type PrivacyWorkerKind = "subject_request" | "workspace_retention";
 
@@ -34,11 +40,15 @@ export async function recordPrivacyWorkerFailure(input: {
   try {
     await client.query("BEGIN");
     const current = await client.query(
-      `SELECT attempt_count FROM tokenless_privacy_worker_failures
+      `SELECT attempt_count,status FROM tokenless_privacy_worker_failures
        WHERE worker_kind=$1 AND work_item_key=$2 FOR UPDATE`,
       [input.workerKind, input.workItemKey],
     );
-    const previousAttempts = Number((current.rows[0] as Row | undefined)?.attempt_count ?? 0);
+    const currentRow = current.rows[0] as Row | undefined;
+    // A resolved item ran to completion, so the count that preceded it is history. Carrying it
+    // forward would make the next transient failure terminal on its first attempt.
+    const previousAttempts =
+      String(currentRow?.status ?? "") === "resolved" ? 0 : Number(currentRow?.attempt_count ?? 0);
     const attemptCount = Math.min(previousAttempts + 1, MAX_ATTEMPTS);
     const terminal = attemptCount >= MAX_ATTEMPTS;
     const retryDelay = Math.min(BASE_RETRY_MS * 2 ** Math.max(attemptCount - 1, 0), MAX_RETRY_MS);
@@ -72,6 +82,20 @@ export async function recordPrivacyWorkerFailure(input: {
   } finally {
     client.release();
   }
+}
+
+/**
+ * Return work that died during an outage to its queue once the revival delay has passed. The
+ * operator alert is deliberately left pending: a retry is not evidence that the cause is gone.
+ */
+export async function revivePrivacyWorkerFailures(now = new Date()) {
+  const revived = await dbPool.query(
+    `UPDATE tokenless_privacy_worker_failures
+     SET status='retrying',attempt_count=1,next_retry_at=$1,updated_at=$1
+     WHERE status='dead' AND last_failed_at<=$2`,
+    [now, new Date(now.getTime() - DEAD_REVIVAL_DELAY_MS)],
+  );
+  return { revived: revived.rowCount ?? 0 };
 }
 
 export async function resolvePrivacyWorkerFailure(input: {
