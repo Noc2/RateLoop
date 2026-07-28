@@ -272,7 +272,7 @@ test("settled lifecycle evidence creates one privacy-minimal in-app notification
     kind: "paymentUpdates",
     title: "Workspace funds updated",
     body: "A workspace balance update was settled.",
-    href: "/agents?tab=overview",
+    href: "/agents?tab=overview&workspace=workspace-private-name",
     source_type: "payment.settled",
     source_key: "ledger-sensitive-source",
   });
@@ -353,14 +353,14 @@ test("indexed settlement actions create idempotent reveal and claim-expiry notif
       source_type: "settlement.claim_expiring",
       title: "Review payment expiring",
       body: "A review payment is nearing its claim deadline.",
-      href: "/human?tab=earnings",
+      href: "/human?tab=profile&section=paid-settlement",
       preference_key: "paymentUpdates",
     },
     {
       source_type: "settlement.reveal_required",
       title: "Review reveal required",
       body: "Your committed review needs a self-reveal before its recovery deadline.",
-      href: "/human?tab=earnings",
+      href: "/human?tab=profile&section=paid-settlement",
       preference_key: "paymentUpdates",
     },
   ]);
@@ -518,6 +518,10 @@ test("API-key ask results fan out only to active workspace owners and admins", a
     recipients.rows.map(row => row.principal_address),
     [PRINCIPAL, SECOND_PRINCIPAL],
   );
+  const resultLinks = await dbClient.execute({
+    sql: "SELECT DISTINCT href FROM tokenless_notifications WHERE source_type = 'ask.result'",
+  });
+  assert.deepEqual(resultLinks.rows, [{ href: "/agents?tab=evaluations&workspace=workspace-api-result" }]);
   assert.deepEqual(await materializeTokenlessLifecycleNotifications({ now: NOW }), { candidates: 0, inserted: 0 });
 });
 

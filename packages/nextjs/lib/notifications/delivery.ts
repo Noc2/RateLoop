@@ -77,12 +77,25 @@ function interleave<T>(groups: T[][], limit: number) {
   return values;
 }
 
-function rowsToCandidates(rows: readonly Row[], template: Omit<LifecycleCandidate, "principalAddress" | "sourceKey">) {
+function rowsToCandidates(
+  rows: readonly Row[],
+  template: Omit<LifecycleCandidate, "principalAddress" | "sourceKey" | "href"> & {
+    href: string | ((row: Row) => string);
+  },
+) {
   return rows.flatMap(row => {
     const principalAddress = rowString(row, "principal_address");
     const sourceKey = rowString(row, "source_key");
-    return principalAddress && sourceKey ? [{ ...template, principalAddress, sourceKey }] : [];
+    const href = typeof template.href === "function" ? template.href(row) : template.href;
+    return principalAddress && sourceKey ? [{ ...template, href, principalAddress, sourceKey }] : [];
   });
+}
+
+function workspaceHref(row: Row, tab: "overview" | "evaluations") {
+  const query = new URLSearchParams({ tab });
+  const workspaceId = rowString(row, "workspace_id");
+  if (workspaceId) query.set("workspace", workspaceId);
+  return `/agents?${query.toString()}`;
 }
 
 async function loadLifecycleCandidates(
@@ -202,7 +215,7 @@ async function loadLifecycleCandidates(
       args: [perSource],
     }),
     dbClient.execute({
-      sql: `SELECT b.principal_address, e.entry_id AS source_key
+      sql: `SELECT b.principal_address, e.entry_id AS source_key, e.workspace_id
             FROM tokenless_prepaid_ledger_entries e
             JOIN tokenless_workspace_members m ON m.workspace_id = e.workspace_id
             JOIN tokenless_browser_identities b ON b.principal_address = lower(m.account_address)
@@ -215,7 +228,7 @@ async function loadLifecycleCandidates(
       args: [perSource],
     }),
     dbClient.execute({
-      sql: `SELECT b.principal_address, o.operation_key AS source_key
+      sql: `SELECT b.principal_address, o.operation_key AS source_key, o.workspace_id
             FROM tokenless_ask_ownership o
             JOIN tokenless_browser_identities b ON b.principal_address = lower(o.owner_account_address)
             JOIN tokenless_result_publications p ON p.operation_key = o.operation_key
@@ -223,12 +236,12 @@ async function loadLifecycleCandidates(
               ON n.principal_address = b.principal_address
                 AND n.source_type = 'ask.result' AND n.source_key = o.operation_key
             WHERE o.owner_account_address IS NOT NULL AND n.notification_id IS NULL
-            GROUP BY b.principal_address, o.operation_key
+            GROUP BY b.principal_address, o.operation_key, o.workspace_id
             ORDER BY min(p.published_at) ASC LIMIT ?`,
       args: [perSource],
     }),
     dbClient.execute({
-      sql: `SELECT b.principal_address, o.operation_key AS source_key
+      sql: `SELECT b.principal_address, o.operation_key AS source_key, o.workspace_id
             FROM tokenless_ask_ownership o
             JOIN tokenless_workspaces w ON w.workspace_id = o.workspace_id AND w.status = 'active'
             JOIN tokenless_workspace_members m
@@ -239,7 +252,7 @@ async function loadLifecycleCandidates(
               ON n.principal_address = b.principal_address
                 AND n.source_type = 'ask.result' AND n.source_key = o.operation_key
             WHERE o.owner_account_address IS NULL AND n.notification_id IS NULL
-            GROUP BY b.principal_address, o.operation_key
+            GROUP BY b.principal_address, o.operation_key, o.workspace_id
             ORDER BY min(p.published_at) ASC LIMIT ?`,
       args: [perSource],
     }),
@@ -272,21 +285,21 @@ async function loadLifecycleCandidates(
       }),
       rowsToCandidates(payments.rows as Row[], {
         body: "A workspace balance update was settled.",
-        href: "/agents?tab=overview",
+        href: row => workspaceHref(row, "overview"),
         preferenceKey: "paymentUpdates",
         sourceType: "payment.settled",
         title: "Workspace funds updated",
       }),
       rowsToCandidates([...resultRows.values()], {
         body: "A human-assurance result is ready for review.",
-        href: "/agents?tab=evaluations",
+        href: row => workspaceHref(row, "evaluations"),
         preferenceKey: "askResults",
         sourceType: "ask.result",
         title: "Agent result ready",
       }),
       revealNotices.map(candidate => ({
         body: "Your committed review needs a self-reveal before its recovery deadline.",
-        href: "/human?tab=earnings",
+        href: "/human?tab=profile&section=paid-settlement",
         preferenceKey: "paymentUpdates" as const,
         principalAddress: candidate.principalAddress,
         sourceKey: candidate.sourceKey,
@@ -295,7 +308,7 @@ async function loadLifecycleCandidates(
       })),
       claimNotices.map(candidate => ({
         body: "A review payment is nearing its claim deadline.",
-        href: "/human?tab=earnings",
+        href: "/human?tab=profile&section=paid-settlement",
         preferenceKey: "paymentUpdates" as const,
         principalAddress: candidate.principalAddress,
         sourceKey: candidate.sourceKey,
