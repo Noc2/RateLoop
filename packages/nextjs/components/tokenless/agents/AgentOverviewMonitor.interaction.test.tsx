@@ -5,13 +5,36 @@ import { installTestDom } from "~~/components/tokenless/testing/dom";
 
 const overview = {
   window: {
+    period: "30",
     days: 30,
     label: "Last 30 days",
     startsAt: "2026-06-28T12:00:00.000Z",
     endsAt: "2026-07-28T12:00:00.000Z",
   },
+  facets: {
+    selected: {
+      workflow: null,
+      riskTier: null,
+      stage: null,
+      versionId: null,
+    },
+    workflows: [
+      { value: "account-change", label: "account-change" },
+      { value: "refund-review", label: "refund-review" },
+    ],
+    riskTiers: [
+      { value: "high", label: "high" },
+      { value: "normal", label: "normal" },
+    ],
+    stages: [
+      { value: "high_coverage", label: "High coverage" },
+      { value: "monitoring", label: "Monitoring" },
+    ],
+    versions: [{ value: "version-support-3", label: "Support agent · v3" }],
+    optionsTruncated: false,
+  },
   headline: {
-    completedDecisions: 12,
+    completedDecisions: { available: true, count: 12 },
     reviewerEndorsement: {
       available: true,
       rateBps: 7_500,
@@ -245,10 +268,30 @@ test("the overview renders four fixed answers and expands lifetime scope evidenc
   const restoreDom = installTestDom();
   const previousFetch = globalThis.fetch;
   globalThis.fetch = async input => {
-    assert.match(String(input), /\/agents\/overview\?page=\d+$/u);
-    return Response.json(
-      new URL(String(input), "https://rateloop.test").searchParams.get("page") === "2" ? secondPageOverview : overview,
-    );
+    assert.match(String(input), /\/agents\/overview(?:\?|$)/u);
+    const url = new URL(String(input), "https://rateloop.test");
+    const source = url.searchParams.get("page") === "2" ? secondPageOverview : overview;
+    const period = url.searchParams.get("period") ?? "30";
+    return Response.json({
+      ...source,
+      window: {
+        ...source.window,
+        period,
+        days: period === "lifetime" ? null : Number(period),
+        label: period === "lifetime" ? "Lifetime" : `Last ${period} days`,
+        startsAt: period === "lifetime" ? null : source.window.startsAt,
+      },
+      facets: {
+        ...source.facets,
+        selected: {
+          ...source.facets.selected,
+          workflow: url.searchParams.get("overviewWorkflow"),
+          riskTier: url.searchParams.get("overviewRisk"),
+          stage: url.searchParams.get("overviewStage"),
+          versionId: url.searchParams.get("overviewVersion"),
+        },
+      },
+    });
   };
   const { act, cleanup, render } = await import("@testing-library/react");
   const userEvent = (await import("@testing-library/user-event")).default;
@@ -297,6 +340,12 @@ test("the overview renders four fixed answers and expands lifetime scope evidenc
     assert.ok(view.getByText("scope-refunds-v3"));
     assert.ok(view.getByText("80.0% · 65.0% · n=40"));
     assert.equal(view.queryByText(/global score/i), null);
+
+    await userEvent.setup({ document }).selectOptions(view.getByLabelText("Period"), "90");
+    assert.equal(new URL(window.location.href).searchParams.get("period"), "90");
+    assert.ok((await view.findAllByText("Last 90 days")).length > 0);
+    await userEvent.setup({ document }).selectOptions(view.getByLabelText("Risk tier"), "high");
+    assert.equal(new URL(window.location.href).searchParams.get("overviewRisk"), "high");
 
     await userEvent.setup({ document }).click(view.getByRole("button", { name: "Next" }));
     assert.ok(await view.findByText("Billing agent"));

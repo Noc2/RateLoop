@@ -158,12 +158,16 @@ test("review quality suppresses every metric when cases miss their frozen privac
 
 test("review-quality SQL is time-bounded, aggregate-only, and caps every hotspot dimension", () => {
   const { qualitySql, timingSql } = __agentReviewQualityTestUtils;
-  assert.equal(qualitySql.match(/\?/gu)?.length, 5);
-  assert.equal(timingSql.match(/\?/gu)?.length, 9);
+  assert.equal(qualitySql.match(/\?/gu)?.length, 17);
+  assert.equal(timingSql.match(/\?/gu)?.length, 21);
   for (const sql of [qualitySql, timingSql]) {
     assert.match(sql, /project\.workspace_id=\?/u);
     assert.match(sql, /run\.updated_at>=\? AND run\.updated_at<=\?/u);
     assert.match(sql, /run\.completed_at>=\? AND run\.completed_at<=\?/u);
+    assert.match(sql, /binding\.enabled=true AND binding\.superseded_at IS NULL/u);
+    assert.match(sql, /profile\.result_semantics='assurance'/u);
+    assert.match(sql, /newer\.version_number>version\.version_number/u);
+    assert.match(sql, /\?::text IS NULL OR scope\.workflow_key=\?/u);
     assert.match(sql, /valid_response_count>=privacy_minimum/u);
     assert.match(sql, /gold\.case_id IS NULL/u);
     assert.doesNotMatch(sql, /reviewer_key|rationale_ciphertext|qualification_keys_json/u);

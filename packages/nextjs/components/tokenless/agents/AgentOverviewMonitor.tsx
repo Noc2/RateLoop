@@ -3,12 +3,20 @@
 import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
 import { agentTabHref } from "./agentWorkspaceState";
+import { SelectField } from "~~/components/tokenless/forms/Field";
 import type {
   AgentOverview,
   AgentOverviewDecisionTimeTrendPoint,
   AgentOverviewParent,
   AgentOverviewScope,
 } from "~~/lib/tokenless/agentOverview";
+import {
+  type AgentOverviewPeriod,
+  type AgentOverviewUrlState,
+  agentOverviewApiSearch,
+  parseAgentOverviewUrlState,
+  updateAgentOverviewUrlSearch,
+} from "~~/lib/tokenless/agentOverviewUrlState";
 import type { AgentReviewQualityHotspot } from "~~/lib/tokenless/agentReviewQuality";
 import { readJson } from "~~/lib/tokenless/http";
 
@@ -68,6 +76,7 @@ function meanTokens(scope: AgentOverviewScope) {
 }
 
 function HeadlineCards({ overview }: { overview: AgentOverview }) {
+  const completed = overview.headline.completedDecisions;
   const endorsement = overview.headline.reviewerEndorsement;
   const latency = overview.headline.medianDecisionLatency;
   const cost = overview.headline.costPerDecision;
@@ -79,8 +88,17 @@ function HeadlineCards({ overview }: { overview: AgentOverview }) {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <article className="surface-card rounded-2xl p-5">
           <p className="text-sm text-base-content/60">Completed decisions</p>
-          <p className="mt-2 text-3xl font-semibold">{overview.headline.completedDecisions.toLocaleString()}</p>
-          <p className="mt-2 text-xs text-base-content/55">Settled in this window</p>
+          {completed.available ? (
+            <>
+              <p className="mt-2 text-3xl font-semibold">{completed.count.toLocaleString()}</p>
+              <p className="mt-2 text-xs text-base-content/55">Settled in this window</p>
+            </>
+          ) : (
+            <>
+              <p className="mt-2 text-xl font-semibold">Unavailable</p>
+              <p className="mt-2 text-xs leading-5 text-base-content/55">{completed.reason}</p>
+            </>
+          )}
         </article>
         <article className="surface-card rounded-2xl p-5">
           <p className="text-sm text-base-content/60">Reviewer endorsement</p>
@@ -137,17 +155,15 @@ function trendDate(date: string) {
   return trendDateFormatter.format(new Date(`${date}T00:00:00.000Z`));
 }
 
-function overviewPageFromUrl() {
-  if (typeof window === "undefined") return 1;
-  const value = Number(new URL(window.location.href).searchParams.get("overviewPage") ?? "1");
-  return Number.isSafeInteger(value) && value > 0 ? value : 1;
+function overviewUrlStateFromWindow() {
+  if (typeof window === "undefined") return parseAgentOverviewUrlState("");
+  return parseAgentOverviewUrlState(new URL(window.location.href).searchParams);
 }
 
-function replaceOverviewPageInUrl(page: number) {
+function replaceOverviewUrlState(state: AgentOverviewUrlState) {
   const url = new URL(window.location.href);
-  if (page === 1) url.searchParams.delete("overviewPage");
-  else url.searchParams.set("overviewPage", String(page));
-  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  const search = updateAgentOverviewUrlSearch(url.searchParams, state);
+  window.history.replaceState(window.history.state, "", `${url.pathname}${search ? `?${search}` : ""}${url.hash}`);
 }
 
 function ReviewOutcomeTrend({ overview }: { overview: AgentOverview }) {
@@ -677,10 +693,12 @@ function AgentVersionTable({
             bound, never an average.
           </p>
         </div>
-        <span className="badge border-white/10 bg-white/[0.04]">Current versions</span>
+        <span className="badge border-white/10 bg-white/[0.04]">Current versions · active policies</span>
       </div>
       {overview.agentVersions.parents.length === 0 ? (
-        <p className="mt-5 text-sm text-base-content/55">No connected agent versions are available.</p>
+        <p className="mt-5 text-sm text-base-content/55">
+          No current agent versions match the active assurance policies and filters.
+        </p>
       ) : (
         <div className="mt-4 overflow-x-auto">
           <table className="table min-w-[52rem]">
@@ -866,28 +884,179 @@ function AttentionList({ overview, workspaceId }: { overview: AgentOverview; wor
   );
 }
 
+const OVERVIEW_PERIOD_OPTIONS: Array<{ value: AgentOverviewPeriod; label: string }> = [
+  { value: "7", label: "7 days" },
+  { value: "30", label: "30 days" },
+  { value: "90", label: "90 days" },
+  { value: "lifetime", label: "Lifetime" },
+];
+
+function OverviewControls({
+  loading,
+  onChange,
+  overview,
+  query,
+}: {
+  loading: boolean;
+  onChange: (patch: Partial<AgentOverviewUrlState>) => void;
+  overview: AgentOverview;
+  query: AgentOverviewUrlState;
+}) {
+  const hasFilters = Boolean(query.workflow || query.riskTier || query.stage || query.versionId);
+  const selectClassName = "select-sm bg-black/20";
+  const labelClassName = "mb-1 text-xs text-base-content/65";
+  return (
+    <section className="surface-card rounded-2xl p-5" aria-labelledby="agent-overview-filters-heading">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 id="agent-overview-filters-heading" className="text-base font-semibold">
+            View
+          </h2>
+          <p className="mt-1 text-sm text-base-content/55">
+            Headline metrics and charts use this exact period and scope.
+          </p>
+        </div>
+        {hasFilters ? (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            disabled={loading}
+            onClick={() => onChange({ workflow: null, riskTier: null, stage: null, versionId: null, page: 1 })}
+          >
+            Clear filters
+          </button>
+        ) : null}
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <SelectField
+          label="Period"
+          labelClassName={labelClassName}
+          className={selectClassName}
+          value={query.period}
+          disabled={loading}
+          onChange={event => onChange({ period: event.target.value as AgentOverviewPeriod, page: 1 })}
+        >
+          {OVERVIEW_PERIOD_OPTIONS.map(option => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </SelectField>
+        <SelectField
+          label="Workflow"
+          labelClassName={labelClassName}
+          className={selectClassName}
+          value={query.workflow ?? ""}
+          disabled={loading}
+          onChange={event => onChange({ workflow: event.target.value || null, page: 1 })}
+        >
+          <option value="">All workflows</option>
+          {overview.facets.workflows.map(option => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </SelectField>
+        <SelectField
+          label="Risk tier"
+          labelClassName={labelClassName}
+          className={selectClassName}
+          value={query.riskTier ?? ""}
+          disabled={loading}
+          onChange={event => onChange({ riskTier: event.target.value || null, page: 1 })}
+        >
+          <option value="">All risk tiers</option>
+          {overview.facets.riskTiers.map(option => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </SelectField>
+        <SelectField
+          label="Assurance stage"
+          labelClassName={labelClassName}
+          className={selectClassName}
+          value={query.stage ?? ""}
+          disabled={loading}
+          onChange={event =>
+            onChange({
+              stage: (event.target.value || null) as AgentOverviewUrlState["stage"],
+              page: 1,
+            })
+          }
+        >
+          <option value="">All stages</option>
+          {overview.facets.stages.map(option => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </SelectField>
+        <SelectField
+          label="Agent version"
+          labelClassName={labelClassName}
+          className={selectClassName}
+          value={query.versionId ?? ""}
+          disabled={loading}
+          onChange={event => onChange({ versionId: event.target.value || null, page: 1 })}
+        >
+          <option value="">All current versions</option>
+          {overview.facets.versions.map(option => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </SelectField>
+      </div>
+      {overview.facets.optionsTruncated ? (
+        <p className="mt-3 text-xs text-base-content/55">
+          Some filter lists are truncated. Existing URL selections remain available when valid.
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
 export function AgentOverviewMonitor({ workspaceId }: { workspaceId: string }) {
   const [overview, setOverview] = useState<AgentOverview | null>(null);
-  const [page, setPage] = useState(overviewPageFromUrl);
+  const [query, setQuery] = useState(overviewUrlStateFromWindow);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const syncFromHistory = () => setQuery(overviewUrlStateFromWindow());
+    window.addEventListener("popstate", syncFromHistory);
+    return () => window.removeEventListener("popstate", syncFromHistory);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     setError(null);
-    void fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/agents/overview?page=${page}`, {
-      cache: "no-store",
-      credentials: "same-origin",
-      signal: controller.signal,
-    })
+    const apiSearch = agentOverviewApiSearch(query);
+    void fetch(
+      `/api/account/workspaces/${encodeURIComponent(workspaceId)}/agents/overview${apiSearch ? `?${apiSearch}` : ""}`,
+      {
+        cache: "no-store",
+        credentials: "same-origin",
+        signal: controller.signal,
+      },
+    )
       .then(response => readJson<AgentOverview>(response))
       .then(body => {
         if (!controller.signal.aborted) {
           setOverview(body);
-          if (body.agentVersions.page !== page) {
-            setPage(body.agentVersions.page);
-            replaceOverviewPageInUrl(body.agentVersions.page);
+          const resolvedQuery: AgentOverviewUrlState = {
+            ...query,
+            workflow: body.facets.selected.workflow,
+            riskTier: body.facets.selected.riskTier,
+            stage: body.facets.selected.stage,
+            versionId: body.facets.selected.versionId,
+            page: body.agentVersions.page,
+          };
+          if (agentOverviewApiSearch(resolvedQuery) !== agentOverviewApiSearch(query)) {
+            replaceOverviewUrlState(resolvedQuery);
+            setQuery(resolvedQuery);
           }
         }
       })
@@ -898,7 +1067,13 @@ export function AgentOverviewMonitor({ workspaceId }: { workspaceId: string }) {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [page, workspaceId]);
+  }, [query, workspaceId]);
+
+  const updateQuery = (patch: Partial<AgentOverviewUrlState>) => {
+    const next = { ...query, ...patch };
+    replaceOverviewUrlState(next);
+    setQuery(next);
+  };
 
   if (loading && !overview) {
     return (
@@ -923,28 +1098,22 @@ export function AgentOverviewMonitor({ workspaceId }: { workspaceId: string }) {
               Agent monitor
             </h2>
             <p className="mt-1 text-sm text-base-content/55">
-              Fixed operational view. Headline metrics cover completed human-review decisions.
+              Completed human-review decisions for current agent versions and active assurance policies.
             </p>
           </div>
           <span className="badge border-white/10 bg-white/[0.04]">{overview.window.label}</span>
         </div>
       </section>
+      <OverviewControls loading={loading} overview={overview} query={query} onChange={updateQuery} />
       <HeadlineCards overview={overview} />
-      <TrendPanels overview={overview} />
-      <ReviewQualityPanel overview={overview} />
       {error ? (
         <p className="rounded-xl border border-red-300/20 bg-red-300/[0.06] p-4 text-sm text-red-100" role="alert">
           {error}
         </p>
       ) : null}
-      <AgentVersionTable
-        loading={loading}
-        overview={overview}
-        onPageChange={nextPage => {
-          replaceOverviewPageInUrl(nextPage);
-          setPage(nextPage);
-        }}
-      />
+      <AgentVersionTable loading={loading} overview={overview} onPageChange={page => updateQuery({ page })} />
+      <TrendPanels overview={overview} />
+      <ReviewQualityPanel overview={overview} />
       <AttentionList overview={overview} workspaceId={workspaceId} />
     </div>
   );

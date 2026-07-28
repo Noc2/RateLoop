@@ -107,7 +107,6 @@ function humanReview(input: { blockedCount?: number; agreementThresholdBps?: num
 test("overview projection derives four distinct 30-day answers from decision evidence", () => {
   const overview = projectAgentOverview({
     agents: [agent(0)],
-    metrics: { reviewsCompleted: 4 },
     observations: [
       {
         agreement: "agree",
@@ -142,12 +141,13 @@ test("overview projection derives four distinct 30-day answers from decision evi
   });
 
   assert.deepEqual(overview.window, {
+    period: "30",
     days: 30,
     label: "Last 30 days",
     startsAt: "2026-06-28T12:00:00.000Z",
     endsAt: "2026-07-28T12:00:00.000Z",
   });
-  assert.equal(overview.headline.completedDecisions, 4);
+  assert.deepEqual(overview.headline.completedDecisions, { available: true, count: 4 });
   assert.deepEqual(overview.headline.reviewerEndorsement, {
     available: true,
     rateBps: 7_500,
@@ -221,7 +221,6 @@ test("agent-version parents are bounded, retain scope rows, and use the lowest o
   ];
   const overview = projectAgentOverview({
     agents,
-    metrics: { reviewsCompleted: 0 },
     observations: [
       {
         agreement: "agree",
@@ -260,7 +259,6 @@ test("agent-version parents are bounded, retain scope rows, and use the lowest o
 
   const secondPage = projectAgentOverview({
     agents,
-    metrics: { reviewsCompleted: 0 },
     observations: [],
     parentPage: 2,
     now: new Date("2026-07-28T12:00:00.000Z"),
@@ -304,7 +302,6 @@ test("attention is limited to current blocked, low-confidence, and insufficient 
   ];
   const overview = projectAgentOverview({
     agents: [agent(0, attentionScopes, humanReview({ blockedCount: 2 }))],
-    metrics: { reviewsCompleted: 0 },
     observations: [],
     now: new Date("2026-07-28T12:00:00.000Z"),
   });
@@ -336,4 +333,44 @@ test("attention is limited to current blocked, low-confidence, and insufficient 
   assert.ok(overview.attention.items.slice(2).every(item => item.kind === "insufficient"));
   assert.ok(overview.attention.items.every(item => !item.itemId.includes("historical")));
   assert.ok(overview.attention.items.every(item => !item.itemId.includes("stale-policy")));
+});
+
+test("period selection never widens and lifetime reports unsupported trends honestly", () => {
+  const now = new Date("2026-07-28T12:00:00.000Z");
+  const observations = [
+    {
+      agreement: "agree" as const,
+      comparable: true,
+      latencyMs: 500,
+      costAtomic: "1",
+      finalizedAt: "2026-07-26T12:00:00.000Z",
+    },
+    {
+      agreement: "disagree" as const,
+      comparable: true,
+      latencyMs: 800,
+      costAtomic: "1",
+      finalizedAt: "2026-07-10T12:00:00.000Z",
+    },
+  ];
+  const sevenDays = projectAgentOverview({ agents: [], observations, period: "7", now });
+  assert.equal(sevenDays.window.period, "7");
+  assert.equal(sevenDays.window.startsAt, "2026-07-21T12:00:00.000Z");
+  assert.deepEqual(sevenDays.headline.completedDecisions, { available: true, count: 1 });
+  assert.equal(sevenDays.trends.outcomes.available && sevenDays.trends.outcomes.points.length, 7);
+
+  const lifetime = projectAgentOverview({ agents: [], observations, period: "lifetime", now });
+  assert.deepEqual(lifetime.window, {
+    period: "lifetime",
+    days: null,
+    label: "Lifetime",
+    startsAt: null,
+    endsAt: "2026-07-28T12:00:00.000Z",
+  });
+  assert.deepEqual(lifetime.headline.completedDecisions, { available: true, count: 2 });
+  assert.equal(lifetime.trends.outcomes.available, false);
+  assert.match(lifetime.trends.outcomes.reason, /Choose 7, 30, or 90 days/u);
+  assert.equal(lifetime.reviewQuality.availability, "empty");
+  assert.equal(lifetime.reviewQuality.consensus.available, false);
+  assert.match(lifetime.reviewQuality.consensus.reason, /Lifetime review quality is unavailable/u);
 });

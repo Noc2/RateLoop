@@ -30,11 +30,16 @@ test("the connected-agent overview mounts the fixed monitor", () => {
   assert.match(source, /overview\.attention\.periodLabel/);
   assert.match(source, /Low confidence/);
   assert.match(source, /Insufficient evidence/);
-  assert.match(source, /overviewPage/);
+  assert.match(source, /onPageChange=\{page => updateQuery\(\{ page \}\)\}/);
+  assert.match(source, /All workflows/);
+  assert.match(source, /All risk tiers/);
+  assert.match(source, /All stages/);
+  assert.match(source, /All current versions/);
+  assert.match(source, /agentOverviewApiSearch/);
   assert.match(source, /hasPreviousPage/);
   assert.match(source, /hasNextPage/);
-  assert.match(routeSource, /searchParams\.get\("page"\)/);
-  assert.match(routeSource, /workspaceId, page/);
+  assert.match(routeSource, /parseAgentOverviewUrlState\(request\.nextUrl\.searchParams\)/);
+  assert.match(routeSource, /workspaceId, query/);
 });
 
 test("overview parent and child records are bounded at the data source", () => {
@@ -51,6 +56,14 @@ test("review quality loads only after workspace membership is authorized", () =>
   const quality = projectionSource.indexOf("loadAgentReviewQuality", access);
   assert.ok(access >= 0);
   assert.ok(quality > access);
+});
+
+test("production overview defaults to current versions with active assurance bindings and policies", () => {
+  assert.match(projectionSource, /current_versions AS/);
+  assert.match(projectionSource, /binding\.enabled=true AND binding\.superseded_at IS NULL/);
+  assert.match(projectionSource, /policy\.enabled=true AND policy\.superseded_at IS NULL/);
+  assert.match(projectionSource, /scope\.human_review_binding_id=review\.binding_id/);
+  assert.match(projectionSource, /scope\.policy_id=review\.policy_id/);
 });
 
 test("agent-version parents disclose bounded scope evidence without reviewer axes or a scope average", () => {

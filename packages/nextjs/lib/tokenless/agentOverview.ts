@@ -1,19 +1,33 @@
 import "server-only";
 import { normalizeAccountSubject } from "~~/lib/auth/accountSubject";
 import { dbClient } from "~~/lib/db";
+import type {
+  AgentOverviewPeriod,
+  AgentOverviewStage,
+  AgentOverviewUrlState,
+} from "~~/lib/tokenless/agentOverviewUrlState";
 import { type AgentAssuranceScopeSummary, type WorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
 import { type AgentReviewQuality, loadAgentReviewQuality } from "~~/lib/tokenless/agentReviewQuality";
-import { type AssuranceMetricsSnapshot, collectWorkspaceAssuranceMetrics } from "~~/lib/tokenless/assuranceMetrics";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 import { wilsonIntervalBps } from "~~/lib/tokenless/transparency";
 
 type QueryRow = Record<string, unknown>;
 
-const OVERVIEW_WINDOW_DAYS = 30;
-const OVERVIEW_WINDOW_MS = OVERVIEW_WINDOW_DAYS * 24 * 60 * 60_000;
+const DAY_MS = 24 * 60 * 60_000;
 export const AGENT_OVERVIEW_PARENT_PAGE_SIZE = 20;
 export const MAX_AGENT_OVERVIEW_SCOPES_PER_PARENT = 8;
 export const MAX_AGENT_OVERVIEW_OBSERVATIONS = 10_000;
+export const MAX_AGENT_OVERVIEW_FACET_OPTIONS = 100;
+
+const PERIODS: Record<
+  AgentOverviewPeriod,
+  { days: 7 | 30 | 90 | null; label: "Last 7 days" | "Last 30 days" | "Last 90 days" | "Lifetime" }
+> = {
+  "7": { days: 7, label: "Last 7 days" },
+  "30": { days: 30, label: "Last 30 days" },
+  "90": { days: 90, label: "Last 90 days" },
+  lifetime: { days: null, label: "Lifetime" },
+};
 
 function rowText(row: QueryRow | undefined, key: string) {
   const value = row?.[key];
@@ -154,10 +168,28 @@ type AvailableEndorsement = {
 
 type UnavailableMetric = { available: false; reason: string };
 
+export type AgentOverviewFacetOption = { value: string; label: string };
+
+export type AgentOverviewFilters = Pick<AgentOverviewUrlState, "workflow" | "riskTier" | "stage" | "versionId">;
+
 export type AgentOverview = {
-  window: { days: 30; label: "Last 30 days"; startsAt: string; endsAt: string };
+  window: {
+    period: AgentOverviewPeriod;
+    days: 7 | 30 | 90 | null;
+    label: "Last 7 days" | "Last 30 days" | "Last 90 days" | "Lifetime";
+    startsAt: string | null;
+    endsAt: string;
+  };
+  facets: {
+    selected: AgentOverviewFilters;
+    workflows: AgentOverviewFacetOption[];
+    riskTiers: AgentOverviewFacetOption[];
+    stages: AgentOverviewFacetOption[];
+    versions: AgentOverviewFacetOption[];
+    optionsTruncated: boolean;
+  };
   headline: {
-    completedDecisions: number;
+    completedDecisions: { available: true; count: number } | UnavailableMetric;
     reviewerEndorsement: AvailableEndorsement | UnavailableMetric;
     medianDecisionLatency: { available: true; milliseconds: number; sampleSize: number } | UnavailableMetric;
     costPerDecision:
@@ -165,7 +197,7 @@ export type AgentOverview = {
       | (UnavailableMetric & { recordedCount: number; decisionCount: number });
   };
   trends: {
-    periodLabel: "Last 30 days";
+    periodLabel: string;
     outcomes:
       | {
           available: true;
@@ -220,7 +252,7 @@ function utcDate(value: Date) {
   return value.toISOString().slice(0, 10);
 }
 
-function calendarDates(startsAt: Date, endsAt: Date) {
+function calendarDates(startsAt: Date, endsAt: Date, days: 7 | 30 | 90) {
   const current = new Date(`${utcDate(startsAt)}T00:00:00.000Z`);
   const final = new Date(`${utcDate(endsAt)}T00:00:00.000Z`);
   const dates: string[] = [];
@@ -228,19 +260,29 @@ function calendarDates(startsAt: Date, endsAt: Date) {
     dates.push(utcDate(current));
     current.setUTCDate(current.getUTCDate() + 1);
   }
-  return dates.slice(-30);
+  return dates.slice(-days);
 }
 
 function trendProjection(input: {
   observations: OverviewObservation[];
   observationsTruncated: boolean;
-  startsAt: Date;
+  startsAt: Date | null;
   endsAt: Date;
+  period: AgentOverviewPeriod;
 }): AgentOverview["trends"] {
+  const period = PERIODS[input.period];
+  if (input.startsAt === null || period.days === null) {
+    const reason = "Daily lifetime trends are unavailable. Choose 7, 30, or 90 days.";
+    return {
+      periodLabel: period.label,
+      outcomes: { available: false, reason },
+      decisionTime: { available: false, reason },
+    };
+  }
   const unavailableReason = "More than 10,000 decisions fall in this window; use the evidence export for exact trends.";
   if (input.observationsTruncated) {
     return {
-      periodLabel: "Last 30 days",
+      periodLabel: period.label,
       outcomes: { available: false, reason: unavailableReason },
       decisionTime: { available: false, reason: unavailableReason },
     };
@@ -256,7 +298,7 @@ function trendProjection(input: {
       latencies: number[];
     }
   >(
-    calendarDates(input.startsAt, input.endsAt).map(date => [
+    calendarDates(input.startsAt, input.endsAt, period.days).map(date => [
       date,
       {
         completedCount: 0,
@@ -301,7 +343,7 @@ function trendProjection(input: {
   const timedSampleSize = decisionTime.reduce((sum, point) => sum + point.sampleSize, 0);
 
   return {
-    periodLabel: "Last 30 days",
+    periodLabel: period.label,
     outcomes:
       totals.completedCount > 0
         ? { available: true, points: outcomes, ...totals }
@@ -495,6 +537,71 @@ const OVERVIEW_STAGE_RATES: Record<AgentAssuranceScopeSummary["stage"], number> 
   monitoring: 1_000,
 };
 
+const CURRENT_ASSURANCE_SCOPES_CTE = `current_versions AS (
+  SELECT DISTINCT ON (agent.agent_id)
+         agent.agent_id,agent.status AS agent_status,agent.created_at AS agent_created_at,
+         version.version_id,version.version_number,version.display_name,version.environment
+  FROM tokenless_agents agent
+  JOIN tokenless_agent_versions version
+    ON version.workspace_id=agent.workspace_id AND version.agent_id=agent.agent_id
+  WHERE agent.workspace_id=?
+  ORDER BY agent.agent_id,version.version_number DESC,version.version_id ASC
+), active_review AS (
+  SELECT binding.agent_id,binding.agent_version_id,binding.binding_id,binding.version AS binding_version,
+         binding.authority,binding.selection_policy_id AS policy_id,
+         binding.selection_policy_version AS policy_version,
+         policy.mode,policy.agreement_threshold_bps,policy.production_floor_bps,policy.fixed_rate_bps
+  FROM tokenless_agent_human_review_bindings binding
+  JOIN tokenless_agent_review_policies policy
+    ON policy.workspace_id=binding.workspace_id
+   AND policy.policy_id=binding.selection_policy_id
+   AND policy.version=binding.selection_policy_version
+   AND policy.enabled=true AND policy.superseded_at IS NULL
+  JOIN tokenless_agent_review_request_profiles profile
+    ON profile.workspace_id=binding.workspace_id
+   AND profile.profile_id=binding.request_profile_id
+   AND profile.version=binding.request_profile_version
+   AND profile.profile_hash=binding.request_profile_hash
+  WHERE binding.workspace_id=? AND binding.enabled=true AND binding.superseded_at IS NULL
+    AND profile.result_semantics='assurance'
+), assurance_scopes AS (
+  SELECT current.agent_id,current.agent_status,current.agent_created_at,
+         current.version_id,current.version_number,current.display_name,current.environment,
+         review.binding_id,review.binding_version,review.authority,review.policy_id,review.policy_version,
+         review.mode,review.agreement_threshold_bps,review.production_floor_bps,review.fixed_rate_bps,
+         scope.scope_id,scope.workflow_key,scope.risk_tier,scope.stage,scope.updated_at
+  FROM current_versions current
+  JOIN active_review review
+    ON review.agent_id=current.agent_id AND review.agent_version_id=current.version_id
+  JOIN tokenless_agent_evaluation_scopes scope
+    ON scope.workspace_id=? AND scope.agent_id=current.agent_id
+   AND scope.agent_version_id=current.version_id
+   AND scope.policy_id=review.policy_id AND scope.policy_version=review.policy_version
+   AND scope.human_review_binding_id=review.binding_id
+   AND scope.human_review_binding_version=review.binding_version
+)`;
+
+const ASSURANCE_SCOPE_FILTER_SQL = `(?::text IS NULL OR version_id=?)
+  AND (?::text IS NULL OR workflow_key=?)
+  AND (?::text IS NULL OR risk_tier=?)
+  AND (?::text IS NULL OR stage=?)`;
+
+function assuranceScopeArgs(workspaceId: string, filters: AgentOverviewFilters) {
+  return [
+    workspaceId,
+    workspaceId,
+    workspaceId,
+    filters.versionId,
+    filters.versionId,
+    filters.workflow,
+    filters.workflow,
+    filters.riskTier,
+    filters.riskTier,
+    filters.stage,
+    filters.stage,
+  ];
+}
+
 async function requireAgentOverviewAccess(accountAddress: string, workspaceId: string) {
   let actor: string;
   try {
@@ -515,16 +622,94 @@ async function requireAgentOverviewAccess(accountAddress: string, workspaceId: s
   return { canManage: role === "owner" || role === "admin" };
 }
 
-async function countAgentOverviewParents(workspaceId: string) {
+async function countAgentOverviewParents(workspaceId: string, filters: AgentOverviewFilters) {
   const result = await dbClient.execute({
-    sql: `SELECT COUNT(DISTINCT agent.agent_id) AS total
-          FROM tokenless_agents agent
-          JOIN tokenless_agent_versions version
-            ON version.workspace_id=agent.workspace_id AND version.agent_id=agent.agent_id
-          WHERE agent.workspace_id=?`,
-    args: [workspaceId],
+    sql: `WITH ${CURRENT_ASSURANCE_SCOPES_CTE}
+          SELECT COUNT(DISTINCT agent_id) AS total
+          FROM assurance_scopes
+          WHERE ${ASSURANCE_SCOPE_FILTER_SQL}`,
+    args: assuranceScopeArgs(workspaceId, filters),
   });
   return rowInteger(result.rows[0] as QueryRow | undefined, "total");
+}
+
+async function loadAgentOverviewFacets(workspaceId: string, requested: AgentOverviewFilters) {
+  const result = await dbClient.execute({
+    sql: `WITH ${CURRENT_ASSURANCE_SCOPES_CTE},
+          dimension_options AS (
+            SELECT 'workflow'::text AS dimension,workflow_key AS value,workflow_key AS label
+            FROM assurance_scopes GROUP BY workflow_key
+            UNION ALL
+            SELECT 'risk_tier',risk_tier,risk_tier FROM assurance_scopes GROUP BY risk_tier
+            UNION ALL
+            SELECT 'stage',stage,
+                   CASE stage
+                     WHEN 'high_coverage' THEN 'High coverage'
+                     WHEN 'medium_coverage' THEN 'Medium coverage'
+                     WHEN 'monitoring' THEN 'Monitoring'
+                     ELSE 'Calibrating'
+                   END
+            FROM assurance_scopes GROUP BY stage
+            UNION ALL
+            SELECT 'version',version_id,display_name || ' · v' || version_number::text
+            FROM assurance_scopes GROUP BY version_id,display_name,version_number
+          ), ranked AS (
+            SELECT dimension,value,label,
+                   ROW_NUMBER() OVER (PARTITION BY dimension ORDER BY label ASC,value ASC) AS option_rank,
+                   COUNT(*) OVER (PARTITION BY dimension) AS option_count
+            FROM dimension_options
+          )
+          SELECT dimension,value,label,option_count
+          FROM ranked
+          WHERE option_rank<=?
+             OR (dimension='workflow' AND value=?)
+             OR (dimension='risk_tier' AND value=?)
+             OR (dimension='stage' AND value=?)
+             OR (dimension='version' AND value=?)
+          ORDER BY dimension ASC,label ASC,value ASC`,
+    args: [
+      workspaceId,
+      workspaceId,
+      workspaceId,
+      MAX_AGENT_OVERVIEW_FACET_OPTIONS + 1,
+      requested.workflow,
+      requested.riskTier,
+      requested.stage,
+      requested.versionId,
+    ],
+  });
+  const rows = result.rows as QueryRow[];
+  const options = (dimension: string, selected: string | null) => {
+    const dimensionRows = rows.filter(row => rowText(row, "dimension") === dimension);
+    const boundedRows = dimensionRows.slice(0, MAX_AGENT_OVERVIEW_FACET_OPTIONS);
+    const selectedRow = selected ? dimensionRows.find(row => rowText(row, "value") === selected) : undefined;
+    if (selectedRow && !boundedRows.includes(selectedRow)) boundedRows[boundedRows.length - 1] = selectedRow;
+    return boundedRows.map(row => {
+      const value = rowText(row, "value");
+      const label = rowText(row, "label");
+      if (!value || !label) throw new Error("Database returned an invalid overview facet.");
+      return { value, label };
+    });
+  };
+  const workflows = options("workflow", requested.workflow);
+  const riskTiers = options("risk_tier", requested.riskTier);
+  const stages = options("stage", requested.stage);
+  const versions = options("version", requested.versionId);
+  const includes = (values: AgentOverviewFacetOption[], value: string | null) =>
+    value !== null && values.some(option => option.value === value) ? value : null;
+  return {
+    selected: {
+      workflow: includes(workflows, requested.workflow),
+      riskTier: includes(riskTiers, requested.riskTier),
+      stage: includes(stages, requested.stage) as AgentOverviewStage | null,
+      versionId: includes(versions, requested.versionId),
+    },
+    workflows,
+    riskTiers,
+    stages,
+    versions,
+    optionsTruncated: rows.some(row => rowInteger(row, "option_count") > MAX_AGENT_OVERVIEW_FACET_OPTIONS),
+  } satisfies AgentOverview["facets"];
 }
 
 function overviewStage(value: unknown): AgentAssuranceScopeSummary["stage"] {
@@ -563,27 +748,18 @@ async function loadAgentOverviewParentPage(input: {
   workspaceId: string;
   page: number;
   totalParentCount: number;
+  filters: AgentOverviewFilters;
 }): Promise<AgentOverview["agentVersions"]> {
   const offset = (input.page - 1) * AGENT_OVERVIEW_PARENT_PAGE_SIZE;
   const parentResult = await dbClient.execute({
-    sql: `WITH ranked_versions AS (
-            SELECT agent.agent_id,agent.status,agent.created_at,
-                   version.version_id,version.version_number,version.display_name,version.environment,
-                   ROW_NUMBER() OVER (
-                     PARTITION BY agent.agent_id
-                     ORDER BY version.version_number DESC,version.version_id ASC
-                   ) AS version_rank
-            FROM tokenless_agents agent
-            JOIN tokenless_agent_versions version
-              ON version.workspace_id=agent.workspace_id AND version.agent_id=agent.agent_id
-            WHERE agent.workspace_id=?
-          )
-          SELECT agent_id,status,version_id,version_number,display_name,environment
-          FROM ranked_versions
-          WHERE version_rank=1
-          ORDER BY created_at DESC,agent_id ASC
+    sql: `WITH ${CURRENT_ASSURANCE_SCOPES_CTE}
+          SELECT DISTINCT agent_id,agent_status AS status,agent_created_at,
+                          version_id,version_number,display_name,environment
+          FROM assurance_scopes
+          WHERE ${ASSURANCE_SCOPE_FILTER_SQL}
+          ORDER BY agent_created_at DESC,agent_id ASC
           LIMIT ? OFFSET ?`,
-    args: [input.workspaceId, AGENT_OVERVIEW_PARENT_PAGE_SIZE, offset],
+    args: [...assuranceScopeArgs(input.workspaceId, input.filters), AGENT_OVERVIEW_PARENT_PAGE_SIZE, offset],
   });
   const parents: AgentOverviewParent[] = (parentResult.rows as QueryRow[]).map(row => {
     const agentId = rowText(row, "agent_id");
@@ -622,27 +798,42 @@ async function loadAgentOverviewParentPage(input: {
   const lowerSql = wilsonLowerSql("e.agreements", "e.comparable");
   const [statsResult, scopesResult] = await Promise.all([
     dbClient.execute({
-      sql: `WITH requested_versions AS (
+      sql: `WITH ${CURRENT_ASSURANCE_SCOPES_CTE},
+            requested_versions AS (
               SELECT UNNEST(?::text[]) AS version_id
+            ), selected_scopes AS (
+              SELECT scope.*
+              FROM assurance_scopes scope
+              JOIN requested_versions requested ON requested.version_id=scope.version_id
+              WHERE (?::text IS NULL OR scope.workflow_key=?)
+                AND (?::text IS NULL OR scope.risk_tier=?)
+                AND (?::text IS NULL OR scope.stage=?)
             ), scope_counts AS (
-              SELECT scope.agent_version_id,
+              SELECT scope.version_id,
                      COUNT(*) AS scope_count,
                      COUNT(*) FILTER (WHERE scope.stage='calibrating') AS calibrating_count,
                      COUNT(*) FILTER (WHERE scope.stage='high_coverage') AS high_coverage_count,
                      COUNT(*) FILTER (WHERE scope.stage='medium_coverage') AS medium_coverage_count,
                      COUNT(*) FILTER (WHERE scope.stage='monitoring') AS monitoring_count
-              FROM tokenless_agent_evaluation_scopes scope
-              WHERE scope.workspace_id=? AND scope.agent_version_id=ANY(?::text[])
-              GROUP BY scope.agent_version_id
+              FROM selected_scopes scope
+              GROUP BY scope.version_id
             ), evidence AS (
-              SELECT scope.agent_version_id,scope.scope_id,scope.workflow_key,scope.risk_tier,
+              SELECT scope.version_id,scope.scope_id,scope.workflow_key,scope.risk_tier,
                      COUNT(*) FILTER (WHERE observation.comparable=true) AS comparable,
                      COUNT(*) FILTER (WHERE observation.comparable=true AND observation.agreement='agree') AS agreements
-              FROM tokenless_agent_evaluation_scopes scope
+              FROM selected_scopes scope
+              LEFT JOIN tokenless_agent_review_opportunities opportunity
+                ON opportunity.workspace_id=? AND opportunity.agent_id=scope.agent_id
+               AND opportunity.agent_version_id=scope.version_id
+               AND opportunity.scope_id=scope.scope_id
+               AND opportunity.policy_id=scope.policy_id
+               AND opportunity.policy_version=scope.policy_version
+               AND opportunity.human_review_binding_id=scope.binding_id
+               AND opportunity.human_review_binding_version=scope.binding_version
               LEFT JOIN tokenless_agent_evaluation_observations observation
-                ON observation.workspace_id=scope.workspace_id AND observation.scope_id=scope.scope_id
-              WHERE scope.workspace_id=? AND scope.agent_version_id=ANY(?::text[])
-              GROUP BY scope.agent_version_id,scope.scope_id,scope.workflow_key,scope.risk_tier
+                ON observation.workspace_id=opportunity.workspace_id
+               AND observation.opportunity_id=opportunity.opportunity_id
+              GROUP BY scope.version_id,scope.scope_id,scope.workflow_key,scope.risk_tier
             )
             SELECT requested.version_id,
                    COALESCE(counts.scope_count,0) AS scope_count,
@@ -655,29 +846,45 @@ async function loadAgentOverviewParentPage(input: {
                    lowest.agreements AS lowest_agreements,
                    lowest.comparable AS lowest_comparable
             FROM requested_versions requested
-            LEFT JOIN scope_counts counts ON counts.agent_version_id=requested.version_id
+            LEFT JOIN scope_counts counts ON counts.version_id=requested.version_id
             LEFT JOIN LATERAL (
               SELECT e.workflow_key,e.risk_tier,e.agreements,e.comparable,${lowerSql} AS lower_bps
               FROM evidence e
-              WHERE e.agent_version_id=requested.version_id AND e.comparable>0
+              WHERE e.version_id=requested.version_id AND e.comparable>0
               ORDER BY lower_bps ASC,e.workflow_key ASC,e.scope_id ASC
               LIMIT 1
             ) lowest ON true`,
-      args: [versionIds, input.workspaceId, versionIds, input.workspaceId, versionIds],
+      args: [
+        input.workspaceId,
+        input.workspaceId,
+        input.workspaceId,
+        versionIds,
+        input.filters.workflow,
+        input.filters.workflow,
+        input.filters.riskTier,
+        input.filters.riskTier,
+        input.filters.stage,
+        input.filters.stage,
+        input.workspaceId,
+      ],
     }),
     dbClient.execute({
-      sql: `WITH ranked_scopes AS (
-              SELECT scope.scope_id,scope.agent_version_id,scope.workflow_key,scope.risk_tier,scope.stage,
-                     scope.updated_at,policy.mode,policy.production_floor_bps,policy.fixed_rate_bps,
+      sql: `WITH ${CURRENT_ASSURANCE_SCOPES_CTE},
+            ranked_scopes AS (
+              SELECT scope.scope_id,scope.version_id AS agent_version_id,
+                     scope.agent_id,scope.policy_id,scope.policy_version,
+                     scope.binding_id,scope.binding_version,
+                     scope.workflow_key,scope.risk_tier,scope.stage,
+                     scope.updated_at,scope.mode,scope.production_floor_bps,scope.fixed_rate_bps,
                      ROW_NUMBER() OVER (
-                       PARTITION BY scope.agent_version_id
+                       PARTITION BY scope.version_id
                        ORDER BY scope.updated_at DESC,scope.scope_id ASC
                      ) AS scope_rank
-              FROM tokenless_agent_evaluation_scopes scope
-              JOIN tokenless_agent_review_policies policy
-                ON policy.workspace_id=scope.workspace_id
-               AND policy.policy_id=scope.policy_id AND policy.version=scope.policy_version
-              WHERE scope.workspace_id=? AND scope.agent_version_id=ANY(?::text[])
+              FROM assurance_scopes scope
+              WHERE scope.version_id=ANY(?::text[])
+                AND (?::text IS NULL OR scope.workflow_key=?)
+                AND (?::text IS NULL OR scope.risk_tier=?)
+                AND (?::text IS NULL OR scope.stage=?)
             )
             SELECT scope.*,
                    COALESCE(opportunities.reviewed,0) AS reviewed,
@@ -697,15 +904,30 @@ async function loadAgentOverviewParentPage(input: {
               SELECT COUNT(*) FILTER (WHERE opportunity.status IN ('review_requested','completed')) AS reviewed,
                      COUNT(*) FILTER (WHERE opportunity.status='skipped') AS skipped
               FROM tokenless_agent_review_opportunities opportunity
-              WHERE opportunity.workspace_id=? AND opportunity.scope_id=scope.scope_id
+              WHERE opportunity.workspace_id=? AND opportunity.agent_id=scope.agent_id
+                AND opportunity.agent_version_id=scope.agent_version_id
+                AND opportunity.scope_id=scope.scope_id
+                AND opportunity.policy_id=scope.policy_id
+                AND opportunity.policy_version=scope.policy_version
+                AND opportunity.human_review_binding_id=scope.binding_id
+                AND opportunity.human_review_binding_version=scope.binding_version
             ) opportunities ON true
             LEFT JOIN LATERAL (
               SELECT COUNT(*) FILTER (WHERE observation.comparable=true) AS comparable,
                      COUNT(*) FILTER (
                        WHERE observation.comparable=true AND observation.agreement='agree'
                      ) AS agreements
-              FROM tokenless_agent_evaluation_observations observation
-              WHERE observation.workspace_id=? AND observation.scope_id=scope.scope_id
+              FROM tokenless_agent_review_opportunities opportunity
+              JOIN tokenless_agent_evaluation_observations observation
+                ON observation.workspace_id=opportunity.workspace_id
+               AND observation.opportunity_id=opportunity.opportunity_id
+              WHERE opportunity.workspace_id=? AND opportunity.agent_id=scope.agent_id
+                AND opportunity.agent_version_id=scope.agent_version_id
+                AND opportunity.scope_id=scope.scope_id
+                AND opportunity.policy_id=scope.policy_id
+                AND opportunity.policy_version=scope.policy_version
+                AND opportunity.human_review_binding_id=scope.binding_id
+                AND opportunity.human_review_binding_version=scope.binding_version
             ) observations ON true
             LEFT JOIN LATERAL (
               SELECT AVG(value.total_duration_ms) AS average_total_duration_ms,
@@ -718,7 +940,13 @@ async function loadAgentOverviewParentPage(input: {
                 JOIN tokenless_agent_executions execution
                   ON execution.workspace_id=opportunity.workspace_id
                  AND execution.execution_id=opportunity.execution_id
-                WHERE opportunity.workspace_id=? AND opportunity.scope_id=scope.scope_id
+                WHERE opportunity.workspace_id=? AND opportunity.agent_id=scope.agent_id
+                  AND opportunity.agent_version_id=scope.agent_version_id
+                  AND opportunity.scope_id=scope.scope_id
+                  AND opportunity.policy_id=scope.policy_id
+                  AND opportunity.policy_version=scope.policy_version
+                  AND opportunity.human_review_binding_id=scope.binding_id
+                  AND opportunity.human_review_binding_version=scope.binding_version
                   AND opportunity.execution_id IS NOT NULL
               ) value
             ) executions ON true
@@ -734,7 +962,15 @@ async function loadAgentOverviewParentPage(input: {
             ORDER BY scope.agent_version_id ASC,scope.updated_at DESC,scope.scope_id ASC`,
       args: [
         input.workspaceId,
+        input.workspaceId,
+        input.workspaceId,
         versionIds,
+        input.filters.workflow,
+        input.filters.workflow,
+        input.filters.riskTier,
+        input.filters.riskTier,
+        input.filters.stage,
+        input.filters.stage,
         input.workspaceId,
         input.workspaceId,
         input.workspaceId,
@@ -823,6 +1059,7 @@ async function loadAgentOverviewParentPage(input: {
 async function loadAgentOverviewAttention(input: {
   workspaceId: string;
   canManage: boolean;
+  filters: AgentOverviewFilters;
 }): Promise<AgentOverview["attention"]> {
   if (!input.canManage) {
     return {
@@ -834,63 +1071,45 @@ async function loadAgentOverviewAttention(input: {
   }
   const lowerSql = wilsonLowerSql("e.agreements", "e.comparable");
   const result = await dbClient.execute({
-    sql: `WITH current_versions AS (
-            SELECT DISTINCT ON (agent.agent_id)
-                   agent.agent_id,version.version_id,version.display_name
-            FROM tokenless_agents agent
-            JOIN tokenless_agent_versions version
-              ON version.workspace_id=agent.workspace_id AND version.agent_id=agent.agent_id
-            WHERE agent.workspace_id=?
-            ORDER BY agent.agent_id,version.version_number DESC,version.version_id ASC
-          ), active_review AS (
-            SELECT binding.agent_id,binding.agent_version_id,
-                   binding.selection_policy_id AS policy_id,
-                   binding.selection_policy_version AS policy_version,
-                   policy.agreement_threshold_bps
-            FROM tokenless_agent_human_review_bindings binding
-            JOIN tokenless_agent_review_policies policy
-              ON policy.workspace_id=binding.workspace_id
-             AND policy.policy_id=binding.selection_policy_id
-             AND policy.version=binding.selection_policy_version
-            JOIN tokenless_agent_review_request_profiles profile
-              ON profile.workspace_id=binding.workspace_id
-             AND profile.profile_id=binding.request_profile_id
-             AND profile.version=binding.request_profile_version
-             AND profile.profile_hash=binding.request_profile_hash
-            WHERE binding.workspace_id=? AND binding.enabled=true
-              AND binding.superseded_at IS NULL AND profile.result_semantics='assurance'
+    sql: `WITH ${CURRENT_ASSURANCE_SCOPES_CTE},
+          filtered_scopes AS (
+            SELECT * FROM assurance_scopes
+            WHERE ${ASSURANCE_SCOPE_FILTER_SQL}
           ), blocked AS (
-            SELECT current.agent_id,current.display_name,COUNT(*) AS blocked_count
-            FROM current_versions current
-            JOIN active_review review
-              ON review.agent_id=current.agent_id AND review.agent_version_id=current.version_id
+            SELECT scope.agent_id,scope.display_name,COUNT(*) AS blocked_count
+            FROM filtered_scopes scope
             JOIN tokenless_agent_review_opportunities opportunity
-              ON opportunity.workspace_id=? AND opportunity.agent_id=current.agent_id
-             AND opportunity.agent_version_id=current.version_id
-             AND opportunity.policy_id=review.policy_id AND opportunity.policy_version=review.policy_version
+              ON opportunity.workspace_id=? AND opportunity.agent_id=scope.agent_id
+             AND opportunity.agent_version_id=scope.version_id
+             AND opportunity.scope_id=scope.scope_id
+             AND opportunity.human_review_binding_id=scope.binding_id
+             AND opportunity.human_review_binding_version=scope.binding_version
             JOIN tokenless_agent_review_opportunity_lifecycles lifecycle
               ON lifecycle.workspace_id=opportunity.workspace_id
              AND lifecycle.opportunity_id=opportunity.opportunity_id
             WHERE lifecycle.state='blocked'
-            GROUP BY current.agent_id,current.display_name
+            GROUP BY scope.agent_id,scope.display_name
           ), evidence AS (
-            SELECT current.agent_id,current.display_name,scope.scope_id,scope.workflow_key,scope.risk_tier,
-                   review.agreement_threshold_bps,
+            SELECT scope.agent_id,scope.display_name,scope.scope_id,scope.workflow_key,scope.risk_tier,
+                   scope.agreement_threshold_bps,
                    COUNT(*) FILTER (WHERE observation.comparable=true) AS comparable,
                    COUNT(*) FILTER (
                      WHERE observation.comparable=true AND observation.agreement='agree'
                    ) AS agreements
-            FROM current_versions current
-            JOIN active_review review
-              ON review.agent_id=current.agent_id AND review.agent_version_id=current.version_id
-            JOIN tokenless_agent_evaluation_scopes scope
-              ON scope.workspace_id=? AND scope.agent_id=current.agent_id
-             AND scope.agent_version_id=current.version_id
-             AND scope.policy_id=review.policy_id AND scope.policy_version=review.policy_version
+            FROM filtered_scopes scope
+            LEFT JOIN tokenless_agent_review_opportunities opportunity
+              ON opportunity.workspace_id=? AND opportunity.agent_id=scope.agent_id
+             AND opportunity.agent_version_id=scope.version_id
+             AND opportunity.scope_id=scope.scope_id
+             AND opportunity.policy_id=scope.policy_id
+             AND opportunity.policy_version=scope.policy_version
+             AND opportunity.human_review_binding_id=scope.binding_id
+             AND opportunity.human_review_binding_version=scope.binding_version
             LEFT JOIN tokenless_agent_evaluation_observations observation
-              ON observation.workspace_id=scope.workspace_id AND observation.scope_id=scope.scope_id
-            GROUP BY current.agent_id,current.display_name,scope.scope_id,scope.workflow_key,scope.risk_tier,
-                     review.agreement_threshold_bps
+              ON observation.workspace_id=opportunity.workspace_id
+             AND observation.opportunity_id=opportunity.opportunity_id
+            GROUP BY scope.agent_id,scope.display_name,scope.scope_id,scope.workflow_key,scope.risk_tier,
+                     scope.agreement_threshold_bps
           ), candidates AS (
             SELECT 0 AS priority,blocked.blocked_count AS severity,'blocked' AS item_kind,
                    blocked.agent_id,blocked.display_name,NULL::text AS scope_id,
@@ -914,7 +1133,7 @@ async function loadAgentOverviewAttention(input: {
           ORDER BY priority ASC,severity DESC,display_name ASC,
                    COALESCE(scope_id,agent_id) ASC
           LIMIT 6`,
-    args: [input.workspaceId, input.workspaceId, input.workspaceId, input.workspaceId],
+    args: [...assuranceScopeArgs(input.workspaceId, input.filters), input.workspaceId, input.workspaceId],
   });
   const candidates = (result.rows as QueryRow[]).map(row => {
     const kind = rowText(row, "item_kind");
@@ -979,9 +1198,9 @@ async function loadAgentOverviewAttention(input: {
 
 export function projectAgentOverview(input: {
   agents: OverviewAgentSource[];
-  metrics: Pick<AssuranceMetricsSnapshot, "reviewsCompleted">;
   observations: OverviewObservation[];
   observationsTruncated?: boolean;
+  period?: AgentOverviewPeriod;
   parentPage?: number;
   agentVersionPage?: {
     parents: AgentOverviewParent[];
@@ -990,15 +1209,18 @@ export function projectAgentOverview(input: {
   };
   attention?: AgentOverview["attention"];
   reviewQuality?: AgentReviewQuality;
+  facets?: AgentOverview["facets"];
   now: Date;
 }): AgentOverview {
-  const startsAt = new Date(input.now.getTime() - OVERVIEW_WINDOW_MS);
+  const periodKey = input.period ?? "30";
+  const period = PERIODS[periodKey];
+  const startsAt = period.days === null ? null : new Date(input.now.getTime() - period.days * DAY_MS);
   const observations = input.observations.filter(observation => {
     const finalizedAt = new Date(observation.finalizedAt);
-    return finalizedAt >= startsAt && finalizedAt <= input.now;
+    return (startsAt === null || finalizedAt >= startsAt) && finalizedAt <= input.now;
   });
   const parents = overviewParents(input.agents);
-  const truncatedReason = "More than 10,000 decisions fall in this window; use the evidence export for exact metrics.";
+  const truncatedReason = `More than 10,000 decisions fall in ${period.label.toLowerCase()}; use the evidence export for exact metrics.`;
   const comparable = observations.filter(
     observation => observation.comparable && ["agree", "disagree"].includes(observation.agreement),
   );
@@ -1017,13 +1239,31 @@ export function projectAgentOverview(input: {
 
   return {
     window: {
-      days: OVERVIEW_WINDOW_DAYS,
-      label: "Last 30 days",
-      startsAt: startsAt.toISOString(),
+      period: periodKey,
+      days: period.days,
+      label: period.label,
+      startsAt: startsAt?.toISOString() ?? null,
       endsAt: input.now.toISOString(),
     },
+    facets:
+      input.facets ??
+      ({
+        selected: {
+          workflow: null,
+          riskTier: null,
+          stage: null,
+          versionId: null,
+        },
+        workflows: [],
+        riskTiers: [],
+        stages: [],
+        versions: [],
+        optionsTruncated: false,
+      } satisfies AgentOverview["facets"]),
     headline: {
-      completedDecisions: input.metrics.reviewsCompleted,
+      completedDecisions: input.observationsTruncated
+        ? { available: false, reason: truncatedReason }
+        : { available: true, count: observations.length },
       reviewerEndorsement: input.observationsTruncated
         ? { available: false, reason: truncatedReason }
         : interval
@@ -1065,18 +1305,43 @@ export function projectAgentOverview(input: {
       observationsTruncated: input.observationsTruncated === true,
       startsAt,
       endsAt: input.now,
+      period: periodKey,
     }),
     reviewQuality:
       input.reviewQuality ??
       ({
-        periodLabel: "Last 30 days",
+        periodLabel: period.label,
         availability: "empty",
         privacyThreshold: null,
-        consensus: { available: false, reason: "No completed review cases in this window." },
-        reviewerConsistency: { available: false, reason: "No completed review cases in this window." },
-        panelSplit: { available: false, reason: "No completed review cases in this window." },
+        consensus: {
+          available: false,
+          reason:
+            period.days === null
+              ? "Lifetime review quality is unavailable. Choose 7, 30, or 90 days."
+              : "No completed review cases in this window.",
+        },
+        reviewerConsistency: {
+          available: false,
+          reason:
+            period.days === null
+              ? "Lifetime review quality is unavailable. Choose 7, 30, or 90 days."
+              : "No completed review cases in this window.",
+        },
+        panelSplit: {
+          available: false,
+          reason:
+            period.days === null
+              ? "Lifetime review quality is unavailable. Choose 7, 30, or 90 days."
+              : "No completed review cases in this window.",
+        },
         hotspots: { workflows: [], riskTiers: [], cases: [] },
-        decisionTime: { available: false, reason: "No completed review cases in this window." },
+        decisionTime: {
+          available: false,
+          reason:
+            period.days === null
+              ? "Lifetime review quality is unavailable. Choose 7, 30, or 90 days."
+              : "No completed review cases in this window.",
+        },
       } satisfies AgentReviewQuality),
     agentVersions: input.agentVersionPage
       ? agentVersionPage({
@@ -1125,60 +1390,95 @@ function observationFromRow(row: QueryRow): OverviewObservation {
 export async function getAgentOverview(input: {
   accountAddress: string;
   workspaceId: string;
+  query?: AgentOverviewUrlState;
   page?: number;
   now?: Date;
 }): Promise<AgentOverview> {
   const now = input.now ?? new Date();
-  const requestedPage = input.page ?? 1;
+  const requestedPeriod = input.query?.period ?? "30";
+  const period = PERIODS[requestedPeriod];
+  const startsAt = period.days === null ? null : new Date(now.getTime() - period.days * DAY_MS);
+  const requestedPage = input.query?.page ?? input.page ?? 1;
   if (!Number.isSafeInteger(requestedPage) || requestedPage < 1) {
     throw new TokenlessServiceError("Overview page is invalid.", 400, "invalid_overview_page", false, "page");
   }
   const access = await requireAgentOverviewAccess(input.accountAddress, input.workspaceId);
-  const startsAt = new Date(now.getTime() - OVERVIEW_WINDOW_MS);
-  const totalParentCountPromise = countAgentOverviewParents(input.workspaceId);
-  const metricsPromise = collectWorkspaceAssuranceMetrics({ workspaceId: input.workspaceId, now });
-  const reviewQualityPromise = loadAgentReviewQuality({
-    workspaceId: input.workspaceId,
-    startsAt,
-    endsAt: now,
-  });
+  const requestedFilters: AgentOverviewFilters = {
+    workflow: input.query?.workflow ?? null,
+    riskTier: input.query?.riskTier ?? null,
+    stage: input.query?.stage ?? null,
+    versionId: input.query?.versionId ?? null,
+  };
+  const facets = await loadAgentOverviewFacets(input.workspaceId, requestedFilters);
+  const filters = facets.selected;
+  const totalParentCountPromise = countAgentOverviewParents(input.workspaceId, filters);
+  const reviewQualityPromise =
+    startsAt === null
+      ? Promise.resolve(undefined)
+      : loadAgentReviewQuality({
+          workspaceId: input.workspaceId,
+          startsAt,
+          endsAt: now,
+          periodLabel: period.label,
+          filters,
+        });
+  const lowerBoundSql = startsAt === null ? "" : "AND ob.finalized_at>=?";
   const observationPromise = dbClient.execute({
-    sql: `SELECT ob.agreement,ob.comparable,ob.latency_ms,ob.cost_atomic,ob.finalized_at
-            FROM tokenless_agent_evaluation_observations ob
-            JOIN tokenless_agent_review_opportunities opportunity
-              ON opportunity.workspace_id=ob.workspace_id AND opportunity.opportunity_id=ob.opportunity_id
-            JOIN tokenless_agent_review_request_profiles profile
-              ON profile.workspace_id=opportunity.workspace_id
-             AND profile.profile_id=opportunity.request_profile_id
-             AND profile.version=opportunity.request_profile_version
-             AND profile.profile_hash=opportunity.request_profile_hash
-            WHERE ob.workspace_id=? AND ob.finalized_at>=? AND ob.finalized_at<=?
-              AND profile.result_semantics='assurance'
-            ORDER BY ob.finalized_at DESC,ob.observation_id DESC
-            LIMIT ?`,
-    args: [input.workspaceId, startsAt, now, MAX_AGENT_OVERVIEW_OBSERVATIONS + 1],
+    sql: `WITH ${CURRENT_ASSURANCE_SCOPES_CTE},
+          filtered_scopes AS (
+            SELECT * FROM assurance_scopes
+            WHERE ${ASSURANCE_SCOPE_FILTER_SQL}
+          )
+          SELECT ob.agreement,ob.comparable,ob.latency_ms,ob.cost_atomic,ob.finalized_at
+          FROM filtered_scopes scope
+          JOIN tokenless_agent_review_opportunities opportunity
+            ON opportunity.workspace_id=? AND opportunity.agent_id=scope.agent_id
+           AND opportunity.agent_version_id=scope.version_id
+           AND opportunity.scope_id=scope.scope_id
+           AND opportunity.policy_id=scope.policy_id
+           AND opportunity.policy_version=scope.policy_version
+           AND opportunity.human_review_binding_id=scope.binding_id
+           AND opportunity.human_review_binding_version=scope.binding_version
+          JOIN tokenless_agent_evaluation_observations ob
+            ON ob.workspace_id=opportunity.workspace_id
+           AND ob.opportunity_id=opportunity.opportunity_id
+          WHERE ob.finalized_at<=? ${lowerBoundSql}
+          ORDER BY ob.finalized_at DESC,ob.observation_id DESC
+          LIMIT ?`,
+    args: [
+      ...assuranceScopeArgs(input.workspaceId, filters),
+      input.workspaceId,
+      now,
+      ...(startsAt === null ? [] : [startsAt]),
+      MAX_AGENT_OVERVIEW_OBSERVATIONS + 1,
+    ],
   });
   const attentionPromise = loadAgentOverviewAttention({
     workspaceId: input.workspaceId,
     canManage: access.canManage,
+    filters,
   });
   const totalParentCount = await totalParentCountPromise;
   const totalPages = Math.max(1, Math.ceil(totalParentCount / AGENT_OVERVIEW_PARENT_PAGE_SIZE));
   const page = Math.min(requestedPage, totalPages);
-  const [metrics, observationResult, parentPage, attention, reviewQuality] = await Promise.all([
-    metricsPromise,
+  const [observationResult, parentPage, attention, reviewQuality] = await Promise.all([
     observationPromise,
-    loadAgentOverviewParentPage({ workspaceId: input.workspaceId, page, totalParentCount }),
+    loadAgentOverviewParentPage({
+      workspaceId: input.workspaceId,
+      page,
+      totalParentCount,
+      filters,
+    }),
     attentionPromise,
     reviewQualityPromise,
   ]);
   return projectAgentOverview({
     agents: [],
-    metrics,
     observations: observationResult.rows
       .slice(0, MAX_AGENT_OVERVIEW_OBSERVATIONS)
-      .map(row => observationFromRow(row as QueryRow)),
+      .map((row: unknown) => observationFromRow(row as QueryRow)),
     observationsTruncated: observationResult.rows.length > MAX_AGENT_OVERVIEW_OBSERVATIONS,
+    period: requestedPeriod,
     agentVersionPage: {
       parents: parentPage.parents,
       totalParentCount: parentPage.totalParentCount,
@@ -1186,6 +1486,7 @@ export async function getAgentOverview(input: {
     },
     attention,
     reviewQuality,
+    facets,
     now,
   });
 }

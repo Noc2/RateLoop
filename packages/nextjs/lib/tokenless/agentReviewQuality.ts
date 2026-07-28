@@ -17,7 +17,7 @@ export type AgentReviewQualityHotspot = {
 type UnavailableQualityMetric = { available: false; reason: string };
 
 export type AgentReviewQuality = {
-  periodLabel: "Last 30 days";
+  periodLabel: string;
   availability: "available" | "empty" | "suppressed";
   privacyThreshold: { minimum: number; maximum: number } | null;
   consensus:
@@ -74,6 +74,7 @@ export type AgentReviewQuality = {
 };
 
 export type AgentReviewQualityProjectionInput = {
+  periodLabel?: string;
   sourceCaseCount: number;
   safeCaseCount: number;
   unanimousCaseCount: number;
@@ -184,7 +185,7 @@ export function projectAgentReviewQuality(input: AgentReviewQualityProjectionInp
   }
 
   return {
-    periodLabel: "Last 30 days",
+    periodLabel: input.periodLabel ?? "Last 30 days",
     availability,
     privacyThreshold: input.privacyThreshold,
     consensus:
@@ -324,14 +325,55 @@ const WINDOW_RUNS_SQL = `SELECT run.run_id,
                          JOIN tokenless_assurance_audience_policies policy
                            ON policy.policy_id=run.audience_policy_id
                           AND policy.version=run.audience_policy_version
-                         LEFT JOIN tokenless_agent_review_opportunities opportunity
+                         JOIN tokenless_agent_review_opportunities opportunity
                            ON opportunity.workspace_id=project.workspace_id AND opportunity.run_id=run.run_id
-                         LEFT JOIN tokenless_agent_evaluation_scopes scope
-                           ON scope.workspace_id=opportunity.workspace_id AND scope.scope_id=opportunity.scope_id
+                         JOIN tokenless_agent_evaluation_scopes scope
+                           ON scope.workspace_id=opportunity.workspace_id
+                          AND scope.scope_id=opportunity.scope_id
+                          AND scope.agent_id=opportunity.agent_id
+                          AND scope.agent_version_id=opportunity.agent_version_id
+                         JOIN tokenless_agent_human_review_bindings binding
+                           ON binding.workspace_id=opportunity.workspace_id
+                          AND binding.agent_id=opportunity.agent_id
+                          AND binding.agent_version_id=opportunity.agent_version_id
+                          AND binding.binding_id=opportunity.human_review_binding_id
+                          AND binding.version=opportunity.human_review_binding_version
+                          AND binding.enabled=true AND binding.superseded_at IS NULL
+                          AND scope.human_review_binding_id=binding.binding_id
+                          AND scope.human_review_binding_version=binding.version
+                          AND scope.policy_id=binding.selection_policy_id
+                          AND scope.policy_version=binding.selection_policy_version
+                         JOIN tokenless_agent_review_policies review_policy
+                           ON review_policy.workspace_id=binding.workspace_id
+                          AND review_policy.policy_id=binding.selection_policy_id
+                          AND review_policy.version=binding.selection_policy_version
+                          AND review_policy.enabled=true AND review_policy.superseded_at IS NULL
+                         JOIN tokenless_agent_review_request_profiles profile
+                           ON profile.workspace_id=binding.workspace_id
+                          AND profile.profile_id=binding.request_profile_id
+                          AND profile.version=binding.request_profile_version
+                          AND profile.profile_hash=binding.request_profile_hash
+                          AND profile.result_semantics='assurance'
+                         JOIN tokenless_agent_versions version
+                           ON version.workspace_id=opportunity.workspace_id
+                          AND version.agent_id=opportunity.agent_id
+                          AND version.version_id=opportunity.agent_version_id
                          WHERE project.workspace_id=? AND project.status<>'deleted'
                            AND run.status='completed'
                            AND run.updated_at>=? AND run.updated_at<=?
-                           AND run.completed_at>=? AND run.completed_at<=?`;
+                           AND run.completed_at>=? AND run.completed_at<=?
+                           AND NOT EXISTS (
+                             SELECT 1 FROM tokenless_agent_versions newer
+                             WHERE newer.workspace_id=version.workspace_id
+                               AND newer.agent_id=version.agent_id
+                               AND newer.version_number>version.version_number
+                           )
+                           AND (?::text IS NULL OR scope.workflow_key=?)
+                           AND (?::text IS NULL OR scope.risk_tier=?)
+                           AND (?::text IS NULL OR scope.stage=?)
+                           AND (?::text IS NULL OR opportunity.agent_version_id=?)
+                           AND (?::text IS NULL OR opportunity.agent_id=?)
+                           AND (?::text IS NULL OR opportunity.scope_id=?)`;
 
 const QUALITY_CASE_CTES = `window_runs AS (${WINDOW_RUNS_SQL}),
                            source_cases AS (
@@ -510,16 +552,53 @@ function text(row: QueryRow | undefined, key: string) {
   return value === null || value === undefined ? null : String(value);
 }
 
-function windowArgs(workspaceId: string, startsAt: Date, endsAt: Date) {
-  return [workspaceId, startsAt, endsAt, startsAt, endsAt];
+type AgentReviewQualityFilters = {
+  workflow: string | null;
+  riskTier: string | null;
+  stage: string | null;
+  versionId: string | null;
+  agentId: string | null;
+  scopeId: string | null;
+};
+
+function windowArgs(workspaceId: string, startsAt: Date, endsAt: Date, filters: AgentReviewQualityFilters) {
+  return [
+    workspaceId,
+    startsAt,
+    endsAt,
+    startsAt,
+    endsAt,
+    filters.workflow,
+    filters.workflow,
+    filters.riskTier,
+    filters.riskTier,
+    filters.stage,
+    filters.stage,
+    filters.versionId,
+    filters.versionId,
+    filters.agentId,
+    filters.agentId,
+    filters.scopeId,
+    filters.scopeId,
+  ];
 }
 
 export async function loadAgentReviewQuality(input: {
   workspaceId: string;
   startsAt: Date;
   endsAt: Date;
+  periodLabel?: string;
+  filters?: Partial<AgentReviewQualityFilters>;
 }): Promise<AgentReviewQuality> {
-  const args = windowArgs(input.workspaceId, input.startsAt, input.endsAt);
+  const filters: AgentReviewQualityFilters = {
+    workflow: input.filters?.workflow ?? null,
+    riskTier: input.filters?.riskTier ?? null,
+    stage: input.filters?.stage ?? null,
+    versionId: input.filters?.versionId ?? null,
+    agentId: input.filters?.agentId ?? null,
+    scopeId: input.filters?.scopeId ?? null,
+  };
+  const args = windowArgs(input.workspaceId, input.startsAt, input.endsAt, filters);
   const [qualityResult, timingResult] = await Promise.all([
     dbClient.execute({ sql: QUALITY_SQL, args }),
     dbClient.execute({
@@ -561,6 +640,7 @@ export async function loadAgentReviewQuality(input: {
     });
   const timing = timingResult.rows[0] as QueryRow | undefined;
   return projectAgentReviewQuality({
+    periodLabel: input.periodLabel,
     sourceCaseCount: integer(summary, "source_case_count"),
     safeCaseCount,
     unanimousCaseCount: integer(summary, "unanimous_case_count"),

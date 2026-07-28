@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireBrowserSession } from "~~/lib/auth/request";
 import { getAgentOverview } from "~~/lib/tokenless/agentOverview";
+import { parseAgentOverviewUrlState } from "~~/lib/tokenless/agentOverviewUrlState";
 import { tokenlessErrorResponse } from "~~/lib/tokenless/server";
 
 export const dynamic = "force-dynamic";
@@ -13,9 +14,8 @@ export async function GET(request: NextRequest, { params }: Context) {
   try {
     const session = await requireBrowserSession(request);
     const { workspaceId } = await params;
-    const rawPage = request.nextUrl.searchParams.get("page");
-    const page = rawPage === null ? 1 : Number(rawPage);
-    return NextResponse.json(await getAgentOverview({ accountAddress: session.principalId, workspaceId, page }), {
+    const query = parseAgentOverviewUrlState(request.nextUrl.searchParams);
+    return NextResponse.json(await getAgentOverview({ accountAddress: session.principalId, workspaceId, query }), {
       headers: NO_STORE,
     });
   } catch (error) {
