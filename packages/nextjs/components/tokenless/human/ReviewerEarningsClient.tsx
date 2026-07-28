@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import type { ReviewerEarning } from "~~/lib/tokenless/raterSettlementService";
 
 type EarningsResponse = {
@@ -92,100 +93,100 @@ export function ReviewerEarningsClient() {
         </button>
       </div>
       {ledger ? (
-        <>
-          <dl className="mt-5 grid gap-3 sm:grid-cols-3">
-            {[
-              ["Earned", ledger.totals.earnedAtomic],
-              ["Paid", ledger.totals.claimedAtomic],
-              ["Ready to claim", ledger.totals.claimableAtomic],
-            ].map(([label, amount]) => (
-              <div key={label} className="surface-card-nested rounded-xl p-4">
-                <dt className="text-xs text-base-content/55">{label}</dt>
-                <dd className="mt-1 text-lg font-semibold">{usdc(amount)}</dd>
-              </div>
-            ))}
-          </dl>
-          {ledger.items.length ? (
-            <div className="mt-5 space-y-3">
-              {ledger.items.map(item => (
-                <article key={item.commitId} className="surface-card-nested rounded-xl p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="truncate text-sm font-medium">{item.question}</h3>
-                      <p className="mt-1 font-mono text-xs text-base-content/55">
-                        Round {item.roundId} · {short(item.commitKey)}
-                      </p>
-                    </div>
-                    <span
-                      className={`rounded-md px-3 py-1 text-xs ${
-                        item.status === "paid"
-                          ? "bg-emerald-400/10 text-emerald-100"
-                          : item.status === "claimable" || item.status === "reveal_required"
-                            ? "bg-amber-400/10 text-amber-100"
-                            : "bg-white/5 text-base-content/60"
-                      }`}
-                    >
-                      {STATUS_LABELS[item.status]}
-                    </span>
-                  </div>
-                  <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-4">
-                    <div>
-                      <dt className="text-base-content/55">Your vote</dt>
-                      <dd className="mt-1">{item.vote ?? "Sealed"}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-base-content/55">Panel verdict</dt>
-                      <dd className="mt-1">{item.verdict ?? "Pending"}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-base-content/55">Earned</dt>
-                      <dd className="mt-1">{usdc(item.earnedAtomic)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-base-content/55">Claim deadline</dt>
-                      <dd className="mt-1">{claimDeadline(item.claimDeadline)}</dd>
-                    </div>
-                  </dl>
-                  <div className="mt-3 flex flex-wrap gap-3 text-xs">
-                    {item.commitTransactionHash ? (
-                      <a
-                        className="text-[var(--rateloop-pink)] underline"
-                        href={`https://sepolia.basescan.org/tx/${item.commitTransactionHash}`}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Commit transaction
-                      </a>
-                    ) : null}
-                    {item.claimTransactionHash ? (
-                      <a
-                        className="text-[var(--rateloop-pink)] underline"
-                        href={`https://sepolia.basescan.org/tx/${item.claimTransactionHash}`}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Claim transaction
-                      </a>
-                    ) : null}
-                    {item.status === "claimable" || item.status === "reveal_required" ? (
-                      <a className="text-[var(--rateloop-pink)] underline" href="#paid-settlement">
-                        Open payment recovery
-                      </a>
-                    ) : null}
-                  </div>
-                </article>
-              ))}
+        <dl className="mt-5 grid gap-3 sm:grid-cols-3">
+          {[
+            ["Earned", ledger.totals.earnedAtomic],
+            ["Paid", ledger.totals.claimedAtomic],
+            ["Ready to claim", ledger.totals.claimableAtomic],
+          ].map(([label, amount]) => (
+            <div key={label} className="surface-card-nested rounded-xl p-4">
+              <dt className="text-xs text-base-content/55">{label}</dt>
+              <dd className="mt-1 text-lg font-semibold">{usdc(amount)}</dd>
             </div>
-          ) : (
-            <p className="mt-5 text-sm text-base-content/55">No paid review commits yet.</p>
-          )}
-        </>
+          ))}
+        </dl>
       ) : null}
-      {error ? (
-        <p className="mt-4 rounded-lg border border-error/30 bg-error/10 p-3 text-sm text-error" role="alert">
-          {error}
-        </p>
-      ) : null}
+      <AsyncSection
+        className="mt-5"
+        loading={loading && ledger === null}
+        loadingLabel="Loading reviewer earnings"
+        error={error}
+        empty={ledger !== null && ledger.items.length === 0}
+        emptyTitle="No paid review commits yet."
+      >
+        {ledger?.items.length ? (
+          <div className="mt-5 space-y-3">
+            {ledger.items.map(item => (
+              <article key={item.commitId} className="surface-card-nested rounded-xl p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate text-sm font-medium">{item.question}</h3>
+                    <p className="mt-1 font-mono text-xs text-base-content/55">
+                      Round {item.roundId} · {short(item.commitKey)}
+                    </p>
+                  </div>
+                  <span
+                    className={`rounded-md px-3 py-1 text-xs ${
+                      item.status === "paid"
+                        ? "bg-emerald-400/10 text-emerald-100"
+                        : item.status === "claimable" || item.status === "reveal_required"
+                          ? "bg-amber-400/10 text-amber-100"
+                          : "bg-white/5 text-base-content/60"
+                    }`}
+                  >
+                    {STATUS_LABELS[item.status]}
+                  </span>
+                </div>
+                <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-4">
+                  <div>
+                    <dt className="text-base-content/55">Your vote</dt>
+                    <dd className="mt-1">{item.vote ?? "Sealed"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-base-content/55">Panel verdict</dt>
+                    <dd className="mt-1">{item.verdict ?? "Pending"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-base-content/55">Earned</dt>
+                    <dd className="mt-1">{usdc(item.earnedAtomic)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-base-content/55">Claim deadline</dt>
+                    <dd className="mt-1">{claimDeadline(item.claimDeadline)}</dd>
+                  </div>
+                </dl>
+                <div className="mt-3 flex flex-wrap gap-3 text-xs">
+                  {item.commitTransactionHash ? (
+                    <a
+                      className="text-[var(--rateloop-pink)] underline"
+                      href={`https://sepolia.basescan.org/tx/${item.commitTransactionHash}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Commit transaction
+                    </a>
+                  ) : null}
+                  {item.claimTransactionHash ? (
+                    <a
+                      className="text-[var(--rateloop-pink)] underline"
+                      href={`https://sepolia.basescan.org/tx/${item.claimTransactionHash}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Claim transaction
+                    </a>
+                  ) : null}
+                  {item.status === "claimable" || item.status === "reveal_required" ? (
+                    <a className="text-[var(--rateloop-pink)] underline" href="#paid-settlement">
+                      Open payment recovery
+                    </a>
+                  ) : null}
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : null}
+      </AsyncSection>
     </section>
   );
 }

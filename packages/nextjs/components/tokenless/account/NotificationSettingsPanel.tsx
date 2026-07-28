@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChoiceInput, Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { HttpJsonError, readJson } from "~~/lib/tokenless/http";
 
 const notificationOptions = [
@@ -141,6 +142,7 @@ export function NotificationSettingsPanel() {
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [savingEmail, setSavingEmail] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { capture, clear, fieldErrors, formError } = useFormErrors();
 
@@ -175,9 +177,12 @@ export function NotificationSettingsPanel() {
         setEmailSettings(nextEmail);
         setCapabilities(nextCapabilities);
         setEmailDraft(nextEmail.email);
+        setLoadError(null);
       })
       .catch(cause => {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : "Unable to load notification settings.");
+        if (!cancelled) {
+          setLoadError(cause instanceof Error ? cause.message : "Unable to load notification settings.");
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -293,47 +298,47 @@ export function NotificationSettingsPanel() {
                   : "Browser alerts need permission"}
           </div>
         </div>
-        {loading ? (
-          <p className="mt-5 text-sm text-base-content/55" role="status">
-            Loading notification settings…
-          </p>
-        ) : null}
-        {!loading ? (
-          <>
-            <div className="mt-5 space-y-5">
-              {notificationGroups.map(entry => (
-                <section key={entry.group} aria-labelledby={`notification-group-${entry.group.replaceAll(" ", "-")}`}>
-                  <h3
-                    id={`notification-group-${entry.group.replaceAll(" ", "-")}`}
-                    className="mb-2 text-sm font-semibold"
-                  >
-                    {entry.group}
-                  </h3>
-                  <div className="space-y-2">
-                    {entry.options.map(option => (
-                      <PreferenceToggle
-                        key={option.key}
-                        option={option}
-                        checked={option.key === "accountSecurity" ? true : preferences[option.key]}
-                        disabled={savingPreferences || option.key === "accountSecurity"}
-                        onChange={value => void updatePreference(option.key, value)}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ))}
-            </div>
-            {browserPermission === "default" ? (
-              <button
-                type="button"
-                className="btn rateloop-secondary-action mt-4"
-                onClick={() => void requestBrowserPermission()}
-              >
-                Enable browser notifications
-              </button>
-            ) : null}
-          </>
-        ) : null}
+        <AsyncSection
+          className="mt-5"
+          loading={loading}
+          loadingLabel="Loading notification settings"
+          error={loadError}
+          empty={notificationGroups.length === 0}
+          emptyTitle="No notification choices available."
+        >
+          <div className="mt-5 space-y-5">
+            {notificationGroups.map(entry => (
+              <section key={entry.group} aria-labelledby={`notification-group-${entry.group.replaceAll(" ", "-")}`}>
+                <h3
+                  id={`notification-group-${entry.group.replaceAll(" ", "-")}`}
+                  className="mb-2 text-sm font-semibold"
+                >
+                  {entry.group}
+                </h3>
+                <div className="space-y-2">
+                  {entry.options.map(option => (
+                    <PreferenceToggle
+                      key={option.key}
+                      option={option}
+                      checked={option.key === "accountSecurity" ? true : preferences[option.key]}
+                      disabled={savingPreferences || option.key === "accountSecurity"}
+                      onChange={value => void updatePreference(option.key, value)}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+          {browserPermission === "default" ? (
+            <button
+              type="button"
+              className="btn rateloop-secondary-action mt-4"
+              onClick={() => void requestBrowserPermission()}
+            >
+              Enable browser notifications
+            </button>
+          ) : null}
+        </AsyncSection>
       </section>
 
       <section className="surface-card rounded-2xl p-6">

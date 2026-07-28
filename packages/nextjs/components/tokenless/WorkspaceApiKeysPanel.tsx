@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { OneTimeSecretNotice } from "~~/components/tokenless/agents/OneTimeSecretNotice";
 import { ChoiceInput, Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
 import {
   WORKSPACE_API_KEY_SCOPES,
@@ -56,6 +57,7 @@ function expiresInNinetyDays() {
 export function WorkspaceApiKeysPanel({ workspaceId }: { workspaceId: string }) {
   const [apiKeys, setApiKeys] = useState<ApiKeySummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [name, setName] = useState("");
   const [scopes, setScopes] = useState<WorkspaceApiKeyScope[]>(["quote:read", "result:read", "evaluation:read"]);
@@ -66,6 +68,7 @@ export function WorkspaceApiKeysPanel({ workspaceId }: { workspaceId: string }) 
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
+    setLoadError(null);
     setRevealedToken(null);
     setRevokeConfirmation(null);
     void fetch(`/api/account/workspaces/${encodeURIComponent(workspaceId)}/api-keys`, {
@@ -75,13 +78,15 @@ export function WorkspaceApiKeysPanel({ workspaceId }: { workspaceId: string }) 
       .then(readJson)
       .then(body => setApiKeys(body.apiKeys as ApiKeySummary[]))
       .catch(error => {
-        if (!controller.signal.aborted) capture(error, "Unable to load API keys.");
+        if (!controller.signal.aborted) {
+          setLoadError(error instanceof Error ? error.message : "Unable to load API keys.");
+        }
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [capture, workspaceId]);
+  }, [workspaceId]);
 
   async function createApiKey(event: FormEvent) {
     event.preventDefault();
@@ -213,46 +218,53 @@ export function WorkspaceApiKeysPanel({ workspaceId }: { workspaceId: string }) 
         <OneTimeSecretNotice label="this API key" value={revealedToken} onDismiss={() => setRevealedToken(null)} />
       ) : null}
 
-      <div className="mt-6 space-y-3" aria-live="polite">
-        {loading ? <p className="text-sm text-base-content/55">Loading API keys…</p> : null}
-        {!loading && apiKeys.length === 0 ? <p className="text-sm text-base-content/55">No API keys yet.</p> : null}
-        {apiKeys.map(apiKey => (
-          <article key={apiKey.apiKeyId} className="rounded-lg border border-white/10 p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h3 className="font-medium">{apiKey.name}</h3>
-                <p className="mt-1 font-mono text-xs text-base-content/55">{apiKey.keyPrefix}…</p>
-                <p className="mt-2 text-xs text-base-content/55">
-                  Expires {dateLabel(apiKey.expiresAt)} · Last used {dateLabel(apiKey.lastUsedAt)}
-                </p>
+      <AsyncSection
+        className="mt-6"
+        loading={loading}
+        loadingLabel="Loading API keys"
+        error={loadError}
+        empty={apiKeys.length === 0}
+        emptyTitle="No API keys yet."
+      >
+        <div className="mt-6 space-y-3" aria-live="polite">
+          {apiKeys.map(apiKey => (
+            <article key={apiKey.apiKeyId} className="rounded-lg border border-white/10 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-medium">{apiKey.name}</h3>
+                  <p className="mt-1 font-mono text-xs text-base-content/55">{apiKey.keyPrefix}…</p>
+                  <p className="mt-2 text-xs text-base-content/55">
+                    Expires {dateLabel(apiKey.expiresAt)} · Last used {dateLabel(apiKey.lastUsedAt)}
+                  </p>
+                </div>
+                {apiKey.revokedAt ? (
+                  <span className="rounded-full bg-base-content/[0.08] px-3 py-1 text-xs">Revoked</span>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-sm border-red-300/20 bg-red-300/[0.06] text-red-100"
+                    disabled={busy}
+                    onClick={() => setRevokeConfirmation(apiKey)}
+                  >
+                    Revoke
+                  </button>
+                )}
               </div>
-              {apiKey.revokedAt ? (
-                <span className="rounded-full bg-base-content/[0.08] px-3 py-1 text-xs">Revoked</span>
-              ) : (
-                <button
-                  type="button"
-                  className="btn btn-sm border-red-300/20 bg-red-300/[0.06] text-red-100"
-                  disabled={busy}
-                  onClick={() => setRevokeConfirmation(apiKey)}
-                >
-                  Revoke
-                </button>
-              )}
-            </div>
-            <ul className="mt-3 flex flex-wrap gap-2" aria-label={`Permissions for ${apiKey.name}`}>
-              {apiKey.scopes.map(scope => (
-                <li
-                  key={scope}
-                  className="inline-flex flex-wrap items-baseline gap-x-2 rounded-md bg-base-content/[0.05] px-2.5 py-1.5 text-xs"
-                >
-                  <span>{WORKSPACE_API_KEY_SCOPE_DETAILS[scope].label}</span>
-                  <code className="text-base-content/50">{scope}</code>
-                </li>
-              ))}
-            </ul>
-          </article>
-        ))}
-      </div>
+              <ul className="mt-3 flex flex-wrap gap-2" aria-label={`Permissions for ${apiKey.name}`}>
+                {apiKey.scopes.map(scope => (
+                  <li
+                    key={scope}
+                    className="inline-flex flex-wrap items-baseline gap-x-2 rounded-md bg-base-content/[0.05] px-2.5 py-1.5 text-xs"
+                  >
+                    <span>{WORKSPACE_API_KEY_SCOPE_DETAILS[scope].label}</span>
+                    <code className="text-base-content/50">{scope}</code>
+                  </li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </div>
+      </AsyncSection>
       <ConfirmDialog
         open={revokeConfirmation !== null}
         title={revokeConfirmation ? `Revoke “${revokeConfirmation.name}”?` : "Revoke this API key?"}

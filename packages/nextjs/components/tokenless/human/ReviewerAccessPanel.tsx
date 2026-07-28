@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
 
 type ReviewerAccess = {
@@ -37,6 +38,7 @@ export function ReviewerAccessPanel() {
   const [loading, setLoading] = useState(true);
   const [busyWorkspaceId, setBusyWorkspaceId] = useState<string | null>(null);
   const [pendingLeave, setPendingLeave] = useState<ReviewerAccess | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
@@ -55,10 +57,10 @@ export function ReviewerAccessPanel() {
     const controller = new AbortController();
     setLoading(true);
     void load(controller.signal)
-      .then(() => setError(null))
+      .then(() => setLoadError(null))
       .catch(cause => {
         if (cause instanceof DOMException && cause.name === "AbortError") return;
-        setError(cause instanceof Error ? cause.message : "Unable to load reviewer access.");
+        setLoadError(cause instanceof Error ? cause.message : "Unable to load reviewer access.");
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -97,11 +99,13 @@ export function ReviewerAccessPanel() {
         </h2>
       </div>
       <div className="mt-5">
-        {loading ? (
-          <p className="text-sm text-base-content/55" role="status">
-            <span className="loading loading-spinner loading-sm mr-2" /> Loading reviewer access…
-          </p>
-        ) : activeAccess.length ? (
+        <AsyncSection
+          loading={loading}
+          loadingLabel="Loading reviewer access"
+          error={loadError}
+          empty={activeAccess.length === 0}
+          emptyTitle="You do not review for a workspace yet."
+        >
           <ul className="space-y-3">
             {activeAccess.map(item => (
               <li className="surface-card-nested rounded-lg p-4" key={item.workspaceId}>
@@ -128,14 +132,12 @@ export function ReviewerAccessPanel() {
               </li>
             ))}
           </ul>
-        ) : (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white/[0.04] p-4">
-            <p className="text-sm text-base-content/55">You do not review for a workspace yet.</p>
-            <Link className="btn btn-sm rateloop-secondary-action" href="/human/review?invite=1">
-              Use an invitation
-            </Link>
-          </div>
-        )}
+        </AsyncSection>
+        {!loading && !loadError && activeAccess.length === 0 ? (
+          <Link className="btn btn-sm rateloop-secondary-action mt-3" href="/human/review?invite=1">
+            Use an invitation
+          </Link>
+        ) : null}
       </div>
       {status ? (
         <p role="status" className="mt-5 rounded-lg bg-emerald-300/10 p-3 text-sm text-emerald-100">

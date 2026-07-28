@@ -3,6 +3,7 @@
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { betterAuthClient, readBrowserAuthConfiguration } from "~~/lib/auth/client";
 import { readJson } from "~~/lib/tokenless/http";
 
@@ -57,6 +58,7 @@ export function PasskeyManagementPanel() {
     const result = await jsonRequest<{ canRemoveLast: boolean; passkeys: PasskeySummary[] }>("/api/account/passkeys");
     setPasskeys(result.passkeys);
     setCanRemoveLast(result.canRemoveLast);
+    setLoadError(null);
   }, []);
 
   useEffect(() => {
@@ -176,11 +178,14 @@ export function PasskeyManagementPanel() {
         </button>
       </div>
 
-      {loading ? <p className="mt-5 text-sm text-base-content/55">Loading passkeys…</p> : null}
-      {!loading && passkeys.length === 0 ? (
-        <p className="mt-5 text-sm text-base-content/55">No passkey added yet.</p>
-      ) : null}
-      {passkeys.length > 0 ? (
+      <AsyncSection
+        className="mt-5"
+        loading={loading}
+        loadingLabel="Loading passkeys"
+        error={loadError}
+        empty={passkeys.length === 0}
+        emptyTitle="No passkey added yet."
+      >
         <ul className="mt-5 space-y-3" aria-label="Your passkeys">
           {passkeys.map(passkey => {
             const isOnly = passkeys.length === 1;
@@ -212,7 +217,7 @@ export function PasskeyManagementPanel() {
             );
           })}
         </ul>
-      ) : null}
+      </AsyncSection>
 
       {pending && configuration ? (
         <div
@@ -315,9 +320,9 @@ export function PasskeyManagementPanel() {
           {notice}
         </p>
       ) : null}
-      {loadError || formError ? (
+      {formError ? (
         <p className="mt-4 text-sm text-error" role="alert">
-          {loadError ?? formError}
+          {formError}
         </p>
       ) : null}
     </section>

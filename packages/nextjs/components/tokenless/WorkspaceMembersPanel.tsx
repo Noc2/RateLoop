@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { OneTimeSecretNotice } from "~~/components/tokenless/agents/OneTimeSecretNotice";
 import { Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
 import { readJson } from "~~/lib/tokenless/http";
 import { WorkspaceRequestScope } from "~~/lib/tokenless/workspaceRequestScope";
@@ -62,7 +63,8 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
   const [issuedToken, setIssuedToken] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<MemberConfirmation | null>(null);
   const [busyTarget, setBusyTarget] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(canManage);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [workspaceRequests] = useState(() => new WorkspaceRequestScope());
   const { capture, clear, fieldErrors, formError } = useFormErrors();
 
@@ -82,6 +84,7 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
       setMembers(body.members);
       setInvitations(body.invitations);
       setViewerPrincipalId(body.viewerPrincipalId);
+      setLoadError(null);
       clear();
     } finally {
       if (request.isCurrent()) setLoading(false);
@@ -96,14 +99,15 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
     setViewerPrincipalId("");
     setIssuedToken(null);
     setConfirmation(null);
+    setLoadError(null);
     clear();
     if (!canManage) return;
     void loadMembers().catch(cause => {
       if (!workspaceRequests.isWorkspaceCurrent(workspaceId)) return;
       setLoading(false);
-      capture(cause, "Unable to load workspace members.");
+      setLoadError(cause instanceof Error ? cause.message : "Unable to load workspace members.");
     });
-  }, [canManage, capture, clear, loadMembers, workspaceId, workspaceRequests]);
+  }, [canManage, clear, loadMembers, workspaceId, workspaceRequests]);
 
   async function createInvitation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -273,103 +277,112 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
         </p>
       ) : null}
 
-      <div className="mt-6 border-t border-white/10 pt-5">
-        <h3 className="text-sm font-semibold">People with workspace access</h3>
-        {loading ? (
-          <p className="mt-3 text-sm text-base-content/55" role="status">
-            Loading members…
-          </p>
-        ) : (
-          <ul className="mt-3 space-y-2">
-            {members.map(member => {
-              const immutable =
-                member.accessRole === "owner" || member.managedBy !== null || member.principalId === viewerPrincipalId;
-              return (
-                <li
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-base-content/[0.035] p-3"
-                  key={member.principalId}
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">
-                      {member.displayName ?? member.email ?? shortPrincipal(member.principalId)}
-                    </p>
-                    <p className="mt-1 text-xs text-base-content/55">
-                      {member.displayName && member.email ? `${member.email} · ` : ""}
-                      {member.managedBy
-                        ? `Managed by ${member.managedBy.toUpperCase()}`
-                        : shortPrincipal(member.principalId)}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {member.accessRole === "owner" ? (
-                      <span className="rounded-full bg-base-content/[0.08] px-3 py-1.5 text-xs font-semibold">
-                        Owner
-                      </span>
-                    ) : (
-                      <SelectField
-                        className="select-sm rounded-lg border-white/10 bg-[var(--rateloop-field)]"
-                        label={`Role for ${member.displayName ?? member.email ?? member.principalId}`}
-                        labelClassName="sr-only"
-                        value={member.accessRole}
-                        disabled={immutable || busyTarget === member.principalId}
-                        onChange={event =>
-                          void updateRole(member, event.target.value as Exclude<WorkspaceAccessRole, "owner">)
-                        }
-                      >
-                        <option value="member">Member</option>
-                        <option value="admin">Admin</option>
-                        <option value="billing">Billing</option>
-                      </SelectField>
-                    )}
-                    {!immutable ? (
-                      <button
-                        className="btn btn-sm border-red-300/20 bg-red-300/[0.06] text-red-100"
-                        type="button"
-                        disabled={busyTarget === member.principalId}
-                        onClick={() =>
-                          setConfirmation({
-                            kind: "remove-member",
-                            member,
-                            label: member.displayName ?? member.email ?? shortPrincipal(member.principalId),
-                          })
-                        }
-                      >
-                        Remove
-                      </button>
-                    ) : null}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-
-      {pendingInvitations.length ? (
+      <AsyncSection
+        className="mt-6"
+        loading={loading}
+        loadingLabel="Loading workspace members"
+        error={loadError}
+        empty={members.length === 0 && pendingInvitations.length === 0}
+        emptyTitle="No workspace members found."
+      >
         <div className="mt-6 border-t border-white/10 pt-5">
-          <h3 className="text-sm font-semibold">Pending invitations</h3>
-          <ul className="mt-3 space-y-2">
-            {pendingInvitations.map(invitation => (
-              <li
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-base-content/[0.035] p-3 text-sm"
-                key={invitation.inviteId}
-              >
-                <span>
-                  {roleLabel(invitation.accessRole)} · expires {dateLabel(invitation.expiresAt)}
-                </span>
-                <button
-                  className="text-xs text-red-200 underline underline-offset-4"
-                  type="button"
-                  disabled={busyTarget === invitation.inviteId}
-                  onClick={() => setConfirmation({ kind: "revoke-invitation", invitation })}
-                >
-                  Revoke
-                </button>
-              </li>
-            ))}
-          </ul>
+          <h3 className="text-sm font-semibold">People with workspace access</h3>
+          {members.length ? (
+            <ul className="mt-3 space-y-2">
+              {members.map(member => {
+                const immutable =
+                  member.accessRole === "owner" ||
+                  member.managedBy !== null ||
+                  member.principalId === viewerPrincipalId;
+                return (
+                  <li
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-base-content/[0.035] p-3"
+                    key={member.principalId}
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">
+                        {member.displayName ?? member.email ?? shortPrincipal(member.principalId)}
+                      </p>
+                      <p className="mt-1 text-xs text-base-content/55">
+                        {member.displayName && member.email ? `${member.email} · ` : ""}
+                        {member.managedBy
+                          ? `Managed by ${member.managedBy.toUpperCase()}`
+                          : shortPrincipal(member.principalId)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {member.accessRole === "owner" ? (
+                        <span className="rounded-full bg-base-content/[0.08] px-3 py-1.5 text-xs font-semibold">
+                          Owner
+                        </span>
+                      ) : (
+                        <SelectField
+                          className="select-sm rounded-lg border-white/10 bg-[var(--rateloop-field)]"
+                          label={`Role for ${member.displayName ?? member.email ?? member.principalId}`}
+                          labelClassName="sr-only"
+                          value={member.accessRole}
+                          disabled={immutable || busyTarget === member.principalId}
+                          onChange={event =>
+                            void updateRole(member, event.target.value as Exclude<WorkspaceAccessRole, "owner">)
+                          }
+                        >
+                          <option value="member">Member</option>
+                          <option value="admin">Admin</option>
+                          <option value="billing">Billing</option>
+                        </SelectField>
+                      )}
+                      {!immutable ? (
+                        <button
+                          className="btn btn-sm border-red-300/20 bg-red-300/[0.06] text-red-100"
+                          type="button"
+                          disabled={busyTarget === member.principalId}
+                          onClick={() =>
+                            setConfirmation({
+                              kind: "remove-member",
+                              member,
+                              label: member.displayName ?? member.email ?? shortPrincipal(member.principalId),
+                            })
+                          }
+                        >
+                          Remove
+                        </button>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="mt-3 text-sm text-base-content/55">No one has workspace access yet.</p>
+          )}
         </div>
-      ) : null}
+
+        {pendingInvitations.length ? (
+          <div className="mt-6 border-t border-white/10 pt-5">
+            <h3 className="text-sm font-semibold">Pending invitations</h3>
+            <ul className="mt-3 space-y-2">
+              {pendingInvitations.map(invitation => (
+                <li
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-base-content/[0.035] p-3 text-sm"
+                  key={invitation.inviteId}
+                >
+                  <span>
+                    {roleLabel(invitation.accessRole)} · expires {dateLabel(invitation.expiresAt)}
+                  </span>
+                  <button
+                    className="text-xs text-red-200 underline underline-offset-4"
+                    type="button"
+                    disabled={busyTarget === invitation.inviteId}
+                    onClick={() => setConfirmation({ kind: "revoke-invitation", invitation })}
+                  >
+                    Revoke
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </AsyncSection>
       <ConfirmDialog
         open={confirmation !== null}
         title={

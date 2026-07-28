@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { OneTimeSecretNotice } from "~~/components/tokenless/agents/OneTimeSecretNotice";
 import { ChoiceInput, Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
+import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
 import { readJson } from "~~/lib/tokenless/http";
 import { WorkspaceRequestScope } from "~~/lib/tokenless/workspaceRequestScope";
@@ -139,6 +140,7 @@ export function WorkspaceReviewersPanel({
   } | null>(null);
   const [busyTarget, setBusyTarget] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [workspaceRequests] = useState(() => new WorkspaceRequestScope());
@@ -186,6 +188,7 @@ export function WorkspaceReviewersPanel({
       setExpertiseContext(
         invitedExpertiseContext(ownerView as Record<string, unknown>, definitionsBody as Record<string, unknown>),
       );
+      setLoadError(null);
       setError(null);
     } finally {
       if (request.isCurrent()) setLoading(false);
@@ -200,6 +203,7 @@ export function WorkspaceReviewersPanel({
     setIssuedUrl(null);
     setConfirmation(null);
     setExpertiseContext(null);
+    setLoadError(null);
     setError(null);
     setNotice(null);
     if (!canManage) {
@@ -209,7 +213,7 @@ export function WorkspaceReviewersPanel({
     void load().catch(cause => {
       if (!workspaceRequests.isWorkspaceCurrent(workspaceId)) return;
       setLoading(false);
-      setError(cause instanceof Error ? cause.message : "Unable to load reviewers.");
+      setLoadError(cause instanceof Error ? cause.message : "Unable to load reviewers.");
     });
   }, [canManage, load, workspaceId, workspaceRequests]);
 
@@ -432,98 +436,103 @@ export function WorkspaceReviewersPanel({
         </p>
       ) : null}
 
-      <div className="mt-6 border-t border-white/10 pt-5">
-        <h3 className="text-sm font-semibold">Active reviewers</h3>
-        {loading ? (
-          <p className="mt-3 text-sm text-base-content/55" role="status">
-            Loading reviewers…
-          </p>
-        ) : activeReviewers.length ? (
-          <ul className="mt-3 space-y-2">
-            {activeReviewers.map(reviewer => (
-              <li
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-base-content/[0.035] p-3"
-                key={reviewer.principalAddress}
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">{reviewerLabel(reviewer)}</p>
-                  {reviewer.displayName && reviewer.email ? (
-                    <p className="mt-1 truncate text-xs text-base-content/60">{reviewer.email}</p>
-                  ) : null}
-                  {reviewer.displayName || reviewer.email ? (
-                    <p className="mt-1 truncate font-mono text-xs text-base-content/55">
-                      {shortPrincipal(reviewer.principalAddress)}
-                    </p>
-                  ) : null}
-                  {reviewer.grants
-                    .filter(grant => grant.status === "active")
-                    .map(grant => (
-                      <p className="mt-1 text-xs text-base-content/55" key={grant.grantId}>
-                        Up to {grant.maxPrivateSensitivity} material · access expires {dateLabel(grant.validUntil)}
+      <AsyncSection
+        className="mt-6"
+        loading={loading}
+        loadingLabel="Loading reviewers"
+        error={loadError}
+        empty={activeReviewers.length === 0 && pendingInvitations.length === 0}
+        emptyTitle="No reviewers yet."
+      >
+        <div className="mt-6 border-t border-white/10 pt-5">
+          <h3 className="text-sm font-semibold">Active reviewers</h3>
+          {activeReviewers.length ? (
+            <ul className="mt-3 space-y-2">
+              {activeReviewers.map(reviewer => (
+                <li
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-base-content/[0.035] p-3"
+                  key={reviewer.principalAddress}
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">{reviewerLabel(reviewer)}</p>
+                    {reviewer.displayName && reviewer.email ? (
+                      <p className="mt-1 truncate text-xs text-base-content/60">{reviewer.email}</p>
+                    ) : null}
+                    {reviewer.displayName || reviewer.email ? (
+                      <p className="mt-1 truncate font-mono text-xs text-base-content/55">
+                        {shortPrincipal(reviewer.principalAddress)}
                       </p>
-                    ))}
-                </div>
-                <div className="flex flex-wrap justify-end gap-2">
-                  {expertiseContext?.definitions.length ? (
+                    ) : null}
+                    {reviewer.grants
+                      .filter(grant => grant.status === "active")
+                      .map(grant => (
+                        <p className="mt-1 text-xs text-base-content/55" key={grant.grantId}>
+                          Up to {grant.maxPrivateSensitivity} material · access expires {dateLabel(grant.validUntil)}
+                        </p>
+                      ))}
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {expertiseContext?.definitions.length ? (
+                      <button
+                        className="btn btn-sm border-white/10 bg-white/[0.04]"
+                        type="button"
+                        disabled={busyTarget === reviewer.principalAddress}
+                        onClick={() => void confirmReviewerExpertise(reviewer)}
+                        title={`Attest: ${expertiseContext.definitions.map(definition => definition.label).join(", ")}`}
+                      >
+                        {busyTarget === reviewer.principalAddress ? "Confirming…" : "Confirm specialist areas"}
+                      </button>
+                    ) : null}
                     <button
-                      className="btn btn-sm border-white/10 bg-white/[0.04]"
+                      className="btn btn-sm border-red-300/20 bg-red-300/[0.06] text-red-100"
                       type="button"
                       disabled={busyTarget === reviewer.principalAddress}
-                      onClick={() => void confirmReviewerExpertise(reviewer)}
-                      title={`Attest: ${expertiseContext.definitions.map(definition => definition.label).join(", ")}`}
+                      onClick={() =>
+                        setConfirmation({
+                          kind: "remove-reviewer",
+                          reviewer,
+                          label: reviewerLabel(reviewer),
+                        })
+                      }
                     >
-                      {busyTarget === reviewer.principalAddress ? "Confirming…" : "Confirm specialist areas"}
+                      Remove
                     </button>
-                  ) : null}
-                  <button
-                    className="btn btn-sm border-red-300/20 bg-red-300/[0.06] text-red-100"
-                    type="button"
-                    disabled={busyTarget === reviewer.principalAddress}
-                    onClick={() =>
-                      setConfirmation({
-                        kind: "remove-reviewer",
-                        reviewer,
-                        label: reviewerLabel(reviewer),
-                      })
-                    }
-                  >
-                    Remove
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-3 text-sm text-base-content/55">No reviewers yet.</p>
-        )}
-      </div>
-
-      {pendingInvitations.length ? (
-        <div className="mt-6 border-t border-white/10 pt-5">
-          <h3 className="text-sm font-semibold">Pending invitations</h3>
-          <ul className="mt-3 space-y-2">
-            {pendingInvitations.map(invitation => (
-              <li
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-base-content/[0.035] p-3 text-sm"
-                key={invitation.invitationId}
-              >
-                <span>
-                  {invitation.hasEmailBinding ? "Email-bound" : "Invitation code"} · expires{" "}
-                  {dateLabel(invitation.expiresAt)}
-                </span>
-                <button
-                  className="text-xs text-red-200 underline underline-offset-4"
-                  type="button"
-                  disabled={busyTarget === invitation.invitationId}
-                  onClick={() => setConfirmation({ kind: "revoke-invitation", invitation })}
-                >
-                  Revoke
-                </button>
-              </li>
-            ))}
-          </ul>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 text-sm text-base-content/55">No active reviewers yet.</p>
+          )}
         </div>
-      ) : null}
+
+        {pendingInvitations.length ? (
+          <div className="mt-6 border-t border-white/10 pt-5">
+            <h3 className="text-sm font-semibold">Pending invitations</h3>
+            <ul className="mt-3 space-y-2">
+              {pendingInvitations.map(invitation => (
+                <li
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-base-content/[0.035] p-3 text-sm"
+                  key={invitation.invitationId}
+                >
+                  <span>
+                    {invitation.hasEmailBinding ? "Email-bound" : "Invitation code"} · expires{" "}
+                    {dateLabel(invitation.expiresAt)}
+                  </span>
+                  <button
+                    className="text-xs text-red-200 underline underline-offset-4"
+                    type="button"
+                    disabled={busyTarget === invitation.invitationId}
+                    onClick={() => setConfirmation({ kind: "revoke-invitation", invitation })}
+                  >
+                    Revoke
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </AsyncSection>
       <ConfirmDialog
         open={confirmation !== null}
         title={
