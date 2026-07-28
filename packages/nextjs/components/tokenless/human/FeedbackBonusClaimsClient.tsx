@@ -247,12 +247,6 @@ function FeedbackBonusClaimsControls() {
       <h2 id="feedback-bonus-claims-title" className="mt-2 text-xl font-semibold">
         Claim a Feedback Bonus
       </h2>
-      <p className="mt-2 text-sm leading-6 text-base-content/60">
-        RateLoop checks this review on your device, sending only its public round and vote key. The paid commit&apos;s
-        public tlock ciphertext becomes decryptable after the commit deadline with no post-commit abort, exposing the
-        vote, prediction, response hash, payout address, and salt even without a reveal or claim. Claiming later submits
-        the payout address and salt on-chain; any wallet may relay, but funds still go to that address.
-      </p>
       <SelectField
         containerClassName="mt-4"
         className="border-white/10 bg-[var(--rateloop-field)]"
@@ -271,6 +265,14 @@ function FeedbackBonusClaimsControls() {
           </option>
         ))}
       </SelectField>
+      {activeSource ? (
+        <p className="mt-3 text-sm leading-6 text-base-content/60">
+          RateLoop checks this review on your device, sending only its public round and vote key. The paid commit&apos;s
+          public tlock ciphertext becomes decryptable after the commit deadline with no post-commit abort, exposing the
+          vote, prediction, response hash, payout address, and salt even without a reveal or claim. Claiming later
+          submits the payout address and salt on-chain; any wallet may relay, but funds still go to that address.
+        </p>
+      ) : null}
       {needsRecoverySecret ? (
         <div className="mt-3 rounded-lg border border-white/10 p-3 text-sm text-base-content/60">
           <Field

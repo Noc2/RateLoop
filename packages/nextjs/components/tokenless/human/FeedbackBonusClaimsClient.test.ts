@@ -31,10 +31,12 @@ test("Feedback Bonus claims keep the recovery preimage in the browser", () => {
   assert.doesNotMatch(source, /body:\s*JSON\.stringify/u);
 });
 
-test("recovery and public-chain consequences remain visible before claim", () => {
+test("recovery and public-chain consequences appear after review selection and before claim", () => {
   const source = readFileSync(new URL("./FeedbackBonusClaimsClient.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(source, /<details/u);
   assert.match(source, /needsRecoverySecret \? \([\s\S]*<div[\s\S]*Recovery secret[\s\S]*type="password"/u);
-  assert.match(source, /Claiming later submits\s+the payout address and salt on-chain/u);
+  assert.match(source, /\{activeSource \? \([\s\S]*public tlock ciphertext becomes decryptable/u);
+  assert.match(source, /Claiming later\s+submits the payout address and salt on-chain/u);
+  assert.ok(source.indexOf("Choose a review") < source.indexOf("public tlock ciphertext becomes decryptable"));
   assert.ok(source.indexOf("public tlock ciphertext becomes decryptable") < source.indexOf('"Claim bonus"'));
 });
