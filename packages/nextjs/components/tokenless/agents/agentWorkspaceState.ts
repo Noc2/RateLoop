@@ -78,6 +78,14 @@ export function agentTabHref(tab: AgentTab, workspaceId?: string) {
   return `/agents?${params.toString()}`;
 }
 
+export function agentSignInReturnTo(input: { tab?: string; workspaceId?: string; step?: string }) {
+  const params = new URLSearchParams();
+  if (input.tab) params.set("tab", resolveAgentTabParam(input.tab));
+  if (input.workspaceId) params.set("workspace", input.workspaceId);
+  if (input.step) params.set("step", input.step);
+  return params.size > 0 ? `/agents?${params.toString()}` : "/agents";
+}
+
 export function nextAgentTabIndex(currentIndex: number, key: string, tabCount: number) {
   if (tabCount <= 0) return -1;
   if (key === "Home") return 0;

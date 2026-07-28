@@ -2,11 +2,11 @@ import Link from "next/link";
 import { SignedOutGate } from "~~/components/auth/SignedOutGate";
 import { Button } from "~~/components/tokenless/ui/Button";
 
-export function AgentsSignInPrompt() {
+export function AgentsSignInPrompt({ returnTo }: { returnTo: string }) {
   return (
     <SignedOutGate
       description="Sign in to connect an agent, configure human review, manage reviewers, and evaluate performance."
-      returnTo="/agents"
+      returnTo={returnTo}
       secondaryAction={
         <Button
           as={Link}

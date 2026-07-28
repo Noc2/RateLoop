@@ -1,4 +1,5 @@
 import {
+  agentSignInReturnTo,
   agentTabHref,
   canStartAgentConnection,
   connectedAgentTabs,
@@ -120,6 +121,11 @@ test("connected navigation splits the owner stack into URL-backed task tabs", ()
   assert.equal(resolveAgentTabParam("groups"), "registry");
   assert.equal(resolveAgentTabParam("unknown"), "overview");
   assert.equal(agentTabHref("inbox", "workspace one"), "/agents?tab=inbox&workspace=workspace+one");
+  assert.equal(agentSignInReturnTo({}), "/agents");
+  assert.equal(
+    agentSignInReturnTo({ tab: "evidence", workspaceId: "workspace one", step: "people" }),
+    "/agents?tab=evidence&workspace=workspace+one&step=people",
+  );
   assert.match(tabsSource, /value: "overview", label: "Overview"/);
   assert.match(tabsSource, /value: "connect", label: "Connections"/);
   assert.match(tabsSource, /value: "inbox", label: "Approvals"/);

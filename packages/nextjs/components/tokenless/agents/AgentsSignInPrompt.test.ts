@@ -8,11 +8,12 @@ const pageSource = readFileSync(new URL("../../../app/(app)/agents/page.tsx", im
 
 test("anonymous visitors see the Agents sign-in prompt without exposing workspace controls", () => {
   assert.match(pageSource, /await findAuthSession\(cookieStore\.get\(AUTH_SESSION_COOKIE\)\?\.value\)/);
-  assert.match(pageSource, /if \(!session\) return <AgentsSignInPrompt \/>/);
-  assert.ok(
-    pageSource.indexOf("if (!session) return <AgentsSignInPrompt />") < pageSource.indexOf("<AgentWorkspacePanels"),
-  );
+  assert.match(pageSource, /if \(!session\)/);
+  assert.match(pageSource, /<AgentsSignInPrompt/);
+  assert.match(pageSource, /returnTo=\{agentSignInReturnTo/);
+  assert.ok(pageSource.indexOf("if (!session)") < pageSource.indexOf("<AgentWorkspacePanels"));
   assert.match(promptSource, /<SignedOutGate/);
+  assert.match(promptSource, /returnTo=\{returnTo\}/);
   assert.match(promptSource, /title="Agents"/);
   assert.doesNotMatch(promptSource, /For Agents/);
   assert.match(promptSource, /Sign in to connect an agent/);

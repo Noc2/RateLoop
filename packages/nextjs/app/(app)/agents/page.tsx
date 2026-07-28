@@ -3,7 +3,11 @@ import type { Metadata } from "next";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { AgentWorkspacePanels } from "~~/components/tokenless/agents/AgentWorkspacePanels";
 import { AgentsSignInPrompt } from "~~/components/tokenless/agents/AgentsSignInPrompt";
-import { resolveAgentTabParam, selectRequestedWorkspace } from "~~/components/tokenless/agents/agentWorkspaceState";
+import {
+  agentSignInReturnTo,
+  resolveAgentTabParam,
+  selectRequestedWorkspace,
+} from "~~/components/tokenless/agents/agentWorkspaceState";
 import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
 import { agentPageTitle } from "~~/lib/tokenless/pageTitles";
 import { listProductWorkspaces } from "~~/lib/tokenless/productCore";
@@ -24,17 +28,23 @@ export async function generateMetadata({ searchParams }: { searchParams: AgentsS
 }
 
 export default async function AgentsPage({ searchParams }: { searchParams: AgentsSearchParams }) {
+  const params = await searchParams;
+  const rawTab = firstQueryValue(params.tab);
+  const requestedWorkspaceId = firstQueryValue(params.workspace);
+  const requestedStep = firstQueryValue(params.step);
   const cookieStore = await cookies();
   const session = await findAuthSession(cookieStore.get(AUTH_SESSION_COOKIE)?.value);
 
-  if (!session) return <AgentsSignInPrompt />;
+  if (!session) {
+    return (
+      <AgentsSignInPrompt
+        returnTo={agentSignInReturnTo({ tab: rawTab, workspaceId: requestedWorkspaceId, step: requestedStep })}
+      />
+    );
+  }
 
-  const params = await searchParams;
-  const rawTab = firstQueryValue(params.tab);
   const tab = resolveAgentTabParam(rawTab);
   const workspaces = await listProductWorkspaces(session.principalId);
-  const requestedWorkspaceId = firstQueryValue(params.workspace);
-  const requestedStep = firstQueryValue(params.step);
   const workspace = selectRequestedWorkspace(workspaces, requestedWorkspaceId);
   let hasConnectedAgent = false;
   let setup = null;
