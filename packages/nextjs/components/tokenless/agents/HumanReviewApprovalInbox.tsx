@@ -316,8 +316,7 @@ export function HumanReviewApprovalInbox({ workspaceId }: { workspaceId: string 
       aria-keyshortcuts={approvals.length > 0 ? "J K A D" : undefined}
     >
       <div>
-        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">Human review</p>
-        <h2 id="human-review-approval-inbox-title" className="mt-2 text-2xl font-semibold">
+        <h2 id="human-review-approval-inbox-title" className="text-2xl font-semibold">
           Requests awaiting approval
         </h2>
         <p className="mt-2 text-sm text-base-content/55">

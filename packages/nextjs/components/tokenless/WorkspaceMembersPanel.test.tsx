@@ -5,8 +5,8 @@ import test from "node:test";
 const source = readFileSync(new URL("./WorkspaceMembersPanel.tsx", import.meta.url), "utf8");
 
 test("workspace members have a focused invite and management path", () => {
-  assert.match(source, /Workspace access/);
   assert.match(source, />\s*Members\s*</);
+  assert.doesNotMatch(source, /Workspace access/);
   assert.match(source, /Invite member/);
   assert.match(source, /People with workspace access/);
   assert.match(source, /Pending invitations/);

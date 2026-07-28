@@ -351,8 +351,7 @@ export function WorkspaceReviewersPanel({
   return (
     <section className="rounded-xl border border-white/10 p-5" aria-labelledby="workspace-reviewers-heading">
       <div>
-        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">Reviewer access</p>
-        <h2 id="workspace-reviewers-heading" className="mt-2 text-xl font-semibold">
+        <h2 id="workspace-reviewers-heading" className="text-xl font-semibold">
           Reviewers
         </h2>
         <p className="mt-2 max-w-2xl text-sm text-base-content/55">

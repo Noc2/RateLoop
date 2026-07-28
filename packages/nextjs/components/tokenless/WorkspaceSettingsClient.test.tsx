@@ -9,14 +9,15 @@ const webhookRoute = new URL("../../app/api/account/workspaces/[workspaceId]/web
 
 test("workspace members are managed before billing without reviewer controls", () => {
   const members = source.indexOf("<WorkspaceMembersPanel");
-  const subscription = source.indexOf("Workspace subscription");
+  const subscription = source.indexOf('id="workspace-plan"');
   assert.ok(members >= 0 && members < subscription);
   assert.match(source, /workspaceId=\{selected\.workspaceId\}/);
   assert.doesNotMatch(source, /active private|private groups/);
 });
 
 test("workspace settings keeps subscription and panel funding separate", () => {
-  assert.match(source, /Workspace subscription/);
+  assert.match(source, /id="workspace-plan"/);
+  assert.doesNotMatch(source, /Workspace subscription/);
   assert.match(source, /Panel funding/);
   assert.match(source, /Settled USDC/);
   assert.match(source, /Reserved USDC/);

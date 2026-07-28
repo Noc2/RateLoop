@@ -276,8 +276,7 @@ export function NotificationSettingsPanel() {
   return (
     <section id="notifications" className="scroll-mt-24 space-y-5">
       <section className="surface-card rounded-2xl p-6">
-        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Notifications</p>
-        <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-xl font-semibold">Choose your notifications</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-base-content/60">
@@ -340,8 +339,7 @@ export function NotificationSettingsPanel() {
       <section className="surface-card rounded-2xl p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">Email delivery</p>
-            <h2 className="mt-2 text-xl font-semibold">Notification email</h2>
+            <h2 className="text-xl font-semibold">Notification email</h2>
             <p className="mt-2 text-sm leading-6 text-base-content/60">
               Add an email address for verified RateLoop notifications. Clearing it disables email delivery.
             </p>

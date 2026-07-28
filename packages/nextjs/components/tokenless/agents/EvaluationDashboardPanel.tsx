@@ -905,8 +905,7 @@ export function EvaluationDashboardPanel({ initialWorkspaceId = "" }: { initialW
   return (
     <div className="space-y-5">
       <section className="surface-card rounded-2xl p-6">
-        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">Evaluations</p>
-        <h2 className="mt-2 text-2xl font-semibold">Human review results</h2>
+        <h2 className="text-2xl font-semibold">Human review results</h2>
       </section>
 
       {error ? (

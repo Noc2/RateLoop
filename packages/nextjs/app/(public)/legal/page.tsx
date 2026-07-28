@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { PageHeading } from "~~/components/tokenless/ui/PageHeading";
 
 export const metadata: Metadata = { title: "Legal" };
 
@@ -19,14 +20,16 @@ const documents = [
 export default function LegalPage() {
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-10 sm:py-14">
-      <div className="border-l-2 border-[var(--rateloop-pink)] pl-6">
-        <p className="font-mono text-xs uppercase tracking-[0.25em] text-base-content/55">RateLoop</p>
-        <h1 className="display-section mt-3 text-4xl sm:text-5xl">Legal</h1>
-      </div>
-      <p className="mt-6 max-w-3xl text-lg leading-8 text-base-content/60">
-        These documents explain the RateLoop service, its privacy boundaries, payment and reviewer responsibilities,
-        public-chain records, and the operator behind the application.
-      </p>
+      <PageHeading
+        accent="pink"
+        heading="Legal"
+        subtitle={
+          <span className="block max-w-3xl text-lg leading-8">
+            These documents explain the RateLoop service, its privacy boundaries, payment and reviewer responsibilities,
+            public-chain records, and the operator behind the application.
+          </span>
+        }
+      />
       <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {documents.map(([title, href, description], index) => (
           <Link

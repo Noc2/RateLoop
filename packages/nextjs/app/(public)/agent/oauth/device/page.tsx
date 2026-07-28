@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
+import { PageHeading } from "~~/components/tokenless/ui/PageHeading";
 import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
 import { AgentOAuthError } from "~~/lib/tokenless/agentOAuth";
 import { getAgentOAuthDeviceApproval } from "~~/lib/tokenless/agentOAuthDevice";
@@ -22,13 +23,12 @@ const scopeLabels: Record<string, string> = {
 function CodeEntry({ message }: { message?: string }) {
   return (
     <section className="surface-card w-full max-w-lg rounded-2xl p-6 sm:p-9" aria-labelledby="device-code-title">
-      <p className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--rateloop-blue)]">Agent connection</p>
-      <h1 id="device-code-title" className="mt-4 text-4xl font-semibold tracking-tight">
-        Enter your connection code
-      </h1>
-      <p className="mt-4 text-sm leading-6 text-base-content/65">
-        Find the code in your agent host. It expires after ten minutes.
-      </p>
+      <PageHeading
+        accent="blue"
+        heading="Enter your connection code"
+        headingId="device-code-title"
+        subtitle="Find the code in your agent host. It expires after ten minutes."
+      />
       <form method="get" className="mt-7 space-y-4">
         <label className="block text-sm font-medium" htmlFor="user_code">
           Verification code
@@ -93,22 +93,18 @@ export default async function AgentOAuthDevicePage({ searchParams }: { searchPar
 
   const terminalCopy = {
     approved: {
-      eyebrow: "Approved",
       title: "Authorization approved",
       message: "Return to the same agent task. RateLoop will show the connection after verification.",
     },
     denied: {
-      eyebrow: "Denied",
       title: "Connection denied",
       message: "You can close this page.",
     },
     consumed: {
-      eyebrow: "Authenticated",
       title: "Authentication complete",
       message: "Return to the same agent task. RateLoop will show the connection after verification.",
     },
     expired: {
-      eyebrow: "Expired",
       title: "Connection code expired",
       message: "Return to your agent and restart authorization.",
     },
@@ -118,22 +114,20 @@ export default async function AgentOAuthDevicePage({ searchParams }: { searchPar
   return (
     <div className="flex grow items-start justify-center px-4 py-16 sm:py-24">
       <section className="surface-card w-full max-w-xl rounded-2xl p-6 sm:p-9" aria-labelledby="device-approval-title">
-        <p className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--rateloop-blue)]">
-          {terminal?.eyebrow ?? "Agent connection"}
-        </p>
-        <h1 id="device-approval-title" className="mt-4 text-4xl font-semibold tracking-tight">
-          {terminal?.title ?? `Allow ${approval.clientName}?`}
-        </h1>
-        {terminal ? (
-          <p className="mt-4 text-base leading-7 text-base-content/65" role="status">
-            {terminal.message}
-          </p>
-        ) : (
+        <PageHeading
+          accent="blue"
+          heading={terminal?.title ?? `Allow ${approval.clientName}?`}
+          headingId="device-approval-title"
+          subtitle={
+            terminal ? (
+              <span role="status">{terminal.message}</span>
+            ) : (
+              "It can check when work needs human review and read resulting decisions. It cannot publish, spend, manage the workspace, or read private files."
+            )
+          }
+        />
+        {!terminal ? (
           <>
-            <p className="mt-4 text-base leading-7 text-base-content/65">
-              It can check when work needs human review and read resulting decisions. It cannot publish, spend, manage
-              the workspace, or read private files.
-            </p>
             <section
               className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4 text-sm"
               aria-labelledby="device-scope-title"
@@ -163,7 +157,7 @@ export default async function AgentOAuthDevicePage({ searchParams }: { searchPar
               </button>
             </form>
           </>
-        )}
+        ) : null}
       </section>
     </div>
   );

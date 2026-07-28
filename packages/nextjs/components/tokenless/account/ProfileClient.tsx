@@ -68,8 +68,7 @@ export function ProfileClient() {
       <section className="surface-card rounded-2xl p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Profile</p>
-            <h2 id="profile-display-name-heading" className="mt-2 text-xl font-semibold">
+            <h2 id="profile-display-name-heading" className="text-xl font-semibold">
               Display name
             </h2>
           </div>

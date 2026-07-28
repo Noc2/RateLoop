@@ -138,8 +138,7 @@ export function WorkspaceApiKeysPanel({ workspaceId }: { workspaceId: string }) 
   return (
     <section className="mt-5 rounded-xl border border-white/10 bg-base-content/[0.025] p-5" aria-labelledby="api-keys">
       <div>
-        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">Agent access</p>
-        <h2 id="api-keys" className="mt-2 text-2xl font-semibold">
+        <h2 id="api-keys" className="text-2xl font-semibold">
           API keys
         </h2>
         <p className="mt-2 text-sm leading-6 text-base-content/60">

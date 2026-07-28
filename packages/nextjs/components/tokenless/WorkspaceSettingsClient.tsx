@@ -863,10 +863,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
             >
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-green)]">
-                    Workspace subscription
-                  </p>
-                  <h2 id="workspace-plan" className="mt-2 text-2xl font-semibold">
+                  <h2 id="workspace-plan" className="text-2xl font-semibold">
                     {billing ? (billing.plan === "early_access" ? "Early Access" : "Free") : "Plan and usage"}
                   </h2>
                 </div>
@@ -1424,10 +1421,7 @@ export function WorkspaceSettingsClient({ initialWorkspaceId = "" }: { initialWo
               <section aria-labelledby="enterprise-identity" className="mt-5 rounded-xl border border-white/10 p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">
-                      Access control
-                    </p>
-                    <h2 id="enterprise-identity" className="mt-2 text-xl font-semibold">
+                    <h2 id="enterprise-identity" className="text-xl font-semibold">
                       Enterprise identity
                     </h2>
                   </div>

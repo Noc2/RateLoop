@@ -74,8 +74,7 @@ export function ReviewerEarningsClient() {
     <section className="surface-card rounded-2xl p-5" aria-labelledby="reviewer-earnings-title">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">Paid review history</p>
-          <h2 id="reviewer-earnings-title" className="mt-2 text-xl font-semibold">
+          <h2 id="reviewer-earnings-title" className="text-xl font-semibold">
             Reviewer earnings
           </h2>
           <p className="mt-2 text-sm leading-6 text-base-content/60">

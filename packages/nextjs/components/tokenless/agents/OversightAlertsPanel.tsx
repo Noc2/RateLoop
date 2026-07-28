@@ -336,8 +336,7 @@ export function OversightAlertsPanel({ workspaceId }: { workspaceId: string }) {
     <Card as="section" className="rounded-2xl p-6" aria-labelledby="oversight-alerts-heading">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Approvals</p>
-          <h2 id="oversight-alerts-heading" className="mt-2 text-xl font-semibold">
+          <h2 id="oversight-alerts-heading" className="text-xl font-semibold">
             Alerts needing attention
             {inbox && inbox.unreadCount > 0 ? (
               <span role="status" className="ml-2 align-middle">

@@ -194,8 +194,7 @@ export function ReviewerNotificationInbox() {
     <Card as="section" className="rounded-2xl p-6" aria-labelledby="reviewer-notifications-heading">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Your activity</p>
-          <h2 id="reviewer-notifications-heading" className="mt-2 text-2xl font-semibold">
+          <h2 id="reviewer-notifications-heading" className="text-2xl font-semibold">
             Reviewer notifications
           </h2>
           <p className="mt-2 text-sm leading-6 text-base-content/60">

@@ -246,8 +246,7 @@ function SettlementRecoveryControls() {
 
   return (
     <section className="surface-card rounded-2xl p-5" aria-labelledby="settlement-recovery-title">
-      <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">Payment recovery</p>
-      <h2 id="settlement-recovery-title" className="mt-2 text-xl font-semibold">
+      <h2 id="settlement-recovery-title" className="text-xl font-semibold">
         Reveal and claim paid reviews
       </h2>
       <p className="mt-2 text-sm leading-6 text-base-content/60">

@@ -4,6 +4,7 @@ import { completeWelcomeAction } from "./actions";
 import type { Metadata } from "next";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { Button } from "~~/components/tokenless/ui/Button";
+import { PageHeading } from "~~/components/tokenless/ui/PageHeading";
 import { getPrincipalWelcomeState } from "~~/lib/auth/principal";
 import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
 
@@ -41,10 +42,7 @@ export default async function WelcomePage() {
 
   return (
     <AppPageShell outerClassName="pb-12" contentClassName="mx-auto max-w-5xl">
-      <header className="max-w-3xl">
-        <p className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--rateloop-blue)]">Welcome</p>
-        <h1 className="mt-4 text-4xl font-semibold tracking-tight sm:text-5xl">What would you like to do first?</h1>
-      </header>
+      <PageHeading accent="blue" className="max-w-3xl" heading="What would you like to do first?" />
 
       <div className="mt-9 grid gap-5 md:grid-cols-2">
         <section className="surface-card flex flex-col rounded-2xl border-l-2 border-l-[var(--rateloop-green)] p-6 sm:p-7">

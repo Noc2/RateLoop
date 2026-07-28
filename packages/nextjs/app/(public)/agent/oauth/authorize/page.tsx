@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { AgentOAuthConsentForm } from "~~/components/tokenless/agents/AgentOAuthConsentForm";
+import { PageHeading } from "~~/components/tokenless/ui/PageHeading";
 import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
 import { validateAgentOAuthAuthorizationRequest } from "~~/lib/tokenless/agentOAuth";
 
@@ -28,13 +29,16 @@ export default async function AgentOAuthAuthorizePage({ searchParams }: { search
     return (
       <div className="flex grow items-start justify-center px-4 py-16 sm:py-24">
         <section className="surface-card w-full max-w-lg rounded-2xl p-6 sm:p-9" aria-labelledby="oauth-error-title">
-          <p className="font-mono text-xs uppercase tracking-[0.22em] text-error">Cannot connect</p>
-          <h1 id="oauth-error-title" className="mt-4 text-3xl font-semibold tracking-tight">
-            This connection request is invalid
-          </h1>
-          <p className="mt-4 text-sm leading-6 text-base-content/65" role="alert">
-            RateLoop couldn&apos;t verify the information in this authorization link.
-          </p>
+          <PageHeading
+            accent="error"
+            heading="This connection request is invalid"
+            headingId="oauth-error-title"
+            subtitle={
+              <span className="text-sm leading-6" role="alert">
+                RateLoop couldn&apos;t verify the information in this authorization link.
+              </span>
+            }
+          />
           <p className="mt-6 text-sm leading-6 text-base-content/55">
             Return to the agent that opened this page and start the connection again.
           </p>
@@ -67,17 +71,20 @@ export default async function AgentOAuthAuthorizePage({ searchParams }: { search
   return (
     <div className="flex grow items-start justify-center px-4 py-16 sm:py-24">
       <section className="surface-card w-full max-w-xl rounded-2xl p-6 sm:p-9" aria-labelledby="oauth-consent-title">
-        <p className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--rateloop-blue)]">Agent connection</p>
-        <h1 id="oauth-consent-title" className="mt-4 text-4xl font-semibold tracking-tight">
-          {authorization.autoAuthorize
-            ? `Connecting ${authorization.clientName}`
-            : `Allow ${authorization.clientName}?`}
-        </h1>
-        <p className="mt-4 text-base leading-7 text-base-content/65">
-          {authorization.autoAuthorize
-            ? "No action is needed unless the connection does not continue automatically."
-            : "It can check when work needs human review and read resulting decisions. It cannot publish, spend, manage the workspace, or read private files."}
-        </p>
+        <PageHeading
+          accent="blue"
+          heading={
+            authorization.autoAuthorize
+              ? `Connecting ${authorization.clientName}`
+              : `Allow ${authorization.clientName}?`
+          }
+          headingId="oauth-consent-title"
+          subtitle={
+            authorization.autoAuthorize
+              ? "No action is needed unless the connection does not continue automatically."
+              : "It can check when work needs human review and read resulting decisions. It cannot publish, spend, manage the workspace, or read private files."
+          }
+        />
         <section
           className="mt-6 rounded-xl border border-white/10 bg-black/20 p-4 text-sm"
           aria-labelledby="scope-title"

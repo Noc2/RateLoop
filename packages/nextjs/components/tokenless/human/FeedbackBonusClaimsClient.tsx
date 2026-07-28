@@ -243,8 +243,7 @@ function FeedbackBonusClaimsControls() {
 
   return (
     <section className="surface-card rounded-2xl p-5" aria-labelledby="feedback-bonus-claims-title">
-      <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">Optional award</p>
-      <h2 id="feedback-bonus-claims-title" className="mt-2 text-xl font-semibold">
+      <h2 id="feedback-bonus-claims-title" className="text-xl font-semibold">
         Claim a Feedback Bonus
       </h2>
       <SelectField

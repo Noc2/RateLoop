@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { PublicAgentConnectionStatus } from "~~/components/tokenless/agents/PublicAgentConnectionStatus";
+import { PageHeading } from "~~/components/tokenless/ui/PageHeading";
 import { getOptionalAppUrl } from "~~/lib/env/server";
 import { getPublicAgentConnectionIntent } from "~~/lib/tokenless/agentConnectionIntents";
 
@@ -84,11 +85,12 @@ export default async function AgentConnectionPage({ params }: { params: Promise<
         dangerouslySetInnerHTML={{ __html: JSON.stringify(machineHandoff).replaceAll("<", "\\u003c") }}
       />
       <section className="surface-card rounded-2xl p-6 sm:p-8" aria-labelledby="agent-connection-heading">
-        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Agent connection</p>
-        <h1 id="agent-connection-heading" className="mt-3 text-3xl font-semibold">
-          {status.label}
-        </h1>
-        <p className="mt-3 max-w-2xl text-base leading-7 text-base-content/70">{status.action}</p>
+        <PageHeading
+          accent="blue"
+          heading={status.label}
+          headingId="agent-connection-heading"
+          subtitle={<span className="block max-w-2xl leading-7">{status.action}</span>}
+        />
 
         {recoveryAction ? (
           <section

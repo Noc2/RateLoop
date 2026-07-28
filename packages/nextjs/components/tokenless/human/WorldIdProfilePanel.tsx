@@ -41,8 +41,7 @@ export function WorldIdProfilePanel() {
 
   return (
     <section className="surface-card rounded-2xl p-6">
-      <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Proof of Human</p>
-      <h2 className="mt-2 text-xl font-semibold">World ID 4 assurance</h2>
+      <h2 className="text-xl font-semibold">World ID 4 assurance</h2>
       <p className="mt-3 text-sm leading-6 text-base-content/60">
         Browser sign-in, Proof of Human, and paid-work eligibility are separate checks. World ID records a one-time,
         provider-scoped uniqueness enrollment for RateLoop-network panels; it is not ongoing liveness or legal

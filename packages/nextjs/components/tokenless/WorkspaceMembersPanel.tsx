@@ -214,8 +214,7 @@ export function WorkspaceMembersPanel({ canManage, workspaceId }: { canManage: b
   return (
     <section className="rounded-xl border border-white/10 p-5" aria-labelledby="workspace-members-heading">
       <div>
-        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Workspace access</p>
-        <h2 id="workspace-members-heading" className="mt-2 text-xl font-semibold">
+        <h2 id="workspace-members-heading" className="text-xl font-semibold">
           Members
         </h2>
       </div>

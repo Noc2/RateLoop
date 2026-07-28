@@ -132,8 +132,7 @@ export function ForecastIntegrityClient() {
   if (!data && !error) return null;
   return (
     <section className="surface-card rounded-2xl p-5" aria-labelledby="forecast-integrity-title">
-      <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Review quality</p>
-      <h2 id="forecast-integrity-title" className="mt-2 text-xl font-semibold">
+      <h2 id="forecast-integrity-title" className="text-xl font-semibold">
         Crowd forecast record
       </h2>
       {error ? (

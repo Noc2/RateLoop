@@ -172,8 +172,7 @@ function FeedbackBonusAwardInboxControls({ workspaceId }: { workspaceId: string 
   return (
     <section className="space-y-4" aria-labelledby="feedback-bonus-award-inbox-title">
       <div>
-        <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">Human action</p>
-        <h2 id="feedback-bonus-award-inbox-title" className="mt-2 text-2xl font-semibold">
+        <h2 id="feedback-bonus-award-inbox-title" className="text-2xl font-semibold">
           Award Feedback Bonus
         </h2>
         <p className="mt-2 text-sm text-base-content/55">
