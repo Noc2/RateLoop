@@ -66,12 +66,12 @@ test("review setup distinguishes a saved policy decision from delivery authority
   }
   assert.match(routingSource, /Manual handoff only/);
   assert.match(routingSource, /Never requires review automatically\. You start each handoff\./);
-  assert.match(flowSource, /Minimum review rate \(%\)/);
+  assert.match(flowSource, /reviewPolicyCopy\.limits\.adaptiveRate/);
   assert.match(flowSource, /disabled=\{reviewFrequency\.mode === "adaptive"\}/);
-  assert.match(flowSource, /Outputs reviewed \(%\)/);
-  assert.match(flowSource, /Maximum outputs between reviews/);
-  assert.match(flowSource, /Review these risk levels/);
-  assert.match(flowSource, /Review below confidence \(%\)/);
+  assert.match(flowSource, /reviewPolicyCopy\.limits\.fixedRate/);
+  assert.match(flowSource, /reviewPolicyCopy\.limits\.maximumGap/);
+  assert.match(flowSource, /reviewPolicyCopy\.limits\.riskTiers/);
+  assert.match(flowSource, /reviewPolicyCopy\.limits\.confidence/);
   assert.match(flowSource, /buildReviewFrequencySelection\(draft\.selection, reviewFrequency\)/);
   assert.doesNotMatch(flowSource, /Choose when this agent should involve people/i);
   assert.doesNotMatch(flowSource, /reviewerAudience|contentBoundary: "private_workspace"/);
@@ -103,9 +103,9 @@ test("review setup resolves frequency before reviewer terms and authority", () =
 });
 
 test("review setup controls audience and shows only the relevant material boundary", () => {
-  for (const label of ["Public network", "Invited reviewers", "private workspace material"]) {
-    assert.match(flowSource, new RegExp(label));
-  }
+  assert.match(flowSource, /reviewPolicyCopy\.audience\.rateLoopNetwork/);
+  assert.match(flowSource, /reviewPolicyCopy\.audience\.invited/);
+  assert.match(flowSource, /private workspace material/);
   assert.match(flowSource, /checked=\{reviewAudience\.audience === value\}/);
   assert.doesNotMatch(flowSource, /Private material sensitivity/);
   assert.doesNotMatch(flowSource, /<option value="(?:internal|confidential|restricted|regulated)">/);
@@ -117,20 +117,22 @@ test("review setup controls audience and shows only the relevant material bounda
 });
 
 test("review setup resumes a controlled question and compact answer format", () => {
-  for (const label of [
-    "Who writes the question?",
-    "Use one question",
-    "Let the agent ask each time",
-    "Review question",
-    "Answer format",
-    "Positive label",
-    "Negative label",
-    "Rationale",
-  ]) {
+  for (const label of ["Answer format"]) {
     assert.match(flowSource, new RegExp(label));
   }
+  for (const path of [
+    "question.authority",
+    "question.ownerFixed",
+    "question.agentPerRequest",
+    "question.criterion",
+    "question.positiveAnswer",
+    "question.negativeAnswer",
+    "question.rationale",
+  ]) {
+    assert.ok(flowSource.includes(`reviewPolicyCopy.${path}`));
+  }
   assert.match(flowSource, /questionAuthority === "owner_fixed"/);
-  assert.match(flowSource, /Agent-written questions collect feedback only/);
+  assert.match(flowSource, /reviewPolicyCopy\.question\.agentWrittenNote/);
   assert.match(flowSource, /adaptiveAvailable=\{reviewCriterion\.questionAuthority !== "agent_per_request"\}/);
   assert.match(flowSource, /questionAuthority === "agent_per_request" && value !== "public_network"/);
   for (const option of ["off", "optional", "required"]) {
@@ -148,8 +150,8 @@ test("review setup resumes a controlled question and compact answer format", () 
 
 test("review setup uses one duration control for the frozen response deadline", () => {
   assert.match(flowSource, /Review round/);
-  assert.match(flowSource, /Response window/);
-  assert.match(flowSource, /Reviewers per request/);
+  assert.match(flowSource, /reviewPolicyCopy\.timing\.responseWindow/);
+  assert.match(flowSource, /reviewPolicyCopy\.timing\.panelSize/);
   assert.match(flowSource, /<DurationInput/);
   assert.match(flowSource, /valueSeconds=\{reviewTiming\.responseWindowSeconds\}/);
   assert.match(flowSource, /summarySuffix="Frozen when a request opens"/);
@@ -181,21 +183,21 @@ test("review setup defines specialist requirements and leaves pool coverage to P
 });
 
 test("review setup controls independent base compensation, optional Feedback Bonus, and agent authority", () => {
-  for (const label of [
-    "Guaranteed bounty",
-    "No bounty",
-    "Add USDC bounty",
-    "USDC per reviewer",
-    "Feedback Bonus",
-    "No bonus",
-    "Add bonus",
-    "Bonus pool",
-    "Human awarder",
-    "Check only",
-    "Prepare for approval",
-    "Send automatically",
-  ]) {
+  for (const label of ["Check only", "Prepare for approval", "Send automatically"]) {
     assert.match(`${flowSource}\n${routingSource}`, new RegExp(label));
+  }
+  for (const path of [
+    "payment.bounty",
+    "payment.noBounty",
+    "payment.addBounty",
+    "payment.bountyPerReviewer",
+    "payment.feedbackBonus",
+    "payment.noBonus",
+    "payment.addBonus",
+    "payment.bonusPool",
+    "payment.awarder",
+  ]) {
+    assert.ok(flowSource.includes(`reviewPolicyCopy.${path}`));
   }
   assert.match(flowSource, /Public and hybrid network assignments currently require a guaranteed bounty/);
   assert.match(flowSource, /<InfoPopover label="About Feedback Bonus">/);
@@ -227,8 +229,7 @@ test("setup reconciles automatic sending after its prerequisites and fails close
   assert.match(flowSource, /authorityAdjustmentNotice/);
   assert.match(flowSource, /changeReviewCompensationMode\("unpaid"\)/);
   assert.match(flowSource, /changeReviewCompensationMode\("usdc"\)/);
-  assert.match(flowSource, /changeFeedbackBonus\(false\)/);
-  assert.match(flowSource, /changeFeedbackBonus\(true\)/);
+  assert.match(flowSource, /changeFeedbackBonus\(value === "enabled"\)/);
   assert.match(flowSource, /Automatic sending changed to Prepare for approval/);
   assert.match(flowSource, /Saving will change it to Prepare for approval/);
   assert.doesNotMatch(
@@ -261,9 +262,9 @@ test("review setup saves directly and confirms only spending or automatic sendin
   assert.match(flowSource, /bountyPerSeatAtomic:/);
   assert.match(flowSource, /feedbackBonusPoolAtomic:/);
   assert.match(flowSource, /panelSize: requestProfile\.panelSize/);
-  assert.match(flowSource, /title: "Confirm paid review policy"/);
+  assert.match(flowSource, /title: reviewPolicyCopy\.confirmation\.title/);
   assert.match(flowSource, /description: confirmation/);
-  assert.match(flowSource, /confirmLabel: "Save review policy"/);
+  assert.match(flowSource, /confirmLabel: reviewPolicyCopy\.confirmation\.action/);
   assert.doesNotMatch(flowSource, /window\.confirm/);
   assert.match(flowSource, /Save and continue/);
   assert.doesNotMatch(flowSource, /Confirm these exact terms/);

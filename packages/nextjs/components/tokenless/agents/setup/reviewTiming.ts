@@ -1,4 +1,5 @@
 import type { ReviewRequestProfileInput } from "./reviewCriterion";
+import { reviewPolicyCopy } from "~~/components/tokenless/agents/reviewPolicyCopy";
 import type { AgentSetupReviewDraft } from "~~/lib/tokenless/workspaceAgentSetup";
 
 type ReviewRequestProfile = AgentSetupReviewDraft["requestProfile"];
@@ -35,11 +36,16 @@ export function buildReviewTimingRequestProfile(
 ): ReviewRequestProfileInput {
   const responseWindowSeconds = requiredInteger(
     values.responseWindowSeconds,
-    "Response window",
+    reviewPolicyCopy.timing.responseWindow,
     MIN_REVIEW_RESPONSE_WINDOW_SECONDS,
     MAX_REVIEW_RESPONSE_WINDOW_SECONDS,
   );
   const minimumPanelSize = profile.audience === "private_invited" ? MIN_REVIEW_PANEL_SIZE : 3;
-  const panelSize = requiredInteger(values.panelSize, "Reviewer count", minimumPanelSize, MAX_REVIEW_PANEL_SIZE);
+  const panelSize = requiredInteger(
+    values.panelSize,
+    reviewPolicyCopy.timing.panelSize,
+    minimumPanelSize,
+    MAX_REVIEW_PANEL_SIZE,
+  );
   return { ...profile, responseWindowSeconds, panelSize };
 }

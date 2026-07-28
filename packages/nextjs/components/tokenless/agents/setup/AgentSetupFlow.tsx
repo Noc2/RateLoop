@@ -63,6 +63,7 @@ import {
 import { InfoPopover } from "~~/components/tokenless/InfoPopover";
 import { useRateLoopNotifications } from "~~/components/tokenless/RateLoopNotificationProvider";
 import { humanReviewConfirmationMessage } from "~~/components/tokenless/agents/humanReviewConfirmation";
+import { reviewPolicyCopy } from "~~/components/tokenless/agents/reviewPolicyCopy";
 import { ChoiceInput, Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { Button } from "~~/components/tokenless/ui/Button";
@@ -101,8 +102,12 @@ const ACTIVE_CONNECTION_STATES = new Set([
 ]);
 
 const REVIEW_AUDIENCE_OPTIONS = [
-  ["public_network", "Public network", "RateLoop network reviewers."],
-  ["private_invited", "Invited reviewers", "Only people you invite can review private workspace material."],
+  ["public_network", reviewPolicyCopy.audience.rateLoopNetwork, "RateLoop network reviewers."],
+  [
+    "private_invited",
+    reviewPolicyCopy.audience.invited,
+    "Only people you invite can review private workspace material.",
+  ],
 ] as const;
 
 const CONFIGURED_HUMAN_REVIEW_LANES = configuredHumanReviewLanes();
@@ -1080,9 +1085,9 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
       if (
         confirmation &&
         !(await confirm({
-          title: "Confirm paid review policy",
+          title: reviewPolicyCopy.confirmation.title,
           description: confirmation,
-          confirmLabel: "Save review policy",
+          confirmLabel: reviewPolicyCopy.confirmation.action,
           destructive: false,
         }))
       )
@@ -1436,7 +1441,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
           <form onSubmit={configureReviews} aria-busy={busy}>
             <SetupStageHeader headingRef={headingRef} title="Set review behavior" />
             <fieldset className="mt-8">
-              <legend className="text-xl font-semibold">Who writes the question?</legend>
+              <legend className="text-xl font-semibold">{reviewPolicyCopy.question.authority}</legend>
               <SetupChoiceGroup>
                 <SetupRadioChoice
                   id="agent-setup-question-owner-fixed"
@@ -1444,7 +1449,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   value="owner_fixed"
                   checked={reviewCriterion.questionAuthority === "owner_fixed"}
                   onChange={() => changeQuestionAuthority("owner_fixed")}
-                  label="Use one question"
+                  label={reviewPolicyCopy.question.ownerFixed}
                   description="Set one question and answer format for every review."
                 />
                 <SetupRadioChoice
@@ -1453,7 +1458,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   value="agent_per_request"
                   checked={reviewCriterion.questionAuthority === "agent_per_request"}
                   onChange={() => changeQuestionAuthority("agent_per_request")}
-                  label="Let the agent ask each time"
+                  label={reviewPolicyCopy.question.agentPerRequest}
                   description={`The agent supplies a question and two answers for each review. ${CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.message}`}
                   disabled={!CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.available}
                 />
@@ -1463,7 +1468,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               <TextareaField
                 containerClassName="mt-6"
                 className="border-white/10 bg-[var(--rateloop-field)]"
-                label="Review question"
+                label={reviewPolicyCopy.question.criterion}
                 labelClassName="text-sm font-medium"
                 rows={3}
                 value={reviewCriterion.criterion}
@@ -1473,8 +1478,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               />
             ) : (
               <p className="mt-5 border-l-2 border-l-[var(--rateloop-yellow)] pl-4 text-sm leading-6 text-base-content/65">
-                Agent-written questions collect feedback only. They use RateLoop network reviewers and never change
-                adaptive review coverage.
+                {reviewPolicyCopy.question.agentWrittenNote}
               </p>
             )}
             <fieldset className="surface-card-nested mt-5 p-4">
@@ -1485,7 +1489,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 {reviewCriterion.questionAuthority === "owner_fixed" ? (
                   <>
                     <Field
-                      label="Positive label"
+                      label={reviewPolicyCopy.question.positiveAnswer}
                       className="border-white/10 bg-[var(--rateloop-field)]"
                       value={reviewCriterion.positiveLabel}
                       onChange={event =>
@@ -1495,7 +1499,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       required
                     />
                     <Field
-                      label="Negative label"
+                      label={reviewPolicyCopy.question.negativeAnswer}
                       className="border-white/10 bg-[var(--rateloop-field)]"
                       value={reviewCriterion.negativeLabel}
                       onChange={event =>
@@ -1508,7 +1512,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 ) : null}
                 <SelectField
                   className="border-white/10 bg-[var(--rateloop-field)]"
-                  label="Rationale"
+                  label={reviewPolicyCopy.question.rationale}
                   labelClassName="text-sm"
                   value={reviewCriterion.rationaleMode}
                   onChange={event =>
@@ -1518,9 +1522,9 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     }))
                   }
                 >
-                  <option value="off">Off</option>
-                  <option value="optional">Optional</option>
-                  <option value="required">Required</option>
+                  <option value="off">{reviewPolicyCopy.question.rationaleOff}</option>
+                  <option value="optional">{reviewPolicyCopy.question.rationaleOptional}</option>
+                  <option value="required">{reviewPolicyCopy.question.rationaleRequired}</option>
                 </SelectField>
               </div>
             </fieldset>
@@ -1536,7 +1540,11 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               <div className="mt-4 border-l-2 border-l-[var(--rateloop-pink)] bg-black/10 px-4 py-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field
-                    label={reviewFrequency.mode === "adaptive" ? "Minimum review rate (%)" : "Outputs reviewed (%)"}
+                    label={
+                      reviewFrequency.mode === "adaptive"
+                        ? reviewPolicyCopy.limits.adaptiveRate
+                        : reviewPolicyCopy.limits.fixedRate
+                    }
                     className="border-white/10 bg-[var(--rateloop-field)]"
                     type="number"
                     min={reviewFrequency.mode === "adaptive" ? 25 : 0.01}
@@ -1559,7 +1567,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     disabled={reviewFrequency.mode === "adaptive"}
                   />
                   <Field
-                    label="Maximum outputs between reviews"
+                    label={reviewPolicyCopy.limits.maximumGap}
                     className="border-white/10 bg-[var(--rateloop-field)]"
                     type="number"
                     min={1}
@@ -1588,7 +1596,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               <div className="mt-4 border-l-2 border-l-[var(--rateloop-pink)] bg-black/10 px-4 py-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field
-                    label="Review these risk levels"
+                    label={reviewPolicyCopy.limits.riskTiers}
                     className="border-white/10 bg-[var(--rateloop-field)]"
                     value={reviewFrequency.requiredRiskTiers}
                     onChange={event =>
@@ -1603,7 +1611,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   <Field
                     label={
                       <>
-                        Review below confidence (%) <span className="text-base-content/55">(optional)</span>
+                        {reviewPolicyCopy.limits.confidence} <span className="text-base-content/55">(optional)</span>
                       </>
                     }
                     className="border-white/10 bg-[var(--rateloop-field)]"
@@ -1636,7 +1644,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               <p className="mt-1 text-sm leading-6 text-base-content/55">{reviewerDetailsSummary}</p>
               <div className="pb-1 pt-6">
                 <fieldset>
-                  <legend className="text-lg font-semibold">Who should review?</legend>
+                  <legend className="text-lg font-semibold">{reviewPolicyCopy.audience.label}</legend>
                   <SetupChoiceGroup>
                     {REVIEW_AUDIENCE_OPTIONS.map(([value, label, description]) => {
                       const configuredLane = configuredAudienceOption(value);
@@ -1898,11 +1906,11 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   <legend className="text-lg font-semibold">Review round</legend>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="text-sm">
-                      <p>Response window</p>
+                      <p>{reviewPolicyCopy.timing.responseWindow}</p>
                       <DurationInput
                         id="agent-setup-review-response-window"
                         className="mt-2"
-                        ariaLabel="Response window"
+                        ariaLabel={reviewPolicyCopy.timing.responseWindow}
                         valueSeconds={reviewTiming.responseWindowSeconds}
                         minSeconds={MIN_REVIEW_RESPONSE_WINDOW_SECONDS}
                         maxSeconds={MAX_REVIEW_RESPONSE_WINDOW_SECONDS}
@@ -1913,7 +1921,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       />
                     </div>
                     <Field
-                      label="Reviewers per request"
+                      label={reviewPolicyCopy.timing.panelSize}
                       className="border-white/10 bg-[var(--rateloop-field)]"
                       type="number"
                       inputMode="numeric"
@@ -1939,7 +1947,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   </div>
                 </fieldset>
                 <fieldset className="mt-6 border-t border-white/10 pt-5">
-                  <legend className="text-lg font-semibold">Guaranteed bounty</legend>
+                  <legend className="text-lg font-semibold">{reviewPolicyCopy.payment.bounty}</legend>
                   <SetupChoiceGroup>
                     <SetupRadioChoice
                       id="agent-setup-compensation-unpaid"
@@ -1951,7 +1959,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       }
                       disabled={reviewAudience.audience !== "private_invited"}
                       onChange={() => changeReviewCompensationMode("unpaid")}
-                      label="No bounty"
+                      label={reviewPolicyCopy.payment.noBounty}
                       description="No guaranteed payment."
                     />
                     <SetupRadioChoice
@@ -1963,7 +1971,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       }
                       disabled={!configuredHumanReviewLaneForSelection(reviewAudience.audience, "usdc").available}
                       onChange={() => changeReviewCompensationMode("usdc")}
-                      label="Add USDC bounty"
+                      label={reviewPolicyCopy.payment.addBounty}
                       description={`Pay each accepted reviewer. ${configuredHumanReviewLaneForSelection(reviewAudience.audience, "usdc").message}`}
                     />
                   </SetupChoiceGroup>
@@ -1976,7 +1984,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   {reviewCompensation.compensationMode === "usdc" ? (
                     <div className="mt-4">
                       <Field
-                        label="USDC per reviewer"
+                        label={reviewPolicyCopy.payment.bountyPerReviewer}
                         className="border-white/10 bg-[var(--rateloop-field)]"
                         type="text"
                         inputMode="decimal"
@@ -1994,7 +2002,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 <fieldset className="mt-6 border-t border-white/10 pt-5">
                   <legend className="text-lg font-semibold">
                     <span className="inline-flex items-center gap-2">
-                      Feedback Bonus
+                      {reviewPolicyCopy.payment.feedbackBonus}
                       <InfoPopover label="About Feedback Bonus">
                         Optional and separate from the guaranteed bounty. A human later chooses useful written feedback
                         to pay.
@@ -2005,15 +2013,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     className="mt-3 sm:max-w-md"
                     value={reviewCompensation.feedbackBonusEnabled ? "enabled" : "disabled"}
                     options={[
-                      { value: "disabled", label: "No bonus" },
-                      { value: "enabled", label: "Add bonus" },
+                      { value: "disabled", label: reviewPolicyCopy.payment.noBonus },
+                      { value: "enabled", label: reviewPolicyCopy.payment.addBonus },
                     ]}
                     onChange={value => changeFeedbackBonus(value === "enabled")}
                   />
                   {reviewCompensation.feedbackBonusEnabled ? (
                     <div className="mt-4 grid gap-4 sm:grid-cols-2">
                       <Field
-                        label="Bonus pool (USDC)"
+                        label={reviewPolicyCopy.payment.bonusPool}
                         className="border-white/10 bg-[var(--rateloop-field)]"
                         type="text"
                         inputMode="decimal"
@@ -2027,7 +2035,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       />
                       <SelectField
                         className="border-white/10 bg-[var(--rateloop-field)]"
-                        label="Human awarder"
+                        label={reviewPolicyCopy.payment.awarder}
                         labelClassName="text-sm"
                         value={reviewCompensation.feedbackBonusAwarderKind}
                         onChange={event =>
@@ -2037,13 +2045,13 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                           }))
                         }
                       >
-                        <option value="requester">Me (requester)</option>
-                        <option value="designated">Designated authenticated human</option>
+                        <option value="requester">{reviewPolicyCopy.payment.requester}</option>
+                        <option value="designated">{reviewPolicyCopy.payment.designated}</option>
                       </SelectField>
                       {reviewCompensation.feedbackBonusAwarderKind === "designated" ? (
                         <div className="sm:col-span-2">
                           <Field
-                            label="Awarder account"
+                            label={reviewPolicyCopy.payment.awarderAccount}
                             className="border-white/10 bg-[var(--rateloop-field)]"
                             value={reviewCompensation.feedbackBonusAwarderAccount}
                             onChange={event =>

@@ -1,4 +1,5 @@
 import type { ReviewRequestProfileInput } from "./reviewCriterion";
+import { reviewPolicyCopy } from "~~/components/tokenless/agents/reviewPolicyCopy";
 import type { AgentSetupReviewDraft } from "~~/lib/tokenless/workspaceAgentSetup";
 
 type ReviewRequestProfile = AgentSetupReviewDraft["requestProfile"];
@@ -32,14 +33,14 @@ export function usdcAtomicToDecimal(value: string) {
 function usdcDecimalToAtomic(value: string, panelSize: number) {
   const normalized = value.trim();
   if (normalized.length > REVIEW_USDC_DECIMAL_MAX_LENGTH) {
-    throw new Error("USDC per reviewer is outside the supported range.");
+    throw new Error(`${reviewPolicyCopy.payment.bountyPerReviewer} is outside the supported range.`);
   }
   const match = USDC_DECIMAL_PATTERN.exec(normalized);
-  if (!match) throw new Error("USDC per reviewer must be a decimal with up to 6 places.");
+  if (!match) throw new Error(`${reviewPolicyCopy.payment.bountyPerReviewer} must be a decimal with up to 6 places.`);
   const atomic = BigInt(match[1]!) * USDC_SCALE + BigInt((match[2] ?? "").padEnd(6, "0") || "0");
-  if (atomic <= 0n) throw new Error("USDC per reviewer must be greater than zero.");
+  if (atomic <= 0n) throw new Error(`${reviewPolicyCopy.payment.bountyPerReviewer} must be greater than zero.`);
   if (atomic > MAX_USDC_ATOMIC || atomic * BigInt(panelSize) > MAX_USDC_ATOMIC) {
-    throw new Error("USDC per reviewer is outside the supported range for this panel.");
+    throw new Error(`${reviewPolicyCopy.payment.bountyPerReviewer} is outside the supported range for this panel.`);
   }
   return atomic.toString();
 }

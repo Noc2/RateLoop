@@ -9,30 +9,12 @@ test("the contextual editor owns every human-review dimension through one canoni
   assert.match(source, /agents\/\$\{encodeURIComponent\(agentId\)\}\/human-review/);
   assert.match(source, /method: "PUT"/);
   assert.match(source, /expectedBindingVersion: view\.bindingRevision/);
-  for (const label of [
-    "Review question",
-    "Question shown to reviewers",
-    "Positive answer",
-    "Negative answer",
-    "Reviewer explanation",
-    "When to review",
-    "Advanced review limits",
-    "Minimum review rate",
-    "Outputs reviewed",
-    "Maximum outputs between reviews",
-    "Reviewers",
-    "Response deadline",
-    "Panel size",
-    "Guaranteed bounty",
-    "USDC per accepted reviewer",
-    "Feedback bonus",
-    "No bonus",
-    "Add bonus",
-    "Bonus pool",
-    "Human awarder",
-  ]) {
+  for (const label of ["Review question", "When to review", "Advanced review limits"]) {
     assert.match(source, new RegExp(label));
   }
+  assert.match(source, /reviewPolicyCopy\.question\.criterion/);
+  assert.match(source, /reviewPolicyCopy\.timing\.responseWindow/);
+  assert.match(source, /reviewPolicyCopy\.payment\.bountyPerReviewer/);
   assert.match(source, /canChooseQuestionAuthority/);
   assert.match(source, /canChooseAudience/);
   assert.match(source, /paidConfigurationRelevant/);
@@ -78,16 +60,16 @@ test("the contextual editor owns every human-review dimension through one canoni
   assert.match(source, /Array\.isArray\(currentRequestProfile\.expertiseRequirements\)/);
   assert.match(source, /humanReviewConfirmationMessage\(\{/);
   assert.match(source, /authority,/);
-  assert.match(source, /title: "Confirm paid review policy"/);
+  assert.match(source, /title: reviewPolicyCopy\.confirmation\.title/);
   assert.match(source, /description: next\.confirmation/);
-  assert.match(source, /confirmLabel: "Save review policy"/);
+  assert.match(source, /confirmLabel: reviewPolicyCopy\.confirmation\.action/);
   assert.doesNotMatch(source, /window\.confirm/);
   assert.match(source, /Save changes/);
   assert.doesNotMatch(source, /Confirm exact changes/);
   assert.doesNotMatch(source, /I confirm this exact human-review configuration/);
   assert.doesNotMatch(source, /Review changes/);
   assert.match(source, /can never select or execute a Feedback Bonus award/);
-  assert.match(source, /Agent-written questions collect feedback only/);
+  assert.match(source, /reviewPolicyCopy\.question\.agentWrittenNote/);
   assert.match(source, /Agent-written questions cannot use adaptive review/);
   assert.match(source, /Agent-written questions require RateLoop network reviewers/);
   assert.doesNotMatch(source, /Private material sensitivity/);

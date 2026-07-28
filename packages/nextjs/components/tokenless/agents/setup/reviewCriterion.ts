@@ -1,3 +1,4 @@
+import { reviewPolicyCopy } from "~~/components/tokenless/agents/reviewPolicyCopy";
 import type { AgentSetupReviewDraft } from "~~/lib/tokenless/workspaceAgentSetup";
 
 type ReviewRequestProfile = AgentSetupReviewDraft["requestProfile"];
@@ -53,9 +54,17 @@ export function buildReviewCriterionRequestProfile(
     return { ...dynamic, questionAuthority: "agent_per_request", rationaleMode: values.rationaleMode };
   }
   if (values.questionAuthority !== "owner_fixed") throw new Error("Choose who writes each review question.");
-  const criterion = requiredText(values.criterion, "Review question", REVIEW_CRITERION_MAX_LENGTH);
-  const positiveLabel = requiredText(values.positiveLabel, "Positive label", REVIEW_ANSWER_LABEL_MAX_LENGTH);
-  const negativeLabel = requiredText(values.negativeLabel, "Negative label", REVIEW_ANSWER_LABEL_MAX_LENGTH);
+  const criterion = requiredText(values.criterion, reviewPolicyCopy.question.criterion, REVIEW_CRITERION_MAX_LENGTH);
+  const positiveLabel = requiredText(
+    values.positiveLabel,
+    reviewPolicyCopy.question.positiveAnswer,
+    REVIEW_ANSWER_LABEL_MAX_LENGTH,
+  );
+  const negativeLabel = requiredText(
+    values.negativeLabel,
+    reviewPolicyCopy.question.negativeAnswer,
+    REVIEW_ANSWER_LABEL_MAX_LENGTH,
+  );
   if (positiveLabel.toLocaleLowerCase("en-US") === negativeLabel.toLocaleLowerCase("en-US")) {
     throw new Error("Positive and negative labels must differ.");
   }

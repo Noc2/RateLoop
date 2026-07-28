@@ -8,6 +8,7 @@ import {
   ReviewRoutingFields,
   reviewRoutingStateForMode,
 } from "~~/components/tokenless/agents/ReviewRoutingFields";
+import { reviewPolicyCopy } from "~~/components/tokenless/agents/reviewPolicyCopy";
 import { Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { Button } from "~~/components/tokenless/ui/Button";
@@ -206,11 +207,17 @@ function buildMutation(view: OwnerView, draft: Draft) {
     ),
   ];
   const minimumPanelSize = draft.audience === "private_invited" ? 2 : 3;
-  const panelSize = positiveInteger(draft.panelSize, "panelSize", "Reviewer count", minimumPanelSize, 100);
+  const panelSize = positiveInteger(
+    draft.panelSize,
+    "panelSize",
+    reviewPolicyCopy.timing.panelSize,
+    minimumPanelSize,
+    100,
+  );
   const responseWindowSeconds = positiveInteger(
     draft.responseWindowSeconds,
     "responseWindowSeconds",
-    "Response window",
+    reviewPolicyCopy.timing.responseWindow,
     1_200,
     86_400,
   );
@@ -264,7 +271,9 @@ function buildMutation(view: OwnerView, draft: Draft) {
     panelSize,
     compensationMode,
     bountyPerSeatAtomic:
-      compensationMode === "usdc" ? usdcToAtomic(draft.bountyUsdc, "bountyUsdc", "USDC per reviewer") : null,
+      compensationMode === "usdc"
+        ? usdcToAtomic(draft.bountyUsdc, "bountyUsdc", reviewPolicyCopy.payment.bountyPerReviewer)
+        : null,
     feedbackBonusEnabled: draft.feedbackBonusEnabled,
     feedbackBonusPoolAtomic: draft.feedbackBonusEnabled
       ? usdcToAtomic(draft.feedbackBonusUsdc, "feedbackBonusUsdc", "Bonus pool")
@@ -460,9 +469,9 @@ export function AgentHumanReviewEditor({
       if (
         next.confirmation &&
         !(await confirm({
-          title: "Confirm paid review policy",
+          title: reviewPolicyCopy.confirmation.title,
           description: next.confirmation,
-          confirmLabel: "Save review policy",
+          confirmLabel: reviewPolicyCopy.confirmation.action,
           destructive: false,
         }))
       )
@@ -561,15 +570,15 @@ export function AgentHumanReviewEditor({
             {canChooseQuestionAuthority ? (
               <SelectField
                 containerClassName="sm:col-span-2"
-                label="Who writes the question?"
+                label={reviewPolicyCopy.question.authority}
                 labelClassName="text-sm"
                 value={draft.questionAuthority}
                 onChange={event => changeQuestionAuthority(event.target.value as QuestionAuthority)}
               >
-                <option value="owner_fixed">Use one question</option>
+                <option value="owner_fixed">{reviewPolicyCopy.question.ownerFixed}</option>
                 {CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.available ||
                 draft.questionAuthority === "agent_per_request" ? (
-                  <option value="agent_per_request">Let the agent ask each time</option>
+                  <option value="agent_per_request">{reviewPolicyCopy.question.agentPerRequest}</option>
                 ) : null}
               </SelectField>
             ) : null}
@@ -577,7 +586,7 @@ export function AgentHumanReviewEditor({
               <>
                 <div className="sm:col-span-2">
                   <TextareaField
-                    label="Question shown to reviewers"
+                    label={reviewPolicyCopy.question.criterion}
                     className="w-full"
                     rows={3}
                     value={draft.criterion}
@@ -587,14 +596,14 @@ export function AgentHumanReviewEditor({
                   />
                 </div>
                 <Field
-                  label="Positive answer"
+                  label={reviewPolicyCopy.question.positiveAnswer}
                   value={draft.positiveLabel}
                   error={fieldErrors.positiveLabel}
                   onChange={event => update("positiveLabel", event.target.value)}
                   required
                 />
                 <Field
-                  label="Negative answer"
+                  label={reviewPolicyCopy.question.negativeAnswer}
                   value={draft.negativeLabel}
                   error={fieldErrors.negativeLabel}
                   onChange={event => update("negativeLabel", event.target.value)}
@@ -603,19 +612,18 @@ export function AgentHumanReviewEditor({
               </>
             ) : (
               <p className="text-sm leading-6 text-base-content/60 sm:col-span-2">
-                Agent-written questions collect feedback only. They use RateLoop network reviewers and never change
-                adaptive review coverage.
+                {reviewPolicyCopy.question.agentWrittenNote}
               </p>
             )}
             <SelectField
-              label="Reviewer explanation"
+              label={reviewPolicyCopy.question.rationale}
               labelClassName="text-sm"
               value={draft.rationaleMode}
               onChange={event => update("rationaleMode", event.target.value as Draft["rationaleMode"])}
             >
-              <option value="off">Off</option>
-              <option value="optional">Optional</option>
-              <option value="required">Required</option>
+              <option value="off">{reviewPolicyCopy.question.rationaleOff}</option>
+              <option value="optional">{reviewPolicyCopy.question.rationaleOptional}</option>
+              <option value="required">{reviewPolicyCopy.question.rationaleRequired}</option>
             </SelectField>
           </div>
         </section>
@@ -651,7 +659,11 @@ export function AgentHumanReviewEditor({
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 {draft.mode === "adaptive" || draft.mode === "fixed" ? (
                   <Field
-                    label={draft.mode === "adaptive" ? "Minimum review rate (%)" : "Outputs reviewed (%)"}
+                    label={
+                      draft.mode === "adaptive"
+                        ? reviewPolicyCopy.limits.adaptiveRate
+                        : reviewPolicyCopy.limits.fixedRate
+                    }
                     type="number"
                     min={draft.mode === "adaptive" ? 25 : 0.01}
                     max={100}
@@ -663,7 +675,7 @@ export function AgentHumanReviewEditor({
                   />
                 ) : null}
                 <Field
-                  label="Maximum outputs between reviews"
+                  label={reviewPolicyCopy.limits.maximumGap}
                   type="number"
                   min={1}
                   max={10000}
@@ -674,13 +686,13 @@ export function AgentHumanReviewEditor({
                 {draft.mode === "rules" ? (
                   <>
                     <Field
-                      label="Risk levels"
+                      label={reviewPolicyCopy.limits.riskTiers}
                       value={draft.requiredRiskTiers}
                       error={fieldErrors.requiredRiskTiers}
                       onChange={event => update("requiredRiskTiers", event.target.value)}
                     />
                     <Field
-                      label="Review below confidence (%)"
+                      label={reviewPolicyCopy.limits.confidence}
                       type="number"
                       min={0}
                       max={100}
@@ -705,7 +717,7 @@ export function AgentHumanReviewEditor({
           <div className="grid gap-4 sm:grid-cols-2">
             {canChooseAudience ? (
               <SelectField
-                label="Reviewers"
+                label={reviewPolicyCopy.audience.label}
                 labelClassName="text-sm"
                 value={draft.audience}
                 onChange={event => {
@@ -722,10 +734,10 @@ export function AgentHumanReviewEditor({
                 }}
               >
                 {draft.questionAuthority !== "agent_per_request" ? (
-                  <option value="private_invited">Invited reviewers</option>
+                  <option value="private_invited">{reviewPolicyCopy.audience.invited}</option>
                 ) : null}
                 {CONFIGURED_HUMAN_REVIEW_LANES.publicPaidNetwork.available || draft.audience === "public_network" ? (
-                  <option value="public_network">RateLoop network</option>
+                  <option value="public_network">{reviewPolicyCopy.audience.rateLoopNetwork}</option>
                 ) : null}
                 {draft.questionAuthority !== "agent_per_request" &&
                 (CONFIGURED_HUMAN_REVIEW_LANES.hybridPublicSafe.available || draft.audience === "hybrid") ? (
@@ -734,13 +746,13 @@ export function AgentHumanReviewEditor({
               </SelectField>
             ) : (
               <div>
-                <p className="text-sm font-medium">Reviewers</p>
-                <p className="mt-2 text-sm text-base-content/70">Invited reviewers</p>
+                <p className="text-sm font-medium">{reviewPolicyCopy.audience.label}</p>
+                <p className="mt-2 text-sm text-base-content/70">{reviewPolicyCopy.audience.invited}</p>
               </div>
             )}
             <div>
               <label className="text-sm font-medium" htmlFor={`response-window-${agentId}`}>
-                Response deadline
+                {reviewPolicyCopy.timing.responseWindow}
               </label>
               <DurationInput
                 id={`response-window-${agentId}`}
@@ -758,7 +770,7 @@ export function AgentHumanReviewEditor({
               ) : null}
             </div>
             <Field
-              label="Panel size"
+              label={reviewPolicyCopy.timing.panelSize}
               type="number"
               min={draft.audience === "private_invited" ? 2 : 3}
               max={100}
@@ -769,20 +781,22 @@ export function AgentHumanReviewEditor({
             />
             {paidConfigurationRelevant ? (
               <SelectField
-                label="Guaranteed bounty"
+                label={reviewPolicyCopy.payment.bounty}
                 labelClassName="text-sm"
                 value={draft.compensationMode}
                 onChange={event => update("compensationMode", event.target.value as Draft["compensationMode"])}
               >
-                {draft.audience === "private_invited" ? <option value="unpaid">No bounty</option> : null}
+                {draft.audience === "private_invited" ? (
+                  <option value="unpaid">{reviewPolicyCopy.payment.noBounty}</option>
+                ) : null}
                 {CONFIGURED_HUMAN_REVIEW_LANES.privateInvitedPaid.available || draft.compensationMode === "usdc" ? (
-                  <option value="usdc">Add USDC bounty</option>
+                  <option value="usdc">{reviewPolicyCopy.payment.addBounty}</option>
                 ) : null}
               </SelectField>
             ) : null}
             {draft.compensationMode === "usdc" ? (
               <Field
-                label="USDC per accepted reviewer"
+                label={reviewPolicyCopy.payment.bountyPerReviewer}
                 inputMode="decimal"
                 value={draft.bountyUsdc}
                 error={fieldErrors.bountyUsdc}
@@ -792,20 +806,20 @@ export function AgentHumanReviewEditor({
             ) : null}
             {paidConfigurationRelevant ? (
               <fieldset className="rounded-xl border border-white/10 p-4 sm:col-span-2">
-                <legend className="px-1 text-sm font-medium">Feedback bonus</legend>
+                <legend className="px-1 text-sm font-medium">{reviewPolicyCopy.payment.feedbackBonus}</legend>
                 <SegmentedChoice
                   className="sm:max-w-md"
                   value={draft.feedbackBonusEnabled ? "enabled" : "disabled"}
                   options={[
-                    { value: "disabled", label: "No bonus" },
-                    { value: "enabled", label: "Add bonus" },
+                    { value: "disabled", label: reviewPolicyCopy.payment.noBonus },
+                    { value: "enabled", label: reviewPolicyCopy.payment.addBonus },
                   ]}
                   onChange={value => update("feedbackBonusEnabled", value === "enabled")}
                 />
                 {draft.feedbackBonusEnabled ? (
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <Field
-                      label="Bonus pool (USDC)"
+                      label={reviewPolicyCopy.payment.bonusPool}
                       inputMode="decimal"
                       value={draft.feedbackBonusUsdc}
                       error={fieldErrors.feedbackBonusUsdc}
@@ -813,20 +827,20 @@ export function AgentHumanReviewEditor({
                       required
                     />
                     <SelectField
-                      label="Human awarder"
+                      label={reviewPolicyCopy.payment.awarder}
                       labelClassName="text-sm"
                       value={draft.feedbackBonusAwarderKind}
                       onChange={event =>
                         update("feedbackBonusAwarderKind", event.target.value as Draft["feedbackBonusAwarderKind"])
                       }
                     >
-                      <option value="requester">Requester</option>
-                      <option value="designated">Designated authenticated human</option>
+                      <option value="requester">{reviewPolicyCopy.payment.requester}</option>
+                      <option value="designated">{reviewPolicyCopy.payment.designated}</option>
                     </SelectField>
                     {draft.feedbackBonusAwarderKind === "designated" ? (
                       <div className="sm:col-span-2">
                         <Field
-                          label="Awarder account"
+                          label={reviewPolicyCopy.payment.awarderAccount}
                           value={draft.feedbackBonusAwarderAccount}
                           error={fieldErrors.feedbackBonusAwarderAccount}
                           onChange={event => update("feedbackBonusAwarderAccount", event.target.value)}

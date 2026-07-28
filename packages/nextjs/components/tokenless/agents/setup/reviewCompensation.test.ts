@@ -105,7 +105,7 @@ test("USDC conversion rejects zero, unsupported precision, and non-decimal notat
           ...noBonus,
           authority: "check_only",
         }),
-      /USDC per reviewer/,
+      /USDC per accepted reviewer/,
     );
   }
 });

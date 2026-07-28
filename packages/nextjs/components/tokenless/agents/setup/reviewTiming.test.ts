@@ -41,7 +41,7 @@ test("private and public profiles enforce their real panel minimums", () => {
   );
   assert.throws(
     () => buildReviewTimingRequestProfile(profile, { responseWindowSeconds: "7200", panelSize: "1" }),
-    /Reviewer count must be between 2 and 500/,
+    /Reviewers per request must be between 2 and 500/,
   );
   assert.equal(
     buildReviewTimingRequestProfile(
@@ -56,7 +56,7 @@ test("private and public profiles enforce their real panel minimums", () => {
         { ...profile, audience: "hybrid", contentBoundary: "public_or_test", privateSensitivity: null },
         { responseWindowSeconds: "7200", panelSize: "2" },
       ),
-    /Reviewer count must be between 3 and 500/,
+    /Reviewers per request must be between 3 and 500/,
   );
 });
 

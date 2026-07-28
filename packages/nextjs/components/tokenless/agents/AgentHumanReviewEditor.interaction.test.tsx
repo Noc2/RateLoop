@@ -39,7 +39,7 @@ test("the editor uses workspace reviewer readiness without exposing legacy group
 
     assert.ok(await screen.findByRole("heading", { name: "Finish human-review setup" }));
     assert.equal(
-      (screen.getByRole("textbox", { name: "Question shown to reviewers" }) as HTMLTextAreaElement).value,
+      (screen.getByRole("textbox", { name: "Review question" }) as HTMLTextAreaElement).value,
       "Is this response safe and correct?",
     );
     assert.equal(screen.queryByRole("combobox", { name: "Invited reviewer group" }), null);
@@ -56,7 +56,7 @@ test("the editor uses workspace reviewer readiness without exposing legacy group
     assert.equal(screen.queryByRole("option", { name: "Add USDC bounty" }), null);
     assert.equal(screen.queryByRole("combobox", { name: "Guaranteed bounty" }), null);
     assert.ok(screen.getByText("Invited reviewers"));
-    assert.equal((screen.getByRole("textbox", { name: "Response deadline" }) as HTMLInputElement).value, "1");
+    assert.equal((screen.getByRole("textbox", { name: "Response window" }) as HTMLInputElement).value, "1");
     await userEvent.setup().click(screen.getByRole("button", { name: "Finish setup" }));
     assert.ok(
       await screen.findByText("Workspace reviewer routing is not ready. Invite reviewers in Reviews, then try again."),
@@ -214,7 +214,7 @@ test("the editor renders a server field error beside the matching review control
   try {
     const view = render(<AgentHumanReviewEditor workspaceId="workspace-1" agentId="agent-1" />);
     await view.findByRole("heading", { name: "Human review" });
-    const responseWindow = view.getByRole("textbox", { name: "Response deadline" });
+    const responseWindow = view.getByRole("textbox", { name: "Response window" });
     await userEvent.setup({ document }).click(view.getByRole("button", { name: "Save changes" }));
     assert.equal(
       (await view.findByRole("alert", { name: "" })).textContent,
