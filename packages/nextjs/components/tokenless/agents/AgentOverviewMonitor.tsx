@@ -1,8 +1,21 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
-import type { AgentOverview, AgentOverviewParent, AgentOverviewScope } from "~~/lib/tokenless/agentOverview";
+import Link from "next/link";
+import { agentTabHref } from "./agentWorkspaceState";
+import type {
+  AgentOverview,
+  AgentOverviewDecisionTimeTrendPoint,
+  AgentOverviewParent,
+  AgentOverviewScope,
+} from "~~/lib/tokenless/agentOverview";
 import { readJson } from "~~/lib/tokenless/http";
+
+const trendDateFormatter = new Intl.DateTimeFormat("en", {
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+});
 
 function percent(bps: number) {
   return `${(bps / 100).toFixed(1)}%`;
@@ -114,6 +127,257 @@ function HeadlineCards({ overview }: { overview: AgentOverview }) {
             </>
           )}
         </article>
+      </div>
+    </section>
+  );
+}
+
+function trendDate(date: string) {
+  return trendDateFormatter.format(new Date(`${date}T00:00:00.000Z`));
+}
+
+function ReviewOutcomeTrend({ overview }: { overview: AgentOverview }) {
+  const trend = overview.trends.outcomes;
+  return (
+    <article className="surface-card rounded-2xl p-5">
+      <h3 className="text-base font-semibold">Review outcomes</h3>
+      <p className="mt-1 text-sm text-base-content/55">Daily settled decisions by panel outcome.</p>
+      {!trend.available ? (
+        <p className="mt-6 text-sm text-base-content/55">{trend.reason}</p>
+      ) : (
+        <>
+          {(() => {
+            const width = 600;
+            const height = 180;
+            const left = 10;
+            const top = 12;
+            const bottom = 26;
+            const plotHeight = height - top - bottom;
+            const slotWidth = (width - left * 2) / trend.points.length;
+            const barWidth = Math.max(3, Math.min(15, slotWidth * 0.72));
+            const maximum = Math.max(1, ...trend.points.map(point => point.completedCount));
+            return (
+              <svg
+                className="mt-4 h-44 w-full"
+                viewBox={`0 0 ${width} ${height}`}
+                role="img"
+                aria-labelledby="agent-outcomes-trend-title agent-outcomes-trend-description"
+              >
+                <title id="agent-outcomes-trend-title">Review outcome trend</title>
+                <desc id="agent-outcomes-trend-description">
+                  {trend.endorsedCount} endorsed, {trend.rejectedCount} rejected, and {trend.inconclusiveCount}{" "}
+                  inconclusive decisions across {overview.window.label.toLowerCase()}.
+                </desc>
+                <line
+                  x1={left}
+                  y1={height - bottom}
+                  x2={width - left}
+                  y2={height - bottom}
+                  stroke="currentColor"
+                  strokeOpacity="0.18"
+                  vectorEffect="non-scaling-stroke"
+                />
+                {trend.points.map((point, index) => {
+                  const x = left + index * slotWidth + (slotWidth - barWidth) / 2;
+                  const endorsedHeight = (point.endorsedCount / maximum) * plotHeight;
+                  const rejectedHeight = (point.rejectedCount / maximum) * plotHeight;
+                  const inconclusiveHeight = (point.inconclusiveCount / maximum) * plotHeight;
+                  const base = height - bottom;
+                  return (
+                    <g key={point.date}>
+                      <rect
+                        x={x}
+                        y={base - endorsedHeight}
+                        width={barWidth}
+                        height={endorsedHeight}
+                        rx="1.5"
+                        className="fill-emerald-300/80"
+                      />
+                      <rect
+                        x={x}
+                        y={base - endorsedHeight - rejectedHeight}
+                        width={barWidth}
+                        height={rejectedHeight}
+                        rx="1.5"
+                        className="fill-rose-300/80"
+                      />
+                      <rect
+                        x={x}
+                        y={base - endorsedHeight - rejectedHeight - inconclusiveHeight}
+                        width={barWidth}
+                        height={inconclusiveHeight}
+                        rx="1.5"
+                        className="fill-amber-200/75"
+                      />
+                      {index === 0 || index === trend.points.length - 1 ? (
+                        <text
+                          x={x + barWidth / 2}
+                          y={height - 7}
+                          textAnchor="middle"
+                          fill="currentColor"
+                          fillOpacity="0.6"
+                          fontSize="10"
+                        >
+                          {trendDate(point.date)}
+                        </text>
+                      ) : null}
+                    </g>
+                  );
+                })}
+              </svg>
+            );
+          })()}
+          <p className="mt-1 text-xs text-base-content/55">
+            {trend.endorsedCount.toLocaleString()} endorsed · {trend.rejectedCount.toLocaleString()} rejected ·{" "}
+            {trend.inconclusiveCount.toLocaleString()} inconclusive
+          </p>
+          <p className="mt-2 text-xs text-base-content/55">
+            Rejected means the panel did not endorse the output, not that reviewers disagreed with each other.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-4 text-xs text-base-content/55" aria-hidden="true">
+            <span className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-sm bg-emerald-300/80" /> Endorsed
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-sm bg-rose-300/80" /> Rejected
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-sm bg-amber-200/75" /> Inconclusive
+            </span>
+          </div>
+        </>
+      )}
+    </article>
+  );
+}
+
+function decisionTimeSegments(
+  points: AgentOverviewDecisionTimeTrendPoint[],
+  input: { left: number; top: number; width: number; height: number; bottom: number; maximum: number },
+) {
+  const slotWidth = (input.width - input.left * 2) / Math.max(1, points.length - 1);
+  const plotHeight = input.height - input.top - input.bottom;
+  const segments: Array<Array<{ x: number; y: number }>> = [];
+  let current: Array<{ x: number; y: number }> = [];
+  points.forEach((point, index) => {
+    if (point.medianMilliseconds === null) {
+      if (current.length > 0) segments.push(current);
+      current = [];
+      return;
+    }
+    current.push({
+      x: input.left + index * slotWidth,
+      y: input.top + plotHeight - (point.medianMilliseconds / input.maximum) * plotHeight,
+    });
+  });
+  if (current.length > 0) segments.push(current);
+  return segments;
+}
+
+function DecisionTimeTrend({ overview }: { overview: AgentOverview }) {
+  const trend = overview.trends.decisionTime;
+  return (
+    <article className="surface-card rounded-2xl p-5">
+      <h3 className="text-base font-semibold">Decision time</h3>
+      <p className="mt-1 text-sm text-base-content/55">Daily median from review request to settled decision.</p>
+      {!trend.available ? (
+        <p className="mt-6 text-sm text-base-content/55">{trend.reason}</p>
+      ) : (
+        <>
+          {(() => {
+            const width = 600;
+            const height = 180;
+            const left = 18;
+            const top = 12;
+            const bottom = 26;
+            const values = trend.points
+              .map(point => point.medianMilliseconds)
+              .filter((value): value is number => value !== null);
+            const maximum = Math.max(1, ...values);
+            const segments = decisionTimeSegments(trend.points, { left, top, width, height, bottom, maximum });
+            const slotWidth = (width - left * 2) / Math.max(1, trend.points.length - 1);
+            const plotHeight = height - top - bottom;
+            return (
+              <svg
+                className="mt-4 h-44 w-full text-[var(--rateloop-blue)]"
+                viewBox={`0 0 ${width} ${height}`}
+                role="img"
+                aria-labelledby="agent-decision-time-trend-title agent-decision-time-trend-description"
+              >
+                <title id="agent-decision-time-trend-title">Decision-time trend</title>
+                <desc id="agent-decision-time-trend-description">
+                  Daily median decision time from {trendDate(trend.points[0]!.date)} to{" "}
+                  {trendDate(trend.points.at(-1)!.date)}, based on {trend.sampleSize} timed decisions.
+                </desc>
+                <line
+                  x1={left}
+                  y1={height - bottom}
+                  x2={width - left}
+                  y2={height - bottom}
+                  stroke="currentColor"
+                  strokeOpacity="0.18"
+                  vectorEffect="non-scaling-stroke"
+                />
+                {segments.map((segment, index) =>
+                  segment.length > 1 ? (
+                    <polyline
+                      key={`segment-${index}`}
+                      points={segment.map(point => `${point.x},${point.y}`).join(" ")}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ) : null,
+                )}
+                {trend.points.map((point, index) =>
+                  point.medianMilliseconds === null ? null : (
+                    <circle
+                      key={point.date}
+                      cx={left + index * slotWidth}
+                      cy={top + plotHeight - (point.medianMilliseconds / maximum) * plotHeight}
+                      r="3"
+                      fill="currentColor"
+                    />
+                  ),
+                )}
+                <text x={left} y={height - 7} fill="currentColor" fillOpacity="0.6" fontSize="10">
+                  {trendDate(trend.points[0]!.date)}
+                </text>
+                <text
+                  x={width - left}
+                  y={height - 7}
+                  textAnchor="end"
+                  fill="currentColor"
+                  fillOpacity="0.6"
+                  fontSize="10"
+                >
+                  {trendDate(trend.points.at(-1)!.date)}
+                </text>
+              </svg>
+            );
+          })()}
+          <p className="mt-1 text-xs text-base-content/55">{trend.sampleSize.toLocaleString()} timed decisions</p>
+        </>
+      )}
+    </article>
+  );
+}
+
+function TrendPanels({ overview }: { overview: AgentOverview }) {
+  return (
+    <section aria-labelledby="agent-overview-trends-heading">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <h2 id="agent-overview-trends-heading" className="text-xl font-semibold">
+          Trends
+        </h2>
+        <span className="text-xs text-base-content/55">{overview.trends.periodLabel}</span>
+      </div>
+      <div className="grid gap-5 xl:grid-cols-2">
+        <ReviewOutcomeTrend overview={overview} />
+        <DecisionTimeTrend overview={overview} />
       </div>
     </section>
   );
@@ -277,6 +541,81 @@ function AgentVersionTable({ overview }: { overview: AgentOverview }) {
   );
 }
 
+function AttentionList({ overview, workspaceId }: { overview: AgentOverview; workspaceId: string }) {
+  return (
+    <section className="surface-card rounded-2xl p-5" aria-labelledby="agent-attention-heading">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 id="agent-attention-heading" className="text-xl font-semibold">
+            Attention
+          </h2>
+          <p className="mt-1 text-sm text-base-content/55">
+            Blocked work and evidence that is objectively below its confidence requirement.
+          </p>
+        </div>
+        <span className="text-xs text-base-content/55">{overview.attention.periodLabel}</span>
+      </div>
+      {overview.attention.items.length === 0 ? (
+        <p className="mt-5 text-sm text-base-content/55">No blocked or evidence-confidence issues need attention.</p>
+      ) : (
+        <ul className="mt-4 divide-y divide-white/10 rounded-xl border border-white/10">
+          {overview.attention.items.map(item => (
+            <li key={item.itemId} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="badge border-white/10 bg-white/[0.04]">
+                    {item.kind === "blocked"
+                      ? "Blocked"
+                      : item.kind === "low_confidence"
+                        ? "Low confidence"
+                        : "Insufficient evidence"}
+                  </span>
+                  <p className="font-medium">{item.displayName}</p>
+                </div>
+                {item.kind === "blocked" ? (
+                  <p className="mt-2 text-sm text-base-content/60">
+                    {item.blockedCount.toLocaleString()} blocked {item.blockedCount === 1 ? "review" : "reviews"} cannot
+                    settle.
+                  </p>
+                ) : item.kind === "low_confidence" ? (
+                  <p className="mt-2 text-sm text-base-content/60">
+                    {item.workflowKey} · {item.riskTier} · 95% lower bound {percent(item.lower95Bps)} is below the{" "}
+                    {percent(item.policyThresholdBps)} policy threshold · {item.rejectedCount.toLocaleString()} rejected
+                    of {item.comparableCount.toLocaleString()} comparable decisions
+                  </p>
+                ) : (
+                  <p className="mt-2 text-sm text-base-content/60">
+                    {item.workflowKey} · {item.riskTier} · n = {item.comparableCount.toLocaleString()} of{" "}
+                    {item.targetComparableCount.toLocaleString()} comparable decisions
+                  </p>
+                )}
+              </div>
+              <Link
+                className="btn btn-outline btn-sm shrink-0 self-start sm:self-auto"
+                href={agentTabHref(
+                  item.kind === "insufficient" ? "registry" : item.kind === "blocked" ? "inbox" : "evaluations",
+                  workspaceId,
+                )}
+              >
+                {item.kind === "insufficient"
+                  ? "Review setup"
+                  : item.kind === "blocked"
+                    ? "Open approvals"
+                    : "Open results"}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+      {overview.attention.itemsTruncated ? (
+        <p className="mt-3 text-xs text-base-content/55">
+          Showing {overview.attention.items.length} of {overview.attention.totalItemCount} current evidence issues.
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
 export function AgentOverviewMonitor({ workspaceId }: { workspaceId: string }) {
   const [overview, setOverview] = useState<AgentOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -334,7 +673,9 @@ export function AgentOverviewMonitor({ workspaceId }: { workspaceId: string }) {
         </div>
       </section>
       <HeadlineCards overview={overview} />
+      <TrendPanels overview={overview} />
       <AgentVersionTable overview={overview} />
+      <AttentionList overview={overview} workspaceId={workspaceId} />
     </div>
   );
 }

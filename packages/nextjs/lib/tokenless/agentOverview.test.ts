@@ -8,6 +8,7 @@ import {
 import type { AgentAssuranceScopeSummary } from "~~/lib/tokenless/agentRegistry";
 
 type SourceAgent = Parameters<typeof projectAgentOverview>[0]["agents"][number];
+type HumanReviewSource = NonNullable<SourceAgent["humanReview"]>;
 
 function scope(
   scopeId: string,
@@ -50,7 +51,7 @@ function scope(
   };
 }
 
-function agent(index: number, scopes: AgentAssuranceScopeSummary[] = []): SourceAgent {
+function agent(index: number, scopes: AgentAssuranceScopeSummary[] = [], humanReview?: HumanReviewSource): SourceAgent {
   return {
     agentId: `agent-${index}`,
     status: "active",
@@ -68,6 +69,38 @@ function agent(index: number, scopes: AgentAssuranceScopeSummary[] = []): Source
       createdAt: "2026-07-01T00:00:00.000Z",
     },
     assuranceScopes: scopes,
+    ...(humanReview ? { humanReview } : {}),
+  };
+}
+
+function humanReview(input: { blockedCount?: number; agreementThresholdBps?: number } = {}): HumanReviewSource {
+  return {
+    workload: {
+      openCount: input.blockedCount ?? 0,
+      approvalRequiredCount: 0,
+      requestReadyCount: 0,
+      activeReviewCount: 0,
+      blockedCount: input.blockedCount ?? 0,
+      ownerActionCount: 0,
+    },
+    management: {
+      binding: null,
+      selectionPolicy: {
+        id: "policy-overview",
+        version: 1,
+        agreementThresholdBps: input.agreementThresholdBps ?? 7_500,
+        productionFloorBps: 1_000,
+        requiredRiskTiers: [],
+        criticalRiskTiers: [],
+        minimumConfidenceBps: null,
+        maximumLatencyMs: null,
+      },
+      requestProfile: null,
+      privateGroup: null,
+      delegation: null,
+      lastTerminalDetails: null,
+      audit: { eventCount: 0, latest: null },
+    },
   };
 }
 
@@ -76,10 +109,34 @@ test("overview projection derives four distinct 30-day answers from decision evi
     agents: [agent(0)],
     metrics: { reviewsCompleted: 4 },
     observations: [
-      { agreement: "agree", comparable: true, latencyMs: 1_000, costAtomic: "1000000" },
-      { agreement: "agree", comparable: true, latencyMs: 3_000, costAtomic: "2000000" },
-      { agreement: "agree", comparable: true, latencyMs: 9_000, costAtomic: "3000000" },
-      { agreement: "disagree", comparable: true, latencyMs: null, costAtomic: "2000000" },
+      {
+        agreement: "agree",
+        comparable: true,
+        latencyMs: 1_000,
+        costAtomic: "1000000",
+        finalizedAt: "2026-07-26T10:00:00.000Z",
+      },
+      {
+        agreement: "agree",
+        comparable: true,
+        latencyMs: 3_000,
+        costAtomic: "2000000",
+        finalizedAt: "2026-07-26T11:00:00.000Z",
+      },
+      {
+        agreement: "agree",
+        comparable: true,
+        latencyMs: 9_000,
+        costAtomic: "3000000",
+        finalizedAt: "2026-07-27T10:00:00.000Z",
+      },
+      {
+        agreement: "disagree",
+        comparable: true,
+        latencyMs: null,
+        costAtomic: "2000000",
+        finalizedAt: "2026-07-27T11:00:00.000Z",
+      },
     ],
     now: new Date("2026-07-28T12:00:00.000Z"),
   });
@@ -109,6 +166,44 @@ test("overview projection derives four distinct 30-day answers from decision evi
     averageAtomic: "2000000",
     sampleSize: 4,
   });
+  assert.equal(overview.trends.periodLabel, "Last 30 days");
+  assert.equal(overview.trends.outcomes.available, true);
+  if (overview.trends.outcomes.available) {
+    assert.equal(overview.trends.outcomes.points.length, 30);
+    assert.deepEqual(
+      overview.trends.outcomes.points.find(point => point.date === "2026-07-26"),
+      {
+        date: "2026-07-26",
+        completedCount: 2,
+        endorsedCount: 2,
+        rejectedCount: 0,
+        inconclusiveCount: 0,
+      },
+    );
+    assert.deepEqual(
+      {
+        completedCount: overview.trends.outcomes.completedCount,
+        endorsedCount: overview.trends.outcomes.endorsedCount,
+        rejectedCount: overview.trends.outcomes.rejectedCount,
+        inconclusiveCount: overview.trends.outcomes.inconclusiveCount,
+      },
+      { completedCount: 4, endorsedCount: 3, rejectedCount: 1, inconclusiveCount: 0 },
+    );
+  }
+  assert.equal(overview.trends.decisionTime.available, true);
+  if (overview.trends.decisionTime.available) {
+    assert.deepEqual(
+      overview.trends.decisionTime.points.find(point => point.date === "2026-07-26"),
+      { date: "2026-07-26", medianMilliseconds: 2_000, sampleSize: 2 },
+    );
+    assert.equal(overview.trends.decisionTime.sampleSize, 3);
+  }
+  assert.deepEqual(overview.attention, {
+    periodLabel: "Current evidence state",
+    items: [],
+    totalItemCount: 0,
+    itemsTruncated: false,
+  });
 });
 
 test("agent-version parents are bounded, retain scope rows, and use the lowest observed bound instead of an average", () => {
@@ -127,7 +222,15 @@ test("agent-version parents are bounded, retain scope rows, and use the lowest o
   const overview = projectAgentOverview({
     agents,
     metrics: { reviewsCompleted: 0 },
-    observations: [{ agreement: "agree", comparable: true, latencyMs: 500, costAtomic: null }],
+    observations: [
+      {
+        agreement: "agree",
+        comparable: true,
+        latencyMs: 500,
+        costAtomic: null,
+        finalizedAt: "2026-07-27T11:00:00.000Z",
+      },
+    ],
     now: new Date("2026-07-28T12:00:00.000Z"),
   });
 
@@ -151,4 +254,70 @@ test("agent-version parents are bounded, retain scope rows, and use the lowest o
     recordedCount: 0,
     decisionCount: 1,
   });
+});
+
+test("attention is limited to current blocked, low-confidence, and insufficient evidence", () => {
+  const attentionScopes = [
+    scope("low-confidence", 6_500, {
+      workflowKey: "refund-review",
+      riskTier: "high",
+      comparableCount: 40,
+      agreementCount: 32,
+    }),
+    scope("insufficient", 6_000, {
+      workflowKey: "account-change",
+      comparableCount: 12,
+      agreementCount: 10,
+    }),
+    ...Array.from({ length: 4 }, (_, index) =>
+      scope(`empty-${index}`, null, {
+        comparableCount: 0,
+        agreementCount: 0,
+      }),
+    ),
+    scope("historical-insufficient", null, {
+      agentVersionId: "version-old",
+      comparableCount: 0,
+      agreementCount: 0,
+    }),
+    scope("stale-policy-insufficient", null, {
+      policyId: "policy-old",
+      comparableCount: 0,
+      agreementCount: 0,
+    }),
+  ];
+  const overview = projectAgentOverview({
+    agents: [agent(0, attentionScopes, humanReview({ blockedCount: 2 }))],
+    metrics: { reviewsCompleted: 0 },
+    observations: [],
+    now: new Date("2026-07-28T12:00:00.000Z"),
+  });
+
+  assert.equal(overview.attention.periodLabel, "Current evidence state");
+  assert.equal(overview.attention.totalItemCount, 7);
+  assert.equal(overview.attention.items.length, 5);
+  assert.equal(overview.attention.itemsTruncated, true);
+  assert.deepEqual(overview.attention.items[0], {
+    itemId: "blocked:agent-0",
+    kind: "blocked",
+    agentId: "agent-0",
+    displayName: "Agent 0",
+    blockedCount: 2,
+  });
+  assert.deepEqual(overview.attention.items[1], {
+    itemId: "low-confidence:low-confidence",
+    kind: "low_confidence",
+    agentId: "agent-0",
+    displayName: "Agent 0",
+    scopeId: "low-confidence",
+    workflowKey: "refund-review",
+    riskTier: "high",
+    comparableCount: 40,
+    rejectedCount: 8,
+    lower95Bps: 6_500,
+    policyThresholdBps: 7_500,
+  });
+  assert.ok(overview.attention.items.slice(2).every(item => item.kind === "insufficient"));
+  assert.ok(overview.attention.items.every(item => !item.itemId.includes("historical")));
+  assert.ok(overview.attention.items.every(item => !item.itemId.includes("stale-policy")));
 });

@@ -12,6 +12,11 @@ test("the connected-agent overview mounts the fixed monitor", () => {
   assert.match(source, /Median time to decision/);
   assert.match(source, /Cost per decision/);
   assert.match(source, /overview\.window\.label/);
+  assert.match(source, /Review outcome trend/);
+  assert.match(source, /Decision-time trend/);
+  assert.match(source, /overview\.attention\.periodLabel/);
+  assert.match(source, /Low confidence/);
+  assert.match(source, /Insufficient evidence/);
 });
 
 test("agent-version parents disclose bounded scope evidence without reviewer axes or a scope average", () => {
