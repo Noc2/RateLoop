@@ -12,6 +12,7 @@ import { Field, SelectField, TextareaField } from "~~/components/tokenless/forms
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
+import { SegmentedChoice } from "~~/components/tokenless/ui/SegmentedChoice";
 import { useConfirmDialog } from "~~/components/tokenless/ui/useConfirmDialog";
 import { DurationInput } from "~~/components/ui/DurationInput";
 import { readJson } from "~~/lib/tokenless/http";
@@ -792,24 +793,15 @@ export function AgentHumanReviewEditor({
             {paidConfigurationRelevant ? (
               <fieldset className="rounded-xl border border-white/10 p-4 sm:col-span-2">
                 <legend className="px-1 text-sm font-medium">Feedback bonus</legend>
-                <div className="grid grid-cols-2 gap-2 sm:max-w-md">
-                  <button
-                    type="button"
-                    aria-pressed={!draft.feedbackBonusEnabled}
-                    className={`btn btn-sm ${!draft.feedbackBonusEnabled ? "btn-primary" : "btn-outline"}`}
-                    onClick={() => update("feedbackBonusEnabled", false)}
-                  >
-                    No bonus
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={draft.feedbackBonusEnabled}
-                    className={`btn btn-sm ${draft.feedbackBonusEnabled ? "btn-primary" : "btn-outline"}`}
-                    onClick={() => update("feedbackBonusEnabled", true)}
-                  >
-                    Add bonus
-                  </button>
-                </div>
+                <SegmentedChoice
+                  className="sm:max-w-md"
+                  value={draft.feedbackBonusEnabled ? "enabled" : "disabled"}
+                  options={[
+                    { value: "disabled", label: "No bonus" },
+                    { value: "enabled", label: "Add bonus" },
+                  ]}
+                  onChange={value => update("feedbackBonusEnabled", value === "enabled")}
+                />
                 {draft.feedbackBonusEnabled ? (
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <Field

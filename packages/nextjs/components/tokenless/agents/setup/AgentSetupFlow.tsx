@@ -66,6 +66,7 @@ import { humanReviewConfirmationMessage } from "~~/components/tokenless/agents/h
 import { ChoiceInput, Field, SelectField, TextareaField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { Button } from "~~/components/tokenless/ui/Button";
+import { SegmentedChoice } from "~~/components/tokenless/ui/SegmentedChoice";
 import { useConfirmDialog } from "~~/components/tokenless/ui/useConfirmDialog";
 import { DurationInput } from "~~/components/ui/DurationInput";
 import { type AgentSetupScreenStep, agentSetupUrl } from "~~/lib/tokenless/agentSetupNavigation";
@@ -312,7 +313,8 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
 
   function openCompletedWorkspace() {
     const url = new URL(window.location.href);
-    url.pathname = "/agents";
+    url.pathname = "/agents/overview";
+    url.searchParams.delete("tab");
     url.searchParams.set("workspace", setup.workspaceId);
     url.searchParams.delete("step");
     router.replace(`${url.pathname}${url.search}`);
@@ -1999,24 +2001,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       </InfoPopover>
                     </span>
                   </legend>
-                  <div className="mt-3 grid grid-cols-2 gap-2 sm:max-w-md">
-                    <button
-                      type="button"
-                      aria-pressed={!reviewCompensation.feedbackBonusEnabled}
-                      className={`btn btn-sm ${!reviewCompensation.feedbackBonusEnabled ? "btn-primary" : "btn-outline"}`}
-                      onClick={() => changeFeedbackBonus(false)}
-                    >
-                      No bonus
-                    </button>
-                    <button
-                      type="button"
-                      aria-pressed={reviewCompensation.feedbackBonusEnabled}
-                      className={`btn btn-sm ${reviewCompensation.feedbackBonusEnabled ? "btn-primary" : "btn-outline"}`}
-                      onClick={() => changeFeedbackBonus(true)}
-                    >
-                      Add bonus
-                    </button>
-                  </div>
+                  <SegmentedChoice
+                    className="mt-3 sm:max-w-md"
+                    value={reviewCompensation.feedbackBonusEnabled ? "enabled" : "disabled"}
+                    options={[
+                      { value: "disabled", label: "No bonus" },
+                      { value: "enabled", label: "Add bonus" },
+                    ]}
+                    onChange={value => changeFeedbackBonus(value === "enabled")}
+                  />
                   {reviewCompensation.feedbackBonusEnabled ? (
                     <div className="mt-4 grid gap-4 sm:grid-cols-2">
                       <Field
