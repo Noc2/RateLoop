@@ -435,6 +435,11 @@ function OversightCaseDetail({ run, workspaceId }: { run: EvaluationRun; workspa
       {view?.detailAvailable ? (
         <div className="mt-3 space-y-3">
           {view.note ? <p className="text-xs leading-5 text-base-content/55">{view.note}</p> : null}
+          {view.cases.some(caseView => caseView.responses.length > 0) ? (
+            <p className="text-xs leading-5 text-base-content/55">
+              Reviewer labels are run-specific pseudonyms by design. Responses are not linked here to roster identities.
+            </p>
+          ) : null}
           {view.cases.map(caseView => (
             <article key={caseView.caseId} className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">

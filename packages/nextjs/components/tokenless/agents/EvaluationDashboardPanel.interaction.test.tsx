@@ -49,7 +49,7 @@ async function mount() {
   return render(<EvaluationDashboardPanel initialWorkspaceId="workspace-1" />);
 }
 
-function installFetch(dashboardBody: Record<string, unknown>) {
+function installFetch(dashboardBody: Record<string, unknown>, caseView?: Record<string, unknown>) {
   const previousFetch = globalThis.fetch;
   globalThis.fetch = async input => {
     const url = String(input);
@@ -57,6 +57,7 @@ function installFetch(dashboardBody: Record<string, unknown>) {
       return Response.json({ workspaces: [{ workspaceId: "workspace-1", name: "Release team", role: "member" }] });
     }
     if (url.endsWith("/evaluations")) return Response.json(dashboardBody);
+    if (caseView && url.endsWith("/cases")) return Response.json(caseView);
     throw new Error(`Unexpected evaluation request: ${url}`);
   };
   return () => {
@@ -178,6 +179,91 @@ test("an attributed run shows its exact agent version without the legacy disclai
     assert.equal(
       view.queryByText(
         "This run has no immutable agent-version reference, so it is excluded from per-agent comparisons.",
+      ),
+      null,
+    );
+  } finally {
+    await act(async () => cleanup());
+    restoreFetch();
+    restoreDom();
+  }
+});
+
+test("per-response details explain run-specific reviewer pseudonyms without exposing roster identity", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const restoreFetch = installFetch(dashboard({ runs: [run({ reviewerSource: "customer_invited" })] }), {
+    runId: "run_evaluation_1",
+    projectId: "project_evaluation_1",
+    lane: "customer_invited",
+    detailAvailable: true,
+    note: null,
+    cases: [
+      {
+        caseId: "case_evaluation_1",
+        position: 0,
+        title: "Support response",
+        instructions: "Compare the replies.",
+        isCalibration: false,
+        artifacts: [],
+        responses: [
+          {
+            reviewerPseudonym: "reviewer-deadbeef",
+            reviewerSource: "customer_invited",
+            choice: "candidate",
+            failureTagKeys: [],
+            rationale: "The candidate resolves the issue.",
+            submittedAt: "2026-07-20T00:00:00.000Z",
+          },
+        ],
+        choiceCounts: { baseline: 0, candidate: 1 },
+        disagreementBps: 0,
+      },
+    ],
+    overrideDecisions: [],
+  });
+
+  try {
+    const view = await mount();
+    await userEvent.setup({ document }).click(await view.findByText("Case detail (oversight)"));
+    assert.ok(
+      await view.findByText(
+        "Reviewer labels are run-specific pseudonyms by design. Responses are not linked here to roster identities.",
+      ),
+    );
+    assert.ok(view.getByText(/reviewer-deadbeef · chose candidate/));
+    assert.equal(view.queryByText(/@/), null);
+  } finally {
+    await act(async () => cleanup());
+    restoreFetch();
+    restoreDom();
+  }
+});
+
+test("aggregate-only network detail does not render the per-response pseudonym explanation", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const aggregateNote =
+    "This run used the RateLoop network lane. Reviewer submissions stay aggregate-only in this workspace.";
+  const restoreFetch = installFetch(dashboard(), {
+    runId: "run_evaluation_1",
+    projectId: "project_evaluation_1",
+    lane: "rateloop_network",
+    detailAvailable: false,
+    note: aggregateNote,
+    cases: [],
+    overrideDecisions: [],
+  });
+
+  try {
+    const view = await mount();
+    await userEvent.setup({ document }).click(await view.findByText("Case detail (oversight)"));
+    assert.ok(await view.findByText(aggregateNote));
+    assert.equal(
+      view.queryByText(
+        "Reviewer labels are run-specific pseudonyms by design. Responses are not linked here to roster identities.",
       ),
       null,
     );

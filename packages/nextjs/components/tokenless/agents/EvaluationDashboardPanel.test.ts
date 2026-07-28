@@ -83,6 +83,12 @@ test("completed runs expose an oversight case detail that respects lane boundari
   // Material renders via the existing lease/encryption artifact route.
   assert.match(source, /assurance\/projects\/\$\{encodeURIComponent\(view\.projectId\)\}\/artifacts\//);
   assert.match(source, /reviewerPseudonym/);
+  assert.match(source, /view\.cases\.some\(caseView => caseView\.responses\.length > 0\)/);
+  assert.match(
+    source,
+    /Reviewer labels are run-specific pseudonyms by design\. Responses are not linked here to roster identities\./,
+  );
+  assert.doesNotMatch(source, /reviewerAccount|reviewerEmail|verifiedEmail|principalAddress/);
   assert.match(source, /dissent/);
   assert.match(source, /Override history/);
   assert.match(source, /No workspace-owned rationale for this response\./);
