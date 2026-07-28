@@ -498,7 +498,7 @@ test("a targeted reconnect requires source confirmation and target-owner approva
   });
   assert.equal(confirmed.workspaceMove.status, "owner_approval_required");
   assert.match(confirmed.workspaceMove.approvalUrl, /tab=connect/u);
-  assert.match(confirmed.workspaceMove.approvalUrl, new RegExp(requested.workspaceMove.transferId, "u"));
+  assert.doesNotMatch(confirmed.workspaceMove.approvalUrl, /[?&]move=/u);
 
   const activeReview = await createReviewOpportunity({
     workspaceId: sourceWorkspace.workspaceId,
