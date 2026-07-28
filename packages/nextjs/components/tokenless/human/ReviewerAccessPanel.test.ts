@@ -28,5 +28,9 @@ test("reviewer invitation routing previews exact access and rejects legacy group
   assert.match(invitations, /Invitation expires/);
   assert.match(invitations, /Reviewer access expires/);
   assert.doesNotMatch(invitations, /private-groups|rlgi_/);
-  assert.doesNotMatch(invitations, /searchParams|location\.search|localStorage|sessionStorage/);
+  assert.match(
+    invitations,
+    /window\.history\.replaceState\(window\.history\.state, "", `\$\{window\.location\.pathname\}\$\{window\.location\.search\}`\)/,
+  );
+  assert.doesNotMatch(invitations, /searchParams|localStorage|sessionStorage/);
 });
