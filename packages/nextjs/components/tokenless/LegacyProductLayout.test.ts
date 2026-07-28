@@ -86,18 +86,19 @@ test("Human profile and settings render their controls directly", () => {
   const page = source("../../app/(app)/human/page.tsx");
   const signInPrompt = source("./human/HumanAccountSignInPrompt.tsx");
   const profileContent = source("./human/HumanProfileContent.tsx");
+  const profileSectionFocus = source("./human/ProfileSectionFocus.tsx");
   const profile = source("./account/ProfileClient.tsx");
   const invitations = source("./account/InvitationRouterPanel.tsx");
 
   assert.match(page, /<HumanProfileContent worldIdEnabled=\{isWorldIdAssuranceEnabled\(\)\} \/>/);
+  assert.match(page, /<ProfileSectionFocus section=\{section\} \/>/);
   assert.match(page, /<NotificationSettingsPanel \/>/);
-  assert.match(page, /<HumanAccountSignInPrompt tab=\{tab\} \/>/);
-  assert.match(page, /if \(!session\) return <HumanAccountSignInPrompt tab=\{tab\} \/>/);
-  assert.ok(
-    page.indexOf("if (!session) return <HumanAccountSignInPrompt tab={tab} />") <
-      page.lastIndexOf("<HumanTabs active={tab} />"),
-  );
+  assert.match(page, /<HumanAccountSignInPrompt/);
+  assert.match(page, /returnTo=\{humanAccountReturnTo/);
+  assert.ok(page.indexOf("if (!session)") < page.lastIndexOf("<HumanTabs active={tab} />"));
   assert.match(signInPrompt, /<SignedOutGate/);
+  assert.match(signInPrompt, /returnTo=\{returnTo\}/);
+  assert.match(profileSectionFocus, /scrollIntoView/);
   assert.match(page, /findAuthSession/);
   assert.match(profileContent, /ReviewerAccessPanel/);
   assert.match(profileContent, /worldIdEnabled \? <WorldIdProfilePanel \/>/);
@@ -115,7 +116,6 @@ test("Human profile and settings render their controls directly", () => {
     assert.match(profileContent, new RegExp(surface));
   }
   assert.doesNotMatch(page, /ProfileOverview|SettingsOverview|Customize|SectionBackLink/);
-  assert.doesNotMatch(page, /section ===/);
   assert.doesNotMatch(profile, /<details|<summary/);
   assert.doesNotMatch(profile, /Sign-in details|Provider|Not provided|Account ID|\/api\/auth\/session/);
   assert.doesNotMatch(profile, /InvitationRedemption|reviewer memberships/);

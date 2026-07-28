@@ -1,12 +1,12 @@
 import { SignedOutGate } from "~~/components/auth/SignedOutGate";
 
-export function HumanAccountSignInPrompt({ tab }: { tab: "profile" | "settings" }) {
+export function HumanAccountSignInPrompt({ returnTo, tab }: { returnTo: string; tab: "profile" | "settings" }) {
   const title = tab === "profile" ? "Your profile" : "Your settings";
 
   return (
     <SignedOutGate
       description={`Sign in to view and update your ${tab}.`}
-      returnTo={`/human?tab=${tab}`}
+      returnTo={returnTo}
       title={title}
       titleId="human-account-sign-in-title"
     />
