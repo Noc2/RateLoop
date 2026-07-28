@@ -42,13 +42,8 @@ export function WorldIdProfilePanel() {
   return (
     <section className="surface-card rounded-2xl p-6">
       <h2 className="text-xl font-semibold">World ID 4 assurance</h2>
-      <p className="mt-3 text-sm leading-6 text-base-content/60">
-        Browser sign-in, Proof of Human, and paid-work eligibility are separate checks. World ID records a one-time,
-        provider-scoped uniqueness enrollment for RateLoop-network panels; it is not ongoing liveness or legal
-        eligibility.
-      </p>
       {status ? (
-        <div className="mt-5">
+        <div className="mt-4">
           <WorldIdAssuranceClient verified={status.verified} onVerified={refresh} />
           {status.verifiedAt ? (
             <p className="mt-3 text-xs text-base-content/55">

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { WalletBindingsClient } from "~~/components/auth/WalletBindingsClient";
+import { PageHeading } from "~~/components/tokenless/ui/PageHeading";
 import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
 
 export const metadata: Metadata = {
@@ -30,12 +31,12 @@ export default async function WalletSettingsPage({
       >
         &larr; Back to Profile
       </Link>
-      <p className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--rateloop-blue)]">Account settings</p>
-      <h1 className="mt-4 text-4xl font-semibold tracking-tight sm:text-5xl">Wallets</h1>
-      <p className="mt-5 max-w-3xl text-base leading-7 text-base-content/65">
-        Add a wallet only when you need to pay for an ask or receive reviewer earnings. A wallet never replaces your
-        RateLoop sign-in.
-      </p>
+      <PageHeading
+        accent="blue"
+        className="max-w-3xl"
+        heading="Wallets"
+        subtitle="Add a wallet only when you need to pay for an ask or receive reviewer earnings. A wallet never replaces your RateLoop sign-in."
+      />
       <div className="mt-10">
         <WalletBindingsClient
           initialPurpose={initialPurpose}

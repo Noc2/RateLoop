@@ -52,4 +52,6 @@ test("the search route only loads private results after resolving a server sessi
   const source = readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
   assert.match(source, /findAuthSession\(\(await cookies\(\)\)\.get\(AUTH_SESSION_COOKIE\)\?\.value\)/u);
   assert.match(source, /session\s*\?\s*await searchAuthorizedSiteData/u);
+  assert.match(source, /<PageHeading/);
+  assert.doesNotMatch(source, /tracking-\[0\.18em\][^>]*>\s*Search\s*</);
 });

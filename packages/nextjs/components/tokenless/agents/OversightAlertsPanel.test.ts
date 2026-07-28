@@ -38,8 +38,8 @@ test("workspace alert settings expose event toggles, the spike threshold, and no
   assert.match(source, /workspaceStop/);
   assert.match(source, /coverageFloorHit/);
   assert.match(source, /disagreementSpikeBps/);
-  // Email delivery reuses the existing verified notification-email machinery.
-  assert.match(source, /add and verify a notification email/i);
+  // Email delivery is configured beside its switch in account settings, not repeated here.
+  assert.doesNotMatch(source, /add and verify a notification email|Email delivery is separate/i);
   assert.doesNotMatch(source, /resend|sendEmail|smtp/i);
 });
 
@@ -50,6 +50,8 @@ test("browser notifications request permission only from the explicit enable but
   const handler = source.slice(source.indexOf("async function enableBrowserNotifications"));
   assert.ok(handler.includes("Notification.requestPermission()"));
   assert.match(source, /Enable browser notifications/);
+  assert.match(source, /Blocked in the browser settings/);
+  assert.match(source, /Off until you enable them explicitly/);
   // Notifications fire only for fresh alerts while the dashboard polls, and
   // only after both the workspace opt-in and a granted permission.
   assert.match(source, /window\.Notification\.permission !== "granted"\) return;/);

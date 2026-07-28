@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { AuthorizedSiteSearchResults } from "~~/components/tokenless/navigation/AuthorizedSiteSearchResults";
 import { SiteSearchResults } from "~~/components/tokenless/navigation/SiteSearchResults";
+import { PageHeading } from "~~/components/tokenless/ui/PageHeading";
 import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
 import { type AuthorizedSiteSearchResult, searchAuthorizedSiteData } from "~~/lib/search/authorizedSiteSearch";
 
@@ -25,18 +26,18 @@ export function SearchPageContent({
 }) {
   return (
     <AppPageShell outerClassName="pb-8" contentClassName="pt-6 sm:pt-10">
-      <header>
-        <p className="font-mono text-xs uppercase tracking-[0.18em] text-[var(--rateloop-blue)]">Search</p>
-        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-base-content sm:text-4xl">
-          {query ? (
+      <PageHeading
+        accent="blue"
+        heading={
+          query ? (
             <>
               Results for <span className="rateloop-text-gradient">&quot;{query}&quot;</span>
             </>
           ) : (
             "Search RateLoop"
-          )}
-        </h1>
-      </header>
+          )
+        }
+      />
 
       {query ? (
         <>

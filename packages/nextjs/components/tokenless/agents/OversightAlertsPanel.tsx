@@ -221,10 +221,6 @@ function AlertSettings({ workspaceId }: { workspaceId: string }) {
           </Button>
         )}
       </div>
-      <p className="text-xs leading-5 text-base-content/55">
-        Alerts always appear here. Email delivery is separate and opt-in: add and verify a notification email in your
-        account settings, then enable oversight alert emails there.
-      </p>
       {error ? (
         <p className="text-xs text-red-100" role="alert">
           {error}

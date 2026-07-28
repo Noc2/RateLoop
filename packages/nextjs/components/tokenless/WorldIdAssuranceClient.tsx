@@ -82,9 +82,8 @@ export function WorldIdAssuranceClient({ verified, onVerified }: Props) {
       <span className="text-xs text-base-content/55">RateLoop-network assurance</span>
       <strong className="mt-1 block">{verified ? "Unique human verified" : "World ID Proof of Human required"}</strong>
       <p className="mt-2 text-xs leading-5 text-base-content/55">
-        This adds a provider-scoped uniqueness assertion for network panels. It does not replace legal, tax, sanctions,
-        age, or payout checks. Verification is a one-time enrollment bound to this RateLoop account. It records that a
-        unique World ID verified during enrollment; it is not an ongoing liveness or credential-validity check.
+        World ID adds a one-time, provider-scoped uniqueness assertion bound to this RateLoop account. It does not
+        replace age, legal, tax, sanctions, or payout checks, and it is not ongoing liveness or credential monitoring.
       </p>
       {!verified ? (
         <button
