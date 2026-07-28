@@ -7,11 +7,19 @@ const source = readFileSync(new URL("./NotificationSettingsPanel.tsx", import.me
 test("account and security notifications cannot be disabled", () => {
   assert.match(source, /if \(key === "accountSecurity"\) return/);
   assert.match(source, /disabled=\{savingPreferences \|\| option\.key === "accountSecurity"\}/);
-  assert.match(source, /Required for important sign-in and account changes/);
+  assert.match(source, /Always on for important sign-in and account changes/);
 });
 
-test("oversight alert email is a listed preference that defaults to off", () => {
+test("workspace and payment choices appear only when they apply", () => {
   assert.match(source, /key: "oversightAlerts"/);
   assert.match(source, /oversightAlerts: false/);
-  assert.match(source, /Email is opt-in/);
+  assert.match(source, /option\.group !== "Payments" \|\| capabilities\.hasPaidActivity/);
+  assert.match(source, /option\.group !== "Workspace" \|\| capabilities\.hasWorkspace/);
+});
+
+test("email availability is described without exposing the delivery vendor", () => {
+  assert.match(source, /Email notifications unavailable/);
+  assert.match(source, /Email notifications are unavailable right now/);
+  assert.doesNotMatch(source, /Resend/);
+  assert.doesNotMatch(source, /not configured on this deployment/);
 });

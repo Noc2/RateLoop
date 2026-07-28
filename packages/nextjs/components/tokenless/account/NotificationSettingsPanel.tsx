@@ -3,47 +3,58 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChoiceInput, Field } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
-import { readJson } from "~~/lib/tokenless/http";
+import { HttpJsonError, readJson } from "~~/lib/tokenless/http";
 
 const notificationOptions = [
   {
     key: "assignmentAvailable",
-    label: "Assignment available",
-    description: "Know when a new human-assurance assignment is ready for you.",
+    group: "Review work",
+    label: "New review",
+    description: "When review work is ready for you.",
   },
   {
     key: "assignmentCompleted",
-    label: "Assignment completed",
-    description: "See when a submitted review reaches its accepted or closed state.",
+    group: "Review work",
+    label: "Review outcome",
+    description: "When a submitted review is accepted or closed.",
   },
   {
     key: "paymentUpdates",
+    group: "Payments",
     label: "Payment updates",
-    description: "Receive updates about voucher, reserve, and settlement progress.",
+    description: "When money from paid review work is ready or needs action.",
   },
   {
     key: "askResults",
-    label: "Ask results",
-    description: "Know when an ask has a result or needs another panel step.",
+    group: "Workspace",
+    label: "Workspace results",
+    description: "When a workspace review has a result or needs another step.",
   },
   {
     key: "accountSecurity",
-    label: "Account and security",
-    description: "Required for important sign-in and account changes.",
+    group: "Account",
+    label: "Account security",
+    description: "Always on for important sign-in and account changes.",
   },
   {
     key: "oversightAlerts",
-    label: "Oversight alerts",
-    description: "Blocked gates, failed or expired reviews, workspace stops, and threshold alerts. Email is opt-in.",
+    group: "Workspace",
+    label: "Workspace alerts",
+    description: "When review work is blocked, fails, expires, or is stopped.",
   },
 ] as const;
 
 type NotificationKey = (typeof notificationOptions)[number]["key"];
+type NotificationGroup = (typeof notificationOptions)[number]["group"];
 type Preferences = Record<NotificationKey, boolean>;
 type EmailSettings = Preferences & {
   email: string;
   verified: boolean;
   deliveryConfigured: boolean;
+};
+type NotificationCapabilities = {
+  hasPaidActivity: boolean;
+  hasWorkspace: boolean;
 };
 
 const defaultPreferences: Preferences = {
@@ -61,6 +72,31 @@ const defaultEmailSettings: EmailSettings = {
   verified: false,
   deliveryConfigured: false,
 };
+
+const defaultCapabilities: NotificationCapabilities = {
+  hasPaidActivity: false,
+  hasWorkspace: false,
+};
+
+async function loadNotificationCapabilities(): Promise<NotificationCapabilities> {
+  const [workspacesResult, earningsResult] = await Promise.allSettled([
+    fetch("/api/account/workspaces", { credentials: "same-origin", cache: "no-store" }).then(response =>
+      readJson<{ workspaces?: unknown[] }>(response),
+    ),
+    fetch("/api/rater/earnings", { credentials: "same-origin", cache: "no-store" }).then(response =>
+      readJson<{ items?: unknown[]; totals?: Record<string, unknown> }>(response),
+    ),
+  ]);
+  const workspaces = workspacesResult.status === "fulfilled" ? workspacesResult.value.workspaces : [];
+  const earnings = earningsResult.status === "fulfilled" ? earningsResult.value : null;
+  const hasPaidTotal = Object.values(earnings?.totals ?? {}).some(
+    value => typeof value === "string" && !/^0+$/u.test(value),
+  );
+  return {
+    hasPaidActivity: Boolean(earnings?.items?.length) || hasPaidTotal,
+    hasWorkspace: Boolean(workspaces?.length),
+  };
+}
 
 function PreferenceToggle({
   option,
@@ -98,6 +134,7 @@ function PreferenceToggle({
 export function NotificationSettingsPanel() {
   const [preferences, setPreferences] = useState<Preferences>(defaultPreferences);
   const [emailSettings, setEmailSettings] = useState<EmailSettings>(defaultEmailSettings);
+  const [capabilities, setCapabilities] = useState<NotificationCapabilities>(defaultCapabilities);
   const [emailDraft, setEmailDraft] = useState("");
   const [browserPermission, setBrowserPermission] = useState<NotificationPermission | "unsupported">("default");
   const [loading, setLoading] = useState(true);
@@ -128,13 +165,15 @@ export function NotificationSettingsPanel() {
     Promise.all([
       fetch("/api/notifications/preferences", { credentials: "same-origin", cache: "no-store" }).then(readJson),
       fetch("/api/notifications/email", { credentials: "same-origin", cache: "no-store" }).then(readJson),
+      loadNotificationCapabilities(),
     ])
-      .then(([preferenceBody, emailBody]) => {
+      .then(([preferenceBody, emailBody, nextCapabilities]) => {
         if (cancelled) return;
         const nextPreferences = { ...defaultPreferences, ...(preferenceBody as Partial<Preferences>) };
         const nextEmail = { ...defaultEmailSettings, ...(emailBody as Partial<EmailSettings>) };
         setPreferences(nextPreferences);
         setEmailSettings(nextEmail);
+        setCapabilities(nextCapabilities);
         setEmailDraft(nextEmail.email);
       })
       .catch(cause => {
@@ -147,6 +186,19 @@ export function NotificationSettingsPanel() {
       cancelled = true;
     };
   }, []);
+
+  const notificationGroups = useMemo(() => {
+    const visibleOptions = notificationOptions.filter(
+      option =>
+        (option.group !== "Payments" || capabilities.hasPaidActivity) &&
+        (option.group !== "Workspace" || capabilities.hasWorkspace),
+    );
+    return (["Review work", "Payments", "Workspace", "Account"] as const)
+      .map(group => ({ group, options: visibleOptions.filter(option => option.group === group) }))
+      .filter((entry): entry is { group: NotificationGroup; options: typeof visibleOptions } =>
+        Boolean(entry.options.length),
+      );
+  }, [capabilities]);
 
   const emailDirty = useMemo(
     () =>
@@ -200,7 +252,12 @@ export function NotificationSettingsPanel() {
         body.verificationSent ? "Check your inbox to verify this notification email." : "Email settings updated.",
       );
     } catch (cause) {
-      capture(cause, "Unable to update email notification settings.");
+      capture(
+        cause instanceof HttpJsonError && cause.status === 503
+          ? { field: cause.field, message: "Email notifications are unavailable right now." }
+          : cause,
+        "Unable to update email notification settings.",
+      );
     } finally {
       setSavingEmail(false);
     }
@@ -222,10 +279,9 @@ export function NotificationSettingsPanel() {
         <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Notifications</p>
         <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-xl font-semibold">Stay close to your RateLoop work</h2>
+            <h2 className="text-xl font-semibold">Choose your notifications</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-base-content/60">
-              Choose the assignment, ask, payment, and account updates you want to see. Email delivery is sent through
-              your configured Resend account after you verify the address.
+              Choose which updates you receive. Account security notifications stay on.
             </p>
           </div>
           <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-base-content/60">
@@ -238,18 +294,34 @@ export function NotificationSettingsPanel() {
                   : "Browser alerts need permission"}
           </div>
         </div>
-        {loading ? <p className="mt-5 text-sm text-base-content/55">Loading notification settings…</p> : null}
+        {loading ? (
+          <p className="mt-5 text-sm text-base-content/55" role="status">
+            Loading notification settings…
+          </p>
+        ) : null}
         {!loading ? (
           <>
-            <div className="mt-5 space-y-3">
-              {notificationOptions.map(option => (
-                <PreferenceToggle
-                  key={option.key}
-                  option={option}
-                  checked={option.key === "accountSecurity" ? true : preferences[option.key]}
-                  disabled={savingPreferences || option.key === "accountSecurity"}
-                  onChange={value => void updatePreference(option.key, value)}
-                />
+            <div className="mt-5 space-y-5">
+              {notificationGroups.map(entry => (
+                <section key={entry.group} aria-labelledby={`notification-group-${entry.group.replaceAll(" ", "-")}`}>
+                  <h3
+                    id={`notification-group-${entry.group.replaceAll(" ", "-")}`}
+                    className="mb-2 text-sm font-semibold"
+                  >
+                    {entry.group}
+                  </h3>
+                  <div className="space-y-2">
+                    {entry.options.map(option => (
+                      <PreferenceToggle
+                        key={option.key}
+                        option={option}
+                        checked={option.key === "accountSecurity" ? true : preferences[option.key]}
+                        disabled={savingPreferences || option.key === "accountSecurity"}
+                        onChange={value => void updatePreference(option.key, value)}
+                      />
+                    ))}
+                  </div>
+                </section>
               ))}
             </div>
             {browserPermission === "default" ? (
@@ -276,7 +348,7 @@ export function NotificationSettingsPanel() {
           </div>
           <span className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-base-content/60">
             {!emailSettings.deliveryConfigured
-              ? "Resend not configured"
+              ? "Email notifications unavailable"
               : !emailSettings.email
                 ? "No email added"
                 : emailSettings.verified
@@ -284,37 +356,49 @@ export function NotificationSettingsPanel() {
                   : "Verification required"}
           </span>
         </div>
-        <div className="mt-5">
-          <Field
-            id="tokenless-notification-email"
-            label="Delivery email"
-            type="email"
-            value={emailDraft}
-            onChange={event => {
-              setEmailDraft(event.target.value);
-              clear("email");
-            }}
-            className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
-            placeholder="you@example.com"
-            autoComplete="email"
-            error={fieldErrors.email}
-          />
-        </div>
-        <button
-          type="button"
-          className="rateloop-gradient-action mt-4 px-5"
-          disabled={savingEmail || !emailDirty || (Boolean(emailDraft.trim()) && !emailSettings.deliveryConfigured)}
-          onClick={() => void saveEmailSettings()}
-        >
-          {savingEmail
-            ? "Saving…"
-            : emailSettings.email && !emailDirty
-              ? "Email settings saved"
-              : "Save email settings"}
-        </button>
+        {emailSettings.deliveryConfigured ? (
+          <>
+            <div className="mt-5">
+              <Field
+                id="tokenless-notification-email"
+                label="Delivery email"
+                type="email"
+                value={emailDraft}
+                onChange={event => {
+                  setEmailDraft(event.target.value);
+                  clear("email");
+                }}
+                className="input mt-2 w-full border-white/10 bg-[var(--rateloop-field)]"
+                placeholder="you@example.com"
+                autoComplete="email"
+                error={fieldErrors.email}
+              />
+            </div>
+            <button
+              type="button"
+              className="rateloop-gradient-action mt-4 px-5"
+              disabled={savingEmail || !emailDirty}
+              onClick={() => void saveEmailSettings()}
+            >
+              {savingEmail
+                ? "Saving…"
+                : emailSettings.email && !emailDirty
+                  ? "Email settings saved"
+                  : "Save email settings"}
+            </button>
+          </>
+        ) : (
+          <p className="mt-5 text-sm text-base-content/60">
+            Email notifications are unavailable right now. Browser notifications still use the choices above.
+          </p>
+        )}
       </section>
 
-      {status ? <p className="rounded-lg bg-emerald-300/10 p-3 text-sm text-emerald-100">{status}</p> : null}
+      {status ? (
+        <p className="rounded-lg bg-emerald-300/10 p-3 text-sm text-emerald-100" role="status">
+          {status}
+        </p>
+      ) : null}
       {error ? (
         <p role="alert" className="rounded-lg bg-red-400/10 p-3 text-sm text-red-100">
           {error}
