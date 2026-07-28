@@ -180,11 +180,10 @@ export default function UseCasesPage() {
       <h2>Choose reviewers and material separately</h2>
       <p>
         Reviewer qualifications determine who can answer the criterion. Data sensitivity independently determines what
-        each configured audience may receive. Private material—customer cases, client work, unreleased
-        prototypes—belongs with authorized invited reviewers. A RateLoop network panel receives only public, synthetic,
-        or safely redacted material when that lane is explicitly activated. Hybrid panels are not available in this
-        release. Proof of Human can provide a provider-scoped uniqueness signal; it does not prove professional
-        expertise, independence, residence, or suitability for every task.
+        each reviewer may receive. The current hosted service routes work only to invited workspace reviewers. Submit
+        private material—such as customer cases, client work, or unreleased prototypes—only when those reviewers are
+        authorized to see it, and never treat an invitation as proof of expertise, independence, residence, or
+        suitability for every task.
       </p>
 
       <h2>When RateLoop is not the right tool</h2>

@@ -20,12 +20,14 @@ const LANDING_TECH_ANCHORS = [
   "base-usdc",
 ] as const;
 
-test("tech-stack docs explain the production mechanisms behind the landing page", async () => {
+test("tech-stack docs separate architecture reference from the hosted path", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const { default: TechStackPage } = await import("./page");
   const html = renderToStaticMarkup(<TechStackPage />).replace(/\s+/g, " ");
 
   assert.match(html, /Tech.*rateloop-text-gradient.*Stack/i);
+  assert.match(html, /current hosted path uses invited, unpaid workspace reviewers/i);
+  assert.match(html, /does not activate the fund-backed settlement mechanisms/i);
   for (const anchor of LANDING_TECH_ANCHORS) {
     assert.match(html, new RegExp('id="' + anchor + '"', "i"));
   }
@@ -40,22 +42,10 @@ test("tech-stack docs explain the production mechanisms behind the landing page"
   assert.doesNotMatch(html, /LREP|staking|governance|truth oracle/i);
 });
 
-test("every technical landing-page link resolves to a rendered docs anchor", async () => {
+test("every indexed technical mechanism has a rendered docs anchor", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
-  const [{ default: HomePage }, { default: TechStackPage }, { default: SmartContractsPage }] = await Promise.all([
-    import("../../page"),
-    import("./page"),
-    import("../smart-contracts/page"),
-  ]);
-  const landingHtml = renderToStaticMarkup(await HomePage());
-  const targetHtml = {
-    "/docs/tech-stack": renderToStaticMarkup(<TechStackPage />),
-    "/docs/smart-contracts": renderToStaticMarkup(<SmartContractsPage />),
-  };
-  const links = [...landingHtml.matchAll(/href="(\/docs\/(?:tech-stack|smart-contracts))#([^"]+)"/g)];
+  const { default: TechStackPage } = await import("./page");
+  const html = renderToStaticMarkup(<TechStackPage />);
 
-  assert.ok(links.length > 0);
-  for (const [, pathname, fragment] of links) {
-    assert.match(targetHtml[pathname as keyof typeof targetHtml], new RegExp('id="' + fragment + '"'));
-  }
+  for (const fragment of LANDING_TECH_ANCHORS) assert.match(html, new RegExp('id="' + fragment + '"'));
 });

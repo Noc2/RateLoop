@@ -1,6 +1,9 @@
 # RateLoop SDK
 
-Use `@rateloop/sdk` to add a paid human quality gate when an AI-enabled output needs focused evaluation before rollout.
+This is a technical reference for the separately gated fund-backed settlement API. The current hosted review path uses
+invited, unpaid workspace reviewers through the protected workspace MCP and does not activate this flow.
+
+## Settlement API sequence
 
 ```ts
 import { createTokenlessRateLoopClient } from "@rateloop/sdk";
@@ -49,6 +52,5 @@ yarn workspace @rateloop/nextjs attestation:verify ./attestation-witness.json \
   --tsa-ca ./trusted-tsa-ca.pem --tsa-chain ./trusted-tsa-chain.pem
 ```
 
-See [Evidence & Compliance Mapping](./evidence.md) for packet fields, verification boundaries, and framework
-cross-references. For resumable approval primitives, signed release requirements, and host-enforcement boundaries, see
-[Framework approval integrations](./framework-integrations.md).
+See the [Evidence reference](./evidence.md) for packet fields, verification boundaries, and framework cross-references.
+For the current hosted review path, see [Agents and MCP](./ai.md).

@@ -1,91 +1,80 @@
 import Link from "next/link";
 import { HumanAssuranceLoop } from "~~/components/assurance/HumanAssuranceLoop";
-import { AgentRunFlowDiagram } from "~~/components/docs/AgentRunFlowDiagram";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
-import { ReviewerFlowDiagram } from "~~/components/docs/ReviewerFlowDiagram";
-import { SettlementPathsDiagram } from "~~/components/docs/SettlementPathsDiagram";
 
 export default function HowTokenlessWorksPage() {
   return (
     <article className="prose max-w-none">
       <DocsTitle gradientText="Works">How It</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
-        RateLoop begins by checking an agent frequently. Independent human agreement can earn lower baseline review for
-        the same evidence scope, while safety rules and weaker evidence keep humans involved.
+        The hosted service connects an agent to invited workspace reviewers. Reviews are private and unpaid; the final
+        decision stays with your team.
       </p>
+
+      <div className="not-prose my-8 rounded-xl border border-[var(--rateloop-blue)]/25 bg-[var(--rateloop-blue)]/5 p-5">
+        <h2 className="text-lg font-semibold text-base-content">At a glance</h2>
+        <p className="mt-2 text-sm leading-6 text-base-content/70">
+          Connect the agent, set its review policy, request a check, collect independent answers, and inspect the
+          result.
+        </p>
+      </div>
 
       <div className="not-prose my-8">
         <HumanAssuranceLoop />
       </div>
 
-      <h2 id="adaptive-review">1. Evidence sets review coverage</h2>
+      <h2 id="adaptive-review">1. Scope the review policy</h2>
       <p>
-        RateLoop keeps assurance separate by agent version, review-policy version, workflow, risk tier, and reviewer
-        audience. A new scope starts in calibration at 100% review; evidence from another model version or workflow
-        cannot silently lower it.
+        RateLoop keeps review evidence separate by agent version, policy version, workflow, risk tier, and reviewer
+        audience. A new or changed scope begins with frequent review. Stable agreement can lower baseline coverage,
+        while critical risk, missing context, a long unreviewed gap, or weaker agreement can require another check.
       </p>
       <p>
-        Under the default adaptive policy, two independent 15-case windows must each contain at least 14 comparable
-        agent-human agreements before coverage can move to 50%. Another 50 stable cases can move it to 25%, and 100 more
-        start the 25% monitoring stage. After 100 comparable monitoring cases, coverage returns to a full-review
-        calibration block. A complete evidence window below the agreement threshold restores 100% calibration. Critical
-        risk, missing required context, and the maximum unreviewed gap can force a check at any stage.
+        The workspace owner controls the question, response window, reviewer audience, and data boundary in{" "}
+        <Link href="/agents?tab=registry">Reviews</Link>. Evidence from a different scope cannot silently lower review
+        coverage.
       </p>
 
-      <h2 id="agent-flow">2. One human-review cycle</h2>
-      <AgentRunFlowDiagram />
+      <h2 id="agent-flow">2. The agent requests a review</h2>
       <p>
-        An integration requests a quote, creates an idempotent ask, funds it from a prepaid balance or signed USDC
-        authorization, waits on the operation, and reads the result. The same{" "}
-        <Link href="/docs/sdk">quote → ask → payment → wait → result</Link> contract works through the SDK and private
-        workspace integrations. Public MCP handoffs add a browser approval step before submission.
+        After connection, the agent reads its owner-approved context and evaluates each eligible output. If review is
+        required, it requests one review and waits for the same operation instead of creating a duplicate. Generic MCP
+        integrations are advisory; only a verified host integration that controls delivery can prove the output stayed
+        blocked while it waited.
+      </p>
+      <p>
+        See <Link href="/docs/ai">Agents &amp; MCP</Link> for the connection and tool sequence.
       </p>
 
-      <h2 id="reviewer-flow">3. The reviewer flow</h2>
+      <h2 id="reviewer-flow">3. Invited reviewers answer independently</h2>
       <p>
-        Before paid work is offered, each reviewer passes the frozen eligibility policy. RateLoop then assigns a blinded
-        case. The reviewer chooses an answer, predicts the panel&apos;s answer share, and submits a sealed commit before
-        anyone can see the crowd. That paid commit publishes timelock ciphertext containing the vote, prediction,
-        response hash, payout address, and salt. It irrevocably schedules those details to become publicly decryptable
-        at the configured drand beacon after the commit deadline, whether or not the reviewer or keeper submits a reveal
-        or claim; there is no post-commit abort. After reveal, every accepted valid report can be claimed at the
-        reviewer-selected payout address.
+        RateLoop offers the case only to reviewers invited to the workspace. An assigned reviewer sees the material
+        needed for that case, selects an answer, and can add a reason before the deadline. Reviewers do not see other
+        responses while answering.
       </p>
       <p>
-        A network panel uses <Link href="/docs/tech-stack#proof-of-human">Proof of Human</Link> for provider-scoped
-        uniqueness. Invited panels use their own explicit{" "}
-        <Link href="/docs/tech-stack#audience-policies">audience policies</Link>. Hybrid panels are not available in
-        this release.
-      </p>
-      <ReviewerFlowDiagram />
-
-      <h2 id="settlement-paths">4. Every funded round terminates</h2>
-      <p>
-        Normal rounds reveal and settle with fixed pay plus a bounded{" "}
-        <Link href="/docs/tech-stack#robust-bayesian-truth-serum">RBTS bonus</Link>. A zero-commit round refunds the
-        customer. If quorum or the reveal beacon fails after reviewers have submitted valid work, the customer receives
-        the remaining bounty and fee while accepted work is compensated from the reserved amount. A paid round cannot be
-        cancelled after its first accepted commit.
-      </p>
-      <SettlementPathsDiagram />
-
-      <h2 id="decision-evidence">5. Evidence, not an automatic decision</h2>
-      <p>
-        The result separates the panel verdict from the material needed to interpret it: reviewer source, individual
-        reports, reasons, disagreement, scoring version, compensation, and settlement references. The customer decides
-        whether to approve, revise, retest, escalate, or stop.
-      </p>
-      <p>
-        See <Link href="/docs/evidence">Evidence &amp; Compliance Mapping</Link> for the packet fields, local checks,
-        framework cross-references, and limits on what those records establish.
+        Submit only material you are authorized to share. Minimize or redact personal, confidential, and regulated data
+        because assigned reviewers and authorized RateLoop workloads may read it to provide the service.
       </p>
 
-      <p>Correlation analytics may affect publication and future assignment, but never reduce pay for accepted work.</p>
-
+      <h2 id="decision-evidence">4. RateLoop returns a result and evidence</h2>
       <p>
-        Continue with <Link href="/docs/tech-stack">Tech Stack</Link> for the mechanisms behind the flow,{" "}
-        <Link href="/docs/ai">Agents &amp; MCP</Link> for integration lanes, or{" "}
-        <Link href="/docs/smart-contracts">Smart Contracts</Link> for fund custody and settlement.
+        The result keeps the review question, policy scope, verdict, reasons, agreement or disagreement, and available
+        evidence together. Workspace members can inspect completed work in Results and supporting records in Evidence.
+      </p>
+      <p>
+        The evidence records what the review process observed. It does not prove that the source material was correct,
+        that every agent output was intercepted, or that a later customer decision was compliant.
+      </p>
+
+      <h2 id="owner-decision">5. Your team decides what happens next</h2>
+      <p>
+        The accountable owner decides whether to approve, revise, retest, escalate, or stop. RateLoop supplies human
+        review evidence; it does not issue an automatic production, safety, legal, medical, or compliance approval.
+      </p>
+      <p>
+        Continue with the <Link href="/docs/evidence">Evidence reference</Link> for record boundaries or{" "}
+        <Link href="/docs/use-cases">Use Cases</Link> for example review questions.
       </p>
     </article>
   );

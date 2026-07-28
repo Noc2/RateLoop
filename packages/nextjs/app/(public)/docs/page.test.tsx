@@ -8,26 +8,22 @@ const { renderToStaticMarkup } = require("react-dom/server") as {
   renderToStaticMarkup: (element: React.ReactElement) => string;
 };
 
-test("documentation introduction presents the focused production path", async () => {
+test("documentation introduction presents the hosted task paths", async () => {
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
   const { default: DocsPage } = await import("./page");
   const html = renderToStaticMarkup(<DocsPage />).replace(/\s+/g, " ");
 
   assert.match(html, /Human.*rateloop-text-gradient.*Assurance/i);
-  assert.match(html, /Human Assurance Loop/i);
-  assert.match(html, /Automated checks can pass.*contextual decision/i);
-  assert.match(html, /100% review.*50%.*25%.*never drops below 25%/i);
-  assert.match(html, /weaker measured agreement.*restore calibration/i);
-  assert.doesNotMatch(
-    html,
-    /Coverage never becomes a global score|Evidence remains scoped to the exact agent version/i,
-  );
-  assert.match(html, /Define:.*Review:.*Settle:.*Decide:/i);
-  assert.match(html, /The final decision stays with you/i);
+  assert.match(html, /hosted service uses invited workspace reviewers for unpaid, private review/i);
+  assert.match(html, /Connect an agent.*Set review policy.*Complete a review.*Verify evidence/i);
+  assert.match(html, /Set policy:.*Request:.*Review:.*Decide:/i);
+  assert.match(html, /href="\/agents\?tab=connect"/i);
+  assert.match(html, /href="\/agents\?tab=registry"/i);
+  assert.match(html, /href="\/human\?tab=discover"/i);
+  assert.match(html, /href="\/agents\?tab=evidence"/i);
   assert.match(html, /href="\/docs\/use-cases"/i);
   assert.match(html, /href="\/docs\/evidence"/i);
   assert.match(html, /href="\/docs\/how-it-works"/i);
-  assert.match(html, /href="\/docs\/tech-stack"/i);
-  assert.match(html, /href="\/docs\/smart-contracts"/i);
-  assert.doesNotMatch(html, /unavailable capabilities/i);
+  assert.match(html, /href="\/docs\/human-oversight"/i);
+  assert.doesNotMatch(html, /guaranteed pay|bonus|USDC|settlement|budget/i);
 });

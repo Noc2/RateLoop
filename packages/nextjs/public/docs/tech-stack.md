@@ -1,5 +1,8 @@
 # Tech Stack
 
+This is a technical reference for the separately gated fund-backed architecture. The current hosted path uses invited,
+unpaid workspace reviewers and does not activate the payment, public-network, or settlement mechanisms below.
+
 RateLoop separates agent integration, human admission, blinded reporting, incentives, and fund custody so that each
 mechanism has one narrow job.
 

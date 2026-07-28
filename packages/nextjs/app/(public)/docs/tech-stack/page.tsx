@@ -7,8 +7,7 @@ import { TokenlessArchitectureDiagram } from "~~/components/docs/TokenlessArchit
 
 export const metadata = {
   title: "Tech Stack",
-  description:
-    "MCP, x402 USDC funding, Proof of Human, sealed review, RBTS incentives, and immutable Base settlement in RateLoop.",
+  description: "Technical reference for RateLoop's connected review and separately gated settlement architecture.",
 } satisfies Metadata;
 
 export default function TokenlessTechStackPage() {
@@ -16,8 +15,8 @@ export default function TokenlessTechStackPage() {
     <article className="prose max-w-none">
       <DocsTitle gradientText="Stack">Tech</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
-        The landing page names the mechanisms behind RateLoop. Here is what each one does and where it fits in the
-        production human-assurance loop.
+        This is a technical architecture reference. The current hosted path uses invited, unpaid workspace reviewers and
+        does not activate the fund-backed settlement mechanisms described below.
       </p>
 
       <TokenlessArchitectureDiagram />

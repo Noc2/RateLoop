@@ -1,31 +1,38 @@
 import Link from "next/link";
-import { HumanAssuranceLoop } from "~~/components/assurance/HumanAssuranceLoop";
 import { DocsTitle } from "~~/components/docs/DocsTitle";
 
 const DOCS_PATHS = [
   {
     number: "01",
-    title: "Agents",
-    description: "Connect an agent, bind its review policy, and check human assurance before eligible outputs.",
-    href: "/docs/ai",
-    label: "Agent guide",
+    title: "Connect an agent",
+    description: "Add RateLoop to the agent host your team already uses.",
+    href: "/agents?tab=connect",
+    label: "Connect",
     color: "var(--rateloop-blue)",
   },
   {
     number: "02",
-    title: "For Reviewers",
-    description: "Join a blinded panel, report what you see, predict the panel, and claim guaranteed pay plus bonus.",
-    href: "/docs/how-it-works#reviewer-flow",
-    label: "Review flow",
+    title: "Set review policy",
+    description: "Choose when the agent asks for review and who can respond.",
+    href: "/agents?tab=registry",
+    label: "Open Reviews",
     color: "var(--rateloop-green)",
   },
   {
     number: "03",
-    title: "For Builders",
-    description: "Use the versioned quote, ask, wait, and result flow without putting a token in your product.",
-    href: "/docs/sdk",
-    label: "SDK guide",
+    title: "Complete a review",
+    description: "Open assigned work, answer independently, and add a useful reason.",
+    href: "/human?tab=discover",
+    label: "Review work",
     color: "var(--rateloop-pink)",
+  },
+  {
+    number: "04",
+    title: "Verify evidence",
+    description: "Inspect completed review records and export the evidence you need.",
+    href: "/agents?tab=evidence",
+    label: "Open Evidence",
+    color: "var(--rateloop-yellow)",
   },
 ] as const;
 
@@ -34,68 +41,53 @@ export default function DocsPage() {
     <article className="prose max-w-none">
       <DocsTitle gradientText="Assurance">Human</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
-        Automated checks can pass while an AI output still needs a contextual decision. RateLoop adds a Human Assurance
-        Loop: review frequently at first, then let scoped evidence—not blind trust—decide when baseline review can
-        decrease.
+        Start with the task you need. The hosted service uses invited workspace reviewers for unpaid, private review.
       </p>
 
-      <h2>Human judgment that follows the evidence</h2>
+      <h2>Choose a task</h2>
       <p>
-        A new agent version and workflow starts with 100% review. Repeated agreement can move its baseline coverage to
-        50%, then 25%. Monitoring never drops below 25% and periodically returns to full-review calibration. Risk rules,
-        missing context, review gaps, or weaker measured agreement keep humans in the loop or restore calibration. The
-        final decision stays with you.
+        Connect the agent first, then set its review policy. Reviewers can complete assigned work while workspace
+        members inspect results and evidence.
       </p>
 
-      <div className="not-prose my-8">
-        <HumanAssuranceLoop />
-      </div>
-
-      <div className="not-prose my-8 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="not-prose my-8 grid gap-x-8 gap-y-10 sm:grid-cols-2">
         {DOCS_PATHS.map(path => (
           <DocsPathCard key={path.title} {...path} />
         ))}
       </div>
 
-      <h2>Inside one human check</h2>
+      <h2>How one review works</h2>
       <ol>
         <li>
-          <strong>Define:</strong> write one question, choose the panel, and set the budget.
+          <strong>Set policy:</strong> choose the workflow, risk rules, reviewers, and response window.
         </li>
         <li>
-          <strong>Review:</strong> eligible humans submit sealed answers and predictions without seeing the crowd.
+          <strong>Request:</strong> the connected agent submits eligible work and waits when review is required.
         </li>
         <li>
-          <strong>Settle:</strong> accepted work reaches a paid terminal path in USDC.
+          <strong>Review:</strong> invited reviewers answer independently without seeing other responses.
         </li>
         <li>
-          <strong>Decide:</strong> consume the verdict, reasons, disagreement, and settlement evidence.
+          <strong>Decide:</strong> use the result, reasons, disagreement, and evidence in your own workflow.
         </li>
       </ol>
 
-      <h2>Where to go next</h2>
+      <h2>Learn more</h2>
       <ul>
         <li>
-          <Link href="/docs/evidence">Evidence</Link> shows what RateLoop records and how to verify it independently.
+          <Link href="/docs/how-it-works">How It Works</Link> follows the current hosted review journey.
         </li>
         <li>
           <Link href="/docs/use-cases">Use Cases</Link> maps concrete AI workflow problems to bounded human checks and
           accountable owner decisions.
         </li>
         <li>
-          <Link href="/docs/human-oversight">Human Oversight</Link> maps monitoring, override, and stop capabilities to
-          the EU AI Act Article 14(4) oversight measures your people carry out.
+          <Link href="/docs/evidence">Evidence reference</Link> explains what RateLoop records and what those records do
+          and do not establish.
         </li>
         <li>
-          <Link href="/docs/how-it-works">How It Works</Link> follows the agent, reviewer, and settlement journeys.
-        </li>
-        <li>
-          <Link href="/docs/tech-stack">Tech Stack</Link> explains MCP, x402, Proof of Human, commit-reveal, RBTS,
-          Surprisingly Popular, and Base USDC.
-        </li>
-        <li>
-          <Link href="/docs/smart-contracts">Smart Contracts</Link> describes the immutable fund core and its small
-          supporting contract set.
+          <Link href="/docs/human-oversight">Human Oversight</Link> explains the controls your people remain responsible
+          for operating.
         </li>
       </ul>
     </article>

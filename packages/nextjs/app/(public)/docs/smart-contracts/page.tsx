@@ -33,7 +33,8 @@ export default function TokenlessContractsPage() {
     <article className="prose max-w-none">
       <DocsTitle gradientText="Contracts">Smart</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
-        Three contracts keep fund custody small, admission separate, and agent-funded USDC settlement explicit.
+        This is a reference for the separately gated fund-backed architecture. The current hosted invited-review path
+        does not activate these contracts.
       </p>
 
       <div className="not-prose my-8 grid gap-5">
@@ -76,11 +77,11 @@ export default function TokenlessContractsPage() {
         Chain evidence can bind a review case to a deployment key, round, transaction receipt, indexed terminal event,
         and deterministic fund accounting. It proves only those recorded chain facts; it does not prove the quality of
         the source material, reviewer competence, or the customer&apos;s final decision. See the full{" "}
-        <Link href="/docs/evidence">Evidence &amp; Compliance Mapping</Link>.
+        <Link href="/docs/evidence">Evidence reference</Link>.
       </p>
       <p>
-        Return to <Link href="/docs/tech-stack#immutable-fund-core">Immutable Fund Core</Link> for the settlement model,
-        or follow the full <Link href="/docs/how-it-works#settlement-paths">settlement paths</Link>.
+        Return to <Link href="/docs/tech-stack#immutable-fund-core">Immutable Fund Core</Link> for the settlement model
+        or the <Link href="/docs/sdk">SDK reference</Link> for the gated API sequence.
       </p>
     </article>
   );

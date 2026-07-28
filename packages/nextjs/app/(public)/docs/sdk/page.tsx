@@ -6,10 +6,11 @@ export default function SdkPage() {
     <article className="prose max-w-none">
       <DocsTitle gradientText="SDK">RateLoop</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
-        Add a paid human-assurance panel to an AI workflow through one versioned, idempotent API.
+        This page is a technical reference for the separately gated fund-backed settlement API. The current hosted
+        review path uses invited, unpaid reviewers through the connected workspace MCP and does not activate this flow.
       </p>
 
-      <h2>Quote → ask → payment → wait → result</h2>
+      <h2>Settlement API sequence</h2>
       <pre>
         <code>{`import { createTokenlessRateLoopClient } from "@rateloop/sdk";
 
@@ -71,9 +72,8 @@ yarn workspace @rateloop/nextjs attestation:verify ./attestation-witness.json \\
   --tsa-ca ./trusted-tsa-ca.pem --tsa-chain ./trusted-tsa-chain.pem`}</code>
       </pre>
       <p>
-        Read <Link href="/docs/evidence">Evidence &amp; Compliance Mapping</Link> for verification boundaries,{` `}
-        <Link href="/docs/ai">Agents &amp; MCP</Link> for publishing lanes, or{` `}
-        <Link href="/docs/tech-stack#x402-usdc">x402 + USDC</Link> for the agent-funded payment path.
+        Read the <Link href="/docs/evidence">Evidence reference</Link> for verification boundaries or{" "}
+        <Link href="/docs/ai">Agents &amp; MCP</Link> for the current hosted review path.
       </p>
     </article>
   );

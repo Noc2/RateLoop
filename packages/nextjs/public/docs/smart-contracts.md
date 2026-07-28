@@ -1,5 +1,8 @@
 # Smart Contracts
 
+This is a reference for the separately gated fund-backed architecture. The current hosted invited-review path does not
+activate these contracts.
+
 The tokenless v4 target keeps customer-funded settlement in four narrow contracts. The active disposable Base Sepolia
 test bundle was deployed at block `44390557`. Its complete deployment key is pinned across the app, indexer, and keeper;
 historical v1-v3 addresses are not accepted as v4 addresses.

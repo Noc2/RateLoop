@@ -14,6 +14,8 @@ test("smart-contract docs name the complete production contract set", async () =
   const html = renderToStaticMarkup(<SmartContractsPage />).replace(/\s+/g, " ");
 
   assert.match(html, /Smart.*rateloop-text-gradient.*Contracts/i);
+  assert.match(html, /separately gated fund-backed architecture/i);
+  assert.match(html, /current hosted invited-review path does not activate these contracts/i);
   assert.match(html, /id="tokenless-panel".*TokenlessPanel/i);
   assert.match(html, /id="credential-issuer".*CredentialIssuer/i);
   assert.match(html, /id="x402-panel-submitter".*X402PanelSubmitter/i);
@@ -28,5 +30,6 @@ test("smart-contract docs name the complete production contract set", async () =
   assert.match(html, /id="settlement-evidence"/i);
   assert.match(html, /It proves only those recorded chain facts/i);
   assert.match(html, /href="\/docs\/evidence"/i);
+  assert.doesNotMatch(html, /href="\/docs\/how-it-works#settlement-paths"/i);
   assert.doesNotMatch(html, /LREP|governance|oracle/i);
 });

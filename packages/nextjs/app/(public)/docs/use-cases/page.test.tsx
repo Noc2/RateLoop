@@ -68,7 +68,9 @@ test("use cases show three worked examples with bounded human-assurance decision
     assert.match(html, new RegExp(`href="${href.replace(/[./-]/g, "\\$&")}"`));
   }
 
-  assert.match(html, /Proof of Human.*uniqueness signal.*does not prove professional expertise/i);
+  assert.match(html, /current hosted service routes work only to invited workspace reviewers/i);
+  assert.match(html, /never treat an invitation as proof of expertise, independence, residence/i);
+  assert.doesNotMatch(html, /network panel|hybrid panel/i);
   assert.match(html, /unit tests, schema validation, deterministic policy checks, tracing, and automated evaluators/i);
   assert.match(html, /sole medical, legal, financial, security, or safety approval/i);
   assert.match(html, /href="\/docs\/how-it-works"/);

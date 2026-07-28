@@ -3,10 +3,16 @@
 RateLoop adds a Human Assurance Loop to an AI-enabled workflow: review frequently at first, then let scoped evidence
 decide whether baseline review can decrease.
 
+## Hosted service available now
+
+The hosted service connects an agent to invited workspace reviewers for private, unpaid review. The owner sets the
+review policy, the agent evaluates eligible outputs and requests a review when required, reviewers answer independently,
+and the workspace returns the result and available evidence. The accountable customer decides what happens next.
+
 ## The Human Assurance Loop
 
 1. **Owner sets policy.** A workspace owner or admin chooses the review rules, risk thresholds, reviewer audience, data
-   boundaries, and publishing and spending limits.
+   boundaries, and response window.
 2. **Agent submits work.** A connected agent submits the workflow, declared risk, confidence, completeness, suggestion
    commitment, and source evidence within that owner-approved policy. RateLoop applies the policy to decide whether the
    output needs a human check.
@@ -22,7 +28,11 @@ calibration block. A complete evidence window below the agreement threshold rest
 Coverage never becomes a global agent score. Evidence from another version, policy, workflow, risk tier, or reviewer
 audience cannot silently lower review.
 
-## Inside one human check
+## Fund-backed settlement architecture reference
+
+The following separately gated architecture is not the ordinary hosted review path.
+
+### Inside one fund-backed check
 
 1. **Freeze the decision.** A buyer or agent defines one question, the response format, a versioned audience policy,
    panel size, and the complete USDC economics. RateLoop derives the round deadlines from the selected panel terms.
@@ -45,18 +55,17 @@ audience cannot silently lower review.
 7. **Return a decision packet.** The versioned result combines the verdict, disagreement, written reasons, reviewer
    coverage, settlement evidence, refunds, and compensation. The customer records the final go, revise, or stop action.
 
-See [Evidence & Compliance Mapping](./evidence.md) for the packet fields, local checks, framework cross-references, and
+See the [Evidence reference](./evidence.md) for the packet fields, local checks, framework cross-references, and
 limits on what those records establish.
 
 ## Agent integration
 
-Workspace owners change audience, frequency, response window, panel, compensation, and authority directly in
+Workspace owners change audience, frequency, response window, reviewer group, and agent authority directly in
 **Reviews**. When multiple agents are active, a compact selector chooses which agent's policy to edit; the workspace
 reviewer roster follows the editor. The connected workspace MCP uses `rateloop_get_agent_context ->
 rateloop_evaluate_review_requirement -> skip or rateloop_request_review -> rateloop_wait_for_review ->
 rateloop_get_review_result -> rateloop_get_assurance_state`. Its basic safe connection can evaluate review requirements
-but cannot spend or publish. Autonomous review requires a separate owner-approved publishing grant with explicit
-limits. Funding permission is additionally required only when the request includes a bounty or Feedback Bonus.
+but cannot spend, publish, read private artifacts, or administer the workspace.
 
 Installing MCP does not create a background check. The tools must be available in the active task, the connection must
 pass `rateloop_verify_connection`, and the agent must call the evaluation flow for each eligible output. A policy edit is
@@ -64,15 +73,14 @@ picked up by the next context read; deletion or revocation requires a fresh conn
 hooks are advisory; a verified adapter that owns the output boundary is required when the host must prove that output
 stayed blocked.
 
-The authenticated API and SDK use `quote -> ask -> wait -> result`. A scoped workspace key supports prepaid automation;
-a self-funded agent can use short-lived x402/EIP-3009 USDC authorizations. The public MCP Adapter remains a separate,
-approval-bound browser handoff and never turns draft content into a funded ask by itself.
+The separately gated fund-backed API and SDK use `quote -> ask -> wait -> result`; they are not the ordinary hosted
+review path. The public MCP Adapter remains a separate, approval-bound browser handoff and never turns draft content
+into a submitted review by itself.
 
 ## Identity and access
 
-Browser access starts with Better Auth and resolves to an opaque RateLoop principal. A wallet is optional and is bound
-only for an explicit funding, payout, or recovery purpose. Private project access depends on workspace membership,
-project assignment, and reviewer lease rather than wallet ownership.
+Browser access starts with Better Auth and resolves to an opaque RateLoop principal. The hosted invited-review path does
+not require a wallet. Private project access depends on workspace membership, project assignment, and reviewer lease.
 
 ## Evidence boundary
 
@@ -80,7 +88,7 @@ Private artifacts are encrypted and access-controlled. Each artifact has its own
 releases derive tenant-scoped workspace/project wrapping keys from a versioned root held in Vercel's server-only secret
 store and bind authenticated encryption context; authorized RateLoop workloads can still decrypt that tenant's artifacts to
 provide the service. This is application-managed encryption, not customer-held or non-exportable HSM custody. Key
-inventory, rotation/rewrap, recovery, and access exercises are release gates. Paid settlement inputs and outputs are
-independently recomputable on Base. A paid commit schedules public
+inventory, rotation/rewrap, recovery, and access exercises are release gates. In the separately gated fund-backed
+architecture, settlement inputs and outputs are independently recomputable on Base. A paid commit schedules public
 decryptability of its vote-key-to-payout link at the configured drand round after the commit deadline, independent of a
 later reveal or claim, while the customer's private artifacts and decision record remain outside the public chain.

@@ -1,7 +1,15 @@
 # RateLoop integration API
 
-Use the versioned API to place a focused human-assurance panel inside an AI-enabled workflow. Automate panel
-orchestration, not the customer's final decision. The workflow is `quote -> ask -> wait -> result` under
+## Hosted service available now
+
+The protected workspace MCP connects an approved agent version to invited, unpaid workspace reviewers. Its basic safe
+connection can read the owner-approved policy, evaluate eligible outputs, request review, wait for the same operation,
+and return the result. It cannot spend, publish, read private artifacts, or administer the workspace.
+
+## Fund-backed settlement API reference
+
+The versioned API below is a separately gated architecture reference, not the ordinary hosted review path. Automate
+panel orchestration, not the customer's final decision. The workflow is `quote -> ask -> wait -> result` under
 `/api/agent/v1`.
 
 - `quote` freezes the audience, panel size, deadlines, response format, and itemized economics.
