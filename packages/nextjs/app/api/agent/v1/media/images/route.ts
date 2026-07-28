@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticateProductPrincipal } from "~~/lib/tokenless/productCore";
+import { authenticateProductPrincipal, requireProductPrincipalScope } from "~~/lib/tokenless/productCore";
 import {
   authorizePublicQuestionMediaOwner,
   stagePublicQuestionImage,
@@ -19,6 +19,8 @@ export async function POST(request: NextRequest) {
     if (principal.kind !== "api_key") {
       throw new TokenlessServiceError("A workspace API key is required.", 401, "api_key_required");
     }
+    // Staged images exist only to be published to a panel, so they need the publishing capability.
+    requireProductPrincipalScope(principal, "panel:publish");
     await authorizePublicQuestionMediaOwner({ apiKeyId: principal.apiKeyId, workspaceId: principal.workspaceId });
     await sweepExpiredPublicQuestionMedia({ limit: 20 });
     const form = await request.formData();

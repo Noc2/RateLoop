@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { JsonRequestBodyError, readJsonRequestBody } from "~~/lib/mcp/requestBody";
 import {
   attachProductAsk,
   authenticateProductPrincipal,
@@ -7,6 +8,7 @@ import {
   releasePreparedProductAsk,
 } from "~~/lib/tokenless/productCore";
 import {
+  TokenlessServiceError,
   createTokenlessAsk,
   parseTokenlessAskMediaPreviewGrants,
   parseTokenlessAskRequest,
@@ -17,6 +19,17 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+async function readAskBody(request: NextRequest) {
+  try {
+    return await readJsonRequestBody(request);
+  } catch (error) {
+    if (error instanceof JsonRequestBodyError) {
+      throw new TokenlessServiceError("Ask body must be valid JSON.", 400, "invalid_ask");
+    }
+    throw error;
+  }
+}
+
 export async function POST(request: NextRequest) {
   let prepared: Awaited<ReturnType<typeof prepareProductAsk>> | null = null;
   let attached = false;
@@ -25,7 +38,7 @@ export async function POST(request: NextRequest) {
       authorization: request.headers.get("authorization"),
       sessionToken: getProductSessionToken(request),
     });
-    const rawBody = await request.json();
+    const rawBody = await readAskBody(request);
     const body = parseTokenlessAskRequest(rawBody, request.headers.get("idempotency-key"));
     const mediaPreviews = parseTokenlessAskMediaPreviewGrants(rawBody);
     prepared = await prepareProductAsk({ mediaPreviews, principal, request: body });

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { JsonRequestBodyError, readJsonRequestBody } from "~~/lib/mcp/requestBody";
 import {
   type AdaptiveReviewDecisionRequest,
   type AdaptiveReviewIntegrationBinding,
@@ -64,8 +65,9 @@ export async function POST(request: NextRequest) {
     const binding = await resolveAdaptiveReviewIntegrationBinding(principal);
     let body: AdaptiveReviewDecisionRequest;
     try {
-      body = (await request.json()) as AdaptiveReviewDecisionRequest;
-    } catch {
+      body = (await readJsonRequestBody(request)) as AdaptiveReviewDecisionRequest;
+    } catch (error) {
+      if (!(error instanceof JsonRequestBodyError)) throw error;
       throw new TokenlessServiceError("Review opportunity body must be valid JSON.", 400, "invalid_review_opportunity");
     }
     if (!body || typeof body !== "object" || Array.isArray(body)) {

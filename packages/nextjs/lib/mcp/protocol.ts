@@ -7,7 +7,9 @@ import {
   getMcpHandoffResult,
   getMcpHandoffStatus,
 } from "~~/lib/mcp/handoff";
+import { workspaceToolErrorPayload } from "~~/lib/mcp/workspaceConnectionError";
 import { configuredHumanReviewAudienceSources } from "~~/lib/tokenless/reviewCapabilities";
+import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 export const TOKENLESS_MCP_PROTOCOL_VERSION = "2025-11-25" as const;
 export const TOKENLESS_MCP_STABLE_PROTOCOL_VERSION = "2025-06-18" as const;
@@ -279,6 +281,19 @@ function toolErrorResult(error: TokenlessMcpToolError) {
   return { ...toolResult(value), isError: true };
 }
 
+/**
+ * Tool handlers reach service code that reports semantic failures as `TokenlessServiceError`.
+ * Those carry the exact status, code and retryability an agent needs, so they are surfaced as tool
+ * errors in the same shape the workspace MCP server uses instead of collapsing into -32603.
+ */
+export function tokenlessMcpToolErrorResult(error: unknown) {
+  if (error instanceof TokenlessMcpToolError) return toolErrorResult(error);
+  if (error instanceof TokenlessServiceError) {
+    return { ...toolResult({ ...workspaceToolErrorPayload(error), status: error.status }), isError: true };
+  }
+  return null;
+}
+
 export function tokenlessMcpCapabilities() {
   return {
     allowedAudienceSources: TOKENLESS_MCP_AUDIENCE_SOURCES,
@@ -305,7 +320,8 @@ async function callTool(name: unknown, args: unknown, origin: string) {
     if (name === "rateloop_get_result") return toolResult(await getMcpHandoffResult(args));
     return null;
   } catch (error) {
-    if (error instanceof TokenlessMcpToolError) return toolErrorResult(error);
+    const mapped = tokenlessMcpToolErrorResult(error);
+    if (mapped) return mapped;
     throw error;
   }
 }

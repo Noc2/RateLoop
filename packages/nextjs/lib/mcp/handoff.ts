@@ -73,7 +73,10 @@ function atomic(value: unknown, path: string) {
   return value;
 }
 
-export function parseMcpQuoteRequest(value: unknown): TokenlessQuoteRequest {
+export function parseMcpQuoteRequest(
+  value: unknown,
+  privacy: { dataClassification: (typeof DATA_CLASSIFICATIONS)[number]; redactionSummary: string },
+): TokenlessQuoteRequest {
   const input = record(value, "request");
   exact(input, ["audience", "audiencePolicy", "budget", "question", "requestedPanelSize"], "request");
   const audience = record(input.audience, "request.audience");
@@ -125,9 +128,13 @@ export function parseMcpQuoteRequest(value: unknown): TokenlessQuoteRequest {
       },
       audiencePolicy: input.audiencePolicy as TokenlessQuoteRequest["audiencePolicy"],
       budget: { attemptReserveAtomic, bountyAtomic, feeBps: Number(budget.feeBps) },
+      confirmedNoSensitiveData: true,
+      dataClassification: privacy.dataClassification,
       question: parsedQuestion,
+      redactionSummary: privacy.redactionSummary,
       requestedPanelSize,
       responseWindowSeconds: DEFAULT_RESPONSE_WINDOW_SECONDS,
+      visibility: "public",
     });
   } catch (error) {
     if (error instanceof RateLoopSdkError) toolError(error.message, "invalid_quote");
@@ -232,13 +239,10 @@ export function createMcpHandoff(
     toolError("dataClassification must be public, synthetic, or redacted.", "invalid_params");
   }
   const redactionSummary = string(input.redactionSummary, "redactionSummary", 10, 1_000).trim();
-  const request = {
-    ...parseMcpQuoteRequest(input.request),
-    visibility: "public" as const,
-    dataClassification: input.dataClassification as "public" | "synthetic" | "redacted",
+  const request = parseMcpQuoteRequest(input.request, {
+    dataClassification: input.dataClassification as (typeof DATA_CLASSIFICATIONS)[number],
     redactionSummary,
-    confirmedNoSensitiveData: true as const,
-  };
+  });
   const now = options.now ?? new Date();
   const preview = parseMediaPreviews(input.mediaPreviews, request, now);
   const random = options.random ?? randomBytes;

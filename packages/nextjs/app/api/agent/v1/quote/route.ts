@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { TokenlessMcpHttpError } from "~~/lib/mcp/errors";
 import { consumeMcpRateLimit } from "~~/lib/mcp/rateLimit";
+import { JsonRequestBodyError, readJsonRequestBody } from "~~/lib/mcp/requestBody";
 import {
   TokenlessServiceError,
   createTokenlessQuote,
@@ -10,27 +11,15 @@ import {
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-const MAX_QUOTE_BODY_BYTES = 64 * 1024;
 
 async function readQuoteBody(request: NextRequest) {
-  const contentLength = request.headers.get("content-length");
-  if (contentLength) {
-    const parsedLength = Number(contentLength);
-    if (!Number.isSafeInteger(parsedLength) || parsedLength < 0) {
-      throw new TokenlessMcpHttpError("Content-Length is invalid.", 400, "invalid_content_length");
-    }
-    if (parsedLength > MAX_QUOTE_BODY_BYTES) {
-      throw new TokenlessMcpHttpError("Quote request body exceeds 64 KiB.", 413, "request_too_large");
-    }
-  }
-  const bytes = await request.arrayBuffer();
-  if (bytes.byteLength > MAX_QUOTE_BODY_BYTES) {
-    throw new TokenlessMcpHttpError("Quote request body exceeds 64 KiB.", 413, "request_too_large");
-  }
   try {
-    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)) as unknown;
-  } catch {
-    throw new TokenlessMcpHttpError("Quote body must be valid JSON.", 400, "parse_error");
+    return await readJsonRequestBody(request);
+  } catch (error) {
+    if (error instanceof JsonRequestBodyError) {
+      throw new TokenlessMcpHttpError("Quote body must be valid JSON.", 400, "parse_error");
+    }
+    throw error;
   }
 }
 

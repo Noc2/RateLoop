@@ -28,6 +28,30 @@ test("private-review route authenticates at the handler and never caches errors"
   assert.equal(response.headers.get("cache-control"), "private, no-store, max-age=0");
 });
 
+test("private-review route requires the publishing scope, not merely a valid key", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Private scope", ownerAddress: OWNER });
+  const key = await createWorkspaceApiKey({
+    workspaceId,
+    name: "Telemetry only",
+    scopes: ["telemetry:write"],
+  });
+  const response = await POST(
+    request(JSON.stringify({ idempotencyKey: "private-scope-0001" }), key.token, "private-scope-0001"),
+  );
+  assert.equal(response.status, 403);
+  assert.equal((await response.json()).code, "insufficient_scope");
+});
+
+test("private-review route refuses a body larger than the shared 64 KiB agent cap", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Private cap", ownerAddress: OWNER });
+  const key = await createWorkspaceApiKey({ workspaceId, name: "Private cap key" });
+  const oversized = JSON.stringify({ idempotencyKey: "private-cap-0001", padding: "x".repeat(70 * 1_024) });
+  const response = await POST(request(oversized, key.token, "private-cap-0001"));
+  assert.equal(response.status, 413);
+  assert.equal(response.headers.get("cache-control"), "private, no-store, max-age=0");
+  assert.equal((await response.json()).code, "request_too_large");
+});
+
 test("private-review route rejects malformed JSON and mismatched idempotency headers before service work", async () => {
   const { workspaceId } = await createWorkspace({ name: "Private route", ownerAddress: OWNER });
   const key = await createWorkspaceApiKey({ workspaceId, name: "Private route key" });

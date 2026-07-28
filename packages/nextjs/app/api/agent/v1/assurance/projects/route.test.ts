@@ -49,6 +49,29 @@ test("project POST rejects malformed JSON as a private 400 response", async () =
   assert.equal((await response.json()).code, "invalid_human_assurance_input");
 });
 
+test("project POST requires the publishing scope, not merely a valid key", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Scoped", ownerAddress: ADDRESS });
+  const { token } = await createWorkspaceApiKey({
+    workspaceId,
+    name: "Telemetry only",
+    scopes: ["telemetry:write"],
+  });
+  const response = await POST(request("POST", token, JSON.stringify({ name: "Support quality" })));
+  assert.equal(response.status, 403);
+  assert.equal(response.headers.get("cache-control"), CACHE_CONTROL);
+  assert.equal((await response.json()).code, "insufficient_scope");
+});
+
+test("project POST refuses a body larger than the shared 64 KiB agent cap", async () => {
+  const { token } = await apiKey();
+  const response = await POST(
+    request("POST", token, JSON.stringify({ name: "Oversized", notes: "x".repeat(70 * 1_024) })),
+  );
+  assert.equal(response.status, 413);
+  assert.equal(response.headers.get("cache-control"), CACHE_CONTROL);
+  assert.equal((await response.json()).code, "request_too_large");
+});
+
 test("project POST derives workspace scope from the API key", async () => {
   const { token, workspaceId } = await apiKey();
   const response = await POST(
