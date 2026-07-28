@@ -16,6 +16,9 @@ test("evaluation dashboard leads with results and progressively discloses detail
   assert.match(source, /label: "Completed"/);
   assert.match(source, /label: "Failed"/);
   assert.match(source, /label: "Waiting"/);
+  assert.match(source, /\["completed", "cancelled"\]\.includes\(run\.status\)/);
+  assert.match(source, /\["failed", "dead"\]\.includes\(run\.status\)/);
+  assert.doesNotMatch(source, /\["failed", "dead", "cancelled"\]/);
   assert.match(source, /Insufficient responses/);
   assert.match(source, /run\.status === "completed".*"Insufficient responses"/s);
   assert.match(source, /Evidence and run details/);

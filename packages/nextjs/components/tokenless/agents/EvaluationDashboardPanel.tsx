@@ -517,9 +517,9 @@ function RunCard({
   const decidable = run.status === "completed" && run.evidencePacketAvailable && !clientDecision;
   const presentationStatus = decidable
     ? { label: "Needs action", className: "bg-amber-300/10 text-amber-100" }
-    : run.status === "completed"
+    : ["completed", "cancelled"].includes(run.status)
       ? { label: "Completed", className: "bg-emerald-300/10 text-emerald-100" }
-      : ["failed", "dead", "cancelled"].includes(run.status)
+      : ["failed", "dead"].includes(run.status)
         ? { label: "Failed", className: "bg-red-300/10 text-red-100" }
         : { label: "Waiting", className: "bg-white/[0.06] text-base-content/65" };
   const currentResult =
