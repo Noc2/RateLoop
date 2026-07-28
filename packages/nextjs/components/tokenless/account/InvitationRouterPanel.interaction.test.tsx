@@ -119,6 +119,7 @@ test("workspace reviewer invitation links hydrate from the fragment without leak
     await view.findByText("Reviewer invitation");
     assert.equal((view.getByLabelText("Invitation code") as HTMLInputElement).value, code);
     assert.equal(window.location.hash, "");
+    assert.equal(window.location.search, "?tab=discover&invite=1");
     assert.deepEqual(calls, [
       {
         body: JSON.stringify({ token: code }),
