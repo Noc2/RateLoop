@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { WorldIdAssuranceClient } from "~~/components/tokenless/WorldIdAssuranceClient";
+import { Card } from "~~/components/tokenless/ui/Card";
 
 type WorldIdStatus = {
   verified: boolean;
@@ -40,7 +41,7 @@ export function WorldIdProfilePanel() {
   }, [refresh]);
 
   return (
-    <section className="surface-card rounded-2xl p-6">
+    <Card as="section" className="rounded-2xl p-6">
       <h2 className="text-xl font-semibold">World ID 4 assurance</h2>
       {status ? (
         <div className="mt-4">
@@ -61,6 +62,6 @@ export function WorldIdProfilePanel() {
           {error}
         </p>
       ) : null}
-    </section>
+    </Card>
   );
 }

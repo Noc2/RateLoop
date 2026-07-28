@@ -4,6 +4,7 @@ import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
 import { agentTabHref } from "./agentWorkspaceState";
 import { SelectField } from "~~/components/tokenless/forms/Field";
+import { Card } from "~~/components/tokenless/ui/Card";
 import type {
   AgentOverview,
   AgentOverviewDecisionTimeTrendPoint,
@@ -86,7 +87,7 @@ function HeadlineCards({ overview }: { overview: AgentOverview }) {
         Overview headline metrics
       </h2>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <article className="surface-card rounded-2xl p-5">
+        <Card as="article" className="rounded-2xl p-5">
           <p className="text-sm text-base-content/60">Completed decisions</p>
           {completed.available ? (
             <>
@@ -99,8 +100,8 @@ function HeadlineCards({ overview }: { overview: AgentOverview }) {
               <p className="mt-2 text-xs leading-5 text-base-content/55">{completed.reason}</p>
             </>
           )}
-        </article>
-        <article className="surface-card rounded-2xl p-5">
+        </Card>
+        <Card as="article" className="rounded-2xl p-5">
           <p className="text-sm text-base-content/60">Reviewer endorsement</p>
           {endorsement.available ? (
             <>
@@ -117,8 +118,8 @@ function HeadlineCards({ overview }: { overview: AgentOverview }) {
               <p className="mt-2 text-xs leading-5 text-base-content/55">{endorsement.reason}</p>
             </>
           )}
-        </article>
-        <article className="surface-card rounded-2xl p-5">
+        </Card>
+        <Card as="article" className="rounded-2xl p-5">
           <p className="text-sm text-base-content/60">Median time to decision</p>
           {latency.available ? (
             <>
@@ -131,8 +132,8 @@ function HeadlineCards({ overview }: { overview: AgentOverview }) {
               <p className="mt-2 text-xs leading-5 text-base-content/55">{latency.reason}</p>
             </>
           )}
-        </article>
-        <article className="surface-card rounded-2xl p-5">
+        </Card>
+        <Card as="article" className="rounded-2xl p-5">
           <p className="text-sm text-base-content/60">Cost per decision</p>
           {cost.available ? (
             <>
@@ -145,7 +146,7 @@ function HeadlineCards({ overview }: { overview: AgentOverview }) {
               <p className="mt-2 text-xs leading-5 text-base-content/55">{cost.reason}</p>
             </>
           )}
-        </article>
+        </Card>
       </div>
     </section>
   );
@@ -169,7 +170,7 @@ function replaceOverviewUrlState(state: AgentOverviewUrlState) {
 function ReviewOutcomeTrend({ overview }: { overview: AgentOverview }) {
   const trend = overview.trends.outcomes;
   return (
-    <article className="surface-card rounded-2xl p-5">
+    <Card as="article" className="rounded-2xl p-5">
       <h3 className="text-base font-semibold">Review outcomes</h3>
       <p className="mt-1 text-sm text-base-content/55">Daily settled decisions by panel outcome.</p>
       {!trend.available ? (
@@ -277,7 +278,7 @@ function ReviewOutcomeTrend({ overview }: { overview: AgentOverview }) {
           </div>
         </>
       )}
-    </article>
+    </Card>
   );
 }
 
@@ -307,7 +308,7 @@ function decisionTimeSegments(
 function DecisionTimeTrend({ overview }: { overview: AgentOverview }) {
   const trend = overview.trends.decisionTime;
   return (
-    <article className="surface-card rounded-2xl p-5">
+    <Card as="article" className="rounded-2xl p-5">
       <h3 className="text-base font-semibold">Decision time</h3>
       <p className="mt-1 text-sm text-base-content/55">Daily median from review request to settled decision.</p>
       {!trend.available ? (
@@ -392,7 +393,7 @@ function DecisionTimeTrend({ overview }: { overview: AgentOverview }) {
           <p className="mt-1 text-xs text-base-content/55">{trend.sampleSize.toLocaleString()} timed decisions</p>
         </>
       )}
-    </article>
+    </Card>
   );
 }
 
@@ -486,7 +487,7 @@ function ReviewQualityPanel({ overview }: { overview: AgentOverview }) {
         </div>
       </div>
       {quality.availability !== "available" ? (
-        <article className="surface-card rounded-2xl p-5">
+        <Card as="article" className="rounded-2xl p-5">
           <p className="font-medium">
             {quality.availability === "suppressed" ? "Privacy threshold not met" : "No data"}
           </p>
@@ -494,11 +495,11 @@ function ReviewQualityPanel({ overview }: { overview: AgentOverview }) {
             {quality.consensus.available ? "Review quality is available." : quality.consensus.reason}
           </p>
           <p className="mt-2 text-xs text-base-content/50">{privacyCopy}</p>
-        </article>
+        </Card>
       ) : (
         <>
           <div className="grid gap-5 xl:grid-cols-4">
-            <article className="surface-card rounded-2xl p-5">
+            <Card as="article" className="rounded-2xl p-5">
               <h3 className="text-base font-semibold">Reviewer consensus</h3>
               {quality.consensus.available ? (
                 <>
@@ -510,8 +511,8 @@ function ReviewQualityPanel({ overview }: { overview: AgentOverview }) {
                   </p>
                 </>
               ) : null}
-            </article>
-            <article className="surface-card rounded-2xl p-5">
+            </Card>
+            <Card as="article" className="rounded-2xl p-5">
               <h3 className="text-base font-semibold">Reviewer consistency (α)</h3>
               <p className="mt-1 text-sm text-base-content/55">
                 Agreement beyond chance across baseline, candidate, and tie.
@@ -530,8 +531,8 @@ function ReviewQualityPanel({ overview }: { overview: AgentOverview }) {
               ) : (
                 <p className="mt-4 text-sm text-base-content/55">{quality.reviewerConsistency.reason}</p>
               )}
-            </article>
-            <article className="surface-card rounded-2xl p-5 xl:col-span-2">
+            </Card>
+            <Card as="article" className="rounded-2xl p-5 xl:col-span-2">
               <h3 className="text-base font-semibold">Panel-split distribution</h3>
               <p className="mt-1 text-sm text-base-content/55">
                 Cases grouped by the share of valid responses outside their modal choice.
@@ -547,10 +548,10 @@ function ReviewQualityPanel({ overview }: { overview: AgentOverview }) {
                   }))}
                 />
               ) : null}
-            </article>
+            </Card>
           </div>
           <div className="mt-5 grid gap-5 xl:grid-cols-3">
-            <article className="surface-card rounded-2xl p-5">
+            <Card as="article" className="rounded-2xl p-5">
               <h3 className="text-base font-semibold">Time to decision</h3>
               {quality.decisionTime.available ? (
                 <>
@@ -581,27 +582,27 @@ function ReviewQualityPanel({ overview }: { overview: AgentOverview }) {
               ) : (
                 <p className="mt-4 text-sm text-base-content/55">{quality.decisionTime.reason}</p>
               )}
-            </article>
-            <article className="surface-card rounded-2xl p-5">
+            </Card>
+            <Card as="article" className="rounded-2xl p-5">
               <h3 className="text-base font-semibold">Workflow hotspots</h3>
               <QualityHotspots
                 hotspots={quality.hotspots.workflows}
                 emptyMessage="No attributed workflow had a split panel in this window."
               />
-            </article>
-            <article className="surface-card rounded-2xl p-5">
+            </Card>
+            <Card as="article" className="rounded-2xl p-5">
               <h3 className="text-base font-semibold">Risk-tier hotspots</h3>
               <QualityHotspots
                 hotspots={quality.hotspots.riskTiers}
                 emptyMessage="No attributed risk tier had a split panel in this window."
               />
-            </article>
+            </Card>
           </div>
           {quality.hotspots.cases.length > 0 ? (
-            <article className="surface-card mt-5 rounded-2xl p-5">
+            <Card as="article" className="mt-5 rounded-2xl p-5">
               <h3 className="text-base font-semibold">Case hotspots</h3>
               <QualityHotspots hotspots={quality.hotspots.cases} emptyMessage="" />
-            </article>
+            </Card>
           ) : null}
           <p className="mt-3 text-xs text-base-content/50">{privacyCopy}</p>
         </>
@@ -678,11 +679,7 @@ function AgentVersionTable({
       : (overview.agentVersions.page - 1) * overview.agentVersions.pageSize + 1;
   const lastParent = firstParent + overview.agentVersions.parents.length - (firstParent === 0 ? 0 : 1);
   return (
-    <section
-      className="surface-card rounded-2xl p-5"
-      aria-busy={loading}
-      aria-labelledby="agent-version-monitor-heading"
-    >
+    <Card as="section" className="rounded-2xl p-5" aria-busy={loading} aria-labelledby="agent-version-monitor-heading">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 id="agent-version-monitor-heading" className="text-xl font-semibold">
@@ -805,13 +802,13 @@ function AgentVersionTable({
           </button>
         </nav>
       </div>
-    </section>
+    </Card>
   );
 }
 
 function AttentionList({ overview, workspaceId }: { overview: AgentOverview; workspaceId: string }) {
   return (
-    <section className="surface-card rounded-2xl p-5" aria-labelledby="agent-attention-heading">
+    <Card as="section" className="rounded-2xl p-5" aria-labelledby="agent-attention-heading">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 id="agent-attention-heading" className="text-xl font-semibold">
@@ -880,7 +877,7 @@ function AttentionList({ overview, workspaceId }: { overview: AgentOverview; wor
           Showing {overview.attention.items.length} of {overview.attention.totalItemCount} current evidence issues.
         </p>
       ) : null}
-    </section>
+    </Card>
   );
 }
 
@@ -906,7 +903,7 @@ function OverviewControls({
   const selectClassName = "select-sm bg-black/20";
   const labelClassName = "mb-1 text-xs text-base-content/65";
   return (
-    <section className="surface-card rounded-2xl p-5" aria-labelledby="agent-overview-filters-heading">
+    <Card as="section" className="rounded-2xl p-5" aria-labelledby="agent-overview-filters-heading">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 id="agent-overview-filters-heading" className="text-base font-semibold">
@@ -1013,7 +1010,7 @@ function OverviewControls({
           Some filter lists are truncated. Existing URL selections remain available when valid.
         </p>
       ) : null}
-    </section>
+    </Card>
   );
 }
 
@@ -1077,21 +1074,21 @@ export function AgentOverviewMonitor({ workspaceId }: { workspaceId: string }) {
 
   if (loading && !overview) {
     return (
-      <section className="surface-card rounded-2xl p-6" role="status">
+      <Card as="section" className="rounded-2xl p-6" role="status">
         Loading agent monitor…
-      </section>
+      </Card>
     );
   }
   if (!overview) {
     return (
-      <section className="surface-card rounded-2xl p-6 text-red-100" role="alert">
+      <Card as="section" className="rounded-2xl p-6 text-red-100" role="alert">
         {error ?? "Agent monitor is unavailable."}
-      </section>
+      </Card>
     );
   }
   return (
     <div className="space-y-5">
-      <section className="surface-card rounded-2xl p-5" aria-labelledby="agent-monitor-heading">
+      <Card as="section" className="rounded-2xl p-5" aria-labelledby="agent-monitor-heading">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 id="agent-monitor-heading" className="text-2xl font-semibold">
@@ -1103,7 +1100,7 @@ export function AgentOverviewMonitor({ workspaceId }: { workspaceId: string }) {
           </div>
           <span className="badge border-white/10 bg-white/[0.04]">{overview.window.label}</span>
         </div>
-      </section>
+      </Card>
       <OverviewControls loading={loading} overview={overview} query={query} onChange={updateQuery} />
       <HeadlineCards overview={overview} />
       {error ? (

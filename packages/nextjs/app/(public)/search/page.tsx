@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { AppPageShell } from "~~/components/shared/AppPageShell";
 import { AuthorizedSiteSearchResults } from "~~/components/tokenless/navigation/AuthorizedSiteSearchResults";
 import { SiteSearchResults } from "~~/components/tokenless/navigation/SiteSearchResults";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { PageHeading } from "~~/components/tokenless/ui/PageHeading";
 import { AUTH_SESSION_COOKIE, findAuthSession } from "~~/lib/auth/session";
 import { type AuthorizedSiteSearchResult, searchAuthorizedSiteData } from "~~/lib/search/authorizedSiteSearch";
@@ -50,10 +51,11 @@ export function SearchPageContent({
               </h2>
               <span className="font-mono text-xs text-base-content/55">1 destination</span>
             </div>
-            <Link
+            <Card
+              as={Link}
               href={`/human/review?q=${encodeURIComponent(query)}`}
               prefetch={false}
-              className="surface-card group mt-4 block rounded-xl px-4 py-3 transition-colors hover:border-base-content/20 hover:bg-base-content/[0.04]"
+              className="group mt-4 block rounded-xl px-4 py-3 transition-colors hover:border-base-content/20 hover:bg-base-content/[0.04]"
             >
               <h3 className="font-semibold text-base-content transition-colors group-hover:text-[var(--rateloop-blue)]">
                 Search review work for &quot;{query}&quot;
@@ -61,13 +63,13 @@ export function SearchPageContent({
               <p className="mt-1 text-sm leading-6 text-base-content/60">
                 Open the full review queue with this search applied.
               </p>
-            </Link>
+            </Card>
           </section>
         </>
       ) : (
-        <p className="surface-card mt-8 rounded-xl p-5 text-sm text-base-content/60">
+        <Card as="p" className="mt-8 rounded-xl p-5 text-sm text-base-content/60">
           Enter a search in the navigation, then press Enter or choose Search.
-        </p>
+        </Card>
       )}
     </AppPageShell>
   );

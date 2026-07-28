@@ -20,6 +20,7 @@ import { Field, SelectField } from "~~/components/tokenless/forms/Field";
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { WorkspacePublicContentLink } from "~~/components/tokenless/navigation/WorkspacePublicContentLink";
 import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
+import { Card } from "~~/components/tokenless/ui/Card";
 import type { EvaluationDashboard } from "~~/lib/tokenless/evaluationDashboard";
 import { readJson } from "~~/lib/tokenless/http";
 
@@ -300,7 +301,7 @@ function VerificationInstructions({
   const instructions = `${packetCommand}\nyarn workspace @rateloop/nextjs audit:verify audit-export.json\n${attestationCommand}`;
   const [copied, setCopied] = useState(false);
   return (
-    <details className="surface-card rounded-2xl p-6">
+    <Card as="details" className="rounded-2xl p-6">
       <summary className="cursor-pointer text-sm font-semibold">Verify an export</summary>
       <div className="mt-4 space-y-4">
         <p className="max-w-3xl text-sm leading-6 text-base-content/55">
@@ -351,7 +352,7 @@ function VerificationInstructions({
           {copied ? "Copied" : "Copy commands"}
         </button>
       </div>
-    </details>
+    </Card>
   );
 }
 
@@ -601,7 +602,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
 
   return (
     <div className="space-y-5">
-      <section className="surface-card rounded-2xl p-6">
+      <Card as="section" className="rounded-2xl p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-2xl font-semibold">Decision records and exports</h2>
@@ -623,7 +624,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
             </button>
           </div>
         </div>
-      </section>
+      </Card>
 
       {error ? (
         <div className="rounded-xl border border-red-300/20 bg-red-300/[0.06] p-4 text-sm text-red-100" role="alert">
@@ -635,7 +636,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
       </AsyncSection>
 
       {!loading && canManage ? (
-        <section className="surface-card rounded-2xl p-6" aria-labelledby="compliance-export-heading">
+        <Card as="section" className="rounded-2xl p-6" aria-labelledby="compliance-export-heading">
           <h2 id="compliance-export-heading" className="text-xl font-semibold">
             Compliance exports
           </h2>
@@ -647,16 +648,16 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
             <ExportLink href={`${base}/assurance/coverage/export`}>Coverage history</ExportLink>
             <ExportLink href={`${base}/assurance/metrics/grafana`}>Grafana dashboard JSON</ExportLink>
           </div>
-        </section>
+        </Card>
       ) : null}
 
       {!loading && packets.length === 0 ? (
-        <section className="surface-card rounded-2xl p-6" aria-labelledby="evidence-empty-heading">
+        <Card as="section" className="rounded-2xl p-6" aria-labelledby="evidence-empty-heading">
           <h2 id="evidence-empty-heading" className="font-semibold">
             No evidence records yet
           </h2>
           <p className="mt-2 text-sm text-base-content/55">Completed human reviews will appear here.</p>
-        </section>
+        </Card>
       ) : null}
 
       {!loading && packets.length > 0 ? (
@@ -664,7 +665,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
           <h2 id="evidence-packets-heading" className="text-xl font-semibold">
             Decision packets
           </h2>
-          <div className="surface-card grid gap-3 rounded-2xl p-4 sm:grid-cols-3">
+          <Card as="div" className="grid gap-3 rounded-2xl p-4 sm:grid-cols-3">
             <Field
               label="Workflow or project"
               type="search"
@@ -690,12 +691,12 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
               <option value="7">Last 7 days</option>
               <option value="30">Last 30 days</option>
             </SelectField>
-          </div>
+          </Card>
           {visiblePackets.length === 0 ? (
-            <div className="surface-card rounded-2xl p-6" role="status">
+            <Card as="div" className="rounded-2xl p-6" role="status">
               <h3 className="font-semibold">No matching evidence</h3>
               <p className="mt-2 text-sm text-base-content/55">Clear or change the filters.</p>
-            </div>
+            </Card>
           ) : null}
           {visiblePackets.map(({ packet, projectName, suiteName }) => {
             const selected =
@@ -717,9 +718,10 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
               .filter((link): link is string => link !== null);
             const newerPacket = newerPacketByIdentity.get(`${packet.payload.runId}\u0000${packet.payload.packetId}`);
             return (
-              <article
+              <Card
+                as="article"
                 key={packet.payload.packetId}
-                className={`surface-card rounded-2xl p-5 ${
+                className={`rounded-2xl p-5 ${
                   selected ? "border-[var(--rateloop-blue)]/35 bg-[var(--rateloop-blue)]/[0.025]" : ""
                 }`}
               >
@@ -922,7 +924,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                     </p>
                   ) : null}
                 </details>
-              </article>
+              </Card>
             );
           })}
         </section>
@@ -945,20 +947,21 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
       ) : null}
 
       {!loading && canManage && showAdvancedControls ? (
-        <section
+        <Card
+          as="section"
           id="evidence-advanced-controls"
-          className="surface-card rounded-2xl p-6"
+          className="rounded-2xl p-6"
           aria-labelledby="evidence-retention-heading"
         >
           <h2 id="evidence-retention-heading" className="text-xl font-semibold">
             Retention policy
           </h2>
           {retention ? <RetentionEditor policy={retention} workspaceId={workspaceId} onSaved={setRetention} /> : null}
-        </section>
+        </Card>
       ) : null}
 
       {!loading && canManage && showAdvancedControls ? (
-        <section className="surface-card rounded-2xl p-6" aria-labelledby="trusted-key-heading">
+        <Card as="section" className="rounded-2xl p-6" aria-labelledby="trusted-key-heading">
           <h2 id="trusted-key-heading" className="text-xl font-semibold">
             Trusted verification keys
           </h2>
@@ -968,7 +971,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
           ) : (
             <div className="mt-4 space-y-3">
               {keys.map(key => (
-                <article key={key.keyId} className="surface-card-nested rounded-xl p-4">
+                <Card as="article" variant="nested" key={key.keyId} className="rounded-xl p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <code className="break-all text-xs text-base-content/75">{key.keyId}</code>
                     <span className="badge border-white/10 bg-white/[0.04] text-xs capitalize">{key.status}</span>
@@ -987,15 +990,15 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                   >
                     Download SPKI pin
                   </a>
-                </article>
+                </Card>
               ))}
             </div>
           )}
-        </section>
+        </Card>
       ) : null}
 
       {!loading && canManage && showAdvancedControls ? (
-        <section className="surface-card rounded-2xl p-6" aria-labelledby="enterprise-delivery-heading">
+        <Card as="section" className="rounded-2xl p-6" aria-labelledby="enterprise-delivery-heading">
           <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-blue)]">Delivery</p>
           <h2 id="enterprise-delivery-heading" className="mt-2 text-xl font-semibold">
             Evidence integrations
@@ -1012,7 +1015,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                 ["metrics", "Metrics access", "Issue access for operational evidence metrics."],
               ] as const
             ).map(([kind, label, description]) => (
-              <article key={kind} className="surface-card-nested rounded-xl p-4">
+              <Card as="article" variant="nested" key={kind} className="rounded-xl p-4">
                 <h3 className="font-semibold">{label}</h3>
                 <p className="mt-1 text-sm text-base-content/55">{description}</p>
                 <button
@@ -1024,7 +1027,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
                 >
                   Configure {label.toLocaleLowerCase()}
                 </button>
-              </article>
+              </Card>
             ))}
           </div>
           {deliveryKind ? (
@@ -1040,7 +1043,7 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
               {deliveryKind === "metrics" ? <MetricsEvidenceAccess workspaceId={workspaceId} /> : null}
             </div>
           ) : null}
-        </section>
+        </Card>
       ) : null}
     </div>
   );

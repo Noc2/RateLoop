@@ -67,6 +67,7 @@ import { ChoiceInput, Field, SelectField, TextareaField } from "~~/components/to
 import { useFormErrors } from "~~/components/tokenless/forms/useFormErrors";
 import { WorkspacePublicContentLink } from "~~/components/tokenless/navigation/WorkspacePublicContentLink";
 import { Button } from "~~/components/tokenless/ui/Button";
+import { Card } from "~~/components/tokenless/ui/Card";
 import { SegmentedChoice } from "~~/components/tokenless/ui/SegmentedChoice";
 import { useConfirmDialog } from "~~/components/tokenless/ui/useConfirmDialog";
 import { DurationInput } from "~~/components/ui/DurationInput";
@@ -679,7 +680,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
 
   if (!setup.canManage) {
     return (
-      <section className="surface-card rounded-2xl p-6">
+      <Card as="section" className="rounded-2xl p-6">
         <AgentSetupProgress
           currentStep={currentStep}
           stages={setup.stages}
@@ -693,7 +694,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
             description="Ask a workspace owner to finish this step."
           />
         </div>
-      </section>
+      </Card>
     );
   }
 
@@ -1285,7 +1286,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
     </Button>
   ) : null;
   return (
-    <section className="surface-card rounded-2xl p-5 sm:p-7">
+    <Card as="section" className="rounded-2xl p-5 sm:p-7">
       {confirmationDialog}
       <AgentSetupProgress
         currentStep={currentStep}
@@ -1478,7 +1479,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                 {reviewPolicyCopy.question.agentWrittenNote}
               </p>
             )}
-            <fieldset className="surface-card-nested mt-5 p-4">
+            <Card as="fieldset" variant="nested" className="mt-5 p-4">
               <legend className="px-1 text-sm font-medium">
                 {reviewCriterion.questionAuthority === "owner_fixed" ? "Answer format" : "Written feedback"}
               </legend>
@@ -1524,15 +1525,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   <option value="required">{reviewPolicyCopy.question.rationaleRequired}</option>
                 </SelectField>
               </div>
-            </fieldset>
-            <fieldset className="surface-card-nested mt-7 p-4 sm:p-5">
+            </Card>
+            <Card as="fieldset" variant="nested" className="mt-7 p-4 sm:p-5">
               <legend className="px-1 text-xl font-semibold">Review frequency</legend>
               <ReviewFrequencyFields
                 mode={reviewFrequency.mode}
                 adaptiveAvailable={reviewCriterion.questionAuthority !== "agent_per_request"}
                 onModeChange={changeReviewMode}
               />
-            </fieldset>
+            </Card>
             {reviewFrequency.mode === "adaptive" || reviewFrequency.mode === "fixed" ? (
               <div className="mt-4 border-l-2 border-l-[var(--rateloop-pink)] bg-black/10 px-4 py-4">
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -1725,7 +1726,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                             candidate => candidate.definitionId === requirement.definitionId,
                           );
                           return (
-                            <li key={requirement.definitionId} className="surface-card-nested rounded-xl p-4">
+                            <Card as="li" variant="nested" key={requirement.definitionId} className="rounded-xl p-4">
                               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                                 <div className="min-w-0">
                                   <p className="font-medium">
@@ -1774,7 +1775,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                                   Required for all {reviewTiming.panelSize || "—"} network reviewers.
                                 </p>
                               )}
-                            </li>
+                            </Card>
                           );
                         })}
                       </ul>
@@ -1848,7 +1849,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                             Define another specialist area
                           </button>
                         ) : (
-                          <div className="surface-card-nested rounded-xl p-4">
+                          <Card as="div" variant="nested" className="rounded-xl p-4">
                             <p className="font-medium">New workspace specialist area</p>
                             <div className="mt-3 grid gap-3">
                               <Field
@@ -1889,7 +1890,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                                 Cancel
                               </button>
                             </div>
-                          </div>
+                          </Card>
                         )}
                       </div>
                     ) : (
@@ -2080,17 +2081,18 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
               </p>
             ) : null}
             {reviewFrequency.mode !== "manual" ? (
-              <ReviewAuthorityFields
-                className="surface-card-nested mt-7 p-4 sm:p-5"
-                prominent
-                authority={displayedReviewAuthority}
-                automaticAvailable={automaticAvailable}
-                automaticUnavailableReason={automaticUnavailableReason}
-                requiresFundingPermission={
-                  reviewCompensation.compensationMode === "usdc" || reviewCompensation.feedbackBonusEnabled === true
-                }
-                onAuthorityChange={changeReviewAuthority}
-              />
+              <Card variant="nested" className="mt-7 p-4 sm:p-5">
+                <ReviewAuthorityFields
+                  prominent
+                  authority={displayedReviewAuthority}
+                  automaticAvailable={automaticAvailable}
+                  automaticUnavailableReason={automaticUnavailableReason}
+                  requiresFundingPermission={
+                    reviewCompensation.compensationMode === "usdc" || reviewCompensation.feedbackBonusEnabled === true
+                  }
+                  onAuthorityChange={changeReviewAuthority}
+                />
+              </Card>
             ) : null}
             <SetupActionBar>
               {backButton}
@@ -2105,7 +2107,11 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
           <>
             <SetupStageHeader headingRef={headingRef} title="People" />
             {setup.reviewDraft?.requestProfile.audience !== "public_network" ? (
-              <section className="surface-card-nested mt-5 flex flex-wrap items-center justify-between gap-3 p-4">
+              <Card
+                as="section"
+                variant="nested"
+                className="mt-5 flex flex-wrap items-center justify-between gap-3 p-4"
+              >
                 <div>
                   <h3 className="font-semibold">Confirmed reviewers</h3>
                   {confirmedReviewerCountError ? (
@@ -2140,10 +2146,15 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     {confirmedReviewerSeatsReady ? "Ready" : "Action required"}
                   </span>
                 ) : null}
-              </section>
+              </Card>
             ) : null}
             {privateExpertiseRequirements.length > 0 ? (
-              <section className="surface-card-nested mt-5 p-4" aria-labelledby="setup-specialist-coverage-heading">
+              <Card
+                as="section"
+                variant="nested"
+                className="mt-5 p-4"
+                aria-labelledby="setup-specialist-coverage-heading"
+              >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h3 id="setup-specialist-coverage-heading" className="font-semibold">
@@ -2198,20 +2209,20 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     })}
                   </ul>
                 )}
-              </section>
+              </Card>
             ) : null}
             {!setup.peopleDecision ? (
               <form className="mt-5" onSubmit={configurePeople} aria-busy={busy}>
                 {setup.reviewDraft?.requestProfile.audience === "public_network" ? (
                   <>
                     <input type="hidden" name="decision" value="not_required" />
-                    <div className="surface-card-nested p-4 text-sm">
+                    <Card as="div" variant="nested" className="p-4 text-sm">
                       <p className="font-medium">RateLoop network</p>
                       <p className="mt-1 text-base-content/60">
                         No invitation is needed. Eligible network reviewers can receive public, synthetic, or safely
                         redacted requests.
                       </p>
-                    </div>
+                    </Card>
                   </>
                 ) : (
                   <>
@@ -2302,7 +2313,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                                 error={fieldErrors.intendedEmailDomain}
                               />
                             </div>
-                            <div className="surface-card-nested p-4 text-sm">
+                            <Card as="div" variant="nested" className="p-4 text-sm">
                               <p>
                                 Anyone with this code can claim one place until {sharedInvitationCapacity} people join
                                 or it expires in seven days. Restrict it to a verified company domain for sensitive
@@ -2317,7 +2328,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                                   knowledge after they join.
                                 </p>
                               ) : null}
-                            </div>
+                            </Card>
                           </>
                         ) : (
                           <>
@@ -2379,20 +2390,20 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                   </>
                 )}
                 {setup.reviewDraft?.requestProfile.compensationMode === "usdc" ? (
-                  <div className="surface-card-nested mt-4 p-4 text-sm">
+                  <Card as="div" variant="nested" className="mt-4 p-4 text-sm">
                     <p className="font-medium">{reviewCompensation.usdcPerReviewer} USDC per accepted reviewer</p>
                     <p className="mt-1 text-base-content/60">
                       Available workspace funding is checked and reserved only when a request is prepared.
                     </p>
-                  </div>
+                  </Card>
                 ) : null}
                 {setup.reviewDraft?.requestProfile.feedbackBonusEnabled ? (
-                  <div className="surface-card-nested mt-4 p-4 text-sm">
+                  <Card as="div" variant="nested" className="mt-4 p-4 text-sm">
                     <p className="font-medium">{reviewCompensation.feedbackBonusUsdc} USDC Feedback Bonus pool</p>
                     <p className="mt-1 text-base-content/60">
                       Funded separately before assignment. Only the saved human awarder can choose feedback to pay.
                     </p>
-                  </div>
+                  </Card>
                 ) : null}
                 <SetupActionBar>
                   {backButton}
@@ -2421,7 +2432,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                     </button>
                   </div>
                 ) : null}
-                <div className="surface-card-nested p-4 text-sm">
+                <Card as="div" variant="nested" className="p-4 text-sm">
                   <p>
                     <span className="text-base-content/55">Agent:</span> {setup.agent?.displayName ?? "Connected agent"}
                   </p>
@@ -2459,7 +2470,7 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
                       )}
                     </p>
                   ) : null}
-                </div>
+                </Card>
                 {finalizedStatusMessage ? (
                   <p
                     className={`rounded-xl border px-4 py-3 text-sm ${
@@ -2507,6 +2518,6 @@ export function AgentSetupFlow({ initialSetup }: { initialSetup: WorkspaceAgentS
           </p>
         ) : null}
       </div>
-    </section>
+    </Card>
   );
 }
