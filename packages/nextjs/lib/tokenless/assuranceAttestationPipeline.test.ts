@@ -4,6 +4,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import {
+  countDueAssuranceAttestationJobs,
   enqueueAssuranceAttestation,
   getPublicAssuranceAttestationBundle,
   listAssuranceAttestations,
@@ -237,4 +238,36 @@ test("a reclaimed attestation lease fences the stale signer before external publ
     ["completed", 2, 2, null, "kms:rateloop:evidence:current", "rekor-current", "41", null],
   );
   assert.equal(stored.rows[0]?.tsa_token_base64, Buffer.alloc(64, 5).toString("base64"));
+});
+
+test("a job abandoned on its final attempt is retired instead of counted as due forever", async () => {
+  const { workspaceId } = await createWorkspace({ name: "Attestation abandoned", ownerAddress: OWNER });
+  const enqueued = await enqueueAssuranceAttestation({
+    workspaceId,
+    kind: "coverage_export_head",
+    artifactDigest: DIGEST,
+    artifactSchemaVersion: "rateloop.assurance-coverage-export.v1",
+    boundaryAt: NOW,
+    now: NOW,
+  });
+  // A run killed mid-attempt on the last try leaves the job claimed at the attempt cap. The claim
+  // requires a count below the cap, and the failure path it never reached is what marks jobs dead.
+  await dbClient.execute({
+    sql: `UPDATE tokenless_assurance_attestation_jobs
+          SET state='processing',attempt_count=8,lease_expires_at=?,claim_signer_key_id='managed:test-key'
+          WHERE job_id=?`,
+    args: [new Date(NOW.getTime() - 60_000), enqueued.jobId],
+  });
+
+  const later = new Date(NOW.getTime() + 60_000);
+  const outcomes = await processAssuranceAttestationJobs({ ...processor(), now: later });
+  assert.deepEqual(outcomes, [{ jobId: enqueued.jobId, state: "dead" }]);
+
+  const stored = await dbClient.execute({
+    sql: "SELECT state FROM tokenless_assurance_attestation_jobs WHERE job_id=?",
+    args: [enqueued.jobId],
+  });
+  assert.equal(stored.rows[0]?.state, "dead");
+  // It must also stop being reported as work waiting to run, which read as healthy.
+  assert.equal(await countDueAssuranceAttestationJobs(later), 0);
 });

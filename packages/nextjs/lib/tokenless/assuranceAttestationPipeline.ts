@@ -234,8 +234,9 @@ export async function countDueAssuranceAttestationJobs(now = new Date()) {
   const due = await dbClient.execute({
     sql: `SELECT COUNT(*) AS count FROM tokenless_assurance_attestation_jobs
           WHERE ((state IN ('pending','retry') AND next_attempt_at<=?)
-                 OR (state='processing' AND lease_expires_at<=?))`,
-    args: [validDate(now, "Attestation queue time"), now],
+                 OR (state='processing' AND lease_expires_at<=?))
+            AND attempt_count<? AND lease_generation<2147483647`,
+    args: [validDate(now, "Attestation queue time"), now, MAX_ATTEMPTS],
   });
   const count = Number((due.rows[0] as Row | undefined)?.count ?? 0);
   if (!Number.isSafeInteger(count) || count < 0) throw new Error("Database returned an invalid attestation job count.");
@@ -436,6 +437,18 @@ export async function processAssuranceAttestationJobs(input: {
   validateManagedSigner(input.signer);
   const now = validDate(input.now ?? new Date(), "Attestation processing time");
   const workspaceFilter = input.workspaceId ? "AND workspace_id=?" : "";
+  // A job killed mid-attempt on its final try can never be claimed again, because the claim
+  // requires attempt_count below the cap, and can never be failed, because it never reaches the
+  // failure path. It stayed due forever while the run reported healthy, since health keys off
+  // retry/dead/unavailable and never off due. Retiring it here makes it counted and visible.
+  const abandoned = await dbClient.execute({
+    sql: `UPDATE tokenless_assurance_attestation_jobs
+          SET state='dead',lease_expires_at=NULL,claim_signer_key_id=NULL,updated_at=?
+          WHERE state='processing' AND lease_expires_at<=? AND attempt_count>=?
+          ${workspaceFilter}
+          RETURNING job_id`,
+    args: [now, now, MAX_ATTEMPTS, ...(input.workspaceId ? [input.workspaceId] : [])],
+  });
   const due = await dbClient.execute({
     sql: `SELECT job_id
           FROM tokenless_assurance_attestation_jobs
@@ -452,7 +465,9 @@ export async function processAssuranceAttestationJobs(input: {
       Math.min(Math.max(input.limit ?? 25, 1), 100),
     ],
   });
-  const outcomes: Array<{ jobId: string; state: "completed" | "retry" | "dead" }> = [];
+  const outcomes: Array<{ jobId: string; state: "completed" | "retry" | "dead" }> = (abandoned.rows as Row[]).map(
+    value => ({ jobId: text(value, "job_id")!, state: "dead" as const }),
+  );
   for (const value of due.rows) {
     const jobId = text(value as Row, "job_id")!;
     const claimed = await dbClient.execute({
