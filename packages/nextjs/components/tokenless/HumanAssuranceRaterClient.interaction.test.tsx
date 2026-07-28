@@ -164,6 +164,42 @@ test("direct invitation links retain credentials while Discover history does not
   assert.doesNotMatch(card, /encodeURIComponent/u);
 });
 
+test("closed assignments are distinguished from expired assignments", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render } = await import("@testing-library/react");
+  const { PrivateAssignmentCard } = await import("./answer/PrivateAssignmentCard");
+  const assignment = {
+    assignmentId: "assignment-status",
+    projectName: "Status review",
+    dataClassification: null,
+    source: null,
+    status: "released",
+    paidAssignment: false,
+    confidentialityTermsHash: null,
+    assignmentExpiresAt: "2999-01-01T00:00:00.000Z",
+    caseCount: 1,
+  };
+
+  try {
+    const view = render(<PrivateAssignmentCard assignment={assignment} />);
+    assert.ok(view.getByText("Closed"));
+    assert.equal(view.queryByText("Expired"), null);
+
+    view.rerender(<PrivateAssignmentCard assignment={{ ...assignment, status: "expired" }} />);
+    assert.ok(view.getAllByText("Expired").length > 0);
+
+    view.rerender(
+      <PrivateAssignmentCard
+        assignment={{ ...assignment, status: "accepted", assignmentExpiresAt: "2000-01-01T00:00:00.000Z" }}
+      />,
+    );
+    assert.ok(view.getAllByText("Expired").length > 0);
+  } finally {
+    cleanup();
+    restoreDom();
+  }
+});
+
 test("an unchanged private-group policy opens without asking for terms again", async () => {
   const restoreDom = installTestDom();
   const { cleanup, render, waitFor } = await import("@testing-library/react");

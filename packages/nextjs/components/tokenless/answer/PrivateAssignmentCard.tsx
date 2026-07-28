@@ -14,7 +14,6 @@ function displayStatus(assignment: PrivateAnswerAssignment) {
   if (assignment.status === "completed") return "Completed";
   if (
     assignment.status === "expired" ||
-    assignment.status === "released" ||
     (assignment.assignmentExpiresAt && Date.parse(assignment.assignmentExpiresAt) <= Date.now())
   ) {
     return "Expired";
