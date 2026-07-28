@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 
 type ReviewerAccess = {
   workspaceId: string;
@@ -30,7 +31,7 @@ function expiryLabel(value: string | null) {
   return Number.isNaN(parsed.getTime()) ? "No expiry" : parsed.toLocaleDateString();
 }
 
-export function ReviewerAccessPanel({ refreshKey }: { refreshKey: number }) {
+export function ReviewerAccessPanel() {
   const [access, setAccess] = useState<ReviewerAccess[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyWorkspaceId, setBusyWorkspaceId] = useState<string | null>(null);
@@ -61,7 +62,7 @@ export function ReviewerAccessPanel({ refreshKey }: { refreshKey: number }) {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [load, refreshKey]);
+  }, [load]);
 
   async function leave(item: ReviewerAccess) {
     if (!window.confirm(`Stop reviewing private work for ${item.workspaceName}?`)) return;
@@ -126,9 +127,12 @@ export function ReviewerAccessPanel({ refreshKey }: { refreshKey: number }) {
             ))}
           </ul>
         ) : (
-          <p className="rounded-lg bg-white/[0.04] p-4 text-sm text-base-content/55">
-            No reviewer access yet. Paste an invitation above to join a workspace reviewer roster.
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white/[0.04] p-4">
+            <p className="text-sm text-base-content/55">You do not review for a workspace yet.</p>
+            <Link className="btn btn-sm rateloop-secondary-action" href="/human?tab=discover&invite=1">
+              Use an invitation
+            </Link>
+          </div>
         )}
       </div>
       {status ? (

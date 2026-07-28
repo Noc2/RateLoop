@@ -86,7 +86,6 @@ test("Human profile and settings render their controls directly", () => {
   const profileContent = source("./human/HumanProfileContent.tsx");
   const profile = source("./account/ProfileClient.tsx");
   const invitations = source("./account/InvitationRouterPanel.tsx");
-  const paidEligibility = source("./PaidEligibilityClient.tsx");
 
   assert.match(page, /<HumanProfileContent worldIdEnabled=\{isWorldIdAssuranceEnabled\(\)\} \/>/);
   assert.match(page, /<NotificationSettingsPanel \/>/);
@@ -98,12 +97,13 @@ test("Human profile and settings render their controls directly", () => {
   );
   assert.match(signInPrompt, /<SignedOutGate/);
   assert.match(page, /findAuthSession/);
-  assert.match(profileContent, /InvitationRouterPanel/);
   assert.match(profileContent, /ReviewerAccessPanel/);
   assert.match(profileContent, /worldIdEnabled \? <WorldIdProfilePanel \/>/);
-  assert.match(profileContent, /<PaidEligibilityClient \/>/);
-  assert.ok(profileContent.indexOf("<ProfileClient />") < profileContent.indexOf("<InvitationRouterPanel"));
-  assert.ok(profileContent.indexOf("<InvitationRouterPanel") < profileContent.indexOf("<ReviewerAccessPanel"));
+  assert.ok(profileContent.indexOf("<ProfileClient />") < profileContent.indexOf("<ReviewerAccessPanel"));
+  assert.doesNotMatch(
+    profileContent,
+    /InvitationRouterPanel|PaidEligibilityClient|ReviewerEarningsClient|ForecastIntegrityClient|RaterSettlementRecoveryClient|FeedbackBonusClaimsClient/,
+  );
   assert.doesNotMatch(page, /ProfileOverview|SettingsOverview|Customize|SectionBackLink/);
   assert.doesNotMatch(page, /section ===/);
   assert.doesNotMatch(profile, /<details|<summary/);
@@ -114,8 +114,6 @@ test("Human profile and settings render their controls directly", () => {
   assert.doesNotMatch(invitations, /rlgi_|private-groups/);
   assert.match(invitations, /label="Invitation code"/);
   assert.doesNotMatch(invitations, /<label/);
-  assert.match(paidEligibility, /Add payout wallet/);
-  assert.doesNotMatch(paidEligibility, /Sign in to RateLoop first/);
 });
 
 test("Human Discover relies on the shell-level site search", () => {
