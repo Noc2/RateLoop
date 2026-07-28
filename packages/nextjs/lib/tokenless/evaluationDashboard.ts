@@ -17,6 +17,13 @@ export type EvaluationRun = {
   projectName: string;
   suiteName: string;
   status: string;
+  workflowKey: string | null;
+  riskTier: string | null;
+  failureSummary: {
+    kind: "deterministic_checks" | "review_execution" | "unrecorded";
+    message: string;
+    affectedCaseCount: number | null;
+  } | null;
   reviewerSource: string;
   compensation: string;
   caseCount: number;
@@ -210,6 +217,34 @@ function rowNullableNumber(row: QueryRow | undefined, key: string) {
   const number = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(number) || number < 0) throw new Error(`Database returned an invalid ${key}.`);
   return number;
+}
+
+export function projectEvaluationFailureSummary(input: {
+  status: string;
+  failedCheckCount: number;
+  failedRoundCount: number;
+}): EvaluationRun["failureSummary"] {
+  const { status, failedCheckCount, failedRoundCount } = input;
+  if (!["failed", "dead"].includes(status)) return null;
+  if (failedCheckCount > 0) {
+    return {
+      kind: "deterministic_checks",
+      message: `${failedCheckCount} ${failedCheckCount === 1 ? "case failed" : "cases failed"} the configured deterministic checks.`,
+      affectedCaseCount: failedCheckCount,
+    };
+  }
+  if (failedRoundCount > 0) {
+    return {
+      kind: "review_execution",
+      message: `${failedRoundCount} review ${failedRoundCount === 1 ? "case stopped" : "cases stopped"} before the run could settle.`,
+      affectedCaseCount: failedRoundCount,
+    };
+  }
+  return {
+    kind: "unrecorded",
+    message: "The run ended before producing a final result. No more specific failure cause was recorded.",
+    affectedCaseCount: null,
+  };
 }
 
 function rowBoolean(row: QueryRow | undefined, key: string) {
@@ -454,6 +489,8 @@ export async function getWorkspaceEvaluationDashboard(input: {
                    d.decision AS client_decision, ep.packet_id, ep.packet_digest,
                    attribution_opportunity.agent_id AS attribution_agent_id,
                    attribution_opportunity.agent_version_id AS attribution_version_id,
+                   attribution_scope.workflow_key AS attribution_workflow_key,
+                   attribution_scope.risk_tier AS attribution_risk_tier,
                    mh.non_gold_case_count,mh.unanimous_case_count,mh.rbts_score_variance_bps2,
                    mh.gold_outcome_count,mh.gold_failure_count,mh.comparable_drift_bps
             FROM tokenless_assurance_runs r
@@ -466,6 +503,9 @@ export async function getWorkspaceEvaluationDashboard(input: {
             LEFT JOIN tokenless_agent_review_opportunities attribution_opportunity
               ON attribution_opportunity.run_id = r.run_id
              AND attribution_opportunity.workspace_id = p.workspace_id
+            LEFT JOIN tokenless_agent_evaluation_scopes attribution_scope
+              ON attribution_scope.workspace_id=attribution_opportunity.workspace_id
+             AND attribution_scope.scope_id=attribution_opportunity.scope_id
             LEFT JOIN tokenless_assurance_mechanism_health mh ON mh.run_id = r.run_id
             WHERE p.workspace_id = ? AND p.status <> 'deleted'
             ORDER BY r.created_at DESC LIMIT 100`,
@@ -503,7 +543,9 @@ export async function getWorkspaceEvaluationDashboard(input: {
             )
             SELECT selected_runs.run_id,
                    COUNT(rc.case_id) FILTER (WHERE gold.case_id IS NULL) AS case_count,
-                   COUNT(gold.case_id) AS calibration_case_count
+                   COUNT(gold.case_id) AS calibration_case_count,
+                   COUNT(rc.case_id) FILTER (WHERE rc.deterministic_checks_status='failed') AS failed_check_count,
+                   COUNT(rc.case_id) FILTER (WHERE rc.round_status='failed') AS failed_round_count
             FROM selected_runs
             LEFT JOIN tokenless_assurance_run_cases rc ON rc.run_id = selected_runs.run_id
             LEFT JOIN tokenless_assurance_run_gold_items gold
@@ -605,12 +647,20 @@ export async function getWorkspaceEvaluationDashboard(input: {
     if (Boolean(attributionAgentId) !== Boolean(attributionVersionId)) {
       throw new Error("Database returned an invalid evaluation attribution.");
     }
+    const status = rowString(row, "status")!;
     return {
       runId,
       projectId: rowString(row, "project_id")!,
       projectName: rowString(row, "project_name")!,
       suiteName: rowString(row, "suite_name")!,
-      status: rowString(row, "status")!,
+      status,
+      workflowKey: rowString(row, "attribution_workflow_key"),
+      riskTier: rowString(row, "attribution_risk_tier"),
+      failureSummary: projectEvaluationFailureSummary({
+        status,
+        failedCheckCount: rowNumber(casesByRun.get(runId), "failed_check_count"),
+        failedRoundCount: rowNumber(casesByRun.get(runId), "failed_round_count"),
+      }),
       reviewerSource: rowString(row, "reviewer_source")!,
       compensation: rowString(row, "compensation")!,
       caseCount: rowNumber(casesByRun.get(runId), "case_count"),

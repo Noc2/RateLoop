@@ -86,7 +86,7 @@ function reviewerPseudonym(reviewerKey: string) {
 }
 
 /**
- * Oversight case detail for a completed run. Access uses the existing
+ * Oversight case detail for a terminal run. Access uses the existing
  * decision gate (owner, admin, or designated decision_owner). Invited-lane
  * (workspace-internal) runs expose the reviewed material: case instructions,
  * the blinded artifacts, per-response choices, failure tags, and plaintext
@@ -103,11 +103,11 @@ export async function getOversightRunCaseView(input: {
   let view: Omit<OversightRunCaseView, "overrideDecisions">;
   try {
     const access = await loadRunAccess(client, input, { decision: true });
-    if (text(access.row, "status") !== "completed") {
+    if (!["completed", "failed", "dead"].includes(text(access.row, "status") ?? "")) {
       throw new TokenlessServiceError(
-        "The oversight case view covers completed runs only.",
+        "The oversight case view covers terminal runs only.",
         409,
-        "assurance_run_not_completed",
+        "assurance_run_not_terminal",
       );
     }
     const projectId = text(access.row, "project_id")!;

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { createWorkspaceAgent } from "~~/lib/tokenless/agentRegistry";
-import { getWorkspaceEvaluationDashboard } from "~~/lib/tokenless/evaluationDashboard";
+import { getWorkspaceEvaluationDashboard, projectEvaluationFailureSummary } from "~~/lib/tokenless/evaluationDashboard";
 import {
   addAssuranceCase,
   createAssuranceAudiencePolicy,
@@ -518,9 +518,42 @@ test("evaluation dashboard keeps legacy runs unattributed and joins an exact age
     clientDecisions: { total: 0, goCount: 0 },
     overrides: { total: 0, acceptedCount: 0 },
   });
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_runs SET status='failed' WHERE run_id=?",
+    args: [run.runId],
+  });
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_run_cases SET round_status='failed' WHERE run_id=?",
+    args: [run.runId],
+  });
+  const failed = await getWorkspaceEvaluationDashboard({ accountAddress: OWNER, workspaceId });
+  assert.deepEqual(failed.runs[0]?.failureSummary, {
+    kind: "unrecorded",
+    message: "The run ended before producing a final result. No more specific failure cause was recorded.",
+    affectedCaseCount: null,
+  });
+  assert.equal(failed.runs[0]?.workflowKey, "support-reply");
+  assert.equal(failed.runs[0]?.riskTier, "low");
 
   await assert.rejects(
     () => getWorkspaceEvaluationDashboard({ accountAddress: OUTSIDER, workspaceId }),
     /Workspace not found/,
+  );
+});
+
+test("failed-run projection prefers persisted case failure states and stays honest without one", () => {
+  assert.deepEqual(projectEvaluationFailureSummary({ status: "failed", failedCheckCount: 2, failedRoundCount: 1 }), {
+    kind: "deterministic_checks",
+    message: "2 cases failed the configured deterministic checks.",
+    affectedCaseCount: 2,
+  });
+  assert.deepEqual(projectEvaluationFailureSummary({ status: "failed", failedCheckCount: 0, failedRoundCount: 1 }), {
+    kind: "review_execution",
+    message: "1 review case stopped before the run could settle.",
+    affectedCaseCount: 1,
+  });
+  assert.equal(
+    projectEvaluationFailureSummary({ status: "completed", failedCheckCount: 2, failedRoundCount: 1 }),
+    null,
   );
 });

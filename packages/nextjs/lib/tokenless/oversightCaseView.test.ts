@@ -218,11 +218,21 @@ async function markRunCompleted(runId: string) {
 
 test("invited-lane case detail shows material, plaintext rationales, disagreement, and override history", async () => {
   const seeded = await fixture();
-  // Completed runs only: the view refuses while the run is still collecting.
+  // Terminal runs only: the view refuses while the run is still collecting.
   await assert.rejects(
     getOversightRunCaseView({ accountAddress: OWNER, workspaceId: seeded.workspaceId, runId: seeded.runId }),
-    (error: TokenlessServiceError) => error.code === "assurance_run_not_completed",
+    (error: TokenlessServiceError) => error.code === "assurance_run_not_terminal",
   );
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_runs SET status = 'failed' WHERE run_id = ?",
+    args: [seeded.runId],
+  });
+  const failedView = await getOversightRunCaseView({
+    accountAddress: OWNER,
+    workspaceId: seeded.workspaceId,
+    runId: seeded.runId,
+  });
+  assert.equal(failedView.cases.length, 2);
   await markRunCompleted(seeded.runId);
   await recordAssuranceOverrideDecision({
     accountAddress: OWNER,

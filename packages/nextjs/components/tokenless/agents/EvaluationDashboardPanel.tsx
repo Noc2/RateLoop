@@ -417,7 +417,9 @@ function OversightCaseDetail({ run, workspaceId }: { run: EvaluationRun; workspa
 
   return (
     <details className="mt-4 border-t border-white/10 pt-4" onToggle={event => event.currentTarget.open && void load()}>
-      <summary className="cursor-pointer text-sm font-semibold text-base-content/65">Case detail (oversight)</summary>
+      <summary className="cursor-pointer text-sm font-semibold text-base-content/65">
+        {run.failureSummary ? "Why this failed: case detail and reviewer reasons" : "Case detail and reviewer reasons"}
+      </summary>
       {state === "loading" ? <p className="mt-3 text-xs text-base-content/55">Loading case material…</p> : null}
       {state === "denied" ? (
         <p className="mt-3 text-xs text-base-content/55">
@@ -557,6 +559,12 @@ function RunCard({
           <p className="text-xs text-base-content/55">{decision ? "Decision" : "Current result"}</p>
           <p className="mt-1 text-2xl font-semibold">{decision ?? currentResult}</p>
           <SampleNote run={run} />
+          {run.failureSummary ? (
+            <div className="mt-3 rounded-xl border border-red-300/20 bg-red-300/[0.06] p-3">
+              <h4 className="text-sm font-semibold text-red-100">Why this failed</h4>
+              <p className="mt-1 text-sm leading-6 text-red-100/80">{run.failureSummary.message}</p>
+            </div>
+          ) : null}
           {decidable ? (
             <>
               <DecisionSignals run={run} />
@@ -648,7 +656,9 @@ function RunCard({
         ) : null}
         <code className="mt-3 block break-all text-[11px] text-base-content/55">{run.runId}</code>
       </details>
-      {run.status === "completed" ? <OversightCaseDetail run={run} workspaceId={workspaceId} /> : null}
+      {["completed", "failed", "dead"].includes(run.status) ? (
+        <OversightCaseDetail run={run} workspaceId={workspaceId} />
+      ) : null}
       {run.status === "completed" ? (
         <div className="mt-4 border-t border-white/10 pt-4">
           <button

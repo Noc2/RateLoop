@@ -226,7 +226,7 @@ test("per-response details explain run-specific reviewer pseudonyms without expo
 
   try {
     const view = await mount();
-    await userEvent.setup({ document }).click(await view.findByText("Case detail (oversight)"));
+    await userEvent.setup({ document }).click(await view.findByText("Case detail and reviewer reasons"));
     assert.ok(
       await view.findByText(
         "Reviewer labels are run-specific pseudonyms by design. Responses are not linked here to roster identities.",
@@ -234,6 +234,69 @@ test("per-response details explain run-specific reviewer pseudonyms without expo
     );
     assert.ok(view.getByText(/reviewer-deadbeef · chose candidate/));
     assert.equal(view.queryByText(/@/), null);
+  } finally {
+    await act(async () => cleanup());
+    restoreFetch();
+    restoreDom();
+  }
+});
+
+test("a failed run explains the recorded failure and exposes its case reasons", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup } = await import("@testing-library/react");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  const restoreFetch = installFetch(
+    dashboard({
+      runs: [
+        run({
+          status: "failed",
+          evidencePacketAvailable: false,
+          failureSummary: {
+            kind: "review_execution",
+            message: "1 review case stopped before the run could settle.",
+            affectedCaseCount: 1,
+          },
+        }),
+      ],
+    }),
+    {
+      runId: "run_evaluation_1",
+      projectId: "project_evaluation_1",
+      lane: "customer_invited",
+      detailAvailable: true,
+      note: null,
+      cases: [
+        {
+          caseId: "case_evaluation_1",
+          position: 0,
+          title: "Support response",
+          instructions: "Compare the replies.",
+          isCalibration: false,
+          artifacts: [],
+          responses: [
+            {
+              reviewerPseudonym: "reviewer-deadbeef",
+              reviewerSource: "customer_invited",
+              choice: "baseline",
+              failureTagKeys: ["incorrect"],
+              rationale: "The candidate did not answer the question.",
+              submittedAt: "2026-07-20T00:00:00.000Z",
+            },
+          ],
+          choiceCounts: { baseline: 1, candidate: 0 },
+          disagreementBps: 0,
+        },
+      ],
+      overrideDecisions: [],
+    },
+  );
+
+  try {
+    const view = await mount();
+    assert.ok(await view.findByRole("heading", { name: "Why this failed" }));
+    assert.ok(view.getByText("1 review case stopped before the run could settle."));
+    await userEvent.setup({ document }).click(view.getByText("Why this failed: case detail and reviewer reasons"));
+    assert.ok(await view.findByText("The candidate did not answer the question."));
   } finally {
     await act(async () => cleanup());
     restoreFetch();
@@ -259,7 +322,7 @@ test("aggregate-only network detail does not render the per-response pseudonym e
 
   try {
     const view = await mount();
-    await userEvent.setup({ document }).click(await view.findByText("Case detail (oversight)"));
+    await userEvent.setup({ document }).click(await view.findByText("Case detail and reviewer reasons"));
     assert.ok(await view.findByText(aggregateNote));
     assert.equal(
       view.queryByText(
