@@ -75,7 +75,9 @@ test("Human Discover offers exactly the legacy source filters and empty state", 
   assert.doesNotMatch(page, /\["all", "public", "private", "submitted"\]/);
   assert.ok(page.indexOf("assignments.map") < page.indexOf("tasks.map"));
   assert.match(page, /No review work is available right now/);
-  assert.match(page, /Check again/);
+  assert.match(page, /No review history yet/);
+  assert.match(page, /Use an invitation/);
+  assert.doesNotMatch(page, /Check again/);
   assert.match(card, /Public reviews can be browsed now/);
   assert.match(card, /\/settings\/wallets/);
 });

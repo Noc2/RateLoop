@@ -137,6 +137,10 @@ test("a selected public scope with no tasks left still renders the private revie
     const screen = within(document.body);
     await waitFor(() => assert.ok(screen.getByRole("heading", { name: privateAssignment.projectName })));
 
+    assert.ok(screen.getByText("Accepted"));
+    assert.ok(screen.getByText(/3 cases/iu));
+    assert.equal(screen.queryByText("Private assignment"), null);
+    assert.equal(screen.queryByText("Data handling"), null);
     assert.deepEqual(
       screen.getAllByRole("tab").map(pill => pill.getAttribute("aria-selected")),
       ["true", "false", "false"],
@@ -195,6 +199,32 @@ test("an empty review queue keeps its empty state and hides the scope pills", as
     const screen = within(document.body);
     await waitFor(() => assert.ok(screen.getByText(/No review work is available right now/iu)));
     assert.deepEqual(screen.queryAllByRole("tab"), []);
+    assert.ok(screen.getByRole("button", { name: "Use an invitation" }));
+    assert.equal(screen.queryByRole("button", { name: "Check again" }), null);
+  } finally {
+    cleanup();
+    await settle();
+    restoreFetch();
+    restoreDom();
+  }
+});
+
+test("an empty history uses history-specific copy without an invitation action", async () => {
+  const restoreDom = installTestDom();
+  const { cleanup, render, waitFor, within } = await import("@testing-library/react");
+  const { AppRouterContext } = await import("next/dist/shared/lib/app-router-context.shared-runtime");
+  const { AnswerPageClient } = await import("./AnswerPageClient");
+  const restoreFetch = installQueueFetch({ assignments: [], tasks: [] });
+
+  try {
+    render(
+      <AppRouterContext.Provider value={router as never}>
+        <AnswerPageClient initialView="history" initialScope="private" />
+      </AppRouterContext.Provider>,
+    );
+    const screen = within(document.body);
+    await waitFor(() => assert.ok(screen.getByText("No review history yet.")));
+    assert.equal(screen.queryByRole("button", { name: "Use an invitation" }), null);
   } finally {
     cleanup();
     await settle();

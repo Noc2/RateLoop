@@ -177,7 +177,7 @@ export function AnswerPageClient({
       <HumanTabs
         active={view === "history" ? "history" : "discover"}
         endAction={
-          principalId ? (
+          principalId && view === "active" && (hasPublicTasks || hasPrivateAssignments) ? (
             <button
               type="button"
               className="btn btn-sm rateloop-secondary-action ml-auto"
@@ -250,26 +250,30 @@ export function AnswerPageClient({
             ))}
           </nav>
         ) : null}
-        {!loading && !signedOut && visibleScope !== "public"
-          ? view === "active"
-            ? assignments
-                .filter(assignment => assignment.assignmentId === focusedAssignmentId)
-                .map(assignment => (
-                  <HumanAssuranceRaterClient
-                    key={assignment.assignmentId}
-                    principalId={principalId}
-                    initialAssignmentId={assignment.assignmentId}
-                    initialTermsHash={assignment.confidentialityTermsHash ?? ""}
-                    presentation="embedded"
-                    assignmentTitle={assignment.projectName ?? "Assigned private review"}
-                    assignmentExpiresAt={assignment.assignmentExpiresAt}
-                    onContinue={() => void load()}
-                  />
-                ))
-            : assignments.map(assignment => (
-                <PrivateAssignmentCard key={assignment.assignmentId} assignment={assignment} />
+        {!loading && !signedOut && visibleScope !== "public" ? (
+          view === "active" ? (
+            assignments
+              .filter(assignment => assignment.assignmentId === focusedAssignmentId)
+              .map(assignment => (
+                <HumanAssuranceRaterClient
+                  key={assignment.assignmentId}
+                  principalId={principalId}
+                  initialAssignmentId={assignment.assignmentId}
+                  initialTermsHash={assignment.confidentialityTermsHash ?? ""}
+                  presentation="embedded"
+                  assignmentTitle={assignment.projectName ?? "Assigned private review"}
+                  assignmentExpiresAt={assignment.assignmentExpiresAt}
+                  onContinue={() => void load()}
+                />
               ))
-          : null}
+          ) : assignments.length ? (
+            <ul className="space-y-2">
+              {assignments.map(assignment => (
+                <PrivateAssignmentCard key={assignment.assignmentId} assignment={assignment} />
+              ))}
+            </ul>
+          ) : null
+        ) : null}
         {!loading && !signedOut && principalId && view === "active" && visibleScope !== "private"
           ? tasks.map((task, index) => (
               <PublicQuestionCard
@@ -293,11 +297,24 @@ export function AnswerPageClient({
           />
         ) : null}
         {!loading && !signedOut && !error && tasks.length === 0 && assignments.length === 0 ? (
-          <div className="surface-card flex min-h-48 flex-col items-center justify-center gap-4 rounded-lg p-6 text-center">
-            <p className="text-base text-base-content/60">No review work is available right now.</p>
-            <button type="button" className="btn btn-sm rateloop-secondary-action" onClick={() => void load()}>
-              Check again
-            </button>
+          <div className="surface-card flex min-h-36 flex-col items-center justify-center gap-3 rounded-lg p-6 text-center">
+            <p className="text-base text-base-content/60">
+              {query
+                ? "No review work matches this search."
+                : view === "history"
+                  ? "No review history yet."
+                  : "No review work is available right now."}
+            </p>
+            {!query && view === "active" && !invitationOpen ? (
+              <button
+                type="button"
+                className="btn btn-sm rateloop-secondary-action"
+                aria-controls="discover-invitation-panel"
+                onClick={() => setInvitationOpen(true)}
+              >
+                Use an invitation
+              </button>
+            ) : null}
           </div>
         ) : null}
         {error ? (
