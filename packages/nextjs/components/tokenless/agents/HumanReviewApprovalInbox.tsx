@@ -313,7 +313,7 @@ export function HumanReviewApprovalInbox({ workspaceId }: { workspaceId: string 
       ref={approvalSectionRef}
       className="space-y-4"
       aria-labelledby="human-review-approval-inbox-title"
-      aria-keyshortcuts="J K A D"
+      aria-keyshortcuts={approvals.length > 0 ? "J K A D" : undefined}
     >
       <div>
         <p className="font-mono text-xs uppercase tracking-widest text-[var(--rateloop-pink)]">Human review</p>
@@ -323,7 +323,9 @@ export function HumanReviewApprovalInbox({ workspaceId }: { workspaceId: string 
         <p className="mt-2 text-sm text-base-content/55">
           Review the frozen audience, timing, panel, and cost before anything is published or funded.
         </p>
-        <p className="mt-1 text-xs text-base-content/55">Keys: J/K move · A approve · D decline</p>
+        {approvals.length > 0 ? (
+          <p className="mt-1 text-xs text-base-content/55">Keys: J/K move · A approve · D decline</p>
+        ) : null}
       </div>
       {error && approvals.length > 0 ? (
         <p role="alert" className="text-sm text-red-300">

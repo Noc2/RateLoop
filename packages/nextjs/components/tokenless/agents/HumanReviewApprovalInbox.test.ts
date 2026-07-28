@@ -36,7 +36,7 @@ test("approval inbox shows frozen terms and submits optimistic approve or reject
   assert.match(source, /rollbackApprovalDecision/);
   assert.doesNotMatch(source, /await load\(undefined, false\)/);
   assert.match(source, /Could not \$\{action\} the request/);
-  assert.match(source, /Keys: J\/K move · A approve · D decline/);
-  assert.match(source, /aria-keyshortcuts="J K A D"/);
+  assert.match(source, /approvals\.length > 0 \? \([\s\S]*Keys: J\/K move · A approve · D decline/);
+  assert.match(source, /aria-keyshortcuts=\{approvals\.length > 0 \? "J K A D" : undefined\}/);
   assert.match(source, /key === "j" \|\| key === "k"/);
 });
