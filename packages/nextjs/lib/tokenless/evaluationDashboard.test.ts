@@ -256,7 +256,7 @@ async function seedModelEvidence(
   });
 }
 
-test("evaluation dashboard suppresses small cells and never attributes legacy runs to registered agents", async () => {
+test("evaluation dashboard keeps legacy runs unattributed and joins an exact agent version when recorded", async () => {
   const { workspaceId } = await createWorkspace({ name: "Evaluation workspace", ownerAddress: OWNER });
   const principal = { kind: "workspace_session" as const, accountAddress: OWNER, workspaceId, role: "owner" as const };
   const { projectId } = await createAssuranceProject({
@@ -380,6 +380,8 @@ test("evaluation dashboard suppresses small cells and never attributes legacy ru
   assert.equal(suppressed.runs[0]?.candidateSelectionShareBps, null);
   assert.equal(suppressed.runs[0]?.choices, null);
   assert.equal(suppressed.runs[0]?.mechanismHealth, null);
+  assert.equal(suppressed.attributionReady, true);
+  assert.deepEqual(suppressed.runs[0]?.attribution, { status: "unattributed", agentId: null, versionId: null });
   assert.equal(suppressed.agents[0]?.attributedRunCount, 0);
   assert.equal(suppressed.summary.attributedRuns, 0);
   assert.deepEqual(suppressed.modelProfiles, [
@@ -486,6 +488,12 @@ test("evaluation dashboard suppresses small cells and never attributes legacy ru
                   '["customer_invitation"]', ?, 'valid', ?, ?)`,
     args: [run.runId, assuranceCase.caseId, hash("response_2"), now, now],
   });
+  await dbClient.execute({
+    sql: `UPDATE tokenless_agent_review_opportunities
+          SET run_id = ?
+          WHERE opportunity_id = 'aeop_evaluation_model'`,
+    args: [run.runId],
+  });
   const released = await getWorkspaceEvaluationDashboard({ accountAddress: OWNER, workspaceId });
   assert.equal(released.runs[0]?.sampleStatus, "small");
   assert.equal(released.runs[0]?.candidateSelectionShareBps, 6_666);
@@ -495,7 +503,13 @@ test("evaluation dashboard suppresses small cells and never attributes legacy ru
     goldFailureRateBps: null,
     comparableDriftBps: null,
   });
-  assert.deepEqual(released.runs[0]?.attribution, { status: "unattributed", agentId: null, versionId: null });
+  assert.deepEqual(released.runs[0]?.attribution, {
+    status: "attributed",
+    agentId: agent.agentId,
+    versionId: agent.currentVersion.versionId,
+  });
+  assert.equal(released.summary.attributedRuns, 1);
+  assert.equal(released.agents[0]?.attributedRunCount, 1);
   assert.ok(released.runs[0]?.candidateSelectionIntervalBps);
   // Anti-rubber-stamping surfaces: the deterministic explanation flag and the
   // caller's own decision trend (empty for a fresh workspace).

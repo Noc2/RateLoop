@@ -41,7 +41,9 @@ export type EvaluationRun = {
   explanationRequired: boolean;
   createdAt: string;
   completedAt: string | null;
-  attribution: { status: "unattributed"; agentId: null; versionId: null };
+  attribution:
+    | { status: "attributed"; agentId: string; versionId: string }
+    | { status: "unattributed"; agentId: null; versionId: null };
 };
 
 /**
@@ -152,13 +154,13 @@ export type EvaluationDashboard = {
   workspaceId: string;
   callerRole: TokenlessWorkspaceRole;
   canViewPublishingPolicies: boolean;
-  attributionReady: false;
+  attributionReady: boolean;
   summary: {
     totalRuns: number;
     completedRuns: number;
     evidenceBackedRuns: number;
     validResponses: number;
-    attributedRuns: 0;
+    attributedRuns: number;
   };
   agents: Array<{
     agentId: string;
@@ -168,7 +170,7 @@ export type EvaluationDashboard = {
     versionNumber: number;
     displayName: string;
     environment: string;
-    attributedRunCount: 0;
+    attributedRunCount: number;
     adaptiveCoverage: AdaptiveCoverageTile[];
   }>;
   modelProfiles: EvaluationModelProfile[];
@@ -450,6 +452,8 @@ export async function getWorkspaceEvaluationDashboard(input: {
                    p.name AS project_name, s.name AS suite_name,
                    ap.reviewer_source, ap.compensation, ap.buyer_privacy_json,
                    d.decision AS client_decision, ep.packet_id, ep.packet_digest,
+                   attribution_opportunity.agent_id AS attribution_agent_id,
+                   attribution_opportunity.agent_version_id AS attribution_version_id,
                    mh.non_gold_case_count,mh.unanimous_case_count,mh.rbts_score_variance_bps2,
                    mh.gold_outcome_count,mh.gold_failure_count,mh.comparable_drift_bps
             FROM tokenless_assurance_runs r
@@ -459,6 +463,9 @@ export async function getWorkspaceEvaluationDashboard(input: {
               ON ap.policy_id = r.audience_policy_id AND ap.version = r.audience_policy_version
             LEFT JOIN tokenless_assurance_client_decisions d ON d.run_id = r.run_id
             LEFT JOIN tokenless_assurance_evidence_packets ep ON ep.run_id = r.run_id
+            LEFT JOIN tokenless_agent_review_opportunities attribution_opportunity
+              ON attribution_opportunity.run_id = r.run_id
+             AND attribution_opportunity.workspace_id = p.workspace_id
             LEFT JOIN tokenless_assurance_mechanism_health mh ON mh.run_id = r.run_id
             WHERE p.workspace_id = ? AND p.status <> 'deleted'
             ORDER BY r.created_at DESC LIMIT 100`,
@@ -593,6 +600,11 @@ export async function getWorkspaceEvaluationDashboard(input: {
     const nonGoldCaseCount = rowNumber(row, "non_gold_case_count");
     const goldOutcomeCount = rowNumber(row, "gold_outcome_count");
     const hasMechanismHealth = row.non_gold_case_count !== null && row.non_gold_case_count !== undefined;
+    const attributionAgentId = rowString(row, "attribution_agent_id");
+    const attributionVersionId = rowString(row, "attribution_version_id");
+    if (Boolean(attributionAgentId) !== Boolean(attributionVersionId)) {
+      throw new Error("Database returned an invalid evaluation attribution.");
+    }
     return {
       runId,
       projectId: rowString(row, "project_id")!,
@@ -639,7 +651,10 @@ export async function getWorkspaceEvaluationDashboard(input: {
       explanationRequired: decisionExplanationRequired(runId),
       createdAt: iso(row.created_at),
       completedAt: row.completed_at ? iso(row.completed_at) : null,
-      attribution: { status: "unattributed" as const, agentId: null, versionId: null },
+      attribution:
+        attributionAgentId && attributionVersionId
+          ? { status: "attributed" as const, agentId: attributionAgentId, versionId: attributionVersionId }
+          : { status: "unattributed" as const, agentId: null, versionId: null },
     } satisfies EvaluationRun;
   });
 
@@ -827,13 +842,13 @@ export async function getWorkspaceEvaluationDashboard(input: {
     workspaceId: input.workspaceId,
     callerRole: access.role,
     canViewPublishingPolicies: access.canManage,
-    attributionReady: false,
+    attributionReady: true,
     summary: {
       totalRuns: runs.length,
       completedRuns: runs.filter(run => run.status === "completed").length,
       evidenceBackedRuns: runs.filter(run => run.evidencePacketAvailable).length,
       validResponses: runs.reduce((total, run) => total + run.validResponses, 0),
-      attributedRuns: 0,
+      attributedRuns: runs.filter(run => run.attribution.status === "attributed").length,
     },
     agents: registry.agents.map(agent => ({
       agentId: agent.agentId,
@@ -843,7 +858,12 @@ export async function getWorkspaceEvaluationDashboard(input: {
       versionNumber: agent.currentVersion.versionNumber,
       displayName: agent.currentVersion.displayName,
       environment: agent.currentVersion.environment,
-      attributedRunCount: 0,
+      attributedRunCount: runs.filter(
+        run =>
+          run.attribution.status === "attributed" &&
+          run.attribution.agentId === agent.agentId &&
+          run.attribution.versionId === agent.currentVersion.versionId,
+      ).length,
       adaptiveCoverage: coverageByAgentVersion.get(`${agent.agentId}\0${agent.currentVersion.versionId}`) ?? [],
     })),
     modelProfiles,

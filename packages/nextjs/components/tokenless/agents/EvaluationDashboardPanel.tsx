@@ -603,6 +603,18 @@ function RunCard({
             <dt className="text-xs text-base-content/55">Created</dt>
             <dd className="mt-1">{new Date(run.createdAt).toLocaleString()}</dd>
           </div>
+          {run.attribution.status === "attributed" ? (
+            <>
+              <div>
+                <dt className="text-xs text-base-content/55">Agent ID</dt>
+                <dd className="mt-1 break-all font-mono">{run.attribution.agentId}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-base-content/55">Agent version</dt>
+                <dd className="mt-1 break-all font-mono">{run.attribution.versionId}</dd>
+              </div>
+            </>
+          ) : null}
           {run.mechanismHealth ? (
             <>
               <div>
@@ -624,9 +636,11 @@ function RunCard({
             </>
           ) : null}
         </dl>
-        <p className="mt-4 text-xs leading-5 text-base-content/55">
-          This run has no immutable agent-version reference, so it is excluded from per-agent comparisons.
-        </p>
+        {run.attribution.status === "unattributed" ? (
+          <p className="mt-4 text-xs leading-5 text-base-content/55">
+            This run has no immutable agent-version reference, so it is excluded from per-agent comparisons.
+          </p>
+        ) : null}
         <code className="mt-3 block break-all text-[11px] text-base-content/55">{run.runId}</code>
       </details>
       {run.status === "completed" ? <OversightCaseDetail run={run} workspaceId={workspaceId} /> : null}

@@ -23,6 +23,7 @@ function run(overrides: Record<string, unknown> = {}) {
     reviewerSource: "rateloop_network",
     compensation: "paid",
     mechanismHealth: null,
+    attribution: { status: "unattributed", agentId: null, versionId: null },
     completedAt: "2026-07-20T00:00:00.000Z",
     createdAt: "2026-07-19T00:00:00.000Z",
     ...overrides,
@@ -146,6 +147,40 @@ test("the panel renders no workspace selector of its own", async () => {
     const view = await mount();
     await view.findByRole("heading", { name: "No evaluations yet" });
     assert.ok(view.queryByRole("combobox") === null, "the panel should render no workspace selector");
+  } finally {
+    await act(async () => cleanup());
+    restoreFetch();
+    restoreDom();
+  }
+});
+
+test("an attributed run shows its exact agent version without the legacy disclaimer", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup } = await import("@testing-library/react");
+  const restoreFetch = installFetch(
+    dashboard({
+      runs: [
+        run({
+          attribution: {
+            status: "attributed",
+            agentId: "agent_support",
+            versionId: "agent_version_support_7",
+          },
+        }),
+      ],
+    }),
+  );
+
+  try {
+    const view = await mount();
+    assert.ok(await view.findByText("agent_support"));
+    assert.ok(view.getByText("agent_version_support_7"));
+    assert.equal(
+      view.queryByText(
+        "This run has no immutable agent-version reference, so it is excluded from per-agent comparisons.",
+      ),
+      null,
+    );
   } finally {
     await act(async () => cleanup());
     restoreFetch();

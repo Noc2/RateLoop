@@ -88,6 +88,16 @@ test("completed runs expose an oversight case detail that respects lane boundari
   assert.match(source, /No workspace-owned rationale for this response\./);
 });
 
+test("run details show exact agent-version attribution and reserve the legacy note for unmatched runs", () => {
+  const source = readFileSync(new URL("./EvaluationDashboardPanel.tsx", import.meta.url), "utf8");
+  assert.match(source, /run\.attribution\.status === "attributed"/);
+  assert.match(source, /run\.attribution\.agentId/);
+  assert.match(source, /run\.attribution\.versionId/);
+  assert.match(source, /run\.attribution\.status === "unattributed"/);
+  assert.match(source, /This run has no immutable agent-version reference/);
+  assert.doesNotMatch(source, /reviewerKey|reviewerAccount|reviewerEmail/);
+});
+
 test("run cards submit go/revise/stop and record per-output overrides without a preselected choice", () => {
   const source = readFileSync(new URL("./EvaluationDashboardPanel.tsx", import.meta.url), "utf8");
   // Go/revise/stop write control: plain buttons, nothing preselected, wired to
