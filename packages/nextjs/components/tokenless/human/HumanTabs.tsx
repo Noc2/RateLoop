@@ -1,26 +1,38 @@
+"use client";
+
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { HumanInboxBadge } from "~~/components/tokenless/human/HumanInboxBadge";
+import { type HumanNavigation, humanSectionHref } from "~~/components/tokenless/human/humanNavigation";
 
-export type HumanTab = "discover" | "inbox" | "profile" | "settings";
-type HumanNavigation = HumanTab | "history";
+export type { HumanTab } from "~~/components/tokenless/human/humanNavigation";
 
-const tabs: Array<{ value: HumanNavigation; label: string; href: string }> = [
-  { value: "discover", label: "To review", href: "/human?tab=discover" },
-  { value: "history", label: "History", href: "/human?tab=discover&view=history&scope=private" },
-  { value: "inbox", label: "Inbox", href: "/human?tab=inbox" },
-  { value: "profile", label: "Profile", href: "/human?tab=profile" },
-  { value: "settings", label: "Settings", href: "/human?tab=settings" },
+const tabs: Array<{ value: HumanNavigation; label: string }> = [
+  { value: "discover", label: "To review" },
+  { value: "history", label: "History" },
+  { value: "inbox", label: "Inbox" },
+  { value: "profile", label: "Profile" },
+  { value: "settings", label: "Settings" },
 ];
 
 export function HumanTabs({ active, endAction }: { active: HumanNavigation; endAction?: ReactNode }) {
+  const searchParams = useSearchParams();
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       <nav aria-label="Human sections" className="flex flex-wrap gap-2">
         {tabs.map(tab => (
           <Link
             key={tab.value}
-            href={tab.href}
+            href={humanSectionHref(
+              tab.value,
+              active === tab.value
+                ? new URLSearchParams(searchParams.toString())
+                : tab.value === "history"
+                  ? new URLSearchParams({ scope: "private" })
+                  : undefined,
+            )}
             aria-current={active === tab.value ? "page" : undefined}
             className={`tab-control px-4 py-1.5 text-base font-medium transition-colors ${
               active === tab.value ? "pill-active" : "pill-inactive"

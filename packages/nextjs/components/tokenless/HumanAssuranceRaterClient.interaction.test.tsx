@@ -155,10 +155,10 @@ test("private-review credentials stay behind a manual fallback", async () => {
 });
 
 test("direct invitation links retain credentials while Discover history does not expose them", () => {
-  const page = readFileSync(new URL("../../app/(app)/human/page.tsx", import.meta.url), "utf8");
+  const page = readFileSync(new URL("../../app/(app)/human/HumanSectionPage.tsx", import.meta.url), "utf8");
   const card = readFileSync(new URL("./answer/PrivateAssignmentCard.tsx", import.meta.url), "utf8");
-  assert.match(page, /initialAssignmentId=\{params\.assignment\}/);
-  assert.match(page, /initialTermsHash=\{params\.terms\}/);
+  assert.match(page, /initialAssignmentId=\{searchParams\.assignment\}/);
+  assert.match(page, /initialTermsHash=\{searchParams\.terms\}/);
   assert.doesNotMatch(card, /assignment\.assignmentId/u);
   assert.doesNotMatch(card, /href=/u);
   assert.doesNotMatch(card, /encodeURIComponent/u);
@@ -285,7 +285,7 @@ test("a closed private review has one terminal recovery path", async () => {
     await waitFor(() => assert.ok(view.getByText("Review window closed")));
     assert.equal(view.queryByRole("button", { name: "Accept terms and open assignment" }), null);
     assert.equal(view.queryByRole("button", { name: "Restore assignment access" }), null);
-    assert.equal(view.getByRole("link", { name: "Return to review queue" }).getAttribute("href"), "/human?tab=reviews");
+    assert.equal(view.getByRole("link", { name: "Return to review queue" }).getAttribute("href"), "/human/review");
   } finally {
     cleanup();
     globalThis.fetch = previousFetch;

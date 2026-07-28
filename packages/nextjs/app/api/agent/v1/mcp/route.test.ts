@@ -900,7 +900,7 @@ test("a targeted OAuth reconnect returns ordinary dual-consent tool actions", as
   assert.equal(confirmed.workspaceMove.ownerApprovalRequired, true);
   assert.equal(confirmed.workspaceMove.nextAction, "owner_approve_then_retry_connection");
   assert.equal(confirmed.idempotent, false);
-  assert.match(confirmed.workspaceMove.approvalUrl, /\/agents\?tab=connect&workspace=/u);
+  assert.match(confirmed.workspaceMove.approvalUrl, /\/agents\/connections\?workspace=/u);
   assert.match(confirmed.instruction, /After approval, retry rateloop_connect_workspace/u);
   assert.match(confirmed.instruction, /unmodified privately preserved connection URL/u);
   assert.match(confirmed.instruction, /Do not approve the website decision for the owner/u);

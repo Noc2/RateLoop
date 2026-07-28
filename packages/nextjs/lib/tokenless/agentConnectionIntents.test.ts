@@ -497,7 +497,7 @@ test("a targeted reconnect requires source confirmation and target-owner approva
     origin: "https://rateloop-tokenless.example",
   });
   assert.equal(confirmed.workspaceMove.status, "owner_approval_required");
-  assert.match(confirmed.workspaceMove.approvalUrl, /tab=connect/u);
+  assert.match(confirmed.workspaceMove.approvalUrl, /\/agents\/connections\?workspace=/u);
   assert.doesNotMatch(confirmed.workspaceMove.approvalUrl, /[?&]move=/u);
 
   const activeReview = await createReviewOpportunity({

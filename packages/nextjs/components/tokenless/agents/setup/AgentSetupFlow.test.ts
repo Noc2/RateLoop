@@ -12,10 +12,10 @@ const actionBarSource = readFileSync(new URL("./SetupActionBar.tsx", import.meta
 const stageHeaderSource = readFileSync(new URL("./SetupStageHeader.tsx", import.meta.url), "utf8");
 
 test("setup uses one canonical URL and a focused workspace creation stage", () => {
-  assert.equal(agentSetupUrl("ws one", "connect"), "/agents?workspace=ws%20one&step=connect");
+  assert.equal(agentSetupUrl("ws one", "connect"), "/agents/connections?workspace=ws%20one&step=connect");
   assert.match(startSource, /Name your workspace/);
   assert.match(startSource, /Step/);
-  assert.match(startSource, /\/agents\?workspace=.*&step=connect/);
+  assert.match(startSource, /\/agents\/connections\?workspace=.*&step=connect/);
   assert.doesNotMatch(startSource, /billing|publishing|API key/i);
 });
 

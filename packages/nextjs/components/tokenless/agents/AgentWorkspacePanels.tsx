@@ -2,7 +2,7 @@
 
 import { useCallback, useReducer, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { WorkspaceSettingsClient } from "../WorkspaceSettingsClient";
 import { WorkspaceStopBanner } from "../WorkspaceStopControl";
 import { Button } from "../ui/Button";
@@ -39,6 +39,7 @@ export function AgentWorkspacePanels({
   workspaces: Workspace[];
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const workspaceId = initialWorkspaceId;
   const hasConnectedAgent = initialSetup?.complete ?? initialHasConnectedAgent;
   const [agentRevision, refreshAgents] = useReducer(value => value + 1, 0);
@@ -105,18 +106,11 @@ export function AgentWorkspacePanels({
         workspaceId={workspaceId}
         workspaces={workspaces}
         onWorkspaceChange={nextWorkspaceId =>
-          router.push(`/agents?tab=${encodeURIComponent(resolvedTab)}&workspace=${encodeURIComponent(nextWorkspaceId)}`)
+          router.push(agentTabHref(resolvedTab, nextWorkspaceId, new URLSearchParams(searchParams.toString())))
         }
       />
 
-      <div
-        key={workspaceId}
-        id="agent-workspace-panel"
-        role="tabpanel"
-        aria-labelledby={`agent-tab-${resolvedTab}`}
-        tabIndex={0}
-        className="space-y-5 outline-none focus-visible:ring-2 focus-visible:ring-[var(--rateloop-blue)]"
-      >
+      <div key={workspaceId} id="agent-workspace-panel" className="space-y-5">
         {resolvedTab === "overview" ? (
           <>
             <AgentOverviewMonitor workspaceId={workspaceId} />

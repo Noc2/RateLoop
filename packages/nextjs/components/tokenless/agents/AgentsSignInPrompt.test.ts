@@ -4,7 +4,7 @@ import test from "node:test";
 
 const promptSource = readFileSync(new URL("./AgentsSignInPrompt.tsx", import.meta.url), "utf8");
 const sharedSurfaceSource = readFileSync(new URL("../../auth/SignInSurface.tsx", import.meta.url), "utf8");
-const pageSource = readFileSync(new URL("../../../app/(app)/agents/page.tsx", import.meta.url), "utf8");
+const pageSource = readFileSync(new URL("../../../app/(app)/agents/AgentsSectionPage.tsx", import.meta.url), "utf8");
 
 test("anonymous visitors see the Agents sign-in prompt without exposing workspace controls", () => {
   assert.match(pageSource, /await findAuthSession\(cookieStore\.get\(AUTH_SESSION_COOKIE\)\?\.value\)/);

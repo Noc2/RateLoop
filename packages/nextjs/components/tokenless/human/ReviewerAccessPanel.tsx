@@ -131,7 +131,7 @@ export function ReviewerAccessPanel() {
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white/[0.04] p-4">
             <p className="text-sm text-base-content/55">You do not review for a workspace yet.</p>
-            <Link className="btn btn-sm rateloop-secondary-action" href="/human?tab=discover&invite=1">
+            <Link className="btn btn-sm rateloop-secondary-action" href="/human/review?invite=1">
               Use an invitation
             </Link>
           </div>

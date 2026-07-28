@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function PaidEligibilityPage() {
-  redirect("/human?tab=profile&section=paid-work");
+  redirect("/human/profile?section=paid-work");
 }

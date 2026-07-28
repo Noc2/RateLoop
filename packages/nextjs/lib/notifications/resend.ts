@@ -186,8 +186,7 @@ export function buildTokenlessVerificationUrl(token: string) {
 export function buildTokenlessNotificationSettingsUrl(status?: string) {
   const appUrl = getOptionalAppUrl();
   if (!appUrl) return null;
-  const url = new URL("/human", appUrl);
-  url.searchParams.set("tab", "settings");
+  const url = new URL("/human/settings", appUrl);
   if (status) url.searchParams.set("email", status);
   url.hash = "notifications";
   return url;

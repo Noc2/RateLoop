@@ -1101,7 +1101,7 @@ export function PublicQuestionCard({
                 </p>
               ) : null}
               <Link
-                href="/human?tab=profile&section=paid-work"
+                href="/human/profile?section=paid-work"
                 className="mt-4 block text-center text-xs underline underline-offset-4"
               >
                 Paid-work eligibility
@@ -1130,7 +1130,7 @@ export function PublicQuestionCard({
                 href={
                   paidAccess.state === "payout_wallet_required"
                     ? "/settings/wallets?use=payout"
-                    : "/human?tab=profile&section=paid-work"
+                    : "/human/profile?section=paid-work"
                 }
                 className="rateloop-gradient-action mt-5 w-full px-4 text-center text-sm"
               >

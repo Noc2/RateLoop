@@ -42,7 +42,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
               <span className="font-mono text-xs text-base-content/55">1 destination</span>
             </div>
             <Link
-              href={`/human?tab=discover&q=${encodeURIComponent(query)}`}
+              href={`/human/review?q=${encodeURIComponent(query)}`}
               prefetch={false}
               className="surface-card group mt-4 block rounded-xl px-4 py-3 transition-colors hover:border-base-content/20 hover:bg-base-content/[0.04]"
             >

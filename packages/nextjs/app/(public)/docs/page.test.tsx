@@ -17,10 +17,10 @@ test("documentation introduction presents the hosted task paths", async () => {
   assert.match(html, /hosted service uses invited workspace reviewers for unpaid, private review/i);
   assert.match(html, /Connect an agent.*Set review policy.*Complete a review.*Verify evidence/i);
   assert.match(html, /Set policy:.*Request:.*Review:.*Decide:/i);
-  assert.match(html, /href="\/agents\?tab=connect"/i);
-  assert.match(html, /href="\/agents\?tab=registry"/i);
-  assert.match(html, /href="\/human\?tab=discover"/i);
-  assert.match(html, /href="\/agents\?tab=evidence"/i);
+  assert.match(html, /href="\/agents\/connections"/i);
+  assert.match(html, /href="\/agents\/review-setup"/i);
+  assert.match(html, /href="\/human\/review"/i);
+  assert.match(html, /href="\/agents\/evidence"/i);
   assert.match(html, /href="\/docs\/use-cases"/i);
   assert.match(html, /href="\/docs\/evidence"/i);
   assert.match(html, /href="\/docs\/how-it-works"/i);

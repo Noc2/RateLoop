@@ -1224,7 +1224,7 @@ export function TokenlessHandoffClient() {
                       <p>This workspace has less available prepaid USDC than the quoted total.</p>
                       <Link
                         className="mt-1 inline-block font-semibold underline underline-offset-4"
-                        href={`/agents?workspace=${encodeURIComponent(selectedWorkspace.workspaceId)}&tab=overview#panel-funding`}
+                        href={`/agents/overview?workspace=${encodeURIComponent(selectedWorkspace.workspaceId)}#panel-funding`}
                       >
                         Top up balance
                       </Link>
@@ -1234,10 +1234,7 @@ export function TokenlessHandoffClient() {
               ) : (
                 <div className="mt-2 text-sm leading-6 text-base-content/60">
                   <p>No prepaid workspace is available. Create and fund one before submitting this handoff.</p>
-                  <Link
-                    className="font-semibold underline underline-offset-4"
-                    href="/agents?tab=overview#panel-funding"
-                  >
+                  <Link className="font-semibold underline underline-offset-4" href="/agents/overview#panel-funding">
                     Top up balance
                   </Link>
                 </div>

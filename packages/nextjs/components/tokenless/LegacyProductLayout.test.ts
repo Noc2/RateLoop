@@ -26,7 +26,7 @@ test("Human Discover keeps the compact legacy feed and action-rail composition",
 
 test("Agents uses URL-backed workspace tabs", () => {
   const tabs = source("./agents/AgentTabs.tsx");
-  const page = source("../../app/(app)/agents/page.tsx");
+  const page = source("../../app/(app)/agents/AgentsSectionPage.tsx");
   const legacyAsk = source("../../app/(app)/ask/page.tsx");
 
   assert.match(tabs, /tab-control/);
@@ -38,7 +38,7 @@ test("Agents uses URL-backed workspace tabs", () => {
   assert.match(tabs, /Review setup/);
   assert.match(tabs, /Results/);
   assert.doesNotMatch(page, /integrate/);
-  assert.match(legacyAsk, /redirect\("\/agents\?tab=overview"\)/);
+  assert.match(legacyAsk, /redirect\("\/agents\/overview"\)/);
 });
 
 test("Human profile keeps established surface cards without a dashboard hero", () => {
@@ -83,7 +83,7 @@ test("Human Discover offers exactly the legacy source filters and empty state", 
 });
 
 test("Human profile and settings render their controls directly", () => {
-  const page = source("../../app/(app)/human/page.tsx");
+  const page = source("../../app/(app)/human/HumanSectionPage.tsx");
   const signInPrompt = source("./human/HumanAccountSignInPrompt.tsx");
   const profileContent = source("./human/HumanProfileContent.tsx");
   const profileSectionFocus = source("./human/ProfileSectionFocus.tsx");
@@ -129,7 +129,7 @@ test("Human profile and settings render their controls directly", () => {
 });
 
 test("Human Discover relies on the shell-level site search", () => {
-  const page = source("../../app/(app)/human/page.tsx");
+  const page = source("../../app/(app)/human/HumanSectionPage.tsx");
   const shell = source("./TokenlessShell.tsx");
 
   assert.doesNotMatch(page, /AnswerSearch|SiteSearch/);

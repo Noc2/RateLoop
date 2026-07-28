@@ -52,7 +52,7 @@ async function insertGenericLifecycleNotification(sourceKey = "assignment-1") {
     [
       {
         body: "A human-assurance assignment is ready for review.",
-        href: "/human?tab=discover",
+        href: "/human/review",
         preferenceKey: "assignmentAvailable",
         principalAddress: PRINCIPAL,
         sourceKey,
@@ -272,7 +272,7 @@ test("settled lifecycle evidence creates one privacy-minimal in-app notification
     kind: "paymentUpdates",
     title: "Workspace funds updated",
     body: "A workspace balance update was settled.",
-    href: "/agents?tab=overview&workspace=workspace-private-name",
+    href: "/agents/overview?workspace=workspace-private-name",
     source_type: "payment.settled",
     source_key: "ledger-sensitive-source",
   });
@@ -353,14 +353,14 @@ test("indexed settlement actions create idempotent reveal and claim-expiry notif
       source_type: "settlement.claim_expiring",
       title: "Review payment expiring",
       body: "A review payment is nearing its claim deadline.",
-      href: "/human?tab=profile&section=paid-settlement",
+      href: "/human/profile?section=paid-settlement",
       preference_key: "paymentUpdates",
     },
     {
       source_type: "settlement.reveal_required",
       title: "Review reveal required",
       body: "Your committed review needs a self-reveal before its recovery deadline.",
-      href: "/human?tab=profile&section=paid-settlement",
+      href: "/human/profile?section=paid-settlement",
       preference_key: "paymentUpdates",
     },
   ]);
@@ -521,7 +521,7 @@ test("API-key ask results fan out only to active workspace owners and admins", a
   const resultLinks = await dbClient.execute({
     sql: "SELECT DISTINCT href FROM tokenless_notifications WHERE source_type = 'ask.result'",
   });
-  assert.deepEqual(resultLinks.rows, [{ href: "/agents?tab=evaluations&workspace=workspace-api-result" }]);
+  assert.deepEqual(resultLinks.rows, [{ href: "/agents/results?workspace=workspace-api-result" }]);
   assert.deepEqual(await materializeTokenlessLifecycleNotifications({ now: NOW }), { candidates: 0, inserted: 0 });
 });
 
@@ -551,7 +551,7 @@ test("verified preferences enqueue once and delivery uses a signed unsubscribe l
     },
   });
   assert.equal(outcomes[0]?.state, "delivered");
-  assert.equal(sent?.actionUrl, "https://tokenless.example.test/human?tab=discover");
+  assert.equal(sent?.actionUrl, "https://tokenless.example.test/human/review");
   assert.equal(sent?.email, "reviewer@example.test");
   assert.doesNotMatch(JSON.stringify(sent), /assignment-1|0x1111/u);
   const unsubscribeUrl = new URL(sent!.unsubscribeUrl);

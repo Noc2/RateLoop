@@ -37,7 +37,7 @@ export default function TokenlessAgentDocsPage() {
           Use the protected workspace MCP to evaluate eligible outputs, request review when required, wait for the same
           operation, and read its result.
         </p>
-        <Link href="/agents?tab=connect" className="btn btn-sm rateloop-secondary-action mt-4 px-3 no-underline">
+        <Link href="/agents/connections" className="btn btn-sm rateloop-secondary-action mt-4 px-3 no-underline">
           Connect an agent
         </Link>
       </div>
@@ -71,7 +71,7 @@ export default function TokenlessAgentDocsPage() {
 
       <h2>Connect with Codex</h2>
       <p>
-        Open <Link href="/agents?tab=connect">Connection</Link> and copy the workspace connection message. If the public
+        Open <Link href="/agents/connections">Connection</Link> and copy the workspace connection message. If the public
         plugin is not installed yet, pin the marketplace to the isolated tokenless branch and add it first:
       </p>
       <CodeBlock>{`codex plugin marketplace add Noc2/RateLoop@tokenless --sparse .agents/plugins --sparse plugins/rateloop --sparse plugins/rateloop-workspace

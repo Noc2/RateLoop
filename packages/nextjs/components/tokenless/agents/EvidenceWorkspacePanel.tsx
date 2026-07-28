@@ -324,10 +324,10 @@ export function EvidenceWorkspacePanel({ workspaceId, canManage }: { workspaceId
   const [busyPacket, setBusyPacket] = useState<string | null>(null);
   const [showAdvancedControls, setShowAdvancedControls] = useState(false);
   const [urlSnapshot, setUrlSnapshot] = useState<EvidenceUrlSnapshot>(() => {
-    const params = new URLSearchParams({ tab: "evidence" });
+    const params = new URLSearchParams();
     if (workspaceId) params.set("workspace", workspaceId);
     return {
-      pathname: "/agents",
+      pathname: "/agents/evidence",
       search: params.toString(),
       hash: "",
       state: DEFAULT_EVIDENCE_URL_STATE,

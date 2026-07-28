@@ -778,7 +778,7 @@ export function HumanAssuranceRaterClient({
                         </Button>
                       ) : (
                         <Link
-                          href="/human?tab=reviews"
+                          href="/human/review"
                           className="mt-3 inline-flex font-semibold underline underline-offset-4"
                         >
                           Return to review queue
@@ -928,7 +928,7 @@ export function HumanAssuranceRaterClient({
                             : "This assignment could not be restored. Open Review work for another assignment."}
                         </p>
                         <Link
-                          href="/human?tab=reviews"
+                          href="/human/review"
                           className="mt-3 inline-flex text-xs font-semibold underline underline-offset-4"
                         >
                           Return to review queue

@@ -4,8 +4,8 @@ import { AppPageShell } from "~~/components/shared/AppPageShell";
 
 const destinations = [
   { href: "/search", label: "Search" },
-  { href: "/human", label: "Review work" },
-  { href: "/agents", label: "Manage agents" },
+  { href: "/human/review", label: "Review work" },
+  { href: "/agents/overview", label: "Manage agents" },
   { href: "/docs", label: "Read docs" },
 ] as const;
 

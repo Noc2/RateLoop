@@ -422,7 +422,7 @@ export async function materializeOversightAlertNotifications(input: { limit?: nu
         candidate.principalAddress,
         candidate.title,
         candidate.body,
-        `/agents?tab=inbox&workspace=${encodeURIComponent(candidate.workspaceId)}`,
+        `/agents/approvals?workspace=${encodeURIComponent(candidate.workspaceId)}`,
         candidate.sourceType,
         candidate.sourceKey,
         now,

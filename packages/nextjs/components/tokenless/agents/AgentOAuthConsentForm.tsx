@@ -16,7 +16,7 @@ type RelayResponse = {
   redirectTo?: string;
 };
 
-const OAUTH_WORKSPACE_RETURN = "/agents?tab=connect&returning=oauth";
+const OAUTH_WORKSPACE_RETURN = "/agents/connections?returning=oauth";
 
 function isLoopbackRedirect(value: string | undefined) {
   if (!value) return false;

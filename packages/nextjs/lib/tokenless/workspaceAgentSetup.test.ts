@@ -1247,7 +1247,7 @@ test("unpaid private automatic review grants publishing without payment and reje
 test("setup rejects future steps, stale revisions, and unsaved review configuration", async () => {
   assert.equal(clampAgentSetupStep("people", "agent"), "agent");
   assert.equal(clampAgentSetupStep("connect", "agent"), "connect");
-  assert.equal(agentSetupUrl("ws a", "reviews"), "/agents?workspace=ws%20a&step=reviews");
+  assert.equal(agentSetupUrl("ws a", "reviews"), "/agents/connections?workspace=ws%20a&step=reviews");
 
   const { workspaceId } = await connectedSetup();
   await assert.rejects(

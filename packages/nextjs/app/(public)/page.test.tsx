@@ -31,7 +31,7 @@ test("landing page presents the tokenless human-assurance story", async () => {
   assert.doesNotMatch(html, /For Humans|For Agents/);
   assert.equal(html.match(/aria-hidden="true" class="text-lg leading-none/g)?.length, 2);
   assert.ok(
-    html.indexOf('href="/human?tab=discover"') < html.indexOf('href="/agents?tab=connect"'),
+    html.indexOf('href="/human/review"') < html.indexOf('href="/agents/connections"'),
     "the Humans CTA should appear before the Agents CTA",
   );
   assert.ok(

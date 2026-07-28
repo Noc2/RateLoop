@@ -1,3 +1,5 @@
+import { humanSectionHref } from "./humanNavigation";
+
 export const HUMAN_PROFILE_SECTIONS = [
   "paid-work",
   "earnings",
@@ -17,8 +19,8 @@ export function humanAccountReturnTo(input: {
   section?: HumanProfileSection;
   tab: "inbox" | "profile" | "settings";
 }) {
-  const params = new URLSearchParams({ tab: input.tab });
+  const params = new URLSearchParams();
   if (input.section) params.set("section", input.section);
   if (input.eligibility === "provider-return") params.set("eligibility", input.eligibility);
-  return `/human?${params.toString()}`;
+  return humanSectionHref(input.tab, params);
 }

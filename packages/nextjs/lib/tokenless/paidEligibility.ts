@@ -758,7 +758,7 @@ export async function createEligibilityProviderHandoff(
   startUrl.searchParams.set("callback_url", callbackUrl);
   startUrl.searchParams.set(
     "return_url",
-    `${getAuthOrigin()}/human?tab=profile&section=paid-work&eligibility=provider-return`,
+    `${getAuthOrigin()}/human/profile?section=paid-work&eligibility=provider-return`,
   );
   return { providerId, startUrl: startUrl.toString(), state, expiresAt };
 }

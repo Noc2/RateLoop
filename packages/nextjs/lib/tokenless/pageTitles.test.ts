@@ -12,6 +12,9 @@ test("agent titles describe the selected workspace destination", () => {
   assert.equal(agentPageTitle("groups"), "Review setup");
   assert.equal(agentPageTitle("registry"), "Review setup");
   assert.equal(agentPageTitle("evaluations"), "Results");
+  assert.equal(agentPageTitle("results"), "Results");
+  assert.equal(agentPageTitle("approvals"), "Approvals");
+  assert.equal(agentPageTitle("review-setup"), "Review setup");
   assert.equal(agentPageTitle("evidence"), "Evidence");
   assert.equal(agentPageTitle("unknown"), "Overview");
 });
@@ -24,6 +27,8 @@ test("reviewer titles prioritize the active task over a generic account label", 
   assert.equal(humanPageTitle({ tab: "settings" }), "Account settings");
   assert.equal(humanPageTitle({ invite: "1", tab: "discover" }), "Reviewer invitation");
   assert.equal(humanPageTitle({ assignment: "assignment_1", tab: "settings" }), "Complete review");
+  assert.equal(humanPageTitle({ routeSection: "history" }), "Review history");
+  assert.equal(humanPageTitle({ routeSection: "profile" }), "Reviewer profile");
 });
 
 test("reviewed documentation and legal routes define descriptive metadata", () => {
@@ -54,13 +59,19 @@ test("reviewed documentation and legal routes define descriptive metadata", () =
 test("signed-in routes derive metadata from the current tab and the root app applies the RateLoop title template", () => {
   const agents = readFileSync(new URL("../../app/(app)/agents/page.tsx", import.meta.url), "utf8");
   const human = readFileSync(new URL("../../app/(app)/human/page.tsx", import.meta.url), "utf8");
+  const agentSection = readFileSync(new URL("../../app/(app)/agents/[section]/page.tsx", import.meta.url), "utf8");
+  const agentContent = readFileSync(new URL("../../app/(app)/agents/AgentsSectionPage.tsx", import.meta.url), "utf8");
+  const humanSection = readFileSync(new URL("../../app/(app)/human/[section]/page.tsx", import.meta.url), "utf8");
+  const humanContent = readFileSync(new URL("../../app/(app)/human/HumanSectionPage.tsx", import.meta.url), "utf8");
   const metadata = readFileSync(new URL("../../utils/scaffold-eth/getMetadata.ts", import.meta.url), "utf8");
 
   assert.match(agents, /generateMetadata[\s\S]*agentPageTitle\(\(await searchParams\)\.tab\)/);
   assert.match(human, /generateMetadata[\s\S]*humanPageTitle\(await searchParams\)/);
-  assert.match(agents, /<PageHeading heading=\{agentPageTitle\(tab\)\} \/>/);
-  assert.match(human, /<PageHeading[\s\S]*Reviewer notifications[\s\S]*Reviewer profile[\s\S]*Account settings/);
-  assert.doesNotMatch(agents, /<h1 className="sr-only">Agent workspace/);
-  assert.doesNotMatch(human, /<h1 className="sr-only">/);
+  assert.match(agentSection, /generateMetadata[\s\S]*agentPageTitle\(tab \?\? "overview"\)/);
+  assert.match(humanSection, /generateMetadata[\s\S]*routeSection: section/);
+  assert.match(agentContent, /<PageHeading heading=\{agentPageTitle\(tab\)\} \/>/);
+  assert.match(humanContent, /<PageHeading[\s\S]*Reviewer notifications[\s\S]*Reviewer profile[\s\S]*Account settings/);
+  assert.doesNotMatch(agentContent, /<h1 className="sr-only">Agent workspace/);
+  assert.doesNotMatch(humanContent, /<h1 className="sr-only">/);
   assert.match(metadata, /const titleTemplate = "%s \| RateLoop"/);
 });

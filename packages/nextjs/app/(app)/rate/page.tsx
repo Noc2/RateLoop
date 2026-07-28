@@ -11,10 +11,11 @@ export default async function RatePage({
   }>;
 }) {
   const params = await searchParams;
-  const next = new URLSearchParams({ tab: "discover" });
+  const next = new URLSearchParams();
   for (const key of ["assignment", "terms", "q", "scope"] as const) {
     const value = Array.isArray(params[key]) ? params[key]?.[0] : params[key];
     if (value) next.set(key, value);
   }
-  redirect(`/human?${next.toString()}`);
+  const search = next.toString();
+  redirect(`/human/review${search ? `?${search}` : ""}`);
 }

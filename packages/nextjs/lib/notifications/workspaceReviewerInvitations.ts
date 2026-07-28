@@ -148,8 +148,7 @@ function isConfigurationError(error: unknown) {
 }
 
 function destinationUrl(token: string, origin: string) {
-  const destination = new URL("/human", origin);
-  destination.searchParams.set("tab", "discover");
+  const destination = new URL("/human/review", origin);
   destination.searchParams.set("invite", "1");
   destination.hash = `invite=${encodeURIComponent(token)}`;
   return destination;

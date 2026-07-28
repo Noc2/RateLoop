@@ -46,9 +46,9 @@ export default function ConnectHostIndexPage() {
     <article className="prose max-w-none">
       <DocsTitle gradientText="Host">Connect a</DocsTitle>
       <p className="lead text-base-content/60 text-lg">
-        Copy the connection message from your workspace&apos;s <Link href="/agents">Agents tab</Link>, then open your
-        host&apos;s guide to see what to expect. Every guide is generated from the same host-capability registry that
-        builds the message, so these pages can only say what the product does.
+        Copy the connection message from your workspace&apos;s <Link href="/agents/connections">Agents tab</Link>, then
+        open your host&apos;s guide to see what to expect. Every guide is generated from the same host-capability
+        registry that builds the message, so these pages can only say what the product does.
       </p>
 
       <h2>Primary path</h2>

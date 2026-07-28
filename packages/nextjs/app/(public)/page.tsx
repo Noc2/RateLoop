@@ -111,7 +111,7 @@ export function TokenlessLandingPage({ socialProofItems }: { socialProofItems: L
               Scale AI autonomy without scaling blind trust.
             </p>
             <div className="mt-6 flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row">
-              <Link href="/human?tab=discover" className="group rateloop-gradient-action min-h-11 gap-2 px-5 text-base">
+              <Link href="/human/review" className="group rateloop-gradient-action min-h-11 gap-2 px-5 text-base">
                 <span>Start Reviewing</span>
                 <span
                   aria-hidden="true"
@@ -121,7 +121,7 @@ export function TokenlessLandingPage({ socialProofItems }: { socialProofItems: L
                 </span>
               </Link>
               <Link
-                href="/agents?tab=connect"
+                href="/agents/connections"
                 className="group btn min-h-11 gap-2 rounded-lg border-0 bg-base-content/[0.11] px-5 text-base hover:bg-base-content/[0.18]"
               >
                 <span>Connect Agent</span>

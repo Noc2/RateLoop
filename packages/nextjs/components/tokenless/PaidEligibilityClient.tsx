@@ -162,7 +162,7 @@ export function PaidEligibilityClient() {
       );
       sessionStorage.removeItem("rateloop:eligibility-provider-state");
       setProviderState(null);
-      window.history.replaceState({}, "", "/human?tab=profile&section=paid-work");
+      window.history.replaceState({}, "", "/human/profile?section=paid-work");
       await refresh();
     } catch (cause) {
       capture(cause, "Unable to complete paid-task eligibility.");

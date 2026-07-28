@@ -22,8 +22,8 @@ test("root recovery offers search and useful task destinations without another m
 
   assert.match(html, /aria-label="Useful destinations"/);
   assert.match(html, /href="\/search"[^>]*>Search</);
-  assert.match(html, /href="\/human"[^>]*>Review work</);
-  assert.match(html, /href="\/agents"[^>]*>Manage agents</);
+  assert.match(html, /href="\/human\/review"[^>]*>Review work</);
+  assert.match(html, /href="\/agents\/overview"[^>]*>Manage agents</);
   assert.match(html, /href="\/docs"[^>]*>Read docs</);
   assert.doesNotMatch(html, /<main\b/);
 });

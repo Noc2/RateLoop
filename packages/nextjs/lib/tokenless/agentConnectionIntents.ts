@@ -832,7 +832,7 @@ export async function confirmAgentWorkspaceMove(input: {
     if (status === "completed") {
       await client.query("COMMIT");
       const approvalUrl = new URL(
-        `/agents?tab=connect&workspace=${encodeURIComponent(workspaceId)}`,
+        `/agents/connections?workspace=${encodeURIComponent(workspaceId)}`,
         new URL(input.origin).origin,
       ).toString();
       return {
@@ -888,7 +888,7 @@ export async function confirmAgentWorkspaceMove(input: {
     }
     await client.query("COMMIT");
     const approvalUrl = new URL(
-      `/agents?tab=connect&workspace=${encodeURIComponent(workspaceId)}`,
+      `/agents/connections?workspace=${encodeURIComponent(workspaceId)}`,
       new URL(input.origin).origin,
     ).toString();
     const workspaceMove = workspaceMovePayload({

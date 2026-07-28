@@ -82,10 +82,78 @@ export function resolveAgentTabParam(requested?: string): AgentTab {
   return currentAgentTabs.has(requested as AgentTab) ? (requested as AgentTab) : "overview";
 }
 
-export function agentTabHref(tab: AgentTab, workspaceId?: string) {
-  const params = new URLSearchParams({ tab });
+export type AgentSection =
+  | "overview"
+  | "connections"
+  | "approvals"
+  | "review-setup"
+  | "results"
+  | "evidence"
+  | "billing";
+
+const agentSectionByTab: Record<AgentTab, AgentSection> = {
+  overview: "overview",
+  connect: "connections",
+  inbox: "approvals",
+  registry: "review-setup",
+  evaluations: "results",
+  evidence: "evidence",
+  billing: "billing",
+};
+
+const agentTabBySection = new Map<string, AgentTab>([
+  ...Object.entries(agentSectionByTab).map(([tab, section]) => [section, tab as AgentTab] as const),
+  ["agents", "connect"],
+  ["connect", "connect"],
+  ["groups", "registry"],
+  ["inbox", "inbox"],
+  ["registry", "registry"],
+  ["evaluations", "evaluations"],
+]);
+
+type NavigationSearchParams = Record<string, string | string[] | undefined>;
+
+function navigationSearchParams(input?: URLSearchParams | NavigationSearchParams) {
+  if (!input) return new URLSearchParams();
+  if (input instanceof URLSearchParams) return new URLSearchParams(input);
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(input)) {
+    if (Array.isArray(value)) {
+      for (const item of value) params.append(key, item);
+    } else if (value !== undefined) {
+      params.set(key, value);
+    }
+  }
+  return params;
+}
+
+function firstNavigationValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export function agentSectionForTab(tab: AgentTab): AgentSection {
+  return agentSectionByTab[tab];
+}
+
+export function agentTabForSection(section?: string): AgentTab | null {
+  return section ? (agentTabBySection.get(section) ?? null) : null;
+}
+
+export function agentTabHref(
+  tab: AgentTab,
+  workspaceId?: string,
+  currentSearch?: URLSearchParams | NavigationSearchParams,
+) {
+  const params = navigationSearchParams(currentSearch);
+  params.delete("tab");
   if (workspaceId) params.set("workspace", workspaceId);
-  return `/agents?${params.toString()}`;
+  const search = params.toString();
+  return `/agents/${agentSectionForTab(tab)}${search ? `?${search}` : ""}`;
+}
+
+export function legacyAgentRouteHref(searchParams: NavigationSearchParams) {
+  const tab = resolveAgentTabParam(firstNavigationValue(searchParams.tab));
+  return agentTabHref(tab, undefined, searchParams);
 }
 
 export function agentSignInReturnTo(input: {
@@ -97,21 +165,10 @@ export function agentSignInReturnTo(input: {
 }) {
   const params = new URLSearchParams();
   if (input.returning === "oauth") params.set("returning", input.returning);
-  if (input.tab) params.set("tab", resolveAgentTabParam(input.tab));
   if (input.workspaceId) params.set("workspace", input.workspaceId);
   if (input.step) params.set("step", input.step);
+  const tab = resolveAgentTabParam(input.tab);
   const search =
-    params.get("tab") === "evidence" && input.evidence
-      ? updateEvidenceUrlSearch(params, input.evidence)
-      : params.toString();
-  return search ? `/agents?${search}` : "/agents";
-}
-
-export function nextAgentTabIndex(currentIndex: number, key: string, tabCount: number) {
-  if (tabCount <= 0) return -1;
-  if (key === "Home") return 0;
-  if (key === "End") return tabCount - 1;
-  if (key === "ArrowRight") return (currentIndex + 1) % tabCount;
-  if (key === "ArrowLeft") return (currentIndex - 1 + tabCount) % tabCount;
-  return currentIndex;
+    tab === "evidence" && input.evidence ? updateEvidenceUrlSearch(params, input.evidence) : params.toString();
+  return agentTabHref(tab, undefined, new URLSearchParams(search));
 }

@@ -348,8 +348,8 @@ export async function createEarlyAccessCheckout(input: { customerId: string; leg
 }
 
 export function workspaceBillingReturnPath(workspaceId: string) {
-  const query = new URLSearchParams({ tab: "overview", workspace: workspaceId });
-  return `/agents?${query.toString()}`;
+  const query = new URLSearchParams({ workspace: workspaceId });
+  return `/agents/overview?${query.toString()}`;
 }
 
 export async function createStripePortal(customerId: string, workspaceId: string) {

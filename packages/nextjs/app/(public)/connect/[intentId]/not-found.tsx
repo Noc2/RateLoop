@@ -12,7 +12,7 @@ export default function AgentConnectionNotFound() {
           The link may be invalid, expired, or replaced. Open Connection in your workspace to create a new connection
           message.
         </p>
-        <Link href="/agents?tab=connect" className="btn btn-primary mt-6">
+        <Link href="/agents/connections" className="btn btn-primary mt-6">
           Open Connection
         </Link>
       </section>

@@ -34,7 +34,7 @@ export default function HowTokenlessWorksPage() {
       </p>
       <p>
         The workspace owner controls the question, response window, reviewer audience, and data boundary in{" "}
-        <Link href="/agents?tab=registry">Reviews</Link>. Evidence from a different scope cannot silently lower review
+        <Link href="/agents/review-setup">Reviews</Link>. Evidence from a different scope cannot silently lower review
         coverage.
       </p>
 

@@ -143,7 +143,7 @@ test("no active agent gives a direct route back to Connection", async () => {
     assert.ok(await screen.findByRole("heading", { name: "Connect an agent first" }));
     assert.equal(
       screen.getByRole("link", { name: "Go to Connection" }).getAttribute("href"),
-      "/agents?tab=connect&workspace=workspace-1",
+      "/agents/connections?workspace=workspace-1",
     );
     assert.equal(screen.queryByRole("heading", { name: "Reviewers" }), null);
     assert.deepEqual(requests, ["/api/account/workspaces/workspace-1/agents"]);

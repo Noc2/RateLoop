@@ -69,8 +69,8 @@ function BookOpenIcon({ className }: IconProps) {
 }
 
 const links = [
-  { href: "/human", label: "Humans", icon: GlobeAltIcon },
-  { href: "/agents", label: "Agents", icon: PlusCircleIcon },
+  { href: "/human/review", label: "Humans", icon: GlobeAltIcon },
+  { href: "/agents/overview", label: "Agents", icon: PlusCircleIcon },
   { href: "/docs", label: "Docs", icon: BookOpenIcon },
 ] as const;
 
@@ -111,7 +111,8 @@ function NavLinks({ mobile = false }: { mobile?: boolean }) {
   return (
     <>
       {links.map(({ href, label, icon: Icon }) => {
-        const active = pathname === href || pathname.startsWith(`${href}/`);
+        const sectionRoot = href.split("/").slice(0, 2).join("/");
+        const active = pathname === sectionRoot || pathname.startsWith(`${sectionRoot}/`);
         const showDocsNavigation = href === "/docs" && active;
 
         return (

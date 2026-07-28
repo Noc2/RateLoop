@@ -138,7 +138,7 @@ export function buildWorkspaceReviewerInvitationUrl(token: string, appUrl = getO
   if (!INVITATION_PATTERN.test(token)) {
     throw new TokenlessServiceError("Reviewer invitation token is invalid.", 400, "invalid_workspace_reviewer");
   }
-  const relative = `/human?tab=discover&invite=1#invite=${encodeURIComponent(token)}`;
+  const relative = `/human/review?invite=1#invite=${encodeURIComponent(token)}`;
   return appUrl ? new URL(relative, appUrl).toString() : relative;
 }
 

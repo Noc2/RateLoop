@@ -1063,7 +1063,7 @@ export async function completeWorkspaceAgentSetup(input: {
     if (status === "completed" || status === "grandfathered") {
       await client.query("COMMIT");
       return {
-        destination: `/agents?workspace=${encodeURIComponent(input.workspaceId)}&tab=overview`,
+        destination: `/agents/overview?workspace=${encodeURIComponent(input.workspaceId)}`,
         idempotent: true,
       };
     }
@@ -1231,7 +1231,7 @@ export async function completeWorkspaceAgentSetup(input: {
     occurredAt: now,
   });
   return {
-    destination: `/agents?workspace=${encodeURIComponent(input.workspaceId)}&tab=overview`,
+    destination: `/agents/overview?workspace=${encodeURIComponent(input.workspaceId)}`,
     idempotent: false,
     policyId,
     policyVersion,
@@ -1738,7 +1738,7 @@ export async function finalizeWorkspaceAgentSetup(input: {
         );
       }
       response = {
-        destination: `/agents?workspace=${encodeURIComponent(input.workspaceId)}&tab=overview`,
+        destination: `/agents/overview?workspace=${encodeURIComponent(input.workspaceId)}`,
         idempotent: true,
         revision: rowNumber(setup, "revision") ?? undefined,
         invitation: await setupFinalizationInvitationReplay(client, {
@@ -2026,7 +2026,7 @@ export async function finalizeWorkspaceAgentSetup(input: {
       throw new TokenlessServiceError("Workspace setup changed. Reload and try again.", 409, "agent_setup_conflict");
     }
     response = {
-      destination: `/agents?workspace=${encodeURIComponent(input.workspaceId)}&tab=overview`,
+      destination: `/agents/overview?workspace=${encodeURIComponent(input.workspaceId)}`,
       idempotent: false,
       policyId,
       policyVersion,

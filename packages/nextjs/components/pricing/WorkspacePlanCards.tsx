@@ -14,10 +14,11 @@ const earlyAccessPlan = TOKENLESS_BILLING_PLANS.early_access;
 const earlyAccessListPrice = formatUsdPrice(earlyAccessPlan.listPriceCents ?? earlyAccessPlan.monthlyPriceCents);
 
 function workspacePlanHref(workspaceId: string | undefined, billing?: "upgrade") {
-  const query = new URLSearchParams({ tab: "billing" });
+  const query = new URLSearchParams();
   if (workspaceId) query.set("workspace", workspaceId);
   if (billing) query.set("billing", billing);
-  return `/agents?${query.toString()}`;
+  const search = query.toString();
+  return `/agents/billing${search ? `?${search}` : ""}`;
 }
 
 export function WorkspacePlanCards({

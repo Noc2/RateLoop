@@ -145,7 +145,7 @@ export function WorkspaceDeletionPanel({ workspaceId, workspaceName }: Workspace
         setSubmitting(false);
         return;
       }
-      window.location.assign("/agents");
+      window.location.assign("/agents/overview");
     } catch (cause) {
       capture(cause, "Unable to delete this workspace.");
       setSubmitting(false);

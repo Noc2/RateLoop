@@ -36,7 +36,7 @@ export function WorkspaceSetupStart() {
         }),
       );
       if (typeof body.workspaceId !== "string") throw new Error("RateLoop did not return the new workspace.");
-      window.location.assign(`/agents?workspace=${encodeURIComponent(body.workspaceId)}&step=connect`);
+      window.location.assign(`/agents/connections?workspace=${encodeURIComponent(body.workspaceId)}&step=connect`);
     } catch (cause) {
       capture(cause, "Unable to create the workspace.");
       setBusy(false);

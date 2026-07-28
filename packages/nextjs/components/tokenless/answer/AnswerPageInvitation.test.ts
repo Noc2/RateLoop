@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const page = readFileSync(new URL("../../../app/(app)/human/page.tsx", import.meta.url), "utf8");
+const page = readFileSync(new URL("../../../app/(app)/human/HumanSectionPage.tsx", import.meta.url), "utf8");
 const answer = readFileSync(new URL("./AnswerPageClient.tsx", import.meta.url), "utf8");
 
 test("Discover opens invitation entry only from the boolean URL marker", () => {

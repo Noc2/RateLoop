@@ -91,7 +91,7 @@ test("public connection page exposes safe human and machine handoff state", () =
 test("missing connection intents explain recovery instead of falling through to the generic 404", () => {
   assert.match(publicNotFound, /This connection link is no longer available/);
   assert.match(publicNotFound, /invalid, expired, or replaced/);
-  assert.match(publicNotFound, /href="\/agents\?tab=connect"/);
+  assert.match(publicNotFound, /href="\/agents\/connections"/);
   assert.match(publicNotFound, /Open Connection/);
 });
 

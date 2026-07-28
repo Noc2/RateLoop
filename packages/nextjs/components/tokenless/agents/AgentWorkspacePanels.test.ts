@@ -1,10 +1,11 @@
 import {
   agentSignInReturnTo,
+  agentTabForSection,
   agentTabHref,
   canStartAgentConnection,
   connectedAgentTabs,
   isUsableAgentConnection,
-  nextAgentTabIndex,
+  legacyAgentRouteHref,
   resolveAgentTabParam,
   resolveAvailableAgentTab,
   selectReconnectableOAuthConnections,
@@ -17,7 +18,12 @@ import test from "node:test";
 const panelsSource = readFileSync(new URL("./AgentWorkspacePanels.tsx", import.meta.url), "utf8");
 const tabsSource = readFileSync(new URL("./AgentTabs.tsx", import.meta.url), "utf8");
 const editorSource = readFileSync(new URL("./AgentHumanReviewEditor.tsx", import.meta.url), "utf8");
-const pageSource = readFileSync(new URL("../../../app/(app)/agents/page.tsx", import.meta.url), "utf8");
+const pageSource = readFileSync(new URL("../../../app/(app)/agents/AgentsSectionPage.tsx", import.meta.url), "utf8");
+const legacyPageSource = readFileSync(new URL("../../../app/(app)/agents/page.tsx", import.meta.url), "utf8");
+const sectionPageSource = readFileSync(
+  new URL("../../../app/(app)/agents/[section]/page.tsx", import.meta.url),
+  "utf8",
+);
 
 test("the requested accessible workspace wins and invalid returning links require a choice", () => {
   const workspaces = [
@@ -137,11 +143,13 @@ test("connected navigation splits the owner stack into URL-backed task tabs", ()
   assert.equal(resolveAgentTabParam("agents"), "connect");
   assert.equal(resolveAgentTabParam("groups"), "registry");
   assert.equal(resolveAgentTabParam("unknown"), "overview");
-  assert.equal(agentTabHref("inbox", "workspace one"), "/agents?tab=inbox&workspace=workspace+one");
-  assert.equal(agentSignInReturnTo({}), "/agents");
+  assert.equal(agentTabHref("inbox", "workspace one"), "/agents/approvals?workspace=workspace+one");
+  assert.equal(agentTabForSection("approvals"), "inbox");
+  assert.equal(agentTabForSection("connect"), "connect");
+  assert.equal(agentSignInReturnTo({}), "/agents/overview");
   assert.equal(
     agentSignInReturnTo({ returning: "oauth", tab: "evidence", workspaceId: "workspace one", step: "people" }),
-    "/agents?returning=oauth&tab=evidence&workspace=workspace+one&step=people",
+    "/agents/evidence?returning=oauth&workspace=workspace+one&step=people",
   );
   assert.equal(
     agentSignInReturnTo({
@@ -155,9 +163,26 @@ test("connected navigation splits the owner stack into URL-backed task tabs", ()
         packetId: "packet one",
       },
     }),
-    "/agents?tab=evidence&workspace=workspace+one&q=release&outcome=fail&date=30&run=run+one&packet=packet+one",
+    "/agents/evidence?workspace=workspace+one&q=release&outcome=fail&date=30&run=run+one&packet=packet+one",
+  );
+  assert.equal(
+    legacyAgentRouteHref({
+      billing: "success",
+      date: "30",
+      outcome: "fail",
+      packet: "packet one",
+      q: "release",
+      returning: "oauth",
+      run: "run one",
+      step: "people",
+      tab: "evidence",
+      workspace: "workspace one",
+    }),
+    "/agents/evidence?billing=success&date=30&outcome=fail&packet=packet+one&q=release&returning=oauth&run=run+one&step=people&workspace=workspace+one",
   );
   assert.match(pageSource, /returning === "oauth" && !requestedWorkspaceId/);
+  assert.match(legacyPageSource, /redirect\(legacyAgentRouteHref\(await searchParams\)\)/);
+  assert.match(sectionPageSource, /section !== agentSectionForTab\(tab\)/);
   assert.match(tabsSource, /value: "overview", label: "Overview"/);
   assert.match(tabsSource, /value: "connect", label: "Connections"/);
   assert.match(tabsSource, /value: "inbox", label: "Approvals"/);
@@ -166,16 +191,11 @@ test("connected navigation splits the owner stack into URL-backed task tabs", ()
   assert.match(tabsSource, /value: "billing", label: "Billing & settings"/);
 });
 
-test("agent tabs use roving focus and arrow, Home, and End navigation", () => {
-  assert.equal(nextAgentTabIndex(0, "ArrowLeft", 7), 6);
-  assert.equal(nextAgentTabIndex(6, "ArrowRight", 7), 0);
-  assert.equal(nextAgentTabIndex(3, "Home", 7), 0);
-  assert.equal(nextAgentTabIndex(2, "End", 7), 6);
-  assert.match(tabsSource, /role="tablist"/);
-  assert.match(tabsSource, /role="tab"/);
-  assert.match(tabsSource, /aria-selected=/);
-  assert.match(tabsSource, /tabIndex=\{active === tab\.value \? 0 : -1\}/);
-  assert.match(panelsSource, /role="tabpanel"/);
+test("agent sections use normal route links instead of tab-widget semantics", () => {
+  assert.match(tabsSource, /aria-current=\{active === tab\.value \? "page" : undefined\}/);
+  assert.match(tabsSource, /href=\{agentTabHref\(/);
+  assert.doesNotMatch(tabsSource, /role="tablist"|role="tab"|aria-selected=|tabIndex=/);
+  assert.doesNotMatch(panelsSource, /role="tabpanel"|aria-labelledby=\{`agent-tab-/);
 });
 
 test("the active workspace selector keeps a stable row and preserves the current tab", () => {
@@ -190,7 +210,7 @@ test("the active workspace selector keeps a stable row and preserves the current
   assert.match(panelsSource, /workspaces=\{workspaces\}/);
   assert.match(
     panelsSource,
-    /`\/agents\?tab=\$\{encodeURIComponent\(resolvedTab\)\}&workspace=\$\{encodeURIComponent\(nextWorkspaceId\)\}`/,
+    /agentTabHref\(resolvedTab, nextWorkspaceId, new URLSearchParams\(searchParams\.toString\(\)\)\)/,
   );
   assert.equal(tabsSource.match(/<select/g)?.length, undefined);
 });
@@ -200,6 +220,8 @@ test("the server resolves onboarding before the client renders downstream panels
   assert.match(pageSource, /selectRequestedWorkspace\(workspaces, requestedWorkspaceId\)/);
   assert.match(pageSource, /getWorkspaceAgentSetup\(/);
   assert.match(pageSource, /requestedStep/);
+  assert.match(pageSource, /resolveAvailableAgentTab\(tab, visibleTabs\)/);
+  assert.match(pageSource, /redirect\(agentTabHref\(resolvedTab, workspace\.workspaceId, searchParams\)\)/);
   assert.doesNotMatch(pageSource, /listPrivateGroups\(/);
   assert.doesNotMatch(pageSource, /getWorkspaceEvaluationDashboard\(/);
   assert.doesNotMatch(panelsSource, /fetch\("\/api\/account\/workspaces"/);

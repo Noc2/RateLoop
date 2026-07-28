@@ -18,7 +18,7 @@ test("agent docs lead with the hosted connected-workspace path", async () => {
   assert.match(html, /https:\/\/rateloop-tokenless\.vercel\.app\/api\/agent\/v1\/mcp/);
   assert.match(html, /current hosted path requests private, unpaid review from invited workspace reviewers/i);
   assert.match(html, /Available now/i);
-  assert.match(html, /href="\/agents\?tab=connect"/);
+  assert.match(html, /href="\/agents\/connections"/);
   assert.match(
     html,
     /codex plugin marketplace add Noc2\/RateLoop@tokenless --sparse \.agents\/plugins --sparse plugins\/rateloop --sparse plugins\/rateloop-workspace/,

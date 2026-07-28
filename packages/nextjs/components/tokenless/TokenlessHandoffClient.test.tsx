@@ -26,7 +26,7 @@ const handoffSource = readFileSync(new URL("./TokenlessHandoffClient.tsx", impor
 
 test("insufficient prepaid handoffs link directly to workspace top-up settings", () => {
   assert.match(handoffSource, /Top up balance/);
-  assert.match(handoffSource, /\/agents\?tab=overview#panel-funding/);
+  assert.match(handoffSource, /\/agents\/overview#panel-funding/);
   assert.match(handoffSource, /workspace=\$\{encodeURIComponent\(selectedWorkspace\.workspaceId\)\}/);
   assert.match(handoffSource, /import Link from "next\/link"/);
   assert.match(handoffSource, /insufficientPrepaid/);

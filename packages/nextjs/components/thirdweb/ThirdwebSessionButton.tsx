@@ -46,7 +46,7 @@ export function AuthenticatedSessionControl({
       }`}
     >
       <Link
-        href="/human?tab=profile"
+        href="/human/profile"
         className="group flex min-w-0 flex-1 items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--rateloop-blue)]"
         aria-label={`Open profile for ${label}`}
       >

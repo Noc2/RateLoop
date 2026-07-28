@@ -18,8 +18,8 @@ test("search shows compact destinations instead of embedding the review workspac
   assert.match(html, /Tasks/i);
   assert.match(html, /Pages and docs/i);
   assert.match(html, /Review work/i);
-  assert.match(html, /href="\/agents\?tab=connect"/);
-  assert.match(html, /href="\/human\?tab=discover&amp;q=connect%20agent"/);
+  assert.match(html, /href="\/agents\/connections"/);
+  assert.match(html, /href="\/human\/review\?q=connect%20agent"/);
   assert.match(html, /Open the full review queue with this search applied/i);
   assert.doesNotMatch(html, /Reviewer navigation|Have an invitation|No review work is available/i);
 });

@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 function notificationSettingsUrl(request: NextRequest, result?: "unsubscribed" | "invalid_unsubscribe") {
-  const url = buildTokenlessNotificationSettingsUrl(result) ?? new URL("/human?tab=settings", request.nextUrl.origin);
+  const url = buildTokenlessNotificationSettingsUrl(result) ?? new URL("/human/settings", request.nextUrl.origin);
   if (result && !url.searchParams.has("email")) url.searchParams.set("email", result);
   url.hash = "notifications";
   return url;

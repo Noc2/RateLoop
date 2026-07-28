@@ -92,10 +92,11 @@ function rowsToCandidates(
 }
 
 function workspaceHref(row: Row, tab: "overview" | "evaluations") {
-  const query = new URLSearchParams({ tab });
+  const query = new URLSearchParams();
   const workspaceId = rowString(row, "workspace_id");
   if (workspaceId) query.set("workspace", workspaceId);
-  return `/agents?${query.toString()}`;
+  const search = query.toString();
+  return `/agents/${tab === "evaluations" ? "results" : "overview"}${search ? `?${search}` : ""}`;
 }
 
 async function loadLifecycleCandidates(
@@ -271,14 +272,14 @@ async function loadLifecycleCandidates(
     [
       rowsToCandidates([...available.rows, ...directAvailable.rows] as Row[], {
         body: "A human-assurance assignment is ready for review.",
-        href: "/human?tab=discover",
+        href: "/human/review",
         preferenceKey: "assignmentAvailable",
         sourceType: "assignment.available",
         title: "Assignment available",
       }),
       rowsToCandidates(completed.rows as Row[], {
         body: "Your human-assurance response was recorded.",
-        href: "/human?tab=discover",
+        href: "/human/review",
         preferenceKey: "assignmentCompleted",
         sourceType: "assignment.completed",
         title: "Response recorded",
@@ -299,7 +300,7 @@ async function loadLifecycleCandidates(
       }),
       revealNotices.map(candidate => ({
         body: "Your committed review needs a self-reveal before its recovery deadline.",
-        href: "/human?tab=profile&section=paid-settlement",
+        href: "/human/profile?section=paid-settlement",
         preferenceKey: "paymentUpdates" as const,
         principalAddress: candidate.principalAddress,
         sourceKey: candidate.sourceKey,
@@ -308,7 +309,7 @@ async function loadLifecycleCandidates(
       })),
       claimNotices.map(candidate => ({
         body: "A review payment is nearing its claim deadline.",
-        href: "/human?tab=profile&section=paid-settlement",
+        href: "/human/profile?section=paid-settlement",
         preferenceKey: "paymentUpdates" as const,
         principalAddress: candidate.principalAddress,
         sourceKey: candidate.sourceKey,
@@ -428,7 +429,7 @@ function appOrigin(value: string) {
 }
 
 function actionUrl(origin: string, href: string | null) {
-  const safePath = href?.startsWith("/") && !href.startsWith("//") ? href : "/human?tab=settings";
+  const safePath = href?.startsWith("/") && !href.startsWith("//") ? href : "/human/settings";
   const target = new URL(safePath, origin);
   if (target.origin !== origin) throw new Error("Notification action URL must remain on the RateLoop origin.");
   return target.toString();

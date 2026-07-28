@@ -3,7 +3,10 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const panelSource = readFileSync(new URL("./AccountDeletionPanel.tsx", import.meta.url), "utf8");
-const settingsPageSource = readFileSync(new URL("../../../app/(app)/human/page.tsx", import.meta.url), "utf8");
+const settingsPageSource = readFileSync(
+  new URL("../../../app/(app)/human/HumanSectionPage.tsx", import.meta.url),
+  "utf8",
+);
 
 test("account deletion exposes its action and requires the server preview", () => {
   assert.match(panelSource, /<section[^>]+aria-labelledby="account-deletion-heading"/);

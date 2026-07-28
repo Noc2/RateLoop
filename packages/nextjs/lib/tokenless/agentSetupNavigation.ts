@@ -2,5 +2,5 @@ export const AGENT_SETUP_SCREEN_STEPS = ["workspace", "connect", "agent", "revie
 export type AgentSetupScreenStep = (typeof AGENT_SETUP_SCREEN_STEPS)[number];
 
 export function agentSetupUrl(workspaceId: string, step: AgentSetupScreenStep) {
-  return `/agents?workspace=${encodeURIComponent(workspaceId)}&step=${encodeURIComponent(step)}`;
+  return `/agents/connections?workspace=${encodeURIComponent(workspaceId)}&step=${encodeURIComponent(step)}`;
 }

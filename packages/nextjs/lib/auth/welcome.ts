@@ -1,7 +1,7 @@
 export const WELCOME_DESTINATIONS = {
-  agent: "/agents",
-  invitation: "/human?tab=discover&invite=1",
-  review: "/human?tab=discover",
+  agent: "/agents/overview",
+  invitation: "/human/review?invite=1",
+  review: "/human/review",
 } as const;
 
 export type WelcomeChoice = keyof typeof WELCOME_DESTINATIONS;

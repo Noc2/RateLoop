@@ -25,7 +25,7 @@ export default async function WalletSettingsPage({
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-12 sm:py-16">
       <Link
-        href="/human?tab=profile"
+        href="/human/profile"
         className="mb-6 inline-flex text-sm font-medium text-base-content/60 transition hover:text-base-content"
       >
         &larr; Back to Profile

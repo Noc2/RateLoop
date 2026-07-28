@@ -1,8 +1,8 @@
 "use client";
 
-import { type KeyboardEvent, useRef } from "react";
 import Link from "next/link";
-import { agentTabHref, nextAgentTabIndex } from "./agentWorkspaceState";
+import { useSearchParams } from "next/navigation";
+import { agentTabHref } from "./agentWorkspaceState";
 import { SelectField } from "~~/components/tokenless/forms/Field";
 
 export type AgentTab = "overview" | "connect" | "inbox" | "registry" | "evaluations" | "evidence" | "billing";
@@ -30,39 +30,22 @@ export function AgentTabs({
   workspaces: Array<{ workspaceId: string; name: string }>;
   workspaceId: string;
 }) {
-  const tabRefs = useRef<Array<HTMLAnchorElement | null>>([]);
+  const searchParams = useSearchParams();
   const visible = tabs.filter(tab => visibleTabs.includes(tab.value));
-
-  function handleKeyDown(event: KeyboardEvent<HTMLAnchorElement>, index: number) {
-    if (event.key === " ") {
-      event.preventDefault();
-      event.currentTarget.click();
-      return;
-    }
-    const nextIndex = nextAgentTabIndex(index, event.key, visible.length);
-    if (nextIndex === index) return;
-    event.preventDefault();
-    tabRefs.current[nextIndex]?.focus();
-  }
 
   return (
     <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
       <nav className="-mx-1 min-w-0 overflow-x-auto px-1 lg:flex-1" aria-label="Agent workspace sections">
-        <div role="tablist" aria-orientation="horizontal" className="flex min-w-max gap-2">
-          {visible.map((tab, index) => (
+        <div className="flex min-w-max gap-2">
+          {visible.map(tab => (
             <Link
               key={tab.value}
-              ref={element => {
-                tabRefs.current[index] = element;
-              }}
-              id={`agent-tab-${tab.value}`}
-              role="tab"
-              href={agentTabHref(tab.value, workspaceId)}
+              href={agentTabHref(
+                tab.value,
+                workspaceId,
+                active === tab.value ? new URLSearchParams(searchParams.toString()) : undefined,
+              )}
               aria-current={active === tab.value ? "page" : undefined}
-              aria-selected={active === tab.value}
-              aria-controls="agent-workspace-panel"
-              tabIndex={active === tab.value ? 0 : -1}
-              onKeyDown={event => handleKeyDown(event, index)}
               className={`tab-control px-4 py-1.5 text-base font-medium transition-colors ${
                 active === tab.value ? "pill-active" : "pill-inactive"
               }`}

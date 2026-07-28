@@ -51,7 +51,7 @@ test("checkout retries use one server-owned key per workspace price version", ()
 test("billing providers return to the workspace that initiated billing", () => {
   assert.equal(
     workspaceBillingReturnPath("ws second/with spaces"),
-    "/agents?tab=overview&workspace=ws+second%2Fwith+spaces",
+    "/agents/overview?workspace=ws+second%2Fwith+spaces",
   );
 });
 

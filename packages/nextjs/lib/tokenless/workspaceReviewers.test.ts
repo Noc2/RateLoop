@@ -90,9 +90,9 @@ test("reviewer invitations persist only token hashes and never grant workspace m
   assert.match(invitation.token, /^rlri_[a-f0-9]{16}_[A-Za-z0-9_-]{43}$/u);
   assert.equal(
     buildWorkspaceReviewerInvitationUrl(invitation.token, "https://tokenless.example.test"),
-    `https://tokenless.example.test/human?tab=discover&invite=1#invite=${invitation.token}`,
+    `https://tokenless.example.test/human/review?invite=1#invite=${invitation.token}`,
   );
-  assert.match(invitation.destinationUrl, /\/human\?tab=discover&invite=1#invite=rlri_/u);
+  assert.match(invitation.destinationUrl, /\/human\/review\?invite=1#invite=rlri_/u);
   const stored = await dbClient.execute({
     sql: `SELECT token_hash,token_prefix,intended_account_address
           FROM tokenless_workspace_reviewer_invitations WHERE invitation_id=?`,

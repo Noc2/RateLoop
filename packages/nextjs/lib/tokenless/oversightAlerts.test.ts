@@ -249,7 +249,7 @@ test("gate and review-failure events alert owners and admins in-app, once, respe
   );
   assert.ok(ownerAlerts.every(row => row.preference_key === "oversightAlerts"));
   assert.ok(
-    ownerAlerts.every(row => row.href === `/agents?tab=inbox&workspace=${encodeURIComponent(setup.workspaceId)}`),
+    ownerAlerts.every(row => row.href === `/agents/approvals?workspace=${encodeURIComponent(setup.workspaceId)}`),
   );
   // Plain members never receive oversight alerts.
   assert.equal((await notificationsFor(setup.member.principalId)).length, 0);
