@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useReducer, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { WorkspaceSettingsClient } from "../WorkspaceSettingsClient";
 import { WorkspaceStopBanner } from "../WorkspaceStopControl";
@@ -92,16 +91,6 @@ export function AgentWorkspacePanels({
       >
         {resolvedTab === "overview" ? (
           <>
-            {canManage ? (
-              <div className="flex justify-end">
-                <Link
-                  className="btn rateloop-secondary-action"
-                  href={`/agents?tab=connect&workspace=${encodeURIComponent(workspaceId)}`}
-                >
-                  {hasConnectedAgent ? "Connect another agent" : "Connect an agent"}
-                </Link>
-              </div>
-            ) : null}
             {canManage ? <ScheduledWorkerHealthPanel workspaceId={workspaceId} /> : null}
             <WorkspaceSettingsClient initialWorkspaceId={workspaceId} />
           </>

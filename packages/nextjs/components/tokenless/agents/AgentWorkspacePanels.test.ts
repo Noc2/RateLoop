@@ -196,8 +196,7 @@ test("the overview starts with workspace settings instead of an evidence summary
   assert.doesNotMatch(panelsSource, /WorkspaceEvidenceSummaryStrip/);
   assert.doesNotMatch(panelsSource, /Last decision packet|Most conservative coverage stage|Latest packet anchor/);
   assert.match(panelsSource, /<WorkspaceSettingsClient initialWorkspaceId=\{workspaceId\} \/>/);
-  assert.match(panelsSource, /Connect another agent/);
-  assert.match(panelsSource, /Connect an agent/);
+  assert.doesNotMatch(panelsSource, /Connect another agent|Connect an agent/);
   assert.match(panelsSource, /\["overview", "connect"\]/);
 });
 
