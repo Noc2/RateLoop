@@ -22,6 +22,7 @@ import {
   normalizedX402Authorization,
   prepareProductAsk,
   recordPrepaidLedgerEntry,
+  releasePreparedProductAsk,
   revokeAgentPublishingPolicy,
 } from "~~/lib/tokenless/productCore";
 import { configuredHumanReviewLaneForSelection } from "~~/lib/tokenless/reviewCapabilities";
@@ -30,6 +31,7 @@ import {
   createInternalPrivateReviewQuote,
   createTokenlessAsk,
   createTokenlessQuote,
+  preflightTokenlessAskIdempotency,
 } from "~~/lib/tokenless/server";
 
 const ADDRESS_A: `0x${string}` = "0x1111111111111111111111111111111111111111";
@@ -255,6 +257,43 @@ test("Free workspaces cannot prepare production paid-panel asks", async () => {
   );
   assert.equal(Number(mutations.rows[0]?.questions), 0);
   assert.equal(Number(mutations.rows[0]?.reservations), 0);
+});
+
+test("one signed-in account cannot be charged twice by resubmitting a key against a second workspace", async () => {
+  const first = await createWorkspace({ name: "Funded one", ownerAddress: ADDRESS_A });
+  const second = await createWorkspace({ name: "Funded two", ownerAddress: ADDRESS_A });
+  await activateEarlyAccess(first.workspaceId);
+  await activateEarlyAccess(second.workspaceId);
+  await recordPrepaidLedgerEntry({ workspaceId: first.workspaceId, amountAtomic: "100000000", source: "invoice" });
+  await recordPrepaidLedgerEntry({ workspaceId: second.workspaceId, amountAtomic: "100000000", source: "invoice" });
+  const principal = { kind: "session" as const, accountAddress: ADDRESS_A };
+  const { request } = await quoteAndRequest(first.workspaceId, "session:double:12345678");
+
+  const prepared = await prepareProductAsk({ principal, request });
+  await preflightTokenlessAskIdempotency(request, request.idempotencyKey, prepared.idempotencyScope);
+  const ask = await createTokenlessAsk(
+    request,
+    request.idempotencyKey,
+    "https://tokenless.example",
+    prepared.idempotencyScope,
+  );
+  await attachProductAsk(prepared, ask);
+
+  const resubmitted = { ...request, payment: { mode: "prepaid" as const, workspaceId: second.workspaceId } };
+  const repreparedAsk = await prepareProductAsk({ principal, request: resubmitted });
+  await assert.rejects(
+    () => preflightTokenlessAskIdempotency(resubmitted, resubmitted.idempotencyKey, repreparedAsk.idempotencyScope),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "idempotency_conflict",
+  );
+  assert.equal(repreparedAsk.idempotencyScope, prepared.idempotencyScope);
+  await releasePreparedProductAsk(repreparedAsk);
+
+  const rows = await dbClient.execute(
+    `SELECT (SELECT COUNT(*) FROM tokenless_agent_asks) AS asks,
+            (SELECT COUNT(*) FROM tokenless_prepaid_reservations WHERE status = 'reserved') AS reservations`,
+  );
+  assert.equal(Number(rows.rows[0]?.asks), 1);
+  assert.equal(Number(rows.rows[0]?.reservations), 1);
 });
 
 test("settled prepaid funds reserve idempotently and conflicting economics fail", async () => {

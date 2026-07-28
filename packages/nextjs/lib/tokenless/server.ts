@@ -24,8 +24,18 @@ import { assertDataIngressPolicy } from "~~/lib/privacy/dataPolicy";
 const QUOTE_TTL_MS = 15 * 60_000;
 const DEFAULT_WAIT_TIMEOUT_MS = 30_000;
 const DEFAULT_WAIT_POLL_INTERVAL_MS = 250;
+/** Successive polls back off to this ceiling, so a long wait costs a handful of reads, not hundreds. */
+const MAX_WAIT_POLL_INTERVAL_MS = 4_000;
 const MAX_WAIT_TIMEOUT_MS = 60_000;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,160}$/;
+/**
+ * A browser-handoff idempotency key is derived by the server from the unguessable handoff
+ * capability, so it identifies exactly one handoff across every tenant. Those keys therefore live
+ * in one fixed scope: the same handoff can never be submitted twice by moving it to another
+ * workspace, and a bearer-capability lookup by key alone can only ever match a single ask.
+ */
+export const TOKENLESS_HANDOFF_IDEMPOTENCY_SCOPE = "handoff:mcp";
+export const TOKENLESS_HANDOFF_IDEMPOTENCY_KEY_PATTERN = /^mcp:[A-Za-z0-9_-]{43}$/;
 const ATOMIC_AMOUNT_PATTERN = /^(0|[1-9]\d*)$/;
 const EVM_ADDRESS_PATTERN = /^0x[0-9a-fA-F]{40}$/;
 const BYTES32_PATTERN = /^0x[0-9a-fA-F]{64}$/;
@@ -381,13 +391,26 @@ async function readAskByOperation(operationKey: string): Promise<StoredAsk | nul
   return row ?? null;
 }
 
+export function isTokenlessHandoffIdempotencyKey(idempotencyKey: string) {
+  return TOKENLESS_HANDOFF_IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey);
+}
+
+/**
+ * Handoff keys ignore the caller-supplied scope entirely. Every other key stays scoped to the
+ * credential that issued it, because those keys are chosen by the caller and would otherwise
+ * collide across tenants.
+ */
+function askIdempotencyScope(idempotencyScope: string, idempotencyKey: string) {
+  return isTokenlessHandoffIdempotencyKey(idempotencyKey) ? TOKENLESS_HANDOFF_IDEMPOTENCY_SCOPE : idempotencyScope;
+}
+
 async function readAskByIdempotency(idempotencyScope: string, idempotencyKey: string): Promise<StoredAsk | null> {
   const [row] = await db
     .select()
     .from(tokenlessAgentAsks)
     .where(
       and(
-        eq(tokenlessAgentAsks.idempotencyScope, idempotencyScope),
+        eq(tokenlessAgentAsks.idempotencyScope, askIdempotencyScope(idempotencyScope, idempotencyKey)),
         eq(tokenlessAgentAsks.idempotencyKey, idempotencyKey),
       ),
     )
@@ -617,7 +640,7 @@ export async function createTokenlessAsk(
   const operationKey = `op_${randomUUID().replaceAll("-", "")}`;
   const baseRow = {
     operationKey,
-    idempotencyScope,
+    idempotencyScope: askIdempotencyScope(idempotencyScope, request.idempotencyKey),
     idempotencyKey: request.idempotencyKey,
     requestHash,
     quoteId: request.quoteId,
@@ -670,6 +693,7 @@ export async function waitForTokenlessAsk(
   }
   const knownUpdatedAt = cursor ? Number(cursor) : null;
   const deadline = Date.now() + timeoutMs;
+  let pollDelayMs = pollIntervalMs;
   let ask: StoredAsk;
 
   while (true) {
@@ -691,6 +715,9 @@ export async function waitForTokenlessAsk(
     if (Date.now() >= operationWaitExpiresAt(ask.updatedAt)) {
       throw new TokenlessServiceError("The authenticated result wait window expired.", 410, "operation_wait_expired");
     }
+    // A caller holding a cursor is waiting for the ask to move past it. A caller without one is
+    // waiting for the result itself, which the terminal branches above return, so it keeps waiting:
+    // returning the current state immediately would turn a long poll into a spin loop.
     if (knownUpdatedAt !== null && ask.updatedAt.getTime() > knownUpdatedAt) break;
 
     const remainingMs = Math.min(deadline - Date.now(), operationWaitExpiresAt(ask.updatedAt) - Date.now());
@@ -710,11 +737,12 @@ export async function waitForTokenlessAsk(
           cleanup();
           resolve();
         },
-        Math.min(pollIntervalMs, remainingMs),
+        Math.min(pollDelayMs, remainingMs),
       );
       options.signal?.addEventListener("abort", abort, { once: true });
       if (options.signal?.aborted) abort();
     });
+    pollDelayMs = Math.min(pollDelayMs * 2, MAX_WAIT_POLL_INTERVAL_MS);
   }
 
   if (Date.now() >= operationWaitExpiresAt(ask.updatedAt)) {
@@ -731,18 +759,10 @@ export async function waitForTokenlessAsk(
 }
 
 export async function getTokenlessAskByIdempotencyKey(idempotencyKey: string) {
-  if (!IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey)) {
-    throw new TokenlessServiceError("A valid idempotencyKey is required.", 400, "invalid_idempotency_key");
+  if (!isTokenlessHandoffIdempotencyKey(idempotencyKey)) {
+    throw new TokenlessServiceError("A valid handoff idempotencyKey is required.", 400, "invalid_idempotency_key");
   }
-  const asks = await db
-    .select()
-    .from(tokenlessAgentAsks)
-    .where(eq(tokenlessAgentAsks.idempotencyKey, idempotencyKey))
-    .limit(2);
-  if (asks.length > 1) {
-    throw new TokenlessServiceError("Ask lookup is ambiguous.", 409, "ambiguous_idempotency_key");
-  }
-  const [ask] = asks;
+  const ask = await readAskByIdempotency(TOKENLESS_HANDOFF_IDEMPOTENCY_SCOPE, idempotencyKey);
   if (!ask) return null;
   return {
     operationKey: ask.operationKey,

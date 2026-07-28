@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
+import { deriveMcpHandoffIdempotencyKey } from "~~/lib/mcp/handoff";
 import { freezeAdmissionPolicy } from "~~/lib/tokenless/admissionPolicy";
 import {
   TokenlessServiceError,
@@ -15,9 +16,28 @@ import {
   waitForTokenlessAsk,
 } from "~~/lib/tokenless/server";
 
+let databaseResources: ReturnType<typeof createMemoryDatabaseResources>;
+
 beforeEach(() => {
-  __setDatabaseResourcesForTests(createMemoryDatabaseResources());
+  databaseResources = createMemoryDatabaseResources();
+  __setDatabaseResourcesForTests(databaseResources);
 });
+
+/** Counts the ask reads a wait performs, so polling cost is asserted instead of assumed. */
+function countDatabaseReads() {
+  const counter = { count: 0 };
+  __setDatabaseResourcesForTests({
+    ...databaseResources,
+    database: new Proxy(databaseResources.database, {
+      get(target, property) {
+        if (property === "select") counter.count += 1;
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    }),
+  });
+  return counter;
+}
 
 afterEach(() => {
   __setDatabaseResourcesForTests(null);
@@ -320,6 +340,35 @@ test("pending operation waits fail closed after their continuation horizon", asy
   );
 });
 
+test("a held wait backs off instead of hammering the database", async () => {
+  const quote = await createTokenlessQuote(quoteRequest());
+  const idempotencyKey = "test:ask:wait-cost";
+  const ask = await createTokenlessAsk(
+    { idempotencyKey, payment: { mode: "prepaid", workspaceId: "wait-cost" }, quoteId: quote.quoteId },
+    idempotencyKey,
+    "https://tokenless.example",
+  );
+
+  // A cursorless wait deliberately blocks for the result, so a short timeout is used to obtain the
+  // cursor the held wait below is measured with.
+  const first = await waitForTokenlessAsk(ask.operationKey, "https://tokenless.example", {
+    pollIntervalMs: 25,
+    timeoutMs: 200,
+  });
+  assert.equal(first.status, "pending");
+  assert.ok(first.continuation?.cursor);
+
+  const reads = countDatabaseReads();
+  const held = await waitForTokenlessAsk(ask.operationKey, "https://tokenless.example", {
+    cursor: first.continuation!.cursor,
+    pollIntervalMs: 25,
+    timeoutMs: 2_000,
+  });
+  assert.equal(held.status, "pending");
+  assert.ok(reads.count >= 2, `an unchanged ask must still be polled, saw ${reads.count} reads`);
+  assert.ok(reads.count <= 15, `a two-second wait must not cost ${reads.count} database reads`);
+});
+
 test("replaying a moderation-rejected ask fails closed instead of returning an unparseable status", async () => {
   const quote = await createTokenlessQuote(quoteRequest());
   const request = {
@@ -372,7 +421,47 @@ test("idempotency conflicts fail closed within a caller scope but cannot be prec
   assert.notEqual(second.operationKey, first.operationKey);
   await assert.rejects(
     () => getTokenlessAskByIdempotencyKey(idempotencyKey),
-    (error: unknown) => error instanceof TokenlessServiceError && error.code === "ambiguous_idempotency_key",
+    (error: unknown) =>
+      error instanceof TokenlessServiceError && error.code === "invalid_idempotency_key" && error.status === 400,
+  );
+});
+
+test("a browser handoff is submitted once, whichever workspace or account the approver chooses", async () => {
+  const quote = await createTokenlessQuote(quoteRequest());
+  const idempotencyKey = deriveMcpHandoffIdempotencyKey({
+    handoffId: `rhl_${"a".repeat(32)}`,
+    handoffToken: `rht_${"b".repeat(43)}_${Math.floor(Date.now() / 1_000 + 3_600).toString(36)}`,
+  });
+  const first = await createTokenlessAsk(
+    { idempotencyKey, payment: { mode: "prepaid", workspaceId: "one" }, quoteId: quote.quoteId },
+    idempotencyKey,
+    "https://tokenless.example",
+    "account:0x1111111111111111111111111111111111111111",
+  );
+
+  await assert.rejects(
+    () =>
+      createTokenlessAsk(
+        { idempotencyKey, payment: { mode: "prepaid", workspaceId: "two" }, quoteId: quote.quoteId },
+        idempotencyKey,
+        "https://tokenless.example",
+        "account:0x2222222222222222222222222222222222222222",
+      ),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "idempotency_conflict",
+  );
+
+  const replay = await createTokenlessAsk(
+    { idempotencyKey, payment: { mode: "prepaid", workspaceId: "one" }, quoteId: quote.quoteId },
+    idempotencyKey,
+    "https://tokenless.example",
+    "account:0x3333333333333333333333333333333333333333",
+  );
+  assert.equal(replay.operationKey, first.operationKey);
+  assert.equal((await getTokenlessAskByIdempotencyKey(idempotencyKey))?.operationKey, first.operationKey);
+  const stored = await dbClient.execute("SELECT idempotency_scope FROM tokenless_agent_asks");
+  assert.deepEqual(
+    stored.rows.map(row => row.idempotency_scope),
+    ["handoff:mcp"],
   );
 });
 

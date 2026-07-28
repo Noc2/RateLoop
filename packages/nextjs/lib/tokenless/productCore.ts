@@ -1519,10 +1519,14 @@ export async function prepareProductAsk(input: {
       amountAtomic: amountAtomic.toString(),
       createdPayment: payment.created,
       idempotencyKey: input.request.idempotencyKey,
+      // An API key belongs to exactly one workspace, so its scope is fixed by the credential. A
+      // session principal can belong to several, and `payment.workspaceId` picks between them, so
+      // the workspace must stay out of the scope: otherwise the same key replayed against a second
+      // funded workspace lands in a second scope and is charged again instead of conflicting.
       idempotencyScope:
         input.principal.kind === "api_key"
           ? `workspace:${workspaceId}:api_key:${input.principal.apiKeyId}`
-          : `workspace:${workspaceId}:account:${input.principal.accountAddress.toLowerCase()}`,
+          : `account:${input.principal.accountAddress.toLowerCase()}`,
       ownerAccountAddress: input.principal.kind === "session" ? input.principal.accountAddress.toLowerCase() : null,
       apiKeyId: input.principal.kind === "api_key" ? input.principal.apiKeyId : null,
       paymentMode,
