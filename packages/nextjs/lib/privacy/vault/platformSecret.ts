@@ -192,6 +192,7 @@ export function createPlatformSecretKeyWrappingProvider(
   }
   return {
     keyResource: keyResource(configuration.activeVersion),
+    keyResourceForVersion: keyResource,
     keyVersion: configuration.activeVersion,
     provider: PROVIDER,
     async wrap(dataKey, aad) {
@@ -222,9 +223,8 @@ export function createPlatformSecretKeyWrappingProvider(
       if (!rootKey) throw unavailable();
       const context = parseArtifactAad(aad);
       if (context.keyVersion !== wrapped.keyVersion) throw unavailable();
-      if (wrapped.provider === "local-test" && wrapped.keyResource === `local://${wrapped.keyVersion}`) {
-        return decrypt(wrapped, rootKey, aad);
-      }
+      // Every envelope this provider opens is unwrapped with the per-tenant derived key. The
+      // stored provider name is untrusted input and must never select a weaker key derivation.
       if (wrapped.provider !== PROVIDER || wrapped.keyResource !== keyResource(wrapped.keyVersion)) {
         throw unavailable();
       }

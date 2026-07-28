@@ -64,10 +64,10 @@ test("platform-secret wrapping derives tenant keys and rotates without re-encryp
   );
 });
 
-test("platform-secret keyring decrypts retained legacy local-test envelopes", async () => {
+test("platform-secret unwrapping always derives the tenant key, whatever the record claims", async () => {
   const root = Buffer.alloc(32, 7);
-  const legacy = createLocalKeyWrappingProvider({ key: root, keyVersion: "artifact-v1" });
-  const wrapped = await legacy.wrap(Buffer.alloc(32, 8), AAD_V1);
+  const rawRoot = createLocalKeyWrappingProvider({ key: root, keyVersion: "artifact-v1" });
+  const wrappedWithRawRoot = await rawRoot.wrap(Buffer.alloc(32, 8), AAD_V1);
   const platform = createPlatformSecretKeyWrappingProvider({
     activeVersion: "artifact-v2",
     keys: new Map([
@@ -75,7 +75,22 @@ test("platform-secret keyring decrypts retained legacy local-test envelopes", as
       ["artifact-v2", Buffer.alloc(32, 9)],
     ]),
   });
-  assert.deepEqual(await platform.unwrap(wrapped, AAD_V1), Buffer.alloc(32, 8));
+  await assert.rejects(
+    () => platform.unwrap(wrappedWithRawRoot, AAD_V1),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "vault_key_unavailable",
+  );
+  await assert.rejects(
+    () =>
+      platform.unwrap(
+        {
+          ...wrappedWithRawRoot,
+          keyResource: "platform-secret://artifact-wrapping/artifact-v1",
+          provider: "platform-secret",
+        },
+        AAD_V1,
+      ),
+    (error: unknown) => error instanceof TokenlessServiceError && error.code === "vault_key_unavailable",
+  );
 });
 
 test("legacy platform secret loads as a one-version transitional keyring", () => {

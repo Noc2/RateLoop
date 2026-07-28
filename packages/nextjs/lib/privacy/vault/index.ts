@@ -31,6 +31,12 @@ export interface KeyWrappingProvider {
   readonly keyResource: string;
   readonly keyVersion: string;
   readonly provider: string;
+  /**
+   * Names the key resource of any retained version of this provider's key family, so a record
+   * that stored only its key version can still be addressed after the active version rotates.
+   * Providers that pin exactly one version omit it and are addressed by `keyResource`.
+   */
+  keyResourceForVersion?(keyVersion: string): string;
   wrap(dataKey: Uint8Array, aad: Uint8Array): Promise<WrappedDataKey>;
   unwrap(wrapped: WrappedDataKey, aad: Uint8Array): Promise<Uint8Array>;
 }

@@ -181,9 +181,14 @@ function keyDomain(provider: Pick<KeyWrappingProvider | WrappedDataKey, "keyReso
   });
 }
 
-function parseKeyDomain(value: string | null, fallback: KeyWrappingProvider) {
+function parseKeyDomain(value: string | null, fallback: KeyWrappingProvider, keyVersion: string) {
   if (!value || value === ARTIFACT_KEY_DOMAIN) {
-    return { keyResource: fallback.keyResource, provider: fallback.provider };
+    // A legacy row records only its key version, so the resource must be resolved from that
+    // version. Naming the active version instead would strand every legacy row on rotation.
+    return {
+      keyResource: fallback.keyResourceForVersion?.(keyVersion) ?? fallback.keyResource,
+      provider: fallback.provider,
+    };
   }
   try {
     const parsed = JSON.parse(value) as Record<string, unknown>;
@@ -774,7 +779,7 @@ export async function readEncryptedArtifact(input: {
   const runtime = getRuntime();
   const keyVersion = rowString(row, "key_version")!;
   const aad = `${ARTIFACT_KEY_DOMAIN}:${input.workspaceId}:${input.projectId}:${input.artifactId}`;
-  const storedKeyDomain = parseKeyDomain(rowString(row, "key_domain"), runtime.keyProvider!);
+  const storedKeyDomain = parseKeyDomain(rowString(row, "key_domain"), runtime.keyProvider!, keyVersion);
   const dataKey = await runtime.keyProvider!.unwrap(
     {
       authTag: rowString(row, "wrap_auth_tag") || null,
@@ -1276,27 +1281,6 @@ export async function processArtifactDeletionByObjectId(objectId: string, now = 
 
   if (!(await finalizeArtifactDeletion(objectId, now, runtime))) return false;
   return completeArtifactDeletionAudit(objectId, now, runtime);
-}
-
-export async function processDueArtifactDeletions(now = new Date(), limit = 100) {
-  const boundedLimit = Math.min(Math.max(Math.trunc(limit), 1), 100);
-  const result = await dbClient.execute({
-    sql: `SELECT candidate.object_id FROM (
-            SELECT object_id, created_at AS sort_at FROM tokenless_assurance_artifact_objects
-            WHERE status = 'active' AND delete_after <= ?
-            UNION
-            SELECT object_id, created_at AS sort_at FROM tokenless_artifact_deletion_jobs
-            WHERE state <> 'completed' AND next_attempt_at <= ?
-          ) candidate
-          GROUP BY candidate.object_id
-          ORDER BY MIN(candidate.sort_at) ASC LIMIT ?`,
-    args: [now, now, boundedLimit],
-  });
-  let deleted = 0;
-  for (const value of result.rows) {
-    if (await processArtifactDeletionByObjectId(rowString(value as QueryRow, "object_id")!, now)) deleted += 1;
-  }
-  return { deleted };
 }
 
 export async function listArtifactAccessLog(input: { accountAddress: string; projectId: string; workspaceId: string }) {

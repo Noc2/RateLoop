@@ -5,6 +5,7 @@ import { __setDatabaseResourcesForTests, dbClient } from "~~/lib/db";
 import { createMemoryDatabaseResources } from "~~/lib/db/testing/testMemory";
 import { appendAuditEvent } from "~~/lib/privacy/audit";
 import { createLegalHold } from "~~/lib/privacy/lifecycle";
+import { createPlatformSecretKeyWrappingProvider } from "~~/lib/privacy/vault/platformSecret";
 import {
   type PrivateArtifactStore,
   __artifactPrivacyTestUtils,
@@ -12,7 +13,6 @@ import {
   issueArtifactLease,
   listArtifactAccessLog,
   processArtifactDeletionByObjectId,
-  processDueArtifactDeletions,
   readEncryptedArtifact,
   registerArtifactManagedKeyProvider,
   requestProjectDeletion,
@@ -20,6 +20,7 @@ import {
 } from "~~/lib/tokenless/artifactPrivacy";
 import { createWorkspace } from "~~/lib/tokenless/productCore";
 import { createProjectOwnerAssignment } from "~~/lib/tokenless/projectAccess";
+import { seedTokenlessScheduledWork } from "~~/lib/tokenless/scheduledMaintenance";
 import { TokenlessServiceError } from "~~/lib/tokenless/server";
 
 const OWNER = "0x1111111111111111111111111111111111111111";
@@ -213,6 +214,50 @@ test("opaque Better Auth principals retain assigned artifact access without a wa
   assert.ok(logs.every(row => String(row.actor_kind) === "principal"));
 });
 
+test("a legacy key-domain artifact still decrypts after the wrapping key rotates", async () => {
+  const commitmentKey = Buffer.alloc(32, 23);
+  const rootV1 = Buffer.alloc(32, 21);
+  const rootV2 = Buffer.alloc(32, 22);
+  const beforeRotation = createPlatformSecretKeyWrappingProvider({
+    activeVersion: "artifact-v1",
+    keys: new Map([["artifact-v1", rootV1]]),
+  });
+  __setArtifactPrivacyRuntimeForTests({
+    commitmentKey,
+    keyProvider: beforeRotation,
+    keyVersion: beforeRotation.keyVersion,
+    store,
+  });
+  const project = await seedProject(OWNER, "Legacy key domain");
+  const artifact = await upload(project, "legacy key domain payload");
+  // Rows written before the key domain became JSON record only the plain domain name.
+  await dbClient.execute({
+    sql: "UPDATE tokenless_assurance_artifact_objects SET key_domain = 'customer_artifact' WHERE artifact_id = ?",
+    args: [artifact.artifactId],
+  });
+
+  const afterRotation = createPlatformSecretKeyWrappingProvider({
+    activeVersion: "artifact-v2",
+    keys: new Map([
+      ["artifact-v1", rootV1],
+      ["artifact-v2", rootV2],
+    ]),
+  });
+  __setArtifactPrivacyRuntimeForTests({
+    commitmentKey,
+    keyProvider: afterRotation,
+    keyVersion: afterRotation.keyVersion,
+    store,
+  });
+  const read = await readEncryptedArtifact({
+    accountAddress: OWNER,
+    artifactId: artifact.artifactId,
+    projectId: project.projectId,
+    workspaceId: project.workspaceId,
+  });
+  assert.equal(new TextDecoder().decode(read.bytes), "legacy key domain payload");
+});
+
 test("cross-tenant reads fail closed while a short account-bound lease grants minimum access", async () => {
   const project = await seedProject();
   const artifact = await upload(project, "assigned case only");
@@ -282,7 +327,7 @@ test("retention deletion removes ciphertext and tombstones the database referenc
     workspaceId: project.workspaceId,
     now,
   });
-  assert.deepEqual(await processDueArtifactDeletions(now), { deleted: 1 });
+  assert.equal(await processArtifactDeletionByObjectId(await objectIdForArtifact(artifact.artifactId), now), true);
   assert.equal(store.objects.size, 0);
   const rows = await dbClient.execute({
     sql: "SELECT storage_ref FROM tokenless_assurance_artifacts WHERE artifact_id = ?",
@@ -334,7 +379,7 @@ test("a provider delete followed by a metadata-finalize rollback resumes from it
   );
 
   configureRuntime();
-  assert.deepEqual(await processDueArtifactDeletions(new Date(now.getTime() + 1_000)), { deleted: 1 });
+  assert.equal(await processArtifactDeletionByObjectId(objectId, new Date(now.getTime() + 1_000)), true);
   assert.equal(store.deleteCalls, 1);
   assert.equal(String((await artifactDeletionJob(objectId))?.state), "completed");
   assert.equal(await artifactDeletionAuditCount(project.workspaceId), 1);
@@ -391,7 +436,7 @@ test("a transient canonical-audit failure leaves finalized deletion work retryab
   assert.equal(await artifactDeletionAuditCount(project.workspaceId), 0);
 
   configureRuntime();
-  assert.deepEqual(await processDueArtifactDeletions(new Date(now.getTime() + 1_000)), { deleted: 1 });
+  assert.equal(await processArtifactDeletionByObjectId(objectId, new Date(now.getTime() + 1_000)), true);
   assert.equal(store.deleteCalls, 1);
   assert.equal(String((await artifactDeletionJob(objectId))?.state), "completed");
   assert.equal(await artifactDeletionAuditCount(project.workspaceId), 1);
@@ -465,6 +510,41 @@ test("retry after audit append reuses the canonical event instead of duplicating
   assert.equal(store.deleteCalls, 1);
   assert.equal(String((await artifactDeletionJob(objectId))?.state), "completed");
   assert.equal(await artifactDeletionAuditCount(project.workspaceId), 1);
+});
+
+test("a finalized deletion job whose object row is already tombstoned stays on the maintenance schedule", async () => {
+  const project = await seedProject();
+  const artifact = await upload(project, "resumable finalized deletion");
+  const objectId = await objectIdForArtifact(artifact.artifactId);
+  const now = new Date("2026-07-13T14:00:00.000Z");
+  await requestProjectDeletion({
+    accountAddress: OWNER,
+    projectId: project.projectId,
+    reason: "customer_request",
+    workspaceId: project.workspaceId,
+    now,
+  });
+  configureRuntime({
+    deletionHook(phase) {
+      if (phase === "after_audit_append") throw new Error("audit checkpoint commit lost");
+    },
+  });
+  await assert.rejects(() => processArtifactDeletionByObjectId(objectId, now), /audit checkpoint commit lost/);
+  configureRuntime();
+
+  const object = await dbClient.execute({
+    sql: "SELECT status FROM tokenless_assurance_artifact_objects WHERE object_id = ?",
+    args: [objectId],
+  });
+  assert.notEqual(String(object.rows[0]?.status), "active");
+  assert.equal(String((await artifactDeletionJob(objectId))?.state), "finalized");
+
+  const seeded = await seedTokenlessScheduledWork(new Date(now.getTime() + 1_000));
+  assert.equal(seeded.deletions, 1);
+  const items = await dbClient.execute({
+    sql: `SELECT kind, subject_key, state FROM tokenless_scheduled_work_items WHERE kind = 'delete_artifact'`,
+  });
+  assert.deepEqual(items.rows, [{ kind: "delete_artifact", state: "pending", subject_key: objectId }]);
 });
 
 test("a hold placed after a failed provider attempt blocks the retry before ciphertext deletion", async () => {
