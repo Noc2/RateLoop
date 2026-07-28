@@ -216,3 +216,195 @@ test("copying the visible message clears the clipboard-failure banner it replace
     restoreDom();
   }
 });
+
+test("all five consequential connection actions require confirmation before sending their original mutations", async () => {
+  const restoreDom = installTestDom();
+  const { act, cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
+  const { RateLoopNotificationProvider } = await import("~~/components/tokenless/RateLoopNotificationProvider");
+  const { AgentConnectionPanel } = await import("./AgentConnectionPanel");
+  const previousFetch = globalThis.fetch;
+  const mutations: Array<{ method: string; url: string; body: string | null }> = [];
+  const future = new Date(Date.now() + 3_600_000).toISOString();
+  const intent = {
+    intentId: "intent-1",
+    status: "issued",
+    createdAt: new Date().toISOString(),
+    hardExpiresAt: future,
+    workspaceMove: {
+      transferId: "move-1",
+      status: "owner_approval_required",
+      sourceConfirmedAt: new Date().toISOString(),
+      targetApprovedAt: null,
+      expiresAt: future,
+    },
+  };
+  const pairing = {
+    pairingId: "pairing-1",
+    status: "open",
+    createdAt: new Date().toISOString(),
+    expiresAt: future,
+  };
+  const integration = {
+    integrationId: "integration-1",
+    apiKeyId: "api-key-1",
+    agentId: "agent-1",
+    agentDisplayName: "Legacy Agent",
+    status: "active",
+    connectionStatus: "connected",
+    credentialExpiresAt: future,
+  };
+
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    const method = init?.method ?? "GET";
+    if (method === "GET") {
+      if (url.endsWith("/agent-connections")) return Response.json({ intents: [intent] });
+      if (url.endsWith("/agent-pairings")) return Response.json({ pairings: [pairing] });
+      if (url.endsWith("/agent-integrations")) return Response.json({ integrations: [integration] });
+      if (url.endsWith("/agent-publishing-policies")) return Response.json({ policies: [] });
+    }
+
+    mutations.push({ method, url, body: typeof init?.body === "string" ? init.body : null });
+    if (url.endsWith("/agent-integrations/integration-1/rotate")) {
+      return Response.json({ secret: "replacement-secret", mcpUrl: "https://rateloop.test/mcp" });
+    }
+    return Response.json({ ok: true });
+  };
+
+  try {
+    render(
+      <RateLoopNotificationProvider>
+        <AgentConnectionPanel workspaceId="workspace-1" />
+      </RateLoopNotificationProvider>,
+    );
+    const screen = within(document.body);
+    await screen.findByRole("heading", { name: "Approve reconnecting this agent" });
+    fireEvent.click(screen.getByRole("button", { name: "Manage connected agents" }));
+
+    const confirmations = [
+      {
+        opener: "Approve reconnect",
+        title: "Reconnect this agent here?",
+        description:
+          "Its current RateLoop workspace connection will stop, and this agent's previous credential will be replaced.",
+      },
+      {
+        opener: "Cancel attempt",
+        title: "Cancel this connection attempt?",
+        description: "Its original message will stop working.",
+      },
+      {
+        opener: "Cancel legacy request",
+        title: "Reject this agent registration request?",
+        description: "The pairing secret cannot be reused.",
+      },
+      {
+        opener: "Rotate legacy credential",
+        title: "Rotate the credential for Legacy Agent?",
+        description: "The previous credential will no longer be valid. The replacement is shown once.",
+      },
+      {
+        opener: "Disconnect",
+        title: "Disconnect Legacy Agent from RateLoop?",
+        description: "Its current RateLoop access will stop.",
+      },
+    ] as const;
+
+    for (const confirmation of confirmations) {
+      const opener = screen.getByRole("button", { name: confirmation.opener });
+      const mutationCount = mutations.length;
+      opener.focus();
+      fireEvent.click(opener);
+      const dialog = screen.getByRole("alertdialog");
+      assert.ok(within(dialog).getByRole("heading", { name: confirmation.title }));
+      assert.ok(within(dialog).getByText(confirmation.description));
+      assert.equal(mutations.length, mutationCount, `${confirmation.opener} must not mutate when its dialog opens`);
+      assert.equal(document.activeElement, within(dialog).getByRole("button", { name: "Cancel" }));
+
+      fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+      await waitFor(() => assert.equal(screen.queryByRole("alertdialog"), null));
+      assert.equal(mutations.length, mutationCount, `${confirmation.opener} must not mutate when cancelled`);
+      assert.equal(document.activeElement, opener);
+    }
+
+    const confirmedActions = [
+      {
+        opener: "Approve reconnect",
+        confirm: "Approve reconnect",
+        status: "Reconnect approved. Return to the same agent task; it can now finish automatically.",
+      },
+      {
+        opener: "Cancel attempt",
+        confirm: "Cancel attempt",
+        status: "Connection attempt cancelled. You can create a new message when ready.",
+      },
+      {
+        opener: "Cancel legacy request",
+        confirm: "Reject request",
+        status: "Agent registration rejected.",
+      },
+      {
+        opener: "Rotate legacy credential",
+        confirm: "Rotate credential",
+        status: "Credential rotated. The previous credential is no longer valid.",
+      },
+      {
+        opener: "Disconnect",
+        confirm: "Disconnect",
+        status: "Agent disconnected.",
+      },
+    ] as const;
+
+    for (const action of confirmedActions) {
+      const mutationCount = mutations.length;
+      const opener = screen.getByRole("button", { name: action.opener });
+      opener.focus();
+      fireEvent.click(opener);
+      const dialog = screen.getByRole("alertdialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: action.confirm }));
+      await waitFor(() => assert.equal(mutations.length, mutationCount + 1));
+      await waitFor(() => assert.equal(screen.queryByRole("alertdialog"), null));
+      const feedback = await screen.findByText(action.status);
+      await waitFor(() => assert.equal(document.activeElement, feedback));
+    }
+
+    assert.deepEqual(
+      mutations.map(request => ({
+        method: request.method,
+        path: new URL(request.url, "https://rateloop.test").pathname,
+        body: request.body,
+      })),
+      [
+        {
+          method: "POST",
+          path: "/api/account/workspaces/workspace-1/agent-connection-moves/move-1/approve",
+          body: JSON.stringify({ decision: "approve" }),
+        },
+        {
+          method: "DELETE",
+          path: "/api/account/workspaces/workspace-1/agent-connections/intent-1",
+          body: null,
+        },
+        {
+          method: "POST",
+          path: "/api/account/workspaces/workspace-1/agent-pairings/pairing-1/reject",
+          body: null,
+        },
+        {
+          method: "POST",
+          path: "/api/account/workspaces/workspace-1/agent-integrations/integration-1/rotate",
+          body: null,
+        },
+        {
+          method: "DELETE",
+          path: "/api/account/workspaces/workspace-1/agent-integrations/integration-1",
+          body: null,
+        },
+      ],
+    );
+  } finally {
+    await act(async () => cleanup());
+    globalThis.fetch = previousFetch;
+    restoreDom();
+  }
+});

@@ -22,6 +22,7 @@ import { AsyncSection } from "~~/components/tokenless/ui/AsyncSection";
 import { Badge } from "~~/components/tokenless/ui/Badge";
 import { Button } from "~~/components/tokenless/ui/Button";
 import { Card } from "~~/components/tokenless/ui/Card";
+import { ConfirmDialog } from "~~/components/tokenless/ui/ConfirmDialog";
 import { type TokenlessHostId } from "~~/lib/tokenless/hostCapabilities";
 import { readJson } from "~~/lib/tokenless/http";
 
@@ -129,6 +130,52 @@ type ApprovalPayload = {
   publishingPolicyId: string;
   allowedWorkflowKeys: string[];
 };
+
+type PendingConnectionConfirmation =
+  | { kind: "cancel-intent"; intentId: string }
+  | { kind: "approve-workspace-move"; intent: AgentConnectionIntent }
+  | { kind: "reject-pairing"; pairingId: string }
+  | { kind: "rotate-integration"; integration: AgentIntegration }
+  | { kind: "revoke-integration"; integration: AgentIntegration };
+
+function confirmationCopy(confirmation: PendingConnectionConfirmation) {
+  if (confirmation.kind === "cancel-intent") {
+    return {
+      title: "Cancel this connection attempt?",
+      description: "Its original message will stop working.",
+      confirmLabel: "Cancel attempt",
+    };
+  }
+  if (confirmation.kind === "approve-workspace-move") {
+    return {
+      title: "Reconnect this agent here?",
+      description:
+        "Its current RateLoop workspace connection will stop, and this agent's previous credential will be replaced.",
+      confirmLabel: "Approve reconnect",
+    };
+  }
+  if (confirmation.kind === "reject-pairing") {
+    return {
+      title: "Reject this agent registration request?",
+      description: "The pairing secret cannot be reused.",
+      confirmLabel: "Reject request",
+    };
+  }
+  if (confirmation.kind === "rotate-integration") {
+    const name = confirmation.integration.agentDisplayName || confirmation.integration.agentId;
+    return {
+      title: `Rotate the credential for ${name}?`,
+      description: "The previous credential will no longer be valid. The replacement is shown once.",
+      confirmLabel: "Rotate credential",
+    };
+  }
+  const name = confirmation.integration.agentDisplayName || confirmation.integration.agentId;
+  return {
+    title: `Disconnect ${name} from RateLoop?`,
+    description: "Its current RateLoop access will stop.",
+    confirmLabel: "Disconnect",
+  };
+}
 
 const PAIRING_POLL_INTERVAL_MS = 5_000;
 const PAIRING_HIDDEN_POLL_INTERVAL_MS = 10_000;
@@ -671,7 +718,10 @@ export function AgentConnectionPanel({
   const [selectedHostId, setSelectedHostId] = useState<TokenlessHostId | null>(null);
   const [expandedLegacyPairingId, setExpandedLegacyPairingId] = useState<string | null>(null);
   const [showConnectionManagement, setShowConnectionManagement] = useState(false);
+  const [pendingConfirmation, setPendingConfirmation] = useState<PendingConnectionConfirmation | null>(null);
   const manualMessageRef = useRef<HTMLTextAreaElement>(null);
+  const actionFeedbackRef = useRef<HTMLParagraphElement>(null);
+  const focusFeedbackAfterConfirmationRef = useRef(false);
 
   // Every poll used to re-announce the same connection state, and the parent treats each
   // announcement as a change: an expanded "Audit history" panel collapsed every five seconds while
@@ -750,6 +800,12 @@ export function AgentConnectionPanel({
   useEffect(() => {
     setSelectedHostId(loadAgentConnectionHostChoice(workspaceId));
   }, [workspaceId]);
+
+  useEffect(() => {
+    if (pendingConfirmation !== null || !focusFeedbackAfterConfirmationRef.current) return;
+    focusFeedbackAfterConfirmationRef.current = false;
+    actionFeedbackRef.current?.focus({ preventScroll: true });
+  }, [pendingConfirmation]);
 
   function selectConnectionHost(hostId: TokenlessHostId | null) {
     setSelectedHostId(hostId);
@@ -888,7 +944,6 @@ export function AgentConnectionPanel({
   }
 
   async function cancelConnectionIntent(intentId: string) {
-    if (!window.confirm("Cancel this connection attempt? Its original message will stop working.")) return;
     setBusyAction(`cancel-intent:${intentId}`);
     setError(null);
     setStatus(null);
@@ -913,12 +968,6 @@ export function AgentConnectionPanel({
   async function approveWorkspaceMove(intent: AgentConnectionIntent) {
     const move = intent.workspaceMove;
     if (!move || move.status !== "owner_approval_required") return;
-    if (
-      !window.confirm(
-        "Reconnect this agent here? Its current RateLoop workspace connection will stop, and this agent's previous credential will be replaced.",
-      )
-    )
-      return;
     setBusyAction(`approve-move:${move.transferId}`);
     setError(null);
     setStatus(null);
@@ -985,7 +1034,6 @@ export function AgentConnectionPanel({
   }
 
   async function rejectPairing(pairingId: string) {
-    if (!window.confirm("Reject this agent registration request? The pairing secret cannot be reused.")) return;
     setBusyAction(`reject:${pairingId}`);
     setError(null);
     setStatus(null);
@@ -1006,7 +1054,6 @@ export function AgentConnectionPanel({
   }
 
   async function rotateIntegration(integration: AgentIntegration) {
-    if (!window.confirm(`Rotate the credential for ${integration.agentDisplayName || integration.agentId}?`)) return;
     setBusyAction(`rotate:${integration.integrationId}`);
     setReveal(null);
     setError(null);
@@ -1031,7 +1078,6 @@ export function AgentConnectionPanel({
   }
 
   async function revokeIntegration(integration: AgentIntegration) {
-    if (!window.confirm(`Disconnect ${integration.agentDisplayName || integration.agentId} from RateLoop?`)) return;
     setBusyAction(`revoke:${integration.integrationId}`);
     setError(null);
     setStatus(null);
@@ -1048,6 +1094,27 @@ export function AgentConnectionPanel({
       setError(cause instanceof Error ? cause.message : "Unable to revoke the agent connection.");
     } finally {
       setBusyAction(null);
+    }
+  }
+
+  async function confirmPendingAction() {
+    const confirmation = pendingConfirmation;
+    if (!confirmation) return;
+    try {
+      if (confirmation.kind === "cancel-intent") {
+        await cancelConnectionIntent(confirmation.intentId);
+      } else if (confirmation.kind === "approve-workspace-move") {
+        await approveWorkspaceMove(confirmation.intent);
+      } else if (confirmation.kind === "reject-pairing") {
+        await rejectPairing(confirmation.pairingId);
+      } else if (confirmation.kind === "rotate-integration") {
+        await rotateIntegration(confirmation.integration);
+      } else {
+        await revokeIntegration(confirmation.integration);
+      }
+    } finally {
+      focusFeedbackAfterConfirmationRef.current = true;
+      setPendingConfirmation(null);
     }
   }
 
@@ -1196,12 +1263,23 @@ export function AgentConnectionPanel({
             </InfoPopover>
           </div>
           {status ? (
-            <p role="status" aria-live="polite" className="mt-4 text-sm text-emerald-100">
+            <p
+              ref={actionFeedbackRef}
+              role="status"
+              aria-live="polite"
+              tabIndex={-1}
+              className="mt-4 text-sm text-emerald-100"
+            >
               {status}
             </p>
           ) : null}
           {error ? (
-            <p role="alert" className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100">
+            <p
+              ref={actionFeedbackRef}
+              role="alert"
+              tabIndex={-1}
+              className="mt-4 rounded-lg bg-red-400/10 p-3 text-sm text-red-100"
+            >
               {error}
             </p>
           ) : null}
@@ -1210,12 +1288,23 @@ export function AgentConnectionPanel({
       ) : null}
 
       {!showConnectionStart && status ? (
-        <p role="status" aria-live="polite" className="rounded-lg bg-emerald-300/10 p-3 text-sm text-emerald-100">
+        <p
+          ref={actionFeedbackRef}
+          role="status"
+          aria-live="polite"
+          tabIndex={-1}
+          className="rounded-lg bg-emerald-300/10 p-3 text-sm text-emerald-100"
+        >
           {status}
         </p>
       ) : null}
       {!showConnectionStart && error ? (
-        <p role="alert" className="rounded-lg bg-red-400/10 p-3 text-sm text-red-100">
+        <p
+          ref={actionFeedbackRef}
+          role="alert"
+          tabIndex={-1}
+          className="rounded-lg bg-red-400/10 p-3 text-sm text-red-100"
+        >
           {error}
         </p>
       ) : null}
@@ -1375,7 +1464,7 @@ export function AgentConnectionPanel({
                               type="button"
                               size="sm"
                               disabled={Boolean(busyAction)}
-                              onClick={() => void approveWorkspaceMove(intent)}
+                              onClick={() => setPendingConfirmation({ kind: "approve-workspace-move", intent })}
                             >
                               {busyAction === `approve-move:${move.transferId}` ? "Approving…" : "Approve reconnect"}
                             </Button>
@@ -1392,7 +1481,7 @@ export function AgentConnectionPanel({
                             type="button"
                             className="btn btn-sm rateloop-secondary-action"
                             disabled={Boolean(busyAction)}
-                            onClick={() => void cancelConnectionIntent(intent.intentId)}
+                            onClick={() => setPendingConfirmation({ kind: "cancel-intent", intentId: intent.intentId })}
                           >
                             {busyAction === `cancel-intent:${intent.intentId}` ? "Cancelling…" : "Cancel attempt"}
                           </button>
@@ -1443,7 +1532,9 @@ export function AgentConnectionPanel({
                         busyAction === `approve:${pairing.pairingId}` || busyAction === `reject:${pairing.pairingId}`
                       }
                       onApprove={payload => approvePairing(pairing.pairingId, payload)}
-                      onReject={() => rejectPairing(pairing.pairingId)}
+                      onReject={async () =>
+                        setPendingConfirmation({ kind: "reject-pairing", pairingId: pairing.pairingId })
+                      }
                     />
                   </div>
                 ) : (
@@ -1479,7 +1570,7 @@ export function AgentConnectionPanel({
                       type="button"
                       className="btn btn-sm rateloop-secondary-action"
                       disabled={busyAction === `reject:${pairing.pairingId}`}
-                      onClick={() => void rejectPairing(pairing.pairingId)}
+                      onClick={() => setPendingConfirmation({ kind: "reject-pairing", pairingId: pairing.pairingId })}
                     >
                       Cancel legacy request
                     </button>
@@ -1589,7 +1680,7 @@ export function AgentConnectionPanel({
                               type="button"
                               className="btn btn-sm rateloop-secondary-action"
                               disabled={Boolean(busyAction)}
-                              onClick={() => void rotateIntegration(integration)}
+                              onClick={() => setPendingConfirmation({ kind: "rotate-integration", integration })}
                             >
                               Rotate legacy credential
                             </button>
@@ -1608,7 +1699,7 @@ export function AgentConnectionPanel({
                             type="button"
                             className="btn btn-sm btn-ghost text-error"
                             disabled={Boolean(busyAction)}
-                            onClick={() => void revokeIntegration(integration)}
+                            onClick={() => setPendingConfirmation({ kind: "revoke-integration", integration })}
                           >
                             Disconnect
                           </button>
@@ -1665,6 +1756,15 @@ export function AgentConnectionPanel({
           ) : null}
         </section>
       ) : null}
+      <ConfirmDialog
+        open={pendingConfirmation !== null}
+        title={pendingConfirmation ? confirmationCopy(pendingConfirmation).title : "Confirm this action"}
+        description={pendingConfirmation ? confirmationCopy(pendingConfirmation).description : ""}
+        confirmLabel={pendingConfirmation ? confirmationCopy(pendingConfirmation).confirmLabel : "Confirm"}
+        busy={Boolean(busyAction)}
+        onCancel={() => setPendingConfirmation(null)}
+        onConfirm={() => void confirmPendingAction()}
+      />
     </div>
   );
 }

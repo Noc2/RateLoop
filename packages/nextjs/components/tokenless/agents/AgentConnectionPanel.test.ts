@@ -110,6 +110,29 @@ test("legacy pairings remain manageable but cannot be issued from the default pa
   );
 });
 
+test("all five consequential connection actions use the shared confirmation dialog", () => {
+  assert.doesNotMatch(source, /window\.confirm/);
+  assert.match(source, /import \{ ConfirmDialog \}/);
+  assert.equal(source.match(/<ConfirmDialog/g)?.length, 1);
+  assert.match(source, /kind: "cancel-intent"/);
+  assert.match(source, /kind: "approve-workspace-move"/);
+  assert.match(source, /kind: "reject-pairing"/);
+  assert.match(source, /kind: "rotate-integration"/);
+  assert.match(source, /kind: "revoke-integration"/);
+  assert.match(source, /Its original message will stop working\./);
+  assert.match(
+    source,
+    /Its current RateLoop workspace connection will stop, and this agent's previous credential will be replaced\./,
+  );
+  assert.match(source, /The pairing secret cannot be reused\./);
+  assert.match(source, /The previous credential will no longer be valid\. The replacement is shown once\./);
+  assert.match(source, /Its current RateLoop access will stop\./);
+  assert.match(source, /busy=\{Boolean\(busyAction\)\}/);
+  assert.match(source, /onCancel=\{\(\) => setPendingConfirmation\(null\)\}/);
+  assert.match(source, /focusFeedbackAfterConfirmationRef\.current = true/);
+  assert.match(source, /actionFeedbackRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
+});
+
 test("safe OAuth integrations show no bearer rotation or publishing permission", () => {
   assert.match(source, /const legacyCredential = Boolean\(integration\.apiKeyId\)/);
   assert.match(source, /legacyCredential \? \(/);
