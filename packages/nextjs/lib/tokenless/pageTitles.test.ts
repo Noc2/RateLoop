@@ -4,12 +4,15 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 test("agent titles describe the selected workspace destination", () => {
-  assert.equal(agentPageTitle(undefined), "Workspace");
-  assert.equal(agentPageTitle("connect"), "Connection");
-  assert.equal(agentPageTitle("registry"), "Reviews");
-  assert.equal(agentPageTitle("evaluations"), "Evaluations");
+  assert.equal(agentPageTitle(undefined), "Overview");
+  assert.equal(agentPageTitle("agents"), "Connections");
+  assert.equal(agentPageTitle("connect"), "Connections");
+  assert.equal(agentPageTitle("inbox"), "Approvals");
+  assert.equal(agentPageTitle("groups"), "Review setup");
+  assert.equal(agentPageTitle("registry"), "Review setup");
+  assert.equal(agentPageTitle("evaluations"), "Results");
   assert.equal(agentPageTitle("evidence"), "Evidence");
-  assert.equal(agentPageTitle("unknown"), "Workspace");
+  assert.equal(agentPageTitle("unknown"), "Overview");
 });
 
 test("reviewer titles prioritize the active task over a generic account label", () => {

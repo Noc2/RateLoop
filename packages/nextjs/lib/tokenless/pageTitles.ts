@@ -3,14 +3,14 @@ function firstQueryValue(value: string | string[] | undefined) {
 }
 
 const agentTitles: Record<string, string> = {
-  agents: "Connection",
-  connect: "Connection",
-  evaluations: "Evaluations",
+  agents: "Connections",
+  connect: "Connections",
+  evaluations: "Results",
   evidence: "Evidence",
-  groups: "Reviews",
-  inbox: "Inbox",
-  overview: "Workspace",
-  registry: "Reviews",
+  groups: "Review setup",
+  inbox: "Approvals",
+  overview: "Overview",
+  registry: "Review setup",
 };
 
 export function agentPageTitle(tab: string | string[] | undefined) {
